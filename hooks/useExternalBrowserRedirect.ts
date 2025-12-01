@@ -2,9 +2,6 @@ import { useEffect } from "react";
 
 export function useExternalBrowserRedirect() {
   useEffect(() => {
-    if (typeof window === "undefined" || typeof navigator === "undefined")
-      return;
-
     const userAgent = navigator.userAgent.toLowerCase();
     const href = window.location.href;
     const url = new URL(href);

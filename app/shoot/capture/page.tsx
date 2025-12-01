@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
 
 const MAX_SHOTS = 8;
+const MAX_COUNT = 10;
 
 export default function CapturePage() {
   const router = useRouter();
@@ -81,7 +82,7 @@ export default function CapturePage() {
     }
     resetShots();
     setIsShooting(true);
-    setCountdown(10);
+    setCountdown(MAX_COUNT);
   };
 
   useEffect(() => {
@@ -98,7 +99,7 @@ export default function CapturePage() {
           setCountdown(null);
           router.push("/shoot/select");
         } else {
-          setCountdown(10);
+          setCountdown(MAX_COUNT);
         }
       } else {
         setCountdown(countdown - 1);
@@ -170,8 +171,7 @@ export default function CapturePage() {
                     &quot;{MAX_SHOTS}장 자동 촬영 시작&quot;
                   </span>{" "}
                   버튼을 누르면
-                  <br />
-                  10초 간격으로 사진을 촬영해요.
+                  <br />${MAX_COUNT}초 간격으로 사진을 촬영해요.
                 </p>
               </div>
             )}

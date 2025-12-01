@@ -4,6 +4,8 @@ type FramePreviewProps = {
   variant: FrameId;
   // selected?: boolean;
   className?: string;
+  images?: string[];
+  borderColor?: string;
 };
 
 type SlotRect = {
@@ -20,7 +22,7 @@ type FrameLayout = {
   full: "h-full" | "w-full";
 };
 
-const FRAME_LAYOUTS: Record<FrameId, FrameLayout> = {
+export const FRAME_LAYOUTS: Record<FrameId, FrameLayout> = {
   // 1번: 2000 x 6000, 내부 1700 x 1200, gap 80
   // margin (top, right, bottom, left) = 200, 150, 760, 150
   "classic-4": (() => {
@@ -126,6 +128,8 @@ export function FramePreview({
   variant,
   // selected,
   className = "",
+  images,
+  borderColor,
 }: FramePreviewProps) {
   const layout = FRAME_LAYOUTS[variant];
 
@@ -148,6 +152,7 @@ export function FramePreview({
       className={["relative", outer].join(" ")}
       style={{
         aspectRatio: `${totalWidth} / ${totalHeight}`,
+        backgroundColor: borderColor,
       }}
     >
       {slots.map((slot, idx) => {
@@ -155,18 +160,31 @@ export function FramePreview({
         const topPct = (slot.y / totalHeight) * 100;
         const widthPct = (slot.width / totalWidth) * 100;
         const heightPct = (slot.height / totalHeight) * 100;
+        const imageSrc = images?.[idx];
 
+        const baseStyle: React.CSSProperties = {
+          left: `${leftPct}%`,
+          top: `${topPct}%`,
+          width: `${widthPct}%`,
+          height: `${heightPct}%`,
+        };
+
+        if (imageSrc) {
+          // 슬롯 안에 선택된 이미지가 있을 때
+          return (
+            <img
+              key={idx}
+              src={imageSrc}
+              alt={`frame-slot-${idx + 1}`}
+              className="absolute rounded-md object-cover"
+              style={baseStyle}
+            />
+          );
+        }
+
+        // 아직 선택 안 된 슬롯은 회색 박스로
         return (
-          <div
-            key={idx}
-            className={slotBase + " absolute"}
-            style={{
-              left: `${leftPct}%`,
-              top: `${topPct}%`,
-              width: `${widthPct}%`,
-              height: `${heightPct}%`,
-            }}
-          />
+          <div key={idx} className={slotBase + " absolute"} style={baseStyle} />
         );
       })}
     </div>
