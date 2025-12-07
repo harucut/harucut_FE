@@ -46,7 +46,7 @@ export async function middleware(req: NextRequest) {
   // accessToken이 없거나
   // accessToken이 만료/무효
   try {
-    const refreshRes = await fetch(`${BASE_URL}api/recorday/reissue`, {
+    const refreshRes = await fetch(`${BASE_URL}/api/recorday/reissue`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
