@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 
-export default function KakaoCallbackPage() {
+export default function CallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -14,7 +14,7 @@ export default function KakaoCallbackPage() {
       const redirectTo = searchParams.get("redirectTo") || "/home";
 
       if (!authCode) {
-        alert("카카오 로그인이 실패했어요. 다시 시도해 주세요.");
+        alert("소셜 로그인이 실패했어요. 다시 시도해 주세요.");
         router.replace("/login");
         return;
       }
@@ -51,7 +51,7 @@ export default function KakaoCallbackPage() {
 
   return (
     <main className="min-h-dvh flex items-center justify-center bg-zinc-950 text-white">
-      <p className="text-xs text-zinc-400">카카오 로그인 처리 중이에요...</p>
+      <p className="text-xs text-zinc-400">소셜 로그인 처리 중이에요...</p>
     </main>
   );
 }

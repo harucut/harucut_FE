@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import KakaoCallbackClient from "./KakaoCallbackClient";
+import CallbackClient from "./CallbackClient";
 
 export default function Page() {
   return (
     <Suspense>
-      <KakaoCallbackClient />
+      <CallbackClient />
     </Suspense>
   );
 }
