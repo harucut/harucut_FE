@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FeatureCard } from "./_components/FeatureCard";
 import { features } from "./_config/features";
 
@@ -14,9 +15,12 @@ export default function HomePage() {
               오늘은 어떻게 기록할까?
             </h1>
           </div>
-          <button className="h-9 w-9 rounded-full bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-400">
+          <Link
+            href="/mypage"
+            className="h-9 w-9 rounded-full bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-400 inline-flex items-center justify-center"
+          >
             사용자
-          </button>
+          </Link>
         </header>
 
         <p className="text-xs text-zinc-500">
