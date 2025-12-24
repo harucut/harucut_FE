@@ -5,11 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
-import {
-  FramePreview,
-  FRAME_LAYOUTS,
-  type FrameMedia,
-} from "@/components/frame/FramePreview";
+import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
 const BORDER_COLORS = [
   { id: "black", label: "블랙", value: "#000000" },
