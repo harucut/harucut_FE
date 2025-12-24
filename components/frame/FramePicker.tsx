@@ -18,10 +18,6 @@ export function FramePicker({
 }: FramePickerProps) {
   return (
     <>
-      <p className="text-xs text-zinc-500">
-        1단계: 인생네컷 레이아웃을 먼저 골라주세요.
-      </p>
-
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-medium text-zinc-300">프레임 선택</h2>
 
@@ -52,17 +48,15 @@ export function FramePicker({
         </div>
       </section>
 
-      <section className="mt-2 flex flex-col gap-3">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </section>
+      <div className="flex justify-end mt-2">
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
+        >
+          {confirmLabel}
+        </button>
+      </div>
     </>
   );
 }

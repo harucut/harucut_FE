@@ -15,7 +15,6 @@ export type FrameLayout = {
 };
 
 export const FRAME_LAYOUTS: Record<FrameId, FrameLayout> = {
-  // (너가 올린 그대로 복붙)
   "classic-4": (() => {
     const totalWidth = 2000;
     const totalHeight = 6000;

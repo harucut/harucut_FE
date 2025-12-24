@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function ThemePage() {
   const router = useRouter();
@@ -29,23 +30,12 @@ export default function ThemePage() {
   return (
     <main className="min-h-dvh bg-zinc-950 text-white px-2 py-6">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <header className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              RECORDAY
-            </span>
-            <h1 className="text-lg font-semibold tracking-tight">
-              테마 꾸미기 · 프레임 선택
-            </h1>
-          </div>
-          <Link
-            href="/home"
-            className="text-xs text-zinc-400 underline underline-offset-4"
-          >
-            홈으로
-          </Link>
-        </header>
-
+        <PageHeader
+          title="테마 꾸미기 · 프레임 선택"
+          backHref="/home"
+          backLabel="홈으로"
+          description={<>1단계: 인생네컷 레이아웃을 먼저 골라주세요.</>}
+        />
         <FramePicker
           selectedFrameId={selectedFrameId}
           onChangeSelected={setSelectedFrameId}

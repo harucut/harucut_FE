@@ -82,6 +82,7 @@ export function FramePreview({
             );
           }
           return (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               key={idx}
               src={mediaItem.src}
