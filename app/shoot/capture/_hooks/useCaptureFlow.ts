@@ -3,9 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { getBestWebmMimeType } from "@/lib/capture/mediaRecorder";
 
 const MAX_SHOTS = 8;
 const MAX_COUNT = 8;
+
+type ShootingState = {
+  isShooting: boolean;
+  countdown: number | null;
+};
 
 export function useCaptureFlow() {
   const router = useRouter();
@@ -13,8 +19,10 @@ export function useCaptureFlow() {
     useShootSession();
 
   const [isCameraReady, setIsCameraReady] = useState(false);
-  const [isShooting, setIsShooting] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
+  const [shooting, setShooting] = useState<ShootingState>({
+    isShooting: false,
+    countdown: null,
+  });
   const [shotCount, setShotCount] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -29,33 +37,44 @@ export function useCaptureFlow() {
 
   // 프레임 없이 들어오면 되돌리기
   useEffect(() => {
-    if (!frameId) {
-      router.replace("/shoot");
-    }
+    if (!frameId) router.replace("/shoot");
   }, [frameId, router]);
 
-  // 카메라 켜기
-  const startCamera = async () => {
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setIsCameraReady(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         alert("이 브라우저에서는 카메라 사용을 지원하지 않아요.");
         return;
       }
 
+      stopStream();
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
         audio: true,
       });
+
       streamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
       }
+
       setIsCameraReady(true);
     } catch (err) {
       console.error(err);
       alert("카메라 접근이 거부되었거나 오류가 발생했어요.");
     }
-  };
+  }, [stopStream]);
 
   // 언마운트 시 정리
   useEffect(() => {
@@ -66,11 +85,9 @@ export function useCaptureFlow() {
       ) {
         mediaRecorderRef.current.stop();
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
+      stopStream();
     };
-  }, []);
+  }, [stopStream]);
 
   const playShutterSound = useCallback(() => {
     const audio = shutterAudioRef.current;
@@ -79,9 +96,9 @@ export function useCaptureFlow() {
     audio.play().catch(() => {});
   }, []);
 
-  // 현재 프레임을 캔버스로 캡쳐해 dataURL로 변환
   const capturePhotoToDataUrl = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return null;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -89,10 +106,10 @@ export function useCaptureFlow() {
 
     const width = video.videoWidth || 480;
     const height = video.videoHeight || 640;
+
     canvas.width = width;
     canvas.height = height;
 
-    // 좌우 반전해서 그리기
     ctx.save();
     ctx.translate(width, 0);
     ctx.scale(-1, 1);
@@ -104,30 +121,29 @@ export function useCaptureFlow() {
     return dataUrl;
   }, [playShutterSound]);
 
-  // 한 샷용 녹화 시작
   const startRecordingForShot = useCallback(() => {
     if (!streamRef.current || typeof MediaRecorder === "undefined") return;
+
+    const mimeType = getBestWebmMimeType();
+    if (!mimeType) return;
 
     try {
       recordedChunksRef.current = [];
 
-      const mr = new MediaRecorder(streamRef.current, {
-        mimeType: "video/webm;codecs=vp9",
-      });
+      const mr = new MediaRecorder(streamRef.current, { mimeType });
 
       mr.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          recordedChunksRef.current.push(e.data);
-        }
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
       };
 
       mr.onstop = () => {
         if (!recordedChunksRef.current.length) return;
+
         const blob = new Blob(recordedChunksRef.current, {
           type: "video/webm",
         });
         const videoUrl = URL.createObjectURL(blob);
-        attachVideoToShot(videoUrl); // 아직 video 없는 샷에 붙임
+        attachVideoToShot(videoUrl);
         recordedChunksRef.current = [];
       };
 
@@ -138,87 +154,95 @@ export function useCaptureFlow() {
     }
   }, [attachVideoToShot]);
 
-  // 한 장 촬영 완료 처리 (사진 캡쳐 + 녹화 stop + 다음 샷 or 종료)
+  // 한 샷 완료 처리: 여기서 다음 단계(다음 샷/종료/라우팅)까지 전부 처리
   const finishSingleShot = useCallback(() => {
     const photoDataUrl = capturePhotoToDataUrl();
     if (!photoDataUrl) return;
 
-    // 1) 사진 저장
     addShotPhoto(photoDataUrl);
 
-    // 2) 녹화 중이면 stop → onstop에서 video 붙음
     const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== "inactive") {
-      mr.stop();
-    }
+    if (mr && mr.state !== "inactive") mr.stop();
 
-    // 3) 카운트 증가 후 다음 흐름
     setShotCount((prev) => {
       const next = prev + 1;
 
-      if (next >= MAX_SHOTS) {
-        setIsShooting(false);
-        setCountdown(null);
-        router.push("/shoot/select");
-      } else {
+      // 다음 샷이면: 녹화 재시작 + 카운트 리셋
+      if (next < MAX_SHOTS) {
         startRecordingForShot();
-        setCountdown(MAX_COUNT);
+        setShooting((s) => ({ ...s, countdown: MAX_COUNT }));
+        return next;
       }
+
+      // 마지막 샷이면: 촬영 종료 + 이동 (라우팅은 다음 틱)
+      setShooting({ isShooting: false, countdown: null });
+      setTimeout(() => {
+        router.push("/shoot/select");
+      }, 0);
 
       return next;
     });
-  }, [capturePhotoToDataUrl, addShotPhoto, router, startRecordingForShot]);
+  }, [capturePhotoToDataUrl, addShotPhoto, startRecordingForShot, router]);
 
-  // 자동 촬영 시작
-  const startShooting = () => {
+  const startShooting = useCallback(() => {
     if (!isCameraReady) {
       alert("먼저 카메라를 켜주세요.");
       return;
     }
+
     resetShots();
     setShotCount(0);
-    setIsShooting(true);
-    startRecordingForShot();
-    setCountdown(MAX_COUNT);
-  };
 
-  // 10초 카운트다운
+    setShooting({ isShooting: true, countdown: MAX_COUNT });
+
+    startRecordingForShot();
+  }, [isCameraReady, resetShots, startRecordingForShot]);
+
+  // 카운트다운 타이머
   useEffect(() => {
-    if (!isShooting) return;
-    if (countdown === null) return;
+    if (!shooting.isShooting) return;
+    if (shooting.countdown === null) return;
 
     const timer = window.setTimeout(() => {
-      if (countdown <= 1) {
-        finishSingleShot();
-      } else {
-        setCountdown(countdown - 1);
-      }
+      // 여기서는 callback이므로 setState ok
+      setShooting((prev) => {
+        // 타입 경고 방지: prev.countdown은 null일 수 있음 → 가드
+        if (!prev.isShooting || prev.countdown === null) return prev;
+
+        if (prev.countdown <= 1) {
+          // countdown state는 finishSingleShot에서 다시 세팅되거나 종료됨
+          // 여기서는 null로 만들지 말고 그냥 유지(중복 렌더 방지)
+          finishSingleShot();
+          return prev;
+        }
+
+        return { ...prev, countdown: prev.countdown - 1 };
+      });
     }, 1000);
 
     return () => window.clearTimeout(timer);
-  }, [isShooting, countdown, finishSingleShot]);
+  }, [shooting.isShooting, shooting.countdown, finishSingleShot]);
 
-  // "지금 촬영" 버튼
-  const handleShootNow = () => {
-    if (!isShooting || !isCameraReady) return;
+  const handleShootNow = useCallback(() => {
+    if (!shooting.isShooting || !isCameraReady) return;
     finishSingleShot();
-  };
+  }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
   return {
-    // refs
     videoRef,
     canvasRef,
     shutterAudioRef,
-    // 상태
+
     isCameraReady,
-    isShooting,
-    countdown,
+    isShooting: shooting.isShooting,
+    countdown: shooting.countdown,
     shotCount,
     remainingShots,
-    // 액션
+
     startCamera,
     startShooting,
     handleShootNow,
+
     MAX_SHOTS,
     MAX_COUNT,
   };

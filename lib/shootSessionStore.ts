@@ -2,8 +2,11 @@
 
 import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
-
-const MAX_SELECT = 4;
+import {
+  createEmptySlots,
+  toggleIndexInSlots,
+  type SelectionSlot,
+} from "@/lib/selection";
 
 export type ShotItem = {
   photo: string;
@@ -13,69 +16,86 @@ export type ShotItem = {
 type ShootSessionState = {
   frameId: FrameId | null;
   shots: ShotItem[];
-  selectedIndexes: (number | null)[];
+  selectedIndexes: SelectionSlot[];
 
   setFrameId: (id: FrameId) => void;
-  addShotPhoto: (dataUrl: string) => void;
+  setShots: (shots: ShotItem[]) => void;
+  toggleSelect: (index: number) => void;
+
+  addShotPhoto: (photoDataUrl: string) => void;
   attachVideoToShot: (videoUrl: string) => void;
   resetShots: () => void;
-  toggleSelect: (index: number) => void;
-  setSelectedIndexes: (indexes: number[]) => void;
-  resetAll: () => void;
+
+  reset: () => void;
 };
 
-export const useShootSession = create<ShootSessionState>((set) => ({
+function revokeBlobUrl(url?: string) {
+  if (!url) return;
+  if (url.startsWith("blob:")) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }
+}
+
+const initialState: Pick<
+  ShootSessionState,
+  "frameId" | "shots" | "selectedIndexes"
+> = {
   frameId: null,
   shots: [],
-  selectedIndexes: Array(MAX_SELECT).fill(null),
+  selectedIndexes: createEmptySlots(),
+};
 
-  setFrameId: (id) => set({ frameId: id }),
+export const useShootSession = create<ShootSessionState>((set, get) => ({
+  ...initialState,
 
-  addShotPhoto: (dataUrl) =>
+  setFrameId: (frameId) => set({ frameId }),
+
+  setShots: (shots) =>
+    set({
+      shots,
+      selectedIndexes: createEmptySlots(),
+    }),
+
+  toggleSelect: (index) =>
+    set({
+      selectedIndexes: toggleIndexInSlots(get().selectedIndexes, index),
+    }),
+
+  addShotPhoto: (photoDataUrl) =>
     set((state) => ({
-      shots: [...state.shots, { photo: dataUrl }],
+      shots: [...state.shots, { photo: photoDataUrl }],
+      selectedIndexes: state.selectedIndexes,
     })),
 
   attachVideoToShot: (videoUrl) =>
     set((state) => {
+      const idx = [...state.shots]
+        .map((s, i) => ({ s, i }))
+        .reverse()
+        .find(({ s }) => !s.video)?.i;
+
+      if (idx == null) return state;
+
       const next = [...state.shots];
-      const idx = next.findIndex((shot) => !shot.video);
-      if (idx === -1) return state;
+      revokeBlobUrl(next[idx].video);
       next[idx] = { ...next[idx], video: videoUrl };
       return { shots: next };
     }),
 
   resetShots: () =>
-    set({
-      shots: [],
-      selectedIndexes: Array(MAX_SELECT).fill(null),
-    }),
-
-  toggleSelect: (index) =>
     set((state) => {
-      const { selectedIndexes } = state;
-
-      const existingSlot = selectedIndexes.indexOf(index);
-      if (existingSlot !== -1) {
-        const next = [...selectedIndexes];
-        next[existingSlot] = null;
-        return { selectedIndexes: next };
-      }
-
-      const emptySlot = selectedIndexes.indexOf(null);
-      if (emptySlot === -1) return state;
-
-      const next = [...selectedIndexes];
-      next[emptySlot] = index;
-      return { selectedIndexes: next };
+      state.shots.forEach((s) => revokeBlobUrl(s.video));
+      return {
+        shots: [],
+        selectedIndexes: createEmptySlots(),
+      };
     }),
 
-  setSelectedIndexes: (indexes) => set({ selectedIndexes: indexes }),
-
-  resetAll: () =>
-    set({
-      frameId: null,
-      shots: [],
-      selectedIndexes: Array(MAX_SELECT).fill(null),
+  reset: () =>
+    set((state) => {
+      state.shots.forEach((s) => revokeBlobUrl(s.video));
+      return initialState;
     }),
 }));

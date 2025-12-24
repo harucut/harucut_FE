@@ -3,13 +3,16 @@
 import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import type { FrameMedia } from "@/components/frame/FramePreview";
-
-const MAX_SELECT = 4;
+import {
+  createEmptySlots,
+  toggleIndexInSlots,
+  type SelectionSlot,
+} from "@/lib/selection";
 
 type UploadSessionState = {
   frameId: FrameId | null;
   media: FrameMedia[];
-  selectedIndexes: (number | null)[];
+  selectedIndexes: SelectionSlot[];
 
   setFrameId: (id: FrameId | null) => void;
   addMedia: (items: FrameMedia[]) => void;
@@ -17,10 +20,17 @@ type UploadSessionState = {
   resetAll: () => void;
 };
 
-export const useUploadSession = create<UploadSessionState>((set) => ({
+const initialState: Pick<
+  UploadSessionState,
+  "frameId" | "media" | "selectedIndexes"
+> = {
   frameId: null,
   media: [],
-  selectedIndexes: Array(MAX_SELECT).fill(null),
+  selectedIndexes: createEmptySlots(),
+};
+
+export const useUploadSession = create<UploadSessionState>((set, get) => ({
+  ...initialState,
 
   setFrameId: (id) => set({ frameId: id }),
 
@@ -30,26 +40,9 @@ export const useUploadSession = create<UploadSessionState>((set) => ({
     })),
 
   toggleSelect: (index) =>
-    set((state) => {
-      const selected = [...state.selectedIndexes];
-      const existingSlot = selected.indexOf(index);
-
-      if (existingSlot !== -1) {
-        selected[existingSlot] = null;
-        return { selectedIndexes: selected };
-      }
-
-      const emptySlot = selected.indexOf(null);
-      if (emptySlot === -1) return state;
-
-      selected[emptySlot] = index;
-      return { selectedIndexes: selected };
-    }),
-
-  resetAll: () =>
     set({
-      frameId: null,
-      media: [],
-      selectedIndexes: Array(MAX_SELECT).fill(null),
+      selectedIndexes: toggleIndexInSlots(get().selectedIndexes, index),
     }),
+
+  resetAll: () => set(initialState),
 }));

@@ -1,20 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-
-const BORDER_COLORS = [
-  { id: "black", label: "블랙", value: "#000000" },
-  { id: "white", label: "화이트", value: "#ffffff" },
-  { id: "zinc", label: "다크 그레이", value: "#18181b" },
-  { id: "pink", label: "핑크", value: "#f973b6" },
-  { id: "blue", label: "블루", value: "#38bdf8" },
-] as const;
+import { BORDER_COLORS } from "@/constants/colors";
+import { drawCover } from "@/lib/canvas/drawCover";
+import { loadImage, loadVideo } from "@/lib/canvas/loaders";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const MAX_SECONDS = 8;
 
@@ -40,18 +35,9 @@ export default function ResultPage() {
   );
 
   useEffect(() => {
-    if (!frameId) {
-      router.replace("/upload");
-      return;
-    }
-    if (!media.length) {
-      router.replace("/upload/select");
-      return;
-    }
-    if (selectedCount !== 4) {
-      router.replace("/upload/select");
-      return;
-    }
+    if (!frameId) return router.replace("/upload");
+    if (!media.length) return router.replace("/upload/select");
+    if (selectedCount !== 4) return router.replace("/upload/select");
   }, [frameId, media.length, selectedCount, router]);
 
   const selectedMedia: (FrameMedia | null)[] = useMemo(
@@ -109,18 +95,7 @@ export default function ResultPage() {
 
     setIsDownloadingImage(true);
     try {
-      const images = await Promise.all(
-        selectedPhotosForFrame.map(
-          (src) =>
-            new Promise<HTMLImageElement>((resolve, reject) => {
-              const img = new Image();
-              img.crossOrigin = "anonymous";
-              img.onload = () => resolve(img);
-              img.onerror = reject;
-              img.src = src;
-            })
-        )
-      );
+      const images = await Promise.all(selectedPhotosForFrame.map(loadImage));
 
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
@@ -136,24 +111,9 @@ export default function ResultPage() {
       slots.forEach((slot, index) => {
         const img = images[index];
         if (!img) return;
-
-        const { x, y, width, height } = slot;
-
-        const iw = img.naturalWidth || img.width;
-        const ih = img.naturalHeight || img.height;
-
-        const scale = Math.max(width / iw, height / ih);
-        const sw = iw * scale;
-        const sh = ih * scale;
-        const dx = x + (width - sw) / 2;
-        const dy = y + (height - sh) / 2;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, y, width, height);
-        ctx.clip();
-        ctx.drawImage(img, dx, dy, sw, sh);
-        ctx.restore();
+        const iw = img.naturalWidth || img.width || 1;
+        const ih = img.naturalHeight || img.height || 1;
+        drawCover(ctx, img, iw, ih, slot);
       });
 
       const dataUrl = canvas.toDataURL("image/png");
@@ -190,49 +150,17 @@ export default function ResultPage() {
 
       // 슬롯별 drawable 로드 (image/video 섞임)
       const drawables: SlotDrawable[] = await Promise.all(
-        selectedMedia.map((m, i) => {
-          return new Promise<SlotDrawable>((resolve, reject) => {
-            if (!m) return reject(new Error(`slot ${i} has no media`));
+        selectedMedia.map(async (m, i) => {
+          if (!m) throw new Error(`slot ${i} has no media`);
 
-            if (m.type === "video") {
-              const v = document.createElement("video");
-              v.src = m.src;
-              v.muted = true;
-              v.playsInline = true;
-              v.crossOrigin = "anonymous";
-              v.loop = true;
+          if (m.type === "video") {
+            const v = await loadVideo(m.src);
+            v.currentTime = 0;
+            return { kind: "video", el: v };
+          }
 
-              const onLoaded = () => {
-                v.removeEventListener("loadedmetadata", onLoaded);
-                v.removeEventListener("error", onError);
-                v.currentTime = 0;
-                resolve({ kind: "video", el: v });
-              };
-
-              const onError = () => {
-                v.removeEventListener("loadedmetadata", onLoaded);
-                v.removeEventListener("error", onError);
-                reject(
-                  new Error(
-                    `video load error (slot ${i}): ${
-                      v.error?.message ?? "unknown error"
-                    }`
-                  )
-                );
-              };
-
-              v.addEventListener("loadedmetadata", onLoaded);
-              v.addEventListener("error", onError);
-              return;
-            }
-
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => resolve({ kind: "image", el: img });
-            img.onerror = () =>
-              reject(new Error(`image load error (slot ${i})`));
-            img.src = m.src;
-          });
+          const img = await loadImage(m.src);
+          return { kind: "image", el: img };
         })
       );
 
@@ -306,37 +234,20 @@ export default function ResultPage() {
           const d = drawables[index];
           if (!d) return;
 
-          const { x, y, width, height } = slot;
-
-          let srcW = 1;
-          let srcH = 1;
-          let drawableEl: CanvasImageSource | null = null;
-
           if (d.kind === "video") {
             const v = d.el;
             if (v.readyState < 2) return;
-            drawableEl = v;
-            srcW = v.videoWidth || 1;
-            srcH = v.videoHeight || 1;
+            drawCover(ctx, v, v.videoWidth || 1, v.videoHeight || 1, slot);
           } else {
             const img = d.el;
-            drawableEl = img;
-            srcW = img.naturalWidth || img.width || 1;
-            srcH = img.naturalHeight || img.height || 1;
+            drawCover(
+              ctx,
+              img,
+              img.naturalWidth || img.width || 1,
+              img.naturalHeight || img.height || 1,
+              slot
+            );
           }
-
-          const scale = Math.max(width / srcW, height / srcH);
-          const dw = srcW * scale;
-          const dh = srcH * scale;
-          const dx = x + (width - dw) / 2;
-          const dy = y + (height - dh) / 2;
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(x, y, width, height);
-          ctx.clip();
-          ctx.drawImage(drawableEl, dx, dy, dw, dh);
-          ctx.restore();
         });
 
         requestAnimationFrame(renderFrame);
@@ -352,35 +263,18 @@ export default function ResultPage() {
     }
   };
 
-  const handleGoHome = () => {
-    router.push("/home");
-  };
+  const handleGoHome = () => router.push("/home");
 
   const canDownloadPng = selectedCount === 4 && isAllImages;
 
   return (
     <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
       <div className="mx-auto flex w-full max-w-md flex-col gap-5">
-        {/* 헤더 */}
-        <header className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              RECORDAY
-            </span>
-            <h1 className="text-lg font-semibold tracking-tight">
-              최종 결과 · 다운로드
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/upload/select"
-              className="text-[11px] text-zinc-400 underline underline-offset-4"
-            >
-              사진 다시 선택
-            </Link>
-          </div>
-        </header>
-
+        <PageHeader
+          title="최종 결과 · 다운로드"
+          backHref="/upload/select"
+          backLabel="사진 다시 선택"
+        />
         {/* 미리보기 */}
         <section className="flex flex-col gap-3">
           <h2 className="text-xs font-medium text-zinc-300">
