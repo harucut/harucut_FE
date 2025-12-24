@@ -62,8 +62,6 @@ export default function LandingPage() {
           <section className="mx-auto flex w-full max-w-xs flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-3 backdrop-blur-md shadow-[0_18px_45px_rgba(0,0,0,0.7)] md:max-w-sm md:p-4">
             <div className="flex items-center justify-between text-[10px] text-zinc-400 md:text-[11px]">
               <span>Sample Image</span>
-              {/* <span>sample frame · 4컷</span> */}
-              {/* <span>8장 촬영 · 4장 선택</span> */}
             </div>
 
             <div className="relative aspect-[3/5] w-full max-h-[320px] rounded-2xl border border-white/10 bg-black overflow-hidden md:max-h-[380px]">
@@ -77,11 +75,6 @@ export default function LandingPage() {
               />
             </div>
 
-            {/* <p className="text-[10px] leading-relaxed text-zinc-400 md:text-xs">
-              인생네컷을 찍고, 업로드하고, 다시 꺼내보는
-              <br />
-              나만의 포토부스를 지금 바로 시작해 보세요.
-            </p> */}
             <p className="text-[10px] leading-relaxed text-zinc-400 md:text-xs">
               나만의 포토부스를 지금 바로 시작해 보세요.
             </p>
