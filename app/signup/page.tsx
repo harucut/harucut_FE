@@ -1,163 +1,49 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { AuthField } from "@/components/auth/AuthField";
+import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
+import {
+  SIGNUP_BASE_FIELDS,
+  type AuthFieldName,
+} from "@/components/auth/authFields";
+
 import {
   validateEmail,
   validatePassword,
-  validateNickname,
+  validateUsername,
 } from "@/lib/authValidation";
-import { api } from "@/lib/api";
-import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
+import { signupWithEmail } from "@/lib/auth/authApi";
+import { useEmailVerification } from "./_hooks/useEmailVerification";
+import { EmailVerificationSection } from "@/components/auth/EmailVerificationSection";
 
-type SignupErrors = {
-  email?: string | null;
-  password?: string | null;
-  passwordConfirm?: string | null;
-  nickname?: string | null;
+type SignupFieldName = Extract<
+  AuthFieldName,
+  "email" | "password" | "confirmPassword" | "username"
+>;
+
+type SignupErrors = Partial<Record<SignupFieldName, string | null>> & {
   common?: string | null;
-  emailCode?: string | null;
 };
-
-const signupFields = [
-  {
-    id: "email",
-    name: "email",
-    type: "email",
-    label: "이메일",
-    autoComplete: "email",
-    placeholder: "example@example.com",
-  },
-  {
-    id: "nickname",
-    name: "nickname",
-    type: "text",
-    label: "닉네임",
-    autoComplete: "nickname",
-    placeholder: "인생네컷에 표시될 이름",
-  },
-  {
-    id: "password",
-    name: "password",
-    type: "password",
-    label: "비밀번호",
-    autoComplete: "new-password",
-    placeholder: "8자 이상, 영문/숫자 조합 권장",
-  },
-  {
-    id: "passwordConfirm",
-    name: "passwordConfirm",
-    type: "password",
-    label: "비밀번호 확인",
-    autoComplete: "new-password",
-    placeholder: "비밀번호를 다시 입력해 주세요",
-  },
-] as const;
 
 export default function SignupPage() {
   const router = useRouter();
-  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<SignupErrors>({});
 
-  // 이메일 인증 관련
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-  const [emailCode, setEmailCode] = useState("");
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
+  const emailVerification = useEmailVerification();
 
-  const isBusy = isSubmitting || isSendingCode || isVerifyingCode;
-
-  const getEmailFromForm = () => {
-    const form = formRef.current;
-    if (!form) return "";
-    const fd = new FormData(form);
-    return String(fd.get("email") || "").trim();
-  };
-
-  const handleSendCode = async () => {
-    setErrors((prev) => ({
-      ...prev,
-      email: null,
-      emailCode: null,
-      common: null,
-    }));
-
-    const email = getEmailFromForm();
-    const emailError = validateEmail(email);
-    if (emailError) {
-      setErrors((prev) => ({ ...prev, email: emailError }));
-      return;
-    }
-
-    // 이메일을 바꾸고 다시 인증하려는 경우를 대비해 인증 상태 초기화
-    setIsEmailVerified(false);
-    setVerifiedEmail(null);
-
-    setIsSendingCode(true);
-    try {
-      await api.post("/api/email-auth/code", { email });
-      alert("인증 코드가 이메일로 전송되었습니다.");
-    } catch (error) {
-      console.error(error);
-      setErrors((prev) => ({
-        ...prev,
-        common: "인증 코드 전송에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-      }));
-    } finally {
-      setIsSendingCode(false);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    setErrors((prev) => ({
-      ...prev,
-      email: null,
-      emailCode: null,
-      common: null,
-    }));
-
-    const email = getEmailFromForm();
-    const emailError = validateEmail(email);
-    if (emailError) {
-      setErrors((prev) => ({ ...prev, email: emailError }));
-      return;
-    }
-
-    if (!emailCode.trim()) {
-      setErrors((prev) => ({
-        ...prev,
-        emailCode: "인증 코드를 입력해 주세요.",
-      }));
-      return;
-    }
-
-    setIsVerifyingCode(true);
-    try {
-      await api.post("/api/email-auth/verification", {
-        email,
-        code: emailCode.trim(),
-      });
-
-      setIsEmailVerified(true);
-      setVerifiedEmail(email);
-      alert("이메일 인증이 완료되었습니다.");
-    } catch (error) {
-      console.error(error);
-      setIsEmailVerified(false);
-      setVerifiedEmail(null);
-      setErrors((prev) => ({
-        ...prev,
-        emailCode: "인증 코드가 올바르지 않습니다.",
-      }));
-    } finally {
-      setIsVerifyingCode(false);
-    }
-  };
+  const emailLocked = useMemo(
+    () =>
+      emailVerification.isEmailVerified &&
+      Boolean(emailVerification.verifiedEmail),
+    [emailVerification.isEmailVerified, emailVerification.verifiedEmail]
+  );
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -165,44 +51,47 @@ export default function SignupPage() {
     setErrors({});
 
     const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") || "").trim();
-    const password = String(formData.get("password") || "");
-    const passwordConfirm = String(formData.get("passwordConfirm") || "");
-    const nickname = String(formData.get("nickname") || "").trim();
 
-    const newErrors: SignupErrors = {};
+    const emailFromForm = String(formData.get("email") || "").trim();
+    const email = (emailVerification.verifiedEmail ?? emailFromForm).trim();
+
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+    const username = String(formData.get("username") || "").trim();
+
+    const nextErrors: SignupErrors = {};
 
     const emailError = validateEmail(email);
-    if (emailError) newErrors.email = emailError;
+    if (emailError) nextErrors.email = emailError;
 
     const passwordError = validatePassword(password);
-    if (passwordError) newErrors.password = passwordError;
+    if (passwordError) nextErrors.password = passwordError;
 
-    if (password !== passwordConfirm) {
-      newErrors.passwordConfirm = "비밀번호가 일치하지 않습니다.";
+    if (!confirmPassword) {
+      nextErrors.confirmPassword = "비밀번호 확인을 입력해 주세요.";
+    } else if (password !== confirmPassword) {
+      nextErrors.confirmPassword = "비밀번호가 일치하지 않습니다.";
     }
 
-    const nicknameError = validateNickname(nickname);
-    if (nicknameError) newErrors.nickname = nicknameError;
+    const usernameError = validateUsername(username);
+    if (usernameError) nextErrors.username = usernameError;
 
-    if (!isEmailVerified || !verifiedEmail || verifiedEmail !== email) {
-      newErrors.email = "이메일 인증을 완료해 주세요.";
+    if (!emailVerification.isEmailVerified) {
+      nextErrors.email = "이메일 인증을 완료해 주세요.";
+    } else if (
+      (emailVerification.verifiedEmail ?? "").trim() !== emailFromForm
+    ) {
+      nextErrors.email = "인증한 이메일과 입력한 이메일이 달라요.";
     }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       setIsSubmitting(false);
       return;
     }
 
     try {
-      await api.post(`/api/recorday/register`, {
-        email,
-        password,
-        username: nickname,
-      });
-
-      alert("회원가입이 완료되었습니다. 로그인해 주세요.");
+      await signupWithEmail({ email, password, username: username });
       router.push("/login");
     } catch (error) {
       console.error(error);
@@ -215,119 +104,68 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
-      <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <Link
-            href="/"
-            className="text-[11px] font-medium tracking-[0.16em] text-zinc-500"
-          >
-            RECORDAY
-          </Link>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Recorday 계정 만들기
-          </h1>
-          <p className="text-[11px] text-zinc-400">
-            오늘 만든 인생네컷을 나중에도 다시 꺼내보고 싶다면
-            <br />
-            이메일로 간단하게 계정을 만들어 보세요.
+    <AuthPageShell
+      title="회원가입"
+      description="이메일 인증 후 계정을 만들 수 있어요."
+      footer={
+        <>
+          <SocialLoginSection mode="signup" />
+          <p className="text-center text-[11px] text-zinc-400 mt-2">
+            이미 계정이 있다면{" "}
+            <Link
+              href="/login"
+              className="font-medium text-emerald-400 underline underline-offset-4"
+            >
+              로그인
+            </Link>
           </p>
-        </header>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {errors.common ? (
+          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+            {errors.common}
+          </p>
+        ) : null}
 
-        {/* 이메일 회원가입 폼 */}
-        <form
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"
+        <EmailVerificationSection
+          emailLocked={emailLocked}
+          emailError={errors.email}
+          emailCode={emailVerification.emailCode}
+          setEmailCode={emailVerification.setEmailCode}
+          isSendingCode={emailVerification.isSendingCode}
+          isVerifyingCode={emailVerification.isVerifyingCode}
+          isEmailVerified={emailVerification.isEmailVerified}
+          emailVerificationEmailError={emailVerification.emailError}
+          codeError={emailVerification.codeError}
+          sendCode={emailVerification.sendCode}
+          verifyCode={emailVerification.verifyCode}
+        />
+
+        {/* 비밀번호 */}
+        {SIGNUP_BASE_FIELDS.map((field) => (
+          <AuthField
+            key={field.id}
+            id={field.id}
+            name={field.name}
+            type={field.type}
+            label={field.label}
+            placeholder={field.placeholder}
+            autoComplete={field.autoComplete}
+            required
+            error={errors[field.name]}
+          />
+        ))}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-full bg-emerald-500 py-2.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {signupFields.map((field) => (
-            <AuthField
-              key={field.id}
-              id={field.id}
-              name={field.name}
-              type={field.type}
-              label={field.label}
-              autoComplete={field.autoComplete}
-              placeholder={field.placeholder}
-              required
-              error={errors[field.name as keyof SignupErrors]}
-            />
-          ))}
-
-          <div className="mt-1 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSendCode}
-                disabled={isBusy}
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/40 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                {isSendingCode ? "전송 중..." : "인증 코드 발송"}
-              </button>
-
-              {isEmailVerified && (
-                <span className="inline-flex h-9 items-center rounded-full bg-emerald-500/10 px-3 text-[11px] font-semibold text-emerald-300">
-                  인증 완료
-                </span>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={emailCode}
-                onChange={(e) => setEmailCode(e.target.value)}
-                placeholder="인증 코드 입력"
-                disabled={isEmailVerified}
-                className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 text-[11px] text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-60"
-              />
-
-              <button
-                type="button"
-                onClick={handleVerifyCode}
-                disabled={isBusy || isEmailVerified || !emailCode.trim()}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-500 px-3 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-              >
-                {isVerifyingCode ? "확인 중..." : "인증하기"}
-              </button>
-            </div>
-
-            {errors.emailCode && (
-              <p className="text-[10px] text-red-400">{errors.emailCode}</p>
-            )}
-
-            <p className="text-[10px] text-zinc-500">
-              인증 코드를 발송한 뒤, 메일로 받은 코드를 입력하고 인증을 완료해
-              주세요.
-            </p>
-          </div>
-
-          {errors.common && (
-            <p className="text-[10px] text-red-400">{errors.common}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting || !isEmailVerified}
-            className="mt-1 inline-flex h-9 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-          >
-            {isSubmitting ? "가입 중..." : "이메일로 회원가입"}
-          </button>
-        </form>
-
-        {/* 소셜 회원가입 */}
-        <SocialLoginSection mode="signup" />
-
-        <p className="text-center text-[11px] text-zinc-400">
-          이미 계정이 있다면{" "}
-          <Link
-            href="/login"
-            className="font-medium text-emerald-400 underline underline-offset-4"
-          >
-            로그인
-          </Link>
-        </p>
-      </div>
-    </main>
+          {isSubmitting ? "가입 중..." : "회원가입"}
+        </button>
+      </form>
+    </AuthPageShell>
   );
 }
