@@ -10,7 +10,7 @@ type Props = {
   description?: ReactNode;
 
   // 오른쪽: 링크 or 커스텀 액션
-  backHref?: string;
+  backHref: string;
   backLabel?: string;
   rightSlot?: string;
 
@@ -38,9 +38,12 @@ export function PageHeader({
         </div>
 
         {rightSlot ? (
-          <button className="h-9 w-9 rounded-full bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-400">
+          <Link
+            href={backHref}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 border border-zinc-700 text-[11px]"
+          >
             {rightSlot}
-          </button>
+          </Link>
         ) : backHref && backLabel ? (
           <Link
             href={backHref}
