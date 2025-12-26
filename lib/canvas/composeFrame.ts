@@ -130,7 +130,7 @@ export async function recordFrameWebm(opts: {
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
 
-  // video play
+  // video 재생
   await Promise.all(
     drawables
       .filter(
