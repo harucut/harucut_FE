@@ -44,8 +44,6 @@ export function EmailCodeSection({
   onVerify,
   verifiedText = "이메일 인증 완료!",
 }: Props) {
-  const locked = emailLocked || isVerified;
-
   return (
     <div className="flex flex-col gap-2">
       <AuthField
@@ -61,14 +59,13 @@ export function EmailCodeSection({
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          disabled={locked}
           placeholder="인증 코드"
           className="flex-1 rounded-2xl border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs outline-none placeholder:text-zinc-500 focus:border-emerald-500 disabled:opacity-50"
         />
 
         <button
           type="button"
-          disabled={locked || isSending}
+          disabled={isSending}
           onClick={async () => {
             await onSend(email.trim());
           }}
@@ -79,7 +76,7 @@ export function EmailCodeSection({
 
         <button
           type="button"
-          disabled={locked || isVerifying || !code.trim()}
+          disabled={isVerifying || !code.trim()}
           onClick={async () => {
             await onVerify(email.trim(), code.trim());
           }}

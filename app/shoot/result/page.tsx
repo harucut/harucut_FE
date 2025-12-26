@@ -14,6 +14,7 @@ import {
   recordFrameWebm,
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
+import { isNotNull } from "@/lib/types/guards";
 
 const MAX_SECONDS = 8;
 
@@ -45,17 +46,30 @@ export default function ShootResultPage() {
     });
   }, [selectedIndexes, shots]);
 
-  // 프리뷰: video가 있으면 video를 보여주고, 없으면 photo
-  const previewMedia: FrameMedia[] = useMemo(() => {
-    return selectedShots.map((s) => {
-      if (!s) return { type: "image", src: "" };
+  const previewVideo = useMemo(() => {
+    return selectedShots.map((s): FrameMedia | null => {
+      if (!s) return null;
       if (s.video) return { type: "video", src: s.video };
       return { type: "image", src: s.photo };
     });
   }, [selectedShots]);
 
-  // 합성 소스: video 있으면 video, 아니면 image(photo)
-  const sources: FrameSource[] = useMemo(() => {
+  const previewImage = useMemo(() => {
+    return selectedShots.map((s): FrameMedia | null => {
+      if (!s) return null;
+      return { type: "image", src: s.photo };
+    });
+  }, [selectedShots]);
+
+  // PNG는 무조건 photo로 합성
+  const pngSources: FrameSource[] = useMemo(() => {
+    return selectedShots
+      .map((s) => (s ? ({ type: "image", src: s.photo } as const) : null))
+      .filter(isNotNull);
+  }, [selectedShots]);
+
+  // WEBM은 video 있으면 video, 없으면 photo를 image로
+  const webmSources: FrameSource[] = useMemo(() => {
     return selectedShots
       .map((s) => {
         if (!s) return null;
@@ -65,17 +79,6 @@ export default function ShootResultPage() {
       .filter((v): v is FrameSource => Boolean(v));
   }, [selectedShots]);
 
-  // PNG는 "전부 사진"일 때만
-  const isAllImages = useMemo(
-    () => selectedShots.every((s) => s && !s.video),
-    [selectedShots]
-  );
-
-  const hasAnyVideo = useMemo(
-    () => selectedShots.some((s) => Boolean(s?.video)),
-    [selectedShots]
-  );
-
   if (!frameId) return null;
 
   const layout = FRAME_LAYOUTS[frameId as FrameId];
@@ -83,15 +86,14 @@ export default function ShootResultPage() {
   if (!layout) return null;
 
   const handleDownloadPng = async () => {
-    if (!isAllImages) return;
-    if (sources.length !== 4) return;
+    if (pngSources.length !== 4) return;
 
     setIsDownloadingImage(true);
     try {
       const blob = await composeFramePng({
         layout,
         borderColor,
-        sources,
+        sources: pngSources,
         canvas: canvasRef.current ?? undefined,
       });
 
@@ -106,18 +108,14 @@ export default function ShootResultPage() {
   };
 
   const handleDownloadVideo = async () => {
-    if (!hasAnyVideo) {
-      alert("동영상이 1개 이상 포함되어야 영상으로 다운로드할 수 있어요.");
-      return;
-    }
-    if (sources.length !== 4) return;
+    if (webmSources.length !== 4) return;
 
     setIsDownloadingVideo(true);
     try {
       const blob = await recordFrameWebm({
         layout,
         borderColor,
-        sources,
+        sources: webmSources,
         seconds: MAX_SECONDS,
         canvas: canvasRef.current ?? undefined,
       });
@@ -143,10 +141,14 @@ export default function ShootResultPage() {
 
         <FramePreview
           frameId={frameId}
-          media={previewMedia}
+          media={previewImage}
           borderColor={borderColor}
         />
-
+        <FramePreview
+          frameId={frameId}
+          media={previewVideo}
+          borderColor={borderColor}
+        />
         <section className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
             {BORDER_COLORS.map((c) => (
@@ -170,9 +172,7 @@ export default function ShootResultPage() {
             <button
               type="button"
               onClick={handleDownloadPng}
-              disabled={
-                isDownloadingImage || !isAllImages || selectedCount !== 4
-              }
+              disabled={isDownloadingImage || selectedCount !== 4}
               className="flex-1 rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isDownloadingImage ? "이미지 생성 중..." : "사진 다운로드 (PNG)"}
@@ -181,7 +181,7 @@ export default function ShootResultPage() {
             <button
               type="button"
               onClick={handleDownloadVideo}
-              disabled={isDownloadingVideo || !hasAnyVideo}
+              disabled={isDownloadingVideo || selectedCount !== 4}
               className="flex-1 rounded-full bg-zinc-700 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isDownloadingVideo ? "영상 생성 중..." : "동영상 다운로드"}
