@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function CapturePage() {
   const {
@@ -29,23 +29,11 @@ export default function CapturePage() {
         className="hidden"
       />
       <div className="mx-auto flex w-full max-w-md flex-col gap-5">
-        <header className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              RECORDAY
-            </span>
-            <h1 className="text-lg font-semibold tracking-tight">
-              사진 촬영 · 8장 자동 촬영
-            </h1>
-          </div>
-          <Link
-            href="/shoot"
-            className="text-xs text-zinc-400 underline underline-offset-4"
-          >
-            프레임 다시 선택
-          </Link>
-        </header>
-
+        <PageHeader
+          title="사진 촬영 · 8장 자동 촬영"
+          backHref="/shoot"
+          backLabel="프레임 다시 선택"
+        />
         <section className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
           <div className="flex items-center justify-between text-[11px] text-zinc-400">
             <span>2단계 · 카메라 촬영 {isShooting && "· 자동 촬영 중"}</span>

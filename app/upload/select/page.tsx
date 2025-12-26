@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import type { FrameMedia } from "@/components/frame/FramePreview";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function UploadSelectPage() {
   const router = useRouter();
@@ -58,48 +59,56 @@ export default function UploadSelectPage() {
   };
 
   return (
-    <FrameSelectPanel
-      frameId={frameId ?? null}
-      media={media}
-      selectedIndexes={selectedIndexes}
-      maxSelect={4}
-      headerTitle="업로드 · 사진 선택"
-      backHref="/upload"
-      backLabel="프레임 다시 선택"
-      guideText={
-        media.length === 0
-          ? "먼저 사진이나 동영상을 업로드해 주세요."
-          : `업로드한 미디어 ${media.length}개 중에서 최대 ${4}개를 골라주세요.`
-      }
-      emptyStateText="아직 업로드된 사진이 없어요. 아래 버튼으로 사진을 추가해 주세요."
-      nextButtonLabel="다음 단계로 (프레임 합성 예정)"
-      onToggleSelect={toggleSelect}
-      onReset={resetAll}
-      onNext={handleNext}
-      renderExtraControls={() => (
-        <>
-          <button
-            type="button"
-            onClick={handleClickUpload}
-            className="h-9 rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-100 hover:bg-zinc-700"
-          >
-            사진 업로드하기
-          </button>
+    <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-5">
+        <PageHeader
+          title="업로드 · 사진 선택"
+          backHref="/upload"
+          backLabel="프레임 다시 선택"
+        />
+        <FrameSelectPanel
+          frameId={frameId ?? null}
+          media={media}
+          selectedIndexes={selectedIndexes}
+          maxSelect={4}
+          guideText={
+            media.length === 0
+              ? "먼저 사진이나 동영상을 업로드해 주세요."
+              : `업로드한 미디어 ${
+                  media.length
+                }개 중에서 최대 ${4}개를 골라주세요.`
+          }
+          emptyStateText="아직 업로드된 사진이 없어요. 아래 버튼으로 사진을 추가해 주세요."
+          nextButtonLabel="다음 단계로 (프레임 합성 예정)"
+          onToggleSelect={toggleSelect}
+          onReset={resetAll}
+          onNext={handleNext}
+          renderExtraControls={() => (
+            <>
+              <button
+                type="button"
+                onClick={handleClickUpload}
+                className="h-9 rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-100 hover:bg-zinc-700"
+              >
+                사진 업로드하기
+              </button>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            onChange={handleChangeFiles}
-            className="hidden"
-          />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={handleChangeFiles}
+                className="hidden"
+              />
 
-          <p className="text-[10px] text-zinc-500">
-            여러 장 업로드한 뒤, 인생네컷에 넣을 사진 4장을 골라보세요.
-          </p>
-        </>
-      )}
-    />
+              <p className="text-[10px] text-zinc-500">
+                여러 장 업로드한 뒤, 인생네컷에 넣을 사진 4장을 골라보세요.
+              </p>
+            </>
+          )}
+        />
+      </div>
+    </main>
   );
 }
