@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAccessToken } from "@/lib/auth";
+import { verifyAccessToken } from "@/lib/server/auth";
 
 const PROTECTED_PATHS = ["/home", "/shoot", "/upload", "/history", "/theme"];
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
