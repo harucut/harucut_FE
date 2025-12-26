@@ -13,7 +13,7 @@ type ReissueResponse = {
     refreshToken: string;
   };
 };
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // 보호 안 하는 경로면 패스
