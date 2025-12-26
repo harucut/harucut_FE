@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "edge";
+
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export async function DELETE(req: Request) {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-
+export const runtime = "edge";
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 function getCookieValue(cookieHeader: string, name: string) {
