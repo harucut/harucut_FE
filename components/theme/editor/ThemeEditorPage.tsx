@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { CanvasStage } from "@/components/theme/editor/canvas/CanvasStage";
 import { AssetPanel } from "@/components/theme/editor/AssetPanel";
@@ -10,6 +11,7 @@ import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
+  const router = useRouter();
   const setFrameId = useThemeEditorStore((s) => s.setFrameId);
   const exportJson = useThemeEditorStore((s) => s.exportJson);
   const resetPhotos = useThemeEditorStore((s) => s.resetPhotos);
@@ -50,6 +52,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             <Link
               href="/theme"
               className="text-xs text-zinc-400 underline underline-offset-4"
+              onClick={() => {
+                useThemeEditorStore.getState().reset();
+                router.push("/theme/frame");
+              }}
             >
               프레임 다시
             </Link>

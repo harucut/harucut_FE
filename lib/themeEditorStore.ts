@@ -23,7 +23,7 @@ function normalizeZ(components: EditorComponent[]): EditorComponent[] {
 }
 
 async function readImageSize(
-  src: string
+  src: string,
 ): Promise<{ w: number; h: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -74,7 +74,7 @@ type State = {
 
   addComponentFromAsset: (
     type: "PHOTO" | "STICKER",
-    src: string
+    src: string,
   ) => Promise<void>;
   addText: () => void;
 
@@ -84,8 +84,8 @@ type State = {
   remove: (id: string) => void;
   duplicate: (id: string) => void;
 
-  // bringToFront: (id: string) => void;
-  // sendToBack: (id: string) => void;
+  reset: () => void;
+
   moveLayerUp: (id: string) => void;
   moveLayerDown: (id: string) => void;
 
@@ -94,6 +94,27 @@ type State = {
 
   exportJson: () => ThemeExportJson | null;
 };
+
+function resetEditorState(get: () => State) {
+  const state = get();
+
+  // 업로드 이미지 메모리 정리
+  for (const p of state.assets.photos) {
+    try {
+      URL.revokeObjectURL(p.src);
+    } catch {}
+  }
+
+  return {
+    tab: "PHOTO" as ComponentType,
+    components: [],
+    activeId: null,
+    assets: {
+      photos: [],
+      stickers: state.assets.stickers,
+    },
+  };
+}
 
 export const useThemeEditorStore = create<State>((set, get) => ({
   frameId: null,
@@ -107,7 +128,16 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   components: [],
   activeId: null,
 
-  setFrameId: (id) => set({ frameId: id }),
+  setFrameId: (id) =>
+    set((s) => {
+      // 같은 프레임 다시 선택하면 아무 것도 안 함
+      if (s.frameId === id) return s;
+
+      return {
+        frameId: id,
+        ...resetEditorState(() => s),
+      };
+    }),
 
   setTab: (t) => set({ tab: t }),
 
@@ -130,7 +160,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     if (!asset) return { ok: false as const, reason: "NOT_FOUND" as const };
 
     const inUse = state.components.some(
-      (c) => c.type === "PHOTO" && c.source === asset.src
+      (c) => c.type === "PHOTO" && c.source === asset.src,
     );
     if (inUse) return { ok: false as const, reason: "IN_USE" as const };
 
@@ -316,27 +346,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
-  // bringToFront: (id) => {
-  //   set((s) => {
-  //     const idx = s.components.findIndex((c) => c.id === id);
-  //     if (idx < 0) return s;
-
-  //     const picked = s.components[idx];
-  //     const rest = s.components.filter((_, i) => i !== idx);
-  //     return { components: normalizeZ([...rest, picked]) };
-  //   });
-  // },
-
-  // sendToBack: (id) => {
-  //   set((s) => {
-  //     const idx = s.components.findIndex((c) => c.id === id);
-  //     if (idx < 0) return s;
-
-  //     const picked = s.components[idx];
-  //     const rest = s.components.filter((_, i) => i !== idx);
-  //     return { components: normalizeZ([picked, ...rest]) };
-  //   });
-  // },
+  reset: () => {
+    set((s) => ({
+      frameId: null,
+      ...resetEditorState(() => s),
+    }));
+  },
 
   moveLayerUp: (id) => {
     set((s) => {
@@ -363,7 +378,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   toggleHidden: (id) => {
     set((s) => ({
       components: s.components.map((c) =>
-        c.id === id ? { ...c, hidden: !c.hidden } : c
+        c.id === id ? { ...c, hidden: !c.hidden } : c,
       ),
     }));
   },
@@ -371,7 +386,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   toggleLocked: (id) => {
     set((s) => ({
       components: s.components.map((c) =>
-        c.id === id ? { ...c, locked: !c.locked } : c
+        c.id === id ? { ...c, locked: !c.locked } : c,
       ),
     }));
   },
