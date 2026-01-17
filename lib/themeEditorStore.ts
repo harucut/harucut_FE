@@ -93,6 +93,9 @@ type State = {
   toggleLocked: (id: string) => void;
 
   exportJson: () => ThemeExportJson | null;
+
+  renderKey: number;
+  bumpRenderKey: () => void;
 };
 
 function resetEditorState(get: () => State) {
@@ -264,7 +267,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
     const style: TextStyleJson = {
       fontFamily: "Pretendard",
-      fontSize: 64,
+      fontSize: 256,
       color: "#ffffff",
       textAlign: "center",
       opacity: 1,
@@ -416,4 +419,11 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         })),
     };
   },
+
+  renderKey: 0,
+
+  bumpRenderKey: () =>
+    set((s) => ({
+      renderKey: s.renderKey + 1,
+    })),
 }));
