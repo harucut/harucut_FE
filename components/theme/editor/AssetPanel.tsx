@@ -1,7 +1,7 @@
 "use client";
 
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 
 export function AssetPanel() {
@@ -227,12 +227,36 @@ function StickerTab() {
 
 function TextTab() {
   const addText = useThemeEditorStore((s) => s.addText);
+  const [text, setText] = useState("HaruCut");
+  const [fontSize, setFontSize] = useState(256);
 
   return (
     <div className="flex flex-col gap-3">
+      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+        <span>텍스트 내용</span>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="텍스트를 입력하세요"
+          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+        <span>폰트 크기</span>
+        <input
+          type="number"
+          min={12}
+          max={420}
+          value={fontSize}
+          onChange={(e) => setFontSize(Number(e.target.value) || 0)}
+          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+        />
+      </label>
+
       <button
         type="button"
-        onClick={addText}
+        onClick={() => addText({ text, fontSize })}
         className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
       >
         텍스트 추가

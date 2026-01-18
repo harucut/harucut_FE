@@ -76,7 +76,7 @@ type State = {
     type: "PHOTO" | "STICKER",
     src: string,
   ) => Promise<void>;
-  addText: () => void;
+  addText: (options?: { text?: string; fontSize?: number }) => void;
 
   setActive: (id: string | null) => void;
   updateComponent: (id: string, patch: UpdatePatch) => void;
@@ -258,16 +258,23 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     get().updateComponent(id, { width: w, height: h });
   },
 
-  addText: () => {
+  addText: (options) => {
     const { frameId } = get();
     if (!frameId) return;
+
+    const text = options?.text?.trim() ? options.text.trim() : "HaruCut";
+    const rawFontSize =
+      typeof options?.fontSize === "number" && Number.isFinite(options.fontSize)
+        ? options.fontSize
+        : 256;
+    const fontSize = Math.min(420, Math.max(12, rawFontSize));
 
     const layout = FRAME_LAYOUTS[frameId];
     const id = uid("text");
 
     const style: TextStyleJson = {
       fontFamily: "Pretendard",
-      fontSize: 256,
+      fontSize,
       color: "#ffffff",
       textAlign: "center",
       opacity: 1,
@@ -276,7 +283,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     const c: TextComponent = {
       id,
       type: "TEXT",
-      source: "Happy Day",
+      source: text,
       x: layout.totalWidth / 2,
       y: 300,
       width: 1200,
