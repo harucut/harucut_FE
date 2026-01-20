@@ -6,7 +6,7 @@ export async function DELETE(req: Request) {
   const cookie = req.headers.get("cookie") ?? "";
 
   try {
-    const upstream = await fetch(`${BASE_URL}/api/recorday/logout`, {
+    const upstream = await fetch(`${BASE_URL}/api/harucut/logout`, {
       method: "DELETE",
       headers: {
         cookie,
@@ -17,7 +17,7 @@ export async function DELETE(req: Request) {
     // 백엔드 응답이 200이든 아니든, 프론트 쿠키는 안전하게 만료
     const res = NextResponse.json(
       { ok: upstream.ok },
-      { status: upstream.ok ? 200 : 400 }
+      { status: upstream.ok ? 200 : 400 },
     );
 
     res.cookies.set("accessToken", "", {

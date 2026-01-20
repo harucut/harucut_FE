@@ -41,7 +41,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         <header className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              RECORDAY
+              harucut
             </span>
             <h1 className="text-lg font-semibold tracking-tight">
               프레임 편집기

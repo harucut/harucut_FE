@@ -13,8 +13,8 @@ export async function requestPasswordResetCode(email: string) {
 
 export async function verifyPasswordResetCode(email: string, code: string) {
   const res = await api.post<ResetTokenResponse>(
-    "/api/recorday/reset/password/verification",
-    { email, code }
+    "/api/harucut/reset/password/verification",
+    { email, code },
   );
 
   const token = res.data?.data?.resetToken;
@@ -23,5 +23,5 @@ export async function verifyPasswordResetCode(email: string, code: string) {
 }
 
 export async function resetPassword(resetToken: string, newPassword: string) {
-  await api.patch("/api/recorday/reset/password", { resetToken, newPassword });
+  await api.patch("/api/harucut/reset/password", { resetToken, newPassword });
 }
