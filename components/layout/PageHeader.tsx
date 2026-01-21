@@ -31,7 +31,7 @@ export function PageHeader({
         <div className="flex flex-col">
           {showBrand && (
             <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              RECORDAY
+              harucut
             </span>
           )}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>

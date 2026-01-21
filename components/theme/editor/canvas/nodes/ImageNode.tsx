@@ -12,6 +12,8 @@ type Props = {
   common: Partial<GroupConfig> & {
     onClick: () => void;
     onTap: () => void;
+    onMouseDown: () => void;
+    onTouchStart: () => void;
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
   };
   outline: React.ReactNode;

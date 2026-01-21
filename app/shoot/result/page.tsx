@@ -29,7 +29,7 @@ export default function ShootResultPage() {
 
   const selectedCount = useMemo(
     () => selectedIndexes.filter((i) => i != null).length,
-    [selectedIndexes]
+    [selectedIndexes],
   );
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function ShootResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "recorday").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
       downloadBlob(blob, `${name}-${Date.now()}.png`);
     } catch (e) {
       console.error(e);
@@ -120,7 +120,7 @@ export default function ShootResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "recorday").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
       downloadBlob(blob, `${name}-${Date.now()}.webm`);
     } catch (e) {
       console.error(e);

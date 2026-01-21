@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { FrameId } from "@/constants/frames";
@@ -14,7 +13,7 @@ export default function ThemePage() {
 
   // 항상 기본값으로 시작
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
-    frameId ?? "classic-4"
+    frameId ?? "classic-4",
   );
 
   // theme 페이지 진입 시 세션 초기화

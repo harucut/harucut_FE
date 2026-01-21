@@ -13,7 +13,7 @@ export default function LandingPage() {
                 TODAY&apos;S RECORD
               </span>
               <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-                Recorday
+                harucut
               </h1>
               <p className="text-xs text-zinc-300 md:text-sm">
                 특별한 오늘을 네 컷으로
@@ -67,7 +67,7 @@ export default function LandingPage() {
             <div className="relative aspect-[3/5] w-full max-h-[320px] rounded-2xl border border-white/10 bg-black overflow-hidden md:max-h-[380px]">
               <Image
                 src="/hero-image.png"
-                alt="recorday 인생네컷 샘플"
+                alt="harucut 인생네컷 샘플"
                 fill
                 sizes="(max-width: 768px) 100vw, 400px"
                 className="object-contain"
@@ -87,7 +87,7 @@ export default function LandingPage() {
                 # 오늘의기록
               </span>
               <span className="rounded-full border border-zinc-700 px-2 py-0.5">
-                # Recorday
+                # harucut
               </span>
             </div>
           </section>

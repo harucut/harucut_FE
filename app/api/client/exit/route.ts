@@ -8,7 +8,7 @@ export async function DELETE(req: Request) {
   const cookie = req.headers.get("cookie") ?? "";
 
   try {
-    const upstream = await fetch(`${BASE_URL}/api/recorday/exit`, {
+    const upstream = await fetch(`${BASE_URL}/api/harucut/exit`, {
       method: "DELETE",
       headers: { cookie },
       cache: "no-store",
@@ -16,7 +16,7 @@ export async function DELETE(req: Request) {
 
     const res = NextResponse.json(
       { ok: upstream.ok },
-      { status: upstream.ok ? 200 : 400 }
+      { status: upstream.ok ? 200 : 400 },
     );
 
     res.cookies.set("accessToken", "", {

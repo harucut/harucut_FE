@@ -8,6 +8,7 @@ import type { EditorComponent, TextComponent } from "@/lib/types/themeEditor";
 import { getOpacity } from "./utils";
 import { ImageNode } from "./nodes/ImageNode";
 import { TextNode } from "./nodes/TextNode";
+import { useThemeEditorStore } from "@/lib/themeEditorStore";
 
 type Props = {
   c: EditorComponent;
@@ -28,8 +29,8 @@ function isText(c: EditorComponent): c is TextComponent {
 }
 
 export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
+  const bumpRenderKey = useThemeEditorStore((s) => s.bumpRenderKey);
   if (c.hidden) return null;
-
   const opacity = getOpacity(c.styleJson);
 
   const outline =
@@ -49,6 +50,8 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
   const common: Partial<GroupConfig> & {
     onClick: () => void;
     onTap: () => void;
+    onMouseDown: () => void;
+    onTouchStart: () => void;
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
   } = {
     id: `node-${c.id}`,
@@ -57,8 +60,12 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
     rotation: c.rotation ?? 0,
     opacity,
     draggable: !c.locked,
+
+    onMouseDown: onSelect,
+    onTouchStart: onSelect,
     onClick: onSelect,
     onTap: onSelect,
+
     onDragEnd: (e) => {
       const node = e.target;
       onCommit({ x: node.x(), y: node.y() });
@@ -66,9 +73,23 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
   };
 
   if (isText(c)) {
-    return <TextNode c={c} common={common} outline={outline} />;
+    return (
+      <TextNode
+        c={c}
+        common={common}
+        outline={outline}
+        onAutoSize={(size) => onCommit(size)}
+      />
+    );
   }
 
   // PHOTO / STICKER
-  return <ImageNode c={c} common={common} outline={outline} />;
+  return (
+    <ImageNode
+      c={c}
+      common={common}
+      outline={outline}
+      onAssetReady={bumpRenderKey}
+    />
+  );
 }

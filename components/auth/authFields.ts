@@ -19,7 +19,7 @@ export const LOGIN_FIELDS: AuthFieldConfig[] = [
     name: "email",
     type: "email",
     label: "이메일",
-    placeholder: "example@recorday.com",
+    placeholder: "example@harucut.com",
     autoComplete: "email",
   },
   {
@@ -37,7 +37,7 @@ export const EMAIL_FIELD: AuthFieldConfig = {
   name: "email",
   type: "email",
   label: "이메일",
-  placeholder: "example@recorday.com",
+  placeholder: "example@harucut.com",
   autoComplete: "email",
 };
 
