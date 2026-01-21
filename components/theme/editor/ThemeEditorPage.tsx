@@ -27,6 +27,12 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   }, [resetPhotos]);
 
   const onDone = async () => {
+    const state = useThemeEditorStore.getState();
+    const hiddenCount = state.components.filter((c) => c.hidden).length;
+    if (hiddenCount > 0) {
+      alert("숨김 요소는 삭제됩니다.");
+    }
+
     const json = exportJson();
     if (!json) return;
 
