@@ -47,6 +47,9 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
       />
     ) : null;
 
+  const offsetX = c.width / 2;
+  const offsetY = c.height / 2;
+
   const common: Partial<GroupConfig> & {
     onClick: () => void;
     onTap: () => void;
@@ -55,8 +58,10 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
   } = {
     id: `node-${c.id}`,
-    x: c.x,
-    y: c.y,
+    x: c.x + offsetX,
+    y: c.y + offsetY,
+    offsetX,
+    offsetY,
     rotation: c.rotation ?? 0,
     opacity,
     draggable: !c.locked,
@@ -68,7 +73,7 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
 
     onDragEnd: (e) => {
       const node = e.target;
-      onCommit({ x: node.x(), y: node.y() });
+      onCommit({ x: node.x() - offsetX, y: node.y() - offsetY });
     },
   };
 
