@@ -165,9 +165,11 @@ export function CanvasStage() {
                 const nextRot = node.rotation();
 
                 if (c.type === "TEXT") {
+                  const nextX = node.x() - c.width / 2;
+                  const nextY = node.y() - c.height / 2;
                   update(activeId, {
-                    x: node.x(),
-                    y: node.y(),
+                    x: nextX,
+                    y: nextY,
                     rotation: nextRot,
                   });
                   return;
@@ -178,13 +180,16 @@ export function CanvasStage() {
                 node.scaleX(1);
                 node.scaleY(1);
 
+                const nextW = Math.max(1, c.width * sx);
+                const nextH = Math.max(1, c.height * sy);
+
                 // PHOTO / STICKER
                 update(activeId, {
-                  x: node.x(),
-                  y: node.y(),
+                  x: node.x() - nextW / 2,
+                  y: node.y() - nextH / 2,
                   rotation: nextRot,
-                  width: Math.max(1, c.width * sx),
-                  height: Math.max(1, c.height * sy),
+                  width: nextW,
+                  height: nextH,
                 });
               }}
             />
