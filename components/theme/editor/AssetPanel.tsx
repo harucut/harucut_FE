@@ -1,7 +1,8 @@
 "use client";
 
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
+import { ImagePlus, X } from "lucide-react";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((s) => s.tab);
@@ -64,7 +65,9 @@ function PhotoTab() {
   const addAssets = useThemeEditorStore((s) => s.addPhotoAssets);
   const addComponent = useThemeEditorStore((s) => s.addComponentFromAsset);
   const removePhotoAsset = useThemeEditorStore((s) => s.removePhotoAsset);
+
   const [blockClick, setBlockClick] = React.useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <div className="flex flex-col gap-3">
@@ -75,73 +78,102 @@ function PhotoTab() {
       </div>
 
       <input
+        ref={fileRef}
         type="file"
         accept="image/*"
         multiple
-        onChange={(e) => e.target.files && addAssets(e.target.files)}
-        className="text-[11px] text-zinc-300"
+        className="hidden"
+        onChange={(e) => {
+          if (!e.target.files) return;
+          addAssets(e.target.files);
+          e.currentTarget.value = "";
+        }}
       />
 
       {photos.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[11px] text-zinc-400">
-          아직 업로드한 사진이 없습니다.
+          아직 업로드한 사진이 없습니다. 아래 + 버튼으로 추가해보세요.
         </div>
-      ) : (
-        <div
-          className="
-            flex gap-2 overflow-x-auto pb-2
-            snap-x snap-mandatory
-            [-webkit-overflow-scrolling:touch]
-            [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
-          "
-        >
-          <HorizontalScroller onDragStateChange={setBlockClick}>
-            {photos.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  if (blockClick) return;
-                  addComponent("PHOTO", p.src);
-                }}
-                className="
+      ) : null}
+      <div
+        className="
+          flex gap-2 overflow-x-auto pb-2
+          snap-x snap-mandatory
+          [-webkit-overflow-scrolling:touch]
+          [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+        "
+      >
+        <HorizontalScroller onDragStateChange={setBlockClick}>
+          {/* 업로드 카드 */}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="
+              group relative
+              aspect-square w-[72px] shrink-0
+              snap-start
+              overflow-hidden rounded-xl
+              border border-dashed border-zinc-700 bg-zinc-950
+              hover:border-emerald-500/60 hover:bg-emerald-500/5
+            "
+            title="사진 업로드"
+          >
+            <div className="h-full w-full flex flex-col items-center justify-center gap-1 text-zinc-400 group-hover:text-emerald-200">
+              <ImagePlus size={18} />
+              <span className="text-[10px]">업로드</span>
+            </div>
+          </button>
+
+          {photos.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                if (blockClick) return;
+                addComponent("PHOTO", p.src);
+              }}
+              className="
                 group relative
                 aspect-square w-[72px] shrink-0
                 snap-start
                 overflow-hidden rounded-xl
                 border border-zinc-800 bg-zinc-950
               "
-                title={p.name ?? "photo"}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.src}
-                  alt={p.name ?? "photo"}
-                  className="h-full w-full object-cover group-hover:opacity-80"
-                  draggable={false}
-                />
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const result = removePhotoAsset(p.id);
+              title={p.name ?? "photo"}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.src}
+                alt={p.name ?? "photo"}
+                className="h-full w-full object-cover group-hover:opacity-85"
+                draggable={false}
+              />
 
-                    if (!result.ok) {
-                      if (result.reason === "IN_USE") {
-                        alert("프레임에서 사용 중인 사진은 삭제할 수 없어요.");
-                      }
-                    }
-                  }}
-                  className="absolute top-1 right-1 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100"
-                  title="사진 삭제"
-                >
-                  ✕
-                </button>
+              {/* 삭제 버튼 */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const result = removePhotoAsset(p.id);
+                  if (!result.ok && result.reason === "IN_USE") {
+                    alert("프레임에서 사용 중인 사진은 삭제할 수 없어요.");
+                  }
+                }}
+                className="
+                  absolute top-1 right-1 z-10
+                  rounded-md border border-white/10 bg-black/60
+                  p-1 text-white
+                  opacity-0 group-hover:opacity-100
+                "
+                title="사진 삭제"
+                aria-label="사진 삭제"
+              >
+                <X size={12} />
               </button>
-            ))}
-          </HorizontalScroller>
-        </div>
-      )}
+            </button>
+          ))}
+        </HorizontalScroller>
+      </div>
     </div>
   );
 }
@@ -195,12 +227,36 @@ function StickerTab() {
 
 function TextTab() {
   const addText = useThemeEditorStore((s) => s.addText);
+  const [text, setText] = useState("HaruCut");
+  const [fontSize, setFontSize] = useState(256);
 
   return (
     <div className="flex flex-col gap-3">
+      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+        <span>텍스트 내용</span>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="텍스트를 입력하세요"
+          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+        <span>폰트 크기</span>
+        <input
+          type="number"
+          min={12}
+          max={420}
+          value={fontSize}
+          onChange={(e) => setFontSize(Number(e.target.value) || 0)}
+          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+        />
+      </label>
+
       <button
         type="button"
-        onClick={addText}
+        onClick={() => addText({ text, fontSize })}
         className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
       >
         텍스트 추가

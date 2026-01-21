@@ -27,7 +27,7 @@ export default function UploadResultPage() {
 
   const selectedCount = useMemo(
     () => selectedIndexes.filter((i) => i != null).length,
-    [selectedIndexes]
+    [selectedIndexes],
   );
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function UploadResultPage() {
         if (idx == null) return null;
         return media[idx] ?? null;
       }),
-    [selectedIndexes, media]
+    [selectedIndexes, media],
   );
 
   const sources: FrameSource[] = useMemo(() => {
@@ -58,12 +58,12 @@ export default function UploadResultPage() {
 
   const hasAnyVideo = useMemo(
     () => selectedMedia.some((m) => m?.type === "video"),
-    [selectedMedia]
+    [selectedMedia],
   );
 
   const isAllImages = useMemo(
     () => selectedMedia.every((m) => m?.type === "image"),
-    [selectedMedia]
+    [selectedMedia],
   );
 
   if (!frameId) return null;
@@ -85,7 +85,7 @@ export default function UploadResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "recorday").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
       downloadBlob(blob, `${name}-${Date.now()}.png`);
     } catch (e) {
       console.error(e);
@@ -112,7 +112,7 @@ export default function UploadResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "recorday").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
       downloadBlob(blob, `${name}-${Date.now()}.webm`);
     } catch (e) {
       console.error(e);

@@ -2,6 +2,16 @@
 
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent } from "@/lib/types/themeEditor";
+import {
+  Lock,
+  LockOpen,
+  Eye,
+  EyeOff,
+  ChevronUp,
+  ChevronDown,
+  Copy,
+  Trash2,
+} from "lucide-react";
 
 export function LayersPanel() {
   const components = useThemeEditorStore((s) => s.components);
@@ -13,8 +23,6 @@ export function LayersPanel() {
 
   const up = useThemeEditorStore((s) => s.moveLayerUp);
   const down = useThemeEditorStore((s) => s.moveLayerDown);
-  // const front = useThemeEditorStore((s) => s.bringToFront);
-  // const back = useThemeEditorStore((s) => s.sendToBack);
 
   const toggleHidden = useThemeEditorStore((s) => s.toggleHidden);
   const toggleLocked = useThemeEditorStore((s) => s.toggleLocked);
@@ -45,8 +53,6 @@ export function LayersPanel() {
               onDup={() => duplicate(c.id)}
               onUp={() => up(c.id)}
               onDown={() => down(c.id)}
-              // onFront={() => front(c.id)}
-              // onBack={() => back(c.id)}
               onToggleHidden={() => toggleHidden(c.id)}
               onToggleLocked={() => toggleLocked(c.id)}
             />
@@ -65,8 +71,6 @@ function LayerRow({
   onDup,
   onUp,
   onDown,
-  // onFront,
-  // onBack,
   onToggleHidden,
   onToggleLocked,
 }: {
@@ -78,8 +82,6 @@ function LayerRow({
   onDup: () => void;
   onUp: () => void;
   onDown: () => void;
-  // onFront: () => void;
-  // onBack: () => void;
   onToggleHidden: () => void;
   onToggleLocked: () => void;
 }) {
@@ -130,43 +132,69 @@ function LayerRow({
       </button>
 
       <div className="flex items-center gap-1">
-        <MiniBtn onClick={onToggleLocked} label={c.locked ? "잠김" : "잠금"} />
-        <MiniBtn
-          onClick={onToggleHidden}
-          label={c.hidden ? "숨김해제" : "숨김"}
+        <MiniIconBtn
+          onClick={onToggleLocked}
+          title={c.locked ? "잠금 해제" : "잠금"}
+          active={c.locked}
+          icon={c.locked ? <Lock size={14} /> : <LockOpen size={14} />}
         />
-        <MiniBtn onClick={onUp} label="↑" />
-        <MiniBtn onClick={onDown} label="↓" />
-        {/* <MiniBtn onClick={onFront} label="앞" />
-        <MiniBtn onClick={onBack} label="뒤" /> */}
-        <MiniBtn onClick={onDup} label="복제" />
-        <MiniBtn onClick={onDelete} label="삭제" danger />
+        <MiniIconBtn
+          onClick={onToggleHidden}
+          title={c.hidden ? "숨김 해제" : "숨김"}
+          active={c.hidden}
+          icon={c.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+        />
+        <MiniIconBtn
+          onClick={onUp}
+          title="위로"
+          icon={<ChevronUp size={14} />}
+        />
+        <MiniIconBtn
+          onClick={onDown}
+          title="아래로"
+          icon={<ChevronDown size={14} />}
+        />
+        <MiniIconBtn onClick={onDup} title="복제" icon={<Copy size={14} />} />
+        <MiniIconBtn
+          onClick={onDelete}
+          title="삭제"
+          danger
+          icon={<Trash2 size={14} />}
+        />
       </div>
     </div>
   );
 }
 
-function MiniBtn({
+function MiniIconBtn({
   onClick,
-  label,
+  icon,
+  title,
+  active,
   danger,
 }: {
   onClick: () => void;
-  label: string;
+  icon: React.ReactNode;
+  title: string;
+  active?: boolean;
   danger?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
+      aria-label={title}
       className={[
-        "rounded-lg border px-2 py-1 text-[10px]",
+        "rounded-lg border p-2 inline-flex items-center justify-center",
         danger
           ? "border-red-800/70 bg-red-950 text-red-200 hover:bg-red-900/60"
-          : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800",
+          : active
+            ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15"
+            : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800",
       ].join(" ")}
     >
-      {label}
+      {icon}
     </button>
   );
 }

@@ -115,7 +115,7 @@ export default function MyPage() {
     }
 
     try {
-      await api.patch("/api/recorday/change/password", {
+      await api.patch("/api/harucut/change/password", {
         oldPassword,
         newPassword,
       });
@@ -150,7 +150,7 @@ export default function MyPage() {
 
   const handleExit = async () => {
     const ok = confirm(
-      "정말 회원 탈퇴할까요?\n탈퇴하면 계정은 복구할 수 없어요."
+      "정말 회원 탈퇴할까요?\n탈퇴하면 계정은 복구할 수 없어요.",
     );
     if (!ok) return;
 
@@ -179,7 +179,7 @@ export default function MyPage() {
               href="/home"
               className="text-[11px] tracking-[0.16em] text-zinc-500"
             >
-              RECORDAY
+              harucut
             </Link>
             <h1 className="text-lg font-semibold tracking-tight">마이페이지</h1>
           </div>

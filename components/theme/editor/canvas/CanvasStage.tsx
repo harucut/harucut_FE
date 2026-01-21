@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { Stage, Layer, Rect, Transformer } from "react-konva";
 import Konva from "konva";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { EditableNode } from "./EditableNode";
-import { TextStyleJson } from "@/lib/types/themeEditor";
 
 const VIEW_SIZE = 330;
 
@@ -15,6 +14,7 @@ export function CanvasStage() {
   const frameId = useThemeEditorStore((s) => s.frameId);
   const components = useThemeEditorStore((s) => s.components);
   const activeId = useThemeEditorStore((s) => s.activeId);
+  const renderKey = useThemeEditorStore((s) => s.renderKey);
 
   const setActive = useThemeEditorStore((s) => s.setActive);
   const update = useThemeEditorStore((s) => s.updateComponent);
@@ -24,12 +24,17 @@ export function CanvasStage() {
   const stageRef = useRef<Konva.Stage | null>(null);
   const trRef = useRef<Konva.Transformer | null>(null);
 
+  const activeComponent = useMemo(
+    () => components.find((x) => x.id === activeId) ?? null,
+    [components, activeId],
+  );
+
   const { viewW, viewH, scale } = useMemo(() => {
     if (!layout) return { viewW: VIEW_SIZE, viewH: VIEW_SIZE, scale: 1 };
 
     const s = Math.min(
       VIEW_SIZE / layout.totalWidth,
-      VIEW_SIZE / layout.totalHeight
+      VIEW_SIZE / layout.totalHeight,
     );
 
     return {
@@ -39,7 +44,7 @@ export function CanvasStage() {
     };
   }, [layout]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const stage = stageRef.current;
     const tr = trRef.current;
     if (!stage || !tr) return;
@@ -50,32 +55,17 @@ export function CanvasStage() {
       return;
     }
 
-    let raf1 = 0;
-    let raf2 = 0;
+    const node = stage.findOne(`#node-${activeId}`);
+    if (!node) return;
 
-    const attach = () => {
-      const node = stage.findOne(`#node-${activeId}`);
-      if (!node) return;
-
-      tr.nodes([node]);
-      tr.forceUpdate();
-      tr.getLayer()?.batchDraw();
-    };
-
-    raf1 = requestAnimationFrame(() => {
-      attach();
-      raf2 = requestAnimationFrame(() => attach());
-    });
-
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
-  }, [activeId, components]);
+    tr.nodes([node]);
+    tr.forceUpdate();
+    tr.getLayer()?.batchDraw();
+  }, [activeId, renderKey]);
 
   const sorted = useMemo(
     () => [...components].sort((a, b) => a.zIndex - b.zIndex),
-    [components]
+    [components],
   );
 
   if (!layout) return null;
@@ -140,18 +130,24 @@ export function CanvasStage() {
               ref={trRef}
               rotateEnabled
               flipEnabled={false}
-              enabledAnchors={[
-                "top-left",
-                "top-right",
-                "bottom-left",
-                "bottom-right",
-                "middle-left",
-                "middle-right",
-                "top-center",
-                "bottom-center",
-              ]}
+              enabledAnchors={
+                activeComponent?.type === "TEXT"
+                  ? []
+                  : ["top-left", "top-right", "bottom-left", "bottom-right"]
+              }
+              keepRatio={activeComponent?.type !== "TEXT"}
               boundBoxFunc={(oldBox, newBox) => {
-                if (newBox.width < 40 || newBox.height < 40) return oldBox;
+                // 텍스트 회전 허용
+                if (activeComponent?.type === "TEXT") return newBox;
+                const stage = stageRef.current;
+                const scaleX = stage?.scaleX() ?? 1;
+                const scaleY = stage?.scaleY() ?? 1;
+                const minSize = 40;
+                const logicalW = newBox.width / scaleX;
+                const logicalH = newBox.height / scaleY;
+
+                // 스테이지 크기가 축소되더라도 스테이지 좌표계에서 최소 크기 검사를 유지
+                if (logicalW < minSize || logicalH < minSize) return oldBox;
                 return newBox;
               }}
               onTransformEnd={() => {
@@ -159,55 +155,36 @@ export function CanvasStage() {
                 if (!stage || !activeId) return;
 
                 const node = stage.findOne(
-                  `#node-${activeId}`
+                  `#node-${activeId}`,
                 ) as Konva.Node | null;
                 if (!node) return;
 
                 const c = components.find((x) => x.id === activeId);
                 if (!c) return;
 
-                const sx = node.scaleX();
-                const sy = node.scaleY();
-
-                // scale을 width/height에만 반영
-                node.scaleX(1);
-                node.scaleY(1);
-
-                const nextW = Math.max(1, c.width * sx);
-                const nextH = Math.max(1, c.height * sy);
                 const nextRot = node.rotation();
 
                 if (c.type === "TEXT") {
-                  const style = c.styleJson;
-                  const baseFont = style.fontSize ?? 48;
-                  const factor = Math.max(sx, sy);
-                  const nextFontSize = Math.max(
-                    1,
-                    Math.round(baseFont * factor)
-                  );
-
                   update(activeId, {
                     x: node.x(),
                     y: node.y(),
                     rotation: nextRot,
-                    width: nextW,
-                    height: nextH,
-                    styleJson: {
-                      fontSize: nextFontSize,
-                    } as Partial<TextStyleJson>,
-                    scale: 1,
                   });
                   return;
                 }
+
+                const sx = node.scaleX();
+                const sy = node.scaleY();
+                node.scaleX(1);
+                node.scaleY(1);
 
                 // PHOTO / STICKER
                 update(activeId, {
                   x: node.x(),
                   y: node.y(),
                   rotation: nextRot,
-                  width: nextW,
-                  height: nextH,
-                  scale: 1,
+                  width: Math.max(1, c.width * sx),
+                  height: Math.max(1, c.height * sy),
                 });
               }}
             />

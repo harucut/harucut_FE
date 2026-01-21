@@ -1,5 +1,5 @@
 {
-  "name": "recorday",
+  "name": "harucut",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,6 +13,7 @@
     "axios": "^1.13.2",
     "jose": "^6.1.3",
     "konva": "^10.0.12",
+    "lucide-react": "^0.562.0",
     "next": "16.0.7",
     "react": "19.2.1",
     "react-dom": "19.2.1",
