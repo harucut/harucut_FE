@@ -12,7 +12,7 @@ type Props = {
   // 오른쪽: 링크 or 커스텀 액션
   backHref?: string;
   backLabel?: string;
-  rightSlot?: string;
+  rightSlot?: ReactNode;
 
   showBrand?: boolean;
 };
