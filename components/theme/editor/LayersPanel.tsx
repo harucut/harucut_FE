@@ -41,7 +41,7 @@ export function LayersPanel() {
           아직 추가된 요소가 없습니다.
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto custom-scroll">
           {list.map((c, idx) => (
             <LayerRow
               key={c.id}
