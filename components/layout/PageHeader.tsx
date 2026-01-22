@@ -12,7 +12,7 @@ type Props = {
   // 오른쪽: 링크 or 커스텀 액션
   backHref?: string;
   backLabel?: string;
-  rightSlot?: string;
+  rightSlot?: ReactNode;
 
   showBrand?: boolean;
 };
@@ -30,9 +30,13 @@ export function PageHeader({
       <header className="flex items-center justify-between">
         <div className="flex flex-col">
           {showBrand && (
-            <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              harucut
-            </span>
+            <Link
+              href="/home"
+              className="text-[11px] tracking-[0.16em] text-zinc-500 hover:text-white transition-colors"
+              aria-label="홈으로 이동"
+            >
+              HARUCUT
+            </Link>
           )}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
         </div>

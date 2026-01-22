@@ -1,3 +1,4 @@
+import { User } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FeatureCard } from "./_components/FeatureCard";
 import { features } from "./_config/features";
@@ -9,12 +10,12 @@ export default function HomePage() {
         <PageHeader
           title="오늘은 어떻게 기록할까?"
           backHref="/mypage"
-          rightSlot="사용자"
+          rightSlot={<User size={16} />}
           description={
             <>
               아래에서 원하는 기능을 선택해서 인생네컷을 만들어 보세요.
               <br />
-              추후 업데이트를 통해 기능들이 추가될 예정이에요.
+              추후 업데이트로 기능들이 추가될 예정이에요
             </>
           }
         />

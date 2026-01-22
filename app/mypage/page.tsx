@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { RefreshCw } from "lucide-react";
 
 type UserInfoResponse = {
   code: string;
@@ -61,8 +62,23 @@ export default function MyPage() {
   };
 
   useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      setUser({
+        id: 1,
+        email: "test@harucut.com",
+        username: "테스트유저",
+        profileUrl: null,
+      });
+      setLoading(false);
+      return;
+    }
+
     fetchUser();
   }, []);
+
+  // useEffect(() => {
+  //   fetchUser();
+  // }, []);
 
   const handleChangeUsername = async (e: FormEvent) => {
     e.preventDefault();
@@ -173,28 +189,32 @@ export default function MyPage() {
   return (
     <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
       <div className="mx-auto w-full max-w-md flex flex-col gap-6">
-        <header className="flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <Link
-              href="/home"
-              className="text-[11px] tracking-[0.16em] text-zinc-500"
+        <PageHeader
+          title="오늘은 어떻게 기록할까?"
+          backHref="/mypage"
+          rightSlot={
+            <button
+              onClick={fetchUser}
+              disabled={isSubmitting || loading}
+              className="h-9 w-9 grid place-items-center rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              aria-label="새로고침"
+              title="새로고침"
             >
-              harucut
-            </Link>
-            <h1 className="text-lg font-semibold tracking-tight">마이페이지</h1>
-          </div>
-
-          <button
-            onClick={fetchUser}
-            className="h-9 rounded-full bg-zinc-900 border border-zinc-700 px-4 text-[11px] text-zinc-300 hover:bg-zinc-800"
-          >
-            새로고침
-          </button>
-        </header>
-
-        {errors.common && (
-          <p className="text-[11px] text-red-400">{errors.common}</p>
-        )}
+              <RefreshCw
+                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              />
+            </button>
+          }
+          description={
+            <span
+              className={`text-[11px] ${
+                errors.common ? "text-red-400" : "text-zinc-400"
+              }`}
+            >
+              {errors.common ?? "계정 정보를 관리할 수 있어요."}
+            </span>
+          }
+        />
 
         {loading ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -311,7 +331,7 @@ export default function MyPage() {
 
             {/* 로그아웃 */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <h2 className="text-sm font-semibold">세션</h2>
+              <h2 className="text-sm font-semibold">로그아웃</h2>
               <button
                 onClick={handleLogout}
                 disabled={isSubmitting}
@@ -323,9 +343,9 @@ export default function MyPage() {
 
             {/* 회원 탈퇴 */}
             <section className="rounded-2xl border border-red-900/40 bg-red-950/10 p-4">
-              <h2 className="text-sm font-semibold text-red-200">위험 구역</h2>
+              <h2 className="text-sm font-semibold text-red-200">회원 탈퇴</h2>
               <p className="mt-1 text-[11px] text-red-200/80">
-                회원 탈퇴 시 계정은 복구할 수 없어요.
+                회원 탈퇴 시 계정은 1주일 내로만 복구할 수 있어요
               </p>
               <button
                 onClick={handleExit}

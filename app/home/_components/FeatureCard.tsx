@@ -1,16 +1,18 @@
 import Link from "next/link";
-import Image, { StaticImageData } from "next/image";
+import type { LucideIcon } from "lucide-react";
 
 export type Feature = {
   id: string;
   title: string;
   description: string;
   href: string;
+  icon: LucideIcon;
   comingSoon?: boolean;
-  icon: StaticImageData;
 };
 
 export function FeatureCard({ feature }: { feature: Feature }) {
+  const Icon = feature.icon;
+
   return (
     <Link
       href={feature.href}
@@ -23,12 +25,7 @@ export function FeatureCard({ feature }: { feature: Feature }) {
     >
       <div className="mt-1">
         <div className="relative h-10 w-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden">
-          <Image
-            src={feature.icon}
-            alt=""
-            className="h-7 w-7 object-contain brightness-0"
-            priority
-          />
+          <Icon className="h-5 w-5 text-emerald-400" />
         </div>
       </div>
 
