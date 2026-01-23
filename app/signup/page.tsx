@@ -18,6 +18,7 @@ import {
   validateUsername,
 } from "@/lib/authValidation";
 import { signupWithEmail } from "@/lib/auth/authApi";
+import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import { useEmailVerification } from "./_hooks/useEmailVerification";
 import { EmailCodeSection } from "@/components/auth/EmailCodeSection";
 
@@ -32,6 +33,7 @@ type SignupErrors = Partial<Record<SignupFieldName, string | null>> & {
 
 export default function SignupPage() {
   const router = useRouter();
+  useRedirectIfAuthenticated();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<SignupErrors>({});

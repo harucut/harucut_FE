@@ -2,13 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail } from "@/lib/auth/authApi";
+import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import type { AuthFieldName } from "@/components/auth/authFields";
 
 type LoginFieldName = Extract<AuthFieldName, "email" | "password">;
@@ -18,7 +18,7 @@ type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
+  useRedirectIfAuthenticated();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
