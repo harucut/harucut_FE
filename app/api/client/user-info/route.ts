@@ -16,10 +16,9 @@ export async function GET(req: Request) {
 
   // accessToken이 없으면 바로 401/400 처리
   if (!accessToken && !refreshToken) {
-    console.log("test");
     return NextResponse.json(
       { code: "AUTH-001", status: 401, message: "NO_TOKEN", data: null },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -33,8 +32,15 @@ export async function GET(req: Request) {
   });
 
   const body = await upstream.text();
-  return new NextResponse(body, {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
+  const res = new NextResponse(body, { status: upstream.status });
+
+  upstream.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "set-cookie") {
+      res.headers.append(key, value);
+    } else {
+      res.headers.set(key, value);
+    }
   });
+
+  return res;
 }
