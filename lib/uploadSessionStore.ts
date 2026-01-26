@@ -11,10 +11,12 @@ import {
 
 type UploadSessionState = {
   frameId: FrameId | null;
+  draftId: string | null;
   media: FrameMedia[];
   selectedIndexes: SelectionSlot[];
 
   setFrameId: (id: FrameId | null) => void;
+  setDraftId: (id: string | null) => void;
   addMedia: (items: FrameMedia[]) => void;
   toggleSelect: (index: number) => void;
   resetAll: () => void;
@@ -22,9 +24,10 @@ type UploadSessionState = {
 
 const initialState: Pick<
   UploadSessionState,
-  "frameId" | "media" | "selectedIndexes"
+  "frameId" | "draftId" | "media" | "selectedIndexes"
 > = {
   frameId: null,
+  draftId: null,
   media: [],
   selectedIndexes: createEmptySlots(),
 };
@@ -33,6 +36,7 @@ export const useUploadSession = create<UploadSessionState>((set, get) => ({
   ...initialState,
 
   setFrameId: (id) => set({ frameId: id }),
+  setDraftId: (id) => set({ draftId: id }),
 
   addMedia: (items) =>
     set((state) => ({
