@@ -88,7 +88,7 @@ export default function MyPage() {
     }
 
     try {
-      await api.patch(`/api/auth/user/change/?username=${next}`);
+      await api.patch(`/api/auth/user/change/username/?username=${next}`);
       setUser((prev) => (prev ? { ...prev, username: next } : prev));
       alert("사용자 이름이 변경됐어요.");
     } catch (e) {
