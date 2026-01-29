@@ -26,6 +26,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
   );
 
+  // 프레임 변경 시 에디터 상태 초기화
   useEffect(() => {
     setFrameId(frameId);
   }, [frameId, setFrameId]);
@@ -37,13 +38,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     }
   }, [draft, frameId, importJson]);
 
+  // 언마운트 시 업로드 이미지 메모리 정리
   useEffect(() => {
     return () => {
       resetPhotos();
     };
   }, [resetPhotos]);
 
+  // 저장: JSON 내보내기 → 서버 전송 → Draft 저장
   const onDone = async () => {
+    // 숨김 레이어가 있으면 경고 (서버에는 제외됨)
     const state = useThemeEditorStore.getState();
     const hiddenCount = state.components.filter((c) => c.hidden).length;
     if (hiddenCount > 0) {

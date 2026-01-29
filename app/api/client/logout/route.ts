@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 export const runtime = "edge";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
+/** 로그아웃 프록시 + 프론트 쿠키 만료 */
 export async function DELETE(req: Request) {
   const cookie = req.headers.get("cookie") ?? "";
 
