@@ -21,10 +21,13 @@ type CreateFrameRequest = {
     rotation: number;
     zIndex: number;
     styleJson: Record<string, unknown>;
+    // 서버가 id를 받는지 여부에 따라 선택
+    id?: string;
   }>;
 };
 
 function inferFrameType(frameId: string): CreateFrameRequest["frameType"] {
+  // 너네 FrameId 규칙에 맞게 매핑
   if (frameId.startsWith("wide")) return "WIDE";
   return "CLASSIC";
 }
@@ -61,6 +64,8 @@ export function toCreateFrameRequest(
       rotation: c.rotation ?? 0,
       zIndex: c.zIndex,
       styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
+      // 서버가 필요하면 여기서 넣기
+      id: c.id,
     })),
   };
 }
