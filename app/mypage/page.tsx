@@ -47,8 +47,7 @@ export default function MyPage() {
     setLoading(true);
     setErrors({});
     try {
-      const res = await api.get<UserInfoResponse>("/api/client/user-info");
-
+      const res = await api.get<UserInfoResponse>("/api/auth/user/info");
       setUser(res.data.data);
       setUsername(res.data.data.username || "");
     } catch (e) {
@@ -75,10 +74,6 @@ export default function MyPage() {
 
     fetchUser();
   }, []);
-
-  // useEffect(() => {
-  //   fetchUser();
-  // }, []);
 
   const handleChangeUsername = async (e: FormEvent) => {
     e.preventDefault();
@@ -151,8 +146,7 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/client/logout", { method: "DELETE" });
-      if (!res.ok) throw new Error("logout failed");
+      await api.delete("/api/harucut/logout");
 
       router.push("/login");
       router.refresh();
@@ -173,8 +167,7 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/client/exit", { method: "DELETE" });
-      if (!res.ok) throw new Error("exit failed");
+      await api.delete("/api/harucut/exit");
 
       router.push("/login");
       router.refresh();
