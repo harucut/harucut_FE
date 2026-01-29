@@ -9,7 +9,6 @@ import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail } from "@/lib/auth/authApi";
-import { setAuthCookies } from "@/lib/auth/tokens";
 import type { AuthFieldName } from "@/components/auth/authFields";
 
 type LoginFieldName = Extract<AuthFieldName, "email" | "password">;
@@ -47,11 +46,7 @@ export default function LoginPage() {
     }
 
     try {
-      const { accessToken, refreshToken } = await loginWithEmail(
-        email,
-        password,
-      );
-      setAuthCookies({ accessToken, refreshToken, sameSite: "Lax" });
+      await loginWithEmail(email, password);
       router.push("/home");
     } catch (error) {
       console.error(error);
