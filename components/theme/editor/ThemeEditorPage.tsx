@@ -10,7 +10,7 @@ import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { toCreateFrameRequest } from "@/lib/frameApi";
-import axios from "axios";
+import { api } from "@/lib/api";
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
@@ -47,7 +47,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     // 필요하면 디버그용
     console.log(body);
 
-    await axios.post("/api/auth/user/frame", body);
+    await api.post("/api/auth/user/frame", body);
   };
   return (
     <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
