@@ -1,16 +1,7 @@
 import { api } from "@/lib/api";
 
-type LoginResponse = {
-  data: {
-    accessToken: string;
-    refreshToken: string;
-  };
-};
-
 export async function loginWithEmail(email: string, password: string) {
-  const res = await api.post("/api/harucut/login", { email, password });
-  const { accessToken, refreshToken } = res.data.data as LoginResponse["data"];
-  return { accessToken, refreshToken };
+  await api.post("/api/harucut/login", { email, password });
 }
 
 export async function sendEmailAuthCode(email: string) {
