@@ -47,7 +47,7 @@ export default function LoginPage() {
 
     try {
       await loginWithEmail(email, password);
-      router.push("/home");
+      window.location.href = "/home";
     } catch (error) {
       console.error(error);
       setErrors({
