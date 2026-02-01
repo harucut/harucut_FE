@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { clientApi } from "@/lib/clientApi";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshCw } from "lucide-react";
 
@@ -47,7 +47,7 @@ export default function MyPage() {
     setLoading(true);
     setErrors({});
     try {
-      const res = await api.get<UserInfoResponse>("/api/auth/user/info");
+      const res = await clientApi.get<UserInfoResponse>("/api/client/user-info");
       setUser(res.data.data);
       setUsername(res.data.data.username || "");
     } catch (e) {
@@ -88,7 +88,7 @@ export default function MyPage() {
     }
 
     try {
-      await api.patch(`/api/auth/user/change/username?username=${next}`);
+      await clientApi.patch("/api/client/user/username", { username: next });
       setUser((prev) => (prev ? { ...prev, username: next } : prev));
       alert("사용자 이름이 변경됐어요.");
     } catch (e) {
@@ -126,7 +126,7 @@ export default function MyPage() {
     }
 
     try {
-      await api.patch("/api/harucut/change/password", {
+      await clientApi.patch("/api/client/auth/password/change", {
         oldPassword,
         newPassword,
       });
@@ -146,7 +146,7 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await api.delete("/api/harucut/logout");
+      await clientApi.delete("/api/client/logout");
 
       router.push("/login");
       router.refresh();
@@ -167,7 +167,7 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await api.delete("/api/harucut/exit");
+      await clientApi.delete("/api/client/exit");
 
       router.push("/login");
       router.refresh();
