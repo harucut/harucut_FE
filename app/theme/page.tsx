@@ -5,41 +5,54 @@ import { useEffect, useState } from "react";
 import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function ThemePage() {
   const router = useRouter();
-  const { frameId, setFrameId, reset } = useThemeSession();
+  const { frameId, setFrameId, setDraftId, reset } = useThemeSession();
+  const drafts = useThemeDraftStore((s) => s.drafts);
 
-  // 항상 기본값으로 시작
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     frameId ?? "classic-4",
   );
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
-  // theme 페이지 진입 시 세션 초기화
   useEffect(() => {
     reset();
   }, [reset]);
 
+  const allowedDraftId =
+    selectedDraftId &&
+    drafts.some(
+      (d) => d.id === selectedDraftId && d.frameId === selectedFrameId,
+    )
+      ? selectedDraftId
+      : null;
+
   const handleConfirmFrame = () => {
     setFrameId(selectedFrameId);
-    router.push("/theme/sticker"); // 다음 단계
+    setDraftId(allowedDraftId);
+    router.push("/theme/sticker");
   };
 
   return (
     <main className="min-h-dvh bg-zinc-950 text-white px-2 py-6">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader
-          title="테마 꾸미기 · 프레임 선택"
+          title="꾸미기 · 프레임 선택"
           backHref="/home"
-          backLabel="홈으로"
-          description={<>1단계: 인생네컷 레이아웃을 먼저 골라주세요.</>}
+          backLabel="처음으로"
+          description={<>1단계: 원하는 프레임을 선택해주세요.</>}
         />
         <FramePicker
           selectedFrameId={selectedFrameId}
           onChangeSelected={setSelectedFrameId}
           onConfirm={handleConfirmFrame}
-          confirmLabel="이 프레임으로 테마 만들기"
+          confirmLabel="이 프레임으로 꾸미기"
+          drafts={drafts}
+          selectedDraftId={allowedDraftId}
+          onSelectDraft={setSelectedDraftId}
         />
       </div>
     </main>
