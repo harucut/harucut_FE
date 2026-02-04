@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshCw } from "lucide-react";
 
@@ -47,9 +46,19 @@ export default function MyPage() {
     setLoading(true);
     setErrors({});
     try {
-      const res = await api.get<UserInfoResponse>("/api/auth/user/info");
-      setUser(res.data.data);
-      setUsername(res.data.data.username || "");
+      const res = await fetch("/api/client/user-info", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        throw new Error("user-info failed");
+      }
+
+      const json = (await res.json()) as UserInfoResponse;
+      setUser(json.data);
+      setUsername(json.data.username || "");
     } catch (e) {
       console.error(e);
       setErrors({
@@ -88,7 +97,18 @@ export default function MyPage() {
     }
 
     try {
-      await api.patch(`/api/auth/user/change/username?username=${next}`);
+      const res = await fetch(
+        `/api/client/user/username?username=${encodeURIComponent(next)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("username change failed");
+      }
       setUser((prev) => (prev ? { ...prev, username: next } : prev));
       alert("사용자 이름이 변경됐어요.");
     } catch (e) {
@@ -126,10 +146,17 @@ export default function MyPage() {
     }
 
     try {
-      await api.patch("/api/harucut/change/password", {
-        oldPassword,
-        newPassword,
+      const res = await fetch("/api/client/password/change", {
+        method: "PATCH",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldPassword, newPassword }),
       });
+
+      if (!res.ok) {
+        throw new Error("password change failed");
+      }
       alert("비밀번호가 변경됐어요.");
       setOldPassword("");
       setNewPassword("");
@@ -146,7 +173,11 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await api.delete("/api/harucut/logout");
+      await fetch("/api/client/logout", {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
+      });
 
       router.push("/login");
       router.refresh();
@@ -167,7 +198,11 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await api.delete("/api/harucut/exit");
+      await fetch("/api/client/exit", {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
+      });
 
       router.push("/login");
       router.refresh();

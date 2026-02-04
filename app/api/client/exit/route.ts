@@ -14,35 +14,19 @@ export async function DELETE(req: Request) {
       cache: "no-store",
     });
 
-    const res = NextResponse.json(
-      { ok: upstream.ok },
-      { status: upstream.ok ? 200 : 400 },
-    );
+    const body = await upstream.text();
+    const res = new NextResponse(body, { status: upstream.status });
 
-    res.cookies.set("accessToken", "", {
-      httpOnly: true,
-      path: "/",
-      maxAge: 0,
-    });
-    res.cookies.set("refreshToken", "", {
-      httpOnly: true,
-      path: "/",
-      maxAge: 0,
+    upstream.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "set-cookie") {
+        res.headers.append(key, value);
+      } else {
+        res.headers.set(key, value);
+      }
     });
 
     return res;
   } catch {
-    const res = NextResponse.json({ ok: false }, { status: 500 });
-    res.cookies.set("accessToken", "", {
-      httpOnly: true,
-      path: "/",
-      maxAge: 0,
-    });
-    res.cookies.set("refreshToken", "", {
-      httpOnly: true,
-      path: "/",
-      maxAge: 0,
-    });
-    return res;
+    return NextResponse.json({ ok: false }, { status: 500 });
   }
 }

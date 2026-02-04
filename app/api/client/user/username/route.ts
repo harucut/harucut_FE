@@ -24,16 +24,20 @@ export async function PATCH(req: Request) {
 
   const upstream = await fetch(url.toString(), {
     method: "PATCH",
-    headers: {
-      cookie,
-    },
+    headers: { cookie },
     cache: "no-store",
   });
 
   const body = await upstream.text();
+  const res = new NextResponse(body, { status: upstream.status });
 
-  return new NextResponse(body, {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
+  upstream.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "set-cookie") {
+      res.headers.append(key, value);
+    } else {
+      res.headers.set(key, value);
+    }
   });
+
+  return res;
 }
