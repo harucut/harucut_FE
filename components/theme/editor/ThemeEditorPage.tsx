@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect } from "react";
@@ -11,16 +11,31 @@ import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { toCreateFrameRequest } from "@/lib/frameApi";
 import { api } from "@/lib/api";
+import { useThemeSession } from "@/lib/themeSessionStore";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
   const setFrameId = useThemeEditorStore((s) => s.setFrameId);
   const exportJson = useThemeEditorStore((s) => s.exportJson);
+  const importJson = useThemeEditorStore((s) => s.importJson);
   const resetPhotos = useThemeEditorStore((s) => s.resetPhotos);
+  const addDraft = useThemeDraftStore((s) => s.addDraft);
+  const { draftId } = useThemeSession();
+  const draft = useThemeDraftStore((s) =>
+    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
+  );
 
   useEffect(() => {
     setFrameId(frameId);
   }, [frameId, setFrameId]);
+
+  // 선택된 저장본이 있으면 불러오기
+  useEffect(() => {
+    if (draft && draft.data.frameId === frameId) {
+      importJson(draft.data);
+    }
+  }, [draft, frameId, importJson]);
 
   useEffect(() => {
     return () => {
@@ -32,23 +47,23 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     const state = useThemeEditorStore.getState();
     const hiddenCount = state.components.filter((c) => c.hidden).length;
     if (hiddenCount > 0) {
-      alert("숨김 요소는 삭제됩니다.");
+      alert("숨겨진 레이어가 있어요.");
     }
 
     const json = exportJson();
     if (!json) return;
 
     const body = toCreateFrameRequest(json, {
-      title: "내 프레임",
-      description: "설명",
+      title: "테스트",
+      description: "임시",
       previewKey: "some-preview-key",
     });
 
-    // 필요하면 디버그용
-    console.log(body);
-
     await api.post("/api/auth/user/frame", body);
+    addDraft(json);
+    router.push("/home");
   };
+
   return (
     <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
@@ -58,7 +73,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               harucut
             </span>
             <h1 className="text-lg font-semibold tracking-tight">
-              프레임 편집기
+              프레임 꾸미기
             </h1>
           </div>
 
@@ -68,7 +83,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               className="text-xs text-zinc-400 underline underline-offset-4"
               onClick={() => {
                 useThemeEditorStore.getState().reset();
-                router.push("/theme/frame");
+                router.push("/theme");
               }}
             >
               프레임 선택으로 돌아가기
@@ -78,7 +93,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               onClick={onDone}
               className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
             >
-              완료
+              저장
             </button>
           </div>
         </header>
@@ -93,7 +108,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">미리보기</p>
                 <p className="text-[11px] text-zinc-500">
-                  드래그 &amp; 드롭 또는 크기/회전 조절로 배치하세요
+                  스티커 & 사진 혹은 글/투명 배경을 조합해보세요.
                 </p>
               </div>
 

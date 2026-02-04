@@ -1,5 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
+
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent } from "@/lib/types/themeEditor";
 import {
@@ -14,20 +17,31 @@ import {
 } from "lucide-react";
 
 export function LayersPanel() {
-  const components = useThemeEditorStore((s) => s.components);
-  const activeId = useThemeEditorStore((s) => s.activeId);
+  const {
+    components,
+    activeId,
+    setActive,
+    remove,
+    duplicate,
+    moveLayerUp,
+    moveLayerDown,
+    toggleHidden,
+    toggleLocked,
+  } = useThemeEditorStore(
+    useShallow((s) => ({
+      components: s.components,
+      activeId: s.activeId,
+      setActive: s.setActive,
+      remove: s.remove,
+      duplicate: s.duplicate,
+      moveLayerUp: s.moveLayerUp,
+      moveLayerDown: s.moveLayerDown,
+      toggleHidden: s.toggleHidden,
+      toggleLocked: s.toggleLocked,
+    })),
+  );
 
-  const setActive = useThemeEditorStore((s) => s.setActive);
-  const remove = useThemeEditorStore((s) => s.remove);
-  const duplicate = useThemeEditorStore((s) => s.duplicate);
-
-  const up = useThemeEditorStore((s) => s.moveLayerUp);
-  const down = useThemeEditorStore((s) => s.moveLayerDown);
-
-  const toggleHidden = useThemeEditorStore((s) => s.toggleHidden);
-  const toggleLocked = useThemeEditorStore((s) => s.toggleLocked);
-
-  const list = [...components].sort((a, b) => a.zIndex - b.zIndex);
+  const list = components;
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
@@ -46,13 +60,14 @@ export function LayersPanel() {
             <LayerRow
               key={c.id}
               c={c}
-              index={idx}
               active={c.id === activeId}
+              isFirst={idx === 0}
+              isLast={idx === list.length - 1}
               onSelect={() => setActive(c.id)}
               onDelete={() => remove(c.id)}
               onDup={() => duplicate(c.id)}
-              onUp={() => up(c.id)}
-              onDown={() => down(c.id)}
+              onUp={() => moveLayerUp(c.id)}
+              onDown={() => moveLayerDown(c.id)}
               onToggleHidden={() => toggleHidden(c.id)}
               onToggleLocked={() => toggleLocked(c.id)}
             />
@@ -66,6 +81,8 @@ export function LayersPanel() {
 function LayerRow({
   c,
   active,
+  isFirst,
+  isLast,
   onSelect,
   onDelete,
   onDup,
@@ -75,8 +92,9 @@ function LayerRow({
   onToggleLocked,
 }: {
   c: EditorComponent;
-  index: number;
   active: boolean;
+  isFirst: boolean;
+  isLast: boolean;
   onSelect: () => void;
   onDelete: () => void;
   onDup: () => void;
@@ -89,6 +107,58 @@ function LayerRow({
     c.type === "TEXT"
       ? `TEXT: ${c.source.slice(0, 10)}${c.source.length > 10 ? "…" : ""}`
       : c.type;
+
+  const actions: {
+    key: string;
+    title: string;
+    icon: ReactNode;
+    onClick: () => void;
+    active?: boolean;
+    danger?: boolean;
+    disabled?: boolean;
+  }[] = [
+    {
+      key: "lock",
+      title: c.locked ? "잠금 해제" : "잠금",
+      icon: c.locked ? <Lock size={14} /> : <LockOpen size={14} />,
+      onClick: onToggleLocked,
+      active: c.locked,
+    },
+    {
+      key: "hide",
+      title: c.hidden ? "숨김 해제" : "숨김",
+      icon: c.hidden ? <EyeOff size={14} /> : <Eye size={14} />,
+      onClick: onToggleHidden,
+      active: c.hidden,
+    },
+    {
+      key: "up",
+      title: "위로",
+      icon: <ChevronUp size={14} />,
+      onClick: onUp,
+      disabled: isLast,
+    },
+    {
+      key: "down",
+      title: "아래로",
+      icon: <ChevronDown size={14} />,
+      onClick: onDown,
+      disabled: isFirst,
+    },
+    {
+      key: "dup",
+      title: "복제",
+      icon: <Copy size={14} />,
+      onClick: onDup,
+    },
+    {
+      key: "delete",
+      title: "삭제",
+      icon: <Trash2 size={14} />,
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
 
   return (
     <div
@@ -132,35 +202,9 @@ function LayerRow({
       </button>
 
       <div className="flex items-center gap-1">
-        <MiniIconBtn
-          onClick={onToggleLocked}
-          title={c.locked ? "잠금 해제" : "잠금"}
-          active={c.locked}
-          icon={c.locked ? <Lock size={14} /> : <LockOpen size={14} />}
-        />
-        <MiniIconBtn
-          onClick={onToggleHidden}
-          title={c.hidden ? "숨김 해제" : "숨김"}
-          active={c.hidden}
-          icon={c.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-        />
-        <MiniIconBtn
-          onClick={onUp}
-          title="위로"
-          icon={<ChevronUp size={14} />}
-        />
-        <MiniIconBtn
-          onClick={onDown}
-          title="아래로"
-          icon={<ChevronDown size={14} />}
-        />
-        <MiniIconBtn onClick={onDup} title="복제" icon={<Copy size={14} />} />
-        <MiniIconBtn
-          onClick={onDelete}
-          title="삭제"
-          danger
-          icon={<Trash2 size={14} />}
-        />
+        {actions.map(({ key, ...action }) => (
+          <MiniIconBtn key={key} {...action} />
+        ))}
       </div>
     </div>
   );
@@ -172,12 +216,14 @@ function MiniIconBtn({
   title,
   active,
   danger,
+  disabled,
 }: {
   onClick: () => void;
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   active?: boolean;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -185,6 +231,7 @@ function MiniIconBtn({
       onClick={onClick}
       title={title}
       aria-label={title}
+      disabled={disabled}
       className={[
         "rounded-lg border p-2 inline-flex items-center justify-center",
         danger
@@ -192,6 +239,7 @@ function MiniIconBtn({
           : active
             ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15"
             : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800",
+        disabled ? "opacity-50 cursor-not-allowed" : "",
       ].join(" ")}
     >
       {icon}

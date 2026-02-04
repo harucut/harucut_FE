@@ -15,10 +15,12 @@ export type ShotItem = {
 
 type ShootSessionState = {
   frameId: FrameId | null;
+  draftId: string | null;
   shots: ShotItem[];
   selectedIndexes: SelectionSlot[];
 
   setFrameId: (id: FrameId) => void;
+  setDraftId: (id: string | null) => void;
   setShots: (shots: ShotItem[]) => void;
   toggleSelect: (index: number) => void;
 
@@ -40,9 +42,10 @@ function revokeBlobUrl(url?: string) {
 
 const initialState: Pick<
   ShootSessionState,
-  "frameId" | "shots" | "selectedIndexes"
+  "frameId" | "draftId" | "shots" | "selectedIndexes"
 > = {
   frameId: null,
+  draftId: null,
   shots: [],
   selectedIndexes: createEmptySlots(),
 };
@@ -51,6 +54,7 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   ...initialState,
 
   setFrameId: (frameId) => set({ frameId }),
+  setDraftId: (id) => set({ draftId: id }),
 
   setShots: (shots) =>
     set({

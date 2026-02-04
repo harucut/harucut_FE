@@ -93,6 +93,7 @@ type State = {
   toggleLocked: (id: string) => void;
 
   exportJson: () => ThemeExportJson | null;
+  importJson: (data: ThemeExportJson) => void;
 
   renderKey: number;
   bumpRenderKey: () => void;
@@ -425,6 +426,29 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
         })),
     };
+  },
+
+  importJson: (data) => {
+    set((s) => {
+      const mapped: EditorComponent[] = data.components.map((c) => ({
+        ...c,
+        scale: c.scale ?? 1,
+        rotation: c.rotation ?? 0,
+        locked: false,
+        hidden: false,
+      })) as EditorComponent[];
+
+      return {
+        frameId: data.frameId,
+        tab: "PHOTO",
+        components: normalizeZ(mapped),
+        activeId: null,
+        assets: {
+          photos: [],
+          stickers: s.assets.stickers,
+        },
+      };
+    });
   },
 
   renderKey: 0,

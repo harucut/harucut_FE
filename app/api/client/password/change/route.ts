@@ -4,13 +4,17 @@ export const runtime = "edge";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
-export async function DELETE(req: Request) {
+export async function PATCH(req: Request) {
   const cookie = req.headers.get("cookie") ?? "";
 
   try {
-    const upstream = await fetch(`${BASE_URL}/api/harucut/logout`, {
-      method: "DELETE",
-      headers: { cookie },
+    const upstream = await fetch(`${BASE_URL}/api/harucut/change/password`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        cookie,
+      },
+      body: await req.text(),
       cache: "no-store",
     });
 
