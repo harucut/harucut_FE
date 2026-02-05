@@ -13,12 +13,6 @@ type ApiOptions = {
   signal?: AbortSignal;
 };
 
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
-
-if (!baseURL) {
-  throw new Error("NEXT_PUBLIC_BASE_URL is not set");
-}
-
 async function request<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
@@ -32,7 +26,7 @@ async function request<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${baseURL}${path}`, {
+  const res = await fetch(path, {
     method,
     headers,
     body: hasBody ? JSON.stringify(body) : undefined,
@@ -66,7 +60,7 @@ async function request<T>(
   };
 }
 
-export const api = {
+export const clientApi = {
   get<T>(path: string, options?: ApiOptions) {
     return request<T>("GET", path, undefined, options);
   },

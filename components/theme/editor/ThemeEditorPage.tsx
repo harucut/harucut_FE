@@ -10,7 +10,7 @@ import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { toCreateFrameRequest } from "@/lib/frameApi";
-import { api } from "@/lib/api";
+import { clientApi } from "@/lib/clientApi";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
@@ -63,7 +63,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       previewKey: "some-preview-key",
     });
 
-    await api.post("/api/auth/user/frame", body);
+    await clientApi.post("/api/client/user/frame", body);
     addDraft(json);
     router.push("/home");
   };

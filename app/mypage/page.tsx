@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { clientApi } from "@/lib/clientApi";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshCw } from "lucide-react";
 
@@ -46,19 +47,9 @@ export default function MyPage() {
     setLoading(true);
     setErrors({});
     try {
-      const res = await fetch("/api/client/user-info", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      if (!res.ok) {
-        throw new Error("user-info failed");
-      }
-
-      const json = (await res.json()) as UserInfoResponse;
-      setUser(json.data);
-      setUsername(json.data.username || "");
+      const res = await clientApi.get<UserInfoResponse>("/api/client/user-info");
+      setUser(res.data.data);
+      setUsername(res.data.data.username || "");
     } catch (e) {
       console.error(e);
       setErrors({
@@ -97,18 +88,7 @@ export default function MyPage() {
     }
 
     try {
-      const res = await fetch(
-        `/api/client/user/username?username=${encodeURIComponent(next)}`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          cache: "no-store",
-        },
-      );
-
-      if (!res.ok) {
-        throw new Error("username change failed");
-      }
+      await clientApi.patch("/api/client/user/username", { username: next });
       setUser((prev) => (prev ? { ...prev, username: next } : prev));
       alert("사용자 이름이 변경됐어요.");
     } catch (e) {
@@ -146,12 +126,9 @@ export default function MyPage() {
     }
 
     try {
-      const res = await fetch("/api/client/password/change", {
-        method: "PATCH",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPassword, newPassword }),
+      await clientApi.patch("/api/client/auth/password/change", {
+        oldPassword,
+        newPassword,
       });
 
       if (!res.ok) {
@@ -173,11 +150,7 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await fetch("/api/client/logout", {
-        method: "DELETE",
-        credentials: "include",
-        cache: "no-store",
-      });
+      await clientApi.delete("/api/client/logout");
 
       router.push("/login");
       router.refresh();
@@ -198,11 +171,7 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
     try {
-      await fetch("/api/client/exit", {
-        method: "DELETE",
-        credentials: "include",
-        cache: "no-store",
-      });
+      await clientApi.delete("/api/client/exit");
 
       router.push("/login");
       router.refresh();

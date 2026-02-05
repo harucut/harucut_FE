@@ -1,4 +1,4 @@
-import type { ThemeExportJson, EditorComponent } from "@/lib/types/themeEditor";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
 type CreateFrameRequest = {
