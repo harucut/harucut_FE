@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { getBestWebmMimeType } from "@/lib/capture/mediaRecorder";
 
+// 촬영 총 장수
 const MAX_SHOTS = 8;
+// 샷 간 간격(초)
 const MAX_COUNT = 8;
 
 type ShootingState = {
@@ -40,6 +42,7 @@ export function useCaptureFlow() {
     if (!frameId) router.replace("/shoot");
   }, [frameId, router]);
 
+  // 카메라 스트림 종료 및 상태 초기화
   const stopStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -48,6 +51,7 @@ export function useCaptureFlow() {
     setIsCameraReady(false);
   }, []);
 
+  // 카메라 권한 요청 및 스트림 시작
   const startCamera = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -96,6 +100,7 @@ export function useCaptureFlow() {
     audio.play().catch(() => {});
   }, []);
 
+  // 현재 프레임을 좌우반전해서 캡처
   const capturePhotoToDataUrl = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return null;
 
@@ -121,6 +126,7 @@ export function useCaptureFlow() {
     return dataUrl;
   }, [playShutterSound]);
 
+  // 샷마다 짧은 동영상 기록 시작
   const startRecordingForShot = useCallback(() => {
     if (!streamRef.current || typeof MediaRecorder === "undefined") return;
 
@@ -154,7 +160,7 @@ export function useCaptureFlow() {
     }
   }, [attachVideoToShot]);
 
-  // 한 샷 완료 처리: 여기서 다음 단계(다음 샷/종료/라우팅)까지 전부 처리
+  // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
   const finishSingleShot = useCallback(() => {
     const photoDataUrl = capturePhotoToDataUrl();
     if (!photoDataUrl) return;
@@ -184,6 +190,7 @@ export function useCaptureFlow() {
     });
   }, [capturePhotoToDataUrl, addShotPhoto, startRecordingForShot, router]);
 
+  // 전체 자동 촬영 시작
   const startShooting = useCallback(() => {
     if (!isCameraReady) {
       alert("먼저 카메라를 켜주세요.");

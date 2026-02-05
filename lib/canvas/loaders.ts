@@ -7,6 +7,7 @@ type LoadVideoOptions = {
   preload?: "auto" | "metadata" | "none";
 };
 
+/** 이미지 로드 (CORS 옵션 포함) */
 export function loadImage(src: string, opts: LoadImageOptions = {}) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -17,6 +18,7 @@ export function loadImage(src: string, opts: LoadImageOptions = {}) {
   });
 }
 
+/** 비디오 로드 (메타데이터 로딩 후 resolve) */
 export function loadVideo(src: string, opts: LoadVideoOptions = {}) {
   return new Promise<HTMLVideoElement>((resolve, reject) => {
     const v = document.createElement("video");

@@ -1,4 +1,3 @@
-// lib/frameApi.ts (예시)
 import type { ThemeExportJson, EditorComponent } from "@/lib/types/themeEditor";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
@@ -26,12 +25,16 @@ type CreateFrameRequest = {
   }>;
 };
 
+// FrameId에서 서버 enum으로 변환
 function inferFrameType(frameId: string): CreateFrameRequest["frameType"] {
   // 너네 FrameId 규칙에 맞게 매핑
   if (frameId.startsWith("wide")) return "WIDE";
   return "CLASSIC";
 }
 
+/**
+ * 에디터 JSON을 서버 요청 스키마로 변환
+ */
 export function toCreateFrameRequest(
   json: ThemeExportJson,
   meta: { title: string; description: string; previewKey: string },

@@ -16,12 +16,15 @@ import type {
   ComponentType,
 } from "@/lib/types/themeEditor";
 
+// 에디터 내부에서 쓰는 임시 ID 생성기
 const uid = (prefix = "front") => `${prefix}-${crypto.randomUUID()}`;
 
+// zIndex를 1..N으로 정규화해 레이어 순서 일관성 유지
 function normalizeZ(components: EditorComponent[]): EditorComponent[] {
   return components.map((c, i) => ({ ...c, zIndex: i + 1 }));
 }
 
+// 이미지 로딩 후 실제 크기 확인
 async function readImageSize(
   src: string,
 ): Promise<{ w: number; h: number } | null> {
@@ -92,13 +95,16 @@ type State = {
   toggleHidden: (id: string) => void;
   toggleLocked: (id: string) => void;
 
+  // 숨김 레이어 제외하고 서버 전송용 JSON 생성
   exportJson: () => ThemeExportJson | null;
   importJson: (data: ThemeExportJson) => void;
 
+  // Konva 트랜스포머 업데이트 트리거용 키
   renderKey: number;
   bumpRenderKey: () => void;
 };
 
+// 프레임 변경/리셋 시 에디터 상태 초기화 (메모리 정리 포함)
 function resetEditorState(get: () => State) {
   const state = get();
 
@@ -132,6 +138,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   components: [],
   activeId: null,
 
+  // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
     set((s) => {
       // 같은 프레임 다시 선택하면 아무 것도 안 함
@@ -145,6 +152,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   setTab: (t) => set({ tab: t }),
 
+  // 업로드한 사진을 에셋으로 등록
   addPhotoAssets: (files) => {
     const list: Asset[] = Array.from(files).map((f) => ({
       id: uid("asset"),
@@ -158,6 +166,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
+  // 사용 중인 사진은 삭제 불가
   removePhotoAsset: (assetId) => {
     const state = get();
     const asset = state.assets.photos.find((p) => p.id === assetId);
@@ -194,6 +203,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
+  // 에셋(사진/스티커)을 캔버스 중앙에 추가
   addComponentFromAsset: async (type, src) => {
     const { frameId } = get();
     if (!frameId) return;
@@ -259,6 +269,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     get().updateComponent(id, { width: w, height: h });
   },
 
+  // 기본 텍스트 컴포넌트 추가
   addText: (options) => {
     const { frameId } = get();
     if (!frameId) return;
@@ -306,6 +317,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   setActive: (id) => set({ activeId: id }),
 
+  // 컴포넌트 속성 업데이트 (TEXT와 IMAGE 분기)
   updateComponent: (id, patch) => {
     set((s) => ({
       components: s.components.map((c) => {
@@ -428,6 +440,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     };
   },
 
+  // 저장된 JSON을 에디터 상태로 복원
   importJson: (data) => {
     set((s) => {
       const mapped: EditorComponent[] = data.components.map((c) => ({

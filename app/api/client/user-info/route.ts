@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 export const runtime = "edge";
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
+// 쿠키 문자열에서 지정한 키 추출
 function getCookieValue(cookieHeader: string, name: string) {
   const match = cookieHeader.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+/**
+ * access/refreshToken이 있으면 백엔드 user info로 프록시
+ */
 export async function GET(req: Request) {
   const cookie = req.headers.get("cookie") ?? "";
 

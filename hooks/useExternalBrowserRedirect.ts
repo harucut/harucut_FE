@@ -1,5 +1,9 @@
 import { useEffect } from "react";
 
+/**
+ * 인앱 브라우저(카카오/라인/인스타 등)에서 열렸을 때
+ * 외부 브라우저로 유도하는 훅
+ */
 export function useExternalBrowserRedirect() {
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -31,6 +35,7 @@ export function useExternalBrowserRedirect() {
     const isEverytime = userAgent.includes("everytimeapp");
     const isSnapchat = userAgent.includes("snapchat");
 
+    // 일반 브라우저 UA 판별
     const isRegularBrowser =
       userAgent.includes("samsungbrowser") ||
       (userAgent.includes("wv") === false &&
@@ -43,6 +48,7 @@ export function useExternalBrowserRedirect() {
           userAgent.includes("edga") ||
           userAgent.includes("whale")));
 
+    // 인앱 브라우저 판별
     const isGenericInApp =
       (isInstagram ||
         isFacebook ||
@@ -54,6 +60,7 @@ export function useExternalBrowserRedirect() {
         isNaverApp) &&
       !isRegularBrowser;
 
+    // 클립보드 복사 폴백 처리
     const copyToClipboard = async (text: string) => {
       try {
         if (navigator.clipboard && window.isSecureContext) {
@@ -76,6 +83,7 @@ export function useExternalBrowserRedirect() {
       }
     };
 
+    // 플랫폼/앱별 외부 브라우저 열기 로직
     const redirect = async () => {
       if (isKakao) {
         const target =
@@ -95,7 +103,7 @@ export function useExternalBrowserRedirect() {
         if (isIOS) {
           await copyToClipboard(href);
           alert(
-            'URL이 클립보드에 복사되었어요.\n\n아래에서 Safari가 열리면 주소창을 길게 눌러 "붙여넣기 및 이동"을 선택해 주세요.'
+            'URL이 클립보드에 복사되었어요.\n\n아래에서 Safari가 열리면 주소창을 길게 눌러 "붙여넣기 및 이동"을 선택해 주세요.',
           );
           window.location.replace("x-web-search://?");
           return;

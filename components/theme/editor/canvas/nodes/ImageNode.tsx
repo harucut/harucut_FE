@@ -21,8 +21,10 @@ type Props = {
 };
 
 export function ImageNode({ c, common, outline, onAssetReady }: Props) {
+  // 원본 이미지를 비동기로 로드
   const [img, status] = useImage(c.source, "anonymous");
 
+  // 로드 완료 시 Transformer 갱신 트리거
   useEffect(() => {
     if (status === "loaded") onAssetReady?.();
   }, [status, onAssetReady]);

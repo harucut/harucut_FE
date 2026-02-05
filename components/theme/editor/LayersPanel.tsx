@@ -108,6 +108,7 @@ function LayerRow({
       ? `TEXT: ${c.source.slice(0, 10)}${c.source.length > 10 ? "…" : ""}`
       : c.type;
 
+  // 레이어 제어 액션 목록
   const actions: {
     key: string;
     title: string;

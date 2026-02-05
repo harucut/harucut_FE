@@ -15,12 +15,14 @@ type SlotDrawable =
   | { kind: "image"; el: HTMLImageElement }
   | { kind: "video"; el: HTMLVideoElement };
 
+// 2D 컨텍스트 확보 (없으면 에러)
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context not available");
   return ctx;
 }
 
+// 캔버스를 PNG Blob으로 변환
 function toPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -30,6 +32,7 @@ function toPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
+/** Blob 다운로드 유틸 */
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -41,6 +44,7 @@ export function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// 슬롯 소스를 실제 이미지/비디오 요소로 로드
 async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
     sources.map(async (s) => {
@@ -51,15 +55,16 @@ async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
       }
       const img = await loadImage(s.src);
       return { kind: "image", el: img };
-    })
+    }),
   );
 }
 
+// 프레임 배경 + 슬롯 이미지/비디오 1회 그리기
 function drawFrameOnce(
   ctx: CanvasRenderingContext2D,
   layout: FrameLayout,
   borderColor: string,
-  drawables: SlotDrawable[]
+  drawables: SlotDrawable[],
 ) {
   const { totalWidth, totalHeight, slots } = layout;
 
@@ -83,6 +88,9 @@ function drawFrameOnce(
   });
 }
 
+/**
+ * 선택된 슬롯을 합성해 PNG Blob 생성
+ */
 export async function composeFramePng(opts: {
   layout: FrameLayout;
   borderColor: string;
@@ -107,6 +115,9 @@ export async function composeFramePng(opts: {
   return toPngBlob(canvas);
 }
 
+/**
+ * 선택된 슬롯을 합성해 WEBM 영상 Blob 생성
+ */
 export async function recordFrameWebm(opts: {
   layout: FrameLayout;
   borderColor: string;
@@ -134,17 +145,17 @@ export async function recordFrameWebm(opts: {
   await Promise.all(
     drawables
       .filter(
-        (d): d is { kind: "video"; el: HTMLVideoElement } => d.kind === "video"
+        (d): d is { kind: "video"; el: HTMLVideoElement } => d.kind === "video",
       )
-      .map((d) => d.el.play().catch(() => undefined))
+      .map((d) => d.el.play().catch(() => undefined)),
   );
 
   const stream = canvas.captureStream(fps);
   const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
     ? "video/webm;codecs=vp9"
     : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
-    ? "video/webm;codecs=vp8"
-    : "video/webm";
+      ? "video/webm;codecs=vp8"
+      : "video/webm";
 
   const recorder = new MediaRecorder(stream, { mimeType });
   const chunks: BlobPart[] = [];
@@ -180,7 +191,7 @@ export async function recordFrameWebm(opts: {
         drawables
           .filter(
             (d): d is { kind: "video"; el: HTMLVideoElement } =>
-              d.kind === "video"
+              d.kind === "video",
           )
           .forEach((d) => {
             try {

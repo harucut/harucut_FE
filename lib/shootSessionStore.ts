@@ -8,6 +8,7 @@ import {
   type SelectionSlot,
 } from "@/lib/selection";
 
+/** 촬영 1회 결과: 사진 + (선택) 비디오 */
 export type ShotItem = {
   photo: string;
   video?: string;
@@ -31,6 +32,7 @@ type ShootSessionState = {
   reset: () => void;
 };
 
+// blob URL 정리 (메모리 누수 방지)
 function revokeBlobUrl(url?: string) {
   if (!url) return;
   if (url.startsWith("blob:")) {

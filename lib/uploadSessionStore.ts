@@ -9,6 +9,7 @@ import {
   type SelectionSlot,
 } from "@/lib/selection";
 
+/** 업로드 플로우 상태 */
 type UploadSessionState = {
   frameId: FrameId | null;
   draftId: string | null;

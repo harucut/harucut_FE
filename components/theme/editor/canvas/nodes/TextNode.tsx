@@ -26,6 +26,7 @@ export function TextNode({ c, common, outline, onAutoSize }: Props) {
   const opacity = getOpacity(style);
   const textRef = useRef<Konva.Text | null>(null);
 
+  // 텍스트 내용/스타일 변경 시 크기 자동 측정
   useLayoutEffect(() => {
     const node = textRef.current;
     if (!node) return;

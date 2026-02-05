@@ -1,3 +1,6 @@
+/**
+ * 브라우저에서 지원하는 WebM 코덱을 우선순위로 선택
+ */
 export function getBestWebmMimeType(): string | null {
   if (typeof MediaRecorder === "undefined") return null;
 

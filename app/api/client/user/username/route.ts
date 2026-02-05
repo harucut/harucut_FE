@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export const runtime = "edge";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
+/** 사용자 이름 변경 프록시 */
 export async function PATCH(req: Request) {
   const cookie = req.headers.get("cookie") ?? "";
 

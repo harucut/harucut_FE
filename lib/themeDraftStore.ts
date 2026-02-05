@@ -5,6 +5,9 @@ import { persist } from "zustand/middleware";
 import type { FrameId } from "@/constants/frames";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
+/**
+ * 테마 에디터 결과를 로컬에 저장하는 Draft 구조
+ */
 export type ThemeDraft = {
   id: string;
   frameId: FrameId;
