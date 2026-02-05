@@ -10,7 +10,7 @@ import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { toCreateFrameRequest } from "@/lib/frameApi";
-import { api } from "@/lib/api";
+import { clientApi } from "@/lib/clientApi";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
@@ -26,6 +26,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
   );
 
+  // 프레임 변경 시 에디터 상태 초기화
   useEffect(() => {
     setFrameId(frameId);
   }, [frameId, setFrameId]);
@@ -37,13 +38,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     }
   }, [draft, frameId, importJson]);
 
+  // 언마운트 시 업로드 이미지 메모리 정리
   useEffect(() => {
     return () => {
       resetPhotos();
     };
   }, [resetPhotos]);
 
+  // 저장: JSON 내보내기 → 서버 전송 → Draft 저장
   const onDone = async () => {
+    // 숨김 레이어가 있으면 경고 (서버에는 제외됨)
     const state = useThemeEditorStore.getState();
     const hiddenCount = state.components.filter((c) => c.hidden).length;
     if (hiddenCount > 0) {
@@ -59,7 +63,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       previewKey: "some-preview-key",
     });
 
-    await api.post("/api/auth/user/frame", body);
+    await clientApi.post("/api/client/user/frame", body);
     addDraft(json);
     router.push("/home");
   };

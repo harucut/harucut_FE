@@ -33,6 +33,7 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
   if (c.hidden) return null;
   const opacity = getOpacity(c.styleJson);
 
+  // 선택된 요소에만 테두리 표시
   const outline =
     isActive && !c.locked ? (
       <Rect
@@ -50,6 +51,7 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
   const offsetX = c.width / 2;
   const offsetY = c.height / 2;
 
+  // 드래그/선택 등 공통 Konva 그룹 설정
   const common: Partial<GroupConfig> & {
     onClick: () => void;
     onTap: () => void;
@@ -77,6 +79,7 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
     },
   };
 
+  // TEXT는 자동 크기 측정 로직 포함
   if (isText(c)) {
     return (
       <TextNode

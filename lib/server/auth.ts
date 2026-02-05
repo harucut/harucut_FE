@@ -7,6 +7,7 @@ if (!secret) {
 
 const SECRET = new TextEncoder().encode(secret);
 
+/** JWT accessToken 검증 (HS256) */
 export async function verifyAccessToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, SECRET, {

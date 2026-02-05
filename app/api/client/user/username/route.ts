@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { buildResponse, forward } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
+/** 사용자 이름 변경 프록시 */
 export async function PATCH(req: Request) {
-  const cookie = req.headers.get("cookie") ?? "";
-
   const { username } = (await req.json()) as { username?: string };
 
   if (!username?.trim()) {
@@ -22,22 +22,11 @@ export async function PATCH(req: Request) {
   const url = new URL(`${BASE_URL}/api/auth/user/change/`);
   url.searchParams.set("username", username.trim());
 
-  const upstream = await fetch(url.toString(), {
+  const upstream = await forward(req, {
     method: "PATCH",
-    headers: { cookie },
-    cache: "no-store",
+    url: url.toString(),
+    forwardBody: false,
   });
 
-  const body = await upstream.text();
-  const res = new NextResponse(body, { status: upstream.status });
-
-  upstream.headers.forEach((value, key) => {
-    if (key.toLowerCase() === "set-cookie") {
-      res.headers.append(key, value);
-    } else {
-      res.headers.set(key, value);
-    }
-  });
-
-  return res;
+  return buildResponse(upstream);
 }

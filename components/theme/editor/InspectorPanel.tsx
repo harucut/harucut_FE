@@ -6,14 +6,16 @@ import type { EditorComponent, TextStyleJson } from "@/lib/types/themeEditor";
 
 type OpacityStyle = { opacity?: number };
 
+// styleJson에서 opacity를 안전하게 읽기
 function getOpacity(styleJson: EditorComponent["styleJson"]): number {
   const opacity = (styleJson as OpacityStyle | undefined)?.opacity;
   return Number.isFinite(opacity as number) ? (opacity as number) : 1;
 }
 
+// TEXT/IMAGE 타입별로 opacity 갱신
 function setOpacity(
   c: EditorComponent,
-  opacity: number
+  opacity: number,
 ): EditorComponent["styleJson"] {
   if (c.type === "TEXT") {
     const s = c.styleJson as TextStyleJson;
@@ -28,9 +30,10 @@ export function InspectorPanel() {
   const activeId = useThemeEditorStore((s) => s.activeId);
   const update = useThemeEditorStore((s) => s.updateComponent);
 
+  // 현재 선택된 컴포넌트
   const active = useMemo(
     () => components.find((c) => c.id === activeId) ?? null,
-    [components, activeId]
+    [components, activeId],
   );
 
   if (!active) {

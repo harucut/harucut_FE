@@ -29,6 +29,7 @@ export function CanvasStage() {
     [components, activeId],
   );
 
+  // 고정 뷰 크기에 맞춰 캔버스 스케일 계산
   const { viewW, viewH, scale } = useMemo(() => {
     if (!layout) return { viewW: VIEW_SIZE, viewH: VIEW_SIZE, scale: 1 };
 
@@ -44,6 +45,7 @@ export function CanvasStage() {
     };
   }, [layout]);
 
+  // 선택된 노드를 Konva Transformer에 연결
   useLayoutEffect(() => {
     const stage = stageRef.current;
     const tr = trRef.current;
@@ -63,6 +65,7 @@ export function CanvasStage() {
     tr.getLayer()?.batchDraw();
   }, [activeId, renderKey]);
 
+  // zIndex 기준으로 렌더 순서 보장
   const sorted = useMemo(
     () => [...components].sort((a, b) => a.zIndex - b.zIndex),
     [components],
@@ -91,6 +94,7 @@ export function CanvasStage() {
           }}
         >
           {/* 1) 아래: 프레임 배경 + 슬롯(구멍 느낌) */}
+          {/* 1) 아래: 프레임 배경 + 슬롯(구멍 느낌) */}
           <Layer listening={false}>
             <Rect
               x={0}
@@ -114,7 +118,7 @@ export function CanvasStage() {
             ))}
           </Layer>
 
-          {/* 2) 가운데: 오브젝트들 */}
+          {/* 2) 가운데: 오브젝트들 (사진/스티커/텍스트) */}
           <Layer>
             {sorted.map((c) => (
               <EditableNode

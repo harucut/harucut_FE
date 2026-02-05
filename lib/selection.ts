@@ -1,16 +1,21 @@
+/** 선택 슬롯 기본 개수 */
 export const DEFAULT_SELECT_COUNT = 4;
 
 export type SelectionSlot = number | null;
 
+/** 빈 선택 슬롯 배열 생성 */
 export function createEmptySlots(
-  count: number = DEFAULT_SELECT_COUNT
+  count: number = DEFAULT_SELECT_COUNT,
 ): SelectionSlot[] {
   return Array(count).fill(null);
 }
 
+/**
+ * 선택 토글: 이미 선택된 index면 해제, 빈 슬롯이 있으면 추가
+ */
 export function toggleIndexInSlots(
   slots: SelectionSlot[],
-  index: number
+  index: number,
 ): SelectionSlot[] {
   const next = [...slots];
 

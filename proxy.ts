@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "@/lib/server/auth";
 
+// 보호가 필요한 경로 목록
 const PROTECTED_PATHS = ["/home", "/shoot", "/upload", "/history", "/theme"];
 // const PROTECTED_PATHS = ["/history"];
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
@@ -14,6 +15,9 @@ type ReissueResponse = {
     refreshToken: string;
   };
 };
+/**
+ * 보호 경로 접근 시 토큰 검증/리이슈 후 통과시키는 미들웨어 헬퍼
+ */
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
