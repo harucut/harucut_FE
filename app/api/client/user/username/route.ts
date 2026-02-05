@@ -19,7 +19,7 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const url = new URL(`${BASE_URL}/api/auth/user/change/`);
+  const url = new URL(`${BASE_URL}/api/auth/user/change`);
   url.searchParams.set("username", username.trim());
 
   const upstream = await forward(req, {
