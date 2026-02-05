@@ -47,7 +47,9 @@ export default function MyPage() {
     setLoading(true);
     setErrors({});
     try {
-      const res = await clientApi.get<UserInfoResponse>("/api/client/user-info");
+      const res = await clientApi.get<UserInfoResponse>(
+        "/api/client/user-info",
+      );
       setUser(res.data.data);
       setUsername(res.data.data.username || "");
     } catch (e) {
@@ -130,10 +132,6 @@ export default function MyPage() {
         oldPassword,
         newPassword,
       });
-
-      if (!res.ok) {
-        throw new Error("password change failed");
-      }
       alert("비밀번호가 변경됐어요.");
       setOldPassword("");
       setNewPassword("");
