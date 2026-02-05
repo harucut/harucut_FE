@@ -130,6 +130,10 @@ export default function MyPage() {
         oldPassword,
         newPassword,
       });
+
+      if (!res.ok) {
+        throw new Error("password change failed");
+      }
       alert("비밀번호가 변경됐어요.");
       setOldPassword("");
       setNewPassword("");
