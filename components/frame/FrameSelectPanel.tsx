@@ -3,6 +3,7 @@
 import { ReactNode, useMemo } from "react";
 import { type FrameId } from "@/constants/frames";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 type FrameSelectPanelProps = {
   frameId: FrameId | null;
@@ -20,6 +21,7 @@ type FrameSelectPanelProps = {
   onNext: () => void;
 
   renderExtraControls?: () => ReactNode;
+  themeData?: ThemeExportJson | null;
 };
 
 export function FrameSelectPanel({
@@ -35,6 +37,7 @@ export function FrameSelectPanel({
   onReset,
   onNext,
   renderExtraControls,
+  themeData = null,
 }: FrameSelectPanelProps) {
   const baseItems: FrameMedia[] = useMemo(() => {
     if (media && media.length) return media;
@@ -67,7 +70,7 @@ export function FrameSelectPanel({
             선택한 프레임 미리보기
           </h2>
           <div className="flex h-[330px] justify-center">
-            <FramePreview frameId={frameId} media={slotMedia} />
+            <FramePreview frameId={frameId} media={slotMedia} theme={themeData} />
           </div>
           <p className="text-center text-[10px] text-zinc-500">
             아래에서 사진을 고르면, 위 프레임에 선택 순서대로 채워져요.

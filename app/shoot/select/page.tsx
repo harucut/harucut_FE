@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
 export default function ShootSelectPage() {
   const router = useRouter();
-  const { frameId, shots, selectedIndexes, toggleSelect, reset } =
+  const { frameId, draftId, shots, selectedIndexes, toggleSelect, reset } =
     useShootSession();
+  const draft = useThemeDraftStore((s) =>
+    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
+  );
 
   useEffect(() => {
     if (!frameId) {
@@ -46,6 +50,9 @@ export default function ShootSelectPage() {
           onToggleSelect={toggleSelect}
           onReset={reset}
           onNext={handleNext}
+          themeData={
+            draft && frameId && draft.data.frameId === frameId ? draft.data : null
+          }
         />
       </div>
     </main>

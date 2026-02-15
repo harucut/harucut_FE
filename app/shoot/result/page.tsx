@@ -15,12 +15,16 @@ import {
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
 import { isNotNull } from "@/lib/guards";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
 const MAX_SECONDS = 8;
 
 export default function ShootResultPage() {
   const router = useRouter();
-  const { frameId, shots, selectedIndexes } = useShootSession();
+  const { frameId, draftId, shots, selectedIndexes } = useShootSession();
+  const draft = useThemeDraftStore((s) =>
+    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
+  );
 
   const [borderColor, setBorderColor] = useState("#18181b");
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
@@ -83,6 +87,8 @@ export default function ShootResultPage() {
 
   const layout = FRAME_LAYOUTS[frameId as FrameId];
   const frameConfig = FRAME_CONFIGS.find((f) => f.id === frameId);
+  const themeData =
+    draft && draft.data.frameId === frameId ? draft.data : null;
   if (!layout) return null;
 
   const handleDownloadPng = async () => {
@@ -94,6 +100,7 @@ export default function ShootResultPage() {
         layout,
         borderColor,
         sources: pngSources,
+        theme: themeData,
         canvas: canvasRef.current ?? undefined,
       });
 
@@ -116,6 +123,7 @@ export default function ShootResultPage() {
         layout,
         borderColor,
         sources: webmSources,
+        theme: themeData,
         seconds: MAX_SECONDS,
         canvas: canvasRef.current ?? undefined,
       });
@@ -143,11 +151,13 @@ export default function ShootResultPage() {
           frameId={frameId}
           media={previewImage}
           borderColor={borderColor}
+          theme={themeData}
         />
         <FramePreview
           frameId={frameId}
           media={previewVideo}
           borderColor={borderColor}
+          theme={themeData}
         />
         <section className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">

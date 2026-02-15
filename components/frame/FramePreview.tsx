@@ -1,5 +1,7 @@
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type { FrameId } from "@/constants/frames";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
 
 export type FrameMedia = {
   type: "image" | "video";
@@ -13,6 +15,7 @@ type FramePreviewProps = {
   media?: (FrameMedia | null)[];
   images?: (string | null)[];
   borderColor?: string;
+  theme?: ThemeExportJson | null;
 };
 
 export function FramePreview({
@@ -22,6 +25,7 @@ export function FramePreview({
   media,
   images,
   borderColor,
+  theme,
 }: FramePreviewProps) {
   const layout = FRAME_LAYOUTS[frameId];
 
@@ -98,6 +102,14 @@ export function FramePreview({
           <div key={idx} className={slotBase + " absolute"} style={baseStyle} />
         );
       })}
+
+      {theme && theme.frameId === frameId ? (
+        <ThemeOverlaySvg
+          layout={layout}
+          data={theme}
+          className="pointer-events-none absolute inset-0 z-20"
+        />
+      ) : null}
     </div>
   );
 }
