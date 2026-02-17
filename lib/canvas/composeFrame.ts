@@ -1,5 +1,6 @@
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { loadImage, loadVideo } from "@/lib/canvas/loaders";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type FrameLayout = {
   totalWidth: number;
@@ -14,6 +15,8 @@ export type FrameSource =
 type SlotDrawable =
   | { kind: "image"; el: HTMLImageElement }
   | { kind: "video"; el: HTMLVideoElement };
+
+type OverlayImageMap = Map<string, HTMLImageElement>;
 
 // 2D 컨텍스트 확보 (없으면 에러)
 function ensureCtx(canvas: HTMLCanvasElement) {
@@ -59,12 +62,100 @@ async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   );
 }
 
+async function loadOverlayImages(theme: ThemeExportJson | null) {
+  const map: OverlayImageMap = new Map();
+  if (!theme) return map;
+
+  const sources = Array.from(
+    new Set(
+      theme.components.filter((c) => c.type !== "TEXT").map((c) => c.source),
+    ),
+  );
+
+  await Promise.all(
+    sources.map(async (src) => {
+      try {
+        const img = await loadImage(src);
+        map.set(src, img);
+      } catch {
+        // 이미지 1개 로딩 실패는 전체 합성을 깨지 않도록 무시
+      }
+    }),
+  );
+
+  return map;
+}
+
+function drawThemeOverlay(
+  ctx: CanvasRenderingContext2D,
+  theme: ThemeExportJson | null,
+  overlayImages: OverlayImageMap,
+) {
+  if (!theme) return;
+
+  theme.components.forEach((c) => {
+    const scale = c.scale ?? 1;
+    const rotation = c.rotation ?? 0;
+    const opacityRaw = c.styleJson?.opacity;
+    const opacity =
+      typeof opacityRaw === "number" ? Math.min(1, Math.max(0, opacityRaw)) : 1;
+
+    const cx = c.x + c.width / 2;
+    const cy = c.y + c.height / 2;
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.translate(cx, cy);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.scale(scale, scale);
+    ctx.translate(-c.width / 2, -c.height / 2);
+
+    if (c.type === "TEXT") {
+      const style = c.styleJson ?? {};
+      const fontFamily =
+        typeof style.fontFamily === "string" ? style.fontFamily : "Pretendard";
+      const fontSize =
+        typeof style.fontSize === "number" ? style.fontSize : 128;
+      const fill = typeof style.color === "string" ? style.color : "#ffffff";
+      const align =
+        style.textAlign === "center" || style.textAlign === "right"
+          ? style.textAlign
+          : "left";
+      const lineHeight = Math.max(1, Math.round(fontSize * 1.15));
+      const lines = c.source.split("\n");
+
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      ctx.fillStyle = fill;
+      ctx.textBaseline = "top";
+      ctx.textAlign = align;
+
+      const textX =
+        align === "center" ? c.width / 2 : align === "right" ? c.width : 0;
+      lines.forEach((line, i) => {
+        ctx.fillText(line, textX, i * lineHeight);
+      });
+
+      ctx.restore();
+      return;
+    }
+
+    const img = overlayImages.get(c.source);
+    if (img) {
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+    }
+
+    ctx.restore();
+  });
+}
+
 // 프레임 배경 + 슬롯 이미지/비디오 1회 그리기
 function drawFrameOnce(
   ctx: CanvasRenderingContext2D,
   layout: FrameLayout,
   borderColor: string,
   drawables: SlotDrawable[],
+  theme: ThemeExportJson | null,
+  overlayImages: OverlayImageMap,
 ) {
   const { totalWidth, totalHeight, slots } = layout;
 
@@ -86,18 +177,19 @@ function drawFrameOnce(
     const vh = d.el.videoHeight || 1;
     drawCover(ctx, d.el, vw, vh, slot);
   });
+
+  drawThemeOverlay(ctx, theme, overlayImages);
 }
 
-/**
- * 선택된 슬롯을 합성해 PNG Blob 생성
- */
+// 선택된 슬롯을 합성해 PNG Blob 생성
 export async function composeFramePng(opts: {
   layout: FrameLayout;
   borderColor: string;
   sources: FrameSource[]; // 반드시 슬롯 개수만큼
+  theme?: ThemeExportJson | null;
   canvas?: HTMLCanvasElement;
 }) {
-  const { layout, borderColor, sources } = opts;
+  const { layout, borderColor, sources, theme = null } = opts;
 
   if (sources.length !== layout.slots.length) {
     throw new Error("sources length must match slot count");
@@ -109,24 +201,24 @@ export async function composeFramePng(opts: {
 
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
+  const overlayImages = await loadOverlayImages(theme);
 
-  drawFrameOnce(ctx, layout, borderColor, drawables);
+  drawFrameOnce(ctx, layout, borderColor, drawables, theme, overlayImages);
 
   return toPngBlob(canvas);
 }
 
-/**
- * 선택된 슬롯을 합성해 WEBM 영상 Blob 생성
- */
+// 선택된 슬롯을 합성해 WEBM 영상 Blob 생성
 export async function recordFrameWebm(opts: {
   layout: FrameLayout;
   borderColor: string;
   sources: FrameSource[]; // image/video 섞여도 됨
+  theme?: ThemeExportJson | null;
   seconds: number;
   fps?: number;
   canvas?: HTMLCanvasElement;
 }) {
-  const { layout, borderColor, sources, seconds } = opts;
+  const { layout, borderColor, sources, theme = null, seconds } = opts;
 
   if (sources.length !== layout.slots.length) {
     throw new Error("sources length must match slot count");
@@ -140,6 +232,7 @@ export async function recordFrameWebm(opts: {
 
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
+  const overlayImages = await loadOverlayImages(theme);
 
   // video 재생
   await Promise.all(
@@ -183,7 +276,7 @@ export async function recordFrameWebm(opts: {
     const tick = () => {
       const elapsed = (performance.now() - start) / 1000;
 
-      drawFrameOnce(ctx, layout, borderColor, drawables);
+      drawFrameOnce(ctx, layout, borderColor, drawables, theme, overlayImages);
 
       if (elapsed >= seconds) {
         recorder.stop();

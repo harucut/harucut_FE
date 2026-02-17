@@ -9,8 +9,6 @@ import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
-import { toCreateFrameRequest } from "@/lib/frameApi";
-import { clientApi } from "@/lib/clientApi";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
@@ -21,6 +19,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const importJson = useThemeEditorStore((s) => s.importJson);
   const resetPhotos = useThemeEditorStore((s) => s.resetPhotos);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
+  const updateDraft = useThemeDraftStore((s) => s.updateDraft);
   const { draftId } = useThemeSession();
   const draft = useThemeDraftStore((s) =>
     draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
@@ -45,7 +44,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [resetPhotos]);
 
-  // 저장: JSON 내보내기 → 서버 전송 → Draft 저장
+  // 저장: JSON 내보내기 → Draft 저장
   const onDone = async () => {
     // 숨김 레이어가 있으면 경고 (서버에는 제외됨)
     const state = useThemeEditorStore.getState();
@@ -57,14 +56,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     const json = exportJson();
     if (!json) return;
 
-    const body = toCreateFrameRequest(json, {
-      title: "테스트",
-      description: "임시",
-      previewKey: "some-preview-key",
-    });
+    // 서버 저장은 잠시 비활성화
+    // const body = toCreateFrameRequest(json, {
+    //   title: "테스트",
+    //   description: "임시",
+    //   previewKey: "some-preview-key",
+    // });
+    // await clientApi.post("/api/client/user/frame", body);
 
-    await clientApi.post("/api/client/user/frame", body);
-    addDraft(json);
+    if (draft?.id) {
+      updateDraft(draft.id, json);
+    } else {
+      addDraft(json);
+    }
     router.push("/home");
   };
 

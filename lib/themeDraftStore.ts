@@ -19,6 +19,11 @@ export type ThemeDraft = {
 type ThemeDraftStore = {
   drafts: ThemeDraft[];
   addDraft: (data: ThemeExportJson, opts?: { name?: string }) => string;
+  updateDraft: (
+    id: string,
+    data: ThemeExportJson,
+    opts?: { name?: string },
+  ) => string | null;
   removeDraft: (id: string) => void;
   getDraft: (id: string) => ThemeDraft | undefined;
 };
@@ -47,6 +52,25 @@ export const useThemeDraftStore = create<ThemeDraftStore>()(
 
         set((s) => ({
           drafts: [draft, ...s.drafts].slice(0, 50),
+        }));
+
+        return id;
+      },
+
+      updateDraft: (id, data, opts) => {
+        const current = get().drafts.find((d) => d.id === id);
+        if (!current) return null;
+
+        const next: ThemeDraft = {
+          ...current,
+          frameId: data.frameId,
+          data,
+          name: opts?.name ?? id,
+          savedAt: Date.now(),
+        };
+
+        set((s) => ({
+          drafts: s.drafts.map((d) => (d.id === id ? next : d)),
         }));
 
         return id;
