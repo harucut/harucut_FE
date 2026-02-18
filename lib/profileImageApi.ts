@@ -27,6 +27,22 @@ type ApiError = Error & {
   status?: number;
 };
 
+function resolveUploadContentType(file: File) {
+  const mime = file.type.toLowerCase();
+
+  if (mime === "image/png") return "PNG";
+  if (mime === "image/jpeg") {
+    return file.name.toLowerCase().endsWith(".jpg") ? "JPG" : "JPEG";
+  }
+  if (mime === "image/jpg") return "JPG";
+  if (mime === "image/webp") return "WEBP";
+  if (mime === "video/webm") return "WEBM";
+
+  const ext = file.name.split(".").pop()?.trim().toUpperCase();
+  if (ext) return ext;
+  return "BIN";
+}
+
 async function requestProfileImageChange(s3Key: string) {
   try {
     await clientApi.patch<ApiEnvelope<null>>(
@@ -54,7 +70,7 @@ export async function uploadProfileImage(file: File) {
   const reqBody: PresignedUploadRequest = {
     type: "PROFILE",
     filename: file.name,
-    contentType: file.type || "application/octet-stream",
+    contentType: resolveUploadContentType(file),
     isTemp: false,
   };
 
@@ -80,4 +96,3 @@ export async function uploadProfileImage(file: File) {
 
   return { key };
 }
-
