@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { getBestWebmMimeType } from "@/lib/capture/mediaRecorder";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
 // 촬영 총 장수
 const MAX_SHOTS = 8;
@@ -37,6 +38,13 @@ export function useCaptureFlow() {
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
 
+  const captureSlot = useMemo(() => {
+    if (!frameId) return null;
+    const layout = FRAME_LAYOUTS[frameId];
+    if (!layout || layout.slots.length === 0) return null;
+    return layout.slots[shotCount % layout.slots.length];
+  }, [frameId, shotCount]);
+
   // 프레임 없이 들어오면 되돌리기
   useEffect(() => {
     if (!frameId) router.replace("/shoot");
@@ -55,7 +63,7 @@ export function useCaptureFlow() {
   const startCamera = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        alert("이 브라우저에서는 카메라 사용을 지원하지 않아요.");
+        alert("현재 브라우저에서는 카메라를 지원하지 않습니다.");
         return;
       }
 
@@ -76,7 +84,7 @@ export function useCaptureFlow() {
       setIsCameraReady(true);
     } catch (err) {
       console.error(err);
-      alert("카메라 접근이 거부되었거나 오류가 발생했어요.");
+      alert("카메라 접근이 거부되었거나 오류가 발생했습니다.");
     }
   }, [stopStream]);
 
@@ -109,22 +117,40 @@ export function useCaptureFlow() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    const width = video.videoWidth || 480;
-    const height = video.videoHeight || 640;
+    const videoWidth = video.videoWidth || 480;
+    const videoHeight = video.videoHeight || 640;
 
-    canvas.width = width;
-    canvas.height = height;
+    const targetWidth = captureSlot?.width ?? videoWidth;
+    const targetHeight = captureSlot?.height ?? videoHeight;
+    const targetAspect = targetWidth / targetHeight;
+    const videoAspect = videoWidth / videoHeight;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = videoWidth;
+    let sh = videoHeight;
+
+    if (videoAspect > targetAspect) {
+      sw = videoHeight * targetAspect;
+      sx = (videoWidth - sw) / 2;
+    } else if (videoAspect < targetAspect) {
+      sh = videoWidth / targetAspect;
+      sy = (videoHeight - sh) / 2;
+    }
+
+    canvas.width = Math.max(1, Math.round(sw));
+    canvas.height = Math.max(1, Math.round(sh));
 
     ctx.save();
-    ctx.translate(width, 0);
+    ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, width, height);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
     playShutterSound();
     return dataUrl;
-  }, [playShutterSound]);
+  }, [playShutterSound, captureSlot]);
 
   // 샷마다 짧은 동영상 기록 시작
   const startRecordingForShot = useCallback(() => {

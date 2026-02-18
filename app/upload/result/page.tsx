@@ -14,11 +14,15 @@ import {
   recordFrameWebm,
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
 const MAX_SECONDS = 8;
 export default function UploadResultPage() {
   const router = useRouter();
-  const { frameId, media, selectedIndexes } = useUploadSession();
+  const { frameId, draftId, media, selectedIndexes } = useUploadSession();
+  const draft = useThemeDraftStore((s) =>
+    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
+  );
 
   const [borderColor, setBorderColor] = useState("#18181b");
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
@@ -69,6 +73,8 @@ export default function UploadResultPage() {
   if (!frameId) return null;
   const layout = FRAME_LAYOUTS[frameId as FrameId];
   const frameConfig = FRAME_CONFIGS.find((f) => f.id === frameId);
+  const themeData =
+    draft && draft.data.frameId === frameId ? draft.data : null;
 
   if (!layout) return null;
 
@@ -82,6 +88,7 @@ export default function UploadResultPage() {
         layout,
         borderColor,
         sources,
+        theme: themeData,
         canvas: canvasRef.current ?? undefined,
       });
 
@@ -108,6 +115,7 @@ export default function UploadResultPage() {
         layout,
         borderColor,
         sources,
+        theme: themeData,
         seconds: MAX_SECONDS,
         canvas: canvasRef.current ?? undefined,
       });
@@ -135,6 +143,7 @@ export default function UploadResultPage() {
           frameId={frameId}
           media={selectedMedia.map((m) => m ?? { type: "image", src: "" })}
           borderColor={borderColor}
+          theme={themeData}
         />
 
         <section className="flex flex-col gap-3">

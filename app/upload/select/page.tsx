@@ -6,11 +6,22 @@ import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
 export default function UploadSelectPage() {
   const router = useRouter();
-  const { frameId, media, selectedIndexes, toggleSelect, resetAll, addMedia } =
-    useUploadSession();
+  const {
+    frameId,
+    draftId,
+    media,
+    selectedIndexes,
+    toggleSelect,
+    resetAll,
+    addMedia,
+  } = useUploadSession();
+  const draft = useThemeDraftStore((s) =>
+    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
+  );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -83,6 +94,9 @@ export default function UploadSelectPage() {
           onToggleSelect={toggleSelect}
           onReset={resetAll}
           onNext={handleNext}
+          themeData={
+            draft && frameId && draft.data.frameId === frameId ? draft.data : null
+          }
           renderExtraControls={() => (
             <>
               <button
