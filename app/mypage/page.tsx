@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clientApi } from "@/lib/clientApi";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshCw } from "lucide-react";
+import { uploadProfileImage } from "@/lib/profileImageApi";
 
 type UserInfoResponse = {
   code: string;
@@ -42,6 +43,8 @@ export default function MyPage() {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
   const fetchUser = async () => {
     setLoading(true);
@@ -144,6 +147,32 @@ export default function MyPage() {
     }
   };
 
+  const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = e.target.files?.[0] ?? null;
+    setProfileFile(nextFile);
+  };
+
+  const handleUploadProfileImage = async () => {
+    if (!profileFile) {
+      setErrors({ common: "업로드할 파일을 선택해주세요." });
+      return;
+    }
+
+    setErrors({});
+    setIsUploadingProfile(true);
+    try {
+      await uploadProfileImage(profileFile);
+      await fetchUser();
+      setProfileFile(null);
+      alert("프로필 이미지가 변경되었습니다.");
+    } catch (e) {
+      console.error(e);
+      setErrors({ common: "프로필 이미지 업로드에 실패했습니다." });
+    } finally {
+      setIsUploadingProfile(false);
+    }
+  };
+
   const handleLogout = async () => {
     setErrors({});
     setIsSubmitting(true);
@@ -218,23 +247,43 @@ export default function MyPage() {
         ) : user ? (
           <>
             {/* 프로필 */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex gap-3 items-center">
-              <div className="h-12 w-12 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center">
-                {user.profileUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={user.profileUrl}
-                    alt="profile"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-[11px] text-zinc-400">USER</span>
-                )}
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+              <div className="flex gap-3 items-center">
+                <div className="h-12 w-12 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center">
+                  {user.profileUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={user.profileUrl}
+                      alt="profile"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[11px] text-zinc-400">USER</span>
+                  )}
+                </div>
+
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold">{user.username}</span>
+                  <span className="text-[11px] text-zinc-400">{user.email}</span>
+                </div>
               </div>
 
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold">{user.username}</span>
-                <span className="text-[11px] text-zinc-400">{user.email}</span>
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,video/webm"
+                  onChange={handleProfileFileChange}
+                  disabled={isUploadingProfile}
+                  className="block w-full text-[11px] text-zinc-300 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-[11px] file:font-semibold file:text-zinc-100 hover:file:bg-zinc-700"
+                />
+                <button
+                  type="button"
+                  onClick={handleUploadProfileImage}
+                  disabled={isUploadingProfile || !profileFile}
+                  className="h-9 whitespace-nowrap rounded-full bg-emerald-500 px-4 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {isUploadingProfile ? "업로드 중..." : "프로필 업로드"}
+                </button>
               </div>
             </section>
 
