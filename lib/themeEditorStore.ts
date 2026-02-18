@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { STICKERS } from "@/constants/stickers.generated";
+import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
 import type {
   Asset,
   CommonStyleJson,
@@ -67,7 +68,9 @@ type State = {
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
 
-  addPhotoAssets: (files: FileList) => void;
+  addPhotoAssets: (
+    files: FileList,
+  ) => Promise<{ added: number; failed: number }>;
 
   removePhotoAsset: (assetId: string) => {
     ok: boolean;
@@ -152,18 +155,37 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   setTab: (t) => set({ tab: t }),
 
-  // 업로드한 사진을 에셋으로 등록
-  addPhotoAssets: (files) => {
-    const list: Asset[] = Array.from(files).map((f) => ({
-      id: uid("asset"),
-      src: URL.createObjectURL(f),
-      name: f.name,
-    }));
+  // 업로드한 사진을 임시 S3에 저장하고 에셋으로 등록
+  addPhotoAssets: async (files) => {
+    const uploaded: Asset[] = [];
+    let failed = 0;
 
-    set((s) => ({
-      assets: { ...s.assets, photos: [...list, ...s.assets.photos] },
-      tab: "PHOTO",
-    }));
+    for (const file of Array.from(files)) {
+      try {
+        const { objectUrl, key } = await uploadToS3WithPresigned({
+          file,
+          type: "FRAME",
+          isTemp: true,
+        });
+        uploaded.push({
+          id: uid("asset"),
+          src: objectUrl,
+          name: file.name,
+          s3Key: key,
+        });
+      } catch {
+        failed += 1;
+      }
+    }
+
+    if (uploaded.length > 0) {
+      set((s) => ({
+        assets: { ...s.assets, photos: [...uploaded, ...s.assets.photos] },
+        tab: "PHOTO",
+      }));
+    }
+
+    return { added: uploaded.length, failed };
   },
 
   // 사용 중인 사진은 삭제 불가
