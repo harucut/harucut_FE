@@ -69,13 +69,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     try {
       const previewBlob = await renderThemePreviewPng(themeJson);
 
-      const localUrl = URL.createObjectURL(previewBlob);
-      const a = document.createElement("a");
-      a.href = localUrl;
-      a.download = "theme-preview-local.png";
-      a.click();
-      URL.revokeObjectURL(localUrl);
-      return; // 여기서 종료하면 통신 없이 이미지 확인 가능
+      // const localUrl = URL.createObjectURL(previewBlob);
+      // const a = document.createElement("a");
+      // a.href = localUrl;
+      // a.download = "theme-preview-local.png";
+      // a.click();
+      // URL.revokeObjectURL(localUrl);
+      // return; // 여기서 종료하면 통신 없이 이미지 확인 가능
 
       const previewFile = new File(
         [previewBlob],
