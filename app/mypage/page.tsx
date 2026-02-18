@@ -66,17 +66,6 @@ export default function MyPage() {
   };
 
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      setUser({
-        id: 1,
-        email: "test@harucut.com",
-        username: "테스트유저",
-        profileUrl: null,
-      });
-      setLoading(false);
-      return;
-    }
-
     fetchUser();
   }, []);
 
