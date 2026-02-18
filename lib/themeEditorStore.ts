@@ -8,6 +8,7 @@ import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
 import type {
   Asset,
   CommonStyleJson,
+  ThemeBackground,
   EditorComponent,
   PhotoComponent,
   StickerComponent,
@@ -53,6 +54,18 @@ type ImagePatch = Partial<
 
 type UpdatePatch = TextPatch | ImagePatch;
 
+function normalizeHexColor(input: string) {
+  const cleaned = input.trim().replace(/^#/, "");
+  const hex = cleaned.replace(/[^0-9a-fA-F]/g, "").slice(0, 6).toLowerCase();
+  if (hex.length === 3) {
+    return hex
+      .split("")
+      .map((c) => `${c}${c}`)
+      .join("");
+  }
+  return hex.padEnd(6, "0");
+}
+
 type State = {
   frameId: FrameId | null;
   tab: ComponentType;
@@ -64,9 +77,11 @@ type State = {
 
   components: EditorComponent[];
   activeId: string | null;
+  backgroundColor: string;
 
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
+  setBackgroundColor: (color: string) => void;
 
   addPhotoAssets: (
     files: FileList,
@@ -140,6 +155,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   components: [],
   activeId: null,
+  backgroundColor: "111827",
 
   // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
@@ -150,10 +166,15 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       return {
         frameId: id,
         ...resetEditorState(() => s),
+        backgroundColor: "111827",
       };
     }),
 
   setTab: (t) => set({ tab: t }),
+  setBackgroundColor: (color) =>
+    set({
+      backgroundColor: normalizeHexColor(color),
+    }),
 
   // 업로드한 사진을 임시 S3에 저장하고 에셋으로 등록
   addPhotoAssets: async (files) => {
@@ -437,13 +458,18 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components } = get();
+    const { frameId, components, backgroundColor } = get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
+    const background: ThemeBackground = {
+      type: "COLOR",
+      value: normalizeHexColor(backgroundColor),
+    };
 
     return {
       frameId,
+      background,
       components: normalized
         .filter((c) => !c.hidden)
         .map((c) => ({
@@ -478,6 +504,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        backgroundColor:
+          data.background?.type === "COLOR"
+            ? normalizeHexColor(data.background.value)
+            : "111827",
         assets: {
           photos: [],
           stickers: s.assets.stickers,

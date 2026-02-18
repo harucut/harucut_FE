@@ -42,6 +42,8 @@ export function toCreateFrameRequest(
   const layout = FRAME_LAYOUTS[json.frameId];
   const canvasWidth = layout.totalWidth;
   const canvasHeight = layout.totalHeight;
+  const bgRaw = json.background?.value ?? "000000";
+  const backgroundValue = bgRaw.startsWith("#") ? bgRaw.slice(1) : bgRaw;
 
   return {
     title: meta.title,
@@ -54,7 +56,7 @@ export function toCreateFrameRequest(
     canvasHeight,
 
     // 배경을 지금 store에서 안 다루는 중이면 일단 기본값 박아두기
-    background: { type: "COLOR", value: "#000000" },
+    background: { type: "COLOR", value: backgroundValue },
 
     components: json.components.map((c) => ({
       type: c.type,

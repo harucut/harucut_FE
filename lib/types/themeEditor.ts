@@ -54,8 +54,14 @@ export type EditorComponent = PhotoComponent | StickerComponent | TextComponent;
 
 export type Asset = { id: string; src: string; name?: string; s3Key?: string };
 
+export type ThemeBackground = {
+  type: "COLOR";
+  value: string;
+};
+
 export type ThemeExportJson = {
   frameId: FrameId;
+  background?: ThemeBackground;
   components: Array<{
     id: string;
     type: ComponentType;

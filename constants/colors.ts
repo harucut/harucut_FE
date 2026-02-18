@@ -8,3 +8,11 @@ export const BORDER_COLORS = [
 
 export type BorderColorId = (typeof BORDER_COLORS)[number]["id"];
 export type BorderColorValue = (typeof BORDER_COLORS)[number]["value"];
+
+export const BACKGROUND_COLORS = [
+  { id: "white", label: "White", value: "ffffff" },
+  { id: "black", label: "Black", value: "000000" },
+  { id: "zinc", label: "Zinc", value: "111827" },
+  { id: "pink", label: "Pink", value: "f973b6" },
+  { id: "blue", label: "Blue", value: "38bdf8" },
+] as const;
