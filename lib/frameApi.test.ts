@@ -39,7 +39,7 @@ describe("toCreateFrameRequest", () => {
     expect(req.previewKey).toBe("p");
     expect(req.canvasWidth).toBe(FRAME_LAYOUTS["classic-4"].totalWidth);
     expect(req.canvasHeight).toBe(FRAME_LAYOUTS["classic-4"].totalHeight);
-    expect(req.background).toEqual({ type: "COLOR", value: "#000000" });
+    expect(req.background).toEqual({ type: "COLOR", value: "000000" });
   });
 
   // wide-* 프레임은 서버 enum 기준 WIDE로 변환되어야 합니다.

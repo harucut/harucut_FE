@@ -14,6 +14,7 @@ export function CanvasStage() {
   const frameId = useThemeEditorStore((s) => s.frameId);
   const components = useThemeEditorStore((s) => s.components);
   const activeId = useThemeEditorStore((s) => s.activeId);
+  const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const renderKey = useThemeEditorStore((s) => s.renderKey);
 
   const setActive = useThemeEditorStore((s) => s.setActive);
@@ -101,7 +102,7 @@ export function CanvasStage() {
               y={0}
               width={frameW}
               height={frameH}
-              fill="#111827"
+              fill={`#${backgroundColor}`}
               cornerRadius={60}
             />
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
 
 const mockPush = jest.fn();
@@ -6,8 +6,12 @@ const mockSetFrameId = jest.fn();
 const mockExportJson = jest.fn();
 const mockImportJson = jest.fn();
 const mockResetPhotos = jest.fn();
+const mockSetBackgroundColor = jest.fn();
 const mockAddDraft = jest.fn();
 const mockUpdateDraft = jest.fn();
+const mockClientPost = jest.fn();
+const mockUploadPresigned = jest.fn();
+const mockRenderPreview = jest.fn();
 
 let mockDraftId: string | null = null;
 let mockDrafts: Array<{
@@ -20,6 +24,8 @@ const editorStoreState = {
   exportJson: mockExportJson,
   importJson: mockImportJson,
   resetPhotos: mockResetPhotos,
+  backgroundColor: "111827",
+  setBackgroundColor: mockSetBackgroundColor,
   components: [] as Array<{ hidden?: boolean }>,
 };
 
@@ -65,6 +71,18 @@ jest.mock("@/lib/themeSessionStore", () => ({
   useThemeSession: () => ({ draftId: mockDraftId }),
 }));
 
+jest.mock("@/lib/clientApi", () => ({
+  clientApi: { post: (...args: unknown[]) => mockClientPost(...args) },
+}));
+
+jest.mock("@/lib/presignedUploadApi", () => ({
+  uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
+}));
+
+jest.mock("@/lib/canvas/renderThemePreview", () => ({
+  renderThemePreviewPng: (...args: unknown[]) => mockRenderPreview(...args),
+}));
+
 describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -73,12 +91,15 @@ describe("ThemeEditorPage save flow", () => {
     editorStoreState.components = [];
     mockExportJson.mockReturnValue({
       frameId: "classic-4",
+      background: { type: "COLOR", value: "111827" },
       components: [],
     });
+    mockRenderPreview.mockResolvedValue(new Blob(["x"], { type: "image/png" }));
+    mockUploadPresigned.mockResolvedValue({ key: "preview-key" });
+    mockClientPost.mockResolvedValue({ ok: true });
   });
 
-  // 기존 draft를 선택한 상태라면 add가 아니라 update 분기를 타야 합니다.
-  it("updates existing draft when draft is selected", () => {
+  it("updates existing draft when draft is selected", async () => {
     mockDraftId = "draft-1";
     mockDrafts = [
       {
@@ -90,18 +111,24 @@ describe("ThemeEditorPage save flow", () => {
     render(<ThemeEditorPage frameId="classic-4" />);
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
-    expect(mockAddDraft).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith("/home");
+    await waitFor(() => {
+      expect(mockClientPost).toHaveBeenCalledTimes(1);
+      expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
+      expect(mockAddDraft).not.toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith("/home");
+    });
   });
 
-  // 선택된 draft가 없으면 새 draft를 추가해야 합니다.
-  it("adds draft when no selected draft exists", () => {
+  it("adds draft when no selected draft exists", async () => {
     render(<ThemeEditorPage frameId="classic-4" />);
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    expect(mockAddDraft).toHaveBeenCalledTimes(1);
-    expect(mockUpdateDraft).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith("/home");
+    await waitFor(() => {
+      expect(mockClientPost).toHaveBeenCalledTimes(1);
+      expect(mockAddDraft).toHaveBeenCalledTimes(1);
+      expect(mockUpdateDraft).not.toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith("/home");
+    });
   });
 });
+

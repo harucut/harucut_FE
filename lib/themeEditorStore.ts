@@ -4,9 +4,11 @@ import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { STICKERS } from "@/constants/stickers.generated";
+import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
 import type {
   Asset,
   CommonStyleJson,
+  ThemeBackground,
   EditorComponent,
   PhotoComponent,
   StickerComponent,
@@ -52,6 +54,18 @@ type ImagePatch = Partial<
 
 type UpdatePatch = TextPatch | ImagePatch;
 
+function normalizeHexColor(input: string) {
+  const cleaned = input.trim().replace(/^#/, "");
+  const hex = cleaned.replace(/[^0-9a-fA-F]/g, "").slice(0, 6).toLowerCase();
+  if (hex.length === 3) {
+    return hex
+      .split("")
+      .map((c) => `${c}${c}`)
+      .join("");
+  }
+  return hex.padEnd(6, "0");
+}
+
 type State = {
   frameId: FrameId | null;
   tab: ComponentType;
@@ -63,11 +77,15 @@ type State = {
 
   components: EditorComponent[];
   activeId: string | null;
+  backgroundColor: string;
 
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
+  setBackgroundColor: (color: string) => void;
 
-  addPhotoAssets: (files: FileList) => void;
+  addPhotoAssets: (
+    files: FileList,
+  ) => Promise<{ added: number; failed: number }>;
 
   removePhotoAsset: (assetId: string) => {
     ok: boolean;
@@ -137,6 +155,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   components: [],
   activeId: null,
+  backgroundColor: "111827",
 
   // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
@@ -147,23 +166,47 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       return {
         frameId: id,
         ...resetEditorState(() => s),
+        backgroundColor: "111827",
       };
     }),
 
   setTab: (t) => set({ tab: t }),
+  setBackgroundColor: (color) =>
+    set({
+      backgroundColor: normalizeHexColor(color),
+    }),
 
-  // 업로드한 사진을 에셋으로 등록
-  addPhotoAssets: (files) => {
-    const list: Asset[] = Array.from(files).map((f) => ({
-      id: uid("asset"),
-      src: URL.createObjectURL(f),
-      name: f.name,
-    }));
+  // 업로드한 사진을 임시 S3에 저장하고 에셋으로 등록
+  addPhotoAssets: async (files) => {
+    const uploaded: Asset[] = [];
+    let failed = 0;
 
-    set((s) => ({
-      assets: { ...s.assets, photos: [...list, ...s.assets.photos] },
-      tab: "PHOTO",
-    }));
+    for (const file of Array.from(files)) {
+      try {
+        const { objectUrl, key } = await uploadToS3WithPresigned({
+          file,
+          type: "FRAME",
+          isTemp: true,
+        });
+        uploaded.push({
+          id: uid("asset"),
+          src: objectUrl,
+          name: file.name,
+          s3Key: key,
+        });
+      } catch {
+        failed += 1;
+      }
+    }
+
+    if (uploaded.length > 0) {
+      set((s) => ({
+        assets: { ...s.assets, photos: [...uploaded, ...s.assets.photos] },
+        tab: "PHOTO",
+      }));
+    }
+
+    return { added: uploaded.length, failed };
   },
 
   // 사용 중인 사진은 삭제 불가
@@ -415,13 +458,18 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components } = get();
+    const { frameId, components, backgroundColor } = get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
+    const background: ThemeBackground = {
+      type: "COLOR",
+      value: normalizeHexColor(backgroundColor),
+    };
 
     return {
       frameId,
+      background,
       components: normalized
         .filter((c) => !c.hidden)
         .map((c) => ({
@@ -456,6 +504,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        backgroundColor:
+          data.background?.type === "COLOR"
+            ? normalizeHexColor(data.background.value)
+            : "111827",
         assets: {
           photos: [],
           stickers: s.assets.stickers,

@@ -1,13 +1,18 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
+import { BACKGROUND_COLORS } from "@/constants/colors";
 import { CanvasStage } from "@/components/theme/editor/canvas/CanvasStage";
 import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
+import { clientApi } from "@/lib/clientApi";
+import { toCreateFrameRequest } from "@/lib/frameApi";
+import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
+import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
@@ -18,9 +23,12 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const exportJson = useThemeEditorStore((s) => s.exportJson);
   const importJson = useThemeEditorStore((s) => s.importJson);
   const resetPhotos = useThemeEditorStore((s) => s.resetPhotos);
+  const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
+  const setBackgroundColor = useThemeEditorStore((s) => s.setBackgroundColor);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
   const updateDraft = useThemeDraftStore((s) => s.updateDraft);
   const { draftId } = useThemeSession();
+  const [isSaving, setIsSaving] = useState(false);
   const draft = useThemeDraftStore((s) =>
     draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
   );
@@ -46,6 +54,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
   // 저장: JSON 내보내기 → Draft 저장
   const onDone = async () => {
+    if (isSaving) return;
     // 숨김 레이어가 있으면 경고 (서버에는 제외됨)
     const state = useThemeEditorStore.getState();
     const hiddenCount = state.components.filter((c) => c.hidden).length;
@@ -53,22 +62,51 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       alert("숨겨진 레이어가 있어요.");
     }
 
-    const json = exportJson();
-    if (!json) return;
+    const themeJson = exportJson();
+    if (!themeJson) return;
 
-    // 서버 저장은 잠시 비활성화
-    // const body = toCreateFrameRequest(json, {
-    //   title: "테스트",
-    //   description: "임시",
-    //   previewKey: "some-preview-key",
-    // });
-    // await clientApi.post("/api/client/user/frame", body);
+    setIsSaving(true);
+    try {
+      const previewBlob = await renderThemePreviewPng(themeJson);
+
+      // const localUrl = URL.createObjectURL(previewBlob);
+      // const a = document.createElement("a");
+      // a.href = localUrl;
+      // a.download = "theme-preview-local.png";
+      // a.click();
+      // URL.revokeObjectURL(localUrl);
+      // return; // 여기서 종료하면 통신 없이 이미지 확인 가능
+
+      const previewFile = new File(
+        [previewBlob],
+        `theme-preview-${Date.now()}.png`,
+        { type: "image/png" },
+      );
+      const { key: previewKey } = await uploadToS3WithPresigned({
+        file: previewFile,
+        type: "PREVIEW",
+        isTemp: false,
+      });
+
+      const body = toCreateFrameRequest(themeJson, {
+        title: "테마 프레임",
+        description: "프레임 꾸미기 저장",
+        previewKey,
+      });
+      await clientApi.post("/api/client/user/frame", body);
+    } catch (e) {
+      console.error(e);
+      alert("저장에 실패했습니다.");
+      setIsSaving(false);
+      return;
+    }
 
     if (draft?.id) {
-      updateDraft(draft.id, json);
+      updateDraft(draft.id, themeJson);
     } else {
-      addDraft(json);
+      addDraft(themeJson);
     }
+    setIsSaving(false);
     router.push("/home");
   };
 
@@ -99,9 +137,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             <button
               type="button"
               onClick={onDone}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
+              disabled={isSaving}
+              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
             >
-              저장
+              {isSaving ? "저장 중..." : "저장"}
             </button>
           </div>
         </header>
@@ -109,6 +148,46 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         <div className="grid grid-cols-1 gap-4 lg:gap-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:auto-rows-min">
           <div className="lg:col-start-2 lg:row-start-1 min-w-0">
             <AssetPanel />
+          </div>
+
+          <div className="lg:col-start-2 lg:row-start-2">
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+              <p className="text-sm font-semibold">배경색</p>
+              <div className="flex flex-wrap gap-2">
+                {BACKGROUND_COLORS.map((color) => {
+                  const selected = backgroundColor === color.value;
+                  return (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => setBackgroundColor(color.value)}
+                      className={`h-8 min-w-16 rounded-lg border px-2 text-[11px] ${
+                        selected
+                          ? "border-white text-white"
+                          : "border-zinc-700 text-zinc-300"
+                      }`}
+                      style={{ backgroundColor: `#${color.value}` }}
+                    >
+                      {color.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={`#${backgroundColor}`}
+                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  className="h-9 w-12 rounded-lg border border-zinc-700 bg-zinc-950"
+                />
+                <input
+                  value={backgroundColor}
+                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-zinc-200"
+                  placeholder="ffffff"
+                />
+              </div>
+            </section>
           </div>
 
           <div className="lg:col-start-1 lg:row-start-1 lg:row-span-3">
@@ -126,11 +205,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             </section>
           </div>
 
-          <div className="lg:col-start-2 lg:row-start-2">
+          <div className="lg:col-start-2 lg:row-start-3">
             <LayersPanel />
           </div>
 
-          <div className="lg:col-start-2 lg:row-start-3">
+          <div className="lg:col-start-2 lg:row-start-4">
             <InspectorPanel />
           </div>
         </div>
