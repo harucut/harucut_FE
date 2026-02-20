@@ -61,7 +61,7 @@ export async function uploadToS3WithPresigned(opts: {
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: {
-      "Content-Type": contentType || file.type || "application/octet-stream",
+      "Content-Type": contentType,
     },
     body: file,
   });
@@ -73,4 +73,3 @@ export async function uploadToS3WithPresigned(opts: {
   const objectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
   return { key, objectUrl };
 }
-
