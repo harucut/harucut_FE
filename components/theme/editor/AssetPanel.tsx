@@ -67,6 +67,7 @@ function PhotoTab() {
   const removePhotoAsset = useThemeEditorStore((s) => s.removePhotoAsset);
 
   const [blockClick, setBlockClick] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -83,9 +84,14 @@ function PhotoTab() {
         accept="image/*"
         multiple
         className="hidden"
-        onChange={(e) => {
+        onChange={async (e) => {
           if (!e.target.files) return;
-          addAssets(e.target.files);
+          setIsUploading(true);
+          const result = await addAssets(e.target.files);
+          if (result.failed > 0) {
+            alert(`${result.failed}개 파일 업로드에 실패했습니다.`);
+          }
+          setIsUploading(false);
           e.currentTarget.value = "";
         }}
       />
@@ -108,19 +114,22 @@ function PhotoTab() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
+            disabled={isUploading}
             className="
               group relative
               aspect-square w-[72px] shrink-0
               snap-start
               overflow-hidden rounded-xl
               border border-dashed border-zinc-700 bg-zinc-950
-              hover:border-emerald-500/60 hover:bg-emerald-500/5
+              hover:border-emerald-500/60 hover:bg-emerald-500/5 disabled:opacity-50
             "
             title="사진 업로드"
           >
             <div className="h-full w-full flex flex-col items-center justify-center gap-1 text-zinc-400 group-hover:text-emerald-200">
               <ImagePlus size={18} />
-              <span className="text-[10px]">업로드</span>
+              <span className="text-[10px]">
+                {isUploading ? "업로드중" : "업로드"}
+              </span>
             </div>
           </button>
 
