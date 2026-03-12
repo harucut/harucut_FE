@@ -4,7 +4,10 @@ import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { STICKERS } from "@/constants/stickers.generated";
-import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
+import {
+  PRESIGNED_UPLOAD_TYPES,
+  uploadToS3WithPresigned,
+} from "@/lib/presignedUploadApi";
 import type {
   Asset,
   CommonStyleJson,
@@ -185,7 +188,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       try {
         const { objectUrl, key } = await uploadToS3WithPresigned({
           file,
-          type: "FRAME",
+          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENTS,
           isTemp: true,
         });
         uploaded.push({

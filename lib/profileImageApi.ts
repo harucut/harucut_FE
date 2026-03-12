@@ -1,7 +1,10 @@
 "use client";
 
 import { clientApi } from "@/lib/clientApi";
-import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
+import {
+  PRESIGNED_UPLOAD_TYPES,
+  uploadToS3WithPresigned,
+} from "@/lib/presignedUploadApi";
 
 type ApiEnvelope<T> = {
   code: string;
@@ -40,7 +43,7 @@ export async function uploadProfileImage(file: File) {
 
   const { key } = await uploadToS3WithPresigned({
     file,
-    type: "PROFILE",
+    type: PRESIGNED_UPLOAD_TYPES.PROFILE,
     isTemp: false,
   });
 
