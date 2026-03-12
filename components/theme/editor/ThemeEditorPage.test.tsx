@@ -34,8 +34,9 @@ function themeEditorStoreMock(
 ) {
   return selector(editorStoreState);
 }
-(themeEditorStoreMock as unknown as { getState: () => typeof editorStoreState }).getState =
-  () => editorStoreState;
+(
+  themeEditorStoreMock as unknown as { getState: () => typeof editorStoreState }
+).getState = () => editorStoreState;
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -78,7 +79,7 @@ jest.mock("@/lib/clientApi", () => ({
 jest.mock("@/lib/presignedUploadApi", () => ({
   PRESIGNED_UPLOAD_TYPES: {
     FRAME: "FRAME",
-    FRAME_COMPONENTS: "FRAME_COMPONENTS",
+    FRAME_COMPONENT: "FRAME_COMPONENT",
     PROFILE: "PROFILE",
     FOURCUT_VIDEO: "FOURCUT_VIDEO",
     FOURCUT_PHOTO: "FOURCUT_PHOTO",
