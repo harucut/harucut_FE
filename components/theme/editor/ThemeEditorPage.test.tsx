@@ -76,6 +76,13 @@ jest.mock("@/lib/clientApi", () => ({
 }));
 
 jest.mock("@/lib/presignedUploadApi", () => ({
+  PRESIGNED_UPLOAD_TYPES: {
+    FRAME: "FRAME",
+    FRAME_COMPONENTS: "FRAME_COMPONENTS",
+    PROFILE: "PROFILE",
+    FOURCUT_VIDEO: "FOURCUT_VIDEO",
+    FOURCUT_PHOTO: "FOURCUT_PHOTO",
+  },
   uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
 }));
 
@@ -113,6 +120,9 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(mockClientPost).toHaveBeenCalledTimes(1);
+      expect(mockUploadPresigned).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "FRAME", isTemp: false }),
+      );
       expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
       expect(mockAddDraft).not.toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/home");
@@ -125,10 +135,12 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(mockClientPost).toHaveBeenCalledTimes(1);
+      expect(mockUploadPresigned).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "FRAME", isTemp: false }),
+      );
       expect(mockAddDraft).toHaveBeenCalledTimes(1);
       expect(mockUpdateDraft).not.toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/home");
     });
   });
 });
-
