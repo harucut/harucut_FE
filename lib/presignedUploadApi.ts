@@ -64,16 +64,86 @@ export function resolveFourcutUploadType(file: File): PresignedUploadType {
   return PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO;
 }
 
+function isImageContentType(contentType: string) {
+  return ["PNG", "JPG", "JPEG", "WEBP"].includes(contentType);
+}
+
+function isWebmContentType(contentType: string) {
+  return contentType === "WEBM";
+}
+
+function extractFilenameFromKey(key: string) {
+  const filename = key.split("/").pop()?.trim();
+  if (!filename) {
+    throw new Error("Missing filename in uploaded key");
+  }
+  return filename;
+}
+
+function extractImageUrl(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const directUrl = [
+    record.url,
+    record.imageUrl,
+    record.downloadUrl,
+    record.presignedUrl,
+    record.presignedImgUrl,
+    record.signedUrl,
+  ].find((candidate): candidate is string => {
+    return typeof candidate === "string" && candidate.trim().length > 0;
+  });
+
+  if (directUrl) {
+    return directUrl;
+  }
+
+  return extractImageUrl(record.data);
+}
+
+async function requestPresignedImageUrl(key: string, fallbackUrl: string) {
+  const res = await clientApi.get<ApiEnvelope<unknown>>(
+    `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
+  );
+
+  return extractImageUrl(res.data.data) ?? fallbackUrl;
+}
+
+async function requestTranscode(key: string) {
+  await clientApi.post<ApiEnvelope<Record<string, never>>>(
+    "/api/client/user/files/transcode",
+    {
+      filename: extractFilenameFromKey(key),
+    },
+  );
+}
+
+export async function uploadFourcutMedia(file: File) {
+  return uploadToS3WithPresigned({
+    file,
+    type: resolveFourcutUploadType(file),
+    isTemp: false,
+  });
+}
+
 export async function uploadToS3WithPresigned(opts: {
   file: File;
   type: PresignedUploadType;
   isTemp: boolean;
 }) {
   const { file, type, isTemp } = opts;
+  const resolvedContentType = resolveUploadContentType(file);
   const body: PresignedUploadRequest = {
     type,
     filename: file.name,
-    contentType: resolveUploadContentType(file),
+    contentType: resolvedContentType,
     isTemp,
   };
 
@@ -95,6 +165,15 @@ export async function uploadToS3WithPresigned(opts: {
     throw new Error(`S3 upload failed: ${uploadRes.status}`);
   }
 
-  const objectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
+  const fallbackObjectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
+
+  if (isWebmContentType(resolvedContentType)) {
+    await requestTranscode(key);
+  }
+
+  const objectUrl = isImageContentType(resolvedContentType)
+    ? await requestPresignedImageUrl(key, fallbackObjectUrl)
+    : fallbackObjectUrl;
+
   return { key, objectUrl };
 }

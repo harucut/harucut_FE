@@ -15,6 +15,7 @@ import {
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
 import { isNotNull } from "@/lib/guards";
+import { uploadFourcutMedia } from "@/lib/presignedUploadApi";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
 
 const MAX_SECONDS = 8;
@@ -105,7 +106,12 @@ export default function ShootResultPage() {
       });
 
       const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
-      downloadBlob(blob, `${name}-${Date.now()}.png`);
+      const filename = `${name}-${Date.now()}.png`;
+      const file = new File([blob], filename, {
+        type: "image/png",
+      });
+      await uploadFourcutMedia(file);
+      downloadBlob(blob, filename);
     } catch (e) {
       console.error(e);
       alert("이미지 생성 중 오류가 발생했어요. 다시 시도해 주세요.");
@@ -129,7 +135,12 @@ export default function ShootResultPage() {
       });
 
       const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
-      downloadBlob(blob, `${name}-${Date.now()}.webm`);
+      const filename = `${name}-${Date.now()}.webm`;
+      const file = new File([blob], filename, {
+        type: "video/webm",
+      });
+      await uploadFourcutMedia(file);
+      downloadBlob(blob, filename);
     } catch (e) {
       console.error(e);
       alert("영상 생성 중 오류가 발생했어요. 다시 시도해 주세요.");
