@@ -16,8 +16,19 @@ type PresignedUploadData = {
   expiresIn: string;
 };
 
+export const PRESIGNED_UPLOAD_TYPES = {
+  FRAME: "FRAME",
+  FRAME_COMPONENTS: "FRAME_COMPONENTS",
+  PROFILE: "PROFILE",
+  FOURCUT_VIDEO: "FOURCUT_VIDEO",
+  FOURCUT_PHOTO: "FOURCUT_PHOTO",
+} as const;
+
+export type PresignedUploadType =
+  (typeof PRESIGNED_UPLOAD_TYPES)[keyof typeof PRESIGNED_UPLOAD_TYPES];
+
 type PresignedUploadRequest = {
-  type: string;
+  type: PresignedUploadType;
   filename: string;
   contentType: string;
   isTemp: boolean;
@@ -39,9 +50,23 @@ export function resolveUploadContentType(file: File) {
   return "BIN";
 }
 
+export function resolveFourcutUploadType(file: File): PresignedUploadType {
+  const mime = file.type.toLowerCase();
+  const contentType = resolveUploadContentType(file);
+
+  if (
+    mime.startsWith("video/") ||
+    ["WEBM", "MP4", "MOV", "AVI", "MKV", "M4V"].includes(contentType)
+  ) {
+    return PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO;
+  }
+
+  return PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO;
+}
+
 export async function uploadToS3WithPresigned(opts: {
   file: File;
-  type: string;
+  type: PresignedUploadType;
   isTemp: boolean;
 }) {
   const { file, type, isTemp } = opts;

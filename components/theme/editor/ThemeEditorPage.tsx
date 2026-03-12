@@ -11,7 +11,10 @@ import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { clientApi } from "@/lib/clientApi";
 import { toCreateFrameRequest } from "@/lib/frameApi";
-import { uploadToS3WithPresigned } from "@/lib/presignedUploadApi";
+import {
+  PRESIGNED_UPLOAD_TYPES,
+  uploadToS3WithPresigned,
+} from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
@@ -84,7 +87,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       );
       const { key: previewKey } = await uploadToS3WithPresigned({
         file: previewFile,
-        type: "PREVIEW",
+        type: PRESIGNED_UPLOAD_TYPES.FRAME,
         isTemp: false,
       });
 
