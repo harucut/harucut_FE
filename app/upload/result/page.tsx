@@ -10,6 +10,7 @@ import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   composeFramePng,
+  downloadFromUrl,
   downloadBlob,
   recordFrameWebm,
   type FrameSource,
@@ -98,8 +99,12 @@ export default function UploadResultPage() {
       const file = new File([blob], filename, {
         type: "image/png",
       });
-      await uploadFourcutMedia(file);
-      downloadBlob(blob, filename);
+      const uploaded = await uploadFourcutMedia(file);
+      if (uploaded.downloadUrl) {
+        await downloadFromUrl(uploaded.downloadUrl, filename);
+      } else {
+        downloadBlob(blob, filename);
+      }
     } catch (e) {
       console.error(e);
       alert("이미지 생성 중 오류가 발생했어요. 다시 시도해 주세요.");
@@ -131,8 +136,15 @@ export default function UploadResultPage() {
       const file = new File([blob], filename, {
         type: "video/webm",
       });
-      await uploadFourcutMedia(file);
-      downloadBlob(blob, filename);
+      const uploaded = await uploadFourcutMedia(file);
+      if (uploaded.downloadUrl) {
+        await downloadFromUrl(
+          uploaded.downloadUrl,
+          filename.replace(/\.webm$/i, ".mp4"),
+        );
+      } else {
+        downloadBlob(blob, filename);
+      }
     } catch (e) {
       console.error(e);
       alert("영상 생성 중 오류가 발생했어요. 다시 시도해 주세요.");
