@@ -47,6 +47,41 @@ export function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function triggerDownloadLink(url: string, filename?: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  if (filename) {
+    a.download = filename;
+  }
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function filenameFromUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    return decodeURIComponent(parsed.pathname.split("/").pop() || "download");
+  } catch {
+    return "download";
+  }
+}
+
+export async function downloadFromUrl(url: string, filename?: string) {
+  try {
+    const res = await fetch(url, { method: "GET" });
+    if (!res.ok) {
+      throw new Error(`download failed: ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    downloadBlob(blob, filename ?? filenameFromUrl(url));
+  } catch {
+    triggerDownloadLink(url, filename);
+  }
+}
+
 // 슬롯 소스를 실제 이미지/비디오 요소로 로드
 async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(

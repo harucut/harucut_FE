@@ -59,7 +59,10 @@ type UpdatePatch = TextPatch | ImagePatch;
 
 function normalizeHexColor(input: string) {
   const cleaned = input.trim().replace(/^#/, "");
-  const hex = cleaned.replace(/[^0-9a-fA-F]/g, "").slice(0, 6).toLowerCase();
+  const hex = cleaned
+    .replace(/[^0-9a-fA-F]/g, "")
+    .slice(0, 6)
+    .toLowerCase();
   if (hex.length === 3) {
     return hex
       .split("")
@@ -188,7 +191,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       try {
         const { objectUrl, key } = await uploadToS3WithPresigned({
           file,
-          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENTS,
+          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
           isTemp: true,
         });
         uploaded.push({
