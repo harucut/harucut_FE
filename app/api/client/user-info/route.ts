@@ -12,5 +12,5 @@ export async function GET(req: Request) {
     forwardBody: false,
   });
 
-  return buildResponse(upstream);
+  return buildResponse(upstream, req);
 }

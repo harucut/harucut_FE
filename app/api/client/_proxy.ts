@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  adaptSetCookiesForRequest,
+  getSetCookieHeaders,
+} from "@/lib/server/setCookies";
 
 type ProxyOptions = {
   url: string;
-  method: "GET" | "POST" | "PATCH" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   forwardBody?: boolean;
   contentType?: string;
   extraHeaders?: Record<string, string>;
@@ -13,8 +17,10 @@ type ForwardResult = {
   status: number;
   body: string;
   contentType: string;
-  setCookie: string | null;
+  setCookies: string[];
 };
+
+type RequestLike = Pick<Request, "headers" | "url">;
 
 export async function forward(
   req: Request,
@@ -47,20 +53,26 @@ export async function forward(
     status: upstream.status,
     body: responseBody,
     contentType,
-    setCookie: upstream.headers.get("set-cookie"),
+    setCookies: getSetCookieHeaders(upstream.headers),
   };
 }
 
-export function buildResponse(result: ForwardResult) {
+export function buildResponse(result: ForwardResult, req?: RequestLike) {
   const res = new NextResponse(result.body, {
     status: result.status,
     headers: { "Content-Type": result.contentType },
   });
-  if (result.setCookie) res.headers.set("set-cookie", result.setCookie);
+  const setCookies = req
+    ? adaptSetCookiesForRequest(result.setCookies, req)
+    : result.setCookies;
+
+  for (const cookie of setCookies) {
+    res.headers.append("set-cookie", cookie);
+  }
   return res;
 }
 
 export async function proxyJson(req: Request, options: ProxyOptions) {
   const result = await forward(req, options);
-  return buildResponse(result);
+  return buildResponse(result, req);
 }

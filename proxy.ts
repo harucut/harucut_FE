@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "@/lib/server/auth";
+import {
+  adaptSetCookiesForRequest,
+  getSetCookieHeaders,
+} from "@/lib/server/setCookies";
 
 // 보호가 필요한 경로 목록
 const PROTECTED_PATHS = ["/home", "/shoot", "/upload", "/history", "/theme"];
 // const PROTECTED_PATHS = ["/history"];
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
-type ReissueResponse = {
-  code: string;
-  status: number;
-  message: string | null;
-  data: {
-    accessToken: string;
-    refreshToken: string;
-  };
-};
 /**
  * 보호 경로 접근 시 토큰 검증/리이슈 후 통과시키는 미들웨어 헬퍼
  */
@@ -54,39 +49,22 @@ export async function proxy(req: NextRequest) {
     const refreshRes = await fetch(`${BASE_URL}/api/harucut/reissue`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Refresh-Token": refreshToken,
+        cookie: req.headers.get("cookie") ?? `refreshToken=${refreshToken}`,
       },
       cache: "no-store",
     });
 
     if (refreshRes.ok) {
-      const { data } = (await refreshRes.json()) as ReissueResponse;
-
-      const newAccessToken = data.accessToken;
-      const newRefreshToken = data.refreshToken;
-
-      if (newAccessToken || newRefreshToken) {
+      const setCookies = adaptSetCookiesForRequest(
+        getSetCookieHeaders(refreshRes.headers),
+        req,
+      );
+      if (setCookies.length > 0) {
+        await refreshRes.text();
         const res = NextResponse.next();
-
-        if (newAccessToken) {
-          res.cookies.set("accessToken", newAccessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            path: "/",
-          });
+        for (const cookie of setCookies) {
+          res.headers.append("set-cookie", cookie);
         }
-
-        if (newRefreshToken) {
-          res.cookies.set("refreshToken", newRefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            path: "/",
-          });
-        }
-
         return res;
       }
     }
