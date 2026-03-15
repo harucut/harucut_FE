@@ -7,6 +7,7 @@ import { useUploadSession } from "@/lib/uploadSessionStore";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import { SUPPORTED_FOURCUT_ACCEPT } from "@/lib/presignedUploadApi";
 
 export default function UploadSelectPage() {
   const router = useRouter();
@@ -110,7 +111,7 @@ export default function UploadSelectPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept={SUPPORTED_FOURCUT_ACCEPT}
                 multiple
                 onChange={handleChangeFiles}
                 className="hidden"
