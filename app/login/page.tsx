@@ -7,8 +7,9 @@ import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
-import { loginWithEmail } from "@/lib/auth/authApi";
+import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
+import { clientApi } from "@/lib/clientApi";
 import type { AuthFieldName } from "@/components/auth/authFields";
 
 type LoginFieldName = Extract<AuthFieldName, "email" | "password">;
@@ -46,12 +47,38 @@ export default function LoginPage() {
     }
 
     try {
-      await loginWithEmail(email, password);
+      const loginData = await loginWithEmail(email, password);
+
+      if (loginData?.userStatus === "DELETED_REQUESTED") {
+        const shouldReactivate = window.confirm(
+          "회원 탈퇴 요청 상태입니다. 탈퇴를 취소하고 계속 로그인할까요?",
+        );
+
+        if (!shouldReactivate) {
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          setErrors({
+            common: "회원 탈퇴 취소를 선택해야 다시 로그인할 수 있습니다.",
+          });
+          return;
+        }
+
+        try {
+          await reactivateAccount();
+        } catch (reactivateError) {
+          console.error(reactivateError);
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          setErrors({
+            common: "회원 탈퇴 취소에 실패했습니다. 다시 시도해 주세요.",
+          });
+          return;
+        }
+      }
+
       window.location.href = "/home";
     } catch (error) {
       console.error(error);
       setErrors({
-        common: "로그인에 실패했습니다. 이메일/비밀번호를 확인해 주세요.",
+        common: "로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.",
       });
     } finally {
       setIsSubmitting(false);

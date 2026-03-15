@@ -1,21 +1,23 @@
 import { clientApi } from "@/lib/clientApi";
+import type { ApiEnvelope, LoginResponseData } from "@/lib/api-types";
 
-/** 이메일 로그인 */
 export async function loginWithEmail(email: string, password: string) {
-  await clientApi.post("/api/client/auth/login", { email, password });
+  const res = await clientApi.post<ApiEnvelope<LoginResponseData>>(
+    "/api/client/auth/login",
+    { email, password },
+  );
+
+  return res.data.data;
 }
 
-/** 이메일 인증 코드 전송 */
 export async function sendEmailAuthCode(email: string) {
   await clientApi.post("/api/client/auth/email/code", { email });
 }
 
-/** 이메일 인증 코드 검증 */
 export async function verifyEmailAuthCode(email: string, code: string) {
   await clientApi.post("/api/client/auth/email/verification", { email, code });
 }
 
-/** 이메일 회원가입 */
 export async function signupWithEmail(args: {
   email: string;
   password: string;
@@ -23,4 +25,8 @@ export async function signupWithEmail(args: {
 }) {
   const res = await clientApi.post("/api/client/auth/register", args);
   return res.data;
+}
+
+export async function reactivateAccount() {
+  await clientApi.post<ApiEnvelope<null>>("/api/client/reactivate");
 }
