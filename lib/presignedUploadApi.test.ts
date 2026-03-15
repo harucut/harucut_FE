@@ -1,5 +1,6 @@
 const mockGet = jest.fn();
 const mockPost = jest.fn();
+const mockRegisterUserMedia = jest.fn();
 
 jest.mock("@/lib/clientApi", () => ({
   clientApi: {
@@ -8,9 +9,15 @@ jest.mock("@/lib/clientApi", () => ({
   },
 }));
 
+jest.mock("@/lib/userMediaApi", () => ({
+  registerUserMedia: (...args: unknown[]) => mockRegisterUserMedia(...args),
+}));
+
 import {
   PRESIGNED_UPLOAD_TYPES,
   resolveFourcutUploadType,
+  resolveUploadContentType,
+  uploadFourcutMedia,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 
@@ -20,34 +27,23 @@ describe("presigned upload flow", () => {
     global.fetch = jest.fn();
   });
 
-  it("maps shot and uploaded videos to FOURCUT_VIDEO", () => {
+  it("maps jpg files to the swagger JPEG enum", () => {
+    const jpg = new File(["x"], "photo.jpg", { type: "image/jpeg" });
+    expect(resolveUploadContentType(jpg)).toBe("JPEG");
+  });
+
+  it("maps shot videos to FOURCUT_VIDEO and photos to FOURCUT_PHOTO", () => {
     const capturedVideo = new File(["x"], "captured.webm", {
       type: "video/webm",
     });
-    const uploadedVideo = new File(["x"], "uploaded.webm", {
-      type: "video/webm",
+    const capturedPhoto = new File(["x"], "captured.png", {
+      type: "image/png",
     });
 
     expect(resolveFourcutUploadType(capturedVideo)).toBe(
       PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO,
     );
-    expect(resolveFourcutUploadType(uploadedVideo)).toBe(
-      PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO,
-    );
-  });
-
-  it("maps shot and uploaded photos to FOURCUT_PHOTO", () => {
-    const capturedPhoto = new File(["x"], "captured.png", {
-      type: "image/png",
-    });
-    const uploadedPhoto = new File(["x"], "uploaded.jpeg", {
-      type: "image/jpeg",
-    });
-
     expect(resolveFourcutUploadType(capturedPhoto)).toBe(
-      PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
-    );
-    expect(resolveFourcutUploadType(uploadedPhoto)).toBe(
       PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
     );
   });
@@ -109,11 +105,65 @@ describe("presigned upload flow", () => {
     });
   });
 
-  it("transcodes webm and returns mp4 downloadUrl", async () => {
-    const key =
-      "uploads/users/VZ_LtszNul/webm/d62ce849-47f7-4983-bbbf-0f4f2fcb6029.webm";
+  it("registers photo media after upload", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        code: "GEN-000",
+        status: 200,
+        message: null,
+        data: {
+          key: "uploads/users/u/photo.png",
+          uploadUrl: "https://example.com/upload/photo.png?sig=1",
+          contentType: "image/png",
+          expiresIn: "PT24H",
+        },
+      },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    mockGet.mockResolvedValueOnce({
+      data: {
+        code: "GEN-000",
+        status: 200,
+        message: null,
+        data: {
+          downloadUrl: "https://example.com/photo.png?sig=2",
+        },
+      },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    mockRegisterUserMedia.mockResolvedValueOnce({
+      mediaId: 1,
+      mediaType: "PHOTO",
+      s3Key: "uploads/users/u/photo.png",
+      downloadUrl: "https://example.com/photo.png?sig=3",
+    });
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+    });
+
+    const result = await uploadFourcutMedia(
+      new File(["x"], "photo.png", { type: "image/png" }),
+    );
+
+    expect(mockRegisterUserMedia).toHaveBeenCalledWith({
+      mediaType: "PHOTO",
+      s3Key: "uploads/users/u/photo.png",
+    });
+    expect(result.downloadUrl).toBe("https://example.com/photo.png?sig=3");
+  });
+
+  it("transcodes webm output and returns the converted downloadUrl", async () => {
+    const key = "uploads/users/u/video.webm";
     const downloadUrl =
-      "[https://harucuts3.s3.ap-northeast-2.amazonaws.com/uploads/users/VZ_LtszNul/mp4/d62ce849-47f7-4983-bbbf-0f4f2fcb6029_converted.mp4](https://harucuts3.s3.ap-northeast-2.amazonaws.com/uploads/users/VZ_LtszNul/mp4/d62ce849-47f7-4983-bbbf-0f4f2fcb6029_converted.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256)";
+      "https://harucuts3.s3.ap-northeast-2.amazonaws.com/uploads/users/u/video.mp4?sig=2";
 
     mockPost
       .mockResolvedValueOnce({
@@ -123,8 +173,7 @@ describe("presigned upload flow", () => {
           message: null,
           data: {
             key,
-            uploadUrl:
-              "https://example.com/upload/d62ce849-47f7-4983-bbbf-0f4f2fcb6029.webm?sig=1",
+            uploadUrl: "https://example.com/upload/video.webm?sig=1",
             contentType: "video/webm",
             expiresIn: "PT24H",
           },
@@ -138,7 +187,12 @@ describe("presigned upload flow", () => {
           code: "GEN-000",
           status: 200,
           message: null,
-          data: {},
+          data: {
+            mediaId: 8,
+            mediaType: "VIDEO",
+            s3Key: "uploads/users/u/video.mp4",
+            downloadUrl,
+          },
         },
         ok: true,
         status: 200,
@@ -151,8 +205,7 @@ describe("presigned upload flow", () => {
         status: 200,
         message: null,
         data: {
-          mediaType: "VIDEO",
-          downloadUrl,
+          downloadUrl: "https://example.com/video.webm?sig=3",
         },
       },
       ok: true,
@@ -165,30 +218,18 @@ describe("presigned upload flow", () => {
       status: 200,
     });
 
-    const result = await uploadToS3WithPresigned({
-      file: new File(["x"], "d62ce849-47f7-4983-bbbf-0f4f2fcb6029.webm", {
-        type: "video/webm",
-      }),
-      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO,
-      isTemp: false,
-    });
+    const result = await uploadFourcutMedia(
+      new File(["x"], "video.webm", { type: "video/webm" }),
+    );
 
-    expect(mockPost).toHaveBeenNthCalledWith(
-      2,
-      "/api/client/user/files/transcode",
-      {
-        filename: "d62ce849-47f7-4983-bbbf-0f4f2fcb6029.webm",
-      },
-    );
-    expect(mockGet).toHaveBeenCalledWith(
-      `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
-    );
+    expect(mockPost).toHaveBeenNthCalledWith(2, "/api/client/user/files/transcode", {
+      filename: "video.webm",
+    });
     expect(result).toEqual({
       key,
-      objectUrl:
-        "https://harucuts3.s3.ap-northeast-2.amazonaws.com/uploads/users/VZ_LtszNul/mp4/d62ce849-47f7-4983-bbbf-0f4f2fcb6029_converted.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256",
-      downloadUrl:
-        "https://harucuts3.s3.ap-northeast-2.amazonaws.com/uploads/users/VZ_LtszNul/mp4/d62ce849-47f7-4983-bbbf-0f4f2fcb6029_converted.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256",
+      mediaId: 8,
+      objectUrl: downloadUrl,
+      downloadUrl,
     });
   });
 });

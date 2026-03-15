@@ -1,0 +1,83 @@
+export type ApiEnvelope<T> = {
+  code: string;
+  status: number;
+  message: string | null;
+  data: T;
+};
+
+export type UserStatus =
+  | "ACTIVE"
+  | "DELETED"
+  | "DELETED_REQUESTED"
+  | "SUSPENDED";
+
+export type LoginResponseData = {
+  userStatus: UserStatus;
+};
+
+export type PresignedUploadContentType =
+  | "JPEG"
+  | "PNG"
+  | "WEBP"
+  | "GIF"
+  | "MP4"
+  | "WEBM"
+  | "MOV";
+
+export type UserMediaType = "PHOTO" | "VIDEO";
+
+export type UserMedia = {
+  mediaId: number;
+  mediaType: UserMediaType;
+  s3Key: string;
+  downloadUrl?: string;
+  originalS3Key?: string;
+  originalFileName?: string;
+  transcodeJobId?: string;
+  createdAt?: string;
+};
+
+export type RemoteFrameType = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
+
+export type RemoteFrameBackground =
+  | {
+      type: "COLOR";
+      value: string;
+    }
+  | {
+      type: "IMAGE";
+      key?: string;
+      opacity?: number;
+    }
+  | {
+      type: "VIDEO";
+      key?: string;
+      autoPlay?: boolean;
+      loop?: boolean;
+    };
+
+export type RemoteFrameComponent = {
+  id?: number | string;
+  type: "PHOTO" | "STICKER" | "TEXT";
+  source: string;
+  key?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale?: number;
+  rotation?: number;
+  zIndex: number;
+  style?: Record<string, unknown>;
+  styleJson?: Record<string, unknown>;
+};
+
+export type RemoteFrame = {
+  frameId: number;
+  title: string;
+  description?: string;
+  source?: string;
+  frameType: RemoteFrameType;
+  background?: RemoteFrameBackground;
+  components: RemoteFrameComponent[];
+};
