@@ -3,6 +3,7 @@
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import React, { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
+import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((s) => s.tab);
@@ -81,7 +82,7 @@ function PhotoTab() {
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_IMAGE_ACCEPT}
         multiple
         className="hidden"
         onChange={async (e) => {
