@@ -28,5 +28,5 @@ export async function PATCH(req: Request) {
     forwardBody: false,
   });
 
-  return buildResponse(upstream);
+  return buildResponse(upstream, req);
 }
