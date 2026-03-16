@@ -6,6 +6,7 @@ import { clientApi } from "@/lib/clientApi";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshCw } from "lucide-react";
 import { uploadProfileImage } from "@/lib/profileImageApi";
+import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 
 type UserInfoResponse = {
   code: string;
@@ -260,7 +261,7 @@ export default function MyPage() {
               <div className="mt-3 flex items-center gap-2">
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,video/webm"
+                  accept={SUPPORTED_IMAGE_ACCEPT}
                   onChange={handleProfileFileChange}
                   disabled={isUploadingProfile}
                   className="block w-full text-[11px] text-zinc-300 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-[11px] file:font-semibold file:text-zinc-100 hover:file:bg-zinc-700"

@@ -1,15 +1,22 @@
-import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import type {
+  RemoteFrameBackground,
+  RemoteFrame,
+  RemoteFrameType,
+} from "@/lib/api-types";
+import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
-type CreateFrameRequest = {
+export type CreateFrameRequest = {
   title: string;
   description: string;
   previewKey: string;
-  frameType: "CLASSIC" | "WIDE" | "SQUARE"; // 서버 enum에 맞게
+  frameType: RemoteFrameType;
   canvasWidth: number;
   canvasHeight: number;
-  background: { type: "COLOR" | "IMAGE"; value: string };
+  background: RemoteFrameBackground;
   components: Array<{
+    id?: string;
     type: "PHOTO" | "STICKER" | "TEXT";
     source: string;
     x: number;
@@ -20,21 +27,96 @@ type CreateFrameRequest = {
     rotation: number;
     zIndex: number;
     styleJson: Record<string, unknown>;
-    // 서버가 id를 받는지 여부에 따라 선택
-    id?: string;
   }>;
 };
 
-// FrameId에서 서버 enum으로 변환
-function inferFrameType(frameId: string): CreateFrameRequest["frameType"] {
-  // 너네 FrameId 규칙에 맞게 매핑
+export function frameTypeFromFrameId(frameId: FrameId): RemoteFrameType {
   if (frameId.startsWith("wide")) return "WIDE";
+  if (frameId.startsWith("grid")) return "GRID";
+  if (frameId.startsWith("polaroid")) return "POLAROID";
   return "CLASSIC";
 }
 
-/**
- * 에디터 JSON을 서버 요청 스키마로 변환
- */
+export function frameIdFromFrameType(frameType: RemoteFrameType): FrameId {
+  switch (frameType) {
+    case "WIDE":
+      return "wide-4";
+    case "GRID":
+      return "grid-4";
+    case "POLAROID":
+      return "polaroid-4";
+    case "CLASSIC":
+    default:
+      return "classic-4";
+  }
+}
+
+export function matchesFrameType(frameId: FrameId, frameType: RemoteFrameType) {
+  return frameTypeFromFrameId(frameId) === frameType;
+}
+
+function normalizeHexColor(input: string) {
+  const cleaned = input.trim().replace(/^#/, "");
+  if (!cleaned) return "000000";
+  return cleaned.toLowerCase();
+}
+
+function toRequestBackground(background?: ThemeBackground): RemoteFrameBackground {
+  if (!background) {
+    return { type: "COLOR", value: "000000" };
+  }
+
+  if (background.type === "COLOR") {
+    return {
+      type: "COLOR",
+      value: normalizeHexColor(background.value),
+    };
+  }
+
+  if (background.type === "IMAGE") {
+    return {
+      type: "IMAGE",
+      key: background.key,
+      opacity: background.opacity,
+    };
+  }
+
+  return {
+    type: "VIDEO",
+    key: background.key,
+    autoPlay: background.autoPlay,
+    loop: background.loop,
+  };
+}
+
+function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground | undefined {
+  if (!background) {
+    return undefined;
+  }
+
+  if (background.type === "COLOR") {
+    return {
+      type: "COLOR",
+      value: normalizeHexColor(background.value),
+    };
+  }
+
+  if (background.type === "IMAGE") {
+    return {
+      type: "IMAGE",
+      key: background.key,
+      opacity: background.opacity,
+    };
+  }
+
+  return {
+    type: "VIDEO",
+    key: background.key,
+    autoPlay: background.autoPlay,
+    loop: background.loop,
+  };
+}
+
 export function toCreateFrameRequest(
   json: ThemeExportJson,
   meta: { title: string; description: string; previewKey: string },
@@ -42,22 +124,15 @@ export function toCreateFrameRequest(
   const layout = FRAME_LAYOUTS[json.frameId];
   const canvasWidth = layout.totalWidth;
   const canvasHeight = layout.totalHeight;
-  const bgRaw = json.background?.value ?? "000000";
-  const backgroundValue = bgRaw.startsWith("#") ? bgRaw.slice(1) : bgRaw;
 
   return {
     title: meta.title,
     description: meta.description,
     previewKey: meta.previewKey,
-
-    frameType: inferFrameType(json.frameId),
-
+    frameType: frameTypeFromFrameId(json.frameId),
     canvasWidth,
     canvasHeight,
-
-    // 배경을 지금 store에서 안 다루는 중이면 일단 기본값 박아두기
-    background: { type: "COLOR", value: backgroundValue },
-
+    background: toRequestBackground(json.background),
     components: json.components.map((c) => ({
       type: c.type,
       source: c.source,
@@ -69,8 +144,28 @@ export function toCreateFrameRequest(
       rotation: c.rotation ?? 0,
       zIndex: c.zIndex,
       styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
-      // 서버가 필요하면 여기서 넣기
       id: c.id,
+    })),
+  };
+}
+
+export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
+  return {
+    frameId: frameIdFromFrameType(frame.frameType),
+    background: toThemeBackground(frame.background),
+    components: frame.components.map((component, index) => ({
+      id: String(component.id ?? `${component.type}-${index}`),
+      type: component.type,
+      source: component.source || component.key || "",
+      x: component.x,
+      y: component.y,
+      width: component.width,
+      height: component.height,
+      scale: component.scale ?? 1,
+      rotation: component.rotation ?? 0,
+      zIndex: component.zIndex,
+      styleJson:
+        (component.styleJson ?? component.style ?? {}) as Record<string, unknown>,
     })),
   };
 }

@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { forward } from "@/app/api/client/_proxy";
+import { buildResponse, forward } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -14,11 +13,8 @@ export async function DELETE(req: Request) {
       forwardBody: false,
     });
 
-    return NextResponse.json(
-      { ok: upstream.ok },
-      { status: upstream.ok ? 200 : 400 },
-    );
+    return buildResponse(upstream, req);
   } catch {
-    return NextResponse.json({ ok: false }, { status: 500 });
+    return Response.json({ ok: false }, { status: 500 });
   }
 }

@@ -1,17 +1,11 @@
 "use client";
 
+import type { ApiEnvelope } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
-
-type ApiEnvelope<T> = {
-  code: string;
-  status: number;
-  message: string | null;
-  data: T;
-};
 
 type ApiError = Error & {
   status?: number;
@@ -39,6 +33,10 @@ async function requestProfileImageChange(s3Key: string) {
 export async function uploadProfileImage(file: File) {
   if (!file) {
     throw new Error("No file selected");
+  }
+
+  if (!file.type.toLowerCase().startsWith("image/")) {
+    throw new Error("Profile image must be an image file");
   }
 
   const { key } = await uploadToS3WithPresigned({

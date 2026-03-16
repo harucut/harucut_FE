@@ -2,7 +2,7 @@
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { loadImage } from "@/lib/canvas/loaders";
-import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
 function toPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => {
@@ -23,6 +23,14 @@ function normalizeHexColor(input?: string) {
       .join("");
   }
   return hex.padEnd(6, "0");
+}
+
+function getPreviewBackgroundColor(background?: ThemeBackground) {
+  if (background?.type === "COLOR") {
+    return normalizeHexColor(background.value);
+  }
+
+  return "111827";
 }
 
 function drawRoundedRect(
@@ -52,7 +60,7 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context not available");
 
-  const bg = normalizeHexColor(theme.background?.value ?? "111827");
+  const bg = getPreviewBackgroundColor(theme.background);
   ctx.fillStyle = `#${bg}`;
   drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 60);
   ctx.fill();

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
 
 const mockPush = jest.fn();
@@ -9,11 +9,15 @@ const mockResetPhotos = jest.fn();
 const mockSetBackgroundColor = jest.fn();
 const mockAddDraft = jest.fn();
 const mockUpdateDraft = jest.fn();
-const mockClientPost = jest.fn();
+const mockCreateFrame = jest.fn();
+const mockUpdateFrame = jest.fn();
+const mockDeleteFrame = jest.fn();
+const mockGetFrame = jest.fn();
 const mockUploadPresigned = jest.fn();
 const mockRenderPreview = jest.fn();
 
 let mockDraftId: string | null = null;
+let mockRemoteFrameId: number | null = null;
 let mockDrafts: Array<{
   id: string;
   data: { frameId: string; components: unknown[] };
@@ -24,6 +28,7 @@ const editorStoreState = {
   exportJson: mockExportJson,
   importJson: mockImportJson,
   resetPhotos: mockResetPhotos,
+  background: { type: "COLOR" as const, value: "111827" },
   backgroundColor: "111827",
   setBackgroundColor: mockSetBackgroundColor,
   components: [] as Array<{ hidden?: boolean }>,
@@ -34,9 +39,22 @@ function themeEditorStoreMock(
 ) {
   return selector(editorStoreState);
 }
+
 (
   themeEditorStoreMock as unknown as { getState: () => typeof editorStoreState }
 ).getState = () => editorStoreState;
+
+function getPrimarySaveButton(container: HTMLElement) {
+  const button = container.querySelector(
+    "button.rounded-full.bg-emerald-500",
+  ) as HTMLButtonElement | null;
+
+  if (!button) {
+    throw new Error("save button not found");
+  }
+
+  return button;
+}
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -45,12 +63,15 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/components/theme/editor/canvas/CanvasStage", () => ({
   CanvasStage: () => <div data-testid="canvas-stage" />,
 }));
+
 jest.mock("@/components/theme/editor/AssetPanel", () => ({
   AssetPanel: () => <div data-testid="asset-panel" />,
 }));
+
 jest.mock("@/components/theme/editor/LayersPanel", () => ({
   LayersPanel: () => <div data-testid="layers-panel" />,
 }));
+
 jest.mock("@/components/theme/editor/InspectorPanel", () => ({
   InspectorPanel: () => <div data-testid="inspector-panel" />,
 }));
@@ -69,11 +90,17 @@ jest.mock("@/lib/themeDraftStore", () => ({
 }));
 
 jest.mock("@/lib/themeSessionStore", () => ({
-  useThemeSession: () => ({ draftId: mockDraftId }),
+  useThemeSession: () => ({
+    draftId: mockDraftId,
+    remoteFrameId: mockRemoteFrameId,
+  }),
 }));
 
-jest.mock("@/lib/clientApi", () => ({
-  clientApi: { post: (...args: unknown[]) => mockClientPost(...args) },
+jest.mock("@/lib/remoteFrameApi", () => ({
+  createFrame: (...args: unknown[]) => mockCreateFrame(...args),
+  updateFrame: (...args: unknown[]) => mockUpdateFrame(...args),
+  deleteFrame: (...args: unknown[]) => mockDeleteFrame(...args),
+  getFrame: (...args: unknown[]) => mockGetFrame(...args),
 }));
 
 jest.mock("@/lib/presignedUploadApi", () => ({
@@ -95,8 +122,12 @@ describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDraftId = null;
+    mockRemoteFrameId = null;
     mockDrafts = [];
     editorStoreState.components = [];
+    editorStoreState.background = { type: "COLOR", value: "111827" };
+    editorStoreState.backgroundColor = "111827";
+
     mockExportJson.mockReturnValue({
       frameId: "classic-4",
       background: { type: "COLOR", value: "111827" },
@@ -104,10 +135,18 @@ describe("ThemeEditorPage save flow", () => {
     });
     mockRenderPreview.mockResolvedValue(new Blob(["x"], { type: "image/png" }));
     mockUploadPresigned.mockResolvedValue({ key: "preview-key" });
-    mockClientPost.mockResolvedValue({ ok: true });
+    mockCreateFrame.mockResolvedValue(undefined);
+    mockUpdateFrame.mockResolvedValue(undefined);
+    mockGetFrame.mockResolvedValue({
+      frameId: 7,
+      title: "saved",
+      frameType: "CLASSIC",
+      background: { type: "COLOR", value: "111827" },
+      components: [],
+    });
   });
 
-  it("updates existing draft when draft is selected", async () => {
+  it("creates a new frame and updates the local draft when a draft is selected", async () => {
     mockDraftId = "draft-1";
     mockDrafts = [
       {
@@ -116,32 +155,68 @@ describe("ThemeEditorPage save flow", () => {
       },
     ];
 
-    render(<ThemeEditorPage frameId="classic-4" />);
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    fireEvent.click(getPrimarySaveButton(container));
 
     await waitFor(() => {
-      expect(mockClientPost).toHaveBeenCalledTimes(1);
+      expect(mockCreateFrame).toHaveBeenCalledTimes(1);
       expect(mockUploadPresigned).toHaveBeenCalledWith(
         expect.objectContaining({ type: "FRAME", isTemp: false }),
       );
       expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
       expect(mockAddDraft).not.toHaveBeenCalled();
-      expect(mockPush).toHaveBeenCalledWith("/home");
+      expect(mockPush).toHaveBeenCalledWith("/theme");
     });
   });
 
-  it("adds draft when no selected draft exists", async () => {
-    render(<ThemeEditorPage frameId="classic-4" />);
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  it("adds a local draft when creating without a selected draft", async () => {
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    fireEvent.click(getPrimarySaveButton(container));
 
     await waitFor(() => {
-      expect(mockClientPost).toHaveBeenCalledTimes(1);
-      expect(mockUploadPresigned).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "FRAME", isTemp: false }),
-      );
+      expect(mockCreateFrame).toHaveBeenCalledTimes(1);
       expect(mockAddDraft).toHaveBeenCalledTimes(1);
       expect(mockUpdateDraft).not.toHaveBeenCalled();
-      expect(mockPush).toHaveBeenCalledWith("/home");
+      expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+  });
+
+  it("updates a remote frame without touching local drafts", async () => {
+    mockRemoteFrameId = 7;
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    await waitFor(() => {
+      expect(mockGetFrame).toHaveBeenCalledWith(7);
+    });
+
+    fireEvent.click(getPrimarySaveButton(container));
+
+    await waitFor(() => {
+      expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
+      expect(mockAddDraft).not.toHaveBeenCalled();
+      expect(mockUpdateDraft).not.toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith("/theme");
+    });
+  });
+
+  it("blocks remote frame save when the initial load fails", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockRejectedValueOnce(new Error("load failed"));
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    const saveButton = getPrimarySaveButton(container);
+
+    await waitFor(() => {
+      expect(mockGetFrame).toHaveBeenCalledWith(7);
+      expect(saveButton).toBeDisabled();
+    });
+
+    fireEvent.click(saveButton);
+
+    expect(mockUpdateFrame).not.toHaveBeenCalled();
+    expect(mockCreateFrame).not.toHaveBeenCalled();
   });
 });

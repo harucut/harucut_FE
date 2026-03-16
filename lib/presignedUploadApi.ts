@@ -1,13 +1,12 @@
 "use client";
 
+import type {
+  ApiEnvelope,
+  PresignedUploadContentType,
+  UserMedia,
+} from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
-
-type ApiEnvelope<T> = {
-  code: string;
-  status: number;
-  message: string | null;
-  data: T;
-};
+import { registerUserMedia } from "@/lib/userMediaApi";
 
 type PresignedUploadData = {
   key: string;
@@ -20,6 +19,12 @@ type UploadedMediaInfo = {
   objectUrl: string;
   downloadUrl?: string;
 };
+
+export const SUPPORTED_IMAGE_ACCEPT =
+  "image/png,image/jpeg,image/webp,image/gif";
+export const SUPPORTED_VIDEO_ACCEPT =
+  "video/mp4,video/webm,video/quicktime";
+export const SUPPORTED_FOURCUT_ACCEPT = `${SUPPORTED_IMAGE_ACCEPT},${SUPPORTED_VIDEO_ACCEPT}`;
 
 export const PRESIGNED_UPLOAD_TYPES = {
   FRAME: "FRAME",
@@ -35,9 +40,17 @@ export type PresignedUploadType =
 type PresignedUploadRequest = {
   type: PresignedUploadType;
   filename: string;
-  contentType: string;
+  contentType: PresignedUploadContentType;
   isTemp: boolean;
 };
+
+function isImageContentType(contentType: PresignedUploadContentType) {
+  return ["PNG", "JPEG", "WEBP", "GIF"].includes(contentType);
+}
+
+function isVideoContentType(contentType: PresignedUploadContentType) {
+  return ["MP4", "WEBM", "MOV"].includes(contentType);
+}
 
 function normalizeRemoteUrl(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -123,58 +136,88 @@ function extractFilenameFromKey(key: string) {
 }
 
 async function requestTranscode(key: string) {
-  await clientApi.post<ApiEnvelope<Record<string, never>>>(
+  const res = await clientApi.post<ApiEnvelope<UserMedia>>(
     "/api/client/user/files/transcode",
     {
       filename: extractFilenameFromKey(key),
     },
   );
+
+  return res.data.data;
 }
 
-function isImageContentType(contentType: string) {
-  return ["PNG", "JPG", "JPEG", "WEBP"].includes(contentType);
+function createUnsupportedTypeError(file: File) {
+  return new Error(`Unsupported upload file type: ${file.type || file.name}`);
 }
 
-function isWebmContentType(contentType: string) {
-  return contentType === "WEBM";
-}
-
-export function resolveUploadContentType(file: File) {
+export function resolveUploadContentType(file: File): PresignedUploadContentType {
   const mime = file.type.toLowerCase();
+  const ext = file.name.split(".").pop()?.trim().toLowerCase();
 
-  if (mime === "image/png") return "PNG";
-  if (mime === "image/jpeg") {
-    return file.name.toLowerCase().endsWith(".jpg") ? "JPG" : "JPEG";
+  if (mime === "image/png" || ext === "png") return "PNG";
+  if (mime === "image/jpeg" || mime === "image/jpg" || ext === "jpg" || ext === "jpeg") {
+    return "JPEG";
   }
-  if (mime === "image/jpg") return "JPG";
-  if (mime === "image/webp") return "WEBP";
-  if (mime === "video/webm") return "WEBM";
+  if (mime === "image/webp" || ext === "webp") return "WEBP";
+  if (mime === "image/gif" || ext === "gif") return "GIF";
+  if (mime === "video/mp4" || ext === "mp4") return "MP4";
+  if (mime === "video/webm" || ext === "webm") return "WEBM";
+  if (mime === "video/quicktime" || ext === "mov") return "MOV";
 
-  const ext = file.name.split(".").pop()?.trim().toUpperCase();
-  if (ext) return ext;
-  return "BIN";
+  throw createUnsupportedTypeError(file);
 }
 
 export function resolveFourcutUploadType(file: File): PresignedUploadType {
-  const mime = file.type.toLowerCase();
   const contentType = resolveUploadContentType(file);
-
-  if (
-    mime.startsWith("video/") ||
-    ["WEBM", "MP4", "MOV", "AVI", "MKV", "M4V"].includes(contentType)
-  ) {
-    return PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO;
-  }
-
-  return PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO;
+  return isVideoContentType(contentType)
+    ? PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO
+    : PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO;
 }
 
 export async function uploadFourcutMedia(file: File) {
-  return uploadToS3WithPresigned({
+  const contentType = resolveUploadContentType(file);
+  const uploaded = await uploadToS3WithPresigned({
     file,
     type: resolveFourcutUploadType(file),
     isTemp: false,
   });
+
+  if (isImageContentType(contentType)) {
+    const media = await registerUserMedia({
+      mediaType: "PHOTO",
+      s3Key: uploaded.key,
+    });
+
+    return {
+      key: uploaded.key,
+      mediaId: media.mediaId,
+      objectUrl: media.downloadUrl ?? uploaded.objectUrl,
+      downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
+    };
+  }
+
+  if (contentType === "WEBM") {
+    const media = await requestTranscode(uploaded.key);
+
+    return {
+      key: uploaded.key,
+      mediaId: media.mediaId,
+      objectUrl: media.downloadUrl ?? uploaded.objectUrl,
+      downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
+    };
+  }
+
+  const media = await registerUserMedia({
+    mediaType: "VIDEO",
+    s3Key: uploaded.key,
+  });
+
+  return {
+    key: uploaded.key,
+    mediaId: media.mediaId,
+    objectUrl: media.downloadUrl ?? uploaded.objectUrl,
+    downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
+  };
 }
 
 export async function uploadToS3WithPresigned(opts: {
@@ -212,11 +255,7 @@ export async function uploadToS3WithPresigned(opts: {
 
   const fallbackObjectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
 
-  if (isWebmContentType(resolvedContentType)) {
-    await requestTranscode(key);
-  }
-
-  if (isImageContentType(resolvedContentType) || isWebmContentType(resolvedContentType)) {
+  if (isImageContentType(resolvedContentType) || resolvedContentType === "WEBM") {
     const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);
     return {
       key,
