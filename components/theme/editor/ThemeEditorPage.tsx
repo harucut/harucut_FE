@@ -99,7 +99,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const onDone = async () => {
     if (isSaving || isLoadingFrame) return;
     if (hasRemoteLoadFailure) {
-      alert("??ν븳 ?꾨젅?꾩쓣 遺덈윭?ㅼ? 紐삵빐 ?섏젙 ??μ쓣 留됱븯?덈떎.");
+      alert("저장한 프레임을 불러오지 못했어 수정 저장을 막았습니다.");
       return;
     }
 
@@ -189,9 +189,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             ) : null}
             {remoteFrameId && hasNonColorBackground ? (
               <p className="mt-1 text-[11px] text-amber-300">
-                ?대?吏/鍮꾨뵒???諛곌꼍? 誘몃━蹂닿린?먯꽌 단??諛곌꼍?쇰줈 蹂댁씠吏留?,
-                諛곌꼍 ?됱긽???붾컮吏 ?딆쑝硫?湲곗〈 諛곌꼍 ?뺣낫? 洹몃?濡?
-                蹂댁“?⑸땲??.
+                이미지/비디오 배경은 미리보기에서 단색 배경으로 보이지만,
+                배경 색상을 바꾸지 않으면 기존 배경 정보는 그대로
+                보존됩니다.
               </p>
             ) : null}
           </div>
