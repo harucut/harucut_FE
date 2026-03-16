@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
 
 const mockPush = jest.fn();
@@ -28,6 +28,7 @@ const editorStoreState = {
   exportJson: mockExportJson,
   importJson: mockImportJson,
   resetPhotos: mockResetPhotos,
+  background: { type: "COLOR" as const, value: "111827" },
   backgroundColor: "111827",
   setBackgroundColor: mockSetBackgroundColor,
   components: [] as Array<{ hidden?: boolean }>,
@@ -43,6 +44,18 @@ function themeEditorStoreMock(
   themeEditorStoreMock as unknown as { getState: () => typeof editorStoreState }
 ).getState = () => editorStoreState;
 
+function getPrimarySaveButton(container: HTMLElement) {
+  const button = container.querySelector(
+    "button.rounded-full.bg-emerald-500",
+  ) as HTMLButtonElement | null;
+
+  if (!button) {
+    throw new Error("save button not found");
+  }
+
+  return button;
+}
+
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
@@ -50,12 +63,15 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/components/theme/editor/canvas/CanvasStage", () => ({
   CanvasStage: () => <div data-testid="canvas-stage" />,
 }));
+
 jest.mock("@/components/theme/editor/AssetPanel", () => ({
   AssetPanel: () => <div data-testid="asset-panel" />,
 }));
+
 jest.mock("@/components/theme/editor/LayersPanel", () => ({
   LayersPanel: () => <div data-testid="layers-panel" />,
 }));
+
 jest.mock("@/components/theme/editor/InspectorPanel", () => ({
   InspectorPanel: () => <div data-testid="inspector-panel" />,
 }));
@@ -109,6 +125,9 @@ describe("ThemeEditorPage save flow", () => {
     mockRemoteFrameId = null;
     mockDrafts = [];
     editorStoreState.components = [];
+    editorStoreState.background = { type: "COLOR", value: "111827" };
+    editorStoreState.backgroundColor = "111827";
+
     mockExportJson.mockReturnValue({
       frameId: "classic-4",
       background: { type: "COLOR", value: "111827" },
@@ -136,8 +155,9 @@ describe("ThemeEditorPage save flow", () => {
       },
     ];
 
-    render(<ThemeEditorPage frameId="classic-4" />);
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    fireEvent.click(getPrimarySaveButton(container));
 
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
@@ -151,8 +171,9 @@ describe("ThemeEditorPage save flow", () => {
   });
 
   it("adds a local draft when creating without a selected draft", async () => {
-    render(<ThemeEditorPage frameId="classic-4" />);
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    fireEvent.click(getPrimarySaveButton(container));
 
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
@@ -165,13 +186,13 @@ describe("ThemeEditorPage save flow", () => {
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
 
-    render(<ThemeEditorPage frameId="classic-4" />);
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
     await waitFor(() => {
       expect(mockGetFrame).toHaveBeenCalledWith(7);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "수정 저장" }));
+    fireEvent.click(getPrimarySaveButton(container));
 
     await waitFor(() => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
@@ -179,5 +200,23 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockUpdateDraft).not.toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+  });
+
+  it("blocks remote frame save when the initial load fails", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockRejectedValueOnce(new Error("load failed"));
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    const saveButton = getPrimarySaveButton(container);
+
+    await waitFor(() => {
+      expect(mockGetFrame).toHaveBeenCalledWith(7);
+      expect(saveButton).toBeDisabled();
+    });
+
+    fireEvent.click(saveButton);
+
+    expect(mockUpdateFrame).not.toHaveBeenCalled();
+    expect(mockCreateFrame).not.toHaveBeenCalled();
   });
 });

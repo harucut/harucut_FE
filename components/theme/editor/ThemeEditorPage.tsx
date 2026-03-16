@@ -31,6 +31,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const exportJson = useThemeEditorStore((s) => s.exportJson);
   const importJson = useThemeEditorStore((s) => s.importJson);
   const resetPhotos = useThemeEditorStore((s) => s.resetPhotos);
+  const background = useThemeEditorStore((s) => s.background);
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const setBackgroundColor = useThemeEditorStore((s) => s.setBackgroundColor);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
@@ -43,6 +44,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const draft = useThemeDraftStore((s) =>
     draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
   );
+  const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
+  const hasNonColorBackground = background.type !== "COLOR";
 
   useEffect(() => {
     setFrameId(frameId);
@@ -95,6 +98,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
   const onDone = async () => {
     if (isSaving || isLoadingFrame) return;
+    if (hasRemoteLoadFailure) {
+      alert("??ν븳 ?꾨젅?꾩쓣 遺덈윭?ㅼ? 紐삵빐 ?섏젙 ??μ쓣 留됱븯?덈떎.");
+      return;
+    }
 
     const state = useThemeEditorStore.getState();
     const hiddenCount = state.components.filter((c) => c.hidden).length;
@@ -180,6 +187,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             {loadError ? (
               <p className="mt-1 text-[11px] text-red-300">{loadError}</p>
             ) : null}
+            {remoteFrameId && hasNonColorBackground ? (
+              <p className="mt-1 text-[11px] text-amber-300">
+                ?대?吏/鍮꾨뵒???諛곌꼍? 誘몃━蹂닿린?먯꽌 단??諛곌꼍?쇰줈 蹂댁씠吏留?,
+                諛곌꼍 ?됱긽???붾컮吏 ?딆쑝硫?湲곗〈 諛곌꼍 ?뺣낫? 洹몃?濡?
+                蹂댁“?⑸땲??.
+              </p>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-3">
@@ -204,11 +218,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               프레임 목록으로 돌아가기
             </Link>
             <button
-              type="button"
-              onClick={onDone}
-              disabled={isSaving || isLoadingFrame}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-            >
+                type="button"
+                onClick={onDone}
+                disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
+                className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+              >
               {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
             </button>
           </div>
