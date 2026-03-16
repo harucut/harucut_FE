@@ -1,10 +1,11 @@
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type {
+  RemoteFrameBackground,
   RemoteFrame,
   RemoteFrameType,
 } from "@/lib/api-types";
-import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type CreateFrameRequest = {
   title: string;
@@ -13,7 +14,7 @@ export type CreateFrameRequest = {
   frameType: RemoteFrameType;
   canvasWidth: number;
   canvasHeight: number;
-  background: { type: "COLOR"; value: string };
+  background: RemoteFrameBackground;
   components: Array<{
     id?: string;
     type: "PHOTO" | "STICKER" | "TEXT";
@@ -60,6 +61,62 @@ function normalizeHexColor(input: string) {
   return cleaned.toLowerCase();
 }
 
+function toRequestBackground(background?: ThemeBackground): RemoteFrameBackground {
+  if (!background) {
+    return { type: "COLOR", value: "000000" };
+  }
+
+  if (background.type === "COLOR") {
+    return {
+      type: "COLOR",
+      value: normalizeHexColor(background.value),
+    };
+  }
+
+  if (background.type === "IMAGE") {
+    return {
+      type: "IMAGE",
+      key: background.key,
+      opacity: background.opacity,
+    };
+  }
+
+  return {
+    type: "VIDEO",
+    key: background.key,
+    autoPlay: background.autoPlay,
+    loop: background.loop,
+  };
+}
+
+function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground | undefined {
+  if (!background) {
+    return undefined;
+  }
+
+  if (background.type === "COLOR") {
+    return {
+      type: "COLOR",
+      value: normalizeHexColor(background.value),
+    };
+  }
+
+  if (background.type === "IMAGE") {
+    return {
+      type: "IMAGE",
+      key: background.key,
+      opacity: background.opacity,
+    };
+  }
+
+  return {
+    type: "VIDEO",
+    key: background.key,
+    autoPlay: background.autoPlay,
+    loop: background.loop,
+  };
+}
+
 export function toCreateFrameRequest(
   json: ThemeExportJson,
   meta: { title: string; description: string; previewKey: string },
@@ -67,7 +124,6 @@ export function toCreateFrameRequest(
   const layout = FRAME_LAYOUTS[json.frameId];
   const canvasWidth = layout.totalWidth;
   const canvasHeight = layout.totalHeight;
-  const bgRaw = json.background?.value ?? "000000";
 
   return {
     title: meta.title,
@@ -76,7 +132,7 @@ export function toCreateFrameRequest(
     frameType: frameTypeFromFrameId(json.frameId),
     canvasWidth,
     canvasHeight,
-    background: { type: "COLOR", value: normalizeHexColor(bgRaw) },
+    background: toRequestBackground(json.background),
     components: json.components.map((c) => ({
       type: c.type,
       source: c.source,
@@ -96,13 +152,7 @@ export function toCreateFrameRequest(
 export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
   return {
     frameId: frameIdFromFrameType(frame.frameType),
-    background:
-      frame.background?.type === "COLOR"
-        ? {
-            type: "COLOR",
-            value: normalizeHexColor(frame.background.value),
-          }
-        : undefined,
+    background: toThemeBackground(frame.background),
     components: frame.components.map((component, index) => ({
       id: String(component.id ?? `${component.type}-${index}`),
       type: component.type,

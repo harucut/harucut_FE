@@ -102,4 +102,41 @@ describe("frame api mapping", () => {
       ],
     });
   });
+
+  it("preserves non-color remote backgrounds when mapping through the editor json", () => {
+    const remoteFrame: RemoteFrame = {
+      frameId: 34,
+      title: "video-bg",
+      frameType: "WIDE",
+      background: {
+        type: "VIDEO",
+        key: "backgrounds/video.mp4",
+        autoPlay: true,
+        loop: false,
+      },
+      components: [],
+    };
+
+    const mapped = toThemeExportJson(remoteFrame);
+
+    expect(mapped.background).toEqual({
+      type: "VIDEO",
+      key: "backgrounds/video.mp4",
+      autoPlay: true,
+      loop: false,
+    });
+
+    expect(
+      toCreateFrameRequest(mapped, {
+        title: "t",
+        description: "d",
+        previewKey: "p",
+      }).background,
+    ).toEqual({
+      type: "VIDEO",
+      key: "backgrounds/video.mp4",
+      autoPlay: true,
+      loop: false,
+    });
+  });
 });

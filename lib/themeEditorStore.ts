@@ -83,6 +83,7 @@ type State = {
 
   components: EditorComponent[];
   activeId: string | null;
+  background: ThemeBackground;
   backgroundColor: string;
 
   setFrameId: (id: FrameId) => void;
@@ -147,6 +148,10 @@ function resetEditorState(get: () => State) {
       photos: [],
       stickers: state.assets.stickers,
     },
+    background: {
+      type: "COLOR" as const,
+      value: "111827",
+    },
   };
 }
 
@@ -161,6 +166,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   components: [],
   activeId: null,
+  background: {
+    type: "COLOR",
+    value: "111827",
+  },
   backgroundColor: "111827",
 
   // 프레임 변경 시 에디터 상태 초기화
@@ -169,17 +178,28 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       // 같은 프레임 다시 선택하면 아무 것도 안 함
       if (s.frameId === id) return s;
 
-      return {
-        frameId: id,
-        ...resetEditorState(() => s),
-        backgroundColor: "111827",
-      };
-    }),
+        return {
+          frameId: id,
+          ...resetEditorState(() => s),
+          background: {
+            type: "COLOR",
+            value: "111827",
+          },
+          backgroundColor: "111827",
+        };
+      }),
 
   setTab: (t) => set({ tab: t }),
   setBackgroundColor: (color) =>
-    set({
-      backgroundColor: normalizeHexColor(color),
+    set(() => {
+      const normalized = normalizeHexColor(color);
+      return {
+        background: {
+          type: "COLOR",
+          value: normalized,
+        },
+        backgroundColor: normalized,
+      };
     }),
 
   // 업로드한 사진을 임시 S3에 저장하고 에셋으로 등록
@@ -464,18 +484,21 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components, backgroundColor } = get();
+    const { frameId, components, backgroundColor, background } = get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
-    const background: ThemeBackground = {
-      type: "COLOR",
-      value: normalizeHexColor(backgroundColor),
-    };
+    const exportedBackground: ThemeBackground =
+      background.type === "COLOR"
+        ? {
+            type: "COLOR",
+            value: normalizeHexColor(backgroundColor),
+          }
+        : background;
 
     return {
       frameId,
-      background,
+      background: exportedBackground,
       components: normalized
         .filter((c) => !c.hidden)
         .map((c) => ({
@@ -505,14 +528,18 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         hidden: false,
       })) as EditorComponent[];
 
-      return {
-        frameId: data.frameId,
-        tab: "PHOTO",
-        components: normalizeZ(mapped),
-        activeId: null,
-        backgroundColor:
-          data.background?.type === "COLOR"
-            ? normalizeHexColor(data.background.value)
+        return {
+          frameId: data.frameId,
+          tab: "PHOTO",
+          components: normalizeZ(mapped),
+          activeId: null,
+          background: data.background ?? {
+            type: "COLOR",
+            value: "111827",
+          },
+          backgroundColor:
+            data.background?.type === "COLOR"
+              ? normalizeHexColor(data.background.value)
             : "111827",
         assets: {
           photos: [],
