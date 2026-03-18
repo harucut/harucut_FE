@@ -33,7 +33,6 @@ pnpm install
 
 ```bash
 NEXT_PUBLIC_BASE_URL=<백엔드 기본 URL>
-JWT_ACCESS_SECRET=<서버 토큰 검증용 JWT 시크릿>
 ```
 
 3. 개발 서버를 실행합니다.
