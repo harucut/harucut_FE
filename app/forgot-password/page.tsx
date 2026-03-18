@@ -3,11 +3,10 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
-import { useForgotPasswordFlow } from "./_hooks/useForgotPasswordFlow";
-import { buildPathWithRedirect } from "@/lib/redirect";
-
 import { VerifyCodeForm } from "@/components/auth/ForgotPassword/VerifyCodeForm";
 import { ResetPasswordForm } from "@/components/auth/ForgotPassword/ResetPasswordForm";
+import { useForgotPasswordFlow } from "./_hooks/useForgotPasswordFlow";
+import { buildPathWithRedirect } from "@/lib/redirect";
 
 function ForgotPasswordPageContent() {
   const router = useRouter();
@@ -24,13 +23,14 @@ function ForgotPasswordPageContent() {
       description={flow.description}
       footer={null}
     >
-      {flow.step === "VERIFY_CODE" && (
+      {flow.step === "VERIFY_CODE" ? (
         <VerifyCodeForm
           email={flow.email}
           setEmail={flow.setEmail}
           code={flow.code}
           setCode={flow.setCode}
           emailLocked={flow.emailLocked}
+          codeExpiresAt={flow.codeExpiresAt}
           isSubmitting={flow.isSubmitting}
           errors={flow.errors}
           onVerify={flow.verifyCode}
@@ -38,9 +38,9 @@ function ForgotPasswordPageContent() {
           onRestart={flow.restart}
           onGoLogin={() => router.push(loginHref)}
         />
-      )}
+      ) : null}
 
-      {flow.step === "RESET_PASSWORD" && (
+      {flow.step === "RESET_PASSWORD" ? (
         <ResetPasswordForm
           newPassword={flow.newPassword}
           setNewPassword={flow.setNewPassword}
@@ -51,13 +51,14 @@ function ForgotPasswordPageContent() {
           onSubmit={async () => {
             const ok = await flow.submitNewPassword();
             if (!ok) return;
-            alert("비밀번호가 변경되었어요. 로그인해 주세요.");
+
+            alert("비밀번호가 변경되었어요. 다시 로그인해 주세요.");
             router.push(loginHref);
           }}
           onRestart={flow.restart}
           onGoLogin={() => router.push(loginHref)}
         />
-      )}
+      ) : null}
     </AuthPageShell>
   );
 }

@@ -8,6 +8,8 @@ import {
   verifyPasswordResetCode,
 } from "@/lib/auth/passwordResetApi";
 
+const VERIFICATION_WINDOW_MS = 5 * 60 * 1000;
+
 export type Step = "VERIFY_CODE" | "RESET_PASSWORD";
 
 export type Errors = {
@@ -26,6 +28,7 @@ export function useForgotPasswordFlow() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [resetToken, setResetToken] = useState<string | null>(null);
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -33,30 +36,36 @@ export function useForgotPasswordFlow() {
   const [emailLocked, setEmailLocked] = useState(false);
 
   const description = useMemo(() => {
-    if (step === "VERIFY_CODE") return "가입한 이메일로 인증을 해주세요.";
-    return "새 비밀번호를 두 번 입력해 주세요.";
+    if (step === "VERIFY_CODE") {
+      return "가입한 이메일로 받은 인증 코드를 입력해 주세요.";
+    }
+
+    return "새 비밀번호를 설정해 주세요.";
   }, [step]);
 
   const sendCode = useCallback(async () => {
     setErrors({});
     setIsSubmitting(true);
 
-    const trimmed = email.trim();
-    const emailErr = validateEmail(trimmed);
-    if (emailErr) {
-      setErrors({ email: emailErr });
+    const normalizedEmail = email.trim();
+    const emailError = validateEmail(normalizedEmail);
+
+    if (emailError) {
+      setErrors({ email: emailError });
       setIsSubmitting(false);
       return false;
     }
 
     try {
-      await requestPasswordResetCode(trimmed);
+      await requestPasswordResetCode(normalizedEmail);
       setEmailLocked(true);
+      setCode("");
+      setCodeExpiresAt(Date.now() + VERIFICATION_WINDOW_MS);
       return true;
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({
-        common: "인증 코드 전송에 실패했어요. 잠시 후 다시 시도해 주세요.",
+        common: "인증 코드를 보내지 못했어요. 잠시 후 다시 시도해 주세요.",
       });
       return false;
     } finally {
@@ -68,37 +77,50 @@ export function useForgotPasswordFlow() {
     setErrors({});
     setIsSubmitting(true);
 
-    const trimmedEmail = email.trim();
-    const trimmedCode = code.trim();
+    const normalizedEmail = email.trim();
+    const normalizedCode = code.trim();
+    const emailError = validateEmail(normalizedEmail);
 
-    const emailErr = validateEmail(trimmedEmail);
-    if (emailErr) {
-      setErrors({ email: emailErr });
+    if (emailError) {
+      setErrors({ email: emailError });
       setIsSubmitting(false);
       return false;
     }
-    if (!trimmedCode) {
+
+    if (!codeExpiresAt) {
+      setErrors({ code: "먼저 인증 코드를 받아 주세요." });
+      setIsSubmitting(false);
+      return false;
+    }
+
+    if (Date.now() >= codeExpiresAt) {
+      setErrors({ code: "인증 시간이 만료되었어요. 코드를 다시 보내 주세요." });
+      setIsSubmitting(false);
+      return false;
+    }
+
+    if (!normalizedCode) {
       setErrors({ code: "인증 코드를 입력해 주세요." });
       setIsSubmitting(false);
       return false;
     }
 
     try {
-      const token = await verifyPasswordResetCode(trimmedEmail, trimmedCode);
+      const token = await verifyPasswordResetCode(normalizedEmail, normalizedCode);
       setResetToken(token);
+      setCodeExpiresAt(null);
       setStep("RESET_PASSWORD");
       return true;
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({
-        common:
-          "인증에 실패했어요. 이메일/코드를 다시 확인하거나 코드를 재발급 받아주세요.",
+        common: "인증에 실패했어요. 이메일과 코드를 다시 확인해 주세요.",
       });
       return false;
     } finally {
       setIsSubmitting(false);
     }
-  }, [email, code]);
+  }, [code, codeExpiresAt, email]);
 
   const submitNewPassword = useCallback(async () => {
     setErrors({});
@@ -106,15 +128,15 @@ export function useForgotPasswordFlow() {
 
     if (!resetToken) {
       setErrors({
-        common: "resetToken이 없어요. 처음부터 다시 진행해 주세요.",
+        common: "인증 정보가 없어요. 처음부터 다시 진행해 주세요.",
       });
       setIsSubmitting(false);
       return false;
     }
 
-    const pwErr = validatePassword(newPassword);
-    if (pwErr) {
-      setErrors({ newPassword: pwErr });
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setErrors({ newPassword: passwordError });
       setIsSubmitting(false);
       return false;
     }
@@ -134,17 +156,16 @@ export function useForgotPasswordFlow() {
     try {
       await resetPassword(resetToken, newPassword);
       return true;
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({
-        common:
-          "비밀번호 변경에 실패했어요. 인증을 다시 진행하거나 잠시 후 재시도해 주세요.",
+        common: "비밀번호 변경에 실패했어요. 잠시 후 다시 시도해 주세요.",
       });
       return false;
     } finally {
       setIsSubmitting(false);
     }
-  }, [resetToken, newPassword, confirmPassword]);
+  }, [confirmPassword, newPassword, resetToken]);
 
   const restart = useCallback(() => {
     setStep("VERIFY_CODE");
@@ -153,8 +174,10 @@ export function useForgotPasswordFlow() {
     setEmail("");
     setCode("");
     setResetToken(null);
+    setCodeExpiresAt(null);
     setNewPassword("");
     setConfirmPassword("");
+    setEmailLocked(false);
   }, []);
 
   return {
@@ -168,6 +191,7 @@ export function useForgotPasswordFlow() {
     code,
     setCode,
     emailLocked,
+    codeExpiresAt,
 
     sendCode,
     verifyCode,

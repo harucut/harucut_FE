@@ -2,9 +2,10 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clientApi } from "@/lib/clientApi";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshCw } from "lucide-react";
+import { AuthField } from "@/components/auth/AuthField";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { clientApi } from "@/lib/clientApi";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 
@@ -33,14 +34,10 @@ export default function MyPage() {
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfoResponse["data"] | null>(null);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
 
-  // username 변경
   const [username, setUsername] = useState("");
-
-  // 비밀번호 변경
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -50,16 +47,17 @@ export default function MyPage() {
   const fetchUser = async () => {
     setLoading(true);
     setErrors({});
+
     try {
       const res = await clientApi.get<UserInfoResponse>(
         "/api/client/user-info",
       );
       setUser(res.data.data);
       setUsername(res.data.data.username || "");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({
-        common: "유저 정보를 불러오지 못했어요. 다시 시도해 주세요.",
+        common: "내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setLoading(false);
@@ -67,7 +65,7 @@ export default function MyPage() {
   };
 
   useEffect(() => {
-    fetchUser();
+    void fetchUser();
   }, []);
 
   const handleChangeUsername = async (e: FormEvent) => {
@@ -75,20 +73,22 @@ export default function MyPage() {
     setErrors({});
     setIsSubmitting(true);
 
-    const next = username.trim();
-    if (!next) {
-      setErrors({ username: "사용자 이름을 입력해 주세요." });
+    const nextUsername = username.trim();
+    if (!nextUsername) {
+      setErrors({ username: "닉네임을 입력해 주세요." });
       setIsSubmitting(false);
       return;
     }
 
     try {
-      await clientApi.patch("/api/client/user/username", { username: next });
-      setUser((prev) => (prev ? { ...prev, username: next } : prev));
-      alert("사용자 이름이 변경됐어요.");
-    } catch (e) {
-      console.error(e);
-      setErrors({ common: "사용자 이름 변경에 실패했어요." });
+      await clientApi.patch("/api/client/user/username", {
+        username: nextUsername,
+      });
+      setUser((prev) => (prev ? { ...prev, username: nextUsername } : prev));
+      alert("닉네임이 변경되었어요.");
+    } catch (error) {
+      console.error(error);
+      setErrors({ common: "닉네임 변경에 실패했어요." });
     } finally {
       setIsSubmitting(false);
     }
@@ -104,16 +104,19 @@ export default function MyPage() {
       setIsSubmitting(false);
       return;
     }
+
     if (!newPassword) {
       setErrors({ newPassword: "새 비밀번호를 입력해 주세요." });
       setIsSubmitting(false);
       return;
     }
+
     if (newPassword.length < 8) {
       setErrors({ newPassword: "비밀번호는 8자 이상으로 설정해 주세요." });
       setIsSubmitting(false);
       return;
     }
+
     if (newPassword !== confirmPassword) {
       setErrors({ confirmPassword: "새 비밀번호가 서로 일치하지 않아요." });
       setIsSubmitting(false);
@@ -125,12 +128,12 @@ export default function MyPage() {
         oldPassword,
         newPassword,
       });
-      alert("비밀번호가 변경됐어요.");
+      alert("비밀번호가 변경되었어요.");
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({ common: "비밀번호 변경에 실패했어요." });
     } finally {
       setIsSubmitting(false);
@@ -138,26 +141,26 @@ export default function MyPage() {
   };
 
   const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const nextFile = e.target.files?.[0] ?? null;
-    setProfileFile(nextFile);
+    setProfileFile(e.target.files?.[0] ?? null);
   };
 
   const handleUploadProfileImage = async () => {
     if (!profileFile) {
-      setErrors({ common: "업로드할 파일을 선택해주세요." });
+      setErrors({ common: "업로드할 이미지를 선택해 주세요." });
       return;
     }
 
     setErrors({});
     setIsUploadingProfile(true);
+
     try {
       await uploadProfileImage(profileFile);
       await fetchUser();
       setProfileFile(null);
-      alert("프로필 이미지가 변경되었습니다.");
-    } catch (e) {
-      console.error(e);
-      setErrors({ common: "프로필 이미지 업로드에 실패했습니다." });
+      alert("프로필 이미지가 변경되었어요.");
+    } catch (error) {
+      console.error(error);
+      setErrors({ common: "프로필 이미지 업로드에 실패했어요." });
     } finally {
       setIsUploadingProfile(false);
     }
@@ -166,13 +169,13 @@ export default function MyPage() {
   const handleLogout = async () => {
     setErrors({});
     setIsSubmitting(true);
+
     try {
       await clientApi.delete("/api/client/logout");
-
       router.push("/login");
       router.refresh();
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({ common: "로그아웃에 실패했어요." });
     } finally {
       setIsSubmitting(false);
@@ -181,19 +184,19 @@ export default function MyPage() {
 
   const handleExit = async () => {
     const ok = confirm(
-      "정말 회원 탈퇴할까요?\n탈퇴하면 계정은 복구할 수 없어요.",
+      "정말 탈퇴하시겠어요?\n1주일 내로 다시 로그인하면 계정을 복구할 수 있어요.",
     );
     if (!ok) return;
 
     setErrors({});
     setIsSubmitting(true);
+
     try {
       await clientApi.delete("/api/client/exit");
-
       router.push("/login");
       router.refresh();
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       setErrors({ common: "회원 탈퇴에 실패했어요." });
     } finally {
       setIsSubmitting(false);
@@ -201,15 +204,16 @@ export default function MyPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
-      <div className="mx-auto w-full max-w-md flex flex-col gap-6">
+    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader
-          title="오늘은 어떻게 기록할까?"
+          title="내 계정"
           rightSlot={
             <button
+              type="button"
               onClick={fetchUser}
               disabled={isSubmitting || loading}
-              className="h-9 w-9 grid place-items-center rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              className="grid h-9 w-9 place-items-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
               aria-label="새로고침"
               title="새로고침"
             >
@@ -224,26 +228,25 @@ export default function MyPage() {
                 errors.common ? "text-red-400" : "text-zinc-400"
               }`}
             >
-              {errors.common ?? "계정 정보를 관리할 수 있어요."}
+              {errors.common ?? "계정 정보와 보안 설정을 관리할 수 있어요."}
             </span>
           }
         />
 
         {loading ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-[11px] text-zinc-400">불러오는 중...</p>
+            <p className="text-[11px] text-zinc-400">정보를 불러오는 중...</p>
           </div>
         ) : user ? (
           <>
-            {/* 프로필 */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <div className="flex gap-3 items-center">
-                <div className="h-12 w-12 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-800">
                   {user.profileUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={user.profileUrl}
-                      alt="profile"
+                      alt="프로필 이미지"
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -253,7 +256,9 @@ export default function MyPage() {
 
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold">{user.username}</span>
-                  <span className="text-[11px] text-zinc-400">{user.email}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {user.email}
+                  </span>
                 </div>
               </div>
 
@@ -276,19 +281,18 @@ export default function MyPage() {
               </div>
             </section>
 
-            {/* 사용자 이름 변경 */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <h2 className="text-sm font-semibold">사용자 이름 변경</h2>
+              <h2 className="text-sm font-semibold">닉네임 변경</h2>
               <p className="mt-1 text-[11px] text-zinc-400">
-                앱에서 표시되는 이름이에요.
+                서비스에서 표시될 이름을 수정할 수 있어요.
               </p>
 
               <form onSubmit={handleChangeUsername} className="mt-3 flex gap-2">
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="flex-1 h-9 rounded-xl bg-zinc-950 border border-zinc-800 px-3 text-[12px] outline-none focus:border-zinc-600"
-                  placeholder="레코데이"
+                  className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-[12px] outline-none focus:border-zinc-600"
+                  placeholder="닉네임을 입력해 주세요"
                 />
                 <button
                   type="submit"
@@ -298,59 +302,56 @@ export default function MyPage() {
                   저장
                 </button>
               </form>
-              {errors.username && (
+
+              {errors.username ? (
                 <p className="mt-2 text-[11px] text-red-400">
                   {errors.username}
                 </p>
-              )}
+              ) : null}
             </section>
 
-            {/* 비밀번호 변경 */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
               <h2 className="text-sm font-semibold">비밀번호 변경</h2>
 
               <form
                 onSubmit={handleChangePassword}
-                className="mt-3 flex flex-col gap-2"
+                className="mt-3 flex flex-col gap-3"
               >
-                <input
+                <AuthField
+                  id="oldPassword"
+                  name="oldPassword"
                   type="password"
+                  label="현재 비밀번호"
+                  placeholder="현재 비밀번호를 입력해 주세요"
+                  autoComplete="current-password"
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
-                  className="h-9 rounded-xl bg-zinc-950 border border-zinc-800 px-3 text-[12px] outline-none focus:border-zinc-600"
-                  placeholder="현재 비밀번호"
+                  error={errors.oldPassword}
                 />
-                {errors.oldPassword && (
-                  <p className="text-[11px] text-red-400">
-                    {errors.oldPassword}
-                  </p>
-                )}
 
-                <input
+                <AuthField
+                  id="newPassword"
+                  name="newPassword"
                   type="password"
+                  label="새 비밀번호"
+                  placeholder="새 비밀번호를 입력해 주세요"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="h-9 rounded-xl bg-zinc-950 border border-zinc-800 px-3 text-[12px] outline-none focus:border-zinc-600"
-                  placeholder="새 비밀번호"
+                  error={errors.newPassword}
                 />
-                {errors.newPassword && (
-                  <p className="text-[11px] text-red-400">
-                    {errors.newPassword}
-                  </p>
-                )}
 
-                <input
+                <AuthField
+                  id="confirmPassword"
+                  name="confirmPassword"
                   type="password"
+                  label="새 비밀번호 확인"
+                  placeholder="새 비밀번호를 한 번 더 입력해 주세요"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-9 rounded-xl bg-zinc-950 border border-zinc-800 px-3 text-[12px] outline-none focus:border-zinc-600"
-                  placeholder="새 비밀번호 확인"
+                  error={errors.confirmPassword}
                 />
-                {errors.confirmPassword && (
-                  <p className="text-[11px] text-red-400">
-                    {errors.confirmPassword}
-                  </p>
-                )}
 
                 <button
                   type="submit"
@@ -362,10 +363,10 @@ export default function MyPage() {
               </form>
             </section>
 
-            {/* 로그아웃 */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
               <h2 className="text-sm font-semibold">로그아웃</h2>
               <button
+                type="button"
                 onClick={handleLogout}
                 disabled={isSubmitting}
                 className="mt-3 h-9 w-full rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
@@ -374,25 +375,28 @@ export default function MyPage() {
               </button>
             </section>
 
-            {/* 회원 탈퇴 */}
             <section className="rounded-2xl border border-red-900/40 bg-red-950/10 p-4">
-              <h2 className="text-sm font-semibold text-red-200">회원 탈퇴</h2>
+              <h2 className="text-sm font-semibold text-red-200">
+                회원 탈퇴 요청
+              </h2>
               <p className="mt-1 text-[11px] text-red-200/80">
-                회원 탈퇴 시 계정은 1주일 내로만 복구할 수 있어요
+                탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를
+                취소하고 계정을 다시 사용할 수 있어요.
               </p>
               <button
+                type="button"
                 onClick={handleExit}
                 disabled={isSubmitting}
                 className="mt-3 h-9 w-full rounded-full bg-red-500 text-[11px] font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-50"
               >
-                회원 탈퇴
+                회원 탈퇴 요청
               </button>
             </section>
           </>
         ) : (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
             <p className="text-[11px] text-zinc-400">
-              유저 정보를 불러오지 못했어요.
+              내 정보를 불러오지 못했어요.
             </p>
           </div>
         )}

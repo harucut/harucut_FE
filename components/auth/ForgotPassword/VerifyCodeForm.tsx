@@ -6,17 +6,14 @@ import type { Errors } from "@/app/forgot-password/_hooks/useForgotPasswordFlow"
 type Props = {
   email: string;
   setEmail: (v: string) => void;
-
   code: string;
   setCode: (v: string) => void;
-
   emailLocked: boolean;
-
+  codeExpiresAt: number | null;
   isSubmitting: boolean;
   errors: Errors;
-
-  onVerify: () => void;
-  onResend: () => void;
+  onVerify: () => Promise<boolean>;
+  onResend: () => Promise<boolean>;
   onRestart: () => void;
   onGoLogin: () => void;
 };
@@ -27,6 +24,7 @@ export function VerifyCodeForm({
   code,
   setCode,
   emailLocked,
+  codeExpiresAt,
   isSubmitting,
   errors,
   onVerify,
@@ -51,17 +49,15 @@ export function VerifyCodeForm({
         isSending={isSubmitting}
         isVerifying={isSubmitting}
         isVerified={false}
+        codeExpiresAt={codeExpiresAt}
         emailError={errors.email}
         codeError={errors.code}
         onSend={async () => {
-          onResend();
-          return true;
+          return onResend();
         }}
         onVerify={async () => {
-          onVerify();
-          return true;
+          return onVerify();
         }}
-        verifiedText="인증 완료!"
       />
 
       {errors.common ? (
@@ -74,7 +70,7 @@ export function VerifyCodeForm({
           onClick={onRestart}
           className="text-zinc-400 hover:text-zinc-200"
         >
-          초기화
+          처음부터 다시
         </button>
         <button
           type="button"
