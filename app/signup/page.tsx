@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { AuthField } from "@/components/auth/AuthField";
@@ -19,6 +19,11 @@ import {
 } from "@/lib/authValidation";
 import { signupWithEmail } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
+import {
+  buildPathWithRedirect,
+  getSafeRedirectPath,
+  resolveRedirectTarget,
+} from "@/lib/redirect";
 import { useEmailVerification } from "./_hooks/useEmailVerification";
 import { EmailCodeSection } from "@/components/auth/EmailCodeSection";
 
@@ -33,7 +38,12 @@ type SignupErrors = Partial<Record<SignupFieldName, string | null>> & {
 
 export default function SignupPage() {
   const router = useRouter();
-  useRedirectIfAuthenticated();
+  const searchParams = useSearchParams();
+  const redirectTo = getSafeRedirectPath(searchParams.get("redirectTo"));
+  const redirectTarget = resolveRedirectTarget(redirectTo);
+  const loginHref = buildPathWithRedirect("/login", redirectTo);
+
+  useRedirectIfAuthenticated(redirectTarget);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<SignupErrors>({});
@@ -97,7 +107,7 @@ export default function SignupPage() {
         password,
         username,
       });
-      router.push("/login");
+      router.push(loginHref);
     } catch (error) {
       console.error(error);
       setErrors({
@@ -118,7 +128,7 @@ export default function SignupPage() {
           <p className="text-center text-[11px] text-zinc-400 mt-2">
             이미 계정이 있다면{" "}
             <Link
-              href="/login"
+              href={loginHref}
               className="font-medium text-emerald-400 underline underline-offset-4"
             >
               로그인
