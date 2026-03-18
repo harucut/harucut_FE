@@ -49,7 +49,9 @@ export default function MyPage() {
     setErrors({});
 
     try {
-      const res = await clientApi.get<UserInfoResponse>("/api/client/user-info");
+      const res = await clientApi.get<UserInfoResponse>(
+        "/api/client/user-info",
+      );
       setUser(res.data.data);
       setUsername(res.data.data.username || "");
     } catch (error) {
@@ -182,7 +184,7 @@ export default function MyPage() {
 
   const handleExit = async () => {
     const ok = confirm(
-      "정말 탈퇴하시겠어요?\n탈퇴 후에는 계정을 복구할 수 없어요.",
+      "정말 탈퇴하시겠어요?\n1주일 내로 다시 로그인하면 계정을 복구할 수 있어요.",
     );
     if (!ok) return;
 
@@ -215,7 +217,9 @@ export default function MyPage() {
               aria-label="새로고침"
               title="새로고침"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              />
             </button>
           }
           description={
@@ -252,7 +256,9 @@ export default function MyPage() {
 
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold">{user.username}</span>
-                  <span className="text-[11px] text-zinc-400">{user.email}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {user.email}
+                  </span>
                 </div>
               </div>
 
@@ -298,7 +304,9 @@ export default function MyPage() {
               </form>
 
               {errors.username ? (
-                <p className="mt-2 text-[11px] text-red-400">{errors.username}</p>
+                <p className="mt-2 text-[11px] text-red-400">
+                  {errors.username}
+                </p>
               ) : null}
             </section>
 
@@ -368,9 +376,12 @@ export default function MyPage() {
             </section>
 
             <section className="rounded-2xl border border-red-900/40 bg-red-950/10 p-4">
-              <h2 className="text-sm font-semibold text-red-200">회원 탈퇴</h2>
+              <h2 className="text-sm font-semibold text-red-200">
+                회원 탈퇴 요청
+              </h2>
               <p className="mt-1 text-[11px] text-red-200/80">
-                탈퇴하면 계정과 저장된 정보가 모두 삭제되며 되돌릴 수 없어요.
+                탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를
+                취소하고 계정을 다시 사용할 수 있어요.
               </p>
               <button
                 type="button"
@@ -378,7 +389,7 @@ export default function MyPage() {
                 disabled={isSubmitting}
                 className="mt-3 h-9 w-full rounded-full bg-red-500 text-[11px] font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-50"
               >
-                회원 탈퇴
+                회원 탈퇴 요청
               </button>
             </section>
           </>
