@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { useForgotPasswordFlow } from "./_hooks/useForgotPasswordFlow";
@@ -8,7 +9,7 @@ import { buildPathWithRedirect } from "@/lib/redirect";
 import { VerifyCodeForm } from "@/components/auth/ForgotPassword/VerifyCodeForm";
 import { ResetPasswordForm } from "@/components/auth/ForgotPassword/ResetPasswordForm";
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const loginHref = buildPathWithRedirect(
@@ -58,5 +59,13 @@ export default function ForgotPasswordPage() {
         />
       )}
     </AuthPageShell>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ForgotPasswordPageContent />
+    </Suspense>
   );
 }

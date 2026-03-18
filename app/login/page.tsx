@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AuthField } from "@/components/auth/AuthField";
@@ -24,7 +24,7 @@ type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
   common?: string | null;
 };
 
-export default function LoginPage() {
+function LoginPageContent() {
   const searchParams = useSearchParams();
   const redirectTo = getSafeRedirectPath(searchParams.get("redirectTo"));
   const redirectTarget = resolveRedirectTarget(redirectTo);
@@ -167,5 +167,13 @@ export default function LoginPage() {
         </button>
       </form>
     </AuthPageShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
