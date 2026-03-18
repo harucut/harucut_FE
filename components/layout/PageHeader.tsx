@@ -35,7 +35,7 @@ export function PageHeader({
               className="text-[11px] tracking-[0.16em] text-zinc-500 hover:text-white transition-colors"
               aria-label="홈으로 이동"
             >
-              HARUCUT
+              하루컷
             </Link>
           )}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
