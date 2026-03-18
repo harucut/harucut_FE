@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -44,7 +45,6 @@ export default function ShootResultPage() {
     if (selectedCount !== 4) return router.replace("/shoot/select");
   }, [frameId, shots.length, selectedCount, router]);
 
-  // 선택 순서대로 shot 가져오기
   const selectedShots = useMemo(() => {
     return selectedIndexes.map((idx) => {
       if (idx == null) return null;
@@ -53,42 +53,42 @@ export default function ShootResultPage() {
   }, [selectedIndexes, shots]);
 
   const previewVideo = useMemo(() => {
-    return selectedShots.map((s): FrameMedia | null => {
-      if (!s) return null;
-      if (s.video) return { type: "video", src: s.video };
-      return { type: "image", src: s.photo };
+    return selectedShots.map((shot): FrameMedia | null => {
+      if (!shot) return null;
+      if (shot.video) return { type: "video", src: shot.video };
+      return { type: "image", src: shot.photo };
     });
   }, [selectedShots]);
 
   const previewImage = useMemo(() => {
-    return selectedShots.map((s): FrameMedia | null => {
-      if (!s) return null;
-      return { type: "image", src: s.photo };
+    return selectedShots.map((shot): FrameMedia | null => {
+      if (!shot) return null;
+      return { type: "image", src: shot.photo };
     });
   }, [selectedShots]);
 
-  // PNG는 무조건 photo로 합성
   const pngSources: FrameSource[] = useMemo(() => {
     return selectedShots
-      .map((s) => (s ? ({ type: "image", src: s.photo } as const) : null))
+      .map((shot) =>
+        shot ? ({ type: "image", src: shot.photo } as const) : null,
+      )
       .filter(isNotNull);
   }, [selectedShots]);
 
-  // WEBM은 video 있으면 video, 없으면 photo를 image로
   const webmSources: FrameSource[] = useMemo(() => {
     return selectedShots
-      .map((s) => {
-        if (!s) return null;
-        if (s.video) return { type: "video", src: s.video } as const;
-        return { type: "image", src: s.photo } as const;
+      .map((shot) => {
+        if (!shot) return null;
+        if (shot.video) return { type: "video", src: shot.video } as const;
+        return { type: "image", src: shot.photo } as const;
       })
-      .filter((v): v is FrameSource => Boolean(v));
+      .filter((value): value is FrameSource => Boolean(value));
   }, [selectedShots]);
 
   if (!frameId) return null;
 
   const layout = FRAME_LAYOUTS[frameId as FrameId];
-  const frameConfig = FRAME_CONFIGS.find((f) => f.id === frameId);
+  const frameConfig = FRAME_CONFIGS.find((frame) => frame.id === frameId);
   const themeData = draft && draft.data.frameId === frameId ? draft.data : null;
   if (!layout) return null;
 
@@ -105,11 +105,9 @@ export default function ShootResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "하루컷").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
       const filename = `${name}-${Date.now()}.png`;
-      const file = new File([blob], filename, {
-        type: "image/png",
-      });
+      const file = new File([blob], filename, { type: "image/png" });
       const uploaded = await uploadFourcutMedia(file);
       if (uploaded.downloadUrl) {
         await downloadFromUrl(uploaded.downloadUrl, filename);
@@ -118,7 +116,7 @@ export default function ShootResultPage() {
       }
     } catch (e) {
       console.error(e);
-      alert("이미지 생성 중 오류가 발생했어요. 다시 시도해 주세요.");
+      alert("이미지 생성 중 오류가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setIsDownloadingImage(false);
     }
@@ -138,11 +136,9 @@ export default function ShootResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "하루컷").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
       const filename = `${name}-${Date.now()}.webm`;
-      const file = new File([blob], filename, {
-        type: "video/webm",
-      });
+      const file = new File([blob], filename, { type: "video/webm" });
       const uploaded = await uploadFourcutMedia(file);
       if (uploaded.downloadUrl) {
         await downloadFromUrl(
@@ -154,17 +150,17 @@ export default function ShootResultPage() {
       }
     } catch (e) {
       console.error(e);
-      alert("영상 생성 중 오류가 발생했어요. 다시 시도해 주세요.");
+      alert("영상 생성 중 오류가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setIsDownloadingVideo(false);
     }
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
-      <div className="mx-auto w-full max-w-md flex flex-col gap-6">
+    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader
-          title="촬영 · 결과"
+          title="촬영 결과"
           backHref="/shoot/select"
           backLabel="다시 고르기"
         />
@@ -181,21 +177,22 @@ export default function ShootResultPage() {
           borderColor={borderColor}
           theme={themeData}
         />
+
         <section className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
-            {BORDER_COLORS.map((c) => (
+            {BORDER_COLORS.map((color) => (
               <button
-                key={c.id}
+                key={color.id}
                 type="button"
-                onClick={() => setBorderColor(c.value)}
+                onClick={() => setBorderColor(color.value)}
                 className={[
-                  "h-8 rounded-full px-3 text-[11px] border",
-                  borderColor === c.value
+                  "h-8 rounded-full border px-3 text-[11px]",
+                  borderColor === color.value
                     ? "border-emerald-400 text-emerald-200"
                     : "border-zinc-700 text-zinc-300",
                 ].join(" ")}
               >
-                {c.label}
+                {color.label}
               </button>
             ))}
           </div>
@@ -205,7 +202,7 @@ export default function ShootResultPage() {
               type="button"
               onClick={handleDownloadPng}
               disabled={isDownloadingImage || selectedCount !== 4}
-              className="flex-1 rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isDownloadingImage ? "이미지 생성 중..." : "사진 다운로드 (PNG)"}
             </button>
@@ -214,11 +211,18 @@ export default function ShootResultPage() {
               type="button"
               onClick={handleDownloadVideo}
               disabled={isDownloadingVideo || selectedCount !== 4}
-              className="flex-1 rounded-full bg-zinc-700 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 rounded-full bg-zinc-700 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isDownloadingVideo ? "영상 생성 중..." : "동영상 다운로드"}
+              {isDownloadingVideo ? "영상 생성 중..." : "영상 다운로드"}
             </button>
           </div>
+
+          <Link
+            href="/home"
+            className="inline-flex items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+          >
+            홈으로 가기
+          </Link>
         </section>
 
         <canvas ref={canvasRef} className="hidden" />
