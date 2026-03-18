@@ -1,38 +1,36 @@
 import { expect, test } from "@playwright/test";
 
-// 촬영 플로우 스모크:
-// 홈 -> /shoot 진입 -> 프레임 확인 버튼 클릭 -> /shoot/capture 이동 확인
-test("shoot flow moves to capture page", async ({ page }) => {
-  await page.goto("/home");
+test("landing CTA routes unauthenticated users to login with redirectTo", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('a[href="/home"]').click();
 
-  await page.locator('a[href="/shoot"]').click();
-  await expect(page).toHaveURL(/\/shoot$/);
-
-  await page.locator("button.rounded-full.bg-emerald-500").click();
-  await expect(page).toHaveURL(/\/shoot\/capture$/);
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("redirectTo"))
+    .toBe("/home");
 });
 
-// 업로드 플로우 스모크:
-// 홈 -> /upload 진입 -> 프레임 확인 버튼 클릭 -> /upload/select 이동 확인
-test("upload flow moves to select page", async ({ page }) => {
-  await page.goto("/home");
+test("login page preserves redirectTo in auth links", async ({ page }) => {
+  await page.goto("/login?redirectTo=%2Fmypage");
 
-  await page.locator('a[href="/upload"]').click();
-  await expect(page).toHaveURL(/\/upload$/);
-
-  await page.locator("button.rounded-full.bg-emerald-500").click();
-  await expect(page).toHaveURL(/\/upload\/select$/);
+  await expect(page.locator('a[href="/signup?redirectTo=%2Fmypage"]')).toBeVisible();
+  await expect(
+    page.locator('a[href="/forgot-password?redirectTo=%2Fmypage"]'),
+  ).toBeVisible();
 });
 
-// 꾸미기 플로우 스모크:
-// 홈 -> /theme 진입 -> 프레임 확인 버튼 클릭 -> /theme/sticker 이동 확인
-test("theme flow moves to sticker editor page", async ({ page }) => {
-  await page.goto("/home");
+test("signup page preserves redirectTo in the login link", async ({ page }) => {
+  await page.goto("/signup?redirectTo=%2Fmypage");
 
-  await page.locator('a[href="/theme"]').click();
-  await expect(page).toHaveURL(/\/theme$/);
-
-  await page.locator("button.rounded-full.bg-emerald-500").click();
-  await expect(page).toHaveURL(/\/theme\/sticker$/);
+  await expect(page.locator('a[href="/login?redirectTo=%2Fmypage"]')).toBeVisible();
 });
 
+for (const route of ["/login", "/signup", "/forgot-password"]) {
+  test(`brand link on ${route} returns to the landing page`, async ({ page }) => {
+    await page.goto(route);
+    await page.locator('header a[href="/"]').first().click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+}
