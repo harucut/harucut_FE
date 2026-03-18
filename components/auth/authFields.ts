@@ -47,7 +47,7 @@ export const SIGNUP_BASE_FIELDS: AuthFieldConfig[] = [
     name: "password",
     type: "password",
     label: "비밀번호",
-    placeholder: "8~16자, 영문/숫자/일부 특수문자",
+    placeholder: "8자 이상 비밀번호를 입력해 주세요",
     autoComplete: "new-password",
   },
   {
@@ -63,7 +63,7 @@ export const SIGNUP_BASE_FIELDS: AuthFieldConfig[] = [
     name: "username",
     type: "text",
     label: "닉네임",
-    placeholder: "2~20자 (한글/영문/숫자/공백/_/-)",
+    placeholder: "표시할 닉네임을 입력해 주세요",
     autoComplete: "username",
   },
 ];
