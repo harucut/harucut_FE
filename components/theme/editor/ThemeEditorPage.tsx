@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -179,7 +179,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         <header className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
             <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              harucut
+              하루컷
             </span>
             <h1 className="text-lg font-semibold tracking-tight">
               {remoteFrameId ? "저장한 프레임 수정" : "프레임 꾸미기"}
@@ -189,9 +189,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             ) : null}
             {remoteFrameId && hasNonColorBackground ? (
               <p className="mt-1 text-[11px] text-amber-300">
-                이미지/비디오 배경은 미리보기에서 단색 배경으로 보이지만,
-                배경 색상을 바꾸지 않으면 기존 배경 정보는 그대로
-                보존됩니다.
+                이미지/비디오 배경은 미리보기에서 단색 배경으로 보이지만, 배경
+                색상을 바꾸지 않으면 기존 배경 정보는 그대로 보존됩니다.
               </p>
             ) : null}
           </div>
@@ -218,11 +217,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               프레임 목록으로 돌아가기
             </Link>
             <button
-                type="button"
-                onClick={onDone}
-                disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
-                className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-              >
+              type="button"
+              onClick={onDone}
+              disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
+              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+            >
               {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
             </button>
           </div>

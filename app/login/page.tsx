@@ -88,7 +88,7 @@ export default function LoginPage() {
   return (
     <AuthPageShell
       title="로그인"
-      description="harucut에서 오늘의 기록을 이어서 확인해요."
+      description="하루컷에서 오늘의 기록을 이어서 확인해요."
       footer={
         <>
           <SocialLoginSection mode="login" />
