@@ -205,7 +205,6 @@ export default function MyPage() {
       <div className="mx-auto w-full max-w-md flex flex-col gap-6">
         <PageHeader
           title="오늘은 어떻게 기록할까?"
-          backHref="/mypage"
           rightSlot={
             <button
               onClick={fetchUser}
