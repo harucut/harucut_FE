@@ -1,14 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { useForgotPasswordFlow } from "./_hooks/useForgotPasswordFlow";
+import { buildPathWithRedirect } from "@/lib/redirect";
 
 import { VerifyCodeForm } from "@/components/auth/ForgotPassword/VerifyCodeForm";
 import { ResetPasswordForm } from "@/components/auth/ForgotPassword/ResetPasswordForm";
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const loginHref = buildPathWithRedirect(
+    "/login",
+    searchParams.get("redirectTo"),
+  );
   const flow = useForgotPasswordFlow();
 
   return (
@@ -29,7 +36,7 @@ export default function ForgotPasswordPage() {
           onVerify={flow.verifyCode}
           onResend={flow.sendCode}
           onRestart={flow.restart}
-          onGoLogin={() => router.push("/login")}
+          onGoLogin={() => router.push(loginHref)}
         />
       )}
 
@@ -45,12 +52,20 @@ export default function ForgotPasswordPage() {
             const ok = await flow.submitNewPassword();
             if (!ok) return;
             alert("비밀번호가 변경되었어요. 로그인해 주세요.");
-            router.push("/login");
+            router.push(loginHref);
           }}
           onRestart={flow.restart}
-          onGoLogin={() => router.push("/login")}
+          onGoLogin={() => router.push(loginHref)}
         />
       )}
     </AuthPageShell>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ForgotPasswordPageContent />
+    </Suspense>
   );
 }

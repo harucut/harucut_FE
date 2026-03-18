@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
@@ -10,6 +11,11 @@ import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import { clientApi } from "@/lib/clientApi";
+import {
+  buildPathWithRedirect,
+  getSafeRedirectPath,
+  resolveRedirectTarget,
+} from "@/lib/redirect";
 import type { AuthFieldName } from "@/components/auth/authFields";
 
 type LoginFieldName = Extract<AuthFieldName, "email" | "password">;
@@ -18,8 +24,17 @@ type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
   common?: string | null;
 };
 
-export default function LoginPage() {
-  useRedirectIfAuthenticated();
+function LoginPageContent() {
+  const searchParams = useSearchParams();
+  const redirectTo = getSafeRedirectPath(searchParams.get("redirectTo"));
+  const redirectTarget = resolveRedirectTarget(redirectTo);
+  const signupHref = buildPathWithRedirect("/signup", redirectTo);
+  const forgotPasswordHref = buildPathWithRedirect(
+    "/forgot-password",
+    redirectTo,
+  );
+
+  useRedirectIfAuthenticated(redirectTarget);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
@@ -74,7 +89,7 @@ export default function LoginPage() {
         }
       }
 
-      window.location.href = "/home";
+      window.location.href = redirectTarget;
     } catch (error) {
       console.error(error);
       setErrors({
@@ -88,14 +103,14 @@ export default function LoginPage() {
   return (
     <AuthPageShell
       title="로그인"
-      description="harucut에서 오늘의 기록을 이어서 확인해요."
+      description="하루컷에서 오늘의 기록을 이어서 확인해요."
       footer={
         <>
           <SocialLoginSection mode="login" />
           <p className="text-center text-[11px] text-zinc-400 mt-2">
             아직 계정이 없다면{" "}
             <Link
-              href="/signup"
+              href={signupHref}
               className="font-medium text-emerald-400 underline underline-offset-4"
             >
               회원가입
@@ -136,7 +151,7 @@ export default function LoginPage() {
           </label>
 
           <Link
-            href="/forgot-password"
+            href={forgotPasswordHref}
             className="text-[10px] text-zinc-400 hover:text-zinc-200"
           >
             비밀번호 찾기
@@ -152,5 +167,13 @@ export default function LoginPage() {
         </button>
       </form>
     </AuthPageShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

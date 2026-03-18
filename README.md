@@ -1,84 +1,114 @@
-# harucut 프론트엔드
+# Harucut Frontend
 
-하루의 순간을 기록하고 네컷 프레임으로 완성하는 웹 앱입니다. 촬영/업로드/테마 꾸미기 흐름을 제공하며, 결과물을 이미지(PNG) 또는 영상(WEBM)으로 다운로드할 수 있습니다.
+Harucut은 네 컷 사진을 위한 서비스입니다.
+사용자는 다음 기능을 사용할 수 있습니다.
+
+- 8장을 촬영한 뒤 4장을 선택해 결과물을 만든다
+- 로컬 이미지나 비디오를 업로드해 프레임을 합성한다
+- 커스텀 프레임 테마를 만들고 수정한다
+- 합성 결과를 PNG 또는 비디오로 다운로드한다
+- 저장된 미디어와 계정 정보를 관리한다
 
 ## 기술 스택
-- Next.js 16 (App Router)
+
+- Next.js 16 App Router
 - React 19
 - TypeScript
 - Tailwind CSS v4
-- Zustand (클라이언트 상태 관리)
-- Konva / react-konva (캔버스 편집)
-- Axios (API 통신)
+- Zustand
+- Konva / react-konva
+- Jest
+- Playwright
+- Storybook
 
-## 주요 기능
-- 촬영 플로우: 웹캠 자동 촬영(8장) + 4장 선택 + 프레임 합성
-- 업로드 플로우: 사진/영상 업로드 + 4장 선택 + 프레임 합성
-- 테마 에디터: 프레임 위에 사진/스티커/텍스트를 배치하여 커스텀 테마 제작
-- 인증/계정: 이메일 로그인/회원가입/비밀번호 재설정/소셜 로그인
-- 마이페이지: 사용자 정보 조회, 닉네임/비밀번호 변경, 로그아웃/탈퇴
+## 시작하기
 
-## 사용자 플로우
-- 촬영
-1. `/shoot`에서 프레임 선택
-2. `/shoot/capture`에서 자동 촬영(8장)
-3. `/shoot/select`에서 4장 선택
-4. `/shoot/result`에서 PNG/WEBM 다운로드
+1. 의존성을 설치합니다.
 
-- 업로드
-1. `/upload`에서 프레임 선택
-2. `/upload/select`에서 파일 업로드 + 4장 선택
-3. `/upload/result`에서 PNG/WEBM 다운로드
+```bash
+pnpm install
+```
 
-- 테마 꾸미기
-1. `/theme`에서 프레임 선택
-2. `/theme/sticker`에서 에디터로 꾸미기
-3. 저장 시 Draft로 보관 및 서버 저장
+2. 환경 변수를 설정합니다.
 
-## 라우팅 요약 (App Router)
-- `/` 랜딩
-- `/home` 기능 선택
-- `/shoot/*` 촬영 플로우
-- `/upload/*` 업로드 플로우
-- `/theme/*` 테마 꾸미기 플로우
-- `/login`, `/signup`, `/forgot-password` 인증
-- `/mypage` 계정 관리
-- `/history` (준비 중)
+```bash
+NEXT_PUBLIC_BASE_URL=<백엔드 기본 URL>
+JWT_ACCESS_SECRET=<서버 토큰 검증용 JWT 시크릿>
+```
 
-## 상태 관리 (Zustand)
-- `lib/shootSessionStore.ts`: 촬영 세션(프레임/샷/선택) 상태
-- `lib/uploadSessionStore.ts`: 업로드 세션(프레임/미디어/선택) 상태
-- `lib/themeEditorStore.ts`: 테마 에디터(자산, 컴포넌트, 레이어) 상태
-- `lib/themeDraftStore.ts`: 테마 Draft 로컬 보관 (persist)
-- `lib/themeSessionStore.ts`: 테마 플로우의 선택값 보관
+3. 개발 서버를 실행합니다.
 
-## 캔버스/합성 파이프라인
-- `lib/canvas/loaders.ts`: 이미지/비디오 로더
-- `lib/canvas/draw.ts`: cover 방식으로 슬롯에 맞춰 그리기
-- `lib/canvas/composeFrame.ts`: 슬롯 합성 + PNG/WEBM 생성
-
-## API 연동/인증
-- `lib/api.ts`: Axios 인스턴스 (BASE URL, 쿠키 포함)
-- `lib/auth/*`: 로그인/회원가입/비밀번호 재설정 API
-- `app/api/client/*`: 프론트 서버에서 쿠키 기반 호출을 백엔드로 프록시
-- `proxy.ts`: 인증 보호/리이슈 로직을 위한 미들웨어 헬퍼
-
-## 환경 변수
-- `NEXT_PUBLIC_BASE_URL`: 백엔드 API Base URL
-- `JWT_ACCESS_SECRET`: 엣지 런타임에서 accessToken 검증용 시크릿
+```bash
+pnpm dev
+```
 
 ## 스크립트
-- `pnpm dev`: 개발 서버
-- `pnpm build`: 스티커 리스트 생성 후 빌드
-- `pnpm generate:stickers`: `public/stickers` → `constants/stickers.generated.ts` 생성
 
-## 디렉터리 구조 (핵심)
-- `app/`: 라우트 페이지 및 API 라우트
-- `components/`: UI 컴포넌트
-- `lib/`: 상태 관리/유틸/캔버스/인증 로직
-- `constants/`: 프레임/색상/스티커 목록
-- `public/`: 스티커 이미지, 사운드 등 정적 리소스
+- `pnpm dev`
+- `pnpm build`
+- `pnpm start`
+- `pnpm lint`
+- `pnpm test`
+- `pnpm test:coverage`
+- `pnpm test:e2e`
+- `pnpm storybook`
+- `pnpm build-storybook`
+- `pnpm generate:stickers`
 
-## 개발 메모
-- 촬영/업로드 결과 생성은 클라이언트 캔버스에서 수행됩니다.
-- 테마 에디터는 Konva로 구현되어 레이어/텍스트/이미지 조작이 가능합니다.
+## 라우트 개요
+
+공개 라우트:
+
+- `/`
+- `/login`
+- `/signup`
+- `/forgot-password`
+
+보호 라우트:
+
+- `/home`
+- `/shoot/*`
+- `/upload/*`
+- `/theme/*`
+- `/history`
+- `/mypage`
+
+보호 라우트는 [`proxy.ts`](./proxy.ts)에서 처리합니다.
+비인증 상태에서 접근하면 `/login?redirectTo=<원래 경로>`로 이동합니다.
+
+## 핵심 흐름
+
+```text
+촬영
+/shoot -> /shoot/capture -> /shoot/select -> /shoot/result
+
+업로드
+/upload -> /upload/select -> /upload/result
+
+테마
+/theme -> /theme/sticker -> /theme
+```
+
+각 멀티스텝 흐름은 메모리 기반 Zustand 세션 상태에 의존합니다.
+필요한 상태 없이 뒤 단계로 직접 진입하면 가장 이른 유효 단계로 되돌아갑니다.
+
+## 주요 디렉터리
+
+- `app/`: App Router 페이지와 라우트 핸들러
+- `components/`: 공용 UI 컴포넌트
+- `lib/`: API 클라이언트, 인증 헬퍼, 상태 저장소, 캔버스 로직
+- `constants/`: 프레임, 색상, 스티커 메타데이터
+- `scripts/`: 빌드 보조 스크립트
+- `tests/`: Playwright E2E 테스트
+
+## 문서
+
+- 라우트 다이어그램: [`docs/route-flows.md`](./docs/route-flows.md)
+- 인증 및 리다이렉트 규칙: [`docs/auth-routing.md`](./docs/auth-routing.md)
+- 작업 메모와 규칙: [`AGENTS.md`](./AGENTS.md)
+
+## 테스트 메모
+
+- 유틸리티와 순수 로직은 Jest로 검증합니다.
+- 현재 E2E는 공개 라우팅과 보호 라우트 리다이렉트 동작에 초점을 맞춥니다.
+- 보호된 전체 사용자 흐름을 끝까지 검증하려면 인증된 테스트 컨텍스트가 필요합니다.

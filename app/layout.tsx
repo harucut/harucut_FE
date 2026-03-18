@@ -3,7 +3,7 @@ import "./globals.css";
 import { ExternalBrowserGate } from "./ExternalBrowserGate";
 
 export const metadata: Metadata = {
-  title: "harucut",
+  title: "하루컷",
   description: "오늘의 인생네컷을 기록하는 웹 서비스",
 };
 

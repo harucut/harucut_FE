@@ -1,26 +1,33 @@
 import { expect, test } from "@playwright/test";
 
-// 가드 테스트:
-// 세션 상태 없이 보호 페이지로 진입하면 지정된 시작 페이지로 되돌아가야 합니다.
+const protectedRoutes = [
+  "/home",
+  "/shoot",
+  "/shoot/capture",
+  "/upload",
+  "/upload/select",
+  "/theme",
+  "/theme/sticker",
+  "/history",
+  "/mypage",
+];
 
-test("redirects /shoot/capture to /shoot when frame is not selected", async ({
-  page,
-}) => {
-  await page.goto("/shoot/capture");
-  await expect(page).toHaveURL(/\/shoot$/);
+for (const route of protectedRoutes) {
+  test(`redirects ${route} to login when unauthenticated`, async ({ page }) => {
+    await page.goto(route);
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("redirectTo"))
+      .toBe(route);
+  });
+}
+
+test("preserves the original query string in redirectTo", async ({ page }) => {
+  await page.goto("/shoot/capture?mode=retry");
+
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("redirectTo"))
+    .toBe("/shoot/capture?mode=retry");
 });
-
-test("redirects /upload/select to /upload when frame is not selected", async ({
-  page,
-}) => {
-  await page.goto("/upload/select");
-  await expect(page).toHaveURL(/\/upload$/);
-});
-
-test("redirects /theme/sticker to /theme when frame is not selected", async ({
-  page,
-}) => {
-  await page.goto("/theme/sticker");
-  await expect(page).toHaveURL(/\/theme$/);
-});
-

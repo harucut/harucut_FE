@@ -237,7 +237,7 @@ function StickerTab() {
 
 function TextTab() {
   const addText = useThemeEditorStore((s) => s.addText);
-  const [text, setText] = useState("HaruCut");
+  const [text, setText] = useState("하루컷");
   const [fontSize, setFontSize] = useState(256);
 
   return (

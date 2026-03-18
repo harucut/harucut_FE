@@ -75,8 +75,7 @@ export default function UploadResultPage() {
   if (!frameId) return null;
   const layout = FRAME_LAYOUTS[frameId as FrameId];
   const frameConfig = FRAME_CONFIGS.find((f) => f.id === frameId);
-  const themeData =
-    draft && draft.data.frameId === frameId ? draft.data : null;
+  const themeData = draft && draft.data.frameId === frameId ? draft.data : null;
 
   if (!layout) return null;
 
@@ -94,7 +93,7 @@ export default function UploadResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "하루컷").replace(/\s+/g, "_");
       const filename = `${name}-${Date.now()}.png`;
       const file = new File([blob], filename, {
         type: "image/png",
@@ -131,7 +130,7 @@ export default function UploadResultPage() {
         canvas: canvasRef.current ?? undefined,
       });
 
-      const name = (frameConfig?.name ?? "harucut").replace(/\s+/g, "_");
+      const name = (frameConfig?.name ?? "하루컷").replace(/\s+/g, "_");
       const filename = `${name}-${Date.now()}.webm`;
       const file = new File([blob], filename, {
         type: "video/webm",

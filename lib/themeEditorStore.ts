@@ -178,16 +178,16 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       // 같은 프레임 다시 선택하면 아무 것도 안 함
       if (s.frameId === id) return s;
 
-        return {
-          frameId: id,
-          ...resetEditorState(() => s),
-          background: {
-            type: "COLOR",
-            value: "111827",
-          },
-          backgroundColor: "111827",
-        };
-      }),
+      return {
+        frameId: id,
+        ...resetEditorState(() => s),
+        background: {
+          type: "COLOR",
+          value: "111827",
+        },
+        backgroundColor: "111827",
+      };
+    }),
 
   setTab: (t) => set({ tab: t }),
   setBackgroundColor: (color) =>
@@ -343,7 +343,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     const { frameId } = get();
     if (!frameId) return;
 
-    const text = options?.text?.trim() ? options.text.trim() : "HaruCut";
+    const text = options?.text?.trim() ? options.text.trim() : "하루컷";
     const rawFontSize =
       typeof options?.fontSize === "number" && Number.isFinite(options.fontSize)
         ? options.fontSize
@@ -528,18 +528,18 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         hidden: false,
       })) as EditorComponent[];
 
-        return {
-          frameId: data.frameId,
-          tab: "PHOTO",
-          components: normalizeZ(mapped),
-          activeId: null,
-          background: data.background ?? {
-            type: "COLOR",
-            value: "111827",
-          },
-          backgroundColor:
-            data.background?.type === "COLOR"
-              ? normalizeHexColor(data.background.value)
+      return {
+        frameId: data.frameId,
+        tab: "PHOTO",
+        components: normalizeZ(mapped),
+        activeId: null,
+        background: data.background ?? {
+          type: "COLOR",
+          value: "111827",
+        },
+        backgroundColor:
+          data.background?.type === "COLOR"
+            ? normalizeHexColor(data.background.value)
             : "111827",
         assets: {
           photos: [],
