@@ -12,9 +12,13 @@ type Props = {
 
 export function AuthPageShell({ title, description, children, footer }: Props) {
   return (
-    <main className="min-h-dvh bg-zinc-950 text-white px-2 py-6">
+    <main className="min-h-dvh bg-zinc-950 px-2 py-6 text-white">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <PageHeader title={title} description={<>{description}</>} />
+        <PageHeader
+          title={title}
+          description={<>{description}</>}
+          brandHref="/"
+        />
 
         {children}
 

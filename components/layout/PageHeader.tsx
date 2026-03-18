@@ -5,15 +5,12 @@ import type { ReactNode } from "react";
 
 type Props = {
   title: ReactNode;
-
-  // 헤더 아래 설명
   description?: ReactNode;
-
-  // 오른쪽: 링크 or 커스텀 액션
   backHref?: string;
   backLabel?: string;
   rightSlot?: ReactNode;
-
+  rightHref?: string;
+  brandHref?: string;
   showBrand?: boolean;
 };
 
@@ -23,6 +20,8 @@ export function PageHeader({
   backHref = "",
   backLabel,
   rightSlot,
+  rightHref,
+  brandHref = "/home",
   showBrand = true,
 }: Props) {
   return (
@@ -31,9 +30,9 @@ export function PageHeader({
         <div className="flex flex-col">
           {showBrand && (
             <Link
-              href="/home"
-              className="text-[11px] tracking-[0.16em] text-zinc-500 hover:text-white transition-colors"
-              aria-label="홈으로 이동"
+              href={brandHref}
+              className="text-[11px] tracking-[0.16em] text-zinc-500 transition-colors hover:text-white"
+              aria-label="Home"
             >
               하루컷
             </Link>
@@ -42,12 +41,16 @@ export function PageHeader({
         </div>
 
         {rightSlot ? (
-          <Link
-            href={backHref}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 border border-zinc-700 text-[11px]"
-          >
-            {rightSlot}
-          </Link>
+          rightHref ? (
+            <Link
+              href={rightHref}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-[11px]"
+            >
+              {rightSlot}
+            </Link>
+          ) : (
+            <div className="flex items-center justify-center">{rightSlot}</div>
+          )
         ) : backHref && backLabel ? (
           <Link
             href={backHref}
@@ -58,9 +61,7 @@ export function PageHeader({
         ) : null}
       </header>
 
-      {description ? (
-        <p className="text-xs text-zinc-500">{description}</p>
-      ) : null}
+      {description ? <p className="text-xs text-zinc-500">{description}</p> : null}
     </>
   );
 }

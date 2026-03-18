@@ -6,7 +6,14 @@ import {
 } from "@/lib/server/setCookies";
 
 // 보호가 필요한 경로 목록
-const PROTECTED_PATHS = ["/home", "/shoot", "/upload", "/history", "/theme"];
+const PROTECTED_PATHS = [
+  "/home",
+  "/shoot",
+  "/upload",
+  "/history",
+  "/theme",
+  "/mypage",
+];
 // const PROTECTED_PATHS = ["/history"];
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -15,6 +22,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
  */
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const redirectTarget = `${pathname}${req.nextUrl.search}`;
 
   // 보호 안 하는 경로면 패스
   const isProtected = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
@@ -39,7 +47,7 @@ export async function proxy(req: NextRequest) {
   // refreshToken도 없으면 바로 로그인으로
   if (!refreshToken) {
     const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("redirectTo", pathname);
+    loginUrl.searchParams.set("redirectTo", redirectTarget);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -73,7 +81,7 @@ export async function proxy(req: NextRequest) {
   }
 
   const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("redirectTo", pathname);
+  loginUrl.searchParams.set("redirectTo", redirectTarget);
   return NextResponse.redirect(loginUrl);
 }
 
@@ -85,5 +93,6 @@ export const config = {
     "/upload/:path*",
     "/history/:path*",
     "/theme/:path*",
+    "/mypage",
   ],
 };
