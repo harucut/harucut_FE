@@ -107,7 +107,7 @@ function LoginPageContent() {
       description="하루컷에 로그인하고 프레임과 기록을 이어서 관리해 보세요."
       footer={
         <>
-          <SocialLoginSection mode="login" />
+          <SocialLoginSection mode="login" redirectTo={redirectTo} />
           <p className="mt-2 text-center text-[11px] text-zinc-400">
             아직 계정이 없으신가요?{" "}
             <Link

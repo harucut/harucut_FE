@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const PROTECTED_PATHS = [
-  "/home",
-  "/shoot",
-  "/upload",
-  "/history",
-  "/theme",
-  "/mypage",
-];
+import { isProtectedPath, PROTECTED_PATHS } from "@/lib/protectedPaths";
 
 function hasAuthCookie(req: NextRequest) {
   return Boolean(
@@ -20,8 +12,7 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const redirectTarget = `${pathname}${req.nextUrl.search}`;
 
-  const isProtected = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
-  if (!isProtected) {
+  if (!isProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
