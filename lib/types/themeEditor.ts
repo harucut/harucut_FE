@@ -52,7 +52,13 @@ export type TextComponent = BaseComponent & {
 
 export type EditorComponent = PhotoComponent | StickerComponent | TextComponent;
 
-export type Asset = { id: string; src: string; name?: string; s3Key?: string };
+export type Asset = {
+  id: string;
+  src: string;
+  name?: string;
+  s3Key?: string;
+  file?: File;
+};
 
 export type ThemeBackground =
   | {
