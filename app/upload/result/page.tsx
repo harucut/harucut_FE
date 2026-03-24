@@ -10,6 +10,7 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   buildDefaultDisplayName,
+  buildDownloadFilename,
   sanitizeDisplayName,
 } from "@/lib/fourcutOutput";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
@@ -353,7 +354,10 @@ export default function UploadResultPage() {
     setIsDownloadingImage(true);
     try {
       const url = await getMediaDownloadUrl(imageResult.mediaId);
-      await downloadFromUrl(url);
+      await downloadFromUrl(
+        url,
+        buildDownloadFilename(imageResult.displayName, imageResult.extension),
+      );
     } catch (error) {
       console.error(error);
       alert("이미지를 다운로드하지 못했어요.");
@@ -368,7 +372,10 @@ export default function UploadResultPage() {
     setIsDownloadingVideo(true);
     try {
       const url = await getMediaDownloadUrl(videoResult.mediaId);
-      await downloadFromUrl(url);
+      await downloadFromUrl(
+        url,
+        buildDownloadFilename(videoResult.displayName, videoResult.extension),
+      );
     } catch (error) {
       console.error(error);
       alert("동영상을 다운로드하지 못했어요.");

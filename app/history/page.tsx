@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Share2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
+import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
 import { getMediaDownloadUrl, listMyMedia } from "@/lib/userMediaApi";
 import type { UserMedia, UserMediaType } from "@/lib/api-types";
@@ -22,6 +23,22 @@ function getMediaTitle(item: UserMedia) {
 
 function getMediaTypeLabel(type: UserMediaType) {
   return type === "PHOTO" ? "사진" : "영상";
+}
+
+function getMediaExtension(item: UserMedia) {
+  const candidates = [item.downloadUrl, item.originalFileName, item.s3Key];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    const normalized = candidate.split("?")[0] ?? candidate;
+    const match = normalized.match(/\.([a-z0-9]+)$/i);
+    if (match?.[1]) {
+      return match[1].toLowerCase();
+    }
+  }
+
+  return item.mediaType === "VIDEO" ? "mp4" : "png";
 }
 
 export default function HistoryPage() {
@@ -92,7 +109,10 @@ export default function HistoryPage() {
 
     try {
       const url = await getMediaDownloadUrl(item.mediaId);
-      await downloadFromUrl(url);
+      await downloadFromUrl(
+        url,
+        buildDownloadFilename(getMediaTitle(item), getMediaExtension(item)),
+      );
     } catch (downloadError) {
       console.error(downloadError);
       alert("다운로드에 실패했어요.");

@@ -27,8 +27,14 @@ export function buildDefaultDisplayName(frameName: string, kind: GeneratedFourcu
 
 export function buildDownloadFilename(
   displayName: string,
-  extension: GeneratedFourcutAsset["extension"],
+  extension: string,
 ) {
   const safeName = sanitizeDisplayName(displayName, "harucut");
-  return `${safeName}.${extension}`;
+  const normalizedExtension = extension.replace(/^\./, "").toLowerCase();
+
+  if (safeName.toLowerCase().endsWith(`.${normalizedExtension}`)) {
+    return safeName;
+  }
+
+  return `${safeName}.${normalizedExtension}`;
 }
