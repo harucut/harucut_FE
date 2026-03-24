@@ -113,7 +113,7 @@ function SignupPageContent() {
       description="이메일 인증 후 계정을 만들어 보세요."
       footer={
         <>
-          <SocialLoginSection mode="signup" />
+          <SocialLoginSection mode="signup" redirectTo={redirectTo} />
           <p className="mt-2 text-center text-[11px] text-zinc-400">
             이미 계정이 있으신가요?{" "}
             <Link

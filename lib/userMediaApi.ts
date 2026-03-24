@@ -25,3 +25,11 @@ export async function getMediaDownloadUrl(mediaId: number) {
   );
   return res.data.data;
 }
+
+export async function updateMediaDisplayName(mediaId: number, displayName: string) {
+  const res = await clientApi.patch<ApiEnvelope<UserMedia>>(
+    `/api/client/user/media/${mediaId}/display-name`,
+    { displayName },
+  );
+  return res.data.data;
+}

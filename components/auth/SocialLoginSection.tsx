@@ -4,14 +4,22 @@ import { loginKakao, loginNaver } from "@/lib/authLogin";
 
 type Props = {
   mode?: "login" | "signup";
+  redirectTo?: string | null;
 };
 
-export function SocialLoginSection({ mode = "login" }: Props) {
+export function SocialLoginSection({
+  mode = "login",
+  redirectTo,
+}: Props) {
   const labelText =
-    mode === "login" ? "또는 소셜 계정으로 로그인" : "또는 소셜 계정으로 가입";
+    mode === "login"
+      ? "또는 소셜 계정으로 로그인"
+      : "또는 소셜 계정으로 시작";
 
   const kakaoText =
-    mode === "login" ? "카카오 계정으로 계속하기" : "카카오 계정으로 시작하기";
+    mode === "login"
+      ? "카카오 계정으로 계속하기"
+      : "카카오 계정으로 시작하기";
 
   const naverText =
     mode === "login" ? "네이버로 계속하기" : "네이버로 시작하기";
@@ -25,19 +33,17 @@ export function SocialLoginSection({ mode = "login" }: Props) {
       </div>
 
       <div className="flex flex-col gap-2 text-[11px]">
-        {/* 카카오 버튼 */}
         <button
           type="button"
-          onClick={loginKakao}
+          onClick={() => loginKakao(redirectTo)}
           className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] text-zinc-900 hover:bg-[#FDE000]"
         >
           <span>{kakaoText}</span>
         </button>
 
-        {/* 네이버 버튼 */}
         <button
           type="button"
-          onClick={loginNaver}
+          onClick={() => loginNaver(redirectTo)}
           className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#03C75A] text-white hover:bg-[#02b456]"
         >
           <span>{naverText}</span>

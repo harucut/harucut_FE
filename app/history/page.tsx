@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Download, Share2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
+import { buildDownloadFilename } from "@/lib/fourcutOutput";
+import { shareOrCopyLink } from "@/lib/share";
 import { getMediaDownloadUrl, listMyMedia } from "@/lib/userMediaApi";
 import type { UserMedia, UserMediaType } from "@/lib/api-types";
 
@@ -22,12 +25,30 @@ function getMediaTypeLabel(type: UserMediaType) {
   return type === "PHOTO" ? "사진" : "영상";
 }
 
+function getMediaExtension(item: UserMedia) {
+  const candidates = [item.downloadUrl, item.originalFileName, item.s3Key];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    const normalized = candidate.split("?")[0] ?? candidate;
+    const match = normalized.match(/\.([a-z0-9]+)$/i);
+    if (match?.[1]) {
+      return match[1].toLowerCase();
+    }
+  }
+
+  return item.mediaType === "VIDEO" ? "mp4" : "png";
+}
+
 export default function HistoryPage() {
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [items, setItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [sharingId, setSharingId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,10 +86,22 @@ export default function HistoryPage() {
     };
   }, [filter]);
 
+  useEffect(() => {
+    if (!feedback) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setFeedback(null);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [feedback]);
+
   const emptyText = useMemo(() => {
-    if (filter === "PHOTO") return "저장된 사진 기록이 없어요.";
-    if (filter === "VIDEO") return "저장된 영상 기록이 없어요.";
-    return "저장된 기록이 없어요.";
+    if (filter === "PHOTO") return "저장한 사진 기록이 아직 없어요.";
+    if (filter === "VIDEO") return "저장한 영상 기록이 아직 없어요.";
+    return "저장한 기록이 아직 없어요.";
   }, [filter]);
 
   const handleDownload = async (item: UserMedia) => {
@@ -76,12 +109,39 @@ export default function HistoryPage() {
 
     try {
       const url = await getMediaDownloadUrl(item.mediaId);
-      await downloadFromUrl(url);
+      await downloadFromUrl(
+        url,
+        buildDownloadFilename(getMediaTitle(item), getMediaExtension(item)),
+      );
     } catch (downloadError) {
       console.error(downloadError);
       alert("다운로드에 실패했어요.");
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleShare = async (item: UserMedia) => {
+    setSharingId(item.mediaId);
+
+    try {
+      const url = await getMediaDownloadUrl(item.mediaId);
+      const result = await shareOrCopyLink({
+        title: `${getMediaTitle(item)} | 하루컷`,
+        text: `${getMediaTypeLabel(item.mediaType)} 공유 링크`,
+        url,
+      });
+
+      if (result === "copied") {
+        setFeedback("공유 링크를 복사했어요.");
+      } else if (result === "shared") {
+        setFeedback("공유 창을 열었어요.");
+      }
+    } catch (shareError) {
+      console.error(shareError);
+      alert("공유 링크를 준비하지 못했어요.");
+    } finally {
+      setSharingId(null);
     }
   };
 
@@ -92,8 +152,16 @@ export default function HistoryPage() {
           title="사진 기록"
           backHref="/home"
           backLabel="홈으로"
-          description={<>내가 만든 사진과 영상을 다시 확인하고 다운로드할 수 있어요.</>}
+          description={
+            <>내가 만든 사진과 영상을 다시 확인하고 내려받거나 공유할 수 있어요.</>
+          }
         />
+
+        {feedback ? (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[11px] text-emerald-200">
+            {feedback}
+          </div>
+        ) : null}
 
         <section className="flex gap-2">
           {(["ALL", "PHOTO", "VIDEO"] as const).map((value) => (
@@ -116,7 +184,7 @@ export default function HistoryPage() {
 
         {loading ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-[11px] text-zinc-400">불러오는 중...</p>
+            <p className="text-[11px] text-zinc-400">기록을 불러오는 중이에요.</p>
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -149,8 +217,8 @@ export default function HistoryPage() {
                         />
                       )
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-[10px] text-zinc-500">
-                        미리보기를 준비 중이에요
+                      <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-zinc-500">
+                        미리보기를 준비하는 중이에요.
                       </div>
                     )}
                   </div>
@@ -170,16 +238,31 @@ export default function HistoryPage() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(item)}
-                      disabled={downloadingId === item.mediaId}
-                      className="rounded-full bg-emerald-500 px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-                    >
-                      {downloadingId === item.mediaId
-                        ? "다운로드 중..."
-                        : "다시 다운로드"}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(item)}
+                        disabled={downloadingId === item.mediaId}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-full bg-emerald-500 px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>
+                          {downloadingId === item.mediaId ? "다운로드 중..." : "다운로드"}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleShare(item)}
+                        disabled={sharingId === item.mediaId}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-900 disabled:opacity-50"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        <span>
+                          {sharingId === item.mediaId ? "링크 준비 중..." : "공유하기"}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </article>

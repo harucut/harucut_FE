@@ -1,0 +1,40 @@
+"use client";
+
+export type GeneratedFourcutAsset = {
+  mediaId: number;
+  kind: "IMAGE" | "VIDEO";
+  objectUrl: string;
+  downloadUrl?: string;
+  extension: "png" | "mp4" | "webm";
+  displayName: string;
+};
+
+export function sanitizeDisplayName(input: string, fallback: string) {
+  const normalized = input
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/\.+$/g, "");
+
+  return normalized || fallback;
+}
+
+export function buildDefaultDisplayName(frameName: string, kind: GeneratedFourcutAsset["kind"]) {
+  const safeFrameName = sanitizeDisplayName(frameName, "harucut").replace(/\s+/g, "_");
+  void kind;
+  return `${safeFrameName}-${Date.now()}`;
+}
+
+export function buildDownloadFilename(
+  displayName: string,
+  extension: string,
+) {
+  const safeName = sanitizeDisplayName(displayName, "harucut");
+  const normalizedExtension = extension.replace(/^\./, "").toLowerCase();
+
+  if (safeName.toLowerCase().endsWith(`.${normalizedExtension}`)) {
+    return safeName;
+  }
+
+  return `${safeName}.${normalizedExtension}`;
+}

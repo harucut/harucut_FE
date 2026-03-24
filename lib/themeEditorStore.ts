@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { STICKERS } from "@/constants/stickers.generated";
+import { removeImageBackground } from "@/lib/backgroundRemoval";
 import {
   PRESIGNED_UPLOAD_TYPES,
   uploadToS3WithPresigned,
@@ -93,6 +94,10 @@ type State = {
   addPhotoAssets: (
     files: FileList,
   ) => Promise<{ added: number; failed: number }>;
+  removePhotoBackground: (assetId: string) => Promise<{
+    ok: boolean;
+    reason?: "NOT_FOUND" | "PROCESS_FAILED";
+  }>;
 
   removePhotoAsset: (assetId: string) => {
     ok: boolean;
@@ -219,6 +224,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           src: objectUrl,
           name: file.name,
           s3Key: key,
+          file,
         });
       } catch {
         failed += 1;
@@ -236,6 +242,50 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   // 사용 중인 사진은 삭제 불가
+  removePhotoBackground: async (assetId) => {
+    const state = get();
+    const asset = state.assets.photos.find((photo) => photo.id === assetId);
+    if (!asset?.file) {
+      return { ok: false as const, reason: "NOT_FOUND" as const };
+    }
+
+    try {
+      const processedFile = await removeImageBackground(asset.file);
+      const { objectUrl, key } = await uploadToS3WithPresigned({
+        file: processedFile,
+        type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+        isTemp: true,
+      });
+
+      set((current) => ({
+        assets: {
+          ...current.assets,
+          photos: current.assets.photos.map((photo) =>
+            photo.id === assetId
+              ? {
+                  ...photo,
+                  src: objectUrl,
+                  name: processedFile.name,
+                  s3Key: key,
+                  file: processedFile,
+                }
+              : photo,
+          ),
+        },
+        components: current.components.map((component) =>
+          component.type === "PHOTO" && component.source === asset.src
+            ? { ...component, source: objectUrl }
+            : component,
+        ),
+      }));
+
+      return { ok: true as const };
+    } catch (error) {
+      console.error(error);
+      return { ok: false as const, reason: "PROCESS_FAILED" as const };
+    }
+  },
+
   removePhotoAsset: (assetId) => {
     const state = get();
     const asset = state.assets.photos.find((p) => p.id === assetId);
