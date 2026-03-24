@@ -28,15 +28,15 @@ export function PageHeader({
     <>
       <header className="flex items-center justify-between">
         <div className="flex flex-col">
-          {showBrand && (
+          {showBrand ? (
             <Link
               href={brandHref}
               className="text-[11px] tracking-[0.16em] text-zinc-500 transition-colors hover:text-white"
-              aria-label="Home"
+              aria-label="Harucut home"
             >
-              하루컷
+              HARUCUT
             </Link>
-          )}
+          ) : null}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
         </div>
 
@@ -61,7 +61,9 @@ export function PageHeader({
         ) : null}
       </header>
 
-      {description ? <p className="text-xs text-zinc-500">{description}</p> : null}
+      {description ? (
+        <p className="text-xs text-zinc-500">{description}</p>
+      ) : null}
     </>
   );
 }

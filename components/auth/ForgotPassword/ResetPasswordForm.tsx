@@ -8,10 +8,8 @@ type Props = {
   setNewPassword: (v: string) => void;
   confirmPassword: string;
   setConfirmPassword: (v: string) => void;
-
   isSubmitting: boolean;
   errors: Errors;
-
   onSubmit: () => void;
   onRestart: () => void;
   onGoLogin: () => void;
@@ -38,7 +36,7 @@ export function ResetPasswordForm({
     >
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
         <p className="text-[10px] text-zinc-400">
-          인증 완료. 새 비밀번호를 설정해 주세요.
+          인증이 완료되었어요. 새 비밀번호를 입력해 주세요.
         </p>
       </div>
 
@@ -48,7 +46,7 @@ export function ResetPasswordForm({
         type="password"
         label="새 비밀번호"
         autoComplete="new-password"
-        placeholder="새 비밀번호"
+        placeholder="새 비밀번호를 입력해 주세요"
         required
         value={newPassword}
         onChange={(e) => setNewPassword(e.target.value)}
@@ -61,7 +59,7 @@ export function ResetPasswordForm({
         type="password"
         label="새 비밀번호 확인"
         autoComplete="new-password"
-        placeholder="새 비밀번호 확인"
+        placeholder="새 비밀번호를 한 번 더 입력해 주세요"
         required
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -93,7 +91,7 @@ export function ResetPasswordForm({
           onClick={onGoLogin}
           className="text-zinc-400 hover:text-zinc-200"
         >
-          로그인으로
+          로그인으로 이동
         </button>
       </div>
     </form>

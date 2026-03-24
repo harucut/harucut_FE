@@ -1,3 +1,6 @@
+"use client";
+
+import { Eye, EyeOff } from "lucide-react";
 import { useMemo, useState, type InputHTMLAttributes } from "react";
 
 type AuthFieldProps = {
@@ -38,21 +41,22 @@ export function AuthField({
           {...inputProps}
         />
 
-        {isPassword && (
+        {isPassword ? (
           <button
             type="button"
-            onClick={() => setShow((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[10px] text-zinc-400 hover:text-zinc-200"
+            onClick={() => setShow((prev) => !prev)}
+            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-900 hover:text-zinc-100"
             aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
+            title={show ? "비밀번호 숨기기" : "비밀번호 보기"}
           >
-            {show ? "숨김" : "보기"}
+            {show ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
-        )}
+        ) : null}
       </div>
 
-      {error && (
+      {error ? (
         <p className="text-[10px] leading-relaxed text-red-400">{error}</p>
-      )}
+      ) : null}
     </div>
   );
 }

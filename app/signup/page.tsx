@@ -1,9 +1,8 @@
 "use client";
 
-import { FormEvent, Suspense, useMemo, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
@@ -11,7 +10,7 @@ import {
   SIGNUP_BASE_FIELDS,
   type AuthFieldName,
 } from "@/components/auth/authFields";
-
+import { EmailCodeSection } from "@/components/auth/EmailCodeSection";
 import {
   validateEmail,
   validatePassword,
@@ -25,7 +24,6 @@ import {
   resolveRedirectTarget,
 } from "@/lib/redirect";
 import { useEmailVerification } from "./_hooks/useEmailVerification";
-import { EmailCodeSection } from "@/components/auth/EmailCodeSection";
 
 type SignupFieldName = Extract<
   AuthFieldName,
@@ -51,30 +49,21 @@ function SignupPageContent() {
 
   const emailVerification = useEmailVerification();
 
-  const emailLocked = useMemo(
-    () =>
-      emailVerification.isEmailVerified &&
-      Boolean(emailVerification.verifiedEmail),
-    [emailVerification.isEmailVerified, emailVerification.verifiedEmail]
-  );
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrors({});
 
     const formData = new FormData(e.currentTarget);
-
     const emailFromState = email.trim();
     const verifiedEmail = (emailVerification.verifiedEmail ?? "").trim();
-
     const password = String(formData.get("password") || "");
     const confirmPassword = String(formData.get("confirmPassword") || "");
     const username = String(formData.get("username") || "").trim();
 
     const nextErrors: SignupErrors = {};
 
-    const emailError = validateEmail(email);
+    const emailError = validateEmail(emailFromState);
     if (emailError) nextErrors.email = emailError;
 
     const passwordError = validatePassword(password);
@@ -83,7 +72,7 @@ function SignupPageContent() {
     if (!confirmPassword) {
       nextErrors.confirmPassword = "비밀번호 확인을 입력해 주세요.";
     } else if (password !== confirmPassword) {
-      nextErrors.confirmPassword = "비밀번호가 일치하지 않습니다.";
+      nextErrors.confirmPassword = "비밀번호가 서로 일치하지 않습니다.";
     }
 
     const usernameError = validateUsername(username);
@@ -92,7 +81,7 @@ function SignupPageContent() {
     if (!emailVerification.isEmailVerified) {
       nextErrors.email = "이메일 인증을 완료해 주세요.";
     } else if (verifiedEmail !== emailFromState) {
-      nextErrors.email = "인증한 이메일과 입력한 이메일이 달라요.";
+      nextErrors.email = "인증한 이메일과 현재 입력한 이메일이 달라요.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -111,7 +100,7 @@ function SignupPageContent() {
     } catch (error) {
       console.error(error);
       setErrors({
-        common: "회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        common: "회원가입에 실패했어요. 잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setIsSubmitting(false);
@@ -121,12 +110,12 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
-      description="이메일 인증 후 계정을 만들 수 있어요."
+      description="이메일 인증 후 계정을 만들어 보세요."
       footer={
         <>
-          <SocialLoginSection mode="signup" />
-          <p className="text-center text-[11px] text-zinc-400 mt-2">
-            이미 계정이 있다면{" "}
+          <SocialLoginSection mode="signup" redirectTo={redirectTo} />
+          <p className="mt-2 text-center text-[11px] text-zinc-400">
+            이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}
               className="font-medium text-emerald-400 underline underline-offset-4"
@@ -147,20 +136,20 @@ function SignupPageContent() {
         <EmailCodeSection
           email={email}
           setEmail={setEmail}
+          onEmailChange={emailVerification.handleEmailChange}
           code={emailVerification.emailCode}
           setCode={emailVerification.setEmailCode}
-          emailLocked={emailLocked}
           isSending={emailVerification.isSendingCode}
           isVerifying={emailVerification.isVerifyingCode}
           isVerified={emailVerification.isEmailVerified}
+          codeExpiresAt={emailVerification.codeExpiresAt}
           emailError={errors.email ?? emailVerification.emailError}
           codeError={emailVerification.codeError}
           onSend={emailVerification.sendCode}
           onVerify={emailVerification.verifyCode}
-          verifiedText="이메일 인증 완료!"
+          verifiedText="이메일 인증이 완료되었어요."
         />
 
-        {/* 비밀번호 */}
         {SIGNUP_BASE_FIELDS.map((field) => (
           <AuthField
             key={field.id}
@@ -178,7 +167,7 @@ function SignupPageContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-full bg-emerald-500 py-2.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-full bg-emerald-500 py-2.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "가입 중..." : "회원가입"}
         </button>

@@ -30,6 +30,8 @@ export type UserMedia = {
   mediaId: number;
   mediaType: UserMediaType;
   s3Key: string;
+  displayName?: string | null;
+  displayname?: string | null;
   downloadUrl?: string;
   originalS3Key?: string;
   originalFileName?: string;
