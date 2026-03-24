@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
@@ -10,13 +10,17 @@ import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function UploadFramePage() {
   const router = useRouter();
-  const { frameId, setFrameId, setDraftId } = useUploadSession();
+  const { frameId, setFrameId, setDraftId, resetAll } = useUploadSession();
   const drafts = useThemeDraftStore((s) => s.drafts);
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     frameId ?? "classic-4",
   );
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    resetAll();
+  }, [resetAll]);
 
   const allowedDraftId =
     selectedDraftId &&

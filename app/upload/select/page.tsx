@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
-import { useUploadSession } from "@/lib/uploadSessionStore";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { SUPPORTED_FOURCUT_ACCEPT } from "@/lib/presignedUploadApi";
+import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
+import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import { useUploadSession } from "@/lib/uploadSessionStore";
+import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
 
 export default function UploadSelectPage() {
   const router = useRouter();
@@ -16,14 +19,19 @@ export default function UploadSelectPage() {
     draftId,
     media,
     selectedIndexes,
+    borderColor,
+    includeVideo,
     toggleSelect,
     resetAll,
     addMedia,
+    setBorderColor,
+    setIncludeVideo,
   } = useUploadSession();
-  const draft = useThemeDraftStore((s) =>
-    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
+  const draft = useThemeDraftStore((state) =>
+    draftId ? state.drafts.find((item) => item.id === draftId) : undefined,
   );
-
+  const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
+  const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -32,9 +40,33 @@ export default function UploadSelectPage() {
     }
   }, [frameId, router]);
 
+  const themeData =
+    draft && frameId && draft.data.frameId === frameId ? draft.data : null;
+  const hasCustomFrame = Boolean(themeData);
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
+
+  const selectedMedia = useMemo(
+    () => selectedIndexes.map((index) => (index == null ? null : media[index] ?? null)),
+    [media, selectedIndexes],
+  );
+  const videoEligible = useMemo(
+    () => selectedMedia.some((item) => item?.type === "video"),
+    [selectedMedia],
+  );
+  const remainingVideoConversions = Math.max(
+    videoConversionLimit - usedVideoConversions,
+    0,
+  );
+
+  useEffect(() => {
+    if ((!videoEligible || remainingVideoConversions === 0) && includeVideo) {
+      setIncludeVideo(false);
+    }
+  }, [includeVideo, remainingVideoConversions, setIncludeVideo, videoEligible]);
+
   const selectedCount = useMemo(
-    () => selectedIndexes.filter((i) => i != null).length,
-    [selectedIndexes]
+    () => selectedIndexes.filter((index) => index != null).length,
+    [selectedIndexes],
   );
 
   const handleClickUpload = () => {
@@ -52,32 +84,36 @@ export default function UploadSelectPage() {
         if (file.type.startsWith("image/")) {
           return { type: "image" as const, src: url };
         }
+
         if (file.type.startsWith("video/")) {
           return { type: "video" as const, src: url };
         }
-        // 이미지/비디오 아니면 무시
+
         return null;
       })
-      .filter((v): v is FrameMedia => v !== null);
+      .filter((value): value is FrameMedia => value !== null);
 
     if (items.length === 0) return;
 
-    addMedia(items); // 기존 media 뒤에 누적
+    addMedia(items);
+    e.target.value = "";
   };
 
   const handleNext = () => {
     if (selectedCount !== 4) return;
-    router.push("/upload/result"); // 나중에 구현할 페이지
+    router.push("/upload/result");
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
+    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
       <div className="mx-auto flex w-full max-w-md flex-col gap-5">
         <PageHeader
-          title="업로드 · 사진 선택"
+          title="업로드할 사진 선택"
           backHref="/upload"
           backLabel="프레임 다시 선택"
+          description="사진이나 영상을 올린 뒤 프레임에 넣을 4장을 골라 주세요."
         />
+
         <FrameSelectPanel
           frameId={frameId ?? null}
           media={media}
@@ -85,19 +121,16 @@ export default function UploadSelectPage() {
           maxSelect={4}
           guideText={
             media.length === 0
-              ? "먼저 사진이나 동영상을 업로드해 주세요."
-              : `업로드한 미디어 ${
-                  media.length
-                }개 중에서 최대 ${4}개를 골라주세요.`
+              ? "먼저 사진이나 영상을 업로드해 주세요."
+              : `업로드한 미디어 ${media.length}개 중에서 4개를 골라 주세요.`
           }
-          emptyStateText="아직 업로드된 사진이 없어요. 아래 버튼으로 사진을 추가해 주세요."
-          nextButtonLabel="다음 단계로 (프레임 합성 예정)"
+          emptyStateText="아직 업로드한 사진이 없어요. 아래 버튼으로 사진이나 영상을 추가해 주세요."
+          nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}
           onReset={resetAll}
           onNext={handleNext}
-          themeData={
-            draft && frameId && draft.data.frameId === frameId ? draft.data : null
-          }
+          themeData={themeData}
+          borderColor={effectiveBorderColor}
           renderExtraControls={() => (
             <>
               <button
@@ -105,7 +138,7 @@ export default function UploadSelectPage() {
                 onClick={handleClickUpload}
                 className="h-9 rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-100 hover:bg-zinc-700"
               >
-                사진 업로드하기
+                사진 또는 영상 추가하기
               </button>
 
               <input
@@ -118,8 +151,18 @@ export default function UploadSelectPage() {
               />
 
               <p className="text-[10px] text-zinc-500">
-                여러 장 업로드한 뒤, 인생네컷에 넣을 사진 4장을 골라보세요.
+                여러 장을 한 번에 올린 뒤 프레임에 넣을 4장을 선택할 수 있어요.
               </p>
+
+              <FrameOutputOptionsPanel
+                borderColor={borderColor}
+                onBorderColorChange={setBorderColor}
+                includeVideo={includeVideo}
+                onIncludeVideoChange={setIncludeVideo}
+                hasCustomFrame={hasCustomFrame}
+                videoEligible={videoEligible}
+                remainingVideoConversions={remainingVideoConversions}
+              />
             </>
           )}
         />
