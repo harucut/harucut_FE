@@ -1,8 +1,10 @@
 "use client";
 
-import { ReactNode, useMemo } from "react";
-import { type FrameId } from "@/constants/frames";
+import type { ReactNode } from "react";
+import { useMemo } from "react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
+import type { FrameId } from "@/constants/frames";
+import type { FourcutFilterId } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 type FrameSelectPanelProps = {
@@ -20,6 +22,7 @@ type FrameSelectPanelProps = {
   renderExtraControls?: () => ReactNode;
   themeData?: ThemeExportJson | null;
   borderColor?: string;
+  outputFilter?: FourcutFilterId;
 };
 
 export function FrameSelectPanel({
@@ -37,6 +40,7 @@ export function FrameSelectPanel({
   renderExtraControls,
   themeData = null,
   borderColor,
+  outputFilter = "NONE",
 }: FrameSelectPanelProps) {
   const baseItems: FrameMedia[] = useMemo(() => {
     if (media && media.length) return media;
@@ -68,6 +72,7 @@ export function FrameSelectPanel({
               media={slotMedia}
               theme={themeData}
               borderColor={borderColor}
+              outputFilter={outputFilter}
             />
           </div>
           <p className="text-center text-[10px] text-zinc-500">

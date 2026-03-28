@@ -18,10 +18,12 @@ export default function ShootSelectPage() {
     shots,
     selectedIndexes,
     borderColor,
+    outputFilter,
     includeVideo,
     toggleSelect,
     reset,
     setBorderColor,
+    setOutputFilter,
     setIncludeVideo,
   } = useShootSession();
   const draft = useThemeDraftStore((state) =>
@@ -93,10 +95,13 @@ export default function ShootSelectPage() {
           onNext={handleNext}
           themeData={themeData}
           borderColor={effectiveBorderColor}
+          outputFilter={outputFilter}
           renderExtraControls={() => (
             <FrameOutputOptionsPanel
               borderColor={borderColor}
               onBorderColorChange={setBorderColor}
+              outputFilter={outputFilter}
+              onOutputFilterChange={setOutputFilter}
               includeVideo={includeVideo}
               onIncludeVideoChange={setIncludeVideo}
               hasCustomFrame={hasCustomFrame}

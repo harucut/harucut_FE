@@ -20,11 +20,13 @@ export default function UploadSelectPage() {
     media,
     selectedIndexes,
     borderColor,
+    outputFilter,
     includeVideo,
     toggleSelect,
     resetAll,
     addMedia,
     setBorderColor,
+    setOutputFilter,
     setIncludeVideo,
   } = useUploadSession();
   const draft = useThemeDraftStore((state) =>
@@ -73,8 +75,8 @@ export default function UploadSelectPage() {
     fileInputRef.current?.click();
   };
 
-  const handleChangeFiles = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const handleChangeFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
     if (!files || files.length === 0) return;
 
     const items: FrameMedia[] = Array.from(files)
@@ -96,7 +98,7 @@ export default function UploadSelectPage() {
     if (items.length === 0) return;
 
     addMedia(items);
-    e.target.value = "";
+    event.target.value = "";
   };
 
   const handleNext = () => {
@@ -131,6 +133,7 @@ export default function UploadSelectPage() {
           onNext={handleNext}
           themeData={themeData}
           borderColor={effectiveBorderColor}
+          outputFilter={outputFilter}
           renderExtraControls={() => (
             <>
               <button
@@ -157,6 +160,8 @@ export default function UploadSelectPage() {
               <FrameOutputOptionsPanel
                 borderColor={borderColor}
                 onBorderColorChange={setBorderColor}
+                outputFilter={outputFilter}
+                onOutputFilterChange={setOutputFilter}
                 includeVideo={includeVideo}
                 onIncludeVideoChange={setIncludeVideo}
                 hasCustomFrame={hasCustomFrame}
