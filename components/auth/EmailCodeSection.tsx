@@ -52,7 +52,6 @@ export function EmailCodeSection({
   useEffect(() => {
     if (!codeExpiresAt || isVerified) return;
 
-    setNow(Date.now());
     const intervalId = window.setInterval(() => {
       setNow(Date.now());
     }, 1000);
