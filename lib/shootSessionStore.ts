@@ -8,6 +8,10 @@ import {
   toggleIndexInSlots,
   type SelectionSlot,
 } from "@/lib/selection";
+import {
+  DEFAULT_FOURCUT_FILTER,
+  type FourcutFilterId,
+} from "@/lib/frameFilters";
 import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 
 export type ShotItem = {
@@ -21,6 +25,7 @@ type ShootSessionState = {
   shots: ShotItem[];
   selectedIndexes: SelectionSlot[];
   borderColor: string;
+  outputFilter: FourcutFilterId;
   includeVideo: boolean;
   imageResult: GeneratedFourcutAsset | null;
   videoResult: GeneratedFourcutAsset | null;
@@ -28,6 +33,7 @@ type ShootSessionState = {
   setFrameId: (id: FrameId) => void;
   setDraftId: (id: string | null) => void;
   setBorderColor: (color: string) => void;
+  setOutputFilter: (filter: FourcutFilterId) => void;
   setIncludeVideo: (value: boolean) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
   setVideoResult: (asset: GeneratedFourcutAsset | null) => void;
@@ -56,6 +62,7 @@ const initialState: Pick<
   | "shots"
   | "selectedIndexes"
   | "borderColor"
+  | "outputFilter"
   | "includeVideo"
   | "imageResult"
   | "videoResult"
@@ -65,6 +72,7 @@ const initialState: Pick<
   shots: [],
   selectedIndexes: createEmptySlots(),
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
+  outputFilter: DEFAULT_FOURCUT_FILTER,
   includeVideo: false,
   imageResult: null,
   videoResult: null,
@@ -90,6 +98,13 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   setBorderColor: (borderColor) =>
     set({
       borderColor,
+      imageResult: null,
+      videoResult: null,
+    }),
+
+  setOutputFilter: (outputFilter) =>
+    set({
+      outputFilter,
       imageResult: null,
       videoResult: null,
     }),

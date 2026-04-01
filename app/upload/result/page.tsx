@@ -38,6 +38,7 @@ export default function UploadResultPage() {
     media,
     selectedIndexes,
     borderColor,
+    outputFilter,
     includeVideo,
     imageResult,
     videoResult,
@@ -163,6 +164,7 @@ export default function UploadResultPage() {
             layout: currentLayout,
             borderColor: effectiveBorderColor,
             sources: imageSources,
+            outputFilter,
             theme: themeData,
             canvas: canvasRef.current ?? undefined,
           });
@@ -225,6 +227,7 @@ export default function UploadResultPage() {
           layout: currentLayout,
           borderColor: effectiveBorderColor,
           sources: videoSources,
+          outputFilter,
           theme: themeData,
           seconds: MAX_SECONDS,
           canvas: canvasRef.current ?? undefined,
@@ -271,6 +274,7 @@ export default function UploadResultPage() {
     imageResult,
     imageSources,
     layout,
+    outputFilter,
     remainingVideoConversions,
     selectedCount,
     setImageResult,
@@ -396,6 +400,7 @@ export default function UploadResultPage() {
           frameId={frameId}
           media={previewImage}
           borderColor={effectiveBorderColor}
+          outputFilter={outputFilter}
           theme={themeData}
         />
 
@@ -404,6 +409,7 @@ export default function UploadResultPage() {
             frameId={frameId}
             media={previewVideo}
             borderColor={effectiveBorderColor}
+            outputFilter={outputFilter}
             theme={themeData}
           />
         ) : null}
