@@ -1,7 +1,12 @@
-import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import type { FrameId } from "@/constants/frames";
-import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { CSSProperties } from "react";
 import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
+import type { FrameId } from "@/constants/frames";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import {
+  getFourcutFilterCssValue,
+  type FourcutFilterId,
+} from "@/lib/frameFilters";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type FrameMedia = {
   type: "image" | "video";
@@ -10,33 +15,31 @@ export type FrameMedia = {
 
 type FramePreviewProps = {
   frameId: FrameId;
-  // selected?: boolean;
   className?: string;
   media?: (FrameMedia | null)[];
   images?: (string | null)[];
   borderColor?: string;
   theme?: ThemeExportJson | null;
+  outputFilter?: FourcutFilterId;
 };
 
 export function FramePreview({
   frameId,
-  // selected,
   className = "",
   media,
   images,
   borderColor,
   theme,
+  outputFilter = "NONE",
 }: FramePreviewProps) {
   const layout = FRAME_LAYOUTS[frameId];
 
   if (!layout) return null;
   const { totalWidth, totalHeight, slots, full } = layout;
+  const previewFilter = getFourcutFilterCssValue(outputFilter);
 
   const outer = [
     "rounded-lg border bg-zinc-900/80 p-2 transition-all",
-    // selected
-    //   ? "border-emerald-400 shadow-[0_0_0_1px_rgba(16,185,129,0.6)]"
-    //   : "border-zinc-700",
     full,
     className,
   ].join(" ");
@@ -57,11 +60,16 @@ export function FramePreview({
         const widthPct = (slot.width / totalWidth) * 100;
         const heightPct = (slot.height / totalHeight) * 100;
 
-        const baseStyle: React.CSSProperties = {
+        const baseStyle: CSSProperties = {
           left: `${leftPct}%`,
           top: `${topPct}%`,
           width: `${widthPct}%`,
           height: `${heightPct}%`,
+        };
+
+        const mediaStyle: CSSProperties = {
+          ...baseStyle,
+          filter: previewFilter,
         };
 
         const mediaItem: FrameMedia | null =
@@ -77,7 +85,7 @@ export function FramePreview({
                 key={idx}
                 src={mediaItem.src}
                 className="absolute rounded-md object-cover"
-                style={baseStyle}
+                style={mediaStyle}
                 autoPlay
                 loop
                 muted
@@ -85,6 +93,7 @@ export function FramePreview({
               />
             );
           }
+
           return (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -92,14 +101,13 @@ export function FramePreview({
               src={mediaItem.src}
               alt={`frame-slot-${idx + 1}`}
               className="absolute rounded-md object-cover"
-              style={baseStyle}
+              style={mediaStyle}
             />
           );
         }
 
-        // 아직 선택 안 된 슬롯은 회색 박스로
         return (
-          <div key={idx} className={slotBase + " absolute"} style={baseStyle} />
+          <div key={idx} className={`${slotBase} absolute`} style={baseStyle} />
         );
       })}
 

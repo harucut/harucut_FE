@@ -1,5 +1,9 @@
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { loadImage, loadVideo } from "@/lib/canvas/loaders";
+import {
+  getFourcutFilterCanvasValue,
+  type FourcutFilterId,
+} from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type FrameLayout = {
@@ -18,14 +22,12 @@ type SlotDrawable =
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
 
-// 2D 컨텍스트 확보 (없으면 에러)
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context not available");
   return ctx;
 }
 
-// 캔버스를 PNG Blob으로 변환
 function toPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -35,7 +37,6 @@ function toPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
-/** Blob 다운로드 유틸 */
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -82,17 +83,17 @@ export async function downloadFromUrl(url: string, filename?: string) {
   }
 }
 
-// 슬롯 소스를 실제 이미지/비디오 요소로 로드
 async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
-    sources.map(async (s) => {
-      if (s.type === "video") {
-        const v = await loadVideo(s.src);
-        v.currentTime = 0;
-        return { kind: "video", el: v };
+    sources.map(async (source) => {
+      if (source.type === "video") {
+        const video = await loadVideo(source.src);
+        video.currentTime = 0;
+        return { kind: "video", el: video };
       }
-      const img = await loadImage(s.src);
-      return { kind: "image", el: img };
+
+      const image = await loadImage(source.src);
+      return { kind: "image", el: image };
     }),
   );
 }
@@ -103,17 +104,17 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
 
   const sources = Array.from(
     new Set(
-      theme.components.filter((c) => c.type !== "TEXT").map((c) => c.source),
+      theme.components.filter((component) => component.type !== "TEXT").map((component) => component.source),
     ),
   );
 
   await Promise.all(
     sources.map(async (src) => {
       try {
-        const img = await loadImage(src);
-        map.set(src, img);
+        const image = await loadImage(src);
+        map.set(src, image);
       } catch {
-        // 이미지 1개 로딩 실패는 전체 합성을 깨지 않도록 무시
+        // Ignore individual overlay image load failures and render the rest.
       }
     }),
   );
@@ -128,25 +129,25 @@ function drawThemeOverlay(
 ) {
   if (!theme) return;
 
-  theme.components.forEach((c) => {
-    const scale = c.scale ?? 1;
-    const rotation = c.rotation ?? 0;
-    const opacityRaw = c.styleJson?.opacity;
+  theme.components.forEach((component) => {
+    const scale = component.scale ?? 1;
+    const rotation = component.rotation ?? 0;
+    const opacityRaw = component.styleJson?.opacity;
     const opacity =
       typeof opacityRaw === "number" ? Math.min(1, Math.max(0, opacityRaw)) : 1;
 
-    const cx = c.x + c.width / 2;
-    const cy = c.y + c.height / 2;
+    const centerX = component.x + component.width / 2;
+    const centerY = component.y + component.height / 2;
 
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.translate(cx, cy);
+    ctx.translate(centerX, centerY);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(scale, scale);
-    ctx.translate(-c.width / 2, -c.height / 2);
+    ctx.translate(-component.width / 2, -component.height / 2);
 
-    if (c.type === "TEXT") {
-      const style = c.styleJson ?? {};
+    if (component.type === "TEXT") {
+      const style = component.styleJson ?? {};
       const fontFamily =
         typeof style.fontFamily === "string" ? style.fontFamily : "Pretendard";
       const fontSize =
@@ -157,7 +158,7 @@ function drawThemeOverlay(
           ? style.textAlign
           : "left";
       const lineHeight = Math.max(1, Math.round(fontSize * 1.15));
-      const lines = c.source.split("\n");
+      const lines = component.source.split("\n");
 
       ctx.font = `${fontSize}px ${fontFamily}`;
       ctx.fillStyle = fill;
@@ -165,66 +166,83 @@ function drawThemeOverlay(
       ctx.textAlign = align;
 
       const textX =
-        align === "center" ? c.width / 2 : align === "right" ? c.width : 0;
-      lines.forEach((line, i) => {
-        ctx.fillText(line, textX, i * lineHeight);
+        align === "center"
+          ? component.width / 2
+          : align === "right"
+            ? component.width
+            : 0;
+
+      lines.forEach((line, index) => {
+        ctx.fillText(line, textX, index * lineHeight);
       });
 
       ctx.restore();
       return;
     }
 
-    const img = overlayImages.get(c.source);
-    if (img) {
-      ctx.drawImage(img, 0, 0, c.width, c.height);
+    const image = overlayImages.get(component.source);
+    if (image) {
+      ctx.drawImage(image, 0, 0, component.width, component.height);
     }
 
     ctx.restore();
   });
 }
 
-// 프레임 배경 + 슬롯 이미지/비디오 1회 그리기
 function drawFrameOnce(
   ctx: CanvasRenderingContext2D,
   layout: FrameLayout,
   borderColor: string,
   drawables: SlotDrawable[],
+  outputFilter: FourcutFilterId,
   theme: ThemeExportJson | null,
   overlayImages: OverlayImageMap,
 ) {
   const { totalWidth, totalHeight, slots } = layout;
+  const slotFilter = getFourcutFilterCanvasValue(outputFilter);
 
   ctx.fillStyle = borderColor;
   ctx.fillRect(0, 0, totalWidth, totalHeight);
 
   slots.forEach((slot, index) => {
-    const d = drawables[index];
-    if (!d) return;
+    const drawable = drawables[index];
+    if (!drawable) return;
 
-    if (d.kind === "image") {
-      const iw = d.el.naturalWidth || d.el.width || 1;
-      const ih = d.el.naturalHeight || d.el.height || 1;
-      drawCover(ctx, d.el, iw, ih, slot);
+    ctx.save();
+    ctx.filter = slotFilter;
+
+    if (drawable.kind === "image") {
+      const imageWidth = drawable.el.naturalWidth || drawable.el.width || 1;
+      const imageHeight = drawable.el.naturalHeight || drawable.el.height || 1;
+      drawCover(ctx, drawable.el, imageWidth, imageHeight, slot);
+      ctx.restore();
       return;
     }
 
-    const vw = d.el.videoWidth || 1;
-    const vh = d.el.videoHeight || 1;
-    drawCover(ctx, d.el, vw, vh, slot);
+    const videoWidth = drawable.el.videoWidth || 1;
+    const videoHeight = drawable.el.videoHeight || 1;
+    drawCover(ctx, drawable.el, videoWidth, videoHeight, slot);
+    ctx.restore();
   });
 
   drawThemeOverlay(ctx, theme, overlayImages);
 }
 
-// 선택된 슬롯을 합성해 PNG Blob 생성
 export async function composeFramePng(opts: {
   layout: FrameLayout;
   borderColor: string;
-  sources: FrameSource[]; // 반드시 슬롯 개수만큼
+  sources: FrameSource[];
+  outputFilter?: FourcutFilterId;
   theme?: ThemeExportJson | null;
   canvas?: HTMLCanvasElement;
 }) {
-  const { layout, borderColor, sources, theme = null } = opts;
+  const {
+    layout,
+    borderColor,
+    sources,
+    outputFilter = "NONE",
+    theme = null,
+  } = opts;
 
   if (sources.length !== layout.slots.length) {
     throw new Error("sources length must match slot count");
@@ -238,22 +256,37 @@ export async function composeFramePng(opts: {
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
 
-  drawFrameOnce(ctx, layout, borderColor, drawables, theme, overlayImages);
+  drawFrameOnce(
+    ctx,
+    layout,
+    borderColor,
+    drawables,
+    outputFilter,
+    theme,
+    overlayImages,
+  );
 
   return toPngBlob(canvas);
 }
 
-// 선택된 슬롯을 합성해 WEBM 영상 Blob 생성
 export async function recordFrameWebm(opts: {
   layout: FrameLayout;
   borderColor: string;
-  sources: FrameSource[]; // image/video 섞여도 됨
+  sources: FrameSource[];
+  outputFilter?: FourcutFilterId;
   theme?: ThemeExportJson | null;
   seconds: number;
   fps?: number;
   canvas?: HTMLCanvasElement;
 }) {
-  const { layout, borderColor, sources, theme = null, seconds } = opts;
+  const {
+    layout,
+    borderColor,
+    sources,
+    outputFilter = "NONE",
+    theme = null,
+    seconds,
+  } = opts;
 
   if (sources.length !== layout.slots.length) {
     throw new Error("sources length must match slot count");
@@ -269,13 +302,13 @@ export async function recordFrameWebm(opts: {
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
 
-  // video 재생
   await Promise.all(
     drawables
       .filter(
-        (d): d is { kind: "video"; el: HTMLVideoElement } => d.kind === "video",
+        (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
+          drawable.kind === "video",
       )
-      .map((d) => d.el.play().catch(() => undefined)),
+      .map((drawable) => drawable.el.play().catch(() => undefined)),
   );
 
   const stream = canvas.captureStream(fps);
@@ -288,16 +321,16 @@ export async function recordFrameWebm(opts: {
   const recorder = new MediaRecorder(stream, { mimeType });
   const chunks: BlobPart[] = [];
 
-  recorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) chunks.push(e.data);
+  recorder.ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) chunks.push(event.data);
   };
 
   const stopped = new Promise<Blob>((resolve, reject) => {
     recorder.onstop = () => {
       try {
         resolve(new Blob(chunks, { type: "video/webm" }));
-      } catch (e) {
-        reject(e);
+      } catch (error) {
+        reject(error);
       }
     };
     recorder.onerror = () => reject(new Error("recorder error"));
@@ -311,19 +344,27 @@ export async function recordFrameWebm(opts: {
     const tick = () => {
       const elapsed = (performance.now() - start) / 1000;
 
-      drawFrameOnce(ctx, layout, borderColor, drawables, theme, overlayImages);
+      drawFrameOnce(
+        ctx,
+        layout,
+        borderColor,
+        drawables,
+        outputFilter,
+        theme,
+        overlayImages,
+      );
 
       if (elapsed >= seconds) {
         recorder.stop();
 
         drawables
           .filter(
-            (d): d is { kind: "video"; el: HTMLVideoElement } =>
-              d.kind === "video",
+            (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
+              drawable.kind === "video",
           )
-          .forEach((d) => {
+          .forEach((drawable) => {
             try {
-              d.el.pause();
+              drawable.el.pause();
             } catch {}
           });
 

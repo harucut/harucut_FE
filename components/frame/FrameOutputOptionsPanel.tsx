@@ -1,11 +1,17 @@
 "use client";
 
 import { BORDER_COLORS } from "@/constants/colors";
+import {
+  FOURCUT_FILTERS,
+  type FourcutFilterId,
+} from "@/lib/frameFilters";
 import { normalizeHexColor } from "@/lib/themeBackground";
 
 type FrameOutputOptionsPanelProps = {
   borderColor: string;
   onBorderColorChange: (color: string) => void;
+  outputFilter: FourcutFilterId;
+  onOutputFilterChange: (filter: FourcutFilterId) => void;
   includeVideo: boolean;
   onIncludeVideoChange: (value: boolean) => void;
   hasCustomFrame: boolean;
@@ -16,6 +22,8 @@ type FrameOutputOptionsPanelProps = {
 export function FrameOutputOptionsPanel({
   borderColor,
   onBorderColorChange,
+  outputFilter,
+  onOutputFilterChange,
   includeVideo,
   onIncludeVideoChange,
   hasCustomFrame,
@@ -31,7 +39,7 @@ export function FrameOutputOptionsPanel({
           <div>
             <h2 className="text-xs font-medium text-zinc-200">출력 옵션</h2>
             <p className="mt-1 text-[11px] text-zinc-500">
-              다음 단계에서 이미지와 동영상을 미리 생성한 뒤 다운로드할 수 있어요.
+              다음 단계에서 이미지와 동영상을 준비할 때 이 설정이 그대로 반영돼요.
             </p>
           </div>
 
@@ -75,6 +83,38 @@ export function FrameOutputOptionsPanel({
               </div>
             </div>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div>
+            <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              미리보기와 최종 이미지, 동영상에 같은 필터가 적용돼요.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {FOURCUT_FILTERS.map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => onOutputFilterChange(filter.id)}
+                className={[
+                  "rounded-2xl border px-3 py-2 text-left transition-colors",
+                  outputFilter === filter.id
+                    ? "border-emerald-400 bg-emerald-500/10"
+                    : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
+                ].join(" ")}
+              >
+                <span className="block text-[11px] font-semibold text-zinc-100">
+                  {filter.label}
+                </span>
+                <span className="mt-1 block text-[10px] text-zinc-400">
+                  {filter.description}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">
