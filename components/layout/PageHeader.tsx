@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -31,10 +32,17 @@ export function PageHeader({
           {showBrand ? (
             <Link
               href={brandHref}
-              className="text-[11px] tracking-[0.16em] text-zinc-500 transition-colors hover:text-white"
+              className="inline-flex h-7 items-center opacity-80 transition-opacity hover:opacity-100"
               aria-label="Harucut home"
             >
-              HARUCUT
+              <Image
+                src="/logo-harucut.svg"
+                alt="HARUCUT"
+                width={196}
+                height={40}
+                className="h-6 w-auto"
+                priority
+              />
             </Link>
           ) : null}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>

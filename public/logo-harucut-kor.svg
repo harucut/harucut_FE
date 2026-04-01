@@ -1,0 +1,27 @@
+<svg width="168" height="40" viewBox="0 0 168 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logo-harucut-kor-accent" x1="4" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86EFAC"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="32" height="32" rx="11" fill="url(#logo-harucut-kor-accent)"/>
+  <rect x="12" y="10" width="16" height="4" rx="2" fill="#081217"/>
+  <rect x="12" y="16" width="16" height="4" rx="2" fill="#081217"/>
+  <rect x="12" y="22" width="16" height="4" rx="2" fill="#081217"/>
+  <rect x="12" y="28" width="16" height="4" rx="2" fill="#081217"/>
+  <path d="M31 2L32.6 6.4L37 8L32.6 9.6L31 14L29.4 9.6L25 8L29.4 6.4L31 2Z" fill="#D1FAE5"/>
+
+  <text
+    x="48"
+    y="28"
+    fill="#F8FAFC"
+    font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif"
+    font-size="22"
+    font-weight="800"
+    letter-spacing="-0.03em"
+  >
+    하루컷
+  </text>
+</svg>
