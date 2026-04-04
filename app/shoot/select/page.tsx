@@ -1,20 +1,20 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
 
 export default function ShootSelectPage() {
   const router = useRouter();
   const {
     frameId,
-    draftId,
+    remoteFrameId,
     shots,
     selectedIndexes,
     borderColor,
@@ -26,9 +26,7 @@ export default function ShootSelectPage() {
     setOutputFilter,
     setIncludeVideo,
   } = useShootSession();
-  const draft = useThemeDraftStore((state) =>
-    draftId ? state.drafts.find((item) => item.id === draftId) : undefined,
-  );
+  const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
 
@@ -43,8 +41,6 @@ export default function ShootSelectPage() {
     }
   }, [frameId, router, shots.length]);
 
-  const themeData =
-    draft && frameId && draft.data.frameId === frameId ? draft.data : null;
   const hasCustomFrame = Boolean(themeData);
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 

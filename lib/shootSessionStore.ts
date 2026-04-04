@@ -21,7 +21,7 @@ export type ShotItem = {
 
 type ShootSessionState = {
   frameId: FrameId | null;
-  draftId: string | null;
+  remoteFrameId: number | null;
   shots: ShotItem[];
   selectedIndexes: SelectionSlot[];
   borderColor: string;
@@ -31,7 +31,7 @@ type ShootSessionState = {
   videoResult: GeneratedFourcutAsset | null;
 
   setFrameId: (id: FrameId) => void;
-  setDraftId: (id: string | null) => void;
+  setRemoteFrameId: (id: number | null) => void;
   setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
   setIncludeVideo: (value: boolean) => void;
@@ -58,7 +58,7 @@ function revokeBlobUrl(url?: string) {
 const initialState: Pick<
   ShootSessionState,
   | "frameId"
-  | "draftId"
+  | "remoteFrameId"
   | "shots"
   | "selectedIndexes"
   | "borderColor"
@@ -68,7 +68,7 @@ const initialState: Pick<
   | "videoResult"
 > = {
   frameId: null,
-  draftId: null,
+  remoteFrameId: null,
   shots: [],
   selectedIndexes: createEmptySlots(),
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
@@ -88,9 +88,9 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       videoResult: null,
     }),
 
-  setDraftId: (id) =>
+  setRemoteFrameId: (id) =>
     set({
-      draftId: id,
+      remoteFrameId: id,
       imageResult: null,
       videoResult: null,
     }),

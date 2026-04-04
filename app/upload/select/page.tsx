@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -6,9 +6,9 @@ import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPa
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { SUPPORTED_FOURCUT_ACCEPT } from "@/lib/presignedUploadApi";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
 
@@ -16,7 +16,7 @@ export default function UploadSelectPage() {
   const router = useRouter();
   const {
     frameId,
-    draftId,
+    remoteFrameId,
     media,
     selectedIndexes,
     borderColor,
@@ -29,9 +29,7 @@ export default function UploadSelectPage() {
     setOutputFilter,
     setIncludeVideo,
   } = useUploadSession();
-  const draft = useThemeDraftStore((state) =>
-    draftId ? state.drafts.find((item) => item.id === draftId) : undefined,
-  );
+  const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -42,8 +40,6 @@ export default function UploadSelectPage() {
     }
   }, [frameId, router]);
 
-  const themeData =
-    draft && frameId && draft.data.frameId === frameId ? draft.data : null;
   const hasCustomFrame = Boolean(themeData);
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 
@@ -113,7 +109,7 @@ export default function UploadSelectPage() {
           title="업로드할 사진 선택"
           backHref="/upload"
           backLabel="프레임 다시 선택"
-          description="사진이나 영상을 올린 뒤 프레임에 넣을 4장을 골라 주세요."
+          description="사진이나 영상을 넣을 프레임에 어울릴 4개를 골라 주세요."
         />
 
         <FrameSelectPanel
@@ -154,7 +150,7 @@ export default function UploadSelectPage() {
               />
 
               <p className="text-[10px] text-zinc-500">
-                여러 장을 한 번에 올린 뒤 프레임에 넣을 4장을 선택할 수 있어요.
+                여러 파일을 한 번에 넣고 프레임에 어울릴 4개를 선택할 수 있어요.
               </p>
 
               <FrameOutputOptionsPanel

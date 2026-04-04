@@ -17,7 +17,7 @@ import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 
 type UploadSessionState = {
   frameId: FrameId | null;
-  draftId: string | null;
+  remoteFrameId: number | null;
   media: FrameMedia[];
   selectedIndexes: SelectionSlot[];
   borderColor: string;
@@ -27,7 +27,7 @@ type UploadSessionState = {
   videoResult: GeneratedFourcutAsset | null;
 
   setFrameId: (id: FrameId | null) => void;
-  setDraftId: (id: string | null) => void;
+  setRemoteFrameId: (id: number | null) => void;
   setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
   setIncludeVideo: (value: boolean) => void;
@@ -42,7 +42,7 @@ type UploadSessionState = {
 const initialState: Pick<
   UploadSessionState,
   | "frameId"
-  | "draftId"
+  | "remoteFrameId"
   | "media"
   | "selectedIndexes"
   | "borderColor"
@@ -52,7 +52,7 @@ const initialState: Pick<
   | "videoResult"
 > = {
   frameId: null,
-  draftId: null,
+  remoteFrameId: null,
   media: [],
   selectedIndexes: createEmptySlots(),
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
@@ -80,9 +80,9 @@ export const useUploadSession = create<UploadSessionState>((set, get) => ({
       videoResult: null,
     }),
 
-  setDraftId: (draftId) =>
+  setRemoteFrameId: (remoteFrameId) =>
     set({
-      draftId,
+      remoteFrameId,
       imageResult: null,
       videoResult: null,
     }),
