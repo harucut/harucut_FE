@@ -1,97 +1,103 @@
 import Link from "next/link";
 import Image from "next/image";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 export default function LandingPage() {
   return (
-    <main className="h-dvh overflow-hidden bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 text-white">
-      <div className="mx-auto flex h-full w-full max-w-5xl items-center px-4">
-        <div className="grid w-full items-center gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-10">
-          <div className="flex flex-col gap-6">
-            <header className="flex flex-col gap-2">
-              <span className="inline-flex items-center gap-2 text-[11px] text-zinc-400">
-                <span className="inline-block h-1 w-6 rounded-full bg-emerald-400" />
-                TODAY&apos;S RECORD
-              </span>
-              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-                하루컷
-              </h1>
-              <p className="text-xs text-zinc-300 md:text-sm">
-                특별한 오늘을 네 컷으로
-                <br />
-                간직해 보세요.
-              </p>
-            </header>
+    <main className="min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.14),_transparent_24%),linear-gradient(180deg,#09090b_0%,#111827_100%)] text-white">
+      <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-5">
+        <header className="flex items-center justify-between gap-3">
+          <BrandMark href="/" />
 
-            <p className="text-[11px] text-zinc-400 md:text-xs">
-              8장을 자동 촬영하고, 마음에 드는 4장을 골라 나만의 인생네컷을 만들
-              수 있어요.
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/login"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-zinc-200 transition hover:border-white/20 sm:px-4 sm:text-[11px]"
+            >
+              로그인
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-full bg-white px-3 py-2 text-[10px] font-semibold text-zinc-950 transition hover:bg-zinc-100 sm:px-4 sm:text-[11px]"
+            >
+              회원가입
+            </Link>
+          </div>
+        </header>
+
+        <section className="grid flex-1 items-center gap-8 py-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="max-w-2xl">
+            <div className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-200">
+              오늘 하루를 네 컷으로 남겨보세요
+            </div>
+
+            <h1 className="mt-5 text-[30px] font-semibold tracking-[-0.04em] text-white sm:text-[34px] md:text-[56px] md:leading-[1.02]">
+              오늘의 순간을
+              <span className="block bg-gradient-to-r from-emerald-200 via-lime-100 to-white bg-clip-text text-transparent">
+                다시 보고 싶은 네 컷으로
+              </span>
+            </h1>
+
+            <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-300 sm:text-[15px] sm:leading-7 md:text-base">
+              촬영하고, 고르고, 저장하세요.
+              오늘 하루 기록을 가볍게 남길 수 있어요.
             </p>
 
-            <div className="flex flex-col gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href="/home"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 py-2.5 text-xs font-semibold hover:bg-emerald-400 transition-colors md:py-3 md:text-sm"
+                className="inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 sm:w-auto"
               >
-                인생네컷 만들기 시작하기
+                시작하기
               </Link>
+              <Link
+                href="/theme"
+                className="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08] sm:w-auto"
+              >
+                프레임 먼저 꾸미기
+              </Link>
+            </div>
 
-              <div className="flex flex-col gap-2 text-[10px] text-zinc-500 md:text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="h-px flex-1 bg-zinc-700" />
-                  <span>어디서든 오늘의 기록을 이어서 보고 싶다면</span>
-                  <span className="h-px flex-1 bg-zinc-700" />
-                </div>
-                <div className="flex gap-2">
-                  <Link
-                    href="/login"
-                    className="flex-1 rounded-full border border-zinc-700 bg-zinc-900/40 py-2 text-center text-[11px] text-zinc-200 hover:bg-zinc-800 md:py-2.5"
-                  >
-                    로그인
-                  </Link>
-                  <Link
-                    href="/signup"
-                    className="flex-1 rounded-full border border-emerald-500/80 bg-emerald-500/10 py-2 text-center text-[11px] text-emerald-300 hover:bg-emerald-500/20 md:py-2.5"
-                  >
-                    회원가입
-                  </Link>
-                </div>
-              </div>
+            <div className="mt-6 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                촬영
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                업로드
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                테마 편집
+              </span>
             </div>
           </div>
 
-          <section className="mx-auto flex w-full max-w-xs flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-3 backdrop-blur-md shadow-[0_18px_45px_rgba(0,0,0,0.7)] md:max-w-sm md:p-4">
-            <div className="flex items-center justify-between text-[10px] text-zinc-400 md:text-[11px]">
-              <span>Sample Image</span>
-            </div>
+          <div className="mx-auto w-full max-w-[340px] sm:max-w-[360px]">
+            <div className="rounded-[30px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur">
+              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-black/30">
+                <div className="relative aspect-[3/4] w-full">
+                  <Image
+                    src="/hero-image.png"
+                    alt="하루컷 샘플"
+                    fill
+                    sizes="(max-width: 1024px) 80vw, 360px"
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+              </div>
 
-            <div className="relative aspect-[3/5] w-full max-h-[320px] rounded-2xl border border-white/10 bg-black overflow-hidden md:max-h-[380px]">
-              <Image
-                src="/hero-image.png"
-                alt="하루컷 샘플"
-                fill
-                sizes="(max-width: 768px) 100vw, 400px"
-                className="object-contain"
-                priority
-              />
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-semibold text-zinc-100">
+                  찍는 순간보다
+                  <span className="block">다시 꺼내 볼 때 더 좋은 네 컷</span>
+                </p>
+                <p className="text-[12px] leading-6 text-zinc-400">
+                  완성한 결과는 기록 페이지에서 다시 보고 공유할 수 있어요.
+                </p>
+              </div>
             </div>
-
-            <p className="text-[10px] leading-relaxed text-zinc-400 md:text-xs">
-              나만의 포토부스를 지금 바로 시작해 보세요.
-            </p>
-
-            <div className="hidden flex-wrap gap-2 text-[10px] text-zinc-400 sm:flex">
-              <span className="rounded-full border border-zinc-700 px-2 py-0.5">
-                # 인생네컷
-              </span>
-              <span className="rounded-full border border-zinc-700 px-2 py-0.5">
-                # 오늘의기록
-              </span>
-              <span className="rounded-full border border-zinc-700 px-2 py-0.5">
-                # 하루컷
-              </span>
-            </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
   );

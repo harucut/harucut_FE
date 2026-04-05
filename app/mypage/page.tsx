@@ -2,24 +2,13 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { CreditCard, RefreshCw, ShieldCheck } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { clientApi } from "@/lib/clientApi";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
-
-type UserInfoResponse = {
-  code: string;
-  status: number;
-  message: string | null;
-  data: {
-    id: number;
-    email: string;
-    username: string;
-    profileUrl: string | null;
-  };
-};
+import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 
 type Errors = {
   common?: string | null;
@@ -33,7 +22,7 @@ export default function MyPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<UserInfoResponse["data"] | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
 
@@ -49,11 +38,9 @@ export default function MyPage() {
     setErrors({});
 
     try {
-      const res = await clientApi.get<UserInfoResponse>(
-        "/api/client/user-info",
-      );
-      setUser(res.data.data);
-      setUsername(res.data.data.username || "");
+      const nextUser = await getMyUserInfo();
+      setUser(nextUser);
+      setUsername(nextUser.username || "");
     } catch (error) {
       console.error(error);
       setErrors({
@@ -259,6 +246,28 @@ export default function MyPage() {
                   <span className="text-[11px] text-zinc-400">
                     {user.email}
                   </span>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
+                  <div className="flex items-center gap-2 text-zinc-300">
+                    <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                    <span className="text-[11px]">로그인 플랫폼</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-zinc-100">
+                    {user.loginPlatform ?? "HARUCUT"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
+                  <div className="flex items-center gap-2 text-zinc-300">
+                    <CreditCard className="h-4 w-4 text-emerald-300" />
+                    <span className="text-[11px]">플랜</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-zinc-100">
+                    {user.planTier ?? "BASIC"}
+                    {user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원` : ""}
+                  </p>
                 </div>
               </div>
 

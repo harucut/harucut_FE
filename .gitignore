@@ -42,3 +42,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.omx/
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
+
+# Keep OMX runtime assets local by default.
+# Re-open only project-owned OMX files below when needed.
+.codex/agents/**
+.codex/prompts/**
+.codex/skills/**
+!.codex/skills/recorday-workflow/
+!.codex/skills/recorday-workflow/**
