@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { CheckCircle2, RotateCcw, X } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import type { FrameId } from "@/constants/frames";
 import type { FourcutFilterId } from "@/lib/frameFilters";
@@ -32,7 +33,7 @@ export function FrameSelectPanel({
   selectedIndexes,
   maxSelect,
   guideText,
-  emptyStateText = "사진이 없어요.",
+  emptyStateText = "??? ???",
   nextButtonLabel,
   onToggleSelect,
   onReset,
@@ -61,6 +62,11 @@ export function FrameSelectPanel({
   );
   const canProceed = selectedCount === maxSelect;
   const progressLabel = `${selectedCount} / ${maxSelect}`;
+  const nextSlotIndex = selectedIndexes.findIndex((index) => index == null);
+  const selectionHint =
+    nextSlotIndex === -1
+      ? "??? ?? ????. ?? ????? ???? ?? ??? ?????."
+      : `${nextSlotIndex + 1}?? ?? ??? ??? ??? ????. ?? ??? ??? ????.`;
 
   return (
     <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
@@ -68,12 +74,91 @@ export function FrameSelectPanel({
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-zinc-100">사진 선택</p>
+              <p className="text-sm font-semibold text-zinc-100">?? ??</p>
               <p className="mt-1 text-[11px] text-zinc-500">{guideText}</p>
             </div>
             <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] text-zinc-300">
               {progressLabel}
             </span>
+          </div>
+          <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-100">
+            {selectionHint}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">?? ??</p>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                ???? ??? ???? ????? 1?, 2?, 3?, 4? ????.
+              </p>
+            </div>
+            {canProceed ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2.5 py-1 text-[10px] text-emerald-100">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                ?? ??
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {selectedIndexes.map((selectedIndex, slotIndex) => {
+              const item = selectedIndex == null ? null : baseItems[selectedIndex] ?? null;
+              const isActive = nextSlotIndex === slotIndex || (nextSlotIndex === -1 && item != null);
+
+              return (
+                <div
+                  key={slotIndex}
+                  className={[
+                    "relative overflow-hidden rounded-2xl border bg-black/30",
+                    item ? "border-white/10" : "border-dashed border-white/10",
+                    isActive ? "ring-2 ring-emerald-400/40" : "",
+                  ].join(" ")}
+                >
+                  <div className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-2 py-1 text-[10px] text-zinc-100">
+                    {slotIndex + 1}?
+                  </div>
+
+                  {item ? (
+                    <>
+                      {item.type === "video" ? (
+                        <video
+                          src={item.src}
+                          className="aspect-[3/4] w-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.src}
+                          alt={`selected-slot-${slotIndex + 1}`}
+                          className="aspect-[3/4] w-full object-cover"
+                        />
+                      )}
+
+                      {selectedIndex != null ? (
+                        <button
+                          type="button"
+                          onClick={() => onToggleSelect(selectedIndex)}
+                          className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[10px] text-zinc-100 hover:bg-black/80"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          ??
+                        </button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="grid aspect-[3/4] place-items-center px-3 text-center text-[11px] text-zinc-500">
+                      {isActive ? "?? ?? ????" : "?? ?? ???"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -95,10 +180,10 @@ export function FrameSelectPanel({
                     type="button"
                     onClick={() => onToggleSelect(index)}
                     className={[
-                      "relative aspect-[3/4] overflow-hidden rounded-xl border bg-black",
+                      "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
                         ? "border-emerald-400 ring-2 ring-emerald-400/60"
-                        : "border-zinc-700",
+                        : "border-zinc-700 hover:border-zinc-500",
                     ].join(" ")}
                   >
                     {item.type === "video" ? (
@@ -118,6 +203,10 @@ export function FrameSelectPanel({
                         className="h-full w-full object-cover"
                       />
                     )}
+
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent px-2 py-2 text-[10px] text-zinc-100">
+                      {isSelected ? `${order}?? ?? ???` : "??? ??"}
+                    </div>
 
                     <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] text-zinc-200">
                       #{index + 1}
@@ -139,9 +228,10 @@ export function FrameSelectPanel({
           <button
             type="button"
             onClick={onReset}
-            className="w-fit rounded-full border border-zinc-700 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-900"
+            className="inline-flex w-fit items-center gap-1 rounded-full border border-zinc-700 px-2.5 py-1.5 text-[10px] text-zinc-400 hover:bg-zinc-900"
           >
-            처음부터 다시
+            <RotateCcw className="h-3.5 w-3.5" />
+            ???? ??
           </button>
 
           <button
@@ -158,7 +248,7 @@ export function FrameSelectPanel({
       <aside className="flex flex-col gap-3 xl:sticky xl:top-6">
         {frameId ? (
           <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-[11px] font-medium text-zinc-200">프레임 미리보기</p>
+            <p className="text-[11px] font-medium text-zinc-200">??? ????</p>
             <div className="flex justify-center">
               <FramePreview
                 frameId={frameId}
