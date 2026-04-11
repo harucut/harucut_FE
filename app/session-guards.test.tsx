@@ -23,7 +23,7 @@ const DEFAULT_FILTER: FourcutFilterId = "NONE";
 
 const shootSessionState = {
   frameId: null as string | null,
-  draftId: null as string | null,
+  remoteFrameId: null as number | null,
   shots: [] as Array<{ photo: string; video?: string }>,
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "111827",
@@ -43,7 +43,7 @@ const shootSessionState = {
 
 const uploadSessionState = {
   frameId: null as string | null,
-  draftId: null as string | null,
+  remoteFrameId: null as number | null,
   media: [] as Array<{ type: "image" | "video"; src: string }>,
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "111827",
@@ -64,6 +64,7 @@ const uploadSessionState = {
 
 const themeSessionState = {
   frameId: null as string | null,
+  remoteFrameId: null as number | null,
 };
 
 jest.mock("next/navigation", () => ({
@@ -138,7 +139,7 @@ describe("page-level multistep session guards", () => {
 
     Object.assign(shootSessionState, {
       frameId: null,
-      draftId: null,
+      remoteFrameId: null,
       shots: [],
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "111827",
@@ -150,7 +151,7 @@ describe("page-level multistep session guards", () => {
 
     Object.assign(uploadSessionState, {
       frameId: null,
-      draftId: null,
+      remoteFrameId: null,
       media: [],
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "111827",
@@ -162,6 +163,7 @@ describe("page-level multistep session guards", () => {
 
     Object.assign(themeSessionState, {
       frameId: null,
+      remoteFrameId: null,
     });
   });
 
