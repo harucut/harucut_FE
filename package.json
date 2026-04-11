@@ -2,6 +2,11 @@
   "name": "harucut",
   "version": "0.1.0",
   "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "protobufjs"
+    ]
+  },
   "scripts": {
     "generate:stickers": "node scripts/generate-stickers.mjs",
     "dev": "next dev",
