@@ -45,6 +45,16 @@ describe("themeDraftStore", () => {
     expect(drafts[0].savedAt).toBeGreaterThanOrEqual(before);
   });
 
+  it("preserves the current name when updating without a new name", () => {
+    const id = useThemeDraftStore
+      .getState()
+      .addDraft(makeTheme("classic-4"), { name: "봄 프레임" });
+
+    useThemeDraftStore.getState().updateDraft(id, makeTheme("grid-4"));
+
+    expect(useThemeDraftStore.getState().drafts[0].name).toBe("봄 프레임");
+  });
+
   // 없는 id를 업데이트하면 null을 반환하고 상태를 바꾸지 않아야 합니다.
   it("returns null when updating missing draft id", () => {
     const result = useThemeDraftStore

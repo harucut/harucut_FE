@@ -16,6 +16,8 @@ type ShootingState = {
   countdown: number | null;
 };
 
+type CameraFacingMode = "user" | "environment";
+
 export function useCaptureFlow() {
   const router = useRouter();
   const { frameId, addShotPhoto, attachVideoToShot, resetShots } =
@@ -27,6 +29,8 @@ export function useCaptureFlow() {
     countdown: null,
   });
   const [shotCount, setShotCount] = useState(0);
+  const [cameraFacingMode, setCameraFacingMode] =
+    useState<CameraFacingMode>("user");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -37,6 +41,9 @@ export function useCaptureFlow() {
   const recordedChunksRef = useRef<Blob[]>([]);
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
+  const canFlipCamera =
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const captureSlot = useMemo(() => {
     if (!frameId) return null;
@@ -60,7 +67,7 @@ export function useCaptureFlow() {
   }, []);
 
   // 카메라 권한 요청 및 스트림 시작
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (nextFacingMode?: CameraFacingMode) => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         alert("현재 브라우저에서는 카메라를 지원하지 않습니다.");
@@ -69,8 +76,10 @@ export function useCaptureFlow() {
 
       stopStream();
 
+      const facingMode = nextFacingMode ?? cameraFacingMode;
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: { facingMode },
         audio: true,
       });
 
@@ -82,11 +91,12 @@ export function useCaptureFlow() {
       }
 
       setIsCameraReady(true);
+      setCameraFacingMode(facingMode);
     } catch (err) {
       console.error(err);
       alert("카메라 접근이 거부되었거나 오류가 발생했습니다.");
     }
-  }, [stopStream]);
+  }, [cameraFacingMode, stopStream]);
 
   // 언마운트 시 정리
   useEffect(() => {
@@ -261,6 +271,13 @@ export function useCaptureFlow() {
     finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
+  const switchCamera = useCallback(async () => {
+    if (!canFlipCamera) return;
+    const nextFacingMode =
+      cameraFacingMode === "user" ? "environment" : "user";
+    await startCamera(nextFacingMode);
+  }, [cameraFacingMode, canFlipCamera, startCamera]);
+
   return {
     videoRef,
     canvasRef,
@@ -271,10 +288,13 @@ export function useCaptureFlow() {
     countdown: shooting.countdown,
     shotCount,
     remainingShots,
+    cameraFacingMode,
+    canFlipCamera,
 
     startCamera,
     startShooting,
     handleShootNow,
+    switchCamera,
 
     MAX_SHOTS,
     MAX_COUNT,

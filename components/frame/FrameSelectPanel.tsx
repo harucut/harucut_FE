@@ -60,114 +60,122 @@ export function FrameSelectPanel({
     [selectedIndexes],
   );
   const canProceed = selectedCount === maxSelect;
+  const progressLabel = `${selectedCount} / ${maxSelect}`;
 
   return (
-    <>
-      {frameId ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-xs font-medium text-zinc-300">프레임 미리보기</h2>
-          <div className="flex h-[330px] justify-center">
-            <FramePreview
-              frameId={frameId}
-              media={slotMedia}
-              theme={themeData}
-              borderColor={borderColor}
-              outputFilter={outputFilter}
-            />
+    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+      <section className="flex flex-col gap-3">
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">사진 선택</p>
+              <p className="mt-1 text-[11px] text-zinc-500">{guideText}</p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] text-zinc-300">
+              {progressLabel}
+            </span>
           </div>
-          <p className="text-center text-[10px] text-zinc-500">
-            아래에서 사진을 고르면 선택한 순서대로 프레임에 채워져요.
-          </p>
         </section>
-      ) : null}
 
-      <p className="text-[11px] text-zinc-400">{guideText}</p>
+        <section className="space-y-2">
+          {baseItems.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-4 text-center text-[11px] text-zinc-500">
+              {emptyStateText}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-4">
+              {baseItems.map((item, index) => {
+                const slotIndex = selectedIndexes.indexOf(index);
+                const isSelected = slotIndex !== -1;
+                const order = slotIndex + 1;
 
-      {renderExtraControls ? (
-        <section className="flex flex-col gap-2">{renderExtraControls()}</section>
-      ) : null}
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => onToggleSelect(index)}
+                    className={[
+                      "relative aspect-[3/4] overflow-hidden rounded-xl border bg-black",
+                      isSelected
+                        ? "border-emerald-400 ring-2 ring-emerald-400/60"
+                        : "border-zinc-700",
+                    ].join(" ")}
+                  >
+                    {item.type === "video" ? (
+                      <video
+                        src={item.src}
+                        className="h-full w-full object-cover"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.src}
+                        alt={`shot-${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
 
-      <section className="space-y-2">
-        {baseItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-4 text-center text-[11px] text-zinc-500">
-            {emptyStateText}
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
-            {baseItems.map((item, index) => {
-              const slotIndex = selectedIndexes.indexOf(index);
-              const isSelected = slotIndex !== -1;
-              const order = slotIndex + 1;
-
-              return (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => onToggleSelect(index)}
-                  className={[
-                    "relative aspect-[3/4] overflow-hidden rounded-lg border bg-black",
-                    isSelected
-                      ? "border-emerald-400 ring-2 ring-emerald-400/60"
-                      : "border-zinc-700",
-                  ].join(" ")}
-                >
-                  {item.type === "video" ? (
-                    <video
-                      src={item.src}
-                      className="h-full w-full object-cover"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.src}
-                      alt={`shot-${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-
-                  <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] text-zinc-200">
-                    #{index + 1}
-                  </span>
-
-                  {isSelected ? (
-                    <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-zinc-950">
-                      {order}
+                    <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] text-zinc-200">
+                      #{index + 1}
                     </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
-      <section className="mt-1 flex items-center justify-between text-[11px] text-zinc-400">
-        <div className="flex flex-col">
-          <span>
-            선택한 사진 {selectedCount} / {maxSelect}장
-          </span>
+                    {isSelected ? (
+                      <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-zinc-950">
+                        {order}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="flex items-center justify-between text-[11px] text-zinc-400">
           <button
             type="button"
             onClick={onReset}
-            className="mt-1 w-fit rounded-full border border-zinc-700 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-900"
+            className="w-fit rounded-full border border-zinc-700 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-900"
           >
             처음부터 다시
           </button>
-        </div>
 
-        <button
-          type="button"
-          disabled={!canProceed}
-          onClick={onNext}
-          className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {nextButtonLabel}
-        </button>
+          <button
+            type="button"
+            disabled={!canProceed}
+            onClick={onNext}
+            className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {nextButtonLabel}
+          </button>
+        </section>
       </section>
-    </>
+
+      <aside className="flex flex-col gap-3 xl:sticky xl:top-6">
+        {frameId ? (
+          <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-[11px] font-medium text-zinc-200">프레임 미리보기</p>
+            <div className="flex justify-center">
+              <FramePreview
+                frameId={frameId}
+                media={slotMedia}
+                theme={themeData}
+                borderColor={borderColor}
+                outputFilter={outputFilter}
+                className="w-full max-w-[250px]"
+              />
+            </div>
+          </section>
+        ) : null}
+
+        {renderExtraControls ? (
+          <section className="flex flex-col gap-2">{renderExtraControls()}</section>
+        ) : null}
+      </aside>
+    </div>
   );
 }

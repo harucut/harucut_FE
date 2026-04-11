@@ -41,6 +41,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const draft = useThemeDraftStore((s) =>
     draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
   );
@@ -70,6 +72,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         const remoteFrame = await getFrame(remoteFrameId);
         if (!cancelled) {
           importJson(toThemeExportJson(remoteFrame));
+          setTitle(remoteFrame.title || "");
+          setDescription(remoteFrame.description || "");
         }
       } catch (error) {
         console.error(error);
@@ -89,6 +93,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       cancelled = true;
     };
   }, [draft, frameId, importJson, remoteFrameId]);
+
+  useEffect(() => {
+    if (remoteFrameId) return;
+
+    if (draft) {
+      setTitle(draft.name ?? "저장한 테마 프레임");
+      setDescription("내가 저장한 테마 프레임");
+      return;
+    }
+
+    setTitle("새 테마 프레임");
+    setDescription("하루컷에서 직접 꾸민 나만의 프레임");
+  }, [draft, remoteFrameId]);
 
   useEffect(() => {
     return () => {
@@ -127,10 +144,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       });
 
       const body = toCreateFrameRequest(themeJson, {
-        title: "테마 프레임",
-        description: remoteFrameId
-          ? "프레임 꾸미기 수정"
-          : "프레임 꾸미기 저장",
+        title: title.trim() || "테마 프레임",
+        description:
+          description.trim() ||
+          (remoteFrameId ? "프레임 꾸미기 수정" : "프레임 꾸미기 저장"),
         previewKey,
       });
 
@@ -140,9 +157,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         await createFrame(body);
 
         if (draft?.id) {
-          updateDraft(draft.id, themeJson);
+          updateDraft(draft.id, themeJson, { name: title.trim() || draft.name });
         } else {
-          addDraft(themeJson);
+          addDraft(themeJson, { name: title.trim() || "새 테마 프레임" });
         }
       }
 
@@ -226,6 +243,31 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             </button>
           </div>
         </header>
+
+        <section className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+          <div>
+            <p className="text-sm font-semibold text-zinc-100">프레임 정보</p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              저장 시 백엔드에 함께 전달될 제목과 설명이에요.
+            </p>
+          </div>
+          <div className="grid gap-3">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+              placeholder="프레임 이름을 입력해 주세요"
+              maxLength={40}
+            />
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="min-h-24 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+              placeholder="프레임 설명을 입력해 주세요"
+              maxLength={160}
+            />
+          </div>
+        </section>
 
         {isLoadingFrame ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">

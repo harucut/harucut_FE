@@ -1,11 +1,12 @@
-"use client";
+﻿"use client";
 
-import { useCaptureFlow } from "./_hooks/useCaptureFlow";
+import { RefreshCw } from "lucide-react";
+import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
-import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
+import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 
 export default function CapturePage() {
   const {
@@ -20,17 +21,15 @@ export default function CapturePage() {
     startCamera,
     startShooting,
     handleShootNow,
+    switchCamera,
+    canFlipCamera,
     MAX_SHOTS,
     MAX_COUNT,
   } = useCaptureFlow();
 
-  const { frameId, draftId } = useShootSession();
-  const draft = useThemeDraftStore((s) =>
-    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
-  );
+  const { frameId, remoteFrameId } = useShootSession();
+  const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
-  const themeData =
-    frameId && draft && draft.data.frameId === frameId ? draft.data : null;
 
   const currentSlot =
     layout && layout.slots.length > 0
@@ -65,7 +64,7 @@ export default function CapturePage() {
           </div>
 
           <div
-            className="relative w-full overflow-hidden rounded-xl bg-black"
+            className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black"
             style={{
               aspectRatio: currentSlot
                 ? `${currentSlot.width} / ${currentSlot.height}`
@@ -81,7 +80,7 @@ export default function CapturePage() {
                   autoPlay
                   playsInline
                   muted
-                  className="h-full w-full object-cover scale-x-[-1]"
+                  className="h-full w-full scale-x-[-1] object-cover"
                 />
                 <div className="pointer-events-none absolute left-2 top-2 z-20 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
                   슬롯 {currentSlotOrder} / 4
@@ -101,22 +100,18 @@ export default function CapturePage() {
                 autoPlay
                 playsInline
                 muted
-                className="h-full w-full object-cover scale-x-[-1]"
+                className="h-full w-full scale-x-[-1] object-cover"
               />
             )}
 
-            {isShooting && countdown !== null && (
+            {isShooting && countdown !== null ? (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40">
                 <div className="pointer-events-auto flex flex-col items-center gap-2">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400 text-2xl font-semibold">
                     {countdown}
                   </div>
-                  <span className="text-xs text-zinc-200">
-                    다음 촬영까지 남은 시간
-                  </span>
-                  <span className="text-[11px] text-zinc-400">
-                    남은 사진 {remainingShots}장
-                  </span>
+                  <span className="text-xs text-zinc-200">다음 촬영까지 남은 시간</span>
+                  <span className="text-[11px] text-zinc-400">남은 사진 {remainingShots}장</span>
                   <button
                     type="button"
                     onClick={handleShootNow}
@@ -126,21 +121,16 @@ export default function CapturePage() {
                   </button>
                 </div>
               </div>
-            )}
+            ) : null}
 
-            {!isShooting && (
+            {!isShooting ? (
               <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/40">
                 <p className="px-4 text-center text-[11px] text-zinc-200">
-                  카메라를 켜고{" "}
-                  <span className="font-semibold">
-                    &quot;{MAX_SHOTS}장 자동 촬영 시작&quot;
-                  </span>{" "}
-                  버튼을 누르면
-                  <br />
-                  {MAX_COUNT}초 간격으로 사진과 영상을 함께 촬영해요.
+                  카메라를 켜고 <span className="font-semibold">&quot;8장 자동 촬영 시작&quot;</span>{" "}
+                  버튼을 누르면 {MAX_COUNT}초 간격으로 사진과 영상을 함께 촬영해요.
                 </p>
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -150,14 +140,24 @@ export default function CapturePage() {
                   isCameraReady ? "bg-emerald-400" : "bg-zinc-500"
                 }`}
               />
-              <span>
-                카메라 {isCameraReady ? "준비 완료" : "아직 꺼져 있어요"}
-              </span>
+              <span>카메라 {isCameraReady ? "준비 완료" : "아직 켜져 있지 않아요"}</span>
             </div>
             <div className="flex items-center gap-2">
+              {canFlipCamera ? (
+                <button
+                  type="button"
+                  onClick={() => void switchCamera()}
+                  className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-800"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    카메라 전환
+                  </span>
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={startCamera}
+                onClick={() => void startCamera()}
                 className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-800"
               >
                 카메라 켜기
