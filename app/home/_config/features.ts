@@ -1,5 +1,5 @@
 import type { Feature } from "../_components/FeatureCard";
-import { Camera, History, Palette, Upload } from "lucide-react";
+import { Camera, History, Palette, Upload, UserCircle2 } from "lucide-react";
 
 export const features: Feature[] = [
   {
@@ -30,5 +30,13 @@ export const features: Feature[] = [
     description: "저장된 사진과 영상을 다시 보고 내려받을 수 있어요.",
     href: "/history",
     icon: History,
+  },
+  {
+    id: "mypage",
+    title: "계정 관리",
+    description:
+      "프로필 이미지, 닉네임, 비밀번호, 로그아웃과 탈퇴 요청까지 관리해요.",
+    href: "/mypage",
+    icon: UserCircle2,
   },
 ];

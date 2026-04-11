@@ -17,15 +17,14 @@ export function FeatureCard({ feature }: { feature: Feature }) {
     <Link
       href={feature.href}
       className={[
-        "group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4",
-        "flex items-start gap-3",
-        "hover:border-emerald-500/70 hover:bg-zinc-900 transition-colors",
+        "group flex items-start gap-3 rounded-[28px] border border-white/10 bg-white/[0.04] p-4 backdrop-blur transition duration-200",
+        "hover:translate-y-[-1px] hover:border-white/20 hover:bg-white/[0.06]",
         feature.comingSoon ? "opacity-70 pointer-events-none" : "",
       ].join(" ")}
     >
       <div className="mt-1">
-        <div className="relative h-10 w-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden">
-          <Icon className="h-5 w-5 text-emerald-400" />
+        <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/25">
+          <Icon className="h-5 w-5 text-emerald-200" />
         </div>
       </div>
 

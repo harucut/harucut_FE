@@ -1,13 +1,20 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { StepProgress } from "@/components/layout/StepProgress";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import { PageHeader } from "@/components/layout/PageHeader";
+import {
+  composeFramePng,
+  downloadFromUrl,
+  recordFrameWebm,
+  type FrameSource,
+} from "@/lib/canvas/composeFrame";
 import {
   buildDefaultDisplayName,
   buildDownloadFilename,
@@ -15,17 +22,12 @@ import {
 } from "@/lib/fourcutOutput";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
 import { isNotNull } from "@/lib/guards";
+import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
-import {
-  composeFramePng,
-  downloadFromUrl,
-  recordFrameWebm,
-  type FrameSource,
-} from "@/lib/canvas/composeFrame";
 
 const MAX_SECONDS = 8;
 
@@ -35,7 +37,7 @@ export default function ShootResultPage() {
   const router = useRouter();
   const {
     frameId,
-    draftId,
+    remoteFrameId,
     shots,
     selectedIndexes,
     borderColor,
@@ -47,9 +49,7 @@ export default function ShootResultPage() {
     setVideoResult,
     clearResults,
   } = useShootSession();
-  const draft = useThemeDraftStore((state) =>
-    draftId ? state.drafts.find((item) => item.id === draftId) : undefined,
-  );
+  const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const consumeVideoConversion = useVideoConversionQuotaStore((state) => state.consume);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
@@ -68,23 +68,14 @@ export default function ShootResultPage() {
   const [isSavingVideoName, setIsSavingVideoName] = useState(false);
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const [isDownloadingVideo, setIsDownloadingVideo] = useState(false);
+  const [isSharingImage, setIsSharingImage] = useState(false);
+  const [isSharingVideo, setIsSharingVideo] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const selectedCount = useMemo(
     () => selectedIndexes.filter((index) => index != null).length,
     [selectedIndexes],
   );
-
-  useEffect(() => {
-    if (!frameId) {
-      router.replace("/shoot");
-      return;
-    }
-
-    if (!shots.length || selectedCount !== 4) {
-      router.replace("/shoot/select");
-    }
-  }, [frameId, router, selectedCount, shots.length]);
 
   const selectedShots = useMemo(
     () => selectedIndexes.map((index) => (index == null ? null : shots[index] ?? null)),
@@ -125,8 +116,17 @@ export default function ShootResultPage() {
     [selectedShots],
   );
 
-  const themeData =
-    draft && frameId && draft.data.frameId === frameId ? draft.data : null;
+  useEffect(() => {
+    if (!frameId) {
+      router.replace("/shoot");
+      return;
+    }
+
+    if (!shots.length || selectedCount !== 4 || imageSources.length !== 4) {
+      router.replace("/shoot/select");
+    }
+  }, [frameId, imageSources.length, router, selectedCount, shots.length]);
+
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
   const frameConfig = FRAME_CONFIGS.find((frame) => frame.id === frameId);
@@ -151,7 +151,7 @@ export default function ShootResultPage() {
   }, [videoResult]);
 
   useEffect(() => {
-    if (!frameId || !layout || selectedCount !== 4) return;
+    if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
 
     let cancelled = false;
     const currentLayout = layout;
@@ -216,7 +216,7 @@ export default function ShootResultPage() {
       if (remainingVideoConversions <= 0) {
         if (!cancelled) {
           setVideoState("error");
-          setVideoError("남은 동영상 변환 횟수가 없어요.");
+          setVideoError("오늘 영상 변환 가능 횟수가 없어요.");
         }
         return;
       }
@@ -258,7 +258,7 @@ export default function ShootResultPage() {
         console.error(error);
         if (!cancelled) {
           setVideoState("error");
-          setVideoError("동영상을 준비하지 못했어요. 다시 시도해 주세요.");
+          setVideoError("영상을 준비하지 못했어요. 다시 시도해 주세요.");
         }
       }
     }
@@ -349,7 +349,7 @@ export default function ShootResultPage() {
       setVideoNameDraft(resolvedName);
     } catch (error) {
       console.error(error);
-      alert("동영상 이름을 저장하지 못했어요.");
+      alert("영상 이름을 저장하지 못했어요.");
     } finally {
       setIsSavingVideoName(false);
     }
@@ -385,91 +385,138 @@ export default function ShootResultPage() {
       );
     } catch (error) {
       console.error(error);
-      alert("동영상을 다운로드하지 못했어요.");
+      alert("영상을 다운로드하지 못했어요.");
     } finally {
       setIsDownloadingVideo(false);
+    }
+  };
+
+  const handleShareImage = async () => {
+    if (!imageResult) return;
+
+    setIsSharingImage(true);
+    try {
+      const url = await getMediaDownloadUrl(imageResult.mediaId);
+      const result = await shareOrCopyLink({
+        title: `${imageResult.displayName} | 하루컷`,
+        text: "방금 완성한 하루컷 이미지예요.",
+        url,
+      });
+
+      if (result === "copied") {
+        alert("이미지 링크를 복사했어요.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("이미지 링크를 준비하지 못했어요.");
+    } finally {
+      setIsSharingImage(false);
+    }
+  };
+
+  const handleShareVideo = async () => {
+    if (!videoResult) return;
+
+    setIsSharingVideo(true);
+    try {
+      const url = await getMediaDownloadUrl(videoResult.mediaId);
+      const result = await shareOrCopyLink({
+        title: `${videoResult.displayName} | 하루컷`,
+        text: "방금 완성한 하루컷 영상이에요.",
+        url,
+      });
+
+      if (result === "copied") {
+        alert("영상 링크를 복사했어요.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("영상 링크를 준비하지 못했어요.");
+    } finally {
+      setIsSharingVideo(false);
     }
   };
 
   return (
     <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <PageHeader
-          title="촬영 결과"
-          description="선택한 사진으로 결과물을 준비하고 있어요."
-        />
+        <PageHeader title="촬영 결과" />
+        <StepProgress current={4} total={4} label="결과 확인" />
 
-        <FramePreview
-          frameId={frameId}
-          media={previewImage}
-          borderColor={effectiveBorderColor}
-          outputFilter={outputFilter}
-          theme={themeData}
-        />
-
-        {shouldPrepareVideo ? (
-          <FramePreview
-            frameId={frameId}
-            media={previewVideo}
-            borderColor={effectiveBorderColor}
-            outputFilter={outputFilter}
-            theme={themeData}
-          />
-        ) : null}
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">
+                {isPreparing ? "결과 준비 중" : "결과 준비 완료"}
+              </p>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                {isPreparing
+                  ? "완성되면 바로 다운로드하거나 공유할 수 있어요."
+                  : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] text-zinc-300">
+              {shouldPrepareVideo ? "이미지 + 영상" : "이미지"}
+            </span>
+          </div>
+        </section>
 
         {isPreparing ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <div className="flex flex-col gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-100">결과 준비 중</h2>
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  Presigned 업로드와 결과 생성이 끝나면 바로 다운로드할 수 있어요.
-                </p>
+            <div className="space-y-2 text-[11px]">
+              <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                <span>이미지 준비</span>
+                <span className="text-zinc-400">
+                  {imageState === "done"
+                    ? "완료"
+                    : imageState === "processing"
+                      ? "생성 중..."
+                      : imageState === "error"
+                        ? "실패"
+                        : "대기 중"}
+                </span>
               </div>
 
-              <div className="space-y-2 text-[11px]">
+              {shouldPrepareVideo ? (
                 <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                  <span>이미지 준비</span>
+                  <span>영상 준비</span>
                   <span className="text-zinc-400">
-                    {imageState === "done"
+                    {videoState === "done"
                       ? "완료"
-                      : imageState === "processing"
-                        ? "생성 중..."
-                        : imageState === "error"
+                      : videoState === "processing"
+                        ? "변환 중..."
+                        : videoState === "error"
                           ? "실패"
                           : "대기 중"}
                   </span>
                 </div>
-
-                {shouldPrepareVideo ? (
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                    <span>동영상 준비</span>
-                    <span className="text-zinc-400">
-                      {videoState === "done"
-                        ? "완료"
-                        : videoState === "processing"
-                          ? "변환 중..."
-                          : videoState === "error"
-                            ? "실패"
-                            : "대기 중"}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-zinc-400">
-                    이번 결과는 이미지만 준비해요.
-                  </div>
-                )}
-              </div>
+              ) : null}
             </div>
           </section>
         ) : null}
 
-        {imageError ? (
-          <p className="text-[11px] text-red-300">{imageError}</p>
-        ) : null}
-        {videoError ? (
-          <p className="text-[11px] text-red-300">{videoError}</p>
-        ) : null}
+        <section className="space-y-3">
+          <FramePreview
+            frameId={frameId}
+            media={previewImage}
+            borderColor={effectiveBorderColor}
+            outputFilter={outputFilter}
+            theme={themeData}
+          />
+
+          {shouldPrepareVideo ? (
+            <FramePreview
+              frameId={frameId}
+              media={previewVideo}
+              borderColor={effectiveBorderColor}
+              outputFilter={outputFilter}
+              theme={themeData}
+            />
+          ) : null}
+        </section>
+
+        {imageError ? <p className="text-[11px] text-red-300">{imageError}</p> : null}
+        {videoError ? <p className="text-[11px] text-red-300">{videoError}</p> : null}
 
         {imageState === "error" || videoState === "error" ? (
           <button
@@ -490,28 +537,34 @@ export default function ShootResultPage() {
         {imageResult ? (
           <GeneratedAssetDownloadCard
             title="이미지 다운로드"
-            description="기록에 저장될 파일 이름을 수정한 뒤 이미지를 내려받을 수 있어요."
+            description="기록으로 저장될 파일 이름을 수정하고 이미지를 내려받을 수 있어요."
             asset={imageResult}
+            metaLabel="촬영 결과 · 이미지"
             draftName={imageNameDraft}
             onChangeName={setImageNameDraft}
             onSaveName={handleSaveImageName}
             onDownload={handleDownloadImage}
+            onShare={handleShareImage}
             isSavingName={isSavingImageName}
             isDownloading={isDownloadingImage}
+            isSharing={isSharingImage}
           />
         ) : null}
 
         {videoResult ? (
           <GeneratedAssetDownloadCard
-            title="동영상 다운로드"
-            description="동영상은 준비된 파일을 그대로 다운로드해요. 다시 눌러도 기록은 추가되지 않아요."
+            title="영상 다운로드"
+            description="영상 결과도 같은 이름 규칙으로 저장하고 바로 공유할 수 있어요."
             asset={videoResult}
+            metaLabel="촬영 결과 · 영상"
             draftName={videoNameDraft}
             onChangeName={setVideoNameDraft}
             onSaveName={handleSaveVideoName}
             onDownload={handleDownloadVideo}
+            onShare={handleShareVideo}
             isSavingName={isSavingVideoName}
             isDownloading={isDownloadingVideo}
+            isSharing={isSharingVideo}
           />
         ) : null}
 

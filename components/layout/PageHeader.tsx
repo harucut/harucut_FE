@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BrandMark } from "./BrandMark";
 
 type Props = {
   title: ReactNode;
@@ -30,20 +30,11 @@ export function PageHeader({
       <header className="flex items-center justify-between">
         <div className="flex flex-col">
           {showBrand ? (
-            <Link
+            <BrandMark
               href={brandHref}
-              className="inline-flex h-7 items-center opacity-80 transition-opacity hover:opacity-100"
-              aria-label="Harucut home"
-            >
-              <Image
-                src="/logo-harucut.svg"
-                alt="HARUCUT"
-                width={196}
-                height={40}
-                className="h-6 w-auto"
-                priority
-              />
-            </Link>
+              compact
+              className="mb-1 opacity-80"
+            />
           ) : null}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
         </div>

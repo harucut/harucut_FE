@@ -65,7 +65,7 @@ export const useThemeDraftStore = create<ThemeDraftStore>()(
           ...current,
           frameId: data.frameId,
           data,
-          name: opts?.name ?? id,
+          name: opts?.name ?? current.name,
           savedAt: Date.now(),
         };
 

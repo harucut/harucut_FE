@@ -1,12 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Download, Share2 } from "lucide-react";
+import {
+  Download,
+  PencilLine,
+  Search,
+  Share2,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
-import { getMediaDownloadUrl, listMyMedia } from "@/lib/userMediaApi";
+import {
+  getMediaDownloadUrl,
+  listMyMedia,
+  updateMediaDisplayName,
+} from "@/lib/userMediaApi";
 import type { UserMedia, UserMediaType } from "@/lib/api-types";
 
 type FilterValue = "ALL" | UserMediaType;
@@ -49,6 +59,10 @@ export default function HistoryPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [savingNameId, setSavingNameId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +112,26 @@ export default function HistoryPage() {
     };
   }, [feedback]);
 
+  const filteredItems = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return items;
+
+    return items.filter((item) =>
+      getMediaTitle(item).toLowerCase().includes(keyword),
+    );
+  }, [items, search]);
+
+  const stats = useMemo(() => {
+    const photos = items.filter((item) => item.mediaType === "PHOTO").length;
+    const videos = items.filter((item) => item.mediaType === "VIDEO").length;
+
+    return {
+      total: items.length,
+      photos,
+      videos,
+    };
+  }, [items]);
+
   const emptyText = useMemo(() => {
     if (filter === "PHOTO") return "저장한 사진 기록이 아직 없어요.";
     if (filter === "VIDEO") return "저장한 영상 기록이 아직 없어요.";
@@ -145,17 +179,129 @@ export default function HistoryPage() {
     }
   };
 
+  const handleStartRename = (item: UserMedia) => {
+    setEditingId(item.mediaId);
+    setDraftName(getMediaTitle(item));
+  };
+
+  const handleSaveName = async (item: UserMedia) => {
+    const nextName = draftName.trim();
+    if (!nextName) {
+      setFeedback("파일 이름은 비워둘 수 없어요.");
+      return;
+    }
+
+    setSavingNameId(item.mediaId);
+
+    try {
+      const updated = await updateMediaDisplayName(item.mediaId, nextName);
+      const resolvedName =
+        updated.displayName?.trim() || updated.displayname?.trim() || nextName;
+
+      setItems((current) =>
+        current.map((currentItem) =>
+          currentItem.mediaId === item.mediaId
+            ? { ...currentItem, displayName: resolvedName }
+            : currentItem,
+        ),
+      );
+      setEditingId(null);
+      setDraftName("");
+      setFeedback("파일 이름을 수정했어요.");
+    } catch (renameError) {
+      console.error(renameError);
+      setFeedback("파일 이름을 수정하지 못했어요.");
+    } finally {
+      setSavingNameId(null);
+    }
+  };
+
   return (
-    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.12),_transparent_24%),linear-gradient(180deg,#09090b_0%,#0f172a_100%)] px-4 py-5 text-white sm:py-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <PageHeader
           title="사진 기록"
           backHref="/home"
           backLabel="홈으로"
           description={
-            <>내가 만든 사진과 영상을 다시 확인하고 내려받거나 공유할 수 있어요.</>
+            <>내가 만든 사진과 영상을 다시 보고, 이름을 정리하고, 공유할 수 있어요.</>
           }
         />
+
+        <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4 sm:rounded-[32px] sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
+                MEMORY ARCHIVE
+              </span>
+              <h2 className="mt-4 text-[28px] font-semibold tracking-tight text-white sm:text-3xl">
+                다시 꺼내 보는 내 기록함
+              </h2>
+              <p className="mt-3 max-w-2xl text-[14px] leading-6 text-zinc-400 sm:text-sm sm:leading-7">
+                저장한 결과를 다시 보고, 이름을 정리하고, 공유할 수 있어요.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: "전체", value: `${stats.total}개` },
+                { label: "사진", value: `${stats.photos}장` },
+                { label: "영상", value: `${stats.videos}개` },
+              ].map((stat) => (
+                <span
+                  key={stat.label}
+                  className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-zinc-300"
+                >
+                  {stat.label} {loading ? "..." : stat.value}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex flex-wrap gap-2">
+              {(["ALL", "PHOTO", "VIDEO"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                    filter === value
+                      ? "bg-emerald-400 text-zinc-950"
+                      : "border border-white/10 bg-white/5 text-zinc-300"
+                  }`}
+                >
+                  {value === "ALL" ? "전체" : value === "PHOTO" ? "사진" : "영상"}
+                </button>
+              ))}
+            </div>
+
+            <label className="flex h-11 flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 text-sm text-zinc-300">
+              <Search className="h-4 w-4 text-zinc-500" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="파일 이름으로 검색"
+                className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-500"
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2 lg:w-[260px]">
+              <Link
+                href="/shoot"
+                className="rounded-full bg-white px-4 py-3 text-center text-sm font-semibold text-zinc-950 hover:bg-zinc-100"
+              >
+                새 촬영
+              </Link>
+              <Link
+                href="/upload"
+                className="rounded-full border border-white/10 px-4 py-3 text-center text-sm font-semibold text-zinc-100 hover:bg-white/5"
+              >
+                업로드
+              </Link>
+            </div>
+          </div>
+        </section>
 
         {feedback ? (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[11px] text-emerald-200">
@@ -163,42 +309,25 @@ export default function HistoryPage() {
           </div>
         ) : null}
 
-        <section className="flex gap-2">
-          {(["ALL", "PHOTO", "VIDEO"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setFilter(value)}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
-                filter === value
-                  ? "bg-emerald-500 text-zinc-950"
-                  : "border border-zinc-800 bg-zinc-900 text-zinc-300"
-              }`}
-            >
-              {value === "ALL" ? "전체" : value === "PHOTO" ? "사진" : "영상"}
-            </button>
-          ))}
-        </section>
-
         {error ? <p className="text-[11px] text-red-300">{error}</p> : null}
 
         {loading ? (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
             <p className="text-[11px] text-zinc-400">기록을 불러오는 중이에요.</p>
           </div>
-        ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+        ) : filteredItems.length === 0 ? (
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
             <p className="text-[11px] text-zinc-500">{emptyText}</p>
           </div>
         ) : (
-          <section className="grid grid-cols-1 gap-3">
-            {items.map((item) => (
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {filteredItems.map((item) => (
               <article
                 key={item.mediaId}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
+                className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4"
               >
                 <div className="flex gap-3">
-                  <div className="h-28 w-24 shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                  <div className="h-32 w-24 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
                     {item.downloadUrl ? (
                       item.mediaType === "VIDEO" ? (
                         <video
@@ -225,12 +354,39 @@ export default function HistoryPage() {
 
                   <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] tracking-[0.2em] text-emerald-300">
-                        {getMediaTypeLabel(item.mediaType)}
-                      </span>
-                      <p className="truncate text-sm font-semibold text-zinc-100">
-                        {getMediaTitle(item)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] tracking-[0.2em] text-emerald-300">
+                          {getMediaTypeLabel(item.mediaType)}
+                        </span>
+                        {item.originalFileName ? (
+                          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400">
+                            original kept
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {editingId === item.mediaId ? (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            value={draftName}
+                            onChange={(e) => setDraftName(e.target.value)}
+                            className="h-9 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 text-[12px] text-zinc-100 outline-none focus:border-emerald-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveName(item)}
+                            disabled={savingNameId === item.mediaId}
+                            className="rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-zinc-100 disabled:opacity-50"
+                          >
+                            {savingNameId === item.mediaId ? "저장 중" : "저장"}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="truncate text-sm font-semibold text-zinc-100">
+                          {getMediaTitle(item)}
+                        </p>
+                      )}
+
                       <p className="text-[11px] text-zinc-500">
                         {item.createdAt
                           ? new Date(item.createdAt).toLocaleString("ko-KR")
@@ -238,29 +394,46 @@ export default function HistoryPage() {
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => handleDownload(item)}
+                        onClick={() => void handleDownload(item)}
                         disabled={downloadingId === item.mediaId}
-                        className="flex flex-1 items-center justify-center gap-1 rounded-full bg-emerald-500 px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                        className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full bg-emerald-400 px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
                       >
                         <Download className="h-3.5 w-3.5" />
                         <span>
-                          {downloadingId === item.mediaId ? "다운로드 중..." : "다운로드"}
+                          {downloadingId === item.mediaId
+                            ? "다운로드 중..."
+                            : "다운로드"}
                         </span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => handleShare(item)}
+                        onClick={() => void handleShare(item)}
                         disabled={sharingId === item.mediaId}
-                        className="flex flex-1 items-center justify-center gap-1 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-900 disabled:opacity-50"
+                        className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-white/5 disabled:opacity-50"
                       >
                         <Share2 className="h-3.5 w-3.5" />
                         <span>
-                          {sharingId === item.mediaId ? "링크 준비 중..." : "공유하기"}
+                          {sharingId === item.mediaId
+                            ? "링크 준비 중..."
+                            : "공유하기"}
                         </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          editingId === item.mediaId
+                            ? setEditingId(null)
+                            : handleStartRename(item)
+                        }
+                        className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-white/5"
+                      >
+                        <PencilLine className="h-3.5 w-3.5" />
+                        <span>{editingId === item.mediaId ? "취소" : "이름 수정"}</span>
                       </button>
                     </div>
                   </div>

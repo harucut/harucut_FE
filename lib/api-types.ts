@@ -11,6 +11,16 @@ export type UserStatus =
   | "DELETED_REQUESTED"
   | "SUSPENDED";
 
+export type UserInfo = {
+  id: number;
+  email: string;
+  username: string;
+  profileUrl: string | null;
+  loginPlatform?: "NAVER" | "KAKAO" | "HARUCUT" | null;
+  planTier?: "BASIC" | "PLUS" | "PRO" | null;
+  monthlyPrice?: number | null;
+};
+
 export type LoginResponseData = {
   userStatus: UserStatus;
 };
