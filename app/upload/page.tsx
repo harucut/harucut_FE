@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
@@ -12,7 +12,7 @@ import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 
-export default function UploadFramePage() {
+function UploadFramePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queriedFrameId = parseFrameIdQuery(searchParams.get("frame"));
@@ -87,3 +87,12 @@ export default function UploadFramePage() {
     </main>
   );
 }
+
+export default function UploadFramePage() {
+  return (
+    <Suspense fallback={null}>
+      <UploadFramePageContent />
+    </Suspense>
+  );
+}
+
