@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isProtectedPath, PROTECTED_PATHS } from "@/lib/protectedPaths";
+import { isProtectedPath } from "@/lib/protectedPaths";
 
 function hasAuthCookie(req: NextRequest) {
   return Boolean(
