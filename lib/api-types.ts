@@ -49,6 +49,30 @@ export type UserMedia = {
   createdAt?: string;
 };
 
+export type TranscodeTaskStatus =
+  | "QUEUED"
+  | "SUBMITTED"
+  | "PROGRESSING"
+  | "COMPLETE"
+  | "ERROR";
+
+export type TranscodeTaskSubmitResponse = {
+  taskId: string;
+  jobId: string;
+  status: TranscodeTaskStatus;
+  requestedAt?: string;
+};
+
+export type TranscodeTaskStatusResponse = {
+  taskId: string;
+  jobId: string;
+  status: TranscodeTaskStatus;
+  errorMessage?: string | null;
+  media?: UserMedia | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type RemoteFrameType = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
 
 export type RemoteFrameBackground =

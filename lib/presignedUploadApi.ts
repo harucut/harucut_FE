@@ -3,7 +3,8 @@
 import type {
   ApiEnvelope,
   PresignedUploadContentType,
-  UserMedia,
+  TranscodeTaskStatusResponse,
+  TranscodeTaskSubmitResponse,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
 import { registerUserMedia } from "@/lib/userMediaApi";
@@ -19,6 +20,9 @@ type UploadedMediaInfo = {
   objectUrl: string;
   downloadUrl?: string;
 };
+
+const TRANSCODE_POLL_INTERVAL_MS = 2_500;
+const TRANSCODE_POLL_TIMEOUT_MS = 90_000;
 
 export const SUPPORTED_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif";
@@ -136,7 +140,7 @@ function extractFilenameFromKey(key: string) {
 }
 
 async function requestTranscode(key: string) {
-  const res = await clientApi.post<ApiEnvelope<UserMedia>>(
+  const res = await clientApi.post<ApiEnvelope<TranscodeTaskSubmitResponse>>(
     "/api/client/user/files/transcode",
     {
       filename: extractFilenameFromKey(key),
@@ -144,6 +148,43 @@ async function requestTranscode(key: string) {
   );
 
   return res.data.data;
+}
+
+async function requestTranscodeStatus(taskId: string) {
+  const res = await clientApi.get<ApiEnvelope<TranscodeTaskStatusResponse>>(
+    `/api/client/user/files/transcode/status?taskId=${encodeURIComponent(taskId)}`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  return res.data.data;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function waitForTranscodeMedia(taskId: string) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < TRANSCODE_POLL_TIMEOUT_MS) {
+    const status = await requestTranscodeStatus(taskId);
+
+    if (status.status === "COMPLETE" && status.media) {
+      return status.media;
+    }
+
+    if (status.status === "ERROR") {
+      throw new Error(status.errorMessage || "Video transcode failed");
+    }
+
+    await sleep(TRANSCODE_POLL_INTERVAL_MS);
+  }
+
+  throw new Error("Video transcode timed out");
 }
 
 function createUnsupportedTypeError(file: File) {
@@ -197,10 +238,11 @@ export async function uploadFourcutMedia(file: File) {
   }
 
   if (contentType === "WEBM") {
-    const media = await requestTranscode(uploaded.key);
+    const task = await requestTranscode(uploaded.key);
+    const media = await waitForTranscodeMedia(task.taskId);
 
     return {
-      key: uploaded.key,
+      key: media.s3Key ?? uploaded.key,
       mediaId: media.mediaId,
       objectUrl: media.downloadUrl ?? uploaded.objectUrl,
       downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
