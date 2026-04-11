@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
@@ -12,7 +12,7 @@ import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useShootSession } from "@/lib/shootSessionStore";
 
-export default function ShootPage() {
+function ShootPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queriedFrameId = parseFrameIdQuery(searchParams.get("frame"));
@@ -87,3 +87,12 @@ export default function ShootPage() {
     </main>
   );
 }
+
+export default function ShootPage() {
+  return (
+    <Suspense fallback={null}>
+      <ShootPageContent />
+    </Suspense>
+  );
+}
+

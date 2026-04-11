@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
@@ -13,7 +13,7 @@ import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
 
-export default function ThemePage() {
+function ThemePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queriedFrameId = parseFrameIdQuery(searchParams.get("frame"));
@@ -96,3 +96,12 @@ export default function ThemePage() {
     </main>
   );
 }
+
+export default function ThemePage() {
+  return (
+    <Suspense fallback={null}>
+      <ThemePageContent />
+    </Suspense>
+  );
+}
+

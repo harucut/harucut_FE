@@ -35,17 +35,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const setBackgroundColor = useThemeEditorStore((s) => s.setBackgroundColor);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
-  const updateDraft = useThemeDraftStore((s) => s.updateDraft);
-  const { draftId, remoteFrameId } = useThemeSession();
+  const { remoteFrameId } = useThemeSession();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const draft = useThemeDraftStore((s) =>
-    draftId ? s.drafts.find((d) => d.id === draftId) : undefined,
-  );
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
   const hasNonColorBackground = background.type !== "COLOR";
 
@@ -59,9 +55,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     async function loadRemoteFrame() {
       if (!remoteFrameId) {
         setLoadError(null);
-        if (draft && draft.data.frameId === frameId) {
-          importJson(draft.data);
-        }
         return;
       }
 
@@ -92,20 +85,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     return () => {
       cancelled = true;
     };
-  }, [draft, frameId, importJson, remoteFrameId]);
+  }, [importJson, remoteFrameId]);
 
   useEffect(() => {
     if (remoteFrameId) return;
 
-    if (draft) {
-      setTitle(draft.name ?? "저장한 테마 프레임");
-      setDescription("내가 저장한 테마 프레임");
-      return;
-    }
-
     setTitle("새 테마 프레임");
     setDescription("하루컷에서 직접 꾸민 나만의 프레임");
-  }, [draft, remoteFrameId]);
+  }, [remoteFrameId]);
 
   useEffect(() => {
     return () => {
@@ -155,12 +142,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         await updateFrame(remoteFrameId, body);
       } else {
         await createFrame(body);
-
-        if (draft?.id) {
-          updateDraft(draft.id, themeJson, { name: title.trim() || draft.name });
-        } else {
-          addDraft(themeJson, { name: title.trim() || "새 테마 프레임" });
-        }
+        addDraft(themeJson, { name: title.trim() || "새 테마 프레임" });
       }
 
       router.push("/theme");
@@ -347,3 +329,4 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     </main>
   );
 }
+
