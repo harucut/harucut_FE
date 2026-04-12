@@ -12,9 +12,9 @@ export function useRedirectIfAuthenticated(targetPath: string = "/home") {
   useEffect(() => {
     let cancelled = false;
 
-    const checkAuth = async () => {
+    const checkSession = async () => {
       try {
-        const res = await fetch("/api/client/user-info", {
+        const res = await fetch("/api/auth/session", {
           method: "GET",
           credentials: "include",
           cache: "no-store",
@@ -22,13 +22,16 @@ export function useRedirectIfAuthenticated(targetPath: string = "/home") {
 
         if (!res.ok || cancelled) return;
 
+        const data = (await res.json()) as { authenticated?: boolean };
+        if (!data.authenticated) return;
+
         router.replace(targetPath);
       } catch (error) {
-        console.error("Failed to verify auth status", error);
+        console.error("Failed to verify auth session", error);
       }
     };
 
-    checkAuth();
+    void checkSession();
 
     return () => {
       cancelled = true;

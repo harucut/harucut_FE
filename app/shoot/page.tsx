@@ -54,8 +54,13 @@ function ShootPageContent() {
   return (
     <main className="min-h-dvh bg-zinc-950 px-2 py-6 text-white">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4">
-        <PageHeader title="??" backHref="/home" backLabel="????" />
-        <StepProgress current={1} total={4} label="??? ??" />
+        <PageHeader
+          title="촬영"
+          backHref="/home"
+          backLabel="홈으로"
+          description="촬영할 프레임을 먼저 골라 주세요."
+        />
+        <StepProgress current={1} total={4} label="프레임 선택" />
 
         <FramePicker
           selectedFrameId={selectedFrameId}
@@ -64,13 +69,13 @@ function ShootPageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmFrame}
-          confirmLabel="? ????? ????"
+          confirmLabel="촬영 시작하기"
         />
 
         <SavedFramesSection
-          title="??? ???"
-          description="?? ??? ???? ??? ???? ?? ??? ??? ? ???."
-          emptyText="? ??? ???? ??? ???? ?? ???."
+          title="저장한 프레임"
+          description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 촬영할 수 있어요."
+          emptyText="이 타입으로 저장한 프레임이 아직 없어요."
           selectedFrameId={selectedFrameId}
           frames={frames}
           isLoading={isLoading}
@@ -81,8 +86,8 @@ function ShootPageContent() {
             setSelectedRemoteFrameId(frame.frameId);
           }}
           onRefresh={refresh}
-          selectedStatusText="?? ??"
-          idleStatusText="???? ??"
+          selectedStatusText="선택됨"
+          idleStatusText="클릭해서 선택"
         />
       </div>
     </main>
