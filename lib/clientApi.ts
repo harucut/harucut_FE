@@ -1,5 +1,11 @@
 "use client";
 
+type ApiEnvelopeLike = {
+  code?: string;
+  status?: number;
+  message?: string | null;
+};
+
 type ApiResult<T> = {
   data: T;
   ok: boolean;
@@ -12,6 +18,41 @@ type ApiOptions = {
   cache?: RequestCache;
   signal?: AbortSignal;
 };
+
+function extractEnvelopeLike(value: unknown): ApiEnvelopeLike | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  return {
+    code: typeof record.code === "string" ? record.code : undefined,
+    status: typeof record.status === "number" ? record.status : undefined,
+    message:
+      typeof record.message === "string" || record.message === null
+        ? (record.message as string | null)
+        : undefined,
+  };
+}
+
+export class ApiRequestError<T = unknown> extends Error {
+  status?: number;
+  data?: T;
+  code?: string;
+  apiMessage?: string | null;
+
+  constructor(args: {
+    status?: number;
+    data?: T;
+    code?: string;
+    apiMessage?: string | null;
+  }) {
+    super(args.apiMessage || "API request failed");
+    this.name = "ApiRequestError";
+    this.status = args.status;
+    this.data = args.data;
+    this.code = args.code;
+    this.apiMessage = args.apiMessage;
+  }
+}
 
 async function request<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
@@ -46,10 +87,13 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    const error = new Error("API request failed");
-    (error as { status?: number }).status = res.status;
-    (error as { data?: T }).data = data;
-    throw error;
+    const envelope = extractEnvelopeLike(data);
+    throw new ApiRequestError<T>({
+      status: res.status,
+      data,
+      code: envelope?.code,
+      apiMessage: envelope?.message,
+    });
   }
 
   return {
