@@ -49,6 +49,7 @@ export async function uploadGeneratedFourcutFile(args: {
   extension: GeneratedFourcutAsset["extension"];
 }) {
   const { file, kind, extension } = args;
+
   const uploaded = await uploadFourcutMedia(file, {
     displayName: args.displayName,
   });
