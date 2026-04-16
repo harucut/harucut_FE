@@ -22,6 +22,15 @@ import {
   sanitizeDisplayName,
 } from "@/lib/fourcutOutput";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
+import {
+  MAX_FOURCUT_VIDEO_SECONDS,
+  TRIMMED_VIDEO_NOTICE,
+  hasVideoSourceLongerThan,
+} from "@/lib/fourcutVideo";
+import {
+  registerGeneratedWebmDebug,
+  unregisterGeneratedWebmDebug,
+} from "@/lib/generatedVideoDebug";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { shareOrCopyLink } from "@/lib/share";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
@@ -29,7 +38,7 @@ import { useUploadSession } from "@/lib/uploadSessionStore";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
 
-const MAX_SECONDS = 8;
+const VIDEO_DEBUG_SCOPE = "upload-result";
 
 type ProcessingState = "idle" | "processing" | "done" | "error";
 
@@ -70,7 +79,11 @@ export default function UploadResultPage() {
   const [isDownloadingVideo, setIsDownloadingVideo] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
   const [isSharingVideo, setIsSharingVideo] = useState(false);
+  const [hasTrimmedVideoSource, setHasTrimmedVideoSource] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageGenerationKeyRef = useRef<string | null>(null);
+  const videoGenerationKeyRef = useRef<string | null>(null);
+  const debugVideoUrlRef = useRef<string | null>(null);
 
   const selectedCount = useMemo(
     () => selectedIndexes.filter((index) => index != null).length,
@@ -138,6 +151,27 @@ export default function UploadResultPage() {
     videoConversionLimit - usedVideoConversions,
     0,
   );
+  const generationKey = useMemo(
+    () =>
+      JSON.stringify({
+        frameId,
+        remoteFrameId,
+        borderColor: effectiveBorderColor,
+        outputFilter,
+        includeVideo,
+        imageSources: imageSources.map((source) => `${source.type}:${source.src}`),
+        videoSources: videoSources.map((source) => `${source.type}:${source.src}`),
+      }),
+    [
+      effectiveBorderColor,
+      frameId,
+      imageSources,
+      includeVideo,
+      outputFilter,
+      remoteFrameId,
+      videoSources,
+    ],
+  );
 
   useEffect(() => {
     setImageState(imageResult ? "done" : "idle");
@@ -150,13 +184,48 @@ export default function UploadResultPage() {
   }, [videoResult]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function inspectVideoSources() {
+      if (!shouldPrepareVideo) {
+        setHasTrimmedVideoSource(false);
+        return;
+      }
+
+      const nextHasTrimmedVideoSource = await hasVideoSourceLongerThan(
+        videoSources,
+        MAX_FOURCUT_VIDEO_SECONDS,
+      );
+
+      if (!cancelled) {
+        setHasTrimmedVideoSource(nextHasTrimmedVideoSource);
+      }
+    }
+
+    void inspectVideoSources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldPrepareVideo, videoSources]);
+
+  useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
 
     let cancelled = false;
     const currentLayout = layout;
+    const imageGenerationKey = `${generationKey}:image`;
+    const videoGenerationKey = `${generationKey}:video`;
 
     async function prepareOutputs() {
+      let generatedImageInThisPass = false;
+
       if (!imageResult) {
+        if (imageGenerationKeyRef.current === imageGenerationKey) {
+          return;
+        }
+
+        imageGenerationKeyRef.current = imageGenerationKey;
         setImageError(null);
         setImageState("processing");
 
@@ -187,6 +256,7 @@ export default function UploadResultPage() {
           if (!cancelled) {
             setImageResult(asset);
             setImageState("done");
+            generatedImageInThisPass = true;
           }
         } catch (error) {
           console.error(error);
@@ -195,6 +265,10 @@ export default function UploadResultPage() {
             setImageError("이미지를 준비하지 못했어요. 다시 시도해 주세요.");
           }
         }
+      }
+
+      if (generatedImageInThisPass) {
+        return;
       }
 
       if (!shouldPrepareVideo) {
@@ -220,6 +294,11 @@ export default function UploadResultPage() {
         return;
       }
 
+      if (videoGenerationKeyRef.current === videoGenerationKey) {
+        return;
+      }
+
+      videoGenerationKeyRef.current = videoGenerationKey;
       setVideoError(null);
       setVideoState("processing");
 
@@ -230,7 +309,7 @@ export default function UploadResultPage() {
           sources: videoSources,
           outputFilter,
           theme: themeData,
-          seconds: MAX_SECONDS,
+          seconds: MAX_FOURCUT_VIDEO_SECONDS,
           canvas: canvasRef.current ?? undefined,
         });
 
@@ -238,7 +317,18 @@ export default function UploadResultPage() {
           frameConfig?.name ?? "harucut",
           "VIDEO",
         );
-        const file = new File([blob], `${displayName}.webm`, {
+        const filename = `${displayName}.webm`;
+
+        if (!cancelled) {
+          debugVideoUrlRef.current = registerGeneratedWebmDebug({
+            scope: VIDEO_DEBUG_SCOPE,
+            blob,
+            filename,
+            previousUrl: debugVideoUrlRef.current,
+          });
+        }
+
+        const file = new File([blob], filename, {
           type: "video/webm",
         });
         const asset = await uploadGeneratedFourcutFile({
@@ -272,6 +362,7 @@ export default function UploadResultPage() {
     effectiveBorderColor,
     frameConfig?.name,
     frameId,
+    generationKey,
     imageResult,
     imageSources,
     layout,
@@ -285,6 +376,13 @@ export default function UploadResultPage() {
     videoResult,
     videoSources,
   ]);
+
+  useEffect(() => {
+    return () => {
+      unregisterGeneratedWebmDebug(VIDEO_DEBUG_SCOPE, debugVideoUrlRef.current);
+      debugVideoUrlRef.current = null;
+    };
+  }, []);
 
   if (!frameId || !layout) return null;
 
@@ -501,6 +599,15 @@ export default function UploadResultPage() {
           </section>
         ) : null}
 
+        {shouldPrepareVideo ? (
+          <section className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-[11px] text-amber-100">
+            <p>영상 결과는 최대 {MAX_FOURCUT_VIDEO_SECONDS}초로 만들어요.</p>
+            {hasTrimmedVideoSource ? (
+              <p className="mt-1 text-amber-50/90">{TRIMMED_VIDEO_NOTICE}</p>
+            ) : null}
+          </section>
+        ) : null}
+
         <section className="space-y-3">
           <FramePreview
             frameId={frameId}
@@ -528,6 +635,10 @@ export default function UploadResultPage() {
           <button
             type="button"
             onClick={() => {
+              imageGenerationKeyRef.current = null;
+              videoGenerationKeyRef.current = null;
+              unregisterGeneratedWebmDebug(VIDEO_DEBUG_SCOPE, debugVideoUrlRef.current);
+              debugVideoUrlRef.current = null;
               clearResults();
               setImageState("idle");
               setVideoState("idle");
