@@ -172,4 +172,27 @@ describe("UploadResultPage", () => {
     expect(mockRecordFrameWebm).toHaveBeenCalledTimes(1);
     expect(mockConsumeVideoConversion).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the same default display name for image and video outputs", async () => {
+    render(<UploadResultPage />);
+
+    await waitFor(() => {
+      expect(mockUploadGeneratedFourcutFile).toHaveBeenCalledTimes(2);
+    });
+
+    const imageCall = mockUploadGeneratedFourcutFile.mock.calls.find(
+      ([args]) => args.kind === "IMAGE",
+    );
+    const videoCall = mockUploadGeneratedFourcutFile.mock.calls.find(
+      ([args]) => args.kind === "VIDEO",
+    );
+
+    expect(imageCall?.[0].displayName).toBe(videoCall?.[0].displayName);
+    expect(imageCall?.[0].file.name).toBe(
+      `${videoCall?.[0].displayName}.png`,
+    );
+    expect(videoCall?.[0].file.name).toBe(
+      `${imageCall?.[0].displayName}.webm`,
+    );
+  });
 });

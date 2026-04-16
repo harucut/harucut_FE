@@ -82,6 +82,8 @@ export default function ShootResultPage() {
   const [isSharingVideo, setIsSharingVideo] = useState(false);
   const [hasTrimmedVideoSource, setHasTrimmedVideoSource] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const displayNameGenerationKeyRef = useRef<string | null>(null);
+  const defaultDisplayNameRef = useRef("");
   const imageGenerationKeyRef = useRef<string | null>(null);
   const videoGenerationKeyRef = useRef<string | null>(null);
   const debugVideoUrlRef = useRef<string | null>(null);
@@ -174,6 +176,14 @@ export default function ShootResultPage() {
       videoSources,
     ],
   );
+  if (displayNameGenerationKeyRef.current !== generationKey) {
+    displayNameGenerationKeyRef.current = generationKey;
+    defaultDisplayNameRef.current = buildDefaultDisplayName(
+      frameConfig?.name ?? "harucut",
+      "IMAGE",
+    );
+  }
+  const defaultDisplayName = defaultDisplayNameRef.current;
 
   useEffect(() => {
     setImageState(imageResult ? "done" : "idle");
@@ -241,10 +251,7 @@ export default function ShootResultPage() {
             canvas: canvasRef.current ?? undefined,
           });
 
-          const displayName = buildDefaultDisplayName(
-            frameConfig?.name ?? "harucut",
-            "IMAGE",
-          );
+          const displayName = defaultDisplayName;
           const file = new File([blob], `${displayName}.png`, {
             type: "image/png",
           });
@@ -315,10 +322,7 @@ export default function ShootResultPage() {
           canvas: canvasRef.current ?? undefined,
         });
 
-        const displayName = buildDefaultDisplayName(
-          frameConfig?.name ?? "harucut",
-          "VIDEO",
-        );
+        const displayName = defaultDisplayName;
         const filename = `${displayName}.webm`;
 
         if (!cancelled) {
@@ -361,6 +365,7 @@ export default function ShootResultPage() {
     };
   }, [
     consumeVideoConversion,
+    defaultDisplayName,
     effectiveBorderColor,
     frameConfig?.name,
     frameId,
