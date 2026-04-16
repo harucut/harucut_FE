@@ -19,14 +19,14 @@ describe("user media preview helpers", () => {
         mediaId: 10,
         mediaType: "VIDEO" as const,
         s3Key: "uploads/result.mp4",
-        displayName: "harucut_20260416_213654",
-        downloadUrl: "https://example.com/result.mp4",
+        displayName: "harucut_20260416_213654.mp4",
+        downloadUrl: null,
       },
       {
         mediaId: 11,
         mediaType: "PHOTO" as const,
         s3Key: "uploads/result.png",
-        displayName: "harucut_20260416_213654",
+        displayName: "harucut_20260416_213654.png",
         downloadUrl: "https://example.com/result.png",
       },
     ];

@@ -31,6 +31,10 @@ import {
   registerGeneratedWebmDebug,
   unregisterGeneratedWebmDebug,
 } from "@/lib/generatedVideoDebug";
+import {
+  registerGeneratedPngDebug,
+  unregisterGeneratedPngDebug,
+} from "@/lib/generatedImageDebug";
 import { isNotNull } from "@/lib/guards";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { shareOrCopyLink } from "@/lib/share";
@@ -40,6 +44,7 @@ import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi"
 import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
 
 const VIDEO_DEBUG_SCOPE = "shoot-result";
+const IMAGE_DEBUG_SCOPE = "shoot-result-image";
 
 type ProcessingState = "idle" | "processing" | "done" | "error";
 
@@ -82,6 +87,7 @@ export default function ShootResultPage() {
   const [isSharingVideo, setIsSharingVideo] = useState(false);
   const [hasTrimmedVideoSource, setHasTrimmedVideoSource] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const debugImageUrlRef = useRef<string | null>(null);
   const displayNameGenerationKeyRef = useRef<string | null>(null);
   const defaultDisplayNameRef = useRef("");
   const imageGenerationKeyRef = useRef<string | null>(null);
@@ -252,6 +258,15 @@ export default function ShootResultPage() {
           });
 
           const displayName = defaultDisplayName;
+          if (!cancelled) {
+            debugImageUrlRef.current = registerGeneratedPngDebug({
+              scope: IMAGE_DEBUG_SCOPE,
+              blob,
+              filename: `${displayName}.png`,
+              previousUrl: debugImageUrlRef.current,
+            });
+          }
+
           const file = new File([blob], `${displayName}.png`, {
             type: "image/png",
           });
@@ -386,6 +401,8 @@ export default function ShootResultPage() {
 
   useEffect(() => {
     return () => {
+      unregisterGeneratedPngDebug(IMAGE_DEBUG_SCOPE, debugImageUrlRef.current);
+      debugImageUrlRef.current = null;
       unregisterGeneratedWebmDebug(VIDEO_DEBUG_SCOPE, debugVideoUrlRef.current);
       debugVideoUrlRef.current = null;
     };
@@ -644,6 +661,8 @@ export default function ShootResultPage() {
             onClick={() => {
               imageGenerationKeyRef.current = null;
               videoGenerationKeyRef.current = null;
+              unregisterGeneratedPngDebug(IMAGE_DEBUG_SCOPE, debugImageUrlRef.current);
+              debugImageUrlRef.current = null;
               unregisterGeneratedWebmDebug(VIDEO_DEBUG_SCOPE, debugVideoUrlRef.current);
               debugVideoUrlRef.current = null;
               clearResults();

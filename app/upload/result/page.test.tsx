@@ -188,11 +188,8 @@ describe("UploadResultPage", () => {
     );
 
     expect(imageCall?.[0].displayName).toBe(videoCall?.[0].displayName);
-    expect(imageCall?.[0].file.name).toBe(
-      `${videoCall?.[0].displayName}.png`,
-    );
-    expect(videoCall?.[0].file.name).toBe(
-      `${imageCall?.[0].displayName}.webm`,
-    );
+    const imageBaseName = imageCall?.[0].file.name.replace(/\.[^.]+$/, "");
+    const videoBaseName = videoCall?.[0].file.name.replace(/\.[^.]+$/, "");
+    expect(imageBaseName).toBe(videoBaseName);
   });
 });

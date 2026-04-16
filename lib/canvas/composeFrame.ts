@@ -5,6 +5,7 @@ import {
   type FourcutFilterId,
 } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { MuxerOptions } from "webm-muxer";
 
 export type FrameLayout = {
   totalWidth: number;
@@ -21,6 +22,10 @@ type SlotDrawable =
   | { kind: "video"; el: HTMLVideoElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
+type SupportedVideoEncoderConfig = {
+  encoderConfig: VideoEncoderConfig;
+  muxerVideoOptions: NonNullable<MuxerOptions<any>["video"]>;
+};
 
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
@@ -83,12 +88,77 @@ export async function downloadFromUrl(url: string, filename?: string) {
   }
 }
 
+async function waitForVideoData(video: HTMLVideoElement) {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const onLoadedData = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error(video.error?.message ?? "video load error"));
+    };
+    const cleanup = () => {
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("error", onError);
+    };
+
+    video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("error", onError);
+  });
+}
+
+function resolveVideoFrameTime(elapsedSeconds: number, duration: number) {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+
+  if (elapsedSeconds < duration) {
+    return elapsedSeconds;
+  }
+
+  return elapsedSeconds % duration;
+}
+
+async function seekVideoToTime(video: HTMLVideoElement, nextTime: number) {
+  await waitForVideoData(video);
+
+  if (Math.abs(video.currentTime - nextTime) < 0.001) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const onSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error(video.error?.message ?? "video seek error"));
+    };
+    const cleanup = () => {
+      video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("error", onError);
+    };
+
+    video.addEventListener("seeked", onSeeked);
+    video.addEventListener("error", onError);
+    video.currentTime = nextTime;
+  });
+}
+
 async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
     sources.map(async (source) => {
       if (source.type === "video") {
         const video = await loadVideo(source.src);
-        video.currentTime = 0;
+        const initialFrameTime =
+          Number.isFinite(video.duration) && video.duration > 0.1 ? 0.1 : 0;
+        await seekVideoToTime(video, initialFrameTime);
         return { kind: "video", el: video };
       }
 
@@ -120,6 +190,81 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
   );
 
   return map;
+}
+
+async function resolveVideoEncoderConfig(
+  width: number,
+  height: number,
+  fps: number,
+): Promise<SupportedVideoEncoderConfig> {
+  const bitrate = Math.max(
+    8_000_000,
+    Math.round(width * height * fps * 0.12),
+  );
+
+  const candidates: SupportedVideoEncoderConfig[] = [
+    {
+      encoderConfig: {
+        codec: "vp09.00.10.08",
+        width,
+        height,
+        bitrate,
+        framerate: fps,
+        latencyMode: "quality",
+      },
+      muxerVideoOptions: {
+        codec: "V_VP9",
+        width,
+        height,
+        frameRate: fps,
+      },
+    },
+    {
+      encoderConfig: {
+        codec: "vp8",
+        width,
+        height,
+        bitrate,
+        framerate: fps,
+        latencyMode: "quality",
+      },
+      muxerVideoOptions: {
+        codec: "V_VP8",
+        width,
+        height,
+        frameRate: fps,
+      },
+    },
+  ];
+
+  for (const candidate of candidates) {
+    const support = await VideoEncoder.isConfigSupported(
+      candidate.encoderConfig,
+    ).catch(() => null);
+
+    if (support?.supported) {
+      return {
+        encoderConfig: support.config ?? candidate.encoderConfig,
+        muxerVideoOptions: candidate.muxerVideoOptions,
+      };
+    }
+  }
+
+  throw new Error("No supported WebCodecs video encoder configuration found");
+}
+
+async function syncVideoDrawablesToElapsedTime(
+  drawables: Array<{ kind: "video"; el: HTMLVideoElement }>,
+  elapsedSeconds: number,
+) {
+  await Promise.all(
+    drawables.map((drawable) =>
+      seekVideoToTime(
+        drawable.el,
+        resolveVideoFrameTime(elapsedSeconds, drawable.el.duration),
+      ),
+    ),
+  );
 }
 
 function drawThemeOverlay(
@@ -301,82 +446,69 @@ export async function recordFrameWebm(opts: {
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
-
-  await Promise.all(
-    drawables
-      .filter(
-        (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
-          drawable.kind === "video",
-      )
-      .map((drawable) => drawable.el.play().catch(() => undefined)),
+  const videoDrawables = drawables.filter(
+    (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
+      drawable.kind === "video",
   );
 
-  const stream = canvas.captureStream(fps);
-  const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-    ? "video/webm;codecs=vp9"
-    : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
-      ? "video/webm;codecs=vp8"
-      : "video/webm";
-
-  const recorder = new MediaRecorder(stream, { mimeType });
-  const chunks: BlobPart[] = [];
-
-  recorder.ondataavailable = (event) => {
-    if (event.data && event.data.size > 0) chunks.push(event.data);
-  };
-
-  const stopped = new Promise<Blob>((resolve, reject) => {
-    recorder.onstop = () => {
-      try {
-        resolve(new Blob(chunks, { type: "video/webm" }));
-      } catch (error) {
-        reject(error);
-      }
-    };
-    recorder.onerror = () => reject(new Error("recorder error"));
+  const frameDurationMicroseconds = Math.round(1_000_000 / fps);
+  const totalFrames = Math.max(1, Math.round(seconds * fps) + 1);
+  const encoderSupport = await resolveVideoEncoderConfig(
+    layout.totalWidth,
+    layout.totalHeight,
+    fps,
+  );
+  const { ArrayBufferTarget, Muxer } = await import("webm-muxer");
+  const muxer = new Muxer({
+    target: new ArrayBufferTarget(),
+    video: encoderSupport.muxerVideoOptions,
+    firstTimestampBehavior: "offset",
   });
 
-  recorder.start();
-
-  const start = performance.now();
-
-  await new Promise<void>((resolve) => {
-    const tick = () => {
-      const elapsed = (performance.now() - start) / 1000;
-
-      drawFrameOnce(
-        ctx,
-        layout,
-        borderColor,
-        drawables,
-        outputFilter,
-        theme,
-        overlayImages,
-      );
-
-      if (elapsed >= seconds) {
-        recorder.stop();
-
-        drawables
-          .filter(
-            (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
-              drawable.kind === "video",
-          )
-          .forEach((drawable) => {
-            try {
-              drawable.el.pause();
-            } catch {}
-          });
-
-        resolve();
-        return;
-      }
-
-      requestAnimationFrame(tick);
-    };
-
-    requestAnimationFrame(tick);
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      muxer.addVideoChunk(chunk, meta);
+    },
+    error: (error) => {
+      throw error;
+    },
   });
 
-  return stopped;
+  encoder.configure(encoderSupport.encoderConfig);
+
+  for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += 1) {
+    const elapsed = frameIndex / fps;
+    await syncVideoDrawablesToElapsedTime(videoDrawables, elapsed);
+
+    drawFrameOnce(
+      ctx,
+      layout,
+      borderColor,
+      drawables,
+      outputFilter,
+      theme,
+      overlayImages,
+    );
+
+    const frame = new VideoFrame(canvas, {
+      timestamp: frameIndex * frameDurationMicroseconds,
+      duration: frameDurationMicroseconds,
+    });
+    encoder.encode(frame, {
+      keyFrame: frameIndex === 0 || frameIndex % fps === 0,
+    });
+    frame.close();
+  }
+
+  await encoder.flush();
+  encoder.close();
+  muxer.finalize();
+
+  videoDrawables.forEach((drawable) => {
+    try {
+      drawable.el.pause();
+    } catch {}
+  });
+
+  return new Blob([muxer.target.buffer], { type: "video/webm" });
 }
