@@ -1,16 +1,13 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
-import {
-  SUPPORTED_FOURCUT_ACCEPT,
-  uploadFourcutMedia,
-} from "@/lib/presignedUploadApi";
+import { SUPPORTED_FOURCUT_ACCEPT } from "@/lib/presignedUploadApi";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
@@ -36,8 +33,6 @@ export default function UploadSelectPage() {
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!frameId) {
@@ -76,47 +71,30 @@ export default function UploadSelectPage() {
     fileInputRef.current?.click();
   };
 
-  const handleChangeFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
+  const handleChangeFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    if (files.length === 0) return;
+    const items: FrameMedia[] = Array.from(files)
+      .map((file) => {
+        const url = URL.createObjectURL(file);
 
-    setUploadError(null);
-    setIsUploadingFiles(true);
-
-    const uploadResults = await Promise.allSettled(
-      files.map(async (file) => {
-        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-          throw new Error(`Unsupported upload file type: ${file.type || file.name}`);
+        if (file.type.startsWith("image/")) {
+          return { type: "image" as const, src: url };
         }
 
-        const uploaded = await uploadFourcutMedia(file);
+        if (file.type.startsWith("video/")) {
+          return { type: "video" as const, src: url };
+        }
 
-        return {
-          type: file.type.startsWith("video/") ? "video" : "image",
-          src: uploaded.downloadUrl ?? uploaded.objectUrl,
-        } satisfies FrameMedia;
-      }),
-    );
+        return null;
+      })
+      .filter((value): value is FrameMedia => value !== null);
 
-    const items = uploadResults.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : [],
-    );
+    if (items.length === 0) return;
 
-    const failedCount = uploadResults.length - items.length;
-
-    if (items.length > 0) {
-      addMedia(items);
-    }
-
-    if (failedCount === files.length) {
-      setUploadError("사진이나 영상을 업로드하지 못했어요. 다시 시도해 주세요.");
-    } else if (failedCount > 0) {
-      setUploadError(`${failedCount}개 파일은 업로드하지 못했어요. 다시 시도해 주세요.`);
-    }
-
-    setIsUploadingFiles(false);
+    addMedia(items);
+    event.target.value = "";
   };
 
   const handleNext = () => {
@@ -157,10 +135,9 @@ export default function UploadSelectPage() {
               <button
                 type="button"
                 onClick={handleClickUpload}
-                disabled={isUploadingFiles}
-                className="h-9 rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-9 rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-100 hover:bg-zinc-700"
               >
-                {isUploadingFiles ? "업로드 중..." : "사진 또는 영상 추가하기"}
+                사진 또는 영상 추가하기
               </button>
 
               <input
@@ -175,10 +152,6 @@ export default function UploadSelectPage() {
               <p className="text-[10px] text-zinc-500">
                 여러 파일을 한 번에 넣고 프레임에 어울릴 4개를 선택할 수 있어요.
               </p>
-
-              {uploadError ? (
-                <p className="text-[10px] text-rose-300">{uploadError}</p>
-              ) : null}
 
               <FrameOutputOptionsPanel
                 borderColor={borderColor}
