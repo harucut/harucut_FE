@@ -1,10 +1,10 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import UploadSelectPage from "@/app/upload/select/page";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockAddMedia = jest.fn();
-const mockUploadFourcutMedia = jest.fn();
+const mockCreateObjectURL = jest.fn();
 
 const uploadSessionState = {
   frameId: "classic-4",
@@ -61,24 +61,19 @@ jest.mock("@/lib/uploadSessionStore", () => ({
 
 jest.mock("@/lib/presignedUploadApi", () => ({
   SUPPORTED_FOURCUT_ACCEPT: "image/png,video/mp4,video/webm",
-  uploadFourcutMedia: (...args: unknown[]) => mockUploadFourcutMedia(...args),
 }));
 
 describe("UploadSelectPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreateObjectURL.mockReturnValue("blob:preview-image");
+    URL.createObjectURL = mockCreateObjectURL;
     uploadSessionState.media = [];
     uploadSessionState.selectedIndexes = [null, null, null, null];
     uploadSessionState.frameId = "classic-4";
   });
 
-  it("uploads selected files before adding them to the session", async () => {
-    mockUploadFourcutMedia.mockResolvedValueOnce({
-      mediaId: 11,
-      objectUrl: "https://example.com/source.png",
-      downloadUrl: "https://example.com/source.png?sig=1",
-    });
-
+  it("adds selected files as local preview media without uploading them", () => {
     const { container } = render(<UploadSelectPage />);
     const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
 
@@ -89,14 +84,9 @@ describe("UploadSelectPage", () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => {
-      expect(mockUploadFourcutMedia).toHaveBeenCalledWith(file);
-    });
-
-    await waitFor(() => {
-      expect(mockAddMedia).toHaveBeenCalledWith([
-        { type: "image", src: "https://example.com/source.png?sig=1" },
-      ]);
-    });
+    expect(mockCreateObjectURL).toHaveBeenCalledWith(file);
+    expect(mockAddMedia).toHaveBeenCalledWith([
+      { type: "image", src: "blob:preview-image" },
+    ]);
   });
 });
