@@ -21,6 +21,9 @@ type SlotDrawable =
   | { kind: "video"; el: HTMLVideoElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
+type CanvasStreamTrack = MediaStreamTrack & {
+  requestFrame?: () => void;
+};
 
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
@@ -83,12 +86,81 @@ export async function downloadFromUrl(url: string, filename?: string) {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function waitForVideoData(video: HTMLVideoElement) {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const onLoadedData = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error(video.error?.message ?? "video load error"));
+    };
+    const cleanup = () => {
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("error", onError);
+    };
+
+    video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("error", onError);
+  });
+}
+
+function resolveVideoFrameTime(elapsedSeconds: number, duration: number) {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+
+  if (elapsedSeconds < duration) {
+    return elapsedSeconds;
+  }
+
+  return elapsedSeconds % duration;
+}
+
+async function seekVideoToTime(video: HTMLVideoElement, nextTime: number) {
+  await waitForVideoData(video);
+
+  if (Math.abs(video.currentTime - nextTime) < 0.001) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const onSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error(video.error?.message ?? "video seek error"));
+    };
+    const cleanup = () => {
+      video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("error", onError);
+    };
+
+    video.addEventListener("seeked", onSeeked);
+    video.addEventListener("error", onError);
+    video.currentTime = nextTime;
+  });
+}
+
 async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
     sources.map(async (source) => {
       if (source.type === "video") {
         const video = await loadVideo(source.src);
-        video.currentTime = 0;
+        await seekVideoToTime(video, 0);
         return { kind: "video", el: video };
       }
 
@@ -301,24 +373,22 @@ export async function recordFrameWebm(opts: {
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
-
-  await Promise.all(
-    drawables
-      .filter(
-        (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
-          drawable.kind === "video",
-      )
-      .map((drawable) => drawable.el.play().catch(() => undefined)),
+  const videoDrawables = drawables.filter(
+    (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
+      drawable.kind === "video",
   );
 
-  const stream = canvas.captureStream(fps);
+  const stream = canvas.captureStream(0);
+  const [track] = stream.getVideoTracks() as CanvasStreamTrack[];
+  const canRequestFrame = typeof track?.requestFrame === "function";
+  const activeStream = canRequestFrame ? stream : canvas.captureStream(fps);
   const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
     ? "video/webm;codecs=vp9"
     : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
       ? "video/webm;codecs=vp8"
       : "video/webm";
 
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(activeStream, { mimeType });
   const chunks: BlobPart[] = [];
 
   recorder.ondataavailable = (event) => {
@@ -338,11 +408,19 @@ export async function recordFrameWebm(opts: {
 
   recorder.start();
 
-  const start = performance.now();
+  if (canRequestFrame && track) {
+    const start = performance.now();
+    const totalFrames = Math.max(1, Math.round(seconds * fps));
 
-  await new Promise<void>((resolve) => {
-    const tick = () => {
-      const elapsed = (performance.now() - start) / 1000;
+    for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += 1) {
+      const elapsed = frameIndex / fps;
+
+      await Promise.all(
+        videoDrawables.map(async (drawable) => {
+          const nextTime = resolveVideoFrameTime(elapsed, drawable.el.duration);
+          await seekVideoToTime(drawable.el, nextTime);
+        }),
+      );
 
       drawFrameOnce(
         ctx,
@@ -354,28 +432,53 @@ export async function recordFrameWebm(opts: {
         overlayImages,
       );
 
-      if (elapsed >= seconds) {
-        recorder.stop();
+      track.requestFrame?.();
 
-        drawables
-          .filter(
-            (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
-              drawable.kind === "video",
-          )
-          .forEach((drawable) => {
-            try {
-              drawable.el.pause();
-            } catch {}
-          });
-
-        resolve();
-        return;
+      const nextFrameDeadline = start + ((frameIndex + 1) * 1000) / fps;
+      const remainingDelay = nextFrameDeadline - performance.now();
+      if (remainingDelay > 0) {
+        await sleep(remainingDelay);
       }
+    }
+  } else {
+    await Promise.all(
+      videoDrawables.map((drawable) => drawable.el.play().catch(() => undefined)),
+    );
+
+    const start = performance.now();
+
+    await new Promise<void>((resolve) => {
+      const tick = () => {
+        const elapsed = (performance.now() - start) / 1000;
+
+        drawFrameOnce(
+          ctx,
+          layout,
+          borderColor,
+          drawables,
+          outputFilter,
+          theme,
+          overlayImages,
+        );
+
+        if (elapsed >= seconds) {
+          resolve();
+          return;
+        }
+
+        requestAnimationFrame(tick);
+      };
 
       requestAnimationFrame(tick);
-    };
+    });
+  }
 
-    requestAnimationFrame(tick);
+  recorder.stop();
+
+  videoDrawables.forEach((drawable) => {
+    try {
+      drawable.el.pause();
+    } catch {}
   });
 
   return stopped;
