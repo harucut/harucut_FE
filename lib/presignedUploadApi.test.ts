@@ -199,19 +199,41 @@ describe("presigned upload flow", () => {
         headers: new Headers(),
       });
 
-    mockGet.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
+    mockGet
+      .mockResolvedValueOnce({
         data: {
-          downloadUrl: "https://example.com/video.webm?sig=3",
+          code: "GEN-000",
+          status: 200,
+          message: null,
+          data: {
+            downloadUrl: "https://example.com/video.webm?sig=3",
+          },
         },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+      })
+      .mockResolvedValueOnce({
+        data: {
+          code: "GEN-000",
+          status: 200,
+          message: null,
+          data: {
+            taskId: "task-1",
+            jobId: "job-1",
+            status: "COMPLETE",
+            media: {
+              mediaId: 8,
+              mediaType: "VIDEO",
+              s3Key: "uploads/users/u/video.mp4",
+              downloadUrl,
+            },
+          },
+        },
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+      });
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
@@ -226,7 +248,7 @@ describe("presigned upload flow", () => {
       filename: "video.webm",
     });
     expect(result).toEqual({
-      key,
+      key: "uploads/users/u/video.mp4",
       mediaId: 8,
       objectUrl: downloadUrl,
       downloadUrl,
