@@ -13,35 +13,50 @@ export function getUserMediaTitle(item: UserMedia) {
 }
 
 function normalizeUserMediaTitle(value: string) {
-  return value.trim().toLowerCase();
+  return value
+    .trim()
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase();
 }
 
-export function getUserMediaPreview(item: UserMedia, items: UserMedia[]) {
+export function getUserMediaPreviewTarget(item: UserMedia, items: UserMedia[]) {
   if (item.mediaType === "PHOTO") {
     return {
       kind: "image" as const,
-      url: item.downloadUrl,
+      media: item,
     };
   }
 
   const titleKey = normalizeUserMediaTitle(getUserMediaTitle(item));
   const matchedPhoto = items.find((candidate) => {
     if (candidate.mediaType !== "PHOTO") return false;
-    if (!candidate.downloadUrl) return false;
     if (candidate.mediaId === item.mediaId) return false;
 
     return normalizeUserMediaTitle(getUserMediaTitle(candidate)) === titleKey;
   });
 
-  if (matchedPhoto?.downloadUrl) {
+  if (matchedPhoto) {
     return {
       kind: "image" as const,
-      url: matchedPhoto.downloadUrl,
+      media: matchedPhoto,
     };
   }
 
   return {
     kind: "video" as const,
-    url: item.downloadUrl,
+    media: item,
+  };
+}
+
+export function getUserMediaPreview(
+  item: UserMedia,
+  items: UserMedia[],
+  resolvedUrls: Record<number, string> = {},
+) {
+  const target = getUserMediaPreviewTarget(item, items);
+
+  return {
+    kind: target.kind,
+    url: resolvedUrls[target.media.mediaId] ?? target.media.downloadUrl,
   };
 }
