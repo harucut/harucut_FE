@@ -24,7 +24,7 @@ type SlotDrawable =
 type OverlayImageMap = Map<string, HTMLImageElement>;
 type SupportedVideoEncoderConfig = {
   encoderConfig: VideoEncoderConfig;
-  muxerVideoOptions: NonNullable<MuxerOptions<ArrayBufferTarget>["video"]>;
+  muxerVideoOptions: NonNullable<MuxerOptions<any>["video"]>;
 };
 
 function ensureCtx(canvas: HTMLCanvasElement) {
@@ -244,7 +244,7 @@ async function resolveVideoEncoderConfig(
 
     if (support?.supported) {
       return {
-        encoderConfig: support.config,
+        encoderConfig: support.config ?? candidate.encoderConfig,
         muxerVideoOptions: candidate.muxerVideoOptions,
       };
     }
