@@ -7,7 +7,7 @@ import type {
   TranscodeTaskSubmitResponse,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
-import { registerUserMedia } from "@/lib/userMediaApi";
+import { registerUserMedia, updateMediaDisplayName } from "@/lib/userMediaApi";
 
 type PresignedUploadData = {
   key: string;
@@ -215,7 +215,10 @@ export function resolveFourcutUploadType(file: File): PresignedUploadType {
     : PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO;
 }
 
-export async function uploadFourcutMedia(file: File) {
+export async function uploadFourcutMedia(
+  file: File,
+  opts: { displayName?: string } = {},
+) {
   const contentType = resolveUploadContentType(file);
   const uploaded = await uploadToS3WithPresigned({
     file,
@@ -227,6 +230,7 @@ export async function uploadFourcutMedia(file: File) {
     const media = await registerUserMedia({
       mediaType: "PHOTO",
       s3Key: uploaded.key,
+      ...(opts.displayName ? { displayName: opts.displayName } : {}),
     });
 
     return {
@@ -240,18 +244,23 @@ export async function uploadFourcutMedia(file: File) {
   if (contentType === "WEBM") {
     const task = await requestTranscode(uploaded.key);
     const media = await waitForTranscodeMedia(task.taskId);
+    const resolvedMedia =
+      opts.displayName && media.mediaId
+        ? await updateMediaDisplayName(media.mediaId, opts.displayName)
+        : media;
 
     return {
-      key: media.s3Key ?? uploaded.key,
-      mediaId: media.mediaId,
-      objectUrl: media.downloadUrl ?? uploaded.objectUrl,
-      downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
+      key: resolvedMedia.s3Key ?? uploaded.key,
+      mediaId: resolvedMedia.mediaId,
+      objectUrl: resolvedMedia.downloadUrl ?? uploaded.objectUrl,
+      downloadUrl: resolvedMedia.downloadUrl ?? uploaded.downloadUrl,
     };
   }
 
   const media = await registerUserMedia({
     mediaType: "VIDEO",
     s3Key: uploaded.key,
+    ...(opts.displayName ? { displayName: opts.displayName } : {}),
   });
 
   return {

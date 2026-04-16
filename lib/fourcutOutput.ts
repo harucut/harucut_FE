@@ -19,10 +19,26 @@ export function sanitizeDisplayName(input: string, fallback: string) {
   return normalized || fallback;
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
 export function buildDefaultDisplayName(frameName: string, kind: GeneratedFourcutAsset["kind"]) {
-  const safeFrameName = sanitizeDisplayName(frameName, "harucut").replace(/\s+/g, "_");
+  void frameName;
   void kind;
-  return `${safeFrameName}-${Date.now()}`;
+  const now = new Date();
+  const formatted = [
+    now.getFullYear(),
+    pad2(now.getMonth() + 1),
+    pad2(now.getDate()),
+  ].join("");
+  const time = [
+    pad2(now.getHours()),
+    pad2(now.getMinutes()),
+    pad2(now.getSeconds()),
+  ].join("");
+
+  return `harucut_${formatted}_${time}`;
 }
 
 export function buildDownloadFilename(
