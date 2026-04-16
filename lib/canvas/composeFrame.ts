@@ -21,9 +21,6 @@ type SlotDrawable =
   | { kind: "video"; el: HTMLVideoElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
-type CanvasStreamTrack = MediaStreamTrack & {
-  requestFrame?: () => void;
-};
 
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
@@ -84,12 +81,6 @@ export async function downloadFromUrl(url: string, filename?: string) {
   } catch {
     triggerDownloadLink(url, filename);
   }
-}
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 }
 
 async function waitForVideoData(video: HTMLVideoElement) {
@@ -160,7 +151,9 @@ async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
     sources.map(async (source) => {
       if (source.type === "video") {
         const video = await loadVideo(source.src);
-        await seekVideoToTime(video, 0);
+        const initialFrameTime =
+          Number.isFinite(video.duration) && video.duration > 0.001 ? 0.001 : 0;
+        await seekVideoToTime(video, initialFrameTime);
         return { kind: "video", el: video };
       }
 
@@ -378,10 +371,16 @@ export async function recordFrameWebm(opts: {
       drawable.kind === "video",
   );
 
-  const stream = canvas.captureStream(0);
-  const [track] = stream.getVideoTracks() as CanvasStreamTrack[];
-  const canRequestFrame = typeof track?.requestFrame === "function";
-  const activeStream = canRequestFrame ? stream : canvas.captureStream(fps);
+  await Promise.all(
+    videoDrawables.map(async (drawable) => {
+      try {
+        drawable.el.currentTime = resolveVideoFrameTime(0, drawable.el.duration);
+        await drawable.el.play();
+      } catch {}
+    }),
+  );
+
+  const activeStream = canvas.captureStream(fps);
   const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
     ? "video/webm;codecs=vp9"
     : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
@@ -408,19 +407,10 @@ export async function recordFrameWebm(opts: {
 
   recorder.start();
 
-  if (canRequestFrame && track) {
-    const start = performance.now();
-    const totalFrames = Math.max(1, Math.round(seconds * fps));
-
-    for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += 1) {
-      const elapsed = frameIndex / fps;
-
-      await Promise.all(
-        videoDrawables.map(async (drawable) => {
-          const nextTime = resolveVideoFrameTime(elapsed, drawable.el.duration);
-          await seekVideoToTime(drawable.el, nextTime);
-        }),
-      );
+  await new Promise<void>((resolve) => {
+    const startedAt = performance.now();
+    const intervalId = window.setInterval(() => {
+      const elapsed = (performance.now() - startedAt) / 1000;
 
       drawFrameOnce(
         ctx,
@@ -432,46 +422,12 @@ export async function recordFrameWebm(opts: {
         overlayImages,
       );
 
-      track.requestFrame?.();
-
-      const nextFrameDeadline = start + ((frameIndex + 1) * 1000) / fps;
-      const remainingDelay = nextFrameDeadline - performance.now();
-      if (remainingDelay > 0) {
-        await sleep(remainingDelay);
+      if (elapsed >= seconds) {
+        window.clearInterval(intervalId);
+        resolve();
       }
-    }
-  } else {
-    await Promise.all(
-      videoDrawables.map((drawable) => drawable.el.play().catch(() => undefined)),
-    );
-
-    const start = performance.now();
-
-    await new Promise<void>((resolve) => {
-      const tick = () => {
-        const elapsed = (performance.now() - start) / 1000;
-
-        drawFrameOnce(
-          ctx,
-          layout,
-          borderColor,
-          drawables,
-          outputFilter,
-          theme,
-          overlayImages,
-        );
-
-        if (elapsed >= seconds) {
-          resolve();
-          return;
-        }
-
-        requestAnimationFrame(tick);
-      };
-
-      requestAnimationFrame(tick);
-    });
-  }
+    }, 1000 / fps);
+  });
 
   recorder.stop();
 
