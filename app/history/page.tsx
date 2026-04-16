@@ -8,6 +8,7 @@ import {
   Search,
   Share2,
 } from "lucide-react";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
@@ -84,7 +85,9 @@ export default function HistoryPage() {
       } catch (loadError) {
         console.error(loadError);
         if (!cancelled) {
-          setError("기록을 불러오지 못했어요.");
+          setError(
+            getUserFacingApiErrorMessage(loadError, "기록을 불러오지 못했어요."),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -149,7 +152,12 @@ export default function HistoryPage() {
       );
     } catch (downloadError) {
       console.error(downloadError);
-      alert("다운로드에 실패했어요.");
+      alert(
+        getUserFacingApiErrorMessage(
+          downloadError,
+          "다운로드를 준비하지 못했어요.",
+        ),
+      );
     } finally {
       setDownloadingId(null);
     }
@@ -173,7 +181,12 @@ export default function HistoryPage() {
       }
     } catch (shareError) {
       console.error(shareError);
-      alert("공유 링크를 준비하지 못했어요.");
+      alert(
+        getUserFacingApiErrorMessage(
+          shareError,
+          "공유 링크를 준비하지 못했어요.",
+        ),
+      );
     } finally {
       setSharingId(null);
     }

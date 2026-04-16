@@ -21,6 +21,7 @@ import {
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
@@ -148,7 +149,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       router.push("/theme");
     } catch (error) {
       console.error(error);
-      alert("저장에 실패했습니다.");
+      alert(getUserFacingApiErrorMessage(error, "저장에 실패했습니다."));
     } finally {
       setIsSaving(false);
     }

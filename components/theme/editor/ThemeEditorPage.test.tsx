@@ -14,6 +14,7 @@ const mockDeleteFrame = jest.fn();
 const mockGetFrame = jest.fn();
 const mockUploadPresigned = jest.fn();
 const mockRenderPreview = jest.fn();
+const mockAlert = jest.fn();
 
 let mockRemoteFrameId: number | null = null;
 
@@ -112,6 +113,7 @@ jest.mock("@/lib/canvas/renderThemePreview", () => ({
 describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.alert = mockAlert;
     mockRemoteFrameId = null;
     editorStoreState.components = [];
     editorStoreState.background = { type: "COLOR", value: "111827" };
@@ -184,5 +186,26 @@ describe("ThemeEditorPage save flow", () => {
 
     expect(mockUpdateFrame).not.toHaveBeenCalled();
     expect(mockCreateFrame).not.toHaveBeenCalled();
+  });
+
+  it("shows the plan limit message when frame creation is rejected with USR-102", async () => {
+    mockCreateFrame.mockRejectedValueOnce({
+      status: 403,
+      data: {
+        code: "USR-102",
+        status: 403,
+        message: "요금제의 월간 프레임 생성 횟수를 초과했습니다.",
+      },
+    });
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    fireEvent.click(getPrimarySaveButton(container));
+
+    await waitFor(() => {
+      expect(mockAlert).toHaveBeenCalledWith(
+        "요금제의 월간 프레임 생성 횟수를 초과했습니다.",
+      );
+    });
   });
 });

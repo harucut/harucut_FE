@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { StepProgress } from "@/components/layout/StepProgress";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
   composeFramePng,
   downloadFromUrl,
@@ -364,7 +365,9 @@ export default function UploadResultPage() {
       );
     } catch (error) {
       console.error(error);
-      alert("이미지를 다운로드하지 못했어요.");
+      alert(
+        getUserFacingApiErrorMessage(error, "이미지를 다운로드하지 못했어요."),
+      );
     } finally {
       setIsDownloadingImage(false);
     }
@@ -382,7 +385,9 @@ export default function UploadResultPage() {
       );
     } catch (error) {
       console.error(error);
-      alert("영상을 다운로드하지 못했어요.");
+      alert(
+        getUserFacingApiErrorMessage(error, "영상을 다운로드하지 못했어요."),
+      );
     } finally {
       setIsDownloadingVideo(false);
     }
@@ -405,7 +410,9 @@ export default function UploadResultPage() {
       }
     } catch (error) {
       console.error(error);
-      alert("이미지 링크를 준비하지 못했어요.");
+      alert(
+        getUserFacingApiErrorMessage(error, "이미지 링크를 준비하지 못했어요."),
+      );
     } finally {
       setIsSharingImage(false);
     }
@@ -428,7 +435,9 @@ export default function UploadResultPage() {
       }
     } catch (error) {
       console.error(error);
-      alert("영상 링크를 준비하지 못했어요.");
+      alert(
+        getUserFacingApiErrorMessage(error, "영상 링크를 준비하지 못했어요."),
+      );
     } finally {
       setIsSharingVideo(false);
     }
