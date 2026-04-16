@@ -2,17 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Download,
-  PencilLine,
-  Search,
-  Share2,
-} from "lucide-react";
+import { Download, PencilLine, Search, Share2 } from "lucide-react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
+import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
 import {
   getMediaDownloadUrl,
   listMyMedia,
@@ -21,16 +17,6 @@ import {
 import type { UserMedia, UserMediaType } from "@/lib/api-types";
 
 type FilterValue = "ALL" | UserMediaType;
-
-function getMediaTitle(item: UserMedia) {
-  const preferredName = item.displayName?.trim() || item.displayname?.trim();
-  if (preferredName) return preferredName;
-
-  const originalName = item.originalFileName?.trim();
-  if (originalName) return originalName;
-
-  return item.s3Key.split("/").pop() || "기록";
-}
 
 function getMediaTypeLabel(type: UserMediaType) {
   return type === "PHOTO" ? "사진" : "영상";
@@ -52,9 +38,18 @@ function getMediaExtension(item: UserMedia) {
   return item.mediaType === "VIDEO" ? "mp4" : "png";
 }
 
+function sortMedia(items: UserMedia[]) {
+  return [...items].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
+}
+
 export default function HistoryPage() {
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [items, setItems] = useState<UserMedia[]>([]);
+  const [previewItems, setPreviewItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -74,13 +69,14 @@ export default function HistoryPage() {
 
       try {
         const media = await listMyMedia(filter === "ALL" ? undefined : filter);
+        const nextPreviewItems =
+          filter === "ALL"
+            ? media
+            : await listMyMedia().catch(() => media);
+
         if (!cancelled) {
-          const sorted = [...media].sort((a, b) => {
-            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return bTime - aTime;
-          });
-          setItems(sorted);
+          setItems(sortMedia(media));
+          setPreviewItems(sortMedia(nextPreviewItems));
         }
       } catch (loadError) {
         console.error(loadError);
@@ -120,7 +116,7 @@ export default function HistoryPage() {
     if (!keyword) return items;
 
     return items.filter((item) =>
-      getMediaTitle(item).toLowerCase().includes(keyword),
+      getUserMediaTitle(item).toLowerCase().includes(keyword),
     );
   }, [items, search]);
 
@@ -148,7 +144,7 @@ export default function HistoryPage() {
       const url = await getMediaDownloadUrl(item.mediaId);
       await downloadFromUrl(
         url,
-        buildDownloadFilename(getMediaTitle(item), getMediaExtension(item)),
+        buildDownloadFilename(getUserMediaTitle(item), getMediaExtension(item)),
       );
     } catch (downloadError) {
       console.error(downloadError);
@@ -169,7 +165,7 @@ export default function HistoryPage() {
     try {
       const url = await getMediaDownloadUrl(item.mediaId);
       const result = await shareOrCopyLink({
-        title: `${getMediaTitle(item)} | 하루컷`,
+        title: `${getUserMediaTitle(item)} | 하루컷`,
         text: `${getMediaTypeLabel(item.mediaType)} 공유 링크`,
         url,
       });
@@ -194,7 +190,7 @@ export default function HistoryPage() {
 
   const handleStartRename = (item: UserMedia) => {
     setEditingId(item.mediaId);
-    setDraftName(getMediaTitle(item));
+    setDraftName(getUserMediaTitle(item));
   };
 
   const handleSaveName = async (item: UserMedia) => {
@@ -212,6 +208,13 @@ export default function HistoryPage() {
         updated.displayName?.trim() || updated.displayname?.trim() || nextName;
 
       setItems((current) =>
+        current.map((currentItem) =>
+          currentItem.mediaId === item.mediaId
+            ? { ...currentItem, displayName: resolvedName }
+            : currentItem,
+        ),
+      );
+      setPreviewItems((current) =>
         current.map((currentItem) =>
           currentItem.mediaId === item.mediaId
             ? { ...currentItem, displayName: resolvedName }
@@ -258,7 +261,7 @@ export default function HistoryPage() {
             <div className="flex flex-wrap gap-2">
               {[
                 { label: "전체", value: `${stats.total}개` },
-                { label: "사진", value: `${stats.photos}장` },
+                { label: "사진", value: `${stats.photos}개` },
                 { label: "영상", value: `${stats.videos}개` },
               ].map((stat) => (
                 <span
@@ -334,125 +337,129 @@ export default function HistoryPage() {
           </div>
         ) : (
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {filteredItems.map((item) => (
-              <article
-                key={item.mediaId}
-                className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4"
-              >
-                <div className="flex gap-3">
-                  <div className="h-32 w-24 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
-                    {item.downloadUrl ? (
-                      item.mediaType === "VIDEO" ? (
-                        <video
-                          src={item.downloadUrl}
-                          className="h-full w-full object-cover"
-                          muted
-                          playsInline
-                          controls={false}
-                        />
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.downloadUrl}
-                          alt={getMediaTitle(item)}
-                          className="h-full w-full object-cover"
-                        />
-                      )
-                    ) : (
-                      <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-zinc-500">
-                        미리보기를 준비하는 중이에요.
-                      </div>
-                    )}
-                  </div>
+            {filteredItems.map((item) => {
+              const preview = getUserMediaPreview(item, previewItems);
 
-                  <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] tracking-[0.2em] text-emerald-300">
-                          {getMediaTypeLabel(item.mediaType)}
-                        </span>
-                        {item.originalFileName ? (
-                          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400">
-                            original kept
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {editingId === item.mediaId ? (
-                        <div className="mt-2 flex gap-2">
-                          <input
-                            value={draftName}
-                            onChange={(e) => setDraftName(e.target.value)}
-                            className="h-9 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 text-[12px] text-zinc-100 outline-none focus:border-emerald-400"
+              return (
+                <article
+                  key={item.mediaId}
+                  className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4"
+                >
+                  <div className="flex gap-3">
+                    <div className="h-32 w-24 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
+                      {preview.url ? (
+                        preview.kind === "video" ? (
+                          <video
+                            src={preview.url}
+                            className="h-full w-full object-cover"
+                            muted
+                            playsInline
+                            controls={false}
                           />
-                          <button
-                            type="button"
-                            onClick={() => void handleSaveName(item)}
-                            disabled={savingNameId === item.mediaId}
-                            className="rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-zinc-100 disabled:opacity-50"
-                          >
-                            {savingNameId === item.mediaId ? "저장 중" : "저장"}
-                          </button>
-                        </div>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={preview.url}
+                            alt={getUserMediaTitle(item)}
+                            className="h-full w-full object-cover"
+                          />
+                        )
                       ) : (
-                        <p className="truncate text-sm font-semibold text-zinc-100">
-                          {getMediaTitle(item)}
-                        </p>
+                        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-zinc-500">
+                          미리보기를 준비하는 중이에요.
+                        </div>
                       )}
-
-                      <p className="text-[11px] text-zinc-500">
-                        {item.createdAt
-                          ? new Date(item.createdAt).toLocaleString("ko-KR")
-                          : "생성 시간을 확인할 수 없어요."}
-                      </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleDownload(item)}
-                        disabled={downloadingId === item.mediaId}
-                        className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full bg-emerald-400 px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>
-                          {downloadingId === item.mediaId
-                            ? "다운로드 중..."
-                            : "다운로드"}
-                        </span>
-                      </button>
+                    <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] tracking-[0.2em] text-emerald-300">
+                            {getMediaTypeLabel(item.mediaType)}
+                          </span>
+                          {item.originalFileName ? (
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400">
+                              original kept
+                            </span>
+                          ) : null}
+                        </div>
 
-                      <button
-                        type="button"
-                        onClick={() => void handleShare(item)}
-                        disabled={sharingId === item.mediaId}
-                        className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-white/5 disabled:opacity-50"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        <span>
-                          {sharingId === item.mediaId
-                            ? "링크 준비 중..."
-                            : "공유하기"}
-                        </span>
-                      </button>
+                        {editingId === item.mediaId ? (
+                          <div className="mt-2 flex gap-2">
+                            <input
+                              value={draftName}
+                              onChange={(e) => setDraftName(e.target.value)}
+                              className="h-9 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 text-[12px] text-zinc-100 outline-none focus:border-emerald-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveName(item)}
+                              disabled={savingNameId === item.mediaId}
+                              className="rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-zinc-100 disabled:opacity-50"
+                            >
+                              {savingNameId === item.mediaId ? "저장 중" : "저장"}
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="truncate text-sm font-semibold text-zinc-100">
+                            {getUserMediaTitle(item)}
+                          </p>
+                        )}
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editingId === item.mediaId
-                            ? setEditingId(null)
-                            : handleStartRename(item)
-                        }
-                        className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-white/5"
-                      >
-                        <PencilLine className="h-3.5 w-3.5" />
-                        <span>{editingId === item.mediaId ? "취소" : "이름 수정"}</span>
-                      </button>
+                        <p className="text-[11px] text-zinc-500">
+                          {item.createdAt
+                            ? new Date(item.createdAt).toLocaleString("ko-KR")
+                            : "생성 시간을 확인할 수 없어요."}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleDownload(item)}
+                          disabled={downloadingId === item.mediaId}
+                          className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full bg-emerald-400 px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          <span>
+                            {downloadingId === item.mediaId
+                              ? "다운로드 중..."
+                              : "다운로드"}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleShare(item)}
+                          disabled={sharingId === item.mediaId}
+                          className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-white/5 disabled:opacity-50"
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                          <span>
+                            {sharingId === item.mediaId
+                              ? "링크 준비 중..."
+                              : "공유하기"}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editingId === item.mediaId
+                              ? setEditingId(null)
+                              : handleStartRename(item)
+                          }
+                          className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-white/5"
+                        >
+                          <PencilLine className="h-3.5 w-3.5" />
+                          <span>{editingId === item.mediaId ? "취소" : "이름 수정"}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </section>
         )}
       </div>
