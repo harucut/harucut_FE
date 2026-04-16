@@ -27,6 +27,10 @@ function resolveInitialDisplayName(args: {
   objectUrl?: string;
   fallbackName: string;
 }) {
+  if (args.fallbackName.trim()) {
+    return sanitizeDisplayName(args.fallbackName, "harucut");
+  }
+
   const filename =
     extractFilenameFromUrlLike(args.downloadUrl) ??
     extractFilenameFromUrlLike(args.objectUrl);
@@ -45,7 +49,9 @@ export async function uploadGeneratedFourcutFile(args: {
   extension: GeneratedFourcutAsset["extension"];
 }) {
   const { file, kind, extension } = args;
-  const uploaded = await uploadFourcutMedia(file);
+  const uploaded = await uploadFourcutMedia(file, {
+    displayName: args.displayName,
+  });
   const displayName = resolveInitialDisplayName({
     downloadUrl: uploaded.downloadUrl,
     objectUrl: uploaded.objectUrl,

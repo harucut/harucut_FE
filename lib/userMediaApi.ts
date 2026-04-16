@@ -14,6 +14,7 @@ export async function listMyMedia(type?: UserMediaType) {
 export async function registerUserMedia(args: {
   mediaType: UserMediaType;
   s3Key: string;
+  displayName?: string;
 }) {
   const res = await clientApi.post<ApiEnvelope<UserMedia>>("/api/client/user/media", args);
   return res.data.data;
