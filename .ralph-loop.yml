@@ -170,7 +170,7 @@ git:
     - "perf"
   forbid_generic_issue_titles: true
   pr_base: "develop_loop"
-  merge_strategy: "squash"
+  merge_strategy: "merge"
   auto_create_issue_pr: false
   promote_to_develop:
     source_branch: "develop_loop"
