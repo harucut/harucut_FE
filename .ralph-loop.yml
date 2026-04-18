@@ -1,0 +1,166 @@
+project:
+  name: "harucut"
+  repo: "harucut/harucut_FE"
+  language: "ko"
+  locale: "ko-KR"
+
+goal: |
+  기존 Harucut 웹 서비스를 apps/web 워크스페이스로 이관하고,
+  iOS/Android 앱은 apps/mobile Expo 앱으로 확장 가능한 구조를 유지한다.
+  루트는 워크스페이스 오케스트레이터만 담당하고,
+  실제 웹 실행 코드는 apps/web 기준으로만 관리한다.
+  일반 기술 선택은 사용자에게 묻지 않고 진행하고,
+  결제, 인증 정보, 외부 계정, 프로덕션 배포, 비가역 데이터 작업만 사용자 확인을 요청한다.
+  Discord는 원격 제어, 감사 로그, 필수 승인 채널로만 사용한다.
+  이 저장소의 Ralph 자동화는 issue 브랜치 생성과 push까지만 자동화하고,
+  PR 생성과 상위 브랜치 승격은 사용자가 지시할 때만 수행한다.
+
+minimum_done:
+  - "기존 Next.js 웹이 apps/web에서 정상 실행된다"
+  - "루트에는 더 이상 웹 앱 소스 디렉터리와 Next 실행 설정이 남지 않는다"
+  - "apps/mobile Expo 앱이 iOS/Android용 기본 골격으로 유지된다"
+  - "루트 pnpm 스크립트가 apps/web, apps/mobile 워크스페이스를 호출한다"
+  - "pnpm verify:automation, pnpm verify:standard가 통과한다"
+  - "변경사항은 issue 브랜치에만 커밋된다"
+  - "main, develop, develop_loop에는 직접 commit/push하지 않는다"
+  - "사용자 확인이 필요한 작업은 결제, 인증 정보, 외부 계정, 프로덕션 배포, 비가역 데이터 작업으로 제한한다"
+
+loop:
+  max_iterations: 40
+  failure_threshold: 3
+  continue_without_user_by_default: true
+
+ask_user_only_when:
+  - "유료 서비스 결제 또는 구독 변경이 필요하다"
+  - "API key, secret, token, 외부 계정 인증 정보가 필요하다"
+  - "외부 계정 로그인 또는 권한 승인이 필요하다"
+  - "프로덕션 배포가 필요하다"
+  - "DB migration 또는 데이터 작업이 비가역적이거나 위험하다"
+
+writing:
+  language: "ko"
+  style: "모든 진행 요약, Discord 메시지, 로그 요약, 설명, PR 요약은 한국어로 작성한다."
+  avoid:
+    - "불필요한 영어 설명"
+    - "과장된 보고체"
+    - "내용 없는 AI 말투"
+
+context_docs:
+  - "README.md"
+  - "AGENTS.md"
+  - "docs/route-flows.md"
+  - "docs/auth-routing.md"
+  - "docs/mobile-app-blueprint.md"
+  - "docs/adr/ADR-0001-모바일-확장-전략.md"
+
+product:
+  target_users:
+    - "하루컷으로 인생네컷 사진을 만들고 편집하려는 일반 사용자"
+    - "모바일에서 촬영부터 결과 저장까지 빠르게 끝내려는 반복 사용자"
+  priorities:
+    - "촬영과 업로드 진입이 빠른 구조"
+    - "웹과 앱이 같은 서비스 경험을 유지하는 정보 구조"
+    - "초기 앱에서 홈, 촬영, 업로드, 히스토리, 마이페이지 흐름이 명확하게 보이는 것"
+    - "향후 고급 편집, 비디오 생성, 테마 에디터로 확장 가능한 구조"
+
+mobile_policy:
+  phase_1:
+    - "앱 골격, 정보 구조, 서비스 소개, API 연결 지점, 인증 저장소, 카메라/업로드 확장 기반"
+    - "복잡한 Konva/WebCodecs 편집기는 그대로 옮기지 않는다"
+  phase_2:
+    - "촬영 가이드, 업로드 흐름, 결과 확인, 히스토리/마이페이지 연결"
+  phase_3:
+    - "테마 편집, 고급 생성, 배경 제거, 비디오 생성은 서버 또는 별도 렌더링 전략으로 확장"
+
+runtime:
+  bridge_host: "127.0.0.1"
+  bridge_port: 8788
+  ascii_workspace_drive: "Y:"
+
+discord:
+  mode: "all"
+  channel_id: ""
+  thread_per_run: false
+  notify_on:
+    - "start"
+    - "issue_created"
+    - "tests_failed_3_times"
+    - "blocked"
+    - "needs_paid_service"
+    - "needs_secret"
+    - "complete"
+  remote_commands:
+    - "/ralph status"
+    - "/ralph pause"
+    - "/ralph resume"
+    - "/ralph stop"
+    - "/ralph nudge <message>"
+    - "/ralph goal <message>"
+    - "/ralph done <message>"
+    - "/ralph logs"
+    - "/ralph pr"
+
+git:
+  base_branch: "develop_loop"
+  protected_branches:
+    - "main"
+    - "develop"
+    - "develop_loop"
+  no_commit_on:
+    - "main"
+    - "develop"
+    - "develop_loop"
+  no_direct_push_to:
+    - "main"
+    - "develop"
+    - "develop_loop"
+  issue_branch_prefix: "issue"
+  issue_title_format: "<type>: <summary>"
+  issue_title_prefixes:
+    - "feat"
+    - "fix"
+    - "refactor"
+    - "docs"
+    - "chore"
+    - "ci"
+    - "test"
+    - "perf"
+  forbid_generic_issue_titles: true
+  pr_base: "develop_loop"
+  merge_strategy: "squash"
+  auto_create_issue_pr: false
+  promote_to_develop:
+    source_branch: "develop_loop"
+    target_branch: "develop"
+    strategy: "merge"
+    approval_required: true
+  auto_create_release_pr: false
+  release_to_main:
+    source_branch: "develop"
+    target_branch: "main"
+    strategy: "merge"
+    author: "alpaka206"
+    head_branch_only: true
+  delete_branch_after_merge: true
+  release_to_main_policy: "pr-only-manual-merge"
+
+commands:
+  install: "pnpm install"
+  lint: "pnpm lint:mobile"
+  test: "pnpm test:web"
+  build: "pnpm build:web"
+  verify:
+    - "python scripts/verify_ralph_setup.py"
+    - "pnpm test:web"
+    - "pnpm build:web"
+    - "pnpm lint:mobile"
+    - "pnpm typecheck:mobile"
+
+agents:
+  planner: true
+  implementer: true
+  reviewer: true
+  tester: true
+  gitops: true
+  agent_discussion_policy: "internal_codex_subagents"
+  discord_for_agent_discussion: "summary_only"

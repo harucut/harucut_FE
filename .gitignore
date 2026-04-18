@@ -1,61 +1,78 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-/playwright-report
-/test-results
-/storybook-static
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
+node_modules/
+apps/mobile/node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
 .DS_Store
+Thumbs.db
+
+.next/
+out/
+build/
+coverage/
+playwright-report/
+test-results/
+storybook-static/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/.vscode/
+
+.swc/
+.storybook/
+agent.log
+agent.log.md
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+.env.discord
+.env.discord.*
 *.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.kdb
+*.secrets.*
+secrets/
+secret/
+private/
+credentials/
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
 .vercel
 
-# typescript
 *.tsbuildinfo
 next-env.d.ts
-.omx/
-.codex/*
-!.codex/agents/
-!.codex/agents/**
-!.codex/skills/
-!.codex/skills/**
-.codex/skills/.system/**
-!.codex/prompts/
-!.codex/prompts/**
 
-# Keep OMX runtime assets local by default.
-# Re-open only project-owned OMX files below when needed.
-.codex/agents/**
-.codex/prompts/**
-.codex/skills/**
-!.codex/skills/recorday-workflow/
-!.codex/skills/recorday-workflow/**
+.codex/*
+!.codex/config.toml
+!.codex/hooks.json
+!.codex/hooks/
+!.codex/hooks/ralph_stop.py
+!.codex/rules/
+!.codex/rules/default.rules
+!.codex/agents/
+.codex/agents/*
+!.codex/agents/gitops.toml
+!.codex/agents/implementer.toml
+!.codex/agents/planner.toml
+!.codex/agents/reviewer.toml
+!.codex/agents/tester.toml
+
+.agents/*
+!.agents/plugins/
+!.agents/plugins/**
+
+.omx/
+.ralph/
+omx_discord_bridge/.venv/
+omx_discord_bridge/__pycache__/
+omx_discord_bridge/logs/
