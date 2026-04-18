@@ -31,6 +31,18 @@ def main() -> int:
     assert isinstance(runtime, dict), "runtime section must be a mapping"
     assert str(runtime.get("bridge_host", "")).strip(), "runtime.bridge_host must not be empty"
 
+    workspace_policy = config.get("workspace_policy", {})
+    assert isinstance(workspace_policy, dict), "workspace_policy must be a mapping"
+    assert workspace_policy.get("forbid_web_changes") is True, "workspace_policy.forbid_web_changes must be true"
+    read_only_paths = set(workspace_policy.get("read_only_paths", []))
+    assert "apps/web/" in read_only_paths, "apps/web/ must be listed as read-only"
+
+    verification_policy = config.get("verification_policy", {})
+    assert isinstance(verification_policy, dict), "verification_policy must be a mapping"
+    assert verification_policy.get("require_visual_check") is True, "visual check must be required"
+    assert verification_policy.get("require_api_check") is True, "api check must be required"
+    assert verification_policy.get("require_mobile_only_scope") is True, "mobile-only scope must be required"
+
     git = config.get("git", {})
     assert isinstance(git, dict), "git section must be a mapping"
     assert git.get("base_branch") == "develop_loop", "git.base_branch must be develop_loop"
@@ -57,6 +69,7 @@ def main() -> int:
         ROOT / "scripts" / "verify_workspace.py",
         ROOT / "apps" / "web" / "package.json",
         ROOT / "apps" / "mobile" / "package.json",
+        ROOT / "docs" / "mobile-qa-checklist.md",
     ):
         assert path.exists(), f"missing required file: {path.relative_to(ROOT)}"
 

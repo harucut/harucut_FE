@@ -23,7 +23,7 @@
 - `main`은 `develop -> main` PR만 허용
 - `main` PR 작성자는 `alpaka206`만 허용
 - 장수 브랜치 승격(`develop_loop -> develop`, `develop -> main`)은 `merge`
-- 이슈 브랜치에서 `develop_loop`로 들어가는 PR만 `squash`
+- 이슈 브랜치에서 `develop_loop`로 들어가는 PR도 `merge`
 - Harucut Ralph 자동화는 issue 브랜치 push까지만 자동화하고 PR은 자동 생성하지 않음
 
 ## 제목 규칙
