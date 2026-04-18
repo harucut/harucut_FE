@@ -4,7 +4,6 @@ import argparse
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -17,6 +16,7 @@ GROUPS: dict[str, list[list[str]]] = {
     ],
     "web": [
         ["pnpm", "test:web"],
+        ["pnpm", "build:web"],
     ],
     "mobile": [
         ["pnpm", "lint:mobile"],
@@ -25,6 +25,7 @@ GROUPS: dict[str, list[list[str]]] = {
     "standard": [
         ["python", "scripts/verify_ralph_setup.py"],
         ["pnpm", "test:web"],
+        ["pnpm", "build:web"],
         ["pnpm", "lint:mobile"],
         ["pnpm", "typecheck:mobile"],
     ],

@@ -1,72 +1,44 @@
-# Harucut Frontend
+# Harucut Frontend Workspace
 
-Harucut은 네 컷 사진을 위한 서비스입니다.
-사용자는 다음 기능을 사용할 수 있습니다.
+하루컷 프론트엔드 워크스페이스입니다.
 
-- 8장을 촬영한 뒤 4장을 선택해 결과물을 만든다
-- 로컬 이미지나 비디오를 업로드해 프레임을 합성한다
-- 커스텀 프레임 테마를 만들고 수정한다
-- 합성 결과를 PNG 또는 비디오로 다운로드한다
-- 저장된 미디어와 계정 정보를 관리한다
+- 웹 앱: `apps/web`
+- 모바일 앱: `apps/mobile`
+- 루트: Ralph loop, GitHub 보호 규칙, 공통 문서, 워크스페이스 실행 스크립트
 
-이 저장소는 현재 다음 두 축으로 운영됩니다.
+## 구조
 
-- 웹: 루트 Next.js 앱
-- 모바일: `apps/mobile` Expo 앱
-
-## 기술 스택
-
-- Next.js 16 App Router
-- React 19
-- TypeScript
-- Tailwind CSS v4
-- Zustand
-- Konva / react-konva
-- Jest
-- Playwright
-- Storybook
+- `apps/web`: 기존 Next.js App Router 웹 앱
+- `apps/mobile`: Expo Router 기반 iOS/Android 앱
+- `docs/`: 서비스 흐름, 인증 라우팅, 모바일 설계, ADR
+- `scripts/`: Ralph loop, Discord bridge, 검증 스크립트
+- `.github/`: 보안, 템플릿, 워크플로
 
 ## 시작하기
 
-1. 의존성을 설치합니다.
-
-```bash
+```powershell
 pnpm install
 ```
 
-2. 환경 변수를 설정합니다.
+웹 개발 서버:
 
-```bash
-NEXT_PUBLIC_BASE_URL=<백엔드 기본 URL>
+```powershell
+pnpm dev:web
 ```
 
-3. 개발 서버를 실행합니다.
+모바일 개발 서버:
 
-```bash
-pnpm dev
-```
-
-모바일 앱을 실행하려면:
-
-```bash
+```powershell
 pnpm dev:mobile
 ```
 
-## 스크립트
+## 주요 스크립트
 
-- `pnpm dev`
-- `pnpm build`
-- `pnpm start`
-- `pnpm lint`
-- `pnpm test`
-- `pnpm test:coverage`
-- `pnpm test:e2e`
-- `pnpm storybook`
-- `pnpm build-storybook`
-- `pnpm generate:stickers`
-- `pnpm dev:mobile`
-- `pnpm android:mobile`
-- `pnpm ios:mobile`
+- `pnpm dev:web`
+- `pnpm build:web`
+- `pnpm test:web`
+- `pnpm lint:mobile`
+- `pnpm typecheck:mobile`
 - `pnpm verify:automation`
 - `pnpm verify:standard`
 
@@ -88,52 +60,21 @@ pnpm dev:mobile
 - `/history`
 - `/mypage`
 
-보호 라우트는 [`proxy.ts`](./proxy.ts)에서 처리합니다.
+보호 라우트는 [apps/web/proxy.ts](./apps/web/proxy.ts)에서 처리합니다.
 비인증 상태에서 접근하면 `/login?redirectTo=<원래 경로>`로 이동합니다.
-
-## 핵심 흐름
-
-```text
-촬영
-/shoot -> /shoot/capture -> /shoot/select -> /shoot/result
-
-업로드
-/upload -> /upload/select -> /upload/result
-
-테마
-/theme -> /theme/sticker -> /theme
-```
-
-각 멀티스텝 흐름은 메모리 기반 Zustand 세션 상태에 의존합니다.
-필요한 상태 없이 뒤 단계로 직접 진입하면 가장 이른 유효 단계로 되돌아갑니다.
-
-## 주요 디렉터리
-
-- `app/`: App Router 페이지와 라우트 핸들러
-- `components/`: 공용 UI 컴포넌트
-- `lib/`: API 클라이언트, 인증 헬퍼, 상태 저장소, 캔버스 로직
-- `constants/`: 프레임, 색상, 스티커 메타데이터
-- `apps/mobile/`: Expo Router 기반 iOS/Android 앱
-- `scripts/`: 빌드 보조 스크립트
-- `tests/`: Playwright E2E 테스트
 
 ## 문서
 
-- 라우트 다이어그램: [`docs/route-flows.md`](./docs/route-flows.md)
-- 인증 및 리다이렉트 규칙: [`docs/auth-routing.md`](./docs/auth-routing.md)
-- 모바일 앱 설계: [`docs/mobile-app-blueprint.md`](./docs/mobile-app-blueprint.md)
-- 작업 메모와 규칙: [`AGENTS.md`](./AGENTS.md)
+- 라우트 플로우: [docs/route-flows.md](./docs/route-flows.md)
+- 인증 및 라우팅: [docs/auth-routing.md](./docs/auth-routing.md)
+- 모바일 앱 설계: [docs/mobile-app-blueprint.md](./docs/mobile-app-blueprint.md)
+- 작업 규칙: [AGENTS.md](./AGENTS.md)
+- 기여 가이드: [CONTRIBUTING.md](./CONTRIBUTING.md)
 
-## 테스트 메모
+## 브랜치 정책
 
-- 유틸리티와 순수 로직은 Jest로 검증합니다.
-- 현재 E2E는 공개 라우팅과 보호 라우트 리다이렉트 동작에 초점을 맞춥니다.
-- 보호된 전체 사용자 흐름을 끝까지 검증하려면 인증된 테스트 컨텍스트가 필요합니다.
-
-## 브랜치 흐름
-
-- 작업 기준 브랜치: `develop_loop`
+- 작업 시작 브랜치: `develop_loop`
 - 작업 브랜치: `issue/<number>-<slug>`
-- 승격 흐름: `develop_loop -> develop -> main`
+- 승격 경로: `develop_loop -> develop -> main`
 - `main`, `develop`, `develop_loop` 직접 commit/push 금지
-- 현재 Harucut Ralph loop는 issue 브랜치 push까지만 자동화하고 PR은 사용자 지시 전까지 자동 생성하지 않습니다.
+- 이 저장소의 Ralph 자동화는 issue 브랜치 생성과 push까지만 자동화하고, PR 생성은 사용자 지시가 있을 때만 수행합니다.

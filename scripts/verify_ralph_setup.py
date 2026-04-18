@@ -55,6 +55,7 @@ def main() -> int:
         ROOT / ".githooks" / "pre-push",
         ROOT / "scripts" / "ralph_runtime.py",
         ROOT / "scripts" / "verify_workspace.py",
+        ROOT / "apps" / "web" / "package.json",
         ROOT / "apps" / "mobile" / "package.json",
     ):
         assert path.exists(), f"missing required file: {path.relative_to(ROOT)}"
