@@ -1,0 +1,31 @@
+name: release-guard
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  enforce-main-policy:
+    name: release-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce develop to main release flow
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if [ "$BASE_REF" != "main" ]; then
+            exit 0
+          fi
+
+          if [ "$HEAD_REF" != "develop" ]; then
+            echo "::error::main 대상 PR은 develop 브랜치에서만 열 수 있습니다."
+            exit 1
+          fi
+
+          if [ "$PR_AUTHOR" != "alpaka206" ]; then
+            echo "::error::main 대상 PR은 alpaka206 계정만 생성할 수 있습니다."
+            exit 1
+          fi

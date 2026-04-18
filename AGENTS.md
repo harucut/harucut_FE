@@ -2,12 +2,23 @@
 
 ## 저장소 구조
 
-- 단일 패키지 Next.js App Router 앱입니다.
+- 루트는 기존 Next.js App Router 웹 앱입니다.
+- `apps/mobile`은 Expo Router 기반 iOS/Android 앱입니다.
 - 주요 디렉터리:
-  - `app/`: 라우트와 라우트 핸들러
-  - `components/`: 재사용 UI
-  - `lib/`: 상태 저장소, API, 인증, 캔버스 로직
-  - `tests/e2e/`: Playwright E2E
+  - `app/`: 웹 라우트와 라우트 핸들러
+  - `components/`: 웹 공용 UI
+  - `lib/`: 웹 상태 저장소, API, 인증, 캔버스 로직
+  - `apps/mobile/app/`: 모바일 라우트
+  - `tests/`: 웹 Playwright/Jest 테스트
+
+## 브랜치/운영 규칙
+
+- 기준 브랜치: `develop_loop`
+- 작업 브랜치: `issue/<number>-<slug>`
+- `main`, `develop`, `develop_loop`에는 직접 commit/push 하지 않습니다.
+- 이 저장소의 Ralph 자동화는 현재 issue/branch/push까지 처리하고 PR은 사용자 지시 전까지 자동 생성하지 않습니다.
+- 이슈와 PR 제목은 `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`, `perf:` 중 하나로 시작합니다.
+- `auto-generated`, `자동 생성` 같은 일반 제목은 금지합니다.
 
 ## 핵심 불변 조건
 
@@ -46,9 +57,12 @@
 - 공개 라우트와 리다이렉트 규칙은 Playwright로 검증할 수 있습니다.
 - 보호된 전체 흐름 E2E는 인증된 테스트 컨텍스트가 필요합니다.
 - 라우트 테스트는 먼저 미들웨어 보호 동작, 그 다음 페이지 내부 세션 가드를 기준으로 맞춥니다.
+- 모바일 검증은 현재 `apps/mobile` lint와 기본 라우트 구조 확인 중심입니다.
 
 ## 참고 문서
 
 - `README.md`
 - `docs/route-flows.md`
 - `docs/auth-routing.md`
+- `docs/mobile-app-blueprint.md`
+- `.ralph-loop.yml`

@@ -1,7 +1,8 @@
 {
-  "name": "harucut",
+  "name": "harucut-web",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.22.0",
   "pnpm": {
     "onlyBuiltDependencies": [
       "protobufjs"
@@ -10,17 +11,32 @@
   "scripts": {
     "generate:stickers": "node scripts/generate-stickers.mjs",
     "dev": "next dev",
+    "dev:web": "pnpm run dev",
     "build": "pnpm generate:stickers && next build",
+    "build:web": "pnpm run build",
     "start": "next start",
     "lint": "eslint",
+    "lint:web": "pnpm run lint",
     "test": "jest",
+    "test:web": "pnpm run test",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "dev:mobile": "pnpm --dir apps/mobile start",
+    "android:mobile": "pnpm --dir apps/mobile android",
+    "ios:mobile": "pnpm --dir apps/mobile ios",
+    "web:mobile": "pnpm --dir apps/mobile web",
+    "lint:mobile": "pnpm --dir apps/mobile lint",
+    "typecheck:mobile": "pnpm --dir apps/mobile typecheck",
+    "verify:ralph": "python scripts/verify_ralph_setup.py",
+    "verify:automation": "python scripts/verify_workspace.py --group automation",
+    "verify:web": "python scripts/verify_workspace.py --group web",
+    "verify:mobile": "python scripts/verify_workspace.py --group mobile",
+    "verify:standard": "python scripts/verify_workspace.py --group standard"
   },
   "dependencies": {
     "@imgly/background-removal": "1.7.0",

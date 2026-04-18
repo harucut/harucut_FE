@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main() -> int:
+    config_path = ROOT / ".ralph-loop.yml"
+    assert config_path.exists(), ".ralph-loop.yml is missing"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert isinstance(config, dict), ".ralph-loop.yml must contain a mapping"
+
+    goal = str(config.get("goal", "")).strip()
+    assert goal, "goal must not be empty"
+
+    minimum_done = config.get("minimum_done", [])
+    assert isinstance(minimum_done, list) and minimum_done, "minimum_done must be a non-empty list"
+
+    context_docs = config.get("context_docs", [])
+    assert isinstance(context_docs, list) and context_docs, "context_docs must be a non-empty list"
+    for raw_doc in context_docs:
+        doc_path = ROOT / str(raw_doc)
+        assert doc_path.exists(), f"context doc is missing: {raw_doc}"
+
+    runtime = config.get("runtime", {})
+    assert isinstance(runtime, dict), "runtime section must be a mapping"
+    assert str(runtime.get("bridge_host", "")).strip(), "runtime.bridge_host must not be empty"
+
+    git = config.get("git", {})
+    assert isinstance(git, dict), "git section must be a mapping"
+    assert git.get("base_branch") == "develop_loop", "git.base_branch must be develop_loop"
+    assert git.get("pr_base") == "develop_loop", "git.pr_base must be develop_loop"
+    assert git.get("auto_create_issue_pr") is False, "git.auto_create_issue_pr must be false"
+    assert git.get("auto_create_release_pr") is False, "git.auto_create_release_pr must be false"
+
+    protected = set(git.get("protected_branches", []))
+    expected = {"main", "develop", "develop_loop"}
+    assert expected.issubset(protected), "protected branches must include main/develop/develop_loop"
+
+    commands = config.get("commands", {})
+    assert isinstance(commands, dict), "commands must be a mapping"
+    for key in ("lint", "test", "build"):
+        assert str(commands.get(key, "")).strip(), f"commands.{key} must be set"
+
+    for path in (
+        ROOT / ".codex" / "config.toml",
+        ROOT / ".codex" / "hooks.json",
+        ROOT / ".codex" / "rules" / "default.rules",
+        ROOT / ".githooks" / "pre-commit",
+        ROOT / ".githooks" / "pre-push",
+        ROOT / "scripts" / "ralph_runtime.py",
+        ROOT / "scripts" / "verify_workspace.py",
+        ROOT / "apps" / "mobile" / "package.json",
+    ):
+        assert path.exists(), f"missing required file: {path.relative_to(ROOT)}"
+
+    print(json.dumps({"ok": True, "project": config.get("project", {}).get("name", "")}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

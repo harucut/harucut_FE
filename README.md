@@ -9,6 +9,11 @@ Harucut은 네 컷 사진을 위한 서비스입니다.
 - 합성 결과를 PNG 또는 비디오로 다운로드한다
 - 저장된 미디어와 계정 정보를 관리한다
 
+이 저장소는 현재 다음 두 축으로 운영됩니다.
+
+- 웹: 루트 Next.js 앱
+- 모바일: `apps/mobile` Expo 앱
+
 ## 기술 스택
 
 - Next.js 16 App Router
@@ -41,6 +46,12 @@ NEXT_PUBLIC_BASE_URL=<백엔드 기본 URL>
 pnpm dev
 ```
 
+모바일 앱을 실행하려면:
+
+```bash
+pnpm dev:mobile
+```
+
 ## 스크립트
 
 - `pnpm dev`
@@ -53,6 +64,11 @@ pnpm dev
 - `pnpm storybook`
 - `pnpm build-storybook`
 - `pnpm generate:stickers`
+- `pnpm dev:mobile`
+- `pnpm android:mobile`
+- `pnpm ios:mobile`
+- `pnpm verify:automation`
+- `pnpm verify:standard`
 
 ## 라우트 개요
 
@@ -97,6 +113,7 @@ pnpm dev
 - `components/`: 공용 UI 컴포넌트
 - `lib/`: API 클라이언트, 인증 헬퍼, 상태 저장소, 캔버스 로직
 - `constants/`: 프레임, 색상, 스티커 메타데이터
+- `apps/mobile/`: Expo Router 기반 iOS/Android 앱
 - `scripts/`: 빌드 보조 스크립트
 - `tests/`: Playwright E2E 테스트
 
@@ -104,6 +121,7 @@ pnpm dev
 
 - 라우트 다이어그램: [`docs/route-flows.md`](./docs/route-flows.md)
 - 인증 및 리다이렉트 규칙: [`docs/auth-routing.md`](./docs/auth-routing.md)
+- 모바일 앱 설계: [`docs/mobile-app-blueprint.md`](./docs/mobile-app-blueprint.md)
 - 작업 메모와 규칙: [`AGENTS.md`](./AGENTS.md)
 
 ## 테스트 메모
@@ -111,3 +129,11 @@ pnpm dev
 - 유틸리티와 순수 로직은 Jest로 검증합니다.
 - 현재 E2E는 공개 라우팅과 보호 라우트 리다이렉트 동작에 초점을 맞춥니다.
 - 보호된 전체 사용자 흐름을 끝까지 검증하려면 인증된 테스트 컨텍스트가 필요합니다.
+
+## 브랜치 흐름
+
+- 작업 기준 브랜치: `develop_loop`
+- 작업 브랜치: `issue/<number>-<slug>`
+- 승격 흐름: `develop_loop -> develop -> main`
+- `main`, `develop`, `develop_loop` 직접 commit/push 금지
+- 현재 Harucut Ralph loop는 issue 브랜치 push까지만 자동화하고 PR은 사용자 지시 전까지 자동 생성하지 않습니다.

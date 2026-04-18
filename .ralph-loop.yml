@@ -1,0 +1,165 @@
+project:
+  name: "harucut"
+  repo: "harucut/harucut_FE"
+  language: "ko"
+  locale: "ko-KR"
+
+goal: |
+  기존 Harucut 웹 서비스를 크게 건드리지 않고 iOS/Android 앱으로 확장할 수 있는 기반을 만든다.
+  웹은 현재 루트 Next.js 앱을 유지하고, 모바일은 `apps/mobile` Expo 앱으로 별도 개발한다.
+  모바일은 하루컷 서비스 흐름을 이해하기 쉬운 구조로 보여 주고, 촬영·업로드·테마·히스토리·마이페이지로 확장 가능한 정보 구조를 먼저 갖춘다.
+  일반적인 기술 선택은 사용자에게 묻지 않고 진행하고, 결제·비밀정보·외부 계정·프로덕션 배포·비가역 작업만 확인한다.
+  Discord는 원격 제어, 감사 로그, 필수 확인 요청 채널로만 사용한다.
+  현재 저장소에서는 Ralph가 브랜치와 이슈까지는 자동으로 다루되 PR은 사용자 지시 전까지 자동 생성하지 않는다.
+
+minimum_done:
+  - "루트 Next.js 웹 앱은 계속 동작하고 주요 스크립트가 유지된다"
+  - "`apps/mobile` Expo Router 앱이 iOS와 Android 대상 기본 골격으로 부팅된다"
+  - "모바일 앱은 home, shoot, upload, history, mypage 중심의 정보 구조를 가진다"
+  - "테마 편집, 결과 확인, 인증 연동 확장을 위한 경로와 문서가 준비된다"
+  - "모바일 앱은 `EXPO_PUBLIC_API_BASE_URL` 기반으로 API 연결 지점을 갖는다"
+  - "보안 저장소, 카메라/앨범, 업로드 확장을 위한 기본 의존성이 반영된다"
+  - "Ralph loop, Discord 제어, Git 보호 규칙, GitHub 템플릿과 보안 설정이 repo에 반영된다"
+  - "변경사항은 issue 브랜치에서만 커밋한다"
+  - "issue 브랜치는 원격에 push되지만 PR은 자동 생성하지 않는다"
+  - "main, develop, develop_loop에는 직접 커밋하거나 직접 push하지 않는다"
+  - "사용자 확인은 결제, 인증정보, 외부 계정, 프로덕션 배포, 비가역 데이터 작업에만 요청한다"
+
+loop:
+  max_iterations: 40
+  failure_threshold: 3
+  continue_without_user_by_default: true
+
+ask_user_only_when:
+  - "유료 서비스 결제나 구독 변경이 필요하다"
+  - "API key, secret, token, 외부 계정 인증정보가 필요하다"
+  - "외부 계정 로그인이나 권한 확인이 필요하다"
+  - "프로덕션 배포가 필요하다"
+  - "DB migration 또는 데이터 작업이 비가역적이거나 위험하다"
+
+writing:
+  language: "ko"
+  style: "모든 진행 요약, Discord 메시지, 로그 요약, 설명, PR 요약은 한국어로 작성한다."
+  avoid:
+    - "불필요한 영어 설명"
+    - "과장된 보고체"
+    - "내용 없는 AI 말투"
+
+context_docs:
+  - "README.md"
+  - "AGENTS.md"
+  - "docs/route-flows.md"
+  - "docs/auth-routing.md"
+  - "docs/mobile-app-blueprint.md"
+  - "docs/adr/ADR-0001-모바일-확장-전략.md"
+
+product:
+  target_users:
+    - "하루컷으로 인생네컷 사진을 찍고 편집하려는 일반 사용자"
+    - "모바일에서 촬영부터 결과 저장까지 빠르게 끝내려는 반복 사용자"
+  priorities:
+    - "촬영과 업로드 진입이 빠른 구조"
+    - "웹 서비스와 일관된 계정/히스토리 경험"
+    - "모바일에서 이해하기 쉬운 단계형 흐름"
+    - "나중에 편집기와 비디오 합성 기능으로 확장 가능한 구조"
+
+mobile_policy:
+  phase_1:
+    - "앱 골격, 탭 구조, 서비스 소개, API 연결 포인트, 인증 저장소, 카메라/업로드 확장 기반"
+    - "웹의 복잡한 Konva/WebCodecs 편집기는 그대로 옮기지 않는다"
+  phase_2:
+    - "촬영 가이드, 업로드 흐름, 결과 확인, 히스토리/마이페이지 연결"
+  phase_3:
+    - "테마 편집, 고급 합성, 배경 제거, 비디오 생성은 필요 시 서버 또는 별도 렌더링 전략으로 확장"
+
+runtime:
+  bridge_host: "127.0.0.1"
+  bridge_port: 8788
+  ascii_workspace_drive: "Y:"
+
+discord:
+  mode: "all"
+  channel_id: ""
+  thread_per_run: false
+  notify_on:
+    - "start"
+    - "issue_created"
+    - "tests_failed_3_times"
+    - "blocked"
+    - "needs_paid_service"
+    - "needs_secret"
+    - "complete"
+  remote_commands:
+    - "/ralph status"
+    - "/ralph pause"
+    - "/ralph resume"
+    - "/ralph stop"
+    - "/ralph nudge <message>"
+    - "/ralph goal <message>"
+    - "/ralph done <message>"
+    - "/ralph logs"
+    - "/ralph pr"
+
+git:
+  base_branch: "develop_loop"
+  protected_branches:
+    - "main"
+    - "develop"
+    - "develop_loop"
+  no_commit_on:
+    - "main"
+    - "develop"
+    - "develop_loop"
+  no_direct_push_to:
+    - "main"
+    - "develop"
+    - "develop_loop"
+  issue_branch_prefix: "issue"
+  issue_title_format: "<type>: <summary>"
+  issue_title_prefixes:
+    - "feat"
+    - "fix"
+    - "refactor"
+    - "docs"
+    - "chore"
+    - "ci"
+    - "test"
+    - "perf"
+  forbid_generic_issue_titles: true
+  pr_base: "develop_loop"
+  merge_strategy: "squash"
+  auto_create_issue_pr: false
+  promote_to_develop:
+    source_branch: "develop_loop"
+    target_branch: "develop"
+    strategy: "merge"
+    approval_required: true
+  auto_create_release_pr: false
+  release_to_main:
+    source_branch: "develop"
+    target_branch: "main"
+    strategy: "merge"
+    author: "alpaka206"
+    head_branch_only: true
+  delete_branch_after_merge: true
+  release_to_main_policy: "pr-only-manual-merge"
+
+commands:
+  install: "pnpm install"
+  lint: "pnpm lint:mobile"
+  test: "pnpm test:web"
+  build: "pnpm typecheck:mobile"
+  verify:
+    - "python scripts/verify_ralph_setup.py"
+    - "pnpm test:web"
+    - "pnpm lint:mobile"
+    - "pnpm typecheck:mobile"
+
+agents:
+  planner: true
+  implementer: true
+  reviewer: true
+  tester: true
+  gitops: true
+  agent_discussion_policy: "internal_codex_subagents"
+  discord_for_agent_discussion: "summary_only"

@@ -1,0 +1,87 @@
+name: dependency-review
+
+on:
+  pull_request:
+    branches:
+      - develop_loop
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Web audit
+        id: web_audit
+        continue-on-error: true
+        run: pnpm audit --audit-level moderate
+
+      - name: Mobile audit
+        id: mobile_audit
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: pnpm audit --audit-level moderate
+
+      - name: Python audit
+        id: python_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          python -m venv .venv-audit
+          source .venv-audit/bin/activate
+          python -m pip install --upgrade pip pip-audit pip-licenses
+          if [ -f omx_discord_bridge/requirements.txt ]; then
+            pip-audit -r omx_discord_bridge/requirements.txt --progress-spinner off
+          fi
+          pip-licenses --from=mixed --with-system=false --summary
+
+      - name: NPM license summary
+        id: npm_license
+        continue-on-error: true
+        working-directory: apps/web
+        run: npx --yes license-checker-rseidelsohn --summary
+
+      - name: Write summary
+        shell: bash
+        env:
+          WEB_AUDIT_OUTCOME: ${{ steps.web_audit.outcome }}
+          MOBILE_AUDIT_OUTCOME: ${{ steps.mobile_audit.outcome }}
+          PYTHON_AUDIT_OUTCOME: ${{ steps.python_audit.outcome }}
+          NPM_LICENSE_OUTCOME: ${{ steps.npm_license.outcome }}
+        run: |
+          {
+            echo "## Supply Chain Audit"
+            echo ""
+            echo "- web audit: ${WEB_AUDIT_OUTCOME}"
+            echo "- mobile audit: ${MOBILE_AUDIT_OUTCOME}"
+            echo "- python audit: ${PYTHON_AUDIT_OUTCOME}"
+            echo "- npm license summary: ${NPM_LICENSE_OUTCOME}"
+            echo ""
+            echo "이 워크플로는 현재 저장소의 기존 취약점/라이선스 상태를 리포트하는 용도입니다."
+            echo "실제 경보와 자동 수정은 Dependabot alerts 및 security updates로 추적합니다."
+          } >> "$GITHUB_STEP_SUMMARY"
