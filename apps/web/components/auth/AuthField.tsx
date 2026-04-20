@@ -25,7 +25,7 @@ export function AuthField({
 
   return (
     <div className="flex flex-col gap-1.5 text-[11px]">
-      <label htmlFor={id} className="text-zinc-300">
+      <label htmlFor={id} className="text-[color:var(--hc-text)]">
         {label}
       </label>
 
@@ -34,9 +34,9 @@ export function AuthField({
           id={id}
           type={inputType}
           className={[
-            "h-9 w-full rounded-lg border bg-zinc-950 px-3 pr-12 text-[11px] text-zinc-100",
-            "placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500",
-            error ? "border-red-500" : "border-zinc-700",
+            "h-9 w-full rounded-lg border bg-[color:var(--hc-surface-strong)] px-3 pr-12 text-[11px] text-[color:var(--hc-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]",
+            "placeholder:text-[color:var(--hc-muted)] focus:outline-none focus:ring-1 focus:ring-[color:var(--hc-primary)]",
+            error ? "border-red-400/70" : "border-[color:var(--hc-border)]",
           ].join(" ")}
           {...inputProps}
         />
@@ -45,7 +45,7 @@ export function AuthField({
           <button
             type="button"
             onClick={() => setShow((prev) => !prev)}
-            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-900 hover:text-zinc-100"
+            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-background-tint)] hover:text-[color:var(--hc-text)]"
             aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
             title={show ? "비밀번호 숨기기" : "비밀번호 보기"}
           >

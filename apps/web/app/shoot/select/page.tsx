@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
@@ -29,6 +30,8 @@ export default function ShootSelectPage() {
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const guestMode = accessMode === "guest";
 
   useEffect(() => {
     if (!frameId) {
@@ -59,23 +62,28 @@ export default function ShootSelectPage() {
   );
 
   useEffect(() => {
-    if ((!videoEligible || remainingVideoConversions === 0) && includeVideo) {
+    if ((guestMode || !videoEligible || remainingVideoConversions === 0) && includeVideo) {
       setIncludeVideo(false);
     }
-  }, [includeVideo, remainingVideoConversions, setIncludeVideo, videoEligible]);
+  }, [guestMode, includeVideo, remainingVideoConversions, setIncludeVideo, videoEligible]);
 
   const handleNext = () => {
     router.push("/shoot/result");
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
+    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <PageHeader
           title="사진 선택"
           backHref="/shoot/capture"
           backLabel="다시 촬영"
-          description="마음에 드는 사진 4장을 고르고 출력 옵션을 정해 주세요."
+          brandHref={guestMode ? "/shoot" : "/home"}
+          description={
+            guestMode
+              ? "마음에 드는 사진 4장을 고르고 다운로드용 이미지를 준비해 보세요."
+              : "마음에 드는 사진 4장을 고르고 출력 옵션을 정해 주세요."
+          }
         />
 
         <FrameSelectPanel
@@ -103,6 +111,7 @@ export default function ShootSelectPage() {
               hasCustomFrame={hasCustomFrame}
               videoEligible={videoEligible}
               remainingVideoConversions={remainingVideoConversions}
+              guestMode={guestMode}
             />
           )}
         />

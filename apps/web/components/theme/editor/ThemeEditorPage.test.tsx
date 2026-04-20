@@ -40,9 +40,9 @@ function themeEditorStoreMock(
 ).getState = () => editorStoreState;
 
 function getPrimarySaveButton(container: HTMLElement) {
-  const button = container.querySelector(
-    "button.rounded-full.bg-emerald-500",
-  ) as HTMLButtonElement | null;
+  const button = Array.from(
+    container.querySelectorAll("button.rounded-full"),
+  ).find((node) => node.textContent?.includes("저장")) as HTMLButtonElement | undefined;
 
   if (!button) {
     throw new Error("save button not found");

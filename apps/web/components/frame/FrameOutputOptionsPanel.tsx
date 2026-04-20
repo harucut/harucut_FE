@@ -17,6 +17,7 @@ type FrameOutputOptionsPanelProps = {
   hasCustomFrame: boolean;
   videoEligible: boolean;
   remainingVideoConversions: number;
+  guestMode?: boolean;
 };
 
 export function FrameOutputOptionsPanel({
@@ -29,6 +30,7 @@ export function FrameOutputOptionsPanel({
   hasCustomFrame,
   videoEligible,
   remainingVideoConversions,
+  guestMode = false,
 }: FrameOutputOptionsPanelProps) {
   const canEnableVideo = videoEligible && remainingVideoConversions > 0;
 
@@ -117,25 +119,31 @@ export function FrameOutputOptionsPanel({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="inline-flex items-start gap-2 text-[11px] text-zinc-200">
-            <input
-              type="checkbox"
-              checked={includeVideo}
-              onChange={(e) => onIncludeVideoChange(e.target.checked)}
-              disabled={!canEnableVideo && !includeVideo}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-emerald-500 focus:ring-0 disabled:opacity-40"
-            />
-            <span className="flex flex-col gap-1">
-              <span>동영상도 함께 준비하기</span>
-              <span className="text-zinc-500">
-                {videoEligible
-                  ? `남은 동영상 변환 횟수 ${remainingVideoConversions}회`
-                  : "선택한 결과로는 동영상을 만들 수 없어요."}
+        {guestMode ? (
+          <div className="rounded-xl border border-[rgba(37,99,235,0.14)] bg-[rgba(37,99,235,0.08)] px-3 py-2 text-[11px] text-[color:var(--hc-muted)]">
+            비회원 체험에서는 이미지 결과만 다운로드할 수 있어요.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <label className="inline-flex items-start gap-2 text-[11px] text-zinc-200">
+              <input
+                type="checkbox"
+                checked={includeVideo}
+                onChange={(e) => onIncludeVideoChange(e.target.checked)}
+                disabled={!canEnableVideo && !includeVideo}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-emerald-500 focus:ring-0 disabled:opacity-40"
+              />
+              <span className="flex flex-col gap-1">
+                <span>동영상도 함께 준비하기</span>
+                <span className="text-zinc-500">
+                  {videoEligible
+                    ? `남은 동영상 변환 횟수 ${remainingVideoConversions}회`
+                    : "선택한 결과로는 동영상을 만들 수 없어요."}
+                </span>
               </span>
-            </span>
-          </label>
-        </div>
+            </label>
+          </div>
+        )}
       </div>
     </section>
   );

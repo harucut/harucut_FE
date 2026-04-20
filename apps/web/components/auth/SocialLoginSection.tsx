@@ -95,16 +95,16 @@ export function SocialLoginSection({
           onClick={() => loginKakao(redirectTo)}
           icon={<KakaoSymbol />}
           label="카카오 로그인"
-          className="bg-[#FEE500] text-[rgba(0,0,0,0.85)] hover:bg-[#FADA0A]"
-          iconContainerClassName="bg-[#FEE500]"
+          className="border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-text)] shadow-[0_14px_32px_var(--hc-shadow)] hover:bg-[color:var(--hc-background-tint)]"
+          iconContainerClassName="border-r border-[color:var(--hc-border)] bg-[linear-gradient(180deg,#fff9d9,#fff3b0)]"
         />
 
         <SocialButton
           onClick={() => loginNaver(redirectTo)}
           icon={<NaverSymbol />}
           label="네이버 로그인"
-          className="bg-[#03C75A] text-white hover:bg-[#02B350]"
-          iconContainerClassName="bg-[#03C75A]"
+          className="bg-[color:var(--hc-primary)] text-white shadow-[0_16px_36px_rgba(37,99,235,0.26)] hover:bg-[color:var(--hc-primary-strong)]"
+          iconContainerClassName="border-r border-white/20 bg-[color:var(--hc-primary-strong)]"
         />
       </div>
     </section>

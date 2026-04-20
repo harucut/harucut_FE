@@ -5,7 +5,7 @@ import {
   type FourcutFilterId,
 } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
-import type { MuxerOptions } from "webm-muxer";
+import type { ArrayBufferTarget, MuxerOptions } from "webm-muxer";
 
 export type FrameLayout = {
   totalWidth: number;
@@ -24,7 +24,7 @@ type SlotDrawable =
 type OverlayImageMap = Map<string, HTMLImageElement>;
 type SupportedVideoEncoderConfig = {
   encoderConfig: VideoEncoderConfig;
-  muxerVideoOptions: NonNullable<MuxerOptions<any>["video"]>;
+  muxerVideoOptions: NonNullable<MuxerOptions<ArrayBufferTarget>["video"]>;
 };
 
 function ensureCtx(canvas: HTMLCanvasElement) {

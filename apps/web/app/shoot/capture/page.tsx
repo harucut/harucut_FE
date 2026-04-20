@@ -5,6 +5,7 @@ import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 
@@ -28,6 +29,7 @@ export default function CapturePage() {
   } = useCaptureFlow();
 
   const { frameId, remoteFrameId } = useShootSession();
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
 
@@ -41,7 +43,7 @@ export default function CapturePage() {
       : null;
 
   return (
-    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
+    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
@@ -53,6 +55,12 @@ export default function CapturePage() {
           title="사진 촬영 · 8장 자동 촬영"
           backHref="/shoot"
           backLabel="프레임 다시 선택"
+          brandHref={accessMode === "guest" ? "/shoot" : "/home"}
+          description={
+            accessMode === "guest"
+              ? "비회원 체험에서는 촬영 후 이미지 다운로드까지만 바로 이용할 수 있어요."
+              : undefined
+          }
         />
 
         <section className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">

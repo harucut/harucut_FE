@@ -118,7 +118,7 @@ function SignupPageContent() {
             이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}
-              className="font-medium text-emerald-400 underline underline-offset-4"
+              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
             >
               로그인
             </Link>
@@ -167,7 +167,7 @@ function SignupPageContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-full bg-emerald-500 py-2.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-[color:var(--hc-primary)] py-2.5 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "가입 중..." : "회원가입"}
         </button>

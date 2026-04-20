@@ -87,12 +87,12 @@ export default function HomePage() {
   const savedFrame = savedFrames[0] ?? null;
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.14),_transparent_24%),linear-gradient(180deg,#09090b_0%,#0f172a_100%)] px-4 py-5 text-white sm:py-6">
+    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),_transparent_24%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <PageHeader
           title={
             <span className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-[0.26em] text-emerald-300/80">
+              <span className="text-[11px] uppercase tracking-[0.26em] text-[color:var(--hc-primary)]/80">
                 Record your day
               </span>
               <span>오늘 하루를 네 컷으로 남겨보세요</span>
@@ -108,15 +108,15 @@ export default function HomePage() {
           }
         />
 
-        <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur sm:p-6">
-          <div className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-200">
+        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_20px_60px_rgba(37,99,235,0.12)] backdrop-blur sm:p-6">
+          <div className="inline-flex rounded-full border border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.08)] px-3 py-1 text-[11px] text-[color:var(--hc-primary-strong)]">
             {recentMoment}
           </div>
 
           <div className="mt-4 space-y-3">
             <h1 className="max-w-2xl text-[28px] font-semibold tracking-tight sm:text-[32px] md:text-5xl">
               찍고 저장하고,
-              <span className="block bg-gradient-to-r from-emerald-200 via-lime-100 to-white bg-clip-text text-transparent">
+              <span className="block bg-gradient-to-r from-[color:var(--hc-primary-strong)] via-[color:var(--hc-primary)] to-[#74a9ff] bg-clip-text text-transparent">
                 다시 꺼내 보는 하루컷
               </span>
             </h1>
@@ -136,7 +136,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/upload"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08] sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.76)] px-5 py-3 text-sm font-semibold text-[color:var(--hc-text)] transition hover:border-[rgba(37,99,235,0.28)] hover:bg-white sm:w-auto"
             >
               <Upload className="h-4 w-4" />
               사진 업로드
@@ -150,9 +150,9 @@ export default function HomePage() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-zinc-200 transition hover:border-white/20 hover:bg-black/30"
+                  className="flex items-center gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-3 text-sm text-zinc-200 transition hover:border-[rgba(37,99,235,0.24)] hover:bg-[rgba(219,234,254,0.86)]"
                 >
-                  <Icon className="h-4 w-4 text-emerald-200" />
+                  <Icon className="h-4 w-4 text-[color:var(--hc-primary)]" />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -161,7 +161,7 @@ export default function HomePage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
+          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.1)]">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
@@ -169,7 +169,7 @@ export default function HomePage() {
                 </p>
                 <h2 className="mt-2 text-lg font-semibold">최근 저장한 결과</h2>
               </div>
-              <Link href="/history" className="text-[11px] text-emerald-200 hover:text-white">
+              <Link href="/history" className="text-[11px] text-[color:var(--hc-primary)] hover:text-[color:var(--hc-primary-strong)]">
                 전체 보기
               </Link>
             </div>
@@ -186,7 +186,7 @@ export default function HomePage() {
                 recentMedia.map((item) => (
                   <div
                     key={item.mediaId}
-                    className="overflow-hidden rounded-3xl border border-white/10 bg-black/30"
+                    className="overflow-hidden rounded-3xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)]"
                   >
                     {item.downloadUrl ? (
                       item.mediaType === "VIDEO" ? (
@@ -210,7 +210,7 @@ export default function HomePage() {
                   </div>
                 ))
               ) : (
-                <div className="col-span-2 rounded-3xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-[11px] text-zinc-400">
+                <div className="col-span-2 rounded-3xl border border-dashed border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] p-5 text-center text-[11px] text-zinc-400">
                   아직 저장한 결과가 없어요.
                 </div>
               )}
@@ -218,7 +218,7 @@ export default function HomePage() {
           </section>
 
           <div className="flex flex-col gap-4">
-            <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
+            <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.1)]">
               <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
                 Frame picks
               </p>
@@ -227,7 +227,7 @@ export default function HomePage() {
                   <Link
                     key={frame.id}
                     href={`/shoot?frame=${frame.id}`}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-3 transition hover:border-white/20"
+                    className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-3 transition hover:border-[rgba(37,99,235,0.24)]"
                   >
                     <div>
                       <p className="text-sm font-semibold text-zinc-100">{frame.name}</p>
@@ -239,10 +239,10 @@ export default function HomePage() {
               </div>
             </section>
 
-            <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
+            <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.1)]">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-zinc-100">이어 꾸밀 프레임</p>
-                <Link href="/theme" className="text-[11px] text-emerald-200">
+                <Link href="/theme" className="text-[11px] text-[color:var(--hc-primary)]">
                   전체 보기
                 </Link>
               </div>
@@ -251,7 +251,7 @@ export default function HomePage() {
                 {savedFrame ? (
                   <Link
                     href={`/theme?frame=${frameIdFromFrameType(savedFrame.frameType)}&remoteFrameId=${savedFrame.frameId}`}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-3 transition hover:border-white/20"
+                    className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-3 transition hover:border-[rgba(37,99,235,0.24)]"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-zinc-100">
@@ -264,7 +264,7 @@ export default function HomePage() {
                     <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
                   </Link>
                 ) : (
-                  <p className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4 text-[11px] text-zinc-400">
+                  <p className="rounded-2xl border border-dashed border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-4 py-4 text-[11px] text-zinc-400">
                     아직 저장한 프레임이 없어요.
                   </p>
                 )}
