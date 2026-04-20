@@ -10,11 +10,11 @@
   },
   "scripts": {
     "dev": "pnpm dev:web",
-    "dev:web": "pnpm --dir apps/web dev",
+    "dev:web": "cd apps/web && node ./node_modules/next/dist/bin/next dev --hostname localhost",
     "build": "pnpm build:web",
     "build:web": "pnpm --dir apps/web build",
     "start": "pnpm start:web",
-    "start:web": "pnpm --dir apps/web start",
+    "start:web": "cd apps/web && node ./node_modules/next/dist/bin/next start --hostname localhost",
     "lint:web": "pnpm --dir apps/web lint",
     "test:web": "pnpm --dir apps/web test",
     "test:coverage:web": "pnpm --dir apps/web test:coverage",

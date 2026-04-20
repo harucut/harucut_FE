@@ -41,8 +41,6 @@ export function ThemeFrameScreen() {
 export function ThemeStickerScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const replace = (path: string) => router.replace(path as never);
-  const savedFrames = useHarucutStore((state) => state.savedFrames);
   const themeEditor = useHarucutStore((state) => state.themeEditor);
   const setThemeTitle = useHarucutStore((state) => state.setThemeTitle);
   const setThemeDescription = useHarucutStore((state) => state.setThemeDescription);
@@ -55,7 +53,7 @@ export function ThemeStickerScreen() {
 
   useEffect(() => {
     if (!themeEditor.frameId) {
-      replace('/theme');
+      router.replace('/theme' as never);
     }
   }, [router, themeEditor.frameId]);
 

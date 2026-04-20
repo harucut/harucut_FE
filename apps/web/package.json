@@ -6,7 +6,7 @@
   "scripts": {
     "generate:stickers": "node scripts/generate-stickers.mjs",
     "dev": "next dev",
-    "build": "pnpm generate:stickers && next build",
+    "build": "pnpm generate:stickers && next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "test": "jest",

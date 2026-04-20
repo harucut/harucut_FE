@@ -1,8 +1,4 @@
 {
-  "files": [],
-  "exclude": [
-    "node_modules",
-    "apps/**/node_modules",
-    "apps/**/.expo"
-  ]
+  "references": [{ "path": "./apps/web" }, { "path": "./apps/mobile" }],
+  "exclude": ["node_modules", "apps/**/node_modules", "apps/**/.expo"]
 }

@@ -45,18 +45,57 @@ function SocialButtons() {
         <Text style={styles.socialText}>또는 소셜 계정으로 계속하기</Text>
         <View style={styles.socialLine} />
       </View>
-      <ActionButton
-        icon={<Ionicons color={HARUCUT_COLORS.text} name="chatbubble-ellipses-outline" size={16} />}
-        label="카카오 로그인"
-        onPress={() => undefined}
-        variant="secondary"
-      />
-      <ActionButton
-        icon={<Ionicons color="#FFFFFF" name="logo-electron" size={16} />}
-        label="네이버 로그인"
-        onPress={() => undefined}
-      />
+      <SocialBrandButton label="카카오 로그인" onPress={() => undefined} provider="kakao" />
+      <SocialBrandButton label="네이버 로그인" onPress={() => undefined} provider="naver" />
     </View>
+  );
+}
+
+function SocialBrandButton({
+  label,
+  onPress,
+  provider,
+}: {
+  label: string;
+  onPress: () => void;
+  provider: 'kakao' | 'naver';
+}) {
+  const isKakao = provider === 'kakao';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.socialButton,
+        isKakao ? styles.socialKakaoButton : styles.socialNaverButton,
+        pressed ? styles.socialButtonPressed : null,
+      ]}>
+      <View style={styles.socialButtonInner}>
+        <View
+          style={[
+            styles.socialIconBox,
+            isKakao ? styles.socialKakaoIconBox : styles.socialNaverIconBox,
+          ]}>
+          {isKakao ? (
+            <View style={styles.kakaoMark}>
+              <View style={styles.kakaoMarkBubble} />
+              <View style={styles.kakaoMarkTail} />
+            </View>
+          ) : (
+            <Text style={styles.naverMark}>N</Text>
+          )}
+        </View>
+        <View style={styles.socialLabelWrap}>
+          <Text
+            style={[
+              styles.socialButtonLabel,
+              isKakao ? styles.socialKakaoLabel : styles.socialNaverLabel,
+            ]}>
+            {label}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -460,15 +499,101 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  kakaoMark: {
+    height: 18,
+    position: 'relative',
+    width: 18,
+  },
+  kakaoMarkBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderRadius: 7,
+    height: 13,
+    left: 1,
+    position: 'absolute',
+    top: 2,
+    width: 15,
+  },
+  kakaoMarkTail: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    bottom: 2,
+    height: 5,
+    left: 4,
+    position: 'absolute',
+    transform: [{ rotate: '45deg' }],
+    width: 5,
+  },
+  naverMark: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 20,
+  },
   socialDivider: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
   },
+  socialButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  socialButtonInner: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: 48,
+  },
+  socialButtonLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  socialButtonPressed: {
+    opacity: 0.9,
+  },
+  socialIconBox: {
+    alignItems: 'center',
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  socialKakaoButton: {
+    backgroundColor: '#FEE500',
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { height: 14, width: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+  },
+  socialKakaoIconBox: {
+    backgroundColor: '#FEE500',
+  },
+  socialKakaoLabel: {
+    color: 'rgba(0, 0, 0, 0.85)',
+  },
   socialLine: {
     backgroundColor: HARUCUT_COLORS.border,
     flex: 1,
     height: 1,
+  },
+  socialLabelWrap: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingRight: 48,
+  },
+  socialNaverButton: {
+    backgroundColor: '#03C75A',
+    shadowColor: 'rgba(3, 199, 90, 0.22)',
+    shadowOffset: { height: 16, width: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 26,
+  },
+  socialNaverIconBox: {
+    backgroundColor: '#02B350',
+    borderRightColor: 'rgba(255, 255, 255, 0.15)',
+    borderRightWidth: 1,
+  },
+  socialNaverLabel: {
+    color: '#FFFFFF',
   },
   socialText: {
     color: HARUCUT_COLORS.muted,

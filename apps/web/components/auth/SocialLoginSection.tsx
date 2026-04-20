@@ -59,19 +59,19 @@ function SocialButton({
       type="button"
       onClick={onClick}
       className={[
-        "inline-flex h-11 w-full items-center rounded-xl text-sm font-semibold transition-colors",
+        "inline-flex h-12 w-full items-center rounded-[12px] text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--hc-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-white hover:-translate-y-0.5",
         className,
       ].join(" ")}
     >
       <span
         className={[
-          "flex h-full w-11 items-center justify-center rounded-l-xl",
+          "flex h-full w-12 items-center justify-center rounded-l-[12px]",
           iconContainerClassName,
         ].join(" ")}
       >
         {icon}
       </span>
-      <span className="flex-1 pr-11 text-center">{label}</span>
+      <span className="flex-1 pr-12 text-center tracking-[-0.01em]">{label}</span>
     </button>
   );
 }
@@ -85,9 +85,9 @@ export function SocialLoginSection({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-        <span className="h-px flex-1 bg-zinc-800" />
+        <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
         <span>또는 소셜 계정으로 계속하기</span>
-        <span className="h-px flex-1 bg-zinc-800" />
+        <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -95,16 +95,16 @@ export function SocialLoginSection({
           onClick={() => loginKakao(redirectTo)}
           icon={<KakaoSymbol />}
           label="카카오 로그인"
-          className="border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-text)] shadow-[0_14px_32px_var(--hc-shadow)] hover:bg-[color:var(--hc-background-tint)]"
-          iconContainerClassName="border-r border-[color:var(--hc-border)] bg-[linear-gradient(180deg,#fff9d9,#fff3b0)]"
+          className="bg-[#FEE500] text-[rgba(0,0,0,0.85)] shadow-[0_14px_32px_rgba(15,23,42,0.08)] hover:bg-[#F7DD00]"
+          iconContainerClassName="bg-[#FEE500]"
         />
 
         <SocialButton
           onClick={() => loginNaver(redirectTo)}
           icon={<NaverSymbol />}
           label="네이버 로그인"
-          className="bg-[color:var(--hc-primary)] text-white shadow-[0_16px_36px_rgba(37,99,235,0.26)] hover:bg-[color:var(--hc-primary-strong)]"
-          iconContainerClassName="border-r border-white/20 bg-[color:var(--hc-primary-strong)]"
+          className="bg-[#03C75A] text-white shadow-[0_16px_36px_rgba(3,199,90,0.24)] hover:bg-[#02B350]"
+          iconContainerClassName="border-r border-white/15 bg-[#02B350]"
         />
       </div>
     </section>

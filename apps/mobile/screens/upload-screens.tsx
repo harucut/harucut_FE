@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
@@ -50,7 +50,6 @@ export function UploadFrameScreen() {
 export function UploadSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const replace = (path: string) => router.replace(path as never);
   const upload = useHarucutStore((state) => state.upload);
   const addUploadAssets = useHarucutStore((state) => state.addUploadAssets);
   const toggleUploadSelection = useHarucutStore((state) => state.toggleUploadSelection);
@@ -58,7 +57,7 @@ export function UploadSelectScreen() {
 
   useEffect(() => {
     if (!upload.frameId) {
-      replace('/upload');
+      router.replace('/upload' as never);
     }
   }, [router, upload.frameId]);
 
@@ -171,7 +170,6 @@ export function UploadSelectScreen() {
 export function UploadResultScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const replace = (path: string) => router.replace(path as never);
   const upload = useHarucutStore((state) => state.upload);
   const persistUploadResult = useHarucutStore((state) => state.persistUploadResult);
   const historyItems = useHarucutStore((state) => state.historyItems);
@@ -180,12 +178,12 @@ export function UploadResultScreen() {
 
   useEffect(() => {
     if (!upload.frameId) {
-      replace('/upload');
+      router.replace('/upload' as never);
       return;
     }
 
     if (upload.selectedAssetIds.length !== 4) {
-      replace('/upload/select');
+      router.replace('/upload/select' as never);
       return;
     }
 

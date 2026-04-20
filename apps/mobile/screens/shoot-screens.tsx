@@ -84,7 +84,6 @@ export function ShootCaptureScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const push = (path: string) => router.push(path as never);
-  const replace = (path: string) => router.replace(path as never);
   const cameraRef = useRef<CameraView | null>(null);
   const shoot = useHarucutStore((state) => state.shoot);
   const addShootShot = useHarucutStore((state) => state.addShootShot);
@@ -97,7 +96,7 @@ export function ShootCaptureScreen() {
 
   useEffect(() => {
     if (!shoot.frameId) {
-      replace('/shoot');
+      router.replace('/shoot' as never);
     }
   }, [router, shoot.frameId]);
 
@@ -213,7 +212,7 @@ export function ShootCaptureScreen() {
 
         <View style={{ gap: 8 }}>
           <Text style={styles.bodyText}>
-            카메라를 켜고 "8장 자동 촬영 시작" 버튼을 누르면 3초 간격으로 사진을 촬영해요.
+            카메라를 켜고 &quot;8장 자동 촬영 시작&quot; 버튼을 누르면 3초 간격으로 사진을 촬영해요.
           </Text>
           <Text style={styles.statusText}>카메라 {isCameraReady ? '준비 완료' : '아직 켜져 있지 않아요'}</Text>
         </View>
@@ -242,7 +241,6 @@ export function ShootCaptureScreen() {
 export function ShootSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const replace = (path: string) => router.replace(path as never);
   const accessMode = useHarucutStore((state) => state.accessMode);
   const shoot = useHarucutStore((state) => state.shoot);
   const toggleShootSelection = useHarucutStore((state) => state.toggleShootSelection);
@@ -250,12 +248,12 @@ export function ShootSelectScreen() {
 
   useEffect(() => {
     if (!shoot.frameId) {
-      replace('/shoot');
+      router.replace('/shoot' as never);
       return;
     }
 
     if (shoot.shots.length === 0) {
-      replace('/shoot/capture');
+      router.replace('/shoot/capture' as never);
     }
   }, [router, shoot.frameId, shoot.shots.length]);
 
@@ -336,7 +334,6 @@ export function ShootSelectScreen() {
 export function ShootResultScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const replace = (path: string) => router.replace(path as never);
   const accessMode = useHarucutStore((state) => state.accessMode);
   const shoot = useHarucutStore((state) => state.shoot);
   const persistShootResult = useHarucutStore((state) => state.persistShootResult);
@@ -350,12 +347,12 @@ export function ShootResultScreen() {
 
   useEffect(() => {
     if (!shoot.frameId) {
-      replace('/shoot');
+      router.replace('/shoot' as never);
       return;
     }
 
     if (shoot.selectedShotIds.length !== 4) {
-      replace('/shoot/select');
+      router.replace('/shoot/select' as never);
       return;
     }
 
