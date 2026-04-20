@@ -564,7 +564,7 @@ export default function UploadResultPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 px-4 py-6 text-white">
+    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader title="업로드 결과" />
         <StepProgress current={3} total={3} label="결과 확인" />

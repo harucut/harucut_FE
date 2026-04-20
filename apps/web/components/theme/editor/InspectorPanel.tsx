@@ -124,7 +124,7 @@ function TextInspector({
         <input
           value={c.source}
           onChange={(e) => onChange({ source: e.target.value })}
-          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
         />
       </Row>
 
@@ -136,7 +136,7 @@ function TextInspector({
               styleJson: { ...style, fontFamily: e.target.value },
             })
           }
-          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
         />
       </Row>
 
@@ -168,7 +168,7 @@ function TextInspector({
               styleJson: { ...style, color: e.target.value },
             })
           }
-          className="h-9 w-12 rounded-lg border border-zinc-800 bg-zinc-950"
+          className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
         />
         <select
           value={style.textAlign ?? "center"}
@@ -178,7 +178,7 @@ function TextInspector({
               v === "left" || v === "center" || v === "right" ? v : "center";
             onChange({ styleJson: { ...style, textAlign: align } });
           }}
-          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+          className="flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
         >
           <option value="left">왼쪽</option>
           <option value="center">가운데</option>
@@ -206,7 +206,7 @@ function Row({
 
 function SmallStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2">
+    <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
       <p className="text-[10px] text-zinc-500">{label}</p>
       <p className="text-xs text-zinc-200">{value}</p>
     </div>

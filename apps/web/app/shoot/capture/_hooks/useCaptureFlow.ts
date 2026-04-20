@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { getBestWebmMimeType } from "@/lib/capture/mediaRecorder";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -20,6 +21,7 @@ type CameraFacingMode = "user" | "environment";
 
 export function useCaptureFlow() {
   const router = useRouter();
+  const setNotice = useGuestTrialStore((state) => state.setNotice);
   const { frameId, addShotPhoto, attachVideoToShot, resetShots } =
     useShootSession();
 
@@ -70,7 +72,14 @@ export function useCaptureFlow() {
   const startCamera = useCallback(async (nextFacingMode?: CameraFacingMode) => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        alert("현재 브라우저에서는 카메라를 지원하지 않습니다.");
+        setNotice({
+          actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+          eyebrow: "CAMERA ACCESS",
+          icon: "camera",
+          message:
+            "현재 브라우저에서는 카메라를 지원하지 않습니다. 최신 브라우저에서 다시 시도해 주세요.",
+          title: "카메라를 사용할 수 없어요",
+        });
         return;
       }
 
@@ -94,9 +103,16 @@ export function useCaptureFlow() {
       setCameraFacingMode(facingMode);
     } catch (err) {
       console.error(err);
-      alert("카메라 접근이 거부되었거나 오류가 발생했습니다.");
+      setNotice({
+        actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+        eyebrow: "CAMERA ACCESS",
+        icon: "camera",
+        message:
+          "카메라 접근이 거부되었거나 오류가 발생했습니다. 브라우저 권한을 확인한 뒤 다시 시도해 주세요.",
+        title: "카메라 접근이 필요해요",
+      });
     }
-  }, [cameraFacingMode, stopStream]);
+  }, [cameraFacingMode, setNotice, stopStream]);
 
   // 언마운트 시 정리
   useEffect(() => {
@@ -229,7 +245,13 @@ export function useCaptureFlow() {
   // 전체 자동 촬영 시작
   const startShooting = useCallback(() => {
     if (!isCameraReady) {
-      alert("먼저 카메라를 켜주세요.");
+      setNotice({
+        actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+        eyebrow: "CAMERA READY",
+        icon: "camera",
+        message: "촬영을 시작하기 전에 먼저 카메라를 켜 주세요.",
+        title: "카메라 준비가 필요해요",
+      });
       return;
     }
 
@@ -239,7 +261,7 @@ export function useCaptureFlow() {
     setShooting({ isShooting: true, countdown: MAX_COUNT });
 
     startRecordingForShot();
-  }, [isCameraReady, resetShots, startRecordingForShot]);
+  }, [isCameraReady, resetShots, setNotice, startRecordingForShot]);
 
   // 카운트다운 타이머
   useEffect(() => {

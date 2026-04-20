@@ -174,7 +174,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   };
 
   return (
-    <main className="min-h-dvh bg-zinc-950 text-white px-4 py-6">
+    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
         <header className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
@@ -220,7 +220,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               type="button"
               onClick={onDone}
               disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+              className="rounded-full bg-[color:var(--hc-primary)] px-4 py-2 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:opacity-50"
             >
               {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
             </button>
@@ -238,14 +238,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+               className="h-10 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-sm text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
               placeholder="프레임 이름을 입력해 주세요"
               maxLength={40}
             />
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="min-h-24 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+               className="min-h-24 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-sm text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
               placeholder="프레임 설명을 입력해 주세요"
               maxLength={160}
             />
@@ -276,8 +276,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       onClick={() => setBackgroundColor(color.value)}
                       className={`h-8 min-w-16 rounded-lg border px-2 text-[11px] ${
                         selected
-                          ? "border-white text-white"
-                          : "border-zinc-700 text-zinc-300"
+                          ? "border-[color:var(--hc-primary)] bg-[rgba(37,99,235,0.1)] text-[color:var(--hc-primary)]"
+                          : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
                       }`}
                       style={{ backgroundColor: `#${color.value}` }}
                     >
@@ -291,12 +291,12 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   type="color"
                   value={`#${backgroundColor}`}
                   onChange={(e) => setBackgroundColor(e.target.value)}
-                  className="h-9 w-12 rounded-lg border border-zinc-700 bg-zinc-950"
+                  className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
                 />
                 <input
                   value={backgroundColor}
                   onChange={(e) => setBackgroundColor(e.target.value)}
-                  className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-zinc-200"
+                  className="h-9 flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-xs text-[color:var(--hc-text)]"
                   placeholder="ffffff"
                 />
               </div>

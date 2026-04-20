@@ -49,8 +49,8 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
-          : "border-zinc-700 bg-zinc-950 text-zinc-300",
+          ? "border-[color:var(--hc-primary)] bg-[rgba(37,99,235,0.1)] text-[color:var(--hc-primary)]"
+          : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
       ].join(" ")}
     >
       {children}
@@ -102,7 +102,7 @@ function PhotoTab() {
       />
 
       {photos.length === 0 ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[11px] text-zinc-400">
+        <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] p-3 text-[11px] text-[color:var(--hc-muted)]">
           아직 업로드한 사진이 없어요. 아래 추가 버튼으로 사진을 넣어보세요.
         </div>
       ) : null}
@@ -124,12 +124,12 @@ function PhotoTab() {
               group relative
               aspect-square w-[96px] shrink-0
               snap-start overflow-hidden rounded-xl
-              border border-dashed border-zinc-700 bg-zinc-950
-              hover:border-emerald-500/60 hover:bg-emerald-500/5 disabled:opacity-50
+              border border-dashed border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]
+              hover:border-[color:var(--hc-primary)] hover:bg-[rgba(37,99,235,0.06)] disabled:opacity-50
             "
             title="사진 업로드"
           >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-400 group-hover:text-emerald-200">
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary)]">
               <ImagePlus size={18} />
               <span className="text-[10px]">
                 {isUploading ? "업로드 중" : "추가"}
@@ -166,7 +166,7 @@ function PhotoTab() {
                 </button>
 
                 {isProcessing ? (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 px-2 text-center text-[10px] font-medium text-white">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(16,40,72,0.38)] px-2 text-center text-[10px] font-medium text-white">
                     누끼를 정리하는 중이에요.
                   </div>
                 ) : null}
@@ -185,7 +185,7 @@ function PhotoTab() {
                       }
                     }}
                     disabled={isProcessing}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/10 bg-black/70 px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-black/80 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(16,40,72,0.68)] px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-[rgba(16,40,72,0.78)] disabled:opacity-50"
                     title="누끼 제거"
                   >
                     <Scissors className="h-3 w-3" />
@@ -201,7 +201,7 @@ function PhotoTab() {
                         alert("프레임에 사용 중인 사진은 삭제할 수 없어요.");
                       }
                     }}
-                    className="flex items-center justify-center rounded-lg border border-white/10 bg-black/70 p-1.5 text-white backdrop-blur hover:bg-black/80"
+                    className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(16,40,72,0.68)] p-1.5 text-white backdrop-blur hover:bg-[rgba(16,40,72,0.78)]"
                     title="사진 삭제"
                     aria-label="사진 삭제"
                   >
@@ -276,7 +276,7 @@ function TextTab() {
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder="텍스트를 입력해 주세요"
-          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
         />
       </label>
 
@@ -288,14 +288,14 @@ function TextTab() {
           max={420}
           value={fontSize}
           onChange={(event) => setFontSize(Number(event.target.value) || 0)}
-          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white"
+          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
         />
       </label>
 
       <button
         type="button"
         onClick={() => addText({ text, fontSize })}
-        className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
+        className="rounded-xl bg-[color:var(--hc-primary)] px-4 py-2 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)]"
       >
         텍스트 추가
       </button>

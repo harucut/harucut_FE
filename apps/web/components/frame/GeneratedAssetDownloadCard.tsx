@@ -41,8 +41,8 @@ export function GeneratedAssetDownloadCard({
                 {metaLabel}
               </span>
             ) : null}
-          <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
-          <p className="mt-1 text-[11px] text-zinc-500">{description}</p>
+            <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
+            <p className="mt-1 text-[11px] text-zinc-500">{description}</p>
           </div>
         </div>
 
@@ -52,14 +52,14 @@ export function GeneratedAssetDownloadCard({
             <input
               value={draftName}
               onChange={(e) => onChangeName(e.target.value)}
-              className="h-9 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-[11px] text-zinc-100 outline-none focus:border-emerald-500"
+              className="h-9 flex-1 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-[11px] text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
               placeholder={asset.displayName}
             />
             <button
               type="button"
               onClick={onSaveName}
               disabled={isSavingName}
-              className="rounded-full border border-zinc-700 px-3 py-2 text-[11px] font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
+              className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3 py-2 text-[11px] font-medium text-[color:var(--hc-text)] hover:bg-[color:var(--hc-background-tint)] disabled:opacity-40"
             >
               {isSavingName ? "저장 중..." : "파일명 수정"}
             </button>
@@ -70,7 +70,7 @@ export function GeneratedAssetDownloadCard({
           type="button"
           onClick={onDownload}
           disabled={isDownloading}
-          className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-zinc-100 disabled:opacity-40"
+          className="rounded-full bg-[color:var(--hc-primary)] px-4 py-2 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:opacity-40"
         >
           {isDownloading ? "다운로드 중..." : "다운로드"}
         </button>
@@ -80,7 +80,7 @@ export function GeneratedAssetDownloadCard({
             type="button"
             onClick={onShare}
             disabled={isSharing}
-            className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs font-semibold text-zinc-100 hover:bg-black/30 disabled:opacity-40"
+            className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--hc-text)] hover:bg-[color:var(--hc-background-tint)] disabled:opacity-40"
           >
             {isSharing ? "공유 준비 중..." : "공유 링크 만들기"}
           </button>

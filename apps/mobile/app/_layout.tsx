@@ -1,24 +1,27 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { GlobalNotice } from '@/components/harucut/global-notice';
+import { HARUCUT_COLORS } from '@/constants/harucut-design';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="theme" options={{ title: '테마 편집', presentation: 'card' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{
+            animation: 'fade',
+            contentStyle: { backgroundColor: HARUCUT_COLORS.background },
+            headerShown: false,
+          }}
+        />
+        <GlobalNotice />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

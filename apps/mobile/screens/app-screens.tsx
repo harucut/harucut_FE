@@ -1,0 +1,577 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+
+import { FRAME_CATALOG, QUICK_LINKS, type HistoryItem } from '@/constants/harucut-data';
+import { HARUCUT_COLORS } from '@/constants/harucut-design';
+import { FramePreview } from '@/components/harucut/frame';
+import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { useHarucutStore } from '@/store/use-harucut-store';
+
+function historyPreviewUri(item: HistoryItem) {
+  return item.previewMedia[0]?.uri ?? '';
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString('ko-KR', {
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'long',
+  });
+}
+
+async function sharePreview(item: HistoryItem) {
+  const uri = historyPreviewUri(item);
+  if (!uri) {
+    return;
+  }
+
+  await Share.share({
+    message: `${item.title}\n${uri}`,
+    url: uri,
+  });
+}
+
+export function HomeScreen() {
+  const router = useRouter();
+  const push = (path: string) => router.push(path as never);
+  const historyItems = useHarucutStore((state) => state.historyItems);
+  const savedFrames = useHarucutStore((state) => state.savedFrames);
+  const user = useHarucutStore((state) => state.user);
+
+  const recentMoment = historyItems[0]
+    ? new Date(historyItems[0].createdAt).toLocaleDateString('ko-KR', {
+        day: 'numeric',
+        month: 'long',
+        weekday: 'short',
+      })
+    : '첫 기록을 남겨보세요';
+
+  return (
+    <AppScrollView>
+      <PageHeader
+        description={`${user.username}님, 촬영하거나 업로드해서 오늘의 기록을 바로 만들어 보세요.`}
+        onPressRight={() => push('/mypage')}
+        rightSlot={<Ionicons color={HARUCUT_COLORS.text} name="person-outline" size={18} />}
+        title="오늘 하루를 네 컷으로 남겨보세요"
+      />
+
+      <SurfaceCard style={{ gap: 16 }}>
+        <Pill>{recentMoment}</Pill>
+        <View style={{ gap: 10 }}>
+          <Text style={styles.heroTitle}>찍고 저장하고,</Text>
+          <Text style={styles.heroTitleAccent}>다시 꺼내 보는 하루컷</Text>
+          <Text style={styles.bodyCopy}>
+            복잡한 설명 없이 바로 시작할 수 있게 준비했어요. 원하는 방식으로 만들고 기록에 남겨두세요.
+          </Text>
+        </View>
+
+        <View style={styles.rowButtons}>
+          <ActionButton
+            icon={<Ionicons color="#FFFFFF" name="camera-outline" size={16} />}
+            label="바로 촬영 시작"
+            onPress={() => push('/shoot')}
+            style={{ flex: 1 }}
+          />
+          <ActionButton
+            icon={<Ionicons color={HARUCUT_COLORS.text} name="cloud-upload-outline" size={16} />}
+            label="사진 업로드"
+            onPress={() => push('/upload')}
+            style={{ flex: 1 }}
+            variant="secondary"
+          />
+        </View>
+
+        <View style={styles.quickGrid}>
+          {QUICK_LINKS.map((item) => (
+            <Pressable key={item.href} onPress={() => push(item.href)} style={styles.quickItem}>
+              <Ionicons color={HARUCUT_COLORS.primary} name={item.icon} size={16} />
+              <Text style={styles.quickText}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 14 }}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionEyebrow}>Recent</Text>
+            <Text style={styles.sectionTitle}>최근 저장한 결과</Text>
+          </View>
+          <Text onPress={() => push('/history')} style={styles.inlineLink}>
+            전체 보기
+          </Text>
+        </View>
+
+        <View style={styles.recentGrid}>
+          {historyItems.slice(0, 4).map((item) => (
+            <View key={item.id} style={styles.thumbCard}>
+              <Image source={{ uri: historyPreviewUri(item) }} style={styles.thumbImage} />
+            </View>
+          ))}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionEyebrow}>Frame picks</Text>
+        {FRAME_CATALOG.slice(0, 3).map((frame) => (
+          <Pressable key={frame.frameId} onPress={() => push('/shoot')} style={styles.linkCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkTitle}>{frame.name}</Text>
+              <Text style={styles.linkBody}>{frame.badge}</Text>
+            </View>
+            <Ionicons color={HARUCUT_COLORS.muted} name="chevron-forward" size={16} />
+          </Pressable>
+        ))}
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>이어 꾸밀 프레임</Text>
+          <Text onPress={() => push('/theme')} style={styles.inlineLink}>
+            전체 보기
+          </Text>
+        </View>
+        {savedFrames[0] ? (
+          <Pressable onPress={() => push('/theme/sticker')} style={styles.savedContinueCard}>
+            <View style={{ width: 86 }}>
+              <FramePreview
+                accentColor={savedFrames[0].accentColor}
+                backgroundColor={savedFrames[0].backgroundColor}
+                caption={savedFrames[0].caption}
+                frameId={savedFrames[0].frameId}
+              />
+            </View>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={styles.linkTitle}>{savedFrames[0].title}</Text>
+              <Text style={styles.linkBody}>저장한 프레임을 이어서 수정할 수 있어요.</Text>
+            </View>
+            <Ionicons color={HARUCUT_COLORS.muted} name="chevron-forward" size={16} />
+          </Pressable>
+        ) : (
+          <Text style={styles.bodyCopy}>아직 저장한 프레임이 없어요.</Text>
+        )}
+      </SurfaceCard>
+    </AppScrollView>
+  );
+}
+
+export function HistoryScreen() {
+  const router = useRouter();
+  const push = (path: string) => router.push(path as never);
+  const historyItems = useHarucutStore((state) => state.historyItems);
+  const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
+  const [filter, setFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
+  const [search, setSearch] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState('');
+
+  const filteredItems = useMemo(() => {
+    return historyItems.filter((item) => {
+      const matchesType =
+        filter === 'ALL' || (filter === 'PHOTO' ? item.kind === 'photo' : item.kind === 'video');
+      const matchesSearch = item.title.toLowerCase().includes(search.trim().toLowerCase());
+      return matchesType && matchesSearch;
+    });
+  }, [filter, historyItems, search]);
+
+  const photoCount = historyItems.filter((item) => item.kind === 'photo').length;
+  const videoCount = historyItems.filter((item) => item.kind === 'video').length;
+
+  return (
+    <AppScrollView>
+      <PageHeader
+        backLabel="홈으로"
+        description="내가 만든 사진과 영상을 다시 보고, 이름을 정리하고, 공유할 수 있어요."
+        onPressBack={() => push('/home')}
+        title="사진 기록"
+      />
+
+      <SurfaceCard style={{ gap: 16 }}>
+        <View style={styles.sectionHeader}>
+          <View style={{ gap: 10 }}>
+            <Pill>MEMORY ARCHIVE</Pill>
+            <Text style={styles.heroTitle}>다시 꺼내 보는 내 기록함</Text>
+            <Text style={styles.bodyCopy}>
+              저장한 결과를 다시 보고, 이름을 정리하고, 공유할 수 있어요.
+            </Text>
+          </View>
+          <View style={styles.statsWrap}>
+            <Pill>전체 {historyItems.length}개</Pill>
+            <Pill>사진 {photoCount}개</Pill>
+            <Pill>영상 {videoCount}개</Pill>
+          </View>
+        </View>
+
+        <View style={styles.filterRow}>
+          {(['ALL', 'PHOTO', 'VIDEO'] as const).map((value) => (
+            <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
+              {value === 'ALL' ? '전체' : value === 'PHOTO' ? '사진' : '영상'}
+            </Pill>
+          ))}
+        </View>
+
+        <FormField label="검색" onChangeText={setSearch} placeholder="파일 이름으로 검색" value={search} />
+
+        <View style={styles.rowButtons}>
+          <ActionButton label="새 촬영" onPress={() => push('/shoot')} style={{ flex: 1 }} />
+          <ActionButton label="업로드" onPress={() => push('/upload')} style={{ flex: 1 }} variant="secondary" />
+        </View>
+      </SurfaceCard>
+
+      {filteredItems.length === 0 ? (
+        <SurfaceCard>
+          <Text style={styles.bodyCopy}>저장한 기록이 아직 없어요.</Text>
+        </SurfaceCard>
+      ) : (
+        filteredItems.map((item) => (
+          <SurfaceCard key={item.id} style={{ gap: 14 }}>
+            <View style={styles.historyCardRow}>
+              <View style={styles.historyPreview}>
+                <FramePreview frameId={item.frameId} media={item.previewMedia} />
+              </View>
+              <View style={{ flex: 1, gap: 8 }}>
+                <View style={{ gap: 4 }}>
+                  <Text style={styles.sectionEyebrow}>{item.kind === 'photo' ? '사진' : '영상'}</Text>
+                  {editingId === item.id ? (
+                    <FormField label="파일 이름" onChangeText={setDraftName} value={draftName} />
+                  ) : (
+                    <Text style={styles.linkTitle}>{item.title}</Text>
+                  )}
+                  <Text style={styles.linkBody}>{formatDate(item.createdAt)}</Text>
+                </View>
+
+                <View style={styles.actionWrap}>
+                  <ActionButton
+                    icon={<Ionicons color="#FFFFFF" name="download-outline" size={15} />}
+                    label="다운로드"
+                    onPress={() => sharePreview(item)}
+                    style={{ flex: 1, minHeight: 42 }}
+                  />
+                  <ActionButton
+                    icon={<Ionicons color={HARUCUT_COLORS.text} name="share-social-outline" size={15} />}
+                    label="공유하기"
+                    onPress={() => sharePreview(item)}
+                    style={{ flex: 1, minHeight: 42 }}
+                    variant="secondary"
+                  />
+                  <ActionButton
+                    icon={<Ionicons color={HARUCUT_COLORS.text} name="create-outline" size={15} />}
+                    label={editingId === item.id ? '저장' : '이름 수정'}
+                    onPress={() => {
+                      if (editingId === item.id) {
+                        renameHistoryItem(item.id, draftName.trim() || item.title);
+                        setEditingId(null);
+                        return;
+                      }
+
+                      setEditingId(item.id);
+                      setDraftName(item.title);
+                    }}
+                    style={{ minHeight: 42, width: '100%' }}
+                    variant="ghost"
+                  />
+                </View>
+              </View>
+            </View>
+          </SurfaceCard>
+        ))
+      )}
+    </AppScrollView>
+  );
+}
+
+export function MyPageScreen() {
+  const router = useRouter();
+  const replace = (path: string) => router.replace(path as never);
+  const user = useHarucutStore((state) => state.user);
+  const setUserProfile = useHarucutStore((state) => state.setUserProfile);
+  const [username, setUsername] = useState(user.username);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const handlePickProfile = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setUserProfile({ profileUrl: result.assets[0].uri });
+    }
+  };
+
+  return (
+    <AppScrollView>
+      <PageHeader
+        description="계정 정보와 보안 설정을 관리할 수 있어요."
+        onPressRight={() => undefined}
+        rightSlot={<Ionicons color={HARUCUT_COLORS.text} name="refresh-outline" size={18} />}
+        title="내 계정"
+      />
+
+      <SurfaceCard style={{ gap: 14 }}>
+        <View style={styles.profileRow}>
+          <View style={styles.profileAvatar}>
+            {user.profileUrl ? <Image source={{ uri: user.profileUrl }} style={styles.avatarImage} /> : null}
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.linkTitle}>{user.username}</Text>
+            <Text style={styles.linkBody}>{user.email}</Text>
+          </View>
+        </View>
+
+        <View style={styles.quickGrid}>
+          <View style={styles.infoTile}>
+            <Text style={styles.linkBody}>로그인 플랫폼</Text>
+            <Text style={styles.linkTitle}>{user.loginPlatform}</Text>
+          </View>
+          <View style={styles.infoTile}>
+            <Text style={styles.linkBody}>플랜</Text>
+            <Text style={styles.linkTitle}>
+              {user.planTier}
+              {user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원` : ''}
+            </Text>
+          </View>
+        </View>
+
+        <ActionButton
+          icon={<Ionicons color={HARUCUT_COLORS.text} name="image-outline" size={16} />}
+          label="프로필 이미지 업로드"
+          onPress={handlePickProfile}
+          variant="secondary"
+        />
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>닉네임 변경</Text>
+        <Text style={styles.bodyCopy}>서비스에서 표시될 이름을 수정할 수 있어요.</Text>
+        <FormField label="닉네임" onChangeText={setUsername} placeholder="닉네임을 입력해 주세요" value={username} />
+        <ActionButton
+          label="저장"
+          onPress={() => setUserProfile({ username: username.trim() || user.username })}
+        />
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>비밀번호 변경</Text>
+        <FormField
+          label="현재 비밀번호"
+          onChangeText={setOldPassword}
+          placeholder="현재 비밀번호를 입력해 주세요"
+          secure
+          value={oldPassword}
+        />
+        <FormField
+          label="새 비밀번호"
+          onChangeText={setNewPassword}
+          placeholder="새 비밀번호를 입력해 주세요"
+          secure
+          value={newPassword}
+        />
+        <FormField
+          label="새 비밀번호 확인"
+          onChangeText={setConfirmPassword}
+          placeholder="새 비밀번호를 한 번 더 입력해 주세요"
+          secure
+          value={confirmPassword}
+        />
+        <ActionButton
+          label="비밀번호 변경"
+          onPress={() => {
+            if (newPassword && newPassword === confirmPassword) {
+              setOldPassword('');
+              setNewPassword('');
+              setConfirmPassword('');
+            }
+          }}
+        />
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>로그아웃</Text>
+        <ActionButton label="로그아웃" onPress={() => replace('/login')} variant="secondary" />
+      </SurfaceCard>
+
+      <SurfaceCard style={[styles.exitCard, { gap: 12 }]}>
+        <Text style={[styles.sectionTitle, { color: HARUCUT_COLORS.danger }]}>회원 탈퇴 요청</Text>
+        <Text style={styles.bodyCopy}>
+          탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
+        </Text>
+        <ActionButton label="회원 탈퇴 요청" onPress={() => replace('/login')} variant="danger" />
+      </SurfaceCard>
+    </AppScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  actionWrap: {
+    gap: 8,
+  },
+  avatarImage: {
+    height: '100%',
+    width: '100%',
+  },
+  bodyCopy: {
+    color: HARUCUT_COLORS.muted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  exitCard: {
+    backgroundColor: HARUCUT_COLORS.dangerSoft,
+  },
+  heroTitle: {
+    color: HARUCUT_COLORS.text,
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 34,
+  },
+  heroTitleAccent: {
+    color: HARUCUT_COLORS.primaryStrong,
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 34,
+  },
+  historyCardRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  historyPreview: {
+    width: 104,
+  },
+  infoTile: {
+    backgroundColor: 'rgba(227, 238, 252, 0.72)',
+    borderColor: HARUCUT_COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flex: 1,
+    gap: 4,
+    padding: 12,
+  },
+  inlineLink: {
+    color: HARUCUT_COLORS.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  linkBody: {
+    color: HARUCUT_COLORS.muted,
+    fontSize: 11,
+    lineHeight: 17,
+  },
+  linkCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(227, 238, 252, 0.72)',
+    borderColor: HARUCUT_COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  linkTitle: {
+    color: HARUCUT_COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  profileAvatar: {
+    backgroundColor: HARUCUT_COLORS.primarySoft,
+    borderColor: HARUCUT_COLORS.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    height: 56,
+    overflow: 'hidden',
+    width: 56,
+  },
+  profileRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickItem: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(227, 238, 252, 0.72)',
+    borderColor: HARUCUT_COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    width: '48%',
+  },
+  quickText: {
+    color: HARUCUT_COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  rowButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  savedContinueCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(227, 238, 252, 0.72)',
+    borderColor: HARUCUT_COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+  },
+  sectionEyebrow: {
+    color: HARUCUT_COLORS.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    color: HARUCUT_COLORS.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  statsWrap: {
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  thumbCard: {
+    aspectRatio: 0.75,
+    backgroundColor: HARUCUT_COLORS.primarySoft,
+    borderColor: HARUCUT_COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    width: '48%',
+  },
+  thumbImage: {
+    height: '100%',
+    width: '100%',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+});

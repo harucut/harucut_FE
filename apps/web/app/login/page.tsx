@@ -11,6 +11,7 @@ import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import { clientApi } from "@/lib/clientApi";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import {
   buildPathWithRedirect,
   getSafeRedirectPath,
@@ -35,6 +36,7 @@ function LoginPageContent() {
   );
 
   useRedirectIfAuthenticated(redirectTarget);
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
@@ -90,6 +92,7 @@ function LoginPageContent() {
         }
       }
 
+      exitGuestMode();
       window.location.href = redirectTarget;
     } catch (error) {
       console.error(error);
@@ -112,7 +115,7 @@ function LoginPageContent() {
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
-              className="font-medium text-emerald-400 underline underline-offset-4"
+              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
             >
               회원가입
             </Link>
@@ -147,7 +150,7 @@ function LoginPageContent() {
               type="checkbox"
               name="remember"
               value="true"
-              className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-900 text-emerald-500 focus:ring-0"
+              className="h-3.5 w-3.5 rounded border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-primary)] focus:ring-0"
             />
             <span>로그인 상태 유지</span>
           </label>
@@ -163,7 +166,7 @@ function LoginPageContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-full bg-emerald-500 py-2.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-[color:var(--hc-primary)] py-2.5 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "로그인 중..." : "로그인"}
         </button>
