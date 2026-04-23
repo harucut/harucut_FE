@@ -33,6 +33,14 @@ export function readStoredColorTheme() {
   return resolveColorTheme(window.localStorage.getItem(COLOR_THEME_STORAGE_KEY));
 }
 
-export function getColorThemeBootstrapScript() {
-  return `(function(){try{var key=${JSON.stringify(COLOR_THEME_STORAGE_KEY)};var attr=${JSON.stringify(COLOR_THEME_ATTRIBUTE)};var stored=window.localStorage.getItem(key);var theme=stored==="dark"||stored==="light"?stored:${JSON.stringify(DEFAULT_COLOR_THEME)};document.documentElement.setAttribute(attr,theme);document.documentElement.style.colorScheme=theme;}catch(error){document.documentElement.setAttribute(${JSON.stringify(COLOR_THEME_ATTRIBUTE)},${JSON.stringify(DEFAULT_COLOR_THEME)});document.documentElement.style.colorScheme=${JSON.stringify(DEFAULT_COLOR_THEME)};}})();`;
+export const COLOR_THEME_BOOTSTRAP_SCRIPT = `(function(){
+try {
+  var stored = window.localStorage.getItem("harucut-web-color-theme");
+  var theme = stored === "dark" || stored === "light" ? stored : "light";
+  document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.style.colorScheme = theme;
+} catch (error) {
+  document.documentElement.setAttribute("data-theme", "light");
+  document.documentElement.style.colorScheme = "light";
 }
+})();`;

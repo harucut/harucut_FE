@@ -1,11 +1,10 @@
-import { getColorThemeBootstrapScript } from "@/lib/colorTheme";
+import Script from "next/script";
+import { COLOR_THEME_BOOTSTRAP_SCRIPT } from "@/lib/colorTheme";
 
 export function ColorThemeScript() {
   return (
-    <script
-      dangerouslySetInnerHTML={{
-        __html: getColorThemeBootstrapScript(),
-      }}
-    />
+    <Script id="harucut-color-theme" strategy="beforeInteractive">
+      {COLOR_THEME_BOOTSTRAP_SCRIPT}
+    </Script>
   );
 }
