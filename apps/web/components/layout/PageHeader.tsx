@@ -43,7 +43,7 @@ export function PageHeader({
           rightHref ? (
             <Link
               href={rightHref}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] text-[11px] text-[color:var(--hc-text)] shadow-[0_10px_24px_rgba(37,99,235,0.08)]"
+              className="hc-button-icon flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
             >
               {rightSlot}
             </Link>

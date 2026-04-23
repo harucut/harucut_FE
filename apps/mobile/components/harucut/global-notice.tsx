@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
 import { ActionButton, Pill } from '@/components/harucut/ui';
+import type { HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 export function GlobalNotice() {
@@ -13,6 +15,8 @@ export function GlobalNotice() {
   const notice = useHarucutStore((state) => state.notice);
   const clearNotice = useHarucutStore((state) => state.clearNotice);
   const enterGuestMode = useHarucutStore((state) => state.enterGuestMode);
+  const { colors, isDark } = useHarucutTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   if (!notice) {
     return null;
@@ -53,7 +57,7 @@ export function GlobalNotice() {
         <View style={[styles.sheetWrap, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.sheet}>
             <View style={styles.iconWrap}>
-              <Ionicons color={HARUCUT_COLORS.primaryStrong} name={notice.icon as any} size={24} />
+              <Ionicons color={colors.primaryStrong} name={notice.icon as any} size={24} />
             </View>
             {notice.eyebrow ? <Pill>{notice.eyebrow}</Pill> : null}
             <View style={{ gap: 8 }}>
@@ -77,51 +81,53 @@ export function GlobalNotice() {
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: 'rgba(10, 24, 45, 0.36)',
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  buttonColumn: {
-    gap: 10,
-    marginTop: 4,
-  },
-  iconWrap: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(37, 99, 235, 0.10)',
-    borderColor: 'rgba(37, 99, 235, 0.18)',
-    borderRadius: 24,
-    borderWidth: 1,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  message: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 13,
-    lineHeight: 21,
-  },
-  sheet: {
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 30,
-    borderWidth: 1,
-    gap: 14,
-    padding: 20,
-    shadowColor: HARUCUT_COLORS.shadow,
-    shadowOffset: { height: 20, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 32,
-  },
-  sheetWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  title: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-});
+function createStyles(colors: HarucutColors, isDark: boolean) {
+  return StyleSheet.create({
+    backdrop: {
+      backgroundColor: colors.overlay,
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    buttonColumn: {
+      gap: 10,
+      marginTop: 4,
+    },
+    iconWrap: {
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderColor: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(37, 99, 235, 0.18)',
+      borderRadius: 24,
+      borderWidth: 1,
+      height: 48,
+      justifyContent: 'center',
+      width: 48,
+    },
+    message: {
+      color: colors.muted,
+      fontSize: 13,
+      lineHeight: 21,
+    },
+    sheet: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: 30,
+      borderWidth: 1,
+      gap: 14,
+      padding: 20,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 20, width: 0 },
+      shadowOpacity: isDark ? 0.34 : 1,
+      shadowRadius: 32,
+    },
+    sheetWrap: {
+      paddingHorizontal: 16,
+      paddingTop: 24,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: '700',
+      lineHeight: 28,
+    },
+  });
+}

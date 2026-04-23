@@ -17,14 +17,14 @@ export function FeatureCard({ feature }: { feature: Feature }) {
     <Link
       href={feature.href}
       className={[
-        "group flex items-start gap-3 rounded-[28px] border border-white/10 bg-white/[0.04] p-4 backdrop-blur transition duration-200",
-        "hover:translate-y-[-1px] hover:border-white/20 hover:bg-white/[0.06]",
+        "hc-surface-card group flex items-start gap-3 rounded-[28px] border p-4 backdrop-blur transition duration-200",
+        "hover:translate-y-[-1px] hover:border-[color:var(--hc-border-strong)] hover:bg-[color:var(--hc-surface-highlight)]",
         feature.comingSoon ? "opacity-70 pointer-events-none" : "",
       ].join(" ")}
     >
       <div className="mt-1">
         <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/25">
-          <Icon className="h-5 w-5 text-emerald-200" />
+          <Icon className="h-5 w-5 text-[color:var(--hc-accent-soft-text)]" />
         </div>
       </div>
 

@@ -60,7 +60,7 @@ export function FrameOutputOptionsPanel({
                     className={[
                       "h-8 rounded-full border px-3 text-[11px]",
                       borderColor === color.value
-                        ? "border-emerald-400 text-emerald-200"
+                        ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
                         : "border-zinc-700 text-zinc-300",
                     ].join(" ")}
                   >
@@ -74,12 +74,12 @@ export function FrameOutputOptionsPanel({
                   type="color"
                   value={normalizeHexColor(borderColor)}
                   onChange={(e) => onBorderColorChange(e.target.value)}
-                  className="h-9 w-12 rounded-lg border border-zinc-700 bg-zinc-950"
+                  className="hc-input h-9 w-12 rounded-lg border"
                 />
                 <input
                   value={borderColor}
                   onChange={(e) => onBorderColorChange(normalizeHexColor(e.target.value))}
-                  className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-[11px] text-zinc-200"
+                  className="hc-input h-9 flex-1 rounded-lg border px-3 text-[11px]"
                   placeholder="#18181b"
                 />
               </div>
@@ -104,7 +104,7 @@ export function FrameOutputOptionsPanel({
                 className={[
                   "rounded-2xl border px-3 py-2 text-left transition-colors",
                   outputFilter === filter.id
-                    ? "border-emerald-400 bg-emerald-500/10"
+                    ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)]"
                     : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
                 ].join(" ")}
               >
@@ -120,7 +120,7 @@ export function FrameOutputOptionsPanel({
         </div>
 
         {guestMode ? (
-          <div className="rounded-xl border border-[rgba(37,99,235,0.14)] bg-[rgba(37,99,235,0.08)] px-3 py-2 text-[11px] text-[color:var(--hc-muted)]">
+          <div className="hc-feedback rounded-xl border px-3 py-2 text-[11px]">
             비회원 체험에서는 이미지 결과만 다운로드할 수 있어요.
           </div>
         ) : (
@@ -131,7 +131,7 @@ export function FrameOutputOptionsPanel({
                 checked={includeVideo}
                 onChange={(e) => onIncludeVideoChange(e.target.checked)}
                 disabled={!canEnableVideo && !includeVideo}
-                className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-emerald-500 focus:ring-0 disabled:opacity-40"
+                className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-[color:var(--hc-primary)] focus:ring-0 disabled:opacity-40"
               />
               <span className="flex flex-col gap-1">
                 <span>동영상도 함께 준비하기</span>

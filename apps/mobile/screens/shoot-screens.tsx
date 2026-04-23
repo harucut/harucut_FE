@@ -2,14 +2,15 @@ import * as MediaLibrary from 'expo-media-library';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
-import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
+import type { HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 function delay(ms: number) {
@@ -41,6 +42,12 @@ async function savePreviewToLibrary(target: View | null) {
   return { ok: true as const };
 }
 
+function useShootStyles() {
+  const { colors, isDark } = useHarucutTheme();
+
+  return useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+}
+
 export function ShootFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
@@ -63,7 +70,12 @@ export function ShootFrameScreen() {
         title={accessMode === 'guest' ? '비회원 촬영 체험' : '촬영'}
       />
       <StepProgress current={1} label="프레임 선택" total={4} />
-      <FramePickerSection confirmLabel="촬영 시작하기" onConfirm={() => push('/shoot/capture')} onSelect={setShootFrame} selectedFrameId={shoot.frameId} />
+      <FramePickerSection
+        confirmLabel="촬영 시작하기"
+        onConfirm={() => push('/shoot/capture')}
+        onSelect={setShootFrame}
+        selectedFrameId={shoot.frameId}
+      />
       {accessMode === 'member' ? (
         <SavedFramesPanel
           description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 촬영할 수 있어요."
@@ -85,6 +97,8 @@ export function ShootCaptureScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const push = (path: string) => router.push(path as never);
   const cameraRef = useRef<CameraView | null>(null);
+  const { colors } = useHarucutTheme();
+  const styles = useShootStyles();
   const shoot = useHarucutStore((state) => state.shoot);
   const addShootShot = useHarucutStore((state) => state.addShootShot);
   const resetShootSession = useHarucutStore((state) => state.resetShootSession);
@@ -175,9 +189,7 @@ export function ShootCaptureScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.statusRow}>
           <Text style={styles.statusText}>2단계 · 카메라 촬영 {isShooting ? '· 자동 촬영 중' : ''}</Text>
-          <Pill>
-            {shoot.shots.length} / 8장 촬영됨
-          </Pill>
+          <Pill>{shoot.shots.length} / 8장 촬영됨</Pill>
         </View>
 
         <View style={styles.cameraFrame}>
@@ -219,7 +231,7 @@ export function ShootCaptureScreen() {
 
         <View style={styles.actionColumn}>
           <ActionButton
-            icon={<Ionicons color={HARUCUT_COLORS.text} name="camera-reverse-outline" size={16} />}
+            icon={<Ionicons color={colors.text} name="camera-reverse-outline" size={16} />}
             label="카메라 전환"
             onPress={() => setFacing((current) => (current === 'front' ? 'back' : 'front'))}
             variant="secondary"
@@ -241,6 +253,7 @@ export function ShootCaptureScreen() {
 export function ShootSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const styles = useShootStyles();
   const accessMode = useHarucutStore((state) => state.accessMode);
   const shoot = useHarucutStore((state) => state.shoot);
   const toggleShootSelection = useHarucutStore((state) => state.toggleShootSelection);
@@ -274,7 +287,10 @@ export function ShootSelectScreen() {
           {shoot.shots.map((item) => {
             const selected = shoot.selectedShotIds.includes(item.id);
             return (
-              <Pressable key={item.id} onPress={() => toggleShootSelection(item.id)} style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
+              <Pressable
+                key={item.id}
+                onPress={() => toggleShootSelection(item.id)}
+                style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
                 <Image source={{ uri: item.uri }} style={styles.mediaImage} />
                 <View style={styles.mediaBadge}>
                   <Text style={styles.mediaBadgeText}>{selected ? '선택됨' : item.label}</Text>
@@ -334,6 +350,8 @@ export function ShootSelectScreen() {
 export function ShootResultScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const { colors } = useHarucutTheme();
+  const styles = useShootStyles();
   const accessMode = useHarucutStore((state) => state.accessMode);
   const shoot = useHarucutStore((state) => state.shoot);
   const persistShootResult = useHarucutStore((state) => state.persistShootResult);
@@ -362,7 +380,8 @@ export function ShootResultScreen() {
   }, [isGuest, persistShootResult, router, shoot.frameId, shoot.selectedShotIds.length]);
 
   const currentHistory = historyItems.find((item) => item.id === shoot.persistedHistoryId) ?? null;
-  const previewMedia = currentHistory?.previewMedia ?? shoot.shots.filter((item) => shoot.selectedShotIds.includes(item.id));
+  const previewMedia =
+    currentHistory?.previewMedia ?? shoot.shots.filter((item) => shoot.selectedShotIds.includes(item.id));
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
@@ -446,7 +465,7 @@ export function ShootResultScreen() {
               style={{ flex: 1 }}
             />
             <ActionButton
-              icon={<Ionicons color={HARUCUT_COLORS.text} name="share-social-outline" size={16} />}
+              icon={<Ionicons color={colors.text} name="share-social-outline" size={16} />}
               label="공유하기"
               onPress={() => shareMedia(currentHistory.title, currentHistory.previewMedia[0]?.uri)}
               style={{ flex: 1 }}
@@ -468,13 +487,13 @@ export function ShootResultScreen() {
             onPress={() => void handleDownload()}
           />
           <ActionButton
-            icon={<Ionicons color={HARUCUT_COLORS.text} name="share-social-outline" size={16} />}
+            icon={<Ionicons color={colors.text} name="share-social-outline" size={16} />}
             label="링크 공유는 로그인 후 가능해요"
             onPress={showGuestShareNotice}
             variant="ghost"
           />
           <ActionButton
-            icon={<Ionicons color={HARUCUT_COLORS.text} name="sparkles-outline" size={16} />}
+            icon={<Ionicons color={colors.text} name="sparkles-outline" size={16} />}
             label="로그인하고 전체 서비스 이용하기"
             onPress={() => push('/login')}
             variant="secondary"
@@ -500,129 +519,131 @@ export function ShootResultScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  actionColumn: {
-    gap: 10,
-  },
-  bodyText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  cameraFrame: {
-    aspectRatio: 0.75,
-    backgroundColor: '#111827',
-    borderRadius: 24,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cameraPlaceholder: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  countdownCircle: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderColor: '#FFFFFF',
-    borderRadius: 40,
-    borderWidth: 1,
-    height: 80,
-    justifyContent: 'center',
-    width: 80,
-  },
-  countdownOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 40, 72, 0.42)',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  countdownText: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  filterWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  mediaBadge: {
-    backgroundColor: 'rgba(16, 40, 72, 0.72)',
-    borderRadius: 999,
-    bottom: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    position: 'absolute',
-  },
-  mediaBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  mediaCard: {
-    aspectRatio: 0.75,
-    backgroundColor: HARUCUT_COLORS.primarySoft,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-    position: 'relative',
-    width: '48%',
-  },
-  mediaCardSelected: {
-    borderColor: HARUCUT_COLORS.primary,
-  },
-  mediaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  mediaImage: {
-    height: '100%',
-    width: '100%',
-  },
-  overlayCaption: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  rowButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  sectionTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  slotBadge: {
-    backgroundColor: 'rgba(16, 40, 72, 0.72)',
-    borderRadius: 999,
-    left: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    position: 'absolute',
-    top: 10,
-  },
-  slotBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  statusRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  statusText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-});
+function createStyles(colors: HarucutColors, isDark: boolean) {
+  return StyleSheet.create({
+    actionColumn: {
+      gap: 10,
+    },
+    bodyText: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    cameraFrame: {
+      aspectRatio: 0.75,
+      backgroundColor: colors.backgroundCanvas,
+      borderRadius: 24,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    cameraPlaceholder: {
+      alignItems: 'center',
+      flex: 1,
+      gap: 12,
+      justifyContent: 'center',
+      padding: 24,
+    },
+    countdownCircle: {
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.16)',
+      borderColor: '#FFFFFF',
+      borderRadius: 40,
+      borderWidth: 1,
+      height: 80,
+      justifyContent: 'center',
+      width: 80,
+    },
+    countdownOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      backgroundColor: colors.overlay,
+      gap: 8,
+      justifyContent: 'center',
+    },
+    countdownText: {
+      color: '#FFFFFF',
+      fontSize: 28,
+      fontWeight: '700',
+    },
+    filterWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    mediaBadge: {
+      backgroundColor: colors.overlayStrong,
+      borderRadius: 999,
+      bottom: 8,
+      left: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      position: 'absolute',
+    },
+    mediaBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    mediaCard: {
+      aspectRatio: 0.75,
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      overflow: 'hidden',
+      position: 'relative',
+      width: '48%',
+    },
+    mediaCardSelected: {
+      borderColor: colors.primary,
+    },
+    mediaGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    mediaImage: {
+      height: '100%',
+      width: '100%',
+    },
+    overlayCaption: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    rowButtons: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    slotBadge: {
+      backgroundColor: colors.overlayStrong,
+      borderRadius: 999,
+      left: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      position: 'absolute',
+      top: 10,
+    },
+    slotBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    statusRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    statusText: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+  });
+}

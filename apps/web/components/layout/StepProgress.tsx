@@ -8,7 +8,7 @@ type StepProgressProps = {
 
 export function StepProgress({ current, total, label }: StepProgressProps) {
   return (
-    <section className="rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.82)] px-3 py-2.5 shadow-[0_12px_28px_rgba(37,99,235,0.08)]">
+    <section className="hc-surface-soft rounded-2xl border px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-medium text-[color:var(--hc-text)]">{label}</p>
         <span className="text-[10px] text-zinc-500">
@@ -22,7 +22,9 @@ export function StepProgress({ current, total, label }: StepProgressProps) {
             <span
               key={index}
               className={`h-1.5 flex-1 rounded-full ${
-                active ? "bg-[color:var(--hc-primary)]" : "bg-[rgba(148,163,184,0.24)]"
+                active
+                  ? "bg-[color:var(--hc-primary)]"
+                  : "bg-[color:var(--hc-border-subtle)]"
               }`}
             />
           );

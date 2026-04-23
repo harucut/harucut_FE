@@ -233,7 +233,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_24%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
+    <main className="hc-page-showcase min-h-dvh px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <PageHeader
           title="사진 기록"
@@ -244,10 +244,10 @@ export default function HistoryPage() {
           }
         />
 
-        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-4 shadow-[0_20px_60px_rgba(37,99,235,0.12)] sm:rounded-[32px] sm:p-5">
+        <section className="hc-surface-card-xl rounded-[28px] border p-4 sm:rounded-[32px] sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <span className="rounded-full border border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.08)] px-3 py-1 text-[11px] text-[color:var(--hc-primary-strong)]">
+              <span className="hc-accent-chip rounded-full border px-3 py-1 text-[11px]">
                 MEMORY ARCHIVE
               </span>
               <h2 className="mt-4 text-[28px] font-semibold tracking-tight text-[color:var(--hc-text)] sm:text-3xl">
@@ -266,7 +266,7 @@ export default function HistoryPage() {
               ].map((stat) => (
                 <span
                   key={stat.label}
-                    className="rounded-full border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-2 text-[11px] text-zinc-300"
+                    className="hc-surface-well rounded-full border px-3 py-2 text-[11px] text-zinc-300"
                 >
                   {stat.label} {loading ? "..." : stat.value}
                 </span>
@@ -283,8 +283,8 @@ export default function HistoryPage() {
                   onClick={() => setFilter(value)}
                   className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
                     filter === value
-                      ? "bg-[color:var(--hc-primary)] text-white"
-                      : "border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.76)] text-zinc-300"
+                      ? "bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
+                      : "hc-button-secondary border text-zinc-300"
                   }`}
                 >
                   {value === "ALL" ? "전체" : value === "PHOTO" ? "사진" : "영상"}
@@ -292,7 +292,7 @@ export default function HistoryPage() {
               ))}
             </div>
 
-            <label className="flex h-11 flex-1 items-center gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 text-sm text-zinc-300">
+            <label className="hc-surface-well flex h-11 flex-1 items-center gap-2 rounded-2xl border px-3 text-sm text-zinc-300">
               <Search className="h-4 w-4 text-zinc-500" />
               <input
                 value={search}
@@ -305,13 +305,13 @@ export default function HistoryPage() {
             <div className="grid grid-cols-2 gap-2 lg:w-[260px]">
               <Link
                 href="/shoot"
-                className="rounded-full bg-white px-4 py-3 text-center text-sm font-semibold text-zinc-950 hover:bg-zinc-100"
+                className="hc-button-neutral rounded-full px-4 py-3 text-center text-sm font-semibold"
               >
                 새 촬영
               </Link>
               <Link
                 href="/upload"
-                className="rounded-full border border-[color:var(--hc-border)] px-4 py-3 text-center text-sm font-semibold text-zinc-100 hover:bg-[rgba(255,255,255,0.76)]"
+                className="hc-button-secondary rounded-full border px-4 py-3 text-center text-sm font-semibold"
               >
                 업로드
               </Link>
@@ -320,7 +320,7 @@ export default function HistoryPage() {
         </section>
 
         {feedback ? (
-          <div className="rounded-2xl border border-[rgba(37,99,235,0.2)] bg-[rgba(37,99,235,0.08)] px-4 py-3 text-[11px] text-[color:var(--hc-primary-strong)]">
+          <div className="hc-feedback rounded-2xl border px-4 py-3 text-[11px]">
             {feedback}
           </div>
         ) : null}
@@ -328,11 +328,11 @@ export default function HistoryPage() {
         {error ? <p className="text-[11px] text-red-300">{error}</p> : null}
 
         {loading ? (
-          <div className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5">
+          <div className="hc-surface-card rounded-[28px] border p-5">
             <p className="text-[11px] text-zinc-400">기록을 불러오는 중이에요.</p>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5">
+          <div className="hc-surface-card rounded-[28px] border p-5">
             <p className="text-[11px] text-zinc-500">{emptyText}</p>
           </div>
         ) : (
@@ -343,7 +343,7 @@ export default function HistoryPage() {
               return (
                 <article
                   key={item.mediaId}
-                  className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-4 shadow-[0_18px_40px_rgba(37,99,235,0.1)]"
+                  className="hc-surface-card rounded-[28px] border p-4"
                 >
                   <div className="flex gap-3">
                     <div className="h-32 w-24 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
@@ -389,13 +389,13 @@ export default function HistoryPage() {
                             <input
                               value={draftName}
                               onChange={(e) => setDraftName(e.target.value)}
-                              className="h-9 flex-1 rounded-xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 text-[12px] text-zinc-100 outline-none focus:border-[color:var(--hc-primary)]"
+                              className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px]"
                             />
                             <button
                               type="button"
                               onClick={() => void handleSaveName(item)}
                               disabled={savingNameId === item.mediaId}
-                              className="rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-zinc-950 hover:bg-zinc-100 disabled:opacity-50"
+                              className="hc-button-neutral rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
                             >
                               {savingNameId === item.mediaId ? "저장 중" : "저장"}
                             </button>
@@ -418,7 +418,7 @@ export default function HistoryPage() {
                           type="button"
                           onClick={() => void handleDownload(item)}
                           disabled={downloadingId === item.mediaId}
-                          className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full bg-[color:var(--hc-primary)] px-3 py-2 text-[11px] font-semibold text-white hover:bg-[color:var(--hc-primary-strong)] disabled:opacity-50"
+                          className="hc-button-primary flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
                         >
                           <Download className="h-3.5 w-3.5" />
                           <span>
@@ -432,7 +432,7 @@ export default function HistoryPage() {
                           type="button"
                           onClick={() => void handleShare(item)}
                           disabled={sharingId === item.mediaId}
-                          className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-[rgba(255,255,255,0.76)] disabled:opacity-50"
+                          className="hc-button-secondary flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
                         >
                           <Share2 className="h-3.5 w-3.5" />
                           <span>
@@ -449,7 +449,7 @@ export default function HistoryPage() {
                               ? setEditingId(null)
                               : handleStartRename(item)
                           }
-                          className="flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-2 text-[11px] font-semibold text-zinc-100 hover:bg-[rgba(255,255,255,0.76)]"
+                          className="hc-button-secondary flex min-w-[112px] flex-1 items-center justify-center gap-1 rounded-full border px-3 py-2 text-[11px] font-semibold"
                         >
                           <PencilLine className="h-3.5 w-3.5" />
                           <span>{editingId === item.mediaId ? "취소" : "이름 수정"}</span>

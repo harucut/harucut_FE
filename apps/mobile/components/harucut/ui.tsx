@@ -1,21 +1,47 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { usePathname, useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HARUCUT_COLORS, HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant } from '@/constants/harucut-design';
+import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
+import { getGlobalThemeScrollPadding } from '@/constants/overlay-ui';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+
+function useUiStyles() {
+  const { colors, isDark } = useHarucutTheme();
+
+  return React.useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+}
 
 export function AppScrollView({
   children,
   contentContainerStyle,
 }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
+  const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const styles = useUiStyles();
+  const { colors } = useHarucutTheme();
+  const bottomPadding = getGlobalThemeScrollPadding(pathname, insets.bottom);
+
   return (
     <View style={styles.screen}>
+      <LinearGradient
+        colors={[colors.backgroundGradientStart, colors.backgroundGradientEnd]}
+        end={{ x: 0.8, y: 1 }}
+        start={{ x: 0.1, y: 0 }}
+        style={StyleSheet.absoluteFillObject}
+      />
       <View pointerEvents="none" style={styles.backgroundOrbTop} />
       <View pointerEvents="none" style={styles.backgroundOrbRight} />
       <ScrollView
-        contentContainerStyle={[styles.screenContent, contentContainerStyle]}
+        contentContainerStyle={[
+          styles.screenContent,
+          { paddingBottom: bottomPadding },
+          contentContainerStyle,
+        ]}
         showsVerticalScrollIndicator={false}>
         {children}
       </ScrollView>
@@ -25,11 +51,23 @@ export function AppScrollView({
 
 export function BrandMark({ compact = false, href = '/home' }: { compact?: boolean; href?: string }) {
   const router = useRouter();
+  const { colors, isDark } = useHarucutTheme();
+  const styles = useUiStyles();
 
   return (
     <Pressable onPress={() => router.push(href as never)} style={styles.brandRow}>
       <View style={styles.brandIcon}>
-        <Ionicons color={HARUCUT_COLORS.primary} name="sparkles-outline" size={18} />
+        <LinearGradient
+          colors={
+            isDark
+              ? ['rgba(59, 130, 246, 0.18)', 'rgba(255, 255, 255, 0.02)']
+              : ['rgba(255, 255, 255, 0.98)', 'rgba(239, 246, 255, 0.95)']
+          }
+          end={{ x: 0.9, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          style={styles.brandIconGradient}>
+          <Ionicons color={colors.primary} name="sparkles-outline" size={18} />
+        </LinearGradient>
       </View>
       <View style={{ flexShrink: 1 }}>
         {!compact ? (
@@ -64,6 +102,8 @@ export function PageHeader({
   showBrand = true,
   title,
 }: PageHeaderProps) {
+  const styles = useUiStyles();
+
   return (
     <View style={styles.headerBlock}>
       <View style={styles.headerRow}>
@@ -92,10 +132,14 @@ export function SurfaceCard({
   children,
   style,
 }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
+  const styles = useUiStyles();
+
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function StepProgress({ current, label, total }: { current: number; label: string; total: number }) {
+  const styles = useUiStyles();
+
   return (
     <SurfaceCard style={{ paddingVertical: 14 }}>
       <View style={styles.stepHeader}>
@@ -121,6 +165,8 @@ export function Pill({
   children,
   onPress,
 }: PropsWithChildren<{ active?: boolean; onPress?: () => void }>) {
+  const styles = useUiStyles();
+
   const content = (
     <View style={[styles.pill, active ? styles.pillActive : null]}>
       <Text style={[styles.pillText, active ? styles.pillTextActive : null]}>{children}</Text>
@@ -149,11 +195,36 @@ export function ActionButton({
   style,
   variant = 'primary',
 }: ActionButtonProps) {
+  const styles = useUiStyles();
+
+  const variantStyle =
+    variant === 'danger'
+      ? styles.buttonDanger
+      : variant === 'ghost'
+        ? styles.buttonGhost
+        : variant === 'secondary'
+          ? styles.buttonSecondary
+          : styles.buttonPrimary;
+
+  const labelStyle =
+    variant === 'danger'
+      ? styles.buttonLabelOnSolid
+      : variant === 'primary'
+        ? styles.buttonLabelOnSolid
+        : styles.buttonLabelDefault;
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.button, buttonStyles[variant], pressed ? styles.buttonPressed : null, style]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        variantStyle,
+        pressed ? styles.buttonPressed : null,
+        style,
+      ]}>
       <View style={styles.buttonContent}>
         {icon ? <View>{icon}</View> : null}
-        <Text style={[styles.buttonLabel, buttonLabelStyles[variant]]}>{label}</Text>
+        <Text style={[styles.buttonLabel, labelStyle]}>{label}</Text>
       </View>
     </Pressable>
   );
@@ -167,6 +238,8 @@ type FormFieldProps = TextInputProps & {
 
 export function FormField({ error, label, secure = false, style, ...props }: FormFieldProps) {
   const [visible, setVisible] = React.useState(false);
+  const { colors } = useHarucutTheme();
+  const styles = useUiStyles();
   const secureTextEntry = secure && !visible;
 
   return (
@@ -174,7 +247,7 @@ export function FormField({ error, label, secure = false, style, ...props }: For
       <Text style={styles.fieldLabel}>{label}</Text>
       <View>
         <TextInput
-          placeholderTextColor={HARUCUT_COLORS.muted}
+          placeholderTextColor={colors.muted}
           secureTextEntry={secureTextEntry}
           style={[styles.fieldInput, error ? styles.fieldInputError : null, style]}
           {...props}
@@ -182,7 +255,7 @@ export function FormField({ error, label, secure = false, style, ...props }: For
         {secure ? (
           <Pressable onPress={() => setVisible((current) => !current)} style={styles.passwordToggle}>
             <Ionicons
-              color={HARUCUT_COLORS.muted}
+              color={colors.muted}
               name={visible ? 'eye-off-outline' : 'eye-outline'}
               size={18}
             />
@@ -195,258 +268,270 @@ export function FormField({ error, label, secure = false, style, ...props }: For
 }
 
 export function SectionEyebrow({ children }: PropsWithChildren) {
+  const styles = useUiStyles();
+
   return <Text style={styles.sectionEyebrow}>{children}</Text>;
 }
 
-const buttonStyles = StyleSheet.create({
-  danger: {
-    backgroundColor: HARUCUT_COLORS.danger,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-    borderColor: HARUCUT_COLORS.border,
-    borderWidth: 1,
-  },
-  primary: {
-    backgroundColor: HARUCUT_COLORS.primary,
-  },
-  secondary: {
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderWidth: 1,
-  },
-});
-
-const buttonLabelStyles = StyleSheet.create({
-  danger: { color: '#FFFFFF' },
-  ghost: { color: HARUCUT_COLORS.text },
-  primary: { color: '#FFFFFF' },
-  secondary: { color: HARUCUT_COLORS.text },
-});
-
-const styles = StyleSheet.create({
-  backLabel: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  backgroundOrbRight: {
-    backgroundColor: 'rgba(37, 99, 235, 0.08)',
-    borderRadius: 220,
-    height: 220,
-    position: 'absolute',
-    right: -70,
-    top: 80,
-    width: 220,
-  },
-  backgroundOrbTop: {
-    backgroundColor: 'rgba(116, 169, 255, 0.16)',
-    borderRadius: 260,
-    height: 260,
-    left: -90,
-    position: 'absolute',
-    top: -70,
-    width: 260,
-  },
-  brandCompact: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  brandEyebrow: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 10,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  brandIcon: {
-    alignItems: 'center',
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: 'center',
-    shadowColor: HARUCUT_COLORS.shadow,
-    shadowOffset: { height: 16, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-    width: 40,
-  },
-  brandRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  brandTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  button: {
-    alignItems: 'center',
-    borderRadius: HARUCUT_RADII.chip,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-  },
-  buttonContent: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  buttonLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonPressed: {
-    opacity: 0.88,
-  },
-  card: {
-    backgroundColor: HARUCUT_COLORS.card,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.card,
-    borderWidth: 1,
-    padding: HARUCUT_SPACING.card,
-    shadowColor: HARUCUT_COLORS.shadow,
-    shadowOffset: { height: 18, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 38,
-  },
-  fieldError: {
-    color: HARUCUT_COLORS.danger,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  fieldInput: {
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.sm,
-    borderWidth: 1,
-    color: HARUCUT_COLORS.text,
-    fontSize: 13,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingRight: 44,
-  },
-  fieldInputError: {
-    borderColor: 'rgba(209, 67, 67, 0.5)',
-  },
-  fieldLabel: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  headerActionIcon: {
-    alignItems: 'center',
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.chip,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  headerBlock: {
-    gap: 8,
-  },
-  headerDescription: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  passwordToggle: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 44,
-  },
-  pill: {
-    alignSelf: 'flex-start',
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.chip,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  pillActive: {
-    backgroundColor: HARUCUT_COLORS.primary,
-    borderColor: HARUCUT_COLORS.primary,
-  },
-  pillText: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  pillTextActive: {
-    color: '#FFFFFF',
-  },
-  screen: {
-    backgroundColor: HARUCUT_COLORS.background,
-    flex: 1,
-  },
-  screenContent: {
-    gap: HARUCUT_SPACING.section,
-    padding: HARUCUT_SPACING.screen,
-    paddingBottom: 28,
-  },
-  sectionEyebrow: {
-    alignSelf: 'flex-start',
-    color: HARUCUT_COLORS.primaryStrong,
-    fontSize: 11,
-    fontWeight: '700',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(37, 99, 235, 0.08)',
-    borderRadius: HARUCUT_RADII.chip,
-    overflow: 'hidden',
-  },
-  stepBar: {
-    backgroundColor: 'rgba(148, 163, 184, 0.24)',
-    borderRadius: HARUCUT_RADII.chip,
-    flex: 1,
-    height: 6,
-  },
-  stepBarActive: {
-    backgroundColor: HARUCUT_COLORS.primary,
-  },
-  stepCount: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  stepHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  stepLabel: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  stepTrack: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-});
+function createStyles(colors: HarucutColors, isDark: boolean) {
+  return StyleSheet.create({
+    backLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: '600',
+      textDecorationLine: 'underline',
+    },
+    backgroundOrbRight: {
+      backgroundColor: colors.backgroundOrbRight,
+      borderRadius: 220,
+      height: 220,
+      position: 'absolute',
+      right: -70,
+      top: 84,
+      width: 220,
+    },
+    backgroundOrbTop: {
+      backgroundColor: colors.backgroundOrbTop,
+      borderRadius: 260,
+      height: 260,
+      left: -90,
+      position: 'absolute',
+      top: -70,
+      width: 260,
+    },
+    brandCompact: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    brandEyebrow: {
+      color: colors.muted,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+    },
+    brandIcon: {
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      height: 40,
+      overflow: 'hidden',
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: 1,
+      shadowRadius: 30,
+      width: 40,
+    },
+    brandIconGradient: {
+      alignItems: 'center',
+      flex: 1,
+      justifyContent: 'center',
+    },
+    brandRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+    },
+    brandTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    button: {
+      alignItems: 'center',
+      borderRadius: HARUCUT_RADII.chip,
+      justifyContent: 'center',
+      minHeight: 48,
+      paddingHorizontal: 18,
+      paddingVertical: 13,
+    },
+    buttonContent: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'center',
+    },
+    buttonDanger: {
+      backgroundColor: colors.danger,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: isDark ? 0.3 : 0.18,
+      shadowRadius: 28,
+    },
+    buttonGhost: {
+      backgroundColor: 'transparent',
+      borderColor: colors.border,
+      borderWidth: 1,
+    },
+    buttonLabel: {
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    buttonLabelDefault: {
+      color: colors.text,
+    },
+    buttonLabelOnSolid: {
+      color: '#FFFFFF',
+    },
+    buttonPressed: {
+      opacity: 0.88,
+    },
+    buttonPrimary: {
+      backgroundColor: colors.primary,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: isDark ? 0.34 : 0.24,
+      shadowRadius: 30,
+    },
+    buttonSecondary: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderWidth: 1,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.card,
+      borderWidth: 1,
+      padding: HARUCUT_SPACING.card,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 18, width: 0 },
+      shadowOpacity: isDark ? 0.26 : 1,
+      shadowRadius: 38,
+    },
+    fieldError: {
+      color: colors.danger,
+      fontSize: 11,
+      lineHeight: 16,
+    },
+    fieldInput: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.sm,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 13,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      paddingRight: 44,
+    },
+    fieldInputError: {
+      borderColor: isDark ? 'rgba(248, 113, 113, 0.56)' : 'rgba(209, 67, 67, 0.5)',
+    },
+    fieldLabel: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    headerActionIcon: {
+      alignItems: 'center',
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      height: 40,
+      justifyContent: 'center',
+      width: 40,
+    },
+    headerBlock: {
+      gap: 8,
+    },
+    headerDescription: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    headerRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    headerTitle: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: '700',
+      lineHeight: 28,
+    },
+    passwordToggle: {
+      alignItems: 'center',
+      height: 44,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      width: 44,
+    },
+    pill: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+    },
+    pillActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    pillText: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    pillTextActive: {
+      color: '#FFFFFF',
+    },
+    screen: {
+      backgroundColor: colors.background,
+      flex: 1,
+    },
+    screenContent: {
+      gap: HARUCUT_SPACING.section,
+      padding: HARUCUT_SPACING.screen,
+    },
+    sectionEyebrow: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.primarySoft,
+      borderColor: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(37, 99, 235, 0.12)',
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      color: colors.primaryStrong,
+      fontSize: 11,
+      fontWeight: '700',
+      overflow: 'hidden',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    stepBar: {
+      backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(148, 163, 184, 0.24)',
+      borderRadius: HARUCUT_RADII.chip,
+      flex: 1,
+      height: 6,
+    },
+    stepBarActive: {
+      backgroundColor: colors.primary,
+    },
+    stepCount: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    stepHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    stepLabel: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    stepTrack: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 10,
+    },
+  });
+}

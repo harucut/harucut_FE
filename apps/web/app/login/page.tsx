@@ -166,7 +166,7 @@ function LoginPageContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-full bg-[color:var(--hc-primary)] py-2.5 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="hc-button-primary rounded-full py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "로그인 중..." : "로그인"}
         </button>

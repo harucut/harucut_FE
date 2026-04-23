@@ -87,9 +87,9 @@ export function EmailCodeSection({
       />
 
       {isVerified ? (
-        <div className="rounded-2xl border border-[color:var(--hc-border)] bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.78))] px-3 py-3 shadow-[0_16px_36px_var(--hc-shadow)]">
+        <div className="hc-surface-hero rounded-2xl border px-3 py-3">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-full bg-[rgba(37,99,235,0.12)] p-2 text-[color:var(--hc-primary)]">
+              <div className="mt-0.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] p-2 text-[color:var(--hc-primary)]">
               <ShieldCheck size={16} />
             </div>
             <div className="min-w-0 flex-1">
@@ -97,7 +97,7 @@ export function EmailCodeSection({
                 <p className="text-[11px] font-medium text-[color:var(--hc-text)]">
                   {verifiedText}
                 </p>
-                <span className="rounded-full border border-[rgba(37,99,235,0.22)] bg-[rgba(37,99,235,0.08)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--hc-primary)]">
+                <span className="hc-accent-chip rounded-full border px-2 py-0.5 text-[10px] font-medium">
                   인증 완료
                 </span>
               </div>
@@ -114,7 +114,7 @@ export function EmailCodeSection({
               className={`rounded-2xl border px-3 py-2 ${
                 isExpired
                   ? "border-red-500/30 bg-red-500/10"
-                  : "border-[rgba(37,99,235,0.18)] bg-[rgba(37,99,235,0.08)]"
+                  : "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)]"
               }`}
             >
               <div className="flex items-center justify-between gap-3">
@@ -136,7 +136,7 @@ export function EmailCodeSection({
                   </p>
                 </div>
                 {!isExpired ? (
-                  <span className="rounded-full border border-[rgba(37,99,235,0.18)] bg-white/70 px-2 py-0.5 text-[10px] font-medium text-[color:var(--hc-primary)]">
+                  <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[10px] font-medium">
                     {formatRemainingTime(remainingSeconds)}
                   </span>
                 ) : null}
@@ -150,7 +150,7 @@ export function EmailCodeSection({
               onChange={(e) => setCode(e.target.value)}
               placeholder="인증 코드 입력"
               inputMode="numeric"
-              className="flex-1 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)] outline-none placeholder:text-[color:var(--hc-muted)] focus:border-[color:var(--hc-primary)] disabled:opacity-50"
+              className="hc-input flex-1 rounded-2xl border px-3 py-2 text-xs disabled:opacity-50"
             />
 
             <button
@@ -159,7 +159,7 @@ export function EmailCodeSection({
               onClick={async () => {
                 await onSend(email.trim());
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3 py-2 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-background-tint)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="hc-button-secondary inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Mail size={14} />
               <span>{sendButtonLabel}</span>
@@ -171,7 +171,7 @@ export function EmailCodeSection({
               onClick={async () => {
                 await onVerify(email.trim(), code.trim());
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(37,99,235,0.24)] bg-[rgba(37,99,235,0.1)] px-3 py-2 text-[11px] text-[color:var(--hc-primary)] hover:bg-[rgba(37,99,235,0.16)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="hc-accent-chip inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <BadgeCheck size={14} />
               <span>{isVerifying ? "확인 중..." : "인증 확인"}</span>

@@ -4,11 +4,36 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
-import { FRAME_CATALOG, QUICK_LINKS, type HistoryItem } from '@/constants/harucut-data';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
 import { FramePreview } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { FRAME_CATALOG, QUICK_LINKS, type HistoryItem } from '@/constants/harucut-data';
+import type { HarucutThemePreference } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
+
+type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
+
+const THEME_OPTIONS: Array<{
+  description: string;
+  label: string;
+  value: HarucutThemePreference;
+}> = [
+  {
+    description: '기기 설정에 맞춰 자동으로 전환해요.',
+    label: '시스템',
+    value: 'system',
+  },
+  {
+    description: '항상 밝은 화면으로 볼 수 있어요.',
+    label: '라이트',
+    value: 'light',
+  },
+  {
+    description: '어두운 화면으로 편하게 볼 수 있어요.',
+    label: '다크',
+    value: 'dark',
+  },
+];
 
 function historyPreviewUri(item: HistoryItem) {
   return item.previewMedia[0]?.uri ?? '';
@@ -35,7 +60,15 @@ async function sharePreview(item: HistoryItem) {
   });
 }
 
+function useAppScreenTheme() {
+  const { colors, isDark } = useHarucutTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
+  return { colors, isDark, styles };
+}
+
 export function HomeScreen() {
+  const { colors, styles } = useAppScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const historyItems = useHarucutStore((state) => state.historyItems);
@@ -55,7 +88,7 @@ export function HomeScreen() {
       <PageHeader
         description={`${user.username}님, 촬영하거나 업로드해서 오늘의 기록을 바로 만들어 보세요.`}
         onPressRight={() => push('/mypage')}
-        rightSlot={<Ionicons color={HARUCUT_COLORS.text} name="person-outline" size={18} />}
+        rightSlot={<Ionicons color={colors.text} name="person-outline" size={18} />}
         title="오늘 하루를 네 컷으로 남겨보세요"
       />
 
@@ -77,7 +110,7 @@ export function HomeScreen() {
             style={{ flex: 1 }}
           />
           <ActionButton
-            icon={<Ionicons color={HARUCUT_COLORS.text} name="cloud-upload-outline" size={16} />}
+            icon={<Ionicons color={colors.text} name="cloud-upload-outline" size={16} />}
             label="사진 업로드"
             onPress={() => push('/upload')}
             style={{ flex: 1 }}
@@ -88,7 +121,7 @@ export function HomeScreen() {
         <View style={styles.quickGrid}>
           {QUICK_LINKS.map((item) => (
             <Pressable key={item.href} onPress={() => push(item.href)} style={styles.quickItem}>
-              <Ionicons color={HARUCUT_COLORS.primary} name={item.icon} size={16} />
+              <Ionicons color={colors.primary} name={item.icon} size={16} />
               <Text style={styles.quickText}>{item.label}</Text>
             </Pressable>
           ))}
@@ -123,7 +156,7 @@ export function HomeScreen() {
               <Text style={styles.linkTitle}>{frame.name}</Text>
               <Text style={styles.linkBody}>{frame.badge}</Text>
             </View>
-            <Ionicons color={HARUCUT_COLORS.muted} name="chevron-forward" size={16} />
+            <Ionicons color={colors.muted} name="chevron-forward" size={16} />
           </Pressable>
         ))}
       </SurfaceCard>
@@ -149,7 +182,7 @@ export function HomeScreen() {
               <Text style={styles.linkTitle}>{savedFrames[0].title}</Text>
               <Text style={styles.linkBody}>저장한 프레임을 이어서 수정할 수 있어요.</Text>
             </View>
-            <Ionicons color={HARUCUT_COLORS.muted} name="chevron-forward" size={16} />
+            <Ionicons color={colors.muted} name="chevron-forward" size={16} />
           </Pressable>
         ) : (
           <Text style={styles.bodyCopy}>아직 저장한 프레임이 없어요.</Text>
@@ -160,6 +193,7 @@ export function HomeScreen() {
 }
 
 export function HistoryScreen() {
+  const { colors, styles } = useAppScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const historyItems = useHarucutStore((state) => state.historyItems);
@@ -252,14 +286,14 @@ export function HistoryScreen() {
                     style={{ flex: 1, minHeight: 42 }}
                   />
                   <ActionButton
-                    icon={<Ionicons color={HARUCUT_COLORS.text} name="share-social-outline" size={15} />}
+                    icon={<Ionicons color={colors.text} name="share-social-outline" size={15} />}
                     label="공유하기"
                     onPress={() => sharePreview(item)}
                     style={{ flex: 1, minHeight: 42 }}
                     variant="secondary"
                   />
                   <ActionButton
-                    icon={<Ionicons color={HARUCUT_COLORS.text} name="create-outline" size={15} />}
+                    icon={<Ionicons color={colors.text} name="create-outline" size={15} />}
                     label={editingId === item.id ? '저장' : '이름 수정'}
                     onPress={() => {
                       if (editingId === item.id) {
@@ -285,10 +319,13 @@ export function HistoryScreen() {
 }
 
 export function MyPageScreen() {
+  const { colors, isDark, styles } = useAppScreenTheme();
   const router = useRouter();
   const replace = (path: string) => router.replace(path as never);
   const user = useHarucutStore((state) => state.user);
   const setUserProfile = useHarucutStore((state) => state.setUserProfile);
+  const themePreference = useHarucutStore((state) => state.themePreference);
+  const setThemePreference = useHarucutStore((state) => state.setThemePreference);
   const [username, setUsername] = useState(user.username);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -312,7 +349,7 @@ export function MyPageScreen() {
       <PageHeader
         description="계정 정보와 보안 설정을 관리할 수 있어요."
         onPressRight={() => undefined}
-        rightSlot={<Ionicons color={HARUCUT_COLORS.text} name="refresh-outline" size={18} />}
+        rightSlot={<Ionicons color={colors.text} name="refresh-outline" size={18} />}
         title="내 계정"
       />
 
@@ -342,7 +379,7 @@ export function MyPageScreen() {
         </View>
 
         <ActionButton
-          icon={<Ionicons color={HARUCUT_COLORS.text} name="image-outline" size={16} />}
+          icon={<Ionicons color={colors.text} name="image-outline" size={16} />}
           label="프로필 이미지 업로드"
           onPress={handlePickProfile}
           variant="secondary"
@@ -353,10 +390,7 @@ export function MyPageScreen() {
         <Text style={styles.sectionTitle}>닉네임 변경</Text>
         <Text style={styles.bodyCopy}>서비스에서 표시될 이름을 수정할 수 있어요.</Text>
         <FormField label="닉네임" onChangeText={setUsername} placeholder="닉네임을 입력해 주세요" value={username} />
-        <ActionButton
-          label="저장"
-          onPress={() => setUserProfile({ username: username.trim() || user.username })}
-        />
+        <ActionButton label="저장" onPress={() => setUserProfile({ username: username.trim() || user.username })} />
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
@@ -395,12 +429,57 @@ export function MyPageScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>앱 테마</Text>
+        <Text style={styles.bodyCopy}>
+          {isDark
+            ? '현재 다크 모드가 적용되어 있어요. 기기 설정을 따르거나 원하는 테마로 바로 바꿀 수 있어요.'
+            : '현재 라이트 모드가 적용되어 있어요. 기기 설정을 따르거나 원하는 테마로 바로 바꿀 수 있어요.'}
+        </Text>
+        <View style={styles.themeOptionList}>
+          {THEME_OPTIONS.map((option) => {
+            const active = themePreference === option.value;
+
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => setThemePreference(option.value)}
+                style={({ pressed }) => [
+                  styles.themeOption,
+                  active ? styles.themeOptionActive : null,
+                  pressed ? styles.themeOptionPressed : null,
+                ]}>
+                <View style={styles.themeOptionHeader}>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[styles.themeOptionLabel, active ? styles.themeOptionLabelActive : null]}>
+                      {option.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.themeOptionDescription,
+                        active ? styles.themeOptionDescriptionActive : null,
+                      ]}>
+                      {option.description}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    color={active ? colors.primary : colors.muted}
+                    name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={18}
+                  />
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
         <Text style={styles.sectionTitle}>로그아웃</Text>
         <ActionButton label="로그아웃" onPress={() => replace('/login')} variant="secondary" />
       </SurfaceCard>
 
       <SurfaceCard style={[styles.exitCard, { gap: 12 }]}>
-        <Text style={[styles.sectionTitle, { color: HARUCUT_COLORS.danger }]}>회원 탈퇴 요청</Text>
+        <Text style={styles.exitTitle}>회원 탈퇴 요청</Text>
         <Text style={styles.bodyCopy}>
           탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
         </Text>
@@ -410,168 +489,218 @@ export function MyPageScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  actionWrap: {
-    gap: 8,
-  },
-  avatarImage: {
-    height: '100%',
-    width: '100%',
-  },
-  bodyCopy: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  exitCard: {
-    backgroundColor: HARUCUT_COLORS.dangerSoft,
-  },
-  heroTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 28,
-    fontWeight: '700',
-    lineHeight: 34,
-  },
-  heroTitleAccent: {
-    color: HARUCUT_COLORS.primaryStrong,
-    fontSize: 28,
-    fontWeight: '700',
-    lineHeight: 34,
-  },
-  historyCardRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  historyPreview: {
-    width: 104,
-  },
-  infoTile: {
-    backgroundColor: 'rgba(227, 238, 252, 0.72)',
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flex: 1,
-    gap: 4,
-    padding: 12,
-  },
-  inlineLink: {
-    color: HARUCUT_COLORS.primary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  linkBody: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    lineHeight: 17,
-  },
-  linkCard: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(227, 238, 252, 0.72)',
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  linkTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  profileAvatar: {
-    backgroundColor: HARUCUT_COLORS.primarySoft,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 24,
-    borderWidth: 1,
-    height: 56,
-    overflow: 'hidden',
-    width: 56,
-  },
-  profileRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  quickItem: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(227, 238, 252, 0.72)',
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    width: '48%',
-  },
-  quickText: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  recentGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  rowButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  savedContinueCard: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(227, 238, 252, 0.72)',
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    padding: 12,
-  },
-  sectionEyebrow: {
-    color: HARUCUT_COLORS.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  sectionTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  statsWrap: {
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  thumbCard: {
-    aspectRatio: 0.75,
-    backgroundColor: HARUCUT_COLORS.primarySoft,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-    width: '48%',
-  },
-  thumbImage: {
-    height: '100%',
-    width: '100%',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-});
+function createStyles(colors: HarucutThemeColors, isDark: boolean) {
+  const tintedSurface = isDark ? 'rgba(37, 99, 235, 0.16)' : colors.cardMuted;
+  const themeOptionActiveSurface = isDark ? 'rgba(37, 99, 235, 0.2)' : colors.primarySoft;
+
+  return StyleSheet.create({
+    actionWrap: {
+      gap: 8,
+    },
+    avatarImage: {
+      height: '100%',
+      width: '100%',
+    },
+    bodyCopy: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    exitCard: {
+      backgroundColor: colors.dangerSoft,
+    },
+    exitTitle: {
+      color: colors.danger,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    filterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    heroTitle: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: '700',
+      lineHeight: 34,
+    },
+    heroTitleAccent: {
+      color: colors.primaryStrong,
+      fontSize: 28,
+      fontWeight: '700',
+      lineHeight: 34,
+    },
+    historyCardRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    historyPreview: {
+      width: 104,
+    },
+    infoTile: {
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flex: 1,
+      gap: 4,
+      padding: 12,
+    },
+    inlineLink: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    linkBody: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 17,
+    },
+    linkCard: {
+      alignItems: 'center',
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    linkTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    profileAvatar: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.border,
+      borderRadius: 24,
+      borderWidth: 1,
+      height: 56,
+      overflow: 'hidden',
+      width: 56,
+    },
+    profileRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+    },
+    quickGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    quickItem: {
+      alignItems: 'center',
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      width: '48%',
+    },
+    quickText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    recentGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    rowButtons: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    savedContinueCard: {
+      alignItems: 'center',
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 12,
+      padding: 12,
+    },
+    sectionEyebrow: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1.6,
+      textTransform: 'uppercase',
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    statsWrap: {
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    themeOption: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    themeOptionActive: {
+      backgroundColor: themeOptionActiveSurface,
+      borderColor: colors.primary,
+    },
+    themeOptionDescription: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 17,
+    },
+    themeOptionDescriptionActive: {
+      color: colors.text,
+    },
+    themeOptionHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    themeOptionLabel: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    themeOptionLabelActive: {
+      color: colors.primaryStrong,
+    },
+    themeOptionList: {
+      gap: 10,
+    },
+    themeOptionPressed: {
+      opacity: 0.92,
+    },
+    thumbCard: {
+      aspectRatio: 0.75,
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      overflow: 'hidden',
+      width: '48%',
+    },
+    thumbImage: {
+      height: '100%',
+      width: '100%',
+    },
+  });
+}

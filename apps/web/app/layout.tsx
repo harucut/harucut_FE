@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
+import { ColorThemeScript } from "@/components/theme/ColorThemeScript";
+import { GlobalThemeToggle } from "@/components/theme/GlobalThemeToggle";
 import "./globals.css";
 import { ExternalBrowserGate } from "./ExternalBrowserGate";
 
@@ -15,13 +17,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body>
+        <ColorThemeScript />
         <ExternalBrowserGate />
         <Suspense fallback={null}>
           <GuestTrialBridge />
         </Suspense>
         {children}
+        <GlobalThemeToggle />
       </body>
     </html>
   );

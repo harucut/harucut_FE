@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { View } from 'react-native';
 
 import { BottomNavigation } from '@/components/harucut/bottom-nav';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 export default function AppLayout() {
@@ -12,6 +12,7 @@ export default function AppLayout() {
   const router = useRouter();
   const accessMode = useHarucutStore((state) => state.accessMode);
   const showGuestRestrictedNotice = useHarucutStore((state) => state.showGuestRestrictedNotice);
+  const { colors } = useHarucutTheme();
 
   useEffect(() => {
     if (accessMode !== 'guest') {
@@ -27,8 +28,8 @@ export default function AppLayout() {
   }, [accessMode, pathname, router, showGuestRestrictedNotice]);
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: HARUCUT_COLORS.background, flex: 1 }}>
-      <View style={{ backgroundColor: HARUCUT_COLORS.background, flex: 1 }}>
+    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background, flex: 1 }}>
+      <View style={{ backgroundColor: colors.background, flex: 1 }}>
         <View style={{ flex: 1 }}>
           <Slot />
         </View>

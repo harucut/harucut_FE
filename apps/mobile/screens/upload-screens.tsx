@@ -1,18 +1,25 @@
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
-import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
+import type { HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 async function shareMedia(title: string, uri: string | undefined) {
   if (!uri) return;
   await Share.share({ message: `${title}\n${uri}`, url: uri });
+}
+
+function useUploadStyles() {
+  const { colors } = useHarucutTheme();
+
+  return useMemo(() => createStyles(colors), [colors]);
 }
 
 export function UploadFrameScreen() {
@@ -32,7 +39,12 @@ export function UploadFrameScreen() {
         title="업로드"
       />
       <StepProgress current={1} label="프레임 선택" total={3} />
-      <FramePickerSection confirmLabel="업로드 시작하기" onConfirm={() => push('/upload/select')} onSelect={setUploadFrame} selectedFrameId={upload.frameId} />
+      <FramePickerSection
+        confirmLabel="업로드 시작하기"
+        onConfirm={() => push('/upload/select')}
+        onSelect={setUploadFrame}
+        selectedFrameId={upload.frameId}
+      />
       <SavedFramesPanel
         description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 만들 수 있어요."
         emptyText="이 타입으로 저장한 프레임이 아직 없어요."
@@ -50,6 +62,8 @@ export function UploadFrameScreen() {
 export function UploadSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const { colors } = useHarucutTheme();
+  const styles = useUploadStyles();
   const upload = useHarucutStore((state) => state.upload);
   const addUploadAssets = useHarucutStore((state) => state.addUploadAssets);
   const toggleUploadSelection = useHarucutStore((state) => state.toggleUploadSelection);
@@ -104,7 +118,7 @@ export function UploadSelectScreen() {
             : `업로드한 미디어 ${upload.assets.length}개 중에서 4개를 골라 주세요.`}
         </Text>
         <ActionButton
-          icon={<Ionicons color={HARUCUT_COLORS.text} name="images-outline" size={16} />}
+          icon={<Ionicons color={colors.text} name="images-outline" size={16} />}
           label="사진 또는 영상 추가하기"
           onPress={() => void handlePickAssets()}
           variant="secondary"
@@ -170,6 +184,8 @@ export function UploadSelectScreen() {
 export function UploadResultScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const { colors } = useHarucutTheme();
+  const styles = useUploadStyles();
   const upload = useHarucutStore((state) => state.upload);
   const persistUploadResult = useHarucutStore((state) => state.persistUploadResult);
   const historyItems = useHarucutStore((state) => state.historyItems);
@@ -192,8 +208,7 @@ export function UploadResultScreen() {
 
   const currentHistory = historyItems.find((item) => item.id === upload.persistedHistoryId) ?? null;
   const previewMedia =
-    currentHistory?.previewMedia ??
-    upload.assets.filter((item) => upload.selectedAssetIds.includes(item.id));
+    currentHistory?.previewMedia ?? upload.assets.filter((item) => upload.selectedAssetIds.includes(item.id));
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
@@ -239,7 +254,7 @@ export function UploadResultScreen() {
               style={{ flex: 1 }}
             />
             <ActionButton
-              icon={<Ionicons color={HARUCUT_COLORS.text} name="share-social-outline" size={16} />}
+              icon={<Ionicons color={colors.text} name="share-social-outline" size={16} />}
               label="공유하기"
               onPress={() => shareMedia(currentHistory.title, currentHistory.previewMedia[0]?.uri)}
               style={{ flex: 1 }}
@@ -266,6 +281,8 @@ function ActionCard({
   onPress: () => void;
   selected: boolean;
 }) {
+  const styles = useUploadStyles();
+
   return (
     <Pressable onPress={onPress} style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
       <Image source={{ uri: item.uri }} style={styles.mediaImage} />
@@ -281,77 +298,79 @@ function ActionCard({
   );
 }
 
-const styles = StyleSheet.create({
-  bodyText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  filterWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  mediaBadge: {
-    backgroundColor: 'rgba(16, 40, 72, 0.72)',
-    borderRadius: 999,
-    bottom: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    position: 'absolute',
-  },
-  mediaBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  mediaCard: {
-    aspectRatio: 0.75,
-    backgroundColor: HARUCUT_COLORS.primarySoft,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-    position: 'relative',
-    width: '48%',
-  },
-  mediaCardSelected: {
-    borderColor: HARUCUT_COLORS.primary,
-  },
-  mediaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  mediaImage: {
-    height: '100%',
-    width: '100%',
-  },
-  rowButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  sectionTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  statusRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  videoBadge: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 40, 72, 0.72)',
-    borderRadius: 999,
-    bottom: 8,
-    height: 22,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 8,
-    width: 22,
-  },
-});
+function createStyles(colors: HarucutColors) {
+  return StyleSheet.create({
+    bodyText: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    filterWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    mediaBadge: {
+      backgroundColor: colors.overlayStrong,
+      borderRadius: 999,
+      bottom: 8,
+      left: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      position: 'absolute',
+    },
+    mediaBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    mediaCard: {
+      aspectRatio: 0.75,
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      overflow: 'hidden',
+      position: 'relative',
+      width: '48%',
+    },
+    mediaCardSelected: {
+      borderColor: colors.primary,
+    },
+    mediaGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    mediaImage: {
+      height: '100%',
+      width: '100%',
+    },
+    rowButtons: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    statusRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    videoBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.overlayStrong,
+      borderRadius: 999,
+      bottom: 8,
+      height: 22,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 8,
+      width: 22,
+    },
+  });
+}

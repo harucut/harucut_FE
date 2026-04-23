@@ -1,14 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
 
+import { ActionButton, Pill, SurfaceCard } from '@/components/harucut/ui';
 import {
   FRAME_CATALOG,
   type FrameId,
   type MediaAsset,
   type SavedFrame,
 } from '@/constants/harucut-data';
-import { HARUCUT_COLORS, HARUCUT_RADII } from '@/constants/harucut-design';
-import { ActionButton, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
 type FrameSlot = {
   height: DimensionValue;
@@ -56,9 +58,15 @@ const FRAME_LAYOUTS: Record<FrameId, { aspectRatio: number; slots: FrameSlot[] }
   },
 };
 
+function useFrameStyles() {
+  const { colors, isDark } = useHarucutTheme();
+
+  return useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+}
+
 export function FramePreview({
-  accentColor = HARUCUT_COLORS.primary,
-  backgroundColor = HARUCUT_COLORS.cardStrong,
+  accentColor,
+  backgroundColor,
   caption,
   frameId,
   media = [],
@@ -69,12 +77,16 @@ export function FramePreview({
   frameId: FrameId;
   media?: MediaAsset[];
 }) {
+  const { colors } = useHarucutTheme();
+  const styles = useFrameStyles();
   const layout = FRAME_LAYOUTS[frameId];
   const frameMeta = FRAME_CATALOG.find((item) => item.frameId === frameId);
+  const resolvedAccent = accentColor ?? colors.primary;
+  const resolvedBackground = backgroundColor ?? colors.cardStrong;
 
   return (
-    <View style={[styles.previewShell, { aspectRatio: layout.aspectRatio, backgroundColor }]}>
-      <View style={[styles.previewOutline, { borderColor: accentColor }]} />
+    <View style={[styles.previewShell, { aspectRatio: layout.aspectRatio, backgroundColor: resolvedBackground }]}>
+      <View style={[styles.previewOutline, { borderColor: resolvedAccent }]} />
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
         return (
@@ -99,12 +111,12 @@ export function FramePreview({
                 ) : null}
               </>
             ) : (
-              <Text style={styles.slotLabel}>{frameMeta?.shortLabel ?? index + 1}</Text>
+              <Text style={[styles.slotLabel, { color: resolvedAccent }]}>{frameMeta?.shortLabel ?? index + 1}</Text>
             )}
           </View>
         );
       })}
-      {caption ? <Text style={[styles.caption, { color: accentColor }]}>{caption}</Text> : null}
+      {caption ? <Text style={[styles.caption, { color: resolvedAccent }]}>{caption}</Text> : null}
     </View>
   );
 }
@@ -120,6 +132,8 @@ export function FramePickerSection({
   onSelect: (frameId: FrameId) => void;
   selectedFrameId: FrameId;
 }) {
+  const styles = useFrameStyles();
+
   return (
     <>
       <View style={styles.grid}>
@@ -173,6 +187,8 @@ export function SavedFramesPanel({
   selectedSavedFrameId: string | null;
   title: string;
 }) {
+  const { colors } = useHarucutTheme();
+  const styles = useFrameStyles();
   const matchingFrames = frames.filter((frame) => frame.frameId === selectedFrameId);
 
   return (
@@ -183,7 +199,7 @@ export function SavedFramesPanel({
           {description ? <Text style={styles.savedDescription}>{description}</Text> : null}
         </View>
         <Pressable onPress={onRefresh}>
-          <Text style={styles.savedRefresh}>새로고침</Text>
+          <Text style={[styles.savedRefresh, { color: colors.primary }]}>새로고침</Text>
         </Pressable>
       </View>
 
@@ -207,7 +223,7 @@ export function SavedFramesPanel({
                   <View style={styles.savedCopy}>
                     <Text style={styles.savedItemTitle}>{frame.title}</Text>
                     <Text style={styles.savedItemDescription}>{frame.description}</Text>
-                    <Text style={styles.savedStatus}>{selected ? '선택됨' : '클릭해서 선택'}</Text>
+                    <Text style={styles.savedStatus}>{selected ? '선택됨' : '터치해서 선택'}</Text>
                   </View>
                 </Pressable>
                 {onAction ? (
@@ -227,167 +243,166 @@ export function SavedFramesPanel({
   );
 }
 
-const styles = StyleSheet.create({
-  caption: {
-    bottom: '8%',
-    fontSize: 10,
-    fontWeight: '700',
-    left: '10%',
-    position: 'absolute',
-    textTransform: 'lowercase',
-  },
-  emptyText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 16,
-  },
-  frameCard: {
-    backgroundColor: HARUCUT_COLORS.card,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.card,
-    borderWidth: 1,
-    gap: 10,
-    padding: 14,
-    width: '48%',
-  },
-  frameCardSelected: {
-    borderColor: HARUCUT_COLORS.primary,
-    shadowColor: HARUCUT_COLORS.shadow,
-    shadowOffset: { height: 18, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 32,
-  },
-  framePreviewWrap: {
-    backgroundColor: HARUCUT_COLORS.backgroundTint,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-    padding: 12,
-  },
-  frameSubtitle: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  frameTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  frameTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  previewOutline: {
-    borderRadius: 24,
-    borderWidth: 2,
-    bottom: 8,
-    left: 8,
-    position: 'absolute',
-    right: 8,
-    top: 8,
-  },
-  previewShell: {
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderRadius: 28,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  savedCard: {
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: HARUCUT_RADII.lg,
-    borderWidth: 1,
-    gap: 12,
-    padding: 12,
-  },
-  savedCardSelected: {
-    borderColor: HARUCUT_COLORS.primary,
-  },
-  savedCopy: {
-    flex: 1,
-    gap: 6,
-  },
-  savedDescription: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    lineHeight: 17,
-  },
-  savedHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  savedItemDescription: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    lineHeight: 17,
-  },
-  savedItemTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  savedPressable: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  savedPreview: {
-    width: 96,
-  },
-  savedRefresh: {
-    color: HARUCUT_COLORS.primary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  savedStatus: {
-    color: HARUCUT_COLORS.primaryStrong,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  savedTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  slot: {
-    backgroundColor: 'rgba(227, 238, 252, 0.9)',
-    borderColor: 'rgba(37, 99, 235, 0.12)',
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-    position: 'absolute',
-  },
-  slotImage: {
-    height: '100%',
-    width: '100%',
-  },
-  slotLabel: {
-    color: HARUCUT_COLORS.primaryStrong,
-    fontSize: 10,
-    fontWeight: '700',
-    left: 8,
-    position: 'absolute',
-    top: 8,
-  },
-  videoBadge: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 40, 72, 0.66)',
-    borderRadius: HARUCUT_RADII.chip,
-    bottom: 8,
-    height: 22,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 8,
-    width: 22,
-  },
-});
+function createStyles(colors: HarucutColors, isDark: boolean) {
+  return StyleSheet.create({
+    caption: {
+      bottom: '8%',
+      fontSize: 10,
+      fontWeight: '700',
+      left: '10%',
+      position: 'absolute',
+      textTransform: 'lowercase',
+    },
+    emptyText: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 16,
+    },
+    frameCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.card,
+      borderWidth: 1,
+      gap: 10,
+      padding: 14,
+      width: '48%',
+    },
+    frameCardSelected: {
+      borderColor: colors.primary,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 18, width: 0 },
+      shadowOpacity: isDark ? 0.34 : 1,
+      shadowRadius: 32,
+    },
+    framePreviewWrap: {
+      backgroundColor: colors.backgroundTint,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.lg,
+      borderWidth: 1,
+      overflow: 'hidden',
+      padding: 12,
+    },
+    frameSubtitle: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    frameTags: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    frameTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    previewOutline: {
+      borderRadius: 24,
+      borderWidth: 2,
+      bottom: 8,
+      left: 8,
+      position: 'absolute',
+      right: 8,
+      top: 8,
+    },
+    previewShell: {
+      borderRadius: 28,
+      overflow: 'hidden',
+      width: '100%',
+    },
+    savedCard: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.lg,
+      borderWidth: 1,
+      gap: 12,
+      padding: 12,
+    },
+    savedCardSelected: {
+      borderColor: colors.primary,
+    },
+    savedCopy: {
+      flex: 1,
+      gap: 6,
+    },
+    savedDescription: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 17,
+    },
+    savedHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    savedItemDescription: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 17,
+    },
+    savedItemTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    savedPressable: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    savedPreview: {
+      width: 96,
+    },
+    savedRefresh: {
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    savedStatus: {
+      color: colors.primaryStrong,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    savedTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    slot: {
+      backgroundColor: colors.cardMuted,
+      borderColor: isDark ? 'rgba(147, 197, 253, 0.14)' : 'rgba(37, 99, 235, 0.12)',
+      borderRadius: 14,
+      borderWidth: 1,
+      overflow: 'hidden',
+      position: 'absolute',
+    },
+    slotImage: {
+      height: '100%',
+      width: '100%',
+    },
+    slotLabel: {
+      fontSize: 10,
+      fontWeight: '700',
+      left: 8,
+      position: 'absolute',
+      top: 8,
+    },
+    videoBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.overlayStrong,
+      borderRadius: HARUCUT_RADII.chip,
+      bottom: 8,
+      height: 22,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 8,
+      width: 22,
+    },
+  });
+}

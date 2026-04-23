@@ -81,7 +81,7 @@ export function FrameSelectPanel({
               {progressLabel}
             </span>
           </div>
-          <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-100">
+          <div className="hc-accent-chip mt-3 rounded-2xl border px-3 py-2 text-[11px]">
             {selectionHint}
           </div>
         </section>
@@ -95,7 +95,7 @@ export function FrameSelectPanel({
               </p>
             </div>
             {canProceed ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2.5 py-1 text-[10px] text-emerald-100">
+              <span className="hc-accent-chip inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px]">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 선택 완료
               </span>
@@ -113,7 +113,7 @@ export function FrameSelectPanel({
                   className={[
                     "relative overflow-hidden rounded-2xl border bg-black/30",
                     item ? "border-white/10" : "border-dashed border-white/10",
-                    isActive ? "ring-2 ring-emerald-400/40" : "",
+                    isActive ? "ring-2 ring-[color:var(--hc-accent-soft-border)]" : "",
                   ].join(" ")}
                 >
                   <div className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-2 py-1 text-[10px] text-zinc-100">
@@ -182,7 +182,7 @@ export function FrameSelectPanel({
                     className={[
                       "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
-                        ? "border-emerald-400 ring-2 ring-emerald-400/60"
+                        ? "border-[color:var(--hc-primary)] ring-2 ring-[color:var(--hc-accent-soft-border)]"
                         : "border-zinc-700 hover:border-zinc-500",
                     ].join(" ")}
                   >
@@ -213,7 +213,7 @@ export function FrameSelectPanel({
                     </span>
 
                     {isSelected ? (
-                      <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-zinc-950">
+                      <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[color:var(--hc-primary)] text-[10px] font-semibold text-[color:var(--hc-primary-contrast)]">
                         {order}
                       </span>
                     ) : null}
@@ -238,7 +238,7 @@ export function FrameSelectPanel({
             type="button"
             disabled={!canProceed}
             onClick={onNext}
-            className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="hc-button-primary rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
           >
             {nextButtonLabel}
           </button>

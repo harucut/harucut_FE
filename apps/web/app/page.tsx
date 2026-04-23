@@ -5,8 +5,8 @@ import { BrandMark } from "@/components/layout/BrandMark";
 
 export default function LandingPage() {
   return (
-    <main className="relative isolate min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.16),_transparent_24%),radial-gradient(circle_at_88%_18%,_rgba(37,99,235,0.12),_transparent_18%),linear-gradient(180deg,#fcfdff_0%,#eef5ff_100%)] text-[color:var(--hc-text)]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.28),transparent_42%,rgba(191,219,254,0.12)_100%)]" />
+    <main className="hc-page-landing relative isolate min-h-dvh overflow-hidden text-[color:var(--hc-text)]">
+      <div className="hc-page-landing-overlay pointer-events-none absolute inset-0" />
       <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-5">
         <header className="flex items-center justify-between gap-3">
           <BrandMark href="/" tone="light" />
@@ -14,13 +14,13 @@ export default function LandingPage() {
           <div className="flex shrink-0 items-center gap-2">
             <Link
               href="/login"
-              className="rounded-full border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.76)] px-3 py-2 text-[10px] text-[color:var(--hc-text)] shadow-[0_10px_30px_rgba(37,99,235,0.08)] transition-all duration-300 ease-out hover:border-[rgba(37,99,235,0.28)] hover:bg-white sm:px-4 sm:text-[11px]"
+              className="hc-button-secondary rounded-full border px-3 py-2 text-[10px] transition-all duration-300 ease-out sm:px-4 sm:text-[11px]"
             >
               로그인
             </Link>
             <Link
               href="/signup"
-              className="rounded-full bg-[color:var(--hc-primary)] px-3 py-2 text-[10px] font-semibold text-white shadow-[0_16px_40px_rgba(37,99,235,0.24)] transition-all duration-300 ease-out hover:bg-[color:var(--hc-primary-strong)] sm:px-4 sm:text-[11px]"
+              className="hc-button-hero rounded-full px-3 py-2 text-[10px] font-semibold transition-all duration-300 ease-out sm:px-4 sm:text-[11px]"
             >
               회원가입
             </Link>
@@ -29,13 +29,19 @@ export default function LandingPage() {
 
         <section className="grid flex-1 items-center gap-8 py-6 lg:grid-cols-[minmax(0,1fr)_400px]">
           <div className="max-w-2xl">
-            <div className="inline-flex rounded-full border border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.08)] px-3 py-1 text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
+            <div className="hc-accent-chip inline-flex rounded-full border px-3 py-1 text-[11px] font-medium">
               오늘 하루를 네 컷으로 남겨보세요
             </div>
 
             <h1 className="mt-5 text-[30px] font-semibold tracking-[-0.04em] text-[color:var(--hc-text)] sm:text-[34px] md:text-[56px] md:leading-[1.02]">
               오늘의 순간을
-              <span className="block bg-gradient-to-r from-[color:var(--hc-primary-strong)] via-[color:var(--hc-primary)] to-[#74a9ff] bg-clip-text text-transparent">
+              <span
+                className="block bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, var(--hc-primary-strong), var(--hc-primary), var(--hc-hero-gradient-end))",
+                }}
+              >
                 다시 보고 싶은 네 컷으로
               </span>
             </h1>
@@ -48,7 +54,7 @@ export default function LandingPage() {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href="/login"
-                className="inline-flex w-full items-center justify-center rounded-full bg-[color:var(--hc-primary)] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(37,99,235,0.24)] transition-all duration-300 ease-out hover:bg-[color:var(--hc-primary-strong)] hover:shadow-[0_22px_44px_rgba(29,78,216,0.2)] sm:w-auto"
+                className="hc-button-hero inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto"
               >
                 시작하기
               </Link>
@@ -56,21 +62,21 @@ export default function LandingPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2 text-[11px] text-[color:var(--hc-muted)]">
-              <span className="rounded-full border border-[rgba(148,163,184,0.3)] bg-[rgba(255,255,255,0.72)] px-3 py-1 shadow-[0_10px_24px_rgba(37,99,235,0.06)]">
+              <span className="hc-surface-soft rounded-full border px-3 py-1">
                 촬영
               </span>
-              <span className="rounded-full border border-[rgba(148,163,184,0.3)] bg-[rgba(255,255,255,0.72)] px-3 py-1 shadow-[0_10px_24px_rgba(37,99,235,0.06)]">
+              <span className="hc-surface-soft rounded-full border px-3 py-1">
                 업로드
               </span>
-              <span className="rounded-full border border-[rgba(148,163,184,0.3)] bg-[rgba(255,255,255,0.72)] px-3 py-1 shadow-[0_10px_24px_rgba(37,99,235,0.06)]">
+              <span className="hc-surface-soft rounded-full border px-3 py-1">
                 테마 편집
               </span>
             </div>
           </div>
 
           <div className="mx-auto w-full max-w-[340px] sm:max-w-[360px]">
-            <div className="rounded-[30px] border border-[color:var(--hc-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(239,246,255,0.92))] p-4 shadow-[0_30px_80px_rgba(37,99,235,0.16)] backdrop-blur-xl">
-              <div className="overflow-hidden rounded-[24px] border border-[rgba(148,163,184,0.24)] bg-[linear-gradient(180deg,#eff6ff_0%,#f8fbff_100%)]">
+            <div className="hc-surface-hero rounded-[30px] border p-4 backdrop-blur-xl">
+              <div className="hc-surface-inset overflow-hidden rounded-[24px] border">
                 <div className="relative aspect-[3/4] w-full">
                   <Image
                     src="/hero-image.png"

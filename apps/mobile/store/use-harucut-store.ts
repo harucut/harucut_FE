@@ -13,7 +13,7 @@ import {
   type SavedFrame,
   type UserProfile,
 } from '@/constants/harucut-data';
-import type { ButtonVariant } from '@/constants/harucut-design';
+import type { ButtonVariant, HarucutThemePreference } from '@/constants/harucut-design';
 
 type AccessMode = 'guest' | 'member';
 
@@ -77,6 +77,7 @@ type HarucutStore = {
   notice: NoticeState | null;
   shoot: ShootSession;
   themeEditor: ThemeEditorState;
+  themePreference: HarucutThemePreference;
   upload: UploadSession;
   user: UserProfile;
   addShootShot: (asset: MediaAsset) => void;
@@ -103,6 +104,7 @@ type HarucutStore = {
   setThemeCaption: (value: string) => void;
   setThemeDescription: (value: string) => void;
   setThemeFrame: (frameId: FrameId) => void;
+  setThemePreference: (value: HarucutThemePreference) => void;
   setThemeTitle: (value: string) => void;
   setUploadFrame: (frameId: FrameId) => void;
   setUploadOption: (key: keyof Pick<UploadSession, 'borderColor' | 'includeVideo' | 'tone'>, value: string | boolean) => void;
@@ -212,6 +214,7 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
   notice: null,
   shoot: defaultShootSession(),
   themeEditor: defaultThemeEditor(),
+  themePreference: 'system',
   upload: defaultUploadSession(),
   user: INITIAL_USER,
   addShootShot: (asset) =>
@@ -441,6 +444,7 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
     set((state) => ({
       themeEditor: { ...defaultThemeEditor(), frameId, selectedSavedFrameId: null },
     })),
+  setThemePreference: (value) => set({ themePreference: value }),
   setThemeTitle: (value) =>
     set((state) => ({ themeEditor: { ...state.themeEditor, title: value } })),
   setUploadFrame: (frameId) =>

@@ -191,7 +191,7 @@ export default function MyPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader
           title="내 계정"
@@ -200,7 +200,7 @@ export default function MyPage() {
               type="button"
               onClick={fetchUser}
               disabled={isSubmitting || loading}
-              className="grid h-9 w-9 place-items-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              className="hc-button-icon grid h-9 w-9 place-items-center rounded-full border text-zinc-300 disabled:opacity-50"
               aria-label="새로고침"
               title="새로고침"
             >
@@ -252,7 +252,7 @@ export default function MyPage() {
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
                   <div className="flex items-center gap-2 text-zinc-300">
-                    <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                    <ShieldCheck className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
                     <span className="text-[11px]">로그인 플랫폼</span>
                   </div>
                   <p className="mt-2 text-sm font-semibold text-zinc-100">
@@ -261,7 +261,7 @@ export default function MyPage() {
                 </div>
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
                   <div className="flex items-center gap-2 text-zinc-300">
-                    <CreditCard className="h-4 w-4 text-emerald-300" />
+                    <CreditCard className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
                     <span className="text-[11px]">플랜</span>
                   </div>
                   <p className="mt-2 text-sm font-semibold text-zinc-100">
@@ -283,7 +283,7 @@ export default function MyPage() {
                   type="button"
                   onClick={handleUploadProfileImage}
                   disabled={isUploadingProfile || !profileFile}
-                  className="h-9 whitespace-nowrap rounded-full bg-emerald-500 px-4 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                  className="hc-button-primary h-9 whitespace-nowrap rounded-full px-4 text-[11px] font-semibold disabled:opacity-50"
                 >
                   {isUploadingProfile ? "업로드 중..." : "프로필 업로드"}
                 </button>
@@ -300,13 +300,13 @@ export default function MyPage() {
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-[12px] outline-none focus:border-zinc-600"
+                  className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px] outline-none"
                   placeholder="닉네임을 입력해 주세요"
                 />
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="h-9 rounded-full bg-emerald-500 px-4 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                  className="hc-button-primary h-9 rounded-full px-4 text-[11px] font-semibold disabled:opacity-50"
                 >
                   저장
                 </button>
@@ -365,7 +365,7 @@ export default function MyPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="mt-1 h-9 rounded-full bg-emerald-500 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                  className="hc-button-primary mt-1 h-9 rounded-full text-[11px] font-semibold disabled:opacity-50"
                 >
                   {isSubmitting ? "변경 중..." : "비밀번호 변경"}
                 </button>

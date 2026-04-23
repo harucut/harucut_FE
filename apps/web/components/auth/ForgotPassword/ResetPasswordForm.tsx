@@ -73,7 +73,7 @@ export function ResetPasswordForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="mt-1 inline-flex h-9 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+        className="hc-button-primary mt-1 inline-flex h-9 items-center justify-center rounded-full text-[11px] font-semibold disabled:opacity-50"
       >
         {isSubmitting ? "변경 중..." : "비밀번호 변경하기"}
       </button>

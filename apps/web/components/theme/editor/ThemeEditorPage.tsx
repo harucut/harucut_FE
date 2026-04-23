@@ -174,7 +174,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   };
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
         <header className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
@@ -220,7 +220,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               type="button"
               onClick={onDone}
               disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
-              className="rounded-full bg-[color:var(--hc-primary)] px-4 py-2 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:opacity-50"
+              className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
             >
               {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
             </button>

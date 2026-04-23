@@ -637,7 +637,7 @@ export default function ShootResultPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader
           title="촬영 결과"
@@ -758,7 +758,7 @@ export default function ShootResultPage() {
               setImageError(null);
               setVideoError(null);
             }}
-            className="rounded-full border border-[color:var(--hc-border)] bg-white/80 px-4 py-2 text-xs font-semibold text-[color:var(--hc-text)] transition hover:bg-white"
+            className="hc-button-secondary rounded-full border px-4 py-2 text-xs font-semibold transition"
           >
             다시 준비하기
           </button>
@@ -786,7 +786,7 @@ export default function ShootResultPage() {
         ) : null}
 
         {guestMode && imageResult ? (
-          <section className="rounded-[28px] border border-[rgba(59,130,246,0.16)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(239,246,255,0.92))] p-4 shadow-[0_20px_44px_rgba(37,99,235,0.1)]">
+          <section className="hc-surface-hero rounded-[28px] border p-4">
             <div className="space-y-2">
               <p className="text-sm font-semibold text-[color:var(--hc-text)]">
                 비회원 체험 결과 안내
@@ -802,14 +802,14 @@ export default function ShootResultPage() {
                 type="button"
                 onClick={handleDownloadImage}
                 disabled={isDownloadingImage}
-                className="rounded-full bg-[color:var(--hc-primary)] px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(37,99,235,0.2)] transition hover:bg-[color:var(--hc-primary-strong)] disabled:opacity-40"
+                className="hc-button-primary rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
               >
                 {isDownloadingImage ? "이미지 저장 중..." : "이미지 다운로드"}
               </button>
               <button
                 type="button"
                 onClick={showGuestShareNotice}
-                className="rounded-full border border-[color:var(--hc-border)] bg-white/85 px-4 py-3 text-sm font-semibold text-[color:var(--hc-text)] transition hover:bg-white"
+                className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
               >
                 링크 공유는 로그인 후 가능해요
               </button>
@@ -837,13 +837,13 @@ export default function ShootResultPage() {
         <div className="flex gap-2">
           <Link
             href={guestMode ? "/shoot/capture" : "/shoot/select"}
-            className="flex-1 rounded-full border border-[color:var(--hc-border)] bg-white/80 px-4 py-2 text-center text-xs font-semibold text-[color:var(--hc-text)] transition hover:bg-white"
+            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
           >
             {guestMode ? "다시 촬영하기" : "사진 다시 고르기"}
           </Link>
           <Link
             href={guestMode ? "/login" : "/home"}
-            className="flex-1 rounded-full border border-[color:var(--hc-border)] bg-white/80 px-4 py-2 text-center text-xs font-semibold text-[color:var(--hc-text)] transition hover:bg-white"
+            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
           >
             {guestMode ? "로그인으로 이동" : "홈으로 가기"}
           </Link>

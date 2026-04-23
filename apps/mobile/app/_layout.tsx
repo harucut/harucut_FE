@@ -6,20 +6,24 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GlobalNotice } from '@/components/harucut/global-notice';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
+import { GlobalThemeToggle } from '@/components/harucut/global-theme-toggle';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
 export default function RootLayout() {
+  const { colors, isDark } = useHarucutTheme();
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             animation: 'fade',
-            contentStyle: { backgroundColor: HARUCUT_COLORS.background },
+            contentStyle: { backgroundColor: colors.background },
             headerShown: false,
           }}
         />
+        <GlobalThemeToggle />
         <GlobalNotice />
       </SafeAreaProvider>
     </GestureHandlerRootView>

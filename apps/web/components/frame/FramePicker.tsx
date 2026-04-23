@@ -33,7 +33,7 @@ export function FramePicker({
                 className={[
                   "group relative overflow-hidden rounded-[28px] border px-3 py-3 text-left transition-all",
                   isSelected
-                    ? "border-emerald-300/80 bg-zinc-900 shadow-[0_0_0_1px_rgba(110,231,183,0.25)]"
+                    ? "border-[color:var(--hc-primary)] bg-zinc-900 shadow-[0_0_0_1px_var(--hc-accent-soft-border)]"
                     : "border-zinc-800 bg-zinc-900/70 hover:border-zinc-600 hover:bg-zinc-900",
                 ].join(" ")}
               >
@@ -83,7 +83,7 @@ export function FramePicker({
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-300"
+          className="hc-button-primary rounded-full px-5 py-2.5 text-xs font-semibold"
         >
           {confirmLabel}
         </button>

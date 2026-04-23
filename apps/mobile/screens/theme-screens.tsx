@@ -1,13 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { BACKGROUND_SWATCHES, THEME_STICKERS } from '@/constants/harucut-data';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { BACKGROUND_SWATCHES, THEME_STICKERS } from '@/constants/harucut-data';
+import type { HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
+
+function useThemeScreenStyles() {
+  const { colors } = useHarucutTheme();
+
+  return useMemo(() => createStyles(colors), [colors]);
+}
 
 export function ThemeFrameScreen() {
   const router = useRouter();
@@ -21,10 +28,15 @@ export function ThemeFrameScreen() {
     <AppScrollView>
       <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} title="프레임 꾸미기" />
       <StepProgress current={1} label="프레임 선택" total={2} />
-      <FramePickerSection confirmLabel="새 프레임 만들기" onConfirm={() => push('/theme/sticker')} onSelect={setThemeFrame} selectedFrameId={themeEditor.frameId} />
+      <FramePickerSection
+        confirmLabel="새 프레임 만들기"
+        onConfirm={() => push('/theme/sticker')}
+        onSelect={setThemeFrame}
+        selectedFrameId={themeEditor.frameId}
+      />
       <SavedFramesPanel
         actionLabel="수정하기"
-        description="같은 프레임 타입으로 저장한 프레임만 불러와서 수정할 수 있어요."
+        description="같은 프레임 타입으로 저장한 프레임만 불러와 수정할 수 있어요."
         emptyText="이 프레임 타입으로 저장한 프레임이 아직 없어요."
         frames={savedFrames}
         onAction={() => push('/theme/sticker')}
@@ -41,6 +53,7 @@ export function ThemeFrameScreen() {
 export function ThemeStickerScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const styles = useThemeScreenStyles();
   const themeEditor = useHarucutStore((state) => state.themeEditor);
   const setThemeTitle = useHarucutStore((state) => state.setThemeTitle);
   const setThemeDescription = useHarucutStore((state) => state.setThemeDescription);
@@ -68,7 +81,7 @@ export function ThemeStickerScreen() {
 
       <SurfaceCard style={{ gap: 12 }}>
         <Text style={styles.sectionTitle}>프레임 정보</Text>
-        <Text style={styles.bodyText}>저장 시 모바일 앱 안에서 다시 불러올 제목과 설명이에요.</Text>
+        <Text style={styles.bodyText}>저장 후 모바일 홈 화면에서 다시 불러와 제목과 설명을 확인할 수 있어요.</Text>
         <FormField label="프레임 이름" onChangeText={setThemeTitle} placeholder="프레임 이름을 입력해 주세요" value={themeEditor.title} />
         <FormField
           label="프레임 설명"
@@ -96,8 +109,8 @@ export function ThemeStickerScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>에셋 패널</Text>
-        <Text style={styles.bodyText}>스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.</Text>
+        <Text style={styles.sectionTitle}>오브젝트 설정</Text>
+        <Text style={styles.bodyText}>스티커, 사진, 글자 조합으로 원하는 프레임을 만들어요.</Text>
         <View style={styles.stickerGrid}>
           {THEME_STICKERS.map((sticker) => {
             const active = themeEditor.stickers.includes(sticker.symbol);
@@ -137,7 +150,7 @@ export function ThemeStickerScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>레이어 패널</Text>
+        <Text style={styles.sectionTitle}>레이어 설명</Text>
         <View style={styles.layerList}>
           <Text style={styles.layerItem}>배경 · {themeEditor.backgroundColor}</Text>
           <Text style={styles.layerItem}>캡션 · {themeEditor.caption || '없음'}</Text>
@@ -147,9 +160,9 @@ export function ThemeStickerScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>인스펙터 패널</Text>
+        <Text style={styles.sectionTitle}>인스턴트 설명</Text>
         <Text style={styles.bodyText}>
-          선택한 프레임 타입에 맞춰 배경, 캡션, 스티커 구성을 정리한 뒤 저장할 수 있어요.
+          선택한 프레임 타입에 맞춰 배경, 캡션, 스티커 구성을 정리해서 저장할 수 있어요.
         </Text>
         <ActionButton
           icon={<Ionicons color="#FFFFFF" name="save-outline" size={16} />}
@@ -175,38 +188,40 @@ export function ThemeStickerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  bodyText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  filterWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  layerItem: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  layerList: {
-    gap: 8,
-  },
-  sectionTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  stickerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  stickerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-});
+function createStyles(colors: HarucutColors) {
+  return StyleSheet.create({
+    bodyText: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    filterWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    layerItem: {
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    layerList: {
+      gap: 8,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    stickerGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    stickerRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+  });
+}

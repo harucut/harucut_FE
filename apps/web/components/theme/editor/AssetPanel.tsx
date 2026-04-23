@@ -295,7 +295,7 @@ function TextTab() {
       <button
         type="button"
         onClick={() => addText({ text, fontSize })}
-        className="rounded-xl bg-[color:var(--hc-primary)] px-4 py-2 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)]"
+        className="hc-button-primary rounded-xl px-4 py-2 text-xs font-semibold"
       >
         텍스트 추가
       </button>

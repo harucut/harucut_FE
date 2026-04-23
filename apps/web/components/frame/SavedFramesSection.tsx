@@ -80,7 +80,7 @@ export function SavedFramesSection({
                 className={[
                   "rounded-2xl border bg-zinc-950/70 p-3 transition",
                   isSelected
-                    ? "border-emerald-400/80"
+                    ? "border-[color:var(--hc-primary)]"
                     : "border-zinc-800 hover:border-zinc-600",
                 ].join(" ")}
               >
@@ -122,7 +122,7 @@ export function SavedFramesSection({
                       <button
                         type="button"
                         onClick={() => onAction(frame)}
-                        className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-medium text-emerald-200 hover:bg-emerald-400/20"
+                        className="hc-accent-chip rounded-full border px-3 py-1 text-[10px] font-medium"
                       >
                         {actionLabel}
                       </button>

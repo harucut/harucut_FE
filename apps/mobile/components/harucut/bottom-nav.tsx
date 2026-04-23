@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BOTTOM_NAV_ITEMS } from '@/constants/harucut-data';
-import { HARUCUT_COLORS, HARUCUT_RADII } from '@/constants/harucut-design';
+import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 function activeKey(pathname: string) {
@@ -21,6 +23,8 @@ export function BottomNavigation() {
   const router = useRouter();
   const accessMode = useHarucutStore((state) => state.accessMode);
   const showGuestRestrictedNotice = useHarucutStore((state) => state.showGuestRestrictedNotice);
+  const { colors, isDark } = useHarucutTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const currentKey = activeKey(pathname);
   const push = (path: string) => router.push(path as never);
 
@@ -46,10 +50,12 @@ export function BottomNavigation() {
               <Ionicons
                 color={
                   locked
-                    ? 'rgba(89, 112, 143, 0.58)'
+                    ? isDark
+                      ? 'rgba(148, 163, 184, 0.58)'
+                      : 'rgba(89, 112, 143, 0.58)'
                     : active
-                      ? HARUCUT_COLORS.primaryStrong
-                      : HARUCUT_COLORS.muted
+                      ? colors.primaryStrong
+                      : colors.muted
                 }
                 name={active ? item.iconActive : item.icon}
                 size={22}
@@ -65,47 +71,49 @@ export function BottomNavigation() {
   );
 }
 
-const styles = StyleSheet.create({
-  bar: {
-    backgroundColor: HARUCUT_COLORS.cardStrong,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 30,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    shadowColor: HARUCUT_COLORS.shadow,
-    shadowOffset: { height: 14, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-  },
-  item: {
-    alignItems: 'center',
-    borderRadius: HARUCUT_RADII.md,
-    flex: 1,
-    gap: 4,
-    paddingVertical: 7,
-  },
-  itemLocked: {
-    opacity: 0.72,
-  },
-  label: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  labelActive: {
-    color: HARUCUT_COLORS.primaryStrong,
-  },
-  labelLocked: {
-    color: 'rgba(89, 112, 143, 0.76)',
-  },
-  outer: {
-    backgroundColor: HARUCUT_COLORS.background,
-    borderTopColor: HARUCUT_COLORS.border,
-    borderTopWidth: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-  },
-});
+function createStyles(colors: HarucutColors, isDark: boolean) {
+  return StyleSheet.create({
+    bar: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: 30,
+      borderWidth: 1,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 14, width: 0 },
+      shadowOpacity: isDark ? 0.3 : 1,
+      shadowRadius: 30,
+    },
+    item: {
+      alignItems: 'center',
+      borderRadius: HARUCUT_RADII.md,
+      flex: 1,
+      gap: 4,
+      paddingVertical: 7,
+    },
+    itemLocked: {
+      opacity: 0.72,
+    },
+    label: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    labelActive: {
+      color: colors.primaryStrong,
+    },
+    labelLocked: {
+      color: isDark ? 'rgba(148, 163, 184, 0.76)' : 'rgba(89, 112, 143, 0.76)',
+    },
+    outer: {
+      backgroundColor: colors.background,
+      borderTopColor: colors.border,
+      borderTopWidth: 1,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+    },
+  });
+}

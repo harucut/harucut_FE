@@ -43,7 +43,7 @@ export default function CapturePage() {
       : null;
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
@@ -115,7 +115,7 @@ export default function CapturePage() {
             {isShooting && countdown !== null ? (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40">
                 <div className="pointer-events-auto flex flex-col items-center gap-2">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400 text-2xl font-semibold">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-2xl font-semibold">
                     {countdown}
                   </div>
                   <span className="text-xs text-zinc-200">다음 촬영까지 남은 시간</span>
@@ -123,7 +123,7 @@ export default function CapturePage() {
                   <button
                     type="button"
                     onClick={handleShootNow}
-                    className="mt-2 rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400"
+                    className="hc-button-primary mt-2 rounded-full px-3 py-1 text-[11px] font-semibold"
                   >
                     지금 촬영
                   </button>
@@ -145,7 +145,7 @@ export default function CapturePage() {
             <div className="flex items-center gap-2 text-[11px] text-zinc-400">
               <span
                 className={`inline-flex h-2 w-2 rounded-full ${
-                  isCameraReady ? "bg-emerald-400" : "bg-zinc-500"
+                  isCameraReady ? "bg-[color:var(--hc-primary)]" : "bg-zinc-500"
                 }`}
               />
               <span>카메라 {isCameraReady ? "준비 완료" : "아직 켜져 있지 않아요"}</span>
@@ -174,7 +174,7 @@ export default function CapturePage() {
                 type="button"
                 onClick={startShooting}
                 disabled={!isCameraReady || isShooting}
-                className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                className="hc-button-primary rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isShooting ? "촬영 중..." : "8장 자동 촬영 시작"}
               </button>

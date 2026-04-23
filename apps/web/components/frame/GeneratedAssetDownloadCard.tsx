@@ -52,14 +52,14 @@ export function GeneratedAssetDownloadCard({
             <input
               value={draftName}
               onChange={(e) => onChangeName(e.target.value)}
-              className="h-9 flex-1 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-[11px] text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+              className="hc-input h-9 flex-1 rounded-xl border px-3 text-[11px]"
               placeholder={asset.displayName}
             />
             <button
               type="button"
               onClick={onSaveName}
               disabled={isSavingName}
-              className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3 py-2 text-[11px] font-medium text-[color:var(--hc-text)] hover:bg-[color:var(--hc-background-tint)] disabled:opacity-40"
+              className="hc-button-secondary rounded-full border px-3 py-2 text-[11px] font-medium disabled:opacity-40"
             >
               {isSavingName ? "저장 중..." : "파일명 수정"}
             </button>
@@ -70,7 +70,7 @@ export function GeneratedAssetDownloadCard({
           type="button"
           onClick={onDownload}
           disabled={isDownloading}
-          className="rounded-full bg-[color:var(--hc-primary)] px-4 py-2 text-xs font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] hover:bg-[color:var(--hc-primary-strong)] disabled:opacity-40"
+          className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-40"
         >
           {isDownloading ? "다운로드 중..." : "다운로드"}
         </button>
@@ -80,7 +80,7 @@ export function GeneratedAssetDownloadCard({
             type="button"
             onClick={onShare}
             disabled={isSharing}
-            className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--hc-text)] hover:bg-[color:var(--hc-background-tint)] disabled:opacity-40"
+            className="hc-button-secondary rounded-full border px-4 py-2 text-xs font-semibold disabled:opacity-40"
           >
             {isSharing ? "공유 준비 중..." : "공유 링크 만들기"}
           </button>

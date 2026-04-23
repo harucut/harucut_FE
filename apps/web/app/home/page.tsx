@@ -87,7 +87,7 @@ export default function HomePage() {
   const savedFrame = savedFrames[0] ?? null;
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),_transparent_24%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
+    <main className="hc-page-showcase min-h-dvh px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <PageHeader
           title={
@@ -108,15 +108,21 @@ export default function HomePage() {
           }
         />
 
-        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_20px_60px_rgba(37,99,235,0.12)] backdrop-blur sm:p-6">
-          <div className="inline-flex rounded-full border border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.08)] px-3 py-1 text-[11px] text-[color:var(--hc-primary-strong)]">
+        <section className="hc-surface-card-xl rounded-[28px] border p-5 backdrop-blur sm:p-6">
+          <div className="hc-accent-chip inline-flex rounded-full border px-3 py-1 text-[11px]">
             {recentMoment}
           </div>
 
           <div className="mt-4 space-y-3">
             <h1 className="max-w-2xl text-[28px] font-semibold tracking-tight sm:text-[32px] md:text-5xl">
               찍고 저장하고,
-              <span className="block bg-gradient-to-r from-[color:var(--hc-primary-strong)] via-[color:var(--hc-primary)] to-[#74a9ff] bg-clip-text text-transparent">
+              <span
+                className="block bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, var(--hc-primary-strong), var(--hc-primary), var(--hc-hero-gradient-end))",
+                }}
+              >
                 다시 꺼내 보는 하루컷
               </span>
             </h1>
@@ -129,14 +135,14 @@ export default function HomePage() {
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/shoot"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 sm:w-auto"
+              className="hc-button-neutral inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition sm:w-auto"
             >
               <Camera className="h-4 w-4" />
               바로 촬영 시작
             </Link>
             <Link
               href="/upload"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.76)] px-5 py-3 text-sm font-semibold text-[color:var(--hc-text)] transition hover:border-[rgba(37,99,235,0.28)] hover:bg-white sm:w-auto"
+              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
             >
               <Upload className="h-4 w-4" />
               사진 업로드
@@ -150,7 +156,7 @@ export default function HomePage() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="flex items-center gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-3 text-sm text-zinc-200 transition hover:border-[rgba(37,99,235,0.24)] hover:bg-[rgba(219,234,254,0.86)]"
+                  className="hc-surface-well hc-surface-well-hover flex items-center gap-2 rounded-2xl border px-3 py-3 text-sm text-zinc-200 transition"
                 >
                   <Icon className="h-4 w-4 text-[color:var(--hc-primary)]" />
                   <span>{item.label}</span>
@@ -161,7 +167,7 @@ export default function HomePage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.1)]">
+          <section className="hc-surface-card rounded-[28px] border p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
@@ -169,7 +175,7 @@ export default function HomePage() {
                 </p>
                 <h2 className="mt-2 text-lg font-semibold">최근 저장한 결과</h2>
               </div>
-              <Link href="/history" className="text-[11px] text-[color:var(--hc-primary)] hover:text-[color:var(--hc-primary-strong)]">
+              <Link href="/history" className="hc-link-accent text-[11px]">
                 전체 보기
               </Link>
             </div>
@@ -186,7 +192,7 @@ export default function HomePage() {
                 recentMedia.map((item) => (
                   <div
                     key={item.mediaId}
-                    className="overflow-hidden rounded-3xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)]"
+                    className="hc-surface-well overflow-hidden rounded-3xl border"
                   >
                     {item.downloadUrl ? (
                       item.mediaType === "VIDEO" ? (
@@ -210,7 +216,7 @@ export default function HomePage() {
                   </div>
                 ))
               ) : (
-                <div className="col-span-2 rounded-3xl border border-dashed border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] p-5 text-center text-[11px] text-zinc-400">
+                <div className="hc-surface-well col-span-2 rounded-3xl border border-dashed p-5 text-center text-[11px] text-zinc-400">
                   아직 저장한 결과가 없어요.
                 </div>
               )}
@@ -218,7 +224,7 @@ export default function HomePage() {
           </section>
 
           <div className="flex flex-col gap-4">
-            <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.1)]">
+            <section className="hc-surface-card rounded-[28px] border p-5">
               <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
                 Frame picks
               </p>
@@ -227,7 +233,7 @@ export default function HomePage() {
                   <Link
                     key={frame.id}
                     href={`/shoot?frame=${frame.id}`}
-                    className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-3 transition hover:border-[rgba(37,99,235,0.24)]"
+                    className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
                   >
                     <div>
                       <p className="text-sm font-semibold text-zinc-100">{frame.name}</p>
@@ -239,10 +245,10 @@ export default function HomePage() {
               </div>
             </section>
 
-            <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[rgba(255,255,255,0.84)] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.1)]">
+            <section className="hc-surface-card rounded-[28px] border p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-zinc-100">이어 꾸밀 프레임</p>
-                <Link href="/theme" className="text-[11px] text-[color:var(--hc-primary)]">
+                <Link href="/theme" className="hc-link-accent text-[11px]">
                   전체 보기
                 </Link>
               </div>
@@ -251,7 +257,7 @@ export default function HomePage() {
                 {savedFrame ? (
                   <Link
                     href={`/theme?frame=${frameIdFromFrameType(savedFrame.frameType)}&remoteFrameId=${savedFrame.frameId}`}
-                    className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-3 py-3 transition hover:border-[rgba(37,99,235,0.24)]"
+                    className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-zinc-100">
@@ -264,7 +270,7 @@ export default function HomePage() {
                     <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
                   </Link>
                 ) : (
-                  <p className="rounded-2xl border border-dashed border-[color:var(--hc-border)] bg-[rgba(227,238,252,0.72)] px-4 py-4 text-[11px] text-zinc-400">
+                  <p className="hc-surface-well rounded-2xl border border-dashed px-4 py-4 text-[11px] text-zinc-400">
                     아직 저장한 프레임이 없어요.
                   </p>
                 )}

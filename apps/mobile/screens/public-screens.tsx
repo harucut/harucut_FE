@@ -4,9 +4,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { HERO_IMAGE_URL, LOGIN_FIELDS, SERVICE_TAGS, SIGNUP_FIELDS } from '@/constants/harucut-data';
-import { HARUCUT_COLORS } from '@/constants/harucut-design';
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, Pill, SectionEyebrow, SurfaceCard } from '@/components/harucut/ui';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
+
+type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
+
+function usePublicScreenTheme() {
+  const { colors, isDark } = useHarucutTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
+  return { colors, isDark, styles };
+}
 
 function AuthShell({
   children,
@@ -19,6 +28,7 @@ function AuthShell({
   footer?: React.ReactNode;
   title: string;
 }) {
+  const { styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
 
@@ -38,6 +48,8 @@ function AuthShell({
 }
 
 function SocialButtons() {
+  const { styles } = usePublicScreenTheme();
+
   return (
     <View style={{ gap: 10 }}>
       <View style={styles.socialDivider}>
@@ -60,6 +72,7 @@ function SocialBrandButton({
   onPress: () => void;
   provider: 'kakao' | 'naver';
 }) {
+  const { styles } = usePublicScreenTheme();
   const isKakao = provider === 'kakao';
 
   return (
@@ -100,6 +113,7 @@ function SocialBrandButton({
 }
 
 export function LandingScreen() {
+  const { styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const showGuestTrialNotice = useHarucutStore((state) => state.showGuestTrialNotice);
@@ -157,6 +171,7 @@ export function LandingScreen() {
 }
 
 export function LoginScreen() {
+  const { colors, styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const replace = (path: string) => router.replace(path as never);
@@ -194,7 +209,7 @@ export function LoginScreen() {
         <View style={styles.authMetaRow}>
           <Pressable onPress={() => setRemember((current) => !current)} style={styles.rememberRow}>
             <Ionicons
-              color={remember ? HARUCUT_COLORS.primary : HARUCUT_COLORS.muted}
+              color={remember ? colors.primary : colors.muted}
               name={remember ? 'checkbox' : 'square-outline'}
               size={18}
             />
@@ -219,6 +234,7 @@ export function LoginScreen() {
 }
 
 export function SignupScreen() {
+  const { colors, styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const [email, setEmail] = useState('');
@@ -272,7 +288,7 @@ export function SignupScreen() {
 
         {verified ? (
           <View style={styles.verifiedCard}>
-            <Ionicons color={HARUCUT_COLORS.primary} name="shield-checkmark-outline" size={18} />
+            <Ionicons color={colors.primary} name="shield-checkmark-outline" size={18} />
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={styles.verifiedTitle}>이메일 인증이 완료되었어요.</Text>
               <Text style={styles.verifiedBody}>이메일을 수정하면 인증 코드 입력 영역이 다시 나타납니다.</Text>
@@ -329,6 +345,7 @@ export function SignupScreen() {
 }
 
 export function ForgotPasswordScreen() {
+  const { styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const [step, setStep] = useState<'RESET_PASSWORD' | 'VERIFY_CODE'>('VERIFY_CODE');
@@ -391,239 +408,241 @@ export function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  authBackLink: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-    textDecorationLine: 'underline',
-  },
-  authFooter: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  authLink: {
-    color: HARUCUT_COLORS.primary,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  authMetaRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  codeNotice: {
-    backgroundColor: 'rgba(37, 99, 235, 0.08)',
-    borderColor: 'rgba(37, 99, 235, 0.18)',
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  codeNoticeText: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 11,
-    lineHeight: 17,
-  },
-  codeRow: {
-    gap: 10,
-  },
-  forgotLink: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  heroActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  heroBody: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 15,
-    lineHeight: 24,
-  },
-  heroCardBody: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  heroCardTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 24,
-  },
-  heroImage: {
-    height: '100%',
-    width: '100%',
-  },
-  heroImageFrame: {
-    aspectRatio: 0.75,
-    backgroundColor: HARUCUT_COLORS.backgroundTint,
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 24,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  heroTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 34,
-    fontWeight: '700',
-    letterSpacing: -1.2,
-  },
-  heroTitleGradient: {
-    color: HARUCUT_COLORS.primaryStrong,
-    fontSize: 34,
-    fontWeight: '700',
-    letterSpacing: -1.2,
-  },
-  landingHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  rememberRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  rememberText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  kakaoMark: {
-    height: 18,
-    position: 'relative',
-    width: 18,
-  },
-  kakaoMarkBubble: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: 7,
-    height: 13,
-    left: 1,
-    position: 'absolute',
-    top: 2,
-    width: 15,
-  },
-  kakaoMarkTail: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    bottom: 2,
-    height: 5,
-    left: 4,
-    position: 'absolute',
-    transform: [{ rotate: '45deg' }],
-    width: 5,
-  },
-  naverMark: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-    lineHeight: 20,
-  },
-  socialDivider: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  socialButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  socialButtonInner: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    minHeight: 48,
-  },
-  socialButtonLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-  },
-  socialButtonPressed: {
-    opacity: 0.9,
-  },
-  socialIconBox: {
-    alignItems: 'center',
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  socialKakaoButton: {
-    backgroundColor: '#FEE500',
-    shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { height: 14, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-  },
-  socialKakaoIconBox: {
-    backgroundColor: '#FEE500',
-  },
-  socialKakaoLabel: {
-    color: 'rgba(0, 0, 0, 0.85)',
-  },
-  socialLine: {
-    backgroundColor: HARUCUT_COLORS.border,
-    flex: 1,
-    height: 1,
-  },
-  socialLabelWrap: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    paddingRight: 48,
-  },
-  socialNaverButton: {
-    backgroundColor: '#03C75A',
-    shadowColor: 'rgba(3, 199, 90, 0.22)',
-    shadowOffset: { height: 16, width: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 26,
-  },
-  socialNaverIconBox: {
-    backgroundColor: '#02B350',
-    borderRightColor: 'rgba(255, 255, 255, 0.15)',
-    borderRightWidth: 1,
-  },
-  socialNaverLabel: {
-    color: '#FFFFFF',
-  },
-  socialText: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  verifiedBody: {
-    color: HARUCUT_COLORS.muted,
-    fontSize: 10,
-    lineHeight: 16,
-  },
-  verifiedCard: {
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(239, 246, 255, 0.96)',
-    borderColor: HARUCUT_COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  verifiedTitle: {
-    color: HARUCUT_COLORS.text,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-});
+function createStyles(colors: HarucutThemeColors, isDark: boolean) {
+  return StyleSheet.create({
+    authBackLink: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: '600',
+      textAlign: 'center',
+      textDecorationLine: 'underline',
+    },
+    authFooter: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    authLink: {
+      color: colors.primary,
+      fontWeight: '700',
+      textDecorationLine: 'underline',
+    },
+    authMetaRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    codeNotice: {
+      backgroundColor: isDark ? 'rgba(37, 99, 235, 0.18)' : 'rgba(37, 99, 235, 0.08)',
+      borderColor: isDark ? 'rgba(96, 165, 250, 0.34)' : 'rgba(37, 99, 235, 0.18)',
+      borderRadius: 18,
+      borderWidth: 1,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    codeNoticeText: {
+      color: colors.text,
+      fontSize: 11,
+      lineHeight: 17,
+    },
+    codeRow: {
+      gap: 10,
+    },
+    forgotLink: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    headerActions: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    heroActions: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    heroBody: {
+      color: colors.muted,
+      fontSize: 15,
+      lineHeight: 24,
+    },
+    heroCardBody: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    heroCardTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+      lineHeight: 24,
+    },
+    heroImage: {
+      height: '100%',
+      width: '100%',
+    },
+    heroImageFrame: {
+      aspectRatio: 0.75,
+      backgroundColor: colors.backgroundTint,
+      borderColor: colors.border,
+      borderRadius: 24,
+      borderWidth: 1,
+      overflow: 'hidden',
+    },
+    heroTitle: {
+      color: colors.text,
+      fontSize: 34,
+      fontWeight: '700',
+      letterSpacing: -1.2,
+    },
+    heroTitleGradient: {
+      color: colors.primaryStrong,
+      fontSize: 34,
+      fontWeight: '700',
+      letterSpacing: -1.2,
+    },
+    landingHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    rememberRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 6,
+    },
+    rememberText: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    kakaoMark: {
+      height: 18,
+      position: 'relative',
+      width: 18,
+    },
+    kakaoMarkBubble: {
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      borderRadius: 7,
+      height: 13,
+      left: 1,
+      position: 'absolute',
+      top: 2,
+      width: 15,
+    },
+    kakaoMarkTail: {
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      bottom: 2,
+      height: 5,
+      left: 4,
+      position: 'absolute',
+      transform: [{ rotate: '45deg' }],
+      width: 5,
+    },
+    naverMark: {
+      color: '#FFFFFF',
+      fontSize: 18,
+      fontWeight: '900',
+      lineHeight: 20,
+    },
+    socialDivider: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 8,
+    },
+    socialButton: {
+      borderRadius: 12,
+      overflow: 'hidden',
+    },
+    socialButtonInner: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      minHeight: 48,
+    },
+    socialButtonLabel: {
+      fontSize: 14,
+      fontWeight: '700',
+      letterSpacing: -0.1,
+    },
+    socialButtonPressed: {
+      opacity: 0.9,
+    },
+    socialIconBox: {
+      alignItems: 'center',
+      height: 48,
+      justifyContent: 'center',
+      width: 48,
+    },
+    socialKakaoButton: {
+      backgroundColor: '#FEE500',
+      shadowColor: 'rgba(15, 23, 42, 0.08)',
+      shadowOffset: { height: 14, width: 0 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+    },
+    socialKakaoIconBox: {
+      backgroundColor: '#FEE500',
+    },
+    socialKakaoLabel: {
+      color: 'rgba(0, 0, 0, 0.85)',
+    },
+    socialLine: {
+      backgroundColor: colors.border,
+      flex: 1,
+      height: 1,
+    },
+    socialLabelWrap: {
+      alignItems: 'center',
+      flex: 1,
+      justifyContent: 'center',
+      paddingRight: 48,
+    },
+    socialNaverButton: {
+      backgroundColor: '#03C75A',
+      shadowColor: 'rgba(3, 199, 90, 0.22)',
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: 1,
+      shadowRadius: 26,
+    },
+    socialNaverIconBox: {
+      backgroundColor: '#02B350',
+      borderRightColor: 'rgba(255, 255, 255, 0.15)',
+      borderRightWidth: 1,
+    },
+    socialNaverLabel: {
+      color: '#FFFFFF',
+    },
+    socialText: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    tagRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    verifiedBody: {
+      color: colors.muted,
+      fontSize: 10,
+      lineHeight: 16,
+    },
+    verifiedCard: {
+      alignItems: 'flex-start',
+      backgroundColor: isDark ? 'rgba(37, 99, 235, 0.14)' : 'rgba(239, 246, 255, 0.96)',
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    verifiedTitle: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+  });
+}
