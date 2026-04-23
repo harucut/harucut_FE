@@ -8,7 +8,6 @@
 - 
 
 ## 검증
-- [ ] `pnpm verify:automation`
 - [ ] `pnpm verify:standard`
 - [ ] 수동 확인 또는 smoke 확인
 
@@ -19,7 +18,7 @@
 - 
 
 ## 체크리스트
-- [ ] `main`, `develop`, `develop_loop`에 직접 commit/push하지 않았다
-- [ ] PR 제목은 `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`, `perf:` 중 하나로 시작한다
-- [ ] 예외 처리와 실패 경로를 확인했다
-- [ ] 불필요한 비밀값과 생성 산출물을 포함하지 않았다
+- [ ] `main`, `develop`, `develop_loop`에 직접 commit/push하지 않음
+- [ ] PR 제목은 `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`, `perf:` 중 하나로 시작
+- [ ] 예외 처리와 실패 경로를 확인
+- [ ] 불필요한 비밀값과 생성 산출물을 포함하지 않음

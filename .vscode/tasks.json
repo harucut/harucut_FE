@@ -2,54 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "verify:automation",
-      "type": "shell",
-      "command": "pnpm verify:automation",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
       "label": "verify:standard",
       "type": "shell",
       "command": "pnpm verify:standard",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "omx:bridge",
-      "type": "shell",
-      "command": "powershell -ExecutionPolicy Bypass -File \"${workspaceFolder}\\scripts\\run-discord-bridge.ps1\"",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "omx:loop",
-      "type": "shell",
-      "command": "powershell -ExecutionPolicy Bypass -File \"${workspaceFolder}\\scripts\\omx-loop.ps1\" -InfiniteMode",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "ralph:run",
-      "type": "shell",
-      "command": "powershell -ExecutionPolicy Bypass -File \"${workspaceFolder}\\scripts\\ralph-run.ps1\"",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "ralph:verify",
-      "type": "shell",
-      "command": "pnpm verify:ralph",
       "options": {
         "cwd": "${workspaceFolder}"
       },
