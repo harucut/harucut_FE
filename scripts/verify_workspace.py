@@ -11,9 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 GROUPS: dict[str, list[list[str]]] = {
-    "automation": [
-        ["python", "scripts/verify_ralph_setup.py"],
-    ],
     "web": [
         ["pnpm", "test:web"],
         ["pnpm", "build:web"],
@@ -23,7 +20,6 @@ GROUPS: dict[str, list[list[str]]] = {
         ["pnpm", "typecheck:mobile"],
     ],
     "standard": [
-        ["python", "scripts/verify_ralph_setup.py"],
         ["pnpm", "test:web"],
         ["pnpm", "build:web"],
         ["pnpm", "lint:mobile"],

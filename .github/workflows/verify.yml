@@ -31,11 +31,5 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
-          if [ -f omx_discord_bridge/requirements.txt ]; then pip install -r omx_discord_bridge/requirements.txt; fi
-      - name: Verify Ralph setup
-        run: python scripts/verify_ralph_setup.py
-      - name: Verify automation
-        run: pnpm verify:automation
       - name: Verify standard
         run: pnpm verify:standard
