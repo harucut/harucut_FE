@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { BrandMark } from "./BrandMark";
 
 type Props = {
-  title: ReactNode;
+  title?: ReactNode;
   description?: ReactNode;
   backHref?: string;
   backLabel?: string;
@@ -36,7 +36,9 @@ export function PageHeader({
               className="mb-1 opacity-80"
             />
           ) : null}
-          <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+          {title ? (
+            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+          ) : null}
         </div>
 
         {rightSlot ? (

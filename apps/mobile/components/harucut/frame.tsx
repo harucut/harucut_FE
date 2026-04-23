@@ -1,6 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useMemo } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useMemo, useState } from 'react';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type DimensionValue,
+  type ViewStyle,
+} from 'react-native';
 
 import { ActionButton, Pill, SurfaceCard } from '@/components/harucut/ui';
 import {
@@ -18,6 +30,13 @@ type FrameSlot = {
   top: DimensionValue;
   width: DimensionValue;
 };
+
+type FramePickerLayoutMode = 'carousel' | 'grid';
+
+const FRAME_PICKER_PREVIEW_BOX = {
+  height: 176,
+  width: 132,
+} as const;
 
 const FRAME_LAYOUTS: Record<FrameId, { aspectRatio: number; slots: FrameSlot[] }> = {
   'classic-4': {
@@ -70,22 +89,28 @@ export function FramePreview({
   caption,
   frameId,
   media = [],
+  style,
 }: {
   accentColor?: string;
   backgroundColor?: string;
   caption?: string;
   frameId: FrameId;
   media?: MediaAsset[];
+  style?: StyleProp<ViewStyle>;
 }) {
   const { colors } = useHarucutTheme();
   const styles = useFrameStyles();
   const layout = FRAME_LAYOUTS[frameId];
-  const frameMeta = FRAME_CATALOG.find((item) => item.frameId === frameId);
   const resolvedAccent = accentColor ?? colors.primary;
   const resolvedBackground = backgroundColor ?? colors.cardStrong;
 
   return (
-    <View style={[styles.previewShell, { aspectRatio: layout.aspectRatio, backgroundColor: resolvedBackground }]}>
+    <View
+      style={[
+        styles.previewShell,
+        { aspectRatio: layout.aspectRatio, backgroundColor: resolvedBackground },
+        style,
+      ]}>
       <View style={[styles.previewOutline, { borderColor: resolvedAccent }]} />
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
@@ -110,9 +135,7 @@ export function FramePreview({
                   </View>
                 ) : null}
               </>
-            ) : (
-              <Text style={[styles.slotLabel, { color: resolvedAccent }]}>{frameMeta?.shortLabel ?? index + 1}</Text>
-            )}
+            ) : null}
           </View>
         );
       })}
@@ -133,35 +156,165 @@ export function FramePickerSection({
   selectedFrameId: FrameId;
 }) {
   const styles = useFrameStyles();
+  const { width } = useWindowDimensions();
+  const { colors } = useHarucutTheme();
+  const [layoutMode, setLayoutMode] = useState<FramePickerLayoutMode>('grid');
+  const carouselCardWidth = Math.min(Math.max(width - 92, 260), 336);
+  const carouselSidePadding = Math.max((width - carouselCardWidth) / 2, 16);
+  const carouselCardGap = 12;
+  const carouselTrailingPadding = carouselSidePadding + 56;
+  const carouselSnapOffsets = FRAME_CATALOG.map(
+    (_, index) => index * (carouselCardWidth + carouselCardGap),
+  );
 
   return (
     <>
-      <View style={styles.grid}>
-        {FRAME_CATALOG.map((frame) => {
-          const selected = frame.frameId === selectedFrameId;
-          return (
-            <Pressable
-              key={frame.frameId}
-              onPress={() => onSelect(frame.frameId)}
-              style={[styles.frameCard, selected ? styles.frameCardSelected : null]}>
-              <Pill active={selected}>{frame.badge}</Pill>
-              <Text style={styles.frameTitle}>{frame.name}</Text>
-              <Text style={styles.frameSubtitle}>{frame.shortLabel}</Text>
-              <View style={styles.framePreviewWrap}>
-                <FramePreview frameId={frame.frameId} />
-              </View>
-              <View style={styles.frameTags}>
-                {frame.recommendedFor.slice(0, 2).map((item) => (
-                  <Pill key={`${frame.frameId}-${item}`}>{item}</Pill>
-                ))}
-              </View>
-            </Pressable>
-          );
-        })}
+      <View style={styles.layoutControls}>
+        <Text style={styles.layoutLabel}>프레임 보기 방식</Text>
+        <View style={styles.layoutOptions}>
+          <Pill active={layoutMode === 'grid'} onPress={() => setLayoutMode('grid')}>
+            2열 그리드
+          </Pill>
+          <Pill active={layoutMode === 'carousel'} onPress={() => setLayoutMode('carousel')}>
+            가로 카드
+          </Pill>
+        </View>
       </View>
+
+      {layoutMode === 'grid' ? (
+        <View style={styles.grid}>
+          {FRAME_CATALOG.map((frame) => (
+            <FramePickerCard
+              key={frame.frameId}
+              frame={frame}
+              layoutMode="grid"
+              onPress={() => onSelect(frame.frameId)}
+              selected={frame.frameId === selectedFrameId}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.carouselSection}>
+          <View style={styles.carouselShell}>
+            <ScrollView
+              bounces={false}
+              decelerationRate="fast"
+              disableIntervalMomentum
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToOffsets={carouselSnapOffsets}
+              contentContainerStyle={[
+                styles.carouselContent,
+                {
+                  paddingLeft: carouselSidePadding,
+                  paddingRight: carouselTrailingPadding,
+                },
+              ]}>
+              {FRAME_CATALOG.map((frame) => (
+                <FramePickerCard
+                  key={frame.frameId}
+                  frame={frame}
+                  layoutMode="carousel"
+                  onPress={() => onSelect(frame.frameId)}
+                  selected={frame.frameId === selectedFrameId}
+                  width={carouselCardWidth}
+                />
+              ))}
+            </ScrollView>
+            <LinearGradient
+              colors={[colors.background, 'transparent']}
+              pointerEvents="none"
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={[styles.carouselFade, styles.carouselFadeLeft]}
+            />
+            <LinearGradient
+              colors={['transparent', colors.background]}
+              pointerEvents="none"
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={[styles.carouselFade, styles.carouselFadeRight]}
+            />
+          </View>
+        </View>
+      )}
       <ActionButton label={confirmLabel} onPress={onConfirm} />
     </>
   );
+}
+
+function FramePickerCard({
+  frame,
+  layoutMode,
+  onPress,
+  selected,
+  width,
+}: {
+  frame: (typeof FRAME_CATALOG)[number];
+  layoutMode: FramePickerLayoutMode;
+  onPress: () => void;
+  selected: boolean;
+  width?: number;
+}) {
+  const { colors } = useHarucutTheme();
+  const styles = useFrameStyles();
+  const previewLayout = getContainedPreviewLayout(frame.frameId);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.frameCard,
+        layoutMode === 'grid' ? styles.frameCardGrid : styles.frameCardCarousel,
+        selected ? styles.frameCardSelected : null,
+        pressed ? styles.frameCardPressed : null,
+        width ? { width } : null,
+      ]}>
+      <View
+        style={[
+          styles.framePreviewWrap,
+          layoutMode === 'grid'
+            ? styles.framePreviewWrapGrid
+            : styles.framePreviewWrapCarousel,
+        ]}>
+        <View style={styles.framePreviewViewport}>
+          <FramePreview frameId={frame.frameId} style={previewLayout} />
+        </View>
+      </View>
+
+      <View style={styles.frameHeader}>
+        <Text style={styles.frameTitle}>{frame.name}</Text>
+        <View
+          style={[
+            styles.selectionBadge,
+            selected ? styles.selectionBadgeActive : null,
+          ]}>
+          <Ionicons
+            color={selected ? '#FFFFFF' : colors.muted}
+            name={selected ? 'checkmark' : 'ellipse-outline'}
+            size={14}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function getContainedPreviewLayout(frameId: FrameId) {
+  const aspectRatio = FRAME_LAYOUTS[frameId].aspectRatio;
+  const { width, height } = FRAME_PICKER_PREVIEW_BOX;
+
+  if (aspectRatio * height <= width) {
+    return {
+      height,
+      width: height * aspectRatio,
+    } satisfies ViewStyle;
+  }
+
+  return {
+    height: width / aspectRatio,
+    width,
+  } satisfies ViewStyle;
 }
 
 export function SavedFramesPanel({
@@ -198,8 +351,8 @@ export function SavedFramesPanel({
           <Text style={styles.savedTitle}>{title}</Text>
           {description ? <Text style={styles.savedDescription}>{description}</Text> : null}
         </View>
-        <Pressable onPress={onRefresh}>
-          <Text style={[styles.savedRefresh, { color: colors.primary }]}>새로고침</Text>
+        <Pressable accessibilityLabel="새로고침" onPress={onRefresh} style={styles.savedRefreshButton}>
+          <Ionicons color={colors.primary} name="refresh" size={16} />
         </Pressable>
       </View>
 
@@ -259,14 +412,45 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       lineHeight: 18,
       marginTop: 16,
     },
+    carouselContent: {
+      gap: 12,
+      paddingVertical: 4,
+    },
+    carouselFade: {
+      bottom: 0,
+      position: 'absolute',
+      top: 0,
+      width: 28,
+    },
+    carouselFadeLeft: {
+      left: 0,
+    },
+    carouselFadeRight: {
+      right: 0,
+    },
+    carouselSection: {
+      gap: 10,
+    },
+    carouselShell: {
+      marginHorizontal: -16,
+      overflow: 'hidden',
+    },
     frameCard: {
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: HARUCUT_RADII.card,
       borderWidth: 1,
-      gap: 10,
+      gap: 12,
       padding: 14,
+    },
+    frameCardCarousel: {
+      width: 296,
+    },
+    frameCardGrid: {
       width: '48%',
+    },
+    frameCardPressed: {
+      opacity: 0.92,
     },
     frameCardSelected: {
       borderColor: colors.primary,
@@ -274,34 +458,61 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       shadowOffset: { height: 18, width: 0 },
       shadowOpacity: isDark ? 0.34 : 1,
       shadowRadius: 32,
+      transform: [{ translateY: -2 }],
+    },
+    frameHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 10,
+      justifyContent: 'space-between',
+      minHeight: 26,
     },
     framePreviewWrap: {
+      alignItems: 'center',
       backgroundColor: colors.backgroundTint,
       borderColor: colors.border,
       borderRadius: HARUCUT_RADII.lg,
       borderWidth: 1,
+      justifyContent: 'center',
       overflow: 'hidden',
+    },
+    framePreviewWrapCarousel: {
+      minHeight: FRAME_PICKER_PREVIEW_BOX.height + 32,
+      padding: 16,
+    },
+    framePreviewWrapGrid: {
+      minHeight: FRAME_PICKER_PREVIEW_BOX.height + 24,
       padding: 12,
     },
-    frameSubtitle: {
-      color: colors.muted,
-      fontSize: 11,
-      fontWeight: '600',
-    },
-    frameTags: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-    },
-    frameTitle: {
-      color: colors.text,
-      fontSize: 15,
-      fontWeight: '700',
+    framePreviewViewport: {
+      alignItems: 'center',
+      height: FRAME_PICKER_PREVIEW_BOX.height,
+      justifyContent: 'center',
+      width: FRAME_PICKER_PREVIEW_BOX.width,
     },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 12,
+    },
+    frameTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+      flex: 1,
+    },
+    layoutControls: {
+      gap: 10,
+      marginBottom: 4,
+    },
+    layoutLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    layoutOptions: {
+      flexDirection: 'row',
+      gap: 8,
     },
     previewOutline: {
       borderRadius: 24,
@@ -364,6 +575,15 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 11,
       fontWeight: '700',
     },
+    savedRefreshButton: {
+      alignItems: 'center',
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      height: 32,
+      justifyContent: 'center',
+      width: 32,
+    },
     savedStatus: {
       color: colors.primaryStrong,
       fontSize: 10,
@@ -373,6 +593,20 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       color: colors.text,
       fontSize: 15,
       fontWeight: '700',
+    },
+    selectionBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      height: 22,
+      justifyContent: 'center',
+      width: 22,
+    },
+    selectionBadgeActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
     },
     slot: {
       backgroundColor: colors.cardMuted,
@@ -385,13 +619,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     slotImage: {
       height: '100%',
       width: '100%',
-    },
-    slotLabel: {
-      fontSize: 10,
-      fontWeight: '700',
-      left: 8,
-      position: 'absolute',
-      top: 8,
     },
     videoBadge: {
       alignItems: 'center',

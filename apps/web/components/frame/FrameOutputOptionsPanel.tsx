@@ -58,13 +58,17 @@ export function FrameOutputOptionsPanel({
                     type="button"
                     onClick={() => onBorderColorChange(color.value)}
                     className={[
-                      "h-8 rounded-full border px-3 text-[11px]",
+                      "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[11px]",
                       borderColor === color.value
                         ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
                         : "border-zinc-700 text-zinc-300",
                     ].join(" ")}
                   >
-                    {color.label}
+                    <span
+                      className="h-3 w-3 rounded-full border border-black/10"
+                      style={{ backgroundColor: color.value }}
+                    />
+                    <span>{color.label}</span>
                   </button>
                 ))}
               </div>
@@ -80,7 +84,7 @@ export function FrameOutputOptionsPanel({
                   value={borderColor}
                   onChange={(e) => onBorderColorChange(normalizeHexColor(e.target.value))}
                   className="hc-input h-9 flex-1 rounded-lg border px-3 text-[11px]"
-                  placeholder="#18181b"
+                  placeholder="#23262d"
                 />
               </div>
             </div>

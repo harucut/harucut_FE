@@ -47,7 +47,7 @@ export function UploadFrameScreen() {
       />
       <SavedFramesPanel
         description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 만들 수 있어요."
-        emptyText="이 타입으로 저장한 프레임이 아직 없어요."
+        emptyText="저장된 프레임이 없습니다."
         frames={savedFrames}
         onRefresh={() => undefined}
         onSelect={selectSavedFrameForUpload}
@@ -78,6 +78,13 @@ export function UploadSelectScreen() {
   const selectedCount = upload.selectedAssetIds.length;
   const selectedHasVideo = upload.assets.some(
     (item) => upload.selectedAssetIds.includes(item.id) && item.kind === 'video'
+  );
+  const previewMedia = useMemo(
+    () =>
+      upload.selectedAssetIds
+        .map((id) => upload.assets.find((item) => item.id === id))
+        .filter((item): item is MediaAsset => Boolean(item)),
+    [upload.assets, upload.selectedAssetIds],
   );
 
   const handlePickAssets = async () => {
@@ -110,6 +117,13 @@ export function UploadSelectScreen() {
         onPressBack={() => push('/upload')}
         title="업로드할 사진 선택"
       />
+
+      <SurfaceCard style={{ gap: 14 }}>
+        <Text style={styles.sectionTitle}>프레임 미리보기</Text>
+        <View style={{ alignItems: 'center' }}>
+          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
+        </View>
+      </SurfaceCard>
 
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.bodyText}>

@@ -57,7 +57,7 @@ function ShootPageContent() {
     <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4">
         <PageHeader
-          title={accessMode === "guest" ? "비회원 촬영 체험" : "촬영"}
+          title={accessMode === "guest" ? "비회원 촬영 체험" : undefined}
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
@@ -82,8 +82,7 @@ function ShootPageContent() {
         {accessMode === "member" ? (
           <SavedFramesSection
             title="저장한 프레임"
-            description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 촬영할 수 있어요."
-            emptyText="이 타입으로 저장한 프레임이 아직 없어요."
+            emptyText="저장된 프레임이 없습니다."
             selectedFrameId={selectedFrameId}
             frames={frames}
             isLoading={isLoading}

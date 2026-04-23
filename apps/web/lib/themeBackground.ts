@@ -2,7 +2,7 @@
 
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
-export const DEFAULT_FRAME_BACKGROUND_COLOR = "#18181b";
+export const DEFAULT_FRAME_BACKGROUND_COLOR = "#23262d";
 
 export function normalizeHexColor(
   input?: string | null,

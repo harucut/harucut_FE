@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { RotateCcw } from "lucide-react";
 import { useMemo } from "react";
 import type { FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
@@ -56,9 +57,11 @@ export function SavedFramesSection({
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-full border border-zinc-700 px-3 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800"
+          aria-label="새로고침"
+          title="새로고침"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
         >
-          새로고침
+          <RotateCcw className="h-3.5 w-3.5" />
         </button>
       </div>
 

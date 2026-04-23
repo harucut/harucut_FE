@@ -117,11 +117,6 @@ export default function UploadSelectPage() {
           media={media}
           selectedIndexes={selectedIndexes}
           maxSelect={4}
-          guideText={
-            media.length === 0
-              ? "먼저 사진이나 영상을 업로드해 주세요."
-              : `업로드한 미디어 ${media.length}개 중에서 4개를 골라 주세요.`
-          }
           emptyStateText="아직 업로드한 사진이 없어요. 아래 버튼으로 사진이나 영상을 추가해 주세요."
           nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}

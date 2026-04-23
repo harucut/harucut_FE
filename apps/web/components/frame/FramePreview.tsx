@@ -19,6 +19,7 @@ type FramePreviewProps = {
   media?: (FrameMedia | null)[];
   images?: (string | null)[];
   borderColor?: string;
+  slotColor?: string;
   theme?: ThemeExportJson | null;
   outputFilter?: FourcutFilterId;
 };
@@ -29,6 +30,7 @@ export function FramePreview({
   media,
   images,
   borderColor,
+  slotColor,
   theme,
   outputFilter = "NONE",
 }: FramePreviewProps) {
@@ -44,14 +46,14 @@ export function FramePreview({
     className,
   ].join(" ");
 
-  const slotBase = "bg-zinc-800/90 rounded-md";
+  const resolvedSlotColor = slotColor ?? "rgba(39,39,42,0.9)";
 
   return (
     <div
       className={["relative", outer].join(" ")}
       style={{
         aspectRatio: `${totalWidth} / ${totalHeight}`,
-        backgroundColor: borderColor,
+        backgroundColor: borderColor || undefined,
       }}
     >
       {slots.map((slot, idx) => {
@@ -107,7 +109,11 @@ export function FramePreview({
         }
 
         return (
-          <div key={idx} className={`${slotBase} absolute`} style={baseStyle} />
+          <div
+            key={idx}
+            className="absolute rounded-md"
+            style={{ ...baseStyle, backgroundColor: resolvedSlotColor }}
+          />
         );
       })}
 
