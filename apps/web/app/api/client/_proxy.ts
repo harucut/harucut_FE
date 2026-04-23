@@ -22,10 +22,48 @@ type ForwardResult = {
 
 type RequestLike = Pick<Request, "headers" | "url">;
 
+const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+
+function buildProxyErrorResult(
+  status: number,
+  code: string,
+  message: string,
+): ForwardResult {
+  return {
+    ok: false,
+    status,
+    body: JSON.stringify({
+      code,
+      status,
+      message,
+      data: null,
+    }),
+    contentType: JSON_CONTENT_TYPE,
+    setCookies: [],
+  };
+}
+
+function getAbsoluteUrlOrNull(url: string) {
+  try {
+    return new URL(url).toString();
+  } catch {
+    return null;
+  }
+}
+
 export async function forward(
   req: Request,
   options: ProxyOptions,
 ): Promise<ForwardResult> {
+  const upstreamUrl = getAbsoluteUrlOrNull(options.url);
+  if (!upstreamUrl) {
+    return buildProxyErrorResult(
+      500,
+      "GEN-500",
+      "NEXT_PUBLIC_BASE_URL is not set or invalid.",
+    );
+  }
+
   const cookie = req.headers.get("cookie") ?? "";
   const shouldForwardBody =
     options.forwardBody ?? (options.method !== "GET" && options.method !== "DELETE");
@@ -37,12 +75,21 @@ export async function forward(
   }
   if (cookie) headers.cookie = cookie;
 
-  const upstream = await fetch(options.url, {
-    method: options.method,
-    headers,
-    body,
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(upstreamUrl, {
+      method: options.method,
+      headers,
+      body,
+      cache: "no-store",
+    });
+  } catch {
+    return buildProxyErrorResult(
+      502,
+      "GEN-502",
+      "Failed to reach backend server.",
+    );
+  }
 
   const responseBody = await upstream.text();
   const contentType =
