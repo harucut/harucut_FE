@@ -82,7 +82,10 @@ export default function HomePage() {
     };
   }, []);
 
-  const recentMoment = useMemo(() => getRecentMoment(recentMedia), [recentMedia]);
+  const recentMoment = useMemo(
+    () => getRecentMoment(recentMedia),
+    [recentMedia],
+  );
   const recommendedFrames = FRAME_CATALOG.slice(0, 3);
   const savedFrame = savedFrames[0] ?? null;
 
@@ -95,17 +98,15 @@ export default function HomePage() {
               <span className="text-[11px] uppercase tracking-[0.26em] text-[color:var(--hc-primary)]/80">
                 Record your day
               </span>
-              <span>오늘 하루를 네 컷으로 남겨보세요</span>
+              <span>
+                {user?.username ? `${user.username}님, ` : ""}오늘 하루를 네 컷으로
+                남겨보세요
+              </span>
             </span>
           }
           rightHref="/mypage"
           rightSlot={<User size={16} />}
-          description={
-            <>
-              {user?.username ? `${user.username}님, ` : ""}
-              촬영하거나 업로드해서 오늘의 기록을 바로 만들어 보세요.
-            </>
-          }
+          description=""
         />
 
         <section className="hc-surface-card-xl rounded-[28px] border p-5 backdrop-blur sm:p-6">
@@ -127,15 +128,15 @@ export default function HomePage() {
               </span>
             </h1>
             <p className="max-w-xl text-[14px] leading-6 text-zinc-300 sm:text-[15px] sm:leading-7">
-              복잡한 설명 없이 바로 시작할 수 있게 준비했어요.
-              원하는 방식으로 만들고 기록에 남겨두세요.
+              복잡한 설명 없이 바로 시작할 수 있게 준비했어요. 원하는 방식으로
+              만들고 기록에 남겨두세요.
             </p>
           </div>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/shoot"
-              className="hc-button-neutral inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition sm:w-auto"
+              className="hc-button-hero inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition sm:w-auto"
             >
               <Camera className="h-4 w-4" />
               바로 촬영 시작
@@ -236,8 +237,12 @@ export default function HomePage() {
                     className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
                   >
                     <div>
-                      <p className="text-sm font-semibold text-zinc-100">{frame.name}</p>
-                      <p className="mt-1 text-[11px] text-zinc-500">{frame.badge}</p>
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {frame.name}
+                      </p>
+                      <p className="mt-1 text-[11px] text-zinc-500">
+                        {frame.badge}
+                      </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-zinc-500" />
                   </Link>
@@ -247,7 +252,9 @@ export default function HomePage() {
 
             <section className="hc-surface-card rounded-[28px] border p-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-100">이어 꾸밀 프레임</p>
+                <p className="text-sm font-semibold text-zinc-100">
+                  저장된 프레임
+                </p>
                 <Link href="/theme" className="hc-link-accent text-[11px]">
                   전체 보기
                 </Link>
