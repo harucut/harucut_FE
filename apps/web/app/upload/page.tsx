@@ -75,7 +75,7 @@ function UploadFramePageContent() {
         <SavedFramesSection
           title="저장한 프레임"
           description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 만들 수 있어요."
-          emptyText="이 타입으로 저장한 프레임이 아직 없어요."
+          emptyText="저장된 프레임이 없습니다."
           selectedFrameId={selectedFrameId}
           frames={frames}
           isLoading={isLoading}

@@ -53,6 +53,8 @@
   --hc-theme-toggle-active-bg: rgba(37, 99, 235, 0.12);
   --hc-theme-toggle-active-text: #1d4ed8;
   --hc-theme-toggle-shadow: 0 18px 48px rgba(37, 99, 235, 0.18);
+  --hc-frame-picker-preview-outer: #303846;
+  --hc-frame-picker-preview-inner: #f4f7fb;
   --hc-page-gradient-app:
     radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 28%),
     linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
@@ -145,6 +147,8 @@ html[data-theme="dark"] {
   --hc-theme-toggle-active-bg: rgba(56, 189, 248, 0.16);
   --hc-theme-toggle-active-text: #e0f2fe;
   --hc-theme-toggle-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+  --hc-frame-picker-preview-outer: #e7ecf2;
+  --hc-frame-picker-preview-inner: #171c24;
   --hc-page-gradient-app: #09090b;
   --hc-page-gradient-showcase:
     radial-gradient(circle at top, rgba(56, 189, 248, 0.14), transparent 24%),

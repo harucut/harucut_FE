@@ -78,8 +78,7 @@ export function ShootFrameScreen() {
       />
       {accessMode === 'member' ? (
         <SavedFramesPanel
-          description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 촬영할 수 있어요."
-          emptyText="이 타입으로 저장한 프레임이 아직 없어요."
+          emptyText="저장된 프레임이 없습니다."
           frames={savedFrames}
           onRefresh={() => undefined}
           onSelect={selectSavedFrameForShoot}
@@ -207,10 +206,6 @@ export function ShootCaptureScreen() {
             </View>
           )}
 
-          <View style={styles.slotBadge}>
-            <Text style={styles.slotBadgeText}>슬롯 {(shoot.shots.length % 4) + 1} / 4</Text>
-          </View>
-
           {isShooting && countdown ? (
             <View style={styles.countdownOverlay}>
               <View style={styles.countdownCircle}>
@@ -271,6 +266,13 @@ export function ShootSelectScreen() {
   }, [router, shoot.frameId, shoot.shots.length]);
 
   const selectedCount = shoot.selectedShotIds.length;
+  const previewMedia = useMemo(
+    () =>
+      shoot.selectedShotIds
+        .map((id) => shoot.shots.find((item) => item.id === id))
+        .filter((item): item is MediaAsset => Boolean(item)),
+    [shoot.selectedShotIds, shoot.shots],
+  );
 
   return (
     <AppScrollView>
@@ -280,6 +282,13 @@ export function ShootSelectScreen() {
         onPressBack={() => push('/shoot/capture')}
         title="사진 선택"
       />
+
+      <SurfaceCard style={{ gap: 14 }}>
+        <Text style={styles.sectionTitle}>프레임 미리보기</Text>
+        <View style={{ alignItems: 'center' }}>
+          <FramePreview accentColor={shoot.borderColor} frameId={shoot.frameId} media={previewMedia} />
+        </View>
+      </SurfaceCard>
 
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.bodyText}>방금 촬영한 사진 {shoot.shots.length}장 중에서 4장을 골라 주세요.</Text>
@@ -618,20 +627,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     sectionTitle: {
       color: colors.text,
       fontSize: 18,
-      fontWeight: '700',
-    },
-    slotBadge: {
-      backgroundColor: colors.overlayStrong,
-      borderRadius: 999,
-      left: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      position: 'absolute',
-      top: 10,
-    },
-    slotBadgeText: {
-      color: '#FFFFFF',
-      fontSize: 10,
       fontWeight: '700',
     },
     statusRow: {

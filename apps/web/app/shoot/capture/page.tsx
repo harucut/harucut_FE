@@ -37,10 +37,6 @@ export default function CapturePage() {
     layout && layout.slots.length > 0
       ? layout.slots[shotCount % layout.slots.length]
       : null;
-  const currentSlotOrder =
-    layout && layout.slots.length > 0
-      ? (shotCount % layout.slots.length) + 1
-      : null;
 
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
@@ -90,9 +86,6 @@ export default function CapturePage() {
                   muted
                   className="h-full w-full scale-x-[-1] object-cover"
                 />
-                <div className="pointer-events-none absolute left-2 top-2 z-20 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
-                  슬롯 {currentSlotOrder} / 4
-                </div>
                 {themeData ? (
                   <ThemeOverlaySvg
                     layout={layout}

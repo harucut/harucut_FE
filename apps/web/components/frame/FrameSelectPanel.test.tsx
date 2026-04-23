@@ -11,7 +11,6 @@ describe("FrameSelectPanel", () => {
       { type: "image" as const, src: "/4.png" },
     ],
     maxSelect: 4,
-    guideText: "guide",
     nextButtonLabel: "다음 단계",
     onToggleSelect: jest.fn(),
     onReset: jest.fn(),
