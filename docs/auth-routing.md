@@ -18,7 +18,7 @@
 - `/history`
 - `/mypage`
 
-미들웨어 진입점은 [`proxy.ts`](../proxy.ts)입니다.
+미들웨어 진입점은 [`apps/web/proxy.ts`](../apps/web/proxy.ts)입니다.
 
 ## redirectTo 계약
 
@@ -38,7 +38,7 @@
 로그인 성공 후에는 `redirectTo`가 안전한 내부 경로일 때 그곳으로 복귀합니다.
 안전하지 않거나 비어 있으면 `/home`으로 이동합니다.
 
-안전한 리다이렉트 파싱은 [`lib/redirect.ts`](../lib/redirect.ts)에 있습니다.
+안전한 리다이렉트 파싱은 [`apps/web/lib/redirect.ts`](../apps/web/lib/redirect.ts)에 있습니다.
 
 ## 인증 페이지 내 이동 규칙
 
@@ -53,7 +53,7 @@
 
 ## 헤더 계약
 
-[`components/layout/PageHeader.tsx`](../components/layout/PageHeader.tsx)는 다음 역할을 분리합니다.
+[`apps/web/components/layout/PageHeader.tsx`](../apps/web/components/layout/PageHeader.tsx)는 다음 역할을 분리합니다.
 
 - `brandHref`: 좌상단 브랜드 링크 목적지
 - `rightHref`: 우측 아이콘 링크 목적지

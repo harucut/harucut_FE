@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+protected_regex='^refs/heads/(main|develop|develop_loop)$'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" =~ $protected_regex ]]; then
+    echo "ERROR: direct push to $remote_ref is forbidden. Use PR flow."
+    exit 1
+  fi
+done
