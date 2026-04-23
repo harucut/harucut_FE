@@ -17,7 +17,6 @@ const eslintConfig = defineConfig([
     "test-results/**",
     "storybook-static/**",
     ".codex/.tmp/**",
-    ".omx/**",
     ".swc/**",
     "tsconfig.tsbuildinfo",
   ]),

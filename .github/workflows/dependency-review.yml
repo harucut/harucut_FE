@@ -56,9 +56,6 @@ jobs:
           python -m venv .venv-audit
           source .venv-audit/bin/activate
           python -m pip install --upgrade pip pip-audit pip-licenses
-          if [ -f omx_discord_bridge/requirements.txt ]; then
-            pip-audit -r omx_discord_bridge/requirements.txt --progress-spinner off
-          fi
           pip-licenses --from=mixed --with-system=false --summary
 
       - name: NPM license summary
