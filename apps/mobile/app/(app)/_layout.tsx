@@ -13,6 +13,7 @@ export default function AppLayout() {
   const accessMode = useHarucutStore((state) => state.accessMode);
   const showGuestRestrictedNotice = useHarucutStore((state) => state.showGuestRestrictedNotice);
   const { colors } = useHarucutTheme();
+  const shouldHideRoute = accessMode === 'guest' && !pathname.startsWith('/shoot');
 
   useEffect(() => {
     if (accessMode !== 'guest') {
@@ -30,10 +31,10 @@ export default function AppLayout() {
   return (
     <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background, flex: 1 }}>
       <View style={{ backgroundColor: colors.background, flex: 1 }}>
-        <View style={{ flex: 1 }}>
+        <View pointerEvents={shouldHideRoute ? 'none' : 'auto'} style={{ flex: 1, opacity: shouldHideRoute ? 0 : 1 }}>
           <Slot />
         </View>
-        <BottomNavigation />
+        {shouldHideRoute ? null : <BottomNavigation />}
       </View>
     </SafeAreaView>
   );

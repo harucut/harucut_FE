@@ -52,6 +52,7 @@ export function ShootFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const accessMode = useHarucutStore((state) => state.accessMode);
+  const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
   const savedFrames = useHarucutStore((state) => state.savedFrames);
   const shoot = useHarucutStore((state) => state.shoot);
   const setShootFrame = useHarucutStore((state) => state.setShootFrame);
@@ -66,7 +67,15 @@ export function ShootFrameScreen() {
             ? '비회원 체험에서는 촬영과 이미지 다운로드만 할 수 있어요.'
             : '촬영할 프레임을 먼저 골라 주세요.'
         }
-        onPressBack={() => push(accessMode === 'guest' ? '/' : '/home')}
+        onPressBack={() => {
+          if (accessMode === 'guest') {
+            enterAnonymousMode();
+            push('/');
+            return;
+          }
+
+          push('/home');
+        }}
         title={accessMode === 'guest' ? '비회원 촬영 체험' : '촬영'}
       />
       <StepProgress current={1} label="프레임 선택" total={4} />

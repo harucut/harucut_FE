@@ -61,17 +61,6 @@ export default function LandingPage() {
               <GuestTrialStartButton />
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-2 text-[11px] text-[color:var(--hc-muted)]">
-              <span className="hc-surface-soft rounded-full border px-3 py-1">
-                촬영
-              </span>
-              <span className="hc-surface-soft rounded-full border px-3 py-1">
-                업로드
-              </span>
-              <span className="hc-surface-soft rounded-full border px-3 py-1">
-                테마 편집
-              </span>
-            </div>
           </div>
 
           <div className="mx-auto w-full max-w-[340px] sm:max-w-[360px]">

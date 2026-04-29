@@ -324,6 +324,7 @@ export function MyPageScreen() {
   const replace = (path: string) => router.replace(path as never);
   const user = useHarucutStore((state) => state.user);
   const setUserProfile = useHarucutStore((state) => state.setUserProfile);
+  const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
   const themePreference = useHarucutStore((state) => state.themePreference);
   const setThemePreference = useHarucutStore((state) => state.setThemePreference);
   const [username, setUsername] = useState(user.username);
@@ -475,7 +476,14 @@ export function MyPageScreen() {
 
       <SurfaceCard style={{ gap: 12 }}>
         <Text style={styles.sectionTitle}>로그아웃</Text>
-        <ActionButton label="로그아웃" onPress={() => replace('/login')} variant="secondary" />
+        <ActionButton
+          label="로그아웃"
+          onPress={() => {
+            enterAnonymousMode();
+            replace('/');
+          }}
+          variant="secondary"
+        />
       </SurfaceCard>
 
       <SurfaceCard style={[styles.exitCard, { gap: 12 }]}>
@@ -483,7 +491,14 @@ export function MyPageScreen() {
         <Text style={styles.bodyCopy}>
           탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
         </Text>
-        <ActionButton label="회원 탈퇴 요청" onPress={() => replace('/login')} variant="danger" />
+        <ActionButton
+          label="회원 탈퇴 요청"
+          onPress={() => {
+            enterAnonymousMode();
+            replace('/');
+          }}
+          variant="danger"
+        />
       </SurfaceCard>
     </AppScrollView>
   );
