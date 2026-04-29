@@ -69,7 +69,7 @@ export default function LandingPage() {
                 <div className="relative aspect-[3/4] w-full">
                   <Image
                     src="/hero-image.png"
-                    alt="하루컷 샘플"
+                    alt="다양한 친구들이 야외에서 셀카를 찍는 네 컷 프레임 예시"
                     fill
                     sizes="(max-width: 1024px) 80vw, 360px"
                     className="object-cover"

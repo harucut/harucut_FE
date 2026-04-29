@@ -11,6 +11,7 @@ type Props = {
   backLabel?: string;
   rightSlot?: ReactNode;
   rightHref?: string;
+  rightLabel?: string;
   brandHref?: string;
   showBrand?: boolean;
 };
@@ -22,6 +23,7 @@ export function PageHeader({
   backLabel,
   rightSlot,
   rightHref,
+  rightLabel,
   brandHref = "/home",
   showBrand = true,
 }: Props) {
@@ -45,6 +47,7 @@ export function PageHeader({
           rightHref ? (
             <Link
               href={rightHref}
+              aria-label={rightLabel}
               className="hc-button-icon flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
             >
               {rightSlot}

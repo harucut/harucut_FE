@@ -50,8 +50,7 @@ export type FrameCatalogItem = {
   shortLabel: string;
 };
 
-export const HERO_IMAGE_URL =
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=80';
+export const HERO_IMAGE_SOURCE = require('../assets/images/hero-image.png');
 
 export const QUICK_LINKS = [
   { href: '/shoot', icon: 'camera-outline', label: '촬영' },

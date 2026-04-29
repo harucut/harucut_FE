@@ -106,6 +106,9 @@ export function FramePreview({
 
   return (
     <View
+      accessible
+      accessibilityLabel={caption ? `${caption} 네 컷 프레임 미리보기` : '네 컷 프레임 미리보기'}
+      accessibilityRole="image"
       style={[
         styles.previewShell,
         { aspectRatio: layout.aspectRatio, backgroundColor: resolvedBackground },
@@ -128,7 +131,12 @@ export function FramePreview({
             ]}>
             {currentMedia ? (
               <>
-                <Image source={{ uri: currentMedia.uri }} style={styles.slotImage} />
+                <Image
+                  accessibilityLabel={currentMedia.label}
+                  accessibilityRole="image"
+                  source={{ uri: currentMedia.uri }}
+                  style={styles.slotImage}
+                />
                 {currentMedia.kind === 'video' ? (
                   <View style={styles.videoBadge}>
                     <Ionicons color="#FFFFFF" name="play" size={12} />
@@ -262,6 +270,9 @@ function FramePickerCard({
 
   return (
     <Pressable
+      accessibilityLabel={`${frame.name} 프레임${selected ? ', 선택됨' : ''}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.frameCard,
@@ -351,7 +362,11 @@ export function SavedFramesPanel({
           <Text style={styles.savedTitle}>{title}</Text>
           {description ? <Text style={styles.savedDescription}>{description}</Text> : null}
         </View>
-        <Pressable accessibilityLabel="새로고침" onPress={onRefresh} style={styles.savedRefreshButton}>
+        <Pressable
+          accessibilityLabel="저장한 프레임 새로고침"
+          accessibilityRole="button"
+          onPress={onRefresh}
+          style={styles.savedRefreshButton}>
           <Ionicons color={colors.primary} name="refresh" size={16} />
         </Pressable>
       </View>
@@ -364,7 +379,12 @@ export function SavedFramesPanel({
             const selected = frame.id === selectedSavedFrameId;
             return (
               <View key={frame.id} style={[styles.savedCard, selected ? styles.savedCardSelected : null]}>
-                <Pressable onPress={() => onSelect(frame)} style={styles.savedPressable}>
+                <Pressable
+                  accessibilityLabel={`${frame.title} 저장 프레임${selected ? ', 선택됨' : ', 선택하기'}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => onSelect(frame)}
+                  style={styles.savedPressable}>
                   <View style={styles.savedPreview}>
                     <FramePreview
                       accentColor={frame.accentColor}

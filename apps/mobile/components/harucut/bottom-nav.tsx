@@ -38,6 +38,9 @@ export function BottomNavigation() {
           return (
             <Pressable
               key={item.key}
+              accessibilityLabel={`${item.label}${active ? ', 현재 탭' : ''}${locked ? ', 로그인 후 이용 가능' : ''}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
               onPress={() => {
                 if (locked) {
                   showGuestRestrictedNotice();

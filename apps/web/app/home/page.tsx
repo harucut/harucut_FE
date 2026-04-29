@@ -105,6 +105,7 @@ export default function HomePage() {
             </span>
           }
           rightHref="/mypage"
+          rightLabel="내 계정으로 이동"
           rightSlot={<User size={16} />}
           description=""
         />
