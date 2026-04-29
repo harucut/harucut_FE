@@ -55,7 +55,11 @@ export function BrandMark({ compact = false, href = '/home' }: { compact?: boole
   const styles = useUiStyles();
 
   return (
-    <Pressable onPress={() => router.push(href as never)} style={styles.brandRow}>
+    <Pressable
+      accessibilityLabel="하루컷 홈으로 이동"
+      accessibilityRole="button"
+      onPress={() => router.push(href as never)}
+      style={styles.brandRow}>
       <View style={styles.brandIcon}>
         <LinearGradient
           colors={
@@ -113,11 +117,15 @@ export function PageHeader({
         </View>
 
         {rightSlot ? (
-          <Pressable onPress={onPressRight} style={styles.headerActionIcon}>
+          <Pressable
+            accessibilityLabel="페이지 작업"
+            accessibilityRole="button"
+            onPress={onPressRight}
+            style={styles.headerActionIcon}>
             {rightSlot}
           </Pressable>
         ) : backLabel && onPressBack ? (
-          <Pressable onPress={onPressBack}>
+          <Pressable accessibilityLabel={backLabel} accessibilityRole="button" onPress={onPressBack}>
             <Text style={styles.backLabel}>{backLabel}</Text>
           </Pressable>
         ) : null}
@@ -177,7 +185,15 @@ export function Pill({
     return content;
   }
 
-  return <Pressable onPress={onPress}>{content}</Pressable>;
+  return (
+    <Pressable
+      accessibilityLabel={typeof children === 'string' ? children : undefined}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}>
+      {content}
+    </Pressable>
+  );
 }
 
 type ActionButtonProps = {
@@ -215,6 +231,8 @@ export function ActionButton({
 
   return (
     <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
@@ -247,13 +265,18 @@ export function FormField({ error, label, secure = false, style, ...props }: For
       <Text style={styles.fieldLabel}>{label}</Text>
       <View>
         <TextInput
+          {...props}
+          accessibilityLabel={props.accessibilityLabel ?? label}
           placeholderTextColor={colors.muted}
           secureTextEntry={secureTextEntry}
           style={[styles.fieldInput, error ? styles.fieldInputError : null, style]}
-          {...props}
         />
         {secure ? (
-          <Pressable onPress={() => setVisible((current) => !current)} style={styles.passwordToggle}>
+          <Pressable
+            accessibilityLabel={visible ? '비밀번호 숨기기' : '비밀번호 보기'}
+            accessibilityRole="button"
+            onPress={() => setVisible((current) => !current)}
+            style={styles.passwordToggle}>
             <Ionicons
               color={colors.muted}
               name={visible ? 'eye-off-outline' : 'eye-outline'}

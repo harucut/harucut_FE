@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { HERO_IMAGE_URL, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
+import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SectionEyebrow, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
@@ -40,7 +40,7 @@ function AuthShell({
       />
       {children}
       {footer ? <View style={{ gap: 10 }}>{footer}</View> : null}
-      <Pressable onPress={() => push('/')}>
+      <Pressable accessibilityLabel="처음 화면으로 돌아가기" accessibilityRole="button" onPress={() => push('/')}>
         <Text style={styles.authBackLink}>처음 화면으로 돌아가기</Text>
       </Pressable>
     </AppScrollView>
@@ -77,6 +77,8 @@ function SocialBrandButton({
 
   return (
     <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.socialButton,
@@ -150,7 +152,12 @@ export function LandingScreen() {
 
         <SurfaceCard>
           <View style={styles.heroImageFrame}>
-            <Image source={{ uri: HERO_IMAGE_URL }} style={styles.heroImage} />
+            <Image
+              accessibilityLabel="다양한 친구들이 야외에서 셀카를 찍는 네 컷 프레임 예시"
+              accessibilityRole="image"
+              source={HERO_IMAGE_SOURCE}
+              style={styles.heroImage}
+            />
           </View>
           <View style={{ gap: 8, marginTop: 16 }}>
             <Text style={styles.heroCardTitle}>찍는 순간보다 {'\n'}다시 꺼내 볼 때 더 좋은 네 컷</Text>

@@ -307,9 +307,12 @@ export function ShootSelectScreen() {
             return (
               <Pressable
                 key={item.id}
+                accessibilityLabel={`${item.label}${selected ? ', 선택됨' : ', 선택하기'}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
                 onPress={() => toggleShootSelection(item.id)}
                 style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
-                <Image source={{ uri: item.uri }} style={styles.mediaImage} />
+                <Image accessibilityLabel={item.label} accessibilityRole="image" source={{ uri: item.uri }} style={styles.mediaImage} />
                 <View style={styles.mediaBadge}>
                   <Text style={styles.mediaBadgeText}>{selected ? '선택됨' : item.label}</Text>
                 </View>
