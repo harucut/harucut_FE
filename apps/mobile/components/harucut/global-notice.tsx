@@ -14,6 +14,7 @@ export function GlobalNotice() {
   const insets = useSafeAreaInsets();
   const notice = useHarucutStore((state) => state.notice);
   const clearNotice = useHarucutStore((state) => state.clearNotice);
+  const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
   const enterGuestMode = useHarucutStore((state) => state.enterGuestMode);
   const { colors, isDark } = useHarucutTheme();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -38,7 +39,7 @@ export function GlobalNotice() {
         replace('/shoot');
         return;
       case 'go-landing':
-        clearNotice();
+        enterAnonymousMode();
         replace('/');
         return;
       case 'start-guest-trial':

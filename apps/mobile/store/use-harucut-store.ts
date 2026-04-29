@@ -15,7 +15,7 @@ import {
 } from '@/constants/harucut-data';
 import type { ButtonVariant, HarucutThemePreference } from '@/constants/harucut-design';
 
-type AccessMode = 'guest' | 'member';
+type AccessMode = 'anonymous' | 'guest' | 'member';
 
 type NoticeActionId =
   | 'dismiss'
@@ -82,6 +82,7 @@ type HarucutStore = {
   user: UserProfile;
   addShootShot: (asset: MediaAsset) => void;
   clearNotice: () => void;
+  enterAnonymousMode: () => void;
   enterGuestMode: () => void;
   enterMemberMode: () => void;
   addUploadAssets: (assets: MediaAsset[]) => void;
@@ -209,7 +210,7 @@ function upsertHistoryItem(
 }
 
 export const useHarucutStore = create<HarucutStore>((set, get) => ({
-  accessMode: 'member',
+  accessMode: 'anonymous',
   historyItems: INITIAL_HISTORY_ITEMS,
   notice: null,
   shoot: defaultShootSession(),
@@ -234,6 +235,14 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
       };
     }),
   clearNotice: () => set({ notice: null }),
+  enterAnonymousMode: () =>
+    set({
+      accessMode: 'anonymous',
+      notice: null,
+      shoot: defaultShootSession(),
+      themeEditor: defaultThemeEditor(),
+      upload: defaultUploadSession(),
+    }),
   enterGuestMode: () =>
     set({
       accessMode: 'guest',
@@ -275,7 +284,7 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
       return null;
     }
 
-    if (state.accessMode === 'guest') {
+    if (state.accessMode !== 'member') {
       return null;
     }
 
@@ -305,6 +314,10 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
     const previewMedia = selectedMedia(state.upload.assets, state.upload.selectedAssetIds);
 
     if (previewMedia.length === 0) {
+      return null;
+    }
+
+    if (state.accessMode !== 'member') {
       return null;
     }
 

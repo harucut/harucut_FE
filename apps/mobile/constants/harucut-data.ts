@@ -263,5 +263,3 @@ export const INITIAL_SAVED_FRAMES: SavedFrame[] = [
     updatedAt: '2026-04-17T09:15:00.000Z',
   },
 ];
-
-export const SERVICE_TAGS = ['촬영', '업로드', '테마 편집'] as const;

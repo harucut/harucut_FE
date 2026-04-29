@@ -3,8 +3,8 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { HERO_IMAGE_URL, LOGIN_FIELDS, SERVICE_TAGS, SIGNUP_FIELDS } from '@/constants/harucut-data';
-import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, Pill, SectionEyebrow, SurfaceCard } from '@/components/harucut/ui';
+import { HERO_IMAGE_URL, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
+import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SectionEyebrow, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
@@ -146,12 +146,6 @@ export function LandingScreen() {
             style={{ flex: 1 }}
             variant="secondary"
           />
-        </View>
-
-        <View style={styles.tagRow}>
-          {SERVICE_TAGS.map((tag) => (
-            <Pill key={tag}>{tag}</Pill>
-          ))}
         </View>
 
         <SurfaceCard>
