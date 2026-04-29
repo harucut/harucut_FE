@@ -4,11 +4,19 @@ const port = Number(process.env.PORT ?? 3000);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
 
 export default defineConfig({
-  testDir: "./tests/e2e",
-  fullyParallel: true,
-  workers: 2,
+  testDir: "./tests/visual",
+  fullyParallel: false,
   timeout: 30_000,
-  expect: { timeout: 5_000 },
+  snapshotPathTemplate:
+    "{testDir}/__screenshots__/{projectName}/{testFilePath}/{arg}{ext}",
+  expect: {
+    timeout: 5_000,
+    toHaveScreenshot: {
+      animations: "disabled",
+      caret: "hide",
+      maxDiffPixelRatio: 0.01,
+    },
+  },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,

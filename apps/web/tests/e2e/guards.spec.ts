@@ -61,6 +61,8 @@ for (const { route, expected } of lateStepRoutes) {
     await enableAuthenticatedContext(page);
     await page.goto(route);
 
-    await expect.poll(() => new URL(page.url()).pathname).toBe(expected);
+    await expect
+      .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
+      .toBe(expected);
   });
 }

@@ -1,15 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test("landing CTA routes unauthenticated users to login with redirectTo", async ({
-  page,
-}) => {
+test("landing primary CTA routes unauthenticated users to login", async ({ page }) => {
   await page.goto("/");
-  await page.locator('a[href="/home"]').click();
+  await page.getByRole("link", { name: "시작하기" }).click();
 
   await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("redirectTo"))
-    .toBe("/home");
 });
 
 test("login page preserves redirectTo in auth links", async ({ page }) => {

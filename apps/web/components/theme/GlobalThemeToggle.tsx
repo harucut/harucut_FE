@@ -71,12 +71,8 @@ export function GlobalThemeToggle() {
               onClick={() => handleThemeChange(item)}
               className="inline-flex min-w-[84px] items-center justify-center gap-2 rounded-full px-3 py-2 text-[11px] font-medium transition-colors sm:min-w-[92px]"
               style={{
-                background: active
-                  ? "var(--hc-theme-toggle-active-bg)"
-                  : "transparent",
-                color: active
-                  ? "var(--hc-theme-toggle-active-text)"
-                  : "var(--hc-muted-soft)",
+                background: active ? "var(--hc-theme-toggle-active-bg)" : "transparent",
+                color: active ? "var(--hc-theme-toggle-active-text)" : "var(--hc-text)",
               }}
               aria-pressed={active}
               title={meta.title}
