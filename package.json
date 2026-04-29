@@ -20,6 +20,9 @@
     "test:coverage:web": "pnpm --dir apps/web test:coverage",
     "test:e2e:web": "pnpm --dir apps/web test:e2e",
     "test:e2e:install:web": "pnpm --dir apps/web test:e2e:install",
+    "test:a11y:web": "pnpm --dir apps/web test:a11y",
+    "test:visual:web": "pnpm --dir apps/web test:visual",
+    "test:visual:update:web": "pnpm --dir apps/web test:visual:update",
     "storybook:web": "pnpm --dir apps/web storybook",
     "build-storybook:web": "pnpm --dir apps/web build-storybook",
     "format": "prettier --check . --ignore-unknown",
@@ -35,7 +38,6 @@
     "verify:mobile": "python scripts/verify_workspace.py --group mobile",
     "verify:standard": "python scripts/verify_workspace.py --group standard"
   },
-  "dependencies": {},
   "devDependencies": {
     "prettier": "^3.8.3"
   }

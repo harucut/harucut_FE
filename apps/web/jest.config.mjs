@@ -18,11 +18,7 @@ const config = {
   // 빌드 산출물/외부 패키지는 테스트 대상에서 제외
   testPathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/node_modules/"],
   // 커버리지 집계 대상 경로
-  collectCoverageFrom: [
-    "lib/**/*.{ts,tsx}",
-    "components/**/*.{ts,tsx}",
-    "!**/*.d.ts",
-  ],
+  collectCoverageFrom: ["lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "!**/*.d.ts"],
 };
 
 export default createJestConfig(config);

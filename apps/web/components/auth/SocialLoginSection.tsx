@@ -76,10 +76,7 @@ function SocialButton({
   );
 }
 
-export function SocialLoginSection({
-  mode = "login",
-  redirectTo,
-}: Props) {
+export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
   void mode;
 
   return (
@@ -103,8 +100,8 @@ export function SocialLoginSection({
           onClick={() => loginNaver(redirectTo)}
           icon={<NaverSymbol />}
           label="네이버 로그인"
-          className="bg-[#03C75A] text-white shadow-[0_16px_36px_rgba(3,199,90,0.24)] hover:bg-[#02B350]"
-          iconContainerClassName="border-r border-white/15 bg-[#02B350]"
+          className="bg-[#007A3D] text-white shadow-[0_16px_36px_rgba(0,122,61,0.22)] hover:bg-[#006E36]"
+          iconContainerClassName="border-r border-white/15 bg-[#006E36]"
         />
       </div>
     </section>
