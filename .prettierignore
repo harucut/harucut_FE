@@ -1,0 +1,11 @@
+node_modules
+.next
+dist
+coverage
+playwright-report
+test-results
+storybook-static
+.swc
+.expo
+*.tsbuildinfo
+pnpm-lock.yaml

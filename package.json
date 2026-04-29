@@ -22,6 +22,8 @@
     "test:e2e:install:web": "pnpm --dir apps/web test:e2e:install",
     "storybook:web": "pnpm --dir apps/web storybook",
     "build-storybook:web": "pnpm --dir apps/web build-storybook",
+    "format": "prettier --check . --ignore-unknown",
+    "format:write": "prettier --write . --ignore-unknown",
     "generate:stickers:web": "pnpm --dir apps/web generate:stickers",
     "dev:mobile": "pnpm --dir apps/mobile start",
     "android:mobile": "pnpm --dir apps/mobile android",
@@ -34,5 +36,7 @@
     "verify:standard": "python scripts/verify_workspace.py --group standard"
   },
   "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "prettier": "^3.8.3"
+  }
 }
