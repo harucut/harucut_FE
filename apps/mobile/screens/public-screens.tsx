@@ -4,8 +4,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
-import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SectionEyebrow, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+import { getApiErrorMessage } from '@/lib/api-client';
+import {
+  loginWithEmail,
+  reactivateAccount,
+  requestPasswordResetCode,
+  resetPassword,
+  sendEmailAuthCode,
+  signupWithEmail,
+  verifyEmailAuthCode,
+  verifyPasswordResetCode,
+} from '@/lib/auth-api';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
@@ -121,23 +132,18 @@ export function LandingScreen() {
   const showGuestTrialNotice = useHarucutStore((state) => state.showGuestTrialNotice);
 
   return (
-    <AppScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}>
+    <AppScrollView contentContainerStyle={styles.landingScrollContent}>
       <View style={styles.landingHeader}>
         <BrandMark href="/" />
-        <View style={styles.headerActions}>
-          <ActionButton label="로그인" onPress={() => push('/login')} variant="secondary" />
-          <ActionButton label="회원가입" onPress={() => push('/signup')} />
-        </View>
       </View>
 
-      <View style={{ gap: 24 }}>
-        <SectionEyebrow>오늘 하루를 네 컷으로 남겨보세요</SectionEyebrow>
-        <View style={{ gap: 14 }}>
-          <Text style={styles.heroTitle}>오늘의 순간을</Text>
-          <Text style={styles.heroTitleGradient}>다시 보고 싶은 네 컷으로</Text>
-          <Text style={styles.heroBody}>
-            촬영하고, 고르고, 저장하세요. 오늘 하루 기록을 가볍게 남길 수 있어요.
-          </Text>
+      <View style={styles.landingMain}>
+        <View style={styles.heroCopy}>
+          <View style={styles.heroTitleStack}>
+            <Text style={styles.heroTitle}>오늘의 순간을</Text>
+            <Text style={styles.heroTitleGradient}>다시 보고 싶은 네 컷으로</Text>
+          </View>
+          <Text style={styles.heroBody}>찍고, 고르고, 바로 저장하세요.</Text>
         </View>
 
         <View style={styles.heroActions}>
@@ -150,7 +156,7 @@ export function LandingScreen() {
           />
         </View>
 
-        <SurfaceCard>
+        <SurfaceCard style={styles.heroPreviewCard}>
           <View style={styles.heroImageFrame}>
             <Image
               accessibilityLabel="다양한 친구들이 야외에서 셀카를 찍는 네 컷 프레임 예시"
@@ -159,7 +165,7 @@ export function LandingScreen() {
               style={styles.heroImage}
             />
           </View>
-          <View style={{ gap: 8, marginTop: 16 }}>
+          <View style={styles.heroCardCopy}>
             <Text style={styles.heroCardTitle}>찍는 순간보다 {'\n'}다시 꺼내 볼 때 더 좋은 네 컷</Text>
             <Text style={styles.heroCardBody}>
               완성한 결과는 기록 페이지에서 다시 보고 공유할 수 있어요.
@@ -176,9 +182,36 @@ export function LoginScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const replace = (path: string) => router.replace(path as never);
-  const enterMemberMode = useHarucutStore((state) => state.enterMemberMode);
+  const bootstrapMemberSession = useHarucutStore((state) => state.bootstrapMemberSession);
   const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [remember, setRemember] = useState(true);
+
+  const handleLogin = async () => {
+    if (!form.email.trim() || !form.password) {
+      setError('이메일과 비밀번호를 입력해 주세요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const loginData = await loginWithEmail(form.email.trim(), form.password);
+
+      if (loginData?.userStatus === 'DELETED_REQUESTED') {
+        await reactivateAccount();
+      }
+
+      await bootstrapMemberSession();
+      replace('/home');
+    } catch (loginError) {
+      setError(getApiErrorMessage(loginError, '로그인에 실패했어요. 이메일과 비밀번호를 확인해 주세요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <AuthShell
@@ -223,12 +256,10 @@ export function LoginScreen() {
         </View>
 
         <ActionButton
-          label="로그인"
-          onPress={() => {
-            enterMemberMode();
-            replace('/home');
-          }}
+          label={submitting ? '로그인 중...' : '로그인'}
+          onPress={() => void handleLogin()}
         />
+        {error ? <Text style={styles.formError}>{error}</Text> : null}
       </SurfaceCard>
     </AuthShell>
   );
@@ -242,6 +273,8 @@ export function SignupScreen() {
   const [code, setCode] = useState('');
   const [form, setForm] = useState({ confirmPassword: '', password: '', username: '' });
   const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [verified, setVerified] = useState(false);
   const remainingSeconds = useMemo(() => {
     if (!codeExpiresAt) return 0;
@@ -260,6 +293,77 @@ export function SignupScreen() {
 
     return () => clearInterval(timer);
   }, [codeExpiresAt, verified]);
+
+  const handleSendCode = async () => {
+    if (!email.trim()) {
+      setError('이메일을 입력해 주세요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      await sendEmailAuthCode(email.trim());
+      setCodeExpiresAt(Date.now() + 5 * 60 * 1000);
+    } catch (sendError) {
+      setError(getApiErrorMessage(sendError, '인증 코드를 보내지 못했어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!email.trim() || !code.trim()) {
+      setError('이메일과 인증 코드를 입력해 주세요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      await verifyEmailAuthCode(email.trim(), code.trim());
+      setVerified(true);
+    } catch (verifyError) {
+      setError(getApiErrorMessage(verifyError, '인증 코드가 올바르지 않거나 만료되었어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!verified) {
+      setError('이메일 인증을 먼저 완료해 주세요.');
+      return;
+    }
+
+    if (!form.username.trim() || !form.password) {
+      setError('닉네임과 비밀번호를 입력해 주세요.');
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setError('비밀번호 확인이 일치하지 않아요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      await signupWithEmail({
+        email: email.trim(),
+        password: form.password,
+        username: form.username.trim(),
+      });
+      push('/login');
+    } catch (signupError) {
+      setError(getApiErrorMessage(signupError, '회원가입에 실패했어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <AuthShell
@@ -315,13 +419,13 @@ export function SignupScreen() {
             <View style={styles.heroActions}>
               <ActionButton
                 label={codeExpiresAt ? '코드 다시 보내기' : '코드 보내기'}
-                onPress={() => setCodeExpiresAt(Date.now() + 5 * 60 * 1000)}
+                onPress={() => void handleSendCode()}
                 style={{ flex: 1 }}
                 variant="secondary"
               />
               <ActionButton
-                label="인증 확인"
-                onPress={() => setVerified(code.trim().length >= 4)}
+                label={submitting ? '확인 중...' : '인증 확인'}
+                onPress={() => void handleVerifyCode()}
                 style={{ flex: 1 }}
               />
             </View>
@@ -339,7 +443,8 @@ export function SignupScreen() {
           />
         ))}
 
-        <ActionButton label="회원가입" onPress={() => push('/login')} />
+        <ActionButton label={submitting ? '처리 중...' : '회원가입'} onPress={() => void handleSignup()} />
+        {error ? <Text style={styles.formError}>{error}</Text> : null}
       </SurfaceCard>
     </AuthShell>
   );
@@ -352,8 +457,74 @@ export function ForgotPasswordScreen() {
   const [step, setStep] = useState<'RESET_PASSWORD' | 'VERIFY_CODE'>('VERIFY_CODE');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleRequestCode = async () => {
+    if (!email.trim()) {
+      setError('이메일을 입력해 주세요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      await requestPasswordResetCode(email.trim());
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, '인증 코드를 보내지 못했어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!email.trim() || !code.trim()) {
+      setError('이메일과 인증 코드를 입력해 주세요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const token = await verifyPasswordResetCode(email.trim(), code.trim());
+      setResetToken(token);
+      setStep('RESET_PASSWORD');
+    } catch (verifyError) {
+      setError(getApiErrorMessage(verifyError, '인증 코드가 올바르지 않거나 만료되었어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetToken) {
+      setError('비밀번호 재설정 인증을 먼저 완료해 주세요.');
+      setStep('VERIFY_CODE');
+      return;
+    }
+
+    if (!newPassword.trim() || newPassword !== confirmPassword) {
+      setError('새 비밀번호와 확인 값이 일치하지 않아요.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      await resetPassword(resetToken, newPassword);
+      push('/login');
+    } catch (resetError) {
+      setError(getApiErrorMessage(resetError, '비밀번호를 변경하지 못했어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <AuthShell
@@ -364,17 +535,19 @@ export function ForgotPasswordScreen() {
           <FormField label="이메일" onChangeText={setEmail} placeholder="example@harucut.com" value={email} />
           <FormField label="인증 코드" onChangeText={setCode} placeholder="인증 코드 입력" value={code} />
           <View style={styles.heroActions}>
-            <ActionButton label="코드 다시 보내기" onPress={() => undefined} style={{ flex: 1 }} variant="secondary" />
             <ActionButton
-              label="인증 확인"
-              onPress={() => {
-                if (code.trim().length >= 4) {
-                  setStep('RESET_PASSWORD');
-                }
-              }}
+              label={submitting ? '전송 중...' : '코드 다시 보내기'}
+              onPress={() => void handleRequestCode()}
+              style={{ flex: 1 }}
+              variant="secondary"
+            />
+            <ActionButton
+              label={submitting ? '확인 중...' : '인증 확인'}
+              onPress={() => void handleVerifyCode()}
               style={{ flex: 1 }}
             />
           </View>
+          {error ? <Text style={styles.formError}>{error}</Text> : null}
           <Text onPress={() => push('/login')} style={styles.authBackLink}>
             로그인으로 돌아가기
           </Text>
@@ -396,13 +569,10 @@ export function ForgotPasswordScreen() {
             value={confirmPassword}
           />
           <ActionButton
-            label="비밀번호 변경"
-            onPress={() => {
-              if (newPassword.trim() && newPassword === confirmPassword) {
-                push('/login');
-              }
-            }}
+            label={submitting ? '변경 중...' : '비밀번호 변경'}
+            onPress={() => void handleResetPassword()}
           />
+          {error ? <Text style={styles.formError}>{error}</Text> : null}
         </SurfaceCard>
       )}
     </AuthShell>
@@ -455,9 +625,10 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 10,
       fontWeight: '700',
     },
-    headerActions: {
-      flexDirection: 'row',
-      gap: 10,
+    formError: {
+      color: colors.danger,
+      fontSize: 11,
+      lineHeight: 17,
     },
     heroActions: {
       flexDirection: 'row',
@@ -483,30 +654,53 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       height: '100%',
       width: '100%',
     },
+    heroCardCopy: {
+      gap: 6,
+    },
     heroImageFrame: {
+      alignSelf: 'center',
       aspectRatio: 0.75,
       backgroundColor: colors.backgroundTint,
       borderColor: colors.border,
       borderRadius: 24,
       borderWidth: 1,
       overflow: 'hidden',
+      width: '86%',
     },
     heroTitle: {
       color: colors.text,
       fontSize: 34,
       fontWeight: '700',
-      letterSpacing: -1.2,
+      letterSpacing: 0,
+      lineHeight: 40.8,
     },
     heroTitleGradient: {
       color: colors.primaryStrong,
       fontSize: 34,
       fontWeight: '700',
-      letterSpacing: -1.2,
+      letterSpacing: 0,
+      lineHeight: 40.8,
+    },
+    heroTitleStack: {
+      gap: 0,
+    },
+    heroCopy: {
+      gap: 12,
     },
     landingHeader: {
       alignItems: 'center',
       flexDirection: 'row',
       justifyContent: 'space-between',
+    },
+    landingMain: {
+      gap: 22,
+    },
+    landingScrollContent: {
+      flexGrow: 1,
+      gap: 28,
+    },
+    heroPreviewCard: {
+      gap: 14,
     },
     rememberRow: {
       alignItems: 'center',

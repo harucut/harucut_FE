@@ -11,6 +11,7 @@ import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress,
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+import { getApiErrorMessage } from '@/lib/api-client';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 function delay(ms: number) {
@@ -54,9 +55,16 @@ export function ShootFrameScreen() {
   const accessMode = useHarucutStore((state) => state.accessMode);
   const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
   const savedFrames = useHarucutStore((state) => state.savedFrames);
+  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
   const shoot = useHarucutStore((state) => state.shoot);
   const setShootFrame = useHarucutStore((state) => state.setShootFrame);
   const selectSavedFrameForShoot = useHarucutStore((state) => state.selectSavedFrameForShoot);
+
+  useEffect(() => {
+    if (accessMode === 'member') {
+      void loadRemoteFrames();
+    }
+  }, [accessMode, loadRemoteFrames]);
 
   return (
     <AppScrollView>
@@ -89,7 +97,7 @@ export function ShootFrameScreen() {
         <SavedFramesPanel
           emptyText="저장된 프레임이 없습니다."
           frames={savedFrames}
-          onRefresh={() => undefined}
+          onRefresh={() => void loadRemoteFrames()}
           onSelect={selectSavedFrameForShoot}
           selectedFrameId={shoot.frameId}
           selectedSavedFrameId={shoot.selectedSavedFrameId}
@@ -381,6 +389,7 @@ export function ShootResultScreen() {
   const showGuestShareNotice = useHarucutStore((state) => state.showGuestShareNotice);
   const showNotice = useHarucutStore((state) => state.showNotice);
   const [draftName, setDraftName] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'error' | 'idle' | 'saving' | 'saved'>('idle');
   const previewRef = useRef<View | null>(null);
   const isGuest = accessMode === 'guest';
 
@@ -395,10 +404,47 @@ export function ShootResultScreen() {
       return;
     }
 
-    if (!isGuest) {
-      persistShootResult();
+    if (isGuest || shoot.persistedHistoryId || saveStatus !== 'idle') {
+      return;
     }
-  }, [isGuest, persistShootResult, router, shoot.frameId, shoot.selectedShotIds.length]);
+
+    const saveResult = async () => {
+      setSaveStatus('saving');
+
+      try {
+        if (!previewRef.current) {
+          throw new Error('저장할 결과 화면을 찾지 못했어요.');
+        }
+
+        const uri = await captureRef(previewRef.current, {
+          format: 'jpg',
+          quality: 0.96,
+        });
+        await persistShootResult(uri);
+        setSaveStatus('saved');
+      } catch (error) {
+        setSaveStatus('error');
+        showNotice({
+          actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+          eyebrow: 'SAVE ERROR',
+          icon: 'warning-outline',
+          message: getApiErrorMessage(error, '촬영 결과를 서버에 저장하지 못했어요.'),
+          title: '결과 저장 실패',
+        });
+      }
+    };
+
+    void saveResult();
+  }, [
+    isGuest,
+    persistShootResult,
+    router,
+    saveStatus,
+    shoot.frameId,
+    shoot.persistedHistoryId,
+    shoot.selectedShotIds.length,
+    showNotice,
+  ]);
 
   const currentHistory = historyItems.find((item) => item.id === shoot.persistedHistoryId) ?? null;
   const previewMedia =
@@ -468,6 +514,12 @@ export function ShootResultScreen() {
         ) : null}
       </SurfaceCard>
 
+      {saveStatus === 'saving' ? (
+        <SurfaceCard>
+          <Text style={styles.bodyText}>결과를 서버에 저장하는 중이에요.</Text>
+        </SurfaceCard>
+      ) : null}
+
       {!isGuest && currentHistory ? (
         <SurfaceCard style={{ gap: 12 }}>
           <Text style={styles.sectionTitle}>이미지 다운로드</Text>
@@ -475,7 +527,17 @@ export function ShootResultScreen() {
           <FormField label="파일 이름" onChangeText={setDraftName} value={draftName} />
           <ActionButton
             label="이름 저장"
-            onPress={() => renameHistoryItem(currentHistory.id, draftName.trim() || currentHistory.title)}
+            onPress={() =>
+              void renameHistoryItem(currentHistory.id, draftName.trim() || currentHistory.title).catch((error) =>
+                showNotice({
+                  actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+                  eyebrow: 'SAVE ERROR',
+                  icon: 'warning-outline',
+                  message: getApiErrorMessage(error, '파일 이름을 저장하지 못했어요.'),
+                  title: '이름 변경 실패',
+                }),
+              )
+            }
             variant="secondary"
           />
           <View style={styles.rowButtons}>

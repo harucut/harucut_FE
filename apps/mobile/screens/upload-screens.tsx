@@ -1,14 +1,16 @@
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+import { getApiErrorMessage } from '@/lib/api-client';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 async function shareMedia(title: string, uri: string | undefined) {
@@ -25,10 +27,18 @@ function useUploadStyles() {
 export function UploadFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const accessMode = useHarucutStore((state) => state.accessMode);
   const savedFrames = useHarucutStore((state) => state.savedFrames);
+  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
   const upload = useHarucutStore((state) => state.upload);
   const setUploadFrame = useHarucutStore((state) => state.setUploadFrame);
   const selectSavedFrameForUpload = useHarucutStore((state) => state.selectSavedFrameForUpload);
+
+  useEffect(() => {
+    if (accessMode === 'member') {
+      void loadRemoteFrames();
+    }
+  }, [accessMode, loadRemoteFrames]);
 
   return (
     <AppScrollView>
@@ -49,7 +59,7 @@ export function UploadFrameScreen() {
         description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 만들 수 있어요."
         emptyText="저장된 프레임이 없습니다."
         frames={savedFrames}
-        onRefresh={() => undefined}
+        onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForUpload}
         selectedFrameId={upload.frameId}
         selectedSavedFrameId={upload.selectedSavedFrameId}
@@ -204,7 +214,10 @@ export function UploadResultScreen() {
   const persistUploadResult = useHarucutStore((state) => state.persistUploadResult);
   const historyItems = useHarucutStore((state) => state.historyItems);
   const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
+  const showNotice = useHarucutStore((state) => state.showNotice);
   const [draftName, setDraftName] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'error' | 'idle' | 'saving' | 'saved'>('idle');
+  const previewRef = useRef<View | null>(null);
 
   useEffect(() => {
     if (!upload.frameId) {
@@ -217,8 +230,46 @@ export function UploadResultScreen() {
       return;
     }
 
-    persistUploadResult();
-  }, [persistUploadResult, router, upload.frameId, upload.selectedAssetIds.length]);
+    if (upload.persistedHistoryId || saveStatus !== 'idle') {
+      return;
+    }
+
+    const saveResult = async () => {
+      setSaveStatus('saving');
+
+      try {
+        if (!previewRef.current) {
+          throw new Error('저장할 결과 화면을 찾지 못했어요.');
+        }
+
+        const uri = await captureRef(previewRef.current, {
+          format: 'jpg',
+          quality: 0.96,
+        });
+        await persistUploadResult(uri);
+        setSaveStatus('saved');
+      } catch (error) {
+        setSaveStatus('error');
+        showNotice({
+          actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+          eyebrow: 'SAVE ERROR',
+          icon: 'warning-outline',
+          message: getApiErrorMessage(error, '업로드 결과를 서버에 저장하지 못했어요.'),
+          title: '결과 저장 실패',
+        });
+      }
+    };
+
+    void saveResult();
+  }, [
+    persistUploadResult,
+    router,
+    saveStatus,
+    showNotice,
+    upload.frameId,
+    upload.persistedHistoryId,
+    upload.selectedAssetIds.length,
+  ]);
 
   const currentHistory = historyItems.find((item) => item.id === upload.persistedHistoryId) ?? null;
   const previewMedia =
@@ -244,11 +295,19 @@ export function UploadResultScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 14 }}>
-        <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
+        <View collapsable={false} ref={previewRef}>
+          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
+        </View>
         {upload.includeVideo ? (
           <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
         ) : null}
       </SurfaceCard>
+
+      {saveStatus === 'saving' ? (
+        <SurfaceCard>
+          <Text style={styles.bodyText}>결과를 서버에 저장하는 중이에요.</Text>
+        </SurfaceCard>
+      ) : null}
 
       {currentHistory ? (
         <SurfaceCard style={{ gap: 12 }}>
@@ -257,7 +316,17 @@ export function UploadResultScreen() {
           <FormField label="파일 이름" onChangeText={setDraftName} value={draftName} />
           <ActionButton
             label="이름 저장"
-            onPress={() => renameHistoryItem(currentHistory.id, draftName.trim() || currentHistory.title)}
+            onPress={() =>
+              void renameHistoryItem(currentHistory.id, draftName.trim() || currentHistory.title).catch((error) =>
+                showNotice({
+                  actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+                  eyebrow: 'SAVE ERROR',
+                  icon: 'warning-outline',
+                  message: getApiErrorMessage(error, '파일 이름을 저장하지 못했어요.'),
+                  title: '이름 변경 실패',
+                }),
+              )
+            }
             variant="secondary"
           />
           <View style={styles.rowButtons}>

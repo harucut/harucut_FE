@@ -2,8 +2,6 @@ import { create } from 'zustand';
 
 import {
   FRAME_BORDER_OPTIONS,
-  FRAME_CATALOG,
-  INITIAL_HISTORY_ITEMS,
   INITIAL_SAVED_FRAMES,
   INITIAL_USER,
   type FrameId,
@@ -14,8 +12,15 @@ import {
   type UserProfile,
 } from '@/constants/harucut-data';
 import type { ButtonVariant, HarucutThemePreference } from '@/constants/harucut-design';
+import { getApiErrorMessage } from '@/lib/api-client';
+import { deleteRemoteFrame, listRemoteFrames, createRemoteFrame, updateRemoteFrame } from '@/lib/frame-api';
+import { uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
+import { getMyUserProfile } from '@/lib/user-api';
+import { listRemoteHistoryItems, updateMediaDisplayName, uploadFourcutResult } from '@/lib/user-media-api';
 
 type AccessMode = 'anonymous' | 'guest' | 'member';
+type RemoteHistoryStatus = 'idle' | 'loading' | 'ready' | 'error';
+type RemoteFrameStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type NoticeActionId =
   | 'dismiss'
@@ -73,7 +78,11 @@ type ThemeEditorState = {
 
 type HarucutStore = {
   accessMode: AccessMode;
+  frameError: string | null;
+  frameStatus: RemoteFrameStatus;
+  historyError: string | null;
   historyItems: HistoryItem[];
+  historyStatus: RemoteHistoryStatus;
   notice: NoticeState | null;
   shoot: ShootSession;
   themeEditor: ThemeEditorState;
@@ -86,15 +95,19 @@ type HarucutStore = {
   enterGuestMode: () => void;
   enterMemberMode: () => void;
   addUploadAssets: (assets: MediaAsset[]) => void;
-  persistShootResult: () => string | null;
-  persistUploadResult: () => string | null;
-  removeSavedFrame: (id: string) => void;
-  renameHistoryItem: (id: string, title: string) => void;
+  bootstrapMemberSession: () => Promise<void>;
+  loadRemoteFrames: () => Promise<void>;
+  loadRemoteHistory: () => Promise<void>;
+  persistShootResult: (previewUri?: string | null) => Promise<string | null>;
+  persistUploadResult: (previewUri?: string | null) => Promise<string | null>;
+  refreshUserProfile: () => Promise<void>;
+  removeSavedFrame: (id: string) => Promise<void>;
+  renameHistoryItem: (id: string, title: string) => Promise<void>;
   resetShootSession: () => void;
   resetThemeEditor: () => void;
   resetUploadSession: () => void;
   savedFrames: SavedFrame[];
-  saveThemeFrame: () => string;
+  saveThemeFrame: (previewUri?: string | null) => Promise<string | null>;
   selectSavedFrameForShoot: (frame: SavedFrame) => void;
   selectSavedFrameForTheme: (frame: SavedFrame) => void;
   selectSavedFrameForUpload: (frame: SavedFrame) => void;
@@ -153,6 +166,12 @@ function selectedMedia(items: MediaAsset[], selectedIds: string[]) {
 }
 
 const defaultBorderColor = FRAME_BORDER_OPTIONS[0].value;
+const frameNames: Record<FrameId, string> = {
+  'classic-4': '클래식 4컷',
+  'grid-4': '2x2 그리드',
+  'polaroid-4': '폴라로이드 4컷',
+  'wide-4': '와이드 4컷',
+};
 
 function defaultShootSession(): ShootSession {
   return {
@@ -194,7 +213,12 @@ function defaultThemeEditor(): ThemeEditorState {
 }
 
 function frameName(frameId: FrameId) {
-  return FRAME_CATALOG.find((item) => item.frameId === frameId)?.name ?? '하루컷 프레임';
+  return frameNames[frameId] ?? '하루컷 프레임';
+}
+
+function remoteFrameIdFromSavedId(id: string) {
+  const value = Number(id.replace('remote-frame-', ''));
+  return Number.isFinite(value) ? value : null;
 }
 
 function upsertHistoryItem(
@@ -211,7 +235,11 @@ function upsertHistoryItem(
 
 export const useHarucutStore = create<HarucutStore>((set, get) => ({
   accessMode: 'anonymous',
-  historyItems: INITIAL_HISTORY_ITEMS,
+  frameError: null,
+  frameStatus: 'idle',
+  historyError: null,
+  historyItems: [],
+  historyStatus: 'idle',
   notice: null,
   shoot: defaultShootSession(),
   themeEditor: defaultThemeEditor(),
@@ -238,15 +266,28 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
   enterAnonymousMode: () =>
     set({
       accessMode: 'anonymous',
+      frameError: null,
+      frameStatus: 'idle',
+      historyError: null,
+      historyItems: [],
+      historyStatus: 'idle',
       notice: null,
+      savedFrames: INITIAL_SAVED_FRAMES,
       shoot: defaultShootSession(),
       themeEditor: defaultThemeEditor(),
       upload: defaultUploadSession(),
+      user: INITIAL_USER,
     }),
   enterGuestMode: () =>
     set({
       accessMode: 'guest',
+      frameError: null,
+      frameStatus: 'idle',
+      historyError: null,
+      historyItems: [],
+      historyStatus: 'idle',
       notice: null,
+      savedFrames: INITIAL_SAVED_FRAMES,
       shoot: defaultShootSession(),
       themeEditor: defaultThemeEditor(),
       upload: defaultUploadSession(),
@@ -254,6 +295,11 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
   enterMemberMode: () =>
     set({
       accessMode: 'member',
+      frameError: null,
+      frameStatus: 'idle',
+      historyError: null,
+      historyItems: [],
+      historyStatus: 'idle',
       notice: null,
     }),
   addUploadAssets: (assets) =>
@@ -276,7 +322,57 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
         },
       };
     }),
-  persistShootResult: () => {
+  bootstrapMemberSession: async () => {
+    set({ accessMode: 'member', notice: null });
+    await Promise.all([
+      get().refreshUserProfile(),
+      get().loadRemoteHistory(),
+      get().loadRemoteFrames(),
+    ]);
+  },
+  refreshUserProfile: async () => {
+    const user = await getMyUserProfile();
+    set({ user });
+  },
+  loadRemoteFrames: async () => {
+    set({ frameError: null, frameStatus: 'loading' });
+
+    try {
+      const savedFrames = await listRemoteFrames();
+
+      set({
+        frameError: null,
+        frameStatus: 'ready',
+        savedFrames,
+      });
+    } catch (error) {
+      set({
+        frameError: getApiErrorMessage(error, '저장한 프레임을 불러오지 못했어요.'),
+        frameStatus: 'error',
+        savedFrames: [],
+      });
+    }
+  },
+  loadRemoteHistory: async () => {
+    set({ historyError: null, historyStatus: 'loading' });
+
+    try {
+      const historyItems = await listRemoteHistoryItems();
+
+      set({
+        historyError: null,
+        historyItems,
+        historyStatus: 'ready',
+      });
+    } catch (error) {
+      set({
+        historyError: getApiErrorMessage(error, '저장한 결과를 불러오지 못했어요.'),
+        historyItems: [],
+        historyStatus: 'error',
+      });
+    }
+  },
+  persistShootResult: async (previewUri) => {
     const state = get();
     const previewMedia = selectedMedia(state.shoot.shots, state.shoot.selectedShotIds);
 
@@ -288,28 +384,34 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
       return null;
     }
 
-    const id = state.shoot.persistedHistoryId ?? createId('shoot-result');
-    const nextItem: HistoryItem = {
-      createdAt: new Date().toISOString(),
+    if (state.shoot.persistedHistoryId) {
+      return state.shoot.persistedHistoryId;
+    }
+
+    if (!previewUri) {
+      throw new Error('저장할 결과 이미지를 만들지 못했어요.');
+    }
+
+    const nextItem = await uploadFourcutResult({
+      displayName: `${frameName(state.shoot.frameId)} 촬영 결과`,
       frameId: state.shoot.frameId,
-      id,
-      kind: state.shoot.includeVideo ? 'video' : 'photo',
-      previewMedia,
       source: 'shoot',
-      title: `${frameName(state.shoot.frameId)} 촬영 결과`,
-    };
+      uri: previewUri,
+    });
 
     set((current) => ({
+      historyError: null,
       historyItems: upsertHistoryItem(current.historyItems, nextItem, current.shoot.persistedHistoryId),
+      historyStatus: 'ready',
       shoot: {
         ...current.shoot,
-        persistedHistoryId: id,
+        persistedHistoryId: nextItem.id,
       },
     }));
 
-    return id;
+    return nextItem.id;
   },
-  persistUploadResult: () => {
+  persistUploadResult: async (previewUri) => {
     const state = get();
     const previewMedia = selectedMedia(state.upload.assets, state.upload.selectedAssetIds);
 
@@ -321,39 +423,75 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
       return null;
     }
 
-    const id = state.upload.persistedHistoryId ?? createId('upload-result');
-    const nextItem: HistoryItem = {
-      createdAt: new Date().toISOString(),
+    if (state.upload.persistedHistoryId) {
+      return state.upload.persistedHistoryId;
+    }
+
+    if (!previewUri) {
+      throw new Error('저장할 결과 이미지를 만들지 못했어요.');
+    }
+
+    const nextItem = await uploadFourcutResult({
+      displayName: `${frameName(state.upload.frameId)} 업로드 결과`,
       frameId: state.upload.frameId,
-      id,
-      kind: state.upload.includeVideo ? 'video' : 'photo',
-      previewMedia,
       source: 'upload',
-      title: `${frameName(state.upload.frameId)} 업로드 결과`,
-    };
+      uri: previewUri,
+    });
 
     set((current) => ({
+      historyError: null,
       historyItems: upsertHistoryItem(current.historyItems, nextItem, current.upload.persistedHistoryId),
+      historyStatus: 'ready',
       upload: {
         ...current.upload,
-        persistedHistoryId: id,
+        persistedHistoryId: nextItem.id,
       },
     }));
 
-    return id;
+    return nextItem.id;
   },
-  removeSavedFrame: (id) =>
+  removeSavedFrame: async (id) => {
+    const frame = get().savedFrames.find((item) => item.id === id);
+    const remoteFrameId = frame?.remoteFrameId ?? remoteFrameIdFromSavedId(id);
+
+    if (remoteFrameId) {
+      await deleteRemoteFrame(remoteFrameId);
+    }
+
     set((state) => ({
-      savedFrames: state.savedFrames.filter((frame) => frame.id !== id),
+      savedFrames: state.savedFrames.filter((item) => item.id !== id),
       themeEditor:
         state.themeEditor.selectedSavedFrameId === id
           ? { ...defaultThemeEditor(), frameId: state.themeEditor.frameId }
           : state.themeEditor,
-    })),
-  renameHistoryItem: (id, title) =>
+    }));
+  },
+  renameHistoryItem: async (id, title) => {
+    const nextTitle = title.trim();
+    const item = get().historyItems.find((historyItem) => historyItem.id === id);
+
+    if (!nextTitle) {
+      return;
+    }
+
+    if (item?.mediaId) {
+      const updated = await updateMediaDisplayName(item.mediaId, nextTitle);
+      const updatedTitle = updated.displayName?.trim() || updated.displayname?.trim() || nextTitle;
+
+      set((state) => ({
+        historyItems: state.historyItems.map((historyItem) =>
+          historyItem.id === id ? { ...historyItem, title: updatedTitle } : historyItem,
+        ),
+      }));
+      return;
+    }
+
     set((state) => ({
-      historyItems: state.historyItems.map((item) => (item.id === id ? { ...item, title } : item)),
-    })),
+      historyItems: state.historyItems.map((historyItem) =>
+        historyItem.id === id ? { ...historyItem, title: nextTitle } : historyItem,
+      ),
+    }));
+  },
   resetShootSession: () =>
     set((state) => ({
       shoot: { ...defaultShootSession(), frameId: state.shoot.frameId },
@@ -367,35 +505,62 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
       upload: { ...defaultUploadSession(), frameId: state.upload.frameId },
     })),
   savedFrames: INITIAL_SAVED_FRAMES,
-  saveThemeFrame: () => {
+  saveThemeFrame: async (previewUri) => {
     const state = get();
     const current = state.themeEditor;
-    const id = current.selectedSavedFrameId ?? createId('saved-frame');
-    const nextFrame: SavedFrame = {
+    const title = current.title.trim() || '새 테마 프레임';
+
+    if (!previewUri) {
+      throw new Error('프레임 미리보기를 만들지 못했어요.');
+    }
+
+    const uploaded = await uploadLocalFileWithPresigned({
+      contentType: 'JPEG',
+      filename: `${title}.jpg`,
+      isTemp: false,
+      type: 'FRAME',
+      uri: previewUri,
+    });
+
+    const selectedFrame = current.selectedSavedFrameId
+      ? state.savedFrames.find((frame) => frame.id === current.selectedSavedFrameId)
+      : null;
+    const remoteFrameId =
+      selectedFrame?.remoteFrameId ??
+      (current.selectedSavedFrameId ? remoteFrameIdFromSavedId(current.selectedSavedFrameId) : null);
+    const draft = {
       accentColor: current.accentColor,
       backgroundColor: current.backgroundColor,
       caption: current.caption,
       description: current.description,
       frameId: current.frameId,
-      id,
+      previewKey: uploaded.key,
       stickers: current.stickers,
-      title: current.title.trim() || '새 테마 프레임',
-      updatedAt: new Date().toISOString(),
+      title,
     };
 
-    set((store) => {
-      const nextFrames = store.savedFrames.some((frame) => frame.id === id)
-        ? store.savedFrames.map((frame) => (frame.id === id ? nextFrame : frame))
-        : [nextFrame, ...store.savedFrames];
+    if (remoteFrameId) {
+      await updateRemoteFrame(remoteFrameId, draft);
+    } else {
+      await createRemoteFrame(draft);
+    }
 
-      return {
-        savedFrames: nextFrames,
+    await get().loadRemoteFrames();
+
+    const nextFrame = get().savedFrames.find((frame) => {
+      if (remoteFrameId) return frame.remoteFrameId === remoteFrameId;
+      return frame.title === title && frame.previewKey === uploaded.key;
+    });
+    const id = nextFrame?.id ?? current.selectedSavedFrameId ?? null;
+
+    if (id) {
+      set((store) => ({
         themeEditor: {
           ...store.themeEditor,
           selectedSavedFrameId: id,
         },
-      };
-    });
+      }));
+    }
 
     return id;
   },

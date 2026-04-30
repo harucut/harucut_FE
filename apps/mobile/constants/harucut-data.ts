@@ -6,6 +6,8 @@ export type MediaAsset = {
   id: string;
   kind: MediaKind;
   label: string;
+  remoteMediaId?: number;
+  s3Key?: string;
   uri: string;
 };
 
@@ -16,6 +18,8 @@ export type SavedFrame = {
   caption: string;
   description: string;
   frameId: FrameId;
+  previewKey?: string;
+  remoteFrameId?: number;
   stickers: string[];
   title: string;
   updatedAt: string;
@@ -26,7 +30,9 @@ export type HistoryItem = {
   frameId: FrameId;
   id: string;
   kind: 'photo' | 'video';
+  mediaId?: number;
   previewMedia: MediaAsset[];
+  remoteS3Key?: string;
   source: 'shoot' | 'upload';
   title: string;
 };
@@ -169,96 +175,12 @@ export const SIGNUP_FIELDS = [
 ] as const;
 
 export const INITIAL_USER: UserProfile = {
-  email: 'hello@harucut.com',
+  email: '',
   loginPlatform: 'HARUCUT',
   monthlyPrice: null,
   planTier: 'BASIC',
-  profileUrl:
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
-  username: '하루컷 유저',
+  profileUrl: null,
+  username: '하루컷',
 };
 
-const SAMPLE_MEDIA: MediaAsset[] = [
-  {
-    id: 'media-a',
-    kind: 'image',
-    label: '오늘의 산책',
-    uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'media-b',
-    kind: 'image',
-    label: '푸른 오후',
-    uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'media-c',
-    kind: 'image',
-    label: '전시 기록',
-    uri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'media-d',
-    kind: 'image',
-    label: '카페 무드',
-    uri: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'media-e',
-    kind: 'image',
-    label: '주말 데이트',
-    uri: 'https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'media-f',
-    kind: 'image',
-    label: '블루 스냅',
-    uri: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&q=80',
-  },
-];
-
-export const INITIAL_HISTORY_ITEMS: HistoryItem[] = [
-  {
-    createdAt: '2026-04-20T10:40:00.000Z',
-    frameId: 'classic-4',
-    id: 'history-1',
-    kind: 'photo',
-    previewMedia: SAMPLE_MEDIA.slice(0, 4),
-    source: 'shoot',
-    title: '클래식 4컷 촬영 결과',
-  },
-  {
-    createdAt: '2026-04-19T17:10:00.000Z',
-    frameId: 'polaroid-4',
-    id: 'history-2',
-    kind: 'video',
-    previewMedia: [SAMPLE_MEDIA[4], SAMPLE_MEDIA[2], SAMPLE_MEDIA[3], SAMPLE_MEDIA[5]],
-    source: 'upload',
-    title: '폴라로이드 4컷 업로드 결과',
-  },
-];
-
-export const INITIAL_SAVED_FRAMES: SavedFrame[] = [
-  {
-    accentColor: '#2563EB',
-    backgroundColor: '#EEF5FF',
-    caption: 'today archive',
-    description: '저장한 프레임을 이어서 수정하거나 같은 타입으로 바로 사용할 수 있어요.',
-    frameId: 'polaroid-4',
-    id: 'saved-frame-1',
-    stickers: ['✦', '♡'],
-    title: '블루 아카이브 프레임',
-    updatedAt: '2026-04-18T13:20:00.000Z',
-  },
-  {
-    accentColor: '#1D4ED8',
-    backgroundColor: '#FFFFFF',
-    caption: 'record your day',
-    description: '촬영 시작 화면에서 바로 이어서 선택할 수 있는 저장 프레임이에요.',
-    frameId: 'classic-4',
-    id: 'saved-frame-2',
-    stickers: ['★'],
-    title: '클래식 블루 라인',
-    updatedAt: '2026-04-17T09:15:00.000Z',
-  },
-];
+export const INITIAL_SAVED_FRAMES: SavedFrame[] = [];
