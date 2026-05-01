@@ -1,0 +1,35 @@
+name: verify
+
+on:
+  pull_request:
+    branches:
+      - develop_loop
+      - develop
+      - main
+  push:
+    branches:
+      - develop_loop
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    name: verify
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+      - name: Verify standard
+        run: pnpm verify:standard

@@ -2,53 +2,64 @@
 
 ## 저장소 구조
 
-- 단일 패키지 Next.js App Router 앱입니다.
-- 주요 디렉터리:
-  - `app/`: 라우트와 라우트 핸들러
-  - `components/`: 재사용 UI
-  - `lib/`: 상태 저장소, API, 인증, 캔버스 로직
-  - `tests/e2e/`: Playwright E2E
+- `apps/web`: 기존 Next.js App Router 웹 앱
+- `apps/mobile`: Expo Router 기반 iOS/Android 앱
+- `docs/`: 서비스 흐름, 인증 라우팅, 모바일 설계, QA 체크리스트, ADR
+- `scripts/`: 검증 스크립트
 
-## 핵심 불변 조건
+현재 모바일 작업 원칙:
 
-- `/home`, `/shoot/*`, `/upload/*`, `/theme/*`, `/history`, `/mypage`는 보호 라우트입니다.
-- 비인증 접근은 `/login?redirectTo=...`로 리다이렉트됩니다.
-- `redirectTo`는 원래 쿼리스트링까지 보존해야 합니다.
-- 인증 페이지의 브랜드 링크는 `/home`이 아니라 `/`를 사용합니다.
+- `apps/web`는 읽기 전용이다
+- 실제 수정은 `apps/mobile` 중심으로만 한다
+- 루트와 문서는 워크스페이스 운영 규칙 정리에만 사용한다
 
-## 멀티스텝 상태 관리
+## 브랜치 규칙
 
-- `lib/shootSessionStore.ts`는 촬영 흐름을 담당합니다.
-- `lib/uploadSessionStore.ts`는 업로드 흐름을 담당합니다.
-- `lib/themeSessionStore.ts`는 테마 진입 흐름을 담당합니다.
-- `lib/themeEditorStore.ts`는 실제 테마 편집기를 담당합니다.
+- 기준 브랜치: `develop_loop`
+- 작업 브랜치: `issue/<number>-<slug>`
+- `main`, `develop`, `develop_loop`에는 직접 commit/push하지 않는다
+- 이슈와 PR 제목은 `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`, `perf:` 중 하나로 시작한다
+- `자동 생성`, `auto-generated` 같은 일반 제목은 금지한다
 
-이 흐름들은 기본적으로 URL만으로 복구되지 않습니다.
-뒤 단계 페이지는 필요한 세션 상태가 없을 때 가장 이른 유효 단계로 복귀시켜야 합니다.
+## 모바일 작업 원칙
 
-## 헤더 사용 규칙
+- `apps/web`는 절대 수정하지 않는다
+- 모바일 변경은 `apps/mobile` 범위 안에서 끝낸다
+- 디자인과 사용성은 직접 확인한다
+- API 통신과 에러 처리도 직접 확인한다
+- 직접 확인하지 않은 기능을 완료라고 쓰지 않는다
 
-`PageHeader`는 다음처럼 사용합니다.
+## 보호 라우트
 
-- `brandHref`: 좌상단 브랜드 링크
-- `rightHref`: `/home -> /mypage` 같은 우측 아이콘 링크
-- `rightSlot`만 사용: 새로고침처럼 실제 버튼을 직접 넣을 때
-- `backHref` + `backLabel`: 텍스트형 뒤로 가기 링크
+- `/home`
+- `/shoot/*`
+- `/upload/*`
+- `/theme/*`
+- `/history`
+- `/mypage`
 
-## 인증 라우팅 규칙
-
-- 안전한 리다이렉트 파싱은 `lib/redirect.ts`에 둡니다.
-- `/login`, `/signup`, `/forgot-password` 사이 이동 시 `redirectTo`를 유지합니다.
-- 로그인 완료 후에는 새 쿠키가 안정적으로 적용되도록 최종 목적지로 전체 이동을 우선합니다.
+보호 라우트 로직은 `apps/web/proxy.ts`에 있다.  
+비인증 접근은 `/login?redirectTo=...`로 보낸다.
 
 ## 테스트 가이드
 
-- 공개 라우트와 리다이렉트 규칙은 Playwright로 검증할 수 있습니다.
-- 보호된 전체 흐름 E2E는 인증된 테스트 컨텍스트가 필요합니다.
-- 라우트 테스트는 먼저 미들웨어 보호 동작, 그 다음 페이지 내부 세션 가드를 기준으로 맞춥니다.
+- 웹 기준선 검증: `pnpm test:web`, `pnpm build:web`
+- 모바일 정적 검증: `pnpm lint:mobile`, `pnpm typecheck:mobile`
+- 통합 검증: `pnpm verify:standard`
+- 모바일 수동/직접 확인: `docs/mobile-qa-checklist.md`
 
 ## 참고 문서
 
 - `README.md`
 - `docs/route-flows.md`
 - `docs/auth-routing.md`
+- `docs/mobile-app-blueprint.md`
+- `docs/mobile-qa-checklist.md`
+
+## 응답 규칙
+
+- 기본 응답 언어는 한국어
+- 별도 요청이 없으면 이슈, PR, 커밋, 설명 문구도 한국어 우선
+- 서술형보다 정리형 표현 우선
+- `...합니다`, `...했습니다`보다 `... 정리`, `... 조정`, `... 제거` 톤 우선
+- 짧고 직접적인 문장 우선

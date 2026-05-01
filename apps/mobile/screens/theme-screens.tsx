@@ -1,0 +1,284 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
+
+import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
+import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { BACKGROUND_SWATCHES, THEME_STICKERS } from '@/constants/harucut-data';
+import type { HarucutColors } from '@/constants/harucut-design';
+import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+import { getApiErrorMessage } from '@/lib/api-client';
+import { useHarucutStore } from '@/store/use-harucut-store';
+
+function useThemeScreenStyles() {
+  const { colors } = useHarucutTheme();
+
+  return useMemo(() => createStyles(colors), [colors]);
+}
+
+export function ThemeFrameScreen() {
+  const router = useRouter();
+  const push = (path: string) => router.push(path as never);
+  const accessMode = useHarucutStore((state) => state.accessMode);
+  const savedFrames = useHarucutStore((state) => state.savedFrames);
+  const themeEditor = useHarucutStore((state) => state.themeEditor);
+  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
+  const setThemeFrame = useHarucutStore((state) => state.setThemeFrame);
+  const selectSavedFrameForTheme = useHarucutStore((state) => state.selectSavedFrameForTheme);
+
+  useEffect(() => {
+    if (accessMode === 'member') {
+      void loadRemoteFrames();
+    }
+  }, [accessMode, loadRemoteFrames]);
+
+  return (
+    <AppScrollView>
+      <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} title="프레임 꾸미기" />
+      <StepProgress current={1} label="프레임 선택" total={2} />
+      <FramePickerSection
+        confirmLabel="새 프레임 만들기"
+        onConfirm={() => push('/theme/sticker')}
+        onSelect={setThemeFrame}
+        selectedFrameId={themeEditor.frameId}
+      />
+      <SavedFramesPanel
+        actionLabel="수정하기"
+        description="같은 프레임 타입으로 저장한 프레임만 불러와 수정할 수 있어요."
+        emptyText="이 프레임 타입으로 저장한 프레임이 아직 없어요."
+        frames={savedFrames}
+        onAction={() => push('/theme/sticker')}
+        onRefresh={() => void loadRemoteFrames()}
+        onSelect={selectSavedFrameForTheme}
+        selectedFrameId={themeEditor.frameId}
+        selectedSavedFrameId={themeEditor.selectedSavedFrameId}
+        title="저장한 프레임"
+      />
+    </AppScrollView>
+  );
+}
+
+export function ThemeStickerScreen() {
+  const router = useRouter();
+  const push = (path: string) => router.push(path as never);
+  const styles = useThemeScreenStyles();
+  const themeEditor = useHarucutStore((state) => state.themeEditor);
+  const setThemeTitle = useHarucutStore((state) => state.setThemeTitle);
+  const setThemeDescription = useHarucutStore((state) => state.setThemeDescription);
+  const setThemeBackgroundColor = useHarucutStore((state) => state.setThemeBackgroundColor);
+  const setThemeAccentColor = useHarucutStore((state) => state.setThemeAccentColor);
+  const setThemeCaption = useHarucutStore((state) => state.setThemeCaption);
+  const toggleThemeSticker = useHarucutStore((state) => state.toggleThemeSticker);
+  const saveThemeFrame = useHarucutStore((state) => state.saveThemeFrame);
+  const removeSavedFrame = useHarucutStore((state) => state.removeSavedFrame);
+  const showNotice = useHarucutStore((state) => state.showNotice);
+  const [saving, setSaving] = useState(false);
+  const previewRef = useRef<View | null>(null);
+
+  useEffect(() => {
+    if (!themeEditor.frameId) {
+      router.replace('/theme' as never);
+    }
+  }, [router, themeEditor.frameId]);
+
+  const showError = (title: string, error: unknown, fallback: string) => {
+    showNotice({
+      actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+      eyebrow: 'FRAME ERROR',
+      icon: 'warning-outline',
+      message: getApiErrorMessage(error, fallback),
+      title,
+    });
+  };
+
+  const handleSaveFrame = async () => {
+    setSaving(true);
+
+    try {
+      if (!previewRef.current) {
+        throw new Error('저장할 프레임 미리보기를 찾지 못했어요.');
+      }
+
+      const uri = await captureRef(previewRef.current, {
+        format: 'jpg',
+        quality: 0.96,
+      });
+      await saveThemeFrame(uri);
+      push('/theme');
+    } catch (error) {
+      showError('프레임 저장 실패', error, '프레임을 서버에 저장하지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveFrame = async () => {
+    if (!themeEditor.selectedSavedFrameId) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await removeSavedFrame(themeEditor.selectedSavedFrameId);
+      push('/theme');
+    } catch (error) {
+      showError('프레임 삭제 실패', error, '프레임을 삭제하지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AppScrollView>
+      <PageHeader
+        backLabel="프레임 목록으로"
+        description={themeEditor.selectedSavedFrameId ? '저장한 프레임 수정' : '프레임 꾸미기'}
+        onPressBack={() => push('/theme')}
+        title={themeEditor.selectedSavedFrameId ? '저장한 프레임 수정' : '프레임 꾸미기'}
+      />
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>프레임 정보</Text>
+        <Text style={styles.bodyText}>저장 후 모바일 홈 화면에서 다시 불러와 제목과 설명을 확인할 수 있어요.</Text>
+        <FormField label="프레임 이름" onChangeText={setThemeTitle} placeholder="프레임 이름을 입력해 주세요" value={themeEditor.title} />
+        <FormField
+          label="프레임 설명"
+          multiline
+          onChangeText={setThemeDescription}
+          placeholder="프레임 설명을 입력해 주세요"
+          style={{ minHeight: 88, paddingTop: 14 }}
+          value={themeEditor.description}
+        />
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 14 }}>
+        <Text style={styles.sectionTitle}>미리보기</Text>
+        <View collapsable={false} ref={previewRef}>
+          <FramePreview
+            accentColor={themeEditor.accentColor}
+            backgroundColor={themeEditor.backgroundColor}
+            caption={themeEditor.caption}
+            frameId={themeEditor.frameId}
+          />
+        </View>
+        <View style={styles.stickerRow}>
+          {themeEditor.stickers.map((sticker) => (
+            <Pill key={sticker}>{sticker}</Pill>
+          ))}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>오브젝트 설정</Text>
+        <Text style={styles.bodyText}>스티커, 사진, 글자 조합으로 원하는 프레임을 만들어요.</Text>
+        <View style={styles.stickerGrid}>
+          {THEME_STICKERS.map((sticker) => {
+            const active = themeEditor.stickers.includes(sticker.symbol);
+            return (
+              <Pill key={sticker.id} active={active} onPress={() => toggleThemeSticker(sticker.symbol)}>
+                {sticker.symbol} {sticker.label}
+              </Pill>
+            );
+          })}
+        </View>
+        <FormField label="캡션" onChangeText={setThemeCaption} placeholder="today archive" value={themeEditor.caption} />
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>배경색</Text>
+        <View style={styles.filterWrap}>
+          {BACKGROUND_SWATCHES.map((color) => (
+            <Pill
+              key={color.value}
+              active={themeEditor.backgroundColor === color.value}
+              onPress={() => setThemeBackgroundColor(color.value)}>
+              {color.label}
+            </Pill>
+          ))}
+        </View>
+        <Text style={styles.sectionTitle}>포인트 컬러</Text>
+        <View style={styles.filterWrap}>
+          {BACKGROUND_SWATCHES.map((color) => (
+            <Pill
+              key={`accent-${color.value}`}
+              active={themeEditor.accentColor === color.value}
+              onPress={() => setThemeAccentColor(color.value)}>
+              {color.label}
+            </Pill>
+          ))}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>레이어 설명</Text>
+        <View style={styles.layerList}>
+          <Text style={styles.layerItem}>배경 · {themeEditor.backgroundColor}</Text>
+          <Text style={styles.layerItem}>캡션 · {themeEditor.caption || '없음'}</Text>
+          <Text style={styles.layerItem}>스티커 · {themeEditor.stickers.length}개</Text>
+          <Text style={styles.layerItem}>포인트 컬러 · {themeEditor.accentColor}</Text>
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard style={{ gap: 12 }}>
+        <Text style={styles.sectionTitle}>인스턴트 설명</Text>
+        <Text style={styles.bodyText}>
+          선택한 프레임 타입에 맞춰 배경, 캡션, 스티커 구성을 정리해서 저장할 수 있어요.
+        </Text>
+        <ActionButton
+          icon={<Ionicons color="#FFFFFF" name="save-outline" size={16} />}
+          label={saving ? '저장 중...' : themeEditor.selectedSavedFrameId ? '수정 저장' : '저장'}
+          onPress={() => void handleSaveFrame()}
+        />
+        {themeEditor.selectedSavedFrameId ? (
+          <ActionButton
+            icon={<Ionicons color="#FFFFFF" name="trash-outline" size={16} />}
+            label="삭제"
+            onPress={() => void handleRemoveFrame()}
+            variant="danger"
+          />
+        ) : null}
+      </SurfaceCard>
+    </AppScrollView>
+  );
+}
+
+function createStyles(colors: HarucutColors) {
+  return StyleSheet.create({
+    bodyText: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    filterWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    layerItem: {
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    layerList: {
+      gap: 8,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    stickerGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    stickerRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+  });
+}

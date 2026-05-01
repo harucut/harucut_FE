@@ -1,0 +1,214 @@
+"use client";
+
+import { useMemo } from "react";
+import { useThemeEditorStore } from "@/lib/themeEditorStore";
+import type { EditorComponent, TextStyleJson } from "@/lib/types/themeEditor";
+
+type OpacityStyle = { opacity?: number };
+
+// styleJson에서 opacity를 안전하게 읽기
+function getOpacity(styleJson: EditorComponent["styleJson"]): number {
+  const opacity = (styleJson as OpacityStyle | undefined)?.opacity;
+  return Number.isFinite(opacity as number) ? (opacity as number) : 1;
+}
+
+// TEXT/IMAGE 타입별로 opacity 갱신
+function setOpacity(
+  c: EditorComponent,
+  opacity: number,
+): EditorComponent["styleJson"] {
+  if (c.type === "TEXT") {
+    const s = c.styleJson as TextStyleJson;
+    return { ...s, opacity };
+  }
+  const base = (c.styleJson ?? {}) as OpacityStyle;
+  return { ...base, opacity };
+}
+
+export function InspectorPanel() {
+  const components = useThemeEditorStore((s) => s.components);
+  const activeId = useThemeEditorStore((s) => s.activeId);
+  const update = useThemeEditorStore((s) => s.updateComponent);
+
+  // 현재 선택된 컴포넌트
+  const active = useMemo(
+    () => components.find((c) => c.id === activeId) ?? null,
+    [components, activeId],
+  );
+
+  if (!active) {
+    return (
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+        <p className="text-sm font-semibold">속성</p>
+        <p className="mt-2 text-[11px] text-zinc-400">
+          캔버스에서 요소를 선택해세요.
+        </p>
+      </section>
+    );
+  }
+
+  const opacity = getOpacity(active.styleJson);
+
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">속성</p>
+        <span className="text-[11px] text-zinc-500">{active.type}</span>
+      </div>
+
+      {/* 공통 */}
+      <Row label="불투명도">
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={opacity}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            update(active.id, { styleJson: setOpacity(active, next) });
+          }}
+          className="w-full"
+        />
+        <span className="w-10 text-right text-[11px] text-zinc-300">
+          {Math.round(opacity * 100)}%
+        </span>
+      </Row>
+
+      <Row label="회전">
+        <input
+          type="range"
+          min={-180}
+          max={180}
+          step={1}
+          value={active.rotation ?? 0}
+          onChange={(e) =>
+            update(active.id, { rotation: Number(e.target.value) })
+          }
+          className="w-full"
+        />
+        <span className="w-10 text-right text-[11px] text-zinc-300">
+          {Math.round(active.rotation ?? 0)}°
+        </span>
+      </Row>
+
+      {active.type === "TEXT" && (
+        <TextInspector
+          c={active}
+          onChange={(patch) => update(active.id, patch)}
+        />
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <SmallStat label="x" value={Math.round(active.x)} />
+        <SmallStat label="y" value={Math.round(active.y)} />
+        <SmallStat label="w" value={Math.round(active.width)} />
+        <SmallStat label="h" value={Math.round(active.height)} />
+      </div>
+    </section>
+  );
+}
+
+function TextInspector({
+  c,
+  onChange,
+}: {
+  c: EditorComponent;
+  onChange: (patch: Partial<EditorComponent>) => void;
+}) {
+  const style = (c.styleJson ?? {}) as TextStyleJson;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Row label="텍스트">
+        <input
+          value={c.source}
+          onChange={(e) => onChange({ source: e.target.value })}
+          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+        />
+      </Row>
+
+      <Row label="폰트">
+        <input
+          value={style.fontFamily ?? "Pretendard"}
+          onChange={(e) =>
+            onChange({
+              styleJson: { ...style, fontFamily: e.target.value },
+            })
+          }
+          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+        />
+      </Row>
+
+      <Row label="크기">
+        <input
+          type="range"
+          min={12}
+          max={420}
+          step={1}
+          value={style.fontSize ?? 48}
+          onChange={(e) =>
+            onChange({
+              styleJson: { ...style, fontSize: Number(e.target.value) },
+            })
+          }
+          className="w-full"
+        />
+        <span className="w-10 text-right text-[11px] text-zinc-300">
+          {style.fontSize ?? 48}
+        </span>
+      </Row>
+
+      <Row label="색">
+        <input
+          type="color"
+          value={style.color ?? "#ffffff"}
+          onChange={(e) =>
+            onChange({
+              styleJson: { ...style, color: e.target.value },
+            })
+          }
+          className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
+        />
+        <select
+          value={style.textAlign ?? "center"}
+          onChange={(e) => {
+            const v = e.target.value;
+            const align: TextStyleJson["textAlign"] =
+              v === "left" || v === "center" || v === "right" ? v : "center";
+            onChange({ styleJson: { ...style, textAlign: align } });
+          }}
+          className="flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+        >
+          <option value="left">왼쪽</option>
+          <option value="center">가운데</option>
+          <option value="right">오른쪽</option>
+        </select>
+      </Row>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-14 text-[11px] text-zinc-400">{label}</span>
+      <div className="flex flex-1 items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+function SmallStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
+      <p className="text-[10px] text-zinc-500">{label}</p>
+      <p className="text-xs text-zinc-200">{value}</p>
+    </div>
+  );
+}
