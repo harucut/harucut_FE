@@ -1,14 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
-import { FRAME_CATALOG, QUICK_LINKS, type HistoryItem } from '@/constants/harucut-data';
+import { FRAME_CATALOG, type HistoryItem } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+import { changePassword, exitAccount, logout } from '@/lib/auth-api';
+import { getApiErrorMessage } from '@/lib/api-client';
+import { uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
+import { updateProfileImage, updateUsername } from '@/lib/user-api';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
@@ -40,7 +44,16 @@ function historyPreviewUri(item: HistoryItem) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString('ko-KR', {
+  if (!value) {
+    return '날짜 없음';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '날짜 없음';
+  }
+
+  return date.toLocaleString('ko-KR', {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
@@ -72,16 +85,35 @@ export function HomeScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const historyItems = useHarucutStore((state) => state.historyItems);
+  const historyError = useHarucutStore((state) => state.historyError);
+  const historyStatus = useHarucutStore((state) => state.historyStatus);
+  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
+  const accessMode = useHarucutStore((state) => state.accessMode);
+  const loadRemoteHistory = useHarucutStore((state) => state.loadRemoteHistory);
   const savedFrames = useHarucutStore((state) => state.savedFrames);
   const user = useHarucutStore((state) => state.user);
 
-  const recentMoment = historyItems[0]
-    ? new Date(historyItems[0].createdAt).toLocaleDateString('ko-KR', {
-        day: 'numeric',
-        month: 'long',
-        weekday: 'short',
-      })
-    : '첫 기록을 남겨보세요';
+  const todayMoment = new Date().toLocaleDateString('ko-KR', {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'short',
+  });
+  const recentItems = historyItems.slice(0, 4);
+  const isHistoryLoading =
+    historyStatus === 'loading' ||
+    (accessMode === 'member' && historyStatus === 'idle');
+
+  useEffect(() => {
+    if (accessMode === 'member' && historyStatus === 'idle') {
+      void loadRemoteHistory();
+    }
+  }, [accessMode, historyStatus, loadRemoteHistory]);
+
+  useEffect(() => {
+    if (accessMode === 'member') {
+      void loadRemoteFrames();
+    }
+  }, [accessMode, loadRemoteFrames]);
 
   return (
     <AppScrollView>
@@ -93,13 +125,11 @@ export function HomeScreen() {
       />
 
       <SurfaceCard style={{ gap: 16 }}>
-        <Pill>{recentMoment}</Pill>
+        <Pill>{todayMoment}</Pill>
         <View style={{ gap: 10 }}>
           <Text style={styles.heroTitle}>찍고 저장하고,</Text>
           <Text style={styles.heroTitleAccent}>다시 꺼내 보는 하루컷</Text>
-          <Text style={styles.bodyCopy}>
-            복잡한 설명 없이 바로 시작할 수 있게 준비했어요. 원하는 방식으로 만들고 기록에 남겨두세요.
-          </Text>
+          <Text style={styles.bodyCopy}>촬영하거나 업로드해서 기록에 남겨두세요.</Text>
         </View>
 
         <View style={styles.rowButtons}>
@@ -117,15 +147,6 @@ export function HomeScreen() {
             variant="secondary"
           />
         </View>
-
-        <View style={styles.quickGrid}>
-          {QUICK_LINKS.map((item) => (
-            <Pressable key={item.href} onPress={() => push(item.href)} style={styles.quickItem}>
-              <Ionicons color={colors.primary} name={item.icon} size={16} />
-              <Text style={styles.quickText}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 14 }}>
@@ -140,11 +161,43 @@ export function HomeScreen() {
         </View>
 
         <View style={styles.recentGrid}>
-          {historyItems.slice(0, 4).map((item) => (
-            <View key={item.id} style={styles.thumbCard}>
-              <Image source={{ uri: historyPreviewUri(item) }} style={styles.thumbImage} />
+          {isHistoryLoading ? (
+            Array.from({ length: 4 }, (_, index) => (
+              <View key={`recent-loading-${index}`} style={[styles.thumbCard, styles.thumbLoading]} />
+            ))
+          ) : recentItems.length > 0 ? (
+            recentItems.map((item) => {
+              const previewUri = historyPreviewUri(item);
+
+              return (
+                <View key={item.id} style={styles.thumbCard}>
+                  {previewUri && item.kind === 'photo' ? (
+                    <Image source={{ uri: previewUri }} style={styles.thumbImage} />
+                  ) : (
+                    <View style={styles.thumbPlaceholder}>
+                      <Ionicons
+                        color={colors.primary}
+                        name={item.kind === 'video' ? 'play-circle-outline' : 'image-outline'}
+                        size={24}
+                      />
+                      <Text style={styles.thumbPlaceholderText}>
+                        {item.kind === 'video' ? '영상' : '미리보기 없음'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.recentEmptyCard}>
+              <Text style={styles.linkTitle}>아직 저장한 결과가 없어요.</Text>
+              <Text style={styles.linkBody}>
+                {historyStatus === 'error'
+                  ? (historyError ?? '저장한 결과를 불러오지 못했어요.')
+                  : '촬영하거나 업로드하면 여기에 표시돼요.'}
+              </Text>
             </View>
-          ))}
+          )}
         </View>
       </SurfaceCard>
 
@@ -196,8 +249,13 @@ export function HistoryScreen() {
   const { colors, styles } = useAppScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const accessMode = useHarucutStore((state) => state.accessMode);
+  const historyError = useHarucutStore((state) => state.historyError);
   const historyItems = useHarucutStore((state) => state.historyItems);
+  const historyStatus = useHarucutStore((state) => state.historyStatus);
+  const loadRemoteHistory = useHarucutStore((state) => state.loadRemoteHistory);
   const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
+  const showNotice = useHarucutStore((state) => state.showNotice);
   const [filter, setFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -214,6 +272,15 @@ export function HistoryScreen() {
 
   const photoCount = historyItems.filter((item) => item.kind === 'photo').length;
   const videoCount = historyItems.filter((item) => item.kind === 'video').length;
+  const isHistoryLoading =
+    historyStatus === 'loading' ||
+    (accessMode === 'member' && historyStatus === 'idle');
+
+  useEffect(() => {
+    if (accessMode === 'member' && historyStatus === 'idle') {
+      void loadRemoteHistory();
+    }
+  }, [accessMode, historyStatus, loadRemoteHistory]);
 
   return (
     <AppScrollView>
@@ -256,9 +323,19 @@ export function HistoryScreen() {
         </View>
       </SurfaceCard>
 
-      {filteredItems.length === 0 ? (
+      {isHistoryLoading ? (
         <SurfaceCard>
-          <Text style={styles.bodyCopy}>저장한 기록이 아직 없어요.</Text>
+          <Text style={styles.bodyCopy}>저장한 기록을 불러오는 중이에요.</Text>
+        </SurfaceCard>
+      ) : historyStatus === 'error' ? (
+        <SurfaceCard>
+          <Text style={styles.bodyCopy}>{historyError ?? '저장한 기록을 불러오지 못했어요.'}</Text>
+        </SurfaceCard>
+      ) : filteredItems.length === 0 ? (
+        <SurfaceCard>
+          <Text style={styles.bodyCopy}>
+            {historyItems.length === 0 ? '저장한 기록이 아직 없어요.' : '검색 결과가 없어요.'}
+          </Text>
         </SurfaceCard>
       ) : (
         filteredItems.map((item) => (
@@ -297,8 +374,17 @@ export function HistoryScreen() {
                     label={editingId === item.id ? '저장' : '이름 수정'}
                     onPress={() => {
                       if (editingId === item.id) {
-                        renameHistoryItem(item.id, draftName.trim() || item.title);
-                        setEditingId(null);
+                        void renameHistoryItem(item.id, draftName.trim() || item.title)
+                          .then(() => setEditingId(null))
+                          .catch((error) =>
+                            showNotice({
+                              actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+                              eyebrow: 'SAVE ERROR',
+                              icon: 'warning-outline',
+                              message: getApiErrorMessage(error, '파일 이름을 저장하지 못했어요.'),
+                              title: '이름 변경 실패',
+                            }),
+                          );
                         return;
                       }
 
@@ -323,14 +409,31 @@ export function MyPageScreen() {
   const router = useRouter();
   const replace = (path: string) => router.replace(path as never);
   const user = useHarucutStore((state) => state.user);
+  const refreshUserProfile = useHarucutStore((state) => state.refreshUserProfile);
   const setUserProfile = useHarucutStore((state) => state.setUserProfile);
   const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
+  const showNotice = useHarucutStore((state) => state.showNotice);
   const themePreference = useHarucutStore((state) => state.themePreference);
   const setThemePreference = useHarucutStore((state) => state.setThemePreference);
   const [username, setUsername] = useState(user.username);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setUsername(user.username);
+  }, [user.username]);
+
+  const showError = (title: string, message: string) => {
+    showNotice({
+      actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+      eyebrow: 'ACCOUNT ERROR',
+      icon: 'warning-outline',
+      message,
+      title,
+    });
+  };
 
   const handlePickProfile = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -341,7 +444,85 @@ export function MyPageScreen() {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setUserProfile({ profileUrl: result.assets[0].uri });
+      setSubmitting(true);
+
+      try {
+        const asset = result.assets[0];
+        const uploaded = await uploadLocalFileWithPresigned({
+          filename: asset.fileName ?? 'profile.jpg',
+          isTemp: false,
+          type: 'PROFILE',
+          uri: asset.uri,
+        });
+        await updateProfileImage(uploaded.key);
+        setUserProfile({ profileUrl: uploaded.objectUrl });
+        await refreshUserProfile();
+      } catch (error) {
+        showError('프로필 이미지 변경 실패', getApiErrorMessage(error, '프로필 이미지를 변경하지 못했어요.'));
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleUpdateUsername = async () => {
+    setSubmitting(true);
+
+    try {
+      await updateUsername(username);
+      await refreshUserProfile();
+    } catch (error) {
+      showError('닉네임 변경 실패', getApiErrorMessage(error, '닉네임을 변경하지 못했어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!oldPassword || !newPassword || newPassword !== confirmPassword) {
+      showError('비밀번호 변경 실패', '현재 비밀번호와 새 비밀번호 확인 값을 다시 확인해 주세요.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await changePassword(oldPassword, newPassword);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      showError('비밀번호 변경 실패', getApiErrorMessage(error, '비밀번호를 변경하지 못했어요.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setSubmitting(true);
+
+    try {
+      await logout();
+    } catch {
+      // 로컬 세션 정리는 계속 진행합니다.
+    } finally {
+      enterAnonymousMode();
+      replace('/');
+      setSubmitting(false);
+    }
+  };
+
+  const handleExit = async () => {
+    setSubmitting(true);
+
+    try {
+      await exitAccount();
+      enterAnonymousMode();
+      replace('/');
+    } catch (error) {
+      showError('회원 탈퇴 요청 실패', getApiErrorMessage(error, '회원 탈퇴 요청을 처리하지 못했어요.'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -349,7 +530,9 @@ export function MyPageScreen() {
     <AppScrollView>
       <PageHeader
         description="계정 정보와 보안 설정을 관리할 수 있어요."
-        onPressRight={() => undefined}
+        onPressRight={() => void refreshUserProfile().catch((error) =>
+          showError('계정 정보 새로고침 실패', getApiErrorMessage(error, '계정 정보를 불러오지 못했어요.')),
+        )}
         rightSlot={<Ionicons color={colors.text} name="refresh-outline" size={18} />}
         title="내 계정"
       />
@@ -381,7 +564,7 @@ export function MyPageScreen() {
 
         <ActionButton
           icon={<Ionicons color={colors.text} name="image-outline" size={16} />}
-          label="프로필 이미지 업로드"
+          label={submitting ? '처리 중...' : '프로필 이미지 업로드'}
           onPress={handlePickProfile}
           variant="secondary"
         />
@@ -391,7 +574,7 @@ export function MyPageScreen() {
         <Text style={styles.sectionTitle}>닉네임 변경</Text>
         <Text style={styles.bodyCopy}>서비스에서 표시될 이름을 수정할 수 있어요.</Text>
         <FormField label="닉네임" onChangeText={setUsername} placeholder="닉네임을 입력해 주세요" value={username} />
-        <ActionButton label="저장" onPress={() => setUserProfile({ username: username.trim() || user.username })} />
+        <ActionButton label={submitting ? '저장 중...' : '저장'} onPress={() => void handleUpdateUsername()} />
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
@@ -418,14 +601,8 @@ export function MyPageScreen() {
           value={confirmPassword}
         />
         <ActionButton
-          label="비밀번호 변경"
-          onPress={() => {
-            if (newPassword && newPassword === confirmPassword) {
-              setOldPassword('');
-              setNewPassword('');
-              setConfirmPassword('');
-            }
-          }}
+          label={submitting ? '변경 중...' : '비밀번호 변경'}
+          onPress={() => void handleChangePassword()}
         />
       </SurfaceCard>
 
@@ -477,11 +654,8 @@ export function MyPageScreen() {
       <SurfaceCard style={{ gap: 12 }}>
         <Text style={styles.sectionTitle}>로그아웃</Text>
         <ActionButton
-          label="로그아웃"
-          onPress={() => {
-            enterAnonymousMode();
-            replace('/');
-          }}
+          label={submitting ? '로그아웃 중...' : '로그아웃'}
+          onPress={() => void handleLogout()}
           variant="secondary"
         />
       </SurfaceCard>
@@ -493,10 +667,7 @@ export function MyPageScreen() {
         </Text>
         <ActionButton
           label="회원 탈퇴 요청"
-          onPress={() => {
-            enterAnonymousMode();
-            replace('/');
-          }}
+          onPress={() => void handleExit()}
           variant="danger"
         />
       </SurfaceCard>
@@ -538,13 +709,13 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: colors.text,
       fontSize: 28,
       fontWeight: '700',
-      lineHeight: 34,
+      lineHeight: 33.6,
     },
     heroTitleAccent: {
       color: colors.primaryStrong,
       fontSize: 28,
       fontWeight: '700',
-      lineHeight: 34,
+      lineHeight: 33.6,
     },
     historyCardRow: {
       flexDirection: 'row',
@@ -607,27 +778,20 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       flexWrap: 'wrap',
       gap: 10,
     },
-    quickItem: {
-      alignItems: 'center',
-      backgroundColor: tintedSurface,
-      borderColor: colors.border,
-      borderRadius: 18,
-      borderWidth: 1,
-      flexDirection: 'row',
-      gap: 8,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-      width: '48%',
-    },
-    quickText: {
-      color: colors.text,
-      fontSize: 13,
-      fontWeight: '700',
-    },
     recentGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 10,
+    },
+    recentEmptyCard: {
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderStyle: 'dashed',
+      borderWidth: 1,
+      gap: 6,
+      padding: 16,
+      width: '100%',
     },
     rowButtons: {
       flexDirection: 'row',
@@ -716,6 +880,22 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     thumbImage: {
       height: '100%',
       width: '100%',
+    },
+    thumbLoading: {
+      opacity: 0.48,
+    },
+    thumbPlaceholder: {
+      alignItems: 'center',
+      flex: 1,
+      gap: 6,
+      justifyContent: 'center',
+      padding: 10,
+    },
+    thumbPlaceholderText: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: '700',
+      textAlign: 'center',
     },
   });
 }

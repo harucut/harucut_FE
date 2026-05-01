@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
 import { BACKGROUND_SWATCHES, THEME_STICKERS } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+import { getApiErrorMessage } from '@/lib/api-client';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 function useThemeScreenStyles() {
@@ -19,10 +21,18 @@ function useThemeScreenStyles() {
 export function ThemeFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
+  const accessMode = useHarucutStore((state) => state.accessMode);
   const savedFrames = useHarucutStore((state) => state.savedFrames);
   const themeEditor = useHarucutStore((state) => state.themeEditor);
+  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
   const setThemeFrame = useHarucutStore((state) => state.setThemeFrame);
   const selectSavedFrameForTheme = useHarucutStore((state) => state.selectSavedFrameForTheme);
+
+  useEffect(() => {
+    if (accessMode === 'member') {
+      void loadRemoteFrames();
+    }
+  }, [accessMode, loadRemoteFrames]);
 
   return (
     <AppScrollView>
@@ -40,7 +50,7 @@ export function ThemeFrameScreen() {
         emptyText="이 프레임 타입으로 저장한 프레임이 아직 없어요."
         frames={savedFrames}
         onAction={() => push('/theme/sticker')}
-        onRefresh={() => undefined}
+        onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForTheme}
         selectedFrameId={themeEditor.frameId}
         selectedSavedFrameId={themeEditor.selectedSavedFrameId}
@@ -63,12 +73,63 @@ export function ThemeStickerScreen() {
   const toggleThemeSticker = useHarucutStore((state) => state.toggleThemeSticker);
   const saveThemeFrame = useHarucutStore((state) => state.saveThemeFrame);
   const removeSavedFrame = useHarucutStore((state) => state.removeSavedFrame);
+  const showNotice = useHarucutStore((state) => state.showNotice);
+  const [saving, setSaving] = useState(false);
+  const previewRef = useRef<View | null>(null);
 
   useEffect(() => {
     if (!themeEditor.frameId) {
       router.replace('/theme' as never);
     }
   }, [router, themeEditor.frameId]);
+
+  const showError = (title: string, error: unknown, fallback: string) => {
+    showNotice({
+      actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+      eyebrow: 'FRAME ERROR',
+      icon: 'warning-outline',
+      message: getApiErrorMessage(error, fallback),
+      title,
+    });
+  };
+
+  const handleSaveFrame = async () => {
+    setSaving(true);
+
+    try {
+      if (!previewRef.current) {
+        throw new Error('저장할 프레임 미리보기를 찾지 못했어요.');
+      }
+
+      const uri = await captureRef(previewRef.current, {
+        format: 'jpg',
+        quality: 0.96,
+      });
+      await saveThemeFrame(uri);
+      push('/theme');
+    } catch (error) {
+      showError('프레임 저장 실패', error, '프레임을 서버에 저장하지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveFrame = async () => {
+    if (!themeEditor.selectedSavedFrameId) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await removeSavedFrame(themeEditor.selectedSavedFrameId);
+      push('/theme');
+    } catch (error) {
+      showError('프레임 삭제 실패', error, '프레임을 삭제하지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppScrollView>
@@ -95,12 +156,14 @@ export function ThemeStickerScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.sectionTitle}>미리보기</Text>
-        <FramePreview
-          accentColor={themeEditor.accentColor}
-          backgroundColor={themeEditor.backgroundColor}
-          caption={themeEditor.caption}
-          frameId={themeEditor.frameId}
-        />
+        <View collapsable={false} ref={previewRef}>
+          <FramePreview
+            accentColor={themeEditor.accentColor}
+            backgroundColor={themeEditor.backgroundColor}
+            caption={themeEditor.caption}
+            frameId={themeEditor.frameId}
+          />
+        </View>
         <View style={styles.stickerRow}>
           {themeEditor.stickers.map((sticker) => (
             <Pill key={sticker}>{sticker}</Pill>
@@ -166,20 +229,14 @@ export function ThemeStickerScreen() {
         </Text>
         <ActionButton
           icon={<Ionicons color="#FFFFFF" name="save-outline" size={16} />}
-          label={themeEditor.selectedSavedFrameId ? '수정 저장' : '저장'}
-          onPress={() => {
-            saveThemeFrame();
-            push('/theme');
-          }}
+          label={saving ? '저장 중...' : themeEditor.selectedSavedFrameId ? '수정 저장' : '저장'}
+          onPress={() => void handleSaveFrame()}
         />
         {themeEditor.selectedSavedFrameId ? (
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="trash-outline" size={16} />}
             label="삭제"
-            onPress={() => {
-              removeSavedFrame(themeEditor.selectedSavedFrameId as string);
-              push('/theme');
-            }}
+            onPress={() => void handleRemoveFrame()}
             variant="danger"
           />
         ) : null}
