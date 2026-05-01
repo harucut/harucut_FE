@@ -129,8 +129,7 @@ export default function HomePage() {
               </span>
             </h1>
             <p className="max-w-xl text-[14px] leading-6 text-zinc-300 sm:text-[15px] sm:leading-7">
-              복잡한 설명 없이 바로 시작할 수 있게 준비했어요. 원하는 방식으로
-              만들고 기록에 남겨두세요.
+              촬영하거나 업로드해서 기록에 남겨두세요.
             </p>
           </div>
 

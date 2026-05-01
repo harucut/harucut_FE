@@ -33,7 +33,7 @@ export default function LandingPage() {
               오늘 하루를 네 컷으로 남겨보세요
             </div>
 
-            <h1 className="mt-5 text-[30px] font-semibold tracking-[-0.04em] text-[color:var(--hc-text)] sm:text-[34px] md:text-[56px] md:leading-[1.02]">
+            <h1 className="mt-5 text-[30px] font-semibold leading-[1.2] tracking-[-0.04em] text-[color:var(--hc-text)] sm:text-[34px] md:text-[56px]">
               오늘의 순간을
               <span
                 className="block bg-clip-text text-transparent"
@@ -51,7 +51,7 @@ export default function LandingPage() {
               오늘 하루 기록을 가볍게 남길 수 있어요.
             </p>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap">
               <Link
                 href="/login"
                 className="hc-button-hero inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto"

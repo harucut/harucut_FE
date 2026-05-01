@@ -417,6 +417,11 @@ export function SavedFramesPanel({
 }
 
 function createStyles(colors: HarucutColors, isDark: boolean) {
+  const framePreviewBackground = isDark ? colors.backgroundTint : '#FFFFFF';
+  const framePreviewBorder = isDark ? colors.border : 'rgba(148, 163, 184, 0.22)';
+  const emptySlotBackground = isDark ? colors.cardMuted : '#F8FAFC';
+  const emptySlotBorder = isDark ? 'rgba(147, 197, 253, 0.14)' : 'rgba(148, 163, 184, 0.18)';
+
   return StyleSheet.create({
     caption: {
       bottom: '8%',
@@ -489,12 +494,17 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     framePreviewWrap: {
       alignItems: 'center',
-      backgroundColor: colors.backgroundTint,
-      borderColor: colors.border,
+      backgroundColor: framePreviewBackground,
+      borderColor: framePreviewBorder,
       borderRadius: HARUCUT_RADII.lg,
       borderWidth: 1,
+      elevation: isDark ? 0 : 1,
       justifyContent: 'center',
       overflow: 'hidden',
+      shadowColor: isDark ? colors.shadow : 'rgba(15, 23, 42, 0.10)',
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: isDark ? 0 : 0.08,
+      shadowRadius: 18,
     },
     framePreviewWrapCarousel: {
       minHeight: FRAME_PICKER_PREVIEW_BOX.height + 32,
@@ -629,8 +639,8 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       borderColor: colors.primary,
     },
     slot: {
-      backgroundColor: colors.cardMuted,
-      borderColor: isDark ? 'rgba(147, 197, 253, 0.14)' : 'rgba(37, 99, 235, 0.12)',
+      backgroundColor: emptySlotBackground,
+      borderColor: emptySlotBorder,
       borderRadius: 14,
       borderWidth: 1,
       overflow: 'hidden',

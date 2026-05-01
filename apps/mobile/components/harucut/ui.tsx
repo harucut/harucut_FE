@@ -10,6 +10,8 @@ import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors 
 import { getGlobalThemeScrollPadding } from '@/constants/overlay-ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
+const EXTRA_TOP_PADDING = 24;
+
 function useUiStyles() {
   const { colors, isDark } = useHarucutTheme();
 
@@ -39,6 +41,7 @@ export function AppScrollView({
       <ScrollView
         contentContainerStyle={[
           styles.screenContent,
+          { paddingTop: HARUCUT_SPACING.screen + EXTRA_TOP_PADDING },
           { paddingBottom: bottomPadding },
           contentContainerStyle,
         ]}
