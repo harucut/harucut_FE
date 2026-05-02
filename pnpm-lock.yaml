@@ -93,8 +93,8 @@ importers:
         specifier: ~4.16.0
         version: 4.16.0(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)
       react-native-view-shot:
-        specifier: ^4.0.3
-        version: 4.0.3(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)
+        specifier: ^5.0.0
+        version: 5.0.1(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)
       react-native-web:
         specifier: ~0.21.0
         version: 0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -6257,11 +6257,12 @@ packages:
       react: '*'
       react-native: '*'
 
-  react-native-view-shot@4.0.3:
-    resolution: {integrity: sha512-USNjYmED7C0me02c1DxKA0074Hw+y/nxo+xJKlffMvfUWWzL5ELh/TJA/pTnVqFurIrzthZDPtDM7aBFJuhrHQ==}
+  react-native-view-shot@5.0.1:
+    resolution: {integrity: sha512-iGLeli0OcqrYL9iz/faSn0iQdqStQ5+EbS0QlUNN8klPenVXl/HJtV8yHbYiECfse20U56hv3E5puVShTJwBDg==}
+    engines: {node: '>=20', npm: '>=10'}
     peerDependencies:
-      react: '*'
-      react-native: '*'
+      react: '>=18.0.0'
+      react-native: '>=0.76.0'
 
   react-native-web@0.21.2:
     resolution: {integrity: sha512-SO2t9/17zM4iEnFvlu2DA9jqNbzNhoUP+AItkoCOyFmDMOhUnBBznBDCYN92fGdfAkfQlWzPoez6+zLxFNsZEg==}
@@ -11933,7 +11934,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
@@ -11964,7 +11965,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -14979,7 +14980,7 @@ snapshots:
       react-native-is-edge-to-edge: 1.3.1(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)
       warn-once: 0.1.1
 
-  react-native-view-shot@4.0.3(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0):
+  react-native-view-shot@5.0.1(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0):
     dependencies:
       html2canvas: 1.4.1
       react: 19.1.0
