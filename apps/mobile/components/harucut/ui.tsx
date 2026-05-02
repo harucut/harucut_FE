@@ -34,7 +34,7 @@ export function AppScrollView({
         colors={[colors.backgroundGradientStart, colors.backgroundGradientEnd]}
         end={{ x: 0.8, y: 1 }}
         start={{ x: 0.1, y: 0 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       <View pointerEvents="none" style={styles.backgroundOrbTop} />
       <View pointerEvents="none" style={styles.backgroundOrbRight} />

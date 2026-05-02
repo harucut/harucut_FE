@@ -4,6 +4,8 @@ import {
   useColorScheme as useRNColorScheme,
 } from 'react-native';
 
+import { normalizeColorScheme } from '@/hooks/use-color-scheme';
+
 const COLOR_SCHEME_QUERY = '(prefers-color-scheme: dark)';
 
 function getWebSystemColorScheme(): NonNullable<ColorSchemeName> | null {
@@ -45,7 +47,7 @@ export function useColorScheme() {
   const colorScheme = useRNColorScheme();
 
   if (hasHydrated) {
-    return colorScheme ?? webSystemScheme;
+    return normalizeColorScheme(webSystemScheme ?? colorScheme);
   }
 
   return 'light';
