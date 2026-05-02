@@ -214,7 +214,7 @@ export function ShootCaptureScreen() {
               facing={facing}
               onCameraReady={() => setIsCameraReady(true)}
               ref={cameraRef}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             />
           ) : (
             <View style={styles.cameraPlaceholder}>
@@ -637,7 +637,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       width: 80,
     },
     countdownOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       alignItems: 'center',
       backgroundColor: colors.overlay,
       gap: 8,
