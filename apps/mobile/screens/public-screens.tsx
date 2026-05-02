@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
@@ -128,11 +129,17 @@ function SocialBrandButton({
 export function LandingScreen() {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
   const showGuestTrialNotice = useHarucutStore((state) => state.showGuestTrialNotice);
+  const landingBottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView contentContainerStyle={styles.landingScrollContent}>
+    <AppScrollView
+      contentContainerStyle={[
+        styles.landingScrollContent,
+        { paddingBottom: landingBottomPadding },
+      ]}>
       <View style={styles.landingHeader}>
         <BrandMark href="/" />
       </View>
@@ -166,10 +173,7 @@ export function LandingScreen() {
             />
           </View>
           <View style={styles.heroCardCopy}>
-            <Text style={styles.heroCardTitle}>찍는 순간보다 {'\n'}다시 꺼내 볼 때 더 좋은 네 컷</Text>
-            <Text style={styles.heroCardBody}>
-              완성한 결과는 기록 페이지에서 다시 보고 공유할 수 있어요.
-            </Text>
+            <Text style={styles.heroCardBody}>완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.</Text>
           </View>
         </SurfaceCard>
       </View>

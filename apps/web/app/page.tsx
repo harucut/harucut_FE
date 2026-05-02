@@ -77,13 +77,9 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2">
-                <p className="text-sm font-semibold text-[color:var(--hc-text)]">
-                  찍는 순간보다
-                  <span className="block">다시 꺼내 볼 때 더 좋은 네 컷</span>
-                </p>
+              <div className="mt-4">
                 <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                  완성한 결과는 기록 페이지에서 다시 보고 공유할 수 있어요.
+                  완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.
                 </p>
               </div>
             </div>
