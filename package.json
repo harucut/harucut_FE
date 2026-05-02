@@ -6,7 +6,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "protobufjs"
-    ]
+    ],
+    "patchedDependencies": {
+      "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"
+    }
   },
   "scripts": {
     "dev": "pnpm dev:web",
