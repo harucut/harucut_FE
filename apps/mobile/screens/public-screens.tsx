@@ -143,7 +143,7 @@ export function LandingScreen() {
             <Text style={styles.heroTitle}>오늘의 순간을</Text>
             <Text style={styles.heroTitleGradient}>다시 보고 싶은 네 컷으로</Text>
           </View>
-          <Text style={styles.heroBody}>찍고, 고르고, 바로 저장하세요.</Text>
+          <Text style={styles.heroBody}>어디에서나 촬영하고, 꾸미고, 기록을 남겨보세요.</Text>
         </View>
 
         <View style={styles.heroActions}>

@@ -47,8 +47,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-4 max-w-xl text-sm leading-6 text-[color:var(--hc-muted)] sm:text-[15px] sm:leading-7 md:text-base">
-              촬영하고, 고르고, 저장하세요.
-              오늘 하루 기록을 가볍게 남길 수 있어요.
+              어디에서나 촬영하고, 꾸미고, 기록을 남겨보세요.
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap">
