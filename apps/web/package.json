@@ -39,7 +39,7 @@
     "@axe-core/playwright": "^4.11.2",
     "@playwright/test": "^1.58.2",
     "@storybook/nextjs": "^10.2.8",
-    "@storybook/react": "10.2.8",
+    "@storybook/react": "10.3.6",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
