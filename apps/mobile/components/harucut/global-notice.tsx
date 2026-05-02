@@ -54,7 +54,7 @@ export function GlobalNotice() {
   return (
     <Modal animationType="fade" transparent visible>
       <View style={styles.backdrop}>
-        <Pressable onPress={clearNotice} style={StyleSheet.absoluteFillObject} />
+        <Pressable onPress={clearNotice} style={StyleSheet.absoluteFill} />
         <View style={[styles.sheetWrap, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.sheet}>
             <View style={styles.iconWrap}>
