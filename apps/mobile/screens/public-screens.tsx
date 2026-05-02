@@ -42,10 +42,12 @@ function AuthShell({
 }) {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
+  const bottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView>
+    <AppScrollView contentContainerStyle={{ paddingBottom: bottomPadding }}>
       <PageHeader
         description={description}
         title={title}
