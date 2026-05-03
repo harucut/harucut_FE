@@ -657,7 +657,7 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
         eyebrow: 'GUEST MODE',
         icon: 'lock-closed-outline',
         message:
-          '비회원 체험에서는 서버와 통신하지 않고 프론트 자체만으로 촬영과 이미지 다운로드만 가능합니다. 링크 공유와 기록 저장, 업로드, 프레임 꾸미기 같은 서버 연동 기능은 로그인 후 사용할 수 있어요.',
+          '비회원 체험에서는 촬영과 이미지 다운로드만 가능합니다. 링크 공유나, 추가 기능들은 로그인 후에 사용할 수 있어요!',
         title: '지금은 촬영 체험만 가능해요',
       },
     }),
@@ -685,7 +685,7 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
         eyebrow: 'TRY HARUCUT',
         icon: 'camera-outline',
         message:
-          '비회원 체험에서는 서버와 통신하지 않고 프론트 자체만으로 촬영과 이미지 다운로드만 가능합니다. 링크 공유는 불가하며, 서버를 통해야 하는 기능은 로그인 후 사용할 수 있어요.',
+          '비회원 체험에서는 촬영과 이미지 다운로드만 가능합니다. 링크 공유나, 추가 기능들은 로그인 후에 사용할 수 있어요!',
         title: '비회원 체험을 시작할까요?',
       },
     }),

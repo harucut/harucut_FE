@@ -62,7 +62,7 @@ function ThemePageContent() {
   return (
     <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4">
-        <PageHeader title="프레임 꾸미기" backHref="/home" backLabel="처음으로" />
+        <PageHeader backHref="/home" backLabel="처음으로" />
         <StepProgress current={1} total={2} label="프레임 선택" />
 
         <FramePicker

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Image,
   Pressable,
@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { ActionButton, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, SurfaceCard } from '@/components/harucut/ui';
 import {
   FRAME_CATALOG,
   type FrameId,
@@ -25,57 +25,85 @@ import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
 type FrameSlot = {
-  height: DimensionValue;
-  left: DimensionValue;
-  top: DimensionValue;
-  width: DimensionValue;
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+type FrameLayout = {
+  slots: FrameSlot[];
+  totalHeight: number;
+  totalWidth: number;
 };
 
 type FramePickerLayoutMode = 'carousel' | 'grid';
+
+const FRAME_PICKER_GRID_MIN_WIDTH = 768;
 
 const FRAME_PICKER_PREVIEW_BOX = {
   height: 176,
   width: 132,
 } as const;
 
-const FRAME_LAYOUTS: Record<FrameId, { aspectRatio: number; slots: FrameSlot[] }> = {
+const FRAME_PICKER_PREVIEW_COLORS = {
+  dark: {
+    outer: '#e7ecf2',
+    slot: '#171c24',
+  },
+  light: {
+    outer: '#303846',
+    slot: '#f4f7fb',
+  },
+} as const;
+
+// 웹 constants/frameLayouts.ts와 같은 캔버스 규격을 사용합니다.
+const FRAME_LAYOUTS: Record<FrameId, FrameLayout> = {
   'classic-4': {
-    aspectRatio: 0.75,
+    totalHeight: 6000,
+    totalWidth: 2000,
     slots: [
-      { height: '18%', left: '12%', top: '7%', width: '76%' },
-      { height: '18%', left: '12%', top: '29%', width: '76%' },
-      { height: '18%', left: '12%', top: '51%', width: '76%' },
-      { height: '18%', left: '12%', top: '73%', width: '76%' },
+      { height: 1200, width: 1700, x: 150, y: 200 },
+      { height: 1200, width: 1700, x: 150, y: 1480 },
+      { height: 1200, width: 1700, x: 150, y: 2760 },
+      { height: 1200, width: 1700, x: 150, y: 4040 },
     ],
   },
   'grid-4': {
-    aspectRatio: 0.9,
+    totalHeight: 6000,
+    totalWidth: 4000,
     slots: [
-      { height: '34%', left: '10%', top: '10%', width: '34%' },
-      { height: '34%', left: '56%', top: '10%', width: '34%' },
-      { height: '34%', left: '10%', top: '56%', width: '34%' },
-      { height: '34%', left: '56%', top: '56%', width: '34%' },
+      { height: 2400, width: 1700, x: 200, y: 200 },
+      { height: 2400, width: 1700, x: 2100, y: 200 },
+      { height: 2400, width: 1700, x: 200, y: 2800 },
+      { height: 2400, width: 1700, x: 2100, y: 2800 },
     ],
   },
   'polaroid-4': {
-    aspectRatio: 0.82,
+    totalHeight: 6000,
+    totalWidth: 4000,
     slots: [
-      { height: '24%', left: '9%', top: '9%', width: '36%' },
-      { height: '24%', left: '55%', top: '9%', width: '36%' },
-      { height: '24%', left: '9%', top: '39%', width: '36%' },
-      { height: '24%', left: '55%', top: '39%', width: '36%' },
+      { height: 2400, width: 1700, x: 200, y: 200 },
+      { height: 2400, width: 1700, x: 2100, y: 800 },
+      { height: 2400, width: 1700, x: 200, y: 2800 },
+      { height: 2400, width: 1700, x: 2100, y: 3400 },
     ],
   },
   'wide-4': {
-    aspectRatio: 0.88,
+    totalHeight: 4000,
+    totalWidth: 6000,
     slots: [
-      { height: '16%', left: '8%', top: '12%', width: '84%' },
-      { height: '16%', left: '8%', top: '33%', width: '84%' },
-      { height: '16%', left: '8%', top: '54%', width: '84%' },
-      { height: '16%', left: '8%', top: '75%', width: '84%' },
+      { height: 1700, width: 2400, x: 200, y: 200 },
+      { height: 1700, width: 2400, x: 2800, y: 200 },
+      { height: 1700, width: 2400, x: 200, y: 2100 },
+      { height: 1700, width: 2400, x: 2800, y: 2100 },
     ],
   },
 };
+
+function toPercent(value: number, total: number): DimensionValue {
+  return `${(value / total) * 100}%`;
+}
 
 function useFrameStyles() {
   const { colors, isDark } = useHarucutTheme();
@@ -89,6 +117,7 @@ export function FramePreview({
   caption,
   frameId,
   media = [],
+  slotColor,
   style,
 }: {
   accentColor?: string;
@@ -96,13 +125,18 @@ export function FramePreview({
   caption?: string;
   frameId: FrameId;
   media?: MediaAsset[];
+  slotColor?: string;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { colors } = useHarucutTheme();
+  const { colors, isDark } = useHarucutTheme();
   const styles = useFrameStyles();
   const layout = FRAME_LAYOUTS[frameId];
+  const pickerPreviewColors = isDark
+    ? FRAME_PICKER_PREVIEW_COLORS.dark
+    : FRAME_PICKER_PREVIEW_COLORS.light;
   const resolvedAccent = accentColor ?? colors.primary;
-  const resolvedBackground = backgroundColor ?? colors.cardStrong;
+  const resolvedBackground = backgroundColor ?? accentColor ?? pickerPreviewColors.outer;
+  const resolvedSlotColor = slotColor ?? pickerPreviewColors.slot;
 
   return (
     <View
@@ -111,32 +145,42 @@ export function FramePreview({
       accessibilityRole="image"
       style={[
         styles.previewShell,
-        { aspectRatio: layout.aspectRatio, backgroundColor: resolvedBackground },
+        {
+          aspectRatio: layout.totalWidth / layout.totalHeight,
+          backgroundColor: resolvedBackground,
+        },
         style,
       ]}>
-      <View style={[styles.previewOutline, { borderColor: resolvedAccent }]} />
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
+        const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
+
         return (
           <View
             key={`${frameId}-${index}`}
             style={[
               styles.slot,
               {
-                height: slot.height,
-                left: slot.left,
-                top: slot.top,
-                width: slot.width,
+                backgroundColor: resolvedSlotColor,
+                height: toPercent(slot.height, layout.totalHeight),
+                left: toPercent(slot.x, layout.totalWidth),
+                top: toPercent(slot.y, layout.totalHeight),
+                width: toPercent(slot.width, layout.totalWidth),
               },
             ]}>
             {currentMedia ? (
               <>
-                <Image
-                  accessibilityLabel={currentMedia.label}
-                  accessibilityRole="image"
-                  source={{ uri: currentMedia.uri }}
-                  style={styles.slotImage}
-                />
+                {currentPreviewKind === 'image' ? (
+                  <Image
+                    accessibilityLabel={currentMedia.label}
+                    accessibilityRole="image"
+                    resizeMode="cover"
+                    source={{ uri: currentMedia.uri }}
+                    style={styles.slotImage}
+                  />
+                ) : (
+                  <View style={[styles.slotVideoPlaceholder, { backgroundColor: resolvedSlotColor }]} />
+                )}
                 {currentMedia.kind === 'video' ? (
                   <View style={styles.videoBadge}>
                     <Ionicons color="#FFFFFF" name="play" size={12} />
@@ -166,29 +210,17 @@ export function FramePickerSection({
   const styles = useFrameStyles();
   const { width } = useWindowDimensions();
   const { colors } = useHarucutTheme();
-  const [layoutMode, setLayoutMode] = useState<FramePickerLayoutMode>('grid');
+  const layoutMode: FramePickerLayoutMode =
+    width >= FRAME_PICKER_GRID_MIN_WIDTH ? 'grid' : 'carousel';
   const carouselCardWidth = Math.min(Math.max(width - 92, 260), 336);
   const carouselSidePadding = Math.max((width - carouselCardWidth) / 2, 16);
   const carouselCardGap = 12;
-  const carouselTrailingPadding = carouselSidePadding + 56;
   const carouselSnapOffsets = FRAME_CATALOG.map(
     (_, index) => index * (carouselCardWidth + carouselCardGap),
   );
 
   return (
     <>
-      <View style={styles.layoutControls}>
-        <Text style={styles.layoutLabel}>프레임 보기 방식</Text>
-        <View style={styles.layoutOptions}>
-          <Pill active={layoutMode === 'grid'} onPress={() => setLayoutMode('grid')}>
-            2열 그리드
-          </Pill>
-          <Pill active={layoutMode === 'carousel'} onPress={() => setLayoutMode('carousel')}>
-            가로 카드
-          </Pill>
-        </View>
-      </View>
-
       {layoutMode === 'grid' ? (
         <View style={styles.grid}>
           {FRAME_CATALOG.map((frame) => (
@@ -207,7 +239,6 @@ export function FramePickerSection({
             <ScrollView
               bounces={false}
               decelerationRate="fast"
-              disableIntervalMomentum
               horizontal
               showsHorizontalScrollIndicator={false}
               snapToOffsets={carouselSnapOffsets}
@@ -215,7 +246,7 @@ export function FramePickerSection({
                 styles.carouselContent,
                 {
                   paddingLeft: carouselSidePadding,
-                  paddingRight: carouselTrailingPadding,
+                  paddingRight: carouselSidePadding,
                 },
               ]}>
               {FRAME_CATALOG.map((frame) => (
@@ -264,9 +295,12 @@ function FramePickerCard({
   selected: boolean;
   width?: number;
 }) {
-  const { colors } = useHarucutTheme();
+  const { colors, isDark } = useHarucutTheme();
   const styles = useFrameStyles();
   const previewLayout = getContainedPreviewLayout(frame.frameId);
+  const previewColors = isDark
+    ? FRAME_PICKER_PREVIEW_COLORS.dark
+    : FRAME_PICKER_PREVIEW_COLORS.light;
 
   return (
     <Pressable
@@ -289,7 +323,12 @@ function FramePickerCard({
             : styles.framePreviewWrapCarousel,
         ]}>
         <View style={styles.framePreviewViewport}>
-          <FramePreview frameId={frame.frameId} style={previewLayout} />
+          <FramePreview
+            backgroundColor={previewColors.outer}
+            frameId={frame.frameId}
+            slotColor={previewColors.slot}
+            style={previewLayout}
+          />
         </View>
       </View>
 
@@ -312,7 +351,8 @@ function FramePickerCard({
 }
 
 function getContainedPreviewLayout(frameId: FrameId) {
-  const aspectRatio = FRAME_LAYOUTS[frameId].aspectRatio;
+  const layout = FRAME_LAYOUTS[frameId];
+  const aspectRatio = layout.totalWidth / layout.totalHeight;
   const { width, height } = FRAME_PICKER_PREVIEW_BOX;
 
   if (aspectRatio * height <= width) {
@@ -374,7 +414,7 @@ export function SavedFramesPanel({
       {matchingFrames.length === 0 ? (
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
-        <View style={{ gap: 12, marginTop: 14 }}>
+        <View style={{ gap: 12, marginTop: 8 }}>
           {matchingFrames.map((frame) => {
             const selected = frame.id === selectedSavedFrameId;
             return (
@@ -419,8 +459,7 @@ export function SavedFramesPanel({
 function createStyles(colors: HarucutColors, isDark: boolean) {
   const framePreviewBackground = isDark ? colors.backgroundTint : '#FFFFFF';
   const framePreviewBorder = isDark ? colors.border : 'rgba(148, 163, 184, 0.22)';
-  const emptySlotBackground = isDark ? colors.cardMuted : '#F8FAFC';
-  const emptySlotBorder = isDark ? 'rgba(147, 197, 253, 0.14)' : 'rgba(148, 163, 184, 0.18)';
+  const previewBorder = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(148, 163, 184, 0.34)';
 
   return StyleSheet.create({
     caption: {
@@ -435,7 +474,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       color: colors.muted,
       fontSize: 12,
       lineHeight: 18,
-      marginTop: 16,
+      marginTop: 8,
     },
     carouselContent: {
       gap: 12,
@@ -531,30 +570,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontWeight: '700',
       flex: 1,
     },
-    layoutControls: {
-      gap: 10,
-      marginBottom: 4,
-    },
-    layoutLabel: {
-      color: colors.muted,
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    layoutOptions: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    previewOutline: {
-      borderRadius: 24,
-      borderWidth: 2,
-      bottom: 8,
-      left: 8,
-      position: 'absolute',
-      right: 8,
-      top: 8,
-    },
     previewShell: {
-      borderRadius: 28,
+      borderColor: previewBorder,
+      borderRadius: 8,
+      borderWidth: 1,
       overflow: 'hidden',
       width: '100%',
     },
@@ -639,14 +658,16 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       borderColor: colors.primary,
     },
     slot: {
-      backgroundColor: emptySlotBackground,
-      borderColor: emptySlotBorder,
-      borderRadius: 14,
-      borderWidth: 1,
+      borderRadius: 6,
       overflow: 'hidden',
       position: 'absolute',
     },
     slotImage: {
+      height: '100%',
+      width: '100%',
+    },
+    slotVideoPlaceholder: {
+      backgroundColor: colors.primarySoft,
       height: '100%',
       width: '100%',
     },

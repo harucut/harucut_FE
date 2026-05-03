@@ -87,7 +87,7 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
         eyebrow: "GUEST MODE",
         icon: "lock",
         message:
-          "비회원 체험에서는 서버와 통신하지 않고 프론트 자체만으로 촬영과 이미지 다운로드만 가능합니다. 링크 공유, 기록 저장, 업로드 시작, 프레임 꾸미기 같은 서버 연동 기능은 로그인 후에 사용할 수 있어요.",
+          "비회원 체험에서는 촬영과 이미지 다운로드만 가능합니다. 링크 공유나, 추가 기능들은 로그인 후에 사용할 수 있어요!",
         title: "지금은 촬영 체험만 가능해요",
       },
     }),
@@ -129,7 +129,7 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
         eyebrow: "TRY HARUCUT",
         icon: "camera",
         message:
-          "비회원 체험에서는 서버와 통신하지 않고 프론트 자체만으로 촬영과 이미지 다운로드만 가능합니다. 링크 공유는 불가하고, 서버를 통해야 하는 기능은 로그인 후에 사용할 수 있어요.",
+          "비회원 체험에서는 촬영과 이미지 다운로드만 가능합니다. 링크 공유나, 추가 기능들은 로그인 후에 사용할 수 있어요!",
         title: "비회원 체험을 시작할까요?",
       },
     }),

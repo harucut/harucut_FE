@@ -46,7 +46,6 @@ export function UploadFrameScreen() {
         backLabel="홈으로"
         description="업로드로 만들 프레임을 먼저 골라 주세요."
         onPressBack={() => push('/home')}
-        title="업로드"
       />
       <StepProgress current={1} label="프레임 선택" total={3} />
       <FramePickerSection

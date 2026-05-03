@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
 import { ColorThemeScript } from "@/components/theme/ColorThemeScript";
-import { GlobalThemeToggle } from "@/components/theme/GlobalThemeToggle";
+import { ColorThemeSync } from "@/components/theme/ColorThemeSync";
 import "./globals.css";
 import { ExternalBrowserGate } from "./ExternalBrowserGate";
 
@@ -20,12 +20,12 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body>
         <ColorThemeScript />
+        <ColorThemeSync />
         <ExternalBrowserGate />
         <Suspense fallback={null}>
           <GuestTrialBridge />
         </Suspense>
         {children}
-        <GlobalThemeToggle />
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, RefreshCw, ShieldCheck } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { clientApi } from "@/lib/clientApi";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
@@ -289,6 +290,8 @@ export default function MyPage() {
                 </button>
               </div>
             </section>
+
+            <ColorThemePreferencePanel />
 
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
               <h2 className="text-sm font-semibold">닉네임 변경</h2>

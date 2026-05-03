@@ -84,7 +84,6 @@ export function ShootFrameScreen() {
 
           push('/home');
         }}
-        title={accessMode === 'guest' ? '비회원 촬영 체험' : '촬영'}
       />
       <StepProgress current={1} label="프레임 선택" total={4} />
       <FramePickerSection
