@@ -12,7 +12,6 @@ import {
   User,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { FRAME_CATALOG } from "@/lib/frameCatalog";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import { listMyFrames } from "@/lib/remoteFrameApi";
@@ -90,7 +89,6 @@ export default function HomePage() {
     () => getRecentMoment(recentMedia),
     [recentMedia],
   );
-  const recommendedFrames = FRAME_CATALOG.slice(0, 3);
   const savedFrame = savedFrames[0] ?? null;
 
   return (
@@ -151,6 +149,13 @@ export default function HomePage() {
             >
               <Upload className="h-4 w-4" />
               사진 업로드
+            </Link>
+            <Link
+              href="/theme"
+              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
+            >
+              <Palette className="h-4 w-4" />
+              꾸미기
             </Link>
           </div>
 
@@ -245,31 +250,6 @@ export default function HomePage() {
           </section>
 
           <div className="flex flex-col gap-4">
-            <section className="hc-surface-card rounded-[28px] border p-5">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
-                Frame picks
-              </p>
-              <div className="mt-3 space-y-2">
-                {recommendedFrames.map((frame) => (
-                  <Link
-                    key={frame.id}
-                    href={`/shoot?frame=${frame.id}`}
-                    className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-100">
-                        {frame.name}
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        {frame.badge}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-zinc-500" />
-                  </Link>
-                ))}
-              </div>
-            </section>
-
             <section className="hc-surface-card rounded-[28px] border p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-zinc-100">

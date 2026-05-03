@@ -83,18 +83,18 @@ export const BOTTOM_NAV_ITEMS = [
     label: '업로드',
   },
   {
+    href: '/theme',
+    icon: 'color-palette-outline',
+    iconActive: 'color-palette',
+    key: 'theme',
+    label: '꾸미기',
+  },
+  {
     href: '/history',
     icon: 'time-outline',
     iconActive: 'time',
     key: 'history',
     label: '기록',
-  },
-  {
-    href: '/mypage',
-    icon: 'person-outline',
-    iconActive: 'person',
-    key: 'mypage',
-    label: '내정보',
   },
 ] as const;
 
