@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Camera,
   ChevronRight,
-  History,
   Palette,
   Play,
   Upload,
@@ -31,13 +30,6 @@ function getRecentMoment(items: UserMedia[]) {
     weekday: "short",
   });
 }
-
-const quickLinks = [
-  { label: "촬영", href: "/shoot", icon: Camera },
-  { label: "업로드", href: "/upload", icon: Upload },
-  { label: "꾸미기", href: "/theme", icon: Palette },
-  { label: "기록", href: "/history", icon: History },
-] as const;
 
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -159,21 +151,6 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {quickLinks.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="hc-surface-well hc-surface-well-hover flex items-center gap-2 rounded-2xl border px-3 py-3 text-sm text-zinc-200 transition"
-                >
-                  <Icon className="h-4 w-4 text-[color:var(--hc-primary)]" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">

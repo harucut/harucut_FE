@@ -55,7 +55,6 @@ function UploadFramePageContent() {
     <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4">
         <PageHeader
-          title="업로드"
           backHref="/home"
           backLabel="홈으로"
           description="업로드로 만들 프레임을 먼저 골라 주세요."

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Image,
   Pressable,
@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { ActionButton, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, SurfaceCard } from '@/components/harucut/ui';
 import {
   FRAME_CATALOG,
   type FrameId,
@@ -38,6 +38,8 @@ type FrameLayout = {
 };
 
 type FramePickerLayoutMode = 'carousel' | 'grid';
+
+const FRAME_PICKER_GRID_MIN_WIDTH = 768;
 
 const FRAME_PICKER_PREVIEW_BOX = {
   height: 176,
@@ -208,29 +210,17 @@ export function FramePickerSection({
   const styles = useFrameStyles();
   const { width } = useWindowDimensions();
   const { colors } = useHarucutTheme();
-  const [layoutMode, setLayoutMode] = useState<FramePickerLayoutMode>('grid');
+  const layoutMode: FramePickerLayoutMode =
+    width >= FRAME_PICKER_GRID_MIN_WIDTH ? 'grid' : 'carousel';
   const carouselCardWidth = Math.min(Math.max(width - 92, 260), 336);
   const carouselSidePadding = Math.max((width - carouselCardWidth) / 2, 16);
   const carouselCardGap = 12;
-  const carouselTrailingPadding = carouselSidePadding + 56;
   const carouselSnapOffsets = FRAME_CATALOG.map(
     (_, index) => index * (carouselCardWidth + carouselCardGap),
   );
 
   return (
     <>
-      <View style={styles.layoutControls}>
-        <Text style={styles.layoutLabel}>프레임 보기 방식</Text>
-        <View style={styles.layoutOptions}>
-          <Pill active={layoutMode === 'grid'} onPress={() => setLayoutMode('grid')}>
-            2열 그리드
-          </Pill>
-          <Pill active={layoutMode === 'carousel'} onPress={() => setLayoutMode('carousel')}>
-            가로 카드
-          </Pill>
-        </View>
-      </View>
-
       {layoutMode === 'grid' ? (
         <View style={styles.grid}>
           {FRAME_CATALOG.map((frame) => (
@@ -249,7 +239,6 @@ export function FramePickerSection({
             <ScrollView
               bounces={false}
               decelerationRate="fast"
-              disableIntervalMomentum
               horizontal
               showsHorizontalScrollIndicator={false}
               snapToOffsets={carouselSnapOffsets}
@@ -257,7 +246,7 @@ export function FramePickerSection({
                 styles.carouselContent,
                 {
                   paddingLeft: carouselSidePadding,
-                  paddingRight: carouselTrailingPadding,
+                  paddingRight: carouselSidePadding,
                 },
               ]}>
               {FRAME_CATALOG.map((frame) => (
@@ -425,7 +414,7 @@ export function SavedFramesPanel({
       {matchingFrames.length === 0 ? (
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
-        <View style={{ gap: 12, marginTop: 14 }}>
+        <View style={{ gap: 12, marginTop: 8 }}>
           {matchingFrames.map((frame) => {
             const selected = frame.id === selectedSavedFrameId;
             return (
@@ -485,7 +474,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       color: colors.muted,
       fontSize: 12,
       lineHeight: 18,
-      marginTop: 16,
+      marginTop: 8,
     },
     carouselContent: {
       gap: 12,
@@ -580,19 +569,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 15,
       fontWeight: '700',
       flex: 1,
-    },
-    layoutControls: {
-      gap: 10,
-      marginBottom: 4,
-    },
-    layoutLabel: {
-      color: colors.muted,
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    layoutOptions: {
-      flexDirection: 'row',
-      gap: 8,
     },
     previewShell: {
       borderColor: previewBorder,

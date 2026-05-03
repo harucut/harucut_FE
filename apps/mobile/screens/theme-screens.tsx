@@ -36,7 +36,7 @@ export function ThemeFrameScreen() {
 
   return (
     <AppScrollView>
-      <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} title="프레임 꾸미기" />
+      <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} />
       <StepProgress current={1} label="프레임 선택" total={2} />
       <FramePickerSection
         confirmLabel="새 프레임 만들기"
