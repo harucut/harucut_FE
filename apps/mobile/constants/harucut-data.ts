@@ -6,6 +6,7 @@ export type MediaAsset = {
   id: string;
   kind: MediaKind;
   label: string;
+  previewKind?: MediaKind;
   remoteMediaId?: number;
   s3Key?: string;
   uri: string;

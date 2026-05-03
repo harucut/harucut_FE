@@ -39,8 +39,12 @@ const THEME_OPTIONS: Array<{
   },
 ];
 
+function historyPreviewAsset(item: HistoryItem) {
+  return item.previewMedia[0] ?? null;
+}
+
 function historyPreviewUri(item: HistoryItem) {
-  return item.previewMedia[0]?.uri ?? '';
+  return historyPreviewAsset(item)?.uri ?? '';
 }
 
 function formatDate(value: string) {
@@ -167,12 +171,21 @@ export function HomeScreen() {
             ))
           ) : recentItems.length > 0 ? (
             recentItems.map((item) => {
-              const previewUri = historyPreviewUri(item);
+              const previewAsset = historyPreviewAsset(item);
+              const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
+              const previewUri = previewAsset?.uri ?? '';
 
               return (
                 <View key={item.id} style={styles.thumbCard}>
-                  {previewUri && item.kind === 'photo' ? (
-                    <Image source={{ uri: previewUri }} style={styles.thumbImage} />
+                  {previewUri && previewKind === 'image' ? (
+                    <>
+                      <Image source={{ uri: previewUri }} style={styles.thumbImage} />
+                      {item.kind === 'video' ? (
+                        <View style={styles.thumbVideoBadge}>
+                          <Ionicons color="#FFFFFF" name="play" size={18} />
+                        </View>
+                      ) : null}
+                    </>
                   ) : (
                     <View style={styles.thumbPlaceholder}>
                       <Ionicons
@@ -896,6 +909,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 10,
       fontWeight: '700',
       textAlign: 'center',
+    },
+    thumbVideoBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.overlayStrong,
+      borderColor: 'rgba(255, 255, 255, 0.32)',
+      borderRadius: 22,
+      borderWidth: 1,
+      height: 44,
+      justifyContent: 'center',
+      left: '50%',
+      marginLeft: -22,
+      marginTop: -22,
+      position: 'absolute',
+      top: '50%',
+      width: 44,
     },
   });
 }

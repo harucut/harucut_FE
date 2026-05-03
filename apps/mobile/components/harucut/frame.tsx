@@ -117,6 +117,8 @@ export function FramePreview({
       <View style={[styles.previewOutline, { borderColor: resolvedAccent }]} />
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
+        const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
+
         return (
           <View
             key={`${frameId}-${index}`}
@@ -131,12 +133,16 @@ export function FramePreview({
             ]}>
             {currentMedia ? (
               <>
-                <Image
-                  accessibilityLabel={currentMedia.label}
-                  accessibilityRole="image"
-                  source={{ uri: currentMedia.uri }}
-                  style={styles.slotImage}
-                />
+                {currentPreviewKind === 'image' ? (
+                  <Image
+                    accessibilityLabel={currentMedia.label}
+                    accessibilityRole="image"
+                    source={{ uri: currentMedia.uri }}
+                    style={styles.slotImage}
+                  />
+                ) : (
+                  <View style={styles.slotVideoPlaceholder} />
+                )}
                 {currentMedia.kind === 'video' ? (
                   <View style={styles.videoBadge}>
                     <Ionicons color="#FFFFFF" name="play" size={12} />
@@ -647,6 +653,11 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       position: 'absolute',
     },
     slotImage: {
+      height: '100%',
+      width: '100%',
+    },
+    slotVideoPlaceholder: {
+      backgroundColor: colors.primarySoft,
       height: '100%',
       width: '100%',
     },

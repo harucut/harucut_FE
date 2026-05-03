@@ -7,6 +7,7 @@ import {
   ChevronRight,
   History,
   Palette,
+  Play,
   Upload,
   User,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { listMyMedia } from "@/lib/userMediaApi";
 import { listMyFrames } from "@/lib/remoteFrameApi";
 import type { UserMedia, RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
+import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
 
 function getRecentMoment(items: UserMedia[]) {
   if (items.length === 0) return "첫 기록을 남겨보세요";
@@ -41,6 +43,7 @@ const quickLinks = [
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
+  const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
   const [savedFrames, setSavedFrames] = useState<RemoteFrame[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,6 +70,7 @@ export default function HomePage() {
 
         setUser(nextUser);
         setRecentMedia(sortedMedia.slice(0, 4));
+        setPreviewMedia(sortedMedia);
         setSavedFrames(nextFrames.slice(0, 1));
       } finally {
         if (!cancelled) {
@@ -190,32 +194,48 @@ export default function HomePage() {
                   />
                 ))
               ) : recentMedia.length > 0 ? (
-                recentMedia.map((item) => (
-                  <div
-                    key={item.mediaId}
-                    className="hc-surface-well overflow-hidden rounded-3xl border"
-                  >
-                    {item.downloadUrl ? (
-                      item.mediaType === "VIDEO" ? (
-                        <video
-                          src={item.downloadUrl}
-                          className="aspect-[3/4] w-full object-cover"
-                          muted
-                          playsInline
-                        />
+                recentMedia.map((item) => {
+                  const preview = getUserMediaPreview(item, previewMedia);
+                  const isVideo = item.mediaType === "VIDEO";
+
+                  return (
+                    <div
+                      key={item.mediaId}
+                      className="hc-surface-well relative overflow-hidden rounded-3xl border"
+                    >
+                      {preview.url ? (
+                        preview.kind === "video" ? (
+                          <video
+                            src={preview.url}
+                            className="aspect-[3/4] w-full object-cover"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={preview.url}
+                            alt={getUserMediaTitle(item)}
+                            className="aspect-[3/4] w-full object-cover"
+                          />
+                        )
                       ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.downloadUrl}
-                          alt={item.displayName ?? "최근 기록"}
-                          className="aspect-[3/4] w-full object-cover"
-                        />
-                      )
-                    ) : (
-                      <div className="aspect-[3/4] bg-white/5" />
-                    )}
-                  </div>
-                ))
+                        <div className="aspect-[3/4] bg-white/5" />
+                      )}
+                      {isVideo ? (
+                        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
+                          <span className="grid h-10 w-10 place-items-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur">
+                            <Play
+                              aria-hidden="true"
+                              className="ml-0.5 h-4 w-4"
+                              fill="currentColor"
+                            />
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="hc-surface-well col-span-2 rounded-3xl border border-dashed p-5 text-center text-[11px] text-zinc-400">
                   아직 저장한 결과가 없어요.
