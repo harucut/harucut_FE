@@ -7,6 +7,11 @@
     "onlyBuiltDependencies": [
       "protobufjs"
     ],
+    "overrides": {
+      "@react-native/babel-plugin-codegen": "0.85.2",
+      "@react-native/babel-preset": "0.85.2",
+      "@react-native/codegen": "0.85.2"
+    },
     "patchedDependencies": {
       "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"
     }
