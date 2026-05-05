@@ -74,7 +74,7 @@ pnpm dev:mobile
 
 ## 브랜치 정책
 
-- 시작 브랜치: `develop_loop`
+- 시작 브랜치: `develop`
 - 작업 브랜치: `issue/<number>-<slug>`
-- 승격 경로: `develop_loop -> develop -> main`
-- `main`, `develop`, `develop_loop` 직접 commit/push 금지
+- 승격 경로: `develop -> main`
+- `main`, `develop` 직접 commit/push 금지

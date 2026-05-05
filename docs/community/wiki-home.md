@@ -8,7 +8,7 @@ Harucut은 온라인 인생네컷 경험을 웹과 모바일에서 제공하는 
 
 - 웹: Next.js 기반 운영
 - 모바일: Expo 기반 iOS/Android 앱 개발 시작
-- 운영 규칙: `develop_loop -> develop -> main`
+- 운영 규칙: `develop -> main`
 
 ## 문서 위치
 
