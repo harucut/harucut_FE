@@ -3,12 +3,11 @@ name: codeql
 on:
   pull_request:
     branches:
-      - develop_loop
       - develop
       - main
   push:
     branches:
-      - develop_loop
+      - develop
       - main
   schedule:
     - cron: "30 2 * * 1"

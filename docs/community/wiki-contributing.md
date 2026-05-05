@@ -2,7 +2,7 @@
 
 ## 브랜치 흐름
 
-- 작업 기준 브랜치: `develop_loop`
+- 작업 기준 브랜치: `develop`
 - 작업 브랜치: `issue/<number>-<slug>`
 - 검토 브랜치: `develop`
 - 릴리스 브랜치: `main`

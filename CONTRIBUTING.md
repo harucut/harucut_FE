@@ -10,19 +10,19 @@
 
 ## 브랜치 정책
 
-- 시작 브랜치: `develop_loop`
+- 시작 브랜치: `develop`
 - 작업 브랜치: `issue/<number>-<slug>`
 - 검증 브랜치: `develop`
 - 릴리즈 브랜치: `main`
 
 ## 강제 규칙
 
-- `main`, `develop`, `develop_loop` 직접 commit 금지
-- `main`, `develop`, `develop_loop` 직접 push 금지
+- `main`, `develop` 직접 commit 금지
+- `main`, `develop` 직접 push 금지
 - `develop` 머지는 write 권한 리뷰 승인 1개 이상 필요
 - `main`에는 `develop -> main` PR만 허용
 - 승격 브랜치 PR은 `merge` 방식 사용
-- 개인 작업 브랜치는 `develop_loop` 기준으로 생성
+- 개인 작업 브랜치는 `develop` 기준으로 생성
 
 ## 제목 규칙
 
