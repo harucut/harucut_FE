@@ -25,15 +25,15 @@
     "@imgly/background-removal": "1.7.0",
     "axios": "^1.16.0",
     "jose": "^6.2.3",
-    "konva": "^10.0.12",
-    "lucide-react": "^0.562.0",
+    "konva": "^10.3.0",
+    "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "react-konva": "^19.2.1",
     "use-image": "^1.1.4",
     "webm-muxer": "^5.1.4",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
