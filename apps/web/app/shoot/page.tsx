@@ -57,7 +57,6 @@ function ShootPageContent() {
     <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4">
         <PageHeader
-          title={accessMode === "guest" ? "비회원 촬영 체험" : undefined}
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}

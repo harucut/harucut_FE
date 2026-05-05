@@ -1,16 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { usePathname, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
-import { getGlobalThemeScrollPadding } from '@/constants/overlay-ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
-const EXTRA_TOP_PADDING = 24;
+const EXTRA_TOP_PADDING = 10;
 
 function useUiStyles() {
   const { colors, isDark } = useHarucutTheme();
@@ -22,11 +21,10 @@ export function AppScrollView({
   children,
   contentContainerStyle,
 }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
-  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const styles = useUiStyles();
   const { colors } = useHarucutTheme();
-  const bottomPadding = getGlobalThemeScrollPadding(pathname, insets.bottom);
+  const bottomPadding = Math.max(insets.bottom, HARUCUT_SPACING.screen);
 
   return (
     <View style={styles.screen}>
@@ -34,7 +32,7 @@ export function AppScrollView({
         colors={[colors.backgroundGradientStart, colors.backgroundGradientEnd]}
         end={{ x: 0.8, y: 1 }}
         start={{ x: 0.1, y: 0 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       <View pointerEvents="none" style={styles.backgroundOrbTop} />
       <View pointerEvents="none" style={styles.backgroundOrbRight} />
@@ -97,7 +95,7 @@ type PageHeaderProps = {
   onPressRight?: () => void;
   rightSlot?: ReactNode;
   showBrand?: boolean;
-  title: ReactNode;
+  title?: ReactNode;
 };
 
 export function PageHeader({
@@ -116,7 +114,7 @@ export function PageHeader({
       <View style={styles.headerRow}>
         <View style={{ flex: 1, gap: 4 }}>
           {showBrand ? <BrandMark compact href="/home" /> : null}
-          <Text style={styles.headerTitle}>{title}</Text>
+          {title ? <Text style={styles.headerTitle}>{title}</Text> : null}
         </View>
 
         {rightSlot ? (

@@ -6,7 +6,63 @@ export type MediaAsset = {
   id: string;
   kind: MediaKind;
   label: string;
+  mimeType?: string | null;
+  previewKind?: MediaKind;
   remoteMediaId?: number;
+  s3Key?: string;
+  uri: string;
+};
+
+export type ThemeComponentType = 'PHOTO' | 'STICKER' | 'TEXT';
+
+export type ThemeTextAlign = 'center' | 'left' | 'right';
+
+export type ThemeComponentStyle = {
+  color?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  opacity?: number;
+  role?: string;
+  textAlign?: ThemeTextAlign;
+};
+
+export type ThemeEditorComponent = {
+  height: number;
+  hidden?: boolean;
+  id: string;
+  locked?: boolean;
+  rotation: number;
+  scale: number;
+  source: string;
+  styleJson?: ThemeComponentStyle;
+  type: ThemeComponentType;
+  width: number;
+  x: number;
+  y: number;
+  zIndex: number;
+};
+
+export type ThemeBackground =
+  | {
+      type: 'COLOR';
+      value: string;
+    }
+  | {
+      key?: string;
+      opacity?: number;
+      type: 'IMAGE';
+    }
+  | {
+      autoPlay?: boolean;
+      key?: string;
+      loop?: boolean;
+      type: 'VIDEO';
+    };
+
+export type ThemeAsset = {
+  id: string;
+  label: string;
+  mimeType?: string | null;
   s3Key?: string;
   uri: string;
 };
@@ -14,8 +70,10 @@ export type MediaAsset = {
 export type SavedFrame = {
   id: string;
   accentColor: string;
+  background?: ThemeBackground;
   backgroundColor: string;
   caption: string;
+  components?: ThemeEditorComponent[];
   description: string;
   frameId: FrameId;
   previewKey?: string;
@@ -56,6 +114,13 @@ export type FrameCatalogItem = {
   shortLabel: string;
 };
 
+export const THEME_FRAME_CANVAS: Record<FrameId, { height: number; width: number }> = {
+  'classic-4': { height: 6000, width: 2000 },
+  'grid-4': { height: 6000, width: 4000 },
+  'polaroid-4': { height: 6000, width: 4000 },
+  'wide-4': { height: 4000, width: 6000 },
+};
+
 export const HERO_IMAGE_SOURCE = require('../assets/images/hero-image.png');
 
 export const QUICK_LINKS = [
@@ -82,18 +147,18 @@ export const BOTTOM_NAV_ITEMS = [
     label: '업로드',
   },
   {
+    href: '/theme',
+    icon: 'color-palette-outline',
+    iconActive: 'color-palette',
+    key: 'theme',
+    label: '꾸미기',
+  },
+  {
     href: '/history',
     icon: 'time-outline',
     iconActive: 'time',
     key: 'history',
     label: '기록',
-  },
-  {
-    href: '/mypage',
-    icon: 'person-outline',
-    iconActive: 'person',
-    key: 'mypage',
-    label: '내정보',
   },
 ] as const;
 

@@ -47,8 +47,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-4 max-w-xl text-sm leading-6 text-[color:var(--hc-muted)] sm:text-[15px] sm:leading-7 md:text-base">
-              촬영하고, 고르고, 저장하세요.
-              오늘 하루 기록을 가볍게 남길 수 있어요.
+              어디에서나 촬영하고, 꾸미고, 기록을 남겨보세요.
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap">
@@ -78,13 +77,9 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2">
-                <p className="text-sm font-semibold text-[color:var(--hc-text)]">
-                  찍는 순간보다
-                  <span className="block">다시 꺼내 볼 때 더 좋은 네 컷</span>
-                </p>
+              <div className="mt-4">
                 <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                  완성한 결과는 기록 페이지에서 다시 보고 공유할 수 있어요.
+                  완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.
                 </p>
               </div>
             </div>

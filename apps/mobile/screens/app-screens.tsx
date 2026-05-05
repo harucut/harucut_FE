@@ -6,7 +6,7 @@ import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
-import { FRAME_CATALOG, type HistoryItem } from '@/constants/harucut-data';
+import type { HistoryItem } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { changePassword, exitAccount, logout } from '@/lib/auth-api';
@@ -39,8 +39,12 @@ const THEME_OPTIONS: Array<{
   },
 ];
 
+function historyPreviewAsset(item: HistoryItem) {
+  return item.previewMedia[0] ?? null;
+}
+
 function historyPreviewUri(item: HistoryItem) {
-  return item.previewMedia[0]?.uri ?? '';
+  return historyPreviewAsset(item)?.uri ?? '';
 }
 
 function formatDate(value: string) {
@@ -132,20 +136,28 @@ export function HomeScreen() {
           <Text style={styles.bodyCopy}>촬영하거나 업로드해서 기록에 남겨두세요.</Text>
         </View>
 
-        <View style={styles.rowButtons}>
+        <View style={styles.heroActionGroup}>
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="camera-outline" size={16} />}
             label="바로 촬영 시작"
             onPress={() => push('/shoot')}
-            style={{ flex: 1 }}
           />
-          <ActionButton
-            icon={<Ionicons color={colors.text} name="cloud-upload-outline" size={16} />}
-            label="사진 업로드"
-            onPress={() => push('/upload')}
-            style={{ flex: 1 }}
-            variant="secondary"
-          />
+          <View style={styles.rowButtons}>
+            <ActionButton
+              icon={<Ionicons color={colors.text} name="cloud-upload-outline" size={16} />}
+              label="사진 업로드"
+              onPress={() => push('/upload')}
+              style={{ flex: 1 }}
+              variant="secondary"
+            />
+            <ActionButton
+              icon={<Ionicons color={colors.text} name="color-palette-outline" size={16} />}
+              label="꾸미기"
+              onPress={() => push('/theme')}
+              style={{ flex: 1 }}
+              variant="secondary"
+            />
+          </View>
         </View>
       </SurfaceCard>
 
@@ -167,12 +179,21 @@ export function HomeScreen() {
             ))
           ) : recentItems.length > 0 ? (
             recentItems.map((item) => {
-              const previewUri = historyPreviewUri(item);
+              const previewAsset = historyPreviewAsset(item);
+              const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
+              const previewUri = previewAsset?.uri ?? '';
 
               return (
                 <View key={item.id} style={styles.thumbCard}>
-                  {previewUri && item.kind === 'photo' ? (
-                    <Image source={{ uri: previewUri }} style={styles.thumbImage} />
+                  {previewUri && previewKind === 'image' ? (
+                    <>
+                      <Image source={{ uri: previewUri }} style={styles.thumbImage} />
+                      {item.kind === 'video' ? (
+                        <View style={styles.thumbVideoBadge}>
+                          <Ionicons color="#FFFFFF" name="play" size={18} />
+                        </View>
+                      ) : null}
+                    </>
                   ) : (
                     <View style={styles.thumbPlaceholder}>
                       <Ionicons
@@ -199,19 +220,6 @@ export function HomeScreen() {
             </View>
           )}
         </View>
-      </SurfaceCard>
-
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionEyebrow}>Frame picks</Text>
-        {FRAME_CATALOG.slice(0, 3).map((frame) => (
-          <Pressable key={frame.frameId} onPress={() => push('/shoot')} style={styles.linkCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.linkTitle}>{frame.name}</Text>
-              <Text style={styles.linkBody}>{frame.badge}</Text>
-            </View>
-            <Ionicons color={colors.muted} name="chevron-forward" size={16} />
-          </Pressable>
-        ))}
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
@@ -717,6 +725,9 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontWeight: '700',
       lineHeight: 33.6,
     },
+    heroActionGroup: {
+      gap: 10,
+    },
     historyCardRow: {
       flexDirection: 'row',
       gap: 12,
@@ -742,17 +753,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: colors.muted,
       fontSize: 11,
       lineHeight: 17,
-    },
-    linkCard: {
-      alignItems: 'center',
-      backgroundColor: tintedSurface,
-      borderColor: colors.border,
-      borderRadius: 18,
-      borderWidth: 1,
-      flexDirection: 'row',
-      gap: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
     },
     linkTitle: {
       color: colors.text,
@@ -896,6 +896,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 10,
       fontWeight: '700',
       textAlign: 'center',
+    },
+    thumbVideoBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.overlayStrong,
+      borderColor: 'rgba(255, 255, 255, 0.32)',
+      borderRadius: 22,
+      borderWidth: 1,
+      height: 44,
+      justifyContent: 'center',
+      left: '50%',
+      marginLeft: -22,
+      marginTop: -22,
+      position: 'absolute',
+      top: '50%',
+      width: 44,
     },
   });
 }

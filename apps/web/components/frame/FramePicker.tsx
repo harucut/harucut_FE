@@ -1,7 +1,6 @@
 "use client";
 
 import { Check, Circle } from "lucide-react";
-import { useState } from "react";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { FRAME_CATALOG } from "@/lib/frameCatalog";
@@ -26,91 +25,49 @@ export function FramePicker({
   onConfirm,
   confirmLabel = "선택한 프레임으로 진행하기",
 }: FramePickerProps) {
-  const [layoutMode, setLayoutMode] = useState<FramePickerLayoutMode>("grid");
-
   return (
     <>
       <section className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2">
-          <p className="text-[11px] font-semibold text-zinc-500">
-            프레임 보기 방식
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setLayoutMode("grid")}
-              className="hc-button-secondary rounded-full border px-3 py-1.5 text-[11px] font-semibold"
-            >
-              <span
-                className={
-                  layoutMode === "grid"
-                    ? "text-[color:var(--hc-primary)]"
-                    : "text-zinc-400"
-                }
-              >
-                2열 그리드
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLayoutMode("carousel")}
-              className="hc-button-secondary rounded-full border px-3 py-1.5 text-[11px] font-semibold"
-            >
-              <span
-                className={
-                  layoutMode === "carousel"
-                    ? "text-[color:var(--hc-primary)]"
-                    : "text-zinc-400"
-                }
-              >
-                가로 카드
-              </span>
-            </button>
-          </div>
+        <div className="grid grid-cols-2 gap-4 max-md:hidden">
+          {FRAME_CONFIGS.map((frame) => (
+            <FramePickerCard
+              key={frame.id}
+              frameId={frame.id}
+              frameName={frame.name}
+              selected={frame.id === selectedFrameId}
+              onClick={() => onChangeSelected(frame.id)}
+            />
+          ))}
         </div>
 
-        {layoutMode === "grid" ? (
-          <div className="grid grid-cols-2 gap-4">
-            {FRAME_CONFIGS.map((frame) => (
-              <FramePickerCard
-                key={frame.id}
-                frameId={frame.id}
-                frameName={frame.name}
-                selected={frame.id === selectedFrameId}
-                onClick={() => onChangeSelected(frame.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div>
-            <div
-              className="overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-              style={{
-                paddingInlineStart:
-                  "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
-                paddingInlineEnd:
-                  "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
-                scrollPaddingInlineStart:
-                  "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
-                scrollPaddingInlineEnd:
-                  "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
-              }}
-            >
-              <div className="flex snap-x snap-mandatory gap-4">
-                {FRAME_CONFIGS.map((frame) => (
-                  <FramePickerCard
-                    key={frame.id}
-                    frameId={frame.id}
-                    frameName={frame.name}
-                    selected={frame.id === selectedFrameId}
-                    onClick={() => onChangeSelected(frame.id)}
-                    mode="carousel"
-                  />
-                ))}
-              </div>
+        <div className="md:hidden">
+          <div
+            className="overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            style={{
+              paddingInlineStart:
+                "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
+              paddingInlineEnd:
+                "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
+              scrollPaddingInlineStart:
+                "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
+              scrollPaddingInlineEnd:
+                "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
+            }}
+          >
+            <div className="flex snap-x snap-mandatory gap-4">
+              {FRAME_CONFIGS.map((frame) => (
+                <FramePickerCard
+                  key={frame.id}
+                  frameId={frame.id}
+                  frameName={frame.name}
+                  selected={frame.id === selectedFrameId}
+                  onClick={() => onChangeSelected(frame.id)}
+                  mode="carousel"
+                />
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </section>
 
       <div className="mt-2 flex justify-end">
