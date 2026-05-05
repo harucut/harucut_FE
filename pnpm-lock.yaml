@@ -260,7 +260,7 @@ importers:
         version: 10.3.6(@testing-library/dom@10.4.0)(prettier@3.8.3)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       tailwindcss:
         specifier: ^4
-        version: 4.1.17
+        version: 4.2.4
       ts-jest:
         specifier: ^29.4.9
         version: 29.4.9(@babel/core@7.28.5)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.28.5))(esbuild@0.28.0)(jest-util@30.3.0)(jest@30.3.0(@types/node@20.19.25)(esbuild-register@3.6.0(esbuild@0.28.0)))(typescript@5.9.3)
@@ -6315,6 +6315,9 @@ packages:
   tailwindcss@4.1.17:
     resolution: {integrity: sha512-j9Ee2YjuQqYT9bbRTfTZht9W/ytp5H+jJpZKiYdP/bpnXARAuELt9ofP0lPnmHjbga7SNQIxdTAXCmtKVYjN+Q==}
 
+  tailwindcss@4.2.4:
+    resolution: {integrity: sha512-HhKppgO81FQof5m6TEnuBWCZGgfRAWbaeOaGT00KOy/Pf/j6oUihdvBpA7ltCeAvZpFhW3j0PTclkxsd4IXYDA==}
+
   tapable@2.3.0:
     resolution: {integrity: sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==}
     engines: {node: '>=6'}
@@ -8967,7 +8970,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -14110,6 +14115,8 @@ snapshots:
   tagged-tag@1.0.0: {}
 
   tailwindcss@4.1.17: {}
+
+  tailwindcss@4.2.4: {}
 
   tapable@2.3.0: {}
 
