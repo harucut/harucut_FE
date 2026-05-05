@@ -15,9 +15,9 @@
 
 ## 브랜치 규칙
 
-- 기준 브랜치: `develop_loop`
+- 기준 브랜치: `develop`
 - 작업 브랜치: `issue/<number>-<slug>`
-- `main`, `develop`, `develop_loop`에는 직접 commit/push하지 않는다
+- `main`, `develop`에는 직접 commit/push하지 않는다
 - 이슈와 PR 제목은 `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`, `perf:` 중 하나로 시작한다
 - `자동 생성`, `auto-generated` 같은 일반 제목은 금지한다
 

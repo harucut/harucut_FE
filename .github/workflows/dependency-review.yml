@@ -3,7 +3,6 @@ name: dependency-review
 on:
   pull_request:
     branches:
-      - develop_loop
       - develop
       - main
 

@@ -3,12 +3,11 @@ name: verify
 on:
   pull_request:
     branches:
-      - develop_loop
       - develop
       - main
   push:
     branches:
-      - develop_loop
+      - develop
 
 jobs:
   verify:
