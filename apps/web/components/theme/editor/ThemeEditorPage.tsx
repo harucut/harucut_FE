@@ -9,6 +9,7 @@ import { CanvasStage } from "@/components/theme/editor/canvas/CanvasStage";
 import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
+import { BrandMark } from "@/components/layout/BrandMark";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
 import {
   createFrame,
@@ -43,6 +44,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
   const hasNonColorBackground = background.type !== "COLOR";
 
@@ -101,10 +106,17 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [resetPhotos]);
 
+  const openSaveDialog = () => {
+    setDraftTitle(title);
+    setDraftDescription(description);
+    setSaveDialogError(null);
+    setIsSaveDialogOpen(true);
+  };
+
   const onDone = async () => {
     if (isSaving || isLoadingFrame) return;
     if (hasRemoteLoadFailure) {
-      alert("저장한 프레임을 불러오지 못했어 수정 저장을 막았습니다.");
+      setSaveDialogError("저장한 프레임을 불러오지 못해 수정 저장을 막았습니다.");
       return;
     }
 
@@ -117,7 +129,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     const themeJson = exportJson();
     if (!themeJson) return;
 
+    const nextTitle = draftTitle.trim() || "테마 프레임";
+    const nextDescription =
+      draftDescription.trim() ||
+      (remoteFrameId ? "프레임 꾸미기 수정" : "프레임 꾸미기 저장");
+
     setIsSaving(true);
+    setSaveDialogError(null);
     try {
       const previewBlob = await renderThemePreviewPng(themeJson);
       const previewFile = new File(
@@ -132,10 +150,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       });
 
       const body = toCreateFrameRequest(themeJson, {
-        title: title.trim() || "테마 프레임",
-        description:
-          description.trim() ||
-          (remoteFrameId ? "프레임 꾸미기 수정" : "프레임 꾸미기 저장"),
+        title: nextTitle,
+        description: nextDescription,
         previewKey,
       });
 
@@ -143,13 +159,18 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         await updateFrame(remoteFrameId, body);
       } else {
         await createFrame(body);
-        addDraft(themeJson, { name: title.trim() || "새 테마 프레임" });
+        addDraft(themeJson, { name: nextTitle });
       }
 
+      setTitle(nextTitle);
+      setDescription(nextDescription);
+      setIsSaveDialogOpen(false);
       router.push("/theme");
     } catch (error) {
       console.error(error);
-      alert(getUserFacingApiErrorMessage(error, "저장에 실패했습니다."));
+      setSaveDialogError(
+        getUserFacingApiErrorMessage(error, "저장에 실패했습니다."),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -178,12 +199,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
         <header className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
-            <span className="text-[11px] tracking-[0.16em] text-zinc-500">
-              하루컷
-            </span>
-            <h1 className="text-lg font-semibold tracking-tight">
-              {remoteFrameId ? "저장한 프레임 수정" : "프레임 꾸미기"}
-            </h1>
+            <BrandMark href="/home" compact className="opacity-80" />
             {loadError ? (
               <p className="mt-1 text-[11px] text-red-300">{loadError}</p>
             ) : null}
@@ -218,7 +234,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             </Link>
             <button
               type="button"
-              onClick={onDone}
+              onClick={openSaveDialog}
               disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
               className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
             >
@@ -226,31 +242,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             </button>
           </div>
         </header>
-
-        <section className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
-          <div>
-            <p className="text-sm font-semibold text-zinc-100">프레임 정보</p>
-            <p className="mt-1 text-[11px] text-zinc-500">
-              저장 시 백엔드에 함께 전달될 제목과 설명이에요.
-            </p>
-          </div>
-          <div className="grid gap-3">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-               className="h-10 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-sm text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
-              placeholder="프레임 이름을 입력해 주세요"
-              maxLength={40}
-            />
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-               className="min-h-24 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-sm text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
-              placeholder="프레임 설명을 입력해 주세요"
-              maxLength={160}
-            />
-          </div>
-        </section>
 
         {isLoadingFrame ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
@@ -327,6 +318,82 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           </div>
         </div>
       </div>
+
+      {isSaveDialogOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-5 sm:items-center">
+          <div
+            aria-modal="true"
+            aria-labelledby="theme-save-dialog-title"
+            role="dialog"
+            className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+          >
+            <div>
+              <h2
+                className="text-base font-semibold text-zinc-50"
+                id="theme-save-dialog-title"
+              >
+                {remoteFrameId ? "저장한 프레임 수정" : "프레임 저장"}
+              </h2>
+              <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                저장할 프레임 이름과 설명을 입력해 주세요.
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <label className="grid gap-1.5 text-[11px] font-semibold text-zinc-300">
+                프레임 이름
+                <input
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  className="h-10 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-sm font-normal text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+                  disabled={isSaving}
+                  maxLength={40}
+                  placeholder="프레임 이름을 입력해 주세요"
+                />
+              </label>
+              <label className="grid gap-1.5 text-[11px] font-semibold text-zinc-300">
+                프레임 설명
+                <textarea
+                  value={draftDescription}
+                  onChange={(e) => setDraftDescription(e.target.value)}
+                  className="min-h-24 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-sm font-normal text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+                  disabled={isSaving}
+                  maxLength={160}
+                  placeholder="프레임 설명을 입력해 주세요"
+                />
+              </label>
+              {saveDialogError ? (
+                <p className="text-[11px] leading-5 text-red-300">
+                  {saveDialogError}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isSaving) {
+                    setIsSaveDialogOpen(false);
+                  }
+                }}
+                disabled={isSaving}
+                className="rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDone()}
+                disabled={isSaving}
+                className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
+              >
+                {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

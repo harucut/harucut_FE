@@ -77,8 +77,7 @@ function ThemePageContent() {
 
         <SavedFramesSection
           title="저장한 프레임"
-          description="같은 프레임 타입으로 저장한 프레임만 불러와서 수정할 수 있어요."
-          emptyText="이 프레임 타입으로 저장한 프레임이 아직 없어요."
+          emptyText="저장한 프레임이 없어요."
           selectedFrameId={selectedFrameId}
           frames={frames}
           isLoading={isLoading}

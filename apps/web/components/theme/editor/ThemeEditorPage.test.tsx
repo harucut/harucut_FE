@@ -41,7 +41,7 @@ function themeEditorStoreMock(
 
 function getPrimarySaveButton(container: HTMLElement) {
   const button = Array.from(
-    container.querySelectorAll("button.rounded-full"),
+    container.querySelectorAll("header button.hc-button-primary"),
   ).find((node) => node.textContent?.includes("저장")) as HTMLButtonElement | undefined;
 
   if (!button) {
@@ -49,6 +49,24 @@ function getPrimarySaveButton(container: HTMLElement) {
   }
 
   return button;
+}
+
+function getDialogSaveButton(container: HTMLElement) {
+  const dialog = container.querySelector('[role="dialog"]');
+  const button = Array.from(
+    dialog?.querySelectorAll("button.hc-button-primary") ?? [],
+  ).find((node) => node.textContent?.includes("저장")) as HTMLButtonElement | undefined;
+
+  if (!button) {
+    throw new Error("dialog save button not found");
+  }
+
+  return button;
+}
+
+function confirmSave(container: HTMLElement) {
+  fireEvent.click(getPrimarySaveButton(container));
+  fireEvent.click(getDialogSaveButton(container));
 }
 
 jest.mock("next/navigation", () => ({
@@ -140,7 +158,7 @@ describe("ThemeEditorPage save flow", () => {
   it("adds a local draft when creating a new frame", async () => {
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
-    fireEvent.click(getPrimarySaveButton(container));
+    confirmSave(container);
 
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
@@ -161,7 +179,7 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockGetFrame).toHaveBeenCalledWith(7);
     });
 
-    fireEvent.click(getPrimarySaveButton(container));
+    confirmSave(container);
 
     await waitFor(() => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
@@ -200,10 +218,10 @@ describe("ThemeEditorPage save flow", () => {
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
-    fireEvent.click(getPrimarySaveButton(container));
+    confirmSave(container);
 
     await waitFor(() => {
-      expect(mockAlert).toHaveBeenCalledWith(
+      expect(container.textContent).toContain(
         "요금제의 월간 프레임 생성 횟수를 초과했습니다.",
       );
     });
