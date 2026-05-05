@@ -1,0 +1,51 @@
+diff --git a/android/src/main/java/expo/modules/kotlin/Promise.kt b/android/src/main/java/expo/modules/kotlin/Promise.kt
+index 9007db08602327a1c6219cddba34b17e93756c7c..3e10a1be464878fc90927ca0991281f4d4eca50d 100644
+--- a/android/src/main/java/expo/modules/kotlin/Promise.kt
++++ b/android/src/main/java/expo/modules/kotlin/Promise.kt
+@@ -40,17 +40,17 @@ fun Promise.toBridgePromise(): com.facebook.react.bridge.Promise {
+       resolveMethod(value)
+     }
+ 
+-    override fun reject(code: String, message: String?) {
+-      expoPromise.reject(code, message, null)
++    override fun reject(code: String?, message: String?) {
++      expoPromise.reject(code ?: unknownCode, message, null)
+     }
+ 
+-    override fun reject(code: String, throwable: Throwable?) {
+-      expoPromise.reject(code, null, throwable)
++    override fun reject(code: String?, throwable: Throwable?) {
++      expoPromise.reject(code ?: unknownCode, null, throwable)
+     }
+ 
+-    override fun reject(code: String, message: String?, throwable: Throwable?) {
+-      expoPromise.reject(code, message, throwable)
++    override fun reject(code: String?, message: String?, throwable: Throwable?) {
++      expoPromise.reject(code ?: unknownCode, message, throwable)
+     }
+ 
+     override fun reject(throwable: Throwable) {
+       expoPromise.reject(unknownCode, null, throwable)
+@@ -68,16 +68,16 @@ fun Promise.toBridgePromise(): com.facebook.react.bridge.Promise {
+       expoPromise.reject(unknownCode, null, throwable)
+     }
+ 
+-    override fun reject(code: String, userInfo: WritableMap) {
+-      expoPromise.reject(code, null, null)
++    override fun reject(code: String?, userInfo: WritableMap) {
++      expoPromise.reject(code ?: unknownCode, null, null)
+     }
+ 
+-    override fun reject(code: String, throwable: Throwable?, userInfo: WritableMap) {
+-      expoPromise.reject(code, null, throwable)
++    override fun reject(code: String?, throwable: Throwable?, userInfo: WritableMap) {
++      expoPromise.reject(code ?: unknownCode, null, throwable)
+     }
+ 
+-    override fun reject(code: String, message: String?, userInfo: WritableMap) {
+-      expoPromise.reject(code, message, null)
++    override fun reject(code: String?, message: String?, userInfo: WritableMap) {
++      expoPromise.reject(code ?: unknownCode, message, null)
+     }
+ 
+     override fun reject(code: String?, message: String?, throwable: Throwable?, userInfo: WritableMap?) {

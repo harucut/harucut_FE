@@ -70,9 +70,9 @@ export function SavedFramesSection({
       {isLoading ? (
         <p className="mt-3 text-[11px] text-zinc-500">불러오는 중...</p>
       ) : matchingFrames.length === 0 ? (
-        <p className="mt-3 text-[11px] text-zinc-500">{emptyText}</p>
+        <p className="mt-2 text-[11px] text-zinc-500">{emptyText}</p>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-3">
+        <div className="mt-2 grid grid-cols-1 gap-3">
           {matchingFrames.map((frame) => {
             const isSelected = selectedRemoteFrameId === frame.frameId;
             const previewFrameId = frameIdFromFrameType(frame.frameType);

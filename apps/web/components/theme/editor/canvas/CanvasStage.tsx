@@ -86,7 +86,7 @@ export function CanvasStage() {
           height={viewH}
           scaleX={scale}
           scaleY={scale}
-          className="rounded-2xl border border-zinc-800 bg-zinc-950"
+          className="block bg-transparent"
           onMouseDown={(e) => {
             if (e.target === e.target.getStage()) setActive(null);
           }}
@@ -214,16 +214,6 @@ export function CanvasStage() {
                 strokeWidth={6}
               />
             ))}
-
-            <Rect
-              x={0}
-              y={0}
-              width={frameW}
-              height={frameH}
-              cornerRadius={60}
-              stroke="rgba(255,255,255,0.18)"
-              strokeWidth={6}
-            />
           </Layer>
         </Stage>
       </div>

@@ -138,14 +138,12 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
   });
 
   // CanvasStage와 동일한 프레임/슬롯 라인 오버레이
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 6;
   layout.slots.forEach((slot) => {
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
     drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
     ctx.stroke();
   });
-  drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 60);
-  ctx.stroke();
 
   return toPngBlob(canvas);
 }

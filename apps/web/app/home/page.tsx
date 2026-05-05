@@ -5,18 +5,18 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Camera,
   ChevronRight,
-  History,
   Palette,
+  Play,
   Upload,
   User,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { FRAME_CATALOG } from "@/lib/frameCatalog";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import { listMyFrames } from "@/lib/remoteFrameApi";
 import type { UserMedia, RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
+import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
 
 function getRecentMoment(items: UserMedia[]) {
   if (items.length === 0) return "첫 기록을 남겨보세요";
@@ -31,16 +31,10 @@ function getRecentMoment(items: UserMedia[]) {
   });
 }
 
-const quickLinks = [
-  { label: "촬영", href: "/shoot", icon: Camera },
-  { label: "업로드", href: "/upload", icon: Upload },
-  { label: "꾸미기", href: "/theme", icon: Palette },
-  { label: "기록", href: "/history", icon: History },
-] as const;
-
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
+  const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
   const [savedFrames, setSavedFrames] = useState<RemoteFrame[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,6 +61,7 @@ export default function HomePage() {
 
         setUser(nextUser);
         setRecentMedia(sortedMedia.slice(0, 4));
+        setPreviewMedia(sortedMedia);
         setSavedFrames(nextFrames.slice(0, 1));
       } finally {
         if (!cancelled) {
@@ -86,7 +81,6 @@ export default function HomePage() {
     () => getRecentMoment(recentMedia),
     [recentMedia],
   );
-  const recommendedFrames = FRAME_CATALOG.slice(0, 3);
   const savedFrame = savedFrames[0] ?? null;
 
   return (
@@ -148,23 +142,15 @@ export default function HomePage() {
               <Upload className="h-4 w-4" />
               사진 업로드
             </Link>
+            <Link
+              href="/theme"
+              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
+            >
+              <Palette className="h-4 w-4" />
+              꾸미기
+            </Link>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {quickLinks.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="hc-surface-well hc-surface-well-hover flex items-center gap-2 rounded-2xl border px-3 py-3 text-sm text-zinc-200 transition"
-                >
-                  <Icon className="h-4 w-4 text-[color:var(--hc-primary)]" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -190,32 +176,48 @@ export default function HomePage() {
                   />
                 ))
               ) : recentMedia.length > 0 ? (
-                recentMedia.map((item) => (
-                  <div
-                    key={item.mediaId}
-                    className="hc-surface-well overflow-hidden rounded-3xl border"
-                  >
-                    {item.downloadUrl ? (
-                      item.mediaType === "VIDEO" ? (
-                        <video
-                          src={item.downloadUrl}
-                          className="aspect-[3/4] w-full object-cover"
-                          muted
-                          playsInline
-                        />
+                recentMedia.map((item) => {
+                  const preview = getUserMediaPreview(item, previewMedia);
+                  const isVideo = item.mediaType === "VIDEO";
+
+                  return (
+                    <div
+                      key={item.mediaId}
+                      className="hc-surface-well relative overflow-hidden rounded-3xl border"
+                    >
+                      {preview.url ? (
+                        preview.kind === "video" ? (
+                          <video
+                            src={preview.url}
+                            className="aspect-[3/4] w-full object-cover"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={preview.url}
+                            alt={getUserMediaTitle(item)}
+                            className="aspect-[3/4] w-full object-cover"
+                          />
+                        )
                       ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.downloadUrl}
-                          alt={item.displayName ?? "최근 기록"}
-                          className="aspect-[3/4] w-full object-cover"
-                        />
-                      )
-                    ) : (
-                      <div className="aspect-[3/4] bg-white/5" />
-                    )}
-                  </div>
-                ))
+                        <div className="aspect-[3/4] bg-white/5" />
+                      )}
+                      {isVideo ? (
+                        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
+                          <span className="grid h-10 w-10 place-items-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur">
+                            <Play
+                              aria-hidden="true"
+                              className="ml-0.5 h-4 w-4"
+                              fill="currentColor"
+                            />
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="hc-surface-well col-span-2 rounded-3xl border border-dashed p-5 text-center text-[11px] text-zinc-400">
                   아직 저장한 결과가 없어요.
@@ -225,31 +227,6 @@ export default function HomePage() {
           </section>
 
           <div className="flex flex-col gap-4">
-            <section className="hc-surface-card rounded-[28px] border p-5">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
-                Frame picks
-              </p>
-              <div className="mt-3 space-y-2">
-                {recommendedFrames.map((frame) => (
-                  <Link
-                    key={frame.id}
-                    href={`/shoot?frame=${frame.id}`}
-                    className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-100">
-                        {frame.name}
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        {frame.badge}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-zinc-500" />
-                  </Link>
-                ))}
-              </div>
-            </section>
-
             <section className="hc-surface-card rounded-[28px] border p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-zinc-100">

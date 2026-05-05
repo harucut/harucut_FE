@@ -6,7 +6,15 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "protobufjs"
-    ]
+    ],
+    "overrides": {
+      "@react-native/babel-plugin-codegen": "0.85.2",
+      "@react-native/babel-preset": "0.85.2",
+      "@react-native/codegen": "0.85.2"
+    },
+    "patchedDependencies": {
+      "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"
+    }
   },
   "scripts": {
     "dev": "pnpm dev:web",
@@ -29,8 +37,11 @@
     "format:write": "prettier --write . --ignore-unknown",
     "generate:stickers:web": "pnpm --dir apps/web generate:stickers",
     "dev:mobile": "pnpm --dir apps/mobile start",
+    "dev-client:mobile": "pnpm --dir apps/mobile dev-client",
     "android:mobile": "pnpm --dir apps/mobile android",
+    "android-dev:mobile": "pnpm --dir apps/mobile android:dev",
     "ios:mobile": "pnpm --dir apps/mobile ios",
+    "ios-dev:mobile": "pnpm --dir apps/mobile ios:dev",
     "web:mobile": "pnpm --dir apps/mobile web",
     "lint:mobile": "pnpm --dir apps/mobile lint",
     "typecheck:mobile": "pnpm --dir apps/mobile typecheck",

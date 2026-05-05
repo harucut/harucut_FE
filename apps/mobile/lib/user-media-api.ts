@@ -43,6 +43,30 @@ function getCreatedAt(item: UserMedia) {
   return createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toISOString() : '';
 }
 
+function normalizeUserMediaTitle(value: string) {
+  return value
+    .trim()
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase();
+}
+
+function findSameNamePhoto(item: UserMedia, items: UserMedia[]) {
+  if (item.mediaType !== 'VIDEO') {
+    return null;
+  }
+
+  const titleKey = normalizeUserMediaTitle(getUserMediaTitle(item));
+
+  return (
+    items.find((candidate) => {
+      if (candidate.mediaType !== 'PHOTO') return false;
+      if (candidate.mediaId === item.mediaId) return false;
+
+      return normalizeUserMediaTitle(getUserMediaTitle(candidate)) === titleKey;
+    }) ?? null
+  );
+}
+
 function mediaToAsset(item: UserMedia): MediaAsset | null {
   if (!item.downloadUrl) {
     return null;
@@ -52,13 +76,35 @@ function mediaToAsset(item: UserMedia): MediaAsset | null {
     id: `remote-media-${item.mediaId}`,
     kind: item.mediaType === 'VIDEO' ? 'video' : 'image',
     label: getUserMediaTitle(item),
+    previewKind: item.mediaType === 'VIDEO' ? 'video' : 'image',
     remoteMediaId: item.mediaId,
     uri: item.downloadUrl,
   };
 }
 
-export function mediaToHistoryItem(item: UserMedia, options: HistoryItemOptions = {}): HistoryItem {
-  const asset = mediaToAsset(item);
+function mediaToPreviewAsset(item: UserMedia, items: UserMedia[]) {
+  const matchedPhoto = findSameNamePhoto(item, items);
+
+  if (!matchedPhoto?.downloadUrl) {
+    return mediaToAsset(item);
+  }
+
+  return {
+    id: `remote-media-${item.mediaId}-preview`,
+    kind: 'video' as const,
+    label: getUserMediaTitle(item),
+    previewKind: 'image' as const,
+    remoteMediaId: item.mediaId,
+    uri: matchedPhoto.downloadUrl,
+  };
+}
+
+export function mediaToHistoryItem(
+  item: UserMedia,
+  options: HistoryItemOptions = {},
+  items: UserMedia[] = [item],
+): HistoryItem {
+  const asset = mediaToPreviewAsset(item, items);
   const title = options.title?.trim() || getUserMediaTitle(item);
 
   return {
@@ -99,7 +145,7 @@ export async function listRemoteHistoryItems() {
 
       return bTime - aTime;
     })
-    .map((item) => mediaToHistoryItem(item));
+    .map((item) => mediaToHistoryItem(item, {}, media));
 }
 
 export async function registerUserMedia(args: {
