@@ -1,5 +1,6 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ??
@@ -15,9 +16,7 @@ const authenticatedRoutes = [
   "/mypage",
 ] as const;
 
-async function enableAuthenticatedContext(
-  page: Parameters<typeof test>[0]["page"],
-) {
+async function enableAuthenticatedContext(page: Page) {
   await page.context().addCookies([
     {
       name: "accessToken",
@@ -27,9 +26,7 @@ async function enableAuthenticatedContext(
   ]);
 }
 
-async function expectNoAccessibilityViolations(
-  page: Parameters<typeof test>[0]["page"],
-) {
+async function expectNoAccessibilityViolations(page: Page) {
   await page.locator("body").waitFor({ state: "visible" });
 
   const accessibilityScanResults = await new AxeBuilder({ page })

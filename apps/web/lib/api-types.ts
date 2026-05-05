@@ -42,7 +42,7 @@ export type UserMedia = {
   s3Key: string;
   displayName?: string | null;
   displayname?: string | null;
-  downloadUrl?: string;
+  downloadUrl?: string | null;
   originalS3Key?: string;
   originalFileName?: string;
   transcodeJobId?: string;
