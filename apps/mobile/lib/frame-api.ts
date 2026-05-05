@@ -1,4 +1,10 @@
-import type { FrameId, SavedFrame } from '@/constants/harucut-data';
+import {
+  THEME_FRAME_CANVAS,
+  type FrameId,
+  type SavedFrame,
+  type ThemeBackground,
+  type ThemeEditorComponent,
+} from '@/constants/harucut-data';
 import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
 
 export type RemoteFrameType = 'CLASSIC' | 'GRID' | 'POLAROID' | 'WIDE';
@@ -59,20 +65,15 @@ type FrameCreateRequest = {
 
 type ThemeFrameDraft = {
   accentColor: string;
+  background?: ThemeBackground;
   backgroundColor: string;
   caption: string;
+  components?: ThemeEditorComponent[];
   description: string;
   frameId: FrameId;
   previewKey: string;
   stickers: string[];
   title: string;
-};
-
-const FRAME_CANVAS: Record<FrameId, { height: number; width: number }> = {
-  'classic-4': { height: 1920, width: 1080 },
-  'grid-4': { height: 1600, width: 1440 },
-  'polaroid-4': { height: 1760, width: 1440 },
-  'wide-4': { height: 1640, width: 1440 },
 };
 
 function frameTypeFromFrameId(frameId: FrameId): RemoteFrameType {
@@ -124,54 +125,140 @@ function stringStyleValue(style: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : null;
 }
 
+function toRequestBackground(draft: ThemeFrameDraft): RemoteFrameBackground {
+  const background = draft.background;
+
+  if (!background || background.type === 'COLOR') {
+    return {
+      type: 'COLOR',
+      value: normalizeHexColor(background?.value ?? draft.backgroundColor),
+    };
+  }
+
+  if (background.type === 'IMAGE') {
+    return {
+      key: background.key,
+      opacity: background.opacity,
+      type: 'IMAGE',
+    };
+  }
+
+  return {
+    autoPlay: background.autoPlay,
+    key: background.key,
+    loop: background.loop,
+    type: 'VIDEO',
+  };
+}
+
+function toSavedBackground(background?: RemoteFrameBackground): ThemeBackground | undefined {
+  if (!background) return undefined;
+
+  if (background.type === 'COLOR') {
+    return {
+      type: 'COLOR',
+      value: normalizeHexColor(background.value),
+    };
+  }
+
+  if (background.type === 'IMAGE') {
+    return {
+      key: background.key,
+      opacity: background.opacity,
+      type: 'IMAGE',
+    };
+  }
+
+  return {
+    autoPlay: background.autoPlay,
+    key: background.key,
+    loop: background.loop,
+    type: 'VIDEO',
+  };
+}
+
+function toRequestComponent(component: ThemeEditorComponent): RemoteFrameComponent {
+  return {
+    height: component.height,
+    id: component.id,
+    rotation: component.rotation ?? 0,
+    scale: component.scale ?? 1,
+    source: component.source,
+    styleJson: component.styleJson ?? {},
+    type: component.type,
+    width: component.width,
+    x: component.x,
+    y: component.y,
+    zIndex: component.zIndex,
+  };
+}
+
+function toSavedComponent(component: RemoteFrameComponent, index: number): ThemeEditorComponent {
+  return {
+    height: component.height,
+    hidden: false,
+    id: String(component.id ?? `${component.type}-${index}`),
+    locked: false,
+    rotation: component.rotation ?? 0,
+    scale: component.scale ?? 1,
+    source: component.source || component.key || '',
+    styleJson: componentStyle(component),
+    type: component.type,
+    width: component.width,
+    x: component.x,
+    y: component.y,
+    zIndex: component.zIndex,
+  };
+}
+
 function toCreateFrameRequest(draft: ThemeFrameDraft): FrameCreateRequest {
-  const canvas = FRAME_CANVAS[draft.frameId];
+  const canvas = THEME_FRAME_CANVAS[draft.frameId];
   const caption = draft.caption.trim();
   const stickers = draft.stickers.filter((item) => item.trim());
-  const components: RemoteFrameComponent[] = [
-    ...(caption
-      ? [
-          {
-            height: 120,
-            source: caption,
+  const components: RemoteFrameComponent[] =
+    draft.components && draft.components.length > 0
+      ? draft.components.map(toRequestComponent)
+      : [
+          ...(caption
+            ? [
+                {
+                  height: 120,
+                  source: caption,
+                  styleJson: {
+                    accentColor: draft.accentColor,
+                    color: draft.accentColor,
+                    role: 'caption',
+                  },
+                  rotation: 0,
+                  scale: 1,
+                  type: 'TEXT' as const,
+                  width: canvas.width * 0.8,
+                  x: canvas.width * 0.1,
+                  y: canvas.height * 0.86,
+                  zIndex: 1,
+                },
+              ]
+            : []),
+          ...stickers.map((sticker, index) => ({
+            height: 96,
+            source: sticker,
             styleJson: {
               accentColor: draft.accentColor,
               color: draft.accentColor,
-              role: 'caption',
+              role: 'sticker',
             },
             rotation: 0,
             scale: 1,
             type: 'TEXT' as const,
-            width: canvas.width * 0.8,
-            x: canvas.width * 0.1,
-            y: canvas.height * 0.86,
-            zIndex: 1,
-          },
-        ]
-      : []),
-    ...stickers.map((sticker, index) => ({
-      height: 96,
-      source: sticker,
-      styleJson: {
-        accentColor: draft.accentColor,
-        color: draft.accentColor,
-        role: 'sticker',
-      },
-      rotation: 0,
-      scale: 1,
-      type: 'TEXT' as const,
-      width: 96,
-      x: 120 + index * 112,
-      y: 120,
-      zIndex: index + 2,
-    })),
-  ];
+            width: 96,
+            x: 120 + index * 112,
+            y: 120,
+            zIndex: index + 2,
+          })),
+        ];
 
   return {
-    background: {
-      type: 'COLOR',
-      value: normalizeHexColor(draft.backgroundColor),
-    },
+    background: toRequestBackground(draft),
     canvasHeight: canvas.height,
     canvasWidth: canvas.width,
     components,
@@ -184,6 +271,7 @@ function toCreateFrameRequest(draft: ThemeFrameDraft): FrameCreateRequest {
 
 function toSavedFrame(frame: RemoteFrame): SavedFrame {
   const components = frame.components ?? [];
+  const savedComponents = components.map(toSavedComponent);
   const captionComponent = components.find(
     (component) => component.type === 'TEXT' && componentStyle(component).role === 'caption',
   );
@@ -202,8 +290,10 @@ function toSavedFrame(frame: RemoteFrame): SavedFrame {
 
   return {
     accentColor,
+    background: toSavedBackground(frame.background),
     backgroundColor,
     caption: captionComponent?.source ?? '',
+    components: savedComponents,
     description: frame.description ?? '',
     frameId: frameIdFromFrameType(frame.frameType),
     id: `remote-frame-${frame.frameId}`,

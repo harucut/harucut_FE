@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   Image,
   Pressable,
@@ -20,9 +21,17 @@ import {
   type FrameId,
   type MediaAsset,
   type SavedFrame,
+  type ThemeEditorComponent,
 } from '@/constants/harucut-data';
 import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
+
+type ThemeComponentTransform = {
+  deltaX?: number;
+  deltaY?: number;
+  rotationDelta?: number;
+  scaleMultiplier?: number;
+};
 
 type FrameSlot = {
   height: number;
@@ -113,24 +122,35 @@ function useFrameStyles() {
 
 export function FramePreview({
   accentColor,
+  activeComponentId,
   backgroundColor,
   caption,
+  components = [],
+  editorMode = false,
   frameId,
   media = [],
+  onSelectComponent,
+  onTransformComponent,
   slotColor,
   style,
 }: {
   accentColor?: string;
+  activeComponentId?: string | null;
   backgroundColor?: string;
   caption?: string;
+  components?: ThemeEditorComponent[];
+  editorMode?: boolean;
   frameId: FrameId;
   media?: MediaAsset[];
+  onSelectComponent?: (id: string | null) => void;
+  onTransformComponent?: (id: string, transform: ThemeComponentTransform) => void;
   slotColor?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const { colors, isDark } = useHarucutTheme();
   const styles = useFrameStyles();
   const layout = FRAME_LAYOUTS[frameId];
+  const [previewSize, setPreviewSize] = useState({ height: 0, width: 0 });
   const pickerPreviewColors = isDark
     ? FRAME_PICKER_PREVIEW_COLORS.dark
     : FRAME_PICKER_PREVIEW_COLORS.light;
@@ -150,7 +170,11 @@ export function FramePreview({
           backgroundColor: resolvedBackground,
         },
         style,
-      ]}>
+      ]}
+      onLayout={(event) => {
+        const { height, width } = event.nativeEvent.layout;
+        setPreviewSize({ height, width });
+      }}>
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
         const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
@@ -191,9 +215,181 @@ export function FramePreview({
           </View>
         );
       })}
-      {caption ? <Text style={[styles.caption, { color: resolvedAccent }]}>{caption}</Text> : null}
+      {components
+        .filter((component) => !component.hidden)
+        .sort((a, b) => a.zIndex - b.zIndex)
+        .map((component) => (
+          <ThemePreviewComponent
+            key={component.id}
+            active={activeComponentId === component.id}
+            component={component}
+            editorMode={editorMode}
+            layout={layout}
+            onSelect={onSelectComponent}
+            onTransform={onTransformComponent}
+            previewHeight={previewSize.height}
+            previewWidth={previewSize.width}
+            styles={styles}
+          />
+        ))}
+      {caption && components.length === 0 ? (
+        <Text style={[styles.caption, { color: resolvedAccent }]}>{caption}</Text>
+      ) : null}
     </View>
   );
+}
+
+function isImageSource(source: string) {
+  return /^(https?:|file:|content:|data:|blob:)/.test(source);
+}
+
+function componentOpacity(component: ThemeEditorComponent) {
+  const opacity = component.styleJson?.opacity;
+  return typeof opacity === 'number' && Number.isFinite(opacity)
+    ? Math.min(1, Math.max(0, opacity))
+    : 1;
+}
+
+function componentFontSize(
+  component: ThemeEditorComponent,
+  layout: FrameLayout,
+  previewWidth: number,
+) {
+  const baseSize = component.styleJson?.fontSize ?? 128;
+  if (previewWidth <= 0) return 12;
+
+  return Math.max(8, (baseSize / layout.totalWidth) * previewWidth);
+}
+
+function ThemePreviewComponent({
+  active,
+  component,
+  editorMode,
+  layout,
+  onSelect,
+  onTransform,
+  previewHeight,
+  previewWidth,
+  styles,
+}: {
+  active: boolean;
+  component: ThemeEditorComponent;
+  editorMode: boolean;
+  layout: FrameLayout;
+  onSelect?: (id: string | null) => void;
+  onTransform?: (id: string, transform: ThemeComponentTransform) => void;
+  previewHeight: number;
+  previewWidth: number;
+  styles: ReturnType<typeof useFrameStyles>;
+}) {
+  const opacity = componentOpacity(component);
+  const canTransform = editorMode && !component.locked && Boolean(onTransform);
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .minDistance(1)
+        .averageTouches(true)
+        .onChange((event) => {
+          if (!canTransform || previewWidth <= 0 || previewHeight <= 0) return;
+
+          onTransform?.(component.id, {
+            deltaX: (event.changeX / previewWidth) * layout.totalWidth,
+            deltaY: (event.changeY / previewHeight) * layout.totalHeight,
+          });
+        }),
+    [canTransform, component.id, layout.totalHeight, layout.totalWidth, onTransform, previewHeight, previewWidth],
+  );
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .runOnJS(true)
+        .onChange((event) => {
+          if (!canTransform) return;
+
+          onTransform?.(component.id, {
+            scaleMultiplier: event.scaleChange,
+          });
+        }),
+    [canTransform, component.id, onTransform],
+  );
+  const rotationGesture = useMemo(
+    () =>
+      Gesture.Rotation()
+        .runOnJS(true)
+        .onChange((event) => {
+          if (!canTransform) return;
+
+          onTransform?.(component.id, {
+            rotationDelta: (event.rotationChange * 180) / Math.PI,
+          });
+        }),
+    [canTransform, component.id, onTransform],
+  );
+  const transformGesture = useMemo(
+    () => Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture),
+    [panGesture, pinchGesture, rotationGesture],
+  );
+  const commonStyle: StyleProp<ViewStyle> = [
+    styles.themeComponent,
+    {
+      height: toPercent(component.height, layout.totalHeight),
+      left: toPercent(component.x, layout.totalWidth),
+      opacity,
+      top: toPercent(component.y, layout.totalHeight),
+      transform: [
+        { rotate: `${component.rotation ?? 0}deg` },
+        { scale: component.scale ?? 1 },
+      ],
+      width: toPercent(component.width, layout.totalWidth),
+      zIndex: component.zIndex,
+    },
+    active ? styles.themeComponentActive : null,
+  ];
+
+  const content =
+    component.type === 'TEXT' || !isImageSource(component.source) ? (
+      <Text
+        adjustsFontSizeToFit
+        minimumFontScale={0.5}
+        style={[
+          styles.themeText,
+          {
+            color: component.styleJson?.color ?? '#FFFFFF',
+            fontSize: componentFontSize(component, layout, previewWidth),
+            textAlign: component.styleJson?.textAlign ?? 'center',
+          },
+        ]}>
+        {component.source}
+      </Text>
+    ) : (
+      <Image
+        accessibilityLabel={component.type.toLowerCase()}
+        resizeMode={component.type === 'STICKER' ? 'contain' : 'cover'}
+        source={{ uri: component.source }}
+        style={styles.themeImage}
+      />
+    );
+
+  if (!editorMode || !onSelect) {
+    return <View pointerEvents="none" style={commonStyle}>{content}</View>;
+  }
+
+  const interactive = (
+    <Pressable
+      accessibilityLabel={`${component.type} layer`}
+      accessibilityRole="button"
+      onPress={() => onSelect(component.id)}
+      style={commonStyle}>
+      {content}
+    </Pressable>
+  );
+
+  if (!canTransform) {
+    return interactive;
+  }
+
+  return <GestureDetector gesture={transformGesture}>{interactive}</GestureDetector>;
 }
 
 export function FramePickerSection({
@@ -430,6 +626,7 @@ export function SavedFramesPanel({
                       accentColor={frame.accentColor}
                       backgroundColor={frame.backgroundColor}
                       caption={frame.caption}
+                      components={frame.components}
                       frameId={frame.frameId}
                     />
                   </View>
@@ -669,6 +866,26 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     slotVideoPlaceholder: {
       backgroundColor: colors.primarySoft,
       height: '100%',
+      width: '100%',
+    },
+    themeComponent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      position: 'absolute',
+    },
+    themeComponentActive: {
+      borderColor: colors.primary,
+      borderRadius: 6,
+      borderWidth: 1,
+    },
+    themeImage: {
+      height: '100%',
+      width: '100%',
+    },
+    themeText: {
+      fontWeight: '700',
+      includeFontPadding: false,
       width: '100%',
     },
     videoBadge: {
