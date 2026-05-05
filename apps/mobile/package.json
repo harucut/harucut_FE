@@ -36,7 +36,7 @@
     "expo-system-ui": "~55.0.16",
     "expo-web-browser": "~55.0.14",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react-dom": "19.2.5",
     "react-native": "0.85.2",
     "react-native-gesture-handler": "~2.31.1",
     "react-native-reanimated": "~4.3.0",
