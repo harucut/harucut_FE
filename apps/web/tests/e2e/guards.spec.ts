@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ??
   `http://localhost:${Number(process.env.PORT ?? 3000)}`;
 
-async function enableAuthenticatedContext(page: Parameters<typeof test>[0]["page"]) {
+async function enableAuthenticatedContext(page: Page) {
   await page.context().addCookies([
     {
       name: "accessToken",
