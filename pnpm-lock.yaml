@@ -165,8 +165,8 @@ importers:
         specifier: ^6.2.3
         version: 6.2.3
       konva:
-        specifier: ^10.0.12
-        version: 10.0.12
+        specifier: ^10.3.0
+        version: 10.3.0
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.5)
@@ -181,7 +181,7 @@ importers:
         version: 19.2.5(react@19.2.5)
       react-konva:
         specifier: ^19.2.1
-        version: 19.2.1(@types/react@19.2.14)(konva@10.0.12)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 19.2.1(@types/react@19.2.14)(konva@10.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       use-image:
         specifier: ^1.1.4
         version: 1.1.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -4805,8 +4805,8 @@ packages:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
 
-  konva@10.0.12:
-    resolution: {integrity: sha512-DHmkeG5FbW6tLCkbMQTi1ihWycfzljrn0V7umUUuewxx7aoINcI71ksgBX9fTPNXhlsK4/JoMgKwI/iCde+BRw==}
+  konva@10.3.0:
+    resolution: {integrity: sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==}
 
   lan-network@0.2.1:
     resolution: {integrity: sha512-ONPnazC96VKDntab9j9JKwIWhZ4ZUceB4A9Epu4Ssg0hYFmtHZSeQ+n15nIwTFmcBUKtExOer8WTJ4GF9MO64A==}
@@ -12187,7 +12187,7 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  konva@10.0.12: {}
+  konva@10.3.0: {}
 
   lan-network@0.2.1: {}
 
@@ -13223,11 +13223,11 @@ snapshots:
 
   react-is@19.2.5: {}
 
-  react-konva@19.2.1(@types/react@19.2.14)(konva@10.0.12)(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
+  react-konva@19.2.1(@types/react@19.2.14)(konva@10.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
       '@types/react-reconciler': 0.32.3(@types/react@19.2.14)
       its-fine: 2.0.0(@types/react@19.2.14)(react@19.2.5)
-      konva: 10.0.12
+      konva: 10.3.0
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
       react-reconciler: 0.33.0(react@19.2.5)
