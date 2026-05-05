@@ -8,7 +8,63 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
+    groups:
+      react-stack:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - "minor"
+          - "patch"
+      expo-runtime:
+        dependency-type: "production"
+        patterns:
+          - "expo"
+          - "expo-*"
+          - "@expo/*"
+          - "react-native"
+          - "react-native-*"
+        update-types:
+          - "minor"
+          - "patch"
+      web-test-tooling:
+        dependency-type: "development"
+        patterns:
+          - "@axe-core/*"
+          - "@playwright/*"
+          - "playwright"
+          - "jest"
+          - "jest-*"
+          - "jest-axe"
+          - "ts-jest"
+          - "@testing-library/*"
+        update-types:
+          - "minor"
+          - "patch"
+      web-style-tooling:
+        dependency-type: "development"
+        patterns:
+          - "@tailwindcss/*"
+          - "tailwindcss"
+        update-types:
+          - "minor"
+          - "patch"
+      lint-tooling:
+        dependency-type: "development"
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@typescript-eslint/*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - "dependencies"
       - "web"
