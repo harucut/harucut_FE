@@ -26,6 +26,8 @@ export function useCaptureFlow() {
     useShootSession();
 
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isCheckingCameraPermission, setIsCheckingCameraPermission] =
+    useState(true);
   const [shooting, setShooting] = useState<ShootingState>({
     isShooting: false,
     countdown: null,
@@ -38,6 +40,7 @@ export function useCaptureFlow() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const shutterAudioRef = useRef<HTMLAudioElement | null>(null);
+  const autoStartAttemptedRef = useRef(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -113,6 +116,43 @@ export function useCaptureFlow() {
       });
     }
   }, [cameraFacingMode, setNotice, stopStream]);
+
+  useEffect(() => {
+    if (!frameId || isCameraReady || autoStartAttemptedRef.current) {
+      setIsCheckingCameraPermission(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const startIfCameraAlreadyAllowed = async () => {
+      if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+        if (!cancelled) setIsCheckingCameraPermission(false);
+        return;
+      }
+
+      try {
+        const permission = await navigator.permissions.query({
+          name: "camera" as PermissionName,
+        });
+
+        if (!cancelled && permission.state === "granted") {
+          autoStartAttemptedRef.current = true;
+          await startCamera();
+        }
+      } catch {
+        // 권한 API가 카메라 조회를 지원하지 않는 브라우저에서는 수동 버튼 흐름 유지
+      } finally {
+        if (!cancelled) setIsCheckingCameraPermission(false);
+      }
+    };
+
+    void startIfCameraAlreadyAllowed();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [frameId, isCameraReady, startCamera]);
 
   // 언마운트 시 정리
   useEffect(() => {
@@ -306,6 +346,7 @@ export function useCaptureFlow() {
     shutterAudioRef,
 
     isCameraReady,
+    isCheckingCameraPermission,
     isShooting: shooting.isShooting,
     countdown: shooting.countdown,
     shotCount,

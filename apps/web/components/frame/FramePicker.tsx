@@ -13,9 +13,10 @@ const PREVIEW_BORDER_COLOR = "var(--hc-frame-picker-preview-outer)";
 const PREVIEW_SLOT_COLOR = "var(--hc-frame-picker-preview-inner)";
 
 type FramePickerProps = {
-  selectedFrameId: FrameId;
+  selectedFrameId: FrameId | null;
   onChangeSelected: (id: FrameId) => void;
   onConfirm: () => void;
+  confirmDisabled?: boolean;
   confirmLabel?: string;
 };
 
@@ -23,6 +24,7 @@ export function FramePicker({
   selectedFrameId,
   onChangeSelected,
   onConfirm,
+  confirmDisabled = false,
   confirmLabel = "선택한 프레임으로 진행하기",
 }: FramePickerProps) {
   return (
@@ -73,8 +75,9 @@ export function FramePicker({
       <div className="mt-2 flex justify-end">
         <button
           type="button"
+          disabled={confirmDisabled}
           onClick={onConfirm}
-          className="hc-button-primary rounded-full px-5 py-2.5 text-xs font-semibold"
+          className="hc-button-primary rounded-full px-5 py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
         >
           {confirmLabel}
         </button>

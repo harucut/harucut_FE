@@ -51,7 +51,7 @@ type NoticeState = {
 
 type ShootSession = {
   borderColor: string;
-  frameId: FrameId;
+  frameId: FrameId | null;
   includeVideo: boolean;
   persistedHistoryId: string | null;
   selectedSavedFrameId: string | null;
@@ -131,7 +131,7 @@ type HarucutStore = {
   selectSavedFrameForShoot: (frame: SavedFrame) => void;
   selectSavedFrameForTheme: (frame: SavedFrame) => void;
   selectSavedFrameForUpload: (frame: SavedFrame) => void;
-  setShootFrame: (frameId: FrameId) => void;
+  setShootFrame: (frameId: FrameId | null) => void;
   setShootOption: (key: keyof Pick<ShootSession, 'borderColor' | 'includeVideo' | 'tone'>, value: string | boolean) => void;
   setThemeAccentColor: (value: string) => void;
   setThemeActiveComponent: (id: string | null) => void;
@@ -236,7 +236,7 @@ const frameNames: Record<FrameId, string> = {
 function defaultShootSession(): ShootSession {
   return {
     borderColor: defaultBorderColor,
-    frameId: 'classic-4',
+    frameId: null,
     includeVideo: false,
     persistedHistoryId: null,
     selectedSavedFrameId: null,
@@ -464,9 +464,15 @@ export const useHarucutStore = create<HarucutStore>((set, get) => ({
       throw new Error('저장할 결과 이미지를 만들지 못했어요.');
     }
 
+    if (!state.shoot.frameId) {
+      throw new Error('촬영할 프레임을 선택해 주세요.');
+    }
+
+    const frameId = state.shoot.frameId;
+
     const nextItem = await uploadFourcutResult({
-      displayName: `${frameName(state.shoot.frameId)} 촬영 결과`,
-      frameId: state.shoot.frameId,
+      displayName: `${frameName(frameId)} 촬영 결과`,
+      frameId,
       source: 'shoot',
       uri: previewUri,
     });

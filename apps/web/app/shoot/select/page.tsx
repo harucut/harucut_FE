@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { StepProgress } from "@/components/layout/StepProgress";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -75,16 +76,11 @@ export default function ShootSelectPage() {
     <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <PageHeader
-          title="사진 선택"
           backHref="/shoot/capture"
           backLabel="다시 촬영"
           brandHref={guestMode ? "/shoot" : "/home"}
-          description={
-            guestMode
-              ? "마음에 드는 사진 4장을 고르고 다운로드용 이미지를 준비해 보세요."
-              : "마음에 드는 사진 4장을 고르고 출력 옵션을 정해 주세요."
-          }
         />
+        <StepProgress current={3} total={4} label="사진 선택" />
 
         <FrameSelectPanel
           frameId={frameId ?? null}
@@ -92,6 +88,7 @@ export default function ShootSelectPage() {
           selectedIndexes={selectedIndexes}
           maxSelect={4}
           emptyStateText="촬영한 사진이 없어요. 다시 촬영해 주세요."
+          incompleteButtonLabel="4장을 골라주세요"
           nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}
           onReset={reset}

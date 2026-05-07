@@ -401,7 +401,7 @@ export function FramePickerSection({
   confirmLabel: string;
   onConfirm: () => void;
   onSelect: (frameId: FrameId) => void;
-  selectedFrameId: FrameId;
+  selectedFrameId: FrameId | null;
 }) {
   const styles = useFrameStyles();
   const { width } = useWindowDimensions();
@@ -473,7 +473,7 @@ export function FramePickerSection({
           </View>
         </View>
       )}
-      <ActionButton label={confirmLabel} onPress={onConfirm} />
+      <ActionButton disabled={!selectedFrameId} label={confirmLabel} onPress={onConfirm} />
     </>
   );
 }
@@ -583,13 +583,15 @@ export function SavedFramesPanel({
   onAction?: (frame: SavedFrame) => void;
   onRefresh: () => void;
   onSelect: (frame: SavedFrame) => void;
-  selectedFrameId: FrameId;
+  selectedFrameId: FrameId | null;
   selectedSavedFrameId: string | null;
   title: string;
 }) {
   const { colors } = useHarucutTheme();
   const styles = useFrameStyles();
-  const matchingFrames = frames.filter((frame) => frame.frameId === selectedFrameId);
+  const matchingFrames = selectedFrameId
+    ? frames.filter((frame) => frame.frameId === selectedFrameId)
+    : frames;
 
   return (
     <SurfaceCard>
