@@ -22,8 +22,8 @@ function ShootPageContent() {
   const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
-  const [manualSelectedFrameId, setManualSelectedFrameId] = useState<FrameId>(
-    queriedFrameId ?? "classic-4",
+  const [manualSelectedFrameId, setManualSelectedFrameId] = useState<FrameId | null>(
+    queriedFrameId ?? null,
   );
   const [selectedRemoteFrameId, setSelectedRemoteFrameId] = useState<number | null>(
     Number.isFinite(queriedRemoteFrameId) && queriedRemoteFrameId > 0
@@ -48,6 +48,8 @@ function ShootPageContent() {
     : manualSelectedFrameId;
 
   const handleConfirmFrame = () => {
+    if (!selectedFrameId) return;
+
     setFrameId(selectedFrameId);
     setRemoteFrameId(selectedRemoteFrameId);
     router.push("/shoot/capture");
@@ -60,11 +62,6 @@ function ShootPageContent() {
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
-          description={
-            accessMode === "guest"
-              ? "비회원 체험에서는 촬영과 이미지 다운로드만 할 수 있어요."
-              : "촬영할 프레임을 먼저 골라 주세요."
-          }
         />
         <StepProgress current={1} total={4} label="프레임 선택" />
 
@@ -75,7 +72,8 @@ function ShootPageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmFrame}
-          confirmLabel="촬영 시작하기"
+          confirmDisabled={!selectedFrameId}
+          confirmLabel={selectedFrameId ? "촬영 시작하기" : "촬영할 프레임을 선택해주세요"}
         />
 
         {accessMode === "member" ? (
