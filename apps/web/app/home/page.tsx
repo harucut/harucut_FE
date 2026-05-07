@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Camera,
   ChevronRight,
@@ -18,17 +18,49 @@ import type { UserMedia, RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
 
-function getRecentMoment(items: UserMedia[]) {
-  if (items.length === 0) return "첫 기록을 남겨보세요";
-
-  const latest = items[0].createdAt ? new Date(items[0].createdAt) : null;
-  if (!latest || Number.isNaN(latest.getTime())) return "최근 기록 확인";
-
-  return latest.toLocaleDateString("ko-KR", {
+function formatCurrentDate() {
+  return new Date().toLocaleDateString("ko-KR", {
     month: "long",
     day: "numeric",
     weekday: "short",
   });
+}
+
+function getNextDateRefreshDelay() {
+  const now = new Date();
+  const nextMidnight = new Date(now);
+  nextMidnight.setHours(24, 0, 1, 0);
+
+  return Math.max(nextMidnight.getTime() - now.getTime(), 1000);
+}
+
+function useCurrentDateLabel() {
+  const [dateLabel, setDateLabel] = useState(formatCurrentDate);
+
+  useEffect(() => {
+    let timeoutId: number;
+
+    const refresh = () => {
+      setDateLabel(formatCurrentDate());
+      timeoutId = window.setTimeout(refresh, getNextDateRefreshDelay());
+    };
+
+    const refreshOnVisible = () => {
+      if (!document.hidden) {
+        setDateLabel(formatCurrentDate());
+      }
+    };
+
+    timeoutId = window.setTimeout(refresh, getNextDateRefreshDelay());
+    document.addEventListener("visibilitychange", refreshOnVisible);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
+    };
+  }, []);
+
+  return dateLabel;
 }
 
 export default function HomePage() {
@@ -77,10 +109,7 @@ export default function HomePage() {
     };
   }, []);
 
-  const recentMoment = useMemo(
-    () => getRecentMoment(recentMedia),
-    [recentMedia],
-  );
+  const currentDateLabel = useCurrentDateLabel();
   const savedFrame = savedFrames[0] ?? null;
 
   return (
@@ -106,7 +135,7 @@ export default function HomePage() {
 
         <section className="hc-surface-card-xl rounded-[28px] border p-5 backdrop-blur sm:p-6">
           <div className="hc-accent-chip inline-flex rounded-full border px-3 py-1 text-[11px]">
-            {recentMoment}
+            {currentDateLabel}
           </div>
 
           <div className="mt-4 space-y-3">

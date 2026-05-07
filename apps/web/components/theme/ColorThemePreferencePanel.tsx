@@ -8,7 +8,6 @@ import {
   persistColorThemePreference,
   readStoredColorThemePreference,
   subscribeSystemColorTheme,
-  type ColorTheme,
   type ColorThemePreference,
 } from "@/lib/colorTheme";
 
@@ -23,7 +22,7 @@ const THEME_META: Record<
   system: {
     description: "기기 설정이 바뀌면 하루컷 화면도 함께 바뀌어요.",
     icon: Monitor,
-    label: "시스템",
+    label: "기본값",
   },
   light: {
     description: "밝은 화면으로 고정해요.",
@@ -40,15 +39,13 @@ const THEME_META: Record<
 export function ColorThemePreferencePanel() {
   const [preference, setPreference] =
     useState<ColorThemePreference>("system");
-  const [effectiveTheme, setEffectiveTheme] = useState<ColorTheme>("light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const storedPreference = readStoredColorThemePreference();
-    const nextTheme = applyPreferredColorTheme(storedPreference);
+    applyPreferredColorTheme(storedPreference);
     const frame = window.requestAnimationFrame(() => {
       setPreference(storedPreference);
-      setEffectiveTheme(nextTheme);
       setMounted(true);
     });
 
@@ -60,18 +57,16 @@ export function ColorThemePreferencePanel() {
       return;
     }
 
-    return subscribeSystemColorTheme((nextTheme) => {
+    return subscribeSystemColorTheme(() => {
       applyPreferredColorTheme("system");
-      setEffectiveTheme(nextTheme);
     });
   }, [preference]);
 
   const handlePreferenceChange = (nextPreference: ColorThemePreference) => {
     persistColorThemePreference(nextPreference);
-    const nextTheme = applyPreferredColorTheme(nextPreference);
+    applyPreferredColorTheme(nextPreference);
 
     setPreference(nextPreference);
-    setEffectiveTheme(nextTheme);
   };
 
   return (
@@ -81,9 +76,6 @@ export function ColorThemePreferencePanel() {
           Display
         </p>
         <h2 className="mt-2 text-sm font-semibold">화면 모드</h2>
-        <p className="mt-1 text-[11px] leading-5 text-[color:var(--hc-muted)]">
-          기본값은 시스템 설정을 따르고, 여기에서 원하는 모드로 고정할 수 있어요.
-        </p>
       </div>
 
       <div className="mt-3 grid gap-2">
@@ -116,9 +108,6 @@ export function ColorThemePreferencePanel() {
                 <span className="min-w-0">
                   <span className="block text-[12px] font-semibold">
                     {meta.label}
-                    {item === "system" && mounted
-                      ? ` · 현재 ${effectiveTheme === "dark" ? "다크" : "라이트"}`
-                      : ""}
                   </span>
                   <span className="mt-0.5 block text-[11px] leading-4 text-[color:var(--hc-muted)]">
                     {meta.description}

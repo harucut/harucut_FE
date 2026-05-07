@@ -211,13 +211,9 @@ export default function MyPage() {
             </button>
           }
           description={
-            <span
-              className={`text-[11px] ${
-                errors.common ? "text-red-400" : "text-zinc-400"
-              }`}
-            >
-              {errors.common ?? "계정 정보와 보안 설정을 관리할 수 있어요."}
-            </span>
+            errors.common ? (
+              <span className="text-[11px] text-red-400">{errors.common}</span>
+            ) : undefined
           }
         />
 
@@ -284,9 +280,9 @@ export default function MyPage() {
                   type="button"
                   onClick={handleUploadProfileImage}
                   disabled={isUploadingProfile || !profileFile}
-                  className="hc-button-primary h-9 whitespace-nowrap rounded-full px-4 text-[11px] font-semibold disabled:opacity-50"
+                  className="hc-button-primary h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[11px] font-semibold disabled:opacity-50"
                 >
-                  {isUploadingProfile ? "업로드 중..." : "프로필 업로드"}
+                  {isUploadingProfile ? "업로드 중" : "업로드"}
                 </button>
               </div>
             </section>
@@ -388,10 +384,10 @@ export default function MyPage() {
             </section>
 
             <section className="rounded-2xl border border-red-900/40 bg-red-950/10 p-4">
-              <h2 className="text-sm font-semibold text-red-200">
+              <h2 className="text-sm font-semibold text-red-700 dark:text-red-200">
                 회원 탈퇴 요청
               </h2>
-              <p className="mt-1 text-[11px] text-red-200/80">
+              <p className="mt-1 text-[11px] text-red-900/80 dark:text-red-200/80">
                 탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를
                 취소하고 계정을 다시 사용할 수 있어요.
               </p>

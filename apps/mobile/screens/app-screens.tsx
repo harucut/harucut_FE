@@ -24,7 +24,7 @@ const THEME_OPTIONS: Array<{
 }> = [
   {
     description: '기기 설정에 맞춰 자동으로 전환해요.',
-    label: '시스템',
+    label: '기본값',
     value: 'system',
   },
   {
@@ -77,6 +77,41 @@ async function sharePreview(item: HistoryItem) {
   });
 }
 
+function formatCurrentDate() {
+  return new Date().toLocaleDateString('ko-KR', {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'short',
+  });
+}
+
+function getNextDateRefreshDelay() {
+  const now = new Date();
+  const nextMidnight = new Date(now);
+  nextMidnight.setHours(24, 0, 1, 0);
+
+  return Math.max(nextMidnight.getTime() - now.getTime(), 1000);
+}
+
+function useCurrentDateLabel() {
+  const [dateLabel, setDateLabel] = useState(formatCurrentDate);
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const refresh = () => {
+      setDateLabel(formatCurrentDate());
+      timeoutId = setTimeout(refresh, getNextDateRefreshDelay());
+    };
+
+    timeoutId = setTimeout(refresh, getNextDateRefreshDelay());
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  return dateLabel;
+}
+
 function useAppScreenTheme() {
   const { colors, isDark } = useHarucutTheme();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -97,11 +132,7 @@ export function HomeScreen() {
   const savedFrames = useHarucutStore((state) => state.savedFrames);
   const user = useHarucutStore((state) => state.user);
 
-  const todayMoment = new Date().toLocaleDateString('ko-KR', {
-    day: 'numeric',
-    month: 'long',
-    weekday: 'short',
-  });
+  const todayMoment = useCurrentDateLabel();
   const recentItems = historyItems.slice(0, 4);
   const isHistoryLoading =
     historyStatus === 'loading' ||
@@ -537,7 +568,6 @@ export function MyPageScreen() {
   return (
     <AppScrollView>
       <PageHeader
-        description="계정 정보와 보안 설정을 관리할 수 있어요."
         onPressRight={() => void refreshUserProfile().catch((error) =>
           showError('계정 정보 새로고침 실패', getApiErrorMessage(error, '계정 정보를 불러오지 못했어요.')),
         )}
@@ -571,8 +601,7 @@ export function MyPageScreen() {
         </View>
 
         <ActionButton
-          icon={<Ionicons color={colors.text} name="image-outline" size={16} />}
-          label={submitting ? '처리 중...' : '프로필 이미지 업로드'}
+          label={submitting ? '업로드 중' : '업로드'}
           onPress={handlePickProfile}
           variant="secondary"
         />
@@ -616,11 +645,6 @@ export function MyPageScreen() {
 
       <SurfaceCard style={{ gap: 12 }}>
         <Text style={styles.sectionTitle}>앱 테마</Text>
-        <Text style={styles.bodyCopy}>
-          {isDark
-            ? '현재 다크 모드가 적용되어 있어요. 기기 설정을 따르거나 원하는 테마로 바로 바꿀 수 있어요.'
-            : '현재 라이트 모드가 적용되어 있어요. 기기 설정을 따르거나 원하는 테마로 바로 바꿀 수 있어요.'}
-        </Text>
         <View style={styles.themeOptionList}>
           {THEME_OPTIONS.map((option) => {
             const active = themePreference === option.value;
@@ -670,7 +694,7 @@ export function MyPageScreen() {
 
       <SurfaceCard style={[styles.exitCard, { gap: 12 }]}>
         <Text style={styles.exitTitle}>회원 탈퇴 요청</Text>
-        <Text style={styles.bodyCopy}>
+        <Text style={styles.exitBody}>
           탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
         </Text>
         <ActionButton
@@ -707,6 +731,11 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: colors.danger,
       fontSize: 18,
       fontWeight: '700',
+    },
+    exitBody: {
+      color: isDark ? '#FECACA' : '#7F1D1D',
+      fontSize: 12,
+      lineHeight: 18,
     },
     filterRow: {
       flexDirection: 'row',

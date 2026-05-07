@@ -22,7 +22,7 @@ const THEME_OPTIONS: {
 }[] = [
   {
     icon: 'phone-portrait-outline',
-    label: '시스템',
+    label: '기본값',
     value: 'system',
   },
   {
@@ -42,7 +42,7 @@ function currentThemeChipLabel(
   scheme: 'light' | 'dark',
 ) {
   if (preference === 'system') {
-    return '시스템';
+    return '기본값';
   }
 
   return scheme === 'dark' ? '다크' : '라이트';
