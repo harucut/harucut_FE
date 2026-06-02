@@ -11,6 +11,7 @@ import type { HarucutThemePreference } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { changePassword, exitAccount, logout } from '@/lib/auth-api';
 import { getApiErrorMessage } from '@/lib/api-client';
+import { validatePassword } from '@/lib/auth-validation';
 import { uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 import { saveRemoteMediaToLibrary, shareMediaLink } from '@/lib/media-download';
 import { updateProfileImage, updateUsername } from '@/lib/user-api';
@@ -577,8 +578,19 @@ export function MyPageScreen() {
   };
 
   const handleChangePassword = async () => {
-    if (!oldPassword || !newPassword || newPassword !== confirmPassword) {
-      showError('비밀번호 변경 실패', '현재 비밀번호와 새 비밀번호 확인 값을 다시 확인해 주세요.');
+    if (!oldPassword) {
+      showError('비밀번호 변경 실패', '현재 비밀번호를 입력해 주세요.');
+      return;
+    }
+
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      showError('비밀번호 변경 실패', passwordError);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showError('비밀번호 변경 실패', '새 비밀번호 확인 값이 일치하지 않아요.');
       return;
     }
 

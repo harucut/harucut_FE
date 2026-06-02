@@ -8,6 +8,7 @@ import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/haru
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
+import { validateEmail, validatePassword, validateUsername } from '@/lib/auth-validation';
 import {
   loginWithEmail,
   reactivateAccount,
@@ -195,8 +196,14 @@ export function LoginScreen() {
   const [remember, setRemember] = useState(true);
 
   const handleLogin = async () => {
-    if (!form.email.trim() || !form.password) {
-      setError('이메일과 비밀번호를 입력해 주세요.');
+    const emailError = validateEmail(form.email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
+    if (!form.password) {
+      setError('비밀번호를 입력해 주세요.');
       return;
     }
 
@@ -301,8 +308,9 @@ export function SignupScreen() {
   }, [codeExpiresAt, verified]);
 
   const handleSendCode = async () => {
-    if (!email.trim()) {
-      setError('이메일을 입력해 주세요.');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -344,8 +352,15 @@ export function SignupScreen() {
       return;
     }
 
-    if (!form.username.trim() || !form.password) {
-      setError('닉네임과 비밀번호를 입력해 주세요.');
+    const usernameError = validateUsername(form.username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
+
+    const passwordError = validatePassword(form.password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -392,6 +407,8 @@ export function SignupScreen() {
           onChangeText={(value) => {
             setEmail(value);
             setVerified(false);
+            setCode('');
+            setCodeExpiresAt(null);
           }}
           placeholder="example@harucut.com"
           value={email}
@@ -468,10 +485,12 @@ export function ForgotPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
 
   const handleRequestCode = async () => {
-    if (!email.trim()) {
-      setError('이메일을 입력해 주세요.');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -480,6 +499,7 @@ export function ForgotPasswordScreen() {
 
     try {
       await requestPasswordResetCode(email.trim());
+      setCodeRequested(true);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, '인증 코드를 보내지 못했어요.'));
     } finally {
@@ -514,7 +534,13 @@ export function ForgotPasswordScreen() {
       return;
     }
 
-    if (!newPassword.trim() || newPassword !== confirmPassword) {
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
       setError('새 비밀번호와 확인 값이 일치하지 않아요.');
       return;
     }
@@ -538,7 +564,13 @@ export function ForgotPasswordScreen() {
       title="비밀번호 재설정">
       {step === 'VERIFY_CODE' ? (
         <SurfaceCard style={{ gap: 14 }}>
-          <FormField label="이메일" onChangeText={setEmail} placeholder="example@harucut.com" value={email} />
+          <FormField
+            editable={!codeRequested}
+            label="이메일"
+            onChangeText={setEmail}
+            placeholder="example@harucut.com"
+            value={email}
+          />
           <FormField label="인증 코드" onChangeText={setCode} placeholder="인증 코드 입력" value={code} />
           <View style={styles.heroActions}>
             <ActionButton
