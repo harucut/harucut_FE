@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
@@ -12,7 +12,9 @@ import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { changePassword, exitAccount, logout } from '@/lib/auth-api';
 import { getApiErrorMessage } from '@/lib/api-client';
 import { uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
+import { saveRemoteMediaToLibrary, shareMediaLink } from '@/lib/media-download';
 import { updateProfileImage, updateUsername } from '@/lib/user-api';
+import { getMediaDownloadUrl } from '@/lib/user-media-api';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
@@ -65,16 +67,16 @@ function formatDate(value: string) {
   });
 }
 
-async function sharePreview(item: HistoryItem) {
-  const uri = historyPreviewUri(item);
-  if (!uri) {
-    return;
+async function resolveHistoryMediaUrl(item: HistoryItem) {
+  if (item.mediaId) {
+    try {
+      return await getMediaDownloadUrl(item.mediaId);
+    } catch {
+      // 서명 URL 재발급 실패 시 미리보기 URL로 대체합니다.
+    }
   }
 
-  await Share.share({
-    message: `${item.title}\n${uri}`,
-    url: uri,
-  });
+  return historyPreviewUri(item);
 }
 
 function formatCurrentDate() {
@@ -299,6 +301,63 @@ export function HistoryScreen() {
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const handleDownloadItem = async (item: HistoryItem) => {
+    setBusyId(item.id);
+
+    try {
+      const url = await resolveHistoryMediaUrl(item);
+      const result = await saveRemoteMediaToLibrary(url, item.title, item.kind);
+
+      if (result.ok) {
+        showNotice({
+          actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+          eyebrow: 'DOWNLOAD',
+          icon: 'checkmark-circle-outline',
+          message: '사진 보관함에 저장했어요.',
+          title: '다운로드 완료',
+        });
+        return;
+      }
+
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'DOWNLOAD ERROR',
+        icon: 'warning-outline',
+        message:
+          result.reason === 'permission-denied'
+            ? '사진 보관함 권한이 필요해요. 권한을 허용한 뒤 다시 시도해 주세요.'
+            : '파일을 내려받지 못했어요. 잠시 후 다시 시도해 주세요.',
+        title: '다운로드 실패',
+      });
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'DOWNLOAD ERROR',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '파일을 내려받지 못했어요.'),
+        title: '다운로드 실패',
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleShareItem = async (item: HistoryItem) => {
+    try {
+      const url = await resolveHistoryMediaUrl(item);
+      await shareMediaLink(item.title, url);
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'SHARE ERROR',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '공유 링크를 준비하지 못했어요.'),
+        title: '공유 실패',
+      });
+    }
+  };
 
   const filteredItems = useMemo(() => {
     return historyItems.filter((item) => {
@@ -397,14 +456,14 @@ export function HistoryScreen() {
                 <View style={styles.actionWrap}>
                   <ActionButton
                     icon={<Ionicons color="#FFFFFF" name="download-outline" size={15} />}
-                    label="다운로드"
-                    onPress={() => sharePreview(item)}
+                    label={busyId === item.id ? '다운로드 중...' : '다운로드'}
+                    onPress={() => void handleDownloadItem(item)}
                     style={{ flex: 1, minHeight: 42 }}
                   />
                   <ActionButton
                     icon={<Ionicons color={colors.text} name="share-social-outline" size={15} />}
                     label="공유하기"
-                    onPress={() => sharePreview(item)}
+                    onPress={() => void handleShareItem(item)}
                     style={{ flex: 1, minHeight: 42 }}
                     variant="secondary"
                   />

@@ -61,6 +61,9 @@ importers:
       expo-dev-client:
         specifier: ~55.0.32
         version: 55.0.32(expo@55.0.20)
+      expo-file-system:
+        specifier: ~55.0.22
+        version: 55.0.22(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))
       expo-font:
         specifier: ~55.0.6
         version: 55.0.6(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
@@ -3757,8 +3760,8 @@ packages:
     peerDependencies:
       expo: '*'
 
-  expo-file-system@55.0.17:
-    resolution: {integrity: sha512-d27K1cagUOt2BwxwPka9KW8Znu5kN1tnairozCzzCRZviZFtWnBxwFuJ3KU6MAbav/9UhSMkp5Ve/oZ+SR0UgQ==}
+  expo-file-system@55.0.22:
+    resolution: {integrity: sha512-T5Rfv3vqcFyhVrl/tEEeglc/J8LJbcZQgC3TMT5jxzIgUgWmIgJEgncGYqB/YNXFgUTL2LiuCvqrU51Dzp83NQ==}
     peerDependencies:
       expo: '*'
       react-native: '*'
@@ -10580,7 +10583,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.2.4
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-react: 7.37.5(eslint@9.39.1(jiti@2.6.1))
@@ -10603,7 +10606,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -10633,14 +10636,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -10675,7 +10678,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
       hasown: 2.0.3
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -11006,7 +11009,7 @@ snapshots:
       expo: 55.0.20(@babel/core@7.28.5)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@55.0.10)(expo-router@55.0.13)(react-dom@19.2.5(react@19.2.5))(react-native-webview@13.16.1(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-worklets@0.8.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
       expo-dev-menu-interface: 55.0.2(expo@55.0.20)
 
-  expo-file-system@55.0.17(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5)):
+  expo-file-system@55.0.22(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5)):
     dependencies:
       expo: 55.0.20(@babel/core@7.28.5)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@55.0.10)(expo-router@55.0.13)(react-dom@19.2.5(react@19.2.5))(react-native-webview@13.16.1(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-worklets@0.8.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
       react-native: 0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5)
@@ -11211,7 +11214,7 @@ snapshots:
       babel-preset-expo: 55.0.20(@babel/core@7.28.5)(@babel/runtime@7.29.2)(expo@55.0.20)(react-refresh@0.14.2)
       expo-asset: 55.0.16(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
       expo-constants: 55.0.15(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))
-      expo-file-system: 55.0.17(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))
+      expo-file-system: 55.0.22(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))
       expo-font: 55.0.6(expo@55.0.20)(react-native@0.85.2(@babel/core@7.28.5)(@react-native/metro-config@0.85.2(@babel/core@7.28.5))(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       expo-keep-awake: 55.0.7(expo@55.0.20)(react@19.2.5)
       expo-modules-autolinking: 55.0.19(typescript@5.9.3)

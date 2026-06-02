@@ -1,6 +1,7 @@
 export type FrameId = 'classic-4' | 'grid-4' | 'polaroid-4' | 'wide-4';
 export type MediaKind = 'image' | 'video';
-export type OutputTone = '기본' | '선명한 블루' | '소프트';
+// 웹 lib/frameFilters.ts와 동일한 4종 필터 (기본/흑백/밝게/뽀샤시)
+export type OutputTone = 'NONE' | 'B&W' | 'BRIGHT' | 'SOFT';
 
 export type MediaAsset = {
   id: string;
@@ -211,7 +212,19 @@ export const FRAME_BORDER_OPTIONS = [
   { label: '아이스 블루', value: '#C7DCFF' },
 ] as const;
 
-export const OUTPUT_TONE_OPTIONS: OutputTone[] = ['기본', '선명한 블루', '소프트'];
+export type OutputToneOption = {
+  description: string;
+  id: OutputTone;
+  label: string;
+};
+
+// 웹 FOURCUT_FILTERS와 라벨/설명/순서를 동일하게 맞춥니다.
+export const OUTPUT_TONE_OPTIONS: OutputToneOption[] = [
+  { description: '원본 톤 그대로', id: 'NONE', label: '기본' },
+  { description: '차분한 필름 톤', id: 'B&W', label: '흑백' },
+  { description: '밝고 또렷하게', id: 'BRIGHT', label: '밝게' },
+  { description: '은은하고 부드럽게', id: 'SOFT', label: '뽀샤시' },
+];
 
 export const BACKGROUND_SWATCHES = [
   { label: '화이트', value: '#FFFFFF' },

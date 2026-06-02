@@ -242,7 +242,7 @@ function defaultShootSession(): ShootSession {
     selectedSavedFrameId: null,
     selectedShotIds: [],
     shots: [],
-    tone: '기본',
+    tone: 'NONE',
   };
 }
 
@@ -255,7 +255,7 @@ function defaultUploadSession(): UploadSession {
     persistedHistoryId: null,
     selectedAssetIds: [],
     selectedSavedFrameId: null,
-    tone: '기본',
+    tone: 'NONE',
   };
 }
 
