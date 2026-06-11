@@ -126,6 +126,17 @@ function SocialButtons() {
         onPress={() => void handleSocialLogin('naver')}
         provider="naver"
       />
+      <Text style={styles.socialConsentNotice}>
+        소셜 계정으로 계속하면{' '}
+        <Text onPress={() => router.push('/terms' as never)} style={styles.socialConsentLink}>
+          서비스 이용약관
+        </Text>
+        과{' '}
+        <Text onPress={() => router.push('/privacy' as never)} style={styles.socialConsentLink}>
+          개인정보 처리방침
+        </Text>
+        에 동의하는 것으로 간주됩니다.
+      </Text>
     </View>
   );
 }
@@ -231,6 +242,27 @@ export function LandingScreen() {
             <Text style={styles.heroCardBody}>완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.</Text>
           </View>
         </SurfaceCard>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 16,
+            justifyContent: 'center',
+            paddingVertical: 4,
+          }}>
+          <Pressable
+            accessibilityLabel="서비스 이용약관 보기"
+            accessibilityRole="link"
+            onPress={() => push('/terms')}>
+            <Text style={styles.legalFooterLink}>서비스 이용약관</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="개인정보 처리방침 보기"
+            accessibilityRole="link"
+            onPress={() => push('/privacy')}>
+            <Text style={styles.legalFooterLink}>개인정보 처리방침</Text>
+          </Pressable>
+        </View>
       </View>
     </AppScrollView>
   );
@@ -341,6 +373,7 @@ export function SignupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [consents, setConsents] = useState({ privacy: false, terms: false });
   const remainingSeconds = useMemo(() => {
     if (!codeExpiresAt) return 0;
     return Math.max(Math.floor((codeExpiresAt - Date.now()) / 1000), 0);
@@ -401,6 +434,11 @@ export function SignupScreen() {
   const handleSignup = async () => {
     if (!verified) {
       setError('이메일 인증을 먼저 완료해 주세요.');
+      return;
+    }
+
+    if (!consents.terms || !consents.privacy) {
+      setError('서비스 이용약관과 개인정보 수집·이용에 동의해야 가입할 수 있어요.');
       return;
     }
 
@@ -517,6 +555,46 @@ export function SignupScreen() {
             value={form[field.key]}
           />
         ))}
+
+        <View style={{ gap: 10 }}>
+          {(
+            [
+              { key: 'terms', label: '[필수] 서비스 이용약관 동의', path: '/terms' },
+              { key: 'privacy', label: '[필수] 개인정보 수집·이용 동의', path: '/privacy' },
+            ] as const
+          ).map((item) => (
+            <View key={item.key} style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                accessibilityLabel={item.label}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: consents[item.key] }}
+                onPress={() =>
+                  setConsents((current) => ({ ...current, [item.key]: !current[item.key] }))
+                }
+                style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: 8 }}>
+                <Ionicons
+                  color={consents[item.key] ? colors.primary : colors.muted}
+                  name={consents[item.key] ? 'checkbox' : 'square-outline'}
+                  size={20}
+                />
+                <Text style={{ color: colors.textSoft, flex: 1, fontSize: 12 }}>{item.label}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={`${item.label} 내용 보기`}
+                accessibilityRole="button"
+                onPress={() => push(item.path)}>
+                <Text
+                  style={{
+                    color: colors.muted,
+                    fontSize: 11,
+                    textDecorationLine: 'underline',
+                  }}>
+                  보기
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
 
         <ActionButton label={submitting ? '처리 중...' : '회원가입'} onPress={() => void handleSignup()} />
         {error ? <Text style={styles.formError}>{error}</Text> : null}
@@ -897,6 +975,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     socialNaverLabel: {
       color: '#FFFFFF',
+    },
+    legalFooterLink: {
+      color: colors.muted,
+      fontSize: 11,
+      textDecorationLine: 'underline',
+    },
+    socialConsentLink: {
+      color: colors.textSoft,
+      textDecorationLine: 'underline',
+    },
+    socialConsentNotice: {
+      color: colors.muted,
+      fontSize: 10,
+      lineHeight: 16,
+      textAlign: 'center',
     },
     socialText: {
       color: colors.muted,

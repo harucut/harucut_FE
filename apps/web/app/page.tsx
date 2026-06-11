@@ -85,6 +85,16 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
+
+        <footer className="flex items-center justify-center gap-4 py-3 text-[11px] text-[color:var(--hc-muted)]">
+          <Link href="/terms" className="underline-offset-4 hover:underline">
+            서비스 이용약관
+          </Link>
+          <span aria-hidden>·</span>
+          <Link href="/privacy" className="underline-offset-4 hover:underline">
+            개인정보 처리방침
+          </Link>
+        </footer>
       </div>
     </main>
   );
