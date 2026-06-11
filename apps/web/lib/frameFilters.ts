@@ -1,4 +1,11 @@
-export type FourcutFilterId = "NONE" | "B&W" | "BRIGHT" | "SOFT";
+import {
+  DEFAULT_FOURCUT_FILTER,
+  FOURCUT_FILTER_DEFINITIONS,
+  type FourcutFilterId,
+} from "@harucut/shared";
+
+export type { FourcutFilterId };
+export { DEFAULT_FOURCUT_FILTER };
 
 export type FourcutFilterOption = {
   id: FourcutFilterId;
@@ -8,38 +15,21 @@ export type FourcutFilterOption = {
   canvasFilter: string;
 };
 
-export const DEFAULT_FOURCUT_FILTER: FourcutFilterId = "NONE";
+// id/라벨/설명/순서는 공통 패키지에서 오고, 실제 필터 값만 웹 구현이다.
+const FILTER_VALUES: Record<FourcutFilterId, string> = {
+  NONE: "none",
+  "B&W": "grayscale(1)",
+  BRIGHT: "brightness(1.14) saturate(1.04) contrast(1.02)",
+  SOFT: "brightness(1.08) contrast(0.94) saturate(0.92) blur(0.45px)",
+};
 
-export const FOURCUT_FILTERS: FourcutFilterOption[] = [
-  {
-    id: "NONE",
-    label: "기본",
-    description: "원본 톤 그대로",
-    cssFilter: "none",
-    canvasFilter: "none",
-  },
-  {
-    id: "B&W",
-    label: "흑백",
-    description: "차분한 필름 톤",
-    cssFilter: "grayscale(1)",
-    canvasFilter: "grayscale(1)",
-  },
-  {
-    id: "BRIGHT",
-    label: "밝게",
-    description: "밝고 또렷하게",
-    cssFilter: "brightness(1.14) saturate(1.04) contrast(1.02)",
-    canvasFilter: "brightness(1.14) saturate(1.04) contrast(1.02)",
-  },
-  {
-    id: "SOFT",
-    label: "뽀샤시",
-    description: "은은하고 부드럽게",
-    cssFilter: "brightness(1.08) contrast(0.94) saturate(0.92) blur(0.45px)",
-    canvasFilter: "brightness(1.08) contrast(0.94) saturate(0.92) blur(0.45px)",
-  },
-];
+export const FOURCUT_FILTERS: FourcutFilterOption[] = FOURCUT_FILTER_DEFINITIONS.map(
+  (definition) => ({
+    ...definition,
+    cssFilter: FILTER_VALUES[definition.id],
+    canvasFilter: FILTER_VALUES[definition.id],
+  }),
+);
 
 export function getFourcutFilterOption(filterId: FourcutFilterId) {
   return FOURCUT_FILTERS.find((filter) => filter.id === filterId) ?? FOURCUT_FILTERS[0];

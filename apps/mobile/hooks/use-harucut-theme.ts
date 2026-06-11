@@ -2,11 +2,11 @@ import { useMemo } from 'react';
 
 import { HARUCUT_THEME_COLORS } from '@/constants/harucut-design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 export function useHarucutTheme() {
   const systemScheme = useColorScheme();
-  const preference = useHarucutStore((state) => state.themePreference);
+  const preference = useSessionStore((state) => state.themePreference);
 
   return useMemo(() => {
     const scheme =

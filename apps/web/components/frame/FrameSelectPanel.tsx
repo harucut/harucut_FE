@@ -15,6 +15,7 @@ type FrameSelectPanelProps = {
   selectedIndexes: (number | null)[];
   maxSelect: number;
   emptyStateText?: string;
+  incompleteButtonLabel?: string;
   nextButtonLabel: string;
   onToggleSelect: (index: number) => void;
   onReset: () => void;
@@ -32,6 +33,7 @@ export function FrameSelectPanel({
   selectedIndexes,
   maxSelect,
   emptyStateText = "선택 가능한 사진이나 영상이 아직 없어요.",
+  incompleteButtonLabel,
   nextButtonLabel,
   onToggleSelect,
   onReset,
@@ -96,6 +98,12 @@ export function FrameSelectPanel({
                     key={index}
                     type="button"
                     onClick={() => onToggleSelect(index)}
+                    aria-pressed={isSelected}
+                    aria-label={
+                      isSelected
+                        ? `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택 해제 (현재 ${order}번째로 선택됨)`
+                        : `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택`
+                    }
                     className={[
                       "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
@@ -121,7 +129,7 @@ export function FrameSelectPanel({
                       />
                     )}
 
-                    <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] text-zinc-200">
+                    <span className="pointer-events-none absolute left-1 top-1 rounded-full border border-black/10 bg-white px-1.5 py-0.5 text-[9px] font-bold text-black shadow-sm">
                       #{index + 1}
                     </span>
 
@@ -153,7 +161,7 @@ export function FrameSelectPanel({
             onClick={onNext}
             className="hc-button-primary rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {nextButtonLabel}
+            {canProceed ? nextButtonLabel : incompleteButtonLabel ?? nextButtonLabel}
           </button>
         </section>
       </section>

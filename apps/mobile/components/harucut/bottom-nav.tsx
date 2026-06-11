@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BOTTOM_NAV_ITEMS } from '@/constants/harucut-data';
 import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 function activeKey(pathname: string) {
   if (pathname.startsWith('/shoot')) return 'shoot';
@@ -21,8 +21,8 @@ export function BottomNavigation() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const router = useRouter();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const showGuestRestrictedNotice = useHarucutStore((state) => state.showGuestRestrictedNotice);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const showGuestRestrictedNotice = useSessionStore((state) => state.showGuestRestrictedNotice);
   const { colors, isDark } = useHarucutTheme();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const currentKey = activeKey(pathname);

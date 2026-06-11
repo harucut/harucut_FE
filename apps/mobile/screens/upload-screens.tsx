@@ -2,20 +2,31 @@ import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
-import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
+import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type HistoryItem, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { saveRemoteMediaToLibrary, shareMediaLink } from '@/lib/media-download';
+import { getMediaDownloadUrl } from '@/lib/user-media-api';
+import { useLibraryStore } from '@/store/use-library-store';
+import { useSessionStore } from '@/store/use-session-store';
+import { useUploadStore } from '@/store/use-upload-store';
 
-async function shareMedia(title: string, uri: string | undefined) {
-  if (!uri) return;
-  await Share.share({ message: `${title}\n${uri}`, url: uri });
+async function resolveHistoryMediaUrl(item: HistoryItem) {
+  if (item.mediaId) {
+    try {
+      return await getMediaDownloadUrl(item.mediaId);
+    } catch {
+      // 서명 URL 재발급 실패 시 미리보기 URL로 대체합니다.
+    }
+  }
+
+  return item.previewMedia[0]?.uri;
 }
 
 function useUploadStyles() {
@@ -27,12 +38,12 @@ function useUploadStyles() {
 export function UploadFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const savedFrames = useHarucutStore((state) => state.savedFrames);
-  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
-  const upload = useHarucutStore((state) => state.upload);
-  const setUploadFrame = useHarucutStore((state) => state.setUploadFrame);
-  const selectSavedFrameForUpload = useHarucutStore((state) => state.selectSavedFrameForUpload);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const savedFrames = useLibraryStore((state) => state.savedFrames);
+  const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
+  const upload = useUploadStore();
+  const setUploadFrame = useUploadStore((state) => state.setUploadFrame);
+  const selectSavedFrameForUpload = useUploadStore((state) => state.selectSavedFrameForUpload);
 
   useEffect(() => {
     if (accessMode === 'member') {
@@ -73,10 +84,10 @@ export function UploadSelectScreen() {
   const push = (path: string) => router.push(path as never);
   const { colors } = useHarucutTheme();
   const styles = useUploadStyles();
-  const upload = useHarucutStore((state) => state.upload);
-  const addUploadAssets = useHarucutStore((state) => state.addUploadAssets);
-  const toggleUploadSelection = useHarucutStore((state) => state.toggleUploadSelection);
-  const setUploadOption = useHarucutStore((state) => state.setUploadOption);
+  const upload = useUploadStore();
+  const addUploadAssets = useUploadStore((state) => state.addUploadAssets);
+  const toggleUploadSelection = useUploadStore((state) => state.toggleUploadSelection);
+  const setUploadOption = useUploadStore((state) => state.setUploadOption);
 
   useEffect(() => {
     if (!upload.frameId) {
@@ -130,7 +141,7 @@ export function UploadSelectScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.sectionTitle}>프레임 미리보기</Text>
         <View style={{ alignItems: 'center' }}>
-          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
+          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
         </View>
       </SurfaceCard>
 
@@ -178,10 +189,10 @@ export function UploadSelectScreen() {
         <View style={styles.filterWrap}>
           {OUTPUT_TONE_OPTIONS.map((option) => (
             <Pill
-              key={option}
-              active={upload.tone === option}
-              onPress={() => setUploadOption('tone', option)}>
-              {option}
+              key={option.id}
+              active={upload.tone === option.id}
+              onPress={() => setUploadOption('tone', option.id)}>
+              {option.label}
             </Pill>
           ))}
         </View>
@@ -209,13 +220,14 @@ export function UploadResultScreen() {
   const push = (path: string) => router.push(path as never);
   const { colors } = useHarucutTheme();
   const styles = useUploadStyles();
-  const upload = useHarucutStore((state) => state.upload);
-  const persistUploadResult = useHarucutStore((state) => state.persistUploadResult);
-  const historyItems = useHarucutStore((state) => state.historyItems);
-  const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const upload = useUploadStore();
+  const persistUploadResult = useUploadStore((state) => state.persistUploadResult);
+  const historyItems = useLibraryStore((state) => state.historyItems);
+  const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [draftName, setDraftName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'error' | 'idle' | 'saving' | 'saved'>('idle');
+  const [downloading, setDownloading] = useState(false);
   const previewRef = useRef<View | null>(null);
 
   useEffect(() => {
@@ -278,6 +290,66 @@ export function UploadResultScreen() {
     setDraftName(currentHistory?.title ?? '');
   }, [currentHistory?.title]);
 
+  const handleDownload = async () => {
+    if (!currentHistory) return;
+
+    setDownloading(true);
+
+    try {
+      const url = await resolveHistoryMediaUrl(currentHistory);
+      const result = await saveRemoteMediaToLibrary(url, currentHistory.title, currentHistory.kind);
+
+      if (result.ok) {
+        showNotice({
+          actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+          eyebrow: 'DOWNLOAD',
+          icon: 'checkmark-circle-outline',
+          message: '사진 보관함에 저장했어요.',
+          title: '다운로드 완료',
+        });
+        return;
+      }
+
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'DOWNLOAD ERROR',
+        icon: 'warning-outline',
+        message:
+          result.reason === 'permission-denied'
+            ? '사진 보관함 권한이 필요해요. 권한을 허용한 뒤 다시 시도해 주세요.'
+            : '파일을 내려받지 못했어요. 잠시 후 다시 시도해 주세요.',
+        title: '다운로드 실패',
+      });
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'DOWNLOAD ERROR',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '파일을 내려받지 못했어요.'),
+        title: '다운로드 실패',
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!currentHistory) return;
+
+    try {
+      const url = await resolveHistoryMediaUrl(currentHistory);
+      await shareMediaLink(currentHistory.title, url);
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'SHARE ERROR',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '공유 링크를 준비하지 못했어요.'),
+        title: '공유 실패',
+      });
+    }
+  };
+
   return (
     <AppScrollView>
       <PageHeader title="업로드 결과" />
@@ -295,10 +367,10 @@ export function UploadResultScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <View collapsable={false} ref={previewRef}>
-          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
+          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
         </View>
         {upload.includeVideo ? (
-          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} />
+          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
         ) : null}
       </SurfaceCard>
 
@@ -331,14 +403,14 @@ export function UploadResultScreen() {
           <View style={styles.rowButtons}>
             <ActionButton
               icon={<Ionicons color="#FFFFFF" name="download-outline" size={16} />}
-              label="다운로드"
-              onPress={() => shareMedia(currentHistory.title, currentHistory.previewMedia[0]?.uri)}
+              label={downloading ? '다운로드 중...' : '다운로드'}
+              onPress={() => void handleDownload()}
               style={{ flex: 1 }}
             />
             <ActionButton
               icon={<Ionicons color={colors.text} name="share-social-outline" size={16} />}
               label="공유하기"
-              onPress={() => shareMedia(currentHistory.title, currentHistory.previewMedia[0]?.uri)}
+              onPress={() => void handleShare()}
               style={{ flex: 1 }}
               variant="secondary"
             />

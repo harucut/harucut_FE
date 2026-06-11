@@ -10,8 +10,10 @@ const config = {
   // matcher 확장(@testing-library/jest-dom) 같은 전역 초기화 파일
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   // tsconfig의 @/* alias를 Jest에서도 동일하게 인식
+  // 워크스페이스 공통 패키지는 TS 소스를 직접 매핑해 변환 대상에 포함시킨다
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
+    "^@harucut/shared$": "<rootDir>/../../packages/shared/src/index.ts",
   },
   // *.test.ts, *.test.tsx 파일만 테스트 대상으로 수집
   testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
