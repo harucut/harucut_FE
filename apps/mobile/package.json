@@ -7,8 +7,6 @@
     "dev-client": "expo start --dev-client",
     "android": "expo start --android",
     "android:dev": "expo run:android",
-    "ios": "expo start --ios",
-    "ios:dev": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"
