@@ -32,7 +32,15 @@ type SignupFieldName = Extract<
 
 type SignupErrors = Partial<Record<SignupFieldName, string | null>> & {
   common?: string | null;
+  consent?: string | null;
 };
+
+const CONSENT_ITEMS = [
+  { href: "/terms", key: "terms", label: "서비스 이용약관 동의" },
+  { href: "/privacy", key: "privacy", label: "개인정보 수집·이용 동의" },
+] as const;
+
+type ConsentKey = (typeof CONSENT_ITEMS)[number]["key"];
 
 function SignupPageContent() {
   const router = useRouter();
@@ -46,6 +54,10 @@ function SignupPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<SignupErrors>({});
   const [email, setEmail] = useState("");
+  const [consents, setConsents] = useState<Record<ConsentKey, boolean>>({
+    privacy: false,
+    terms: false,
+  });
 
   const emailVerification = useEmailVerification();
 
@@ -84,6 +96,11 @@ function SignupPageContent() {
       nextErrors.email = "인증한 이메일과 현재 입력한 이메일이 달라요.";
     }
 
+    if (!consents.terms || !consents.privacy) {
+      nextErrors.consent =
+        "서비스 이용약관과 개인정보 수집·이용에 동의해야 가입할 수 있어요.";
+    }
+
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       setIsSubmitting(false);
@@ -114,6 +131,17 @@ function SignupPageContent() {
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
+          <p className="mt-2 text-center text-[10px] leading-5 text-zinc-500">
+            소셜 계정으로 가입하면{" "}
+            <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+              서비스 이용약관
+            </Link>
+            과{" "}
+            <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+              개인정보 처리방침
+            </Link>
+            에 동의하는 것으로 간주됩니다.
+          </p>
           <p className="mt-2 text-center text-[11px] text-zinc-400">
             이미 계정이 있으신가요?{" "}
             <Link
@@ -163,6 +191,43 @@ function SignupPageContent() {
             error={errors[field.name]}
           />
         ))}
+
+        <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+          <legend className="sr-only">약관 동의</legend>
+          {CONSENT_ITEMS.map((item) => (
+            <label
+              key={item.key}
+              className="flex items-center gap-2 text-[12px] text-zinc-300"
+            >
+              <input
+                type="checkbox"
+                checked={consents[item.key]}
+                onChange={(e) =>
+                  setConsents((current) => ({
+                    ...current,
+                    [item.key]: e.target.checked,
+                  }))
+                }
+                className="h-4 w-4 accent-[color:var(--hc-primary)]"
+              />
+              <span>
+                <span className="text-[color:var(--hc-primary)]">[필수]</span>{" "}
+                {item.label}
+              </span>
+              <Link
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
+              >
+                보기
+              </Link>
+            </label>
+          ))}
+          {errors.consent ? (
+            <p className="text-[11px] text-red-300">{errors.consent}</p>
+          ) : null}
+        </fieldset>
 
         <button
           type="submit"
