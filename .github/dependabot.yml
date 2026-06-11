@@ -65,6 +65,32 @@ updates:
       - dependency-name: "eslint"
         update-types:
           - "version-update:semver-major"
+      # Expo SDK가 버전을 고정하는 네이티브 런타임은 minor 이상 자동 범프 금지
+      # (RN 0.86 범프가 Expo 55 Metro 번들링을 깨뜨린 회귀 재발 방지, #303 참고)
+      - dependency-name: "react-native"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+      - dependency-name: "react-native-reanimated"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+      - dependency-name: "react-native-screens"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+      - dependency-name: "react-native-safe-area-context"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+      - dependency-name: "react-native-gesture-handler"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+      - dependency-name: "react-native-worklets"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     labels:
       - "dependencies"
       - "web"
