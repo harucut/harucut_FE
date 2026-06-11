@@ -44,6 +44,9 @@ export function useCaptureFlow() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  // 타이머와 즉시 촬영 버튼이 같은 샷을 중복 처리하지 않도록 마지막으로 끝낸 샷 인덱스를 기록
+  const lastFinishedShotRef = useRef(-1);
+  const recordingNoticeShownRef = useRef(false);
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
@@ -218,12 +221,32 @@ export function useCaptureFlow() {
     return dataUrl;
   }, [playShutterSound, captureSlot]);
 
+  // 녹화 불가 환경은 한 번만 안내하고 사진 전용으로 계속 진행
+  const notifyRecordingUnavailable = useCallback(() => {
+    if (recordingNoticeShownRef.current) return;
+    recordingNoticeShownRef.current = true;
+    setNotice({
+      actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+      eyebrow: "VIDEO RECORDING",
+      icon: "camera",
+      message:
+        "현재 브라우저에서 영상 녹화를 사용할 수 없어 사진만 저장됩니다. 촬영은 계속 진행돼요.",
+      title: "영상 없이 촬영을 진행해요",
+    });
+  }, [setNotice]);
+
   // 샷마다 짧은 동영상 기록 시작
   const startRecordingForShot = useCallback(() => {
-    if (!streamRef.current || typeof MediaRecorder === "undefined") return;
+    if (!streamRef.current || typeof MediaRecorder === "undefined") {
+      notifyRecordingUnavailable();
+      return;
+    }
 
     const mimeType = getBestWebmMimeType();
-    if (!mimeType) return;
+    if (!mimeType) {
+      notifyRecordingUnavailable();
+      return;
+    }
 
     try {
       recordedChunksRef.current = [];
@@ -249,38 +272,43 @@ export function useCaptureFlow() {
       mr.start();
     } catch (err) {
       console.error("MediaRecorder start error:", err);
+      notifyRecordingUnavailable();
     }
-  }, [attachVideoToShot]);
+  }, [attachVideoToShot, notifyRecordingUnavailable]);
 
   // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
+  // state updater 안에서 호출하지 않는다 — 녹화 재시작/라우팅 같은 사이드 이펙트가 함께 실행되므로
   const finishSingleShot = useCallback(() => {
+    // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리
+    if (lastFinishedShotRef.current >= shotCount) return;
+
     const photoDataUrl = capturePhotoToDataUrl();
     if (!photoDataUrl) return;
 
+    lastFinishedShotRef.current = shotCount;
     addShotPhoto(photoDataUrl);
 
     const mr = mediaRecorderRef.current;
     if (mr && mr.state !== "inactive") mr.stop();
 
-    setShotCount((prev) => {
-      const next = prev + 1;
+    const next = shotCount + 1;
+    setShotCount(next);
 
-      // 다음 샷이면: 녹화 재시작 + 카운트 리셋
-      if (next < MAX_SHOTS) {
-        startRecordingForShot();
-        setShooting((s) => ({ ...s, countdown: MAX_COUNT }));
-        return next;
-      }
+    if (next < MAX_SHOTS) {
+      startRecordingForShot();
+      setShooting((s) => ({ ...s, countdown: MAX_COUNT }));
+      return;
+    }
 
-      // 마지막 샷이면: 촬영 종료 + 이동 (라우팅은 다음 틱)
-      setShooting({ isShooting: false, countdown: null });
-      setTimeout(() => {
-        router.push("/shoot/select");
-      }, 0);
-
-      return next;
-    });
-  }, [capturePhotoToDataUrl, addShotPhoto, startRecordingForShot, router]);
+    setShooting({ isShooting: false, countdown: null });
+    router.push("/shoot/select");
+  }, [
+    shotCount,
+    capturePhotoToDataUrl,
+    addShotPhoto,
+    startRecordingForShot,
+    router,
+  ]);
 
   // 전체 자동 촬영 시작
   const startShooting = useCallback(() => {
@@ -297,6 +325,7 @@ export function useCaptureFlow() {
 
     resetShots();
     setShotCount(0);
+    lastFinishedShotRef.current = -1;
 
     setShooting({ isShooting: true, countdown: MAX_COUNT });
 
@@ -309,18 +338,14 @@ export function useCaptureFlow() {
     if (shooting.countdown === null) return;
 
     const timer = window.setTimeout(() => {
-      // 여기서는 callback이므로 setState ok
+      // 이 effect는 isShooting/countdown 변경마다 재실행되므로 closure 값이 최신
+      if (shooting.countdown !== null && shooting.countdown <= 1) {
+        finishSingleShot();
+        return;
+      }
+
       setShooting((prev) => {
-        // 타입 경고 방지: prev.countdown은 null일 수 있음 → 가드
         if (!prev.isShooting || prev.countdown === null) return prev;
-
-        if (prev.countdown <= 1) {
-          // countdown state는 finishSingleShot에서 다시 세팅되거나 종료됨
-          // 여기서는 null로 만들지 말고 그냥 유지(중복 렌더 방지)
-          finishSingleShot();
-          return prev;
-        }
-
         return { ...prev, countdown: prev.countdown - 1 };
       });
     }, 1000);
