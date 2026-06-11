@@ -5,7 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
 import { completeSocialLoginSession } from '@/lib/social-login';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 // 소셜 로그인 후 harucut://oauth2/callback 딥링크로 복귀할 때의 진입점.
 // 인앱 브라우저(openAuthSessionAsync)가 결과를 돌려주지 못하는 경우
@@ -13,7 +13,7 @@ import { useHarucutStore } from '@/store/use-harucut-store';
 export default function OAuthCallbackScreen() {
   const router = useRouter();
   const { colors } = useHarucutTheme();
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const isHandlingRef = useRef(false);
 
   useEffect(() => {

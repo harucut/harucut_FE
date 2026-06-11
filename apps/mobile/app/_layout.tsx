@@ -10,12 +10,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GlobalNotice } from '@/components/harucut/global-notice';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getAuthStatus } from '@/lib/auth-api';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 export default function RootLayout() {
   const { colors, isDark } = useHarucutTheme();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const bootstrapMemberSession = useHarucutStore((state) => state.bootstrapMemberSession);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const bootstrapMemberSession = useSessionStore((state) => state.bootstrapMemberSession);
 
   useEffect(() => {
     if (accessMode !== 'anonymous' || Platform.OS === 'web') {

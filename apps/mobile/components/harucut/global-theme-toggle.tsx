@@ -13,7 +13,7 @@ import {
   getGlobalThemeToggleBottomOffset,
 } from '@/constants/overlay-ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 const THEME_OPTIONS: {
   icon: string;
@@ -63,9 +63,7 @@ export function GlobalThemeToggle() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { colors, isDark, preference, scheme } = useHarucutTheme();
-  const setThemePreference = useHarucutStore(
-    (state) => state.setThemePreference,
-  );
+  const setThemePreference = useSessionStore((state) => state.setThemePreference);
   const [open, setOpen] = React.useState(false);
   const styles = React.useMemo(
     () => createStyles(colors, isDark),

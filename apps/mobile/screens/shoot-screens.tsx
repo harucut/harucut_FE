@@ -12,7 +12,9 @@ import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/co
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useLibraryStore } from '@/store/use-library-store';
+import { useSessionStore } from '@/store/use-session-store';
+import { useShootStore } from '@/store/use-shoot-store';
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,13 +54,13 @@ function useShootStyles() {
 export function ShootFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
-  const savedFrames = useHarucutStore((state) => state.savedFrames);
-  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
-  const shoot = useHarucutStore((state) => state.shoot);
-  const setShootFrame = useHarucutStore((state) => state.setShootFrame);
-  const selectSavedFrameForShoot = useHarucutStore((state) => state.selectSavedFrameForShoot);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const enterAnonymousMode = useSessionStore((state) => state.enterAnonymousMode);
+  const savedFrames = useLibraryStore((state) => state.savedFrames);
+  const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
+  const shoot = useShootStore();
+  const setShootFrame = useShootStore((state) => state.setShootFrame);
+  const selectSavedFrameForShoot = useShootStore((state) => state.selectSavedFrameForShoot);
 
   useEffect(() => {
     if (accessMode === 'member') {
@@ -117,10 +119,10 @@ export function ShootCaptureScreen() {
   const cameraRef = useRef<CameraView | null>(null);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
-  const shoot = useHarucutStore((state) => state.shoot);
-  const addShootShot = useHarucutStore((state) => state.addShootShot);
-  const resetShootSession = useHarucutStore((state) => state.resetShootSession);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const shoot = useShootStore();
+  const addShootShot = useShootStore((state) => state.addShootShot);
+  const resetShootSession = useShootStore((state) => state.resetShootSession);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [facing, setFacing] = useState<CameraType>('front');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -271,11 +273,11 @@ export function ShootSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useShootStyles();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const shoot = useHarucutStore((state) => state.shoot);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const shoot = useShootStore();
   const selectedFrameId = shoot.frameId;
-  const toggleShootSelection = useHarucutStore((state) => state.toggleShootSelection);
-  const setShootOption = useHarucutStore((state) => state.setShootOption);
+  const toggleShootSelection = useShootStore((state) => state.toggleShootSelection);
+  const setShootOption = useShootStore((state) => state.setShootOption);
 
   useEffect(() => {
     if (!selectedFrameId) {
@@ -387,14 +389,14 @@ export function ShootResultScreen() {
   const push = (path: string) => router.push(path as never);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const shoot = useHarucutStore((state) => state.shoot);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const shoot = useShootStore();
   const selectedFrameId = shoot.frameId;
-  const persistShootResult = useHarucutStore((state) => state.persistShootResult);
-  const historyItems = useHarucutStore((state) => state.historyItems);
-  const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
-  const showGuestShareNotice = useHarucutStore((state) => state.showGuestShareNotice);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const persistShootResult = useShootStore((state) => state.persistShootResult);
+  const historyItems = useLibraryStore((state) => state.historyItems);
+  const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
+  const showGuestShareNotice = useSessionStore((state) => state.showGuestShareNotice);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [draftName, setDraftName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'error' | 'idle' | 'saving' | 'saved'>('idle');
   const previewRef = useRef<View | null>(null);

@@ -1,5 +1,5 @@
 import { getAuthStatus, reactivateAccount } from '@/lib/auth-api';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 // 소셜 로그인 복귀 후 세션 확정 절차(상태 확인 → 필요 시 재활성화 → 멤버 세션 부트스트랩).
 // openAuthSessionAsync 성공 경로와 harucut://oauth2/callback 딥링크 경로가
@@ -15,7 +15,7 @@ export function completeSocialLoginSession(): Promise<void> {
         await reactivateAccount();
       }
 
-      await useHarucutStore.getState().bootstrapMemberSession();
+      await useSessionStore.getState().bootstrapMemberSession();
     })().finally(() => {
       inFlight = null;
     });

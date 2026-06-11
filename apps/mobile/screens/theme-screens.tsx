@@ -12,7 +12,9 @@ import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
 import { resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useLibraryStore } from '@/store/use-library-store';
+import { useSessionStore } from '@/store/use-session-store';
+import { useThemeEditorStore } from '@/store/use-theme-editor-store';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -25,12 +27,12 @@ function useThemeScreenStyles() {
 export function ThemeFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const savedFrames = useHarucutStore((state) => state.savedFrames);
-  const themeEditor = useHarucutStore((state) => state.themeEditor);
-  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
-  const setThemeFrame = useHarucutStore((state) => state.setThemeFrame);
-  const selectSavedFrameForTheme = useHarucutStore((state) => state.selectSavedFrameForTheme);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const savedFrames = useLibraryStore((state) => state.savedFrames);
+  const themeEditor = useThemeEditorStore();
+  const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
+  const setThemeFrame = useThemeEditorStore((state) => state.setThemeFrame);
+  const selectSavedFrameForTheme = useThemeEditorStore((state) => state.selectSavedFrameForTheme);
 
   useEffect(() => {
     if (accessMode === 'member') {
@@ -67,26 +69,26 @@ export function ThemeStickerScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useThemeScreenStyles();
-  const themeEditor = useHarucutStore((state) => state.themeEditor);
-  const setThemeTitle = useHarucutStore((state) => state.setThemeTitle);
-  const setThemeDescription = useHarucutStore((state) => state.setThemeDescription);
-  const setThemeBackgroundColor = useHarucutStore((state) => state.setThemeBackgroundColor);
-  const setThemeActiveComponent = useHarucutStore((state) => state.setThemeActiveComponent);
-  const setThemeTab = useHarucutStore((state) => state.setThemeTab);
-  const addThemePhotoAssets = useHarucutStore((state) => state.addThemePhotoAssets);
-  const addThemeComponentFromAsset = useHarucutStore((state) => state.addThemeComponentFromAsset);
-  const addThemeText = useHarucutStore((state) => state.addThemeText);
-  const duplicateThemeComponent = useHarucutStore((state) => state.duplicateThemeComponent);
-  const moveThemeComponentDown = useHarucutStore((state) => state.moveThemeComponentDown);
-  const moveThemeComponentUp = useHarucutStore((state) => state.moveThemeComponentUp);
-  const removeThemeComponent = useHarucutStore((state) => state.removeThemeComponent);
-  const removeThemePhotoAsset = useHarucutStore((state) => state.removeThemePhotoAsset);
-  const transformThemeComponent = useHarucutStore((state) => state.transformThemeComponent);
-  const toggleThemeComponentHidden = useHarucutStore((state) => state.toggleThemeComponentHidden);
-  const toggleThemeComponentLocked = useHarucutStore((state) => state.toggleThemeComponentLocked);
-  const saveThemeFrame = useHarucutStore((state) => state.saveThemeFrame);
-  const removeSavedFrame = useHarucutStore((state) => state.removeSavedFrame);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const themeEditor = useThemeEditorStore();
+  const setThemeTitle = useThemeEditorStore((state) => state.setThemeTitle);
+  const setThemeDescription = useThemeEditorStore((state) => state.setThemeDescription);
+  const setThemeBackgroundColor = useThemeEditorStore((state) => state.setThemeBackgroundColor);
+  const setThemeActiveComponent = useThemeEditorStore((state) => state.setThemeActiveComponent);
+  const setThemeTab = useThemeEditorStore((state) => state.setThemeTab);
+  const addThemePhotoAssets = useThemeEditorStore((state) => state.addThemePhotoAssets);
+  const addThemeComponentFromAsset = useThemeEditorStore((state) => state.addThemeComponentFromAsset);
+  const addThemeText = useThemeEditorStore((state) => state.addThemeText);
+  const duplicateThemeComponent = useThemeEditorStore((state) => state.duplicateThemeComponent);
+  const moveThemeComponentDown = useThemeEditorStore((state) => state.moveThemeComponentDown);
+  const moveThemeComponentUp = useThemeEditorStore((state) => state.moveThemeComponentUp);
+  const removeThemeComponent = useThemeEditorStore((state) => state.removeThemeComponent);
+  const removeThemePhotoAsset = useThemeEditorStore((state) => state.removeThemePhotoAsset);
+  const transformThemeComponent = useThemeEditorStore((state) => state.transformThemeComponent);
+  const toggleThemeComponentHidden = useThemeEditorStore((state) => state.toggleThemeComponentHidden);
+  const toggleThemeComponentLocked = useThemeEditorStore((state) => state.toggleThemeComponentLocked);
+  const saveThemeFrame = useThemeEditorStore((state) => state.saveThemeFrame);
+  const removeSavedFrame = useThemeEditorStore((state) => state.removeSavedFrame);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [textDraft, setTextDraft] = useState('하루컷');

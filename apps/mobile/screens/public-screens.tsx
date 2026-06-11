@@ -22,7 +22,7 @@ import {
   verifyPasswordResetCode,
 } from '@/lib/auth-api';
 import { completeSocialLoginSession } from '@/lib/social-login';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
 type SocialProvider = 'kakao' | 'naver';
@@ -69,7 +69,7 @@ function AuthShell({
 function SocialButtons() {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [pending, setPending] = useState<SocialProvider | null>(null);
 
   // 웹은 `${backend}/oauth2/authorization/{provider}`로 이동 후 쿠키 세션을 받습니다.
@@ -186,7 +186,7 @@ export function LandingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
-  const showGuestTrialNotice = useHarucutStore((state) => state.showGuestTrialNotice);
+  const showGuestTrialNotice = useSessionStore((state) => state.showGuestTrialNotice);
   const landingBottomPadding = Math.max(insets.bottom, 16);
 
   return (
@@ -241,7 +241,7 @@ export function LoginScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const replace = (path: string) => router.replace(path as never);
-  const bootstrapMemberSession = useHarucutStore((state) => state.bootstrapMemberSession);
+  const bootstrapMemberSession = useSessionStore((state) => state.bootstrapMemberSession);
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
