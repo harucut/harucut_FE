@@ -1,5 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,8 +9,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { getApiErrorMessage } from '@/lib/api-client';
+import { getApiConfig, getApiErrorMessage } from '@/lib/api-client';
+import { validateEmail, validatePassword, validateUsername } from '@/lib/auth-validation';
 import {
+  getAuthStatus,
   loginWithEmail,
   reactivateAccount,
   requestPasswordResetCode,
@@ -21,6 +25,7 @@ import {
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
+type SocialProvider = 'kakao' | 'naver';
 
 function usePublicScreenTheme() {
   const { colors, isDark } = useHarucutTheme();
@@ -63,6 +68,52 @@ function AuthShell({
 
 function SocialButtons() {
   const { styles } = usePublicScreenTheme();
+  const router = useRouter();
+  const bootstrapMemberSession = useHarucutStore((state) => state.bootstrapMemberSession);
+  const showNotice = useHarucutStore((state) => state.showNotice);
+  const [pending, setPending] = useState<SocialProvider | null>(null);
+
+  // 웹은 `${backend}/oauth2/authorization/{provider}`로 이동 후 쿠키 세션을 받습니다.
+  // 모바일은 시스템 인증 세션(expo-web-browser)으로 동일 엔드포인트를 열고,
+  // `harucut://oauth2/callback` 딥링크로 복귀한 뒤 세션 상태를 확인합니다.
+  // 백엔드가 해당 리다이렉트 스킴과 앱 쿠키/토큰 핸드오프를 지원해야 완결됩니다.
+  const handleSocialLogin = async (provider: SocialProvider) => {
+    if (pending) {
+      return;
+    }
+
+    setPending(provider);
+
+    try {
+      const { baseUrl } = getApiConfig();
+      const returnUrl = Linking.createURL('oauth2/callback');
+      const authUrl = `${baseUrl}/oauth2/authorization/${provider}`;
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, returnUrl);
+
+      if (result.type !== 'success') {
+        return;
+      }
+
+      const status = await getAuthStatus();
+
+      if (status?.userStatus === 'DELETED_REQUESTED') {
+        await reactivateAccount();
+      }
+
+      await bootstrapMemberSession();
+      router.replace('/home' as never);
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'SOCIAL LOGIN',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '소셜 로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.'),
+        title: '소셜 로그인 실패',
+      });
+    } finally {
+      setPending(null);
+    }
+  };
 
   return (
     <View style={{ gap: 10 }}>
@@ -71,8 +122,16 @@ function SocialButtons() {
         <Text style={styles.socialText}>또는 소셜 계정으로 계속하기</Text>
         <View style={styles.socialLine} />
       </View>
-      <SocialBrandButton label="카카오 로그인" onPress={() => undefined} provider="kakao" />
-      <SocialBrandButton label="네이버 로그인" onPress={() => undefined} provider="naver" />
+      <SocialBrandButton
+        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오 로그인'}
+        onPress={() => void handleSocialLogin('kakao')}
+        provider="kakao"
+      />
+      <SocialBrandButton
+        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버 로그인'}
+        onPress={() => void handleSocialLogin('naver')}
+        provider="naver"
+      />
     </View>
   );
 }
@@ -195,8 +254,14 @@ export function LoginScreen() {
   const [remember, setRemember] = useState(true);
 
   const handleLogin = async () => {
-    if (!form.email.trim() || !form.password) {
-      setError('이메일과 비밀번호를 입력해 주세요.');
+    const emailError = validateEmail(form.email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
+    if (!form.password) {
+      setError('비밀번호를 입력해 주세요.');
       return;
     }
 
@@ -301,8 +366,9 @@ export function SignupScreen() {
   }, [codeExpiresAt, verified]);
 
   const handleSendCode = async () => {
-    if (!email.trim()) {
-      setError('이메일을 입력해 주세요.');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -344,8 +410,15 @@ export function SignupScreen() {
       return;
     }
 
-    if (!form.username.trim() || !form.password) {
-      setError('닉네임과 비밀번호를 입력해 주세요.');
+    const usernameError = validateUsername(form.username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
+
+    const passwordError = validatePassword(form.password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -392,6 +465,8 @@ export function SignupScreen() {
           onChangeText={(value) => {
             setEmail(value);
             setVerified(false);
+            setCode('');
+            setCodeExpiresAt(null);
           }}
           placeholder="example@harucut.com"
           value={email}
@@ -468,10 +543,12 @@ export function ForgotPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
 
   const handleRequestCode = async () => {
-    if (!email.trim()) {
-      setError('이메일을 입력해 주세요.');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -480,6 +557,7 @@ export function ForgotPasswordScreen() {
 
     try {
       await requestPasswordResetCode(email.trim());
+      setCodeRequested(true);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, '인증 코드를 보내지 못했어요.'));
     } finally {
@@ -514,7 +592,13 @@ export function ForgotPasswordScreen() {
       return;
     }
 
-    if (!newPassword.trim() || newPassword !== confirmPassword) {
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
       setError('새 비밀번호와 확인 값이 일치하지 않아요.');
       return;
     }
@@ -538,7 +622,13 @@ export function ForgotPasswordScreen() {
       title="비밀번호 재설정">
       {step === 'VERIFY_CODE' ? (
         <SurfaceCard style={{ gap: 14 }}>
-          <FormField label="이메일" onChangeText={setEmail} placeholder="example@harucut.com" value={email} />
+          <FormField
+            editable={!codeRequested}
+            label="이메일"
+            onChangeText={setEmail}
+            placeholder="example@harucut.com"
+            value={email}
+          />
           <FormField label="인증 코드" onChangeText={setCode} placeholder="인증 코드 입력" value={code} />
           <View style={styles.heroActions}>
             <ActionButton

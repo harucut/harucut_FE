@@ -310,7 +310,7 @@ export function ShootSelectScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.sectionTitle}>프레임 미리보기</Text>
         <View style={{ alignItems: 'center' }}>
-          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} />
+          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         </View>
       </SurfaceCard>
 
@@ -353,10 +353,10 @@ export function ShootSelectScreen() {
         <View style={styles.filterWrap}>
           {OUTPUT_TONE_OPTIONS.map((option) => (
             <Pill
-              key={option}
-              active={shoot.tone === option}
-              onPress={() => setShootOption('tone', option)}>
-              {option}
+              key={option.id}
+              active={shoot.tone === option.id}
+              onPress={() => setShootOption('tone', option.id)}>
+              {option.label}
             </Pill>
           ))}
         </View>
@@ -516,10 +516,10 @@ export function ShootResultScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <View collapsable={false} ref={previewRef}>
-          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} />
+          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         </View>
         {!isGuest && shoot.includeVideo ? (
-          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} />
+          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         ) : null}
       </SurfaceCard>
 
