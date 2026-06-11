@@ -12,7 +12,6 @@ import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiConfig, getApiErrorMessage } from '@/lib/api-client';
 import { validateEmail, validatePassword, validateUsername } from '@/lib/auth-validation';
 import {
-  getAuthStatus,
   loginWithEmail,
   reactivateAccount,
   requestPasswordResetCode,
@@ -22,6 +21,7 @@ import {
   verifyEmailAuthCode,
   verifyPasswordResetCode,
 } from '@/lib/auth-api';
+import { completeSocialLoginSession } from '@/lib/social-login';
 import { useHarucutStore } from '@/store/use-harucut-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
@@ -69,14 +69,14 @@ function AuthShell({
 function SocialButtons() {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
-  const bootstrapMemberSession = useHarucutStore((state) => state.bootstrapMemberSession);
   const showNotice = useHarucutStore((state) => state.showNotice);
   const [pending, setPending] = useState<SocialProvider | null>(null);
 
   // 웹은 `${backend}/oauth2/authorization/{provider}`로 이동 후 쿠키 세션을 받습니다.
   // 모바일은 시스템 인증 세션(expo-web-browser)으로 동일 엔드포인트를 열고,
   // `harucut://oauth2/callback` 딥링크로 복귀한 뒤 세션 상태를 확인합니다.
-  // 백엔드가 해당 리다이렉트 스킴과 앱 쿠키/토큰 핸드오프를 지원해야 완결됩니다.
+  // 인증 세션이 결과를 돌려주지 못하는 경로(외부 브라우저 복귀, 콜드 스타트)는
+  // app/oauth2/callback.tsx 라우트가 같은 절차로 세션을 확정합니다.
   const handleSocialLogin = async (provider: SocialProvider) => {
     if (pending) {
       return;
@@ -94,13 +94,7 @@ function SocialButtons() {
         return;
       }
 
-      const status = await getAuthStatus();
-
-      if (status?.userStatus === 'DELETED_REQUESTED') {
-        await reactivateAccount();
-      }
-
-      await bootstrapMemberSession();
+      await completeSocialLoginSession();
       router.replace('/home' as never);
     } catch (error) {
       showNotice({
