@@ -59,13 +59,8 @@
     "msw": "^1.3.5",
     "playwright": "^1.60.0",
     "storybook": "^10.3.6",
-<<<<<<< HEAD
     "tailwindcss": "^4.3.0",
-    "ts-jest": "^29.4.9",
-=======
-    "tailwindcss": "^4.2.4",
     "ts-jest": "^29.4.11",
->>>>>>> origin/develop
     "typescript": "^5"
   }
 }
