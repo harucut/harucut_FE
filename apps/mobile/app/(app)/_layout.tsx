@@ -5,13 +5,13 @@ import { View } from 'react-native';
 
 import { BottomNavigation } from '@/components/harucut/bottom-nav';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 export default function AppLayout() {
   const pathname = usePathname();
   const router = useRouter();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const showGuestRestrictedNotice = useHarucutStore((state) => state.showGuestRestrictedNotice);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const showGuestRestrictedNotice = useSessionStore((state) => state.showGuestRestrictedNotice);
   const { colors } = useHarucutTheme();
   const shouldHideRoute = accessMode === 'guest' && !pathname.startsWith('/shoot');
 

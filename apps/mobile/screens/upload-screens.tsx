@@ -13,7 +13,9 @@ import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
 import { saveRemoteMediaToLibrary, shareMediaLink } from '@/lib/media-download';
 import { getMediaDownloadUrl } from '@/lib/user-media-api';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useLibraryStore } from '@/store/use-library-store';
+import { useSessionStore } from '@/store/use-session-store';
+import { useUploadStore } from '@/store/use-upload-store';
 
 async function resolveHistoryMediaUrl(item: HistoryItem) {
   if (item.mediaId) {
@@ -36,12 +38,12 @@ function useUploadStyles() {
 export function UploadFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const savedFrames = useHarucutStore((state) => state.savedFrames);
-  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
-  const upload = useHarucutStore((state) => state.upload);
-  const setUploadFrame = useHarucutStore((state) => state.setUploadFrame);
-  const selectSavedFrameForUpload = useHarucutStore((state) => state.selectSavedFrameForUpload);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const savedFrames = useLibraryStore((state) => state.savedFrames);
+  const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
+  const upload = useUploadStore();
+  const setUploadFrame = useUploadStore((state) => state.setUploadFrame);
+  const selectSavedFrameForUpload = useUploadStore((state) => state.selectSavedFrameForUpload);
 
   useEffect(() => {
     if (accessMode === 'member') {
@@ -82,10 +84,10 @@ export function UploadSelectScreen() {
   const push = (path: string) => router.push(path as never);
   const { colors } = useHarucutTheme();
   const styles = useUploadStyles();
-  const upload = useHarucutStore((state) => state.upload);
-  const addUploadAssets = useHarucutStore((state) => state.addUploadAssets);
-  const toggleUploadSelection = useHarucutStore((state) => state.toggleUploadSelection);
-  const setUploadOption = useHarucutStore((state) => state.setUploadOption);
+  const upload = useUploadStore();
+  const addUploadAssets = useUploadStore((state) => state.addUploadAssets);
+  const toggleUploadSelection = useUploadStore((state) => state.toggleUploadSelection);
+  const setUploadOption = useUploadStore((state) => state.setUploadOption);
 
   useEffect(() => {
     if (!upload.frameId) {
@@ -218,11 +220,11 @@ export function UploadResultScreen() {
   const push = (path: string) => router.push(path as never);
   const { colors } = useHarucutTheme();
   const styles = useUploadStyles();
-  const upload = useHarucutStore((state) => state.upload);
-  const persistUploadResult = useHarucutStore((state) => state.persistUploadResult);
-  const historyItems = useHarucutStore((state) => state.historyItems);
-  const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const upload = useUploadStore();
+  const persistUploadResult = useUploadStore((state) => state.persistUploadResult);
+  const historyItems = useLibraryStore((state) => state.historyItems);
+  const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [draftName, setDraftName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'error' | 'idle' | 'saving' | 'saved'>('idle');
   const [downloading, setDownloading] = useState(false);
