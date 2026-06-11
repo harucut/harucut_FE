@@ -98,6 +98,12 @@ export function FrameSelectPanel({
                     key={index}
                     type="button"
                     onClick={() => onToggleSelect(index)}
+                    aria-pressed={isSelected}
+                    aria-label={
+                      isSelected
+                        ? `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택 해제 (현재 ${order}번째로 선택됨)`
+                        : `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택`
+                    }
                     className={[
                       "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
