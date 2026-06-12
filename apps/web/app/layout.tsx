@@ -7,6 +7,7 @@ import "./globals.css";
 import { ExternalBrowserGate } from "./ExternalBrowserGate";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.harucut.com"),
   title: "하루컷",
   description: "오늘의 인생 네컷을 기록하는 사진 서비스",
 };

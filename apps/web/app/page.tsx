@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { BrandMark } from "@/components/layout/BrandMark";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default function LandingPage() {
   return (
