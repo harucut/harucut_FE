@@ -198,6 +198,7 @@ export function Pill({
 }
 
 type ActionButtonProps = {
+  disabled?: boolean;
   icon?: ReactNode;
   label: string;
   onPress: () => void;
@@ -206,6 +207,7 @@ type ActionButtonProps = {
 };
 
 export function ActionButton({
+  disabled = false,
   icon,
   label,
   onPress,
@@ -234,11 +236,14 @@ export function ActionButton({
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         variantStyle,
-        pressed ? styles.buttonPressed : null,
+        pressed && !disabled ? styles.buttonPressed : null,
+        disabled ? styles.buttonDisabled : null,
         style,
       ]}>
       <View style={styles.buttonContent}>
@@ -396,6 +401,9 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     buttonLabelOnSolid: {
       color: '#FFFFFF',
+    },
+    buttonDisabled: {
+      opacity: 0.55,
     },
     buttonPressed: {
       opacity: 0.88,

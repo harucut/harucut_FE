@@ -20,6 +20,7 @@ import {
   FRAME_CATALOG,
   type FrameId,
   type MediaAsset,
+  type OutputTone,
   type SavedFrame,
   type ThemeEditorComponent,
 } from '@/constants/harucut-data';
@@ -114,6 +115,23 @@ function toPercent(value: number, total: number): DimensionValue {
   return `${(value / total) * 100}%`;
 }
 
+type RnFilter = NonNullable<ViewStyle['filter']>;
+
+// 웹 FOURCUT_FILTERS의 CSS 필터를 React Native filter 스타일로 옮긴 값입니다.
+// (RN 0.76+ New Architecture에서 brightness/contrast/saturate/grayscale/blur 지원)
+function getOutputToneFilter(tone: OutputTone | undefined): RnFilter | undefined {
+  switch (tone) {
+    case 'B&W':
+      return [{ grayscale: 1 }];
+    case 'BRIGHT':
+      return [{ brightness: 1.14 }, { saturate: 1.04 }, { contrast: 1.02 }];
+    case 'SOFT':
+      return [{ brightness: 1.08 }, { contrast: 0.94 }, { saturate: 0.92 }, { blur: 0.45 }];
+    default:
+      return undefined;
+  }
+}
+
 function useFrameStyles() {
   const { colors, isDark } = useHarucutTheme();
 
@@ -133,6 +151,7 @@ export function FramePreview({
   onTransformComponent,
   slotColor,
   style,
+  tone,
 }: {
   accentColor?: string;
   activeComponentId?: string | null;
@@ -146,6 +165,7 @@ export function FramePreview({
   onTransformComponent?: (id: string, transform: ThemeComponentTransform) => void;
   slotColor?: string;
   style?: StyleProp<ViewStyle>;
+  tone?: OutputTone;
 }) {
   const { colors, isDark } = useHarucutTheme();
   const styles = useFrameStyles();
@@ -157,6 +177,7 @@ export function FramePreview({
   const resolvedAccent = accentColor ?? colors.primary;
   const resolvedBackground = backgroundColor ?? accentColor ?? pickerPreviewColors.outer;
   const resolvedSlotColor = slotColor ?? pickerPreviewColors.slot;
+  const toneFilter = getOutputToneFilter(tone);
 
   return (
     <View
@@ -191,6 +212,7 @@ export function FramePreview({
                 top: toPercent(slot.y, layout.totalHeight),
                 width: toPercent(slot.width, layout.totalWidth),
               },
+              toneFilter ? { filter: toneFilter } : null,
             ]}>
             {currentMedia ? (
               <>
@@ -401,7 +423,7 @@ export function FramePickerSection({
   confirmLabel: string;
   onConfirm: () => void;
   onSelect: (frameId: FrameId) => void;
-  selectedFrameId: FrameId;
+  selectedFrameId: FrameId | null;
 }) {
   const styles = useFrameStyles();
   const { width } = useWindowDimensions();
@@ -473,7 +495,7 @@ export function FramePickerSection({
           </View>
         </View>
       )}
-      <ActionButton label={confirmLabel} onPress={onConfirm} />
+      <ActionButton disabled={!selectedFrameId} label={confirmLabel} onPress={onConfirm} />
     </>
   );
 }
@@ -583,13 +605,15 @@ export function SavedFramesPanel({
   onAction?: (frame: SavedFrame) => void;
   onRefresh: () => void;
   onSelect: (frame: SavedFrame) => void;
-  selectedFrameId: FrameId;
+  selectedFrameId: FrameId | null;
   selectedSavedFrameId: string | null;
   title: string;
 }) {
   const { colors } = useHarucutTheme();
   const styles = useFrameStyles();
-  const matchingFrames = frames.filter((frame) => frame.frameId === selectedFrameId);
+  const matchingFrames = selectedFrameId
+    ? frames.filter((frame) => frame.frameId === selectedFrameId)
+    : frames;
 
   return (
     <SurfaceCard>

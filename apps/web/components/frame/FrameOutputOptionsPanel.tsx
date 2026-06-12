@@ -40,9 +40,6 @@ export function FrameOutputOptionsPanel({
         <div className="flex flex-col gap-2">
           <div>
             <h2 className="text-xs font-medium text-zinc-200">출력 옵션</h2>
-            <p className="mt-1 text-[11px] text-zinc-500">
-              다음 단계에서 이미지와 동영상을 준비할 때 이 설정이 그대로 반영돼요.
-            </p>
           </div>
 
           {hasCustomFrame ? (
@@ -123,11 +120,7 @@ export function FrameOutputOptionsPanel({
           </div>
         </div>
 
-        {guestMode ? (
-          <div className="hc-feedback rounded-xl border px-3 py-2 text-[11px]">
-            비회원 체험에서는 이미지 결과만 다운로드할 수 있어요.
-          </div>
-        ) : (
+        {guestMode ? null : (
           <div className="flex flex-col gap-2">
             <label className="inline-flex items-start gap-2 text-[11px] text-zinc-200">
               <input

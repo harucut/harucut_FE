@@ -8,12 +8,8 @@
     "scheme": "harucut",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.harucut.mobile"
-    },
     "android": {
-      "package": "com.harucut.mobile",
+      "package": "com.harucut.app",
       "adaptiveIcon": {
         "backgroundColor": "#F6E8E0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

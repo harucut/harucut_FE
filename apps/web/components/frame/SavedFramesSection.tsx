@@ -11,7 +11,7 @@ type SavedFramesSectionProps = {
   title: string;
   description?: string;
   emptyText: string;
-  selectedFrameId: FrameId;
+  selectedFrameId: FrameId | null;
   frames: RemoteFrame[];
   isLoading: boolean;
   error: string | null;
@@ -41,7 +41,10 @@ export function SavedFramesSection({
   idleStatusText = "클릭해서 선택",
 }: SavedFramesSectionProps) {
   const matchingFrames = useMemo(
-    () => frames.filter((frame) => matchesFrameType(selectedFrameId, frame.frameType)),
+    () =>
+      selectedFrameId
+        ? frames.filter((frame) => matchesFrameType(selectedFrameId, frame.frameType))
+        : frames,
     [frames, selectedFrameId],
   );
 

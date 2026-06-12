@@ -7,15 +7,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionButton, Pill } from '@/components/harucut/ui';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useSessionStore } from '@/store/use-session-store';
 
 export function GlobalNotice() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const notice = useHarucutStore((state) => state.notice);
-  const clearNotice = useHarucutStore((state) => state.clearNotice);
-  const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
-  const enterGuestMode = useHarucutStore((state) => state.enterGuestMode);
+  const notice = useSessionStore((state) => state.notice);
+  const clearNotice = useSessionStore((state) => state.clearNotice);
+  const enterAnonymousMode = useSessionStore((state) => state.enterAnonymousMode);
+  const enterGuestMode = useSessionStore((state) => state.enterGuestMode);
   const { colors, isDark } = useHarucutTheme();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 

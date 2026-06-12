@@ -1,5 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { getApiErrorMessage } from '@/lib/api-client';
+import { getApiConfig, getApiErrorMessage } from '@/lib/api-client';
+import { validateEmail, validatePassword, validateUsername } from '@/lib/auth-validation';
 import {
   loginWithEmail,
   reactivateAccount,
@@ -18,9 +21,11 @@ import {
   verifyEmailAuthCode,
   verifyPasswordResetCode,
 } from '@/lib/auth-api';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { completeSocialLoginSession } from '@/lib/social-login';
+import { useSessionStore } from '@/store/use-session-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
+type SocialProvider = 'kakao' | 'naver';
 
 function usePublicScreenTheme() {
   const { colors, isDark } = useHarucutTheme();
@@ -63,6 +68,46 @@ function AuthShell({
 
 function SocialButtons() {
   const { styles } = usePublicScreenTheme();
+  const router = useRouter();
+  const showNotice = useSessionStore((state) => state.showNotice);
+  const [pending, setPending] = useState<SocialProvider | null>(null);
+
+  // 웹은 `${backend}/oauth2/authorization/{provider}`로 이동 후 쿠키 세션을 받습니다.
+  // 모바일은 시스템 인증 세션(expo-web-browser)으로 동일 엔드포인트를 열고,
+  // `harucut://oauth2/callback` 딥링크로 복귀한 뒤 세션 상태를 확인합니다.
+  // 인증 세션이 결과를 돌려주지 못하는 경로(외부 브라우저 복귀, 콜드 스타트)는
+  // app/oauth2/callback.tsx 라우트가 같은 절차로 세션을 확정합니다.
+  const handleSocialLogin = async (provider: SocialProvider) => {
+    if (pending) {
+      return;
+    }
+
+    setPending(provider);
+
+    try {
+      const { baseUrl } = getApiConfig();
+      const returnUrl = Linking.createURL('oauth2/callback');
+      const authUrl = `${baseUrl}/oauth2/authorization/${provider}`;
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, returnUrl);
+
+      if (result.type !== 'success') {
+        return;
+      }
+
+      await completeSocialLoginSession();
+      router.replace('/home' as never);
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'SOCIAL LOGIN',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '소셜 로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.'),
+        title: '소셜 로그인 실패',
+      });
+    } finally {
+      setPending(null);
+    }
+  };
 
   return (
     <View style={{ gap: 10 }}>
@@ -71,8 +116,27 @@ function SocialButtons() {
         <Text style={styles.socialText}>또는 소셜 계정으로 계속하기</Text>
         <View style={styles.socialLine} />
       </View>
-      <SocialBrandButton label="카카오 로그인" onPress={() => undefined} provider="kakao" />
-      <SocialBrandButton label="네이버 로그인" onPress={() => undefined} provider="naver" />
+      <SocialBrandButton
+        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오 로그인'}
+        onPress={() => void handleSocialLogin('kakao')}
+        provider="kakao"
+      />
+      <SocialBrandButton
+        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버 로그인'}
+        onPress={() => void handleSocialLogin('naver')}
+        provider="naver"
+      />
+      <Text style={styles.socialConsentNotice}>
+        소셜 계정으로 계속하면{' '}
+        <Text onPress={() => router.push('/terms' as never)} style={styles.socialConsentLink}>
+          서비스 이용약관
+        </Text>
+        과{' '}
+        <Text onPress={() => router.push('/privacy' as never)} style={styles.socialConsentLink}>
+          개인정보 처리방침
+        </Text>
+        에 동의하는 것으로 간주됩니다.
+      </Text>
     </View>
   );
 }
@@ -133,7 +197,7 @@ export function LandingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
-  const showGuestTrialNotice = useHarucutStore((state) => state.showGuestTrialNotice);
+  const showGuestTrialNotice = useSessionStore((state) => state.showGuestTrialNotice);
   const landingBottomPadding = Math.max(insets.bottom, 16);
 
   return (
@@ -178,6 +242,27 @@ export function LandingScreen() {
             <Text style={styles.heroCardBody}>완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.</Text>
           </View>
         </SurfaceCard>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 16,
+            justifyContent: 'center',
+            paddingVertical: 4,
+          }}>
+          <Pressable
+            accessibilityLabel="서비스 이용약관 보기"
+            accessibilityRole="link"
+            onPress={() => push('/terms')}>
+            <Text style={styles.legalFooterLink}>서비스 이용약관</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="개인정보 처리방침 보기"
+            accessibilityRole="link"
+            onPress={() => push('/privacy')}>
+            <Text style={styles.legalFooterLink}>개인정보 처리방침</Text>
+          </Pressable>
+        </View>
       </View>
     </AppScrollView>
   );
@@ -188,15 +273,21 @@ export function LoginScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const replace = (path: string) => router.replace(path as never);
-  const bootstrapMemberSession = useHarucutStore((state) => state.bootstrapMemberSession);
+  const bootstrapMemberSession = useSessionStore((state) => state.bootstrapMemberSession);
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [remember, setRemember] = useState(true);
 
   const handleLogin = async () => {
-    if (!form.email.trim() || !form.password) {
-      setError('이메일과 비밀번호를 입력해 주세요.');
+    const emailError = validateEmail(form.email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
+    if (!form.password) {
+      setError('비밀번호를 입력해 주세요.');
       return;
     }
 
@@ -282,6 +373,7 @@ export function SignupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [consents, setConsents] = useState({ privacy: false, terms: false });
   const remainingSeconds = useMemo(() => {
     if (!codeExpiresAt) return 0;
     return Math.max(Math.floor((codeExpiresAt - Date.now()) / 1000), 0);
@@ -301,8 +393,9 @@ export function SignupScreen() {
   }, [codeExpiresAt, verified]);
 
   const handleSendCode = async () => {
-    if (!email.trim()) {
-      setError('이메일을 입력해 주세요.');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -344,8 +437,20 @@ export function SignupScreen() {
       return;
     }
 
-    if (!form.username.trim() || !form.password) {
-      setError('닉네임과 비밀번호를 입력해 주세요.');
+    if (!consents.terms || !consents.privacy) {
+      setError('서비스 이용약관과 개인정보 수집·이용에 동의해야 가입할 수 있어요.');
+      return;
+    }
+
+    const usernameError = validateUsername(form.username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
+
+    const passwordError = validatePassword(form.password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -392,6 +497,8 @@ export function SignupScreen() {
           onChangeText={(value) => {
             setEmail(value);
             setVerified(false);
+            setCode('');
+            setCodeExpiresAt(null);
           }}
           placeholder="example@harucut.com"
           value={email}
@@ -449,6 +556,46 @@ export function SignupScreen() {
           />
         ))}
 
+        <View style={{ gap: 10 }}>
+          {(
+            [
+              { key: 'terms', label: '[필수] 서비스 이용약관 동의', path: '/terms' },
+              { key: 'privacy', label: '[필수] 개인정보 수집·이용 동의', path: '/privacy' },
+            ] as const
+          ).map((item) => (
+            <View key={item.key} style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                accessibilityLabel={item.label}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: consents[item.key] }}
+                onPress={() =>
+                  setConsents((current) => ({ ...current, [item.key]: !current[item.key] }))
+                }
+                style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: 8 }}>
+                <Ionicons
+                  color={consents[item.key] ? colors.primary : colors.muted}
+                  name={consents[item.key] ? 'checkbox' : 'square-outline'}
+                  size={20}
+                />
+                <Text style={{ color: colors.textSoft, flex: 1, fontSize: 12 }}>{item.label}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={`${item.label} 내용 보기`}
+                accessibilityRole="button"
+                onPress={() => push(item.path)}>
+                <Text
+                  style={{
+                    color: colors.muted,
+                    fontSize: 11,
+                    textDecorationLine: 'underline',
+                  }}>
+                  보기
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+
         <ActionButton label={submitting ? '처리 중...' : '회원가입'} onPress={() => void handleSignup()} />
         {error ? <Text style={styles.formError}>{error}</Text> : null}
       </SurfaceCard>
@@ -468,10 +615,12 @@ export function ForgotPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
 
   const handleRequestCode = async () => {
-    if (!email.trim()) {
-      setError('이메일을 입력해 주세요.');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -480,6 +629,7 @@ export function ForgotPasswordScreen() {
 
     try {
       await requestPasswordResetCode(email.trim());
+      setCodeRequested(true);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, '인증 코드를 보내지 못했어요.'));
     } finally {
@@ -514,7 +664,13 @@ export function ForgotPasswordScreen() {
       return;
     }
 
-    if (!newPassword.trim() || newPassword !== confirmPassword) {
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
       setError('새 비밀번호와 확인 값이 일치하지 않아요.');
       return;
     }
@@ -538,7 +694,13 @@ export function ForgotPasswordScreen() {
       title="비밀번호 재설정">
       {step === 'VERIFY_CODE' ? (
         <SurfaceCard style={{ gap: 14 }}>
-          <FormField label="이메일" onChangeText={setEmail} placeholder="example@harucut.com" value={email} />
+          <FormField
+            editable={!codeRequested}
+            label="이메일"
+            onChangeText={setEmail}
+            placeholder="example@harucut.com"
+            value={email}
+          />
           <FormField label="인증 코드" onChangeText={setCode} placeholder="인증 코드 입력" value={code} />
           <View style={styles.heroActions}>
             <ActionButton
@@ -813,6 +975,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     socialNaverLabel: {
       color: '#FFFFFF',
+    },
+    legalFooterLink: {
+      color: colors.muted,
+      fontSize: 11,
+      textDecorationLine: 'underline',
+    },
+    socialConsentLink: {
+      color: colors.textSoft,
+      textDecorationLine: 'underline',
+    },
+    socialConsentNotice: {
+      color: colors.muted,
+      fontSize: 10,
+      lineHeight: 16,
+      textAlign: 'center',
     },
     socialText: {
       color: colors.muted,

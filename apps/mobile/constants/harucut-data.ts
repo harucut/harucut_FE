@@ -1,6 +1,8 @@
+import { FOURCUT_FILTER_DEFINITIONS, type FourcutFilterId } from '@harucut/shared';
+
 export type FrameId = 'classic-4' | 'grid-4' | 'polaroid-4' | 'wide-4';
 export type MediaKind = 'image' | 'video';
-export type OutputTone = '기본' | '선명한 블루' | '소프트';
+export type OutputTone = FourcutFilterId;
 
 export type MediaAsset = {
   id: string;
@@ -211,7 +213,16 @@ export const FRAME_BORDER_OPTIONS = [
   { label: '아이스 블루', value: '#C7DCFF' },
 ] as const;
 
-export const OUTPUT_TONE_OPTIONS: OutputTone[] = ['기본', '선명한 블루', '소프트'];
+export type OutputToneOption = {
+  description: string;
+  id: OutputTone;
+  label: string;
+};
+
+// id/라벨/설명/순서는 웹과 공유하는 공통 패키지 정의를 그대로 사용한다.
+export const OUTPUT_TONE_OPTIONS: OutputToneOption[] = FOURCUT_FILTER_DEFINITIONS.map(
+  ({ description, id, label }) => ({ description, id, label }),
+);
 
 export const BACKGROUND_SWATCHES = [
   { label: '화이트', value: '#FFFFFF' },

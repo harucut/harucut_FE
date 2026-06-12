@@ -1,6 +1,8 @@
 import { render, waitFor } from "@testing-library/react";
 import { create } from "zustand";
 import UploadResultPage from "@/app/upload/result/page";
+import type { FrameMedia } from "@/components/frame/FramePreview";
+import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -11,7 +13,22 @@ const mockUploadGeneratedFourcutFile = jest.fn();
 const mockCreateObjectURL = jest.fn();
 const mockRevokeObjectURL = jest.fn();
 
-const mockUseUploadSession = create(() => ({
+type MockUploadSessionState = {
+  frameId: string | null;
+  remoteFrameId: number | null;
+  media: FrameMedia[];
+  selectedIndexes: Array<number | null>;
+  borderColor: string;
+  outputFilter: "NONE";
+  includeVideo: boolean;
+  imageResult: GeneratedFourcutAsset | null;
+  videoResult: GeneratedFourcutAsset | null;
+  setImageResult: (imageResult: GeneratedFourcutAsset | null) => void;
+  setVideoResult: (videoResult: GeneratedFourcutAsset | null) => void;
+  clearResults: () => void;
+};
+
+const mockUseUploadSession = create<MockUploadSessionState>((set) => ({
   frameId: "classic-4" as string | null,
   remoteFrameId: null as number | null,
   media: [
@@ -24,15 +41,11 @@ const mockUseUploadSession = create(() => ({
   borderColor: "#111827",
   outputFilter: "NONE",
   includeVideo: true,
-  imageResult: null as null | object,
-  videoResult: null as null | object,
-  setImageResult: (imageResult: unknown) =>
-    mockUseUploadSession.setState({ imageResult }),
-  setVideoResult: (videoResult: unknown) =>
-    mockUseUploadSession.setState({ videoResult }),
-  clearResults: jest.fn(() =>
-    mockUseUploadSession.setState({ imageResult: null, videoResult: null }),
-  ),
+  imageResult: null,
+  videoResult: null,
+  setImageResult: (imageResult) => set({ imageResult }),
+  setVideoResult: (videoResult) => set({ videoResult }),
+  clearResults: jest.fn(() => set({ imageResult: null, videoResult: null })),
 }));
 
 jest.mock("next/navigation", () => ({

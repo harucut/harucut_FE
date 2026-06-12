@@ -12,7 +12,9 @@ import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/co
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
-import { useHarucutStore } from '@/store/use-harucut-store';
+import { useLibraryStore } from '@/store/use-library-store';
+import { useSessionStore } from '@/store/use-session-store';
+import { useShootStore } from '@/store/use-shoot-store';
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,13 +54,13 @@ function useShootStyles() {
 export function ShootFrameScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const enterAnonymousMode = useHarucutStore((state) => state.enterAnonymousMode);
-  const savedFrames = useHarucutStore((state) => state.savedFrames);
-  const loadRemoteFrames = useHarucutStore((state) => state.loadRemoteFrames);
-  const shoot = useHarucutStore((state) => state.shoot);
-  const setShootFrame = useHarucutStore((state) => state.setShootFrame);
-  const selectSavedFrameForShoot = useHarucutStore((state) => state.selectSavedFrameForShoot);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const enterAnonymousMode = useSessionStore((state) => state.enterAnonymousMode);
+  const savedFrames = useLibraryStore((state) => state.savedFrames);
+  const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
+  const shoot = useShootStore();
+  const setShootFrame = useShootStore((state) => state.setShootFrame);
+  const selectSavedFrameForShoot = useShootStore((state) => state.selectSavedFrameForShoot);
 
   useEffect(() => {
     if (accessMode === 'member') {
@@ -66,15 +68,14 @@ export function ShootFrameScreen() {
     }
   }, [accessMode, loadRemoteFrames]);
 
+  useEffect(() => {
+    setShootFrame(null);
+  }, [setShootFrame]);
+
   return (
     <AppScrollView>
       <PageHeader
         backLabel={accessMode === 'guest' ? '처음으로' : '홈으로'}
-        description={
-          accessMode === 'guest'
-            ? '비회원 체험에서는 촬영과 이미지 다운로드만 할 수 있어요.'
-            : '촬영할 프레임을 먼저 골라 주세요.'
-        }
         onPressBack={() => {
           if (accessMode === 'guest') {
             enterAnonymousMode();
@@ -87,8 +88,12 @@ export function ShootFrameScreen() {
       />
       <StepProgress current={1} label="프레임 선택" total={4} />
       <FramePickerSection
-        confirmLabel="촬영 시작하기"
-        onConfirm={() => push('/shoot/capture')}
+        confirmLabel={shoot.frameId ? '촬영 시작하기' : '촬영할 프레임을 선택해주세요'}
+        onConfirm={() => {
+          if (!shoot.frameId) return;
+
+          push('/shoot/capture');
+        }}
         onSelect={setShootFrame}
         selectedFrameId={shoot.frameId}
       />
@@ -114,10 +119,10 @@ export function ShootCaptureScreen() {
   const cameraRef = useRef<CameraView | null>(null);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
-  const shoot = useHarucutStore((state) => state.shoot);
-  const addShootShot = useHarucutStore((state) => state.addShootShot);
-  const resetShootSession = useHarucutStore((state) => state.resetShootSession);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const shoot = useShootStore();
+  const addShootShot = useShootStore((state) => state.addShootShot);
+  const resetShootSession = useShootStore((state) => state.resetShootSession);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [facing, setFacing] = useState<CameraType>('front');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -128,8 +133,6 @@ export function ShootCaptureScreen() {
       router.replace('/shoot' as never);
     }
   }, [router, shoot.frameId]);
-
-  const remainingShots = Math.max(8 - shoot.shots.length, 0);
 
   const handleStartAutoCapture = async () => {
     if (!permission?.granted) {
@@ -198,17 +201,21 @@ export function ShootCaptureScreen() {
       <PageHeader
         backLabel="프레임 다시 선택"
         onPressBack={() => push('/shoot')}
-        title="사진 촬영 · 8장 자동 촬영"
       />
+      <StepProgress current={2} label="사진 촬영" total={4} />
 
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.statusRow}>
-          <Text style={styles.statusText}>2단계 · 카메라 촬영 {isShooting ? '· 자동 촬영 중' : ''}</Text>
+          <Text style={styles.statusText}>사진과 영상을 함께 촬영해요</Text>
           <Pill>{shoot.shots.length} / 8장 촬영됨</Pill>
         </View>
 
         <View style={styles.cameraFrame}>
-          {permission?.granted ? (
+          {permission === null ? (
+            <View style={styles.cameraPlaceholder}>
+              <Text style={styles.bodyText}>카메라 권한 상태를 확인하는 중이에요.</Text>
+            </View>
+          ) : permission.granted ? (
             <CameraView
               facing={facing}
               onCameraReady={() => setIsCameraReady(true)}
@@ -227,15 +234,16 @@ export function ShootCaptureScreen() {
               <View style={styles.countdownCircle}>
                 <Text style={styles.countdownText}>{countdown}</Text>
               </View>
-              <Text style={styles.overlayCaption}>다음 촬영까지 남은 시간</Text>
-              <Text style={styles.overlayCaption}>남은 사진 {remainingShots}장</Text>
+              <Text style={styles.overlayCaption}>{shoot.shots.length}/8</Text>
             </View>
           ) : null}
         </View>
 
         <View style={{ gap: 8 }}>
           <Text style={styles.bodyText}>
-            카메라를 켜고 &quot;8장 자동 촬영 시작&quot; 버튼을 누르면 3초 간격으로 사진을 촬영해요.
+            {permission?.granted
+              ? '"촬영 시작" 버튼을 누르면 3초 간격으로 사진을 촬영해요.'
+              : '카메라 권한을 허용하면 8장 자동 촬영을 시작할 수 있어요.'}
           </Text>
           <Text style={styles.statusText}>카메라 {isCameraReady ? '준비 완료' : '아직 켜져 있지 않아요'}</Text>
         </View>
@@ -249,7 +257,7 @@ export function ShootCaptureScreen() {
           />
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="camera-outline" size={16} />}
-            label={isShooting ? '촬영 중...' : '8장 자동 촬영 시작'}
+            label={isShooting ? '촬영 중...' : '촬영 시작'}
             onPress={() => void handleStartAutoCapture()}
           />
           {shoot.shots.length >= 4 ? (
@@ -265,13 +273,14 @@ export function ShootSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useShootStyles();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const shoot = useHarucutStore((state) => state.shoot);
-  const toggleShootSelection = useHarucutStore((state) => state.toggleShootSelection);
-  const setShootOption = useHarucutStore((state) => state.setShootOption);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const shoot = useShootStore();
+  const selectedFrameId = shoot.frameId;
+  const toggleShootSelection = useShootStore((state) => state.toggleShootSelection);
+  const setShootOption = useShootStore((state) => state.setShootOption);
 
   useEffect(() => {
-    if (!shoot.frameId) {
+    if (!selectedFrameId) {
       router.replace('/shoot' as never);
       return;
     }
@@ -279,7 +288,7 @@ export function ShootSelectScreen() {
     if (shoot.shots.length === 0) {
       router.replace('/shoot/capture' as never);
     }
-  }, [router, shoot.frameId, shoot.shots.length]);
+  }, [router, selectedFrameId, shoot.shots.length]);
 
   const selectedCount = shoot.selectedShotIds.length;
   const previewMedia = useMemo(
@@ -290,26 +299,27 @@ export function ShootSelectScreen() {
     [shoot.selectedShotIds, shoot.shots],
   );
 
+  if (!selectedFrameId) return null;
+
   return (
     <AppScrollView>
       <PageHeader
         backLabel="다시 촬영"
-        description="마음에 드는 사진 4장을 고르고 출력 옵션을 정해 주세요."
         onPressBack={() => push('/shoot/capture')}
-        title="사진 선택"
       />
+      <StepProgress current={3} label="사진 선택" total={4} />
 
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.sectionTitle}>프레임 미리보기</Text>
         <View style={{ alignItems: 'center' }}>
-          <FramePreview accentColor={shoot.borderColor} frameId={shoot.frameId} media={previewMedia} />
+          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         </View>
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.bodyText}>방금 촬영한 사진 {shoot.shots.length}장 중에서 4장을 골라 주세요.</Text>
         <View style={styles.mediaGrid}>
-          {shoot.shots.map((item) => {
+          {shoot.shots.map((item, index) => {
             const selected = shoot.selectedShotIds.includes(item.id);
             return (
               <Pressable
@@ -321,7 +331,7 @@ export function ShootSelectScreen() {
                 style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
                 <Image accessibilityLabel={item.label} accessibilityRole="image" source={{ uri: item.uri }} style={styles.mediaImage} />
                 <View style={styles.mediaBadge}>
-                  <Text style={styles.mediaBadgeText}>{selected ? '선택됨' : item.label}</Text>
+                  <Text style={styles.mediaBadgeText}>#{index + 1}</Text>
                 </View>
               </Pressable>
             );
@@ -345,10 +355,10 @@ export function ShootSelectScreen() {
         <View style={styles.filterWrap}>
           {OUTPUT_TONE_OPTIONS.map((option) => (
             <Pill
-              key={option}
-              active={shoot.tone === option}
-              onPress={() => setShootOption('tone', option)}>
-              {option}
+              key={option.id}
+              active={shoot.tone === option.id}
+              onPress={() => setShootOption('tone', option.id)}>
+              {option.label}
             </Pill>
           ))}
         </View>
@@ -359,11 +369,10 @@ export function ShootSelectScreen() {
             </Pill>
             <Text style={styles.bodyText}>촬영 플로우에서는 이미지 중심 결과를 우선 제공합니다.</Text>
           </>
-        ) : (
-          <Text style={styles.bodyText}>비회원 체험에서는 이미지 결과만 다운로드할 수 있어요.</Text>
-        )}
+        ) : null}
         <ActionButton
-          label={`다음 단계로 (${selectedCount}/4)`}
+          disabled={selectedCount !== 4}
+          label={selectedCount === 4 ? '다음 단계로' : '4장을 골라주세요'}
           onPress={() => {
             if (selectedCount === 4) {
               push('/shoot/result');
@@ -380,20 +389,21 @@ export function ShootResultScreen() {
   const push = (path: string) => router.push(path as never);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
-  const accessMode = useHarucutStore((state) => state.accessMode);
-  const shoot = useHarucutStore((state) => state.shoot);
-  const persistShootResult = useHarucutStore((state) => state.persistShootResult);
-  const historyItems = useHarucutStore((state) => state.historyItems);
-  const renameHistoryItem = useHarucutStore((state) => state.renameHistoryItem);
-  const showGuestShareNotice = useHarucutStore((state) => state.showGuestShareNotice);
-  const showNotice = useHarucutStore((state) => state.showNotice);
+  const accessMode = useSessionStore((state) => state.accessMode);
+  const shoot = useShootStore();
+  const selectedFrameId = shoot.frameId;
+  const persistShootResult = useShootStore((state) => state.persistShootResult);
+  const historyItems = useLibraryStore((state) => state.historyItems);
+  const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
+  const showGuestShareNotice = useSessionStore((state) => state.showGuestShareNotice);
+  const showNotice = useSessionStore((state) => state.showNotice);
   const [draftName, setDraftName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'error' | 'idle' | 'saving' | 'saved'>('idle');
   const previewRef = useRef<View | null>(null);
   const isGuest = accessMode === 'guest';
 
   useEffect(() => {
-    if (!shoot.frameId) {
+    if (!selectedFrameId) {
       router.replace('/shoot' as never);
       return;
     }
@@ -439,7 +449,7 @@ export function ShootResultScreen() {
     persistShootResult,
     router,
     saveStatus,
-    shoot.frameId,
+    selectedFrameId,
     shoot.persistedHistoryId,
     shoot.selectedShotIds.length,
     showNotice,
@@ -485,6 +495,8 @@ export function ShootResultScreen() {
     }
   };
 
+  if (!selectedFrameId) return null;
+
   return (
     <AppScrollView>
       <PageHeader title="촬영 결과" />
@@ -506,10 +518,10 @@ export function ShootResultScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <View collapsable={false} ref={previewRef}>
-          <FramePreview accentColor={shoot.borderColor} frameId={shoot.frameId} media={previewMedia} />
+          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         </View>
         {!isGuest && shoot.includeVideo ? (
-          <FramePreview accentColor={shoot.borderColor} frameId={shoot.frameId} media={previewMedia} />
+          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         ) : null}
       </SurfaceCard>
 
@@ -653,8 +665,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       gap: 8,
     },
     mediaBadge: {
-      backgroundColor: colors.overlayStrong,
+      backgroundColor: '#FFFFFF',
+      borderColor: 'rgba(17, 24, 39, 0.14)',
       borderRadius: 999,
+      borderWidth: 1,
       bottom: 8,
       left: 8,
       paddingHorizontal: 8,
@@ -662,9 +676,9 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       position: 'absolute',
     },
     mediaBadgeText: {
-      color: '#FFFFFF',
+      color: '#000000',
       fontSize: 10,
-      fontWeight: '700',
+      fontWeight: '800',
     },
     mediaCard: {
       aspectRatio: 0.75,
