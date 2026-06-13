@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
-import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
+import { CaptureFrameStage, FRAME_LAYOUTS, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
@@ -127,6 +127,27 @@ export function ShootCaptureScreen() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
+  const savedFrames = useLibraryStore((state) => state.savedFrames);
+
+  const activeSavedFrame =
+    shoot.selectedSavedFrameId != null
+      ? savedFrames.find((frame) => frame.id === shoot.selectedSavedFrameId) ?? null
+      : null;
+  const layout = shoot.frameId ? FRAME_LAYOUTS[shoot.frameId] : null;
+  const slotCount = layout ? layout.slots.length : 4;
+  // 8장을 슬롯 수로 순환 — 지금 찍는 칸 인덱스.
+  const cameraSlotIndex = shoot.shots.length % slotCount;
+  // 각 칸에 가장 최근 촬영본을 채워 프레임이 완성돼 가는 모습을 보여준다(현재 칸은 카메라가 덮는다).
+  const capturedUris = layout
+    ? layout.slots.map((_, slotIndex) => {
+        if (slotIndex === cameraSlotIndex) return undefined;
+        for (let k = shoot.shots.length - 1; k >= 0; k -= 1) {
+          if (k % slotCount === slotIndex) return shoot.shots[k]?.uri;
+        }
+        return undefined;
+      })
+    : [];
+  const isTallFrame = layout ? layout.totalWidth / layout.totalHeight < 1 : true;
 
   useEffect(() => {
     if (!shoot.frameId) {
@@ -210,27 +231,36 @@ export function ShootCaptureScreen() {
           <Pill>{shoot.shots.length} / 8장 촬영됨</Pill>
         </View>
 
-        <View style={styles.cameraFrame}>
-          {permission === null ? (
-            <View style={styles.cameraPlaceholder}>
-              <Text style={styles.bodyText}>카메라 권한 상태를 확인하는 중이에요.</Text>
-            </View>
-          ) : permission.granted ? (
-            <CameraView
-              facing={facing}
-              onCameraReady={() => setIsCameraReady(true)}
-              ref={cameraRef}
-              style={StyleSheet.absoluteFill}
+        <View style={styles.stageWrap}>
+          {layout && shoot.frameId ? (
+            <CaptureFrameStage
+              accentColor={shoot.borderColor}
+              backgroundColor={shoot.borderColor}
+              cameraSlotIndex={cameraSlotIndex}
+              capturedUris={capturedUris}
+              components={activeSavedFrame?.components ?? []}
+              frameId={shoot.frameId}
+              renderCamera={() =>
+                permission?.granted ? (
+                  <CameraView
+                    facing={facing}
+                    onCameraReady={() => setIsCameraReady(true)}
+                    ref={cameraRef}
+                    style={StyleSheet.absoluteFill}
+                  />
+                ) : (
+                  <View style={styles.cameraSlotPlaceholder}>
+                    <Ionicons color="#FFFFFF" name="camera-outline" size={22} />
+                  </View>
+                )
+              }
+              slotColor={colors.backgroundCanvas}
+              style={isTallFrame ? styles.stageTall : styles.stageWide}
             />
-          ) : (
-            <View style={styles.cameraPlaceholder}>
-              <Text style={styles.bodyText}>카메라 권한을 허용하면 네이티브 카메라로 바로 촬영할 수 있어요.</Text>
-              <ActionButton label="카메라 권한 요청" onPress={() => void requestPermission()} />
-            </View>
-          )}
+          ) : null}
 
           {isShooting && countdown ? (
-            <View style={styles.countdownOverlay}>
+            <View pointerEvents="none" style={styles.countdownOverlay}>
               <View style={styles.countdownCircle}>
                 <Text style={styles.countdownText}>{countdown}</Text>
               </View>
@@ -238,6 +268,14 @@ export function ShootCaptureScreen() {
             </View>
           ) : null}
         </View>
+
+        {permission && !permission.granted ? (
+          <ActionButton
+            label="카메라 권한 요청"
+            onPress={() => void requestPermission()}
+            variant="secondary"
+          />
+        ) : null}
 
         <View style={{ gap: 8 }}>
           <Text style={styles.bodyText}>
@@ -636,6 +674,24 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       gap: 12,
       justifyContent: 'center',
       padding: 24,
+    },
+    cameraSlotPlaceholder: {
+      alignItems: 'center',
+      backgroundColor: colors.backgroundCanvas,
+      flex: 1,
+      justifyContent: 'center',
+    },
+    stageTall: {
+      height: '100%',
+    },
+    stageWide: {
+      width: '100%',
+    },
+    stageWrap: {
+      alignItems: 'center',
+      height: 420,
+      justifyContent: 'center',
+      position: 'relative',
     },
     countdownCircle: {
       alignItems: 'center',

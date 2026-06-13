@@ -92,7 +92,7 @@ export function ThemeOverlaySvg({
                   fontFamily={fontFamily}
                   fontSize={fontSize}
                   textAnchor={textAnchor}
-                  dominantBaseline="hanging"
+                  dominantBaseline="text-before-edge"
                 >
                   {lines.map((line, i) => (
                     <tspan key={`${c.id}-${i}`} x={x} dy={i === 0 ? 0 : lineHeight}>

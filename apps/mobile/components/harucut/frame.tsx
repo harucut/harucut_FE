@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   Image,
@@ -68,7 +68,7 @@ const FRAME_PICKER_PREVIEW_COLORS = {
 } as const;
 
 // 웹 constants/frameLayouts.ts와 같은 캔버스 규격을 사용합니다.
-const FRAME_LAYOUTS: Record<FrameId, FrameLayout> = {
+export const FRAME_LAYOUTS: Record<FrameId, FrameLayout> = {
   'classic-4': {
     totalHeight: 6000,
     totalWidth: 2000,
@@ -412,6 +412,106 @@ function ThemePreviewComponent({
   }
 
   return <GestureDetector gesture={transformGesture}>{interactive}</GestureDetector>;
+}
+
+// 촬영 화면 전용: 전체 프레임 무대에 현재 칸은 라이브 카메라, 나머지 칸은 촬영본/가이드로 채우고
+// 프레임 데코(컴포넌트)를 그 위에 올린다. 좌표계는 FramePreview/결과 합성과 동일해 픽셀 정합.
+export function CaptureFrameStage({
+  accentColor,
+  backgroundColor,
+  cameraSlotIndex,
+  capturedUris,
+  components = [],
+  frameId,
+  renderCamera,
+  slotColor,
+  style,
+}: {
+  accentColor?: string;
+  backgroundColor?: string;
+  cameraSlotIndex: number;
+  capturedUris?: (string | undefined)[];
+  components?: ThemeEditorComponent[];
+  frameId: FrameId;
+  renderCamera: () => ReactNode;
+  slotColor?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { colors, isDark } = useHarucutTheme();
+  const styles = useFrameStyles();
+  const layout = FRAME_LAYOUTS[frameId];
+  const [previewSize, setPreviewSize] = useState({ height: 0, width: 0 });
+  const pickerPreviewColors = isDark
+    ? FRAME_PICKER_PREVIEW_COLORS.dark
+    : FRAME_PICKER_PREVIEW_COLORS.light;
+  const resolvedBackground = backgroundColor ?? accentColor ?? pickerPreviewColors.outer;
+  const resolvedSlotColor = slotColor ?? pickerPreviewColors.slot;
+  const resolvedAccent = accentColor ?? colors.primary;
+
+  return (
+    <View
+      accessibilityLabel="촬영 프레임 미리보기"
+      accessibilityRole="image"
+      style={[
+        styles.captureStage,
+        {
+          aspectRatio: layout.totalWidth / layout.totalHeight,
+          backgroundColor: resolvedBackground,
+        },
+        style,
+      ]}
+      onLayout={(event) => {
+        const { height, width } = event.nativeEvent.layout;
+        setPreviewSize({ height, width });
+      }}>
+      {layout.slots.map((slot, index) => {
+        const isCamera = index === cameraSlotIndex;
+        const uri = capturedUris?.[index];
+
+        return (
+          <View
+            key={`${frameId}-capture-${index}`}
+            style={[
+              styles.slot,
+              {
+                backgroundColor: isCamera ? 'transparent' : resolvedSlotColor,
+                height: toPercent(slot.height, layout.totalHeight),
+                left: toPercent(slot.x, layout.totalWidth),
+                top: toPercent(slot.y, layout.totalHeight),
+                width: toPercent(slot.width, layout.totalWidth),
+              },
+              isCamera ? { borderColor: resolvedAccent, borderWidth: 2 } : null,
+            ]}>
+            {isCamera ? (
+              renderCamera()
+            ) : uri ? (
+              <Image
+                accessibilityLabel={`촬영 ${index + 1}`}
+                resizeMode="cover"
+                source={{ uri }}
+                style={styles.slotImage}
+              />
+            ) : null}
+          </View>
+        );
+      })}
+      {components
+        .filter((component) => !component.hidden)
+        .sort((a, b) => a.zIndex - b.zIndex)
+        .map((component) => (
+          <ThemePreviewComponent
+            key={component.id}
+            active={false}
+            component={component}
+            editorMode={false}
+            layout={layout}
+            previewHeight={previewSize.height}
+            previewWidth={previewSize.width}
+            styles={styles}
+          />
+        ))}
+    </View>
+  );
 }
 
 export function FramePickerSection({
@@ -790,6 +890,11 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 15,
       fontWeight: '700',
       flex: 1,
+    },
+    captureStage: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      position: 'relative',
     },
     previewShell: {
       borderColor: previewBorder,
