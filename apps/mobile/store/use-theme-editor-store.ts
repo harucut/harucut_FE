@@ -31,6 +31,9 @@ type ThemeEditorSessionState = {
   background: ThemeBackground;
   backgroundColor: string;
   backgroundImageUri: string | null;
+  // backgroundImageUri가 새로 고른 로컬 파일이라 저장 시 업로드해야 하는지 여부.
+  // 저장 프레임을 다시 열어 원격 배경을 미리보기만 할 때는 false(재업로드 금지, 기존 key 유지).
+  backgroundImagePending: boolean;
   caption: string;
   components: ThemeEditorComponent[];
   description: string;
@@ -67,6 +70,7 @@ type ThemeEditorStore = ThemeEditorSessionState & {
   setThemeActiveComponent: (id: string | null) => void;
   setThemeBackgroundColor: (value: string) => void;
   setThemeBackgroundImage: (uri: string) => void;
+  setThemeBackgroundPreview: (uri: string) => void;
   setThemeCaption: (value: string) => void;
   setThemeDescription: (value: string) => void;
   setThemeFrame: (frameId: FrameId) => void;
@@ -97,6 +101,7 @@ function defaultThemeEditor(): ThemeEditorSessionState {
     },
     backgroundColor,
     backgroundImageUri: null,
+    backgroundImagePending: false,
     caption: 'today archive',
     components: [],
     description: '하루컷에서 직접 꾸민 나만의 프레임',
@@ -287,9 +292,10 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
     const remoteFrameId =
       selectedFrame?.remoteFrameId ??
       (current.selectedSavedFrameId ? remoteFrameIdFromSavedId(current.selectedSavedFrameId) : null);
-    // 로컬 배경 이미지가 있으면 업로드해 IMAGE 배경 key를 채운다.
+    // 새로 고른 로컬 배경 이미지만 업로드해 IMAGE 배경 key를 채운다.
+    // (저장 프레임을 다시 열어 미리보기만 한 경우는 pending=false라 기존 key를 그대로 보존)
     let background = current.background;
-    if (current.backgroundImageUri) {
+    if (current.backgroundImagePending && current.backgroundImageUri) {
       const uploadedBackground = await uploadLocalFileWithPresigned({
         contentType: 'JPEG',
         filename: `${title}-bg.jpg`,
@@ -349,6 +355,7 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
       },
       backgroundColor: frame.backgroundColor,
       backgroundImageUri: null,
+      backgroundImagePending: false,
       caption: frame.caption,
       components: normalizeThemeZ(
         (frame.components ?? []).map((component) => ({
@@ -373,6 +380,7 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
         value: normalizeThemeColor(state.backgroundColor).replace(/^#/, ''),
       },
       backgroundImageUri: null,
+      backgroundImagePending: false,
     })),
   setThemeBackgroundColor: (value) => {
     const backgroundColor = normalizeThemeColor(value);
@@ -384,14 +392,19 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
       },
       backgroundColor,
       backgroundImageUri: null,
+      backgroundImagePending: false,
     });
   },
   setThemeBackgroundImage: (uri) =>
     set({
-      // key는 저장 시 업로드 후 채운다. 미리보기는 backgroundImageUri(local)를 사용.
+      // 새로 고른 로컬 이미지 — 저장 시 업로드해 key를 채운다(pending=true).
       background: { type: 'IMAGE' },
       backgroundImageUri: uri,
+      backgroundImagePending: true,
     }),
+  setThemeBackgroundPreview: (uri) =>
+    // 저장된 원격 IMAGE 배경을 편집용으로 미리보기만(기존 key 유지, 재업로드 금지).
+    set({ backgroundImageUri: uri, backgroundImagePending: false }),
   setThemeCaption: (value) => set({ caption: value }),
   setThemeDescription: (value) => set({ description: value }),
   setThemeFrame: (frameId) =>
