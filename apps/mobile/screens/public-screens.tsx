@@ -25,7 +25,7 @@ import { completeSocialLoginSession } from '@/lib/social-login';
 import { useSessionStore } from '@/store/use-session-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
-type SocialProvider = 'kakao' | 'naver';
+type SocialProvider = 'google' | 'kakao' | 'naver';
 
 function usePublicScreenTheme() {
   const { colors, isDark } = useHarucutTheme();
@@ -117,14 +117,19 @@ function SocialButtons() {
         <View style={styles.socialLine} />
       </View>
       <SocialBrandButton
-        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오 로그인'}
+        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오로 계속하기'}
         onPress={() => void handleSocialLogin('kakao')}
         provider="kakao"
       />
       <SocialBrandButton
-        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버 로그인'}
+        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버로 계속하기'}
         onPress={() => void handleSocialLogin('naver')}
         provider="naver"
+      />
+      <SocialBrandButton
+        label={pending === 'google' ? '구글 로그인 중...' : '구글로 계속하기'}
+        onPress={() => void handleSocialLogin('google')}
+        provider="google"
       />
       <Text style={styles.socialConsentNotice}>
         소셜 계정으로 계속하면{' '}
@@ -148,10 +153,30 @@ function SocialBrandButton({
 }: {
   label: string;
   onPress: () => void;
-  provider: 'kakao' | 'naver';
+  provider: SocialProvider;
 }) {
   const { styles } = usePublicScreenTheme();
-  const isKakao = provider === 'kakao';
+
+  const buttonStyle =
+    provider === 'kakao'
+      ? styles.socialKakaoButton
+      : provider === 'naver'
+        ? styles.socialNaverButton
+        : styles.socialGoogleButton;
+
+  const iconBoxStyle =
+    provider === 'kakao'
+      ? styles.socialKakaoIconBox
+      : provider === 'naver'
+        ? styles.socialNaverIconBox
+        : styles.socialGoogleIconBox;
+
+  const labelStyle =
+    provider === 'kakao'
+      ? styles.socialKakaoLabel
+      : provider === 'naver'
+        ? styles.socialNaverLabel
+        : styles.socialGoogleLabel;
 
   return (
     <Pressable
@@ -160,32 +185,24 @@ function SocialBrandButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.socialButton,
-        isKakao ? styles.socialKakaoButton : styles.socialNaverButton,
+        buttonStyle,
         pressed ? styles.socialButtonPressed : null,
       ]}>
       <View style={styles.socialButtonInner}>
-        <View
-          style={[
-            styles.socialIconBox,
-            isKakao ? styles.socialKakaoIconBox : styles.socialNaverIconBox,
-          ]}>
-          {isKakao ? (
+        <View style={[styles.socialIconBox, iconBoxStyle]}>
+          {provider === 'kakao' ? (
             <View style={styles.kakaoMark}>
               <View style={styles.kakaoMarkBubble} />
               <View style={styles.kakaoMarkTail} />
             </View>
-          ) : (
+          ) : provider === 'naver' ? (
             <Text style={styles.naverMark}>N</Text>
+          ) : (
+            <Text style={styles.googleMark}>G</Text>
           )}
         </View>
         <View style={styles.socialLabelWrap}>
-          <Text
-            style={[
-              styles.socialButtonLabel,
-              isKakao ? styles.socialKakaoLabel : styles.socialNaverLabel,
-            ]}>
-            {label}
-          </Text>
+          <Text style={[styles.socialButtonLabel, labelStyle]}>{label}</Text>
         </View>
       </View>
     </Pressable>
@@ -312,7 +329,7 @@ export function LoginScreen() {
 
   return (
     <AuthShell
-      description="하루컷에 로그인하고 프레임과 기록을 이어서 관리해 보세요."
+      description="로그인하고 오늘의 네 컷을 이어가요."
       footer={
         <>
           <SocialButtons />
@@ -324,7 +341,7 @@ export function LoginScreen() {
           </Text>
         </>
       }
-      title="로그인">
+      title="다시 오셨네요">
       <SurfaceCard style={{ gap: 14 }}>
         {LOGIN_FIELDS.map((field) => (
           <FormField
@@ -478,7 +495,7 @@ export function SignupScreen() {
 
   return (
     <AuthShell
-      description="이메일 인증 후 계정을 만들어 보세요."
+      description="금방 끝나요. 이메일 인증 후 바로 첫 네 컷을 찍으러 가요."
       footer={
         <>
           <SocialButtons />
@@ -909,6 +926,12 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontWeight: '900',
       lineHeight: 20,
     },
+    googleMark: {
+      color: '#4285F4',
+      fontSize: 19,
+      fontWeight: '900',
+      lineHeight: 22,
+    },
     socialDivider: {
       alignItems: 'center',
       flexDirection: 'row',
@@ -975,6 +998,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     socialNaverLabel: {
       color: '#FFFFFF',
+    },
+    socialGoogleButton: {
+      backgroundColor: '#FFFFFF',
+      borderColor: isDark ? 'rgba(15, 23, 42, 0.16)' : 'rgba(60, 64, 67, 0.18)',
+      borderWidth: 1,
+      shadowColor: 'rgba(15, 23, 42, 0.08)',
+      shadowOffset: { height: 14, width: 0 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+    },
+    socialGoogleIconBox: {
+      backgroundColor: '#FFFFFF',
+    },
+    socialGoogleLabel: {
+      color: 'rgba(30, 30, 30, 0.88)',
     },
     legalFooterLink: {
       color: colors.muted,

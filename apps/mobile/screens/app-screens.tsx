@@ -650,7 +650,11 @@ export function MyPageScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.profileRow}>
           <View style={styles.profileAvatar}>
-            {user.profileUrl ? <Image source={{ uri: user.profileUrl }} style={styles.avatarImage} /> : null}
+            {user.profileUrl ? (
+              <Image source={{ uri: user.profileUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.profileAvatarInitial}>{user.username?.trim().charAt(0) || '하'}</Text>
+            )}
           </View>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={styles.linkTitle}>{user.username}</Text>
@@ -861,13 +865,20 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontWeight: '700',
     },
     profileAvatar: {
+      alignItems: 'center',
       backgroundColor: colors.primarySoft,
       borderColor: colors.border,
       borderRadius: 24,
       borderWidth: 1,
       height: 56,
+      justifyContent: 'center',
       overflow: 'hidden',
       width: 56,
+    },
+    profileAvatarInitial: {
+      color: colors.primaryStrong,
+      fontSize: 22,
+      fontWeight: '800',
     },
     profileRow: {
       alignItems: 'center',
