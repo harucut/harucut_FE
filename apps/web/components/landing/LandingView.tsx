@@ -227,21 +227,21 @@ export function LandingView() {
         </div>
 
         {/* 프레임 콜라주 — 우리 프로그래매틱 프레임 */}
-        <div className="relative flex h-[480px] items-center justify-center">
+        <div className="relative flex h-[340px] items-center justify-center overflow-hidden sm:h-[480px]">
           <div
-            className="h-[260px] -mr-6 drop-shadow-2xl"
+            className="-mr-5 h-[180px] drop-shadow-2xl sm:-mr-6 sm:h-[260px]"
             style={{ transform: "rotate(-8deg) translateY(8px)", zIndex: 1 }}
           >
             <ShowcaseFrame id="classic-4" className="!h-full !w-auto" />
           </div>
           <div
-            className="h-[320px] drop-shadow-2xl"
+            className="h-[220px] drop-shadow-2xl sm:h-[320px]"
             style={{ transform: "rotate(3deg)", zIndex: 3 }}
           >
             <ShowcaseFrame id="grid-4" className="!h-full !w-auto" />
           </div>
           <div
-            className="h-[260px] -ml-6 drop-shadow-2xl"
+            className="-ml-5 h-[180px] drop-shadow-2xl sm:-ml-6 sm:h-[260px]"
             style={{ transform: "rotate(9deg) translateY(8px)", zIndex: 2 }}
           >
             <ShowcaseFrame id="polaroid-4" className="!h-full !w-auto" />
