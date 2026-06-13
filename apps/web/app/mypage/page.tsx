@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, RefreshCw, ShieldCheck } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { clientApi } from "@/lib/clientApi";
 import { uploadProfileImage } from "@/lib/profileImageApi";
@@ -192,7 +193,7 @@ export default function MyPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 pb-[90px] text-[color:var(--hc-text)] lg:pb-6">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <PageHeader
           title="내 계정"
@@ -409,6 +410,7 @@ export default function MyPage() {
           </div>
         )}
       </div>
+      <MobileTabBar />
     </main>
   );
 }
