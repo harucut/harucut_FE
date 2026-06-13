@@ -19,6 +19,7 @@ import {
 } from "@/lib/remoteFrameApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
+  getImageUrlByKey,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
@@ -37,6 +38,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const setBackgroundColor = useThemeEditorStore((s) => s.setBackgroundColor);
   const setBackgroundImage = useThemeEditorStore((s) => s.setBackgroundImage);
+  const setBackgroundImageUrl = useThemeEditorStore((s) => s.setBackgroundImageUrl);
   const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
   const { remoteFrameId } = useThemeSession();
@@ -71,10 +73,30 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
       try {
         const remoteFrame = await getFrame(remoteFrameId);
-        if (!cancelled) {
-          importJson(toThemeExportJson(remoteFrame));
-          setTitle(remoteFrame.title || "");
-          setDescription(remoteFrame.description || "");
+        if (cancelled) return;
+        const imported = toThemeExportJson(remoteFrame);
+        importJson(imported);
+        setTitle(remoteFrame.title || "");
+        setDescription(remoteFrame.description || "");
+
+        // IMAGE 배경(key만 있음)은 url을 해석해 캔버스/썸네일에 렌더되도록 주입.
+        // 그래야 수정 저장 시 배경이 빠진 단색 썸네일로 저장되지 않는다.
+        const importedKey =
+          imported.background?.type === "IMAGE" ? imported.background.key : undefined;
+        if (importedKey) {
+          const url = await getImageUrlByKey(importedKey);
+          // 해석을 기다리는 동안 사용자가 새 배경(로컬 파일/다른 key)을 골랐을 수 있다.
+          // 현재 배경이 여전히 같은 원격 key일 때만 적용해 stale URL 덮어쓰기를 막는다.
+          const current = useThemeEditorStore.getState();
+          if (
+            !cancelled &&
+            url &&
+            !current.pendingBackgroundFile &&
+            current.background.type === "IMAGE" &&
+            current.background.key === importedKey
+          ) {
+            setBackgroundImageUrl(url);
+          }
         }
       } catch (error) {
         console.error(error);
@@ -93,7 +115,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     return () => {
       cancelled = true;
     };
-  }, [importJson, remoteFrameId]);
+  }, [importJson, remoteFrameId, setBackgroundImageUrl]);
 
   useEffect(() => {
     if (remoteFrameId) return;
