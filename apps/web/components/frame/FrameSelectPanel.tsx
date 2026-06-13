@@ -63,10 +63,10 @@ export function FrameSelectPanel({
   const canProceed = selectedCount === maxSelect;
 
   return (
-    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
       <section className="flex flex-col gap-3">
         {frameId ? (
-          <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 xl:hidden">
+          <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 lg:hidden">
             <p className="text-sm font-semibold text-zinc-100">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview
@@ -87,7 +87,7 @@ export function FrameSelectPanel({
               {emptyStateText}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
               {baseItems.map((item, index) => {
                 const slotIndex = selectedIndexes.indexOf(index);
                 const isSelected = slotIndex !== -1;
@@ -166,9 +166,9 @@ export function FrameSelectPanel({
         </section>
       </section>
 
-      <aside className="flex flex-col gap-3 xl:sticky xl:top-6">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-6">
         {frameId ? (
-          <section className="hidden flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 xl:flex">
+          <section className="hidden flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 lg:flex">
             <p className="text-sm font-semibold text-zinc-100">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview

@@ -564,8 +564,8 @@ export default function UploadResultPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <PageHeader title="업로드 결과" />
         <StepProgress current={3} total={3} label="결과 확인" />
 
@@ -630,7 +630,13 @@ export default function UploadResultPage() {
           </section>
         ) : null}
 
-        <section className="space-y-3">
+        <section
+          className={
+            shouldPrepareVideo
+              ? "mx-auto grid w-full max-w-md gap-3 sm:max-w-none sm:grid-cols-2"
+              : "mx-auto w-full max-w-md"
+          }
+        >
           <FramePreview
             frameId={frameId}
             media={previewImage}

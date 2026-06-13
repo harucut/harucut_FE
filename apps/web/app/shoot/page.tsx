@@ -56,12 +56,14 @@ function ShootPageContent() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)] sm:px-4 lg:px-8 lg:py-10">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
+          title="프레임 선택"
+          description="촬영할 4컷 프레임을 골라주세요."
         />
         <StepProgress current={1} total={4} label="프레임 선택" />
 
