@@ -207,10 +207,10 @@ export const FRAME_CATALOG: FrameCatalogItem[] = [
 ];
 
 export const FRAME_BORDER_OPTIONS = [
-  { label: '코발트', value: '#2563EB' },
-  { label: '딥 네이비', value: '#1D4ED8' },
-  { label: '스카이 틴트', value: '#74A9FF' },
-  { label: '아이스 블루', value: '#C7DCFF' },
+  { label: '블랙', value: '#000000' },
+  { label: '그린', value: '#1ED760' },
+  { label: '아이보리', value: '#FAFAF7' },
+  { label: '차콜', value: '#232325' },
 ] as const;
 
 export type OutputToneOption = {
@@ -226,9 +226,9 @@ export const OUTPUT_TONE_OPTIONS: OutputToneOption[] = FOURCUT_FILTER_DEFINITION
 
 export const BACKGROUND_SWATCHES = [
   { label: '화이트', value: '#FFFFFF' },
-  { label: '블루 틴트', value: '#EEF5FF' },
-  { label: '미스트', value: '#E7F0FF' },
-  { label: '코발트', value: '#2563EB' },
+  { label: '크림', value: '#FAF7F0' },
+  { label: '민트', value: '#E4F7EC' },
+  { label: '그린', value: '#1ED760' },
 ] as const;
 
 export const THEME_STICKERS = [
