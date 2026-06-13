@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
 
 type BrandMarkProps = {
   href: string;
@@ -11,44 +10,58 @@ type BrandMarkProps = {
   tone?: "dark" | "light";
 };
 
+// STUDIO 로고 — 딥다크 라운드 + 그린 4컷 그라데이션 스트립(A안).
+const MARK_SHADES = ["#7BEAA6", "#4FDD86", "#2FD06B", "#17B551"];
+
+function FourCutMark({ size = 30 }: { size?: number }) {
+  const width = Math.round(size * 0.74);
+  return (
+    <svg
+      width={width}
+      height={size}
+      viewBox="0 0 24 32"
+      aria-hidden
+      style={{ display: "block" }}
+    >
+      <rect width="24" height="32" rx="6" fill="#0B0B0C" />
+      {MARK_SHADES.map((color, i) => (
+        <rect
+          key={color}
+          x="5"
+          y={4 + i * 6.35}
+          width="14"
+          height="5"
+          rx="1.6"
+          fill={color}
+        />
+      ))}
+    </svg>
+  );
+}
+
 export function BrandMark({
   href,
   label = "하루컷",
   compact = false,
   className = "",
+  tone,
 }: BrandMarkProps) {
+  // tone=light/dark는 고정 배경(예: 다크 랜딩) 위에서 테마와 무관하게 글자색을 강제한다.
+  const labelColor =
+    tone === "light" ? "#FFFFFF" : tone === "dark" ? "#0B0B0C" : "var(--hc-text)";
   return (
     <Link
       href={href}
       aria-label="Harucut home"
-      className={`inline-flex items-center gap-3 transition-opacity hover:opacity-100 ${className}`.trim()}
+      className={`inline-flex items-center gap-2.5 transition-opacity hover:opacity-90 ${className}`.trim()}
     >
+      <FourCutMark size={compact ? 26 : 30} />
       <span
-        className="grid h-10 w-10 place-items-center rounded-2xl border border-[color:var(--hc-border)]"
-        style={{
-          background: "var(--hc-brand-badge-bg)",
-          color: "var(--hc-brand-badge-text)",
-          boxShadow: "var(--hc-brand-badge-shadow)",
-        }}
+        className="text-lg font-extrabold tracking-tight"
+        style={{ color: labelColor }}
       >
-        <Sparkles className="h-4 w-4" />
+        {label}
       </span>
-      {!compact ? (
-        <span className="flex min-w-0 flex-col">
-          <span className="text-[10px] uppercase tracking-[0.26em] text-[color:var(--hc-brand-overline)]">
-            Record your four cuts
-          </span>
-          <span
-            className="text-base font-semibold tracking-tight text-[color:var(--hc-text)]"
-          >
-            {label}
-          </span>
-        </span>
-      ) : (
-        <span className="text-sm font-semibold tracking-tight text-[color:var(--hc-text)]">
-          {label}
-        </span>
-      )}
     </Link>
   );
 }
