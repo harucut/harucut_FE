@@ -44,7 +44,11 @@ export function BrandMark({
   label = "하루컷",
   compact = false,
   className = "",
+  tone,
 }: BrandMarkProps) {
+  // tone=light/dark는 고정 배경(예: 다크 랜딩) 위에서 테마와 무관하게 글자색을 강제한다.
+  const labelColor =
+    tone === "light" ? "#FFFFFF" : tone === "dark" ? "#0B0B0C" : "var(--hc-text)";
   return (
     <Link
       href={href}
@@ -52,7 +56,10 @@ export function BrandMark({
       className={`inline-flex items-center gap-2.5 transition-opacity hover:opacity-90 ${className}`.trim()}
     >
       <FourCutMark size={compact ? 26 : 30} />
-      <span className="text-lg font-extrabold tracking-tight text-[color:var(--hc-text)]">
+      <span
+        className="text-lg font-extrabold tracking-tight"
+        style={{ color: labelColor }}
+      >
         {label}
       </span>
     </Link>

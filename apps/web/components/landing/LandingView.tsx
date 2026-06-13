@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Plus } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import type { FrameId } from "@/constants/frames";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
@@ -86,6 +87,17 @@ const FAQ_ITEMS: [string, string][] = [
   ],
 ];
 
+const FOOTER_COLS: { title: string; items: { label: string; href?: string }[] }[] = [
+  { title: "서비스", items: [{ label: "촬영" }, { label: "프레임" }, { label: "기록" }] },
+  {
+    title: "정책",
+    items: [
+      { label: "이용약관", href: "/terms" },
+      { label: "개인정보", href: "/privacy" },
+    ],
+  },
+];
+
 function WebNav() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -104,7 +116,7 @@ function WebNav() {
       }}
     >
       <div className="mx-auto flex h-[72px] max-w-[1160px] items-center justify-between px-7">
-        <BrandMark href="/" />
+        <BrandMark href="/" tone="light" />
         <nav className="hidden items-center gap-8 md:flex">
           <a href="#how" className="text-sm font-semibold text-[#B3B3B3] hover:text-white">
             서비스
@@ -208,12 +220,9 @@ export function LandingView() {
             >
               무료로 시작하기 <ArrowRight className="h-[19px] w-[19px]" />
             </Link>
-            <Link
-              href="/shoot"
-              className="inline-flex items-center rounded-full border border-white/20 px-6 py-3.5 text-[16px] font-bold text-white hover:border-white"
-            >
+            <GuestTrialStartButton className="inline-flex items-center rounded-full border border-white/20 px-6 py-3.5 text-[16px] font-bold text-white transition-colors hover:border-white">
               체험하기
-            </Link>
+            </GuestTrialStartButton>
           </div>
         </div>
 
@@ -452,7 +461,7 @@ export function LandingView() {
       <footer className="border-t border-white/10 bg-[#161617]">
         <div className="mx-auto flex max-w-[1160px] flex-wrap justify-between gap-8 px-7 pb-10 pt-12">
           <div className="max-w-[280px]">
-            <BrandMark href="/" />
+            <BrandMark href="/" tone="light" />
             <p className="mt-3.5 text-[13px] leading-[1.6] text-[#6F6F73]">
               온라인 인생네컷 서비스.
               <br />
@@ -460,17 +469,24 @@ export function LandingView() {
             </p>
           </div>
           <div className="flex flex-wrap gap-14">
-            {[
-              ["서비스", ["촬영", "프레임", "기록"]],
-              ["정책", ["이용약관", "개인정보"]],
-            ].map(([h, items]) => (
-              <div key={h as string}>
-                <h6 className="mb-3.5 text-[13px] font-extrabold tracking-[.3px]">{h}</h6>
-                {(items as string[]).map((it) => (
-                  <span key={it} className="mb-2.5 block text-[13.5px] text-[#B3B3B3]">
-                    {it}
-                  </span>
-                ))}
+            {FOOTER_COLS.map((col) => (
+              <div key={col.title}>
+                <h6 className="mb-3.5 text-[13px] font-extrabold tracking-[.3px]">{col.title}</h6>
+                {col.items.map((it) =>
+                  it.href ? (
+                    <Link
+                      key={it.label}
+                      href={it.href}
+                      className="mb-2.5 block text-[13.5px] text-[#B3B3B3] hover:text-white"
+                    >
+                      {it.label}
+                    </Link>
+                  ) : (
+                    <span key={it.label} className="mb-2.5 block text-[13.5px] text-[#B3B3B3]">
+                      {it.label}
+                    </span>
+                  ),
+                )}
               </div>
             ))}
           </div>
