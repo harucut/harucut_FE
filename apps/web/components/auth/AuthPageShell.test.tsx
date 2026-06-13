@@ -1,32 +1,19 @@
 import { render, screen } from "@testing-library/react";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 
-const mockPageHeader = jest.fn();
-
-jest.mock("@/components/layout/PageHeader", () => ({
-  PageHeader: (props: unknown) => {
-    mockPageHeader(props);
-    return <div data-testid="page-header" />;
-  },
-}));
-
 describe("AuthPageShell", () => {
-  beforeEach(() => {
-    mockPageHeader.mockClear();
-  });
-
-  test("pins the auth-page brand link to the landing page", () => {
+  test("renders the title and pins the brand link to the landing page", () => {
     render(
       <AuthPageShell title="로그인" description="설명">
         <div>content</div>
       </AuthPageShell>,
     );
 
-    expect(screen.getByTestId("page-header")).toBeInTheDocument();
-    expect(mockPageHeader).toHaveBeenCalledWith(
-      expect.objectContaining({
-        brandHref: "/",
-      }),
-    );
+    expect(screen.getByRole("heading", { name: "로그인" })).toBeInTheDocument();
+    expect(screen.getByText("content")).toBeInTheDocument();
+
+    const homeLinks = screen.getAllByRole("link", { name: /Harucut home/i });
+    expect(homeLinks.length).toBeGreaterThan(0);
+    homeLinks.forEach((link) => expect(link).toHaveAttribute("href", "/"));
   });
 });
