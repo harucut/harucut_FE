@@ -142,6 +142,7 @@ export function FramePreview({
   accentColor,
   activeComponentId,
   backgroundColor,
+  backgroundImageUri,
   caption,
   components = [],
   editorMode = false,
@@ -156,6 +157,7 @@ export function FramePreview({
   accentColor?: string;
   activeComponentId?: string | null;
   backgroundColor?: string;
+  backgroundImageUri?: string;
   caption?: string;
   components?: ThemeEditorComponent[];
   editorMode?: boolean;
@@ -196,6 +198,14 @@ export function FramePreview({
         const { height, width } = event.nativeEvent.layout;
         setPreviewSize({ height, width });
       }}>
+      {backgroundImageUri ? (
+        <Image
+          accessibilityLabel="프레임 배경 이미지"
+          resizeMode="cover"
+          source={{ uri: backgroundImageUri }}
+          style={styles.backgroundImage}
+        />
+      ) : null}
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
         const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
@@ -890,6 +900,15 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 15,
       fontWeight: '700',
       flex: 1,
+    },
+    backgroundImage: {
+      bottom: 0,
+      height: '100%',
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      width: '100%',
     },
     captureStage: {
       borderRadius: 12,

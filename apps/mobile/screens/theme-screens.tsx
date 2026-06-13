@@ -73,6 +73,8 @@ export function ThemeStickerScreen() {
   const setThemeTitle = useThemeEditorStore((state) => state.setThemeTitle);
   const setThemeDescription = useThemeEditorStore((state) => state.setThemeDescription);
   const setThemeBackgroundColor = useThemeEditorStore((state) => state.setThemeBackgroundColor);
+  const setThemeBackgroundImage = useThemeEditorStore((state) => state.setThemeBackgroundImage);
+  const clearThemeBackgroundImage = useThemeEditorStore((state) => state.clearThemeBackgroundImage);
   const setThemeActiveComponent = useThemeEditorStore((state) => state.setThemeActiveComponent);
   const setThemeTab = useThemeEditorStore((state) => state.setThemeTab);
   const addThemePhotoAssets = useThemeEditorStore((state) => state.addThemePhotoAssets);
@@ -195,6 +197,20 @@ export function ThemeStickerScreen() {
     setUploadingPhotos(false);
   };
 
+  const handlePickBackground = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: false,
+      mediaTypes: ['images'],
+      quality: 0.9,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    setThemeBackgroundImage(result.assets[0].uri);
+  };
+
   const handleSaveFrame = async () => {
     if (saving) {
       return;
@@ -259,6 +275,7 @@ export function ThemeStickerScreen() {
           <FramePreview
             activeComponentId={themeEditor.activeComponentId}
             backgroundColor={themeEditor.backgroundColor}
+            backgroundImageUri={themeEditor.backgroundImageUri ?? undefined}
             components={themeEditor.components}
             editorMode
             frameId={themeEditor.frameId}
@@ -354,16 +371,33 @@ export function ThemeStickerScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>배경색</Text>
+        <Text style={styles.sectionTitle}>배경</Text>
+        <Text style={styles.bodyText}>색 또는 이미지를 고르면 사진 칸 뒤에 깔려요.</Text>
         <View style={styles.filterWrap}>
           {BACKGROUND_SWATCHES.map((color) => (
             <Pill
               key={color.value}
-              active={themeEditor.backgroundColor === color.value}
+              active={!themeEditor.backgroundImageUri && themeEditor.backgroundColor === color.value}
               onPress={() => setThemeBackgroundColor(color.value)}>
               {color.label}
             </Pill>
           ))}
+        </View>
+        <View style={styles.filterWrap}>
+          <ActionButton
+            icon={<Ionicons color="#FFFFFF" name="image-outline" size={16} />}
+            label={themeEditor.backgroundImageUri ? '배경 이미지 변경' : '배경 이미지 선택'}
+            onPress={() => void handlePickBackground()}
+            style={{ flex: 1 }}
+          />
+          {themeEditor.backgroundImageUri ? (
+            <ActionButton
+              label="이미지 제거"
+              onPress={clearThemeBackgroundImage}
+              style={{ flex: 1 }}
+              variant="secondary"
+            />
+          ) : null}
         </View>
       </SurfaceCard>
 
