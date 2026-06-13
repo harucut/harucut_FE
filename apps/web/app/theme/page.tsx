@@ -60,9 +60,14 @@ function ThemePageContent() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4">
-        <PageHeader backHref="/home" backLabel="처음으로" />
+    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)] sm:px-4 lg:px-8 lg:py-10">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
+        <PageHeader
+          backHref="/home"
+          backLabel="처음으로"
+          title="프레임 꾸미기"
+          description="새 프레임을 만들거나 저장한 프레임을 이어서 꾸며보세요."
+        />
         <StepProgress current={1} total={2} label="프레임 선택" />
 
         <FramePicker

@@ -637,8 +637,8 @@ export default function ShootResultPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <PageHeader
           title="촬영 결과"
           brandHref={guestMode ? "/shoot" : "/home"}
@@ -715,7 +715,13 @@ export default function ShootResultPage() {
           </section>
         ) : null}
 
-        <section className="space-y-3">
+        <section
+          className={
+            shouldPrepareVideo
+              ? "mx-auto grid w-full max-w-md gap-3 sm:max-w-none sm:grid-cols-2"
+              : "mx-auto w-full max-w-md"
+          }
+        >
           <FramePreview
             frameId={frameId}
             media={previewImage}

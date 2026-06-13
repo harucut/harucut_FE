@@ -30,7 +30,7 @@ export function FramePicker({
   return (
     <>
       <section className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-4 max-md:hidden">
+        <div className="grid grid-cols-2 gap-4 max-md:hidden lg:grid-cols-3 xl:grid-cols-4">
           {FRAME_CONFIGS.map((frame) => (
             <FramePickerCard
               key={frame.id}
@@ -72,12 +72,12 @@ export function FramePicker({
         </div>
       </section>
 
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex justify-stretch md:justify-end">
         <button
           type="button"
           disabled={confirmDisabled}
           onClick={onConfirm}
-          className="hc-button-primary rounded-full px-5 py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+          className="hc-button-primary w-full rounded-full px-5 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:py-2.5 md:text-xs"
         >
           {confirmLabel}
         </button>
