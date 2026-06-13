@@ -69,6 +69,8 @@ export type ThemeBackground =
       type: "IMAGE";
       key?: string;
       opacity?: number;
+      // 클라이언트에서 key를 해석해 채우는 렌더 전용 URL (서버 전송 X).
+      url?: string;
     }
   | {
       type: "VIDEO";

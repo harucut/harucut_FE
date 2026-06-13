@@ -11,7 +11,7 @@ import { BACKGROUND_SWATCHES, THEME_STICKERS, type ThemeAsset, type ThemeCompone
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
-import { resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
+import { getPresignedImageUrl, resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 import { useLibraryStore } from '@/store/use-library-store';
 import { useSessionStore } from '@/store/use-session-store';
 import { useThemeEditorStore } from '@/store/use-theme-editor-store';
@@ -74,6 +74,7 @@ export function ThemeStickerScreen() {
   const setThemeDescription = useThemeEditorStore((state) => state.setThemeDescription);
   const setThemeBackgroundColor = useThemeEditorStore((state) => state.setThemeBackgroundColor);
   const setThemeBackgroundImage = useThemeEditorStore((state) => state.setThemeBackgroundImage);
+  const setThemeBackgroundPreview = useThemeEditorStore((state) => state.setThemeBackgroundPreview);
   const clearThemeBackgroundImage = useThemeEditorStore((state) => state.clearThemeBackgroundImage);
   const setThemeActiveComponent = useThemeEditorStore((state) => state.setThemeActiveComponent);
   const setThemeTab = useThemeEditorStore((state) => state.setThemeTab);
@@ -109,6 +110,28 @@ export function ThemeStickerScreen() {
       router.replace('/theme' as never);
     }
   }, [router, themeEditor.frameId]);
+
+  // 저장된 IMAGE 배경 프레임을 다시 열면 key를 URL로 해석해 미리보기에 복원한다.
+  // (수정 저장 시 배경 이미지가 빠진 단색 썸네일로 저장되는 문제 방지)
+  useEffect(() => {
+    const background = themeEditor.background;
+    if (background.type !== 'IMAGE' || !background.key || themeEditor.backgroundImageUri) {
+      return;
+    }
+
+    let cancelled = false;
+    void getPresignedImageUrl(background.key)
+      .then((url) => {
+        if (!cancelled && url) {
+          setThemeBackgroundPreview(url);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [themeEditor.background, themeEditor.backgroundImageUri, setThemeBackgroundPreview]);
 
   const showError = (title: string, error: unknown, fallback: string) => {
     showNotice({

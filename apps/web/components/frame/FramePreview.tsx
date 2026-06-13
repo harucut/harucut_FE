@@ -56,6 +56,17 @@ export function FramePreview({
         backgroundColor: borderColor || undefined,
       }}
     >
+      {theme?.background?.type === "IMAGE" && theme.background.url ? (
+        // 배경 이미지는 슬롯(사진)보다 아래 레이어로 깔린다.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={theme.background.url}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          style={{ opacity: theme.background.opacity ?? 1 }}
+        />
+      ) : null}
       {slots.map((slot, idx) => {
         const leftPct = (slot.x / totalWidth) * 100;
         const topPct = (slot.y / totalHeight) * 100;
