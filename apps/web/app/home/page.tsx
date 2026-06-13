@@ -17,6 +17,7 @@ import { listMyFrames } from "@/lib/remoteFrameApi";
 import type { UserMedia, RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
 
 function formatCurrentDate() {
   return new Date().toLocaleDateString("ko-KR", {
@@ -113,7 +114,7 @@ export default function HomePage() {
   const savedFrame = savedFrames[0] ?? null;
 
   return (
-    <main className="hc-page-showcase min-h-dvh px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
+    <main className="hc-page-showcase min-h-dvh px-4 py-5 pb-[90px] text-[color:var(--hc-text)] sm:py-6 lg:pb-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <PageHeader
           title={
@@ -292,6 +293,7 @@ export default function HomePage() {
           </div>
         </section>
       </div>
+      <MobileTabBar />
     </main>
   );
 }

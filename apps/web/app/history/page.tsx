@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, PencilLine, Search, Share2 } from "lucide-react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
@@ -233,7 +234,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="hc-page-showcase min-h-dvh px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
+    <main className="hc-page-showcase min-h-dvh px-4 py-5 pb-[90px] text-[color:var(--hc-text)] sm:py-6 lg:pb-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <PageHeader
           title="사진 기록"
@@ -463,6 +464,7 @@ export default function HistoryPage() {
           </section>
         )}
       </div>
+      <MobileTabBar />
     </main>
   );
 }
