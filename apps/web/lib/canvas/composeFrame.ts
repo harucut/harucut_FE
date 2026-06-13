@@ -192,6 +192,19 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
   return map;
 }
 
+// IMAGE 배경(슬롯 뒤에 깔리는 배경)을 로드한다. 실패 시 null → 색 배경만 사용.
+async function loadBackgroundImage(theme: ThemeExportJson | null) {
+  if (!theme || theme.background?.type !== "IMAGE") return null;
+  const url = theme.background.url;
+  if (!url) return null;
+
+  try {
+    return await loadImage(url);
+  } catch {
+    return null;
+  }
+}
+
 async function resolveVideoEncoderConfig(
   width: number,
   height: number,
@@ -342,12 +355,29 @@ function drawFrameOnce(
   outputFilter: FourcutFilterId,
   theme: ThemeExportJson | null,
   overlayImages: OverlayImageMap,
+  backgroundImage: HTMLImageElement | null,
 ) {
   const { totalWidth, totalHeight, slots } = layout;
   const slotFilter = getFourcutFilterCanvasValue(outputFilter);
 
   ctx.fillStyle = borderColor;
   ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+  // 배경 이미지를 색 배경 위, 슬롯(사진) 아래에 cover로 깐다.
+  if (backgroundImage) {
+    const bgOpacity =
+      theme?.background?.type === "IMAGE" ? theme.background.opacity ?? 1 : 1;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, bgOpacity));
+    drawCover(
+      ctx,
+      backgroundImage,
+      backgroundImage.naturalWidth || backgroundImage.width || 1,
+      backgroundImage.naturalHeight || backgroundImage.height || 1,
+      { x: 0, y: 0, width: totalWidth, height: totalHeight },
+    );
+    ctx.restore();
+  }
 
   slots.forEach((slot, index) => {
     const drawable = drawables[index];
@@ -400,6 +430,7 @@ export async function composeFramePng(opts: {
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
+  const backgroundImage = await loadBackgroundImage(theme);
 
   drawFrameOnce(
     ctx,
@@ -409,6 +440,7 @@ export async function composeFramePng(opts: {
     outputFilter,
     theme,
     overlayImages,
+    backgroundImage,
   );
 
   return toPngBlob(canvas);
@@ -446,6 +478,7 @@ export async function recordFrameWebm(opts: {
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
+  const backgroundImage = await loadBackgroundImage(theme);
   const videoDrawables = drawables.filter(
     (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
       drawable.kind === "video",
@@ -488,6 +521,7 @@ export async function recordFrameWebm(opts: {
       outputFilter,
       theme,
       overlayImages,
+      backgroundImage,
     );
 
     const frame = new VideoFrame(canvas, {

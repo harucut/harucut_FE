@@ -86,10 +86,15 @@ type State = {
   activeId: string | null;
   background: ThemeBackground;
   backgroundColor: string;
+  // 저장 시 업로드할 로컬 배경 이미지 파일(있을 때만).
+  pendingBackgroundFile: File | null;
 
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
   setBackgroundColor: (color: string) => void;
+  setBackgroundImage: (file: File) => void;
+  setBackgroundImageKey: (key: string) => void;
+  clearBackgroundImage: () => void;
 
   addPhotoAssets: (
     files: FileList,
@@ -144,6 +149,11 @@ function resetEditorState(get: () => State) {
       URL.revokeObjectURL(p.src);
     } catch {}
   }
+  if (state.background.type === "IMAGE" && state.background.url) {
+    try {
+      URL.revokeObjectURL(state.background.url);
+    } catch {}
+  }
 
   return {
     tab: "PHOTO" as ComponentType,
@@ -157,6 +167,7 @@ function resetEditorState(get: () => State) {
       type: "COLOR" as const,
       value: "111827",
     },
+    pendingBackgroundFile: null,
   };
 }
 
@@ -176,6 +187,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     value: "111827",
   },
   backgroundColor: "111827",
+  pendingBackgroundFile: null,
 
   // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
@@ -196,7 +208,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   setTab: (t) => set({ tab: t }),
   setBackgroundColor: (color) =>
-    set(() => {
+    set((s) => {
+      // 색을 고르면 배경 이미지는 해제한다.
+      if (s.background.type === "IMAGE" && s.background.url) {
+        try {
+          URL.revokeObjectURL(s.background.url);
+        } catch {}
+      }
       const normalized = normalizeHexColor(color);
       return {
         background: {
@@ -204,6 +222,37 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           value: normalized,
         },
         backgroundColor: normalized,
+        pendingBackgroundFile: null,
+      };
+    }),
+  setBackgroundImage: (file) =>
+    set((s) => {
+      if (s.background.type === "IMAGE" && s.background.url) {
+        try {
+          URL.revokeObjectURL(s.background.url);
+        } catch {}
+      }
+      const url = URL.createObjectURL(file);
+      return {
+        background: { type: "IMAGE", url },
+        pendingBackgroundFile: file,
+      };
+    }),
+  setBackgroundImageKey: (key) =>
+    set((s) => {
+      if (s.background.type !== "IMAGE") return s;
+      return { background: { ...s.background, key } };
+    }),
+  clearBackgroundImage: () =>
+    set((s) => {
+      if (s.background.type === "IMAGE" && s.background.url) {
+        try {
+          URL.revokeObjectURL(s.background.url);
+        } catch {}
+      }
+      return {
+        background: { type: "COLOR", value: normalizeHexColor(s.backgroundColor) },
+        pendingBackgroundFile: null,
       };
     }),
 

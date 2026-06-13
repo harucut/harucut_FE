@@ -1,7 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef } from "react";
-import { Stage, Layer, Rect, Transformer } from "react-konva";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Stage, Layer, Rect, Transformer, Image as KonvaImage } from "react-konva";
 import Konva from "konva";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -15,7 +15,33 @@ export function CanvasStage() {
   const components = useThemeEditorStore((s) => s.components);
   const activeId = useThemeEditorStore((s) => s.activeId);
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
+  const background = useThemeEditorStore((s) => s.background);
   const renderKey = useThemeEditorStore((s) => s.renderKey);
+
+  const backgroundImageUrl =
+    background.type === "IMAGE" ? background.url : undefined;
+  const [backgroundImage, setBackgroundImage] =
+    useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!backgroundImageUrl) {
+      setBackgroundImage(null);
+      return;
+    }
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    let active = true;
+    img.onload = () => {
+      if (active) setBackgroundImage(img);
+    };
+    img.onerror = () => {
+      if (active) setBackgroundImage(null);
+    };
+    img.src = backgroundImageUrl;
+    return () => {
+      active = false;
+    };
+  }, [backgroundImageUrl]);
 
   const setActive = useThemeEditorStore((s) => s.setActive);
   const update = useThemeEditorStore((s) => s.updateComponent);
@@ -105,6 +131,47 @@ export function CanvasStage() {
               fill={`#${backgroundColor}`}
               cornerRadius={60}
             />
+
+            {backgroundImage
+              ? (() => {
+                  const iw =
+                    backgroundImage.naturalWidth || backgroundImage.width || 1;
+                  const ih =
+                    backgroundImage.naturalHeight || backgroundImage.height || 1;
+                  const fr = frameW / frameH;
+                  const ir = iw / ih;
+                  let cw = iw;
+                  let ch = ih;
+                  let cx = 0;
+                  let cy = 0;
+                  // cover crop
+                  if (ir > fr) {
+                    ch = ih;
+                    cw = ih * fr;
+                    cx = (iw - cw) / 2;
+                  } else {
+                    cw = iw;
+                    ch = iw / fr;
+                    cy = (ih - ch) / 2;
+                  }
+                  return (
+                    <KonvaImage
+                      image={backgroundImage}
+                      x={0}
+                      y={0}
+                      width={frameW}
+                      height={frameH}
+                      crop={{ x: cx, y: cy, width: cw, height: ch }}
+                      cornerRadius={60}
+                      opacity={
+                        background.type === "IMAGE"
+                          ? background.opacity ?? 1
+                          : 1
+                      }
+                    />
+                  );
+                })()
+              : null}
 
             {layout.slots.map((s, i) => (
               <Rect

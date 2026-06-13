@@ -65,6 +65,36 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
   drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 60);
   ctx.fill();
 
+  // IMAGE 배경: 색 위, 슬롯 아래에 cover로 깐다.
+  if (theme.background?.type === "IMAGE" && theme.background.url) {
+    try {
+      const bgImg = await loadImage(theme.background.url);
+      const iw = bgImg.naturalWidth || bgImg.width || 1;
+      const ih = bgImg.naturalHeight || bgImg.height || 1;
+      const fr = canvas.width / canvas.height;
+      const ir = iw / ih;
+      let dw = canvas.width;
+      let dh = canvas.height;
+      let dx = 0;
+      let dy = 0;
+      if (ir > fr) {
+        dh = canvas.height;
+        dw = dh * ir;
+        dx = (canvas.width - dw) / 2;
+      } else {
+        dw = canvas.width;
+        dh = dw / ir;
+        dy = (canvas.height - dh) / 2;
+      }
+      ctx.save();
+      drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 60);
+      ctx.clip();
+      ctx.globalAlpha = Math.min(1, Math.max(0, theme.background.opacity ?? 1));
+      ctx.drawImage(bgImg, dx, dy, dw, dh);
+      ctx.restore();
+    } catch {}
+  }
+
   // CanvasStage와 동일한 슬롯 음영 레이어
   ctx.fillStyle = "rgba(0,0,0,0.30)";
   layout.slots.forEach((slot) => {

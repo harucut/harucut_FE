@@ -36,6 +36,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const background = useThemeEditorStore((s) => s.background);
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const setBackgroundColor = useThemeEditorStore((s) => s.setBackgroundColor);
+  const setBackgroundImage = useThemeEditorStore((s) => s.setBackgroundImage);
+  const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
   const { remoteFrameId } = useThemeSession();
   const [isSaving, setIsSaving] = useState(false);
@@ -49,7 +51,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
-  const hasNonColorBackground = background.type !== "COLOR";
+  const hasVideoBackground = background.type === "VIDEO";
 
   useEffect(() => {
     setFrameId(frameId);
@@ -126,9 +128,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       alert("숨겨진 레이어가 있어요.");
     }
 
-    const themeJson = exportJson();
-    if (!themeJson) return;
-
     const nextTitle = draftTitle.trim() || "테마 프레임";
     const nextDescription =
       draftDescription.trim() ||
@@ -137,6 +136,27 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     setIsSaving(true);
     setSaveDialogError(null);
     try {
+      // 로컬 배경 이미지가 있으면 먼저 업로드해 IMAGE 배경 key를 채운다.
+      const editorState = useThemeEditorStore.getState();
+      if (
+        editorState.pendingBackgroundFile &&
+        editorState.background.type === "IMAGE" &&
+        !editorState.background.key
+      ) {
+        const { key } = await uploadToS3WithPresigned({
+          file: editorState.pendingBackgroundFile,
+          type: PRESIGNED_UPLOAD_TYPES.FRAME,
+          isTemp: false,
+        });
+        useThemeEditorStore.getState().setBackgroundImageKey(key);
+      }
+
+      const themeJson = exportJson();
+      if (!themeJson) {
+        setIsSaving(false);
+        return;
+      }
+
       const previewBlob = await renderThemePreviewPng(themeJson);
       const previewFile = new File(
         [previewBlob],
@@ -203,10 +223,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             {loadError ? (
               <p className="mt-1 text-[11px] text-red-300">{loadError}</p>
             ) : null}
-            {remoteFrameId && hasNonColorBackground ? (
+            {remoteFrameId && hasVideoBackground ? (
               <p className="mt-1 text-[11px] text-amber-300">
-                이미지/비디오 배경은 미리보기에서 단색 배경으로 보이지만, 배경
-                색상을 바꾸지 않으면 기존 배경 정보는 그대로 보존됩니다.
+                비디오 배경은 미리보기에서 단색 배경으로 보이지만, 배경 색상을
+                바꾸지 않으면 기존 배경 정보는 그대로 보존됩니다.
               </p>
             ) : null}
           </div>
@@ -256,7 +276,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
           <div className="lg:col-start-2 lg:row-start-2">
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
-              <p className="text-sm font-semibold">배경색</p>
+              <p className="text-sm font-semibold">배경</p>
               <div className="flex flex-wrap gap-2">
                 {BACKGROUND_COLORS.map((color) => {
                   const selected = backgroundColor === color.value;
@@ -291,6 +311,33 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   placeholder="ffffff"
                 />
               </div>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-text)] hover:border-[color:var(--hc-primary)]">
+                  {background.type === "IMAGE" ? "배경 이미지 변경" : "배경 이미지"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setBackgroundImage(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {background.type === "IMAGE" ? (
+                  <button
+                    type="button"
+                    onClick={clearBackgroundImage}
+                    className="h-9 rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-muted)] hover:border-[color:var(--hc-primary)]"
+                  >
+                    이미지 제거
+                  </button>
+                ) : null}
+              </div>
+              <p className="text-[11px] leading-4 text-[color:var(--hc-muted)]">
+                배경 이미지는 사진 칸 뒤에 깔려요.
+              </p>
             </section>
           </div>
 

@@ -131,6 +131,21 @@ async function requestUploadedMediaInfo(
   return { objectUrl: fallbackUrl };
 }
 
+// 저장된 S3 key를 화면/합성용 다운로드 URL로 해석한다. 실패 시 null(호출부에서 색 폴백).
+export async function getImageUrlByKey(key: string): Promise<string | null> {
+  if (!key) return null;
+
+  try {
+    const res = await clientApi.get<ApiEnvelope<unknown>>(
+      `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
+    );
+    const info = extractUploadedMediaInfo(res.data.data);
+    return info?.downloadUrl ?? info?.objectUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function extractFilenameFromKey(key: string) {
   const filename = key.split("/").pop()?.trim();
   if (!filename) {
