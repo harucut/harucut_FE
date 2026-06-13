@@ -94,6 +94,7 @@ type State = {
   setBackgroundColor: (color: string) => void;
   setBackgroundImage: (file: File) => void;
   setBackgroundImageKey: (key: string) => void;
+  setBackgroundImageUrl: (url: string) => void;
   clearBackgroundImage: () => void;
 
   addPhotoAssets: (
@@ -242,6 +243,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     set((s) => {
       if (s.background.type !== "IMAGE") return s;
       return { background: { ...s.background, key } };
+    }),
+  // 저장된 원격 IMAGE 배경(key만 있음)을 편집/썸네일에 렌더하도록 해석된 url을 주입.
+  // 재업로드 대상이 아니므로 pendingBackgroundFile은 건드리지 않는다(기존 key 보존).
+  setBackgroundImageUrl: (url) =>
+    set((s) => {
+      if (s.background.type !== "IMAGE") return s;
+      return { background: { ...s.background, url } };
     }),
   clearBackgroundImage: () =>
     set((s) => {
@@ -640,6 +648,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           data.background?.type === "COLOR"
             ? normalizeHexColor(data.background.value)
             : "111827",
+        pendingBackgroundFile: null,
         assets: {
           photos: [],
           stickers: s.assets.stickers,
