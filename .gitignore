@@ -52,3 +52,10 @@ next-env.d.ts
 
 .codex/
 .agents/
+
+# 빌드 산출물
+*.aab
+
+# 디자인 핸드오프 소스 (필요한 자산은 각 앱으로 복사; 원본은 로컬 참고용으로만 보관)
+/handoff/
+/deployimage/
