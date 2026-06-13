@@ -30,6 +30,7 @@ type ThemeEditorSessionState = {
   };
   background: ThemeBackground;
   backgroundColor: string;
+  backgroundImageUri: string | null;
   caption: string;
   components: ThemeEditorComponent[];
   description: string;
@@ -61,9 +62,11 @@ type ThemeEditorStore = ThemeEditorSessionState & {
   resetThemeEditor: () => void;
   saveThemeFrame: (previewUri?: string | null) => Promise<string | null>;
   selectSavedFrameForTheme: (frame: SavedFrame) => void;
+  clearThemeBackgroundImage: () => void;
   setThemeAccentColor: (value: string) => void;
   setThemeActiveComponent: (id: string | null) => void;
   setThemeBackgroundColor: (value: string) => void;
+  setThemeBackgroundImage: (uri: string) => void;
   setThemeCaption: (value: string) => void;
   setThemeDescription: (value: string) => void;
   setThemeFrame: (frameId: FrameId) => void;
@@ -93,6 +96,7 @@ function defaultThemeEditor(): ThemeEditorSessionState {
       value: backgroundColor.replace(/^#/, ''),
     },
     backgroundColor,
+    backgroundImageUri: null,
     caption: 'today archive',
     components: [],
     description: '하루컷에서 직접 꾸민 나만의 프레임',
@@ -283,9 +287,22 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
     const remoteFrameId =
       selectedFrame?.remoteFrameId ??
       (current.selectedSavedFrameId ? remoteFrameIdFromSavedId(current.selectedSavedFrameId) : null);
+    // 로컬 배경 이미지가 있으면 업로드해 IMAGE 배경 key를 채운다.
+    let background = current.background;
+    if (current.backgroundImageUri) {
+      const uploadedBackground = await uploadLocalFileWithPresigned({
+        contentType: 'JPEG',
+        filename: `${title}-bg.jpg`,
+        isTemp: false,
+        type: 'FRAME_COMPONENT',
+        uri: current.backgroundImageUri,
+      });
+      background = { type: 'IMAGE', key: uploadedBackground.key };
+    }
+
     const draft = {
       accentColor: current.accentColor,
-      background: current.background,
+      background,
       backgroundColor: current.backgroundColor,
       caption: current.caption,
       components: normalizeThemeZ(current.components)
@@ -331,6 +348,7 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
         value: normalizeThemeColor(frame.backgroundColor).replace(/^#/, ''),
       },
       backgroundColor: frame.backgroundColor,
+      backgroundImageUri: null,
       caption: frame.caption,
       components: normalizeThemeZ(
         (frame.components ?? []).map((component) => ({
@@ -348,6 +366,14 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
     }),
   setThemeAccentColor: (value) => set({ accentColor: value }),
   setThemeActiveComponent: (id) => set({ activeComponentId: id }),
+  clearThemeBackgroundImage: () =>
+    set((state) => ({
+      background: {
+        type: 'COLOR',
+        value: normalizeThemeColor(state.backgroundColor).replace(/^#/, ''),
+      },
+      backgroundImageUri: null,
+    })),
   setThemeBackgroundColor: (value) => {
     const backgroundColor = normalizeThemeColor(value);
 
@@ -357,8 +383,15 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
         value: backgroundColor.replace(/^#/, ''),
       },
       backgroundColor,
+      backgroundImageUri: null,
     });
   },
+  setThemeBackgroundImage: (uri) =>
+    set({
+      // key는 저장 시 업로드 후 채운다. 미리보기는 backgroundImageUri(local)를 사용.
+      background: { type: 'IMAGE' },
+      backgroundImageUri: uri,
+    }),
   setThemeCaption: (value) => set({ caption: value }),
   setThemeDescription: (value) => set({ description: value }),
   setThemeFrame: (frameId) =>
