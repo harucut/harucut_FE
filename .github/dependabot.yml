@@ -65,32 +65,45 @@ updates:
       - dependency-name: "eslint"
         update-types:
           - "version-update:semver-major"
-      # Expo SDK가 버전을 고정하는 네이티브 런타임은 minor 이상 자동 범프 금지
-      # (RN 0.86 범프가 Expo 55 Metro 번들링을 깨뜨린 회귀 재발 방지, #303 참고)
+      # Expo SDK가 버전을 고정하는 네이티브 런타임은 patch 포함 모든 자동 범프 금지.
+      # RN 버전은 Expo SDK 업그레이드가 단독으로 주도해야 함 (Expo 55는 RN 0.85.2 고정).
+      # 회귀 사례: RN minor 범프가 Expo 55 Metro 번들링을 깨뜨림(#303), RN 0.85.3 patch도
+      # expo-runtime 그룹으로 반복 유입(#327/#333) → patch까지 ignore로 막는다.
       - dependency-name: "react-native"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+          - "version-update:semver-patch"
       - dependency-name: "react-native-reanimated"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+          - "version-update:semver-patch"
       - dependency-name: "react-native-screens"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+          - "version-update:semver-patch"
       - dependency-name: "react-native-safe-area-context"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+          - "version-update:semver-patch"
       - dependency-name: "react-native-gesture-handler"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+          - "version-update:semver-patch"
       - dependency-name: "react-native-worklets"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      # expo-camera 메이저(예: 56)는 Expo SDK 56 전용이라 SDK 55에서 네이티브 빌드를 깨뜨림(#328).
+      # SDK 55 내 minor/patch(55.0.x)는 허용 — SDK 업그레이드 시 메이저를 함께 올린다.
+      - dependency-name: "expo-camera"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - "dependencies"
       - "web"
