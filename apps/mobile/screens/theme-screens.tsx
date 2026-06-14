@@ -5,9 +5,10 @@ import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
-import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
+import { FrameCapacityMeter, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
 import { BACKGROUND_SWATCHES, THEME_STICKERS, type ThemeAsset, type ThemeComponentType, type ThemeEditorComponent } from '@/constants/harucut-data';
+import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
@@ -29,21 +30,26 @@ export function ThemeFrameScreen() {
   const push = (path: string) => router.push(path as never);
   const accessMode = useSessionStore((state) => state.accessMode);
   const savedFrames = useLibraryStore((state) => state.savedFrames);
+  const planTier = useSessionStore((state) => state.user.planTier);
+  const refreshUserProfile = useSessionStore((state) => state.refreshUserProfile);
   const themeEditor = useThemeEditorStore();
   const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
   const setThemeFrame = useThemeEditorStore((state) => state.setThemeFrame);
   const selectSavedFrameForTheme = useThemeEditorStore((state) => state.selectSavedFrameForTheme);
+  const plan = resolvePlanInfo(planTier);
 
   useEffect(() => {
     if (accessMode === 'member') {
       void loadRemoteFrames();
+      void refreshUserProfile().catch(() => {});
     }
-  }, [accessMode, loadRemoteFrames]);
+  }, [accessMode, loadRemoteFrames, refreshUserProfile]);
 
   return (
     <AppScrollView>
       <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} />
       <StepProgress current={1} label="프레임 선택" total={2} />
+      <FrameCapacityMeter onUpgrade={() => push('/mypage')} plan={plan} used={savedFrames.length} />
       <FramePickerSection
         confirmLabel="새 프레임 만들기"
         onConfirm={() => push('/theme/sticker')}
@@ -57,6 +63,8 @@ export function ThemeFrameScreen() {
         onAction={() => push('/theme/sticker')}
         onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForTheme}
+        onUpgrade={() => push('/mypage')}
+        planLimit={plan.limit}
         selectedFrameId={themeEditor.frameId}
         selectedSavedFrameId={themeEditor.selectedSavedFrameId}
         title="저장한 프레임"

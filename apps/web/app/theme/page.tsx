@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
+import { resolvePlanInfo } from "@/constants/planLimits";
+import { FrameCapacityMeter } from "@/components/frame/FrameCapacityMeter";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,6 +14,7 @@ import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import { getMyUserInfo } from "@/lib/userApi";
 
 function ThemePageContent() {
   const router = useRouter();
@@ -20,6 +23,9 @@ function ThemePageContent() {
   const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
   const { setFrameId, setRemoteFrameId, reset } = useThemeSession();
   const { frames, isLoading, error, refresh } = useMyFrames();
+
+  const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
+  const plan = resolvePlanInfo(planTier);
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
@@ -33,6 +39,20 @@ function ThemePageContent() {
   useEffect(() => {
     reset();
   }, [reset]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getMyUserInfo()
+      .then((user) => {
+        if (!cancelled) setPlanTier(user.planTier ?? "BASIC");
+      })
+      .catch(() => {
+        if (!cancelled) setPlanTier("BASIC");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!Number.isFinite(queriedRemoteFrameId) || queriedRemoteFrameId <= 0) return;
@@ -70,6 +90,12 @@ function ThemePageContent() {
         />
         <StepProgress current={1} total={2} label="프레임 선택" />
 
+        <FrameCapacityMeter
+          plan={plan}
+          used={frames.length}
+          onUpgrade={() => router.push("/pricing")}
+        />
+
         <FramePicker
           selectedFrameId={selectedFrameId}
           onChangeSelected={(nextFrameId) => {
@@ -95,6 +121,8 @@ function ThemePageContent() {
           onRefresh={refresh}
           onAction={handleOpenRemoteFrame}
           actionLabel="수정하기"
+          planLimit={plan.limit}
+          onUpgrade={() => router.push("/pricing")}
         />
       </div>
     </main>
