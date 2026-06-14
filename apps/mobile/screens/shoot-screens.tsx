@@ -497,8 +497,12 @@ export function ShootResultScreen() {
   ]);
 
   const currentHistory = historyItems.find((item) => item.id === shoot.persistedHistoryId) ?? null;
+  // 사용자가 탭한 순서(selectedShotIds)를 보존해 미리보기/저장 결과가 일치하도록 한다.
   const previewMedia =
-    currentHistory?.previewMedia ?? shoot.shots.filter((item) => shoot.selectedShotIds.includes(item.id));
+    currentHistory?.previewMedia ??
+    shoot.selectedShotIds
+      .map((id) => shoot.shots.find((shot) => shot.id === id))
+      .filter((shot): shot is (typeof shoot.shots)[number] => shot !== undefined);
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
