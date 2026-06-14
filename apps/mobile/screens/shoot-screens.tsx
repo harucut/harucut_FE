@@ -355,22 +355,25 @@ export function ShootSelectScreen() {
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 14 }}>
-        <Text style={styles.bodyText}>방금 촬영한 사진 {shoot.shots.length}장 중에서 4장을 골라 주세요.</Text>
+        <Text style={styles.bodyText}>찍은 {shoot.shots.length}장 중 4장을 순서대로 탭하세요.</Text>
         <View style={styles.mediaGrid}>
-          {shoot.shots.map((item, index) => {
-            const selected = shoot.selectedShotIds.includes(item.id);
+          {shoot.shots.map((item) => {
+            const order = shoot.selectedShotIds.indexOf(item.id);
+            const selected = order >= 0;
             return (
               <Pressable
                 key={item.id}
-                accessibilityLabel={`${item.label}${selected ? ', 선택됨' : ', 선택하기'}`}
+                accessibilityLabel={`${item.label}${selected ? `, ${order + 1}번째로 선택됨` : ', 선택하기'}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 onPress={() => toggleShootSelection(item.id)}
                 style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
                 <Image accessibilityLabel={item.label} accessibilityRole="image" source={{ uri: item.uri }} style={styles.mediaImage} />
-                <View style={styles.mediaBadge}>
-                  <Text style={styles.mediaBadgeText}>#{index + 1}</Text>
-                </View>
+                {selected ? (
+                  <View style={styles.orderBadge}>
+                    <Text style={styles.orderBadgeText}>{order + 1}</Text>
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
@@ -745,6 +748,22 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       overflow: 'hidden',
       position: 'relative',
       width: '48%',
+    },
+    orderBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      height: 26,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      width: 26,
+    },
+    orderBadgeText: {
+      color: '#06140A',
+      fontSize: 13,
+      fontWeight: '800',
     },
     mediaCardSelected: {
       borderColor: colors.primary,

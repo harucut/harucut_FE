@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, FormField, Pill, SurfaceCard } from '@/components/harucut/ui';
 import type { HistoryItem } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -154,80 +154,105 @@ export function HomeScreen() {
     }
   }, [accessMode, loadRemoteFrames]);
 
+  const savedCount = historyItems.length;
+
   return (
     <AppScrollView>
-      <PageHeader
-        description={`${user.username}님, 촬영하거나 업로드해서 오늘의 기록을 바로 만들어 보세요.`}
-        onPressRight={() => push('/mypage')}
-        rightSlot={<Ionicons color={colors.text} name="person-outline" size={18} />}
-        title="오늘 하루를 네 컷으로 남겨보세요"
-      />
-
-      <SurfaceCard style={{ gap: 16 }}>
-        <Pill>{todayMoment}</Pill>
-        <View style={{ gap: 10 }}>
-          <Text style={styles.heroTitle}>찍고 저장하고,</Text>
-          <Text style={styles.heroTitleAccent}>다시 꺼내 보는 하루컷</Text>
-          <Text style={styles.bodyCopy}>촬영하거나 업로드해서 기록에 남겨두세요.</Text>
+      <View style={styles.homeTopBar}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dateEyebrow}>{todayMoment}</Text>
+          <Text style={styles.greetingTitle}>{user.username}님, 오늘은</Text>
+          <Text style={styles.greetingAccent}>어떤 네 컷일까요?</Text>
         </View>
+        <Pressable
+          accessibilityLabel="내 계정"
+          accessibilityRole="button"
+          onPress={() => push('/mypage')}
+          style={styles.topIconButton}>
+          <Ionicons color={colors.text} name="person-outline" size={20} />
+        </Pressable>
+      </View>
 
-        <View style={styles.heroActionGroup}>
-          <ActionButton
-            icon={<Ionicons color="#FFFFFF" name="camera-outline" size={16} />}
-            label="바로 촬영 시작"
-            onPress={() => push('/shoot')}
-          />
-          <View style={styles.rowButtons}>
-            <ActionButton
-              icon={<Ionicons color={colors.text} name="cloud-upload-outline" size={16} />}
-              label="사진 업로드"
-              onPress={() => push('/upload')}
-              style={{ flex: 1 }}
-              variant="secondary"
-            />
-            <ActionButton
-              icon={<Ionicons color={colors.text} name="color-palette-outline" size={16} />}
-              label="꾸미기"
-              onPress={() => push('/theme')}
-              style={{ flex: 1 }}
-              variant="secondary"
-            />
+      <Pressable
+        accessibilityLabel="지금 촬영하기"
+        accessibilityRole="button"
+        onPress={() => push('/shoot')}
+        style={({ pressed }) => [styles.heroCta, pressed ? styles.pressedSoft : null]}>
+        <View style={styles.heroCtaIcon}>
+          <Ionicons color={colors.primary} name="camera" size={24} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heroCtaTitle}>지금 촬영하기</Text>
+          <Text style={styles.heroCtaSubtitle}>프레임 고르고 8장 찍기</Text>
+        </View>
+        <Ionicons color="#06140A" name="chevron-forward" size={22} />
+      </Pressable>
+
+      <View style={styles.quickRow}>
+        <Pressable
+          accessibilityLabel="사진 불러오기"
+          accessibilityRole="button"
+          onPress={() => push('/upload')}
+          style={({ pressed }) => [styles.quickCard, pressed ? styles.pressedSoft : null]}>
+          <Ionicons color={colors.primaryStrong} name="image-outline" size={22} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quickTitle}>사진 불러오기</Text>
+            <Text style={styles.quickSubtitle}>갤러리에서</Text>
           </View>
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard style={{ gap: 14 }}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>Recent</Text>
-            <Text style={styles.sectionTitle}>최근 저장한 결과</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="프레임 꾸미기"
+          accessibilityRole="button"
+          onPress={() => push('/theme')}
+          style={({ pressed }) => [styles.quickCard, pressed ? styles.pressedSoft : null]}>
+          <Ionicons color={colors.primaryStrong} name="sparkles-outline" size={22} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quickTitle}>프레임 꾸미기</Text>
+            <Text style={styles.quickSubtitle}>나만의 테마</Text>
           </View>
-          <Text onPress={() => push('/history')} style={styles.inlineLink}>
-            전체 보기
-          </Text>
-        </View>
+        </Pressable>
+      </View>
 
-        <View style={styles.recentGrid}>
-          {isHistoryLoading ? (
-            Array.from({ length: 4 }, (_, index) => (
-              <View key={`recent-loading-${index}`} style={[styles.thumbCard, styles.thumbLoading]} />
-            ))
-          ) : recentItems.length > 0 ? (
-            recentItems.map((item) => {
-              const previewAsset = historyPreviewAsset(item);
-              const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
-              const previewUri = previewAsset?.uri ?? '';
+      <View style={styles.statStrip}>
+        <Text style={styles.statNumber}>{savedCount}</Text>
+        <Text style={styles.statCopy}>
+          지금까지 <Text style={styles.statCopyStrong}>{savedCount}컷</Text>을 남겼어요.{'\n'}
+          오늘도 한 컷 더 채워볼까요?
+        </Text>
+      </View>
 
-              return (
-                <View key={item.id} style={styles.thumbCard}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>최근 기록</Text>
+        <Text onPress={() => push('/history')} style={styles.inlineLink}>
+          전체보기
+        </Text>
+      </View>
+
+      <View style={styles.recentGrid}>
+        {isHistoryLoading ? (
+          Array.from({ length: 4 }, (_, index) => (
+            <View key={`recent-loading-${index}`} style={[styles.thumbCard, styles.thumbLoading]} />
+          ))
+        ) : recentItems.length > 0 ? (
+          recentItems.map((item) => {
+            const previewAsset = historyPreviewAsset(item);
+            const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
+            const previewUri = previewAsset?.uri ?? '';
+
+            return (
+              <View key={item.id} style={styles.recentTile}>
+                <View style={styles.thumbCard}>
                   {previewUri && previewKind === 'image' ? (
                     <>
                       <Image source={{ uri: previewUri }} style={styles.thumbImage} />
-                      {item.kind === 'video' ? (
-                        <View style={styles.thumbVideoBadge}>
-                          <Ionicons color="#FFFFFF" name="play" size={18} />
-                        </View>
-                      ) : null}
+                      <View style={styles.thumbTypeBadge}>
+                        <Ionicons
+                          color="#FFFFFF"
+                          name={item.kind === 'video' ? 'videocam' : 'image'}
+                          size={11}
+                        />
+                        <Text style={styles.thumbTypeText}>{item.kind === 'video' ? '영상' : '사진'}</Text>
+                      </View>
                     </>
                   ) : (
                     <View style={styles.thumbPlaceholder}>
@@ -242,48 +267,54 @@ export function HomeScreen() {
                     </View>
                   )}
                 </View>
-              );
-            })
-          ) : (
-            <View style={styles.recentEmptyCard}>
-              <Text style={styles.linkTitle}>아직 저장한 결과가 없어요.</Text>
-              <Text style={styles.linkBody}>
-                {historyStatus === 'error'
-                  ? (historyError ?? '저장한 결과를 불러오지 못했어요.')
-                  : '촬영하거나 업로드하면 여기에 표시돼요.'}
-              </Text>
-            </View>
-          )}
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard style={{ gap: 12 }}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>이어 꾸밀 프레임</Text>
-          <Text onPress={() => push('/theme')} style={styles.inlineLink}>
-            전체 보기
-          </Text>
-        </View>
-        {savedFrames[0] ? (
-          <Pressable onPress={() => push('/theme/sticker')} style={styles.savedContinueCard}>
-            <View style={{ width: 86 }}>
-              <FramePreview
-                accentColor={savedFrames[0].accentColor}
-                backgroundColor={savedFrames[0].backgroundColor}
-                caption={savedFrames[0].caption}
-                frameId={savedFrames[0].frameId}
-              />
-            </View>
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text style={styles.linkTitle}>{savedFrames[0].title}</Text>
-              <Text style={styles.linkBody}>저장한 프레임을 이어서 수정할 수 있어요.</Text>
-            </View>
-            <Ionicons color={colors.muted} name="chevron-forward" size={16} />
-          </Pressable>
+                <View style={{ gap: 2 }}>
+                  <Text numberOfLines={1} style={styles.thumbTitle}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.thumbMeta}>{formatDate(item.createdAt)}</Text>
+                </View>
+              </View>
+            );
+          })
         ) : (
-          <Text style={styles.bodyCopy}>아직 저장한 프레임이 없어요.</Text>
+          <View style={styles.recentEmptyCard}>
+            <Text style={styles.linkTitle}>아직 저장한 결과가 없어요.</Text>
+            <Text style={styles.linkBody}>
+              {historyStatus === 'error'
+                ? (historyError ?? '저장한 결과를 불러오지 못했어요.')
+                : '촬영하거나 업로드하면 여기에 표시돼요.'}
+            </Text>
+          </View>
         )}
-      </SurfaceCard>
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>이어 꾸밀 프레임</Text>
+        <Text onPress={() => push('/theme')} style={styles.inlineLink}>
+          전체보기
+        </Text>
+      </View>
+      {savedFrames[0] ? (
+        <Pressable onPress={() => push('/theme/sticker')} style={styles.savedContinueCard}>
+          <View style={{ width: 76 }}>
+            <FramePreview
+              accentColor={savedFrames[0].accentColor}
+              backgroundColor={savedFrames[0].backgroundColor}
+              caption={savedFrames[0].caption}
+              frameId={savedFrames[0].frameId}
+            />
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.linkTitle}>{savedFrames[0].title}</Text>
+            <Text style={styles.linkBody}>저장한 프레임을 이어서 수정할 수 있어요.</Text>
+          </View>
+          <Ionicons color={colors.muted} name="chevron-forward" size={16} />
+        </Pressable>
+      ) : (
+        <View style={styles.savedEmptyCard}>
+          <Text style={styles.bodyCopy}>아직 저장한 프레임이 없어요. 꾸미기에서 나만의 프레임을 만들어 보세요.</Text>
+        </View>
+      )}
     </AppScrollView>
   );
 }
@@ -384,44 +415,44 @@ export function HistoryScreen() {
 
   return (
     <AppScrollView>
-      <PageHeader
-        backLabel="홈으로"
-        description="내가 만든 사진과 영상을 다시 보고, 이름을 정리하고, 공유할 수 있어요."
-        onPressBack={() => push('/home')}
-        title="사진 기록"
-      />
-
-      <SurfaceCard style={{ gap: 16 }}>
-        <View style={styles.sectionHeader}>
-          <View style={{ gap: 10 }}>
-            <Pill>MEMORY ARCHIVE</Pill>
-            <Text style={styles.heroTitle}>다시 꺼내 보는 내 기록함</Text>
-            <Text style={styles.bodyCopy}>
-              저장한 결과를 다시 보고, 이름을 정리하고, 공유할 수 있어요.
-            </Text>
-          </View>
-          <View style={styles.statsWrap}>
-            <Pill>전체 {historyItems.length}개</Pill>
-            <Pill>사진 {photoCount}개</Pill>
-            <Pill>영상 {videoCount}개</Pill>
-          </View>
+      <View style={styles.historyTopBar}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dateEyebrow}>MEMORY ARCHIVE</Text>
+          <Text style={styles.greetingTitle}>기록</Text>
         </View>
+        <Pressable
+          accessibilityLabel="새 촬영 시작"
+          accessibilityRole="button"
+          onPress={() => push('/shoot')}
+          style={styles.topIconButton}>
+          <Ionicons color={colors.text} name="camera-outline" size={20} />
+        </Pressable>
+      </View>
 
-        <View style={styles.filterRow}>
-          {(['ALL', 'PHOTO', 'VIDEO'] as const).map((value) => (
-            <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
-              {value === 'ALL' ? '전체' : value === 'PHOTO' ? '사진' : '영상'}
-            </Pill>
-          ))}
+      <View style={styles.historyStatRow}>
+        <View style={styles.historyStatCell}>
+          <Text style={styles.historyStatNumber}>{historyItems.length}</Text>
+          <Text style={styles.historyStatLabel}>전체</Text>
         </View>
-
-        <FormField label="검색" onChangeText={setSearch} placeholder="파일 이름으로 검색" value={search} />
-
-        <View style={styles.rowButtons}>
-          <ActionButton label="새 촬영" onPress={() => push('/shoot')} style={{ flex: 1 }} />
-          <ActionButton label="업로드" onPress={() => push('/upload')} style={{ flex: 1 }} variant="secondary" />
+        <View style={[styles.historyStatCell, styles.historyStatDivider]}>
+          <Text style={styles.historyStatNumber}>{photoCount}</Text>
+          <Text style={styles.historyStatLabel}>사진</Text>
         </View>
-      </SurfaceCard>
+        <View style={[styles.historyStatCell, styles.historyStatDivider]}>
+          <Text style={styles.historyStatNumber}>{videoCount}</Text>
+          <Text style={styles.historyStatLabel}>영상</Text>
+        </View>
+      </View>
+
+      <View style={styles.filterRow}>
+        {(['ALL', 'PHOTO', 'VIDEO'] as const).map((value) => (
+          <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
+            {value === 'ALL' ? '전체' : value === 'PHOTO' ? '사진' : '영상'}
+          </Pill>
+        ))}
+      </View>
+
+      <FormField label="검색" onChangeText={setSearch} placeholder="파일 이름으로 검색" value={search} />
 
       {isHistoryLoading ? (
         <SurfaceCard>
@@ -515,6 +546,8 @@ export function MyPageScreen() {
   const showNotice = useSessionStore((state) => state.showNotice);
   const themePreference = useSessionStore((state) => state.themePreference);
   const setThemePreference = useSessionStore((state) => state.setThemePreference);
+  const savedCount = useLibraryStore((state) => state.historyItems.length);
+  const savedFrameCount = useLibraryStore((state) => state.savedFrames.length);
   const [username, setUsername] = useState(user.username);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -637,31 +670,64 @@ export function MyPageScreen() {
     }
   };
 
+  const avatarInitial = user.username?.trim().charAt(0) || '하';
+
   return (
     <AppScrollView>
-      <PageHeader
-        onPressRight={() => void refreshUserProfile().catch((error) =>
-          showError('계정 정보 새로고침 실패', getApiErrorMessage(error, '계정 정보를 불러오지 못했어요.')),
-        )}
-        rightSlot={<Ionicons color={colors.text} name="refresh-outline" size={18} />}
-        title="내 계정"
-      />
+      <View style={styles.myTopBar}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dateEyebrow}>MY</Text>
+          <Text style={styles.greetingTitle}>내 계정</Text>
+        </View>
+        <Pressable
+          accessibilityLabel="계정 정보 새로고침"
+          accessibilityRole="button"
+          onPress={() => void refreshUserProfile().catch((error) =>
+            showError('계정 정보 새로고침 실패', getApiErrorMessage(error, '계정 정보를 불러오지 못했어요.')),
+          )}
+          style={styles.topIconButton}>
+          <Ionicons color={colors.text} name="refresh-outline" size={18} />
+        </Pressable>
+      </View>
+
+      <View style={styles.profileRow}>
+        <View style={styles.profileAvatar}>
+          {user.profileUrl ? (
+            <Image source={{ uri: user.profileUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.profileAvatarInitial}>{avatarInitial}</Text>
+          )}
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={styles.profileName}>{user.username}</Text>
+          <Text style={styles.linkBody}>{user.email}</Text>
+        </View>
+        <Pressable
+          accessibilityLabel={submitting ? '업로드 중' : '프로필 이미지 변경'}
+          accessibilityRole="button"
+          disabled={submitting}
+          onPress={handlePickProfile}
+          style={styles.editPill}>
+          <Text style={styles.editPillText}>{submitting ? '업로드 중' : '편집'}</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.statStripRow}>
+        <View style={styles.statStripCell}>
+          <Text style={styles.statStripNumber}>{savedCount}</Text>
+          <Text style={styles.statStripLabel}>총 네 컷</Text>
+        </View>
+        <View style={[styles.statStripCell, styles.statStripDivider]}>
+          <Text style={styles.statStripNumber}>{savedFrameCount}</Text>
+          <Text style={styles.statStripLabel}>보관 프레임</Text>
+        </View>
+        <View style={[styles.statStripCell, styles.statStripDivider]}>
+          <Text style={styles.statStripNumber}>{user.planTier}</Text>
+          <Text style={styles.statStripLabel}>플랜</Text>
+        </View>
+      </View>
 
       <SurfaceCard style={{ gap: 14 }}>
-        <View style={styles.profileRow}>
-          <View style={styles.profileAvatar}>
-            {user.profileUrl ? (
-              <Image source={{ uri: user.profileUrl }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.profileAvatarInitial}>{user.username?.trim().charAt(0) || '하'}</Text>
-            )}
-          </View>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.linkTitle}>{user.username}</Text>
-            <Text style={styles.linkBody}>{user.email}</Text>
-          </View>
-        </View>
-
         <View style={styles.quickGrid}>
           <View style={styles.infoTile}>
             <Text style={styles.linkBody}>로그인 플랫폼</Text>
@@ -675,12 +741,6 @@ export function MyPageScreen() {
             </Text>
           </View>
         </View>
-
-        <ActionButton
-          label={submitting ? '업로드 중' : '업로드'}
-          onPress={handlePickProfile}
-          variant="secondary"
-        />
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
@@ -799,6 +859,248 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: colors.muted,
       fontSize: 12,
       lineHeight: 18,
+    },
+    dateEyebrow: {
+      color: colors.primaryStrong,
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 1.4,
+      marginBottom: 6,
+      textTransform: 'uppercase',
+    },
+    editPill: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    editPillText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    greetingAccent: {
+      color: colors.primaryStrong,
+      fontSize: 24,
+      fontWeight: '800',
+      letterSpacing: -0.4,
+      lineHeight: 31,
+    },
+    greetingTitle: {
+      color: colors.text,
+      fontSize: 24,
+      fontWeight: '800',
+      letterSpacing: -0.4,
+      lineHeight: 31,
+    },
+    heroCta: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 24,
+      flexDirection: 'row',
+      gap: 14,
+      padding: 18,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: isDark ? 0.34 : 0.24,
+      shadowRadius: 30,
+    },
+    heroCtaIcon: {
+      alignItems: 'center',
+      backgroundColor: '#06140A',
+      borderRadius: 15,
+      height: 50,
+      justifyContent: 'center',
+      width: 50,
+    },
+    heroCtaSubtitle: {
+      color: 'rgba(6, 20, 10, 0.72)',
+      fontSize: 12.5,
+      fontWeight: '500',
+      marginTop: 2,
+    },
+    heroCtaTitle: {
+      color: '#06140A',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    historyStatCell: {
+      alignItems: 'center',
+      flex: 1,
+      gap: 2,
+    },
+    historyStatDivider: {
+      borderLeftColor: colors.border,
+      borderLeftWidth: 1,
+    },
+    historyStatLabel: {
+      color: colors.muted,
+      fontSize: 11,
+    },
+    historyStatNumber: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: '800',
+    },
+    historyStatRow: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 20,
+      borderWidth: 1,
+      flexDirection: 'row',
+      paddingVertical: 16,
+    },
+    historyTopBar: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    homeTopBar: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    myTopBar: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    pressedSoft: {
+      opacity: 0.9,
+    },
+    profileName: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    quickCard: {
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: 'row',
+      gap: 10,
+      minWidth: 0,
+      padding: 14,
+    },
+    quickRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    quickSubtitle: {
+      color: colors.muted,
+      fontSize: 11,
+    },
+    quickTitle: {
+      color: colors.text,
+      fontSize: 13.5,
+      fontWeight: '700',
+    },
+    recentTile: {
+      gap: 8,
+      width: '48%',
+    },
+    statCopy: {
+      color: colors.textSoft,
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    statCopyStrong: {
+      color: colors.text,
+      fontWeight: '700',
+    },
+    statNumber: {
+      color: colors.primaryStrong,
+      fontSize: 28,
+      fontWeight: '800',
+    },
+    statStrip: {
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.border,
+      borderRadius: 20,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 14,
+      padding: 16,
+    },
+    statStripCell: {
+      alignItems: 'center',
+      flex: 1,
+      gap: 2,
+    },
+    statStripDivider: {
+      borderLeftColor: colors.border,
+      borderLeftWidth: 1,
+    },
+    statStripLabel: {
+      color: colors.muted,
+      fontSize: 11,
+    },
+    statStripNumber: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: '800',
+    },
+    statStripRow: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 20,
+      borderWidth: 1,
+      flexDirection: 'row',
+      paddingVertical: 16,
+    },
+    savedEmptyCard: {
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderStyle: 'dashed',
+      borderWidth: 1,
+      padding: 16,
+    },
+    thumbMeta: {
+      color: colors.muted,
+      fontSize: 11,
+    },
+    thumbTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    thumbTypeBadge: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius: 999,
+      flexDirection: 'row',
+      gap: 4,
+      left: 9,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      position: 'absolute',
+      top: 9,
+    },
+    thumbTypeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    topIconButton: {
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 21,
+      borderWidth: 1,
+      height: 42,
+      justifyContent: 'center',
+      width: 42,
     },
     exitCard: {
       backgroundColor: colors.dangerSoft,
@@ -987,7 +1289,8 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       borderRadius: 18,
       borderWidth: 1,
       overflow: 'hidden',
-      width: '48%',
+      position: 'relative',
+      width: '100%',
     },
     thumbImage: {
       height: '100%',
