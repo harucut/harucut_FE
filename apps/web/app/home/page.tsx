@@ -3,27 +3,45 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  ArrowRight,
   Camera,
   ChevronRight,
-  Palette,
+  Image as ImageIcon,
   Play,
-  Upload,
-  User,
+  Sparkles,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
-import { listMyFrames } from "@/lib/remoteFrameApi";
-import type { UserMedia, RemoteFrame } from "@/lib/api-types";
-import { frameIdFromFrameType } from "@/lib/frameApi";
+import type { UserMedia } from "@/lib/api-types";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
+
+const HOME_COACH_STEPS: CoachStep[] = [
+  {
+    selector: '[data-coach="shoot"]',
+    title: "촬영하기",
+    body: "카메라로 8장을 찍고 마음에 드는 4장을 골라 네 컷을 만들어요.",
+  },
+  {
+    selector: '[data-coach="upload"]',
+    title: "사진 업로드",
+    body: "이미 찍어둔 사진으로도 바로 네 컷을 만들 수 있어요.",
+  },
+  {
+    selector: '[data-coach="theme"]',
+    title: "꾸미기",
+    body: "프레임 색·배경 이미지·텍스트·스티커로 나만의 프레임을 만들어요.",
+  },
+];
 
 function formatCurrentDate() {
   return new Date().toLocaleDateString("ko-KR", {
+    year: "numeric",
     month: "long",
     day: "numeric",
-    weekday: "short",
+    weekday: "long",
   });
 }
 
@@ -68,7 +86,6 @@ export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
   const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
-  const [savedFrames, setSavedFrames] = useState<RemoteFrame[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,10 +95,9 @@ export default function HomePage() {
       setLoading(true);
 
       try {
-        const [nextUser, nextMedia, nextFrames] = await Promise.all([
+        const [nextUser, nextMedia] = await Promise.all([
           getMyUserInfo().catch(() => null),
           listMyMedia().catch(() => []),
-          listMyFrames().catch(() => []),
         ]);
 
         if (cancelled) return;
@@ -95,7 +111,6 @@ export default function HomePage() {
         setUser(nextUser);
         setRecentMedia(sortedMedia.slice(0, 4));
         setPreviewMedia(sortedMedia);
-        setSavedFrames(nextFrames.slice(0, 1));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -111,115 +126,147 @@ export default function HomePage() {
   }, []);
 
   const currentDateLabel = useCurrentDateLabel();
-  const savedFrame = savedFrames[0] ?? null;
+  const greetingName = user?.username ? `${user.username}님, ` : "";
 
   return (
-    <main className="hc-page-showcase min-h-dvh px-4 py-5 pb-[90px] text-[color:var(--hc-text)] sm:py-6 lg:pb-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <PageHeader
-          title={
-            <span className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-[0.26em] text-[color:var(--hc-primary)]/80">
-                Record your day
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav userInitial={user?.username} />
+
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
+        {/* 인사 */}
+        <header className="pt-1 lg:pt-0">
+          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
+            {currentDateLabel}
+          </span>
+          <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-tight sm:text-[30px] lg:text-[34px]">
+            {greetingName}오늘은
+            <br className="lg:hidden" />
+            <span className="lg:ml-2">어떻게 남겨볼까요?</span>
+          </h1>
+        </header>
+
+        {/* 액션 인덱스 → 촬영 / 업로드 / 꾸미기 (data-coach 앵커 유지) */}
+        <section className="grid gap-3 sm:grid-cols-3">
+          <Link
+            href="/shoot"
+            data-coach="shoot"
+            className="group flex min-h-[120px] flex-col justify-between rounded-[20px] bg-[color:var(--hc-primary)] p-5 text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
+          >
+            <span className="text-[11px] font-semibold tracking-[0.18em] opacity-70">
+              01
+            </span>
+            <span>
+              <span className="flex items-center justify-between text-[18px] font-extrabold">
+                촬영하기
+                <ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" />
               </span>
-              <span>
-                {user?.username ? `${user.username}님, ` : ""}오늘 하루를 네 컷으로
-                남겨보세요
+              <span className="mt-1 block text-[12.5px] font-medium opacity-75">
+                프레임 고르고 네 컷을 남겨요
               </span>
             </span>
-          }
-          rightHref="/mypage"
-          rightLabel="내 계정으로 이동"
-          rightSlot={<User size={16} />}
-          description=""
-        />
+          </Link>
 
-        <section className="hc-surface-card-xl rounded-[28px] border p-5 backdrop-blur sm:p-6">
-          <div className="hc-accent-chip inline-flex rounded-full border px-3 py-1 text-[11px]">
-            {currentDateLabel}
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <h1 className="max-w-2xl text-[28px] font-semibold tracking-tight sm:text-[32px] md:text-5xl">
-              찍고 저장하고,
-              <span
-                className="block bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(90deg, var(--hc-primary-strong), var(--hc-primary), var(--hc-hero-gradient-end))",
-                }}
-              >
-                다시 꺼내 보는 하루컷
+          <Link
+            href="/upload"
+            data-coach="upload"
+            className="hc-surface-card group flex min-h-[120px] flex-col justify-between rounded-[20px] border p-5 transition hover:border-[color:var(--hc-border-strong)]"
+          >
+            <span className="text-[11px] font-semibold tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
+              02
+            </span>
+            <span>
+              <span className="flex items-center justify-between text-[18px] font-extrabold">
+                업로드하기
+                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
               </span>
-            </h1>
-            <p className="max-w-xl text-[14px] leading-6 text-zinc-300 sm:text-[15px] sm:leading-7">
-              촬영하거나 업로드해서 기록에 남겨두세요.
-            </p>
-          </div>
+              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+                찍어둔 사진·영상으로 만들어요
+              </span>
+            </span>
+          </Link>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/shoot"
-              className="hc-button-hero inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition sm:w-auto"
-            >
-              <Camera className="h-4 w-4" />
-              바로 촬영 시작
-            </Link>
-            <Link
-              href="/upload"
-              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
-            >
-              <Upload className="h-4 w-4" />
-              사진 업로드
-            </Link>
-            <Link
-              href="/theme"
-              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
-            >
-              <Palette className="h-4 w-4" />
-              꾸미기
-            </Link>
-          </div>
-
+          <Link
+            href="/theme"
+            data-coach="theme"
+            className="hc-surface-card group flex min-h-[120px] flex-col justify-between rounded-[20px] border p-5 transition hover:border-[color:var(--hc-border-strong)]"
+          >
+            <span className="text-[11px] font-semibold tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
+              03
+            </span>
+            <span>
+              <span className="flex items-center justify-between text-[18px] font-extrabold">
+                프레임 꾸미기
+                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
+              </span>
+              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+                만들어두면 촬영할 때 골라 써요
+              </span>
+            </span>
+          </Link>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="hc-surface-card rounded-[28px] border p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
-                  Recent
-                </p>
-                <h2 className="mt-2 text-lg font-semibold">최근 저장한 결과</h2>
-              </div>
-              <Link href="/history" className="hc-link-accent text-[11px]">
-                전체 보기
-              </Link>
-            </div>
+        {/* 모바일 보조 진입 (앱 느낌) */}
+        <section className="grid gap-3 sm:hidden">
+          <Link
+            href="/shoot"
+            className="hc-surface-card flex items-center gap-3 rounded-2xl border p-4"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color:var(--hc-accent-soft-bg)]">
+              <Camera className="h-5 w-5 text-[color:var(--hc-primary)]" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold">바로 촬영 시작</span>
+              <span className="block text-[11.5px] text-[color:var(--hc-muted)]">
+                셔터를 누르면 네 컷이 자동으로 찍혀요
+              </span>
+            </span>
+            <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-[color:var(--hc-muted-soft)]" />
+          </Link>
+        </section>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {loading ? (
-                Array.from({ length: 4 }, (_, index) => (
-                  <div
-                    key={index}
-                    className="aspect-[3/4] animate-pulse rounded-3xl bg-white/5"
-                  />
-                ))
-              ) : recentMedia.length > 0 ? (
-                recentMedia.map((item) => {
-                  const preview = getUserMediaPreview(item, previewMedia);
-                  const isVideo = item.mediaType === "VIDEO";
+        {/* 최근 기록 */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-end justify-between">
+            <h2 className="flex items-baseline gap-2 text-[20px] font-extrabold tracking-tight lg:text-[22px]">
+              최근 기록
+              <span className="text-[12px] font-normal uppercase tracking-[0.2em] text-[color:var(--hc-muted-soft)]">
+                Recent
+              </span>
+            </h2>
+            <Link
+              href="/history"
+              className="hc-link-accent flex items-center gap-1 text-[13px] font-semibold"
+            >
+              전체보기
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
 
-                  return (
-                    <div
-                      key={item.mediaId}
-                      className="hc-surface-well relative overflow-hidden rounded-3xl border"
-                    >
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+            {loading ? (
+              Array.from({ length: 4 }, (_, index) => (
+                <div
+                  key={index}
+                  className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+                />
+              ))
+            ) : recentMedia.length > 0 ? (
+              recentMedia.map((item) => {
+                const preview = getUserMediaPreview(item, previewMedia);
+                const isVideo = item.mediaType === "VIDEO";
+
+                return (
+                  <Link
+                    key={item.mediaId}
+                    href="/history"
+                    className="group flex flex-col gap-2"
+                  >
+                    <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
                       {preview.url ? (
                         preview.kind === "video" ? (
                           <video
                             src={preview.url}
-                            className="aspect-[3/4] w-full object-cover"
+                            className="h-full w-full object-contain"
                             muted
                             playsInline
                           />
@@ -228,72 +275,58 @@ export default function HomePage() {
                           <img
                             src={preview.url}
                             alt={getUserMediaTitle(item)}
-                            className="aspect-[3/4] w-full object-cover"
+                            className="h-full w-full object-contain"
                           />
                         )
                       ) : (
-                        <div className="aspect-[3/4] bg-white/5" />
+                        <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
                       )}
-                      {isVideo ? (
-                        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
-                          <span className="grid h-10 w-10 place-items-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur">
+                      <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
+                        {isVideo ? (
+                          <>
                             <Play
                               aria-hidden="true"
-                              className="ml-0.5 h-4 w-4"
+                              className="h-2.5 w-2.5"
                               fill="currentColor"
                             />
-                          </span>
-                        </div>
-                      ) : null}
+                            영상
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon
+                              aria-hidden="true"
+                              className="h-2.5 w-2.5"
+                            />
+                            사진
+                          </>
+                        )}
+                      </span>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="hc-surface-well col-span-2 rounded-3xl border border-dashed p-5 text-center text-[11px] text-zinc-400">
-                  아직 저장한 결과가 없어요.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <div className="flex flex-col gap-4">
-            <section className="hc-surface-card rounded-[28px] border p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-100">
-                  저장된 프레임
+                    <p className="truncate text-[13.5px] font-bold tracking-tight">
+                      {getUserMediaTitle(item)}
+                    </p>
+                  </Link>
+                );
+              })
+            ) : (
+              <div className="hc-surface-well col-span-2 flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center md:col-span-4">
+                <Sparkles className="h-6 w-6 text-[color:var(--hc-primary)]" />
+                <p className="text-[13px] text-[color:var(--hc-muted)]">
+                  아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
                 </p>
-                <Link href="/theme" className="hc-link-accent text-[11px]">
-                  전체 보기
+                <Link
+                  href="/shoot"
+                  className="hc-button-primary rounded-full px-4 py-2 text-[12px] font-semibold"
+                >
+                  촬영 시작
                 </Link>
               </div>
-
-              <div className="mt-3">
-                {savedFrame ? (
-                  <Link
-                    href={`/theme?frame=${frameIdFromFrameType(savedFrame.frameType)}&remoteFrameId=${savedFrame.frameId}`}
-                    className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-100">
-                        {savedFrame.title}
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        저장한 프레임을 이어서 수정할 수 있어요.
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
-                  </Link>
-                ) : (
-                  <p className="hc-surface-well rounded-2xl border border-dashed px-4 py-4 text-[11px] text-zinc-400">
-                    아직 저장한 프레임이 없어요.
-                  </p>
-                )}
-              </div>
-            </section>
+            )}
           </div>
         </section>
       </div>
       <MobileTabBar />
+      <CoachMarks id="home-v1" steps={HOME_COACH_STEPS} />
     </main>
   );
 }

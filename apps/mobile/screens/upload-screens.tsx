@@ -160,12 +160,12 @@ export function UploadSelectScreen() {
 
         <View style={styles.mediaGrid}>
           {upload.assets.map((item) => {
-            const selected = upload.selectedAssetIds.includes(item.id);
+            const order = upload.selectedAssetIds.indexOf(item.id);
             return (
               <ActionCard
                 key={item.id}
                 item={item}
-                selected={selected}
+                order={order}
                 onPress={() => toggleUploadSelection(item.id)}
               />
             );
@@ -203,7 +203,8 @@ export function UploadSelectScreen() {
         </Pill>
         <Text style={styles.bodyText}>선택한 미디어에 영상이 포함되어 있을 때만 영상 결과를 함께 보여줍니다.</Text>
         <ActionButton
-          label={`다음 단계로 (${selectedCount}/4)`}
+          disabled={selectedCount !== 4}
+          label={selectedCount === 4 ? '다음 — 결과 만들기' : `${Math.max(0, 4 - selectedCount)}개 더 골라주세요`}
           onPress={() => {
             if (selectedCount === 4) {
               push('/upload/result');
@@ -429,25 +430,32 @@ export function UploadResultScreen() {
 function ActionCard({
   item,
   onPress,
-  selected,
+  order,
 }: {
   item: MediaAsset;
   onPress: () => void;
-  selected: boolean;
+  order: number;
 }) {
   const styles = useUploadStyles();
+  const selected = order >= 0;
 
   return (
     <Pressable
-      accessibilityLabel={`${item.label}${selected ? ', 선택됨' : ', 선택하기'}`}
+      accessibilityLabel={`${item.label}${selected ? `, ${order + 1}번째로 선택됨` : ', 선택하기'}`}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
       style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
       <Image accessibilityLabel={item.label} accessibilityRole="image" source={{ uri: item.uri }} style={styles.mediaImage} />
-      <View style={styles.mediaBadge}>
-        <Text style={styles.mediaBadgeText}>{selected ? '선택됨' : item.label}</Text>
-      </View>
+      {selected ? (
+        <View style={styles.orderBadge}>
+          <Text style={styles.orderBadgeText}>{order + 1}</Text>
+        </View>
+      ) : (
+        <View style={styles.mediaBadge}>
+          <Text numberOfLines={1} style={styles.mediaBadgeText}>{item.label}</Text>
+        </View>
+      )}
       {item.kind === 'video' ? (
         <View style={styles.videoBadge}>
           <Ionicons color="#FFFFFF" name="play" size={12} />
@@ -495,6 +503,22 @@ function createStyles(colors: HarucutColors) {
     },
     mediaCardSelected: {
       borderColor: colors.primary,
+    },
+    orderBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      height: 26,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      width: 26,
+    },
+    orderBadgeText: {
+      color: '#06140A',
+      fontSize: 13,
+      fontWeight: '800',
     },
     mediaGrid: {
       flexDirection: 'row',

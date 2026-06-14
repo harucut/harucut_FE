@@ -2,9 +2,9 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, RefreshCw, ShieldCheck } from "lucide-react";
+import { CreditCard, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { clientApi } from "@/lib/clientApi";
@@ -192,41 +192,48 @@ export default function MyPage() {
     }
   };
 
+  const profileInitial = user?.username?.trim()?.[0] ?? "U";
+
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 pb-[90px] text-[color:var(--hc-text)] lg:pb-6">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <PageHeader
-          title="내 계정"
-          rightSlot={
-            <button
-              type="button"
-              onClick={fetchUser}
-              disabled={isSubmitting || loading}
-              className="hc-button-icon grid h-9 w-9 place-items-center rounded-full border text-zinc-300 disabled:opacity-50"
-              aria-label="새로고침"
-              title="새로고침"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              />
-            </button>
-          }
-          description={
-            errors.common ? (
-              <span className="text-[11px] text-red-400">{errors.common}</span>
-            ) : undefined
-          }
-        />
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav userInitial={user?.username} />
+
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
+        {/* 헤더 */}
+        <header className="flex items-center justify-between pt-1 lg:pt-3">
+          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+            마이페이지
+          </h1>
+          <button
+            type="button"
+            onClick={fetchUser}
+            disabled={isSubmitting || loading}
+            className="hc-button-icon grid h-10 w-10 place-items-center rounded-full border disabled:opacity-50"
+            aria-label="새로고침"
+            title="새로고침"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </header>
+
+        {errors.common ? (
+          <p className="text-[12px] text-[color:var(--hc-primary-strong)]">
+            {errors.common}
+          </p>
+        ) : null}
 
         {loading ? (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-[11px] text-zinc-400">정보를 불러오는 중...</p>
+          <div className="hc-surface-card rounded-[20px] border p-5">
+            <p className="text-[12px] text-[color:var(--hc-muted)]">
+              정보를 불러오는 중...
+            </p>
           </div>
         ) : user ? (
           <>
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-800">
+            {/* 프로필 */}
+            <section className="hc-surface-card rounded-[24px] border p-5 sm:p-6">
+              <div className="flex items-center gap-4">
+                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full bg-[color:var(--hc-primary)] text-[24px] font-extrabold text-[color:var(--hc-primary-contrast)]">
                   {user.profileUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -235,53 +242,59 @@ export default function MyPage() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="text-[11px] text-zinc-400">USER</span>
+                    <span>{profileInitial}</span>
                   )}
                 </div>
 
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold">{user.username}</span>
-                  <span className="text-[11px] text-zinc-400">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[18px] font-extrabold">
+                    {user.username}
+                  </p>
+                  <p className="truncate text-[13px] text-[color:var(--hc-muted)]">
                     {user.email}
-                  </span>
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
-                  <div className="flex items-center gap-2 text-zinc-300">
-                    <ShieldCheck className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
-                    <span className="text-[11px]">로그인 플랫폼</span>
+              {/* 플랜·플랫폼 */}
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="hc-surface-well rounded-2xl border p-3.5">
+                  <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
+                    <ShieldCheck className="h-4 w-4 text-[color:var(--hc-primary)]" />
+                    <span className="text-[11.5px]">로그인 플랫폼</span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-zinc-100">
+                  <p className="mt-1.5 text-[14px] font-bold">
                     {user.loginPlatform ?? "HARUCUT"}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
-                  <div className="flex items-center gap-2 text-zinc-300">
-                    <CreditCard className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
-                    <span className="text-[11px]">플랜</span>
+                <div className="hc-surface-well rounded-2xl border p-3.5">
+                  <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
+                    <CreditCard className="h-4 w-4 text-[color:var(--hc-primary)]" />
+                    <span className="text-[11.5px]">플랜</span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-zinc-100">
+                  <p className="mt-1.5 text-[14px] font-bold">
                     {user.planTier ?? "BASIC"}
-                    {user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원` : ""}
+                    {user.monthlyPrice
+                      ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원`
+                      : ""}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center gap-2">
+              {/* 프로필 이미지 업로드 */}
+              <div className="mt-4 flex items-center gap-2">
                 <input
                   type="file"
                   accept={SUPPORTED_IMAGE_ACCEPT}
                   onChange={handleProfileFileChange}
                   disabled={isUploadingProfile}
-                  className="block w-full text-[11px] text-zinc-300 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-[11px] file:font-semibold file:text-zinc-100 hover:file:bg-zinc-700"
+                  className="block w-full text-[11.5px] text-[color:var(--hc-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[color:var(--hc-surface-muted)] file:px-3 file:py-2 file:text-[11.5px] file:font-semibold file:text-[color:var(--hc-text)] hover:file:bg-[color:var(--hc-surface-muted-hover)]"
                 />
                 <button
                   type="button"
                   onClick={handleUploadProfileImage}
                   disabled={isUploadingProfile || !profileFile}
-                  className="hc-button-primary h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[11px] font-semibold disabled:opacity-50"
+                  className="hc-button-primary h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[11.5px] font-semibold disabled:opacity-50"
                 >
                   {isUploadingProfile ? "업로드 중" : "업로드"}
                 </button>
@@ -290,9 +303,10 @@ export default function MyPage() {
 
             <ColorThemePreferencePanel />
 
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <h2 className="text-sm font-semibold">닉네임 변경</h2>
-              <p className="mt-1 text-[11px] text-zinc-400">
+            {/* 닉네임 변경 */}
+            <section className="hc-surface-card rounded-[20px] border p-5">
+              <h2 className="text-[15px] font-bold">닉네임 변경</h2>
+              <p className="mt-1 text-[12px] text-[color:var(--hc-muted)]">
                 서비스에서 표시될 이름을 수정할 수 있어요.
               </p>
 
@@ -300,27 +314,28 @@ export default function MyPage() {
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px] outline-none"
+                  className="hc-input h-10 flex-1 rounded-xl border px-3 text-[13px] outline-none"
                   placeholder="닉네임을 입력해 주세요"
                 />
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="hc-button-primary h-9 rounded-full px-4 text-[11px] font-semibold disabled:opacity-50"
+                  className="hc-button-primary h-10 rounded-full px-4 text-[12px] font-semibold disabled:opacity-50"
                 >
                   저장
                 </button>
               </form>
 
               {errors.username ? (
-                <p className="mt-2 text-[11px] text-red-400">
+                <p className="mt-2 text-[11.5px] text-[color:var(--hc-primary-strong)]">
                   {errors.username}
                 </p>
               ) : null}
             </section>
 
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <h2 className="text-sm font-semibold">비밀번호 변경</h2>
+            {/* 비밀번호 변경 */}
+            <section className="hc-surface-card rounded-[20px] border p-5">
+              <h2 className="text-[15px] font-bold">비밀번호 변경</h2>
 
               <form
                 onSubmit={handleChangePassword}
@@ -365,46 +380,48 @@ export default function MyPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="hc-button-primary mt-1 h-9 rounded-full text-[11px] font-semibold disabled:opacity-50"
+                  className="hc-button-primary mt-1 h-10 rounded-full text-[12px] font-semibold disabled:opacity-50"
                 >
                   {isSubmitting ? "변경 중..." : "비밀번호 변경"}
                 </button>
               </form>
             </section>
 
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <h2 className="text-sm font-semibold">로그아웃</h2>
+            {/* 로그아웃 / 탈퇴 */}
+            <section className="hc-surface-card rounded-[20px] border p-5">
               <button
                 type="button"
                 onClick={handleLogout}
                 disabled={isSubmitting}
-                className="mt-3 h-9 w-full rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
+                className="hc-button-secondary flex h-10 w-full items-center justify-center gap-2 rounded-full border text-[12px] font-semibold disabled:opacity-50"
               >
+                <LogOut className="h-4 w-4" />
                 로그아웃
               </button>
+
+              <div className="mt-4 border-t border-[color:var(--hc-border-subtle)] pt-4">
+                <p className="text-[11.5px] text-[color:var(--hc-muted)]">
+                  탈퇴를 요청하면 계정이 비활성화돼요. 1주일 내로 다시 로그인하면
+                  탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleExit}
+                  disabled={isSubmitting}
+                  className="mt-3 text-[12px] font-semibold text-[color:var(--hc-muted-soft)] underline underline-offset-4 transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+                >
+                  회원 탈퇴 요청
+                </button>
+              </div>
             </section>
 
-            <section className="rounded-2xl border border-red-900/40 bg-red-950/10 p-4">
-              <h2 className="text-sm font-semibold text-red-700 dark:text-red-200">
-                회원 탈퇴 요청
-              </h2>
-              <p className="mt-1 text-[11px] text-red-900/80 dark:text-red-200/80">
-                탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를
-                취소하고 계정을 다시 사용할 수 있어요.
-              </p>
-              <button
-                type="button"
-                onClick={handleExit}
-                disabled={isSubmitting}
-                className="mt-3 h-9 w-full rounded-full bg-red-500 text-[11px] font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-50"
-              >
-                회원 탈퇴 요청
-              </button>
-            </section>
+            <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted-soft)]">
+              하루컷 v1.0.0
+            </p>
           </>
         ) : (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-[11px] text-zinc-400">
+          <div className="hc-surface-card rounded-[20px] border p-5">
+            <p className="text-[12px] text-[color:var(--hc-muted)]">
               내 정보를 불러오지 못했어요.
             </p>
           </div>
