@@ -266,7 +266,7 @@ export default function HomePage() {
                         preview.kind === "video" ? (
                           <video
                             src={preview.url}
-                            className="h-full w-full object-contain"
+                            className="absolute inset-0 h-full w-full object-contain p-3"
                             muted
                             playsInline
                           />
@@ -275,7 +275,7 @@ export default function HomePage() {
                           <img
                             src={preview.url}
                             alt={getUserMediaTitle(item)}
-                            className="h-full w-full object-contain"
+                            className="absolute inset-0 h-full w-full object-contain p-3"
                           />
                         )
                       ) : (
