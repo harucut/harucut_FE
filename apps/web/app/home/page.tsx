@@ -18,6 +18,25 @@ import type { UserMedia, RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
+
+const HOME_COACH_STEPS: CoachStep[] = [
+  {
+    selector: '[data-coach="shoot"]',
+    title: "촬영하기",
+    body: "카메라로 8장을 찍고 마음에 드는 4장을 골라 네 컷을 만들어요.",
+  },
+  {
+    selector: '[data-coach="upload"]',
+    title: "사진 업로드",
+    body: "이미 찍어둔 사진으로도 바로 네 컷을 만들 수 있어요.",
+  },
+  {
+    selector: '[data-coach="theme"]',
+    title: "꾸미기",
+    body: "프레임 색·배경 이미지·텍스트·스티커로 나만의 프레임을 만들어요.",
+  },
+];
 
 function formatCurrentDate() {
   return new Date().toLocaleDateString("ko-KR", {
@@ -160,6 +179,7 @@ export default function HomePage() {
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/shoot"
+              data-coach="shoot"
               className="hc-button-hero inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition sm:w-auto"
             >
               <Camera className="h-4 w-4" />
@@ -167,6 +187,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/upload"
+              data-coach="upload"
               className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
             >
               <Upload className="h-4 w-4" />
@@ -174,6 +195,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/theme"
+              data-coach="theme"
               className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
             >
               <Palette className="h-4 w-4" />
@@ -294,6 +316,7 @@ export default function HomePage() {
         </section>
       </div>
       <MobileTabBar />
+      <CoachMarks id="home-v1" steps={HOME_COACH_STEPS} />
     </main>
   );
 }
