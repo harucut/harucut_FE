@@ -28,7 +28,11 @@ export function AuthPageShell({ title, description, children, footer }: Props) {
         >
           <div
             className="-mr-6 h-[300px] drop-shadow-2xl"
-            style={{ transform: "rotate(-7deg)" }}
+            style={{
+              transform: "rotate(-7deg) translateZ(0)",
+              backfaceVisibility: "hidden",
+              willChange: "transform",
+            }}
           >
             <FramePreview
               frameId="classic-4"
@@ -37,7 +41,14 @@ export function AuthPageShell({ title, description, children, footer }: Props) {
               className="!h-full !w-auto"
             />
           </div>
-          <div className="h-[330px] drop-shadow-2xl" style={{ transform: "rotate(5deg)" }}>
+          <div
+            className="h-[330px] drop-shadow-2xl"
+            style={{
+              transform: "rotate(5deg) translateZ(0)",
+              backfaceVisibility: "hidden",
+              willChange: "transform",
+            }}
+          >
             <FramePreview
               frameId="grid-4"
               images={COLLAGE}
