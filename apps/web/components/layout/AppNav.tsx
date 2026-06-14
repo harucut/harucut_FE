@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Camera } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type AppNavProps = {
   // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
   userInitial?: string | null;
-  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 CTA가 /shoot로 직행하면
-  // proxy가 비회원을 /login으로 막으므로, 게스트 체험 안내를 띄워
-  // enterGuestMode 후 /shoot로 이어지도록 한다. authed 페이지에서는 미지정.
+  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 CTA는 인증 여부를 확인해
+  // 로그인 사용자는 /shoot로 직행, 비회원은 게스트 체험 안내를 띄운다.
+  // (proxy가 비회원을 /login으로 막으므로) authed 페이지에서는 미지정.
   publicShoot?: boolean;
 };
 
@@ -26,9 +26,7 @@ const NAV_LINKS: { href: string; label: string }[] = [
 // 모바일(< lg)에서는 숨기고 하단 MobileTabBar가 네비게이션을 담당한다.
 export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
   const pathname = usePathname();
-  const showGuestTrialNotice = useGuestTrialStore(
-    (state) => state.showGuestTrialNotice,
-  );
+  const { onShootCta } = usePublicShootCta();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
@@ -66,7 +64,7 @@ export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
           {publicShoot ? (
             <button
               type="button"
-              onClick={showGuestTrialNotice}
+              onClick={onShootCta}
               className={shootButtonClass}
             >
               <Camera className="h-[17px] w-[17px]" />

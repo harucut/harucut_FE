@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Camera, Clock3, Home, User } from "lucide-react";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type MobileTabBarProps = {
-  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 탭이 /shoot로 직행하면
-  // proxy가 비회원을 /login으로 막으므로, 게스트 체험 안내를 띄워
-  // enterGuestMode 후 /shoot로 이어지도록 한다. authed 페이지에서는 미지정.
+  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 탭은 인증 여부를 확인해
+  // 로그인 사용자는 /shoot로 직행, 비회원은 게스트 체험 안내를 띄운다.
+  // (proxy가 비회원을 /login으로 막으므로) authed 페이지에서는 미지정.
   publicShoot?: boolean;
 };
 
@@ -16,9 +16,7 @@ type MobileTabBarProps = {
 // 데스크톱(≥ lg)에서는 숨기고 기존 웹 네비게이션을 사용한다.
 export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
-  const showGuestTrialNotice = useGuestTrialStore(
-    (state) => state.showGuestTrialNotice,
-  );
+  const { onShootCta } = usePublicShootCta();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
@@ -60,7 +58,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
         <button
           type="button"
           aria-label="촬영"
-          onClick={showGuestTrialNotice}
+          onClick={onShootCta}
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
