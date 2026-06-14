@@ -135,7 +135,7 @@ export function PricingView() {
 
   return (
     <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
-      <AppNav />
+      <AppNav publicShoot />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
@@ -197,7 +197,7 @@ export function PricingView() {
         </section>
       </div>
 
-      <MobileTabBar />
+      <MobileTabBar publicShoot />
     </main>
   );
 }

@@ -173,7 +173,7 @@ export default function MyPage() {
 
   const handleExit = async () => {
     const ok = confirm(
-      "정말 탈퇴하시겠어요?\n1주일 내로 다시 로그인하면 계정을 복구할 수 있어요.",
+      "정말 탈퇴하시겠어요?\n탈퇴 신청일부터 30일 내로 다시 로그인하면 계정을 복구할 수 있어요.",
     );
     if (!ok) return;
 
@@ -401,8 +401,8 @@ export default function MyPage() {
 
               <div className="mt-4 border-t border-[color:var(--hc-border-subtle)] pt-4">
                 <p className="text-[11.5px] text-[color:var(--hc-muted)]">
-                  탈퇴를 요청하면 계정이 비활성화돼요. 1주일 내로 다시 로그인하면
-                  탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
+                  탈퇴를 요청하면 계정이 비활성화돼요. 탈퇴 신청일부터 30일 내로
+                  다시 로그인하면 탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
                 </p>
                 <button
                   type="button"
