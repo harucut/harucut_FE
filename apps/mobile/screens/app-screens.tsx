@@ -244,7 +244,7 @@ export function HomeScreen() {
                 <View style={styles.thumbCard}>
                   {previewUri && previewKind === 'image' ? (
                     <>
-                      <Image source={{ uri: previewUri }} style={styles.thumbImage} />
+                      <Image resizeMode="contain" source={{ uri: previewUri }} style={styles.thumbImage} />
                       <View style={styles.thumbTypeBadge}>
                         <Ionicons
                           color="#FFFFFF"
