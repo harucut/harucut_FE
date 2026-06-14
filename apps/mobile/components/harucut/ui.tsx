@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -21,10 +20,11 @@ export function AppScrollView({
   children,
   contentContainerStyle,
 }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
-  const insets = useSafeAreaInsets();
   const styles = useUiStyles();
   const { colors } = useHarucutTheme();
-  const bottomPadding = Math.max(insets.bottom, HARUCUT_SPACING.screen);
+  // 하단 안전영역은 (app)의 BottomNavigation, (public)/(legal) 레이아웃의 bottom safe-area가
+  // 처리한다. 스크롤 콘텐츠는 콘텐츠 간격만 둬서 안전영역 이중 적용(하단 여백 과다)을 막는다.
+  const bottomPadding = HARUCUT_SPACING.screen;
 
   return (
     <View style={styles.screen}>
