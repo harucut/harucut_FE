@@ -3,13 +3,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Camera, Clock3, Home, User } from "lucide-react";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
+
+type MobileTabBarProps = {
+  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 탭이 /shoot로 직행하면
+  // proxy가 비회원을 /login으로 막으므로, 게스트 체험 안내를 띄워
+  // enterGuestMode 후 /shoot로 이어지도록 한다. authed 페이지에서는 미지정.
+  publicShoot?: boolean;
+};
 
 // 폰/태블릿(< lg)에서만 보이는 앱 스타일 하단 탭바 (handoff app TabBar: 홈·기록·촬영·MY).
 // 데스크톱(≥ lg)에서는 숨기고 기존 웹 네비게이션을 사용한다.
-export function MobileTabBar() {
+export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
+  const showGuestTrialNotice = useGuestTrialStore(
+    (state) => state.showGuestTrialNotice,
+  );
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
+
+  const shootButtonClass =
+    "-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]";
 
   return (
     <nav
@@ -42,14 +56,26 @@ export function MobileTabBar() {
         <span className="text-[10.5px] font-medium">기록</span>
       </Link>
 
-      <Link
-        href="/shoot"
-        aria-label="촬영"
-        className="-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]"
-        style={{ background: "var(--hc-primary)" }}
-      >
-        <Camera className="h-[26px] w-[26px]" />
-      </Link>
+      {publicShoot ? (
+        <button
+          type="button"
+          aria-label="촬영"
+          onClick={showGuestTrialNotice}
+          className={shootButtonClass}
+          style={{ background: "var(--hc-primary)" }}
+        >
+          <Camera className="h-[26px] w-[26px]" />
+        </button>
+      ) : (
+        <Link
+          href="/shoot"
+          aria-label="촬영"
+          className={shootButtonClass}
+          style={{ background: "var(--hc-primary)" }}
+        >
+          <Camera className="h-[26px] w-[26px]" />
+        </Link>
+      )}
 
       <Link
         href="/mypage"
