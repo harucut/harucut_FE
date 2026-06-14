@@ -105,7 +105,11 @@ export function limitSelection(current: string[], id: string) {
 }
 
 export function selectedMedia(items: MediaAsset[], selectedIds: string[]) {
-  const selected = items.filter((item) => selectedIds.includes(item.id));
+  // 사용자가 탭한 순서(selectedIds)를 그대로 보존해야 미리보기와 저장 결과가 일치한다.
+  // 원본 items 순서로 filter하면 탭 순서가 사라지므로 selectedIds 기준으로 매핑한다.
+  const selected = selectedIds
+    .map((id) => items.find((item) => item.id === id))
+    .filter((item): item is MediaAsset => item !== undefined);
   return selected.slice(0, 4);
 }
 
