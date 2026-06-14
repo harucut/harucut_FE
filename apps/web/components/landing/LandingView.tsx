@@ -242,19 +242,34 @@ export function LandingView() {
         <div className="relative flex h-[340px] items-center justify-center overflow-hidden sm:h-[480px]">
           <div
             className="-mr-5 h-[180px] drop-shadow-2xl sm:-mr-6 sm:h-[260px]"
-            style={{ transform: "rotate(-8deg) translateY(8px)", zIndex: 1 }}
+            style={{
+              transform: "rotate(-8deg) translateY(8px) translateZ(0)",
+              zIndex: 1,
+              backfaceVisibility: "hidden",
+              willChange: "transform",
+            }}
           >
             <ShowcaseFrame id="classic-4" className="!h-full !w-auto" />
           </div>
           <div
             className="h-[220px] drop-shadow-2xl sm:h-[320px]"
-            style={{ transform: "rotate(3deg)", zIndex: 3 }}
+            style={{
+              transform: "rotate(3deg) translateZ(0)",
+              zIndex: 3,
+              backfaceVisibility: "hidden",
+              willChange: "transform",
+            }}
           >
             <ShowcaseFrame id="grid-4" className="!h-full !w-auto" />
           </div>
           <div
             className="-ml-5 h-[180px] drop-shadow-2xl sm:-ml-6 sm:h-[260px]"
-            style={{ transform: "rotate(9deg) translateY(8px)", zIndex: 2 }}
+            style={{
+              transform: "rotate(9deg) translateY(8px) translateZ(0)",
+              zIndex: 2,
+              backfaceVisibility: "hidden",
+              willChange: "transform",
+            }}
           >
             <ShowcaseFrame id="polaroid-4" className="!h-full !w-auto" />
           </div>
@@ -327,7 +342,11 @@ export function LandingView() {
             <div key={f.id} className="text-center">
               <div
                 className="inline-block drop-shadow-2xl"
-                style={{ transform: `rotate(${(i - 1.5) * 2}deg)` }}
+                style={{
+                  transform: `rotate(${(i - 1.5) * 2}deg) translateZ(0)`,
+                  backfaceVisibility: "hidden",
+                  willChange: "transform",
+                }}
               >
                 <div className={f.id === "wide-4" ? "w-[240px]" : "h-[210px]"}>
                   <ShowcaseFrame
