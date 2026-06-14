@@ -11,6 +11,7 @@ import {
   Share2,
 } from "lucide-react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
@@ -246,8 +247,10 @@ export default function HistoryPage() {
   ];
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-5 pb-[90px] text-[color:var(--hc-text)] sm:py-6 lg:pb-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 lg:gap-6">
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav />
+
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
         {/* 헤더 */}
         <header className="flex flex-col gap-2 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
           <div>

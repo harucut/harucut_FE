@@ -26,8 +26,8 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
       done = true;
     }
     if (done) return;
-    // 버튼이 마운트될 시간을 준 뒤 시작
-    const timer = window.setTimeout(() => setActive(true), 700);
+    // 버튼이 마운트될 최소 시간만 기다린 뒤, 슬라이드/페이드 없이 즉시 표시
+    const timer = window.setTimeout(() => setActive(true), 350);
     return () => window.clearTimeout(timer);
   }, [storageKey]);
 
@@ -91,7 +91,7 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
       {rect ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-2xl transition-all duration-200"
+          className="pointer-events-none absolute rounded-2xl"
           style={{
             top: rect.top - pad,
             left: rect.left - pad,
@@ -106,8 +106,12 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
       )}
 
       <div
-        className="absolute w-[300px] max-w-[calc(100vw-24px)] rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-card)] p-4 shadow-2xl"
-        style={{ top: tooltipTop, left: tooltipLeft }}
+        className="absolute w-[300px] max-w-[calc(100vw-24px)] rounded-2xl border-2 border-[color:var(--hc-border-strong)] bg-[color:var(--hc-surface)] p-4 shadow-2xl"
+        style={{
+          top: tooltipTop,
+          left: tooltipLeft,
+          boxShadow: "0 18px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.08)",
+        }}
       >
         <p className="text-[11px] font-bold tracking-wide text-[color:var(--hc-primary)]">
           {index + 1} / {steps.length}
