@@ -144,10 +144,13 @@ export function FramePreview({
   backgroundColor,
   backgroundImageUri,
   caption,
+  cellCutouts,
   components = [],
+  cutMode = false,
   editorMode = false,
   frameId,
   media = [],
+  onCellTap,
   onSelectComponent,
   onTransformComponent,
   slotColor,
@@ -159,10 +162,13 @@ export function FramePreview({
   backgroundColor?: string;
   backgroundImageUri?: string;
   caption?: string;
+  cellCutouts?: boolean[];
   components?: ThemeEditorComponent[];
+  cutMode?: boolean;
   editorMode?: boolean;
   frameId: FrameId;
   media?: MediaAsset[];
+  onCellTap?: (index: number) => void;
   onSelectComponent?: (id: string | null) => void;
   onTransformComponent?: (id: string, transform: ThemeComponentTransform) => void;
   slotColor?: string;
@@ -209,6 +215,7 @@ export function FramePreview({
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
         const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
+        const isCut = Boolean(cellCutouts?.[index]);
 
         return (
           <View
@@ -224,6 +231,18 @@ export function FramePreview({
               },
               toneFilter ? { filter: toneFilter } : null,
             ]}>
+            {isCut ? (
+              <>
+                {/* 누끼 시각 효과: 가장자리를 어둡게 해 피사체만 남긴 느낌 + 녹색 테두리 */}
+                <LinearGradient
+                  colors={['rgba(11,11,12,0.82)', 'rgba(11,11,12,0)', 'rgba(11,11,12,0.82)']}
+                  locations={[0, 0.5, 1]}
+                  pointerEvents="none"
+                  style={styles.cutoutVignette}
+                />
+                <View pointerEvents="none" style={[styles.cutoutRing, { borderColor: resolvedAccent }]} />
+              </>
+            ) : null}
             {currentMedia ? (
               <>
                 {currentPreviewKind === 'image' ? (
@@ -264,6 +283,25 @@ export function FramePreview({
             styles={styles}
           />
         ))}
+      {cutMode && onCellTap
+        ? layout.slots.map((slot, index) => (
+            <Pressable
+              accessibilityLabel={`${index + 1}번 칸 누끼 ${cellCutouts?.[index] ? '해제' : '적용'}`}
+              accessibilityRole="button"
+              key={`${frameId}-cut-${index}`}
+              onPress={() => onCellTap(index)}
+              style={[
+                styles.cutoutTapTarget,
+                {
+                  height: toPercent(slot.height, layout.totalHeight),
+                  left: toPercent(slot.x, layout.totalWidth),
+                  top: toPercent(slot.y, layout.totalHeight),
+                  width: toPercent(slot.width, layout.totalWidth),
+                },
+              ]}
+            />
+          ))
+        : null}
       {caption && components.length === 0 ? (
         <Text style={[styles.caption, { color: resolvedAccent }]}>{caption}</Text>
       ) : null}
@@ -1006,6 +1044,28 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       borderRadius: 6,
       overflow: 'hidden',
       position: 'absolute',
+    },
+    cutoutVignette: {
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      zIndex: 2,
+    },
+    cutoutRing: {
+      borderRadius: 6,
+      borderWidth: 2,
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      zIndex: 3,
+    },
+    cutoutTapTarget: {
+      position: 'absolute',
+      zIndex: 50,
     },
     slotImage: {
       height: '100%',

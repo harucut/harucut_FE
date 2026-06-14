@@ -166,7 +166,7 @@ function LayerRow({
       className={[
         "rounded-xl border p-2 flex items-center gap-2",
         active
-          ? "border-[color:var(--hc-primary)] bg-[rgba(37,99,235,0.1)] shadow-[0_14px_32px_var(--hc-shadow)]"
+          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] shadow-[0_14px_32px_var(--hc-shadow)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]",
         c.hidden ? "opacity-60" : "",
       ].join(" ")}
@@ -238,7 +238,7 @@ function MiniIconBtn({
         danger
           ? "border-red-800/70 bg-red-950 text-red-200 hover:bg-red-900/60"
           : active
-          ? "border-[rgba(37,99,235,0.24)] bg-[rgba(37,99,235,0.1)] text-[color:var(--hc-primary)] hover:bg-[rgba(37,99,235,0.16)]"
+          ? "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)] hover:bg-[color:var(--hc-accent-soft-bg)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] text-[color:var(--hc-muted)] hover:bg-[color:var(--hc-background-tint)]",
         disabled ? "opacity-50 cursor-not-allowed" : "",
       ].join(" ")}
