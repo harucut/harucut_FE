@@ -2,7 +2,6 @@ import { PRIVACY_POLICY, TERMS_OF_SERVICE, type LegalDocument } from '@harucut/s
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppScrollView, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -10,12 +9,10 @@ import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 function LegalDocumentScreen({ document }: { document: LegalDocument }) {
   const { colors } = useHarucutTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const bottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView contentContainerStyle={{ paddingBottom: bottomPadding }}>
+    <AppScrollView>
       <PageHeader description={`시행일 ${document.effectiveDate}`} title={document.title} />
       <SurfaceCard style={{ gap: 18 }}>
         <Text style={styles.intro}>{document.intro}</Text>
