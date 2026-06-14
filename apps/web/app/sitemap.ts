@@ -6,6 +6,7 @@ const BASE_URL = "https://www.harucut.com";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${BASE_URL}/`, priority: 1 },
+    { url: `${BASE_URL}/pricing`, priority: 0.6 },
     { url: `${BASE_URL}/terms`, priority: 0.3 },
     { url: `${BASE_URL}/privacy`, priority: 0.3 },
   ];
