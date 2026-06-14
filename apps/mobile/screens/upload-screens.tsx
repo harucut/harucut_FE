@@ -284,8 +284,12 @@ export function UploadResultScreen() {
   ]);
 
   const currentHistory = historyItems.find((item) => item.id === upload.persistedHistoryId) ?? null;
+  // 사용자가 탭한 순서(selectedAssetIds)를 보존해 미리보기/저장 결과가 일치하도록 한다.
   const previewMedia =
-    currentHistory?.previewMedia ?? upload.assets.filter((item) => upload.selectedAssetIds.includes(item.id));
+    currentHistory?.previewMedia ??
+    upload.selectedAssetIds
+      .map((id) => upload.assets.find((asset) => asset.id === id))
+      .filter((asset): asset is (typeof upload.assets)[number] => asset !== undefined);
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
