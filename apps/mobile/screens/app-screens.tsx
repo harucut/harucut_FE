@@ -315,6 +315,18 @@ export function HomeScreen() {
           <Text style={styles.bodyCopy}>아직 저장한 프레임이 없어요. 꾸미기에서 나만의 프레임을 만들어 보세요.</Text>
         </View>
       )}
+      <Pressable
+        accessibilityLabel="요금제 업그레이드로 프레임 보관함 늘리기"
+        accessibilityRole="button"
+        onPress={() => push('/pricing')}
+        style={styles.frameUpgradeRow}>
+        <Ionicons color={colors.primaryStrong} name="sparkles-outline" size={16} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.linkTitle}>프레임 보관함 늘리기</Text>
+          <Text style={styles.linkBody}>PLUS·PRO로 더 많은 프레임을 보관해요.</Text>
+        </View>
+        <Ionicons color={colors.muted} name="chevron-forward" size={16} />
+      </Pressable>
     </AppScrollView>
   );
 }
@@ -539,6 +551,7 @@ export function MyPageScreen() {
   const { colors, isDark, styles } = useAppScreenTheme();
   const router = useRouter();
   const replace = (path: string) => router.replace(path as never);
+  const push = (path: string) => router.push(path as never);
   const user = useSessionStore((state) => state.user);
   const refreshUserProfile = useSessionStore((state) => state.refreshUserProfile);
   const setUserProfile = useSessionStore((state) => state.setUserProfile);
@@ -741,6 +754,17 @@ export function MyPageScreen() {
             </Text>
           </View>
         </View>
+        <Pressable
+          accessibilityLabel="요금제 보기"
+          accessibilityRole="button"
+          onPress={() => push('/pricing')}
+          style={({ pressed }) => [styles.planNavRow, pressed ? styles.planNavRowPressed : null]}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.linkTitle}>요금제</Text>
+            <Text style={styles.linkBody}>플랜을 비교하고 업그레이드할 수 있어요.</Text>
+          </View>
+          <Ionicons color={colors.muted} name="chevron-forward" size={16} />
+        </Pressable>
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
@@ -1220,6 +1244,29 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       flexDirection: 'row',
       gap: 12,
       padding: 12,
+    },
+    frameUpgradeRow: {
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 12,
+      padding: 14,
+    },
+    planNavRow: {
+      alignItems: 'center',
+      backgroundColor: tintedSurface,
+      borderColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 12,
+      padding: 14,
+    },
+    planNavRowPressed: {
+      opacity: 0.85,
     },
     sectionEyebrow: {
       color: colors.primary,
