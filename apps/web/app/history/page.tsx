@@ -1,13 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Image as ImageIcon,
+  LayoutGrid,
   PencilLine,
   Play,
-  Search,
   Share2,
 } from "lucide-react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -25,6 +27,29 @@ import {
 import type { UserMedia, UserMediaType } from "@/lib/api-types";
 
 type FilterValue = "ALL" | UserMediaType;
+type ViewMode = "grid" | "calendar";
+
+const FILTER_LABELS: { value: FilterValue; label: string }[] = [
+  { value: "ALL", label: "전체" },
+  { value: "PHOTO", label: "사진" },
+  { value: "VIDEO", label: "영상" },
+];
+
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const MONTH_KO = [
+  "1월",
+  "2월",
+  "3월",
+  "4월",
+  "5월",
+  "6월",
+  "7월",
+  "8월",
+  "9월",
+  "10월",
+  "11월",
+  "12월",
+];
 
 function getMediaTypeLabel(type: UserMediaType) {
   return type === "PHOTO" ? "사진" : "영상";
@@ -46,16 +71,109 @@ function getMediaExtension(item: UserMedia) {
   return item.mediaType === "VIDEO" ? "mp4" : "png";
 }
 
+function getItemTime(item: UserMedia) {
+  return item.createdAt ? new Date(item.createdAt).getTime() : 0;
+}
+
 function sortMedia(items: UserMedia[]) {
-  return [...items].sort((a, b) => {
-    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return bTime - aTime;
-  });
+  return [...items].sort((a, b) => getItemTime(b) - getItemTime(a));
+}
+
+/** YYYY-MM 키 (createdAt 기준). 날짜 정보가 없으면 null. */
+function monthKey(item: UserMedia) {
+  if (!item.createdAt) return null;
+  const date = new Date(item.createdAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  const thisYear = new Date().getFullYear();
+  const prefix = year === thisYear ? "" : `${year}년 `;
+  return `${prefix}${MONTH_KO[(month ?? 1) - 1]}`;
+}
+
+/** createdAt 기준 월별 그룹. 날짜 없는 항목은 '기타'로 마지막에 묶는다. */
+function groupByMonth(items: UserMedia[]) {
+  const map = new Map<string, UserMedia[]>();
+  for (const item of items) {
+    const key = monthKey(item) ?? "unknown";
+    const bucket = map.get(key);
+    if (bucket) bucket.push(item);
+    else map.set(key, [item]);
+  }
+
+  return [...map.keys()]
+    .sort((a, b) => {
+      if (a === "unknown") return 1;
+      if (b === "unknown") return -1;
+      return a < b ? 1 : -1;
+    })
+    .map((key) => ({ key, items: map.get(key) ?? [] }));
+}
+
+function MediaThumb({
+  item,
+  previewItems,
+  bare = false,
+}: {
+  item: UserMedia;
+  previewItems: UserMedia[];
+  bare?: boolean;
+}) {
+  const preview = getUserMediaPreview(item, previewItems);
+  const isVideo = item.mediaType === "VIDEO";
+
+  const shellClassName = bare
+    ? "relative grid h-full w-full place-items-center overflow-hidden"
+    : "hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]";
+
+  return (
+    <div className={shellClassName}>
+      {preview.url ? (
+        preview.kind === "video" ? (
+          <video
+            src={preview.url}
+            className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
+            muted
+            playsInline
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview.url}
+            alt={getUserMediaTitle(item)}
+            className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
+          />
+        )
+      ) : (
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted-soft)]">
+          미리보기를 준비하는 중이에요.
+        </div>
+      )}
+      {!bare ? (
+        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
+          {isVideo ? (
+            <>
+              <Play aria-hidden="true" className="h-2.5 w-2.5" fill="currentColor" />
+              영상
+            </>
+          ) : (
+            <>
+              <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
+              사진
+            </>
+          )}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export default function HistoryPage() {
   const [filter, setFilter] = useState<FilterValue>("ALL");
+  const [view, setView] = useState<ViewMode>("grid");
   const [items, setItems] = useState<UserMedia[]>([]);
   const [previewItems, setPreviewItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +184,7 @@ export default function HistoryPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftName, setDraftName] = useState("");
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
+  const [monthCursor, setMonthCursor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,15 +194,12 @@ export default function HistoryPage() {
       setError(null);
 
       try {
-        const media = await listMyMedia(filter === "ALL" ? undefined : filter);
-        const nextPreviewItems =
-          filter === "ALL"
-            ? media
-            : await listMyMedia().catch(() => media);
+        const media = await listMyMedia();
 
         if (!cancelled) {
-          setItems(sortMedia(media));
-          setPreviewItems(sortMedia(nextPreviewItems));
+          const sorted = sortMedia(media);
+          setItems(sorted);
+          setPreviewItems(sorted);
         }
       } catch (loadError) {
         console.error(loadError);
@@ -105,7 +220,7 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter]);
+  }, []);
 
   useEffect(() => {
     if (!feedback) return undefined;
@@ -120,22 +235,18 @@ export default function HistoryPage() {
   }, [feedback]);
 
   const filteredItems = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (!keyword) return items;
+    if (filter === "ALL") return items;
+    return items.filter((item) => item.mediaType === filter);
+  }, [items, filter]);
 
-    return items.filter((item) =>
-      getUserMediaTitle(item).toLowerCase().includes(keyword),
-    );
-  }, [items, search]);
+  const groups = useMemo(
+    () => groupByMonth(filteredItems),
+    [filteredItems],
+  );
 
   const stats = useMemo(() => {
-    const photos = items.filter((item) => item.mediaType === "PHOTO").length;
-    const videos = items.filter((item) => item.mediaType === "VIDEO").length;
-
     return {
       total: items.length,
-      photos,
-      videos,
     };
   }, [items]);
 
@@ -144,6 +255,21 @@ export default function HistoryPage() {
     if (filter === "VIDEO") return "저장한 영상 기록이 아직 없어요.";
     return "저장한 기록이 아직 없어요.";
   }, [filter]);
+
+  // 달력용: 날짜가 있는 월만 모아 정렬한다.
+  const calendarMonths = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = monthKey(item);
+      if (key) keys.add(key);
+    }
+    return [...keys].sort((a, b) => (a < b ? 1 : -1));
+  }, [items]);
+
+  const activeMonth = useMemo(() => {
+    if (monthCursor && calendarMonths.includes(monthCursor)) return monthCursor;
+    return calendarMonths[0] ?? null;
+  }, [monthCursor, calendarMonths]);
 
   const handleDownload = async (item: UserMedia) => {
     setDownloadingId(item.mediaId);
@@ -215,20 +341,15 @@ export default function HistoryPage() {
       const resolvedName =
         updated.displayName?.trim() || updated.displayname?.trim() || nextName;
 
-      setItems((current) =>
+      const applyName = (current: UserMedia[]) =>
         current.map((currentItem) =>
           currentItem.mediaId === item.mediaId
             ? { ...currentItem, displayName: resolvedName }
             : currentItem,
-        ),
-      );
-      setPreviewItems((current) =>
-        current.map((currentItem) =>
-          currentItem.mediaId === item.mediaId
-            ? { ...currentItem, displayName: resolvedName }
-            : currentItem,
-        ),
-      );
+        );
+
+      setItems(applyName);
+      setPreviewItems(applyName);
       setEditingId(null);
       setDraftName("");
       setFeedback("파일 이름을 수정했어요.");
@@ -240,19 +361,13 @@ export default function HistoryPage() {
     }
   };
 
-  const filterOptions: { value: FilterValue; label: string; count: number }[] = [
-    { value: "ALL", label: "전체", count: stats.total },
-    { value: "PHOTO", label: "사진", count: stats.photos },
-    { value: "VIDEO", label: "영상", count: stats.videos },
-  ];
-
   return (
     <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
-        {/* 헤더 */}
-        <header className="flex flex-col gap-2 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
+        {/* 헤더 + 필터 + 뷰 토글 */}
+        <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
           <div>
             <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
               기록
@@ -262,54 +377,49 @@ export default function HistoryPage() {
               있어요
             </p>
           </div>
-          <div className="hidden gap-2 lg:flex">
-            <Link
-              href="/shoot"
-              className="hc-button-primary rounded-full px-4 py-2.5 text-[13px] font-semibold"
-            >
-              새 촬영
-            </Link>
-            <Link
-              href="/upload"
-              className="hc-button-secondary rounded-full border px-4 py-2.5 text-[13px] font-semibold"
-            >
-              업로드
-            </Link>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {view === "grid"
+              ? FILTER_LABELS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFilter(option.value)}
+                    className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                      filter === option.value
+                        ? "bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
+                        : "hc-button-secondary border text-[color:var(--hc-muted)]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              : null}
+
+            <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
+              {(
+                [
+                  { id: "grid", label: "그리드", Icon: LayoutGrid },
+                  { id: "calendar", label: "달력", Icon: CalendarDays },
+                ] as const
+              ).map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setView(id)}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-bold transition ${
+                    view === id
+                      ? "bg-white text-[#0B0B0C]"
+                      : "text-[color:var(--hc-muted)]"
+                  }`}
+                >
+                  <Icon className="h-[15px] w-[15px]" />
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
-
-        {/* 필터 + 검색 */}
-        <section className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="flex flex-wrap gap-2">
-            {filterOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setFilter(option.value)}
-                className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
-                  filter === option.value
-                    ? "bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
-                    : "hc-button-secondary border text-[color:var(--hc-muted)]"
-                }`}
-              >
-                {option.label}
-                <span className="ml-1 opacity-70">
-                  {loading ? "" : option.count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <label className="hc-surface-well flex h-11 flex-1 items-center gap-2 rounded-2xl border px-3 text-sm">
-            <Search className="h-4 w-4 text-[color:var(--hc-muted-soft)]" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="파일 이름으로 검색"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-[color:var(--hc-muted-soft)]"
-            />
-          </label>
-        </section>
 
         {feedback ? (
           <div className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
@@ -323,173 +433,262 @@ export default function HistoryPage() {
           </p>
         ) : null}
 
-        {/* 그리드 */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
               <div
                 key={index}
-                className="hc-surface-card flex gap-3 rounded-[20px] border p-4"
-              >
-                <div className="h-32 w-24 shrink-0 animate-pulse rounded-2xl bg-[color:var(--hc-surface-muted)]" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3 w-1/2 animate-pulse rounded bg-[color:var(--hc-surface-muted)]" />
-                  <div className="h-3 w-3/4 animate-pulse rounded bg-[color:var(--hc-surface-muted)]" />
-                </div>
-              </div>
+                className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+              />
             ))}
           </div>
+        ) : view === "calendar" ? (
+          <CalendarView
+            items={items}
+            previewItems={previewItems}
+            months={calendarMonths}
+            activeMonth={activeMonth}
+            onChangeMonth={setMonthCursor}
+          />
         ) : filteredItems.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
             <ImageIcon className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-            <p className="text-[13px] text-[color:var(--hc-muted)]">
-              {search.trim() ? "검색 결과가 없어요." : emptyText}
-            </p>
-            {!search.trim() ? (
-              <Link
-                href="/shoot"
-                className="hc-button-primary rounded-full px-4 py-2 text-[12px] font-semibold"
-              >
-                새 네 컷 만들기
-              </Link>
-            ) : null}
+            <p className="text-[13px] text-[color:var(--hc-muted)]">{emptyText}</p>
           </div>
         ) : (
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {filteredItems.map((item) => {
-              const preview = getUserMediaPreview(item, previewItems);
-              const isVideo = item.mediaType === "VIDEO";
+          <div className="flex flex-col gap-8">
+            {groups.map((group) => (
+              <section key={group.key} className="flex flex-col gap-4">
+                <div className="flex items-baseline gap-2.5">
+                  <h2 className="text-[19px] font-extrabold tracking-tight">
+                    {group.key === "unknown" ? "기타" : monthLabel(group.key)}
+                  </h2>
+                  <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+                    {group.items.length}컷
+                  </span>
+                </div>
 
-              return (
-                <article
-                  key={item.mediaId}
-                  className="hc-surface-card flex flex-col gap-3 rounded-[20px] border p-4 sm:flex-row"
-                >
-                  <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-muted)] sm:h-32 sm:w-24">
-                    {preview.url ? (
-                      preview.kind === "video" ? (
-                        <video
-                          src={preview.url}
-                          className="h-full w-full object-cover"
-                          muted
-                          playsInline
-                          controls={false}
-                        />
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={preview.url}
-                          alt={getUserMediaTitle(item)}
-                          className="h-full w-full object-cover"
-                        />
-                      )
-                    ) : (
-                      <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted-soft)]">
-                        미리보기를 준비하는 중이에요.
-                      </div>
-                    )}
-                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">
-                      {isVideo ? (
-                        <>
-                          <Play
-                            aria-hidden="true"
-                            className="h-2.5 w-2.5"
-                            fill="currentColor"
-                          />
-                          영상
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-                          사진
-                        </>
-                      )}
-                    </span>
-                  </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
+                  {group.items.map((item) => {
+                    const isEditing = editingId === item.mediaId;
 
-                  <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-                    <div className="flex flex-col gap-1">
-                      {editingId === item.mediaId ? (
-                        <div className="flex gap-2">
-                          <input
-                            value={draftName}
-                            onChange={(e) => setDraftName(e.target.value)}
-                            className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px]"
-                          />
+                    return (
+                      <article key={item.mediaId} className="group flex flex-col gap-2.5">
+                        <MediaThumb item={item} previewItems={previewItems} />
+
+                        <div className="flex flex-col gap-1">
+                          {isEditing ? (
+                            <div className="flex gap-2">
+                              <input
+                                value={draftName}
+                                onChange={(e) => setDraftName(e.target.value)}
+                                className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveName(item)}
+                                disabled={savingNameId === item.mediaId}
+                                className="hc-button-neutral rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
+                              >
+                                {savingNameId === item.mediaId ? "저장 중" : "저장"}
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="truncate text-[14px] font-bold tracking-tight">
+                              {getUserMediaTitle(item)}
+                            </p>
+                          )}
+                          <p className="text-[11.5px] text-[color:var(--hc-muted-soft)]">
+                            {item.createdAt
+                              ? new Date(item.createdAt).toLocaleDateString(
+                                  "ko-KR",
+                                  { month: "long", day: "numeric" },
+                                )
+                              : "날짜 없음"}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
                           <button
                             type="button"
-                            onClick={() => void handleSaveName(item)}
-                            disabled={savingNameId === item.mediaId}
-                            className="hc-button-neutral rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
+                            onClick={() => void handleDownload(item)}
+                            disabled={downloadingId === item.mediaId}
+                            className="hc-button-primary flex flex-1 items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
                           >
-                            {savingNameId === item.mediaId ? "저장 중" : "저장"}
+                            <Download className="h-3.5 w-3.5" />
+                            <span>
+                              {downloadingId === item.mediaId ? "저장 중" : "저장"}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleShare(item)}
+                            disabled={sharingId === item.mediaId}
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                            <span>
+                              {sharingId === item.mediaId ? "준비 중" : "공유"}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              isEditing
+                                ? setEditingId(null)
+                                : handleStartRename(item)
+                            }
+                            className="hc-button-secondary flex items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold"
+                          >
+                            <PencilLine className="h-3.5 w-3.5" />
+                            <span>{isEditing ? "취소" : "이름"}</span>
                           </button>
                         </div>
-                      ) : (
-                        <p className="truncate text-[15px] font-bold tracking-tight">
-                          {getUserMediaTitle(item)}
-                        </p>
-                      )}
-
-                      <p className="text-[11.5px] text-[color:var(--hc-muted-soft)]">
-                        {item.createdAt
-                          ? new Date(item.createdAt).toLocaleString("ko-KR")
-                          : "생성 시간을 확인할 수 없어요."}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleDownload(item)}
-                        disabled={downloadingId === item.mediaId}
-                        className="hc-button-primary flex min-w-[104px] flex-1 items-center justify-center gap-1 rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>
-                          {downloadingId === item.mediaId
-                            ? "다운로드 중..."
-                            : "다운로드"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => void handleShare(item)}
-                        disabled={sharingId === item.mediaId}
-                        className="hc-button-secondary flex min-w-[104px] flex-1 items-center justify-center gap-1 rounded-full border px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        <span>
-                          {sharingId === item.mediaId
-                            ? "링크 준비 중..."
-                            : "공유하기"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editingId === item.mediaId
-                            ? setEditingId(null)
-                            : handleStartRename(item)
-                        }
-                        className="hc-button-secondary flex min-w-[104px] flex-1 items-center justify-center gap-1 rounded-full border px-3 py-2 text-[11px] font-semibold"
-                      >
-                        <PencilLine className="h-3.5 w-3.5" />
-                        <span>
-                          {editingId === item.mediaId ? "취소" : "이름 수정"}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         )}
       </div>
       <MobileTabBar />
     </main>
+  );
+}
+
+function CalendarView({
+  items,
+  previewItems,
+  months,
+  activeMonth,
+  onChangeMonth,
+}: {
+  items: UserMedia[];
+  previewItems: UserMedia[];
+  months: string[];
+  activeMonth: string | null;
+  onChangeMonth: (key: string) => void;
+}) {
+  if (!activeMonth) {
+    return (
+      <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
+        <CalendarDays className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
+        <p className="text-[13px] text-[color:var(--hc-muted)]">
+          달력으로 볼 기록이 아직 없어요.
+        </p>
+      </div>
+    );
+  }
+
+  const [year, month] = activeMonth.split("-").map(Number);
+  const monthItems = items.filter((item) => monthKey(item) === activeMonth);
+
+  const byDay = new Map<number, UserMedia[]>();
+  for (const item of monthItems) {
+    if (!item.createdAt) continue;
+    const day = new Date(item.createdAt).getDate();
+    const bucket = byDay.get(day);
+    if (bucket) bucket.push(item);
+    else byDay.set(day, [item]);
+  }
+
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstWeekday; i += 1) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d += 1) cells.push(d);
+
+  const monthIndex = months.indexOf(activeMonth);
+  const hasOlder = monthIndex < months.length - 1;
+  const hasNewer = monthIndex > 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={!hasOlder}
+            onClick={() => hasOlder && onChangeMonth(months[monthIndex + 1])}
+            className="hc-button-secondary grid h-9 w-9 place-items-center rounded-full border disabled:opacity-40"
+            aria-label="이전 달"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <b className="min-w-[120px] text-center text-[20px] tracking-tight">
+            {year}년 {month}월
+          </b>
+          <button
+            type="button"
+            disabled={!hasNewer}
+            onClick={() => hasNewer && onChangeMonth(months[monthIndex - 1])}
+            className="hc-button-secondary grid h-9 w-9 place-items-center rounded-full border disabled:opacity-40"
+            aria-label="다음 달"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+          이번 달 {monthItems.length}컷
+        </span>
+      </div>
+
+      <div className="grid grid-cols-7 gap-2.5">
+        {WEEKDAYS.map((label, index) => (
+          <div
+            key={label}
+            className="pb-1 text-center text-[12px] font-bold"
+            style={{
+              color:
+                index === 0
+                  ? "#FF6B6B"
+                  : index === 6
+                    ? "#6BA6FF"
+                    : "var(--hc-muted-soft)",
+            }}
+          >
+            {label}
+          </div>
+        ))}
+
+        {cells.map((day, index) => {
+          const list = day ? byDay.get(day) : undefined;
+
+          return (
+            <div
+              key={index}
+              className={`relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl border p-1.5 ${
+                day ? "hc-surface-card" : "border-transparent"
+              }`}
+            >
+              {day ? (
+                <span
+                  className="text-[11px] font-bold"
+                  style={{
+                    color: list
+                      ? "var(--hc-primary)"
+                      : "var(--hc-muted-soft)",
+                  }}
+                >
+                  {day}
+                </span>
+              ) : null}
+              {list ? (
+                <div className="relative mt-1 flex flex-1 items-center justify-center">
+                  <MediaThumb item={list[0]} previewItems={previewItems} bare />
+                  {list.length > 1 ? (
+                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[9px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                      +{list.length - 1}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
