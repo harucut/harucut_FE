@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
+import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { clientApi } from "@/lib/clientApi";
@@ -194,8 +195,10 @@ export default function MyPage() {
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-5 pb-[90px] text-[color:var(--hc-text)] sm:py-6 lg:pb-6">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 lg:gap-6">
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav userInitial={user?.username} />
+
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
         {/* 헤더 */}
         <header className="flex items-center justify-between pt-1 lg:pt-3">
           <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">

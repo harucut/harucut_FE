@@ -7,16 +7,14 @@ import {
   Camera,
   ChevronRight,
   Image as ImageIcon,
-  Palette,
   Play,
   Sparkles,
 } from "lucide-react";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
-import { listMyFrames } from "@/lib/remoteFrameApi";
-import type { UserMedia, RemoteFrame } from "@/lib/api-types";
-import { frameIdFromFrameType } from "@/lib/frameApi";
+import type { UserMedia } from "@/lib/api-types";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
 
@@ -88,7 +86,6 @@ export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
   const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
-  const [savedFrames, setSavedFrames] = useState<RemoteFrame[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -98,10 +95,9 @@ export default function HomePage() {
       setLoading(true);
 
       try {
-        const [nextUser, nextMedia, nextFrames] = await Promise.all([
+        const [nextUser, nextMedia] = await Promise.all([
           getMyUserInfo().catch(() => null),
           listMyMedia().catch(() => []),
-          listMyFrames().catch(() => []),
         ]);
 
         if (cancelled) return;
@@ -115,7 +111,6 @@ export default function HomePage() {
         setUser(nextUser);
         setRecentMedia(sortedMedia.slice(0, 4));
         setPreviewMedia(sortedMedia);
-        setSavedFrames(nextFrames.slice(0, 1));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -131,14 +126,15 @@ export default function HomePage() {
   }, []);
 
   const currentDateLabel = useCurrentDateLabel();
-  const savedFrame = savedFrames[0] ?? null;
   const greetingName = user?.username ? `${user.username}님, ` : "";
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-5 pb-[90px] text-[color:var(--hc-text)] sm:py-6 lg:pb-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 lg:gap-9">
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav userInitial={user?.username} />
+
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
         {/* 인사 */}
-        <header className="pt-1 lg:pt-4">
+        <header className="pt-1 lg:pt-0">
           <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
             {currentDateLabel}
           </span>
@@ -265,12 +261,12 @@ export default function HomePage() {
                     href="/history"
                     className="group flex flex-col gap-2"
                   >
-                    <div className="hc-surface-well relative aspect-[3/4] overflow-hidden rounded-[18px] border transition group-hover:border-[color:var(--hc-border-strong)]">
+                    <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
                       {preview.url ? (
                         preview.kind === "video" ? (
                           <video
                             src={preview.url}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-contain"
                             muted
                             playsInline
                           />
@@ -279,7 +275,7 @@ export default function HomePage() {
                           <img
                             src={preview.url}
                             alt={getUserMediaTitle(item)}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-contain"
                           />
                         )
                       ) : (
@@ -327,34 +323,6 @@ export default function HomePage() {
               </div>
             )}
           </div>
-        </section>
-
-        {/* 저장된 프레임 */}
-        <section className="hc-surface-card flex items-center justify-between rounded-[20px] border p-4 sm:p-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color:var(--hc-accent-soft-bg)]">
-              <Palette className="h-5 w-5 text-[color:var(--hc-primary)]" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[14px] font-bold">저장된 프레임</p>
-              <p className="mt-0.5 truncate text-[12px] text-[color:var(--hc-muted)]">
-                {savedFrame
-                  ? savedFrame.title
-                  : "만들어둔 프레임을 촬영할 때 골라 쓸 수 있어요."}
-              </p>
-            </div>
-          </div>
-          <Link
-            href={
-              savedFrame
-                ? `/theme?frame=${frameIdFromFrameType(savedFrame.frameType)}&remoteFrameId=${savedFrame.frameId}`
-                : "/theme"
-            }
-            className="hc-link-accent ml-3 flex shrink-0 items-center gap-1 text-[13px] font-semibold"
-          >
-            {savedFrame ? "이어서 수정" : "프레임 만들기"}
-            <ChevronRight className="h-4 w-4" />
-          </Link>
         </section>
       </div>
       <MobileTabBar />
