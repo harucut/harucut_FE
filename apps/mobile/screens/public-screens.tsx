@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
 import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
@@ -47,12 +46,10 @@ function AuthShell({
 }) {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
-  const bottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView contentContainerStyle={{ paddingBottom: bottomPadding }}>
+    <AppScrollView>
       <PageHeader
         description={description}
         title={title}
@@ -212,17 +209,11 @@ function SocialBrandButton({
 export function LandingScreen() {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
   const showGuestTrialNotice = useSessionStore((state) => state.showGuestTrialNotice);
-  const landingBottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView
-      contentContainerStyle={[
-        styles.landingScrollContent,
-        { paddingBottom: landingBottomPadding },
-      ]}>
+    <AppScrollView contentContainerStyle={styles.landingScrollContent}>
       <View style={styles.landingHeader}>
         <BrandMark href="/" />
       </View>

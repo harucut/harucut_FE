@@ -7,7 +7,7 @@ export default function PublicLayout() {
   const { colors } = useHarucutTheme();
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background, flex: 1 }}>
+    <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.background, flex: 1 }}>
       <Slot />
     </SafeAreaView>
   );
