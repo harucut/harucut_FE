@@ -159,6 +159,9 @@ export function ShootCaptureScreen() {
       })
     : [];
   const isTallFrame = layout ? layout.totalWidth / layout.totalHeight < 1 : true;
+  // 세션이 시작되면(촬영 중이거나 이미 한 장 이상 찍었으면) 모드/간격을 잠근다.
+  // 수동 모드는 매 컷 후 isShooting이 false가 되므로 isShooting만으로는 부족하다.
+  const sessionLocked = isShooting || shoot.shots.length > 0;
 
   useEffect(() => {
     if (!shoot.frameId) {
@@ -346,11 +349,11 @@ export function ShootCaptureScreen() {
               <Pressable
                 accessibilityLabel={`${label} 모드`}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: isShooting, selected: active }}
-                disabled={isShooting}
+                accessibilityState={{ disabled: sessionLocked, selected: active }}
+                disabled={sessionLocked}
                 key={mode}
                 onPress={() => setCaptureMode(mode)}
-                style={[styles.modeButton, active ? styles.modeButtonActive : null, isShooting ? styles.controlLocked : null]}>
+                style={[styles.modeButton, active ? styles.modeButtonActive : null, sessionLocked ? styles.controlLocked : null]}>
                 <Text style={[styles.modeButtonText, active ? styles.modeButtonTextActive : null]}>{label}</Text>
               </Pressable>
             );
@@ -366,11 +369,11 @@ export function ShootCaptureScreen() {
                 <Pressable
                   accessibilityLabel={`${seconds}초 간격`}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isShooting, selected: active }}
-                  disabled={isShooting}
+                  accessibilityState={{ disabled: sessionLocked, selected: active }}
+                  disabled={sessionLocked}
                   key={seconds}
                   onPress={() => setTimerSeconds(seconds)}
-                  style={[styles.timerChip, active ? styles.timerChipActive : null, isShooting ? styles.controlLocked : null]}>
+                  style={[styles.timerChip, active ? styles.timerChipActive : null, sessionLocked ? styles.controlLocked : null]}>
                   <Ionicons color={active ? '#000000' : colors.text} name="timer-outline" size={13} />
                   <Text style={[styles.timerChipText, active ? styles.timerChipTextActive : null]}>{seconds}s</Text>
                 </Pressable>
@@ -414,7 +417,7 @@ export function ShootCaptureScreen() {
           <View style={styles.flipButtonSpacer} />
         </View>
 
-        {shoot.shots.length >= 4 ? (
+        {shoot.shots.length >= SHOOT_TOTAL ? (
           <ActionButton label="촬영 결과 고르기" onPress={() => push('/shoot/select')} variant="ghost" />
         ) : null}
       </SurfaceCard>
