@@ -9,5 +9,6 @@ export async function PATCH(req: Request) {
   return proxyJson(req, {
     method: "PATCH",
     url: `${BASE_URL}/api/harucut/reset/password`,
+    stripAuthCookies: true,
   });
 }
