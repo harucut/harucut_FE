@@ -1439,7 +1439,7 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       borderWidth: 1,
       overflow: 'hidden',
       padding: 4,
-      width: '13%',
+      width: '12%',
       flexGrow: 1,
     },
     calendarCellFilled: {
