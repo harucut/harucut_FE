@@ -127,7 +127,7 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
-      description="이메일 인증 후 계정을 만들어 보세요."
+      description="금방 끝나요. 바로 첫 네 컷을 찍으러 가요."
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
@@ -142,7 +142,7 @@ function SignupPageContent() {
             </Link>
             에 동의하는 것으로 간주됩니다.
           </p>
-          <p className="mt-2 text-center text-[11px] text-zinc-400">
+          <p className="mt-2 text-center text-[14px] text-[color:var(--hc-muted)]">
             이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}

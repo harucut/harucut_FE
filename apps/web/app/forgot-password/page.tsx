@@ -19,8 +19,9 @@ function ForgotPasswordPageContent() {
 
   return (
     <AuthPageShell
-      title="비밀번호 재설정"
+      title="비밀번호 찾기"
       description={flow.description}
+      icon="lock"
       footer={null}
     >
       {flow.step === "VERIFY_CODE" ? (
