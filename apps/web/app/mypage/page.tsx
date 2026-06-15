@@ -72,6 +72,20 @@ export default function MyPage() {
       listMyMedia(),
       listMyFrames(),
     ]);
+
+    // 페이지에 머문 채 세션이 만료돼 통계 API가 401이면(프록시 리다이렉트는
+    // 네비게이션 시점에만 동작) 오류 UI에 남기지 말고 로그인으로 보낸다(fetchUser와 동일).
+    const unauthorized = [mediaRes, framesRes].some(
+      (r) =>
+        r.status === "rejected" &&
+        r.reason instanceof ApiRequestError &&
+        r.reason.status === 401,
+    );
+    if (unauthorized) {
+      router.replace(buildPathWithRedirect("/login", "/mypage"));
+      return;
+    }
+
     // 미디어(총 컷): 실패 시 null로 두어 '–'를 표시(0으로 오인 금지).
     setTotalCuts(mediaRes.status === "fulfilled" ? mediaRes.value.length : null);
     // 프레임: 실패와 빈 목록을 구분. 실패면 오류 상태로 두고 목록은 비우지 않음.
