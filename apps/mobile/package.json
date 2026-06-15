@@ -15,7 +15,7 @@
     "@expo/metro-runtime": "~55.0.10",
     "@harucut/shared": "workspace:*",
     "@expo/vector-icons": "^15.0.3",
-    "@react-navigation/native": "^7.1.8",
+    "@react-navigation/native": "^7.3.2",
     "expo": "~55.0.20",
     "expo-camera": "~55.0.17",
     "expo-constants": "~55.0.15",
