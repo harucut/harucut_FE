@@ -12,14 +12,21 @@ export function CutoutPanel() {
   const toggleCellCutout = useThemeEditorStore((s) => s.toggleCellCutout);
   const setCutMode = useThemeEditorStore((s) => s.setCutMode);
 
-  // 이 패널이 떠 있는 동안에는 캔버스 칸 탭으로도 누끼를 토글할 수 있게 한다.
+  // 누끼 모드를 항상 켜두면 캔버스 칸 히트 영역이 모든 클릭/드래그를 가로채
+  // 컴포넌트를 선택·이동할 수 없게 된다. 따라서 이 패널을 직접 다루는 동안에만
+  // 캔버스 칸 탭 토글을 활성화하고, 벗어나면 다시 끈다.
   useEffect(() => {
-    setCutMode(true);
     return () => setCutMode(false);
   }, [setCutMode]);
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+    <section
+      className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3"
+      onPointerEnter={() => setCutMode(true)}
+      onPointerLeave={() => setCutMode(false)}
+      onFocusCapture={() => setCutMode(true)}
+      onBlurCapture={() => setCutMode(false)}
+    >
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">누끼</p>
         <span className="inline-flex items-center gap-1 text-[11px] text-[color:var(--hc-primary)]">

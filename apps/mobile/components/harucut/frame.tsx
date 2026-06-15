@@ -215,7 +215,6 @@ export function FramePreview({
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
         const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
-        const isCut = Boolean(cellCutouts?.[index]);
 
         return (
           <View
@@ -231,18 +230,6 @@ export function FramePreview({
               },
               toneFilter ? { filter: toneFilter } : null,
             ]}>
-            {isCut ? (
-              <>
-                {/* 누끼 시각 효과: 가장자리를 어둡게 해 피사체만 남긴 느낌 + 녹색 테두리 */}
-                <LinearGradient
-                  colors={['rgba(11,11,12,0.82)', 'rgba(11,11,12,0)', 'rgba(11,11,12,0.82)']}
-                  locations={[0, 0.5, 1]}
-                  pointerEvents="none"
-                  style={styles.cutoutVignette}
-                />
-                <View pointerEvents="none" style={[styles.cutoutRing, { borderColor: resolvedAccent }]} />
-              </>
-            ) : null}
             {currentMedia ? (
               <>
                 {currentPreviewKind === 'image' ? (
@@ -283,6 +270,32 @@ export function FramePreview({
             styles={styles}
           />
         ))}
+      {/* 누끼 오버레이는 사용자 컴포넌트(사진/스티커) 위에 그려야 편집·저장 화면에서 효과가 가려지지 않는다. */}
+      {layout.slots.map((slot, index) =>
+        cellCutouts?.[index] ? (
+          <View
+            key={`${frameId}-cutout-${index}`}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              height: toPercent(slot.height, layout.totalHeight),
+              left: toPercent(slot.x, layout.totalWidth),
+              top: toPercent(slot.y, layout.totalHeight),
+              width: toPercent(slot.width, layout.totalWidth),
+              overflow: 'hidden',
+              borderRadius: 6,
+            }}>
+            {/* 누끼 시각 효과: 가장자리를 어둡게 해 피사체만 남긴 느낌 + 녹색 테두리 */}
+            <LinearGradient
+              colors={['rgba(11,11,12,0.82)', 'rgba(11,11,12,0)', 'rgba(11,11,12,0.82)']}
+              locations={[0, 0.5, 1]}
+              pointerEvents="none"
+              style={styles.cutoutVignette}
+            />
+            <View pointerEvents="none" style={[styles.cutoutRing, { borderColor: resolvedAccent }]} />
+          </View>
+        ) : null,
+      )}
       {cutMode && onCellTap
         ? layout.slots.map((slot, index) => (
             <Pressable
