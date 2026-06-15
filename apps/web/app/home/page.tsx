@@ -198,8 +198,15 @@ export default function HomePage() {
   const currentDateLabel = useCurrentDateLabel();
   const greetingName = user?.username ? `${user.username}님, ` : "";
 
-  const monthCount = useMemo(() => countThisMonth(previewMedia), [previewMedia]);
-  const weekCount = useMemo(() => countThisWeek(previewMedia), [previewMedia]);
+  // currentDateLabel을 의존성에 포함해 날짜가 바뀌면(주/월 경계) 카운트도 다시 계산되게 한다.
+  const monthCount = useMemo(
+    () => countThisMonth(previewMedia),
+    [previewMedia, currentDateLabel],
+  );
+  const weekCount = useMemo(
+    () => countThisWeek(previewMedia),
+    [previewMedia, currentDateLabel],
+  );
   const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
   const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
   const progressWidth = `${Math.round(ringPct * 100)}%`;
@@ -281,10 +288,11 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {/* 데스크톱(lg+) 액션 인덱스 → 촬영 / 업로드 / 꾸미기 (data-coach 앵커는 모바일 카드에 둠) */}
+        {/* 데스크톱(lg+) 액션 인덱스 → 촬영 / 업로드 / 꾸미기 (코치마크는 보이는 카드를 비춤) */}
         <section className="hidden gap-3.5 lg:grid lg:grid-cols-3">
           <Link
             href="/shoot"
+            data-coach="shoot"
             className="group flex min-h-[108px] flex-col justify-between rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
           >
             <span className="font-mono text-[11px] tracking-[0.18em] opacity-60">01</span>
@@ -301,6 +309,7 @@ export default function HomePage() {
 
           <Link
             href="/upload"
+            data-coach="upload"
             className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
           >
             <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
@@ -319,6 +328,7 @@ export default function HomePage() {
 
           <Link
             href="/theme"
+            data-coach="theme"
             className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
           >
             <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
