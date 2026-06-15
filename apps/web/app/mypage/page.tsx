@@ -57,6 +57,8 @@ export default function MyPage() {
   const [totalCuts, setTotalCuts] = useState<number | null>(null);
   const [frames, setFrames] = useState<RemoteFrame[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
+  // 로드 실패를 빈 목록과 구분한다(실패를 0으로 삼키지 않기).
+  const [framesError, setFramesError] = useState(false);
 
   // 섹션 전환: 데스크톱(≥lg)은 사이드바+콘텐츠를 항상 함께,
   // 모바일(<lg)은 메뉴 목록 ↔ 상세를 오가는 앱 스타일 내비게이션.
@@ -65,16 +67,21 @@ export default function MyPage() {
 
   const loadStats = async () => {
     setStatsLoading(true);
-    try {
-      const [media, myFrames] = await Promise.all([
-        listMyMedia().catch(() => []),
-        listMyFrames().catch(() => []),
-      ]);
-      setTotalCuts(media.length);
-      setFrames(myFrames);
-    } finally {
-      setStatsLoading(false);
+    setFramesError(false);
+    const [mediaRes, framesRes] = await Promise.allSettled([
+      listMyMedia(),
+      listMyFrames(),
+    ]);
+    // 미디어(총 컷): 실패 시 null로 두어 '–'를 표시(0으로 오인 금지).
+    setTotalCuts(mediaRes.status === "fulfilled" ? mediaRes.value.length : null);
+    // 프레임: 실패와 빈 목록을 구분. 실패면 오류 상태로 두고 목록은 비우지 않음.
+    if (framesRes.status === "fulfilled") {
+      setFrames(framesRes.value);
+    } else {
+      console.error(framesRes.reason);
+      setFramesError(true);
     }
+    setStatsLoading(false);
   };
 
   const fetchUser = async () => {
@@ -258,7 +265,11 @@ export default function MyPage() {
     {
       id: "frames",
       label: "내 프레임",
-      desc: statsLoading ? "불러오는 중..." : `보관한 프레임 ${frames.length}개`,
+      desc: statsLoading
+        ? "불러오는 중..."
+        : framesError
+          ? "불러오지 못했어요"
+          : `보관한 프레임 ${frames.length}개`,
       icon: ImageIcon,
     },
     { id: "theme", label: "테마", desc: "다크 · 라이트", icon: Palette },
@@ -347,7 +358,7 @@ export default function MyPage() {
                   </div>
                   <div className="flex-1 border-l border-[color:var(--hc-border-subtle)]">
                     <div className="text-[20px] font-extrabold tabular-nums">
-                      {statsLoading ? "–" : frames.length}
+                      {statsLoading || framesError ? "–" : frames.length}
                     </div>
                     <div className="mt-0.5 text-[11.5px] text-[color:var(--hc-muted)]">
                       보관 프레임
@@ -450,6 +461,8 @@ export default function MyPage() {
                 isUploadingProfile={isUploadingProfile}
                 statsLoading={statsLoading}
                 frames={frames}
+                framesError={framesError}
+                onRetryStats={loadStats}
                 onChangeUsername={handleChangeUsername}
                 onChangePassword={handleChangePassword}
                 onProfileFileChange={handleProfileFileChange}
@@ -487,6 +500,8 @@ type SectionPanelProps = {
   isUploadingProfile: boolean;
   statsLoading: boolean;
   frames: RemoteFrame[];
+  framesError: boolean;
+  onRetryStats: () => void;
   onChangeUsername: (e: FormEvent) => void;
   onChangePassword: (e: FormEvent) => void;
   onProfileFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -500,7 +515,14 @@ function SectionPanel(props: SectionPanelProps) {
     return <AccountSection {...props} />;
   }
   if (section === "frames") {
-    return <FramesSection statsLoading={props.statsLoading} frames={props.frames} />;
+    return (
+      <FramesSection
+        statsLoading={props.statsLoading}
+        frames={props.frames}
+        error={props.framesError}
+        onRetry={props.onRetryStats}
+      />
+    );
   }
   if (section === "theme") {
     return (
@@ -653,9 +675,13 @@ function AccountSection({
 function FramesSection({
   statsLoading,
   frames,
+  error,
+  onRetry,
 }: {
   statsLoading: boolean;
   frames: RemoteFrame[];
+  error: boolean;
+  onRetry: () => void;
 }) {
   return (
     <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
@@ -673,6 +699,22 @@ function FramesSection({
         <p className="mt-4 text-[12px] text-[color:var(--hc-muted)]">
           불러오는 중...
         </p>
+      ) : error ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-[color:var(--hc-border)] px-4 py-8 text-center">
+          <p className="text-[13px] font-semibold">
+            프레임을 불러오지 못했어요.
+          </p>
+          <p className="mt-1 text-[11.5px] text-[color:var(--hc-muted)]">
+            잠시 후 다시 시도해 주세요.
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="hc-button-secondary mt-4 inline-flex h-9 items-center rounded-full border px-4 text-[12px] font-semibold"
+          >
+            다시 시도
+          </button>
+        </div>
       ) : frames.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed border-[color:var(--hc-border)] px-4 py-8 text-center">
           <p className="text-[13px] font-semibold">아직 보관한 프레임이 없어요.</p>
