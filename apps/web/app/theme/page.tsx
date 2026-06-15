@@ -58,13 +58,26 @@ function ThemePageContent() {
     if (!Number.isFinite(queriedRemoteFrameId) || queriedRemoteFrameId <= 0) return;
     if (isLoading) return;
 
-    const targetFrame = frames.find((frame) => frame.frameId === queriedRemoteFrameId);
-    if (!targetFrame) return;
+    const targetIndex = frames.findIndex(
+      (frame) => frame.frameId === queriedRemoteFrameId,
+    );
+    if (targetIndex === -1) return;
+
+    const targetFrame = frames[targetIndex];
+    if (targetIndex >= plan.limit) return;
 
     setFrameId(frameIdFromFrameType(targetFrame.frameType));
     setRemoteFrameId(targetFrame.frameId);
     router.push("/theme/sticker");
-  }, [frames, isLoading, queriedRemoteFrameId, router, setFrameId, setRemoteFrameId]);
+  }, [
+    frames,
+    isLoading,
+    plan.limit,
+    queriedRemoteFrameId,
+    router,
+    setFrameId,
+    setRemoteFrameId,
+  ]);
 
   const handleConfirmNewFrame = () => {
     setFrameId(selectedFrameId);
