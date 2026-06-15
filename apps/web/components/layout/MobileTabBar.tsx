@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Camera, Clock3, Home, User } from "lucide-react";
+import { Camera, Film, Home, LayoutGrid, User } from "lucide-react";
 import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type MobileTabBarProps = {
@@ -12,7 +12,7 @@ type MobileTabBarProps = {
   publicShoot?: boolean;
 };
 
-// 폰/태블릿(< lg)에서만 보이는 앱 스타일 하단 탭바 (handoff app TabBar: 홈·기록·촬영·MY).
+// 폰/태블릿(< lg)에서만 보이는 앱 스타일 하단 탭바 (handoff app TabBar: 홈·기록·촬영·프레임·MY).
 // 데스크톱(≥ lg)에서는 숨기고 기존 웹 네비게이션을 사용한다.
 export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
@@ -50,7 +50,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
             : "text-[color:var(--hc-muted)]"
         }`}
       >
-        <Clock3 className="h-[23px] w-[23px]" />
+        <LayoutGrid className="h-[23px] w-[23px]" />
         <span className="text-[10.5px] font-medium">기록</span>
       </Link>
 
@@ -74,6 +74,19 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           <Camera className="h-[26px] w-[26px]" />
         </Link>
       )}
+
+      <Link
+        href="/theme"
+        aria-label="프레임"
+        className={`flex w-14 flex-col items-center gap-0.5 ${
+          isActive("/theme")
+            ? "text-[color:var(--hc-text)]"
+            : "text-[color:var(--hc-muted)]"
+        }`}
+      >
+        <Film className="h-[23px] w-[23px]" />
+        <span className="text-[10.5px] font-medium">프레임</span>
+      </Link>
 
       <Link
         href="/mypage"
