@@ -7,7 +7,8 @@ import { AuthField } from "@/components/auth/AuthField";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
-import { clientApi } from "@/lib/clientApi";
+import { ApiRequestError, clientApi } from "@/lib/clientApi";
+import { buildPathWithRedirect } from "@/lib/redirect";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
@@ -44,6 +45,11 @@ export default function MyPage() {
       setUser(nextUser);
       setUsername(nextUser.username || "");
     } catch (error) {
+      // 세션 만료/무효(401)면 에러를 보여주지 말고 로그인 페이지로 보낸다
+      if (error instanceof ApiRequestError && error.status === 401) {
+        router.replace(buildPathWithRedirect("/login", "/mypage"));
+        return;
+      }
       console.error(error);
       setErrors({
         common: "내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
