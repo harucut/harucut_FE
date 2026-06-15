@@ -132,35 +132,38 @@ export const QUICK_LINKS = [
   { href: '/history', icon: 'time-outline', label: '기록' },
 ] as const;
 
+// 핸드오프 TabBar(홈·기록·촬영·프레임·MY) 정본 순서. 촬영은 중앙 FAB로 돌출 렌더.
+// 업로드는 독립 탭에서 제거(홈의 '사진 불러오기' / 촬영 진입으로 흡수, 라우트는 유지).
 export const BOTTOM_NAV_ITEMS = [
   { href: '/home', icon: 'home-outline', iconActive: 'home', key: 'home', label: '홈' },
   {
-    href: '/shoot',
-    icon: 'camera-outline',
-    iconActive: 'camera',
-    key: 'shoot',
-    label: '촬영',
+    href: '/history',
+    icon: 'grid-outline',
+    iconActive: 'grid',
+    key: 'history',
+    label: '기록',
   },
   {
-    href: '/upload',
-    icon: 'cloud-upload-outline',
-    iconActive: 'cloud-upload',
-    key: 'upload',
-    label: '업로드',
+    center: true,
+    href: '/shoot',
+    icon: 'camera',
+    iconActive: 'camera',
+    key: 'shoot',
+    label: '',
   },
   {
     href: '/theme',
-    icon: 'color-palette-outline',
-    iconActive: 'color-palette',
+    icon: 'film-outline',
+    iconActive: 'film',
     key: 'theme',
-    label: '꾸미기',
+    label: '프레임',
   },
   {
-    href: '/history',
-    icon: 'time-outline',
-    iconActive: 'time',
-    key: 'history',
-    label: '기록',
+    href: '/mypage',
+    icon: 'person-outline',
+    iconActive: 'person',
+    key: 'mypage',
+    label: 'MY',
   },
 ] as const;
 
