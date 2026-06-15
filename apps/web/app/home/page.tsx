@@ -18,6 +18,81 @@ import type { UserMedia, RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
 
+const WEEKLY_GOAL = 5;
+
+type WeeklyStat = {
+  monthCount: number;
+  weekCount: number;
+  remaining: number;
+  pct: number;
+};
+
+function startOfWeekMonday(now: Date) {
+  const day = now.getDay(); // 0=Sun..6=Sat
+  const diff = (day + 6) % 7; // days since Monday
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function computeWeeklyStat(items: UserMedia[], now: Date): WeeklyStat {
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const nextMonthStart = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    1,
+  ).getTime();
+  const weekStart = startOfWeekMonday(now).getTime();
+  const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
+
+  let monthCount = 0;
+  let weekCount = 0;
+
+  for (const item of items) {
+    if (!item.createdAt) continue;
+    const t = new Date(item.createdAt).getTime();
+    if (Number.isNaN(t)) continue;
+    if (t >= monthStart && t < nextMonthStart) monthCount += 1;
+    if (t >= weekStart && t < weekEnd) weekCount += 1;
+  }
+
+  return {
+    monthCount,
+    weekCount,
+    remaining: Math.max(WEEKLY_GOAL - weekCount, 0),
+    pct: Math.min(weekCount / WEEKLY_GOAL, 1),
+  };
+}
+
+function Ring({ pct }: { pct: number }) {
+  const r = 18;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+      <circle
+        cx="23"
+        cy="23"
+        r={r}
+        fill="none"
+        stroke="var(--hc-border-strong)"
+        strokeWidth="5"
+      />
+      <circle
+        cx="23"
+        cy="23"
+        r={r}
+        fill="none"
+        stroke="var(--hc-primary)"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - pct)}
+        transform="rotate(-90 23 23)"
+      />
+    </svg>
+  );
+}
+
 function getRecentMoment(items: UserMedia[]) {
   if (items.length === 0) return "첫 기록을 남겨보세요";
 
@@ -37,6 +112,8 @@ export default function HomePage() {
   const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
   const [savedFrames, setSavedFrames] = useState<RemoteFrame[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mediaError, setMediaError] = useState(false);
+  const [weeklyStat, setWeeklyStat] = useState<WeeklyStat | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,9 +122,13 @@ export default function HomePage() {
       setLoading(true);
 
       try {
+        let mediaFailed = false;
         const [nextUser, nextMedia, nextFrames] = await Promise.all([
           getMyUserInfo().catch(() => null),
-          listMyMedia().catch(() => []),
+          listMyMedia().catch(() => {
+            mediaFailed = true;
+            return [] as UserMedia[];
+          }),
           listMyFrames().catch(() => []),
         ]);
 
@@ -63,6 +144,11 @@ export default function HomePage() {
         setRecentMedia(sortedMedia.slice(0, 4));
         setPreviewMedia(sortedMedia);
         setSavedFrames(nextFrames.slice(0, 1));
+        setMediaError(mediaFailed);
+        // Compute date-dependent stats after mount to avoid SSR/hydration mismatch.
+        setWeeklyStat(
+          mediaFailed ? null : computeWeeklyStat(sortedMedia, new Date()),
+        );
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -152,6 +238,52 @@ export default function HomePage() {
           </div>
 
         </section>
+
+        {!mediaError &&
+          (loading ? (
+            <section className="hc-surface-card flex items-center gap-4 rounded-[28px] border p-5">
+              <div className="h-12 w-12 animate-pulse rounded-full bg-white/5" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3.5 w-3/4 animate-pulse rounded bg-white/5" />
+                <div className="h-3.5 w-1/2 animate-pulse rounded bg-white/5" />
+              </div>
+              <div className="h-[46px] w-[46px] animate-pulse rounded-full bg-white/5" />
+            </section>
+          ) : weeklyStat ? (
+            <section className="hc-surface-card flex items-center gap-4 rounded-[28px] border p-5">
+              <div className="text-[28px] font-semibold tabular-nums text-[color:var(--hc-primary)] sm:text-[32px]">
+                {weeklyStat.monthCount}
+              </div>
+              <p className="flex-1 text-[13px] leading-6 text-zinc-300 sm:text-sm">
+                {weeklyStat.monthCount === 0 ? (
+                  "이번 달 첫 네 컷을 남겨보세요."
+                ) : (
+                  <>
+                    이번 달{" "}
+                    <b className="text-[color:var(--hc-text)]">
+                      {weeklyStat.monthCount}컷
+                    </b>
+                    을 남겼어요.
+                    <br />
+                    {weeklyStat.remaining > 0 ? (
+                      <>
+                        이번 주 목표까지{" "}
+                        <b className="text-[color:var(--hc-primary)]">
+                          {weeklyStat.remaining}컷
+                        </b>{" "}
+                        남았어요!
+                      </>
+                    ) : (
+                      "이번 주 목표를 달성했어요! 🎉"
+                    )}
+                  </>
+                )}
+              </p>
+              <div className="h-[46px] w-[46px] shrink-0">
+                <Ring pct={weeklyStat.pct} />
+              </div>
+            </section>
+          ) : null)}
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
           <section className="hc-surface-card rounded-[28px] border p-5">
