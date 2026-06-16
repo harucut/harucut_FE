@@ -69,6 +69,65 @@ function formatDate(value: string) {
   });
 }
 
+const HISTORY_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+const HISTORY_MONTH_KO = [
+  '1월',
+  '2월',
+  '3월',
+  '4월',
+  '5월',
+  '6월',
+  '7월',
+  '8월',
+  '9월',
+  '10월',
+  '11월',
+  '12월',
+] as const;
+
+// createdAt 기준 YYYY-MM 키. 날짜 정보가 없으면 null.
+function historyMonthKey(item: HistoryItem): string | null {
+  if (!item.createdAt) {
+    return null;
+  }
+
+  const date = new Date(item.createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function historyMonthLabel(key: string): string {
+  const [year, month] = key.split('-').map(Number);
+  const prefix = year === new Date().getFullYear() ? '' : `${year}년 `;
+  return `${prefix}${HISTORY_MONTH_KO[(month ?? 1) - 1]}`;
+}
+
+// createdAt 기준 월별 그룹(최신순). 날짜 없는 항목은 'unknown'으로 마지막에 묶는다.
+function groupHistoryByMonth(items: HistoryItem[]): Array<{ items: HistoryItem[]; key: string }> {
+  const map = new Map<string, HistoryItem[]>();
+
+  for (const item of items) {
+    const key = historyMonthKey(item) ?? 'unknown';
+    const bucket = map.get(key);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+
+  return [...map.keys()]
+    .sort((a, b) => {
+      if (a === 'unknown') return 1;
+      if (b === 'unknown') return -1;
+      return a < b ? 1 : -1;
+    })
+    .map((key) => ({ items: map.get(key) ?? [], key }));
+}
+
 async function resolveHistoryMediaUrl(item: HistoryItem) {
   if (item.mediaId) {
     try {
@@ -468,8 +527,6 @@ export function HomeScreen() {
 
 export function HistoryScreen() {
   const { colors, styles } = useAppScreenTheme();
-  const router = useRouter();
-  const push = (path: string) => router.push(path as never);
   const accessMode = useSessionStore((state) => state.accessMode);
   const historyError = useLibraryStore((state) => state.historyError);
   const historyItems = useLibraryStore((state) => state.historyItems);
@@ -478,10 +535,11 @@ export function HistoryScreen() {
   const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
   const showNotice = useSessionStore((state) => state.showNotice);
   const [filter, setFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
-  const [search, setSearch] = useState('');
+  const [view, setView] = useState<'grid' | 'calendar'>('grid');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [monthCursor, setMonthCursor] = useState<string | null>(null);
 
   const handleDownloadItem = async (item: HistoryItem) => {
     setBusyId(item.id);
@@ -540,16 +598,32 @@ export function HistoryScreen() {
   };
 
   const filteredItems = useMemo(() => {
-    return historyItems.filter((item) => {
-      const matchesType =
-        filter === 'ALL' || (filter === 'PHOTO' ? item.kind === 'photo' : item.kind === 'video');
-      const matchesSearch = item.title.toLowerCase().includes(search.trim().toLowerCase());
-      return matchesType && matchesSearch;
-    });
-  }, [filter, historyItems, search]);
+    if (filter === 'ALL') {
+      return historyItems;
+    }
 
-  const photoCount = historyItems.filter((item) => item.kind === 'photo').length;
-  const videoCount = historyItems.filter((item) => item.kind === 'video').length;
+    return historyItems.filter((item) =>
+      filter === 'PHOTO' ? item.kind === 'photo' : item.kind === 'video',
+    );
+  }, [filter, historyItems]);
+
+  const monthGroups = useMemo(() => groupHistoryByMonth(filteredItems), [filteredItems]);
+
+  // 달력용: 날짜가 있는 월만 모아 최신순 정렬.
+  const calendarMonths = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of historyItems) {
+      const key = historyMonthKey(item);
+      if (key) {
+        keys.add(key);
+      }
+    }
+    return [...keys].sort((a, b) => (a < b ? 1 : -1));
+  }, [historyItems]);
+
+  const activeMonth =
+    monthCursor && calendarMonths.includes(monthCursor) ? monthCursor : calendarMonths[0] ?? null;
+
   const isHistoryLoading =
     historyStatus === 'loading' ||
     (accessMode === 'member' && historyStatus === 'idle');
@@ -560,6 +634,90 @@ export function HistoryScreen() {
     }
   }, [accessMode, historyStatus, loadRemoteHistory]);
 
+  const renderHistoryCard = (item: HistoryItem) => {
+    const previewAsset = historyPreviewAsset(item);
+    const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
+    const previewUri = previewAsset?.uri ?? '';
+    const isEditing = editingId === item.id;
+
+    return (
+      <View key={item.id} style={styles.historyTile}>
+        <View style={styles.thumbCard}>
+          {previewUri && previewKind === 'image' ? (
+            <Image resizeMode="contain" source={{ uri: previewUri }} style={styles.thumbImage} />
+          ) : (
+            <View style={styles.thumbPlaceholder}>
+              <Ionicons
+                color={colors.primary}
+                name={item.kind === 'video' ? 'play-circle-outline' : 'image-outline'}
+                size={24}
+              />
+              <Text style={styles.thumbPlaceholderText}>
+                {item.kind === 'video' ? '영상' : '미리보기 없음'}
+              </Text>
+            </View>
+          )}
+          <View style={styles.thumbTypeBadge}>
+            <Ionicons color="#FFFFFF" name={item.kind === 'video' ? 'videocam' : 'image'} size={11} />
+            <Text style={styles.thumbTypeText}>{item.kind === 'video' ? '영상' : '사진'}</Text>
+          </View>
+        </View>
+
+        <View style={{ gap: 2 }}>
+          {isEditing ? (
+            <FormField label="파일 이름" onChangeText={setDraftName} value={draftName} />
+          ) : (
+            <Text numberOfLines={1} style={styles.thumbTitle}>
+              {item.title}
+            </Text>
+          )}
+          <Text style={styles.thumbMeta}>{formatDate(item.createdAt)}</Text>
+        </View>
+
+        <View style={styles.historyTileActions}>
+          <ActionButton
+            icon={<Ionicons color="#FFFFFF" name="download-outline" size={14} />}
+            label={busyId === item.id ? '저장 중' : '저장'}
+            onPress={() => void handleDownloadItem(item)}
+            style={styles.historyTileButton}
+          />
+          <ActionButton
+            icon={<Ionicons color={colors.text} name="share-social-outline" size={14} />}
+            label="공유"
+            onPress={() => void handleShareItem(item)}
+            style={styles.historyTileButton}
+            variant="secondary"
+          />
+          <ActionButton
+            icon={<Ionicons color={colors.text} name="create-outline" size={14} />}
+            label={isEditing ? '저장' : '이름'}
+            onPress={() => {
+              if (isEditing) {
+                void renameHistoryItem(item.id, draftName.trim() || item.title)
+                  .then(() => setEditingId(null))
+                  .catch((error) =>
+                    showNotice({
+                      actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+                      eyebrow: 'SAVE ERROR',
+                      icon: 'warning-outline',
+                      message: getApiErrorMessage(error, '파일 이름을 저장하지 못했어요.'),
+                      title: '이름 변경 실패',
+                    }),
+                  );
+                return;
+              }
+
+              setEditingId(item.id);
+              setDraftName(item.title);
+            }}
+            style={styles.historyTileButton}
+            variant="ghost"
+          />
+        </View>
+      </View>
+    );
+  };
+
   return (
     <AppScrollView>
       <View style={styles.historyTopBar}>
@@ -567,39 +725,38 @@ export function HistoryScreen() {
           <Text style={styles.dateEyebrow}>MEMORY ARCHIVE</Text>
           <Text style={styles.greetingTitle}>기록</Text>
         </View>
-        <Pressable
-          accessibilityLabel="새 촬영 시작"
-          accessibilityRole="button"
-          onPress={() => push('/shoot')}
-          style={styles.topIconButton}>
-          <Ionicons color={colors.text} name="camera-outline" size={20} />
-        </Pressable>
+        <View style={styles.viewToggle}>
+          {(
+            [
+              { icon: 'grid', id: 'grid', label: '그리드 보기' },
+              { icon: 'calendar', id: 'calendar', label: '달력 보기' },
+            ] as const
+          ).map(({ icon, id, label }) => {
+            const active = view === id;
+            return (
+              <Pressable
+                accessibilityLabel={label}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                key={id}
+                onPress={() => setView(id)}
+                style={[styles.viewToggleButton, active ? styles.viewToggleButtonActive : null]}>
+                <Ionicons color={active ? '#0B0B0C' : colors.muted} name={icon} size={15} />
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
-      <View style={styles.historyStatRow}>
-        <View style={styles.historyStatCell}>
-          <Text style={styles.historyStatNumber}>{historyItems.length}</Text>
-          <Text style={styles.historyStatLabel}>전체</Text>
+      {view === 'grid' ? (
+        <View style={styles.filterRow}>
+          {(['ALL', 'PHOTO', 'VIDEO'] as const).map((value) => (
+            <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
+              {value === 'ALL' ? '전체' : value === 'PHOTO' ? '사진' : '영상'}
+            </Pill>
+          ))}
         </View>
-        <View style={[styles.historyStatCell, styles.historyStatDivider]}>
-          <Text style={styles.historyStatNumber}>{photoCount}</Text>
-          <Text style={styles.historyStatLabel}>사진</Text>
-        </View>
-        <View style={[styles.historyStatCell, styles.historyStatDivider]}>
-          <Text style={styles.historyStatNumber}>{videoCount}</Text>
-          <Text style={styles.historyStatLabel}>영상</Text>
-        </View>
-      </View>
-
-      <View style={styles.filterRow}>
-        {(['ALL', 'PHOTO', 'VIDEO'] as const).map((value) => (
-          <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
-            {value === 'ALL' ? '전체' : value === 'PHOTO' ? '사진' : '영상'}
-          </Pill>
-        ))}
-      </View>
-
-      <FormField label="검색" onChangeText={setSearch} placeholder="파일 이름으로 검색" value={search} />
+      ) : null}
 
       {isHistoryLoading ? (
         <SurfaceCard>
@@ -609,76 +766,163 @@ export function HistoryScreen() {
         <SurfaceCard>
           <Text style={styles.bodyCopy}>{historyError ?? '저장한 기록을 불러오지 못했어요.'}</Text>
         </SurfaceCard>
+      ) : view === 'calendar' ? (
+        <HistoryCalendar
+          activeMonth={activeMonth}
+          colors={colors}
+          items={historyItems}
+          months={calendarMonths}
+          onChangeMonth={setMonthCursor}
+          styles={styles}
+        />
       ) : filteredItems.length === 0 ? (
         <SurfaceCard>
           <Text style={styles.bodyCopy}>
-            {historyItems.length === 0 ? '저장한 기록이 아직 없어요.' : '검색 결과가 없어요.'}
+            {filter === 'PHOTO'
+              ? '저장한 사진 기록이 아직 없어요.'
+              : filter === 'VIDEO'
+                ? '저장한 영상 기록이 아직 없어요.'
+                : '저장한 기록이 아직 없어요.'}
           </Text>
         </SurfaceCard>
       ) : (
-        filteredItems.map((item) => (
-          <SurfaceCard key={item.id} style={{ gap: 14 }}>
-            <View style={styles.historyCardRow}>
-              <View style={styles.historyPreview}>
-                <FramePreview frameId={item.frameId} media={item.previewMedia} />
-              </View>
-              <View style={{ flex: 1, gap: 8 }}>
-                <View style={{ gap: 4 }}>
-                  <Text style={styles.sectionEyebrow}>{item.kind === 'photo' ? '사진' : '영상'}</Text>
-                  {editingId === item.id ? (
-                    <FormField label="파일 이름" onChangeText={setDraftName} value={draftName} />
-                  ) : (
-                    <Text style={styles.linkTitle}>{item.title}</Text>
-                  )}
-                  <Text style={styles.linkBody}>{formatDate(item.createdAt)}</Text>
-                </View>
-
-                <View style={styles.actionWrap}>
-                  <ActionButton
-                    icon={<Ionicons color="#FFFFFF" name="download-outline" size={15} />}
-                    label={busyId === item.id ? '다운로드 중...' : '다운로드'}
-                    onPress={() => void handleDownloadItem(item)}
-                    style={{ flex: 1, minHeight: 42 }}
-                  />
-                  <ActionButton
-                    icon={<Ionicons color={colors.text} name="share-social-outline" size={15} />}
-                    label="공유하기"
-                    onPress={() => void handleShareItem(item)}
-                    style={{ flex: 1, minHeight: 42 }}
-                    variant="secondary"
-                  />
-                  <ActionButton
-                    icon={<Ionicons color={colors.text} name="create-outline" size={15} />}
-                    label={editingId === item.id ? '저장' : '이름 수정'}
-                    onPress={() => {
-                      if (editingId === item.id) {
-                        void renameHistoryItem(item.id, draftName.trim() || item.title)
-                          .then(() => setEditingId(null))
-                          .catch((error) =>
-                            showNotice({
-                              actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
-                              eyebrow: 'SAVE ERROR',
-                              icon: 'warning-outline',
-                              message: getApiErrorMessage(error, '파일 이름을 저장하지 못했어요.'),
-                              title: '이름 변경 실패',
-                            }),
-                          );
-                        return;
-                      }
-
-                      setEditingId(item.id);
-                      setDraftName(item.title);
-                    }}
-                    style={{ minHeight: 42, width: '100%' }}
-                    variant="ghost"
-                  />
-                </View>
-              </View>
+        monthGroups.map((group) => (
+          <View key={group.key} style={{ gap: 13 }}>
+            <View style={styles.monthHeader}>
+              <Text style={styles.monthHeaderTitle}>
+                {group.key === 'unknown' ? '기타' : historyMonthLabel(group.key)}
+              </Text>
+              <Text style={styles.monthHeaderCount}>{group.items.length}컷</Text>
             </View>
-          </SurfaceCard>
+            <View style={styles.historyGrid}>{group.items.map(renderHistoryCard)}</View>
+          </View>
         ))
       )}
     </AppScrollView>
+  );
+}
+
+function HistoryCalendar({
+  activeMonth,
+  colors,
+  items,
+  months,
+  onChangeMonth,
+  styles,
+}: {
+  activeMonth: string | null;
+  colors: HarucutThemeColors;
+  items: HistoryItem[];
+  months: string[];
+  onChangeMonth: (key: string) => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  if (!activeMonth) {
+    return (
+      <SurfaceCard>
+        <Text style={styles.bodyCopy}>달력으로 볼 기록이 아직 없어요.</Text>
+      </SurfaceCard>
+    );
+  }
+
+  const [year, month] = activeMonth.split('-').map(Number);
+  const monthItems = items.filter((item) => historyMonthKey(item) === activeMonth);
+
+  const byDay = new Map<number, HistoryItem[]>();
+  for (const item of monthItems) {
+    if (!item.createdAt) {
+      continue;
+    }
+    const day = new Date(item.createdAt).getDate();
+    const bucket = byDay.get(day);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      byDay.set(day, [item]);
+    }
+  }
+
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells: Array<number | null> = [];
+  for (let i = 0; i < firstWeekday; i += 1) {
+    cells.push(null);
+  }
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    cells.push(d);
+  }
+
+  const monthIndex = months.indexOf(activeMonth);
+  const hasOlder = monthIndex < months.length - 1;
+  const hasNewer = monthIndex > 0;
+
+  return (
+    <View style={{ gap: 14 }}>
+      <View style={styles.calendarNav}>
+        <Pressable
+          accessibilityLabel="이전 달"
+          accessibilityRole="button"
+          disabled={!hasOlder}
+          onPress={() => hasOlder && onChangeMonth(months[monthIndex + 1])}
+          style={[styles.calendarNavButton, hasOlder ? null : styles.calendarNavButtonDisabled]}>
+          <Ionicons color={colors.text} name="chevron-back" size={16} />
+        </Pressable>
+        <Text style={styles.calendarNavTitle}>
+          {year}년 {month}월 · {monthItems.length}컷
+        </Text>
+        <Pressable
+          accessibilityLabel="다음 달"
+          accessibilityRole="button"
+          disabled={!hasNewer}
+          onPress={() => hasNewer && onChangeMonth(months[monthIndex - 1])}
+          style={[styles.calendarNavButton, hasNewer ? null : styles.calendarNavButtonDisabled]}>
+          <Ionicons color={colors.text} name="chevron-forward" size={16} />
+        </Pressable>
+      </View>
+
+      <View style={styles.calendarWeekRow}>
+        {HISTORY_WEEKDAYS.map((label, index) => (
+          <Text
+            key={label}
+            style={[
+              styles.calendarWeekday,
+              index === 0
+                ? styles.calendarWeekdaySun
+                : index === 6
+                  ? styles.calendarWeekdaySat
+                  : null,
+            ]}>
+            {label}
+          </Text>
+        ))}
+      </View>
+
+      <View style={styles.calendarGrid}>
+        {cells.map((day, index) => {
+          const list = day ? byDay.get(day) : undefined;
+
+          return (
+            <View
+              key={`${activeMonth}-${index}`}
+              style={[styles.calendarCell, day ? styles.calendarCellFilled : null]}>
+              {day ? (
+                <Text style={[styles.calendarDay, list ? styles.calendarDayActive : null]}>{day}</Text>
+              ) : null}
+              {list ? (
+                <View style={styles.calendarCellPreview}>
+                  <FramePreview frameId={list[0].frameId} media={list[0].previewMedia} />
+                  {list.length > 1 ? (
+                    <View style={styles.calendarBadge}>
+                      <Text style={styles.calendarBadgeText}>+{list.length - 1}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -995,9 +1239,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
   const themeOptionActiveSurface = isDark ? 'rgba(37, 99, 235, 0.2)' : colors.primarySoft;
 
   return StyleSheet.create({
-    actionWrap: {
-      gap: 8,
-    },
     avatarImage: {
       height: '100%',
       width: '100%',
@@ -1072,32 +1313,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: '#06140A',
       fontSize: 16,
       fontWeight: '800',
-    },
-    historyStatCell: {
-      alignItems: 'center',
-      flex: 1,
-      gap: 2,
-    },
-    historyStatDivider: {
-      borderLeftColor: colors.border,
-      borderLeftWidth: 1,
-    },
-    historyStatLabel: {
-      color: colors.muted,
-      fontSize: 11,
-    },
-    historyStatNumber: {
-      color: colors.text,
-      fontSize: 20,
-      fontWeight: '800',
-    },
-    historyStatRow: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: 20,
-      borderWidth: 1,
-      flexDirection: 'row',
-      paddingVertical: 16,
     },
     historyTopBar: {
       alignItems: 'flex-start',
@@ -1271,6 +1486,144 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       flexWrap: 'wrap',
       gap: 8,
     },
+    viewToggle: {
+      backgroundColor: colors.cardStrong,
+      borderRadius: 999,
+      flexDirection: 'row',
+      gap: 3,
+      padding: 3,
+    },
+    viewToggleButton: {
+      alignItems: 'center',
+      borderRadius: 999,
+      height: 30,
+      justifyContent: 'center',
+      width: 32,
+    },
+    viewToggleButtonActive: {
+      backgroundColor: '#FFFFFF',
+    },
+    monthHeader: {
+      alignItems: 'baseline',
+      flexDirection: 'row',
+      gap: 8,
+    },
+    monthHeaderCount: {
+      color: colors.muted,
+      fontSize: 12,
+    },
+    monthHeaderTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+      letterSpacing: -0.3,
+    },
+    historyGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 14,
+    },
+    historyTile: {
+      gap: 9,
+      width: '47%',
+      flexGrow: 1,
+    },
+    historyTileActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    historyTileButton: {
+      flexBasis: '47%',
+      flexGrow: 1,
+      minHeight: 38,
+      paddingHorizontal: 8,
+      paddingVertical: 9,
+    },
+    calendarNav: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    calendarNavButton: {
+      alignItems: 'center',
+      backgroundColor: colors.cardStrong,
+      borderRadius: 17,
+      height: 34,
+      justifyContent: 'center',
+      width: 34,
+    },
+    calendarNavButtonDisabled: {
+      opacity: 0.4,
+    },
+    calendarNavTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: '700',
+      letterSpacing: -0.3,
+    },
+    calendarWeekRow: {
+      flexDirection: 'row',
+    },
+    calendarWeekday: {
+      color: colors.muted,
+      flex: 1,
+      fontSize: 10.5,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    calendarWeekdaySat: {
+      color: '#6BA6FF',
+    },
+    calendarWeekdaySun: {
+      color: '#FF6B6B',
+    },
+    calendarGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    calendarCell: {
+      aspectRatio: 0.75,
+      borderColor: 'transparent',
+      borderRadius: 9,
+      borderWidth: 1,
+      overflow: 'hidden',
+      padding: 4,
+      width: '12%',
+      flexGrow: 1,
+    },
+    calendarCellFilled: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+    },
+    calendarCellPreview: {
+      flex: 1,
+      justifyContent: 'center',
+      marginTop: 2,
+      position: 'relative',
+    },
+    calendarDay: {
+      color: colors.muted,
+      fontSize: 9.5,
+      fontWeight: '700',
+    },
+    calendarDayActive: {
+      color: colors.primaryStrong,
+    },
+    calendarBadge: {
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      paddingHorizontal: 4,
+      position: 'absolute',
+      right: -2,
+      top: -2,
+    },
+    calendarBadgeText: {
+      color: '#06140A',
+      fontSize: 8,
+      fontWeight: '800',
+    },
     heroTitle: {
       color: colors.text,
       fontSize: 28,
@@ -1285,13 +1638,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     heroActionGroup: {
       gap: 10,
-    },
-    historyCardRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    historyPreview: {
-      width: 104,
     },
     infoTile: {
       backgroundColor: tintedSurface,
