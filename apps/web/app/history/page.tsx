@@ -263,14 +263,16 @@ export default function HistoryPage() {
   }, [filter]);
 
   // 달력용: 날짜가 있는 월만 모아 정렬한다.
+  // 달력에는 필터 칩이 보이지 않으므로, 그리드 필터와 무관하게 전체(previewItems)
+  // 기준으로 월을 모아 다른 타입/월이 조용히 누락되지 않게 한다.
   const calendarMonths = useMemo(() => {
     const keys = new Set<string>();
-    for (const item of items) {
+    for (const item of previewItems) {
       const key = monthKey(item);
       if (key) keys.add(key);
     }
     return [...keys].sort((a, b) => (a < b ? 1 : -1));
-  }, [items]);
+  }, [previewItems]);
 
   const activeMonth = useMemo(() => {
     if (monthCursor && calendarMonths.includes(monthCursor)) return monthCursor;
@@ -450,7 +452,7 @@ export default function HistoryPage() {
           </div>
         ) : view === "calendar" ? (
           <CalendarView
-            items={items}
+            items={previewItems}
             previewItems={previewItems}
             months={calendarMonths}
             activeMonth={activeMonth}
