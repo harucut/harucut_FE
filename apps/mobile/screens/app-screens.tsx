@@ -893,8 +893,8 @@ export function MyPageScreen() {
 
                   {row.id === 'frames' ? (
                     <ActionButton
-                      label="내 기록 보기"
-                      onPress={() => push('/history')}
+                      label="내 프레임 관리"
+                      onPress={() => push('/theme')}
                       variant="secondary"
                     />
                   ) : null}

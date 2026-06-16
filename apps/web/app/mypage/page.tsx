@@ -492,10 +492,10 @@ export default function MyPage() {
       </p>
       <button
         type="button"
-        onClick={() => router.push("/history")}
+        onClick={() => router.push("/theme")}
         className="hc-button-secondary h-11 self-start rounded-full border px-6 text-[13px] font-semibold"
       >
-        내 기록 보기
+        내 프레임 관리
       </button>
     </div>
   );
