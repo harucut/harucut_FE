@@ -56,7 +56,7 @@ export function ThemeFrameScreen() {
         confirmLabel={
           isAtCapacity ? '보관함이 가득 찼어요 · 업그레이드' : '새 프레임 만들기'
         }
-        onConfirm={() => push(isAtCapacity ? '/pricing' : '/theme/sticker')}
+        onConfirm={() => push(isAtCapacity ? '/mypage' : '/theme/sticker')}
         onSelect={setThemeFrame}
         selectedFrameId={themeEditor.frameId}
       />
