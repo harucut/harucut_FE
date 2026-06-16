@@ -42,8 +42,15 @@ function computeWeeklyStat(items: UserMedia[], now: Date): WeeklyStat {
     now.getMonth() + 1,
     1,
   ).getTime();
-  const weekStart = startOfWeekMonday(now).getTime();
-  const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
+  const weekStartDate = startOfWeekMonday(now);
+  const weekStart = weekStartDate.getTime();
+  // DST 전환 주에는 168시간 고정 가산이 다음 주 월요일 자정에 도달하지 못한다.
+  // 캘린더 날짜를 7일 진행해 로컬 자정 기준으로 정확히 다음 주 월요일을 구한다.
+  const weekEnd = new Date(
+    weekStartDate.getFullYear(),
+    weekStartDate.getMonth(),
+    weekStartDate.getDate() + 7,
+  ).getTime();
 
   let monthCount = 0;
   let weekCount = 0;
