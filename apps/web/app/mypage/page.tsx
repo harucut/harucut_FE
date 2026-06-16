@@ -98,6 +98,18 @@ export default function MyPage() {
   const [section, setSection] = useState<SectionId>("account");
   const [openMobile, setOpenMobile] = useState<SectionId | null>(null);
 
+  // 데스크톱/모바일 레이아웃을 CSS로만 숨기면 같은 섹션 폼(동일 id)이 양쪽에
+  // 동시에 마운트된다. 뷰포트에 따라 한 쪽만 렌더해 중복 마운트를 막는다.
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktop(mql.matches);
+    sync();
+    mql.addEventListener("change", sync);
+    return () => mql.removeEventListener("change", sync);
+  }, []);
+
   const fetchUser = async () => {
     setLoading(true);
     setErrors({});
@@ -577,6 +589,7 @@ export default function MyPage() {
         ) : (
           <>
             {/* ===== 데스크톱 (lg+) : 260px 사이드바 + 우측 콘텐츠 ===== */}
+            {isDesktop ? (
             <div className="mt-2 hidden items-start gap-8 lg:grid lg:grid-cols-[260px_1fr]">
               {/* 사이드바 */}
               <div>
@@ -640,8 +653,10 @@ export default function MyPage() {
                 {sectionBody[section]}
               </div>
             </div>
+            ) : null}
 
             {/* ===== 모바일/태블릿 (<lg) : 앱 MyPage 레이아웃 ===== */}
+            {!isDesktop ? (
             <div className="mt-4 flex flex-col gap-5 lg:hidden">
               {/* 프로필 */}
               <div className="flex items-center gap-4 px-0.5 pb-1">
@@ -729,6 +744,7 @@ export default function MyPage() {
                 하루컷 v1.0.0
               </p>
             </div>
+            ) : null}
           </>
         )}
       </div>
