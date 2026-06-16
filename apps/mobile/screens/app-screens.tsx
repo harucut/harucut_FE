@@ -233,13 +233,15 @@ function ProgressRing({
           width: size,
         }}
       />
-      <HalfRing
-        color={progressColor}
-        rotate={firstRotate}
-        side="right"
-        size={size}
-        stroke={stroke}
-      />
+      {clamped > 0 ? (
+        <HalfRing
+          color={progressColor}
+          rotate={firstRotate}
+          side="right"
+          size={size}
+          stroke={stroke}
+        />
+      ) : null}
       {clamped > 0.5 ? (
         <HalfRing
           color={progressColor}
