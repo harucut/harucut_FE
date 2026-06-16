@@ -20,6 +20,14 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// 촬영 총 장수
+const SHOOT_TOTAL = 8;
+// 선택 가능한 타이머 간격(초)
+const TIMER_OPTIONS = [3, 5, 8] as const;
+type TimerSeconds = (typeof TIMER_OPTIONS)[number];
+// 촬영 모드: 타이머(간격 선택 → 8장 자동 연속) / 수동(셔터 1장씩)
+type CaptureMode = 'manual' | 'timer';
+
 async function shareMedia(title: string, uri: string | undefined) {
   if (!uri) return;
   await Share.share({ message: `${title}\n${uri}`, url: uri });
@@ -127,6 +135,9 @@ export function ShootCaptureScreen() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
+  // 촬영 모드/타이머 간격은 시작 전에만 변경 가능(시작 후 잠금)
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('timer');
+  const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
   const savedFrames = useLibraryStore((state) => state.savedFrames);
 
   const activeSavedFrame =
@@ -148,6 +159,9 @@ export function ShootCaptureScreen() {
       })
     : [];
   const isTallFrame = layout ? layout.totalWidth / layout.totalHeight < 1 : true;
+  // 세션이 시작되면(촬영 중이거나 이미 한 장 이상 찍었으면) 모드/간격을 잠근다.
+  // 수동 모드는 매 컷 후 isShooting이 false가 되므로 isShooting만으로는 부족하다.
+  const sessionLocked = isShooting || shoot.shots.length > 0;
 
   useEffect(() => {
     if (!shoot.frameId) {
@@ -155,50 +169,71 @@ export function ShootCaptureScreen() {
     }
   }, [router, shoot.frameId]);
 
-  const handleStartAutoCapture = async () => {
-    if (!permission?.granted) {
-      const nextPermission = await requestPermission();
+  // 캡처 화면에 진입할 때마다 이전(완료·중단)된 세션의 촬영본을 비운다.
+  // resetShootSession은 frameId/선택 프레임은 유지하고 shots만 초기화하므로,
+  // 재촬영 진입 시 모드·간격을 다시 고를 수 있고 수동 촬영이 9장째로 누적되지 않는다.
+  useEffect(() => {
+    resetShootSession();
+  }, [resetShootSession]);
 
-      if (!nextPermission.granted) {
-        showNotice({
-          actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
-          eyebrow: 'CAMERA ACCESS',
-          icon: 'camera-outline',
-          message: '촬영 체험을 계속하려면 카메라 권한이 필요해요. 설정에서 권한을 허용한 뒤 다시 시도해 주세요.',
-          title: '카메라 권한이 필요해요',
-        });
-      }
-      return;
+  // 카메라 권한이 없으면 요청하고, 끝내 거부되면 안내 후 false를 돌려준다.
+  const ensureCameraPermission = async () => {
+    if (permission?.granted) return true;
+
+    const nextPermission = await requestPermission();
+
+    if (!nextPermission.granted) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'CAMERA ACCESS',
+        icon: 'camera-outline',
+        message: '촬영 체험을 계속하려면 카메라 권한이 필요해요. 설정에서 권한을 허용한 뒤 다시 시도해 주세요.',
+        title: '카메라 권한이 필요해요',
+      });
+      return false;
     }
 
-    if (!cameraRef.current || isShooting) {
-      return;
-    }
+    return true;
+  };
+
+  // 한 장 촬영해서 세션에 추가하고, 추가 후 누적 장수를 돌려준다.
+  const captureOneShot = async (shotIndex: number) => {
+    if (!cameraRef.current) return shotIndex;
+
+    const picture = await cameraRef.current.takePictureAsync({
+      quality: 0.6,
+      shutterSound: false,
+      skipProcessing: true,
+    });
+
+    const asset: MediaAsset = {
+      id: `shoot-shot-${Date.now()}-${shotIndex}`,
+      kind: 'image',
+      label: `촬영 ${shotIndex + 1}`,
+      uri: picture.uri,
+    };
+
+    addShootShot(asset);
+    return shotIndex + 1;
+  };
+
+  // 타이머 모드: 선택한 간격으로 8장을 자동 연속 촬영.
+  const handleTimerBurst = async () => {
+    if (!(await ensureCameraPermission())) return;
+    if (!cameraRef.current || isShooting) return;
 
     resetShootSession();
     setIsShooting(true);
 
     try {
-      for (let shotIndex = 0; shotIndex < 8; shotIndex += 1) {
-        for (let remaining = 3; remaining > 0; remaining -= 1) {
+      for (let shotIndex = 0; shotIndex < SHOOT_TOTAL; shotIndex += 1) {
+        for (let remaining = timerSeconds; remaining > 0; remaining -= 1) {
           setCountdown(remaining);
-          await delay(700);
+          // 1초 틱으로 맞춰 선택한 간격(3·5·8초)이 실제 촬영 간격과 일치하게 한다.
+          await delay(1000);
         }
 
-        const picture = await cameraRef.current.takePictureAsync({
-          quality: 0.6,
-          shutterSound: false,
-          skipProcessing: true,
-        });
-
-        const asset: MediaAsset = {
-          id: `shoot-shot-${Date.now()}-${shotIndex}`,
-          kind: 'image',
-          label: `촬영 ${shotIndex + 1}`,
-          uri: picture.uri,
-        };
-
-        addShootShot(asset);
+        await captureOneShot(shotIndex);
       }
 
       setCountdown(null);
@@ -217,6 +252,38 @@ export function ShootCaptureScreen() {
     }
   };
 
+  // 수동 모드: 셔터를 누를 때마다 즉시 1장. 8장째에서 자동으로 고르기 단계로 이동.
+  const handleManualShutter = async () => {
+    if (!(await ensureCameraPermission())) return;
+    if (!cameraRef.current || isShooting) return;
+
+    // 첫 컷이면 세션을 초기화한다.
+    const isFirst = shoot.shots.length === 0;
+    setIsShooting(true);
+
+    try {
+      if (isFirst) {
+        resetShootSession();
+      }
+
+      const total = await captureOneShot(isFirst ? 0 : shoot.shots.length);
+
+      if (total >= SHOOT_TOTAL) {
+        push('/shoot/select');
+      }
+    } catch {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'CAPTURE ERROR',
+        icon: 'warning-outline',
+        message: '촬영을 완료하지 못했어요. 카메라 권한이나 디바이스 상태를 확인한 뒤 다시 시도해 주세요.',
+        title: '촬영을 마치지 못했어요',
+      });
+    } finally {
+      setIsShooting(false);
+    }
+  };
+
   return (
     <AppScrollView>
       <PageHeader
@@ -228,7 +295,7 @@ export function ShootCaptureScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.statusRow}>
           <Text style={styles.statusText}>사진과 영상을 함께 촬영해요</Text>
-          <Pill>{shoot.shots.length} / 8장 촬영됨</Pill>
+          <Pill>{shoot.shots.length} / {SHOOT_TOTAL}장 촬영됨</Pill>
         </View>
 
         <View style={styles.stageWrap}>
@@ -264,7 +331,7 @@ export function ShootCaptureScreen() {
               <View style={styles.countdownCircle}>
                 <Text style={styles.countdownText}>{countdown}</Text>
               </View>
-              <Text style={styles.overlayCaption}>{shoot.shots.length}/8</Text>
+              <Text style={styles.overlayCaption}>{shoot.shots.length}/{SHOOT_TOTAL}</Text>
             </View>
           ) : null}
         </View>
@@ -277,31 +344,90 @@ export function ShootCaptureScreen() {
           />
         ) : null}
 
+        {/* 촬영 모드 토글: 타이머 / 수동. 촬영이 시작되면 잠긴다. */}
+        <View style={styles.modeToggle}>
+          {(
+            [
+              ['timer', '타이머'],
+              ['manual', '수동'],
+            ] as const
+          ).map(([mode, label]) => {
+            const active = captureMode === mode;
+            return (
+              <Pressable
+                accessibilityLabel={`${label} 모드`}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: sessionLocked, selected: active }}
+                disabled={sessionLocked}
+                key={mode}
+                onPress={() => setCaptureMode(mode)}
+                style={[styles.modeButton, active ? styles.modeButtonActive : null, sessionLocked ? styles.controlLocked : null]}>
+                <Text style={[styles.modeButtonText, active ? styles.modeButtonTextActive : null]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 타이머 간격 칩(3/5/8초). 타이머 모드에서만 노출되고, 촬영 시작 후에는 잠긴다. */}
+        {captureMode === 'timer' ? (
+          <View style={styles.timerChipRow}>
+            {TIMER_OPTIONS.map((seconds) => {
+              const active = timerSeconds === seconds;
+              return (
+                <Pressable
+                  accessibilityLabel={`${seconds}초 간격`}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: sessionLocked, selected: active }}
+                  disabled={sessionLocked}
+                  key={seconds}
+                  onPress={() => setTimerSeconds(seconds)}
+                  style={[styles.timerChip, active ? styles.timerChipActive : null, sessionLocked ? styles.controlLocked : null]}>
+                  <Ionicons color={active ? '#000000' : colors.text} name="timer-outline" size={13} />
+                  <Text style={[styles.timerChipText, active ? styles.timerChipTextActive : null]}>{seconds}s</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         <View style={{ gap: 8 }}>
           <Text style={styles.bodyText}>
-            {permission?.granted
-              ? '"촬영 시작" 버튼을 누르면 3초 간격으로 사진을 촬영해요.'
-              : '카메라 권한을 허용하면 8장 자동 촬영을 시작할 수 있어요.'}
+            {!permission?.granted
+              ? '카메라 권한을 허용하면 촬영을 시작할 수 있어요.'
+              : captureMode === 'timer'
+                ? `"촬영 시작"을 누르면 ${timerSeconds}초 간격으로 8장을 자동으로 찍어요.`
+                : '셔터를 누를 때마다 한 장씩 총 8장을 찍어요.'}
           </Text>
           <Text style={styles.statusText}>카메라 {isCameraReady ? '준비 완료' : '아직 켜져 있지 않아요'}</Text>
         </View>
 
-        <View style={styles.actionColumn}>
-          <ActionButton
-            icon={<Ionicons color={colors.text} name="camera-reverse-outline" size={16} />}
-            label="카메라 전환"
+        {/* 셔터 영역: 큰 원형 셔터(핸드오프) + 카메라 전환 */}
+        <View style={styles.shutterRow}>
+          <Pressable
+            accessibilityLabel="카메라 전환"
+            accessibilityRole="button"
+            disabled={sessionLocked}
             onPress={() => setFacing((current) => (current === 'front' ? 'back' : 'front'))}
-            variant="secondary"
-          />
-          <ActionButton
-            icon={<Ionicons color="#FFFFFF" name="camera-outline" size={16} />}
-            label={isShooting ? '촬영 중...' : '촬영 시작'}
-            onPress={() => void handleStartAutoCapture()}
-          />
-          {shoot.shots.length >= 4 ? (
-            <ActionButton label="촬영 결과 고르기" onPress={() => push('/shoot/select')} variant="ghost" />
-          ) : null}
+            style={[styles.flipButton, sessionLocked ? styles.controlLocked : null]}>
+            <Ionicons color={colors.text} name="camera-reverse-outline" size={18} />
+          </Pressable>
+
+          <Pressable
+            accessibilityLabel={captureMode === 'manual' ? '한 장 촬영' : '촬영 시작'}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: captureMode === 'timer' && isShooting }}
+            disabled={captureMode === 'timer' && isShooting}
+            onPress={() => void (captureMode === 'manual' ? handleManualShutter() : handleTimerBurst())}
+            style={[styles.shutterButton, captureMode === 'timer' && isShooting ? styles.controlLocked : null]}>
+            <View style={styles.shutterInner} />
+          </Pressable>
+
+          <View style={styles.flipButtonSpacer} />
         </View>
+
+        {shoot.shots.length >= SHOOT_TOTAL ? (
+          <ActionButton label="촬영 결과 고르기" onPress={() => push('/shoot/select')} variant="ghost" />
+        ) : null}
       </SurfaceCard>
     </AppScrollView>
   );
@@ -660,13 +786,99 @@ export function ShootResultScreen() {
 
 function createStyles(colors: HarucutColors, isDark: boolean) {
   return StyleSheet.create({
-    actionColumn: {
-      gap: 10,
-    },
     bodyText: {
       color: colors.muted,
       fontSize: 12,
       lineHeight: 18,
+    },
+    controlLocked: {
+      opacity: 0.45,
+    },
+    flipButton: {
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 44,
+      justifyContent: 'center',
+      width: 44,
+    },
+    flipButtonSpacer: {
+      height: 44,
+      width: 44,
+    },
+    modeButton: {
+      alignItems: 'center',
+      borderRadius: 999,
+      flex: 1,
+      height: 38,
+      justifyContent: 'center',
+    },
+    modeButtonActive: {
+      backgroundColor: '#FFFFFF',
+    },
+    modeButtonText: {
+      color: colors.muted,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    modeButtonTextActive: {
+      color: '#0B0B0C',
+    },
+    modeToggle: {
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.cardMuted,
+      borderRadius: 999,
+      flexDirection: 'row',
+      gap: 6,
+      padding: 4,
+    },
+    shutterButton: {
+      alignItems: 'center',
+      borderColor: colors.text,
+      borderRadius: 999,
+      borderWidth: 4,
+      height: 76,
+      justifyContent: 'center',
+      width: 76,
+    },
+    shutterInner: {
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      height: 56,
+      width: 56,
+    },
+    shutterRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 28,
+      justifyContent: 'center',
+    },
+    timerChip: {
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.cardMuted,
+      borderRadius: 999,
+      flexDirection: 'row',
+      gap: 4,
+      height: 34,
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+    },
+    timerChipActive: {
+      backgroundColor: '#FFFFFF',
+    },
+    timerChipRow: {
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'center',
+    },
+    timerChipText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    timerChipTextActive: {
+      color: '#000000',
     },
     cameraFrame: {
       aspectRatio: 0.75,

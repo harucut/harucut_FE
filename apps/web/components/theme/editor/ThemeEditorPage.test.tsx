@@ -89,6 +89,10 @@ jest.mock("@/components/theme/editor/InspectorPanel", () => ({
   InspectorPanel: () => <div data-testid="inspector-panel" />,
 }));
 
+jest.mock("@/components/theme/editor/CutoutPanel", () => ({
+  CutoutPanel: () => <div data-testid="cutout-panel" />,
+}));
+
 jest.mock("@/lib/themeEditorStore", () => ({
   useThemeEditorStore: themeEditorStoreMock,
 }));

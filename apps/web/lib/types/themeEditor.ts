@@ -82,6 +82,8 @@ export type ThemeBackground =
 export type ThemeExportJson = {
   frameId: FrameId;
   background?: ThemeBackground;
+  // 셀별 누끼(배경 제거) 상태. 에디터/미리보기 전용이며 서버 요청에는 포함되지 않는다.
+  cellCutouts?: boolean[];
   components: Array<{
     id: string;
     type: ComponentType;

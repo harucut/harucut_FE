@@ -2,56 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
-
-type Plan = {
-  id: "basic" | "plus" | "pro";
-  name: string;
-  price: string;
-  sub: string;
-  tagline: string;
-  feats: string[];
-  cta: string;
-  href: string;
-  hot?: boolean;
-};
-
-// 랜딩 PLANS와 동일한 플랜 구성(BASIC/PLUS/PRO)을 요금제 페이지에서도 사용한다.
-const PLANS: Plan[] = [
-  {
-    id: "basic",
-    name: "BASIC",
-    price: "₩0",
-    sub: "/월",
-    tagline: "처음 시작하는 분께",
-    feats: ["기본 프레임 4종", "사진 + 영상 월 5회", "기록 보관", "링크 공유"],
-    cta: "무료로 시작하기",
-    href: "/signup",
-  },
-  {
-    id: "plus",
-    name: "PLUS",
-    price: "₩4,900",
-    sub: "/월",
-    tagline: "자주 남기는 분께",
-    feats: ["영상 월 30회", "워터마크 없이 저장", "원본 화질", "프레임 직접 꾸미기"],
-    cta: "PLUS 시작하기",
-    href: "/signup",
-    hot: true,
-  },
-  {
-    id: "pro",
-    name: "PRO",
-    price: "₩9,900",
-    sub: "/월",
-    tagline: "무제한으로 누리고 싶다면",
-    feats: ["영상 무제한", "워터마크 없이 저장", "모든 프레임·편집 기능", "우선 지원"],
-    cta: "PRO 시작하기",
-    href: "/signup",
-  },
-];
+import {
+  PLANS,
+  PRICING_HEADLINE,
+  PRICING_SUBTITLE,
+  type Plan,
+} from "@/constants/plans";
 
 const FAQ_ITEMS: [string, string][] = [
   [
@@ -79,9 +38,9 @@ function PlanCard({ plan }: { plan: Plan }) {
           : "hc-surface-card"
       }`}
     >
-      {hot ? (
-        <span className="absolute right-5 top-5 rounded-full bg-[color:var(--hc-primary)] px-2.5 py-1 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
-          인기
+      {plan.badge ? (
+        <span className="absolute right-4 top-4 rounded-full bg-[color:var(--hc-primary)] px-2.5 py-1 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+          {plan.badge}
         </span>
       ) : null}
 
@@ -93,32 +52,55 @@ function PlanCard({ plan }: { plan: Plan }) {
         {plan.name}
       </span>
 
-      <div className="mb-1.5 mt-3 flex items-baseline gap-1.5">
-        <span className="text-[34px] font-extrabold leading-none tracking-[-1.4px] text-[color:var(--hc-text)]">
+      <div className="mb-0.5 mt-2.5 flex items-baseline gap-1.5">
+        <span className="text-[28px] font-extrabold leading-none tracking-[-0.6px] text-[color:var(--hc-text)]">
           {plan.price}
         </span>
         <span className="text-[13px] text-[color:var(--hc-muted)]">{plan.sub}</span>
       </div>
-      <p className="mb-5 text-[13.5px] text-[color:var(--hc-muted)]">{plan.tagline}</p>
 
-      <div className="my-1 h-px w-full bg-[color:var(--hc-border)]" />
+      <div className="my-4 h-px w-full bg-[color:var(--hc-border)]" />
 
-      <ul className="mb-6 mt-5 flex flex-col gap-3">
-        {plan.feats.map((feat) => (
-          <li key={feat} className="flex items-start gap-2.5">
-            <span className="mt-0.5 grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full bg-[color:var(--hc-accent-soft-bg)]">
-              <Check className="h-3 w-3 text-[color:var(--hc-primary)]" strokeWidth={3} />
+      <ul className="flex flex-col gap-[11px]">
+        {plan.feats.map(([label, on, note]) => (
+          <li
+            key={label}
+            className="flex items-start gap-2.5"
+            style={{ opacity: on ? 1 : 0.4 }}
+          >
+            <span
+              className={`mt-px grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full ${
+                on
+                  ? "bg-[color:var(--hc-accent-soft-bg)]"
+                  : "border-[1.5px] border-[color:var(--hc-border-strong)]"
+              }`}
+            >
+              {on ? (
+                <Check className="h-3 w-3 text-[color:var(--hc-primary)]" strokeWidth={3} />
+              ) : (
+                <X className="h-[11px] w-[11px] text-[color:var(--hc-muted)]" />
+              )}
             </span>
             <span className="text-[13.5px] leading-[1.4] text-[color:var(--hc-text)]">
-              {feat}
+              {label}
+              {note ? (
+                <b
+                  className={`font-bold ${
+                    on ? "text-[color:var(--hc-text)]" : "text-[color:var(--hc-muted)]"
+                  }`}
+                >
+                  {" · "}
+                  {note}
+                </b>
+              ) : null}
             </span>
           </li>
         ))}
       </ul>
 
       <Link
-        href={plan.href}
-        className={`mt-auto flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition ${
+        href="/signup"
+        className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition ${
           hot
             ? "hc-button-primary"
             : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
@@ -143,15 +125,15 @@ export function PricingView() {
           <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
             PRICING · 요금제
           </span>
-          <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-tight sm:text-[30px] lg:text-[34px]">
-            나에게 맞는 플랜
+          <h1 className="mt-3 text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">
+            {PRICING_HEADLINE}
           </h1>
-          <p className="mt-3 max-w-[480px] text-[14.5px] leading-[1.6] text-[color:var(--hc-muted)]">
-            비회원도 촬영은 무료예요. 저장·영상·보관은 플랜에 따라 달라요.
+          <p className="mt-3 max-w-[480px] text-[14px] leading-[1.5] text-[color:var(--hc-muted)]">
+            {PRICING_SUBTITLE}
           </p>
         </header>
 
-        {/* 플랜 카드 */}
+        {/* 플랜 카드 — <lg 1열, lg+ 3열 */}
         <section className="grid items-stretch gap-4 md:grid-cols-3">
           {PLANS.map((plan) => (
             <PlanCard key={plan.id} plan={plan} />

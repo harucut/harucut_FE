@@ -25,6 +25,7 @@ import {
   type ThemeEditorComponent,
 } from '@/constants/harucut-data';
 import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
+import { buildGaugeDots, type GaugeDotState, type PlanInfo } from '@/constants/plan-limits';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
 type ThemeComponentTransform = {
@@ -144,10 +145,13 @@ export function FramePreview({
   backgroundColor,
   backgroundImageUri,
   caption,
+  cellCutouts,
   components = [],
+  cutMode = false,
   editorMode = false,
   frameId,
   media = [],
+  onCellTap,
   onSelectComponent,
   onTransformComponent,
   slotColor,
@@ -159,10 +163,13 @@ export function FramePreview({
   backgroundColor?: string;
   backgroundImageUri?: string;
   caption?: string;
+  cellCutouts?: boolean[];
   components?: ThemeEditorComponent[];
+  cutMode?: boolean;
   editorMode?: boolean;
   frameId: FrameId;
   media?: MediaAsset[];
+  onCellTap?: (index: number) => void;
   onSelectComponent?: (id: string | null) => void;
   onTransformComponent?: (id: string, transform: ThemeComponentTransform) => void;
   slotColor?: string;
@@ -264,6 +271,51 @@ export function FramePreview({
             styles={styles}
           />
         ))}
+      {/* 누끼 오버레이는 사용자 컴포넌트(사진/스티커) 위에 그려야 편집·저장 화면에서 효과가 가려지지 않는다. */}
+      {layout.slots.map((slot, index) =>
+        cellCutouts?.[index] ? (
+          <View
+            key={`${frameId}-cutout-${index}`}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              height: toPercent(slot.height, layout.totalHeight),
+              left: toPercent(slot.x, layout.totalWidth),
+              top: toPercent(slot.y, layout.totalHeight),
+              width: toPercent(slot.width, layout.totalWidth),
+              overflow: 'hidden',
+              borderRadius: 6,
+            }}>
+            {/* 누끼 시각 효과: 가장자리를 어둡게 해 피사체만 남긴 느낌 + 녹색 테두리 */}
+            <LinearGradient
+              colors={['rgba(11,11,12,0.82)', 'rgba(11,11,12,0)', 'rgba(11,11,12,0.82)']}
+              locations={[0, 0.5, 1]}
+              pointerEvents="none"
+              style={styles.cutoutVignette}
+            />
+            <View pointerEvents="none" style={[styles.cutoutRing, { borderColor: resolvedAccent }]} />
+          </View>
+        ) : null,
+      )}
+      {cutMode && onCellTap
+        ? layout.slots.map((slot, index) => (
+            <Pressable
+              accessibilityLabel={`${index + 1}번 칸 누끼 ${cellCutouts?.[index] ? '해제' : '적용'}`}
+              accessibilityRole="button"
+              key={`${frameId}-cut-${index}`}
+              onPress={() => onCellTap(index)}
+              style={[
+                styles.cutoutTapTarget,
+                {
+                  height: toPercent(slot.height, layout.totalHeight),
+                  left: toPercent(slot.x, layout.totalWidth),
+                  top: toPercent(slot.y, layout.totalHeight),
+                  width: toPercent(slot.width, layout.totalWidth),
+                },
+              ]}
+            />
+          ))
+        : null}
       {caption && components.length === 0 ? (
         <Text style={[styles.caption, { color: resolvedAccent }]}>{caption}</Text>
       ) : null}
@@ -696,6 +748,85 @@ function getContainedPreviewLayout(frameId: FrameId) {
   } satisfies ViewStyle;
 }
 
+// 요금제별 프레임 보관 한도를 보여주는 슬롯 게이지(capacity meter).
+// 저장 개수(used)는 실제 저장 프레임 수, 한도(limit)는 요금제 tier에서 구동한다.
+export function FrameCapacityMeter({
+  onUpgrade,
+  plan,
+  used,
+}: {
+  onUpgrade?: () => void;
+  plan: PlanInfo;
+  used: number;
+}) {
+  const { colors } = useHarucutTheme();
+  const styles = useFrameStyles();
+  const { limit, name, next, nextLimit } = plan;
+  const full = used >= limit;
+  const remaining = Math.max(0, limit - used);
+  const dots = buildGaugeDots(used, limit);
+
+  return (
+    <SurfaceCard style={{ gap: 14 }}>
+      <View style={styles.meterTopRow}>
+        <View style={styles.meterPlanGroup}>
+          <View style={styles.meterPlanBadge}>
+            <Ionicons color={colors.primaryStrong} name="sparkles" size={12} />
+            <Text style={styles.meterPlanBadgeText}>{name}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.meterCount}>
+              보관 {used} <Text style={styles.meterCountMuted}>/ {limit}개</Text>
+            </Text>
+            <Text style={styles.meterCaption}>
+              {full ? '보관함이 가득 찼어요' : `${remaining}개 더 저장할 수 있어요`}
+            </Text>
+          </View>
+        </View>
+        {onUpgrade && next ? (
+          <Pressable
+            accessibilityLabel="요금제 업그레이드"
+            accessibilityRole="button"
+            onPress={onUpgrade}
+            style={styles.meterUpgradeButton}>
+            <Text style={styles.meterUpgradeText}>업그레이드</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.meterDotRow}>
+        {dots.map((state, index) => (
+          <GaugeDot key={index} state={state} styles={styles} />
+        ))}
+        <Text style={styles.meterDotHint}>{limit}개 이후는 상위 요금제</Text>
+      </View>
+    </SurfaceCard>
+  );
+}
+
+function GaugeDot({
+  state,
+  styles,
+}: {
+  state: GaugeDotState;
+  styles: ReturnType<typeof useFrameStyles>;
+}) {
+  const { colors } = useHarucutTheme();
+
+  return (
+    <View
+      style={[
+        styles.gaugeDot,
+        state === 'filled'
+          ? styles.gaugeDotFilled
+          : state === 'empty'
+            ? styles.gaugeDotEmpty
+            : styles.gaugeDotLocked,
+      ]}>
+      {state === 'locked' ? <Ionicons color={colors.muted} name="lock-closed" size={7} /> : null}
+    </View>
+  );
+}
+
 export function SavedFramesPanel({
   actionLabel = '선택하기',
   description,
@@ -704,6 +835,8 @@ export function SavedFramesPanel({
   onAction,
   onRefresh,
   onSelect,
+  planLimit,
+  onUpgrade,
   selectedFrameId,
   selectedSavedFrameId,
   title,
@@ -715,6 +848,10 @@ export function SavedFramesPanel({
   onAction?: (frame: SavedFrame) => void;
   onRefresh: () => void;
   onSelect: (frame: SavedFrame) => void;
+  /** 요금제 보관 한도. 이 개수를 넘는 저장 프레임은 잠금(읽기전용)으로 표시 */
+  planLimit?: number;
+  /** 잠금 프레임의 업그레이드 CTA */
+  onUpgrade?: () => void;
   selectedFrameId: FrameId | null;
   selectedSavedFrameId: string | null;
   title: string;
@@ -724,6 +861,9 @@ export function SavedFramesPanel({
   const matchingFrames = selectedFrameId
     ? frames.filter((frame) => frame.frameId === selectedFrameId)
     : frames;
+  // 전체 저장 프레임 기준으로 한도를 넘는 프레임 id를 잠금 대상으로 표시한다.
+  const lockedIds =
+    planLimit === undefined ? new Set<string>() : new Set(frames.slice(planLimit).map((f) => f.id));
 
   return (
     <SurfaceCard>
@@ -747,12 +887,22 @@ export function SavedFramesPanel({
         <View style={{ gap: 12, marginTop: 8 }}>
           {matchingFrames.map((frame) => {
             const selected = frame.id === selectedSavedFrameId;
+            const locked = lockedIds.has(frame.id);
             return (
-              <View key={frame.id} style={[styles.savedCard, selected ? styles.savedCardSelected : null]}>
+              <View
+                key={frame.id}
+                style={[
+                  styles.savedCard,
+                  selected && !locked ? styles.savedCardSelected : null,
+                  locked ? styles.savedCardLocked : null,
+                ]}>
                 <Pressable
-                  accessibilityLabel={`${frame.title} 저장 프레임${selected ? ', 선택됨' : ', 선택하기'}`}
+                  accessibilityLabel={`${frame.title} 저장 프레임${
+                    locked ? ', 요금제 한도 초과로 잠김' : selected ? ', 선택됨' : ', 선택하기'
+                  }`}
                   accessibilityRole="button"
-                  accessibilityState={{ selected }}
+                  accessibilityState={{ disabled: locked, selected }}
+                  disabled={locked}
                   onPress={() => onSelect(frame)}
                   style={styles.savedPressable}>
                   <View style={styles.savedPreview}>
@@ -763,14 +913,30 @@ export function SavedFramesPanel({
                       components={frame.components}
                       frameId={frame.frameId}
                     />
+                    {locked ? (
+                      <View style={styles.savedLockOverlay}>
+                        <Ionicons color="#FFFFFF" name="lock-closed" size={18} />
+                      </View>
+                    ) : null}
                   </View>
                   <View style={styles.savedCopy}>
                     <Text style={styles.savedItemTitle}>{frame.title}</Text>
                     <Text style={styles.savedItemDescription}>{frame.description}</Text>
-                    <Text style={styles.savedStatus}>{selected ? '선택됨' : '터치해서 선택'}</Text>
+                    <Text style={styles.savedStatus}>
+                      {locked ? '요금제 한도 초과 · 잠금' : selected ? '선택됨' : '터치해서 선택'}
+                    </Text>
                   </View>
                 </Pressable>
-                {onAction ? (
+                {locked ? (
+                  onUpgrade ? (
+                    <ActionButton
+                      label="업그레이드하고 잠금 해제"
+                      onPress={onUpgrade}
+                      style={{ minHeight: 38, paddingVertical: 10 }}
+                      variant="secondary"
+                    />
+                  ) : null
+                ) : onAction ? (
                   <ActionButton
                     label={actionLabel}
                     onPress={() => onAction(frame)}
@@ -930,8 +1096,108 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       gap: 12,
       padding: 12,
     },
+    savedCardLocked: {
+      opacity: 0.6,
+    },
     savedCardSelected: {
       borderColor: colors.primary,
+    },
+    savedLockOverlay: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
+      borderRadius: 8,
+      bottom: 0,
+      justifyContent: 'center',
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+    },
+    meterTopRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    meterPlanGroup: {
+      alignItems: 'center',
+      flex: 1,
+      flexDirection: 'row',
+      gap: 12,
+      minWidth: 0,
+    },
+    meterPlanBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderRadius: HARUCUT_RADII.chip,
+      flexDirection: 'row',
+      gap: 5,
+      height: 28,
+      paddingHorizontal: 12,
+    },
+    meterPlanBadgeText: {
+      color: colors.primaryStrong,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    meterCount: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    meterCountMuted: {
+      color: colors.muted,
+      fontWeight: '600',
+    },
+    meterCaption: {
+      color: colors.muted,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    meterUpgradeButton: {
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderRadius: HARUCUT_RADII.chip,
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    meterUpgradeText: {
+      color: colors.primaryStrong,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    meterDotRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 7,
+    },
+    meterDotHint: {
+      color: colors.muted,
+      fontSize: 11,
+      marginLeft: 4,
+    },
+    gaugeDot: {
+      alignItems: 'center',
+      borderRadius: 999,
+      borderWidth: 1.5,
+      height: 14,
+      justifyContent: 'center',
+      width: 14,
+    },
+    gaugeDotEmpty: {
+      backgroundColor: 'transparent',
+      borderColor: colors.border,
+    },
+    gaugeDotFilled: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    gaugeDotLocked: {
+      backgroundColor: 'transparent',
+      borderColor: colors.border,
+      opacity: 0.6,
     },
     savedCopy: {
       flex: 1,
@@ -963,6 +1229,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       gap: 12,
     },
     savedPreview: {
+      position: 'relative',
       width: 96,
     },
     savedRefresh: {
@@ -1006,6 +1273,28 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       borderRadius: 6,
       overflow: 'hidden',
       position: 'absolute',
+    },
+    cutoutVignette: {
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      zIndex: 2,
+    },
+    cutoutRing: {
+      borderRadius: 6,
+      borderWidth: 2,
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      zIndex: 3,
+    },
+    cutoutTapTarget: {
+      position: 'absolute',
+      zIndex: 50,
     },
     slotImage: {
       height: '100%',

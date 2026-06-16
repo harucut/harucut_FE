@@ -9,6 +9,7 @@ import { CanvasStage } from "@/components/theme/editor/canvas/CanvasStage";
 import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
+import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
 import {
@@ -309,7 +310,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       onClick={() => setBackgroundColor(color.value)}
                       className={`h-8 min-w-16 rounded-lg border px-2 text-[11px] ${
                         selected
-                          ? "border-[color:var(--hc-primary)] bg-[rgba(37,99,235,0.1)] text-[color:var(--hc-primary)]"
+                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
                           : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
                       }`}
                       style={{ backgroundColor: `#${color.value}` }}
@@ -379,10 +380,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           </div>
 
           <div className="lg:col-start-2 lg:row-start-3">
-            <LayersPanel />
+            <CutoutPanel />
           </div>
 
           <div className="lg:col-start-2 lg:row-start-4">
+            <LayersPanel />
+          </div>
+
+          <div className="lg:col-start-2 lg:row-start-5">
             <InspectorPanel />
           </div>
         </div>

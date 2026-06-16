@@ -234,6 +234,28 @@ export const BACKGROUND_SWATCHES = [
   { label: '그린', value: '#1ED760' },
 ] as const;
 
+// 핸드오프 app-decorate "프레임색" 스와치(스트립 색)
+export const FRAME_COLOR_SWATCHES = [
+  '#000000',
+  '#FFFFFF',
+  '#1ED760',
+  '#15151E',
+  '#E14B2A',
+  '#3A5A8C',
+  '#C8A24A',
+  '#9C6FB0',
+] as const;
+
+// 핸드오프 app-decorate "선택" 탭 글자색 스와치
+export const THEME_TEXT_COLOR_SWATCHES = [
+  '#FFFFFF',
+  '#0B0B0C',
+  '#1ED760',
+  '#FF5A8A',
+  '#FFD15C',
+  '#5AA9FF',
+] as const;
+
 export const THEME_STICKERS = [
   { id: 'spark', label: '반짝', symbol: '✦' },
   { id: 'heart', label: '하트', symbol: '♡' },

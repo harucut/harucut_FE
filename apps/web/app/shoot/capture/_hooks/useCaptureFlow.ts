@@ -9,8 +9,11 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
 // 촬영 총 장수
 const MAX_SHOTS = 8;
-// 샷 간 간격(초)
-const MAX_COUNT = 8;
+// 선택 가능한 타이머 간격(초)
+export const TIMER_OPTIONS = [3, 5, 8] as const;
+export type TimerSeconds = (typeof TIMER_OPTIONS)[number];
+// 촬영 모드: 타이머(시작 전 간격 선택 → 8장 자동 연속) / 수동(셔터 1장씩)
+export type CaptureMode = "timer" | "manual";
 
 type ShootingState = {
   isShooting: boolean;
@@ -35,6 +38,9 @@ export function useCaptureFlow() {
   const [shotCount, setShotCount] = useState(0);
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
+  // 촬영 모드와 타이머 간격은 "촬영 시작 전에만" 변경 가능(시작 후 잠금)
+  const [captureMode, setCaptureMode] = useState<CaptureMode>("timer");
+  const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -296,7 +302,12 @@ export function useCaptureFlow() {
 
     if (next < MAX_SHOTS) {
       startRecordingForShot();
-      setShooting((s) => ({ ...s, countdown: MAX_COUNT }));
+      // 타이머 모드: 다음 컷까지 선택한 간격으로 자동 카운트다운.
+      // 수동 모드: 카운트다운 없이 다음 셔터를 기다린다(녹화만 미리 시작).
+      setShooting((s) => ({
+        ...s,
+        countdown: captureMode === "timer" ? timerSeconds : null,
+      }));
       return;
     }
 
@@ -307,6 +318,8 @@ export function useCaptureFlow() {
     capturePhotoToDataUrl,
     addShotPhoto,
     startRecordingForShot,
+    captureMode,
+    timerSeconds,
     router,
   ]);
 
@@ -327,10 +340,25 @@ export function useCaptureFlow() {
     setShotCount(0);
     lastFinishedShotRef.current = -1;
 
-    setShooting({ isShooting: true, countdown: MAX_COUNT });
+    // 타이머 모드: 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
+    // 수동 모드: 카운트다운 없이 첫 컷을 바로 찍고, 이후 셔터를 누를 때마다 1장씩.
+    if (captureMode === "timer") {
+      setShooting({ isShooting: true, countdown: timerSeconds });
+      startRecordingForShot();
+      return;
+    }
 
+    setShooting({ isShooting: true, countdown: null });
     startRecordingForShot();
-  }, [isCameraReady, resetShots, setNotice, startRecordingForShot]);
+    // 첫 수동 컷은 사용자가 셔터를 누를 때 찍히므로 여기서는 녹화만 준비한다.
+  }, [
+    isCameraReady,
+    resetShots,
+    setNotice,
+    startRecordingForShot,
+    captureMode,
+    timerSeconds,
+  ]);
 
   // 카운트다운 타이머
   useEffect(() => {
@@ -358,6 +386,39 @@ export function useCaptureFlow() {
     finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
+  // 수동 모드 셔터: 한 번 누를 때마다 즉시 1장.
+  // 첫 셔터에서 세션을 시작(리셋+녹화)하고 바로 한 장 찍어, "누르면 즉시 촬영" 사양을 만족한다.
+  const handleManualShutter = useCallback(() => {
+    if (!isCameraReady) {
+      setNotice({
+        actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+        eyebrow: "CAMERA READY",
+        icon: "camera",
+        message: "촬영을 시작하기 전에 먼저 카메라를 켜 주세요.",
+        title: "카메라 준비가 필요해요",
+      });
+      return;
+    }
+
+    if (!shooting.isShooting) {
+      // 첫 컷: 세션 초기화 후 녹화 시작 → 같은 클릭에서 바로 1장 촬영
+      resetShots();
+      setShotCount(0);
+      lastFinishedShotRef.current = -1;
+      setShooting({ isShooting: true, countdown: null });
+      startRecordingForShot();
+    }
+
+    finishSingleShot();
+  }, [
+    isCameraReady,
+    shooting.isShooting,
+    resetShots,
+    setNotice,
+    startRecordingForShot,
+    finishSingleShot,
+  ]);
+
   const switchCamera = useCallback(async () => {
     if (!canFlipCamera) return;
     const nextFacingMode =
@@ -379,12 +440,18 @@ export function useCaptureFlow() {
     cameraFacingMode,
     canFlipCamera,
 
+    captureMode,
+    setCaptureMode,
+    timerSeconds,
+    setTimerSeconds,
+
     startCamera,
     startShooting,
     handleShootNow,
+    handleManualShutter,
     switchCamera,
 
     MAX_SHOTS,
-    MAX_COUNT,
+    TIMER_OPTIONS,
   };
 }

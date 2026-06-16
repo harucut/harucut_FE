@@ -10,6 +10,16 @@ export type CoachStep = {
 
 type Rect = { top: number; left: number; width: number; height: number };
 
+// 같은 selector(data-coach)가 모바일·데스크톱에 동시에 존재할 수 있으므로,
+// lg:hidden 등으로 숨겨지지 않은(실제로 화면에 보이는) 요소를 고른다.
+function findVisibleTarget(selector: string): Element | null {
+  const candidates = Array.from(document.querySelectorAll(selector));
+  const visible = candidates.find(
+    (el) => el instanceof HTMLElement && el.offsetParent !== null,
+  );
+  return visible ?? candidates[0] ?? null;
+}
+
 // 첫 방문 시 1회만 보여주는 스포트라이트 코치마크.
 // 각 단계가 실제 버튼(data-coach 등 selector)을 비추며 기능을 설명한다.
 export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
@@ -34,7 +44,7 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
   const measure = useCallback(() => {
     const step = steps[index];
     if (!step) return;
-    const el = document.querySelector(step.selector);
+    const el = findVisibleTarget(step.selector);
     if (!el) {
       setRect(null);
       return;
@@ -46,7 +56,7 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
   useLayoutEffect(() => {
     if (!active) return;
     const step = steps[index];
-    const el = step ? document.querySelector(step.selector) : null;
+    const el = step ? findVisibleTarget(step.selector) : null;
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
     // 스크롤 후 위치를 다시 측정
     const raf = window.requestAnimationFrame(measure);

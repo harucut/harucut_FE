@@ -88,9 +88,15 @@ type State = {
   backgroundColor: string;
   // 저장 시 업로드할 로컬 배경 이미지 파일(있을 때만).
   pendingBackgroundFile: File | null;
+  // 셀별 누끼(배경 제거) 상태 — 4칸. 에디터/미리보기 전용(서버 미전송).
+  cellCutouts: boolean[];
+  // 누끼 편집 모드: 켜져 있을 때만 캔버스 셀 탭으로 누끼를 토글한다.
+  cutMode: boolean;
 
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
+  toggleCellCutout: (index: number) => void;
+  setCutMode: (on: boolean) => void;
   setBackgroundColor: (color: string) => void;
   setBackgroundImage: (file: File) => void;
   setBackgroundImageKey: (key: string) => void;
@@ -160,6 +166,7 @@ function resetEditorState(get: () => State) {
     tab: "PHOTO" as ComponentType,
     components: [],
     activeId: null,
+    cellCutouts: [false, false, false, false],
     assets: {
       photos: [],
       stickers: state.assets.stickers,
@@ -189,6 +196,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
   backgroundColor: "111827",
   pendingBackgroundFile: null,
+  cellCutouts: [false, false, false, false],
+  cutMode: false,
 
   // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
@@ -208,6 +217,14 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }),
 
   setTab: (t) => set({ tab: t }),
+  toggleCellCutout: (index) =>
+    set((s) => {
+      if (index < 0 || index > 3) return s;
+      const next = [...s.cellCutouts];
+      next[index] = !next[index];
+      return { cellCutouts: next };
+    }),
+  setCutMode: (on) => set({ cutMode: on }),
   setBackgroundColor: (color) =>
     set((s) => {
       // 색을 고르면 배경 이미지는 해제한다.
@@ -591,7 +608,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components, backgroundColor, background } = get();
+    const { frameId, components, backgroundColor, background, cellCutouts } =
+      get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
@@ -606,6 +624,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     return {
       frameId,
       background: exportedBackground,
+      cellCutouts: [...cellCutouts],
       components: normalized
         .filter((c) => !c.hidden)
         .map((c) => ({
@@ -640,6 +659,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        cellCutouts: Array.isArray(data.cellCutouts)
+          ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
+          : [false, false, false, false],
         background: data.background ?? {
           type: "COLOR",
           value: "111827",

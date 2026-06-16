@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/layout/BrandMark";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import type { FrameId } from "@/constants/frames";
+import { PLANS } from "@/constants/plans";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
@@ -24,44 +25,6 @@ const FRAMES: { id: FrameId; name: string; border: string }[] = [
   { id: "wide-4", name: "와이드", border: "#18181A" },
   { id: "grid-4", name: "2×2 그리드", border: GREEN },
   { id: "polaroid-4", name: "폴라로이드", border: "#FAFAF7" },
-];
-
-type Plan = {
-  id: "basic" | "plus" | "pro";
-  name: string;
-  price: string;
-  sub: string;
-  tagline: string;
-  feats: string[];
-  hot?: boolean;
-};
-
-const PLANS: Plan[] = [
-  {
-    id: "basic",
-    name: "BASIC",
-    price: "₩0",
-    sub: "/월",
-    tagline: "처음 시작하는 분께",
-    feats: ["기본 프레임 4종", "사진 + 영상 월 5회", "기록 보관", "링크 공유"],
-  },
-  {
-    id: "plus",
-    name: "PLUS",
-    price: "₩4,900",
-    sub: "/월",
-    tagline: "자주 남기는 분께",
-    feats: ["영상 월 30회", "워터마크 없이 저장", "원본 화질", "프레임 직접 꾸미기"],
-    hot: true,
-  },
-  {
-    id: "pro",
-    name: "PRO",
-    price: "₩9,900",
-    sub: "/월",
-    tagline: "무제한으로 누리고 싶다면",
-    feats: ["영상 무제한", "워터마크 없이 저장", "모든 프레임·편집 기능", "우선 지원"],
-  },
 ];
 
 const FAQ_ITEMS: [string, string][] = [
@@ -375,8 +338,6 @@ export function LandingView() {
           <div className="grid items-stretch gap-[18px] md:grid-cols-3">
             {PLANS.map((p) => {
               const hot = p.hot;
-              const label =
-                p.id === "basic" ? "무료로 시작하기" : p.id === "pro" ? "PRO 시작하기" : "PLUS 시작하기";
               return (
                 <div
                   key={p.id}
@@ -394,18 +355,18 @@ export function LandingView() {
                     >
                       {p.name}
                     </span>
-                    {hot ? (
+                    {p.badge ? (
                       <span
                         className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
                         style={{ background: "#06140A", color: GREEN }}
                       >
-                        인기
+                        {p.badge}
                       </span>
                     ) : null}
                   </div>
-                  <div className="mb-2.5 mt-[18px] flex items-baseline gap-1.5">
+                  <div className="mb-5 mt-[18px] flex items-baseline gap-1.5">
                     <span
-                      className="text-[42px] font-extrabold leading-[.9] tracking-[-1.6px]"
+                      className="text-[32px] font-extrabold leading-[.9] tracking-[-1.2px]"
                       style={{ color: hot ? "#06140A" : "#fff" }}
                     >
                       {p.price}
@@ -417,29 +378,53 @@ export function LandingView() {
                       {p.sub}
                     </span>
                   </div>
-                  <p
-                    className="mb-6 text-[13.5px]"
-                    style={{ color: hot ? "rgba(6,20,10,.7)" : "#B3B3B3" }}
-                  >
-                    {p.tagline}
-                  </p>
-                  <div className="mb-[26px] flex flex-col gap-3.5">
-                    {p.feats.map((feat) => (
-                      <div key={feat} className="flex items-start gap-2.5">
+                  <div
+                    className="mb-[22px] h-px w-full"
+                    style={{ background: hot ? "rgba(6,20,10,.14)" : "rgba(255,255,255,.1)" }}
+                  />
+                  <div className="mb-[26px] flex flex-col gap-3">
+                    {p.feats.map(([label, on, note]) => (
+                      <div
+                        key={label}
+                        className="flex items-start gap-2.5"
+                        style={{ opacity: on ? 1 : 0.45 }}
+                      >
                         <span
                           className="mt-0.5 grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full text-[11px] font-bold"
                           style={{
-                            background: hot ? "rgba(6,20,10,.12)" : "rgba(30,215,96,.16)",
+                            background: !on
+                              ? "transparent"
+                              : hot
+                                ? "rgba(6,20,10,.12)"
+                                : "rgba(30,215,96,.16)",
+                            border: on
+                              ? "none"
+                              : `1.5px solid ${hot ? "rgba(6,20,10,.32)" : "rgba(255,255,255,.28)"}`,
                             color: hot ? "#06140A" : GREEN,
                           }}
                         >
-                          ✓
+                          {on ? "✓" : "×"}
                         </span>
                         <span
                           className="text-[13.5px] leading-[1.4]"
                           style={{ color: hot ? "#06140A" : "#fff" }}
                         >
-                          {feat}
+                          {label}
+                          {note ? (
+                            <b
+                              className="font-bold"
+                              style={{
+                                color: hot
+                                  ? "rgba(6,20,10,.82)"
+                                  : on
+                                    ? "#fff"
+                                    : "#B3B3B3",
+                              }}
+                            >
+                              {" · "}
+                              {note}
+                            </b>
+                          ) : null}
                         </span>
                       </div>
                     ))}
@@ -453,7 +438,7 @@ export function LandingView() {
                       border: hot ? "none" : "1px solid rgba(255,255,255,.18)",
                     }}
                   >
-                    {label}
+                    {p.cta}
                   </Link>
                 </div>
               );
