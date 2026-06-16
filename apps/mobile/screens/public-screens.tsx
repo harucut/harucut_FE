@@ -213,66 +213,52 @@ export function LandingScreen() {
   const showGuestTrialNotice = useSessionStore((state) => state.showGuestTrialNotice);
 
   return (
-    <AppScrollView contentContainerStyle={styles.landingScrollContent}>
-      <View style={styles.landingHeader}>
-        <BrandMark href="/" />
+    <View style={styles.onboardingScreen}>
+      <View style={styles.onboardingHeader}>
+        <BrandMark compact href="/" />
       </View>
 
-      <View style={styles.landingMain}>
-        <View style={styles.heroCopy}>
-          <View style={styles.heroTitleStack}>
-            <Text style={styles.heroTitle}>오늘의 순간을</Text>
-            <Text style={styles.heroTitleGradient}>다시 보고 싶은 네 컷으로</Text>
-          </View>
-          <Text style={styles.heroBody}>어디에서나 촬영하고, 꾸미고, 기록을 남겨보세요.</Text>
-        </View>
-
-        <View style={styles.heroActions}>
-          <ActionButton label="시작하기" onPress={() => push('/login')} style={{ flex: 1 }} />
-          <ActionButton
-            label="체험하기"
-            onPress={showGuestTrialNotice}
-            style={{ flex: 1 }}
-            variant="secondary"
+      {/* 떠 있는 네 컷 프레임 — 겹쳐서 중앙 배치 */}
+      <View pointerEvents="none" style={styles.onboardingFrames}>
+        <View style={styles.onboardingFrameLeft}>
+          <Image
+            accessibilityRole="image"
+            source={HERO_IMAGE_SOURCE}
+            style={styles.onboardingFrameImage}
           />
         </View>
-
-        <SurfaceCard style={styles.heroPreviewCard}>
-          <View style={styles.heroImageFrame}>
-            <Image
-              accessibilityLabel="다양한 친구들이 야외에서 셀카를 찍는 네 컷 프레임 예시"
-              accessibilityRole="image"
-              source={HERO_IMAGE_SOURCE}
-              style={styles.heroImage}
-            />
-          </View>
-          <View style={styles.heroCardCopy}>
-            <Text style={styles.heroCardBody}>완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.</Text>
-          </View>
-        </SurfaceCard>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 16,
-            justifyContent: 'center',
-            paddingVertical: 4,
-          }}>
-          <Pressable
-            accessibilityLabel="서비스 이용약관 보기"
-            accessibilityRole="link"
-            onPress={() => push('/terms')}>
-            <Text style={styles.legalFooterLink}>서비스 이용약관</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="개인정보 처리방침 보기"
-            accessibilityRole="link"
-            onPress={() => push('/privacy')}>
-            <Text style={styles.legalFooterLink}>개인정보 처리방침</Text>
-          </Pressable>
+        <View style={styles.onboardingFrameRight}>
+          <Image
+            accessibilityRole="image"
+            source={HERO_IMAGE_SOURCE}
+            style={styles.onboardingFrameImage}
+          />
         </View>
       </View>
-    </AppScrollView>
+
+      <View style={styles.onboardingFooter}>
+        <View style={styles.onboardingTitleStack}>
+          <Text style={styles.onboardingTitle}>어디서든,</Text>
+          <Text style={styles.onboardingTitleAccent}>오늘의 네 컷</Text>
+        </View>
+        <Text style={styles.onboardingBody}>특별한 하루를{'\n'}사진으로 남겨보세요.</Text>
+
+        <ActionButton label="시작하기" onPress={() => push('/signup')} />
+        <ActionButton
+          label="이미 계정이 있어요"
+          onPress={() => push('/login')}
+          style={{ marginTop: 10 }}
+          variant="ghost"
+        />
+        <Pressable
+          accessibilityLabel="로그인 없이 바로 촬영해보기"
+          accessibilityRole="button"
+          onPress={showGuestTrialNotice}
+          style={{ marginTop: 16 }}>
+          <Text style={styles.onboardingGuestLink}>로그인 없이 바로 촬영해보기 →</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -877,6 +863,97 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     heroPreviewCard: {
       gap: 14,
+    },
+    onboardingScreen: {
+      backgroundColor: colors.background,
+      flex: 1,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    onboardingHeader: {
+      paddingHorizontal: 22,
+      paddingTop: 10,
+      zIndex: 2,
+    },
+    onboardingFrames: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      justifyContent: 'center',
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 74,
+      zIndex: 1,
+    },
+    onboardingFrameImage: {
+      borderRadius: 14,
+      height: '100%',
+      width: '100%',
+    },
+    onboardingFrameLeft: {
+      aspectRatio: 0.62,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      height: 206,
+      marginRight: -30,
+      marginTop: 18,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOffset: { height: 18, width: 0 },
+      shadowOpacity: 0.55,
+      shadowRadius: 30,
+      transform: [{ rotate: '-9deg' }],
+    },
+    onboardingFrameRight: {
+      aspectRatio: 0.62,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      height: 228,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOffset: { height: 20, width: 0 },
+      shadowOpacity: 0.6,
+      shadowRadius: 34,
+      transform: [{ rotate: '7deg' }],
+    },
+    onboardingFooter: {
+      marginTop: 'auto',
+      paddingBottom: 30,
+      paddingHorizontal: 26,
+      paddingTop: 60,
+      zIndex: 2,
+    },
+    onboardingTitleStack: {
+      gap: 0,
+    },
+    onboardingTitle: {
+      color: colors.text,
+      fontSize: 30,
+      fontWeight: '800',
+      letterSpacing: -1,
+      lineHeight: 35,
+    },
+    onboardingTitleAccent: {
+      color: colors.primary,
+      fontSize: 30,
+      fontWeight: '500',
+      letterSpacing: -1,
+      lineHeight: 35,
+    },
+    onboardingBody: {
+      color: colors.muted,
+      fontSize: 14.5,
+      lineHeight: 23,
+      marginBottom: 26,
+      marginTop: 12,
+    },
+    onboardingGuestLink: {
+      color: colors.muted,
+      fontSize: 13.5,
+      fontWeight: '600',
+      textAlign: 'center',
     },
     rememberRow: {
       alignItems: 'center',
