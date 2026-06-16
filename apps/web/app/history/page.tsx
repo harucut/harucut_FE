@@ -194,12 +194,17 @@ export default function HistoryPage() {
       setError(null);
 
       try {
-        const media = await listMyMedia();
+        // 선택한 타입을 백엔드에 전달해 페이지네이션 너머의 항목까지 해당 타입으로
+        // 받아온다(클라이언트 필터는 첫 페이지만 걸러 누락이 생긴다).
+        const media = await listMyMedia(filter === "ALL" ? undefined : filter);
 
         if (!cancelled) {
           const sorted = sortMedia(media);
           setItems(sorted);
-          setPreviewItems(sorted);
+          // 전체 미리보기·통계는 ALL 응답 기준으로 유지한다.
+          if (filter === "ALL") {
+            setPreviewItems(sorted);
+          }
         }
       } catch (loadError) {
         console.error(loadError);
@@ -220,7 +225,7 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [filter]);
 
   useEffect(() => {
     if (!feedback) return undefined;
@@ -246,9 +251,10 @@ export default function HistoryPage() {
 
   const stats = useMemo(() => {
     return {
-      total: items.length,
+      // 전체 합계는 필터와 무관하게 ALL 응답 기준 previewItems로 센다.
+      total: previewItems.length,
     };
-  }, [items]);
+  }, [previewItems]);
 
   const emptyText = useMemo(() => {
     if (filter === "PHOTO") return "저장한 사진 기록이 아직 없어요.";
