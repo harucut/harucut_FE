@@ -83,6 +83,8 @@ function ThemePageContent() {
   const isAtCapacity = frames.length >= plan.limit;
 
   const handleConfirmNewFrame = () => {
+    // 목록 로딩 전에는 frames가 빈 배열이라 한도를 알 수 없으므로 진입을 보류한다.
+    if (isLoading) return;
     if (isAtCapacity) {
       router.push("/pricing");
       return;
@@ -124,7 +126,11 @@ function ThemePageContent() {
           }}
           onConfirm={handleConfirmNewFrame}
           confirmLabel={
-            isAtCapacity ? "보관함이 가득 찼어요 · 업그레이드" : "새 프레임 만들기"
+            isLoading
+              ? "불러오는 중..."
+              : isAtCapacity
+                ? "보관함이 가득 찼어요 · 업그레이드"
+                : "새 프레임 만들기"
           }
         />
 

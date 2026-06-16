@@ -39,13 +39,23 @@ export function ThemeFrameScreen() {
   const plan = resolvePlanInfo(planTier);
   // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
   const isAtCapacity = savedFrames.length >= plan.limit;
+  // 원격 프레임 로딩 전에는 savedFrames가 빈 배열이라 한도를 알 수 없으므로,
+  // 로딩이 끝나기 전까지 생성 진입을 보류한다(비회원은 원격 로딩 불필요).
+  const [framesLoaded, setFramesLoaded] = useState(false);
 
   useEffect(() => {
     if (accessMode === 'member') {
-      void loadRemoteFrames();
+      void loadRemoteFrames().finally(() => setFramesLoaded(true));
       void refreshUserProfile().catch(() => {});
+    } else {
+      setFramesLoaded(true);
     }
   }, [accessMode, loadRemoteFrames, refreshUserProfile]);
+
+  const handleConfirmNewFrame = () => {
+    if (!framesLoaded) return;
+    push(isAtCapacity ? '/mypage' : '/theme/sticker');
+  };
 
   return (
     <AppScrollView>
@@ -54,9 +64,13 @@ export function ThemeFrameScreen() {
       <FrameCapacityMeter onUpgrade={() => push('/mypage')} plan={plan} used={savedFrames.length} />
       <FramePickerSection
         confirmLabel={
-          isAtCapacity ? '보관함이 가득 찼어요 · 업그레이드' : '새 프레임 만들기'
+          !framesLoaded
+            ? '불러오는 중...'
+            : isAtCapacity
+              ? '보관함이 가득 찼어요 · 업그레이드'
+              : '새 프레임 만들기'
         }
-        onConfirm={() => push(isAtCapacity ? '/mypage' : '/theme/sticker')}
+        onConfirm={handleConfirmNewFrame}
         onSelect={setThemeFrame}
         selectedFrameId={themeEditor.frameId}
       />
