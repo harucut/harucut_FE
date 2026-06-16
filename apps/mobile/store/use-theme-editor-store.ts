@@ -319,7 +319,6 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
       background,
       backgroundColor: current.backgroundColor,
       caption: current.caption,
-      cellCutouts: current.cellCutouts,
       components: normalizeThemeZ(current.components)
         .filter((component) => !component.hidden)
         .map(({ hidden, locked, ...component }) => component),
@@ -366,7 +365,6 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
       backgroundImageUri: null,
       backgroundImagePending: false,
       caption: frame.caption,
-      cellCutouts: frame.cellCutouts ?? [false, false, false, false],
       components: normalizeThemeZ(
         (frame.components ?? []).map((component) => ({
           ...component,
