@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Timer } from "lucide-react";
 import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StepProgress } from "@/components/layout/StepProgress";
@@ -20,12 +20,18 @@ export default function CapturePage() {
     isShooting,
     countdown,
     shotCount,
+    captureMode,
+    setCaptureMode,
+    timerSeconds,
+    setTimerSeconds,
     startCamera,
     startShooting,
     handleShootNow,
+    handleManualShutter,
     switchCamera,
     canFlipCamera,
     MAX_SHOTS,
+    TIMER_OPTIONS,
   } = useCaptureFlow();
 
   const { frameId, remoteFrameId, shots, borderColor } = useShootSession();
@@ -177,47 +183,107 @@ export default function CapturePage() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[11px] text-[color:var(--hc-muted)]">
-              <span
-                className={`inline-flex h-2 w-2 rounded-full ${
-                  isCameraReady ? "bg-[color:var(--hc-primary)]" : "bg-zinc-500"
-                }`}
-              />
-              <span>카메라 {isCameraReady ? "준비 완료" : "아직 켜져 있지 않아요"}</span>
+          {/* 촬영 모드: 타이머 / 수동. 촬영이 시작되면 잠긴다. */}
+          <div className="mx-auto flex w-full max-w-[280px] items-center gap-1.5 rounded-full bg-[color:var(--hc-surface-muted)] p-1">
+            {(
+              [
+                ["timer", "타이머"],
+                ["manual", "수동"],
+              ] as const
+            ).map(([mode, label]) => {
+              const active = captureMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setCaptureMode(mode)}
+                  disabled={isShooting}
+                  aria-pressed={active}
+                  className={`flex h-9 flex-1 items-center justify-center rounded-full text-[13px] font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    active
+                      ? "bg-white text-[#0B0B0C] shadow-sm"
+                      : "text-[color:var(--hc-muted)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 타이머 간격 칩(3/5/8초). 타이머 모드에서만 노출되고, 촬영 시작 후에는 잠긴다. */}
+          {captureMode === "timer" ? (
+            <div className="flex items-center justify-center gap-2">
+              {TIMER_OPTIONS.map((seconds) => {
+                const active = timerSeconds === seconds;
+                return (
+                  <button
+                    key={seconds}
+                    type="button"
+                    onClick={() => setTimerSeconds(seconds)}
+                    disabled={isShooting}
+                    aria-pressed={active}
+                    className={`inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      active
+                        ? "bg-white text-[#0B0B0C]"
+                        : "bg-[color:var(--hc-surface-muted)] text-[color:var(--hc-text)]"
+                    }`}
+                  >
+                    <Timer className="h-3.5 w-3.5" />
+                    {seconds}s
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex items-center gap-2">
-              {canFlipCamera ? (
-                <button
-                  type="button"
-                  onClick={() => void switchCamera()}
-                  className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3 py-1.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    카메라 전환
-                  </span>
-                </button>
-              ) : null}
-              {!isCameraReady && !isCheckingCameraPermission ? (
-                <button
-                  type="button"
-                  onClick={() => void startCamera()}
-                  className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3 py-1.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
-                >
-                  카메라 켜기
-                </button>
-              ) : null}
+          ) : null}
+
+          {/* 셔터/시작 영역 */}
+          <div className="flex items-center justify-center gap-5">
+            {canFlipCamera ? (
               <button
                 type="button"
-                onClick={startShooting}
-                disabled={!isCameraReady || isShooting}
-                className="hc-button-primary rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => void switchCamera()}
+                disabled={isShooting}
+                className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isShooting ? "촬영 중..." : "촬영 시작"}
+                <RefreshCw className="h-3.5 w-3.5" />
+                전환
               </button>
-            </div>
+            ) : null}
+
+            {!isCameraReady && !isCheckingCameraPermission ? (
+              <button
+                type="button"
+                onClick={() => void startCamera()}
+                className="inline-flex h-10 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-4 text-[12px] font-semibold text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
+              >
+                카메라 켜기
+              </button>
+            ) : null}
+
+            {/* 큰 원형 셔터: 타이머 모드는 '촬영 시작'(이후 자동 잠금), 수동 모드는 누를 때마다 한 장씩 */}
+            <button
+              type="button"
+              onClick={
+                captureMode === "manual" ? handleManualShutter : startShooting
+              }
+              disabled={
+                !isCameraReady || (captureMode === "timer" && isShooting)
+              }
+              aria-label={captureMode === "manual" ? "한 장 촬영" : "촬영 시작"}
+              className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] bg-transparent transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)]" />
+            </button>
+
+            <span className="inline-block w-[68px]" />
           </div>
+
+          <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
+            {captureMode === "timer"
+              ? `촬영 시작을 누르면 ${timerSeconds}초 간격으로 8장을 자동으로 찍어요`
+              : "셔터를 누를 때마다 한 장씩 총 8장을 찍어요"}
+          </p>
         </section>
       </div>
     </main>
