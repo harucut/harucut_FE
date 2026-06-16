@@ -93,13 +93,13 @@ function SocialButton({
 }
 
 export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
-  void mode;
+  const dividerLabel = mode === "signup" ? "간편가입" : "또는";
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+      <div className="flex items-center gap-2 text-[12.5px] text-[color:var(--hc-muted-soft)]">
         <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
-        <span>또는 소셜 계정으로 계속하기</span>
+        <span>{dividerLabel}</span>
         <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
       </div>
 
