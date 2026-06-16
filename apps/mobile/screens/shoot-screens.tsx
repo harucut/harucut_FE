@@ -169,6 +169,13 @@ export function ShootCaptureScreen() {
     }
   }, [router, shoot.frameId]);
 
+  // 캡처 화면에 진입할 때마다 이전(완료·중단)된 세션의 촬영본을 비운다.
+  // resetShootSession은 frameId/선택 프레임은 유지하고 shots만 초기화하므로,
+  // 재촬영 진입 시 모드·간격을 다시 고를 수 있고 수동 촬영이 9장째로 누적되지 않는다.
+  useEffect(() => {
+    resetShootSession();
+  }, [resetShootSession]);
+
   // 카메라 권한이 없으면 요청하고, 끝내 거부되면 안내 후 false를 돌려준다.
   const ensureCameraPermission = async () => {
     if (permission?.granted) return true;
@@ -222,7 +229,8 @@ export function ShootCaptureScreen() {
       for (let shotIndex = 0; shotIndex < SHOOT_TOTAL; shotIndex += 1) {
         for (let remaining = timerSeconds; remaining > 0; remaining -= 1) {
           setCountdown(remaining);
-          await delay(700);
+          // 1초 틱으로 맞춰 선택한 간격(3·5·8초)이 실제 촬영 간격과 일치하게 한다.
+          await delay(1000);
         }
 
         await captureOneShot(shotIndex);
