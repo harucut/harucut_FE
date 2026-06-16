@@ -197,14 +197,14 @@ export default function HistoryPage() {
         // 선택한 타입을 백엔드에 전달해 페이지네이션 너머의 항목까지 해당 타입으로
         // 받아온다(클라이언트 필터는 첫 페이지만 걸러 누락이 생긴다).
         const media = await listMyMedia(filter === "ALL" ? undefined : filter);
+        // 전체 미리보기·통계는 ALL 응답 기준으로 유지한다. 필터부터 먼저 로드돼도
+        // 미리보기가 비지 않도록, ALL이 아니면 전체를 함께 받아온다(실패 시 현 응답 대체).
+        const nextPreviewItems =
+          filter === "ALL" ? media : await listMyMedia().catch(() => media);
 
         if (!cancelled) {
-          const sorted = sortMedia(media);
-          setItems(sorted);
-          // 전체 미리보기·통계는 ALL 응답 기준으로 유지한다.
-          if (filter === "ALL") {
-            setPreviewItems(sorted);
-          }
+          setItems(sortMedia(media));
+          setPreviewItems(sortMedia(nextPreviewItems));
         }
       } catch (loadError) {
         console.error(loadError);
