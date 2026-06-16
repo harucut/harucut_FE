@@ -37,6 +37,8 @@ export function ThemeFrameScreen() {
   const setThemeFrame = useThemeEditorStore((state) => state.setThemeFrame);
   const selectSavedFrameForTheme = useThemeEditorStore((state) => state.selectSavedFrameForTheme);
   const plan = resolvePlanInfo(planTier);
+  // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
+  const isAtCapacity = savedFrames.length >= plan.limit;
 
   useEffect(() => {
     if (accessMode === 'member') {
@@ -51,8 +53,10 @@ export function ThemeFrameScreen() {
       <StepProgress current={1} label="프레임 선택" total={2} />
       <FrameCapacityMeter onUpgrade={() => push('/mypage')} plan={plan} used={savedFrames.length} />
       <FramePickerSection
-        confirmLabel="새 프레임 만들기"
-        onConfirm={() => push('/theme/sticker')}
+        confirmLabel={
+          isAtCapacity ? '보관함이 가득 찼어요 · 업그레이드' : '새 프레임 만들기'
+        }
+        onConfirm={() => push(isAtCapacity ? '/pricing' : '/theme/sticker')}
         onSelect={setThemeFrame}
         selectedFrameId={themeEditor.frameId}
       />

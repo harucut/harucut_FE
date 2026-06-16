@@ -79,7 +79,14 @@ function ThemePageContent() {
     setRemoteFrameId,
   ]);
 
+  // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
+  const isAtCapacity = frames.length >= plan.limit;
+
   const handleConfirmNewFrame = () => {
+    if (isAtCapacity) {
+      router.push("/pricing");
+      return;
+    }
     setFrameId(selectedFrameId);
     setRemoteFrameId(null);
     setSelectedRemoteFrameId(null);
@@ -116,7 +123,9 @@ function ThemePageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmNewFrame}
-          confirmLabel="새 프레임 만들기"
+          confirmLabel={
+            isAtCapacity ? "보관함이 가득 찼어요 · 업그레이드" : "새 프레임 만들기"
+          }
         />
 
         <SavedFramesSection
