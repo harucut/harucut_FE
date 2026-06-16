@@ -137,8 +137,9 @@ export function PricingScreen() {
   const accessMode = useSessionStore((state) => state.accessMode);
 
   const handlePick = () => {
-    // 결제 백엔드 연동은 범위 밖. 비회원/게스트는 가입, 회원은 마이페이지로 안내한다.
-    router.push((accessMode === 'guest' ? '/signup' : '/mypage') as never);
+    // 결제 백엔드 연동은 범위 밖. 회원만 마이페이지로, 그 외(anonymous·guest)는
+    // 보호 라우트인 /mypage 대신 가입 흐름으로 안내한다.
+    router.push((accessMode === 'member' ? '/mypage' : '/signup') as never);
   };
 
   return (
