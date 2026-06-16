@@ -9,5 +9,6 @@ export async function POST(req: Request) {
   return proxyJson(req, {
     method: "POST",
     url: `${BASE_URL}/api/email-auth/code`,
+    stripAuthCookies: true,
   });
 }

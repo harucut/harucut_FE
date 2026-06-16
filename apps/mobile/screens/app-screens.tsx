@@ -140,12 +140,43 @@ async function resolveHistoryMediaUrl(item: HistoryItem) {
   return historyPreviewUri(item);
 }
 
+const WEEKDAY_KO = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+
+// 핸드오프와 동일한 주간 목표 컷 수(임의 상수). 진행 링/남은 컷 계산 기준.
+const WEEKLY_GOAL = 5;
+
+// 핸드오프와 동일한 "2026.06.12 · 금요일" 표기.
 function formatCurrentDate() {
-  return new Date().toLocaleDateString('ko-KR', {
-    day: 'numeric',
-    month: 'long',
-    weekday: 'short',
-  });
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = `${now.getMonth() + 1}`.padStart(2, '0');
+  const dd = `${now.getDate()}`.padStart(2, '0');
+  return `${yyyy}.${mm}.${dd} · ${WEEKDAY_KO[now.getDay()]}`;
+}
+
+function countThisMonth(items: HistoryItem[]) {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  return items.filter((item) => {
+    if (!item.createdAt) return false;
+    const date = new Date(item.createdAt);
+    return !Number.isNaN(date.getTime()) && date.getFullYear() === y && date.getMonth() === m;
+  }).length;
+}
+
+function countThisWeek(items: HistoryItem[]) {
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  // 월요일 기준 이번 주 시작(0=일..6=토 -> 월요일까지 경과일).
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const startMs = weekStart.getTime();
+  return items.filter((item) => {
+    if (!item.createdAt) return false;
+    const date = new Date(item.createdAt);
+    return !Number.isNaN(date.getTime()) && date.getTime() >= startMs;
+  }).length;
 }
 
 function getNextDateRefreshDelay() {
@@ -182,6 +213,107 @@ function useAppScreenTheme() {
   return { colors, isDark, styles };
 }
 
+// react-native-svg 없이 두 개의 반원(좌/우 클립)으로 그리는 진행 링.
+// (핸드오프 app 홈 스탯 카드의 그린 진행 링)
+// 각 반원은 한쪽 테두리만 progress 색으로 칠한 원을 회전시켜 호를 만든다.
+function HalfRing({
+  size,
+  stroke,
+  color,
+  side,
+  rotate,
+}: {
+  color: string;
+  rotate: number;
+  side: 'left' | 'right';
+  size: number;
+  stroke: number;
+}) {
+  const half = size / 2;
+  return (
+    <View
+      style={{
+        height: size,
+        left: side === 'right' ? half : 0,
+        overflow: 'hidden',
+        position: 'absolute',
+        top: 0,
+        width: half,
+      }}>
+      <View
+        style={{
+          // 오른쪽/위 테두리만 색을 칠해 한쪽 반원 호를 만든다.
+          borderBottomColor: 'transparent',
+          borderLeftColor: 'transparent',
+          borderRadius: half,
+          borderRightColor: side === 'right' ? color : 'transparent',
+          borderTopColor: color,
+          borderWidth: stroke,
+          height: size,
+          left: side === 'right' ? -half : 0,
+          position: 'absolute',
+          top: 0,
+          transform: [{ rotate: `${rotate}deg` }],
+          width: size,
+        }}
+      />
+    </View>
+  );
+}
+
+function ProgressRing({
+  pct,
+  size = 46,
+  stroke = 5,
+  trackColor,
+  progressColor,
+}: {
+  pct: number;
+  progressColor: string;
+  size?: number;
+  stroke?: number;
+  trackColor: string;
+}) {
+  const clamped = Math.max(0, Math.min(1, pct));
+  const half = size / 2;
+  // 12시 방향(=-135deg 기준)에서 시계방향으로 진행. 오른쪽 반원이 먼저 채워진다.
+  const firstRotate = -135 + Math.min(clamped, 0.5) * 360;
+  const secondRotate = -135 + Math.max(clamped - 0.5, 0) * 360;
+
+  return (
+    <View style={{ height: size, width: size }}>
+      <View
+        style={{
+          borderColor: trackColor,
+          borderRadius: half,
+          borderWidth: stroke,
+          height: size,
+          position: 'absolute',
+          width: size,
+        }}
+      />
+      {clamped > 0 ? (
+        <HalfRing
+          color={progressColor}
+          rotate={firstRotate}
+          side="right"
+          size={size}
+          stroke={stroke}
+        />
+      ) : null}
+      {clamped > 0.5 ? (
+        <HalfRing
+          color={progressColor}
+          rotate={secondRotate}
+          side="left"
+          size={size}
+          stroke={stroke}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 export function HomeScreen() {
   const { colors, styles } = useAppScreenTheme();
   const router = useRouter();
@@ -213,7 +345,17 @@ export function HomeScreen() {
     }
   }, [accessMode, loadRemoteFrames]);
 
-  const savedCount = historyItems.length;
+  // todayMoment(날짜 라벨)을 의존성에 포함해 자정·주·월 경계를 넘기면 수치도 재계산.
+  const monthCount = useMemo(
+    () => countThisMonth(historyItems),
+    [historyItems, todayMoment],
+  );
+  const weekCount = useMemo(
+    () => countThisWeek(historyItems),
+    [historyItems, todayMoment],
+  );
+  const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
+  const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
 
   return (
     <AppScrollView>
@@ -266,18 +408,23 @@ export function HomeScreen() {
           style={({ pressed }) => [styles.quickCard, pressed ? styles.pressedSoft : null]}>
           <Ionicons color={colors.primaryStrong} name="sparkles-outline" size={22} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.quickTitle}>프레임 꾸미기</Text>
-            <Text style={styles.quickSubtitle}>나만의 테마</Text>
+            <Text style={styles.quickTitle}>프레임 보기</Text>
+            <Text style={styles.quickSubtitle}>4가지 테마</Text>
           </View>
         </Pressable>
       </View>
 
       <View style={styles.statStrip}>
-        <Text style={styles.statNumber}>{savedCount}</Text>
+        <Text style={styles.statNumber}>{monthCount}</Text>
         <Text style={styles.statCopy}>
-          지금까지 <Text style={styles.statCopyStrong}>{savedCount}컷</Text>을 남겼어요.{'\n'}
-          오늘도 한 컷 더 채워볼까요?
+          이번 달 <Text style={styles.statCopyStrong}>{monthCount}컷</Text>을 남겼어요.{'\n'}
+          이번 주 목표까지 <Text style={styles.statCopyAccent}>{remainingToGoal}컷</Text> 남았어요!
         </Text>
+        <ProgressRing
+          progressColor={colors.primary}
+          pct={ringPct}
+          trackColor={colors.border}
+        />
       </View>
 
       <View style={styles.sectionHeader}>
@@ -1227,6 +1374,10 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       flex: 1,
       fontSize: 13,
       lineHeight: 19,
+    },
+    statCopyAccent: {
+      color: colors.primaryStrong,
+      fontWeight: '700',
     },
     statCopyStrong: {
       color: colors.text,

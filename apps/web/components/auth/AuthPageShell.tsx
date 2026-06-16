@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Lock } from "lucide-react";
 import { BrandMark } from "../layout/BrandMark";
 import { FramePreview } from "../frame/FramePreview";
 
@@ -9,12 +10,13 @@ type Props = {
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  icon?: "lock";
 };
 
 // 사진은 추후 교체될 placeholder.
 const COLLAGE = Array.from({ length: 4 }, () => "/hero-image.png");
 
-export function AuthPageShell({ title, description, children, footer }: Props) {
+export function AuthPageShell({ title, description, children, footer, icon }: Props) {
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       {/* 브랜드 패널 — 데스크톱(lg+)에서만, handoff web 분할 레이아웃의 다크 스테이지 */}
@@ -74,6 +76,11 @@ export function AuthPageShell({ title, description, children, footer }: Props) {
           <div className="mb-8 lg:hidden">
             <BrandMark href="/" />
           </div>
+          {icon === "lock" ? (
+            <div className="mb-5 grid h-[60px] w-[60px] place-items-center rounded-[18px] bg-[color:var(--hc-accent-soft-bg)]">
+              <Lock size={28} className="text-[color:var(--hc-primary-strong)]" />
+            </div>
+          ) : null}
           <h1 className="text-[28px] font-extrabold tracking-tight text-[color:var(--hc-text)]">
             {title}
           </h1>
