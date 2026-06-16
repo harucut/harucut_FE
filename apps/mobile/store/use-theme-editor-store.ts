@@ -42,7 +42,13 @@ type ThemeEditorSessionState = {
   stickers: string[];
   tab: ThemeComponentType;
   title: string;
+  // 셀별 누끼(배경 제거) 상태 — 4칸. 에디터/미리보기 전용.
+  cellCutouts: boolean[];
 };
+
+// 꾸미기 하단 시트 6탭(핸드오프 app-decorate). 소재 타입 탭은 그대로 두고
+// 프레임색/누끼/선택 탭을 별도로 둔다.
+export type ThemeDecorateTab = 'photo' | 'frame' | 'text' | 'sticker' | 'cut' | 'layer';
 
 type ThemeComponentTransform = {
   deltaX?: number;
@@ -78,6 +84,7 @@ type ThemeEditorStore = ThemeEditorSessionState & {
   setThemeTitle: (value: string) => void;
   toggleThemeComponentHidden: (id: string) => void;
   toggleThemeComponentLocked: (id: string) => void;
+  toggleThemeCellCutout: (index: number) => void;
   toggleThemeSticker: (value: string) => void;
   transformThemeComponent: (id: string, transform: ThemeComponentTransform) => void;
   updateThemeComponent: (
@@ -110,6 +117,7 @@ function defaultThemeEditor(): ThemeEditorSessionState {
     stickers: ['✦', '♡'],
     tab: 'PHOTO',
     title: '새 테마 프레임',
+    cellCutouts: [false, false, false, false],
   };
 }
 
@@ -427,6 +435,13 @@ export const useThemeEditorStore = create<ThemeEditorStore>((set, get) => ({
         component.id === id ? { ...component, locked: !component.locked } : component,
       ),
     })),
+  toggleThemeCellCutout: (index) =>
+    set((state) => {
+      if (index < 0 || index > 3) return state;
+      const next = [...state.cellCutouts];
+      next[index] = !next[index];
+      return { cellCutouts: next };
+    }),
   toggleThemeSticker: (value) =>
     set((state) => ({
       stickers: state.stickers.includes(value)

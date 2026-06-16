@@ -347,6 +347,56 @@ function drawThemeOverlay(
   });
 }
 
+function traceRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+// 누끼(셀별 배경 제거) 비네트 — renderThemePreview와 동일하게 사용자 컴포넌트 위에
+// 그려, 에디터/썸네일뿐 아니라 실제 다운로드·공유 출력에서도 효과가 유지되게 한다.
+function drawCellCutouts(
+  ctx: CanvasRenderingContext2D,
+  layout: FrameLayout,
+  theme: ThemeExportJson | null,
+) {
+  const cutouts = theme?.cellCutouts ?? [];
+  layout.slots.forEach((slot, index) => {
+    if (!cutouts[index]) return;
+    const cx = slot.x + slot.width / 2;
+    const cy = slot.y + slot.height / 2;
+    const radius = Math.min(slot.width, slot.height) * 0.62;
+    ctx.save();
+    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.clip();
+    const grad = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(11,11,12,0.82)");
+    ctx.fillStyle = grad;
+    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = "#1ED760";
+    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
 function drawFrameOnce(
   ctx: CanvasRenderingContext2D,
   layout: FrameLayout,
@@ -401,6 +451,7 @@ function drawFrameOnce(
   });
 
   drawThemeOverlay(ctx, theme, overlayImages);
+  drawCellCutouts(ctx, layout, theme);
 }
 
 export async function composeFramePng(opts: {

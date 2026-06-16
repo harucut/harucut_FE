@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
+import { resolvePlanInfo } from "@/constants/planLimits";
+import { FrameCapacityMeter } from "@/components/frame/FrameCapacityMeter";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,6 +14,7 @@ import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import { getMyUserInfo } from "@/lib/userApi";
 
 function ThemePageContent() {
   const router = useRouter();
@@ -20,6 +23,9 @@ function ThemePageContent() {
   const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
   const { setFrameId, setRemoteFrameId, reset } = useThemeSession();
   const { frames, isLoading, error, refresh } = useMyFrames();
+
+  const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
+  const plan = resolvePlanInfo(planTier);
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
@@ -35,18 +41,54 @@ function ThemePageContent() {
   }, [reset]);
 
   useEffect(() => {
+    let cancelled = false;
+    void getMyUserInfo()
+      .then((user) => {
+        if (!cancelled) setPlanTier(user.planTier ?? "BASIC");
+      })
+      .catch(() => {
+        if (!cancelled) setPlanTier("BASIC");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!Number.isFinite(queriedRemoteFrameId) || queriedRemoteFrameId <= 0) return;
     if (isLoading) return;
 
-    const targetFrame = frames.find((frame) => frame.frameId === queriedRemoteFrameId);
-    if (!targetFrame) return;
+    const targetIndex = frames.findIndex(
+      (frame) => frame.frameId === queriedRemoteFrameId,
+    );
+    if (targetIndex === -1) return;
+
+    const targetFrame = frames[targetIndex];
+    if (targetIndex >= plan.limit) return;
 
     setFrameId(frameIdFromFrameType(targetFrame.frameType));
     setRemoteFrameId(targetFrame.frameId);
     router.push("/theme/sticker");
-  }, [frames, isLoading, queriedRemoteFrameId, router, setFrameId, setRemoteFrameId]);
+  }, [
+    frames,
+    isLoading,
+    plan.limit,
+    queriedRemoteFrameId,
+    router,
+    setFrameId,
+    setRemoteFrameId,
+  ]);
+
+  // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
+  const isAtCapacity = frames.length >= plan.limit;
 
   const handleConfirmNewFrame = () => {
+    // 목록 로딩 전에는 frames가 빈 배열이라 한도를 알 수 없으므로 진입을 보류한다.
+    if (isLoading) return;
+    if (isAtCapacity) {
+      router.push("/pricing");
+      return;
+    }
     setFrameId(selectedFrameId);
     setRemoteFrameId(null);
     setSelectedRemoteFrameId(null);
@@ -70,6 +112,12 @@ function ThemePageContent() {
         />
         <StepProgress current={1} total={2} label="프레임 선택" />
 
+        <FrameCapacityMeter
+          plan={plan}
+          used={frames.length}
+          onUpgrade={() => router.push("/pricing")}
+        />
+
         <FramePicker
           selectedFrameId={selectedFrameId}
           onChangeSelected={(nextFrameId) => {
@@ -77,7 +125,13 @@ function ThemePageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmNewFrame}
-          confirmLabel="새 프레임 만들기"
+          confirmLabel={
+            isLoading
+              ? "불러오는 중..."
+              : isAtCapacity
+                ? "보관함이 가득 찼어요 · 업그레이드"
+                : "새 프레임 만들기"
+          }
         />
 
         <SavedFramesSection
@@ -95,6 +149,8 @@ function ThemePageContent() {
           onRefresh={refresh}
           onAction={handleOpenRemoteFrame}
           actionLabel="수정하기"
+          planLimit={plan.limit}
+          onUpgrade={() => router.push("/pricing")}
         />
       </div>
     </main>
