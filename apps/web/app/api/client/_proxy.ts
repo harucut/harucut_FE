@@ -10,7 +10,26 @@ type ProxyOptions = {
   forwardBody?: boolean;
   contentType?: string;
   extraHeaders?: Record<string, string>;
+  /**
+   * 로그인/회원가입 등 비인증 엔드포인트로 프록시할 때 true.
+   * 브라우저에 남아있는 만료/무효 accessToken·refreshToken 쿠키를 함께 보내면
+   * 백엔드 인증 필터가 그 토큰을 검증해 INVALID_ACCESS_TOKEN(401)으로 막아버리므로,
+   * 인증 토큰 쿠키만 제거하고 나머지(게스트 쿠키 등)는 그대로 전달한다.
+   */
+  stripAuthCookies?: boolean;
 };
+
+const AUTH_COOKIE_NAMES = new Set(["accessToken", "refreshToken"]);
+
+function stripAuthCookies(cookie: string): string {
+  return cookie
+    .split(/;\s*/)
+    .filter((part) => {
+      const name = part.split("=")[0]?.trim();
+      return name ? !AUTH_COOKIE_NAMES.has(name) : false;
+    })
+    .join("; ");
+}
 
 type ForwardResult = {
   ok: boolean;
@@ -64,7 +83,10 @@ export async function forward(
     );
   }
 
-  const cookie = req.headers.get("cookie") ?? "";
+  const rawCookie = req.headers.get("cookie") ?? "";
+  const cookie = options.stripAuthCookies
+    ? stripAuthCookies(rawCookie)
+    : rawCookie;
   const shouldForwardBody =
     options.forwardBody ?? (options.method !== "GET" && options.method !== "DELETE");
   const body = shouldForwardBody ? await req.text() : undefined;
