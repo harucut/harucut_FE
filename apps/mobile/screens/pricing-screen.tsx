@@ -149,7 +149,11 @@ export function PricingScreen() {
           accessibilityLabel="뒤로 가기"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() => (router.canGoBack() ? router.back() : router.push('/mypage' as never))}
+          onPress={() =>
+            router.canGoBack()
+              ? router.back()
+              : router.push((accessMode === 'member' ? '/mypage' : '/') as never)
+          }
           style={styles.backButton}>
           <Ionicons color={colors.text} name="arrow-back" size={20} />
         </Pressable>
