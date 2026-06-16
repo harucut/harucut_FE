@@ -138,12 +138,13 @@ function countThisMonth(items: UserMedia[]) {
   }).length;
 }
 
-// 일요일 기준 이번 주 시작 이후 만든 기록 수.
+// 월요일 기준 이번 주 시작 이후 만든 기록 수.
 function countThisWeek(items: UserMedia[]) {
   const now = new Date();
   const weekStart = new Date(now);
   weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(now.getDate() - now.getDay());
+  // 0=일..6=토 -> 월요일까지 경과일. setDate는 로컬 캘린더 기준이라 DST 안전.
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const startMs = weekStart.getTime();
   return items.filter((item) => {
     if (!item.createdAt) return false;

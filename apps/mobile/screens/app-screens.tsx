@@ -110,7 +110,8 @@ function countThisWeek(items: HistoryItem[]) {
   const now = new Date();
   const weekStart = new Date(now);
   weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(now.getDate() - now.getDay());
+  // 월요일 기준 이번 주 시작(0=일..6=토 -> 월요일까지 경과일).
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const startMs = weekStart.getTime();
   return items.filter((item) => {
     if (!item.createdAt) return false;
@@ -283,8 +284,15 @@ export function HomeScreen() {
     }
   }, [accessMode, loadRemoteFrames]);
 
-  const monthCount = useMemo(() => countThisMonth(historyItems), [historyItems]);
-  const weekCount = useMemo(() => countThisWeek(historyItems), [historyItems]);
+  // todayMoment(날짜 라벨)을 의존성에 포함해 자정·주·월 경계를 넘기면 수치도 재계산.
+  const monthCount = useMemo(
+    () => countThisMonth(historyItems),
+    [historyItems, todayMoment],
+  );
+  const weekCount = useMemo(
+    () => countThisWeek(historyItems),
+    [historyItems, todayMoment],
+  );
   const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
   const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
 
