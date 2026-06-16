@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { type ComponentProps, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, Pill, SurfaceCard } from '@/components/harucut/ui';
@@ -689,6 +689,23 @@ export function MyPageScreen() {
     }
   };
 
+  // 탈퇴는 되돌리기 어려운 비활성화 작업이므로, 30일 복구 안내와 함께
+  // 확인 단계를 거친 뒤에만 실제 요청을 보낸다(웹 마이페이지와 동일 안내).
+  const confirmExit = () => {
+    if (submitting) {
+      return;
+    }
+
+    Alert.alert(
+      '정말 탈퇴하시겠어요?',
+      '탈퇴 신청일부터 30일 내로 다시 로그인하면 계정을 복구할 수 있어요.',
+      [
+        { style: 'cancel', text: '취소' },
+        { onPress: () => void handleExit(), style: 'destructive', text: '탈퇴하기' },
+      ],
+    );
+  };
+
   const avatarInitial = user.username?.trim().charAt(0) || '하';
 
   return (
@@ -961,7 +978,7 @@ export function MyPageScreen() {
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => void handleExit()}
+        onPress={confirmExit}
         style={styles.exitLinkButton}>
         <Text style={styles.exitLinkText}>회원 탈퇴</Text>
       </Pressable>
