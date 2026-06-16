@@ -75,6 +75,7 @@ export type SavedFrame = {
   background?: ThemeBackground;
   backgroundColor: string;
   caption: string;
+  cellCutouts?: boolean[];
   components?: ThemeEditorComponent[];
   description: string;
   frameId: FrameId;

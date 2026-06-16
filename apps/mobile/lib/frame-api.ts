@@ -44,6 +44,7 @@ type RemoteFrameComponent = {
 
 type RemoteFrame = {
   background?: RemoteFrameBackground;
+  cellCutouts?: boolean[];
   components?: RemoteFrameComponent[];
   description?: string;
   frameId: number;
@@ -56,6 +57,7 @@ type FrameCreateRequest = {
   background: RemoteFrameBackground;
   canvasHeight: number;
   canvasWidth: number;
+  cellCutouts?: boolean[];
   components: RemoteFrameComponent[];
   description: string;
   frameType: RemoteFrameType;
@@ -68,6 +70,7 @@ type ThemeFrameDraft = {
   background?: ThemeBackground;
   backgroundColor: string;
   caption: string;
+  cellCutouts?: boolean[];
   components?: ThemeEditorComponent[];
   description: string;
   frameId: FrameId;
@@ -261,6 +264,7 @@ function toCreateFrameRequest(draft: ThemeFrameDraft): FrameCreateRequest {
     background: toRequestBackground(draft),
     canvasHeight: canvas.height,
     canvasWidth: canvas.width,
+    cellCutouts: draft.cellCutouts,
     components,
     description: draft.description,
     frameType: frameTypeFromFrameId(draft.frameId),
@@ -293,6 +297,9 @@ function toSavedFrame(frame: RemoteFrame): SavedFrame {
     background: toSavedBackground(frame.background),
     backgroundColor,
     caption: captionComponent?.source ?? '',
+    cellCutouts: Array.isArray(frame.cellCutouts)
+      ? [0, 1, 2, 3].map((i) => Boolean(frame.cellCutouts?.[i]))
+      : undefined,
     components: savedComponents,
     description: frame.description ?? '',
     frameId: frameIdFromFrameType(frame.frameType),
