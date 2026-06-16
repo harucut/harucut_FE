@@ -406,9 +406,9 @@ export function ShootCaptureScreen() {
           <Pressable
             accessibilityLabel="카메라 전환"
             accessibilityRole="button"
-            disabled={isShooting}
+            disabled={sessionLocked}
             onPress={() => setFacing((current) => (current === 'front' ? 'back' : 'front'))}
-            style={[styles.flipButton, isShooting ? styles.controlLocked : null]}>
+            style={[styles.flipButton, sessionLocked ? styles.controlLocked : null]}>
             <Ionicons color={colors.text} name="camera-reverse-outline" size={18} />
           </Pressable>
 
