@@ -1,33 +1,34 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  ChevronLeft,
+  ChangeEvent,
+  FormEvent,
+  ReactElement,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
+import {
+  Bell,
   ChevronRight,
+  CreditCard,
   Image as ImageIcon,
   LogOut,
-  Palette,
-  Plus,
-  RefreshCw,
-  Settings2,
-  User as UserIcon,
+  Settings,
+  Sparkles,
+  User,
 } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
-import { FramePreview } from "@/components/frame/FramePreview";
-import { ApiRequestError, clientApi } from "@/lib/clientApi";
-import { buildPathWithRedirect } from "@/lib/redirect";
+import { clientApi } from "@/lib/clientApi";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import { listMyFrames } from "@/lib/remoteFrameApi";
-import { frameIdFromFrameType } from "@/lib/frameApi";
-import type { RemoteFrame } from "@/lib/api-types";
 
 type Errors = {
   common?: string | null;
@@ -37,7 +38,40 @@ type Errors = {
   confirmPassword?: string | null;
 };
 
-type SectionId = "account" | "frames" | "theme" | "pref";
+type SectionId = "account" | "plan" | "notif" | "frames" | "pref";
+
+type Stats = {
+  total: number;
+  thisMonth: number;
+  frames: number;
+};
+
+// 메뉴 구성은 핸드오프(app/web)와 동일한 순서·아이콘을 따른다.
+const SECTION_META: Record<
+  SectionId,
+  { icon: typeof User; title: string; sub: string }
+> = {
+  account: {
+    icon: User,
+    title: "계정 정보",
+    sub: "이메일, 닉네임, 비밀번호 변경",
+  },
+  plan: { icon: Sparkles, title: "요금제", sub: "플랜 및 결제 관리" },
+  notif: { icon: Bell, title: "알림 설정", sub: "푸시, 주간 리마인더" },
+  frames: { icon: ImageIcon, title: "내 프레임", sub: "보관한 프레임" },
+  pref: { icon: Settings, title: "설정", sub: "화질, 워터마크, 언어" },
+};
+
+// 데스크톱 사이드바에 노출하는 섹션(요금제는 별도 라우트로 이동)
+const SIDEBAR_SECTIONS: SectionId[] = ["account", "notif", "frames", "pref"];
+// 앱(모바일) 레이아웃의 메뉴 행 순서
+const MOBILE_SECTIONS: SectionId[] = [
+  "account",
+  "plan",
+  "notif",
+  "frames",
+  "pref",
+];
 
 export default function MyPage() {
   const router = useRouter();
@@ -54,49 +88,27 @@ export default function MyPage() {
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
-  const [totalCuts, setTotalCuts] = useState<number | null>(null);
-  const [frames, setFrames] = useState<RemoteFrame[]>([]);
-  const [statsLoading, setStatsLoading] = useState(false);
-  // 로드 실패를 빈 목록과 구분한다(실패를 0으로 삼키지 않기).
-  const [framesError, setFramesError] = useState(false);
+  const [stats, setStats] = useState<Stats>({
+    total: 0,
+    thisMonth: 0,
+    frames: 0,
+  });
 
-  // 섹션 전환: 데스크톱(≥lg)은 사이드바+콘텐츠를 항상 함께,
-  // 모바일(<lg)은 메뉴 목록 ↔ 상세를 오가는 앱 스타일 내비게이션.
+  // 데스크톱: 우측 콘텐츠 섹션 / 모바일: 펼쳐진 메뉴 행
   const [section, setSection] = useState<SectionId>("account");
-  const [mobileView, setMobileView] = useState<"menu" | "detail">("menu");
+  const [openMobile, setOpenMobile] = useState<SectionId | null>(null);
 
-  const loadStats = async () => {
-    setStatsLoading(true);
-    setFramesError(false);
-    const [mediaRes, framesRes] = await Promise.allSettled([
-      listMyMedia(),
-      listMyFrames(),
-    ]);
+  // 데스크톱/모바일 레이아웃을 CSS로만 숨기면 같은 섹션 폼(동일 id)이 양쪽에
+  // 동시에 마운트된다. 뷰포트에 따라 한 쪽만 렌더해 중복 마운트를 막는다.
+  const [isDesktop, setIsDesktop] = useState(false);
 
-    // 페이지에 머문 채 세션이 만료돼 통계 API가 401이면(프록시 리다이렉트는
-    // 네비게이션 시점에만 동작) 오류 UI에 남기지 말고 로그인으로 보낸다(fetchUser와 동일).
-    const unauthorized = [mediaRes, framesRes].some(
-      (r) =>
-        r.status === "rejected" &&
-        r.reason instanceof ApiRequestError &&
-        r.reason.status === 401,
-    );
-    if (unauthorized) {
-      router.replace(buildPathWithRedirect("/login", "/mypage"));
-      return;
-    }
-
-    // 미디어(총 컷): 실패 시 null로 두어 '–'를 표시(0으로 오인 금지).
-    setTotalCuts(mediaRes.status === "fulfilled" ? mediaRes.value.length : null);
-    // 프레임: 실패와 빈 목록을 구분. 실패면 오류 상태로 두고 목록은 비우지 않음.
-    if (framesRes.status === "fulfilled") {
-      setFrames(framesRes.value);
-    } else {
-      console.error(framesRes.reason);
-      setFramesError(true);
-    }
-    setStatsLoading(false);
-  };
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktop(mql.matches);
+    sync();
+    mql.addEventListener("change", sync);
+    return () => mql.removeEventListener("change", sync);
+  }, []);
 
   const fetchUser = async () => {
     setLoading(true);
@@ -106,13 +118,7 @@ export default function MyPage() {
       const nextUser = await getMyUserInfo();
       setUser(nextUser);
       setUsername(nextUser.username || "");
-      void loadStats();
     } catch (error) {
-      // 세션 만료/무효(401)면 에러를 보여주지 말고 로그인 페이지로 보낸다
-      if (error instanceof ApiRequestError && error.status === 401) {
-        router.replace(buildPathWithRedirect("/login", "/mypage"));
-        return;
-      }
       console.error(error);
       setErrors({
         common: "내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -122,9 +128,37 @@ export default function MyPage() {
     }
   };
 
+  // 스탯 3셀은 우리 실제 데이터(기록 미디어 / 이번 달 / 보관 프레임)로 매핑한다.
+  const fetchStats = async () => {
+    try {
+      const [media, frames] = await Promise.all([
+        listMyMedia().catch(() => []),
+        listMyFrames().catch(() => []),
+      ]);
+
+      const now = new Date();
+      const thisMonth = media.filter((item) => {
+        if (!item.createdAt) return false;
+        const created = new Date(item.createdAt);
+        return (
+          created.getFullYear() === now.getFullYear() &&
+          created.getMonth() === now.getMonth()
+        );
+      }).length;
+
+      setStats({
+        total: media.length,
+        thisMonth,
+        frames: frames.length,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     void fetchUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void fetchStats();
   }, []);
 
   const handleChangeUsername = async (e: FormEvent) => {
@@ -262,606 +296,459 @@ export default function MyPage() {
     }
   };
 
-  const profileInitial = user?.username?.trim()?.[0]?.toUpperCase() ?? "U";
+  const profileInitial = user?.username?.trim()?.[0] ?? "U";
 
-  const MENU: {
-    id: SectionId;
-    label: string;
-    desc: string;
-    icon: typeof UserIcon;
-  }[] = [
-    {
-      id: "account",
-      label: "계정 정보",
-      desc: "닉네임 · 이메일 · 비밀번호",
-      icon: UserIcon,
-    },
-    {
-      id: "frames",
-      label: "내 프레임",
-      desc: statsLoading
-        ? "불러오는 중..."
-        : framesError
-          ? "불러오지 못했어요"
-          : `보관한 프레임 ${frames.length}개`,
-      icon: ImageIcon,
-    },
-    { id: "theme", label: "테마", desc: "다크 · 라이트", icon: Palette },
-    {
-      id: "pref",
-      label: "환경 설정",
-      desc: "저장 화질 · 워터마크 · 언어",
-      icon: Settings2,
-    },
-  ];
-
-  const openSection = (id: SectionId) => {
-    setSection(id);
-    setMobileView("detail");
-  };
-
-  return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
-      <AppNav userInitial={user?.username} />
-
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-7 lg:py-8">
-        <header className="flex items-center justify-between pt-1 lg:pt-2">
-          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
-            마이페이지
-          </h1>
-          <button
-            type="button"
-            onClick={fetchUser}
-            disabled={isSubmitting || loading}
-            className="hc-button-icon grid h-10 w-10 place-items-center rounded-full border disabled:opacity-50"
-            aria-label="새로고침"
-            title="새로고침"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
-        </header>
-
-        {errors.common ? (
-          <p className="text-[12px] text-[color:var(--hc-primary-strong)]">
-            {errors.common}
-          </p>
-        ) : null}
-
-        {loading ? (
-          <div className="hc-surface-card rounded-[20px] border p-5">
-            <p className="text-[12px] text-[color:var(--hc-muted)]">
-              정보를 불러오는 중...
-            </p>
-          </div>
-        ) : user ? (
-          <div className="lg:grid lg:grid-cols-[260px_1fr] lg:items-start lg:gap-8">
-            {/* 사이드바(데스크톱) / 메뉴(모바일) */}
-            <aside
-              className={`${mobileView === "detail" ? "hidden" : "flex"} flex-col gap-4 lg:flex`}
-            >
-              {/* 프로필 카드 */}
-              <section className="hc-surface-card rounded-[24px] border p-5 text-center">
-                <div className="mx-auto grid h-20 w-20 place-items-center overflow-hidden rounded-full bg-[color:var(--hc-primary)] text-[28px] font-extrabold text-[color:var(--hc-primary-contrast)]">
-                  {user.profileUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={user.profileUrl}
-                      alt="프로필 이미지"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span>{profileInitial}</span>
-                  )}
-                </div>
-                <p className="mt-3.5 truncate text-[18px] font-extrabold">
-                  {user.username}
-                </p>
-                <p className="truncate text-[13px] text-[color:var(--hc-muted)]">
-                  {user.email}
-                </p>
-
-                {/* 스탯 */}
-                <div className="mt-4 flex border-t border-[color:var(--hc-border-subtle)] pt-4">
-                  <div className="flex-1">
-                    <div className="text-[20px] font-extrabold tabular-nums">
-                      {totalCuts ?? "–"}
-                    </div>
-                    <div className="mt-0.5 text-[11.5px] text-[color:var(--hc-muted)]">
-                      총 네 컷
-                    </div>
-                  </div>
-                  <div className="flex-1 border-l border-[color:var(--hc-border-subtle)]">
-                    <div className="text-[20px] font-extrabold tabular-nums">
-                      {statsLoading || framesError ? "–" : frames.length}
-                    </div>
-                    <div className="mt-0.5 text-[11.5px] text-[color:var(--hc-muted)]">
-                      보관 프레임
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* 메뉴 */}
-              <nav className="hc-surface-card overflow-hidden rounded-[20px] border">
-                {MENU.map((item, i) => {
-                  const active = section === item.id;
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => openSection(item.id)}
-                      aria-current={active ? "true" : undefined}
-                      className={`flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition ${
-                        i ? "border-t border-[color:var(--hc-border-subtle)]" : ""
-                      } ${active ? "bg-[color:var(--hc-surface-highlight)]" : "hover:bg-[color:var(--hc-surface-muted)]"}`}
-                    >
-                      <span
-                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-                          active
-                            ? "bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
-                            : "bg-[color:var(--hc-surface-muted)] text-[color:var(--hc-muted)]"
-                        }`}
-                      >
-                        <Icon className="h-[18px] w-[18px]" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[14px] font-bold">
-                          {item.label}
-                        </span>
-                        <span className="block truncate text-[11.5px] text-[color:var(--hc-muted)]">
-                          {item.desc}
-                        </span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--hc-muted-soft)] lg:hidden" />
-                    </button>
-                  );
-                })}
-              </nav>
-
-              {/* 로그아웃 / 탈퇴 */}
-              <div className="hc-surface-card rounded-[20px] border p-4">
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isSubmitting}
-                  className="hc-button-secondary flex h-10 w-full items-center justify-center gap-2 rounded-full border text-[12px] font-semibold disabled:opacity-50"
-                >
-                  <LogOut className="h-4 w-4" />
-                  로그아웃
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExit}
-                  disabled={isSubmitting}
-                  className="mx-auto mt-3 block text-[12px] font-semibold text-[color:var(--hc-muted-soft)] underline underline-offset-4 transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
-                >
-                  회원 탈퇴
-                </button>
-              </div>
-
-              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted-soft)]">
-                하루컷 v1.0.0
-              </p>
-            </aside>
-
-            {/* 콘텐츠 패널 */}
-            <div
-              className={`${mobileView === "menu" ? "hidden" : "block"} lg:block`}
-            >
-              <button
-                type="button"
-                onClick={() => setMobileView("menu")}
-                className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-[color:var(--hc-muted)] lg:hidden"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                메뉴
-              </button>
-
-              <SectionPanel
-                section={section}
-                user={user}
-                username={username}
-                setUsername={setUsername}
-                oldPassword={oldPassword}
-                setOldPassword={setOldPassword}
-                newPassword={newPassword}
-                setNewPassword={setNewPassword}
-                confirmPassword={confirmPassword}
-                setConfirmPassword={setConfirmPassword}
-                errors={errors}
-                isSubmitting={isSubmitting}
-                profileFile={profileFile}
-                isUploadingProfile={isUploadingProfile}
-                statsLoading={statsLoading}
-                frames={frames}
-                framesError={framesError}
-                onRetryStats={loadStats}
-                onChangeUsername={handleChangeUsername}
-                onChangePassword={handleChangePassword}
-                onProfileFileChange={handleProfileFileChange}
-                onUploadProfileImage={handleUploadProfileImage}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="hc-surface-card rounded-[20px] border p-5">
-            <p className="text-[12px] text-[color:var(--hc-muted)]">
-              내 정보를 불러오지 못했어요.
-            </p>
-          </div>
-        )}
-      </div>
-      <MobileTabBar />
-    </main>
+  const statCells = useMemo(
+    () =>
+      [
+        { n: stats.total, l: "총 기록" },
+        { n: stats.thisMonth, l: "이번 달" },
+        { n: stats.frames, l: "보관 프레임" },
+      ] as const,
+    [stats],
   );
-}
 
-type SectionPanelProps = {
-  section: SectionId;
-  user: UserInfo;
-  username: string;
-  setUsername: (v: string) => void;
-  oldPassword: string;
-  setOldPassword: (v: string) => void;
-  newPassword: string;
-  setNewPassword: (v: string) => void;
-  confirmPassword: string;
-  setConfirmPassword: (v: string) => void;
-  errors: Errors;
-  isSubmitting: boolean;
-  profileFile: File | null;
-  isUploadingProfile: boolean;
-  statsLoading: boolean;
-  frames: RemoteFrame[];
-  framesError: boolean;
-  onRetryStats: () => void;
-  onChangeUsername: (e: FormEvent) => void;
-  onChangePassword: (e: FormEvent) => void;
-  onProfileFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  onUploadProfileImage: () => void;
-};
+  // 핸드오프 색상: 메뉴 아이콘은 초록 틴트 위 초록 아이콘
+  const iconTint =
+    "color-mix(in srgb, var(--hc-primary) 14%, transparent)" as const;
 
-function SectionPanel(props: SectionPanelProps) {
-  const { section } = props;
+  const renderAvatar = (size: number, font: number) => (
+    <div
+      className="grid shrink-0 place-items-center overflow-hidden rounded-full bg-[color:var(--hc-primary)] font-extrabold text-[color:var(--hc-primary-contrast)]"
+      style={{ width: size, height: size, fontSize: font }}
+    >
+      {user?.profileUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={user.profileUrl}
+          alt="프로필 이미지"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span>{profileInitial}</span>
+      )}
+    </div>
+  );
 
-  if (section === "account") {
-    return <AccountSection {...props} />;
-  }
-  if (section === "frames") {
-    return (
-      <FramesSection
-        statsLoading={props.statsLoading}
-        frames={props.frames}
-        error={props.framesError}
-        onRetry={props.onRetryStats}
-      />
-    );
-  }
-  if (section === "theme") {
-    return (
-      <div className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-        <h2 className="text-[17px] font-extrabold">테마</h2>
-        <p className="mt-1 text-[12px] text-[color:var(--hc-muted)]">
-          앱 전체의 밝기 테마를 선택해요.
-        </p>
-        <div className="mt-4">
-          <ColorThemePreferencePanel />
+  const statStrip = (
+    <div className="flex">
+      {statCells.map((cell, i) => (
+        <div
+          key={cell.l}
+          className={`flex-1 text-center ${i ? "border-l border-[color:var(--hc-border-subtle)]" : ""}`}
+        >
+          <div className="text-[21px] font-semibold tabular-nums">{cell.n}</div>
+          <div className="mt-0.5 text-[12px] text-[color:var(--hc-muted)]">
+            {cell.l}
+          </div>
         </div>
-      </div>
-    );
-  }
-  return <PreferencesSection />;
-}
+      ))}
+    </div>
+  );
 
-function AccountSection({
-  user,
-  username,
-  setUsername,
-  oldPassword,
-  setOldPassword,
-  newPassword,
-  setNewPassword,
-  confirmPassword,
-  setConfirmPassword,
-  errors,
-  isSubmitting,
-  profileFile,
-  isUploadingProfile,
-  onChangeUsername,
-  onChangePassword,
-  onProfileFileChange,
-  onUploadProfileImage,
-}: SectionPanelProps) {
-  return (
-    <div className="flex flex-col gap-5">
-      {/* 프로필 이미지 */}
-      <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-        <h2 className="text-[17px] font-extrabold">프로필 이미지</h2>
-        <div className="mt-4 flex items-center gap-2">
-          <input
-            type="file"
-            accept={SUPPORTED_IMAGE_ACCEPT}
-            onChange={onProfileFileChange}
-            disabled={isUploadingProfile}
-            className="block w-full text-[11.5px] text-[color:var(--hc-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[color:var(--hc-surface-muted)] file:px-3 file:py-2 file:text-[11.5px] file:font-semibold file:text-[color:var(--hc-text)] hover:file:bg-[color:var(--hc-surface-muted-hover)]"
-          />
-          <button
-            type="button"
-            onClick={onUploadProfileImage}
-            disabled={isUploadingProfile || !profileFile}
-            className="hc-button-primary h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[11.5px] font-semibold disabled:opacity-50"
-          >
-            {isUploadingProfile ? "업로드 중" : "업로드"}
-          </button>
-        </div>
-      </section>
+  /* ---------- 섹션 콘텐츠 (데스크톱 우측 / 모바일 펼침 공용) ---------- */
 
-      {/* 닉네임 */}
-      <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-        <h2 className="text-[17px] font-extrabold">닉네임</h2>
-        <p className="mt-1 text-[12px] text-[color:var(--hc-muted)]">
-          서비스에서 표시될 이름을 수정할 수 있어요.
-        </p>
-        <form onSubmit={onChangeUsername} className="mt-3 flex gap-2">
+  const accountSection = (
+    <div className="flex flex-col gap-6">
+      <form onSubmit={handleChangeUsername} className="flex flex-col gap-2">
+        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+          닉네임
+        </label>
+        <div className="flex gap-2">
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="hc-input h-10 flex-1 rounded-xl border px-3 text-[13px] outline-none"
+            className="hc-input h-11 flex-1 rounded-xl border px-3.5 text-[14px] outline-none"
             placeholder="닉네임을 입력해 주세요"
           />
           <button
             type="submit"
             disabled={isSubmitting}
-            className="hc-button-primary h-10 rounded-full px-4 text-[12px] font-semibold disabled:opacity-50"
+            className="hc-button-primary h-11 rounded-full px-5 text-[13px] font-semibold disabled:opacity-50"
           >
             저장
           </button>
-        </form>
+        </div>
         {errors.username ? (
-          <p className="mt-2 text-[11.5px] text-[color:var(--hc-primary-strong)]">
+          <p className="text-[11.5px] text-[color:var(--hc-primary-strong)]">
             {errors.username}
           </p>
         ) : null}
-      </section>
+      </form>
 
-      {/* 이메일 (읽기 전용) */}
-      <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-        <h2 className="text-[17px] font-extrabold">이메일</h2>
+      <div className="flex flex-col gap-2">
+        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+          이메일
+        </label>
         <input
-          value={user.email}
+          value={user?.email ?? ""}
           readOnly
-          disabled
-          className="hc-input mt-3 h-10 w-full rounded-xl border px-3 text-[13px] text-[color:var(--hc-muted)] outline-none"
+          className="hc-input h-11 w-full cursor-default rounded-xl border px-3.5 text-[14px] text-[color:var(--hc-muted)] outline-none"
         />
-      </section>
-
-      {/* 비밀번호 변경 */}
-      <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-        <h2 className="text-[17px] font-extrabold">비밀번호 변경</h2>
-        <form onSubmit={onChangePassword} className="mt-3 flex flex-col gap-3">
-          <AuthField
-            id="oldPassword"
-            name="oldPassword"
-            type="password"
-            label="현재 비밀번호"
-            placeholder="현재 비밀번호를 입력해 주세요"
-            autoComplete="current-password"
-            value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
-            error={errors.oldPassword}
-          />
-          <AuthField
-            id="newPassword"
-            name="newPassword"
-            type="password"
-            label="새 비밀번호"
-            placeholder="새 비밀번호를 입력해 주세요"
-            autoComplete="new-password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            error={errors.newPassword}
-          />
-          <AuthField
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            label="새 비밀번호 확인"
-            placeholder="새 비밀번호를 한 번 더 입력해 주세요"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            error={errors.confirmPassword}
-          />
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="hc-button-primary mt-1 h-10 rounded-full text-[12px] font-semibold disabled:opacity-50"
-          >
-            {isSubmitting ? "변경 중..." : "비밀번호 변경"}
-          </button>
-        </form>
-      </section>
-    </div>
-  );
-}
-
-function FramesSection({
-  statsLoading,
-  frames,
-  error,
-  onRetry,
-}: {
-  statsLoading: boolean;
-  frames: RemoteFrame[];
-  error: boolean;
-  onRetry: () => void;
-}) {
-  return (
-    <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[17px] font-extrabold">내 프레임</h2>
-        <Link
-          href="/theme"
-          className="hc-accent-chip inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold"
-        >
-          <Plus className="h-3.5 w-3.5" />새 프레임
-        </Link>
       </div>
 
-      {statsLoading ? (
-        <p className="mt-4 text-[12px] text-[color:var(--hc-muted)]">
-          불러오는 중...
-        </p>
-      ) : error ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-[color:var(--hc-border)] px-4 py-8 text-center">
-          <p className="text-[13px] font-semibold">
-            프레임을 불러오지 못했어요.
-          </p>
-          <p className="mt-1 text-[11.5px] text-[color:var(--hc-muted)]">
-            잠시 후 다시 시도해 주세요.
-          </p>
+      <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+        <AuthField
+          id="oldPassword"
+          name="oldPassword"
+          type="password"
+          label="현재 비밀번호"
+          placeholder="현재 비밀번호를 입력해 주세요"
+          autoComplete="current-password"
+          value={oldPassword}
+          onChange={(e) => setOldPassword(e.target.value)}
+          error={errors.oldPassword}
+        />
+        <AuthField
+          id="newPassword"
+          name="newPassword"
+          type="password"
+          label="새 비밀번호"
+          placeholder="새 비밀번호를 입력해 주세요"
+          autoComplete="new-password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          error={errors.newPassword}
+        />
+        <AuthField
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          label="새 비밀번호 확인"
+          placeholder="새 비밀번호를 한 번 더 입력해 주세요"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          error={errors.confirmPassword}
+        />
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="hc-button-primary mt-1 h-11 self-start rounded-full px-6 text-[13px] font-semibold disabled:opacity-50"
+        >
+          {isSubmitting ? "변경 중..." : "변경사항 저장"}
+        </button>
+      </form>
+
+      <div className="flex flex-col gap-2 border-t border-[color:var(--hc-border-subtle)] pt-5">
+        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+          프로필 이미지
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            accept={SUPPORTED_IMAGE_ACCEPT}
+            onChange={handleProfileFileChange}
+            disabled={isUploadingProfile}
+            className="block w-full text-[12px] text-[color:var(--hc-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[color:var(--hc-surface-muted)] file:px-3 file:py-2 file:text-[12px] file:font-semibold file:text-[color:var(--hc-text)] hover:file:bg-[color:var(--hc-surface-muted-hover)]"
+          />
           <button
             type="button"
-            onClick={onRetry}
-            className="hc-button-secondary mt-4 inline-flex h-9 items-center rounded-full border px-4 text-[12px] font-semibold"
+            onClick={handleUploadProfileImage}
+            disabled={isUploadingProfile || !profileFile}
+            className="hc-button-primary h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[12px] font-semibold disabled:opacity-50"
           >
-            다시 시도
+            {isUploadingProfile ? "업로드 중" : "업로드"}
           </button>
         </div>
-      ) : frames.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-[color:var(--hc-border)] px-4 py-8 text-center">
-          <p className="text-[13px] font-semibold">아직 보관한 프레임이 없어요.</p>
-          <p className="mt-1 text-[11.5px] text-[color:var(--hc-muted)]">
-            꾸미기에서 나만의 프레임을 만들어 보관해 보세요.
-          </p>
-          <Link
-            href="/theme"
-            className="hc-button-primary mt-4 inline-flex h-9 items-center rounded-full px-4 text-[12px] font-semibold"
-          >
-            프레임 만들러 가기
-          </Link>
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {frames.map((frame) => (
-            <article key={frame.frameId} className="flex flex-col gap-2">
-              <div className="aspect-[3/4] overflow-hidden rounded-xl border border-[color:var(--hc-border-subtle)] bg-[color:var(--hc-surface-muted)]">
-                {frame.source ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={frame.source}
-                    alt={frame.title || `프레임 #${frame.frameId}`}
-                    className="h-full w-full object-contain p-1.5"
-                  />
-                ) : (
-                  <div className="grid h-full w-full place-items-center p-2">
-                    <FramePreview
-                      frameId={frameIdFromFrameType(frame.frameType)}
-                    />
-                  </div>
-                )}
-              </div>
-              <p className="truncate text-[12px] font-semibold">
-                {frame.title || `프레임 #${frame.frameId}`}
-              </p>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function PreferencesSection() {
-  // 백엔드 미연동 — UI 선구현(추후 BE 합의 후 연동). 로컬 상태로만 동작.
-  const [highQuality, setHighQuality] = useState(true);
-  const [watermark, setWatermark] = useState(true);
-  const [language, setLanguage] = useState("ko");
-
-  return (
-    <section className="hc-surface-card rounded-[20px] border p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[17px] font-extrabold">환경 설정</h2>
-        <span className="rounded-full bg-[color:var(--hc-surface-muted)] px-2.5 py-1 text-[10.5px] font-semibold text-[color:var(--hc-muted)]">
-          연동 예정
-        </span>
       </div>
-      <p className="mt-1 text-[12px] text-[color:var(--hc-muted)]">
-        저장 화질·워터마크·언어 설정이에요. 서버 연동 전까지는 임시로 동작해요.
-      </p>
+    </div>
+  );
 
-      <div className="mt-4 flex flex-col">
-        <ToggleRow
-          title="고화질 저장"
-          desc="원본 해상도로 저장해요."
-          on={highQuality}
-          onToggle={() => setHighQuality((v) => !v)}
-        />
-        <ToggleRow
-          title="워터마크 표시"
-          desc="하루컷 로고를 함께 남겨요."
-          on={watermark}
-          onToggle={() => setWatermark((v) => !v)}
-        />
-        <div className="flex items-center justify-between gap-3 py-3.5">
-          <div>
-            <div className="text-[14px] font-bold">언어</div>
-            <div className="mt-0.5 text-[12px] text-[color:var(--hc-muted)]">
-              표시 언어를 선택해요.
-            </div>
+  const planSection = (
+    <div className="flex flex-col gap-3">
+      <div className="hc-surface-well grid gap-2 rounded-2xl border p-4 sm:grid-cols-2">
+        <div>
+          <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
+            <CreditCard className="h-4 w-4 text-[color:var(--hc-primary)]" />
+            <span className="text-[11.5px]">현재 플랜</span>
           </div>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="hc-input h-9 rounded-xl border px-3 text-[13px] outline-none"
-          >
-            <option value="ko">한국어</option>
-            <option value="en">English</option>
-          </select>
+          <p className="mt-1.5 text-[15px] font-bold">
+            {user?.planTier ?? "BASIC"}
+            {user?.monthlyPrice
+              ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원`
+              : ""}
+          </p>
         </div>
-      </div>
-    </section>
-  );
-}
-
-function ToggleRow({
-  title,
-  desc,
-  on,
-  onToggle,
-}: {
-  title: string;
-  desc: string;
-  on: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-[color:var(--hc-border-subtle)] py-3.5 last:border-b-0">
-      <div>
-        <div className="text-[14px] font-bold">{title}</div>
-        <div className="mt-0.5 text-[12px] text-[color:var(--hc-muted)]">
-          {desc}
+        <div>
+          <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
+            <User className="h-4 w-4 text-[color:var(--hc-primary)]" />
+            <span className="text-[11.5px]">로그인 플랫폼</span>
+          </div>
+          <p className="mt-1.5 text-[15px] font-bold">
+            {user?.loginPlatform ?? "HARUCUT"}
+          </p>
         </div>
       </div>
       <button
         type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={title}
-        onClick={onToggle}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-          on
-            ? "bg-[color:var(--hc-primary)]"
-            : "bg-[color:var(--hc-surface-muted-hover)]"
-        }`}
+        onClick={() => router.push("/pricing")}
+        className="hc-button-primary h-11 self-start rounded-full px-6 text-[13px] font-semibold"
       >
-        <span
-          className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${
-            on ? "left-6" : "left-1"
-          }`}
-        />
+        요금제 보기
       </button>
     </div>
+  );
+
+  const notifSection = (
+    <p className="text-[13px] leading-6 text-[color:var(--hc-muted)]">
+      알림 설정은 곧 제공될 예정이에요. 주간 리마인더와 좋아요 알림을 이곳에서
+      관리할 수 있게 준비하고 있어요.
+    </p>
+  );
+
+  const framesSection = (
+    <div className="flex flex-col gap-3">
+      <p className="text-[13px] text-[color:var(--hc-muted)]">
+        보관한 프레임 {stats.frames}개
+      </p>
+      <button
+        type="button"
+        onClick={() => router.push("/theme")}
+        className="hc-button-secondary h-11 self-start rounded-full border px-6 text-[13px] font-semibold"
+      >
+        내 프레임 관리
+      </button>
+    </div>
+  );
+
+  const prefSection = (
+    <div className="flex flex-col gap-4">
+      <ColorThemePreferencePanel />
+      <p className="text-[12.5px] leading-5 text-[color:var(--hc-muted)]">
+        화질·워터마크·언어 설정은 순차적으로 추가될 예정이에요.
+      </p>
+    </div>
+  );
+
+  const sectionTitle: Record<SectionId, string> = {
+    account: "계정 정보",
+    plan: "요금제",
+    notif: "알림 설정",
+    frames: "내 프레임",
+    pref: "설정",
+  };
+
+  const sectionBody: Record<SectionId, ReactElement> = {
+    account: accountSection,
+    plan: planSection,
+    notif: notifSection,
+    frames: framesSection,
+    pref: prefSection,
+  };
+
+  const logoutAndExit = (
+    <>
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={isSubmitting}
+        className="hc-button-secondary flex h-11 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-semibold disabled:opacity-50"
+      >
+        <LogOut className="h-4 w-4" />
+        로그아웃
+      </button>
+      <button
+        type="button"
+        onClick={handleExit}
+        disabled={isSubmitting}
+        className="mx-auto mt-3 block text-[12.5px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+      >
+        회원 탈퇴
+      </button>
+    </>
+  );
+
+  return (
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav userInitial={user?.username} />
+
+      <div className="mx-auto w-full max-w-[1000px] px-4 py-5 sm:py-6 lg:py-8">
+        <h1 className="text-[28px] font-extrabold tracking-tight lg:mb-7 lg:text-[34px]">
+          마이페이지
+        </h1>
+
+        {errors.common ? (
+          <p className="mt-3 text-[12px] text-[color:var(--hc-primary-strong)]">
+            {errors.common}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <div className="hc-surface-card mt-5 rounded-[20px] border p-5">
+            <p className="text-[12px] text-[color:var(--hc-muted)]">
+              정보를 불러오는 중...
+            </p>
+          </div>
+        ) : !user ? (
+          <div className="hc-surface-card mt-5 rounded-[20px] border p-5">
+            <p className="text-[12px] text-[color:var(--hc-muted)]">
+              내 정보를 불러오지 못했어요.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* ===== 데스크톱 (lg+) : 260px 사이드바 + 우측 콘텐츠 ===== */}
+            {isDesktop ? (
+            <div className="mt-2 hidden items-start gap-8 lg:grid lg:grid-cols-[260px_1fr]">
+              {/* 사이드바 */}
+              <div>
+                <div className="hc-surface-card mb-4 rounded-[20px] border p-6 text-center">
+                  <div className="mx-auto mb-3.5">{renderAvatar(80, 30)}</div>
+                  <div className="text-[18px] font-extrabold">
+                    {user.username}
+                  </div>
+                  <div className="mt-1 truncate text-[12px] text-[color:var(--hc-muted)]">
+                    {user.email}
+                  </div>
+                  <div className="mt-4 border-t border-[color:var(--hc-border-subtle)] pt-4">
+                    {statStrip}
+                  </div>
+                </div>
+
+                <div className="hc-surface-card overflow-hidden rounded-[20px] border">
+                  {SIDEBAR_SECTIONS.map((id, i) => {
+                    const meta = SECTION_META[id];
+                    const Icon = meta.icon;
+                    const active = section === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setSection(id)}
+                        className={`flex w-full items-center gap-3 px-4 py-3.5 text-left ${i ? "border-t border-[color:var(--hc-border-subtle)]" : ""}`}
+                        style={active ? { background: iconTint } : undefined}
+                      >
+                        <Icon
+                          className="h-[19px] w-[19px]"
+                          style={{
+                            color: active
+                              ? "var(--hc-primary)"
+                              : "var(--hc-muted)",
+                          }}
+                        />
+                        <span
+                          className="text-[14px] font-bold"
+                          style={{
+                            color: active
+                              ? "var(--hc-primary-strong)"
+                              : "var(--hc-text)",
+                          }}
+                        >
+                          {meta.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4">{logoutAndExit}</div>
+              </div>
+
+              {/* 우측 콘텐츠 카드 */}
+              <div className="hc-surface-card rounded-[20px] border p-8">
+                <h2 className="mb-6 text-[21px] font-extrabold">
+                  {sectionTitle[section]}
+                </h2>
+                {sectionBody[section]}
+              </div>
+            </div>
+            ) : null}
+
+            {/* ===== 모바일/태블릿 (<lg) : 앱 MyPage 레이아웃 ===== */}
+            {!isDesktop ? (
+            <div className="mt-4 flex flex-col gap-5 lg:hidden">
+              {/* 프로필 */}
+              <div className="flex items-center gap-4 px-0.5 pb-1">
+                {renderAvatar(64, 24)}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[18px] font-extrabold">
+                    {user.username}
+                  </div>
+                  <div className="truncate text-[13px] text-[color:var(--hc-muted)]">
+                    {user.email}
+                  </div>
+                </div>
+              </div>
+
+              {/* 스탯 3셀 */}
+              <div className="hc-surface-card rounded-[20px] border py-4">
+                {statStrip}
+              </div>
+
+              {/* 그룹 메뉴 행 */}
+              <div className="hc-surface-card overflow-hidden rounded-[20px] border">
+                {MOBILE_SECTIONS.map((id, i) => {
+                  const meta = SECTION_META[id];
+                  const Icon = meta.icon;
+                  const isOpen = openMobile === id;
+                  return (
+                    <div
+                      key={id}
+                      className={
+                        i
+                          ? "border-t border-[color:var(--hc-border-subtle)]"
+                          : ""
+                      }
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (id === "plan") {
+                            router.push("/pricing");
+                            return;
+                          }
+                          setOpenMobile((prev) => (prev === id ? null : id));
+                        }}
+                        className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left"
+                      >
+                        <span
+                          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl"
+                          style={{ background: iconTint }}
+                        >
+                          <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary)]" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14.5px] font-bold">
+                            {meta.title}
+                          </span>
+                          <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">
+                            {id === "frames"
+                              ? `보관한 프레임 ${stats.frames}개`
+                              : id === "plan"
+                                ? `${user.planTier ?? "BASIC"}${user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원` : ""}`
+                                : meta.sub}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          className="h-[18px] w-[18px] shrink-0 text-[color:var(--hc-muted)] transition-transform"
+                          style={
+                            isOpen ? { transform: "rotate(90deg)" } : undefined
+                          }
+                        />
+                      </button>
+                      {isOpen && id !== "plan" ? (
+                        <div className="border-t border-[color:var(--hc-border-subtle)] px-4 py-5">
+                          {sectionBody[id]}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 로그아웃 / 탈퇴 */}
+              <div className="mt-1">{logoutAndExit}</div>
+
+              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted-soft)]">
+                하루컷 v1.0.0
+              </p>
+            </div>
+            ) : null}
+          </>
+        )}
+      </div>
+      <MobileTabBar />
+    </main>
   );
 }

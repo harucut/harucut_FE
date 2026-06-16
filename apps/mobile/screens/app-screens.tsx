@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ComponentProps, useEffect, useMemo, useState } from 'react';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, Pill, SurfaceCard } from '@/components/harucut/ui';
@@ -42,6 +42,9 @@ const THEME_OPTIONS: Array<{
     value: 'dark',
   },
 ];
+
+// 핸드오프 app MyPage의 그룹 메뉴 행 구성(순서·아이콘·서브카피 동일)
+type MyMenuId = 'account' | 'plan' | 'notif' | 'frames' | 'pref';
 
 function historyPreviewAsset(item: HistoryItem) {
   return item.previewMedia[0] ?? null;
@@ -927,9 +930,10 @@ function HistoryCalendar({
 }
 
 export function MyPageScreen() {
-  const { colors, isDark, styles } = useAppScreenTheme();
+  const { colors, styles } = useAppScreenTheme();
   const router = useRouter();
   const replace = (path: string) => router.replace(path as never);
+  const push = (path: string) => router.push(path as never);
   const user = useSessionStore((state) => state.user);
   const refreshUserProfile = useSessionStore((state) => state.refreshUserProfile);
   const setUserProfile = useSessionStore((state) => state.setUserProfile);
@@ -937,8 +941,23 @@ export function MyPageScreen() {
   const showNotice = useSessionStore((state) => state.showNotice);
   const themePreference = useSessionStore((state) => state.themePreference);
   const setThemePreference = useSessionStore((state) => state.setThemePreference);
-  const savedCount = useLibraryStore((state) => state.historyItems.length);
+  const historyItems = useLibraryStore((state) => state.historyItems);
+  const savedCount = historyItems.length;
   const savedFrameCount = useLibraryStore((state) => state.savedFrames.length);
+  const thisMonthCount = useMemo(() => {
+    const now = new Date();
+    return historyItems.filter((item) => {
+      const created = new Date(item.createdAt);
+      if (Number.isNaN(created.getTime())) {
+        return false;
+      }
+      return (
+        created.getFullYear() === now.getFullYear() &&
+        created.getMonth() === now.getMonth()
+      );
+    }).length;
+  }, [historyItems]);
+  const [openSection, setOpenSection] = useState<MyMenuId | null>(null);
   const [username, setUsername] = useState(user.username);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -1061,6 +1080,23 @@ export function MyPageScreen() {
     }
   };
 
+  // 탈퇴는 되돌리기 어려운 비활성화 작업이므로, 30일 복구 안내와 함께
+  // 확인 단계를 거친 뒤에만 실제 요청을 보낸다(웹 마이페이지와 동일 안내).
+  const confirmExit = () => {
+    if (submitting) {
+      return;
+    }
+
+    Alert.alert(
+      '정말 탈퇴하시겠어요?',
+      '탈퇴 신청일부터 30일 내로 다시 로그인하면 계정을 복구할 수 있어요.',
+      [
+        { style: 'cancel', text: '취소' },
+        { onPress: () => void handleExit(), style: 'destructive', text: '탈퇴하기' },
+      ],
+    );
+  };
+
   const avatarInitial = user.username?.trim().charAt(0) || '하';
 
   return (
@@ -1109,127 +1145,236 @@ export function MyPageScreen() {
           <Text style={styles.statStripLabel}>총 네 컷</Text>
         </View>
         <View style={[styles.statStripCell, styles.statStripDivider]}>
+          <Text style={styles.statStripNumber}>{thisMonthCount}</Text>
+          <Text style={styles.statStripLabel}>이번 달</Text>
+        </View>
+        <View style={[styles.statStripCell, styles.statStripDivider]}>
           <Text style={styles.statStripNumber}>{savedFrameCount}</Text>
           <Text style={styles.statStripLabel}>보관 프레임</Text>
         </View>
-        <View style={[styles.statStripCell, styles.statStripDivider]}>
-          <Text style={styles.statStripNumber}>{user.planTier}</Text>
-          <Text style={styles.statStripLabel}>플랜</Text>
-        </View>
       </View>
 
-      <SurfaceCard style={{ gap: 14 }}>
-        <View style={styles.quickGrid}>
-          <View style={styles.infoTile}>
-            <Text style={styles.linkBody}>로그인 플랫폼</Text>
-            <Text style={styles.linkTitle}>{user.loginPlatform}</Text>
-          </View>
-          <View style={styles.infoTile}>
-            <Text style={styles.linkBody}>플랜</Text>
-            <Text style={styles.linkTitle}>
-              {user.planTier}
-              {user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원` : ''}
-            </Text>
-          </View>
-        </View>
-      </SurfaceCard>
+      <View style={styles.menuCard}>
+        {(
+          [
+            {
+              icon: 'person-outline',
+              id: 'account',
+              sub: '이메일, 닉네임, 비밀번호 변경',
+              title: '계정 정보',
+            },
+            {
+              icon: 'sparkles-outline',
+              id: 'plan',
+              sub: `${user.planTier}${user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원` : ''}`,
+              title: '요금제',
+            },
+            {
+              icon: 'notifications-outline',
+              id: 'notif',
+              sub: '푸시, 주간 리마인더',
+              title: '알림 설정',
+            },
+            {
+              icon: 'images-outline',
+              id: 'frames',
+              sub: `보관한 프레임 ${savedFrameCount}개`,
+              title: '내 프레임',
+            },
+            {
+              icon: 'settings-outline',
+              id: 'pref',
+              sub: '테마, 화질, 워터마크',
+              title: '설정',
+            },
+          ] as {
+            icon: ComponentProps<typeof Ionicons>['name'];
+            id: MyMenuId;
+            sub: string;
+            title: string;
+          }[]
+        ).map((row, index) => {
+          const open = openSection === row.id;
 
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>닉네임 변경</Text>
-        <Text style={styles.bodyCopy}>서비스에서 표시될 이름을 수정할 수 있어요.</Text>
-        <FormField label="닉네임" onChangeText={setUsername} placeholder="닉네임을 입력해 주세요" value={username} />
-        <ActionButton label={submitting ? '저장 중...' : '저장'} onPress={() => void handleUpdateUsername()} />
-      </SurfaceCard>
-
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>비밀번호 변경</Text>
-        <FormField
-          label="현재 비밀번호"
-          onChangeText={setOldPassword}
-          placeholder="현재 비밀번호를 입력해 주세요"
-          secure
-          value={oldPassword}
-        />
-        <FormField
-          label="새 비밀번호"
-          onChangeText={setNewPassword}
-          placeholder="새 비밀번호를 입력해 주세요"
-          secure
-          value={newPassword}
-        />
-        <FormField
-          label="새 비밀번호 확인"
-          onChangeText={setConfirmPassword}
-          placeholder="새 비밀번호를 한 번 더 입력해 주세요"
-          secure
-          value={confirmPassword}
-        />
-        <ActionButton
-          label={submitting ? '변경 중...' : '비밀번호 변경'}
-          onPress={() => void handleChangePassword()}
-        />
-      </SurfaceCard>
-
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>앱 테마</Text>
-        <View style={styles.themeOptionList}>
-          {THEME_OPTIONS.map((option) => {
-            const active = themePreference === option.value;
-
-            return (
+          return (
+            <View
+              key={row.id}
+              style={index ? styles.menuRowDivider : undefined}>
               <Pressable
-                key={option.value}
-                onPress={() => setThemePreference(option.value)}
+                accessibilityRole="button"
+                onPress={() =>
+                  setOpenSection((prev) => (prev === row.id ? null : row.id))
+                }
                 style={({ pressed }) => [
-                  styles.themeOption,
-                  active ? styles.themeOptionActive : null,
-                  pressed ? styles.themeOptionPressed : null,
+                  styles.menuRow,
+                  pressed ? styles.menuRowPressed : null,
                 ]}>
-                <View style={styles.themeOptionHeader}>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={[styles.themeOptionLabel, active ? styles.themeOptionLabelActive : null]}>
-                      {option.label}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.themeOptionDescription,
-                        active ? styles.themeOptionDescriptionActive : null,
-                      ]}>
-                      {option.description}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    color={active ? colors.primary : colors.muted}
-                    name={active ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={18}
-                  />
+                <View style={styles.menuRowIcon}>
+                  <Ionicons color={colors.primary} name={row.icon} size={19} />
                 </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.menuRowTitle}>{row.title}</Text>
+                  <Text style={styles.menuRowSub}>{row.sub}</Text>
+                </View>
+                <Ionicons
+                  color={colors.muted}
+                  name={open ? 'chevron-down' : 'chevron-forward'}
+                  size={18}
+                />
               </Pressable>
-            );
-          })}
-        </View>
-      </SurfaceCard>
 
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>로그아웃</Text>
-        <ActionButton
-          label={submitting ? '로그아웃 중...' : '로그아웃'}
-          onPress={() => void handleLogout()}
-          variant="secondary"
-        />
-      </SurfaceCard>
+              {open ? (
+                <View style={styles.menuRowBody}>
+                  {row.id === 'account' ? (
+                    <View style={{ gap: 16 }}>
+                      <View style={{ gap: 12 }}>
+                        <Text style={styles.sectionTitle}>닉네임 변경</Text>
+                        <Text style={styles.bodyCopy}>
+                          서비스에서 표시될 이름을 수정할 수 있어요.
+                        </Text>
+                        <FormField
+                          label="닉네임"
+                          onChangeText={setUsername}
+                          placeholder="닉네임을 입력해 주세요"
+                          value={username}
+                        />
+                        <ActionButton
+                          label={submitting ? '저장 중...' : '저장'}
+                          onPress={() => void handleUpdateUsername()}
+                        />
+                      </View>
+                      <View style={{ gap: 12 }}>
+                        <Text style={styles.sectionTitle}>비밀번호 변경</Text>
+                        <FormField
+                          label="현재 비밀번호"
+                          onChangeText={setOldPassword}
+                          placeholder="현재 비밀번호를 입력해 주세요"
+                          secure
+                          value={oldPassword}
+                        />
+                        <FormField
+                          label="새 비밀번호"
+                          onChangeText={setNewPassword}
+                          placeholder="새 비밀번호를 입력해 주세요"
+                          secure
+                          value={newPassword}
+                        />
+                        <FormField
+                          label="새 비밀번호 확인"
+                          onChangeText={setConfirmPassword}
+                          placeholder="새 비밀번호를 한 번 더 입력해 주세요"
+                          secure
+                          value={confirmPassword}
+                        />
+                        <ActionButton
+                          label={submitting ? '변경 중...' : '비밀번호 변경'}
+                          onPress={() => void handleChangePassword()}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
 
-      <SurfaceCard style={[styles.exitCard, { gap: 12 }]}>
-        <Text style={styles.exitTitle}>회원 탈퇴 요청</Text>
-        <Text style={styles.exitBody}>
-          탈퇴를 요청하면 계정이 비활성화돼요. 다시 로그인하면 탈퇴를 취소하고 계정을 다시 사용할 수 있어요.
-        </Text>
-        <ActionButton
-          label="회원 탈퇴 요청"
-          onPress={() => void handleExit()}
-          variant="danger"
-        />
-      </SurfaceCard>
+                  {row.id === 'plan' ? (
+                    <View style={styles.quickGrid}>
+                      <View style={styles.infoTile}>
+                        <Text style={styles.linkBody}>로그인 플랫폼</Text>
+                        <Text style={styles.linkTitle}>{user.loginPlatform}</Text>
+                      </View>
+                      <View style={styles.infoTile}>
+                        <Text style={styles.linkBody}>플랜</Text>
+                        <Text style={styles.linkTitle}>
+                          {user.planTier}
+                          {user.monthlyPrice
+                            ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원`
+                            : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {row.id === 'notif' ? (
+                    <Text style={styles.bodyCopy}>
+                      알림 설정은 곧 제공될 예정이에요. 주간 리마인더와 좋아요
+                      알림을 이곳에서 관리할 수 있게 준비하고 있어요.
+                    </Text>
+                  ) : null}
+
+                  {row.id === 'frames' ? (
+                    <ActionButton
+                      label="내 프레임 관리"
+                      onPress={() => push('/theme')}
+                      variant="secondary"
+                    />
+                  ) : null}
+
+                  {row.id === 'pref' ? (
+                    <View style={{ gap: 12 }}>
+                      <Text style={styles.sectionTitle}>앱 테마</Text>
+                      <View style={styles.themeOptionList}>
+                        {THEME_OPTIONS.map((option) => {
+                          const active = themePreference === option.value;
+
+                          return (
+                            <Pressable
+                              key={option.value}
+                              onPress={() => setThemePreference(option.value)}
+                              style={({ pressed }) => [
+                                styles.themeOption,
+                                active ? styles.themeOptionActive : null,
+                                pressed ? styles.themeOptionPressed : null,
+                              ]}>
+                              <View style={styles.themeOptionHeader}>
+                                <View style={{ flex: 1, gap: 4 }}>
+                                  <Text
+                                    style={[
+                                      styles.themeOptionLabel,
+                                      active ? styles.themeOptionLabelActive : null,
+                                    ]}>
+                                    {option.label}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.themeOptionDescription,
+                                      active
+                                        ? styles.themeOptionDescriptionActive
+                                        : null,
+                                    ]}>
+                                    {option.description}
+                                  </Text>
+                                </View>
+                                <Ionicons
+                                  color={active ? colors.primary : colors.muted}
+                                  name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                                  size={18}
+                                />
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      <ActionButton
+        label={submitting ? '로그아웃 중...' : '로그아웃'}
+        onPress={() => void handleLogout()}
+        variant="secondary"
+      />
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={confirmExit}
+        style={styles.exitLinkButton}>
+        <Text style={styles.exitLinkText}>회원 탈퇴</Text>
+      </Pressable>
+
+      <Text style={styles.appVersion}>하루컷 v1.0.0</Text>
     </AppScrollView>
   );
 }
@@ -1468,19 +1613,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       justifyContent: 'center',
       width: 42,
     },
-    exitCard: {
-      backgroundColor: colors.dangerSoft,
-    },
-    exitTitle: {
-      color: colors.danger,
-      fontSize: 18,
-      fontWeight: '700',
-    },
-    exitBody: {
-      color: isDark ? '#FECACA' : '#7F1D1D',
-      fontSize: 12,
-      lineHeight: 18,
-    },
     filterRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1661,6 +1793,66 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     linkTitle: {
       color: colors.text,
       fontSize: 14,
+      fontWeight: '700',
+    },
+    appVersion: {
+      color: colors.muted,
+      fontSize: 11,
+      marginTop: 6,
+      textAlign: 'center',
+    },
+    exitLinkButton: {
+      alignSelf: 'center',
+      marginTop: 6,
+      paddingVertical: 4,
+    },
+    exitLinkText: {
+      color: colors.muted,
+      fontSize: 12.5,
+      textDecorationLine: 'underline',
+    },
+    menuCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 20,
+      borderWidth: 1,
+      overflow: 'hidden',
+    },
+    menuRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 15,
+    },
+    menuRowBody: {
+      borderTopColor: colors.border,
+      borderTopWidth: 1,
+      paddingHorizontal: 16,
+      paddingVertical: 18,
+    },
+    menuRowDivider: {
+      borderTopColor: colors.border,
+      borderTopWidth: 1,
+    },
+    menuRowIcon: {
+      alignItems: 'center',
+      backgroundColor: tintedSurface,
+      borderRadius: 11,
+      height: 38,
+      justifyContent: 'center',
+      width: 38,
+    },
+    menuRowPressed: {
+      opacity: 0.7,
+    },
+    menuRowSub: {
+      color: colors.muted,
+      fontSize: 12,
+    },
+    menuRowTitle: {
+      color: colors.text,
+      fontSize: 14.5,
       fontWeight: '700',
     },
     profileAvatar: {
