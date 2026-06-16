@@ -7,7 +7,7 @@ import { captureRef } from 'react-native-view-shot';
 
 import { FrameCapacityMeter, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
-import { BACKGROUND_SWATCHES, THEME_STICKERS, type ThemeAsset, type ThemeComponentType, type ThemeEditorComponent } from '@/constants/harucut-data';
+import { BACKGROUND_SWATCHES, FRAME_COLOR_SWATCHES, THEME_STICKERS, THEME_TEXT_COLOR_SWATCHES, type ThemeAsset, type ThemeEditorComponent } from '@/constants/harucut-data';
 import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -15,9 +15,18 @@ import { getApiErrorMessage } from '@/lib/api-client';
 import { getPresignedImageUrl, resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 import { useLibraryStore } from '@/store/use-library-store';
 import { useSessionStore } from '@/store/use-session-store';
-import { useThemeEditorStore } from '@/store/use-theme-editor-store';
+import { useThemeEditorStore, type ThemeDecorateTab } from '@/store/use-theme-editor-store';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+const DECORATE_TABS: [ThemeDecorateTab, string][] = [
+  ['photo', '사진'],
+  ['frame', '프레임색'],
+  ['text', '텍스트'],
+  ['sticker', '스티커'],
+  ['cut', '누끼'],
+  ['layer', '선택'],
+];
 
 function useThemeScreenStyles() {
   const { colors } = useHarucutTheme();
@@ -95,6 +104,7 @@ export function ThemeStickerScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useThemeScreenStyles();
+  const { colors: themeColors } = useHarucutTheme();
   const themeEditor = useThemeEditorStore();
   const setThemeTitle = useThemeEditorStore((state) => state.setThemeTitle);
   const setThemeDescription = useThemeEditorStore((state) => state.setThemeDescription);
@@ -118,9 +128,12 @@ export function ThemeStickerScreen() {
   const saveThemeFrame = useThemeEditorStore((state) => state.saveThemeFrame);
   const removeSavedFrame = useThemeEditorStore((state) => state.removeSavedFrame);
   const showNotice = useSessionStore((state) => state.showNotice);
+  const toggleThemeCellCutout = useThemeEditorStore((state) => state.toggleThemeCellCutout);
+  const updateThemeComponent = useThemeEditorStore((state) => state.updateThemeComponent);
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [textDraft, setTextDraft] = useState('하루컷');
+  const [decorateTab, setDecorateTab] = useState<ThemeDecorateTab>('photo');
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState(themeEditor.title);
@@ -317,35 +330,56 @@ export function ThemeStickerScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.sectionTitle}>미리보기</Text>
-          {activeComponent ? <Text style={styles.activeBadge}>{activeComponent.type}</Text> : null}
+          <Text style={styles.sectionTitle}>꾸미기</Text>
+          <Pressable accessibilityRole="button" onPress={openSaveDialog}>
+            <Text style={styles.doneText}>{saving ? '저장 중...' : '완료'}</Text>
+          </Pressable>
         </View>
         <View collapsable={false} ref={previewRef} style={styles.previewWrap}>
           <FramePreview
             activeComponentId={themeEditor.activeComponentId}
             backgroundColor={themeEditor.backgroundColor}
             backgroundImageUri={themeEditor.backgroundImageUri ?? undefined}
+            cellCutouts={themeEditor.cellCutouts}
             components={themeEditor.components}
+            cutMode={decorateTab === 'cut'}
             editorMode
             frameId={themeEditor.frameId}
+            onCellTap={toggleThemeCellCutout}
             onSelectComponent={setThemeActiveComponent}
             onTransformComponent={transformThemeComponent}
           />
         </View>
       </SurfaceCard>
 
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>소재</Text>
-        <View style={styles.tabRow}>
-          {(['PHOTO', 'STICKER', 'TEXT'] as ThemeComponentType[]).map((tab) => (
-            <Pill key={tab} active={themeEditor.tab === tab} onPress={() => setThemeTab(tab)}>
-              {tab === 'PHOTO' ? '사진' : tab === 'STICKER' ? '스티커' : '텍스트'}
-            </Pill>
+      {/* 하단 시트 6탭: 사진 · 프레임색 · 텍스트 · 스티커 · 누끼 · 선택 (핸드오프 app-decorate) */}
+      <SurfaceCard style={{ gap: 14 }}>
+        <ScrollView
+          contentContainerStyle={styles.decorateTabRow}
+          horizontal
+          showsHorizontalScrollIndicator={false}>
+          {DECORATE_TABS.map(([id, label]) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: decorateTab === id }}
+              key={id}
+              onPress={() => {
+                setDecorateTab(id);
+                if (id === 'photo') setThemeTab('PHOTO');
+                if (id === 'sticker') setThemeTab('STICKER');
+                if (id === 'text') setThemeTab('TEXT');
+              }}
+              style={[styles.decorateTab, decorateTab === id ? styles.decorateTabActive : null]}>
+              <Text style={[styles.decorateTabText, decorateTab === id ? styles.decorateTabTextActive : null]}>
+                {label}
+              </Text>
+            </Pressable>
           ))}
-        </View>
+        </ScrollView>
 
-        {themeEditor.tab === 'PHOTO' ? (
+        {decorateTab === 'photo' ? (
           <View style={{ gap: 12 }}>
+            <Text style={styles.bodyText}>프레임에 넣을 사진을 올려요 · 최대 8장</Text>
             <ActionButton
               icon={<Ionicons color="#FFFFFF" name="images-outline" size={16} />}
               label={uploadingPhotos ? '업로드 중...' : '사진 추가'}
@@ -391,10 +425,69 @@ export function ThemeStickerScreen() {
                 </View>
               </ScrollView>
             )}
+            <Text style={styles.bodyText}>올린 사진을 눌러 프레임 위에 올린 뒤 드래그로 배치해요.</Text>
           </View>
         ) : null}
 
-        {themeEditor.tab === 'STICKER' ? (
+        {decorateTab === 'frame' ? (
+          <View style={{ gap: 14 }}>
+            <Text style={styles.panelLabel}>프레임(스트립) 색</Text>
+            <View style={styles.swatchRow}>
+              {FRAME_COLOR_SWATCHES.map((color) => (
+                <ColorSwatch
+                  key={color}
+                  color={color}
+                  onPress={() => setThemeBackgroundColor(color)}
+                  selected={!themeEditor.backgroundImageUri && themeEditor.backgroundColor.toUpperCase() === color.toUpperCase()}
+                  styles={styles}
+                />
+              ))}
+            </View>
+            <Text style={styles.panelLabel}>추천 배경색</Text>
+            <View style={styles.swatchRow}>
+              {BACKGROUND_SWATCHES.map((color) => (
+                <ColorSwatch
+                  key={color.value}
+                  color={color.value}
+                  onPress={() => setThemeBackgroundColor(color.value)}
+                  selected={!themeEditor.backgroundImageUri && themeEditor.backgroundColor.toUpperCase() === color.value.toUpperCase()}
+                  styles={styles}
+                />
+              ))}
+            </View>
+            <View style={styles.filterWrap}>
+              <ActionButton
+                icon={<Ionicons color="#FFFFFF" name="image-outline" size={16} />}
+                label={themeEditor.backgroundImageUri ? '배경 이미지 변경' : '배경 이미지'}
+                onPress={() => void handlePickBackground()}
+                style={{ flex: 1 }}
+              />
+              {themeEditor.backgroundImageUri ? (
+                <ActionButton
+                  label="이미지 제거"
+                  onPress={clearThemeBackgroundImage}
+                  style={{ flex: 1 }}
+                  variant="secondary"
+                />
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {decorateTab === 'text' ? (
+          <View style={{ gap: 12 }}>
+            <FormField
+              label="텍스트"
+              onChangeText={setTextDraft}
+              placeholder="하루컷"
+              value={textDraft}
+            />
+            <ActionButton label="＋ 텍스트 추가" onPress={() => { addThemeText(textDraft); setDecorateTab('layer'); }} />
+            <Text style={styles.bodyText}>추가한 뒤 ‘선택’ 탭에서 회전·크기·색을 바꿔요.</Text>
+          </View>
+        ) : null}
+
+        {decorateTab === 'sticker' ? (
           <View style={styles.stickerGrid}>
             {THEME_STICKERS.map((sticker) => (
               <Pill
@@ -406,78 +499,75 @@ export function ThemeStickerScreen() {
           </View>
         ) : null}
 
-        {themeEditor.tab === 'TEXT' ? (
+        {decorateTab === 'cut' ? (
           <View style={{ gap: 12 }}>
-            <FormField
-              label="텍스트"
-              onChangeText={setTextDraft}
-              placeholder="하루컷"
-              value={textDraft}
-            />
-            <ActionButton label="텍스트 추가" onPress={() => addThemeText(textDraft)} />
+            <Text style={styles.panelLabel}>누끼 따기 (배경 제거)</Text>
+            <Text style={styles.bodyText}>
+              위 미리보기에서 칸을 누르면 인물만 남기고 배경을 지워요. 다시 누르면 원래대로 돌아와요.
+            </Text>
+            <View style={styles.cutGrid}>
+              {[0, 1, 2, 3].map((index) => {
+                const on = themeEditor.cellCutouts[index];
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    key={index}
+                    onPress={() => toggleThemeCellCutout(index)}
+                    style={[styles.cutChip, on ? styles.cutChipActive : null]}>
+                    <Text style={[styles.cutChipText, on ? styles.cutChipTextActive : null]}>
+                      {index + 1}번 칸 {on ? '적용됨' : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         ) : null}
-      </SurfaceCard>
 
-      <SurfaceCard style={{ gap: 12 }}>
-        <Text style={styles.sectionTitle}>배경</Text>
-        <Text style={styles.bodyText}>색 또는 이미지를 고르면 사진 칸 뒤에 깔려요.</Text>
-        <View style={styles.filterWrap}>
-          {BACKGROUND_SWATCHES.map((color) => (
-            <Pill
-              key={color.value}
-              active={!themeEditor.backgroundImageUri && themeEditor.backgroundColor === color.value}
-              onPress={() => setThemeBackgroundColor(color.value)}>
-              {color.label}
-            </Pill>
-          ))}
-        </View>
-        <View style={styles.filterWrap}>
-          <ActionButton
-            icon={<Ionicons color="#FFFFFF" name="image-outline" size={16} />}
-            label={themeEditor.backgroundImageUri ? '배경 이미지 변경' : '배경 이미지 선택'}
-            onPress={() => void handlePickBackground()}
-            style={{ flex: 1 }}
-          />
-          {themeEditor.backgroundImageUri ? (
-            <ActionButton
-              label="이미지 제거"
-              onPress={clearThemeBackgroundImage}
-              style={{ flex: 1 }}
-              variant="secondary"
-            />
-          ) : null}
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard style={{ gap: 12 }}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.sectionTitle}>레이어</Text>
-          <Text style={styles.bodyText}>{themeEditor.components.length}개</Text>
-        </View>
-        {themeEditor.components.length === 0 ? (
-          <Text style={styles.bodyText}>추가한 레이어가 없어요.</Text>
-        ) : (
-          <View style={styles.layerList}>
-            {themeEditor.components.map((component, index) => (
-              <ThemeLayerRow
-                key={component.id}
-                active={component.id === themeEditor.activeComponentId}
-                component={component}
-                isFirst={index === 0}
-                isLast={index === themeEditor.components.length - 1}
-                onDelete={() => removeThemeComponent(component.id)}
-                onDuplicate={() => duplicateThemeComponent(component.id)}
-                onMoveDown={() => moveThemeComponentDown(component.id)}
-                onMoveUp={() => moveThemeComponentUp(component.id)}
-                onSelect={() => setThemeActiveComponent(component.id)}
-                onToggleHidden={() => toggleThemeComponentHidden(component.id)}
-                onToggleLocked={() => toggleThemeComponentLocked(component.id)}
+        {decorateTab === 'layer' ? (
+          <View style={{ gap: 12 }}>
+            {activeComponent ? (
+              <ThemeSelectionInspector
+                colors={themeColors}
+                component={activeComponent}
+                onChange={(patch) => updateThemeComponent(activeComponent.id, patch)}
+                onDelete={() => removeThemeComponent(activeComponent.id)}
                 styles={styles}
               />
-            ))}
+            ) : (
+              <Text style={styles.bodyText}>미리보기에서 텍스트·스티커·사진을 눌러 선택하세요.</Text>
+            )}
+
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.panelLabel}>레이어</Text>
+              <Text style={styles.bodyText}>{themeEditor.components.length}개</Text>
+            </View>
+            {themeEditor.components.length === 0 ? (
+              <Text style={styles.bodyText}>추가한 레이어가 없어요.</Text>
+            ) : (
+              <View style={styles.layerList}>
+                {themeEditor.components.map((component, index) => (
+                  <ThemeLayerRow
+                    key={component.id}
+                    active={component.id === themeEditor.activeComponentId}
+                    component={component}
+                    isFirst={index === 0}
+                    isLast={index === themeEditor.components.length - 1}
+                    onDelete={() => removeThemeComponent(component.id)}
+                    onDuplicate={() => duplicateThemeComponent(component.id)}
+                    onMoveDown={() => moveThemeComponentDown(component.id)}
+                    onMoveUp={() => moveThemeComponentUp(component.id)}
+                    onSelect={() => setThemeActiveComponent(component.id)}
+                    onToggleHidden={() => toggleThemeComponentHidden(component.id)}
+                    onToggleLocked={() => toggleThemeComponentLocked(component.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
+            )}
           </View>
-        )}
+        ) : null}
       </SurfaceCard>
 
       <SurfaceCard style={{ gap: 12 }}>
@@ -552,6 +642,124 @@ export function ThemeStickerScreen() {
         </View>
       </Modal>
     </AppScrollView>
+  );
+}
+
+function ColorSwatch({
+  color,
+  onPress,
+  selected,
+  styles,
+}: {
+  color: string;
+  onPress: () => void;
+  selected: boolean;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`${color} 색`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.swatch, { backgroundColor: color }, selected ? styles.swatchSelected : null]}
+    />
+  );
+}
+
+// 핸드오프 "선택" 탭: 회전·크기·(텍스트)색을 바꾸고 삭제한다.
+function ThemeSelectionInspector({
+  colors,
+  component,
+  onChange,
+  onDelete,
+  styles,
+}: {
+  colors: HarucutColors;
+  component: ThemeEditorComponent;
+  onChange: (patch: Partial<ThemeEditorComponent> & { styleJson?: ThemeEditorComponent['styleJson'] }) => void;
+  onDelete: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const isText = component.type === 'TEXT';
+  const rotation = Math.round(component.rotation ?? 0);
+  const stepRotation = (delta: number) => onChange({ rotation: (component.rotation ?? 0) + delta });
+  const stepSize = (factor: number) => {
+    if (isText) {
+      const current = component.styleJson?.fontSize ?? 128;
+      const next = Math.min(420, Math.max(12, Math.round(current * factor)));
+      onChange({ styleJson: { ...(component.styleJson ?? {}), fontSize: next } });
+    } else {
+      const next = Math.min(3, Math.max(0.2, (component.scale ?? 1) * factor));
+      onChange({ scale: next });
+    }
+  };
+
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.panelLabel}>
+          {isText ? `"${component.source}"` : component.type === 'PHOTO' ? '사진' : component.source} 편집
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onDelete} style={styles.deletePill}>
+          <Ionicons color="#FFFFFF" name="trash-outline" size={13} />
+          <Text style={styles.deletePillText}>삭제</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.stepRow}>
+        <Text style={styles.stepLabel}>회전</Text>
+        <View style={styles.stepControls}>
+          <StepButton label="-" onPress={() => stepRotation(-15)} styles={styles} />
+          <Text style={styles.stepValue}>{rotation}°</Text>
+          <StepButton label="+" onPress={() => stepRotation(15)} styles={styles} />
+        </View>
+      </View>
+
+      <View style={styles.stepRow}>
+        <Text style={styles.stepLabel}>크기</Text>
+        <View style={styles.stepControls}>
+          <StepButton label="-" onPress={() => stepSize(0.9)} styles={styles} />
+          <Text style={styles.stepValue}>
+            {isText ? `${Math.round(component.styleJson?.fontSize ?? 128)}` : `${Math.round((component.scale ?? 1) * 100)}%`}
+          </Text>
+          <StepButton label="+" onPress={() => stepSize(1.1)} styles={styles} />
+        </View>
+      </View>
+
+      {isText ? (
+        <View style={{ gap: 8 }}>
+          <Text style={styles.panelLabel}>글자 색</Text>
+          <View style={styles.swatchRow}>
+            {THEME_TEXT_COLOR_SWATCHES.map((color) => (
+              <ColorSwatch
+                key={color}
+                color={color}
+                onPress={() => onChange({ styleJson: { ...(component.styleJson ?? {}), color } })}
+                selected={(component.styleJson?.color ?? '#FFFFFF').toUpperCase() === color.toUpperCase()}
+                styles={styles}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function StepButton({
+  label,
+  onPress,
+  styles,
+}: {
+  label: string;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.stepButton}>
+      <Text style={styles.stepButtonText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -699,6 +907,130 @@ function createStyles(colors: HarucutColors) {
       flexDirection: 'row',
       justifyContent: 'space-between',
     },
+    doneText: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    decorateTabRow: {
+      flexDirection: 'row',
+      gap: 6,
+      paddingRight: 8,
+    },
+    decorateTab: {
+      backgroundColor: colors.cardStrong,
+      borderRadius: 999,
+      height: 36,
+      justifyContent: 'center',
+      paddingHorizontal: 16,
+    },
+    decorateTabActive: {
+      backgroundColor: '#FFFFFF',
+    },
+    decorateTabText: {
+      color: colors.muted,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    decorateTabTextActive: {
+      color: '#0B0B0C',
+    },
+    panelLabel: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    swatchRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    swatch: {
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 40,
+      width: 40,
+    },
+    swatchSelected: {
+      borderColor: colors.primary,
+      borderWidth: 3,
+    },
+    cutGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    cutChip: {
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    cutChipActive: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
+    },
+    cutChipText: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    cutChipTextActive: {
+      color: colors.primaryStrong,
+    },
+    deletePill: {
+      alignItems: 'center',
+      backgroundColor: colors.danger,
+      borderRadius: 999,
+      flexDirection: 'row',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+    },
+    deletePillText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    stepRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    stepLabel: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    stepControls: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 12,
+    },
+    stepValue: {
+      color: colors.muted,
+      fontSize: 12,
+      minWidth: 48,
+      textAlign: 'center',
+    },
+    stepButton: {
+      alignItems: 'center',
+      backgroundColor: colors.cardStrong,
+      borderColor: colors.border,
+      borderRadius: 10,
+      borderWidth: 1,
+      height: 34,
+      justifyContent: 'center',
+      width: 40,
+    },
+    stepButtonText: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '700',
+    },
     filterWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -822,11 +1154,6 @@ function createStyles(colors: HarucutColors) {
       gap: 8,
     },
     stickerRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    tabRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,

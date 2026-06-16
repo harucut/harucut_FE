@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Stage, Layer, Rect, Transformer, Image as KonvaImage } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Group,
+  Transformer,
+  Image as KonvaImage,
+} from "react-konva";
 import Konva from "konva";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -17,6 +24,9 @@ export function CanvasStage() {
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const background = useThemeEditorStore((s) => s.background);
   const renderKey = useThemeEditorStore((s) => s.renderKey);
+  const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
+  const toggleCellCutout = useThemeEditorStore((s) => s.toggleCellCutout);
+  const cutMode = useThemeEditorStore((s) => s.cutMode);
 
   const backgroundImageUrl =
     background.type === "IMAGE" ? background.url : undefined;
@@ -281,6 +291,70 @@ export function CanvasStage() {
                 strokeWidth={6}
               />
             ))}
+          </Layer>
+
+          {/* 4) 누끼(셀별 배경 제거) 오버레이 + 탭 토글 */}
+          <Layer listening={cutMode}>
+            {layout.slots.slice(0, 4).map((s, i) => {
+              const on = cellCutouts[i];
+              const cx = s.x + s.width / 2;
+              const cy = s.y + s.height / 2;
+              const radius = Math.min(s.width, s.height) * 0.62;
+              return (
+                <Group key={i}>
+                  {on ? (
+                    <>
+                      {/* 가장자리를 어둡게 해 피사체만 남은 듯한 비네트 마스크(MVP 시각 효과) */}
+                      <Rect
+                        x={s.x}
+                        y={s.y}
+                        width={s.width}
+                        height={s.height}
+                        cornerRadius={40}
+                        listening={false}
+                        fillRadialGradientStartPoint={{ x: cx - s.x, y: cy - s.y }}
+                        fillRadialGradientEndPoint={{ x: cx - s.x, y: cy - s.y }}
+                        fillRadialGradientStartRadius={radius * 0.6}
+                        fillRadialGradientEndRadius={radius}
+                        fillRadialGradientColorStops={[
+                          0,
+                          "rgba(0,0,0,0)",
+                          1,
+                          "rgba(11,11,12,0.82)",
+                        ]}
+                      />
+                      <Rect
+                        x={s.x}
+                        y={s.y}
+                        width={s.width}
+                        height={s.height}
+                        cornerRadius={40}
+                        listening={false}
+                        stroke="#1ED760"
+                        strokeWidth={10}
+                      />
+                    </>
+                  ) : null}
+                  {/* 셀 탭으로 누끼 토글 */}
+                  <Rect
+                    x={s.x}
+                    y={s.y}
+                    width={s.width}
+                    height={s.height}
+                    cornerRadius={40}
+                    fill="rgba(0,0,0,0.001)"
+                    onMouseDown={(e) => {
+                      e.cancelBubble = true;
+                      toggleCellCutout(i);
+                    }}
+                    onTouchStart={(e) => {
+                      e.cancelBubble = true;
+                      toggleCellCutout(i);
+                    }}
+                  />
+                </Group>
+              );
+            })}
           </Layer>
         </Stage>
       </div>
