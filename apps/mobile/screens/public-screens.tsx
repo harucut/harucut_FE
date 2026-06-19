@@ -124,7 +124,7 @@ function SocialButtons() {
         provider="naver"
       />
       <SocialBrandButton
-        label={pending === 'google' ? '구글 로그인 중...' : '구글로 계속하기'}
+        label={pending === 'google' ? 'Google 로그인 중...' : 'Google로 계속하기'}
         onPress={() => void handleSocialLogin('google')}
         provider="google"
       />
@@ -195,7 +195,12 @@ function SocialBrandButton({
           ) : provider === 'naver' ? (
             <Text style={styles.naverMark}>N</Text>
           ) : (
-            <Text style={styles.googleMark}>G</Text>
+            <Image
+              accessibilityLabel="Google"
+              resizeMode="contain"
+              source={require('../assets/images/google-g-logo.png')}
+              style={styles.googleLogo}
+            />
           )}
         </View>
         <View style={styles.socialLabelWrap}>
@@ -1020,11 +1025,9 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontWeight: '900',
       lineHeight: 20,
     },
-    googleMark: {
-      color: '#4285F4',
-      fontSize: 19,
-      fontWeight: '900',
-      lineHeight: 22,
+    googleLogo: {
+      height: 20,
+      width: 20,
     },
     socialDivider: {
       alignItems: 'center',
