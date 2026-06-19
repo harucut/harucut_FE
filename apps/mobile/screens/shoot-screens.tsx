@@ -125,6 +125,10 @@ export function ShootCaptureScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const push = (path: string) => router.push(path as never);
   const cameraRef = useRef<CameraView | null>(null);
+  // 타이머 촬영 루프는 수 초간 await가 이어지므로, 그 사이 사용자가 화면을 벗어나면
+  // 언마운트된 컴포넌트에 setState/네비게이션이 발생할 수 있다. 마운트 여부를 추적해
+  // 루프 중간에 안전하게 빠져나가기 위한 ref.
+  const isMountedRef = useRef(true);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
   const shoot = useShootStore();
@@ -175,6 +179,15 @@ export function ShootCaptureScreen() {
   useEffect(() => {
     resetShootSession();
   }, [resetShootSession]);
+
+  // 언마운트 시 진행 중인 타이머 버스트 루프가 더 이상 상태를 갱신하거나
+  // 화면을 전환하지 않도록 마운트 플래그를 내린다.
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // 카메라 권한이 없으면 요청하고, 끝내 거부되면 안내 후 false를 돌려준다.
   const ensureCameraPermission = async () => {
@@ -228,17 +241,24 @@ export function ShootCaptureScreen() {
     try {
       for (let shotIndex = 0; shotIndex < SHOOT_TOTAL; shotIndex += 1) {
         for (let remaining = timerSeconds; remaining > 0; remaining -= 1) {
+          // 카운트다운 도중 화면을 벗어났으면 즉시 중단(언마운트 후 setState 방지).
+          if (!isMountedRef.current) return;
           setCountdown(remaining);
           // 1초 틱으로 맞춰 선택한 간격(3·5·8초)이 실제 촬영 간격과 일치하게 한다.
           await delay(1000);
         }
 
+        // 촬영 직전 이탈했으면 더 찍지 않는다.
+        if (!isMountedRef.current) return;
         await captureOneShot(shotIndex);
       }
 
+      // 완료 직전 이탈했으면 화면 전환하지 않는다.
+      if (!isMountedRef.current) return;
       setCountdown(null);
       push('/shoot/select');
     } catch {
+      if (!isMountedRef.current) return;
       showNotice({
         actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
         eyebrow: 'CAPTURE ERROR',
@@ -247,8 +267,11 @@ export function ShootCaptureScreen() {
         title: '촬영을 마치지 못했어요',
       });
     } finally {
-      setCountdown(null);
-      setIsShooting(false);
+      // 언마운트 이후에는 상태를 건드리지 않는다.
+      if (isMountedRef.current) {
+        setCountdown(null);
+        setIsShooting(false);
+      }
     }
   };
 
@@ -268,7 +291,8 @@ export function ShootCaptureScreen() {
 
       const total = await captureOneShot(isFirst ? 0 : shoot.shots.length);
 
-      if (total >= SHOOT_TOTAL) {
+      // 촬영 도중 화면을 벗어났으면 네비게이션하지 않는다.
+      if (total >= SHOOT_TOTAL && isMountedRef.current) {
         push('/shoot/select');
       }
     } catch {
@@ -280,7 +304,7 @@ export function ShootCaptureScreen() {
         title: '촬영을 마치지 못했어요',
       });
     } finally {
-      setIsShooting(false);
+      if (isMountedRef.current) setIsShooting(false);
     }
   };
 
