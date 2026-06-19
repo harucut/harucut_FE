@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
-import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, BrandMark, FormField } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiConfig, getApiErrorMessage } from '@/lib/api-client';
 import { validateEmail, validatePassword, validateUsername } from '@/lib/auth-validation';
@@ -44,21 +44,27 @@ function AuthShell({
   footer?: React.ReactNode;
   title: string;
 }) {
-  const { styles } = usePublicScreenTheme();
+  const { colors, styles } = usePublicScreenTheme();
   const router = useRouter();
-  const push = (path: string) => router.push(path as never);
 
   return (
     <AppScrollView>
-      <PageHeader
-        description={description}
-        title={title}
-      />
+      <View style={styles.authBackRow}>
+        <Pressable
+          accessibilityLabel="뒤로"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/' as never))}
+          style={styles.authBackButton}>
+          <Ionicons color={colors.text} name="chevron-back" size={24} />
+        </Pressable>
+      </View>
+      <View style={styles.authIntro}>
+        <Text style={styles.authTitle}>{title}</Text>
+        {description ? <Text style={styles.authDescription}>{description}</Text> : null}
+      </View>
       {children}
       {footer ? <View style={{ gap: 10 }}>{footer}</View> : null}
-      <Pressable accessibilityLabel="처음 화면으로 돌아가기" accessibilityRole="button" onPress={() => push('/')}>
-        <Text style={styles.authBackLink}>처음 화면으로 돌아가기</Text>
-      </Pressable>
     </AppScrollView>
   );
 }
@@ -348,7 +354,7 @@ export function LoginScreen() {
         </>
       }
       title="다시 오셨네요">
-      <SurfaceCard style={{ gap: 14 }}>
+      <View style={{ gap: 14 }}>
         {LOGIN_FIELDS.map((field) => (
           <FormField
             key={field.key}
@@ -380,7 +386,7 @@ export function LoginScreen() {
           onPress={() => void handleLogin()}
         />
         {error ? <Text style={styles.formError}>{error}</Text> : null}
-      </SurfaceCard>
+      </View>
     </AuthShell>
   );
 }
@@ -526,7 +532,7 @@ export function SignupScreen() {
         </>
       }
       title="회원가입">
-      <SurfaceCard style={{ gap: 14 }}>
+      <View style={{ gap: 14 }}>
         <FormField
           label="이메일"
           onChangeText={(value) => {
@@ -633,7 +639,7 @@ export function SignupScreen() {
 
         <ActionButton label={submitting ? '처리 중...' : '회원가입'} onPress={() => void handleSignup()} />
         {error ? <Text style={styles.formError}>{error}</Text> : null}
-      </SurfaceCard>
+      </View>
     </AuthShell>
   );
 }
@@ -728,7 +734,7 @@ export function ForgotPasswordScreen() {
       description={step === 'VERIFY_CODE' ? '이메일로 받은 인증 코드를 입력해 주세요.' : '새 비밀번호를 입력하고 다시 로그인하세요.'}
       title="비밀번호 재설정">
       {step === 'VERIFY_CODE' ? (
-        <SurfaceCard style={{ gap: 14 }}>
+        <View style={{ gap: 14 }}>
           <FormField
             editable={!codeRequested}
             label="이메일"
@@ -754,9 +760,9 @@ export function ForgotPasswordScreen() {
           <Text onPress={() => push('/login')} style={styles.authBackLink}>
             로그인으로 돌아가기
           </Text>
-        </SurfaceCard>
+        </View>
       ) : (
-        <SurfaceCard style={{ gap: 14 }}>
+        <View style={{ gap: 14 }}>
           <FormField
             label="새 비밀번호"
             onChangeText={setNewPassword}
@@ -776,7 +782,7 @@ export function ForgotPasswordScreen() {
             onPress={() => void handleResetPassword()}
           />
           {error ? <Text style={styles.formError}>{error}</Text> : null}
-        </SurfaceCard>
+        </View>
       )}
     </AuthShell>
   );
@@ -784,9 +790,34 @@ export function ForgotPasswordScreen() {
 
 function createStyles(colors: HarucutThemeColors, isDark: boolean) {
   return StyleSheet.create({
+    authBackRow: {
+      marginBottom: 6,
+    },
+    authBackButton: {
+      alignItems: 'center',
+      height: 40,
+      justifyContent: 'center',
+      marginLeft: -8,
+      width: 40,
+    },
+    authIntro: {
+      gap: 6,
+      marginBottom: 22,
+    },
+    authTitle: {
+      color: colors.text,
+      fontSize: 26,
+      fontWeight: '800',
+      letterSpacing: -0.6,
+    },
+    authDescription: {
+      color: colors.muted,
+      fontSize: 14,
+      lineHeight: 20,
+    },
     authBackLink: {
       color: colors.muted,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600',
       textAlign: 'center',
       textDecorationLine: 'underline',
