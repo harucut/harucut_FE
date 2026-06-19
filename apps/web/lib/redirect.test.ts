@@ -19,6 +19,17 @@ describe("redirect helpers", () => {
     expect(getSafeRedirectPath("/signup?redirectTo=/mypage")).toBeNull();
   });
 
+  test("rejects protocol-relative bypasses using backslashes or control chars", () => {
+    // 브라우저가 역슬래시를 슬래시로 정규화하면 "//evil.com"이 되어 외부로 나간다.
+    expect(getSafeRedirectPath("/\\evil.com")).toBeNull();
+    expect(getSafeRedirectPath("/\\/evil.com")).toBeNull();
+    expect(getSafeRedirectPath("\\\\evil.com")).toBeNull();
+    expect(getSafeRedirectPath("\\/evil.com")).toBeNull();
+    // 선행 탭/개행을 제거하면 "//evil.com"이 드러나는 우회.
+    expect(getSafeRedirectPath("/\t/evil.com")).toBeNull();
+    expect(getSafeRedirectPath("\n//evil.com")).toBeNull();
+  });
+
   test("falls back to home when redirect target is missing", () => {
     expect(resolveRedirectTarget(null)).toBe("/home");
     expect(resolveRedirectTarget("/login")).toBe("/home");
