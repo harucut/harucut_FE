@@ -114,7 +114,8 @@ function defaultThemeEditor(): ThemeEditorSessionState {
     description: '하루컷에서 직접 꾸민 나만의 프레임',
     frameId: 'polaroid-4',
     selectedSavedFrameId: null,
-    stickers: ['✦', '♡'],
+    // 기본 스티커는 THEME_STICKERS(이모지 16종) 카탈로그의 앞 두 개(별·핑크하트)와 맞춘다.
+    stickers: ['⭐️', '💖'],
     tab: 'PHOTO',
     title: '새 테마 프레임',
     cellCutouts: [false, false, false, false],

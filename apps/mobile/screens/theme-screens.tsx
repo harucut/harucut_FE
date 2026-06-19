@@ -6,7 +6,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { captureRef } from 'react-native-view-shot';
 
 import { FrameCapacityMeter, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, FormField, PageHeader, StepProgress, SurfaceCard } from '@/components/harucut/ui';
 import { BACKGROUND_SWATCHES, FRAME_COLOR_SWATCHES, THEME_STICKERS, THEME_TEXT_COLOR_SWATCHES, type ThemeAsset, type ThemeEditorComponent } from '@/constants/harucut-data';
 import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
@@ -490,11 +490,14 @@ export function ThemeStickerScreen() {
         {decorateTab === 'sticker' ? (
           <View style={styles.stickerGrid}>
             {THEME_STICKERS.map((sticker) => (
-              <Pill
+              <Pressable
                 key={sticker.id}
-                onPress={() => addThemeComponentFromAsset('STICKER', sticker.symbol)}>
-                {sticker.symbol} {sticker.label}
-              </Pill>
+                accessibilityLabel={`${sticker.label} 스티커 추가`}
+                accessibilityRole="button"
+                onPress={() => addThemeComponentFromAsset('STICKER', sticker.symbol)}
+                style={styles.stickerTile}>
+                <Text style={styles.stickerTileSymbol}>{sticker.symbol}</Text>
+              </Pressable>
             ))}
           </View>
         ) : null}
@@ -1152,6 +1155,20 @@ function createStyles(colors: HarucutColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
+    },
+    stickerTile: {
+      alignItems: 'center',
+      aspectRatio: 1,
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: 12,
+      borderWidth: 1,
+      justifyContent: 'center',
+      width: 48,
+    },
+    stickerTileSymbol: {
+      fontSize: 24,
+      lineHeight: 30,
     },
     stickerRow: {
       flexDirection: 'row',
