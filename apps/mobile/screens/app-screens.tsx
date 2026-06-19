@@ -1362,8 +1362,8 @@ export function MyPageScreen() {
 }
 
 function createStyles(colors: HarucutThemeColors, isDark: boolean) {
-  const tintedSurface = isDark ? 'rgba(37, 99, 235, 0.16)' : colors.cardMuted;
-  const themeOptionActiveSurface = isDark ? 'rgba(37, 99, 235, 0.2)' : colors.primarySoft;
+  const tintedSurface = isDark ? 'rgba(30, 215, 96, 0.16)' : colors.cardMuted;
+  const themeOptionActiveSurface = isDark ? 'rgba(30, 215, 96, 0.2)' : colors.primarySoft;
 
   return StyleSheet.create({
     avatarImage: {

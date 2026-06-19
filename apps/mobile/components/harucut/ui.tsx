@@ -219,7 +219,7 @@ export function ActionButton({
     variant === 'danger'
       ? styles.buttonLabelOnSolid
       : variant === 'primary'
-        ? styles.buttonLabelOnSolid
+        ? styles.buttonLabelOnPrimary
         : styles.buttonLabelDefault;
 
   return (
@@ -400,6 +400,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     buttonLabelOnSolid: {
       color: '#FFFFFF',
     },
+    // handoff .btn-primary: 그린 채움 위 거의 검정 텍스트(Spotify식). danger는 흰색 유지.
+    buttonLabelOnPrimary: {
+      color: '#06140A',
+    },
     buttonDisabled: {
       opacity: 0.55,
     },
@@ -524,7 +528,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     sectionEyebrow: {
       alignSelf: 'flex-start',
       backgroundColor: colors.primarySoft,
-      borderColor: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(37, 99, 235, 0.12)',
+      borderColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.12)',
       borderRadius: HARUCUT_RADII.chip,
       borderWidth: 1,
       color: colors.primaryStrong,
