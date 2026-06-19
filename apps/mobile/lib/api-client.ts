@@ -20,6 +20,8 @@ type RequestOptions = {
   headers?: HeadersInit;
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   signal?: AbortSignal;
+  /** 내부용: 401 자동 재발급/재시도를 건너뛴다(재발급 요청 자체의 무한 루프 방지). */
+  skipAuthRefresh?: boolean;
 };
 
 const DEFAULT_API_BASE_URL = 'https://api.harucut.com';
@@ -125,25 +127,82 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+// 401(액세스 토큰 만료) 시 1회 재발급 후 재시도하되, 아래 경로들은 401이 정상이거나
+// 재발급 요청 자체라 자동 재발급/재시도 대상에서 제외한다(무한 루프·오탐 방지).
+const SESSION_REFRESH_EXEMPT_PATHS = new Set<string>([
+  '/api/harucut/reissue',
+  '/api/harucut/login',
+  '/api/harucut/register',
+  '/api/auth/status',
+  '/api/email-auth/code',
+  '/api/email-auth/verification',
+  '/api/harucut/reset/password',
+  '/api/harucut/reset/password/verification',
+  '/api/harucut/logout',
+  '/api/harucut/exit',
+]);
+
+function isSessionRefreshExempt(path: ApiPath) {
+  const key = typeof path === 'string' ? path : path.direct;
+  return SESSION_REFRESH_EXEMPT_PATHS.has(key);
+}
+
+// 401로 재발급까지 실패했을 때 호출되는 세션 종료 핸들러.
+// api-client는 세션 스토어를 직접 import할 수 없어(순환 참조) 레지스트리로 위임받는다.
+let onSessionExpired: (() => void) | null = null;
+
+export function registerSessionExpiredHandler(handler: (() => void) | null) {
+  onSessionExpired = handler;
+}
+
+// 쿠키 기반 액세스 토큰 재발급(요청 본문 없음). 자체 401 재시도는 건너뛴다.
+async function reissueAccessToken() {
+  await apiRequest('/api/harucut/reissue', { method: 'POST', skipAuthRefresh: true });
+}
+
 export async function apiRequest<T>(path: ApiPath, options: RequestOptions = {}) {
   const { baseUrl } = getApiConfig();
-  const headers = new Headers(options.headers);
+  const url = `${baseUrl}${resolvePath(path)}`;
   const hasBody = options.body !== undefined;
 
-  headers.set('Accept', headers.get('Accept') ?? 'application/json');
+  const performFetch = () => {
+    const headers = new Headers(options.headers);
+    headers.set('Accept', headers.get('Accept') ?? 'application/json');
 
-  if (hasBody && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+    if (hasBody && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    return fetch(url, {
+      body: hasBody ? JSON.stringify(options.body) : undefined,
+      cache: options.cache,
+      credentials: 'include',
+      headers,
+      method: options.method ?? 'GET',
+      signal: options.signal,
+    });
+  };
+
+  let response = await performFetch();
+
+  // 액세스 토큰 만료(401)면 쿠키 기반으로 1회 재발급한 뒤 원요청을 재시도한다.
+  // 재발급까지 실패하면(여전히 401) 세션이 끊긴 것으로 보고 등록된 종료 핸들러를 호출한다.
+  if (
+    response.status === 401 &&
+    !options.skipAuthRefresh &&
+    !isSessionRefreshExempt(path)
+  ) {
+    try {
+      await reissueAccessToken();
+      response = await performFetch();
+    } catch {
+      // 재발급 실패 — 아래 401 분기에서 에러를 던지고 세션 종료를 알린다.
+    }
+
+    if (response.status === 401) {
+      onSessionExpired?.();
+    }
   }
-
-  const response = await fetch(`${baseUrl}${resolvePath(path)}`, {
-    body: hasBody ? JSON.stringify(options.body) : undefined,
-    cache: options.cache,
-    credentials: 'include',
-    headers,
-    method: options.method ?? 'GET',
-    signal: options.signal,
-  });
 
   const text = await response.text();
   let data = null as T;
