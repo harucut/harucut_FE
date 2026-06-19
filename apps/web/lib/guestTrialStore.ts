@@ -55,9 +55,16 @@ function setGuestCookie(enabled: boolean) {
     return;
   }
 
+  // 운영(HTTPS)에서는 Secure를 붙여 평문(HTTP) 구간 전송을 막는다.
+  // 로컬 개발(http://localhost)에서 Secure를 붙이면 쿠키가 저장되지 않으므로 제외한다.
+  const secure =
+    typeof location !== "undefined" && location.protocol === "https:"
+      ? "; Secure"
+      : "";
+
   document.cookie = enabled
-    ? `${GUEST_TRIAL_COOKIE}=1; path=/; max-age=604800; SameSite=Lax`
-    : `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+    ? `${GUEST_TRIAL_COOKIE}=1; path=/; max-age=604800; SameSite=Lax${secure}`
+    : `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secure}`;
 }
 
 export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
