@@ -884,7 +884,7 @@ export function SavedFramesPanel({
       {matchingFrames.length === 0 ? (
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
-        <View style={{ gap: 12, marginTop: 8 }}>
+        <View style={styles.savedGrid}>
           {matchingFrames.map((frame) => {
             const selected = frame.id === selectedSavedFrameId;
             const locked = lockedIds.has(frame.id);
@@ -1088,13 +1088,21 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       overflow: 'hidden',
       width: '100%',
     },
+    savedGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      justifyContent: 'space-between',
+      marginTop: 8,
+    },
     savedCard: {
       backgroundColor: colors.cardStrong,
       borderColor: colors.border,
       borderRadius: HARUCUT_RADII.lg,
       borderWidth: 1,
-      gap: 12,
+      gap: 10,
       padding: 12,
+      width: '48%',
     },
     savedCardLocked: {
       opacity: 0.6,
@@ -1225,12 +1233,13 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontWeight: '700',
     },
     savedPressable: {
-      flexDirection: 'row',
-      gap: 12,
+      flexDirection: 'column',
+      gap: 10,
     },
     savedPreview: {
+      alignItems: 'center',
       position: 'relative',
-      width: 96,
+      width: '100%',
     },
     savedRefresh: {
       fontSize: 11,
