@@ -5,7 +5,7 @@ import { type ComponentProps, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, BrandMark, FormField, Pill, SurfaceCard } from '@/components/harucut/ui';
 import type { HistoryItem } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -363,18 +363,20 @@ export function HomeScreen() {
   return (
     <AppScrollView>
       <View style={styles.homeTopBar}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.dateEyebrow}>{todayMoment}</Text>
-          <Text style={styles.greetingTitle}>{user.username}님, 오늘은</Text>
-          <Text style={styles.greetingAccent}>어떤 네 컷일까요?</Text>
-        </View>
+        <BrandMark compact href="/home" />
         <Pressable
-          accessibilityLabel="내 계정"
+          accessibilityLabel="알림"
           accessibilityRole="button"
           onPress={() => push('/mypage')}
           style={styles.topIconButton}>
-          <Ionicons color={colors.text} name="person-outline" size={20} />
+          <Ionicons color={colors.text} name="notifications-outline" size={20} />
         </Pressable>
+      </View>
+
+      <View style={styles.greetingBlock}>
+        <Text style={styles.dateEyebrow}>{todayMoment}</Text>
+        <Text style={styles.greetingTitle}>{user.username}님, 오늘은</Text>
+        <Text style={styles.greetingAccent}>어떤 네 컷일까요?</Text>
       </View>
 
       <Pressable
@@ -497,45 +499,6 @@ export function HomeScreen() {
         )}
       </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>이어 꾸밀 프레임</Text>
-        <Text onPress={() => push('/theme')} style={styles.inlineLink}>
-          전체보기
-        </Text>
-      </View>
-      {savedFrames[0] ? (
-        <Pressable onPress={() => push('/theme/sticker')} style={styles.savedContinueCard}>
-          <View style={{ width: 76 }}>
-            <FramePreview
-              accentColor={savedFrames[0].accentColor}
-              backgroundColor={savedFrames[0].backgroundColor}
-              caption={savedFrames[0].caption}
-              frameId={savedFrames[0].frameId}
-            />
-          </View>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.linkTitle}>{savedFrames[0].title}</Text>
-            <Text style={styles.linkBody}>저장한 프레임을 이어서 수정할 수 있어요.</Text>
-          </View>
-          <Ionicons color={colors.muted} name="chevron-forward" size={16} />
-        </Pressable>
-      ) : (
-        <View style={styles.savedEmptyCard}>
-          <Text style={styles.bodyCopy}>아직 저장한 프레임이 없어요. 꾸미기에서 나만의 프레임을 만들어 보세요.</Text>
-        </View>
-      )}
-      <Pressable
-        accessibilityLabel="요금제 업그레이드로 프레임 보관함 늘리기"
-        accessibilityRole="button"
-        onPress={() => push('/pricing')}
-        style={styles.frameUpgradeRow}>
-        <Ionicons color={colors.primaryStrong} name="sparkles-outline" size={16} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.linkTitle}>프레임 보관함 늘리기</Text>
-          <Text style={styles.linkBody}>PLUS·PRO로 더 많은 프레임을 보관해요.</Text>
-        </View>
-        <Ionicons color={colors.muted} name="chevron-forward" size={16} />
-      </Pressable>
     </AppScrollView>
   );
 }
@@ -1485,10 +1448,14 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       justifyContent: 'space-between',
     },
     homeTopBar: {
-      alignItems: 'flex-start',
+      alignItems: 'center',
       flexDirection: 'row',
       gap: 12,
       justifyContent: 'space-between',
+    },
+    greetingBlock: {
+      gap: 2,
+      marginTop: 18,
     },
     myTopBar: {
       alignItems: 'flex-start',
@@ -1630,6 +1597,7 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       borderWidth: 1,
       height: 42,
       justifyContent: 'center',
+      position: 'relative',
       width: 42,
     },
     filterRow: {
