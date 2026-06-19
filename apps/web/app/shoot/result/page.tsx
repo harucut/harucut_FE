@@ -650,7 +650,7 @@ export default function ShootResultPage() {
         />
         <StepProgress current={4} total={4} label="결과 확인" />
 
-        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30, 215, 96,0.08)]">
+        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[color:var(--hc-text)]">
@@ -673,7 +673,7 @@ export default function ShootResultPage() {
         </section>
 
         {isPreparing ? (
-          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30, 215, 96,0.08)]">
+          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
             <div className="space-y-2 text-[11px]">
               <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
                 <span className="text-[color:var(--hc-text)]">이미지 준비</span>
@@ -707,7 +707,7 @@ export default function ShootResultPage() {
         ) : null}
 
         {shouldPrepareVideo ? (
-          <section className="rounded-[28px] border border-[rgba(30, 215, 96,0.18)] bg-[rgba(30, 215, 96,0.08)] px-4 py-3 text-[11px] text-[color:var(--hc-primary-strong)]">
+          <section className="rounded-[28px] border border-[rgba(30,215,96,0.18)] bg-[rgba(30,215,96,0.08)] px-4 py-3 text-[11px] text-[color:var(--hc-primary-strong)]">
             <p>영상 결과는 최대 {MAX_FOURCUT_VIDEO_SECONDS}초로 만들어요.</p>
             {hasTrimmedVideoSource ? (
               <p className="mt-1 text-[color:var(--hc-text)]/80">{TRIMMED_VIDEO_NOTICE}</p>
