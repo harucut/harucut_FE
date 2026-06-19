@@ -124,7 +124,7 @@ function SocialButtons() {
         provider="naver"
       />
       <SocialBrandButton
-        label={pending === 'google' ? '구글 로그인 중...' : '구글로 계속하기'}
+        label={pending === 'google' ? 'Google 로그인 중...' : 'Google로 계속하기'}
         onPress={() => void handleSocialLogin('google')}
         provider="google"
       />
@@ -188,14 +188,29 @@ function SocialBrandButton({
       <View style={styles.socialButtonInner}>
         <View style={[styles.socialIconBox, iconBoxStyle]}>
           {provider === 'kakao' ? (
-            <View style={styles.kakaoMark}>
-              <View style={styles.kakaoMarkBubble} />
-              <View style={styles.kakaoMarkTail} />
-            </View>
+            <Image
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              resizeMode="contain"
+              source={require('../assets/images/kakao-symbol.png')}
+              style={styles.kakaoLogo}
+            />
           ) : provider === 'naver' ? (
-            <Text style={styles.naverMark}>N</Text>
+            <Image
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              resizeMode="contain"
+              source={require('../assets/images/naver-symbol.png')}
+              style={styles.naverLogo}
+            />
           ) : (
-            <Text style={styles.googleMark}>G</Text>
+            <Image
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              resizeMode="contain"
+              source={require('../assets/images/google-g-logo.png')}
+              style={styles.googleLogo}
+            />
           )}
         </View>
         <View style={styles.socialLabelWrap}>
@@ -991,40 +1006,17 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 11,
       fontWeight: '600',
     },
-    kakaoMark: {
-      height: 18,
-      position: 'relative',
-      width: 18,
+    kakaoLogo: {
+      height: 26,
+      width: 26,
     },
-    kakaoMarkBubble: {
-      backgroundColor: 'rgba(0, 0, 0, 0.85)',
-      borderRadius: 7,
-      height: 13,
-      left: 1,
-      position: 'absolute',
-      top: 2,
-      width: 15,
+    naverLogo: {
+      height: 30,
+      width: 30,
     },
-    kakaoMarkTail: {
-      backgroundColor: 'rgba(0, 0, 0, 0.85)',
-      bottom: 2,
-      height: 5,
-      left: 4,
-      position: 'absolute',
-      transform: [{ rotate: '45deg' }],
-      width: 5,
-    },
-    naverMark: {
-      color: '#FFFFFF',
-      fontSize: 18,
-      fontWeight: '900',
-      lineHeight: 20,
-    },
-    googleMark: {
-      color: '#4285F4',
-      fontSize: 19,
-      fontWeight: '900',
-      lineHeight: 22,
+    googleLogo: {
+      height: 20,
+      width: 20,
     },
     socialDivider: {
       alignItems: 'center',
