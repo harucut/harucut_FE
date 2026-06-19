@@ -884,7 +884,7 @@ export function SavedFramesPanel({
       {matchingFrames.length === 0 ? (
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
-        <View style={{ gap: 12, marginTop: 8 }}>
+        <View style={styles.savedGrid}>
           {matchingFrames.map((frame) => {
             const selected = frame.id === selectedSavedFrameId;
             const locked = lockedIds.has(frame.id);
@@ -1088,13 +1088,23 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       overflow: 'hidden',
       width: '100%',
     },
+    savedGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      marginTop: 8,
+      // 가로 간격은 justifyContent: space-between으로 처리(48%+48%=96%이 한 줄에 들어감).
+      // columnGap을 추가하면 96%+gap이 좁은 기기에서 100%를 넘겨 1열로 줄바꿈되므로 rowGap만 둔다.
+      rowGap: 12,
+    },
     savedCard: {
       backgroundColor: colors.cardStrong,
       borderColor: colors.border,
       borderRadius: HARUCUT_RADII.lg,
       borderWidth: 1,
-      gap: 12,
+      gap: 10,
       padding: 12,
+      width: '48%',
     },
     savedCardLocked: {
       opacity: 0.6,
@@ -1225,12 +1235,13 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontWeight: '700',
     },
     savedPressable: {
-      flexDirection: 'row',
-      gap: 12,
+      flexDirection: 'column',
+      gap: 10,
     },
     savedPreview: {
+      alignItems: 'center',
       position: 'relative',
-      width: 96,
+      width: '100%',
     },
     savedRefresh: {
       fontSize: 11,
