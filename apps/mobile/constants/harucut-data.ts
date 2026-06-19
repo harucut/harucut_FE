@@ -256,12 +256,24 @@ export const THEME_TEXT_COLOR_SWATCHES = [
   '#5AA9FF',
 ] as const;
 
+// 핸드오프 decorate ED_STICKERS 정본(이모지 16종)
 export const THEME_STICKERS = [
-  { id: 'spark', label: '반짝', symbol: '✦' },
-  { id: 'heart', label: '하트', symbol: '♡' },
-  { id: 'star', label: '별', symbol: '★' },
-  { id: 'ribbon', label: '리본', symbol: '⌁' },
-  { id: 'note', label: '메모', symbol: '✎' },
+  { id: 'star', label: '별', symbol: '⭐️' },
+  { id: 'heart-pink', label: '핑크하트', symbol: '💖' },
+  { id: 'sparkles', label: '반짝', symbol: '✨' },
+  { id: 'blossom', label: '벚꽃', symbol: '🌸' },
+  { id: 'ribbon', label: '리본', symbol: '🎀' },
+  { id: 'cloud', label: '구름', symbol: '☁️' },
+  { id: 'fire', label: '불꽃', symbol: '🔥' },
+  { id: 'cool', label: '선글라스', symbol: '😎' },
+  { id: 'dog', label: '강아지', symbol: '🐶' },
+  { id: 'strawberry', label: '딸기', symbol: '🍓' },
+  { id: 'rainbow', label: '무지개', symbol: '🌈' },
+  { id: 'heart-red', label: '하트', symbol: '❤️' },
+  { id: 'crown', label: '왕관', symbol: '👑' },
+  { id: 'butterfly', label: '나비', symbol: '🦋' },
+  { id: 'clover', label: '클로버', symbol: '🍀' },
+  { id: 'camera', label: '카메라', symbol: '📷' },
 ] as const;
 
 export const LOGIN_FIELDS = [
