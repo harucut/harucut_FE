@@ -30,14 +30,30 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
 }
 
+// localhost / 안드로이드 에뮬레이터 전용 호스트인지 판별한다.
+function isLocalDevHost(value: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:|\/|$)/i.test(value.trim());
+}
+
 function configuredApiBaseUrl() {
-  const fromEnv = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  // 릴리즈 빌드(__DEV__ === false)에서는 개발 전용 localhost 값을 신뢰하지 않고 운영 API로
+  // 폴백한다. env가 주입되지 않은 standalone 빌드가 app.json의 localhost 값을 채택해 모든
+  // 요청이 localhost로 향하고 "Network request failed"가 나던 문제를 코드 레벨에서도 막는다.
+  const acceptable = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+    if (!__DEV__ && isLocalDevHost(trimmed)) return undefined;
+    return trimmed;
+  };
+
+  const fromEnv = acceptable(process.env.EXPO_PUBLIC_API_BASE_URL);
   if (fromEnv) return fromEnv;
 
-  const fromExtra = Constants.expoConfig?.extra?.apiBaseUrl;
-  if (typeof fromExtra === 'string' && fromExtra.trim()) {
-    return fromExtra;
-  }
+  const fromExtra =
+    typeof Constants.expoConfig?.extra?.apiBaseUrl === 'string'
+      ? acceptable(Constants.expoConfig?.extra?.apiBaseUrl)
+      : undefined;
+  if (fromExtra) return fromExtra;
 
   return DEFAULT_API_BASE_URL;
 }
