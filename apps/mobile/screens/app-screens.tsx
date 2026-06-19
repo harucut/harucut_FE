@@ -370,7 +370,6 @@ export function HomeScreen() {
           onPress={() => push('/mypage')}
           style={styles.topIconButton}>
           <Ionicons color={colors.text} name="notifications-outline" size={20} />
-          <View style={styles.notifDot} />
         </Pressable>
       </View>
 
@@ -1457,17 +1456,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     greetingBlock: {
       gap: 2,
       marginTop: 18,
-    },
-    notifDot: {
-      backgroundColor: colors.primary,
-      borderColor: colors.card,
-      borderRadius: 4,
-      borderWidth: 1.5,
-      height: 8,
-      position: 'absolute',
-      right: 9,
-      top: 9,
-      width: 8,
     },
     myTopBar: {
       alignItems: 'flex-start',
