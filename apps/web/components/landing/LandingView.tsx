@@ -76,8 +76,11 @@ const FOOTER_COLS: { title: string; items: { label: string; href?: string }[] }[
 function WebNav() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
+    // passive 리스너로 등록해 스크롤 중 브라우저가 핸들러의 preventDefault 여부를
+    // 기다리지 않도록 한다(스크롤 부드러움 향상). 마운트 시 현재 위치도 한 번 동기화한다.
     const onScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", onScroll);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
