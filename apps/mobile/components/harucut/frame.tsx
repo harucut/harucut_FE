@@ -1091,9 +1091,11 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     savedGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 12,
       justifyContent: 'space-between',
       marginTop: 8,
+      // 가로 간격은 justifyContent: space-between으로 처리(48%+48%=96%이 한 줄에 들어감).
+      // columnGap을 추가하면 96%+gap이 좁은 기기에서 100%를 넘겨 1열로 줄바꿈되므로 rowGap만 둔다.
+      rowGap: 12,
     },
     savedCard: {
       backgroundColor: colors.cardStrong,
