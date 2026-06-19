@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 
 import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -52,7 +52,6 @@ export function AppScrollView({
 
 export function BrandMark({ compact = false, href = '/home' }: { compact?: boolean; href?: string }) {
   const router = useRouter();
-  const { colors, isDark } = useHarucutTheme();
   const styles = useUiStyles();
 
   return (
@@ -62,17 +61,8 @@ export function BrandMark({ compact = false, href = '/home' }: { compact?: boole
       onPress={() => router.push(href as never)}
       style={styles.brandRow}>
       <View style={styles.brandIcon}>
-        <LinearGradient
-          colors={
-            isDark
-              ? ['rgba(59, 130, 246, 0.18)', 'rgba(255, 255, 255, 0.02)']
-              : ['rgba(255, 255, 255, 0.98)', 'rgba(239, 246, 255, 0.95)']
-          }
-          end={{ x: 0.9, y: 1 }}
-          start={{ x: 0, y: 0 }}
-          style={styles.brandIconGradient}>
-          <Ionicons color={colors.primary} name="sparkles-outline" size={18} />
-        </LinearGradient>
+        {/* 반짝이 placeholder 대신 실제 하루컷 로고(앱 아이콘)를 브랜드 마크로 사용 */}
+        <Image source={require('../../assets/images/icon.png')} style={styles.brandIconImage} />
       </View>
       <View style={{ flexShrink: 1 }}>
         {!compact ? (
@@ -354,6 +344,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       shadowOpacity: 1,
       shadowRadius: 30,
       width: 40,
+    },
+    brandIconImage: {
+      height: '100%',
+      width: '100%',
     },
     brandIconGradient: {
       alignItems: 'center',
