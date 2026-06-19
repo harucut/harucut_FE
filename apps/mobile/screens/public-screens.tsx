@@ -189,21 +189,24 @@ function SocialBrandButton({
         <View style={[styles.socialIconBox, iconBoxStyle]}>
           {provider === 'kakao' ? (
             <Image
-              accessibilityLabel="카카오"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
               resizeMode="contain"
               source={require('../assets/images/kakao-symbol.png')}
               style={styles.kakaoLogo}
             />
           ) : provider === 'naver' ? (
             <Image
-              accessibilityLabel="네이버"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
               resizeMode="contain"
               source={require('../assets/images/naver-symbol.png')}
               style={styles.naverLogo}
             />
           ) : (
             <Image
-              accessibilityLabel="Google"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
               resizeMode="contain"
               source={require('../assets/images/google-g-logo.png')}
               style={styles.googleLogo}

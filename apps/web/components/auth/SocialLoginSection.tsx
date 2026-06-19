@@ -11,7 +11,7 @@ function GoogleSymbol() {
   // 직접 그린 SVG가 아니라 구글이 배포하는 공식 G 로고 이미지를 사용한다.
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/google-g-logo.png" alt="Google" className="h-[18px] w-[18px] shrink-0" />
+    <img src="/google-g-logo.png" alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
   );
 }
 
@@ -19,7 +19,7 @@ function KakaoSymbol() {
   // 카카오 공식 로그인 버튼에서 추출한 말풍선 심볼(노란 배경은 카카오 버튼색과 동일해 자연스럽게 섞임)
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/kakao-symbol.png" alt="카카오" className="h-5 w-5 shrink-0" />
+    <img src="/kakao-symbol.png" alt="" aria-hidden="true" className="h-5 w-5 shrink-0" />
   );
 }
 
@@ -27,7 +27,7 @@ function NaverSymbol() {
   // 네이버 공식 로그인 심볼(green icon: 초록 원 + 흰 N)
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/naver-symbol.png" alt="네이버" className="h-[22px] w-[22px] shrink-0" />
+    <img src="/naver-symbol.png" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
   );
 }
 
