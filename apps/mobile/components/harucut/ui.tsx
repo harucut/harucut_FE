@@ -260,7 +260,9 @@ type FormFieldProps = TextInputProps & {
   secure?: boolean;
 };
 
-export function FormField({ error, label, secure = false, style, ...props }: FormFieldProps) {
+// React.memo로 감싸 부모(로그인/회원가입 화면)의 키 입력당 전체 리렌더가 입력 필드까지
+// 전파되지 않게 한다. 부모는 필드별 onChangeText 핸들러를 안정 참조로 넘겨야 효과가 난다.
+function FormFieldImpl({ error, label, secure = false, style, ...props }: FormFieldProps) {
   const [visible, setVisible] = React.useState(false);
   const { colors } = useHarucutTheme();
   const styles = useUiStyles();
@@ -295,6 +297,8 @@ export function FormField({ error, label, secure = false, style, ...props }: For
     </View>
   );
 }
+
+export const FormField = React.memo(FormFieldImpl);
 
 export function SectionEyebrow({ children }: PropsWithChildren) {
   const styles = useUiStyles();
