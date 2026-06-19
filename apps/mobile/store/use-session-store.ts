@@ -1,5 +1,7 @@
+import { router } from 'expo-router';
 import { create } from 'zustand';
 
+import { registerSessionExpiredHandler } from '@/lib/api-client';
 import { INITIAL_USER, type UserProfile } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
 import { getMyUserProfile } from '@/lib/user-api';
@@ -124,3 +126,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }),
   showNotice: (notice) => set({ notice }),
 }));
+
+// 401(액세스 토큰 만료)로 재발급까지 실패하면 회원 세션을 종료하고 로그인 화면으로 보낸다.
+// api-client는 스토어를 직접 import할 수 없어(순환 참조) 레지스트리로 위임받는다.
+// 회원이 아닐 때(게스트/비회원)의 401은 정상 흐름이므로 무시한다.
+registerSessionExpiredHandler(() => {
+  const state = useSessionStore.getState();
+  if (state.accessMode !== 'member') {
+    return;
+  }
+
+  state.enterAnonymousMode();
+  state.showNotice({
+    actions: [{ id: 'dismiss', label: '확인' }],
+    eyebrow: 'SESSION',
+    icon: 'lock-closed-outline',
+    message: '로그인 세션이 만료되었어요. 다시 로그인해 주세요.',
+    title: '다시 로그인이 필요해요',
+  });
+  router.replace('/login' as never);
+});

@@ -273,6 +273,20 @@ export function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [remember, setRemember] = useState(true);
 
+  // 키 입력마다 새 인라인 핸들러를 만들면 memo된 FormField가 매번 리렌더되어, 가려진
+  // 비밀번호 입력의 노출→마스킹 왕복이 끊겨 보인다. 필드별 핸들러를 한 번만 만들어
+  // 안정 참조로 넘겨 바뀐 필드만 리렌더되게 한다.
+  const handleFieldChange = useMemo(
+    () =>
+      Object.fromEntries(
+        LOGIN_FIELDS.map((field) => [
+          field.key,
+          (value: string) => setForm((current) => ({ ...current, [field.key]: value })),
+        ]),
+      ) as Record<string, (value: string) => void>,
+    [],
+  );
+
   const handleLogin = async () => {
     const emailError = validateEmail(form.email);
     if (emailError) {
@@ -324,7 +338,7 @@ export function LoginScreen() {
           <FormField
             key={field.key}
             label={field.label}
-            onChangeText={(value) => setForm((current) => ({ ...current, [field.key]: value }))}
+            onChangeText={handleFieldChange[field.key]}
             placeholder={field.placeholder}
             secure={field.secure}
             value={form[field.key]}
@@ -363,6 +377,18 @@ export function SignupScreen() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [form, setForm] = useState({ confirmPassword: '', password: '', username: '' });
+  // 키 입력당 화면 전체 리렌더가 memo된 FormField까지 번지지 않도록 필드별 핸들러를
+  // 안정 참조로 한 번만 만든다(가려진 비밀번호 입력 버벅임 방지).
+  const handleFieldChange = useMemo(
+    () =>
+      Object.fromEntries(
+        SIGNUP_FIELDS.map((field) => [
+          field.key,
+          (value: string) => setForm((current) => ({ ...current, [field.key]: value })),
+        ]),
+      ) as Record<string, (value: string) => void>,
+    [],
+  );
   const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -543,7 +569,7 @@ export function SignupScreen() {
           <FormField
             key={field.key}
             label={field.label}
-            onChangeText={(value) => setForm((current) => ({ ...current, [field.key]: value }))}
+            onChangeText={handleFieldChange[field.key]}
             placeholder={field.placeholder}
             secure={field.secure}
             value={form[field.key]}
