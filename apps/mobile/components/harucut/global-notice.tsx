@@ -96,7 +96,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     iconWrap: {
       alignItems: 'center',
       backgroundColor: colors.primarySoft,
-      borderColor: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(37, 99, 235, 0.18)',
+      borderColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.18)',
       borderRadius: 24,
       borderWidth: 1,
       height: 48,

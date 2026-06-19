@@ -286,7 +286,7 @@ function toSavedFrame(frame: RemoteFrame): SavedFrame {
   const accentColor =
     stringStyleValue(captionStyle, 'accentColor') ??
     stringStyleValue(captionStyle, 'color') ??
-    '#2563EB';
+    '#1ED760';
 
   return {
     accentColor,

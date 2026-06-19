@@ -808,8 +808,8 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       justifyContent: 'space-between',
     },
     codeNotice: {
-      backgroundColor: isDark ? 'rgba(37, 99, 235, 0.18)' : 'rgba(37, 99, 235, 0.08)',
-      borderColor: isDark ? 'rgba(96, 165, 250, 0.34)' : 'rgba(37, 99, 235, 0.18)',
+      backgroundColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.08)',
+      borderColor: isDark ? 'rgba(30, 215, 96, 0.34)' : 'rgba(30, 215, 96, 0.18)',
       borderRadius: 18,
       borderWidth: 1,
       paddingHorizontal: 14,
@@ -1132,7 +1132,7 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     verifiedCard: {
       alignItems: 'flex-start',
-      backgroundColor: isDark ? 'rgba(37, 99, 235, 0.14)' : 'rgba(239, 246, 255, 0.96)',
+      backgroundColor: isDark ? 'rgba(30, 215, 96, 0.14)' : 'rgba(239, 246, 255, 0.96)',
       borderColor: colors.border,
       borderRadius: 18,
       borderWidth: 1,
