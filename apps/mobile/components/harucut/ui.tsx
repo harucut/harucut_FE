@@ -524,7 +524,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     sectionEyebrow: {
       alignSelf: 'flex-start',
       backgroundColor: colors.primarySoft,
-      borderColor: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(37, 99, 235, 0.12)',
+      borderColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.12)',
       borderRadius: HARUCUT_RADII.chip,
       borderWidth: 1,
       color: colors.primaryStrong,

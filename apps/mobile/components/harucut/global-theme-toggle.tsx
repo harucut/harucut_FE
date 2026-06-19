@@ -197,8 +197,8 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     menuItemActive: {
       backgroundColor: colors.primarySoft,
       borderColor: isDark
-        ? 'rgba(147, 197, 253, 0.18)'
-        : 'rgba(37, 99, 235, 0.14)',
+        ? 'rgba(30, 215, 96, 0.18)'
+        : 'rgba(30, 215, 96, 0.14)',
       borderWidth: 1,
     },
     menuItemLabel: {

@@ -98,7 +98,7 @@ function defaultThemeEditor(): ThemeEditorSessionState {
 
   return {
     activeComponentId: null,
-    accentColor: '#2563EB',
+    accentColor: '#1ED760',
     assets: {
       photos: [],
     },
