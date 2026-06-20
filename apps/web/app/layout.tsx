@@ -9,7 +9,7 @@ import { ExternalBrowserGate } from "./ExternalBrowserGate";
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.harucut.com"),
   title: "하루컷",
-  description: "오늘의 인생 네컷을 기록하는 사진 서비스",
+  description: "하루의 인생 네컷을 기록하는 사진 서비스",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "하루컷 — 오늘 하루를 네 컷으로",
+    title: "하루컷 — 하루를 네 컷으로",
     description: "찍고, 꾸미고, 기록하는 나만의 인생네컷. 하루컷.",
     images: ["/og-image.png"],
     type: "website",

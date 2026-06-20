@@ -224,13 +224,13 @@ export default function HomePage() {
           </span>
           {/* 데스크톱(lg+): handoff web 카피 */}
           <h1 className="mt-3 hidden text-[34px] font-extrabold leading-[1.15] tracking-tight lg:block">
-            {greetingName}오늘은
+            {greetingName}하루는
             <br />
             어떻게 남겨볼까요?
           </h1>
           {/* 모바일(&lt;lg): handoff app 카피 ("어떤 네 컷"만 그린) */}
           <h1 className="mt-2 text-[25px] font-extrabold leading-[1.25] tracking-tight lg:hidden">
-            {greetingName}오늘은
+            {greetingName}하루는
             <br />
             <span className="text-[color:var(--hc-primary)]">어떤 네 컷</span>
             일까요?
