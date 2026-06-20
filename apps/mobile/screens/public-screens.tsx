@@ -260,24 +260,18 @@ export function LandingScreen() {
       <View style={styles.onboardingFooter}>
         <View style={styles.onboardingTitleStack}>
           <Text style={styles.onboardingTitle}>어디서든,</Text>
-          <Text style={styles.onboardingTitleAccent}>오늘의 네 컷</Text>
+          <Text style={styles.onboardingTitleAccent}>하루를 촬영해요</Text>
         </View>
-        <Text style={styles.onboardingBody}>특별한 하루를{'\n'}사진으로 남겨보세요.</Text>
+        <Text style={styles.onboardingBody}>특별한 하루를 사진으로 남겨보세요.</Text>
 
-        <ActionButton label="시작하기" onPress={() => push('/signup')} />
+        {/* 로그인 우선. 회원가입은 로그인 화면에서 유도하고, 비회원은 체험하기로 바로 촬영. */}
+        <ActionButton label="로그인" onPress={() => push('/login')} />
         <ActionButton
-          label="이미 계정이 있어요"
-          onPress={() => push('/login')}
+          label="체험하기"
+          onPress={showGuestTrialNotice}
           style={{ marginTop: 10 }}
           variant="ghost"
         />
-        <Pressable
-          accessibilityLabel="로그인 없이 바로 촬영해보기"
-          accessibilityRole="button"
-          onPress={showGuestTrialNotice}
-          style={{ marginTop: 16 }}>
-          <Text style={styles.onboardingGuestLink}>로그인 없이 바로 촬영해보기 →</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -341,7 +335,7 @@ export function LoginScreen() {
 
   return (
     <AuthShell
-      description="로그인하고 오늘의 네 컷을 이어가요."
+      description="로그인하고 하루의 네 컷을 이어가요."
       footer={
         <>
           <SocialButtons />
@@ -1020,12 +1014,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       lineHeight: 23,
       marginBottom: 26,
       marginTop: 12,
-    },
-    onboardingGuestLink: {
-      color: colors.muted,
-      fontSize: 13.5,
-      fontWeight: '600',
-      textAlign: 'center',
     },
     rememberRow: {
       alignItems: 'center',

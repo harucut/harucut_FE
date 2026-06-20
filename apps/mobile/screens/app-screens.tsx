@@ -375,7 +375,7 @@ export function HomeScreen() {
 
       <View style={styles.greetingBlock}>
         <Text style={styles.dateEyebrow}>{todayMoment}</Text>
-        <Text style={styles.greetingTitle}>{user.username}님, 오늘은</Text>
+        <Text style={styles.greetingTitle}>{user.username}님, 하루는</Text>
         <Text style={styles.greetingAccent}>어떤 네 컷일까요?</Text>
       </View>
 

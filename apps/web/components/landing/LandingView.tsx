@@ -185,7 +185,7 @@ export function LandingView() {
           <h1 className="mt-2 text-[40px] font-extrabold leading-[1.12] tracking-[-2px] sm:text-[58px]">
             어디서든,
             <br />
-            <span style={{ color: GREEN }}>오늘의 네&nbsp;컷</span>
+            <span style={{ color: GREEN }}>하루를 촬영해요</span>
           </h1>
           <p className="mb-7 mt-5 max-w-[430px] text-[17px] leading-[1.65] text-[#B3B3B3]">
             특별한 하루를 사진으로 남겨보세요.
@@ -300,7 +300,7 @@ export function LandingView() {
             FRAMES · 프레임
           </span>
           <h2 className="mt-3 text-[38px] font-extrabold tracking-[-1.2px]">
-            오늘의 기분대로, <span style={{ color: GREEN }}>네 가지 프레임</span>
+            하루의 기분대로, <span style={{ color: GREEN }}>네 가지 프레임</span>
           </h2>
         </div>
         <div className="flex flex-wrap items-end justify-center gap-9">
@@ -465,7 +465,7 @@ export function LandingView() {
           style={{ background: GREEN }}
         >
           <h2 className="text-[30px] font-extrabold tracking-[-1px]" style={{ color: "#06140A" }}>
-            오늘 하루, 네 컷으로 남겨볼까요?
+            하루를 네 컷으로 남겨볼까요?
           </h2>
           <Link
             href="/signup"
@@ -484,7 +484,7 @@ export function LandingView() {
             <p className="mt-3.5 text-[13px] leading-[1.6] text-[#6F6F73]">
               온라인 인생네컷 서비스.
               <br />
-              오늘 하루를 네 컷으로 남기세요.
+              하루를 네 컷으로 남기세요.
             </p>
           </div>
           <div className="flex flex-wrap gap-14">

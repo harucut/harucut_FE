@@ -61,7 +61,7 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
         </div>
         <div className="relative z-10 mt-auto">
           <p className="text-[34px] font-extrabold leading-[1.2] tracking-[-1px] text-white">
-            오늘 하루를
+            하루를
             <br />네 컷으로.
           </p>
           <p className="mt-3.5 max-w-[300px] text-[15px] leading-[1.6] text-white/60">
