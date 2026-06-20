@@ -5,10 +5,6 @@ export type HarucutColors = {
   accent: string;
   background: string;
   backgroundCanvas: string;
-  backgroundGradientEnd: string;
-  backgroundGradientStart: string;
-  backgroundOrbRight: string;
-  backgroundOrbTop: string;
   backgroundTint: string;
   border: string;
   card: string;
@@ -36,10 +32,6 @@ export const HARUCUT_THEME_COLORS: Record<HarucutColorScheme, HarucutColors> = {
     accent: '#7BEAA6',
     background: '#0B0B0C',
     backgroundCanvas: '#000000',
-    backgroundGradientEnd: '#161617',
-    backgroundGradientStart: '#0B0B0C',
-    backgroundOrbRight: 'rgba(30, 215, 96, 0.10)',
-    backgroundOrbTop: 'rgba(30, 215, 96, 0.16)',
     backgroundTint: '#161617',
     border: 'rgba(255, 255, 255, 0.10)',
     card: '#18181A',
@@ -61,10 +53,6 @@ export const HARUCUT_THEME_COLORS: Record<HarucutColorScheme, HarucutColors> = {
     accent: '#0E7E39',
     background: '#FAFAF7',
     backgroundCanvas: '#0B0B0C',
-    backgroundGradientEnd: '#F1F1EE',
-    backgroundGradientStart: '#FAFAF7',
-    backgroundOrbRight: 'rgba(22, 180, 84, 0.08)',
-    backgroundOrbTop: 'rgba(22, 180, 84, 0.14)',
     backgroundTint: '#F1F1EE',
     border: 'rgba(20, 20, 15, 0.10)',
     card: '#FFFFFF',
