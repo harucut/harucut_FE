@@ -53,6 +53,9 @@ export function useCaptureFlow() {
   // 타이머와 즉시 촬영 버튼이 같은 샷을 중복 처리하지 않도록 마지막으로 끝낸 샷 인덱스를 기록
   const lastFinishedShotRef = useRef(-1);
   const recordingNoticeShownRef = useRef(false);
+  // shooting.isShooting의 동기 미러. 상태는 비동기라, 첫 셔터 더블탭처럼 리렌더 이전의
+  // stale 클로저가 세션을 두 번 시작/리셋해 첫 장을 날리는 것을 막는 가드로 쓴다.
+  const isShootingRef = useRef(false);
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
@@ -311,6 +314,7 @@ export function useCaptureFlow() {
       return;
     }
 
+    isShootingRef.current = false;
     setShooting({ isShooting: false, countdown: null });
     router.push("/shoot/select");
   }, [
@@ -336,9 +340,13 @@ export function useCaptureFlow() {
       return;
     }
 
+    // 이미 촬영 중이면 재시작 무시(시작 버튼 더블탭으로 녹화가 중복 시작되는 것 방지).
+    if (isShootingRef.current) return;
+
     resetShots();
     setShotCount(0);
     lastFinishedShotRef.current = -1;
+    isShootingRef.current = true;
 
     // 타이머 모드: 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
     // 수동 모드: 카운트다운 없이 첫 컷을 바로 찍고, 이후 셔터를 누를 때마다 1장씩.
@@ -400,8 +408,10 @@ export function useCaptureFlow() {
       return;
     }
 
-    if (!shooting.isShooting) {
-      // 첫 컷: 세션 초기화 후 녹화 시작 → 같은 클릭에서 바로 1장 촬영
+    if (!isShootingRef.current) {
+      // 첫 컷: 세션 초기화 후 녹화 시작 → 같은 클릭에서 바로 1장 촬영.
+      // 동기 ref로 가드해, 리렌더 전 더블탭이 세션을 두 번 리셋(첫 장 유실)하지 않게 한다.
+      isShootingRef.current = true;
       resetShots();
       setShotCount(0);
       lastFinishedShotRef.current = -1;
@@ -412,7 +422,6 @@ export function useCaptureFlow() {
     finishSingleShot();
   }, [
     isCameraReady,
-    shooting.isShooting,
     resetShots,
     setNotice,
     startRecordingForShot,
