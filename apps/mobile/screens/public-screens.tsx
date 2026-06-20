@@ -239,9 +239,16 @@ export function LandingScreen() {
         <BrandMark compact href="/" />
       </View>
 
-      {/* 떠 있는 네 컷 프레임 — 겹쳐서 중앙 배치 */}
+      {/* 떠 있는 네 컷 프레임 — 웹 히어로 콜라주와 동일하게 3장(좌·중·우)을 겹쳐 중앙 배치 */}
       <View pointerEvents="none" style={styles.onboardingFrames}>
         <View style={styles.onboardingFrameLeft}>
+          <Image
+            accessibilityRole="image"
+            source={HERO_IMAGE_SOURCE}
+            style={styles.onboardingFrameImage}
+          />
+        </View>
+        <View style={styles.onboardingFrameCenter}>
           <Image
             accessibilityRole="image"
             source={HERO_IMAGE_SOURCE}
@@ -961,28 +968,49 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       borderColor: colors.border,
       borderRadius: 16,
       borderWidth: 1,
-      height: 206,
-      marginRight: -30,
-      marginTop: 18,
+      elevation: 6,
+      height: 192,
+      marginRight: -26,
+      marginTop: 22,
       overflow: 'hidden',
       shadowColor: '#000000',
-      shadowOffset: { height: 18, width: 0 },
-      shadowOpacity: 0.55,
-      shadowRadius: 30,
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 28,
       transform: [{ rotate: '-9deg' }],
+      zIndex: 1,
+    },
+    onboardingFrameCenter: {
+      aspectRatio: 0.62,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      elevation: 12,
+      height: 230,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOffset: { height: 22, width: 0 },
+      shadowOpacity: 0.62,
+      shadowRadius: 36,
+      transform: [{ rotate: '2deg' }],
+      zIndex: 3,
     },
     onboardingFrameRight: {
       aspectRatio: 0.62,
       borderColor: colors.border,
       borderRadius: 16,
       borderWidth: 1,
-      height: 228,
+      elevation: 8,
+      height: 192,
+      marginLeft: -26,
+      marginTop: 22,
       overflow: 'hidden',
       shadowColor: '#000000',
-      shadowOffset: { height: 20, width: 0 },
-      shadowOpacity: 0.6,
-      shadowRadius: 34,
-      transform: [{ rotate: '7deg' }],
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 28,
+      transform: [{ rotate: '9deg' }],
+      zIndex: 2,
     },
     onboardingFooter: {
       marginTop: 'auto',
