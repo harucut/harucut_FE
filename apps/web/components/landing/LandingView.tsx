@@ -63,12 +63,11 @@ const FAQ_ITEMS: [string, string][] = [
 ];
 
 const FOOTER_COLS: { title: string; items: { label: string; href?: string }[] }[] = [
-  { title: "서비스", items: [{ label: "촬영" }, { label: "프레임" }, { label: "기록" }] },
   {
     title: "정책",
     items: [
       { label: "이용약관", href: "/terms" },
-      { label: "개인정보", href: "/privacy" },
+      { label: "개인정보 처리방침", href: "/privacy" },
     ],
   },
 ];
@@ -95,18 +94,19 @@ function WebNav() {
     >
       <div className="mx-auto flex h-[72px] max-w-[1160px] items-center justify-between px-7">
         <BrandMark href="/" tone="light" />
-        <nav className="hidden items-center gap-8 md:flex">
-          <a href="#how" className="text-sm font-semibold text-[#B3B3B3] hover:text-white">
-            서비스
-          </a>
-          <a href="#frames" className="text-sm font-semibold text-[#B3B3B3] hover:text-white">
-            프레임
-          </a>
-        </nav>
-        <div className="flex items-center gap-2.5">
+        {/*
+          단일 페이지라 섹션 점프용 nav(서비스/프레임)는 제거 — 헤더는 로고 + CTA만.
+          모바일·태블릿(<lg)에선 CTA도 숨겨 앱 온보딩처럼 로고만 두고, CTA는 히어로 하단으로 내린다.
+        */}
+        <div className="hidden items-center gap-2.5 lg:flex">
+          {/*
+            hover:bg-white/[0.07] (not bg-white/5): globals.css의 테마 매핑 규칙
+            [class*="bg-white/5"]가 부분 문자열 매칭이라 hover:bg-white/5까지 상시 적용해버려
+            라이트 시스템 테마에서 로그인 버튼이 흰 알약(글자 안 보임)으로 굳던 문제를 피한다.
+          */}
           <Link
             href="/login"
-            className="rounded-full px-4 py-2 text-[13px] font-semibold text-white hover:bg-white/5"
+            className="rounded-full px-4 py-2 text-[13px] font-semibold text-white hover:bg-white/[0.07]"
           >
             로그인
           </Link>
@@ -179,18 +179,37 @@ export function LandingView() {
     <div className="min-h-dvh bg-[#0B0B0C] text-white">
       <WebNav />
 
-      {/* HERO */}
-      <section className="mx-auto grid max-w-[1160px] items-center gap-10 px-7 pb-16 pt-10 lg:grid-cols-[1.05fr_.95fr]">
-        <div>
-          <h1 className="mt-2 text-[40px] font-extrabold leading-[1.12] tracking-[-2px] sm:text-[58px]">
+      {/*
+        HERO — 데스크톱(lg+)은 좌측 텍스트 / 우측 콜라주의 2열 마케팅 히어로.
+        모바일·태블릿(<lg)은 앱 온보딩 화면과 1:1로 맞춘다: 한 화면을 꽉 채우고
+        상단에 프레임 콜라주, 하단에 타이틀·본문·풀폭 버튼(로그인 우선)을 둔다.
+      */}
+      <section className="mx-auto flex min-h-[calc(100svh-72px)] max-w-[1160px] flex-col px-7 pb-10 pt-4 lg:grid lg:min-h-0 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:gap-10 lg:pb-16 lg:pt-10">
+        {/* 텍스트·버튼 — 모바일은 하단(order-2)·중앙 정렬 폭 제한, 데스크톱은 좌측 열에서 살짝 위로 */}
+        <div className="order-2 mx-auto w-full max-w-[460px] lg:order-none lg:mx-0 lg:max-w-none lg:-translate-y-4">
+          <h1 className="text-[34px] font-extrabold leading-[1.12] tracking-[-1.5px] sm:text-[44px] lg:mt-2 lg:text-[58px] lg:tracking-[-2px]">
             어디서든,
             <br />
             <span style={{ color: GREEN }}>하루를 촬영해요</span>
           </h1>
-          <p className="mb-7 mt-5 max-w-[430px] text-[17px] leading-[1.65] text-[#B3B3B3]">
+          <p className="mb-6 mt-4 max-w-[430px] text-[15px] leading-[1.6] text-[#B3B3B3] sm:text-[17px] lg:mb-7 lg:mt-5 lg:leading-[1.65]">
             특별한 하루를 사진으로 남겨보세요.
           </p>
-          <div className="flex flex-wrap gap-3">
+          {/* 모바일·태블릿: 앱 온보딩처럼 풀폭 스택 (1차 CTA = 무료로 시작하기) */}
+          <div className="flex flex-col gap-2.5 lg:hidden">
+            <Link
+              href="/signup"
+              className="flex w-full items-center justify-center rounded-full px-7 py-3.5 text-[16px] font-bold"
+              style={{ background: GREEN, color: "#06140A" }}
+            >
+              무료로 시작하기
+            </Link>
+            <GuestTrialStartButton className="flex w-full items-center justify-center rounded-full border border-white/20 px-6 py-3.5 text-[16px] font-bold text-white transition-colors hover:border-white">
+              체험하기
+            </GuestTrialStartButton>
+          </div>
+          {/* 데스크톱: 기존 마케팅 CTA(무료로 시작하기 우선) */}
+          <div className="hidden flex-wrap gap-3 lg:flex">
             <Link
               href="/signup"
               className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[16px] font-bold"
@@ -204,8 +223,8 @@ export function LandingView() {
           </div>
         </div>
 
-        {/* 프레임 콜라주 — 우리 프로그래매틱 프레임 */}
-        <div className="relative flex h-[340px] items-center justify-center overflow-hidden sm:h-[480px]">
+        {/* 프레임 콜라주 — 모바일은 상단(order-1)에서 남는 공간을 채우며 중앙 부유, 데스크톱은 우측 열 */}
+        <div className="relative order-1 flex min-h-0 flex-1 items-start justify-center overflow-hidden pt-3 lg:order-none lg:h-[480px] lg:flex-none lg:items-center lg:translate-y-7 lg:pt-0">
           <div
             className="-mr-5 h-[180px] drop-shadow-2xl sm:-mr-6 sm:h-[260px]"
             style={{
