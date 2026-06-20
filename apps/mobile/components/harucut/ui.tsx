@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
@@ -21,21 +20,13 @@ export function AppScrollView({
   contentContainerStyle,
 }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
   const styles = useUiStyles();
-  const { colors } = useHarucutTheme();
   // 하단 안전영역은 (app)의 BottomNavigation, (public)/(legal) 레이아웃의 bottom safe-area가
   // 처리한다. 스크롤 콘텐츠는 콘텐츠 간격만 둬서 안전영역 이중 적용(하단 여백 과다)을 막는다.
   const bottomPadding = HARUCUT_SPACING.screen;
 
   return (
+    // 배경은 handoff처럼 단색 다크(colors.background)로 둔다. 이전의 그라데이션 + 초록 orb 2개는 제거.
     <View style={styles.screen}>
-      <LinearGradient
-        colors={[colors.backgroundGradientStart, colors.backgroundGradientEnd]}
-        end={{ x: 0.8, y: 1 }}
-        start={{ x: 0.1, y: 0 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View pointerEvents="none" style={styles.backgroundOrbTop} />
-      <View pointerEvents="none" style={styles.backgroundOrbRight} />
       <ScrollView
         contentContainerStyle={[
           styles.screenContent,
@@ -303,24 +294,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 11,
       fontWeight: '600',
       textDecorationLine: 'underline',
-    },
-    backgroundOrbRight: {
-      backgroundColor: colors.backgroundOrbRight,
-      borderRadius: 220,
-      height: 220,
-      position: 'absolute',
-      right: -70,
-      top: 84,
-      width: 220,
-    },
-    backgroundOrbTop: {
-      backgroundColor: colors.backgroundOrbTop,
-      borderRadius: 260,
-      height: 260,
-      left: -90,
-      position: 'absolute',
-      top: -70,
-      width: 260,
     },
     brandCompact: {
       color: colors.text,
