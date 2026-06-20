@@ -261,16 +261,25 @@ export default function CapturePage() {
               </button>
             ) : null}
 
-            {/* 큰 원형 셔터: 타이머 모드는 '촬영 시작'(이후 자동 잠금), 수동 모드는 누를 때마다 한 장씩 */}
+            {/* 큰 원형 셔터: 수동은 누를 때마다 한 장씩. 타이머는 시작 전엔 '촬영 시작',
+                카운트다운 중엔 탭하면 남은 대기를 스킵하고 그 컷을 즉시 촬영한다. */}
             <button
               type="button"
               onClick={
-                captureMode === "manual" ? handleManualShutter : startShooting
+                captureMode === "manual"
+                  ? handleManualShutter
+                  : isShooting
+                    ? handleShootNow
+                    : startShooting
               }
-              disabled={
-                !isCameraReady || (captureMode === "timer" && isShooting)
+              disabled={!isCameraReady}
+              aria-label={
+                captureMode === "manual"
+                  ? "한 장 촬영"
+                  : isShooting
+                    ? "지금 바로 촬영"
+                    : "촬영 시작"
               }
-              aria-label={captureMode === "manual" ? "한 장 촬영" : "촬영 시작"}
               className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] bg-transparent transition disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)]" />
@@ -281,7 +290,9 @@ export default function CapturePage() {
 
           <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
             {captureMode === "timer"
-              ? `촬영 시작을 누르면 ${timerSeconds}초 간격으로 8장을 자동으로 찍어요`
+              ? isShooting
+                ? "셔터를 누르면 기다리지 않고 바로 이 컷을 찍어요"
+                : `촬영 시작을 누르면 ${timerSeconds}초 간격으로 8장을 자동으로 찍어요`
               : "셔터를 누를 때마다 한 장씩 총 8장을 찍어요"}
           </p>
         </section>

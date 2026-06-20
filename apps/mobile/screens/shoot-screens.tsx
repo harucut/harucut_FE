@@ -16,10 +16,6 @@ import { useLibraryStore } from '@/store/use-library-store';
 import { useSessionStore } from '@/store/use-session-store';
 import { useShootStore } from '@/store/use-shoot-store';
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // 촬영 총 장수
 const SHOOT_TOTAL = 8;
 // 선택 가능한 타이머 간격(초)
@@ -129,6 +125,10 @@ export function ShootCaptureScreen() {
   // 언마운트된 컴포넌트에 setState/네비게이션이 발생할 수 있다. 마운트 여부를 추적해
   // 루프 중간에 안전하게 빠져나가기 위한 ref.
   const isMountedRef = useRef(true);
+  // 타이머 카운트다운을 셔터 탭으로 즉시 끝내기 위한 신호.
+  // captureNowRef: "지금 이 컷을 바로 찍어라" 플래그. tickResolveRef: 진행 중인 1초 틱을 깨우는 resolver.
+  const captureNowRef = useRef(false);
+  const tickResolveRef = useRef<(() => void) | null>(null);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
   const shoot = useShootStore();
@@ -186,6 +186,8 @@ export function ShootCaptureScreen() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      // 진행 중인 카운트다운 틱이 있으면 깨워, await가 영원히 매달리지 않게 한다.
+      tickResolveRef.current?.();
     };
   }, []);
 
@@ -230,26 +232,50 @@ export function ShootCaptureScreen() {
     return shotIndex + 1;
   };
 
+  // 타이머 카운트다운의 1초 틱. 셔터 탭(handleShootNow)이 들어오면 남은 대기를 깨고 즉시 반환한다.
+  const waitTickOrSkip = () =>
+    new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        tickResolveRef.current = null;
+        resolve();
+      };
+      const timeoutId = setTimeout(finish, 1000);
+      tickResolveRef.current = finish;
+    });
+
   // 타이머 모드: 선택한 간격으로 8장을 자동 연속 촬영.
+  // 카운트다운 중 셔터를 탭하면 남은 대기를 스킵하고 그 컷을 즉시 찍는다(captureNowRef + tickResolveRef로 틱 인터럽트).
   const handleTimerBurst = async () => {
     if (!(await ensureCameraPermission())) return;
     if (!cameraRef.current || isShooting) return;
 
     resetShootSession();
+    captureNowRef.current = false;
     setIsShooting(true);
 
     try {
       for (let shotIndex = 0; shotIndex < SHOOT_TOTAL; shotIndex += 1) {
+        // 컷마다 스킵 플래그를 초기화해, 직전 컷의 탭이 다음 컷으로 새지 않게 한다.
+        captureNowRef.current = false;
+
         for (let remaining = timerSeconds; remaining > 0; remaining -= 1) {
           // 카운트다운 도중 화면을 벗어났으면 즉시 중단(언마운트 후 setState 방지).
           if (!isMountedRef.current) return;
+          // 셔터를 탭했으면 남은 카운트다운을 건너뛴다.
+          if (captureNowRef.current) break;
           setCountdown(remaining);
-          // 1초 틱으로 맞춰 선택한 간격(3·5·8초)이 실제 촬영 간격과 일치하게 한다.
-          await delay(1000);
+          // 1초 틱으로 맞춰 선택한 간격(3·5·8초)이 실제 촬영 간격과 일치하게 한다(탭하면 조기 종료).
+          await waitTickOrSkip();
+          if (captureNowRef.current) break;
         }
 
         // 촬영 직전 이탈했으면 더 찍지 않는다.
         if (!isMountedRef.current) return;
+        captureNowRef.current = false;
         await captureOneShot(shotIndex);
       }
 
@@ -273,6 +299,14 @@ export function ShootCaptureScreen() {
         setIsShooting(false);
       }
     }
+  };
+
+  // 타이머 카운트다운 중 셔터 탭: 남은 대기를 스킵하고 즉시 그 컷을 찍는다.
+  // 대기 틱이 없는 순간(이미 캡처 진행 중)의 탭은 무시해 중복 촬영을 막는다.
+  const handleShootNow = () => {
+    if (!isShooting || !tickResolveRef.current) return;
+    captureNowRef.current = true;
+    tickResolveRef.current();
   };
 
   // 수동 모드: 셔터를 누를 때마다 즉시 1장. 8장째에서 자동으로 고르기 단계로 이동.
@@ -356,6 +390,7 @@ export function ShootCaptureScreen() {
                 <Text style={styles.countdownText}>{countdown}</Text>
               </View>
               <Text style={styles.overlayCaption}>{shoot.shots.length}/{SHOOT_TOTAL}</Text>
+              <Text style={styles.overlayHint}>셔터를 누르면 바로 이 컷을 찍어요</Text>
             </View>
           ) : null}
         </View>
@@ -437,12 +472,18 @@ export function ShootCaptureScreen() {
           </Pressable>
 
           <Pressable
-            accessibilityLabel={captureMode === 'manual' ? '한 장 촬영' : '촬영 시작'}
+            accessibilityLabel={
+              captureMode === 'manual' ? '한 장 촬영' : isShooting ? '지금 바로 촬영' : '촬영 시작'
+            }
             accessibilityRole="button"
-            accessibilityState={{ disabled: captureMode === 'timer' && isShooting }}
-            disabled={captureMode === 'timer' && isShooting}
-            onPress={() => void (captureMode === 'manual' ? handleManualShutter() : handleTimerBurst())}
-            style={[styles.shutterButton, captureMode === 'timer' && isShooting ? styles.controlLocked : null]}>
+            onPress={() =>
+              void (captureMode === 'manual'
+                ? handleManualShutter()
+                : isShooting
+                  ? handleShootNow()
+                  : handleTimerBurst())
+            }
+            style={styles.shutterButton}>
             <View style={styles.shutterInner} />
           </Pressable>
 
@@ -1021,6 +1062,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       color: '#FFFFFF',
       fontSize: 12,
       fontWeight: '600',
+    },
+    overlayHint: {
+      color: 'rgba(255,255,255,0.82)',
+      fontSize: 11,
     },
     rowButtons: {
       flexDirection: 'row',
