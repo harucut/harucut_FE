@@ -52,29 +52,35 @@ export function GlobalNotice() {
   };
 
   return (
-    <Modal animationType="fade" transparent visible>
+    <Modal
+      animationType="slide"
+      transparent
+      visible
+      statusBarTranslucent
+      onRequestClose={clearNotice}>
       <View style={styles.backdrop}>
         <Pressable onPress={clearNotice} style={StyleSheet.absoluteFill} />
-        <View style={[styles.sheetWrap, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <View style={styles.grabber} />
+          {notice.icon ? (
             <View style={styles.iconWrap}>
               <Ionicons color={colors.primaryStrong} name={notice.icon as any} size={24} />
             </View>
-            {notice.eyebrow ? <Pill>{notice.eyebrow}</Pill> : null}
-            <View style={{ gap: 8 }}>
-              <Text style={styles.title}>{notice.title}</Text>
-              <Text style={styles.message}>{notice.message}</Text>
-            </View>
-            <View style={styles.buttonColumn}>
-              {notice.actions.map((action) => (
-                <ActionButton
-                  key={action.id}
-                  label={action.label}
-                  onPress={() => handleAction(action.id)}
-                  variant={action.variant ?? 'primary'}
-                />
-              ))}
-            </View>
+          ) : null}
+          {notice.eyebrow ? <Pill>{notice.eyebrow}</Pill> : null}
+          <View style={{ gap: 8 }}>
+            <Text style={styles.title}>{notice.title}</Text>
+            <Text style={styles.message}>{notice.message}</Text>
+          </View>
+          <View style={styles.buttonColumn}>
+            {notice.actions.map((action) => (
+              <ActionButton
+                key={action.id}
+                label={action.label}
+                onPress={() => handleAction(action.id)}
+                variant={action.variant ?? 'primary'}
+              />
+            ))}
           </View>
         </View>
       </View>
@@ -92,6 +98,14 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     buttonColumn: {
       gap: 10,
       marginTop: 4,
+    },
+    grabber: {
+      alignSelf: 'center',
+      backgroundColor: colors.border,
+      borderRadius: 999,
+      height: 5,
+      marginBottom: 4,
+      width: 44,
     },
     iconWrap: {
       alignItems: 'center',
@@ -111,18 +125,16 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     sheet: {
       backgroundColor: colors.cardStrong,
       borderColor: colors.border,
-      borderRadius: 30,
-      borderWidth: 1,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderTopWidth: 1,
       gap: 14,
-      padding: 20,
+      paddingHorizontal: 20,
+      paddingTop: 12,
       shadowColor: colors.shadow,
-      shadowOffset: { height: 20, width: 0 },
+      shadowOffset: { height: -6, width: 0 },
       shadowOpacity: isDark ? 0.34 : 1,
-      shadowRadius: 32,
-    },
-    sheetWrap: {
-      paddingHorizontal: 16,
-      paddingTop: 24,
+      shadowRadius: 30,
     },
     title: {
       color: colors.text,

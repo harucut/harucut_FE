@@ -274,7 +274,7 @@ export function LandingScreen() {
         {/* 로그인 우선. 회원가입은 로그인 화면에서 유도하고, 비회원은 체험하기로 바로 촬영. */}
         <ActionButton label="로그인" onPress={() => push('/login')} />
         <ActionButton
-          label="체험하기"
+          label="무료로 체험하기"
           onPress={showGuestTrialNotice}
           style={{ marginTop: 10 }}
           variant="ghost"
@@ -949,13 +949,11 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       zIndex: 2,
     },
     onboardingFrames: {
-      alignItems: 'flex-start',
+      // 헤더와 푸터 사이 남는 공간을 채우고 그 중앙에 프레임을 띄운다(absolute top 고정 → flex 중앙정렬).
+      alignItems: 'center',
+      flex: 1,
       flexDirection: 'row',
       justifyContent: 'center',
-      left: 0,
-      position: 'absolute',
-      right: 0,
-      top: 74,
       zIndex: 1,
     },
     onboardingFrameImage: {
@@ -1013,7 +1011,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       zIndex: 2,
     },
     onboardingFooter: {
-      marginTop: 'auto',
       paddingBottom: 30,
       paddingHorizontal: 26,
       paddingTop: 60,
