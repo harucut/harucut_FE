@@ -21,7 +21,7 @@ export function GuestTrialStartButton({
       onClick={showGuestTrialNotice}
       className={className ?? DEFAULT_CLASS}
     >
-      {children ?? "체험하기"}
+      {children ?? "무료로 체험하기"}
     </button>
   );
 }

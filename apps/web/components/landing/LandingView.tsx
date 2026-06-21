@@ -205,7 +205,7 @@ export function LandingView() {
               무료로 시작하기
             </Link>
             <GuestTrialStartButton className="flex w-full items-center justify-center rounded-full border border-white/20 px-6 py-3.5 text-[16px] font-bold text-white transition-colors hover:border-white">
-              체험하기
+              무료로 체험하기
             </GuestTrialStartButton>
           </div>
           {/* 데스크톱: 기존 마케팅 CTA(무료로 시작하기 우선) */}
@@ -218,7 +218,7 @@ export function LandingView() {
               무료로 시작하기 <ArrowRight className="h-[19px] w-[19px]" />
             </Link>
             <GuestTrialStartButton className="inline-flex items-center rounded-full border border-white/20 px-6 py-3.5 text-[16px] font-bold text-white transition-colors hover:border-white">
-              체험하기
+              무료로 체험하기
             </GuestTrialStartButton>
           </div>
         </div>
