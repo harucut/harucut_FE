@@ -77,7 +77,7 @@ export function GuestTrialOverlay() {
         </button>
 
         <div className="flex flex-col gap-4">
-          <NoticeIcon icon={notice.icon} />
+          {notice.icon ? <NoticeIcon icon={notice.icon} /> : null}
           {notice.eyebrow ? (
             <span className="hc-accent-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-medium">
               {notice.eyebrow}

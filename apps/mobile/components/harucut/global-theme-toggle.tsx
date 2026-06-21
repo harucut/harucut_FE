@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname } from 'expo-router';
 import * as React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type {
@@ -76,6 +76,18 @@ export function GlobalThemeToggle() {
   React.useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  // 메뉴가 열려 있으면 안드로이드 뒤로가기로 화면을 떠나지 말고 메뉴만 닫는다.
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setOpen(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [open]);
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
