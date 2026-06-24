@@ -12,6 +12,7 @@ import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
+import { getSubscriptionUsage, type SubscriptionUsage } from '@/lib/user-api';
 import { getPresignedImageUrl, resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 import { useLibraryStore } from '@/store/use-library-store';
 import { useSessionStore } from '@/store/use-session-store';
@@ -45,7 +46,16 @@ export function ThemeFrameScreen() {
   const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
   const setThemeFrame = useThemeEditorStore((state) => state.setThemeFrame);
   const selectSavedFrameForTheme = useThemeEditorStore((state) => state.selectSavedFrameForTheme);
-  const plan = resolvePlanInfo(planTier);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const basePlan = resolvePlanInfo(planTier);
+  // 프레임 보관 한도는 서버 구독 사용량(frameRetentionLimit)을 우선 사용하고,
+  // 무제한(-1)/미조회 시에는 요금제 tier 기반 기본 한도를 유지한다.
+  const serverFrameLimit =
+    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit > 0
+      ? usage.frameRetentionLimit
+      : null;
+  const plan =
+    serverFrameLimit != null ? { ...basePlan, limit: serverFrameLimit } : basePlan;
   // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
   const isAtCapacity = savedFrames.length >= plan.limit;
   // 원격 프레임 로딩 전에는 savedFrames가 빈 배열이라 한도를 알 수 없으므로,
@@ -56,6 +66,9 @@ export function ThemeFrameScreen() {
     if (accessMode === 'member') {
       void loadRemoteFrames().finally(() => setFramesLoaded(true));
       void refreshUserProfile().catch(() => {});
+      void getSubscriptionUsage()
+        .then(setUsage)
+        .catch(() => {});
     } else {
       setFramesLoaded(true);
     }

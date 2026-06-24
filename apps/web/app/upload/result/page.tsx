@@ -40,7 +40,10 @@ import { shareOrCopyLink } from "@/lib/share";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
-import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
+import {
+  useHydrateVideoConversionQuota,
+  useVideoConversionQuotaStore,
+} from "@/lib/videoConversionQuotaStore";
 
 const VIDEO_DEBUG_SCOPE = "upload-result";
 const IMAGE_DEBUG_SCOPE = "upload-result-image";
@@ -67,6 +70,10 @@ export default function UploadResultPage() {
   const consumeVideoConversion = useVideoConversionQuotaStore((state) => state.consume);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
+  const videoConversionUnlimited = useVideoConversionQuotaStore(
+    (state) => state.unlimited,
+  );
+  useHydrateVideoConversionQuota();
 
   const [imageState, setImageState] = useState<ProcessingState>(
     imageResult ? "done" : "idle",
@@ -155,10 +162,9 @@ export default function UploadResultPage() {
     [selectedMedia],
   );
   const shouldPrepareVideo = includeVideo && videoEligible;
-  const remainingVideoConversions = Math.max(
-    videoConversionLimit - usedVideoConversions,
-    0,
-  );
+  const remainingVideoConversions = videoConversionUnlimited
+    ? Number.POSITIVE_INFINITY
+    : Math.max(videoConversionLimit - usedVideoConversions, 0);
   const generationKey = useMemo(
     () =>
       JSON.stringify({

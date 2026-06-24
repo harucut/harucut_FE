@@ -42,7 +42,10 @@ import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
-import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
+import {
+  useHydrateVideoConversionQuota,
+  useVideoConversionQuotaStore,
+} from "@/lib/videoConversionQuotaStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 
 const VIDEO_DEBUG_SCOPE = "shoot-result";
@@ -75,6 +78,10 @@ export default function ShootResultPage() {
   const consumeVideoConversion = useVideoConversionQuotaStore((state) => state.consume);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
+  const videoConversionUnlimited = useVideoConversionQuotaStore(
+    (state) => state.unlimited,
+  );
+  useHydrateVideoConversionQuota(!guestMode);
 
   const [imageState, setImageState] = useState<ProcessingState>(
     imageResult ? "done" : "idle",
@@ -175,7 +182,9 @@ export default function ShootResultPage() {
     [selectedShots],
   );
   const shouldPrepareVideo = !guestMode && includeVideo && videoEligible;
-  const remainingVideoConversions = Math.max(videoConversionLimit - usedVideoConversions, 0);
+  const remainingVideoConversions = videoConversionUnlimited
+    ? Number.POSITIVE_INFINITY
+    : Math.max(videoConversionLimit - usedVideoConversions, 0);
   const generationKey = useMemo(
     () =>
       JSON.stringify({

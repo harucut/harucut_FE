@@ -17,6 +17,7 @@ const draftStoreState = {
 const videoQuotaState = {
   usedCount: 0,
   limit: 3,
+  unlimited: false,
 };
 
 const DEFAULT_FILTER: FourcutFilterId = "NONE";
@@ -110,6 +111,7 @@ jest.mock("@/lib/themeDraftStore", () => ({
 jest.mock("@/lib/videoConversionQuotaStore", () => ({
   useVideoConversionQuotaStore: (selector: (state: typeof videoQuotaState) => unknown) =>
     selector(videoQuotaState),
+  useHydrateVideoConversionQuota: () => {},
 }));
 
 jest.mock("@/lib/themeBackground", () => ({

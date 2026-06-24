@@ -10,11 +10,11 @@ import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StepProgress } from "@/components/layout/StepProgress";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import type { RemoteFrame } from "@/lib/api-types";
+import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
-import { getMyUserInfo } from "@/lib/userApi";
+import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
 
 function ThemePageContent() {
   const router = useRouter();
@@ -25,7 +25,16 @@ function ThemePageContent() {
   const { frames, isLoading, error, refresh } = useMyFrames();
 
   const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
-  const plan = resolvePlanInfo(planTier);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const basePlan = resolvePlanInfo(planTier);
+  // 프레임 보관 한도는 서버 구독 사용량(frameRetentionLimit)을 우선 사용하고,
+  // 무제한(-1)/미조회 시에는 요금제 tier 기반 기본 한도를 유지한다.
+  const serverFrameLimit =
+    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit > 0
+      ? usage.frameRetentionLimit
+      : null;
+  const plan =
+    serverFrameLimit != null ? { ...basePlan, limit: serverFrameLimit } : basePlan;
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
@@ -48,6 +57,13 @@ function ThemePageContent() {
       })
       .catch(() => {
         if (!cancelled) setPlanTier("BASIC");
+      });
+    void getSubscriptionUsage()
+      .then((next) => {
+        if (!cancelled) setUsage(next);
+      })
+      .catch(() => {
+        // 미조회 시 tier 기반 기본 한도 유지
       });
     return () => {
       cancelled = true;

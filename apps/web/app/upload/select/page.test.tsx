@@ -51,8 +51,10 @@ jest.mock("@/lib/themeBackground", () => ({
 }));
 
 jest.mock("@/lib/videoConversionQuotaStore", () => ({
-  useVideoConversionQuotaStore: (selector: (state: { usedCount: number; limit: number }) => unknown) =>
-    selector({ usedCount: 0, limit: 3 }),
+  useVideoConversionQuotaStore: (
+    selector: (state: { usedCount: number; limit: number; unlimited: boolean }) => unknown,
+  ) => selector({ usedCount: 0, limit: 3, unlimited: false }),
+  useHydrateVideoConversionQuota: () => {},
 }));
 
 jest.mock("@/lib/uploadSessionStore", () => ({

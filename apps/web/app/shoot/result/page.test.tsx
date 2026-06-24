@@ -90,13 +90,16 @@ jest.mock("@/lib/videoConversionQuotaStore", () => ({
       consume: () => void;
       usedCount: number;
       limit: number;
+      unlimited: boolean;
     }) => unknown,
   ) =>
     selector({
       consume: mockConsumeVideoConversion,
       usedCount: 0,
       limit: 3,
+      unlimited: false,
     }),
+  useHydrateVideoConversionQuota: () => {},
 }));
 
 jest.mock("@/lib/canvas/composeFrame", () => ({

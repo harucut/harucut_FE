@@ -10,7 +10,10 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
+import {
+  useHydrateVideoConversionQuota,
+  useVideoConversionQuotaStore,
+} from "@/lib/videoConversionQuotaStore";
 
 export default function ShootSelectPage() {
   const router = useRouter();
@@ -31,8 +34,12 @@ export default function ShootSelectPage() {
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
+  const videoConversionUnlimited = useVideoConversionQuotaStore(
+    (state) => state.unlimited,
+  );
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const guestMode = accessMode === "guest";
+  useHydrateVideoConversionQuota(!guestMode);
 
   useEffect(() => {
     if (!frameId) {
@@ -57,10 +64,9 @@ export default function ShootSelectPage() {
     () => selectedShots.some((shot) => Boolean(shot?.video)),
     [selectedShots],
   );
-  const remainingVideoConversions = Math.max(
-    videoConversionLimit - usedVideoConversions,
-    0,
-  );
+  const remainingVideoConversions = videoConversionUnlimited
+    ? Number.POSITIVE_INFINITY
+    : Math.max(videoConversionLimit - usedVideoConversions, 0);
 
   useEffect(() => {
     if ((guestMode || !videoEligible || remainingVideoConversions === 0) && includeVideo) {
@@ -107,6 +113,7 @@ export default function ShootSelectPage() {
               hasCustomFrame={hasCustomFrame}
               videoEligible={videoEligible}
               remainingVideoConversions={remainingVideoConversions}
+              unlimitedVideoConversions={videoConversionUnlimited}
               guestMode={guestMode}
             />
           )}

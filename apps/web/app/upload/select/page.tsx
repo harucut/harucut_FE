@@ -10,7 +10,10 @@ import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { SUPPORTED_FOURCUT_ACCEPT } from "@/lib/presignedUploadApi";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { useUploadSession } from "@/lib/uploadSessionStore";
-import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
+import {
+  useHydrateVideoConversionQuota,
+  useVideoConversionQuotaStore,
+} from "@/lib/videoConversionQuotaStore";
 
 export default function UploadSelectPage() {
   const router = useRouter();
@@ -32,6 +35,10 @@ export default function UploadSelectPage() {
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
   const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
+  const videoConversionUnlimited = useVideoConversionQuotaStore(
+    (state) => state.unlimited,
+  );
+  useHydrateVideoConversionQuota();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -51,10 +58,9 @@ export default function UploadSelectPage() {
     () => selectedMedia.some((item) => item?.type === "video"),
     [selectedMedia],
   );
-  const remainingVideoConversions = Math.max(
-    videoConversionLimit - usedVideoConversions,
-    0,
-  );
+  const remainingVideoConversions = videoConversionUnlimited
+    ? Number.POSITIVE_INFINITY
+    : Math.max(videoConversionLimit - usedVideoConversions, 0);
 
   useEffect(() => {
     if ((!videoEligible || remainingVideoConversions === 0) && includeVideo) {
@@ -158,6 +164,7 @@ export default function UploadSelectPage() {
                 hasCustomFrame={hasCustomFrame}
                 videoEligible={videoEligible}
                 remainingVideoConversions={remainingVideoConversions}
+                unlimitedVideoConversions={videoConversionUnlimited}
               />
             </>
           )}

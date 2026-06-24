@@ -17,6 +17,8 @@ type FrameOutputOptionsPanelProps = {
   hasCustomFrame: boolean;
   videoEligible: boolean;
   remainingVideoConversions: number;
+  /** 무제한 요금제면 남은 횟수 대신 '무제한'으로 표기 */
+  unlimitedVideoConversions?: boolean;
   guestMode?: boolean;
 };
 
@@ -30,9 +32,11 @@ export function FrameOutputOptionsPanel({
   hasCustomFrame,
   videoEligible,
   remainingVideoConversions,
+  unlimitedVideoConversions = false,
   guestMode = false,
 }: FrameOutputOptionsPanelProps) {
-  const canEnableVideo = videoEligible && remainingVideoConversions > 0;
+  const canEnableVideo =
+    videoEligible && (unlimitedVideoConversions || remainingVideoConversions > 0);
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -134,7 +138,9 @@ export function FrameOutputOptionsPanel({
                 <span>동영상도 함께 준비하기</span>
                 <span className="text-zinc-500">
                   {videoEligible
-                    ? `남은 동영상 변환 횟수 ${remainingVideoConversions}회`
+                    ? unlimitedVideoConversions
+                      ? "남은 동영상 변환 횟수 무제한"
+                      : `남은 동영상 변환 횟수 ${remainingVideoConversions}회`
                     : "선택한 결과로는 동영상을 만들 수 없어요."}
                 </span>
               </span>
