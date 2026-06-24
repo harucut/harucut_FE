@@ -7,9 +7,9 @@ export type ResetTokenResponse = {
   data: { resetToken: string };
 };
 
-/** 비밀번호 재설정 코드 전송 */
+/** 비밀번호 재설정 코드 전송 (회원가입용 코드와 분리된 전용 엔드포인트) */
 export async function requestPasswordResetCode(email: string) {
-  await clientApi.post("/api/client/auth/email/code", { email });
+  await clientApi.post("/api/client/auth/password/reset/code", { email });
 }
 
 /** 재설정 코드 검증 후 resetToken 반환 */
