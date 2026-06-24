@@ -7,7 +7,7 @@ import { BrandMark } from "@/components/layout/BrandMark";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import type { FrameId } from "@/constants/frames";
-import { PLANS } from "@/constants/plans";
+import { COMPANY } from "@/constants/company";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
@@ -64,6 +64,10 @@ const FAQ_ITEMS: [string, string][] = [
 
 const FOOTER_COLS: { title: string; items: { label: string; href?: string }[] }[] = [
   {
+    title: "바로가기",
+    items: [{ label: "요금제", href: "/pricing" }],
+  },
+  {
     title: "정책",
     items: [
       { label: "이용약관", href: "/terms" },
@@ -104,6 +108,12 @@ function WebNav() {
             [class*="bg-white/5"]가 부분 문자열 매칭이라 hover:bg-white/5까지 상시 적용해버려
             라이트 시스템 테마에서 로그인 버튼이 흰 알약(글자 안 보임)으로 굳던 문제를 피한다.
           */}
+          <Link
+            href="/pricing"
+            className="rounded-full px-4 py-2 text-[13px] font-semibold text-white hover:bg-white/[0.07]"
+          >
+            요금제
+          </Link>
           <Link
             href="/login"
             className="rounded-full px-4 py-2 text-[13px] font-semibold text-white hover:bg-white/[0.07]"
@@ -346,129 +356,6 @@ export function LandingView() {
         </div>
       </section>
 
-      {/* PRICING */}
-      <section className="border-y border-white/10 bg-[#18181A]">
-        <div className="mx-auto max-w-[1160px] px-7 py-20">
-          <div className="mb-9">
-            <span className="font-mono text-xs tracking-[3px]" style={{ color: GREEN }}>
-              PRICING · 요금제
-            </span>
-            <h2 className="mt-3 text-[38px] font-extrabold tracking-[-1.2px]">
-              비회원도 촬영은 무료
-            </h2>
-          </div>
-          <div className="grid items-stretch gap-[18px] md:grid-cols-3">
-            {PLANS.map((p) => {
-              const hot = p.hot;
-              return (
-                <div
-                  key={p.id}
-                  className="flex flex-col rounded-[18px] px-[26px] py-7"
-                  style={{
-                    background: hot ? GREEN : "transparent",
-                    border: hot ? "none" : "1px solid rgba(255,255,255,.1)",
-                    boxShadow: hot ? "0 24px 50px -24px rgba(30,215,96,.5)" : "none",
-                  }}
-                >
-                  <div className="flex min-h-[22px] items-center justify-between">
-                    <span
-                      className="text-[15px] font-extrabold tracking-[.4px]"
-                      style={{ color: hot ? "#06140A" : "#fff" }}
-                    >
-                      {p.name}
-                    </span>
-                    {p.badge ? (
-                      <span
-                        className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
-                        style={{ background: "#06140A", color: GREEN }}
-                      >
-                        {p.badge}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mb-5 mt-[18px] flex items-baseline gap-1.5">
-                    <span
-                      className="text-[32px] font-extrabold leading-[.9] tracking-[-1.2px]"
-                      style={{ color: hot ? "#06140A" : "#fff" }}
-                    >
-                      {p.price}
-                    </span>
-                    <span
-                      className="font-mono text-[13px]"
-                      style={{ color: hot ? "rgba(6,20,10,.62)" : "#6F6F73" }}
-                    >
-                      {p.sub}
-                    </span>
-                  </div>
-                  <div
-                    className="mb-[22px] h-px w-full"
-                    style={{ background: hot ? "rgba(6,20,10,.14)" : "rgba(255,255,255,.1)" }}
-                  />
-                  <div className="mb-[26px] flex flex-col gap-3">
-                    {p.feats.map(([label, on, note]) => (
-                      <div
-                        key={label}
-                        className="flex items-start gap-2.5"
-                        style={{ opacity: on ? 1 : 0.45 }}
-                      >
-                        <span
-                          className="mt-0.5 grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full text-[11px] font-bold"
-                          style={{
-                            background: !on
-                              ? "transparent"
-                              : hot
-                                ? "rgba(6,20,10,.12)"
-                                : "rgba(30,215,96,.16)",
-                            border: on
-                              ? "none"
-                              : `1.5px solid ${hot ? "rgba(6,20,10,.32)" : "rgba(255,255,255,.28)"}`,
-                            color: hot ? "#06140A" : GREEN,
-                          }}
-                        >
-                          {on ? "✓" : "×"}
-                        </span>
-                        <span
-                          className="text-[13.5px] leading-[1.4]"
-                          style={{ color: hot ? "#06140A" : "#fff" }}
-                        >
-                          {label}
-                          {note ? (
-                            <b
-                              className="font-bold"
-                              style={{
-                                color: hot
-                                  ? "rgba(6,20,10,.82)"
-                                  : on
-                                    ? "#fff"
-                                    : "#B3B3B3",
-                              }}
-                            >
-                              {" · "}
-                              {note}
-                            </b>
-                          ) : null}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <Link
-                    href={p.id === "basic" ? "/signup" : "/login"}
-                    className="mt-auto flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition-transform hover:scale-[1.025]"
-                    style={{
-                      background: hot ? "#06140A" : "transparent",
-                      color: hot ? GREEN : "#fff",
-                      border: hot ? "none" : "1px solid rgba(255,255,255,.18)",
-                    }}
-                  >
-                    {p.cta}
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* FAQ */}
       <section className="mx-auto max-w-[820px] px-7 py-20">
         <h2 className="mb-8 text-[36px] font-extrabold tracking-[-1px]">
@@ -505,6 +392,12 @@ export function LandingView() {
               <br />
               하루를 네 컷으로 남기세요.
             </p>
+            <a
+              href={`mailto:${COMPANY.email}`}
+              className="mt-3 inline-block text-[13px] text-[#B3B3B3] hover:text-white"
+            >
+              고객문의 {COMPANY.email}
+            </a>
           </div>
           <div className="flex flex-wrap gap-14">
             {FOOTER_COLS.map((col) => (
@@ -530,9 +423,16 @@ export function LandingView() {
           </div>
         </div>
         <div className="border-t border-white/10">
-          <div className="mx-auto flex max-w-[1160px] justify-between px-7 py-[18px]">
-            <span className="font-mono text-[11px] text-[#6F6F73]">© 2026 Harucut</span>
-            <span className="font-mono text-[11px] text-[#6F6F73]">harucut.com</span>
+          <div className="mx-auto flex max-w-[1160px] flex-col gap-2 px-7 py-[18px] font-mono text-[11px] leading-[1.7] text-[#6F6F73]">
+            <p>
+              {COMPANY.name} · 대표 {COMPANY.owner} · 사업자등록번호{" "}
+              {COMPANY.bizRegNo} · 통신판매업신고번호 {COMPANY.mailOrderNo}
+            </p>
+            <p>{COMPANY.address}</p>
+            <div className="flex justify-between">
+              <span>© 2026 {COMPANY.name}</span>
+              <span>harucut.com</span>
+            </div>
           </div>
         </div>
       </footer>
