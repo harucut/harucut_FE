@@ -13,6 +13,7 @@ export type UserMedia = {
   displayName?: string | null;
   displayname?: string | null;
   downloadUrl?: string;
+  thumbnailUrl?: string | null;
   mediaId: number;
   mediaType: UserMediaType;
   originalFileName?: string;
@@ -86,6 +87,18 @@ function mediaToPreviewAsset(item: UserMedia, items: UserMedia[]) {
   const matchedPhoto = findSameNamePhoto(item, items);
 
   if (!matchedPhoto?.downloadUrl) {
+    // 같은 이름 사진이 없으면 백엔드가 제공하는 영상 포스터(thumbnailUrl)를 사용한다.
+    if (item.mediaType === 'VIDEO' && item.thumbnailUrl) {
+      return {
+        id: `remote-media-${item.mediaId}-poster`,
+        kind: 'video' as const,
+        label: getUserMediaTitle(item),
+        previewKind: 'image' as const,
+        remoteMediaId: item.mediaId,
+        uri: item.thumbnailUrl,
+      };
+    }
+
     return mediaToAsset(item);
   }
 
@@ -121,18 +134,38 @@ export function mediaToHistoryItem(
 }
 
 export async function listMyMedia(type?: UserMediaType) {
-  const query = type ? `?type=${encodeURIComponent(type)}` : '';
-  const media = await apiEnvelopeData<UserMedia[]>(
-    {
-      direct: `/api/auth/user/media${query}`,
-      proxy: `/api/client/user/media${query}`,
-    },
-    {
-      cache: 'no-store',
-    },
-  );
+  // 백엔드 GET /api/auth/user/media는 page(0부터)/size(기본 10) 기반 페이지네이션이고,
+  // data는 페이지 객체({ content, totalPages, number })다. 이전엔 data를 배열로 가정해
+  // Array.isArray가 항상 false였고 저장 미디어 목록이 늘 비어 있었다. 모든 페이지를 순회한다.
+  const out: UserMedia[] = [];
+  let page = 0;
+  for (let guard = 0; guard < 100; guard += 1) {
+    const parts = [`page=${page}`, 'size=100'];
+    if (type) parts.unshift(`type=${encodeURIComponent(type)}`);
+    const query = `?${parts.join('&')}`;
+    const data = await apiEnvelopeData<
+      | { content?: UserMedia[]; number?: number; totalPages?: number }
+      | UserMedia[]
+      | null
+    >(
+      {
+        direct: `/api/auth/user/media${query}`,
+        proxy: `/api/client/user/media${query}`,
+      },
+      {
+        cache: 'no-store',
+      },
+    );
 
-  return Array.isArray(media) ? media : [];
+    if (Array.isArray(data)) return data;
+    out.push(...(data?.content ?? []));
+    const current = data?.number ?? page;
+    const totalPages = data?.totalPages ?? current + 1;
+    if (current + 1 >= totalPages) break;
+    page = current + 1;
+  }
+
+  return out;
 }
 
 export async function listRemoteHistoryItems() {

@@ -55,6 +55,15 @@ export function getUserMediaPreview(
 ) {
   const target = getUserMediaPreviewTarget(item, items);
 
+  // 같은 이름의 사진 프리뷰가 없는 영상은 downloadUrl이 null이라 미리보기가 비는데,
+  // 백엔드가 제공하는 포스터(thumbnailUrl)가 있으면 그걸 이미지 프리뷰로 사용한다.
+  if (target.kind === "video" && item.thumbnailUrl) {
+    return {
+      kind: "image" as const,
+      url: item.thumbnailUrl,
+    };
+  }
+
   return {
     kind: target.kind,
     url: resolvedUrls[target.media.mediaId] ?? target.media.downloadUrl,

@@ -9,7 +9,7 @@ export type UserStatus =
   | "ACTIVE"
   | "DELETED"
   | "DELETED_REQUESTED"
-  | "SUSPENDED";
+  | "BLOCKED";
 
 export type UserInfo = {
   id: number;
@@ -43,6 +43,7 @@ export type UserMedia = {
   displayName?: string | null;
   displayname?: string | null;
   downloadUrl?: string | null;
+  thumbnailUrl?: string | null;
   originalS3Key?: string;
   originalFileName?: string;
   transcodeJobId?: string;
@@ -116,4 +117,20 @@ export type RemoteFrame = {
   frameType: RemoteFrameType;
   background?: RemoteFrameBackground;
   components: RemoteFrameComponent[];
+};
+
+// GET /api/auth/user/subscription/usage 응답.
+// *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한을 의미한다.
+export type SubscriptionUsage = {
+  planTier: string;
+  videoUploadMonthlyLimit: number;
+  videoUploadUsedCount: number;
+  videoUploadRemainingCount: number;
+  videoUploadUnlimited: boolean;
+  frameRetentionLimit: number;
+  frameRetentionUsedCount: number;
+  frameRetentionRemainingCount: number;
+  frameRetentionUnlimited: boolean;
+  currentCycleStartAt: string;
+  currentCycleEndAt: string;
 };

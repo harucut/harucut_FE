@@ -17,7 +17,7 @@ const USER_STATUS_VALUES = new Set<UserStatus>([
   "ACTIVE",
   "DELETED",
   "DELETED_REQUESTED",
-  "SUSPENDED",
+  "BLOCKED",
 ]);
 
 function readUserStatus(data: AuthStatusResponse) {

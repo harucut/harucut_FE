@@ -51,4 +51,20 @@ describe("user media preview helpers", () => {
       url: "https://example.com/result.mp4",
     });
   });
+
+  it("prefers the backend thumbnailUrl poster for a video without a same-name photo", () => {
+    const item = {
+      mediaId: 10,
+      mediaType: "VIDEO" as const,
+      s3Key: "uploads/result.mp4",
+      displayName: "harucut_20260416_213654",
+      downloadUrl: null,
+      thumbnailUrl: "https://example.com/result-poster.jpg",
+    };
+
+    expect(getUserMediaPreview(item, [item])).toEqual({
+      kind: "image",
+      url: "https://example.com/result-poster.jpg",
+    });
+  });
 });
