@@ -7,7 +7,6 @@ import {
   Camera,
   ChevronRight,
   Image as ImageIcon,
-  Play,
   Sparkles,
 } from "lucide-react";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
@@ -48,6 +47,12 @@ function formatCurrentDate() {
   const mm = `${now.getMonth() + 1}`.padStart(2, "0");
   const dd = `${now.getDate()}`.padStart(2, "0");
   return `${yyyy}.${mm}.${dd} · ${WEEKDAY_KO[now.getDay()]}`;
+}
+
+// 인사 헤딩용 — "6.27 토요일"(연도·0 패딩 없이). currentDateLabel과 같은 자정 갱신을 공유한다.
+function formatHeadingDate() {
+  const now = new Date();
+  return `${now.getMonth() + 1}.${now.getDate()} ${WEEKDAY_KO[now.getDay()]}`;
 }
 
 function getNextDateRefreshDelay() {
@@ -197,7 +202,8 @@ export default function HomePage() {
   }, []);
 
   const currentDateLabel = useCurrentDateLabel();
-  const greetingName = user?.username ? `${user.username}님, ` : "";
+  // 헤딩 날짜는 currentDateLabel과 같은 자정 갱신에 묶어 재계산(별도 타이머 불필요).
+  const currentHeadingDate = useMemo(() => formatHeadingDate(), [currentDateLabel]);
 
   // currentDateLabel을 의존성에 포함해 날짜가 바뀌면(주/월 경계) 카운트도 다시 계산되게 한다.
   const monthCount = useMemo(
@@ -217,23 +223,12 @@ export default function HomePage() {
       <AppNav userInitial={user?.username} />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
-        {/* 인사 */}
+        {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
         <header className="pt-1 lg:pt-0">
-          <span className="font-mono text-[11.5px] uppercase tracking-[0.2em] text-[color:var(--hc-primary)] lg:text-[12px]">
-            {currentDateLabel}
-          </span>
-          {/* 데스크톱(lg+): handoff web 카피 */}
-          <h1 className="mt-3 hidden text-[34px] font-extrabold leading-[1.15] tracking-tight lg:block">
-            {greetingName}하루는
+          <h1 className="text-[25px] font-extrabold leading-[1.25] tracking-tight lg:text-[34px] lg:leading-[1.15]">
+            <span className="text-[color:var(--hc-primary)]">{currentHeadingDate}</span>의
             <br />
-            어떻게 남겨볼까요?
-          </h1>
-          {/* 모바일(&lt;lg): handoff app 카피 ("어떤 네 컷"만 그린) */}
-          <h1 className="mt-2 text-[25px] font-extrabold leading-[1.25] tracking-tight lg:hidden">
-            {greetingName}하루는
-            <br />
-            <span className="text-[color:var(--hc-primary)]">어떤 네 컷</span>
-            일까요?
+            기록을 남겨보세요.
           </h1>
         </header>
 
@@ -322,7 +317,7 @@ export default function HomePage() {
                 <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
               </span>
               <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
-                찍어둔 사진·영상으로 만들어요
+                찍어둔 사진으로 만들어요
               </span>
             </span>
           </Link>
@@ -411,7 +406,6 @@ export default function HomePage() {
             ) : recentMedia.length > 0 ? (
               recentMedia.map((item) => {
                 const preview = getUserMediaPreview(item, previewMedia);
-                const isVideo = item.mediaType === "VIDEO";
 
                 return (
                   <Link
@@ -421,40 +415,18 @@ export default function HomePage() {
                   >
                     <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
                       {preview.url ? (
-                        preview.kind === "video" ? (
-                          <video
-                            src={preview.url}
-                            className="absolute inset-0 h-full w-full object-contain p-3"
-                            muted
-                            playsInline
-                          />
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={preview.url}
-                            alt={getUserMediaTitle(item)}
-                            className="absolute inset-0 h-full w-full object-contain p-3"
-                          />
-                        )
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={preview.url}
+                          alt={getUserMediaTitle(item)}
+                          className="absolute inset-0 h-full w-full object-contain p-3"
+                        />
                       ) : (
                         <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
                       )}
                       <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
-                        {isVideo ? (
-                          <>
-                            <Play
-                              aria-hidden="true"
-                              className="h-2.5 w-2.5"
-                              fill="currentColor"
-                            />
-                            영상
-                          </>
-                        ) : (
-                          <>
-                            <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-                            사진
-                          </>
-                        )}
+                        <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
+                        사진
                       </span>
                     </div>
                     <p className="truncate text-[13.5px] font-bold tracking-tight">

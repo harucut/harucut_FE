@@ -1,9 +1,8 @@
 import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
 
-export type PresignedUploadContentType = 'GIF' | 'JPEG' | 'MOV' | 'MP4' | 'PNG' | 'WEBM' | 'WEBP';
+export type PresignedUploadContentType = 'GIF' | 'JPEG' | 'PNG' | 'WEBP';
 export type PresignedUploadType =
   | 'FOURCUT_PHOTO'
-  | 'FOURCUT_VIDEO'
   | 'FRAME'
   | 'FRAME_COMPONENT'
   | 'PROFILE';
@@ -21,21 +20,6 @@ type UploadLocalFileOptions = {
   isTemp?: boolean;
   type: PresignedUploadType;
   uri: string;
-};
-
-type TranscodeTaskStatus = 'COMPLETE' | 'ERROR' | 'PROGRESSING' | 'QUEUED' | 'SUBMITTED';
-
-type TranscodeTaskSubmitResponse = {
-  jobId: string;
-  requestedAt?: string;
-  status: TranscodeTaskStatus;
-  taskId: string;
-};
-
-type TranscodeTaskStatusResponse = TranscodeTaskSubmitResponse & {
-  errorMessage?: string | null;
-  media?: unknown;
-  updatedAt?: string;
 };
 
 function extensionFromUri(uri: string) {
@@ -66,9 +50,6 @@ export function resolveUploadContentType(args: {
   if (mimeType === 'image/png' || ext === 'png') return 'PNG';
   if (mimeType === 'image/webp' || ext === 'webp') return 'WEBP';
   if (mimeType === 'image/gif' || ext === 'gif') return 'GIF';
-  if (mimeType === 'video/mp4' || ext === 'mp4') return 'MP4';
-  if (mimeType === 'video/webm' || ext === 'webm') return 'WEBM';
-  if (mimeType === 'video/quicktime' || mimeType === 'video/mov' || ext === 'mov') return 'MOV';
   if (
     mimeType === 'image/jpeg' ||
     mimeType === 'image/jpg' ||
@@ -81,12 +62,8 @@ export function resolveUploadContentType(args: {
   return 'JPEG';
 }
 
-function isVideoContentType(contentType: PresignedUploadContentType) {
-  return ['MOV', 'MP4', 'WEBM'].includes(contentType);
-}
-
-export function fourcutUploadType(contentType: PresignedUploadContentType): PresignedUploadType {
-  return isVideoContentType(contentType) ? 'FOURCUT_VIDEO' : 'FOURCUT_PHOTO';
+export function fourcutUploadType(_contentType: PresignedUploadContentType): PresignedUploadType {
+  return 'FOURCUT_PHOTO';
 }
 
 async function createPresignedUpload(args: {
@@ -148,29 +125,4 @@ export async function uploadLocalFileWithPresigned(opts: UploadLocalFileOptions)
     key: presigned.key,
     objectUrl: presigned.uploadUrl.split('?')[0] ?? presigned.uploadUrl,
   };
-}
-
-export async function requestVideoTranscode(filename: string) {
-  return apiEnvelopeData<TranscodeTaskSubmitResponse>(
-    {
-      direct: '/api/auth/user/files/transcode',
-      proxy: '/api/client/user/files/transcode',
-    },
-    {
-      body: { filename },
-      method: 'POST',
-    },
-  );
-}
-
-export async function getVideoTranscodeStatus(taskId: string) {
-  return apiEnvelopeData<TranscodeTaskStatusResponse>(
-    {
-      direct: `/api/auth/user/files/transcode/status?taskId=${encodeURIComponent(taskId)}`,
-      proxy: `/api/client/user/files/transcode/status?taskId=${encodeURIComponent(taskId)}`,
-    },
-    {
-      cache: 'no-store',
-    },
-  );
 }

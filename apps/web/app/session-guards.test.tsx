@@ -14,53 +14,39 @@ const draftStoreState = {
   drafts: [] as Array<{ id: string; frameId: string }>,
 };
 
-const videoQuotaState = {
-  usedCount: 0,
-  limit: 3,
-  unlimited: false,
-};
-
 const DEFAULT_FILTER: FourcutFilterId = "NONE";
 
 const shootSessionState = {
   frameId: null as string | null,
   remoteFrameId: null as number | null,
-  shots: [] as Array<{ photo: string; video?: string }>,
+  shots: [] as Array<{ photo: string }>,
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "111827",
   outputFilter: DEFAULT_FILTER,
-  includeVideo: false,
   imageResult: null,
-  videoResult: null,
   toggleSelect: noop,
   reset: noop,
   setBorderColor: noop,
   setOutputFilter: noop,
-  setIncludeVideo: noop,
   clearResults: noop,
   setImageResult: noop,
-  setVideoResult: noop,
 };
 
 const uploadSessionState = {
   frameId: null as string | null,
   remoteFrameId: null as number | null,
-  media: [] as Array<{ type: "image" | "video"; src: string }>,
+  media: [] as Array<{ type: "image"; src: string }>,
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "111827",
   outputFilter: DEFAULT_FILTER,
-  includeVideo: false,
   imageResult: null,
-  videoResult: null,
   toggleSelect: noop,
   resetAll: noop,
   addMedia: noop,
   setBorderColor: noop,
   setOutputFilter: noop,
-  setIncludeVideo: noop,
   clearResults: noop,
   setImageResult: noop,
-  setVideoResult: noop,
 };
 
 const themeSessionState = {
@@ -108,12 +94,6 @@ jest.mock("@/lib/themeDraftStore", () => ({
     selector(draftStoreState),
 }));
 
-jest.mock("@/lib/videoConversionQuotaStore", () => ({
-  useVideoConversionQuotaStore: (selector: (state: typeof videoQuotaState) => unknown) =>
-    selector(videoQuotaState),
-  useHydrateVideoConversionQuota: () => {},
-}));
-
 jest.mock("@/lib/themeBackground", () => ({
   DEFAULT_FRAME_BACKGROUND_COLOR: "111827",
   resolveFrameBackgroundColor: (_theme: unknown, borderColor: string) => borderColor,
@@ -136,8 +116,6 @@ describe("page-level multistep session guards", () => {
     jest.clearAllMocks();
 
     draftStoreState.drafts = [];
-    videoQuotaState.usedCount = 0;
-    videoQuotaState.limit = 3;
 
     Object.assign(shootSessionState, {
       frameId: null,
@@ -146,9 +124,7 @@ describe("page-level multistep session guards", () => {
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "111827",
       outputFilter: DEFAULT_FILTER,
-      includeVideo: false,
       imageResult: null,
-      videoResult: null,
     });
 
     Object.assign(uploadSessionState, {
@@ -158,9 +134,7 @@ describe("page-level multistep session guards", () => {
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "111827",
       outputFilter: DEFAULT_FILTER,
-      includeVideo: false,
       imageResult: null,
-      videoResult: null,
     });
 
     Object.assign(themeSessionState, {

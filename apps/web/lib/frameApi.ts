@@ -73,19 +73,10 @@ function toRequestBackground(background?: ThemeBackground): RemoteFrameBackgroun
     };
   }
 
-  if (background.type === "IMAGE") {
-    return {
-      type: "IMAGE",
-      key: background.key,
-      opacity: background.opacity,
-    };
-  }
-
   return {
-    type: "VIDEO",
+    type: "IMAGE",
     key: background.key,
-    autoPlay: background.autoPlay,
-    loop: background.loop,
+    opacity: background.opacity,
   };
 }
 
@@ -101,19 +92,10 @@ function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground 
     };
   }
 
-  if (background.type === "IMAGE") {
-    return {
-      type: "IMAGE",
-      key: background.key,
-      opacity: background.opacity,
-    };
-  }
-
   return {
-    type: "VIDEO",
+    type: "IMAGE",
     key: background.key,
-    autoPlay: background.autoPlay,
-    loop: background.loop,
+    opacity: background.opacity,
   };
 }
 

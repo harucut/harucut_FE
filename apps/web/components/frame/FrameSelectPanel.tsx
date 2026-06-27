@@ -32,7 +32,7 @@ export function FrameSelectPanel({
   media,
   selectedIndexes,
   maxSelect,
-  emptyStateText = "선택 가능한 사진이나 영상이 아직 없어요.",
+  emptyStateText = "선택 가능한 사진이 아직 없어요.",
   incompleteButtonLabel,
   nextButtonLabel,
   onToggleSelect,
@@ -101,8 +101,8 @@ export function FrameSelectPanel({
                     aria-pressed={isSelected}
                     aria-label={
                       isSelected
-                        ? `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택 해제 (현재 ${order}번째로 선택됨)`
-                        : `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택`
+                        ? `${index + 1}번 사진 선택 해제 (현재 ${order}번째로 선택됨)`
+                        : `${index + 1}번 사진 선택`
                     }
                     className={[
                       "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
@@ -111,23 +111,12 @@ export function FrameSelectPanel({
                         : "border-zinc-700 hover:border-zinc-500",
                     ].join(" ")}
                   >
-                    {item.type === "video" ? (
-                      <video
-                        src={item.src}
-                        className="h-full w-full object-cover"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.src}
-                        alt={`shot-${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.src}
+                      alt={`shot-${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
 
                     <span className="pointer-events-none absolute left-1 top-1 rounded-full border border-black/10 bg-white px-1.5 py-0.5 text-[9px] font-bold text-black shadow-sm">
                       #{index + 1}

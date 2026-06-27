@@ -79,10 +79,6 @@ export async function updateProfileImage(s3Key: string) {
 // *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한.
 export type SubscriptionUsage = {
   planTier: string;
-  videoUploadMonthlyLimit: number;
-  videoUploadUsedCount: number;
-  videoUploadRemainingCount: number;
-  videoUploadUnlimited: boolean;
   frameRetentionLimit: number;
   frameRetentionUsedCount: number;
   frameRetentionRemainingCount: number;

@@ -15,7 +15,6 @@ import { useSessionStore } from '@/store/use-session-store';
 type ShootSessionState = {
   borderColor: string;
   frameId: FrameId | null;
-  includeVideo: boolean;
   persistedHistoryId: string | null;
   selectedSavedFrameId: string | null;
   selectedShotIds: string[];
@@ -31,7 +30,7 @@ type ShootStore = ShootSessionState & {
   selectSavedFrameForShoot: (frame: SavedFrame) => void;
   setShootFrame: (frameId: FrameId | null) => void;
   setShootOption: (
-    key: keyof Pick<ShootSessionState, 'borderColor' | 'includeVideo' | 'tone'>,
+    key: keyof Pick<ShootSessionState, 'borderColor' | 'tone'>,
     value: string | boolean,
   ) => void;
   toggleShootSelection: (id: string) => void;
@@ -41,7 +40,6 @@ function defaultShootSession(): ShootSessionState {
   return {
     borderColor: defaultBorderColor,
     frameId: null,
-    includeVideo: false,
     persistedHistoryId: null,
     selectedSavedFrameId: null,
     selectedShotIds: [],

@@ -459,21 +459,21 @@ export function HomeScreen() {
                       <View style={styles.thumbTypeBadge}>
                         <Ionicons
                           color="#FFFFFF"
-                          name={item.kind === 'video' ? 'videocam' : 'image'}
+                          name="image"
                           size={11}
                         />
-                        <Text style={styles.thumbTypeText}>{item.kind === 'video' ? '영상' : '사진'}</Text>
+                        <Text style={styles.thumbTypeText}>사진</Text>
                       </View>
                     </>
                   ) : (
                     <View style={styles.thumbPlaceholder}>
                       <Ionicons
                         color={colors.primary}
-                        name={item.kind === 'video' ? 'play-circle-outline' : 'image-outline'}
+                        name="image-outline"
                         size={24}
                       />
                       <Text style={styles.thumbPlaceholderText}>
-                        {item.kind === 'video' ? '영상' : '미리보기 없음'}
+                        미리보기 없음
                       </Text>
                     </View>
                   )}
@@ -512,7 +512,7 @@ export function HistoryScreen() {
   const loadRemoteHistory = useLibraryStore((state) => state.loadRemoteHistory);
   const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
   const showNotice = useSessionStore((state) => state.showNotice);
-  const [filter, setFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'PHOTO'>('ALL');
   const [view, setView] = useState<'grid' | 'calendar'>('grid');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
@@ -580,9 +580,7 @@ export function HistoryScreen() {
       return historyItems;
     }
 
-    return historyItems.filter((item) =>
-      filter === 'PHOTO' ? item.kind === 'photo' : item.kind === 'video',
-    );
+    return historyItems.filter((item) => item.kind === 'photo');
   }, [filter, historyItems]);
 
   const monthGroups = useMemo(() => groupHistoryByMonth(filteredItems), [filteredItems]);
@@ -627,17 +625,17 @@ export function HistoryScreen() {
             <View style={styles.thumbPlaceholder}>
               <Ionicons
                 color={colors.primary}
-                name={item.kind === 'video' ? 'play-circle-outline' : 'image-outline'}
+                name="image-outline"
                 size={24}
               />
               <Text style={styles.thumbPlaceholderText}>
-                {item.kind === 'video' ? '영상' : '미리보기 없음'}
+                미리보기 없음
               </Text>
             </View>
           )}
           <View style={styles.thumbTypeBadge}>
-            <Ionicons color="#FFFFFF" name={item.kind === 'video' ? 'videocam' : 'image'} size={11} />
-            <Text style={styles.thumbTypeText}>{item.kind === 'video' ? '영상' : '사진'}</Text>
+            <Ionicons color="#FFFFFF" name="image" size={11} />
+            <Text style={styles.thumbTypeText}>사진</Text>
           </View>
         </View>
 
@@ -728,9 +726,9 @@ export function HistoryScreen() {
 
       {view === 'grid' ? (
         <View style={styles.filterRow}>
-          {(['ALL', 'PHOTO', 'VIDEO'] as const).map((value) => (
+          {(['ALL', 'PHOTO'] as const).map((value) => (
             <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
-              {value === 'ALL' ? '전체' : value === 'PHOTO' ? '사진' : '영상'}
+              {value === 'ALL' ? '전체' : '사진'}
             </Pill>
           ))}
         </View>
@@ -758,9 +756,7 @@ export function HistoryScreen() {
           <Text style={styles.bodyCopy}>
             {filter === 'PHOTO'
               ? '저장한 사진 기록이 아직 없어요.'
-              : filter === 'VIDEO'
-                ? '저장한 영상 기록이 아직 없어요.'
-                : '저장한 기록이 아직 없어요.'}
+              : '저장한 기록이 아직 없어요.'}
           </Text>
         </SurfaceCard>
       ) : (
@@ -2010,21 +2006,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 10,
       fontWeight: '700',
       textAlign: 'center',
-    },
-    thumbVideoBadge: {
-      alignItems: 'center',
-      backgroundColor: colors.overlayStrong,
-      borderColor: 'rgba(255, 255, 255, 0.32)',
-      borderRadius: 22,
-      borderWidth: 1,
-      height: 44,
-      justifyContent: 'center',
-      left: '50%',
-      marginLeft: -22,
-      marginTop: -22,
-      position: 'absolute',
-      top: '50%',
-      width: 44,
     },
   });
 }

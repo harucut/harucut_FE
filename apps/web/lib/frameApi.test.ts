@@ -106,13 +106,11 @@ describe("frame api mapping", () => {
   it("preserves non-color remote backgrounds when mapping through the editor json", () => {
     const remoteFrame: RemoteFrame = {
       frameId: 34,
-      title: "video-bg",
+      title: "image-bg",
       frameType: "WIDE",
       background: {
-        type: "VIDEO",
-        key: "backgrounds/video.mp4",
-        autoPlay: true,
-        loop: false,
+        type: "IMAGE",
+        key: "backgrounds/cover.png",
       },
       components: [],
     };
@@ -120,10 +118,8 @@ describe("frame api mapping", () => {
     const mapped = toThemeExportJson(remoteFrame);
 
     expect(mapped.background).toEqual({
-      type: "VIDEO",
-      key: "backgrounds/video.mp4",
-      autoPlay: true,
-      loop: false,
+      type: "IMAGE",
+      key: "backgrounds/cover.png",
     });
 
     expect(
@@ -133,10 +129,8 @@ describe("frame api mapping", () => {
         previewKey: "p",
       }).background,
     ).toEqual({
-      type: "VIDEO",
-      key: "backgrounds/video.mp4",
-      autoPlay: true,
-      loop: false,
+      type: "IMAGE",
+      key: "backgrounds/cover.png",
     });
   });
 });

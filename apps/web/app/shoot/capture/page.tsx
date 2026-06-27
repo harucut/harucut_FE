@@ -72,7 +72,7 @@ export default function CapturePage() {
 
         <section className="flex flex-col gap-3 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
           <div className="flex items-center justify-between text-[11px] text-[color:var(--hc-muted)]">
-            <span>사진과 영상을 함께 촬영해요</span>
+            <span>사진을 촬영해요</span>
             <span className="rounded-full border border-[color:var(--hc-border)] px-2 py-0.5">
               {shotCount} / {MAX_SHOTS}장 촬영됨
             </span>
@@ -97,7 +97,7 @@ export default function CapturePage() {
                   maxHeight: "100%",
                 }}
               >
-                {/* 이미 찍은 칸 + 아직 안 찍은 칸 플레이스홀더 (현재 칸은 아래 영상이 덮는다) */}
+                {/* 이미 찍은 칸 + 아직 안 찍은 칸 플레이스홀더 (현재 칸은 아래 카메라가 덮는다) */}
                 {layout.slots.map((slot, idx) => {
                   const photo = idx === currentSlotIndex ? undefined : photoForSlot(idx);
                   return (

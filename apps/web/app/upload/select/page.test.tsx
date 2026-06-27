@@ -9,17 +9,15 @@ const mockCreateObjectURL = jest.fn();
 const uploadSessionState = {
   frameId: "classic-4",
   remoteFrameId: null as number | null,
-  media: [] as Array<{ type: "image" | "video"; src: string }>,
+  media: [] as Array<{ type: "image"; src: string }>,
   selectedIndexes: [null, null, null, null] as Array<number | null>,
   borderColor: "#111827",
   outputFilter: "NONE",
-  includeVideo: false,
   toggleSelect: jest.fn(),
   resetAll: jest.fn(),
   addMedia: mockAddMedia,
   setBorderColor: jest.fn(),
   setOutputFilter: jest.fn(),
-  setIncludeVideo: jest.fn(),
 };
 
 jest.mock("next/navigation", () => ({
@@ -50,19 +48,12 @@ jest.mock("@/lib/themeBackground", () => ({
   resolveFrameBackgroundColor: (_theme: unknown, borderColor: string) => borderColor,
 }));
 
-jest.mock("@/lib/videoConversionQuotaStore", () => ({
-  useVideoConversionQuotaStore: (
-    selector: (state: { usedCount: number; limit: number; unlimited: boolean }) => unknown,
-  ) => selector({ usedCount: 0, limit: 3, unlimited: false }),
-  useHydrateVideoConversionQuota: () => {},
-}));
-
 jest.mock("@/lib/uploadSessionStore", () => ({
   useUploadSession: () => uploadSessionState,
 }));
 
 jest.mock("@/lib/presignedUploadApi", () => ({
-  SUPPORTED_FOURCUT_ACCEPT: "image/png,video/mp4,video/webm",
+  SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",
 }));
 
 describe("UploadSelectPage", () => {

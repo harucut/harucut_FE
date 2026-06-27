@@ -6,20 +6,17 @@ import {
   uploadLocalFileWithPresigned,
 } from '@/lib/file-storage-api';
 
-export type UserMediaType = 'PHOTO' | 'VIDEO';
+export type UserMediaType = 'PHOTO';
 
 export type UserMedia = {
   createdAt?: string;
   displayName?: string | null;
   displayname?: string | null;
   downloadUrl?: string;
-  thumbnailUrl?: string | null;
   mediaId: number;
   mediaType: UserMediaType;
   originalFileName?: string;
-  originalS3Key?: string;
   s3Key: string;
-  transcodeJobId?: string;
 };
 
 type HistoryItemOptions = {
@@ -44,30 +41,6 @@ function getCreatedAt(item: UserMedia) {
   return createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toISOString() : '';
 }
 
-function normalizeUserMediaTitle(value: string) {
-  return value
-    .trim()
-    .replace(/\.[^.]+$/, '')
-    .toLowerCase();
-}
-
-function findSameNamePhoto(item: UserMedia, items: UserMedia[]) {
-  if (item.mediaType !== 'VIDEO') {
-    return null;
-  }
-
-  const titleKey = normalizeUserMediaTitle(getUserMediaTitle(item));
-
-  return (
-    items.find((candidate) => {
-      if (candidate.mediaType !== 'PHOTO') return false;
-      if (candidate.mediaId === item.mediaId) return false;
-
-      return normalizeUserMediaTitle(getUserMediaTitle(candidate)) === titleKey;
-    }) ?? null
-  );
-}
-
 function mediaToAsset(item: UserMedia): MediaAsset | null {
   if (!item.downloadUrl) {
     return null;
@@ -75,56 +48,30 @@ function mediaToAsset(item: UserMedia): MediaAsset | null {
 
   return {
     id: `remote-media-${item.mediaId}`,
-    kind: item.mediaType === 'VIDEO' ? 'video' : 'image',
+    kind: 'image',
     label: getUserMediaTitle(item),
-    previewKind: item.mediaType === 'VIDEO' ? 'video' : 'image',
+    previewKind: 'image',
     remoteMediaId: item.mediaId,
     uri: item.downloadUrl,
   };
 }
 
-function mediaToPreviewAsset(item: UserMedia, items: UserMedia[]) {
-  const matchedPhoto = findSameNamePhoto(item, items);
-
-  if (!matchedPhoto?.downloadUrl) {
-    // 같은 이름 사진이 없으면 백엔드가 제공하는 영상 포스터(thumbnailUrl)를 사용한다.
-    if (item.mediaType === 'VIDEO' && item.thumbnailUrl) {
-      return {
-        id: `remote-media-${item.mediaId}-poster`,
-        kind: 'video' as const,
-        label: getUserMediaTitle(item),
-        previewKind: 'image' as const,
-        remoteMediaId: item.mediaId,
-        uri: item.thumbnailUrl,
-      };
-    }
-
-    return mediaToAsset(item);
-  }
-
-  return {
-    id: `remote-media-${item.mediaId}-preview`,
-    kind: 'video' as const,
-    label: getUserMediaTitle(item),
-    previewKind: 'image' as const,
-    remoteMediaId: item.mediaId,
-    uri: matchedPhoto.downloadUrl,
-  };
+function mediaToPreviewAsset(item: UserMedia) {
+  return mediaToAsset(item);
 }
 
 export function mediaToHistoryItem(
   item: UserMedia,
   options: HistoryItemOptions = {},
-  items: UserMedia[] = [item],
 ): HistoryItem {
-  const asset = mediaToPreviewAsset(item, items);
+  const asset = mediaToPreviewAsset(item);
   const title = options.title?.trim() || getUserMediaTitle(item);
 
   return {
     createdAt: getCreatedAt(item),
     frameId: options.frameId ?? 'classic-4',
     id: `remote-history-${item.mediaId}`,
-    kind: item.mediaType === 'VIDEO' ? 'video' : 'photo',
+    kind: 'photo',
     mediaId: item.mediaId,
     previewMedia: asset ? [asset] : [],
     remoteS3Key: item.s3Key,
@@ -178,7 +125,7 @@ export async function listRemoteHistoryItems() {
 
       return bTime - aTime;
     })
-    .map((item) => mediaToHistoryItem(item, {}, media));
+    .map((item) => mediaToHistoryItem(item));
 }
 
 export async function registerUserMedia(args: {
@@ -241,9 +188,7 @@ export async function uploadFourcutResult(args: {
   });
   const media = await registerUserMedia({
     displayName: args.displayName,
-    mediaType: uploaded.contentType === 'MOV' || uploaded.contentType === 'MP4' || uploaded.contentType === 'WEBM'
-      ? 'VIDEO'
-      : 'PHOTO',
+    mediaType: 'PHOTO',
     s3Key: uploaded.key,
   });
 

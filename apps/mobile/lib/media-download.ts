@@ -10,13 +10,13 @@ export type MediaDownloadResult =
   | { ok: true }
   | { ok: false; reason: 'failed' | 'no-url' | 'permission-denied' };
 
-function inferExtension(url: string, kind: 'image' | 'photo' | 'video') {
+function inferExtension(url: string, _kind: 'image' | 'photo') {
   const match = /\.([a-zA-Z0-9]{2,4})(?:[?#]|$)/.exec(url);
   if (match) {
     return match[1].toLowerCase();
   }
 
-  return kind === 'video' ? 'mp4' : 'jpg';
+  return 'jpg';
 }
 
 function sanitizeFilename(value: string) {
@@ -31,7 +31,7 @@ function sanitizeFilename(value: string) {
 export async function saveRemoteMediaToLibrary(
   url: string | undefined,
   title: string,
-  kind: 'image' | 'photo' | 'video' = 'photo',
+  kind: 'image' | 'photo' = 'photo',
 ): Promise<MediaDownloadResult> {
   if (!url) {
     return { ok: false, reason: 'no-url' };

@@ -215,7 +215,6 @@ export function FramePreview({
       ) : null}
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
-        const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
 
         return (
           <View
@@ -232,24 +231,13 @@ export function FramePreview({
               toneFilter ? { filter: toneFilter } : null,
             ]}>
             {currentMedia ? (
-              <>
-                {currentPreviewKind === 'image' ? (
-                  <Image
-                    accessibilityLabel={currentMedia.label}
-                    accessibilityRole="image"
-                    resizeMode="cover"
-                    source={{ uri: currentMedia.uri }}
-                    style={styles.slotImage}
-                  />
-                ) : (
-                  <View style={[styles.slotVideoPlaceholder, { backgroundColor: resolvedSlotColor }]} />
-                )}
-                {currentMedia.kind === 'video' ? (
-                  <View style={styles.videoBadge}>
-                    <Ionicons color="#FFFFFF" name="play" size={12} />
-                  </View>
-                ) : null}
-              </>
+              <Image
+                accessibilityLabel={currentMedia.label}
+                accessibilityRole="image"
+                resizeMode="cover"
+                source={{ uri: currentMedia.uri }}
+                style={styles.slotImage}
+              />
             ) : null}
           </View>
         );
@@ -1311,11 +1299,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       height: '100%',
       width: '100%',
     },
-    slotVideoPlaceholder: {
-      backgroundColor: colors.primarySoft,
-      height: '100%',
-      width: '100%',
-    },
     themeComponent: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -1335,17 +1318,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontWeight: '700',
       includeFontPadding: false,
       width: '100%',
-    },
-    videoBadge: {
-      alignItems: 'center',
-      backgroundColor: colors.overlayStrong,
-      borderRadius: HARUCUT_RADII.chip,
-      bottom: 8,
-      height: 22,
-      justifyContent: 'center',
-      position: 'absolute',
-      right: 8,
-      width: 22,
     },
   });
 }

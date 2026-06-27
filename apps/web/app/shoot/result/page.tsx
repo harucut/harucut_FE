@@ -14,7 +14,6 @@ import {
   composeFramePng,
   downloadBlob,
   downloadFromUrl,
-  recordFrameWebm,
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
 import {
@@ -23,15 +22,6 @@ import {
   sanitizeDisplayName,
 } from "@/lib/fourcutOutput";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
-import {
-  MAX_FOURCUT_VIDEO_SECONDS,
-  TRIMMED_VIDEO_NOTICE,
-  hasVideoSourceLongerThan,
-} from "@/lib/fourcutVideo";
-import {
-  registerGeneratedWebmDebug,
-  unregisterGeneratedWebmDebug,
-} from "@/lib/generatedVideoDebug";
 import {
   registerGeneratedPngDebug,
   unregisterGeneratedPngDebug,
@@ -42,13 +32,9 @@ import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
-import {
-  useHydrateVideoConversionQuota,
-  useVideoConversionQuotaStore,
-} from "@/lib/videoConversionQuotaStore";
+import { useDecorateSession } from "@/lib/decorateSessionStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 
-const VIDEO_DEBUG_SCOPE = "shoot-result";
 const IMAGE_DEBUG_SCOPE = "shoot-result-image";
 
 type ProcessingState = "idle" | "processing" | "done" | "error";
@@ -62,11 +48,8 @@ export default function ShootResultPage() {
     selectedIndexes,
     borderColor,
     outputFilter,
-    includeVideo,
     imageResult,
-    videoResult,
     setImageResult,
-    setVideoResult,
     clearResults,
   } = useShootSession();
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
@@ -75,39 +58,46 @@ export default function ShootResultPage() {
   const showGuestSavedNotice = useGuestTrialStore((state) => state.showGuestSavedNotice);
   const showGuestShareNotice = useGuestTrialStore((state) => state.showGuestShareNotice);
   const guestMode = accessMode === "guest";
-  const consumeVideoConversion = useVideoConversionQuotaStore((state) => state.consume);
-  const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
-  const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
-  const videoConversionUnlimited = useVideoConversionQuotaStore(
-    (state) => state.unlimited,
-  );
-  useHydrateVideoConversionQuota(!guestMode);
+  const setDecorateSource = useDecorateSession((state) => state.setSource);
+
+  // 완성된 네컷을 꾸미기 에디터로 넘긴다. 캔버스 오염(taint) 방지를 위해
+  // 가능하면 이미지를 blob으로 받아 same-origin object URL로 전달한다.
+  const handleDecorate = async () => {
+    if (!imageResult) return;
+    try {
+      const url = guestMode
+        ? imageResult.objectUrl
+        : await getMediaDownloadUrl(imageResult.mediaId);
+      let src = url;
+      try {
+        const res = await fetch(url);
+        if (res.ok) src = URL.createObjectURL(await res.blob());
+      } catch {
+        // CORS/네트워크 실패 시 원본 URL로 진행한다.
+      }
+      setDecorateSource(src, imageResult.displayName);
+      router.push("/decorate");
+    } catch (error) {
+      console.error(error);
+      setDecorateSource(imageResult.objectUrl, imageResult.displayName);
+      router.push("/decorate");
+    }
+  };
 
   const [imageState, setImageState] = useState<ProcessingState>(
     imageResult ? "done" : "idle",
   );
-  const [videoState, setVideoState] = useState<ProcessingState>(
-    videoResult ? "done" : "idle",
-  );
   const [imageError, setImageError] = useState<string | null>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
   const [imageNameDraft, setImageNameDraft] = useState(imageResult?.displayName ?? "");
-  const [videoNameDraft, setVideoNameDraft] = useState(videoResult?.displayName ?? "");
   const [isSavingImageName, setIsSavingImageName] = useState(false);
-  const [isSavingVideoName, setIsSavingVideoName] = useState(false);
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
-  const [isDownloadingVideo, setIsDownloadingVideo] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
-  const [isSharingVideo, setIsSharingVideo] = useState(false);
-  const [hasTrimmedVideoSource, setHasTrimmedVideoSource] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const debugImageUrlRef = useRef<string | null>(null);
-  const debugVideoUrlRef = useRef<string | null>(null);
   const guestImageUrlRef = useRef<string | null>(null);
   const displayNameGenerationKeyRef = useRef<string | null>(null);
   const defaultDisplayNameRef = useRef("");
   const imageGenerationKeyRef = useRef<string | null>(null);
-  const videoGenerationKeyRef = useRef<string | null>(null);
 
   const showStatusNotice = (title: string, message: string) => {
     setNotice({
@@ -135,31 +125,11 @@ export default function ShootResultPage() {
       ),
     [selectedShots],
   );
-  const previewVideo = useMemo(
-    () =>
-      selectedShots.map((shot): FrameMedia | null => {
-        if (!shot) return null;
-        if (shot.video) return { type: "video", src: shot.video };
-        return { type: "image", src: shot.photo };
-      }),
-    [selectedShots],
-  );
   const imageSources: FrameSource[] = useMemo(
     () =>
       selectedShots
         .map((shot) => (shot ? ({ type: "image", src: shot.photo } as const) : null))
         .filter(isNotNull),
-    [selectedShots],
-  );
-  const videoSources: FrameSource[] = useMemo(
-    () =>
-      selectedShots
-        .map((shot) => {
-          if (!shot) return null;
-          if (shot.video) return { type: "video", src: shot.video } as const;
-          return { type: "image", src: shot.photo } as const;
-        })
-        .filter((value): value is FrameSource => Boolean(value)),
     [selectedShots],
   );
 
@@ -177,14 +147,6 @@ export default function ShootResultPage() {
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
   const frameConfig = FRAME_CONFIGS.find((frame) => frame.id === frameId);
-  const videoEligible = useMemo(
-    () => selectedShots.some((shot) => Boolean(shot?.video)),
-    [selectedShots],
-  );
-  const shouldPrepareVideo = !guestMode && includeVideo && videoEligible;
-  const remainingVideoConversions = videoConversionUnlimited
-    ? Number.POSITIVE_INFINITY
-    : Math.max(videoConversionLimit - usedVideoConversions, 0);
   const generationKey = useMemo(
     () =>
       JSON.stringify({
@@ -192,9 +154,7 @@ export default function ShootResultPage() {
         remoteFrameId,
         borderColor: effectiveBorderColor,
         outputFilter,
-        includeVideo: shouldPrepareVideo,
         imageSources: imageSources.map((source) => `${source.type}:${source.src}`),
-        videoSources: videoSources.map((source) => `${source.type}:${source.src}`),
       }),
     [
       effectiveBorderColor,
@@ -202,8 +162,6 @@ export default function ShootResultPage() {
       imageSources,
       outputFilter,
       remoteFrameId,
-      shouldPrepareVideo,
-      videoSources,
     ],
   );
 
@@ -223,47 +181,13 @@ export default function ShootResultPage() {
   }, [imageResult]);
 
   useEffect(() => {
-    setVideoState(videoResult ? "done" : "idle");
-    setVideoNameDraft(videoResult?.displayName ?? "");
-  }, [videoResult]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function inspectVideoSources() {
-      if (!shouldPrepareVideo) {
-        setHasTrimmedVideoSource(false);
-        return;
-      }
-
-      const nextHasTrimmedVideoSource = await hasVideoSourceLongerThan(
-        videoSources,
-        MAX_FOURCUT_VIDEO_SECONDS,
-      );
-
-      if (!cancelled) {
-        setHasTrimmedVideoSource(nextHasTrimmedVideoSource);
-      }
-    }
-
-    void inspectVideoSources();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldPrepareVideo, videoSources]);
-
-  useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
 
     let cancelled = false;
     const currentLayout = layout;
     const imageGenerationKey = `${generationKey}:image`;
-    const videoGenerationKey = `${generationKey}:video`;
 
     async function prepareOutputs() {
-      let generatedImageInThisPass = false;
-
       if (!imageResult) {
         if (imageGenerationKeyRef.current === imageGenerationKey) {
           return;
@@ -310,7 +234,6 @@ export default function ShootResultPage() {
                 displayName,
               });
               setImageState("done");
-              generatedImageInThisPass = true;
             } else {
               URL.revokeObjectURL(objectUrl);
             }
@@ -328,7 +251,6 @@ export default function ShootResultPage() {
             if (!cancelled) {
               setImageResult(asset);
               setImageState("done");
-              generatedImageInThisPass = true;
             }
           }
         } catch (error) {
@@ -339,91 +261,6 @@ export default function ShootResultPage() {
           }
         }
       }
-
-      if (generatedImageInThisPass || guestMode) {
-        if (!cancelled) {
-          setVideoState("idle");
-          setVideoError(null);
-        }
-        return;
-      }
-
-      if (!shouldPrepareVideo) {
-        if (!cancelled) {
-          setVideoState("idle");
-          setVideoError(null);
-        }
-        return;
-      }
-
-      if (videoResult) {
-        if (!cancelled) {
-          setVideoState("done");
-        }
-        return;
-      }
-
-      if (remainingVideoConversions <= 0) {
-        if (!cancelled) {
-          setVideoState("error");
-          setVideoError("오늘 영상 변환 가능 횟수가 없어요.");
-        }
-        return;
-      }
-
-      if (videoGenerationKeyRef.current === videoGenerationKey) {
-        return;
-      }
-
-      videoGenerationKeyRef.current = videoGenerationKey;
-      setVideoError(null);
-      setVideoState("processing");
-
-      try {
-        const blob = await recordFrameWebm({
-          layout: currentLayout,
-          borderColor: effectiveBorderColor,
-          sources: videoSources,
-          outputFilter,
-          theme: themeData,
-          seconds: MAX_FOURCUT_VIDEO_SECONDS,
-          canvas: canvasRef.current ?? undefined,
-        });
-
-        const displayName = defaultDisplayName;
-        const filename = `${displayName}.webm`;
-
-        if (!cancelled) {
-          debugVideoUrlRef.current = registerGeneratedWebmDebug({
-            scope: VIDEO_DEBUG_SCOPE,
-            blob,
-            filename,
-            previousUrl: debugVideoUrlRef.current,
-          });
-        }
-
-        const file = new File([blob], filename, {
-          type: "video/webm",
-        });
-        const asset = await uploadGeneratedFourcutFile({
-          file,
-          kind: "VIDEO",
-          displayName,
-          extension: "mp4",
-        });
-
-        if (!cancelled) {
-          setVideoResult(asset);
-          setVideoState("done");
-          consumeVideoConversion();
-        }
-      } catch (error) {
-        console.error(error);
-        if (!cancelled) {
-          setVideoState("error");
-          setVideoError("영상을 준비하지 못했어요. 다시 시도해 주세요.");
-        }
-      }
     }
 
     void prepareOutputs();
@@ -432,7 +269,6 @@ export default function ShootResultPage() {
       cancelled = true;
     };
   }, [
-    consumeVideoConversion,
     defaultDisplayName,
     effectiveBorderColor,
     frameId,
@@ -442,29 +278,21 @@ export default function ShootResultPage() {
     imageSources,
     layout,
     outputFilter,
-    remainingVideoConversions,
     selectedCount,
     setImageResult,
-    setVideoResult,
-    shouldPrepareVideo,
     themeData,
-    videoResult,
-    videoSources,
   ]);
 
   useEffect(() => {
     return () => {
       unregisterGeneratedPngDebug(IMAGE_DEBUG_SCOPE, debugImageUrlRef.current);
       debugImageUrlRef.current = null;
-      unregisterGeneratedWebmDebug(VIDEO_DEBUG_SCOPE, debugVideoUrlRef.current);
-      debugVideoUrlRef.current = null;
     };
   }, []);
 
   if (!frameId || !layout) return null;
 
-  const isPreparing =
-    imageState === "processing" || videoState === "processing" || imageState === "idle";
+  const isPreparing = imageState === "processing" || imageState === "idle";
 
   const syncDisplayName = async (
     asset: NonNullable<typeof imageResult>,
@@ -508,29 +336,6 @@ export default function ShootResultPage() {
     }
   };
 
-  const handleSaveVideoName = async () => {
-    if (!videoResult) return;
-
-    setIsSavingVideoName(true);
-    try {
-      const nextName = sanitizeDisplayName(videoNameDraft, videoResult.displayName);
-      if (nextName === videoResult.displayName) {
-        setVideoNameDraft(videoResult.displayName);
-        return;
-      }
-
-      const resolvedName = await syncDisplayName(videoResult, videoNameDraft, (displayName) =>
-        setVideoResult({ ...videoResult, displayName }),
-      );
-      setVideoNameDraft(resolvedName);
-    } catch (error) {
-      console.error(error);
-      showStatusNotice("영상 이름을 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
-    } finally {
-      setIsSavingVideoName(false);
-    }
-  };
-
   const handleDownloadImage = async () => {
     if (!imageResult) return;
 
@@ -567,27 +372,6 @@ export default function ShootResultPage() {
     }
   };
 
-  const handleDownloadVideo = async () => {
-    if (!videoResult) return;
-
-    setIsDownloadingVideo(true);
-    try {
-      const url = await getMediaDownloadUrl(videoResult.mediaId);
-      await downloadFromUrl(
-        url,
-        buildDownloadFilename(videoResult.displayName, videoResult.extension),
-      );
-    } catch (error) {
-      console.error(error);
-      showStatusNotice(
-        "영상을 다운로드하지 못했어요",
-        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
-      );
-    } finally {
-      setIsDownloadingVideo(false);
-    }
-  };
-
   const handleShareImage = async () => {
     if (!imageResult) return;
 
@@ -616,32 +400,6 @@ export default function ShootResultPage() {
       );
     } finally {
       setIsSharingImage(false);
-    }
-  };
-
-  const handleShareVideo = async () => {
-    if (!videoResult) return;
-
-    setIsSharingVideo(true);
-    try {
-      const url = await getMediaDownloadUrl(videoResult.mediaId);
-      const result = await shareOrCopyLink({
-        title: `${videoResult.displayName} | 하루컷`,
-        text: "방금 완성한 하루컷 영상이에요.",
-        url,
-      });
-
-      if (result === "copied") {
-        showStatusNotice("링크를 복사했어요", "영상 링크를 바로 붙여넣어 공유할 수 있어요.");
-      }
-    } catch (error) {
-      console.error(error);
-      showStatusNotice(
-        "영상 링크를 준비하지 못했어요",
-        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
-      );
-    } finally {
-      setIsSharingVideo(false);
     }
   };
 
@@ -676,7 +434,7 @@ export default function ShootResultPage() {
               </p>
             </div>
             <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[10px] font-medium text-[color:var(--hc-primary-strong)]">
-              {guestMode ? "이미지 다운로드" : shouldPrepareVideo ? "이미지 + 영상" : "이미지"}
+              {guestMode ? "이미지 다운로드" : "이미지"}
             </span>
           </div>
         </section>
@@ -687,50 +445,14 @@ export default function ShootResultPage() {
               <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
                 <span className="text-[color:var(--hc-text)]">이미지 준비</span>
                 <span className="text-[color:var(--hc-muted)]">
-                  {imageState === "done"
-                    ? "완료"
-                    : imageState === "processing"
-                      ? "생성 중..."
-                      : imageState === "error"
-                        ? "실패"
-                        : "대기 중"}
+                  {imageState === "processing" ? "생성 중..." : "대기 중"}
                 </span>
               </div>
-
-              {shouldPrepareVideo ? (
-                <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
-                  <span className="text-[color:var(--hc-text)]">영상 준비</span>
-                  <span className="text-[color:var(--hc-muted)]">
-                    {videoState === "done"
-                      ? "완료"
-                      : videoState === "processing"
-                        ? "변환 중..."
-                        : videoState === "error"
-                          ? "실패"
-                          : "대기 중"}
-                  </span>
-                </div>
-              ) : null}
             </div>
           </section>
         ) : null}
 
-        {shouldPrepareVideo ? (
-          <section className="rounded-[28px] border border-[rgba(30,215,96,0.18)] bg-[rgba(30,215,96,0.08)] px-4 py-3 text-[11px] text-[color:var(--hc-primary-strong)]">
-            <p>영상 결과는 최대 {MAX_FOURCUT_VIDEO_SECONDS}초로 만들어요.</p>
-            {hasTrimmedVideoSource ? (
-              <p className="mt-1 text-[color:var(--hc-text)]/80">{TRIMMED_VIDEO_NOTICE}</p>
-            ) : null}
-          </section>
-        ) : null}
-
-        <section
-          className={
-            shouldPrepareVideo
-              ? "mx-auto grid w-full max-w-md gap-3 sm:max-w-none sm:grid-cols-2"
-              : "mx-auto w-full max-w-md"
-          }
-        >
+        <section className="mx-auto w-full max-w-md">
           <FramePreview
             frameId={frameId}
             media={previewImage}
@@ -738,40 +460,24 @@ export default function ShootResultPage() {
             outputFilter={outputFilter}
             theme={themeData}
           />
-
-          {shouldPrepareVideo ? (
-            <FramePreview
-              frameId={frameId}
-              media={previewVideo}
-              borderColor={effectiveBorderColor}
-              outputFilter={outputFilter}
-              theme={themeData}
-            />
-          ) : null}
         </section>
 
         {imageError ? <p className="text-[11px] text-red-500">{imageError}</p> : null}
-        {videoError ? <p className="text-[11px] text-red-500">{videoError}</p> : null}
 
-        {imageState === "error" || videoState === "error" ? (
+        {imageState === "error" ? (
           <button
             type="button"
             onClick={() => {
               imageGenerationKeyRef.current = null;
-              videoGenerationKeyRef.current = null;
               unregisterGeneratedPngDebug(IMAGE_DEBUG_SCOPE, debugImageUrlRef.current);
               debugImageUrlRef.current = null;
-              unregisterGeneratedWebmDebug(VIDEO_DEBUG_SCOPE, debugVideoUrlRef.current);
-              debugVideoUrlRef.current = null;
               if (guestImageUrlRef.current?.startsWith("blob:")) {
                 URL.revokeObjectURL(guestImageUrlRef.current);
               }
               guestImageUrlRef.current = null;
               clearResults();
               setImageState("idle");
-              setVideoState("idle");
               setImageError(null);
-              setVideoError(null);
             }}
             className="hc-button-secondary rounded-full border px-4 py-2 text-xs font-semibold transition"
           >
@@ -832,21 +538,14 @@ export default function ShootResultPage() {
           </section>
         ) : null}
 
-        {videoResult ? (
-          <GeneratedAssetDownloadCard
-            title="영상 다운로드"
-            description="영상 결과도 같은 이름 규칙으로 저장하고 바로 공유할 수 있어요."
-            asset={videoResult}
-            metaLabel="촬영 결과 · 영상"
-            draftName={videoNameDraft}
-            onChangeName={setVideoNameDraft}
-            onSaveName={handleSaveVideoName}
-            onDownload={handleDownloadVideo}
-            onShare={handleShareVideo}
-            isSavingName={isSavingVideoName}
-            isDownloading={isDownloadingVideo}
-            isSharing={isSharingVideo}
-          />
+        {imageResult ? (
+          <button
+            type="button"
+            onClick={handleDecorate}
+            className="hc-button-secondary rounded-full border px-4 py-2.5 text-center text-sm font-semibold transition"
+          >
+            네컷 꾸미기 — 스티커·텍스트·그리기
+          </button>
         ) : null}
 
         <div className="flex gap-2">
