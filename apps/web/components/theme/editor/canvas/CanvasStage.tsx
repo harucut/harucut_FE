@@ -55,6 +55,7 @@ export function CanvasStage() {
 
   const setActive = useThemeEditorStore((s) => s.setActive);
   const update = useThemeEditorStore((s) => s.updateComponent);
+  const bumpRenderKey = useThemeEditorStore((s) => s.bumpRenderKey);
 
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
 
@@ -205,6 +206,7 @@ export function CanvasStage() {
                 isActive={c.id === activeId}
                 onSelect={() => setActive(c.id)}
                 onCommit={(patch) => update(c.id, patch)}
+                onAssetReady={bumpRenderKey}
               />
             ))}
 

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { BACKGROUND_COLORS } from "@/constants/colors";
@@ -28,6 +28,11 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import {
+  clearEditorDraft,
+  loadEditorDraft,
+  saveEditorDraft,
+} from "@/lib/themeEditorDraft";
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
@@ -35,6 +40,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const exportJson = useThemeEditorStore((s) => s.exportJson);
   const importJson = useThemeEditorStore((s) => s.importJson);
   const resetPhotos = useThemeEditorStore((s) => s.resetPhotos);
+  const hydrateDraft = useThemeEditorStore((s) => s.hydrateDraft);
   const background = useThemeEditorStore((s) => s.background);
   const backgroundColor = useThemeEditorStore((s) => s.backgroundColor);
   const setBackgroundColor = useThemeEditorStore((s) => s.setBackgroundColor);
@@ -54,7 +60,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
-  const hasVideoBackground = background.type === "VIDEO";
 
   useEffect(() => {
     setFrameId(frameId);
@@ -131,6 +136,49 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [resetPhotos]);
 
+  // 새 프레임 작업 시: 새로고침/이탈로 남은 WIP 초안(localStorage)이 있으면 복원한다.
+  // 원격 프레임 수정 중에는 저장본을 불러오므로 초안 복원을 하지 않는다.
+  const didRestoreDraftRef = useRef(false);
+  useEffect(() => {
+    if (remoteFrameId || didRestoreDraftRef.current) return;
+    didRestoreDraftRef.current = true;
+    const draft = loadEditorDraft();
+    if (draft && draft.frameId === frameId) {
+      hydrateDraft(draft);
+    }
+  }, [frameId, remoteFrameId, hydrateDraft]);
+
+  // 편집 중 상태를 localStorage에 자동 저장(디바운스). S3 temp 업로드 대신 로컬 보관.
+  useEffect(() => {
+    if (remoteFrameId) return;
+    let timer: number | undefined;
+    const unsubscribe = useThemeEditorStore.subscribe(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const s = useThemeEditorStore.getState();
+        if (!s.frameId) return;
+        const isEmptyDefault =
+          s.components.length === 0 && s.background.type === "COLOR";
+        if (isEmptyDefault) {
+          clearEditorDraft();
+          return;
+        }
+        void saveEditorDraft({
+          frameId: s.frameId,
+          backgroundColor: s.backgroundColor,
+          background: s.background,
+          cellCutouts: s.cellCutouts,
+          components: s.components,
+          now: Date.now(),
+        });
+      }, 1000);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [remoteFrameId]);
+
   const openSaveDialog = () => {
     setDraftTitle(title);
     setDraftDescription(description);
@@ -174,6 +222,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         useThemeEditorStore.getState().setBackgroundImageKey(key);
       }
 
+      // 캔버스에서 실제 사용 중인 로컬 사진을 이 시점에 최종 업로드한다(편집 중엔 temp 업로드 없음).
+      await useThemeEditorStore.getState().finalizePhotosForSave();
+
       const themeJson = exportJson();
       if (!themeJson) {
         setIsSaving(false);
@@ -205,6 +256,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         addDraft(themeJson, { name: nextTitle });
       }
 
+      clearEditorDraft();
       setTitle(nextTitle);
       setDescription(nextDescription);
       setIsSaveDialogOpen(false);
@@ -246,12 +298,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             {loadError ? (
               <p className="mt-1 text-[11px] text-red-300">{loadError}</p>
             ) : null}
-            {remoteFrameId && hasVideoBackground ? (
-              <p className="mt-1 text-[11px] text-amber-300">
-                비디오 배경은 미리보기에서 단색 배경으로 보이지만, 배경 색상을
-                바꾸지 않으면 기존 배경 정보는 그대로 보존됩니다.
-              </p>
-            ) : null}
           </div>
 
           <div className="flex items-center gap-3">
@@ -270,6 +316,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               className="text-xs text-zinc-400 underline underline-offset-4"
               onClick={() => {
                 useThemeEditorStore.getState().reset();
+                clearEditorDraft();
                 router.push("/theme");
               }}
             >

@@ -27,6 +27,10 @@ const editorStoreState = {
   backgroundColor: "111827",
   setBackgroundColor: mockSetBackgroundColor,
   components: [] as Array<{ hidden?: boolean }>,
+  cellCutouts: [false, false, false, false],
+  frameId: "classic",
+  finalizePhotosForSave: jest.fn().mockResolvedValue(undefined),
+  hydrateDraft: jest.fn(),
 };
 
 function themeEditorStoreMock(
@@ -38,6 +42,12 @@ function themeEditorStoreMock(
 (
   themeEditorStoreMock as unknown as { getState: () => typeof editorStoreState }
 ).getState = () => editorStoreState;
+
+(
+  themeEditorStoreMock as unknown as {
+    subscribe: (listener: () => void) => () => void;
+  }
+).subscribe = () => () => {};
 
 function getPrimarySaveButton(container: HTMLElement) {
   const button = Array.from(
@@ -122,7 +132,6 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     FRAME: "FRAME",
     FRAME_COMPONENT: "FRAME_COMPONENT",
     PROFILE: "PROFILE",
-    FOURCUT_VIDEO: "FOURCUT_VIDEO",
     FOURCUT_PHOTO: "FOURCUT_PHOTO",
   },
   uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
