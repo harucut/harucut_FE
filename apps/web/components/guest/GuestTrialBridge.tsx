@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { GuestTrialOverlay } from "@/components/guest/GuestTrialOverlay";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
@@ -27,19 +27,24 @@ export function GuestTrialBridge() {
 
   // 비회원 저장(보류) → 로그인/회원가입 완료 후 /home?resumeSave=1 로 돌아오면
   // 보관해 둔 결과물을 서버(기록)에 자동 업로드한다.
+  // 파라미터 제거로 effect가 재실행돼도 ref 가드로 1회만 처리하고, 업로드는 cancel하지 않아
+  // 완료 후 localStorage 정리/알림이 반드시 실행되게 한다(중복 업로드 방지).
+  const resumeHandledRef = useRef(false);
   useEffect(() => {
     if (!searchParams.get("resumeSave")) return;
+    if (resumeHandledRef.current) return;
+    resumeHandledRef.current = true;
 
-    // 중복 실행 방지를 위해 파라미터를 즉시 제거한다.
+    const pending = getPendingGuestSave();
+
+    // 파라미터 제거(재실행은 위 ref 가드로 차단되므로 진행 중 업로드에 영향 없음).
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("resumeSave");
     const nextSearch = nextParams.toString();
     router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname);
 
-    const pending = getPendingGuestSave();
     if (!pending) return;
 
-    let cancelled = false;
     void (async () => {
       try {
         const file = dataUrlToFile(
@@ -52,7 +57,6 @@ export function GuestTrialBridge() {
           displayName: pending.displayName,
           extension: "png",
         });
-        if (cancelled) return;
         clearPendingGuestSave();
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -63,7 +67,6 @@ export function GuestTrialBridge() {
           title: "기록에 저장됐어요",
         });
       } catch (error) {
-        if (cancelled) return;
         console.error(error);
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -74,10 +77,6 @@ export function GuestTrialBridge() {
         });
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [pathname, router, searchParams, setNotice]);
 
   useEffect(() => {
