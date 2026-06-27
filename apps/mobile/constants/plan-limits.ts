@@ -10,17 +10,18 @@ export type PlanInfo = {
   nextLimit: number | null;
 };
 
-// 요금제별 프레임 보관 한도. BASIC 1 · PLUS 5 · PRO 10
+// 요금제별 커스텀 프레임 보관 한도(가격표 기준). Free 0 · Plus 3 · Pro 무제한.
+// 서버 구독 사용량을 못 받을 때의 폴백 기본값이며, 무제한은 Infinity로 표현한다.
 export const PLAN_FRAME_LIMITS: Record<PlanTier, number> = {
-  BASIC: 1,
-  PLUS: 5,
-  PRO: 10,
+  BASIC: 0,
+  PLUS: 3,
+  PRO: Number.POSITIVE_INFINITY,
 };
 
 const PLAN_ORDER: PlanTier[] = ['BASIC', 'PLUS', 'PRO'];
 
-/** 게이지에 그리는 점 최대 개수(최상위 요금제 한도) */
-export const MAX_GAUGE_DOTS = PLAN_FRAME_LIMITS.PRO;
+/** 게이지에 그리는 점 최대 개수(유한 표시용 상한). PRO는 무제한이라 한도와 분리해 고정한다. */
+export const MAX_GAUGE_DOTS = 6;
 
 export type GaugeDotState = 'filled' | 'empty' | 'locked';
 

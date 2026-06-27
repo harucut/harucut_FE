@@ -52,7 +52,7 @@ export function FrameCapacityMeter({ plan, used, onUpgrade }: FrameCapacityMeter
             onClick={onUpgrade}
             className="hc-accent-chip whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold"
           >
-            {next}로 업그레이드 · {nextLimit}개
+            {next}로 업그레이드 · {Number.isFinite(nextLimit) ? `${nextLimit}개` : "무제한"}
           </button>
         ) : null}
       </div>
