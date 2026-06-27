@@ -750,7 +750,8 @@ export function FrameCapacityMeter({
   const { colors } = useHarucutTheme();
   const styles = useFrameStyles();
   const { limit, name, next, nextLimit } = plan;
-  const full = used >= limit;
+  const unlimited = !Number.isFinite(limit);
+  const full = !unlimited && used >= limit;
   const remaining = Math.max(0, limit - used);
   const dots = buildGaugeDots(used, limit);
 
@@ -764,14 +765,21 @@ export function FrameCapacityMeter({
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.meterCount}>
-              보관 {used} <Text style={styles.meterCountMuted}>/ {limit}개</Text>
+              보관 {used}{' '}
+              <Text style={styles.meterCountMuted}>
+                / {unlimited ? '무제한' : `${limit}개`}
+              </Text>
             </Text>
             <Text style={styles.meterCaption}>
-              {full ? '보관함이 가득 찼어요' : `${remaining}개 더 저장할 수 있어요`}
+              {unlimited
+                ? '무제한으로 저장할 수 있어요'
+                : full
+                  ? '보관함이 가득 찼어요'
+                  : `${remaining}개 더 저장할 수 있어요`}
             </Text>
           </View>
         </View>
-        {onUpgrade && next ? (
+        {onUpgrade && next && !unlimited ? (
           <Pressable
             accessibilityLabel="요금제 업그레이드"
             accessibilityRole="button"
@@ -785,7 +793,9 @@ export function FrameCapacityMeter({
         {dots.map((state, index) => (
           <GaugeDot key={index} state={state} styles={styles} />
         ))}
-        <Text style={styles.meterDotHint}>{limit}개 이후는 상위 요금제</Text>
+        {unlimited ? null : (
+          <Text style={styles.meterDotHint}>{limit}개 이후는 상위 요금제</Text>
+        )}
       </View>
     </SurfaceCard>
   );

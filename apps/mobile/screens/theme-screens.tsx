@@ -48,14 +48,20 @@ export function ThemeFrameScreen() {
   const selectSavedFrameForTheme = useThemeEditorStore((state) => state.selectSavedFrameForTheme);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
   const basePlan = resolvePlanInfo(planTier);
-  // 프레임 보관 한도는 서버 구독 사용량(frameRetentionLimit)을 우선 사용하고,
-  // 무제한(-1)/미조회 시에는 요금제 tier 기반 기본 한도를 유지한다.
+  // 프레임 보관 한도는 서버 구독 사용량을 우선 사용한다. 무제한(frameRetentionUnlimited 또는 -1)이면
+  // 한도를 Infinity로 둬 한도 게이트/요금제 유도를 막고, 유한 한도면 그 값을, 미조회 시 tier 기본값을 쓴다.
+  const unlimitedRetention =
+    usage != null &&
+    (usage.frameRetentionUnlimited || usage.frameRetentionLimit < 0);
   const serverFrameLimit =
     usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit > 0
       ? usage.frameRetentionLimit
       : null;
-  const plan =
-    serverFrameLimit != null ? { ...basePlan, limit: serverFrameLimit } : basePlan;
+  const plan = unlimitedRetention
+    ? { ...basePlan, limit: Number.POSITIVE_INFINITY, next: null, nextLimit: null }
+    : serverFrameLimit != null
+      ? { ...basePlan, limit: serverFrameLimit }
+      : basePlan;
   // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
   const isAtCapacity = savedFrames.length >= plan.limit;
   // 원격 프레임 로딩 전에는 savedFrames가 빈 배열이라 한도를 알 수 없으므로,

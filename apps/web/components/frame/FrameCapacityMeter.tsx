@@ -16,7 +16,8 @@ type FrameCapacityMeterProps = {
  */
 export function FrameCapacityMeter({ plan, used, onUpgrade }: FrameCapacityMeterProps) {
   const { name, limit, next, nextLimit } = plan;
-  const full = used >= limit;
+  const unlimited = !Number.isFinite(limit);
+  const full = !unlimited && used >= limit;
   const remaining = Math.max(0, limit - used);
   const dots = buildGaugeDots(used, limit);
 
@@ -31,15 +32,21 @@ export function FrameCapacityMeter({ plan, used, onUpgrade }: FrameCapacityMeter
           <div className="min-w-0">
             <p className="text-[15px] font-extrabold text-[color:var(--hc-text)] lg:text-base">
               보관 {used}{" "}
-              <span className="font-semibold text-[color:var(--hc-muted-soft)]">/ {limit}개</span>
+              <span className="font-semibold text-[color:var(--hc-muted-soft)]">
+                / {unlimited ? "무제한" : `${limit}개`}
+              </span>
             </p>
             <p className="mt-0.5 text-[11px] text-[color:var(--hc-muted)]">
-              {full ? "보관함이 가득 찼어요" : `${remaining}개 더 저장할 수 있어요`}
+              {unlimited
+                ? "무제한으로 저장할 수 있어요"
+                : full
+                  ? "보관함이 가득 찼어요"
+                  : `${remaining}개 더 저장할 수 있어요`}
             </p>
           </div>
         </div>
 
-        {onUpgrade && next ? (
+        {onUpgrade && next && !unlimited ? (
           <button
             type="button"
             onClick={onUpgrade}
@@ -54,9 +61,11 @@ export function FrameCapacityMeter({ plan, used, onUpgrade }: FrameCapacityMeter
         {dots.map((state, i) => (
           <GaugeDot key={i} state={state} />
         ))}
-        <span className="ml-1 text-[11px] text-[color:var(--hc-muted)]">
-          {limit}개 이후는 상위 요금제
-        </span>
+        {unlimited ? null : (
+          <span className="ml-1 text-[11px] text-[color:var(--hc-muted)]">
+            {limit}개 이후는 상위 요금제
+          </span>
+        )}
       </div>
     </section>
   );
