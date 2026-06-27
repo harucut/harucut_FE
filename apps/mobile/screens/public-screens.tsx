@@ -274,7 +274,7 @@ export function LandingScreen() {
         {/* 로그인 우선. 회원가입은 로그인 화면에서 유도하고, 비회원은 체험하기로 바로 촬영. */}
         <ActionButton label="로그인" onPress={() => push('/login')} />
         <ActionButton
-          label="무료로 체험하기"
+          label="비회원 체험하기"
           onPress={showGuestTrialNotice}
           style={{ marginTop: 10 }}
           variant="ghost"

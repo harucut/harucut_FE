@@ -41,6 +41,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" suppressHydrationWarning>
+      <head>
+        {/*
+          Pretendard 웹폰트를 직접 로드해 방문자 OS에 설치 여부와 무관하게
+          어디서나 동일하게 렌더되도록 한다(dynamic-subset = 필요한 글리프만 로드).
+        */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css"
+        />
+      </head>
       <body>
         <ColorThemeScript />
         <ColorThemeSync />

@@ -85,7 +85,11 @@ export function adaptSetCookieForRequest(setCookie: string, req: RequestLike) {
   }
 
   if (url.protocol !== "https:") {
+    // 로컬(http) 개발에선 Secure를 떼야 쿠키가 저장되는데, SameSite=None은 Secure가 없으면
+    // 브라우저가 거부한다. 백엔드 인증 쿠키(accessToken/refreshToken)가 localhost에서도
+    // 저장되도록 None을 Lax로 낮춘다. (https 운영 환경에선 이 블록을 타지 않아 원본 유지)
     nextCookie = nextCookie.replace(/;\s*Secure/gi, "");
+    nextCookie = nextCookie.replace(/;\s*SameSite=None/gi, "; SameSite=Lax");
   }
 
   return nextCookie;
