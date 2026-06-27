@@ -9,7 +9,7 @@ export type UserStatus =
   | "ACTIVE"
   | "DELETED"
   | "DELETED_REQUESTED"
-  | "SUSPENDED";
+  | "BLOCKED";
 
 export type UserInfo = {
   id: number;
@@ -25,16 +25,9 @@ export type LoginResponseData = {
   userStatus: UserStatus;
 };
 
-export type PresignedUploadContentType =
-  | "JPEG"
-  | "PNG"
-  | "WEBP"
-  | "GIF"
-  | "MP4"
-  | "WEBM"
-  | "MOV";
+export type PresignedUploadContentType = "JPEG" | "PNG" | "WEBP" | "GIF";
 
-export type UserMediaType = "PHOTO" | "VIDEO";
+export type UserMediaType = "PHOTO";
 
 export type UserMedia = {
   mediaId: number;
@@ -43,34 +36,8 @@ export type UserMedia = {
   displayName?: string | null;
   displayname?: string | null;
   downloadUrl?: string | null;
-  originalS3Key?: string;
   originalFileName?: string;
-  transcodeJobId?: string;
   createdAt?: string;
-};
-
-export type TranscodeTaskStatus =
-  | "QUEUED"
-  | "SUBMITTED"
-  | "PROGRESSING"
-  | "COMPLETE"
-  | "ERROR";
-
-export type TranscodeTaskSubmitResponse = {
-  taskId: string;
-  jobId: string;
-  status: TranscodeTaskStatus;
-  requestedAt?: string;
-};
-
-export type TranscodeTaskStatusResponse = {
-  taskId: string;
-  jobId: string;
-  status: TranscodeTaskStatus;
-  errorMessage?: string | null;
-  media?: UserMedia | null;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
 export type RemoteFrameType = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
@@ -84,12 +51,6 @@ export type RemoteFrameBackground =
       type: "IMAGE";
       key?: string;
       opacity?: number;
-    }
-  | {
-      type: "VIDEO";
-      key?: string;
-      autoPlay?: boolean;
-      loop?: boolean;
     };
 
 export type RemoteFrameComponent = {
@@ -116,4 +77,16 @@ export type RemoteFrame = {
   frameType: RemoteFrameType;
   background?: RemoteFrameBackground;
   components: RemoteFrameComponent[];
+};
+
+// GET /api/auth/user/subscription/usage 응답 (프레임 보관 한도·사용량).
+// *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한을 의미한다.
+export type SubscriptionUsage = {
+  planTier: string;
+  frameRetentionLimit: number;
+  frameRetentionUsedCount: number;
+  frameRetentionRemainingCount: number;
+  frameRetentionUnlimited: boolean;
+  currentCycleStartAt: string;
+  currentCycleEndAt: string;
 };

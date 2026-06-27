@@ -21,56 +21,67 @@ type Plan = {
   sub: string;
 };
 
-// 핸드오프(handoff/app/pricing.jsx)와 1:1 일치하는 6행 피처 매트릭스.
+// 7행 피처 매트릭스. 웹 constants/plans.ts와 같은 값/순서를 공유한다.
+// 워터마크는 전 플랜 기본 포함. Free는 제거 불가, Plus·Pro는 해제 가능(기본값은 항상 포함).
 const PLANS: Plan[] = [
   {
-    cta: '시작하기',
+    cta: '무료로 시작하기',
     feats: [
-      ['촬영·업로드', true, '이미지 무제한'],
-      ['다운로드·저장', true],
-      ['영상 생성', true, '월 5회'],
-      ['프레임 보관', true, '1개'],
-      ['사진 내역', true, '3일 보관'],
-      ['워터마크 제거', false],
+      ['커스텀 프레임', false],
+      ['워터마크 해제', false, '기본 포함 (고정)'],
+      ['사진 보관 기간', true, '3일'],
+      ['보정', false],
+      ['광고 제거', false, '보정·다운로드 시 노출'],
+      ['AI (추후)', false],
+      ['동영상 (추후)', false],
     ],
     id: 'basic',
-    name: 'BASIC',
+    name: 'Free',
     price: '무료',
     sub: '가입 시 제공',
   },
   {
     badge: '인기',
-    cta: 'PLUS 시작하기',
+    cta: 'Plus 시작하기',
     feats: [
-      ['촬영·업로드', true, '이미지 무제한'],
-      ['다운로드·저장', true],
-      ['영상 생성', true, '월 30회'],
-      ['프레임 보관', true, '5개'],
-      ['사진 내역', true, '무제한'],
-      ['워터마크 제거', true],
+      ['커스텀 프레임', true, '3개'],
+      ['워터마크 해제', true, '선택 (기본 포함)'],
+      ['사진 보관 기간', true, '3달'],
+      ['보정', true],
+      ['광고 제거', true],
+      ['AI (추후)', false],
+      ['동영상 (추후)', false, '미정'],
     ],
     hot: true,
     id: 'plus',
-    name: 'PLUS',
+    name: 'Plus',
     price: '₩3,900',
     sub: '/ 월',
   },
   {
-    cta: 'PRO 시작하기',
+    cta: 'Pro 시작하기',
     feats: [
-      ['촬영·업로드', true, '이미지 무제한'],
-      ['다운로드·저장', true],
-      ['영상 생성', true, '무제한'],
-      ['프레임 보관', true, '10개'],
-      ['사진 내역', true, '무제한'],
-      ['워터마크 제거', true],
+      ['커스텀 프레임', true, '무제한'],
+      ['워터마크 해제', true, '선택 (기본 포함)'],
+      ['사진 보관 기간', true, '무제한'],
+      ['보정', true],
+      ['광고 제거', true],
+      ['AI (추후)', true],
+      ['동영상 (추후)', false, '미정'],
     ],
     id: 'pro',
-    name: 'PRO',
-    price: '₩7,900',
+    name: 'Pro',
+    price: '₩9,900',
     sub: '/ 월',
   },
 ];
+
+// Enterprise — 추후 출시 예정(팬미팅·행사용 QR 촬영).
+const ENTERPRISE_TEASER = {
+  badge: '추후',
+  desc: '팬미팅·행사용 플랜이에요. 공간을 미리 만들어 두면 비회원도 QR로 입장해 그 자리에서 누구나 네 컷을 찍을 수 있어요.',
+  name: 'Enterprise',
+};
 
 function PlanCard({
   onPick,
@@ -164,7 +175,7 @@ export function PricingScreen() {
       <View style={styles.headerBlock}>
         <Text style={styles.headline}>나에게 맞는 플랜</Text>
         <Text style={styles.subtitle}>
-          비회원도 촬영은 무료예요. 저장·영상·보관은 플랜에 따라 달라요.
+          비회원도 촬영은 무료예요. 커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요.
         </Text>
       </View>
 
@@ -179,6 +190,20 @@ export function PricingScreen() {
           />
         ))}
       </View>
+
+      <View style={styles.enterpriseCard}>
+        <View style={styles.enterpriseHeader}>
+          <Text style={styles.enterpriseName}>{ENTERPRISE_TEASER.name}</Text>
+          <View style={styles.enterpriseBadge}>
+            <Text style={styles.enterpriseBadgeLabel}>{ENTERPRISE_TEASER.badge}</Text>
+          </View>
+        </View>
+        <Text style={styles.enterpriseDesc}>{ENTERPRISE_TEASER.desc}</Text>
+      </View>
+
+      <Text style={styles.footnote}>
+        가격은 부가세 포함이에요. 요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.
+      </Text>
     </AppScrollView>
   );
 }
@@ -231,6 +256,43 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       height: 1,
       marginVertical: 16,
     },
+    enterpriseBadge: {
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    enterpriseBadgeLabel: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: '800',
+    },
+    enterpriseCard: {
+      borderColor: colors.border,
+      borderRadius: HARUCUT_RADII.lg,
+      borderStyle: 'dashed',
+      borderWidth: 1,
+      gap: 8,
+      marginTop: 14,
+      padding: 18,
+    },
+    enterpriseDesc: {
+      color: colors.muted,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    enterpriseHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 8,
+    },
+    enterpriseName: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+      letterSpacing: 0.3,
+    },
     featIcon: {
       alignItems: 'center',
       borderRadius: 999,
@@ -269,6 +331,12 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     featRowOff: {
       opacity: 0.4,
+    },
+    footnote: {
+      color: colors.muted,
+      fontSize: 11.5,
+      lineHeight: 17,
+      marginTop: 14,
     },
     headerBlock: {
       gap: 8,

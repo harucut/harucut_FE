@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
-import { getBestWebmMimeType } from "@/lib/capture/mediaRecorder";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
 // 촬영 총 장수
@@ -25,8 +24,7 @@ type CameraFacingMode = "user" | "environment";
 export function useCaptureFlow() {
   const router = useRouter();
   const setNotice = useGuestTrialStore((state) => state.setNotice);
-  const { frameId, addShotPhoto, attachVideoToShot, resetShots } =
-    useShootSession();
+  const { frameId, addShotPhoto, resetShots } = useShootSession();
 
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isCheckingCameraPermission, setIsCheckingCameraPermission] =
@@ -39,7 +37,8 @@ export function useCaptureFlow() {
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
   // 촬영 모드와 타이머 간격은 "촬영 시작 전에만" 변경 가능(시작 후 잠금)
-  const [captureMode, setCaptureMode] = useState<CaptureMode>("timer");
+  // 기본은 수동 촬영. 타이머 모드는 사용자가 직접 선택할 수 있다.
+  const [captureMode, setCaptureMode] = useState<CaptureMode>("manual");
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -48,11 +47,8 @@ export function useCaptureFlow() {
   const shutterAudioRef = useRef<HTMLAudioElement | null>(null);
   const autoStartAttemptedRef = useRef(false);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
   // 타이머와 즉시 촬영 버튼이 같은 샷을 중복 처리하지 않도록 마지막으로 끝낸 샷 인덱스를 기록
   const lastFinishedShotRef = useRef(-1);
-  const recordingNoticeShownRef = useRef(false);
   // shooting.isShooting의 동기 미러. 상태는 비동기라, 첫 셔터 더블탭처럼 리렌더 이전의
   // stale 클로저가 세션을 두 번 시작/리셋해 첫 장을 날리는 것을 막는 가드로 쓴다.
   const isShootingRef = useRef(false);
@@ -104,7 +100,7 @@ export function useCaptureFlow() {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode },
-        audio: true,
+        audio: false,
       });
 
       streamRef.current = stream;
@@ -169,12 +165,6 @@ export function useCaptureFlow() {
   // 언마운트 시 정리
   useEffect(() => {
     return () => {
-      if (
-        mediaRecorderRef.current &&
-        mediaRecorderRef.current.state !== "inactive"
-      ) {
-        mediaRecorderRef.current.stop();
-      }
       stopStream();
     };
   }, [stopStream]);
@@ -230,63 +220,8 @@ export function useCaptureFlow() {
     return dataUrl;
   }, [playShutterSound, captureSlot]);
 
-  // 녹화 불가 환경은 한 번만 안내하고 사진 전용으로 계속 진행
-  const notifyRecordingUnavailable = useCallback(() => {
-    if (recordingNoticeShownRef.current) return;
-    recordingNoticeShownRef.current = true;
-    setNotice({
-      actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-      eyebrow: "VIDEO RECORDING",
-      icon: "camera",
-      message:
-        "현재 브라우저에서 영상 녹화를 사용할 수 없어 사진만 저장됩니다. 촬영은 계속 진행돼요.",
-      title: "영상 없이 촬영을 진행해요",
-    });
-  }, [setNotice]);
-
-  // 샷마다 짧은 동영상 기록 시작
-  const startRecordingForShot = useCallback(() => {
-    if (!streamRef.current || typeof MediaRecorder === "undefined") {
-      notifyRecordingUnavailable();
-      return;
-    }
-
-    const mimeType = getBestWebmMimeType();
-    if (!mimeType) {
-      notifyRecordingUnavailable();
-      return;
-    }
-
-    try {
-      recordedChunksRef.current = [];
-
-      const mr = new MediaRecorder(streamRef.current, { mimeType });
-
-      mr.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
-      };
-
-      mr.onstop = () => {
-        if (!recordedChunksRef.current.length) return;
-
-        const blob = new Blob(recordedChunksRef.current, {
-          type: "video/webm",
-        });
-        const videoUrl = URL.createObjectURL(blob);
-        attachVideoToShot(videoUrl);
-        recordedChunksRef.current = [];
-      };
-
-      mediaRecorderRef.current = mr;
-      mr.start();
-    } catch (err) {
-      console.error("MediaRecorder start error:", err);
-      notifyRecordingUnavailable();
-    }
-  }, [attachVideoToShot, notifyRecordingUnavailable]);
-
   // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
-  // state updater 안에서 호출하지 않는다 — 녹화 재시작/라우팅 같은 사이드 이펙트가 함께 실행되므로
+  // state updater 안에서 호출하지 않는다 — 라우팅 같은 사이드 이펙트가 함께 실행되므로
   const finishSingleShot = useCallback(() => {
     // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리
     if (lastFinishedShotRef.current >= shotCount) return;
@@ -297,16 +232,12 @@ export function useCaptureFlow() {
     lastFinishedShotRef.current = shotCount;
     addShotPhoto(photoDataUrl);
 
-    const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== "inactive") mr.stop();
-
     const next = shotCount + 1;
     setShotCount(next);
 
     if (next < MAX_SHOTS) {
-      startRecordingForShot();
       // 타이머 모드: 다음 컷까지 선택한 간격으로 자동 카운트다운.
-      // 수동 모드: 카운트다운 없이 다음 셔터를 기다린다(녹화만 미리 시작).
+      // 수동 모드: 카운트다운 없이 다음 셔터를 기다린다.
       setShooting((s) => ({
         ...s,
         countdown: captureMode === "timer" ? timerSeconds : null,
@@ -321,7 +252,6 @@ export function useCaptureFlow() {
     shotCount,
     capturePhotoToDataUrl,
     addShotPhoto,
-    startRecordingForShot,
     captureMode,
     timerSeconds,
     router,
@@ -340,7 +270,7 @@ export function useCaptureFlow() {
       return;
     }
 
-    // 이미 촬영 중이면 재시작 무시(시작 버튼 더블탭으로 녹화가 중복 시작되는 것 방지).
+    // 이미 촬영 중이면 재시작 무시(시작 버튼 더블탭으로 중복 시작되는 것 방지).
     if (isShootingRef.current) return;
 
     resetShots();
@@ -352,18 +282,15 @@ export function useCaptureFlow() {
     // 수동 모드: 카운트다운 없이 첫 컷을 바로 찍고, 이후 셔터를 누를 때마다 1장씩.
     if (captureMode === "timer") {
       setShooting({ isShooting: true, countdown: timerSeconds });
-      startRecordingForShot();
       return;
     }
 
     setShooting({ isShooting: true, countdown: null });
-    startRecordingForShot();
-    // 첫 수동 컷은 사용자가 셔터를 누를 때 찍히므로 여기서는 녹화만 준비한다.
+    // 첫 수동 컷은 사용자가 셔터를 누를 때 찍힌다.
   }, [
     isCameraReady,
     resetShots,
     setNotice,
-    startRecordingForShot,
     captureMode,
     timerSeconds,
   ]);
@@ -395,7 +322,7 @@ export function useCaptureFlow() {
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
   // 수동 모드 셔터: 한 번 누를 때마다 즉시 1장.
-  // 첫 셔터에서 세션을 시작(리셋+녹화)하고 바로 한 장 찍어, "누르면 즉시 촬영" 사양을 만족한다.
+  // 첫 셔터에서 세션을 리셋하고 바로 한 장 찍어, "누르면 즉시 촬영" 사양을 만족한다.
   const handleManualShutter = useCallback(() => {
     if (!isCameraReady) {
       setNotice({
@@ -409,14 +336,13 @@ export function useCaptureFlow() {
     }
 
     if (!isShootingRef.current) {
-      // 첫 컷: 세션 초기화 후 녹화 시작 → 같은 클릭에서 바로 1장 촬영.
+      // 첫 컷: 세션 초기화 후 같은 클릭에서 바로 1장 촬영.
       // 동기 ref로 가드해, 리렌더 전 더블탭이 세션을 두 번 리셋(첫 장 유실)하지 않게 한다.
       isShootingRef.current = true;
       resetShots();
       setShotCount(0);
       lastFinishedShotRef.current = -1;
       setShooting({ isShooting: true, countdown: null });
-      startRecordingForShot();
     }
 
     finishSingleShot();
@@ -424,7 +350,6 @@ export function useCaptureFlow() {
     isCameraReady,
     resetShots,
     setNotice,
-    startRecordingForShot,
     finishSingleShot,
   ]);
 

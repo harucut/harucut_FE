@@ -152,6 +152,7 @@ const SESSION_REFRESH_EXEMPT_PATHS = new Set<string>([
   '/api/email-auth/code',
   '/api/email-auth/verification',
   '/api/harucut/reset/password',
+  '/api/harucut/reset/password/code',
   '/api/harucut/reset/password/verification',
   '/api/harucut/logout',
 ]);

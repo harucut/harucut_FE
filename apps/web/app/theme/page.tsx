@@ -10,11 +10,11 @@ import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StepProgress } from "@/components/layout/StepProgress";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import type { RemoteFrame } from "@/lib/api-types";
+import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
-import { getMyUserInfo } from "@/lib/userApi";
+import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
 
 function ThemePageContent() {
   const router = useRouter();
@@ -25,7 +25,24 @@ function ThemePageContent() {
   const { frames, isLoading, error, refresh } = useMyFrames();
 
   const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
-  const plan = resolvePlanInfo(planTier);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const basePlan = resolvePlanInfo(planTier);
+  // 프레임 보관 한도는 서버 구독 사용량을 우선 사용한다. 무제한(frameRetentionUnlimited 또는 -1)이면
+  // 한도를 Infinity로 둬 한도 게이트/요금제 유도를 막고, 유한 한도면 그 값을, 미조회 시 tier 기본값을 쓴다.
+  const unlimitedRetention =
+    usage != null &&
+    (usage.frameRetentionUnlimited || usage.frameRetentionLimit < 0);
+  // 서버가 0을 주면(예: Free 플랜은 커스텀 프레임 미제공) 그대로 0을 한도로 쓴다.
+  // 0은 유효한 한도이고, 미조회(usage 없음)일 때만 tier 기본값으로 폴백한다.
+  const serverFrameLimit =
+    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0
+      ? usage.frameRetentionLimit
+      : null;
+  const plan = unlimitedRetention
+    ? { ...basePlan, limit: Number.POSITIVE_INFINITY, next: null, nextLimit: null }
+    : serverFrameLimit != null
+      ? { ...basePlan, limit: serverFrameLimit }
+      : basePlan;
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
@@ -48,6 +65,13 @@ function ThemePageContent() {
       })
       .catch(() => {
         if (!cancelled) setPlanTier("BASIC");
+      });
+    void getSubscriptionUsage()
+      .then((next) => {
+        if (!cancelled) setUsage(next);
+      })
+      .catch(() => {
+        // 미조회 시 tier 기반 기본 한도 유지
       });
     return () => {
       cancelled = true;

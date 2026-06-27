@@ -18,12 +18,6 @@ type RemoteFrameBackground =
       key?: string;
       opacity?: number;
       type: 'IMAGE';
-    }
-  | {
-      autoPlay?: boolean;
-      key?: string;
-      loop?: boolean;
-      type: 'VIDEO';
     };
 
 type RemoteFrameComponent = {
@@ -135,19 +129,10 @@ function toRequestBackground(draft: ThemeFrameDraft): RemoteFrameBackground {
     };
   }
 
-  if (background.type === 'IMAGE') {
-    return {
-      key: background.key,
-      opacity: background.opacity,
-      type: 'IMAGE',
-    };
-  }
-
   return {
-    autoPlay: background.autoPlay,
     key: background.key,
-    loop: background.loop,
-    type: 'VIDEO',
+    opacity: background.opacity,
+    type: 'IMAGE',
   };
 }
 
@@ -161,19 +146,10 @@ function toSavedBackground(background?: RemoteFrameBackground): ThemeBackground 
     };
   }
 
-  if (background.type === 'IMAGE') {
-    return {
-      key: background.key,
-      opacity: background.opacity,
-      type: 'IMAGE',
-    };
-  }
-
   return {
-    autoPlay: background.autoPlay,
     key: background.key,
-    loop: background.loop,
-    type: 'VIDEO',
+    opacity: background.opacity,
+    type: 'IMAGE',
   };
 }
 

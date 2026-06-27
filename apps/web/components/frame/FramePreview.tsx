@@ -9,7 +9,7 @@ import {
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type FrameMedia = {
-  type: "image" | "video";
+  type: "image";
   src: string;
 };
 
@@ -92,21 +92,6 @@ export function FramePreview({
             : null);
 
         if (mediaItem) {
-          if (mediaItem.type === "video") {
-            return (
-              <video
-                key={idx}
-                src={mediaItem.src}
-                className="absolute rounded-md object-cover"
-                style={mediaStyle}
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-            );
-          }
-
           return (
             // eslint-disable-next-line @next/next/no-img-element
             <img

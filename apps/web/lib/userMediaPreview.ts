@@ -12,51 +12,15 @@ export function getUserMediaTitle(item: UserMedia) {
   return item.s3Key.split("/").pop() || "기록";
 }
 
-function normalizeUserMediaTitle(value: string) {
-  return value
-    .trim()
-    .replace(/\.[^.]+$/, "")
-    .toLowerCase();
-}
-
-export function getUserMediaPreviewTarget(item: UserMedia, items: UserMedia[]) {
-  if (item.mediaType === "PHOTO") {
-    return {
-      kind: "image" as const,
-      media: item,
-    };
-  }
-
-  const titleKey = normalizeUserMediaTitle(getUserMediaTitle(item));
-  const matchedPhoto = items.find((candidate) => {
-    if (candidate.mediaType !== "PHOTO") return false;
-    if (candidate.mediaId === item.mediaId) return false;
-
-    return normalizeUserMediaTitle(getUserMediaTitle(candidate)) === titleKey;
-  });
-
-  if (matchedPhoto) {
-    return {
-      kind: "image" as const,
-      media: matchedPhoto,
-    };
-  }
-
-  return {
-    kind: "video" as const,
-    media: item,
-  };
-}
-
 export function getUserMediaPreview(
   item: UserMedia,
   items: UserMedia[],
   resolvedUrls: Record<number, string> = {},
 ) {
-  const target = getUserMediaPreviewTarget(item, items);
+  void items;
 
   return {
-    kind: target.kind,
-    url: resolvedUrls[target.media.mediaId] ?? target.media.downloadUrl,
+    kind: "image" as const,
+    url: resolvedUrls[item.mediaId] ?? item.downloadUrl,
   };
 }

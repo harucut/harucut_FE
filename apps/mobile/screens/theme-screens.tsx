@@ -12,6 +12,7 @@ import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiErrorMessage } from '@/lib/api-client';
+import { getSubscriptionUsage, type SubscriptionUsage } from '@/lib/user-api';
 import { getPresignedImageUrl, resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 import { useLibraryStore } from '@/store/use-library-store';
 import { useSessionStore } from '@/store/use-session-store';
@@ -45,7 +46,24 @@ export function ThemeFrameScreen() {
   const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
   const setThemeFrame = useThemeEditorStore((state) => state.setThemeFrame);
   const selectSavedFrameForTheme = useThemeEditorStore((state) => state.selectSavedFrameForTheme);
-  const plan = resolvePlanInfo(planTier);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const basePlan = resolvePlanInfo(planTier);
+  // 프레임 보관 한도는 서버 구독 사용량을 우선 사용한다. 무제한(frameRetentionUnlimited 또는 -1)이면
+  // 한도를 Infinity로 둬 한도 게이트/요금제 유도를 막고, 유한 한도면 그 값을, 미조회 시 tier 기본값을 쓴다.
+  const unlimitedRetention =
+    usage != null &&
+    (usage.frameRetentionUnlimited || usage.frameRetentionLimit < 0);
+  // 서버가 0을 주면(예: Free 플랜은 커스텀 프레임 미제공) 그대로 0을 한도로 쓴다.
+  // 0은 유효한 한도이고, 미조회(usage 없음)일 때만 tier 기본값으로 폴백한다.
+  const serverFrameLimit =
+    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0
+      ? usage.frameRetentionLimit
+      : null;
+  const plan = unlimitedRetention
+    ? { ...basePlan, limit: Number.POSITIVE_INFINITY, next: null, nextLimit: null }
+    : serverFrameLimit != null
+      ? { ...basePlan, limit: serverFrameLimit }
+      : basePlan;
   // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
   const isAtCapacity = savedFrames.length >= plan.limit;
   // 원격 프레임 로딩 전에는 savedFrames가 빈 배열이라 한도를 알 수 없으므로,
@@ -56,6 +74,9 @@ export function ThemeFrameScreen() {
     if (accessMode === 'member') {
       void loadRemoteFrames().finally(() => setFramesLoaded(true));
       void refreshUserProfile().catch(() => {});
+      void getSubscriptionUsage()
+        .then(setUsage)
+        .catch(() => {});
     } else {
       setFramesLoaded(true);
     }

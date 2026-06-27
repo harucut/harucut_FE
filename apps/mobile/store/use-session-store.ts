@@ -118,7 +118,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           { id: 'go-login', label: '로그인하기', variant: 'secondary' },
         ],
         message:
-          '가입 없이 촬영·꾸미기를 바로 체험할 수 있어요. 저장·영상·기록 보관은 무료 가입 후 이용할 수 있어요.',
+          '가입 없이 촬영·꾸미기를 바로 체험할 수 있어요. 저장·기록 보관은 무료 가입 후 이용할 수 있어요.',
         title: '무료로 체험해볼까요?',
       },
     }),
