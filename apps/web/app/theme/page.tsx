@@ -32,8 +32,10 @@ function ThemePageContent() {
   const unlimitedRetention =
     usage != null &&
     (usage.frameRetentionUnlimited || usage.frameRetentionLimit < 0);
+  // 서버가 0을 주면(예: Free 플랜은 커스텀 프레임 미제공) 그대로 0을 한도로 쓴다.
+  // 0은 유효한 한도이고, 미조회(usage 없음)일 때만 tier 기본값으로 폴백한다.
   const serverFrameLimit =
-    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit > 0
+    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0
       ? usage.frameRetentionLimit
       : null;
   const plan = unlimitedRetention
