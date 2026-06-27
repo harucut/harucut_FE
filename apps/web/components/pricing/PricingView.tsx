@@ -4,38 +4,47 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, X } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
+import { BrandMark } from "@/components/layout/BrandMark";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import {
+  ENTERPRISE_TEASER,
   PLANS,
+  PRICING_DOWNGRADE_NOTE,
   PRICING_HEADLINE,
   PRICING_SUBTITLE,
   type Plan,
 } from "@/constants/plans";
 import { COMPANY } from "@/constants/company";
+import { PRICING_FAQ } from "@/constants/faq";
+import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
 
-const FAQ_ITEMS: [string, string][] = [
-  [
-    "비회원도 사용할 수 있나요?",
-    "네, 가입 없이도 촬영과 꾸미기를 바로 체험할 수 있어요. 다만 결과물 다운로드·저장, 영상 생성, 기록 보관은 무료 가입(BASIC) 후 이용할 수 있어요.",
-  ],
-  [
-    "플랜은 언제든 바꿀 수 있나요?",
-    "네. 마이페이지에서 언제든 플랜을 올리거나 내릴 수 있어요. 변경한 플랜은 다음 결제 주기부터 적용돼요.",
-  ],
-  [
-    "워터마크 없이 저장할 수 있나요?",
-    "PLUS·PRO 플랜에서는 워터마크 없이 원본 화질로 저장할 수 있어요. 무료 BASIC은 결과물에 워터마크가 포함돼요.",
-  ],
-];
+// 비로그인 방문자용 마케팅 헤더. 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로
+// 비회원에겐 로고 + 인증 진입(시작하기·로그인)만 노출한다. 로그인 우선이라 primary=로그인.
+function PublicPricingNav() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl">
+      <div className="mx-auto flex h-[60px] w-full max-w-5xl items-center justify-between px-4 sm:px-7">
+        <BrandMark href="/" />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/signup"
+            className="rounded-full px-3.5 py-2 text-[13.5px] font-bold text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
+          >
+            시작하기
+          </Link>
+          <Link
+            href="/login"
+            className="hc-button-primary flex items-center rounded-full px-4 py-2 text-[13.5px] font-bold"
+          >
+            로그인
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
 
-// 전체 스펙 비교 표 — PLANS의 6행 피처 매트릭스를 행(기능)×열(플랜)으로 전치한다.
-const FEATURE_ROWS = PLANS[0].feats.map((feat, rowIndex) => ({
-  label: feat[0],
-  cells: PLANS.map((plan) => {
-    const [, included, note] = plan.feats[rowIndex];
-    return { included, note };
-  }),
-}));
+// FAQ는 constants/faq.ts(단일 소스)로 이동 — 요금제는 PRICING_FAQ만, 전체는 /faq.
 
 function PlanCard({ plan }: { plan: Plan }) {
   const hot = plan.hot;
@@ -122,12 +131,16 @@ function PlanCard({ plan }: { plan: Plan }) {
   );
 }
 
-export function PricingView() {
+export function PricingView({ authed = false }: { authed?: boolean }) {
   const [open, setOpen] = useState(0);
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
-      <AppNav publicShoot />
+    <main
+      className={`hc-page-app min-h-dvh text-[color:var(--hc-text)] ${
+        authed ? "pb-[90px] lg:pb-0" : "pb-10"
+      }`}
+    >
+      {authed ? <AppNav publicShoot /> : <PublicPricingNav />}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
@@ -150,84 +163,39 @@ export function PricingView() {
           ))}
         </section>
 
+        {/* Enterprise — 추후 출시 예정(팬미팅·행사용 QR 촬영) */}
+        <section className="flex flex-col gap-3 rounded-[20px] border border-dashed border-[color:var(--hc-border-strong)] bg-[color:var(--hc-surface)] p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
+                {ENTERPRISE_TEASER.name}
+              </span>
+              <span className="rounded-full border border-[color:var(--hc-border-strong)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--hc-muted)]">
+                {ENTERPRISE_TEASER.badge}
+              </span>
+            </div>
+            <p className="max-w-[520px] text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
+              {ENTERPRISE_TEASER.desc}
+            </p>
+          </div>
+          <a
+            href={`mailto:${COMPANY.email}`}
+            className="hc-surface-well flex h-[46px] shrink-0 items-center justify-center rounded-full border px-6 text-[13.5px] font-extrabold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]"
+          >
+            {ENTERPRISE_TEASER.cta}
+          </a>
+        </section>
+
         {/* 전체 스펙 비교 — 기능(행) × 플랜(열) 매트릭스 */}
         <section className="flex flex-col gap-4">
           <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
             전체 스펙 비교
           </h2>
-          <div className="-mx-4 overflow-x-auto px-4">
-            <table className="w-full min-w-[520px] border-collapse">
-              <thead>
-                <tr className="border-b border-[color:var(--hc-border)]">
-                  <th className="py-3 pr-3 text-left text-[12px] font-medium text-[color:var(--hc-muted)]">
-                    기능
-                  </th>
-                  {PLANS.map((plan) => (
-                    <th
-                      key={plan.id}
-                      className={`px-3 py-3 text-center ${
-                        plan.hot ? "bg-[color:var(--hc-accent-soft-bg)]" : ""
-                      }`}
-                    >
-                      <span
-                        className={`block text-[14px] font-extrabold ${
-                          plan.hot
-                            ? "text-[color:var(--hc-primary)]"
-                            : "text-[color:var(--hc-text)]"
-                        }`}
-                      >
-                        {plan.name}
-                      </span>
-                      <span className="mt-0.5 block text-[11px] font-medium text-[color:var(--hc-muted)]">
-                        {plan.price}
-                        {plan.sub ? ` ${plan.sub}` : ""}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {FEATURE_ROWS.map((row) => (
-                  <tr
-                    key={row.label}
-                    className="border-b border-[color:var(--hc-border)]"
-                  >
-                    <th
-                      scope="row"
-                      className="py-3 pr-3 text-left text-[13px] font-semibold text-[color:var(--hc-text)]"
-                    >
-                      {row.label}
-                    </th>
-                    {row.cells.map((cell, i) => (
-                      <td
-                        key={PLANS[i].id}
-                        className={`px-3 py-3 text-center align-middle ${
-                          PLANS[i].hot ? "bg-[color:var(--hc-accent-soft-bg)]" : ""
-                        }`}
-                      >
-                        {cell.included ? (
-                          cell.note ? (
-                            <span className="text-[13px] font-semibold text-[color:var(--hc-text)]">
-                              {cell.note}
-                            </span>
-                          ) : (
-                            <Check
-                              className="mx-auto h-4 w-4 text-[color:var(--hc-primary)]"
-                              strokeWidth={3}
-                            />
-                          )
-                        ) : (
-                          <X className="mx-auto h-4 w-4 text-[color:var(--hc-muted)]" />
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-[color:var(--hc-muted)]">
+          <PlanComparisonTable />
+          <p className="text-[11px] leading-[1.6] text-[color:var(--hc-muted)]">
             가격은 부가세 포함이에요. 플랜은 마이페이지에서 언제든 바꿀 수 있어요.
+            <br />
+            {PRICING_DOWNGRADE_NOTE}
           </p>
         </section>
 
@@ -237,10 +205,13 @@ export function PricingView() {
             자주 묻는 질문
           </h2>
           <div className="flex flex-col">
-            {FAQ_ITEMS.map(([q, a], i) => {
+            {PRICING_FAQ.map((item, i) => {
               const on = open === i;
               return (
-                <div key={q} className="border-t border-[color:var(--hc-border)]">
+                <div
+                  key={item.q}
+                  className="border-t border-[color:var(--hc-border)]"
+                >
                   <button
                     type="button"
                     onClick={() => setOpen(on ? -1 : i)}
@@ -248,7 +219,7 @@ export function PricingView() {
                     className="flex w-full items-center justify-between gap-4 py-4 text-left"
                   >
                     <span className="text-[15px] font-bold tracking-tight text-[color:var(--hc-text)]">
-                      {q}
+                      {item.q}
                     </span>
                     <span
                       className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[color:var(--hc-border-strong)] text-[color:var(--hc-muted)] transition-transform"
@@ -259,7 +230,7 @@ export function PricingView() {
                   </button>
                   {on ? (
                     <p className="mb-4 max-w-[680px] text-[14px] leading-[1.65] text-[color:var(--hc-muted)]">
-                      {a}
+                      {item.a}
                     </p>
                   ) : null}
                 </div>
@@ -275,19 +246,26 @@ export function PricingView() {
             비회원도 촬영은 무료예요
           </h2>
           <p className="max-w-[420px] text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
-            먼저 무료로 찍어보고, 저장·영상·보관이 필요해지면 그때 플랜을 올리면 돼요.
+            먼저 무료로 찍어보고, 저장·보관이 필요해지면 그때 플랜을 올리면 돼요.
           </p>
           <Link
             href="/signup"
             className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[14.5px] font-extrabold"
           >
-            무료로 시작하기
+            시작하기
           </Link>
         </section>
 
         {/* 푸터 — 전자상거래법 사업자 정보. 값은 constants/company.ts 단일 소스. */}
         <footer className="flex flex-col items-center gap-3 border-t border-[color:var(--hc-border)] pt-7 text-center text-[color:var(--hc-muted)]">
           <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 text-[12px] font-medium">
+            <Link
+              href="/faq"
+              className="transition hover:text-[color:var(--hc-text)]"
+            >
+              자주 묻는 질문
+            </Link>
+            <span className="opacity-40">·</span>
             <Link
               href="/privacy"
               className="transition hover:text-[color:var(--hc-text)]"
@@ -318,7 +296,7 @@ export function PricingView() {
         </footer>
       </div>
 
-      <MobileTabBar publicShoot />
+      {authed ? <MobileTabBar publicShoot /> : null}
     </main>
   );
 }
