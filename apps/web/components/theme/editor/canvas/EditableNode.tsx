@@ -1,6 +1,6 @@
 "use client";
 
-import { Rect } from "react-konva";
+import { Rect } from "@/lib/reactKonva";
 import type Konva from "konva";
 import type { GroupConfig } from "konva/lib/Group";
 
