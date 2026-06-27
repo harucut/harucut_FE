@@ -25,4 +25,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --merge "$PR_URL"
+        # 닫히는 중인 PR과의 경합(예: Dependabot이 그룹 PR을 닫는 순간)으로 인한 실패만 흡수해
+        # 빨간 X를 막고, 권한·머지 방식·repo auto-merge 비활성 등 영구적 원인의 실패는 그대로 노출(red)해
+        # 정비 신호를 유지한다. synchronize에서 재실행돼 head 갱신 후 auto-merge가 다시 켜지도록 둔다.
+        run: |
+          state="$(gh pr view "$PR_URL" --json state -q .state)"
+          if [ "$state" != "OPEN" ]; then
+            echo "PR이 OPEN이 아니라($state) auto-merge를 건너뜁니다."
+            exit 0
+          fi
+          if ! output="$(gh pr merge --auto --merge "$PR_URL" 2>&1)"; then
+            echo "$output"
+            if echo "$output" | grep -qi "pull request is closed"; then
+              echo "처리 중 PR이 닫혔습니다(경합) — 건너뜁니다."
+              exit 0
+            fi
+            exit 1
+          fi
