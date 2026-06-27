@@ -39,15 +39,20 @@ export function GuestTrialBridge() {
     if (resumeHandledRef.current) return;
     resumeHandledRef.current = true;
 
+    // 성공(또는 보류 없음)일 때만 resumeSave를 제거한다. 업로드 실패 시에는
+    // 파라미터와 pending을 유지해, 새로고침/재진입 시 자동으로 다시 시도되게 한다(결과 유실 방지).
+    const stripResumeParam = () => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("resumeSave");
+      const nextSearch = nextParams.toString();
+      router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname);
+    };
+
     const pending = getPendingGuestSave();
-
-    // 파라미터 제거(재실행은 위 ref 가드로 차단되므로 진행 중 업로드에 영향 없음).
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete("resumeSave");
-    const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname);
-
-    if (!pending) return;
+    if (!pending) {
+      stripResumeParam();
+      return;
+    }
 
     void (async () => {
       try {
@@ -62,6 +67,7 @@ export function GuestTrialBridge() {
           extension: "png",
         });
         clearPendingGuestSave();
+        stripResumeParam();
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
           eyebrow: "SAVED",
@@ -71,12 +77,13 @@ export function GuestTrialBridge() {
           title: "기록에 저장됐어요",
         });
       } catch (error) {
+        // 실패 시 resumeSave/pending을 그대로 둬 새로고침 시 자동 재시도되게 한다.
         console.error(error);
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
           eyebrow: "NOTICE",
           icon: "lock",
-          message: "저장을 마치지 못했어요. 잠시 후 기록 화면에서 다시 시도해 주세요.",
+          message: "저장을 마치지 못했어요. 이 화면을 새로고침하면 자동으로 다시 시도해요.",
           title: "저장을 완료하지 못했어요",
         });
       }
