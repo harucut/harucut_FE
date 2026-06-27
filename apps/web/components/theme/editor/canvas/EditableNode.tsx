@@ -8,7 +8,6 @@ import type { EditorComponent, TextComponent } from "@/lib/types/themeEditor";
 import { getOpacity } from "./utils";
 import { ImageNode } from "./nodes/ImageNode";
 import { TextNode } from "./nodes/TextNode";
-import { useThemeEditorStore } from "@/lib/themeEditorStore";
 
 type Props = {
   c: EditorComponent;
@@ -22,14 +21,22 @@ type Props = {
     rotation?: number;
     scale?: number;
   }) => void;
+  // 이미지(스티커/사진) 로드 완료 시 캔버스 리렌더를 유도하는 콜백.
+  // 어떤 스토어든 쓸 수 있도록 store 의존 대신 prop으로 주입한다.
+  onAssetReady: () => void;
 };
 
 function isText(c: EditorComponent): c is TextComponent {
   return c.type === "TEXT";
 }
 
-export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
-  const bumpRenderKey = useThemeEditorStore((s) => s.bumpRenderKey);
+export function EditableNode({
+  c,
+  isActive,
+  onSelect,
+  onCommit,
+  onAssetReady,
+}: Props) {
   if (c.hidden) return null;
   const opacity = getOpacity(c.styleJson);
 
@@ -97,7 +104,7 @@ export function EditableNode({ c, isActive, onSelect, onCommit }: Props) {
       c={c}
       common={common}
       outline={outline}
-      onAssetReady={bumpRenderKey}
+      onAssetReady={onAssetReady}
     />
   );
 }

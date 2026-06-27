@@ -26,6 +26,8 @@ export async function verifyEmailAuthCode(email: string, code: string) {
   await clientApi.post("/api/client/auth/email/verification", { email, code });
 }
 
+// 백엔드 LocalRegisterRequest는 email·username·password만 받는다(스웨거 기준).
+// 마케팅/약관 동의 필드는 아직 백엔드 계약에 없으므로 전송하지 않는다(추가되면 여기 반영).
 export async function signupWithEmail(args: {
   email: string;
   password: string;

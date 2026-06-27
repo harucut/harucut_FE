@@ -7,18 +7,8 @@ export const runtime = "edge";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export async function GET(req: Request) {
-  const cookieHeader = req.headers.get("cookie") ?? "";
-  const hasAuthCookie =
-    cookieHeader.includes("accessToken=") ||
-    cookieHeader.includes("refreshToken=");
-
-  // 쿠키 자체가 없으면 바로 미인증
-  if (!hasAuthCookie) {
-    return NextResponse.json({ authenticated: false });
-  }
-
-  // 쿠키가 남아있어도 만료/무효일 수 있으므로 백엔드로 실제 유효성을 검증한다.
-  // (쿠키 존재만으로 인증으로 판단하면 만료된 세션이 /login에서 /home으로 튕긴다)
+  // 세션 인증 여부는 프론트에서 쿠키 존재를 직접 판단하지 않고 백엔드(/api/auth/status)에
+  // 위임한다. 쿠키가 남아있어도 만료/무효일 수 있으므로, 실제 유효성만 신뢰한다.
   const upstream = await forward(req, {
     method: "GET",
     url: `${BASE_URL}/api/auth/status`,

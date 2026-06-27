@@ -68,6 +68,8 @@ export function EmailCodeSection({
 
   const hasSentCode = Boolean(codeExpiresAt);
   const isExpired = hasSentCode && remainingSeconds === 0;
+  // 타이머가 도는 동안엔 '인증 확인'만, 전송 전·만료 후엔 '코드 보내기'만 (번갈아 노출).
+  const showVerify = hasSentCode && !isExpired;
   const sendButtonLabel =
     isSending ? "전송 중..." : hasSentCode ? "코드 다시 보내기" : "코드 보내기";
 
@@ -144,38 +146,42 @@ export function EmailCodeSection({
             </div>
           ) : null}
 
-          <div className="flex gap-2">
+          {/* 인증 코드 입력 + 단일 토글 버튼을 한 줄로. 전송 전·만료 후엔 '코드 보내기',
+             타이머가 도는 동안엔 '인증 확인'만 노출(번갈아). radius·높이는 다른 입력칸과 동일. */}
+          <div className="flex items-stretch gap-2">
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="인증 코드 입력"
               inputMode="numeric"
-              className="hc-input flex-1 rounded-2xl border px-3 py-2 text-xs disabled:opacity-50"
+              className="hc-input h-9 min-w-0 flex-1 rounded-lg border px-3 text-xs disabled:opacity-50"
             />
 
-            <button
-              type="button"
-              disabled={isSending}
-              onClick={async () => {
-                await onSend(email.trim());
-              }}
-              className="hc-button-secondary inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Mail size={14} />
-              <span>{sendButtonLabel}</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={isVerifying || !code.trim() || isExpired}
-              onClick={async () => {
-                await onVerify(email.trim(), code.trim());
-              }}
-              className="hc-accent-chip inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <BadgeCheck size={14} />
-              <span>{isVerifying ? "확인 중..." : "인증 확인"}</span>
-            </button>
+            {showVerify ? (
+              <button
+                type="button"
+                disabled={isVerifying || !code.trim()}
+                onClick={async () => {
+                  await onVerify(email.trim(), code.trim());
+                }}
+                className="hc-accent-chip inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <BadgeCheck size={14} />
+                <span>{isVerifying ? "확인 중..." : "인증 확인"}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isSending}
+                onClick={async () => {
+                  await onSend(email.trim());
+                }}
+                className="hc-button-secondary inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Mail size={14} />
+                <span>{sendButtonLabel}</span>
+              </button>
+            )}
           </div>
 
           {codeError ? (

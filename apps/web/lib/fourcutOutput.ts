@@ -2,10 +2,10 @@
 
 export type GeneratedFourcutAsset = {
   mediaId: number;
-  kind: "IMAGE" | "VIDEO";
+  kind: "IMAGE";
   objectUrl: string;
   downloadUrl?: string;
-  extension: "png" | "mp4" | "webm";
+  extension: "png";
   displayName: string;
 };
 

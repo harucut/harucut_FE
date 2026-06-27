@@ -26,7 +26,13 @@
       "picomatch@>=4.0.0 <4.0.4": "4.0.4",
       "postcss@<8.5.10": "8.5.10",
       "serialize-javascript@<7.0.5": "7.0.5",
-      "uuid@<14.0.0": "14.0.0"
+      "uuid@<14.0.0": "14.0.0",
+      "brace-expansion@>=5.0.0 <5.0.6": "5.0.6",
+      "ws@>=8.0.0 <8.21.0": "8.21.0",
+      "form-data@>=4.0.0 <4.0.6": "4.0.6",
+      "vite": "8.0.16",
+      "esbuild@>=0.27.3 <0.28.1": "0.28.1",
+      "@babel/core@>=7.0.0 <7.29.6": "7.29.7"
     },
     "patchedDependencies": {
       "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"

@@ -1,6 +1,6 @@
 import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
 
-export type UserStatus = 'ACTIVE' | 'DELETED' | 'DELETED_REQUESTED' | 'SUSPENDED';
+export type UserStatus = 'ACTIVE' | 'DELETED' | 'DELETED_REQUESTED' | 'BLOCKED';
 
 type LoginResponse = {
   userStatus: UserStatus;
@@ -83,7 +83,17 @@ export async function verifyEmailAuthCode(email: string, code: string) {
 }
 
 export async function requestPasswordResetCode(email: string) {
-  await sendEmailAuthCode(email);
+  // 회원가입용(/api/email-auth/code)이 아닌 비밀번호 재설정 전용 코드 발송 엔드포인트.
+  await apiRequest(
+    {
+      direct: '/api/harucut/reset/password/code',
+      proxy: '/api/client/auth/password/reset/code',
+    },
+    {
+      body: { email },
+      method: 'POST',
+    },
+  );
 }
 
 export async function verifyPasswordResetCode(email: string, code: string) {

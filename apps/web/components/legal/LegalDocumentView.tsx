@@ -1,8 +1,16 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import type { LegalDocument } from "@harucut/shared";
 import { BrandMark } from "@/components/layout/BrandMark";
 
-export function LegalDocumentView({ document }: { document: LegalDocument }) {
+export function LegalDocumentView({
+  document,
+  extra,
+}: {
+  document: LegalDocument;
+  // 약관 본문 아래에 덧붙일 추가 섹션(예: 유료 서비스 요금·혜택 비교표).
+  extra?: ReactNode;
+}) {
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -43,6 +51,8 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
             </section>
           ))}
         </div>
+
+        {extra}
       </div>
     </main>
   );

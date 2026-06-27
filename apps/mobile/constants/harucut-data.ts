@@ -1,7 +1,7 @@
 import { FOURCUT_FILTER_DEFINITIONS, type FourcutFilterId } from '@harucut/shared';
 
 export type FrameId = 'classic-4' | 'grid-4' | 'polaroid-4' | 'wide-4';
-export type MediaKind = 'image' | 'video';
+export type MediaKind = 'image';
 export type OutputTone = FourcutFilterId;
 
 export type MediaAsset = {
@@ -53,12 +53,6 @@ export type ThemeBackground =
       key?: string;
       opacity?: number;
       type: 'IMAGE';
-    }
-  | {
-      autoPlay?: boolean;
-      key?: string;
-      loop?: boolean;
-      type: 'VIDEO';
     };
 
 export type ThemeAsset = {
@@ -89,7 +83,7 @@ export type HistoryItem = {
   createdAt: string;
   frameId: FrameId;
   id: string;
-  kind: 'photo' | 'video';
+  kind: 'photo';
   mediaId?: number;
   previewMedia: MediaAsset[];
   remoteS3Key?: string;

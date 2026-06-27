@@ -9,7 +9,6 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   PencilLine,
-  Play,
   Share2,
 } from "lucide-react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -26,13 +25,12 @@ import {
 } from "@/lib/userMediaApi";
 import type { UserMedia, UserMediaType } from "@/lib/api-types";
 
-type FilterValue = "ALL" | UserMediaType;
+type FilterValue = "ALL" | "PHOTO";
 type ViewMode = "grid" | "calendar";
 
 const FILTER_LABELS: { value: FilterValue; label: string }[] = [
   { value: "ALL", label: "전체" },
   { value: "PHOTO", label: "사진" },
-  { value: "VIDEO", label: "영상" },
 ];
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -52,7 +50,7 @@ const MONTH_KO = [
 ];
 
 function getMediaTypeLabel(type: UserMediaType) {
-  return type === "PHOTO" ? "사진" : "영상";
+  return "사진";
 }
 
 function getMediaExtension(item: UserMedia) {
@@ -68,7 +66,7 @@ function getMediaExtension(item: UserMedia) {
     }
   }
 
-  return item.mediaType === "VIDEO" ? "mp4" : "png";
+  return "png";
 }
 
 function getItemTime(item: UserMedia) {
@@ -123,7 +121,6 @@ function MediaThumb({
   bare?: boolean;
 }) {
   const preview = getUserMediaPreview(item, previewItems);
-  const isVideo = item.mediaType === "VIDEO";
 
   const shellClassName = bare
     ? "relative grid h-full w-full place-items-center overflow-hidden"
@@ -132,21 +129,12 @@ function MediaThumb({
   return (
     <div className={shellClassName}>
       {preview.url ? (
-        preview.kind === "video" ? (
-          <video
-            src={preview.url}
-            className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
-            muted
-            playsInline
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={preview.url}
-            alt={getUserMediaTitle(item)}
-            className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
-          />
-        )
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={preview.url}
+          alt={getUserMediaTitle(item)}
+          className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
+        />
       ) : (
         <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted-soft)]">
           미리보기를 준비하는 중이에요.
@@ -154,17 +142,8 @@ function MediaThumb({
       )}
       {!bare ? (
         <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
-          {isVideo ? (
-            <>
-              <Play aria-hidden="true" className="h-2.5 w-2.5" fill="currentColor" />
-              영상
-            </>
-          ) : (
-            <>
-              <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-              사진
-            </>
-          )}
+          <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
+          사진
         </span>
       ) : null}
     </div>
@@ -258,7 +237,6 @@ export default function HistoryPage() {
 
   const emptyText = useMemo(() => {
     if (filter === "PHOTO") return "저장한 사진 기록이 아직 없어요.";
-    if (filter === "VIDEO") return "저장한 영상 기록이 아직 없어요.";
     return "저장한 기록이 아직 없어요.";
   }, [filter]);
 

@@ -96,9 +96,6 @@ export function UploadSelectScreen() {
   }, [router, upload.frameId]);
 
   const selectedCount = upload.selectedAssetIds.length;
-  const selectedHasVideo = upload.assets.some(
-    (item) => upload.selectedAssetIds.includes(item.id) && item.kind === 'video'
-  );
   const previewMedia = useMemo(
     () =>
       upload.selectedAssetIds
@@ -110,7 +107,7 @@ export function UploadSelectScreen() {
   const handlePickAssets = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: true,
-      mediaTypes: ['images', 'videos'],
+      mediaTypes: ['images'],
       quality: 0.8,
       selectionLimit: 8,
     });
@@ -121,7 +118,7 @@ export function UploadSelectScreen() {
 
     const nextAssets: MediaAsset[] = result.assets.map((asset, index) => ({
       id: `upload-asset-${Date.now()}-${index}`,
-      kind: asset.type === 'video' ? 'video' : 'image',
+      kind: 'image',
       label: asset.fileName ?? `업로드 ${index + 1}`,
       uri: asset.uri,
     }));
@@ -133,7 +130,7 @@ export function UploadSelectScreen() {
     <AppScrollView>
       <PageHeader
         backLabel="프레임 다시 선택"
-        description="사진이나 영상을 넣을 프레임에 어울릴 4개를 골라 주세요."
+        description="사진을 넣을 프레임에 어울릴 4개를 골라 주세요."
         onPressBack={() => push('/upload')}
         title="업로드할 사진 선택"
       />
@@ -148,12 +145,12 @@ export function UploadSelectScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.bodyText}>
           {upload.assets.length === 0
-            ? '먼저 사진이나 영상을 업로드해 주세요.'
+            ? '먼저 사진을 업로드해 주세요.'
             : `업로드한 미디어 ${upload.assets.length}개 중에서 4개를 골라 주세요.`}
         </Text>
         <ActionButton
           icon={<Ionicons color={colors.text} name="images-outline" size={16} />}
-          label="사진 또는 영상 추가하기"
+          label="사진 추가하기"
           onPress={() => void handlePickAssets()}
           variant="secondary"
         />
@@ -196,12 +193,6 @@ export function UploadSelectScreen() {
             </Pill>
           ))}
         </View>
-        <Pill
-          active={upload.includeVideo}
-          onPress={() => setUploadOption('includeVideo', selectedHasVideo ? !upload.includeVideo : false)}>
-          영상 포함
-        </Pill>
-        <Text style={styles.bodyText}>선택한 미디어에 영상이 포함되어 있을 때만 영상 결과를 함께 보여줍니다.</Text>
         <ActionButton
           disabled={selectedCount !== 4}
           label={selectedCount === 4 ? '다음 — 결과 만들기' : `${Math.max(0, 4 - selectedCount)}개 더 골라주세요`}
@@ -366,7 +357,7 @@ export function UploadResultScreen() {
             <Text style={styles.sectionTitle}>결과 준비 완료</Text>
             <Text style={styles.bodyText}>마음에 드는 결과를 저장하거나 링크로 공유해 보세요.</Text>
           </View>
-          <Pill>{upload.includeVideo ? '이미지 + 영상' : '이미지'}</Pill>
+          <Pill>이미지</Pill>
         </View>
       </SurfaceCard>
 
@@ -374,9 +365,6 @@ export function UploadResultScreen() {
         <View collapsable={false} ref={previewRef}>
           <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
         </View>
-        {upload.includeVideo ? (
-          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
-        ) : null}
       </SurfaceCard>
 
       {saveStatus === 'saving' ? (
@@ -460,11 +448,6 @@ function ActionCard({
           <Text numberOfLines={1} style={styles.mediaBadgeText}>{item.label}</Text>
         </View>
       )}
-      {item.kind === 'video' ? (
-        <View style={styles.videoBadge}>
-          <Ionicons color="#FFFFFF" name="play" size={12} />
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -547,17 +530,6 @@ function createStyles(colors: HarucutColors) {
       flexDirection: 'row',
       gap: 12,
       justifyContent: 'space-between',
-    },
-    videoBadge: {
-      alignItems: 'center',
-      backgroundColor: colors.overlayStrong,
-      borderRadius: 999,
-      bottom: 8,
-      height: 22,
-      justifyContent: 'center',
-      position: 'absolute',
-      right: 8,
-      width: 22,
     },
   });
 }

@@ -140,7 +140,8 @@ export function ShootCaptureScreen() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
   // 촬영 모드/타이머 간격은 시작 전에만 변경 가능(시작 후 잠금)
-  const [captureMode, setCaptureMode] = useState<CaptureMode>('timer');
+  // 기본은 수동 촬영. 타이머 모드는 사용자가 직접 선택할 수 있다.
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('manual');
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
   const savedFrames = useLibraryStore((state) => state.savedFrames);
 
@@ -352,7 +353,7 @@ export function ShootCaptureScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.statusRow}>
-          <Text style={styles.statusText}>사진과 영상을 함께 촬영해요</Text>
+          <Text style={styles.statusText}>프레임에 맞춰 8장을 촬영해요</Text>
           <Pill>{shoot.shots.length} / {SHOOT_TOTAL}장 촬영됨</Pill>
         </View>
 
@@ -368,6 +369,9 @@ export function ShootCaptureScreen() {
               renderCamera={() =>
                 permission?.granted ? (
                   <CameraView
+                    // 신 아키텍처(Fabric)에서는 facing prop만 바꿔도 실제 카메라가
+                    // 전환되지 않는 경우가 있어, key로 강제 remount해 후면/전면 전환을 보장한다.
+                    key={facing}
                     facing={facing}
                     onCameraReady={() => setIsCameraReady(true)}
                     ref={cameraRef}
@@ -466,7 +470,11 @@ export function ShootCaptureScreen() {
             accessibilityLabel="카메라 전환"
             accessibilityRole="button"
             disabled={sessionLocked}
-            onPress={() => setFacing((current) => (current === 'front' ? 'back' : 'front'))}
+            onPress={() => {
+              // remount 동안 카메라가 다시 초기화되므로 준비 상태를 내려 UI에 반영한다.
+              setIsCameraReady(false);
+              setFacing((current) => (current === 'front' ? 'back' : 'front'));
+            }}
             style={[styles.flipButton, sessionLocked ? styles.controlLocked : null]}>
             <Ionicons color={colors.text} name="camera-reverse-outline" size={18} />
           </Pressable>
@@ -502,7 +510,6 @@ export function ShootSelectScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useShootStyles();
-  const accessMode = useSessionStore((state) => state.accessMode);
   const shoot = useShootStore();
   const selectedFrameId = shoot.frameId;
   const toggleShootSelection = useShootStore((state) => state.toggleShootSelection);
@@ -594,14 +601,6 @@ export function ShootSelectScreen() {
             </Pill>
           ))}
         </View>
-        {accessMode === 'member' ? (
-          <>
-            <Pill active={shoot.includeVideo} onPress={() => setShootOption('includeVideo', !shoot.includeVideo)}>
-              영상 포함
-            </Pill>
-            <Text style={styles.bodyText}>촬영 플로우에서는 이미지 중심 결과를 우선 제공합니다.</Text>
-          </>
-        ) : null}
         <ActionButton
           disabled={selectedCount !== 4}
           label={selectedCount === 4 ? '다음 단계로' : '4장을 골라주세요'}
@@ -748,7 +747,7 @@ export function ShootResultScreen() {
                 : '마음에 드는 결과를 저장하거나 링크로 공유해 보세요.'}
             </Text>
           </View>
-          <Pill>{isGuest ? '이미지 다운로드' : shoot.includeVideo ? '이미지 + 영상' : '이미지'}</Pill>
+          <Pill>{isGuest ? '이미지 다운로드' : '이미지'}</Pill>
         </View>
       </SurfaceCard>
 
@@ -756,9 +755,6 @@ export function ShootResultScreen() {
         <View collapsable={false} ref={previewRef}>
           <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
         </View>
-        {!isGuest && shoot.includeVideo ? (
-          <FramePreview accentColor={shoot.borderColor} frameId={selectedFrameId} media={previewMedia} tone={shoot.tone} />
-        ) : null}
       </SurfaceCard>
 
       {saveStatus === 'saving' ? (

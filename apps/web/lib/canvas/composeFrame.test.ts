@@ -1,4 +1,4 @@
-import { composeFramePng, recordFrameWebm } from "@/lib/canvas/composeFrame";
+import { composeFramePng } from "@/lib/canvas/composeFrame";
 
 describe("composeFrame validations", () => {
   const layout = {
@@ -18,18 +18,6 @@ describe("composeFrame validations", () => {
       composeFramePng({
         layout,
         borderColor: "#000",
-        sources: [{ type: "image", src: "/a.png" }],
-      }),
-    ).rejects.toThrow("sources length must match slot count");
-  });
-
-  // video 합성도 동일하게 입력 검증을 통과해야만 진행됩니다.
-  it("throws when WEBM sources length does not match slot count", async () => {
-    await expect(
-      recordFrameWebm({
-        layout,
-        borderColor: "#000",
-        seconds: 1,
         sources: [{ type: "image", src: "/a.png" }],
       }),
     ).rejects.toThrow("sources length must match slot count");

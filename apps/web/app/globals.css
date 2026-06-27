@@ -185,8 +185,13 @@ html[data-theme="dark"] {
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* 전역 폰트는 Pretendard 단일. (Geist 기본값 제거 — layout.tsx에서 웹폰트 로드) */
+  --font-sans:
+    "Pretendard Variable", Pretendard, SUIT, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Noto Sans KR", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
   --color-zinc-950: var(--hc-zinc-950);
   --color-zinc-900: var(--hc-zinc-900);
   --color-zinc-800: var(--hc-zinc-800);

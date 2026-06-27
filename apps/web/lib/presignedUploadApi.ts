@@ -3,11 +3,9 @@
 import type {
   ApiEnvelope,
   PresignedUploadContentType,
-  TranscodeTaskStatusResponse,
-  TranscodeTaskSubmitResponse,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
-import { registerUserMedia, updateMediaDisplayName } from "@/lib/userMediaApi";
+import { registerUserMedia } from "@/lib/userMediaApi";
 
 type PresignedUploadData = {
   key: string;
@@ -21,20 +19,14 @@ type UploadedMediaInfo = {
   downloadUrl?: string;
 };
 
-const TRANSCODE_POLL_INTERVAL_MS = 2_500;
-const TRANSCODE_POLL_TIMEOUT_MS = 90_000;
-
 export const SUPPORTED_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif";
-export const SUPPORTED_VIDEO_ACCEPT =
-  "video/mp4,video/webm,video/quicktime";
-export const SUPPORTED_FOURCUT_ACCEPT = `${SUPPORTED_IMAGE_ACCEPT},${SUPPORTED_VIDEO_ACCEPT}`;
+export const SUPPORTED_FOURCUT_ACCEPT = SUPPORTED_IMAGE_ACCEPT;
 
 export const PRESIGNED_UPLOAD_TYPES = {
   FRAME: "FRAME",
   FRAME_COMPONENT: "FRAME_COMPONENT",
   PROFILE: "PROFILE",
-  FOURCUT_VIDEO: "FOURCUT_VIDEO",
   FOURCUT_PHOTO: "FOURCUT_PHOTO",
 } as const;
 
@@ -50,10 +42,6 @@ type PresignedUploadRequest = {
 
 function isImageContentType(contentType: PresignedUploadContentType) {
   return ["PNG", "JPEG", "WEBP", "GIF"].includes(contentType);
-}
-
-function isVideoContentType(contentType: PresignedUploadContentType) {
-  return ["MP4", "WEBM", "MOV"].includes(contentType);
 }
 
 function normalizeRemoteUrl(value: string | null | undefined): string | null {
@@ -146,62 +134,6 @@ export async function getImageUrlByKey(key: string): Promise<string | null> {
   }
 }
 
-function extractFilenameFromKey(key: string) {
-  const filename = key.split("/").pop()?.trim();
-  if (!filename) {
-    throw new Error("Missing filename in uploaded key");
-  }
-  return filename;
-}
-
-async function requestTranscode(key: string) {
-  const res = await clientApi.post<ApiEnvelope<TranscodeTaskSubmitResponse>>(
-    "/api/client/user/files/transcode",
-    {
-      filename: extractFilenameFromKey(key),
-    },
-  );
-
-  return res.data.data;
-}
-
-async function requestTranscodeStatus(taskId: string) {
-  const res = await clientApi.get<ApiEnvelope<TranscodeTaskStatusResponse>>(
-    `/api/client/user/files/transcode/status?taskId=${encodeURIComponent(taskId)}`,
-    {
-      cache: "no-store",
-    },
-  );
-
-  return res.data.data;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-async function waitForTranscodeMedia(taskId: string) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < TRANSCODE_POLL_TIMEOUT_MS) {
-    const status = await requestTranscodeStatus(taskId);
-
-    if (status.status === "COMPLETE" && status.media) {
-      return status.media;
-    }
-
-    if (status.status === "ERROR") {
-      throw new Error(status.errorMessage || "Video transcode failed");
-    }
-
-    await sleep(TRANSCODE_POLL_INTERVAL_MS);
-  }
-
-  throw new Error("Video transcode timed out");
-}
-
 function createUnsupportedTypeError(file: File) {
   return new Error(`Unsupported upload file type: ${file.type || file.name}`);
 }
@@ -216,64 +148,25 @@ export function resolveUploadContentType(file: File): PresignedUploadContentType
   }
   if (mime === "image/webp" || ext === "webp") return "WEBP";
   if (mime === "image/gif" || ext === "gif") return "GIF";
-  if (mime === "video/mp4" || ext === "mp4") return "MP4";
-  if (mime === "video/webm" || ext === "webm") return "WEBM";
-  if (mime === "video/quicktime" || ext === "mov") return "MOV";
 
   throw createUnsupportedTypeError(file);
-}
-
-export function resolveFourcutUploadType(file: File): PresignedUploadType {
-  const contentType = resolveUploadContentType(file);
-  return isVideoContentType(contentType)
-    ? PRESIGNED_UPLOAD_TYPES.FOURCUT_VIDEO
-    : PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO;
 }
 
 export async function uploadFourcutMedia(
   file: File,
   opts: { displayName?: string } = {},
 ) {
-  const contentType = resolveUploadContentType(file);
+  // 지원하지 않는 파일 타입이면 업로드 전에 throw 한다.
+  resolveUploadContentType(file);
+
   const uploaded = await uploadToS3WithPresigned({
     file,
-    type: resolveFourcutUploadType(file),
+    type: PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
     isTemp: false,
   });
 
-  if (isImageContentType(contentType)) {
-    const media = await registerUserMedia({
-      mediaType: "PHOTO",
-      s3Key: uploaded.key,
-      ...(opts.displayName ? { displayName: opts.displayName } : {}),
-    });
-
-    return {
-      key: uploaded.key,
-      mediaId: media.mediaId,
-      objectUrl: media.downloadUrl ?? uploaded.objectUrl,
-      downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
-    };
-  }
-
-  if (contentType === "WEBM") {
-    const task = await requestTranscode(uploaded.key);
-    const media = await waitForTranscodeMedia(task.taskId);
-    const resolvedMedia =
-      opts.displayName && media.mediaId
-        ? await updateMediaDisplayName(media.mediaId, opts.displayName)
-        : media;
-
-    return {
-      key: resolvedMedia.s3Key ?? uploaded.key,
-      mediaId: resolvedMedia.mediaId,
-      objectUrl: resolvedMedia.downloadUrl ?? uploaded.objectUrl,
-      downloadUrl: resolvedMedia.downloadUrl ?? uploaded.downloadUrl,
-    };
-  }
-
   const media = await registerUserMedia({
-    mediaType: "VIDEO",
+    mediaType: "PHOTO",
     s3Key: uploaded.key,
     ...(opts.displayName ? { displayName: opts.displayName } : {}),
   });
@@ -321,7 +214,7 @@ export async function uploadToS3WithPresigned(opts: {
 
   const fallbackObjectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
 
-  if (isImageContentType(resolvedContentType) || resolvedContentType === "WEBM") {
+  if (isImageContentType(resolvedContentType)) {
     const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);
     return {
       key,

@@ -215,7 +215,6 @@ export function FramePreview({
       ) : null}
       {layout.slots.map((slot, index) => {
         const currentMedia = media[index];
-        const currentPreviewKind = currentMedia?.previewKind ?? currentMedia?.kind;
 
         return (
           <View
@@ -232,24 +231,13 @@ export function FramePreview({
               toneFilter ? { filter: toneFilter } : null,
             ]}>
             {currentMedia ? (
-              <>
-                {currentPreviewKind === 'image' ? (
-                  <Image
-                    accessibilityLabel={currentMedia.label}
-                    accessibilityRole="image"
-                    resizeMode="cover"
-                    source={{ uri: currentMedia.uri }}
-                    style={styles.slotImage}
-                  />
-                ) : (
-                  <View style={[styles.slotVideoPlaceholder, { backgroundColor: resolvedSlotColor }]} />
-                )}
-                {currentMedia.kind === 'video' ? (
-                  <View style={styles.videoBadge}>
-                    <Ionicons color="#FFFFFF" name="play" size={12} />
-                  </View>
-                ) : null}
-              </>
+              <Image
+                accessibilityLabel={currentMedia.label}
+                accessibilityRole="image"
+                resizeMode="cover"
+                source={{ uri: currentMedia.uri }}
+                style={styles.slotImage}
+              />
             ) : null}
           </View>
         );
@@ -762,7 +750,8 @@ export function FrameCapacityMeter({
   const { colors } = useHarucutTheme();
   const styles = useFrameStyles();
   const { limit, name, next, nextLimit } = plan;
-  const full = used >= limit;
+  const unlimited = !Number.isFinite(limit);
+  const full = !unlimited && used >= limit;
   const remaining = Math.max(0, limit - used);
   const dots = buildGaugeDots(used, limit);
 
@@ -776,14 +765,21 @@ export function FrameCapacityMeter({
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.meterCount}>
-              보관 {used} <Text style={styles.meterCountMuted}>/ {limit}개</Text>
+              보관 {used}{' '}
+              <Text style={styles.meterCountMuted}>
+                / {unlimited ? '무제한' : `${limit}개`}
+              </Text>
             </Text>
             <Text style={styles.meterCaption}>
-              {full ? '보관함이 가득 찼어요' : `${remaining}개 더 저장할 수 있어요`}
+              {unlimited
+                ? '무제한으로 저장할 수 있어요'
+                : full
+                  ? '보관함이 가득 찼어요'
+                  : `${remaining}개 더 저장할 수 있어요`}
             </Text>
           </View>
         </View>
-        {onUpgrade && next ? (
+        {onUpgrade && next && !unlimited ? (
           <Pressable
             accessibilityLabel="요금제 업그레이드"
             accessibilityRole="button"
@@ -797,7 +793,9 @@ export function FrameCapacityMeter({
         {dots.map((state, index) => (
           <GaugeDot key={index} state={state} styles={styles} />
         ))}
-        <Text style={styles.meterDotHint}>{limit}개 이후는 상위 요금제</Text>
+        {unlimited ? null : (
+          <Text style={styles.meterDotHint}>{limit}개 이후는 상위 요금제</Text>
+        )}
       </View>
     </SurfaceCard>
   );
@@ -1311,11 +1309,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       height: '100%',
       width: '100%',
     },
-    slotVideoPlaceholder: {
-      backgroundColor: colors.primarySoft,
-      height: '100%',
-      width: '100%',
-    },
     themeComponent: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -1335,17 +1328,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontWeight: '700',
       includeFontPadding: false,
       width: '100%',
-    },
-    videoBadge: {
-      alignItems: 'center',
-      backgroundColor: colors.overlayStrong,
-      borderRadius: HARUCUT_RADII.chip,
-      bottom: 8,
-      height: 22,
-      justifyContent: 'center',
-      position: 'absolute',
-      right: 8,
-      width: 22,
     },
   });
 }

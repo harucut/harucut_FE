@@ -9,7 +9,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 // 인증 쿠키(accessToken/refreshToken)는 httpOnly라 클라이언트에서 직접 읽을 수 없으므로,
 // 앱이 이미 사용하는 /api/auth/status(소셜 로그인 콜백과 동일)로 로그인 여부를 판단한다.
 // - 로그인 사용자: 게스트 오버레이/enterGuestMode 없이 /shoot로 직행해
-//   회원 스토어를 게스트로 덮어쓰지 않는다(저장 프레임·영상 옵션 유지).
+//   회원 스토어를 게스트로 덮어쓰지 않는다(저장 프레임 옵션 유지).
 // - 비회원: 기존 게스트 체험 안내(showGuestTrialNotice)를 띄운다.
 export function usePublicShootCta() {
   const router = useRouter();

@@ -12,12 +12,7 @@ type FrameOutputOptionsPanelProps = {
   onBorderColorChange: (color: string) => void;
   outputFilter: FourcutFilterId;
   onOutputFilterChange: (filter: FourcutFilterId) => void;
-  includeVideo: boolean;
-  onIncludeVideoChange: (value: boolean) => void;
   hasCustomFrame: boolean;
-  videoEligible: boolean;
-  remainingVideoConversions: number;
-  guestMode?: boolean;
 };
 
 export function FrameOutputOptionsPanel({
@@ -25,15 +20,8 @@ export function FrameOutputOptionsPanel({
   onBorderColorChange,
   outputFilter,
   onOutputFilterChange,
-  includeVideo,
-  onIncludeVideoChange,
   hasCustomFrame,
-  videoEligible,
-  remainingVideoConversions,
-  guestMode = false,
 }: FrameOutputOptionsPanelProps) {
-  const canEnableVideo = videoEligible && remainingVideoConversions > 0;
-
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex flex-col gap-4">
@@ -92,7 +80,7 @@ export function FrameOutputOptionsPanel({
           <div>
             <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
             <p className="mt-1 text-[11px] text-zinc-500">
-              미리보기와 최종 이미지, 동영상에 같은 필터가 적용돼요.
+              미리보기와 최종 이미지에 같은 필터가 적용돼요.
             </p>
           </div>
 
@@ -119,28 +107,6 @@ export function FrameOutputOptionsPanel({
             ))}
           </div>
         </div>
-
-        {guestMode ? null : (
-          <div className="flex flex-col gap-2">
-            <label className="inline-flex items-start gap-2 text-[11px] text-zinc-200">
-              <input
-                type="checkbox"
-                checked={includeVideo}
-                onChange={(e) => onIncludeVideoChange(e.target.checked)}
-                disabled={!canEnableVideo && !includeVideo}
-                className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-[color:var(--hc-primary)] focus:ring-0 disabled:opacity-40"
-              />
-              <span className="flex flex-col gap-1">
-                <span>동영상도 함께 준비하기</span>
-                <span className="text-zinc-500">
-                  {videoEligible
-                    ? `남은 동영상 변환 횟수 ${remainingVideoConversions}회`
-                    : "선택한 결과로는 동영상을 만들 수 없어요."}
-                </span>
-              </span>
-            </label>
-          </div>
-        )}
       </div>
     </section>
   );
