@@ -31,7 +31,11 @@ export function GuestTrialBridge() {
   // 완료 후 localStorage 정리/알림이 반드시 실행되게 한다(중복 업로드 방지).
   const resumeHandledRef = useRef(false);
   useEffect(() => {
-    if (!searchParams.get("resumeSave")) return;
+    if (!searchParams.get("resumeSave")) {
+      // resumeSave가 사라지면 가드를 풀어, 같은 탭에서 이후의 또 다른 보류 저장도 처리되게 한다.
+      resumeHandledRef.current = false;
+      return;
+    }
     if (resumeHandledRef.current) return;
     resumeHandledRef.current = true;
 
