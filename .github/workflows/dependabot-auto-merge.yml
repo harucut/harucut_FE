@@ -4,9 +4,7 @@ on:
   pull_request_target:
     types:
       - opened
-      - edited
       - reopened
-      - synchronize
       - ready_for_review
     branches:
       - develop
@@ -25,4 +23,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --merge "$PR_URL"
+        # auto-merge는 한 번 켜지면 유지되므로 매 push(synchronize)마다 다시 켤 필요가 없고,
+        # PR이 이미 닫혔거나 충돌로 머지 불가한 경우에도 워크플로가 실패(빨간 X)하지 않도록 오류를 흡수한다.
+        run: gh pr merge --auto --merge "$PR_URL" || echo "auto-merge를 켜지 못했습니다(PR 종료/머지 불가 등) — 건너뜁니다."
