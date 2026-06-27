@@ -8,7 +8,7 @@ import {
   Group,
   Transformer,
   Image as KonvaImage,
-} from "react-konva";
+} from "@/lib/reactKonva";
 import Konva from "konva";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";

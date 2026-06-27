@@ -7,7 +7,7 @@ import {
   Line,
   Image as KonvaImage,
   Transformer,
-} from "react-konva";
+} from "@/lib/reactKonva";
 import Konva from "konva";
 
 import { useDecorateStore } from "@/lib/decorateStore";

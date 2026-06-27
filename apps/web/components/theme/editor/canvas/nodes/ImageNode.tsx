@@ -1,6 +1,6 @@
 "use client";
 
-import { Group, Image as KonvaImage, Rect } from "react-konva";
+import { Group, Image as KonvaImage, Rect } from "@/lib/reactKonva";
 import useImage from "use-image";
 import type { GroupConfig } from "konva/lib/Group";
 import type Konva from "konva";
