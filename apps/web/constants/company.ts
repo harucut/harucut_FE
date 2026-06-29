@@ -8,10 +8,10 @@ export const COMPANY = {
   /** 사업자등록번호 */
   bizRegNo: "819-32-01933",
   /** 통신판매업신고번호 (발급 전 placeholder) */
-  mailOrderNo: "준비 중",
+  mailOrderNo: "2026-인천서구-2643",
   /** 사업장 소재지 */
   address:
     "인천광역시 서구 서곶로 45, 103동 4301호 (가정동, 루원 린스트라우스 더 린시티)",
   /** 고객문의 이메일 (공통) */
-  email: "gyuwon05@gmail.com",
+  email: "gyuwon05@gmail.com · 010-2412-0339",
 } as const;
