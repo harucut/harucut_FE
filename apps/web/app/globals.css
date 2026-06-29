@@ -1,189 +1,197 @@
 @import "tailwindcss";
 
+/* STUDIO 디자인 — 라이트: 웜 오프화이트 + 그린(#16B454). 그린은 채움/보더용,
+   그 위 글자는 어둡게(#06140A). 본문 텍스트/보조는 AA 통과 값으로 둔다. */
 :root {
   color-scheme: light;
-  --background: #f7fbff;
-  --foreground: #102848;
-  --hc-primary: #2563eb;
-  --hc-primary-strong: #1d4ed8;
-  --hc-primary-hover: #1d4ed8;
-  --hc-primary-contrast: #ffffff;
-  --hc-background-tint: #eef5ff;
-  --hc-text: #102848;
-  --hc-muted: #59708f;
-  --hc-muted-soft: #6d84a0;
-  --hc-border: rgba(148, 163, 184, 0.34);
-  --hc-border-subtle: rgba(148, 163, 184, 0.24);
-  --hc-border-strong: rgba(37, 99, 235, 0.28);
-  --hc-surface: rgba(255, 255, 255, 0.86);
-  --hc-surface-strong: rgba(255, 255, 255, 0.96);
-  --hc-surface-soft: rgba(255, 255, 255, 0.76);
-  --hc-surface-highlight: rgba(255, 255, 255, 0.92);
-  --hc-surface-muted: rgba(227, 238, 252, 0.72);
-  --hc-surface-muted-hover: rgba(219, 234, 254, 0.86);
-  --hc-surface-inset: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
-  --hc-input-bg: rgba(255, 255, 255, 0.96);
-  --hc-input-border: rgba(148, 163, 184, 0.34);
-  --hc-input-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --hc-icon-button-bg: rgba(255, 255, 255, 0.84);
-  --hc-icon-button-hover: #ffffff;
-  --hc-accent-soft-bg: rgba(37, 99, 235, 0.08);
-  --hc-accent-soft-border: rgba(37, 99, 235, 0.16);
-  --hc-accent-soft-text: #1d4ed8;
-  --hc-brand-badge-bg: rgba(255, 255, 255, 0.92);
-  --hc-brand-badge-text: #2563eb;
-  --hc-brand-badge-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
-  --hc-brand-overline: #59708f;
-  --hc-soft-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
-  --hc-shadow: rgba(37, 99, 235, 0.14);
-  --hc-card-shadow: 0 18px 40px rgba(37, 99, 235, 0.1);
-  --hc-card-shadow-xl: 0 20px 60px rgba(37, 99, 235, 0.12);
-  --hc-card-shadow-hero: 0 30px 80px rgba(37, 99, 235, 0.16);
-  --hc-button-shadow: 0 16px 36px rgba(37, 99, 235, 0.24);
-  --hc-button-shadow-hover: 0 20px 44px rgba(29, 78, 216, 0.2);
+  --background: #fafaf7;
+  --foreground: #14140f;
+  --hc-primary: #16b454;
+  --hc-primary-strong: #0e7e39;
+  --hc-primary-hover: #129a47;
+  --hc-primary-contrast: #06140a;
+  --hc-background-tint: #f1f1ee;
+  --hc-text: #14140f;
+  --hc-muted: #5c5c57;
+  --hc-muted-soft: #94948d;
+  --hc-border: rgba(20, 20, 15, 0.16);
+  --hc-border-subtle: rgba(20, 20, 15, 0.1);
+  --hc-border-strong: rgba(22, 180, 84, 0.34);
+  --hc-surface: #ffffff;
+  --hc-surface-strong: #ffffff;
+  --hc-surface-soft: rgba(255, 255, 255, 0.82);
+  --hc-surface-highlight: #ffffff;
+  --hc-surface-muted: #f1f1ee;
+  --hc-surface-muted-hover: #e8e8e4;
+  --hc-surface-inset: linear-gradient(180deg, #f1f1ee 0%, #fafaf7 100%);
+  --hc-input-bg: #e8e8e4;
+  --hc-input-border: rgba(20, 20, 15, 0.16);
+  --hc-input-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --hc-icon-button-bg: #ffffff;
+  --hc-icon-button-hover: #f1f1ee;
+  --hc-accent-soft-bg: rgba(22, 180, 84, 0.1);
+  --hc-accent-soft-border: rgba(22, 180, 84, 0.16);
+  --hc-accent-soft-text: #0e7e39;
+  --hc-brand-badge-bg: #ffffff;
+  --hc-brand-badge-text: #0e7e39;
+  --hc-brand-badge-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
+  --hc-brand-overline: #5c5c57;
+  --hc-soft-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
+  --hc-shadow: rgba(20, 20, 15, 0.14);
+  --hc-card-shadow: 0 18px 40px rgba(20, 20, 15, 0.1);
+  --hc-card-shadow-xl: 0 20px 60px rgba(20, 20, 15, 0.12);
+  --hc-card-shadow-hero: 0 30px 80px rgba(20, 20, 15, 0.16);
+  --hc-button-shadow: 0 16px 36px rgba(22, 180, 84, 0.24);
+  --hc-button-shadow-hover: 0 20px 44px rgba(14, 126, 57, 0.2);
   --hc-neutral-button-bg: #ffffff;
-  --hc-neutral-button-hover: #f8fbff;
-  --hc-neutral-button-text: #102848;
-  --hc-neutral-button-shadow: 0 12px 32px rgba(37, 99, 235, 0.08);
-  --hc-hero-button-bg: #2563eb;
-  --hc-hero-button-hover: #1d4ed8;
-  --hc-hero-button-text: #ffffff;
-  --hc-hero-gradient-end: #74a9ff;
-  --hc-theme-toggle-bg: rgba(255, 255, 255, 0.88);
-  --hc-theme-toggle-active-bg: rgba(37, 99, 235, 0.12);
-  --hc-theme-toggle-active-text: #1d4ed8;
-  --hc-theme-toggle-shadow: 0 18px 48px rgba(37, 99, 235, 0.18);
+  --hc-neutral-button-hover: #f1f1ee;
+  --hc-neutral-button-text: #14140f;
+  --hc-neutral-button-shadow: 0 12px 32px rgba(20, 20, 15, 0.08);
+  --hc-hero-button-bg: #16b454;
+  --hc-hero-button-hover: #129a47;
+  --hc-hero-button-text: #06140a;
+  --hc-hero-gradient-end: #3dd17f;
+  --hc-theme-toggle-bg: #ffffff;
+  --hc-theme-toggle-active-bg: rgba(22, 180, 84, 0.12);
+  --hc-theme-toggle-active-text: #0e7e39;
+  --hc-theme-toggle-shadow: 0 18px 48px rgba(20, 20, 15, 0.18);
   --hc-frame-picker-preview-outer: #303846;
   --hc-frame-picker-preview-inner: #f4f7fb;
   --hc-page-gradient-app:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 28%),
-    linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    radial-gradient(circle at top, rgba(30, 215, 96, 0.1), transparent 28%),
+    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
   --hc-page-gradient-showcase:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.14), transparent 24%),
-    linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    radial-gradient(circle at top, rgba(30, 215, 96, 0.12), transparent 24%),
+    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
   --hc-page-gradient-landing:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.16), transparent 24%),
-    radial-gradient(circle at 88% 18%, rgba(37, 99, 235, 0.12), transparent 18%),
-    linear-gradient(180deg, #fcfdff 0%, #eef5ff 100%);
+    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
+    radial-gradient(circle at 88% 18%, rgba(22, 180, 84, 0.1), transparent 18%),
+    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
   --hc-page-overlay-landing:
     linear-gradient(
       135deg,
       rgba(255, 255, 255, 0.28),
       transparent 42%,
-      rgba(191, 219, 254, 0.12) 100%
+      rgba(22, 180, 84, 0.08) 100%
     );
-  --hc-scrollbar-thumb: rgba(96, 165, 250, 0.42);
-  --hc-scrollbar-thumb-hover: rgba(59, 130, 246, 0.64);
-  --hc-zinc-950: #edf4ff;
-  --hc-zinc-900: #e4eefb;
-  --hc-zinc-800: #d1dded;
-  --hc-zinc-700: #bccddd;
-  --hc-zinc-600: #93a8c1;
-  --hc-zinc-500: #6d84a0;
-  --hc-zinc-400: #55708f;
-  --hc-zinc-300: #35506d;
-  --hc-zinc-200: #223d5c;
-  --hc-zinc-100: #16304d;
-  --hc-zinc-50: #102848;
-  --hc-emerald-100: #dbeafe;
-  --hc-emerald-200: #bfdbfe;
-  --hc-emerald-300: #93c5fd;
-  --hc-emerald-400: #60a5fa;
-  --hc-emerald-500: #2563eb;
-  --hc-lime-100: #dbeafe;
-  --hc-lime-200: #bfdbfe;
+  --hc-scrollbar-thumb: rgba(22, 180, 84, 0.42);
+  --hc-scrollbar-thumb-hover: rgba(22, 180, 84, 0.64);
+  --hc-zinc-950: #f1f1ee;
+  --hc-zinc-900: #e8e8e4;
+  --hc-zinc-800: #deded9;
+  --hc-zinc-700: #c9c9c3;
+  --hc-zinc-600: #a6a69f;
+  --hc-zinc-500: #94948d;
+  --hc-zinc-400: #6f6f69;
+  --hc-zinc-300: #4f4f49;
+  --hc-zinc-200: #36362f;
+  --hc-zinc-100: #232320;
+  --hc-zinc-50: #14140f;
+  --hc-emerald-100: #d7f5e3;
+  --hc-emerald-200: #a8e9c4;
+  --hc-emerald-300: #5fd592;
+  --hc-emerald-400: #2bc76f;
+  --hc-emerald-500: #16b454;
+  --hc-lime-100: #d7f5e3;
+  --hc-lime-200: #a8e9c4;
 }
 
+/* STUDIO 디자인 — 다크: 딥다크 무대(#0B0B0C) + 비비드 그린(#1ED760). */
 html[data-theme="dark"] {
   color-scheme: dark;
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --hc-primary: #0ea5e9;
-  --hc-primary-strong: #bae6fd;
-  --hc-primary-hover: #38bdf8;
-  --hc-primary-contrast: #09090b;
-  --hc-background-tint: #111827;
+  --background: #0b0b0c;
+  --foreground: #ffffff;
+  --hc-primary: #1ed760;
+  --hc-primary-strong: #56dd86;
+  --hc-primary-hover: #1fe267;
+  --hc-primary-contrast: #06140a;
+  --hc-background-tint: #161617;
   --hc-text: #ffffff;
-  --hc-muted: #d4d4d8;
-  --hc-muted-soft: #a1a1aa;
+  --hc-muted: #b3b3b3;
+  --hc-muted-soft: #6f6f73;
   --hc-border: rgba(255, 255, 255, 0.1);
-  --hc-border-subtle: rgba(255, 255, 255, 0.1);
+  --hc-border-subtle: rgba(255, 255, 255, 0.08);
   --hc-border-strong: rgba(255, 255, 255, 0.2);
-  --hc-surface: rgba(255, 255, 255, 0.04);
-  --hc-surface-strong: rgba(255, 255, 255, 0.05);
-  --hc-surface-soft: rgba(255, 255, 255, 0.05);
-  --hc-surface-highlight: rgba(255, 255, 255, 0.08);
-  --hc-surface-muted: rgba(0, 0, 0, 0.2);
-  --hc-surface-muted-hover: rgba(0, 0, 0, 0.3);
-  --hc-surface-inset: rgba(0, 0, 0, 0.3);
-  --hc-input-bg: #09090b;
-  --hc-input-border: #3f3f46;
+  --hc-surface: #18181a;
+  --hc-surface-strong: #1c1c1e;
+  --hc-surface-soft: #161617;
+  --hc-surface-highlight: #232325;
+  --hc-surface-muted: rgba(0, 0, 0, 0.3);
+  --hc-surface-muted-hover: rgba(0, 0, 0, 0.45);
+  --hc-surface-inset: #000000;
+  --hc-input-bg: #232325;
+  --hc-input-border: rgba(255, 255, 255, 0.12);
   --hc-input-shadow: none;
-  --hc-icon-button-bg: #18181b;
-  --hc-icon-button-hover: #27272a;
-  --hc-accent-soft-bg: rgba(56, 189, 248, 0.1);
-  --hc-accent-soft-border: rgba(56, 189, 248, 0.25);
-  --hc-accent-soft-text: #e0f2fe;
-  --hc-brand-badge-bg: rgba(255, 255, 255, 0.04);
-  --hc-brand-badge-text: #bae6fd;
+  --hc-icon-button-bg: #232325;
+  --hc-icon-button-hover: #2e2e31;
+  --hc-accent-soft-bg: rgba(30, 215, 96, 0.16);
+  --hc-accent-soft-border: rgba(30, 215, 96, 0.3);
+  --hc-accent-soft-text: #7beaa6;
+  --hc-brand-badge-bg: rgba(255, 255, 255, 0.06);
+  --hc-brand-badge-text: #56dd86;
   --hc-brand-badge-shadow: none;
-  --hc-brand-overline: #a1a1aa;
+  --hc-brand-overline: #6f6f73;
   --hc-soft-shadow: none;
-  --hc-shadow: rgba(0, 0, 0, 0.24);
-  --hc-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
-  --hc-card-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.28);
-  --hc-card-shadow-hero: 0 24px 80px rgba(0, 0, 0, 0.32);
-  --hc-button-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
-  --hc-button-shadow-hover: 0 20px 44px rgba(0, 0, 0, 0.38);
+  --hc-shadow: rgba(0, 0, 0, 0.6);
+  --hc-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  --hc-card-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --hc-card-shadow-hero: 0 24px 80px rgba(0, 0, 0, 0.7);
+  --hc-button-shadow: 0 10px 28px -12px rgba(30, 215, 96, 0.5);
+  --hc-button-shadow-hover: 0 14px 32px -12px rgba(30, 215, 96, 0.6);
   --hc-neutral-button-bg: #ffffff;
-  --hc-neutral-button-hover: #f4f4f5;
-  --hc-neutral-button-text: #09090b;
-  --hc-neutral-button-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
-  --hc-hero-button-bg: #ffffff;
-  --hc-hero-button-hover: #f4f4f5;
-  --hc-hero-button-text: #09090b;
-  --hc-hero-gradient-end: #ffffff;
-  --hc-theme-toggle-bg: rgba(24, 24, 27, 0.88);
-  --hc-theme-toggle-active-bg: rgba(56, 189, 248, 0.16);
-  --hc-theme-toggle-active-text: #e0f2fe;
-  --hc-theme-toggle-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+  --hc-neutral-button-hover: #f1f1ee;
+  --hc-neutral-button-text: #0b0b0c;
+  --hc-neutral-button-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  --hc-hero-button-bg: #1ed760;
+  --hc-hero-button-hover: #1fe267;
+  --hc-hero-button-text: #06140a;
+  --hc-hero-gradient-end: #56dd86;
+  --hc-theme-toggle-bg: #161617;
+  --hc-theme-toggle-active-bg: rgba(30, 215, 96, 0.16);
+  --hc-theme-toggle-active-text: #7beaa6;
+  --hc-theme-toggle-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
   --hc-frame-picker-preview-outer: #e7ecf2;
   --hc-frame-picker-preview-inner: #171c24;
-  --hc-page-gradient-app: #09090b;
+  --hc-page-gradient-app: #0b0b0c;
   --hc-page-gradient-showcase:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.14), transparent 24%),
-    linear-gradient(180deg, #09090b 0%, #0f172a 100%);
+    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
+    linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
   --hc-page-gradient-landing:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.14), transparent 24%),
-    linear-gradient(180deg, #09090b 0%, #111827 100%);
+    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
+    linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
   --hc-page-overlay-landing: transparent;
-  --hc-scrollbar-thumb: rgba(113, 113, 122, 0.4);
-  --hc-scrollbar-thumb-hover: rgba(113, 113, 122, 0.7);
-  --hc-zinc-950: #09090b;
-  --hc-zinc-900: #18181b;
-  --hc-zinc-800: #27272a;
-  --hc-zinc-700: #3f3f46;
-  --hc-zinc-600: #52525b;
-  --hc-zinc-500: #71717a;
-  --hc-zinc-400: #a1a1aa;
-  --hc-zinc-300: #d4d4d8;
-  --hc-zinc-200: #e4e4e7;
-  --hc-zinc-100: #f4f4f5;
+  --hc-scrollbar-thumb: rgba(111, 111, 115, 0.5);
+  --hc-scrollbar-thumb-hover: rgba(30, 215, 96, 0.6);
+  --hc-zinc-950: #0b0b0c;
+  --hc-zinc-900: #161617;
+  --hc-zinc-800: #232325;
+  --hc-zinc-700: #3a3a3d;
+  --hc-zinc-600: #5a5a5e;
+  --hc-zinc-500: #6f6f73;
+  --hc-zinc-400: #b3b3b3;
+  --hc-zinc-300: #d4d4d4;
+  --hc-zinc-200: #e4e4e4;
+  --hc-zinc-100: #f4f4f4;
   --hc-zinc-50: #fafafa;
-  --hc-emerald-100: #e0f2fe;
-  --hc-emerald-200: #bae6fd;
-  --hc-emerald-300: #7dd3fc;
-  --hc-emerald-400: #38bdf8;
-  --hc-emerald-500: #0ea5e9;
-  --hc-lime-100: #e0f2fe;
-  --hc-lime-200: #bae6fd;
+  --hc-emerald-100: #c9f7da;
+  --hc-emerald-200: #7beaa6;
+  --hc-emerald-300: #56dd86;
+  --hc-emerald-400: #2fd06b;
+  --hc-emerald-500: #1ed760;
+  --hc-lime-100: #c9f7da;
+  --hc-lime-200: #7beaa6;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* 전역 폰트는 Pretendard 단일. (Geist 기본값 제거 — layout.tsx에서 웹폰트 로드) */
+  --font-sans:
+    "Pretendard Variable", Pretendard, SUIT, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Noto Sans KR", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
   --color-zinc-950: var(--hc-zinc-950);
   --color-zinc-900: var(--hc-zinc-900);
   --color-zinc-800: var(--hc-zinc-800);

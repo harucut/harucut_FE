@@ -74,3 +74,27 @@ export async function updateProfileImage(s3Key: string) {
     },
   );
 }
+
+// GET /api/auth/user/subscription/usage 응답.
+// *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한.
+export type SubscriptionUsage = {
+  planTier: string;
+  frameRetentionLimit: number;
+  frameRetentionUsedCount: number;
+  frameRetentionRemainingCount: number;
+  frameRetentionUnlimited: boolean;
+  currentCycleStartAt: string;
+  currentCycleEndAt: string;
+};
+
+export async function getSubscriptionUsage() {
+  return apiEnvelopeData<SubscriptionUsage>(
+    {
+      direct: '/api/auth/user/subscription/usage',
+      proxy: '/api/client/user/subscription/usage',
+    },
+    {
+      cache: 'no-store',
+    },
+  );
+}

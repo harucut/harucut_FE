@@ -1,6 +1,6 @@
 "use client";
 
-import { Group, Text as KonvaText } from "react-konva";
+import { Group, Text as KonvaText } from "@/lib/reactKonva";
 import { useLayoutEffect, useRef } from "react";
 import type Konva from "konva";
 import type { GroupConfig } from "konva/lib/Group";

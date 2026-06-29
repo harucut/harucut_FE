@@ -1,29 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   Camera,
   ChevronRight,
-  Palette,
-  Play,
-  Upload,
-  User,
+  Image as ImageIcon,
+  Sparkles,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
-import { listMyFrames } from "@/lib/remoteFrameApi";
-import type { UserMedia, RemoteFrame } from "@/lib/api-types";
-import { frameIdFromFrameType } from "@/lib/frameApi";
+import type { UserMedia } from "@/lib/api-types";
 import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import { AppNav } from "@/components/layout/AppNav";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
 
+// 핸드오프 문구에 맞춘 주간 목표 컷 수(임의 상수). 진행 링/남은 컷 계산의 기준.
+const WEEKLY_GOAL = 5;
+
+const HOME_COACH_STEPS: CoachStep[] = [
+  {
+    selector: '[data-coach="shoot"]',
+    title: "촬영하기",
+    body: "카메라로 8장을 찍고 마음에 드는 4장을 골라 네 컷을 만들어요.",
+  },
+  {
+    selector: '[data-coach="upload"]',
+    title: "사진 업로드",
+    body: "이미 찍어둔 사진으로도 바로 네 컷을 만들 수 있어요.",
+  },
+  {
+    selector: '[data-coach="theme"]',
+    title: "꾸미기",
+    body: "프레임 색·배경 이미지·텍스트·스티커로 나만의 프레임을 만들어요.",
+  },
+];
+
+const WEEKDAY_KO = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+
+// 핸드오프와 동일한 "2026.06.12 · 금요일" 표기.
 function formatCurrentDate() {
-  return new Date().toLocaleDateString("ko-KR", {
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  });
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = `${now.getMonth() + 1}`.padStart(2, "0");
+  const dd = `${now.getDate()}`.padStart(2, "0");
+  return `${yyyy}.${mm}.${dd} · ${WEEKDAY_KO[now.getDay()]}`;
+}
+
+// 인사 헤딩용 — "6.27 토요일"(연도·0 패딩 없이). currentDateLabel과 같은 자정 갱신을 공유한다.
+function formatHeadingDate() {
+  const now = new Date();
+  return `${now.getMonth() + 1}.${now.getDate()} ${WEEKDAY_KO[now.getDay()]}`;
 }
 
 function getNextDateRefreshDelay() {
@@ -63,11 +92,76 @@ function useCurrentDateLabel() {
   return dateLabel;
 }
 
+// 진행 링(SVG). 핸드오프 app 홈 스탯 카드의 그린 링.
+function ProgressRing({
+  pct,
+  size = 46,
+  stroke = 5,
+}: {
+  pct: number;
+  size?: number;
+  stroke?: number;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(1, pct));
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--hc-surface-muted)"
+        strokeWidth={stroke}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--hc-primary)"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - clamped)}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </svg>
+  );
+}
+
+// createdAt이 같은 (자연) 월에 속하면 이번 달 기록으로 센다.
+function countThisMonth(items: UserMedia[]) {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  return items.filter((item) => {
+    if (!item.createdAt) return false;
+    const d = new Date(item.createdAt);
+    return !Number.isNaN(d.getTime()) && d.getFullYear() === y && d.getMonth() === m;
+  }).length;
+}
+
+// 월요일 기준 이번 주 시작 이후 만든 기록 수.
+function countThisWeek(items: UserMedia[]) {
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  // 0=일..6=토 -> 월요일까지 경과일. setDate는 로컬 캘린더 기준이라 DST 안전.
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const startMs = weekStart.getTime();
+  return items.filter((item) => {
+    if (!item.createdAt) return false;
+    const d = new Date(item.createdAt);
+    return !Number.isNaN(d.getTime()) && d.getTime() >= startMs;
+  }).length;
+}
+
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
   const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
-  const [savedFrames, setSavedFrames] = useState<RemoteFrame[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,10 +171,9 @@ export default function HomePage() {
       setLoading(true);
 
       try {
-        const [nextUser, nextMedia, nextFrames] = await Promise.all([
+        const [nextUser, nextMedia] = await Promise.all([
           getMyUserInfo().catch(() => null),
           listMyMedia().catch(() => []),
-          listMyFrames().catch(() => []),
         ]);
 
         if (cancelled) return;
@@ -94,7 +187,6 @@ export default function HomePage() {
         setUser(nextUser);
         setRecentMedia(sortedMedia.slice(0, 4));
         setPreviewMedia(sortedMedia);
-        setSavedFrames(nextFrames.slice(0, 1));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -110,188 +202,258 @@ export default function HomePage() {
   }, []);
 
   const currentDateLabel = useCurrentDateLabel();
-  const savedFrame = savedFrames[0] ?? null;
+  // 헤딩 날짜는 currentDateLabel과 같은 자정 갱신에 묶어 재계산(별도 타이머 불필요).
+  const currentHeadingDate = useMemo(() => formatHeadingDate(), [currentDateLabel]);
+
+  // currentDateLabel을 의존성에 포함해 날짜가 바뀌면(주/월 경계) 카운트도 다시 계산되게 한다.
+  const monthCount = useMemo(
+    () => countThisMonth(previewMedia),
+    [previewMedia, currentDateLabel],
+  );
+  const weekCount = useMemo(
+    () => countThisWeek(previewMedia),
+    [previewMedia, currentDateLabel],
+  );
+  const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
+  const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
+  const progressWidth = `${Math.round(ringPct * 100)}%`;
 
   return (
-    <main className="hc-page-showcase min-h-dvh px-4 py-5 text-[color:var(--hc-text)] sm:py-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <PageHeader
-          title={
-            <span className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-[0.26em] text-[color:var(--hc-primary)]/80">
-                Record your day
+    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+      <AppNav userInitial={user?.username} />
+
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
+        {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
+        <header className="pt-1 lg:pt-0">
+          <h1 className="text-[25px] font-extrabold leading-[1.25] tracking-tight lg:text-[34px] lg:leading-[1.15]">
+            <span className="text-[color:var(--hc-primary)]">{currentHeadingDate}</span>의
+            <br />
+            기록을 남겨보세요.
+          </h1>
+        </header>
+
+        {/* 모바일(&lt;lg) 메인 CTA — 핸드오프 app 홈 그린 카드 */}
+        <Link
+          href="/shoot"
+          data-coach="shoot"
+          className="flex items-center gap-3.5 rounded-[24px] bg-[color:var(--hc-primary)] p-[18px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] lg:hidden"
+        >
+          <span className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-[15px] bg-[#06140A]">
+            <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary)]" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-extrabold">지금 촬영하기</span>
+            <span className="mt-0.5 block whitespace-nowrap text-[12.5px] font-medium opacity-75">
+              프레임 고르고 8장 찍기
+            </span>
+          </span>
+          <ChevronRight className="h-[22px] w-[22px] shrink-0" />
+        </Link>
+
+        {/* 모바일(&lt;lg) 보조 2카드 — 사진 불러오기 / 프레임 보기 */}
+        <section className="grid grid-cols-2 gap-2.5 lg:hidden">
+          <Link
+            href="/upload"
+            data-coach="upload"
+            className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
+          >
+            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
+            <span className="min-w-0">
+              <span className="block whitespace-nowrap text-[13.5px] font-bold">
+                사진 불러오기
               </span>
-              <span>
-                {user?.username ? `${user.username}님, ` : ""}오늘 하루를 네 컷으로
-                남겨보세요
+              <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
+                갤러리에서
               </span>
             </span>
-          }
-          rightHref="/mypage"
-          rightLabel="내 계정으로 이동"
-          rightSlot={<User size={16} />}
-          description=""
-        />
-
-        <section className="hc-surface-card-xl rounded-[28px] border p-5 backdrop-blur sm:p-6">
-          <div className="hc-accent-chip inline-flex rounded-full border px-3 py-1 text-[11px]">
-            {currentDateLabel}
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <h1 className="max-w-2xl text-[28px] font-semibold tracking-tight sm:text-[32px] md:text-5xl">
-              찍고 저장하고,
-              <span
-                className="block bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(90deg, var(--hc-primary-strong), var(--hc-primary), var(--hc-hero-gradient-end))",
-                }}
-              >
-                다시 꺼내 보는 하루컷
+          </Link>
+          <Link
+            href="/theme"
+            data-coach="theme"
+            className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
+          >
+            <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
+            <span className="min-w-0">
+              <span className="block whitespace-nowrap text-[13.5px] font-bold">
+                프레임 보기
               </span>
-            </h1>
-            <p className="max-w-xl text-[14px] leading-6 text-zinc-300 sm:text-[15px] sm:leading-7">
-              촬영하거나 업로드해서 기록에 남겨두세요.
-            </p>
-          </div>
-
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/shoot"
-              className="hc-button-hero inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition sm:w-auto"
-            >
-              <Camera className="h-4 w-4" />
-              바로 촬영 시작
-            </Link>
-            <Link
-              href="/upload"
-              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
-            >
-              <Upload className="h-4 w-4" />
-              사진 업로드
-            </Link>
-            <Link
-              href="/theme"
-              className="hc-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition sm:w-auto"
-            >
-              <Palette className="h-4 w-4" />
-              꾸미기
-            </Link>
-          </div>
-
+              <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
+                4가지 테마
+              </span>
+            </span>
+          </Link>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="hc-surface-card rounded-[28px] border p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
-                  Recent
-                </p>
-                <h2 className="mt-2 text-lg font-semibold">최근 저장한 결과</h2>
-              </div>
-              <Link href="/history" className="hc-link-accent text-[11px]">
-                전체 보기
-              </Link>
-            </div>
+        {/* 데스크톱(lg+) 액션 인덱스 → 촬영 / 업로드 / 꾸미기 (코치마크는 보이는 카드를 비춤) */}
+        <section className="hidden gap-3.5 lg:grid lg:grid-cols-3">
+          <Link
+            href="/shoot"
+            data-coach="shoot"
+            className="group flex min-h-[108px] flex-col justify-between rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
+          >
+            <span className="font-mono text-[11px] tracking-[0.18em] opacity-60">01</span>
+            <span>
+              <span className="flex items-center justify-between text-[19px] font-extrabold">
+                촬영하기
+                <ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" />
+              </span>
+              <span className="mt-1 block text-[12.5px] font-medium opacity-75">
+                프레임 고르고 8장, 네 컷만 남겨요
+              </span>
+            </span>
+          </Link>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {loading ? (
-                Array.from({ length: 4 }, (_, index) => (
-                  <div
-                    key={index}
-                    className="aspect-[3/4] animate-pulse rounded-3xl bg-white/5"
-                  />
-                ))
-              ) : recentMedia.length > 0 ? (
-                recentMedia.map((item) => {
-                  const preview = getUserMediaPreview(item, previewMedia);
-                  const isVideo = item.mediaType === "VIDEO";
+          <Link
+            href="/upload"
+            data-coach="upload"
+            className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
+          >
+            <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
+              02
+            </span>
+            <span>
+              <span className="flex items-center justify-between text-[19px] font-extrabold">
+                업로드하기
+                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
+              </span>
+              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+                찍어둔 사진으로 만들어요
+              </span>
+            </span>
+          </Link>
 
-                  return (
-                    <div
-                      key={item.mediaId}
-                      className="hc-surface-well relative overflow-hidden rounded-3xl border"
-                    >
+          <Link
+            href="/theme"
+            data-coach="theme"
+            className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
+          >
+            <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
+              03
+            </span>
+            <span>
+              <span className="flex items-center justify-between text-[19px] font-extrabold">
+                프레임 꾸미기
+                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
+              </span>
+              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+                만들어두면 촬영할 때 골라 써요
+              </span>
+            </span>
+          </Link>
+        </section>
+
+        {/* 모바일(&lt;lg) 스탯 카드 — 이번 달 컷 수 + 주간 목표 + 진행 링 */}
+        <section className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 lg:hidden">
+          <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary)]">
+            {monthCount}
+          </span>
+          <p className="flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
+            이번 달 <b className="text-[color:var(--hc-text)]">{monthCount}컷</b>을
+            남겼어요.
+            <br />
+            이번 주 목표까지{" "}
+            <b className="text-[color:var(--hc-primary)]">{remainingToGoal}컷</b> 남았어요!
+          </p>
+          <ProgressRing pct={ringPct} />
+        </section>
+
+        {/* 데스크톱(lg+) 주간 진행 스트립 */}
+        <section className="hc-surface-card hidden items-center gap-5 rounded-2xl border p-[22px] lg:flex">
+          <span className="flex items-baseline gap-2">
+            <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary)]">
+              {monthCount}
+            </span>
+            <span className="text-[14px] text-[color:var(--hc-muted)]">컷 / 이번 달</span>
+          </span>
+          <span className="h-2 min-w-[160px] flex-1 overflow-hidden rounded-full bg-[color:var(--hc-surface-muted)]">
+            <span
+              className="block h-full rounded-full bg-[color:var(--hc-primary)]"
+              style={{ width: progressWidth }}
+            />
+          </span>
+          <span className="text-[13.5px] text-[color:var(--hc-muted)]">
+            이번 주 목표까지{" "}
+            <b className="text-[color:var(--hc-text)]">{remainingToGoal}컷</b>
+          </span>
+        </section>
+
+        {/* 최근 기록 */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-end justify-between">
+            <h2 className="flex items-baseline gap-2 text-[17px] font-extrabold tracking-tight lg:text-[22px]">
+              최근 기록
+              <span className="hidden font-mono text-[13px] font-normal uppercase tracking-[0.18em] text-[color:var(--hc-muted-soft)] lg:inline">
+                Recent
+              </span>
+            </h2>
+            <Link
+              href="/history"
+              className="hc-link-accent flex items-center gap-1 text-[13px] font-semibold"
+            >
+              전체보기
+              <ArrowRight className="hidden h-3.5 w-3.5 lg:inline" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3.5 sm:gap-4 md:grid-cols-4">
+            {loading ? (
+              Array.from({ length: 4 }, (_, index) => (
+                <div
+                  key={index}
+                  className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+                />
+              ))
+            ) : recentMedia.length > 0 ? (
+              recentMedia.map((item) => {
+                const preview = getUserMediaPreview(item, previewMedia);
+
+                return (
+                  <Link
+                    key={item.mediaId}
+                    href="/history"
+                    className="group flex flex-col gap-2"
+                  >
+                    <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
                       {preview.url ? (
-                        preview.kind === "video" ? (
-                          <video
-                            src={preview.url}
-                            className="aspect-[3/4] w-full object-cover"
-                            muted
-                            playsInline
-                          />
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={preview.url}
-                            alt={getUserMediaTitle(item)}
-                            className="aspect-[3/4] w-full object-cover"
-                          />
-                        )
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={preview.url}
+                          alt={getUserMediaTitle(item)}
+                          className="absolute inset-0 h-full w-full object-contain p-3"
+                        />
                       ) : (
-                        <div className="aspect-[3/4] bg-white/5" />
+                        <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
                       )}
-                      {isVideo ? (
-                        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
-                          <span className="grid h-10 w-10 place-items-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur">
-                            <Play
-                              aria-hidden="true"
-                              className="ml-0.5 h-4 w-4"
-                              fill="currentColor"
-                            />
-                          </span>
-                        </div>
-                      ) : null}
+                      <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
+                        <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
+                        사진
+                      </span>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="hc-surface-well col-span-2 rounded-3xl border border-dashed p-5 text-center text-[11px] text-zinc-400">
-                  아직 저장한 결과가 없어요.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <div className="flex flex-col gap-4">
-            <section className="hc-surface-card rounded-[28px] border p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-100">
-                  저장된 프레임
+                    <p className="truncate text-[13.5px] font-bold tracking-tight">
+                      {getUserMediaTitle(item)}
+                    </p>
+                  </Link>
+                );
+              })
+            ) : (
+              <div className="hc-surface-well col-span-2 flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center md:col-span-4">
+                <Sparkles className="h-6 w-6 text-[color:var(--hc-primary)]" />
+                <p className="text-[13px] text-[color:var(--hc-muted)]">
+                  아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
                 </p>
-                <Link href="/theme" className="hc-link-accent text-[11px]">
-                  전체 보기
+                <Link
+                  href="/shoot"
+                  className="hc-button-primary rounded-full px-4 py-2 text-[12px] font-semibold"
+                >
+                  촬영 시작
                 </Link>
               </div>
-
-              <div className="mt-3">
-                {savedFrame ? (
-                  <Link
-                    href={`/theme?frame=${frameIdFromFrameType(savedFrame.frameType)}&remoteFrameId=${savedFrame.frameId}`}
-                    className="hc-surface-well hc-surface-well-hover flex items-center justify-between rounded-2xl border px-3 py-3 transition"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-100">
-                        {savedFrame.title}
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        저장한 프레임을 이어서 수정할 수 있어요.
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
-                  </Link>
-                ) : (
-                  <p className="hc-surface-well rounded-2xl border border-dashed px-4 py-4 text-[11px] text-zinc-400">
-                    아직 저장한 프레임이 없어요.
-                  </p>
-                )}
-              </div>
-            </section>
+            )}
           </div>
         </section>
       </div>
+      <MobileTabBar />
+      <CoachMarks id="home-v1" steps={HOME_COACH_STEPS} />
     </main>
   );
 }

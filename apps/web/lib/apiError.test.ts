@@ -5,16 +5,16 @@ describe("apiError helpers", () => {
     const details = getApiErrorDetails({
       status: 403,
       data: {
-        code: "USR-101",
+        code: "USR-103",
         status: 403,
-        message: "요금제의 월간 영상 다운로드 횟수를 초과했습니다.",
+        message: "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
       },
     });
 
     expect(details).toEqual({
       status: 403,
-      code: "USR-101",
-      message: "요금제의 월간 영상 다운로드 횟수를 초과했습니다.",
+      code: "USR-103",
+      message: "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
     });
   });
 

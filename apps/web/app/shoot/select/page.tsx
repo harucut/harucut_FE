@@ -10,7 +10,6 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { useVideoConversionQuotaStore } from "@/lib/videoConversionQuotaStore";
 
 export default function ShootSelectPage() {
   const router = useRouter();
@@ -21,16 +20,12 @@ export default function ShootSelectPage() {
     selectedIndexes,
     borderColor,
     outputFilter,
-    includeVideo,
     toggleSelect,
     reset,
     setBorderColor,
     setOutputFilter,
-    setIncludeVideo,
   } = useShootSession();
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
-  const usedVideoConversions = useVideoConversionQuotaStore((state) => state.usedCount);
-  const videoConversionLimit = useVideoConversionQuotaStore((state) => state.limit);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const guestMode = accessMode === "guest";
 
@@ -48,25 +43,7 @@ export default function ShootSelectPage() {
   const hasCustomFrame = Boolean(themeData);
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 
-  const selectedShots = useMemo(
-    () => selectedIndexes.map((index) => (index == null ? null : shots[index] ?? null)),
-    [selectedIndexes, shots],
-  );
   const shotPhotos = useMemo(() => shots.map((shot) => shot.photo), [shots]);
-  const videoEligible = useMemo(
-    () => selectedShots.some((shot) => Boolean(shot?.video)),
-    [selectedShots],
-  );
-  const remainingVideoConversions = Math.max(
-    videoConversionLimit - usedVideoConversions,
-    0,
-  );
-
-  useEffect(() => {
-    if ((guestMode || !videoEligible || remainingVideoConversions === 0) && includeVideo) {
-      setIncludeVideo(false);
-    }
-  }, [guestMode, includeVideo, remainingVideoConversions, setIncludeVideo, videoEligible]);
 
   const handleNext = () => {
     router.push("/shoot/result");
@@ -102,12 +79,7 @@ export default function ShootSelectPage() {
               onBorderColorChange={setBorderColor}
               outputFilter={outputFilter}
               onOutputFilterChange={setOutputFilter}
-              includeVideo={includeVideo}
-              onIncludeVideoChange={setIncludeVideo}
               hasCustomFrame={hasCustomFrame}
-              videoEligible={videoEligible}
-              remainingVideoConversions={remainingVideoConversions}
-              guestMode={guestMode}
             />
           )}
         />

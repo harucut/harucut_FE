@@ -17,7 +17,6 @@ type UploadSessionState = {
   assets: MediaAsset[];
   borderColor: string;
   frameId: FrameId;
-  includeVideo: boolean;
   persistedHistoryId: string | null;
   selectedAssetIds: string[];
   selectedSavedFrameId: string | null;
@@ -32,7 +31,7 @@ type UploadStore = UploadSessionState & {
   selectSavedFrameForUpload: (frame: SavedFrame) => void;
   setUploadFrame: (frameId: FrameId) => void;
   setUploadOption: (
-    key: keyof Pick<UploadSessionState, 'borderColor' | 'includeVideo' | 'tone'>,
+    key: keyof Pick<UploadSessionState, 'borderColor' | 'tone'>,
     value: string | boolean,
   ) => void;
   toggleUploadSelection: (id: string) => void;
@@ -43,7 +42,6 @@ function defaultUploadSession(): UploadSessionState {
     assets: [],
     borderColor: defaultBorderColor,
     frameId: 'classic-4',
-    includeVideo: false,
     persistedHistoryId: null,
     selectedAssetIds: [],
     selectedSavedFrameId: null,

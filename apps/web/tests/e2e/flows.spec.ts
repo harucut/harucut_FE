@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test("landing primary CTA routes unauthenticated users to login", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "시작하기" }).click();
+  // 로그인 우선: 우측 상단 primary CTA '지금 시작하기'가 /login으로 간다.
+  await page.getByRole("link", { name: "지금 시작하기" }).click();
 
   await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
 });

@@ -27,7 +27,7 @@ export const features: Feature[] = [
   {
     id: "history",
     title: "사진 기록",
-    description: "저장된 사진과 영상을 다시 보고 내려받을 수 있어요.",
+    description: "저장된 사진을 다시 보고 내려받을 수 있어요.",
     href: "/history",
     icon: History,
   },

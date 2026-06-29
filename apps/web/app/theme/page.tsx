@@ -3,15 +3,18 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
+import { resolvePlanInfo } from "@/constants/planLimits";
+import { FrameCapacityMeter } from "@/components/frame/FrameCapacityMeter";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StepProgress } from "@/components/layout/StepProgress";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import type { RemoteFrame } from "@/lib/api-types";
+import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
 
 function ThemePageContent() {
   const router = useRouter();
@@ -20,6 +23,26 @@ function ThemePageContent() {
   const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
   const { setFrameId, setRemoteFrameId, reset } = useThemeSession();
   const { frames, isLoading, error, refresh } = useMyFrames();
+
+  const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const basePlan = resolvePlanInfo(planTier);
+  // 프레임 보관 한도는 서버 구독 사용량을 우선 사용한다. 무제한(frameRetentionUnlimited 또는 -1)이면
+  // 한도를 Infinity로 둬 한도 게이트/요금제 유도를 막고, 유한 한도면 그 값을, 미조회 시 tier 기본값을 쓴다.
+  const unlimitedRetention =
+    usage != null &&
+    (usage.frameRetentionUnlimited || usage.frameRetentionLimit < 0);
+  // 서버가 0을 주면(예: Free 플랜은 커스텀 프레임 미제공) 그대로 0을 한도로 쓴다.
+  // 0은 유효한 한도이고, 미조회(usage 없음)일 때만 tier 기본값으로 폴백한다.
+  const serverFrameLimit =
+    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0
+      ? usage.frameRetentionLimit
+      : null;
+  const plan = unlimitedRetention
+    ? { ...basePlan, limit: Number.POSITIVE_INFINITY, next: null, nextLimit: null }
+    : serverFrameLimit != null
+      ? { ...basePlan, limit: serverFrameLimit }
+      : basePlan;
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
@@ -35,18 +58,61 @@ function ThemePageContent() {
   }, [reset]);
 
   useEffect(() => {
+    let cancelled = false;
+    void getMyUserInfo()
+      .then((user) => {
+        if (!cancelled) setPlanTier(user.planTier ?? "BASIC");
+      })
+      .catch(() => {
+        if (!cancelled) setPlanTier("BASIC");
+      });
+    void getSubscriptionUsage()
+      .then((next) => {
+        if (!cancelled) setUsage(next);
+      })
+      .catch(() => {
+        // 미조회 시 tier 기반 기본 한도 유지
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!Number.isFinite(queriedRemoteFrameId) || queriedRemoteFrameId <= 0) return;
     if (isLoading) return;
 
-    const targetFrame = frames.find((frame) => frame.frameId === queriedRemoteFrameId);
-    if (!targetFrame) return;
+    const targetIndex = frames.findIndex(
+      (frame) => frame.frameId === queriedRemoteFrameId,
+    );
+    if (targetIndex === -1) return;
+
+    const targetFrame = frames[targetIndex];
+    if (targetIndex >= plan.limit) return;
 
     setFrameId(frameIdFromFrameType(targetFrame.frameType));
     setRemoteFrameId(targetFrame.frameId);
     router.push("/theme/sticker");
-  }, [frames, isLoading, queriedRemoteFrameId, router, setFrameId, setRemoteFrameId]);
+  }, [
+    frames,
+    isLoading,
+    plan.limit,
+    queriedRemoteFrameId,
+    router,
+    setFrameId,
+    setRemoteFrameId,
+  ]);
+
+  // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
+  const isAtCapacity = frames.length >= plan.limit;
 
   const handleConfirmNewFrame = () => {
+    // 목록 로딩 전에는 frames가 빈 배열이라 한도를 알 수 없으므로 진입을 보류한다.
+    if (isLoading) return;
+    if (isAtCapacity) {
+      router.push("/pricing");
+      return;
+    }
     setFrameId(selectedFrameId);
     setRemoteFrameId(null);
     setSelectedRemoteFrameId(null);
@@ -60,10 +126,21 @@ function ThemePageContent() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)]">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4">
-        <PageHeader backHref="/home" backLabel="처음으로" />
+    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)] sm:px-4 lg:px-8 lg:py-10">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
+        <PageHeader
+          backHref="/home"
+          backLabel="처음으로"
+          title="프레임 꾸미기"
+          description="새 프레임을 만들거나 저장한 프레임을 이어서 꾸며보세요."
+        />
         <StepProgress current={1} total={2} label="프레임 선택" />
+
+        <FrameCapacityMeter
+          plan={plan}
+          used={frames.length}
+          onUpgrade={() => router.push("/pricing")}
+        />
 
         <FramePicker
           selectedFrameId={selectedFrameId}
@@ -72,7 +149,13 @@ function ThemePageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmNewFrame}
-          confirmLabel="새 프레임 만들기"
+          confirmLabel={
+            isLoading
+              ? "불러오는 중..."
+              : isAtCapacity
+                ? "보관함이 가득 찼어요 · 업그레이드"
+                : "새 프레임 만들기"
+          }
         />
 
         <SavedFramesSection
@@ -90,6 +173,8 @@ function ThemePageContent() {
           onRefresh={refresh}
           onAction={handleOpenRemoteFrame}
           actionLabel="수정하기"
+          planLimit={plan.limit}
+          onUpgrade={() => router.push("/pricing")}
         />
       </div>
     </main>

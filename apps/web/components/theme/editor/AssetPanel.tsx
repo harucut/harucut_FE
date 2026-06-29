@@ -49,7 +49,7 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-[color:var(--hc-primary)] bg-[rgba(37,99,235,0.1)] text-[color:var(--hc-primary)]"
+          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
       ].join(" ")}
     >
@@ -125,7 +125,7 @@ function PhotoTab() {
               aspect-square w-[96px] shrink-0
               snap-start overflow-hidden rounded-xl
               border border-dashed border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]
-              hover:border-[color:var(--hc-primary)] hover:bg-[rgba(37,99,235,0.06)] disabled:opacity-50
+              hover:border-[color:var(--hc-primary)] hover:bg-[color:var(--hc-accent-soft-bg)] disabled:opacity-50
             "
             title="사진 업로드"
           >
@@ -166,7 +166,7 @@ function PhotoTab() {
                 </button>
 
                 {isProcessing ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(16,40,72,0.38)] px-2 text-center text-[10px] font-medium text-white">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[10px] font-medium text-white">
                     누끼를 정리하는 중이에요.
                   </div>
                 ) : null}
@@ -185,7 +185,7 @@ function PhotoTab() {
                       }
                     }}
                     disabled={isProcessing}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(16,40,72,0.68)] px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-[rgba(16,40,72,0.78)] disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
                     title="누끼 제거"
                   >
                     <Scissors className="h-3 w-3" />
@@ -201,7 +201,7 @@ function PhotoTab() {
                         alert("프레임에 사용 중인 사진은 삭제할 수 없어요.");
                       }
                     }}
-                    className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(16,40,72,0.68)] p-1.5 text-white backdrop-blur hover:bg-[rgba(16,40,72,0.78)]"
+                    className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] p-1.5 text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)]"
                     title="사진 삭제"
                     aria-label="사진 삭제"
                   >

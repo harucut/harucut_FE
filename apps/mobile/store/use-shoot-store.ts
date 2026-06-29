@@ -15,7 +15,6 @@ import { useSessionStore } from '@/store/use-session-store';
 type ShootSessionState = {
   borderColor: string;
   frameId: FrameId | null;
-  includeVideo: boolean;
   persistedHistoryId: string | null;
   selectedSavedFrameId: string | null;
   selectedShotIds: string[];
@@ -31,7 +30,7 @@ type ShootStore = ShootSessionState & {
   selectSavedFrameForShoot: (frame: SavedFrame) => void;
   setShootFrame: (frameId: FrameId | null) => void;
   setShootOption: (
-    key: keyof Pick<ShootSessionState, 'borderColor' | 'includeVideo' | 'tone'>,
+    key: keyof Pick<ShootSessionState, 'borderColor' | 'tone'>,
     value: string | boolean,
   ) => void;
   toggleShootSelection: (id: string) => void;
@@ -41,7 +40,6 @@ function defaultShootSession(): ShootSessionState {
   return {
     borderColor: defaultBorderColor,
     frameId: null,
-    includeVideo: false,
     persistedHistoryId: null,
     selectedSavedFrameId: null,
     selectedShotIds: [],
@@ -107,7 +105,11 @@ export const useShootStore = create<ShootStore>((set, get) => ({
   resetShootSession: () =>
     set((state) => ({
       ...defaultShootSession(),
+      // 촬영 시작 시 세션(촬영본/선택)만 초기화하고 고른 프레임(저장 프레임 포함)은 유지한다.
+      // 그래야 촬영 중에도 카메라 위 프레임 오버레이의 데코가 그대로 보인다.
+      borderColor: state.borderColor,
       frameId: state.frameId,
+      selectedSavedFrameId: state.selectedSavedFrameId,
     })),
   selectSavedFrameForShoot: (frame) =>
     set({

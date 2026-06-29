@@ -65,6 +65,36 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
   drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 60);
   ctx.fill();
 
+  // IMAGE 배경: 색 위, 슬롯 아래에 cover로 깐다.
+  if (theme.background?.type === "IMAGE" && theme.background.url) {
+    try {
+      const bgImg = await loadImage(theme.background.url);
+      const iw = bgImg.naturalWidth || bgImg.width || 1;
+      const ih = bgImg.naturalHeight || bgImg.height || 1;
+      const fr = canvas.width / canvas.height;
+      const ir = iw / ih;
+      let dw = canvas.width;
+      let dh = canvas.height;
+      let dx = 0;
+      let dy = 0;
+      if (ir > fr) {
+        dh = canvas.height;
+        dw = dh * ir;
+        dx = (canvas.width - dw) / 2;
+      } else {
+        dw = canvas.width;
+        dh = dw / ir;
+        dy = (canvas.height - dh) / 2;
+      }
+      ctx.save();
+      drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 60);
+      ctx.clip();
+      ctx.globalAlpha = Math.min(1, Math.max(0, theme.background.opacity ?? 1));
+      ctx.drawImage(bgImg, dx, dy, dw, dh);
+      ctx.restore();
+    } catch {}
+  }
+
   // CanvasStage와 동일한 슬롯 음영 레이어
   ctx.fillStyle = "rgba(0,0,0,0.30)";
   layout.slots.forEach((slot) => {
@@ -143,6 +173,32 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
     ctx.stroke();
+  });
+
+  // 누끼(셀별 배경 제거) 비네트 — 켜진 칸은 가장자리를 어둡게 해 피사체만 남긴 듯한 시각 효과
+  // CanvasStage처럼 사용자 컴포넌트(사진/스티커/글) 위에 그려야 에디터 캔버스와 일치한다.
+  const cutouts = theme.cellCutouts ?? [];
+  layout.slots.forEach((slot, i) => {
+    if (!cutouts[i]) return;
+    const cx = slot.x + slot.width / 2;
+    const cy = slot.y + slot.height / 2;
+    const radius = Math.min(slot.width, slot.height) * 0.62;
+    ctx.save();
+    drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.clip();
+    const grad = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(11,11,12,0.82)");
+    ctx.fillStyle = grad;
+    drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = "#1ED760";
+    drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.stroke();
+    ctx.restore();
   });
 
   return toPngBlob(canvas);

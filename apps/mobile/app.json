@@ -11,10 +11,8 @@
     "android": {
       "package": "com.harucut.app",
       "adaptiveIcon": {
-        "backgroundColor": "#F6E8E0",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0B0B0C",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -26,14 +24,21 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FFF8F5",
+          "backgroundColor": "#0B0B0C",
           "dark": {
-            "backgroundColor": "#1E1714"
+            "backgroundColor": "#0B0B0C"
           }
         }
       ]
@@ -43,7 +48,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:8080",
+      "apiBaseUrl": "https://api.harucut.com",
       "router": {},
       "eas": {
         "projectId": "1ccc6938-4a60-45f0-8a06-4db1a0101b0f"

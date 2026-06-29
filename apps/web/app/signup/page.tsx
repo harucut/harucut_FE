@@ -36,8 +36,19 @@ type SignupErrors = Partial<Record<SignupFieldName, string | null>> & {
 };
 
 const CONSENT_ITEMS = [
-  { href: "/terms", key: "terms", label: "서비스 이용약관 동의" },
-  { href: "/privacy", key: "privacy", label: "개인정보 수집·이용 동의" },
+  { href: "/terms", key: "terms", label: "서비스 이용약관 동의", required: true },
+  {
+    href: "/privacy",
+    key: "privacy",
+    label: "개인정보 수집·이용 동의",
+    required: true,
+  },
+  {
+    href: "/privacy",
+    key: "marketing",
+    label: "마케팅 정보 수신 동의",
+    required: false,
+  },
 ] as const;
 
 type ConsentKey = (typeof CONSENT_ITEMS)[number]["key"];
@@ -57,6 +68,7 @@ function SignupPageContent() {
   const [consents, setConsents] = useState<Record<ConsentKey, boolean>>({
     privacy: false,
     terms: false,
+    marketing: false,
   });
 
   const emailVerification = useEmailVerification();
@@ -108,6 +120,8 @@ function SignupPageContent() {
     }
 
     try {
+      // 마케팅 수신 동의(consents.marketing)는 UI/법적 고지용으로 수집한다.
+      // 백엔드 register 계약(email·username·password)에 동의 필드가 아직 없어 전송하지 않는다.
       await signupWithEmail({
         email: verifiedEmail || emailFromState,
         password,
@@ -127,7 +141,7 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
-      description="이메일 인증 후 계정을 만들어 보세요."
+      description="금방 끝나요. 바로 첫 네 컷을 찍으러 가요."
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
@@ -142,7 +156,7 @@ function SignupPageContent() {
             </Link>
             에 동의하는 것으로 간주됩니다.
           </p>
-          <p className="mt-2 text-center text-[11px] text-zinc-400">
+          <p className="mt-2 text-center text-[14px] text-[color:var(--hc-muted)]">
             이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}
@@ -211,7 +225,15 @@ function SignupPageContent() {
                 className="h-4 w-4 accent-[color:var(--hc-primary)]"
               />
               <span>
-                <span className="text-[color:var(--hc-primary)]">[필수]</span>{" "}
+                <span
+                  className={
+                    item.required
+                      ? "text-[color:var(--hc-primary)]"
+                      : "text-zinc-500"
+                  }
+                >
+                  {item.required ? "[필수]" : "[선택]"}
+                </span>{" "}
                 {item.label}
               </span>
               <Link

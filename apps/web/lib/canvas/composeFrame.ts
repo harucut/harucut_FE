@@ -1,11 +1,10 @@
 import { drawCover, type Rect } from "@/lib/canvas/draw";
-import { loadImage, loadVideo } from "@/lib/canvas/loaders";
+import { loadImage } from "@/lib/canvas/loaders";
 import {
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
 } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
-import type { ArrayBufferTarget, MuxerOptions } from "webm-muxer";
 
 export type FrameLayout = {
   totalWidth: number;
@@ -13,19 +12,11 @@ export type FrameLayout = {
   slots: Rect[];
 };
 
-export type FrameSource =
-  | { type: "image"; src: string }
-  | { type: "video"; src: string };
+export type FrameSource = { type: "image"; src: string };
 
-type SlotDrawable =
-  | { kind: "image"; el: HTMLImageElement }
-  | { kind: "video"; el: HTMLVideoElement };
+type SlotDrawable = { kind: "image"; el: HTMLImageElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
-type SupportedVideoEncoderConfig = {
-  encoderConfig: VideoEncoderConfig;
-  muxerVideoOptions: NonNullable<MuxerOptions<ArrayBufferTarget>["video"]>;
-};
 
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
@@ -88,82 +79,11 @@ export async function downloadFromUrl(url: string, filename?: string) {
   }
 }
 
-async function waitForVideoData(video: HTMLVideoElement) {
-  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const onLoadedData = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error(video.error?.message ?? "video load error"));
-    };
-    const cleanup = () => {
-      video.removeEventListener("loadeddata", onLoadedData);
-      video.removeEventListener("error", onError);
-    };
-
-    video.addEventListener("loadeddata", onLoadedData);
-    video.addEventListener("error", onError);
-  });
-}
-
-function resolveVideoFrameTime(elapsedSeconds: number, duration: number) {
-  if (!Number.isFinite(duration) || duration <= 0) {
-    return 0;
-  }
-
-  if (elapsedSeconds < duration) {
-    return elapsedSeconds;
-  }
-
-  return elapsedSeconds % duration;
-}
-
-async function seekVideoToTime(video: HTMLVideoElement, nextTime: number) {
-  await waitForVideoData(video);
-
-  if (Math.abs(video.currentTime - nextTime) < 0.001) {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const onSeeked = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error(video.error?.message ?? "video seek error"));
-    };
-    const cleanup = () => {
-      video.removeEventListener("seeked", onSeeked);
-      video.removeEventListener("error", onError);
-    };
-
-    video.addEventListener("seeked", onSeeked);
-    video.addEventListener("error", onError);
-    video.currentTime = nextTime;
-  });
-}
-
 async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
     sources.map(async (source) => {
-      if (source.type === "video") {
-        const video = await loadVideo(source.src);
-        const initialFrameTime =
-          Number.isFinite(video.duration) && video.duration > 0.1 ? 0.1 : 0;
-        await seekVideoToTime(video, initialFrameTime);
-        return { kind: "video", el: video };
-      }
-
       const image = await loadImage(source.src);
-      return { kind: "image", el: image };
+      return { kind: "image", el: image } as const;
     }),
   );
 }
@@ -192,79 +112,17 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
   return map;
 }
 
-async function resolveVideoEncoderConfig(
-  width: number,
-  height: number,
-  fps: number,
-): Promise<SupportedVideoEncoderConfig> {
-  const bitrate = Math.max(
-    8_000_000,
-    Math.round(width * height * fps * 0.12),
-  );
+// IMAGE 배경(슬롯 뒤에 깔리는 배경)을 로드한다. 실패 시 null → 색 배경만 사용.
+async function loadBackgroundImage(theme: ThemeExportJson | null) {
+  if (!theme || theme.background?.type !== "IMAGE") return null;
+  const url = theme.background.url;
+  if (!url) return null;
 
-  const candidates: SupportedVideoEncoderConfig[] = [
-    {
-      encoderConfig: {
-        codec: "vp09.00.10.08",
-        width,
-        height,
-        bitrate,
-        framerate: fps,
-        latencyMode: "quality",
-      },
-      muxerVideoOptions: {
-        codec: "V_VP9",
-        width,
-        height,
-        frameRate: fps,
-      },
-    },
-    {
-      encoderConfig: {
-        codec: "vp8",
-        width,
-        height,
-        bitrate,
-        framerate: fps,
-        latencyMode: "quality",
-      },
-      muxerVideoOptions: {
-        codec: "V_VP8",
-        width,
-        height,
-        frameRate: fps,
-      },
-    },
-  ];
-
-  for (const candidate of candidates) {
-    const support = await VideoEncoder.isConfigSupported(
-      candidate.encoderConfig,
-    ).catch(() => null);
-
-    if (support?.supported) {
-      return {
-        encoderConfig: support.config ?? candidate.encoderConfig,
-        muxerVideoOptions: candidate.muxerVideoOptions,
-      };
-    }
+  try {
+    return await loadImage(url);
+  } catch {
+    return null;
   }
-
-  throw new Error("No supported WebCodecs video encoder configuration found");
-}
-
-async function syncVideoDrawablesToElapsedTime(
-  drawables: Array<{ kind: "video"; el: HTMLVideoElement }>,
-  elapsedSeconds: number,
-) {
-  await Promise.all(
-    drawables.map((drawable) =>
-      seekVideoToTime(
-        drawable.el,
-        resolveVideoFrameTime(elapsedSeconds, drawable.el.duration),
-      ),
-    ),
-  );
 }
 
 function drawThemeOverlay(
@@ -334,6 +192,56 @@ function drawThemeOverlay(
   });
 }
 
+function traceRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+// 누끼(셀별 배경 제거) 비네트 — renderThemePreview와 동일하게 사용자 컴포넌트 위에
+// 그려, 에디터/썸네일뿐 아니라 실제 다운로드·공유 출력에서도 효과가 유지되게 한다.
+function drawCellCutouts(
+  ctx: CanvasRenderingContext2D,
+  layout: FrameLayout,
+  theme: ThemeExportJson | null,
+) {
+  const cutouts = theme?.cellCutouts ?? [];
+  layout.slots.forEach((slot, index) => {
+    if (!cutouts[index]) return;
+    const cx = slot.x + slot.width / 2;
+    const cy = slot.y + slot.height / 2;
+    const radius = Math.min(slot.width, slot.height) * 0.62;
+    ctx.save();
+    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.clip();
+    const grad = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(11,11,12,0.82)");
+    ctx.fillStyle = grad;
+    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = "#1ED760";
+    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
 function drawFrameOnce(
   ctx: CanvasRenderingContext2D,
   layout: FrameLayout,
@@ -342,12 +250,29 @@ function drawFrameOnce(
   outputFilter: FourcutFilterId,
   theme: ThemeExportJson | null,
   overlayImages: OverlayImageMap,
+  backgroundImage: HTMLImageElement | null,
 ) {
   const { totalWidth, totalHeight, slots } = layout;
   const slotFilter = getFourcutFilterCanvasValue(outputFilter);
 
   ctx.fillStyle = borderColor;
   ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+  // 배경 이미지를 색 배경 위, 슬롯(사진) 아래에 cover로 깐다.
+  if (backgroundImage) {
+    const bgOpacity =
+      theme?.background?.type === "IMAGE" ? theme.background.opacity ?? 1 : 1;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, bgOpacity));
+    drawCover(
+      ctx,
+      backgroundImage,
+      backgroundImage.naturalWidth || backgroundImage.width || 1,
+      backgroundImage.naturalHeight || backgroundImage.height || 1,
+      { x: 0, y: 0, width: totalWidth, height: totalHeight },
+    );
+    ctx.restore();
+  }
 
   slots.forEach((slot, index) => {
     const drawable = drawables[index];
@@ -356,21 +281,14 @@ function drawFrameOnce(
     ctx.save();
     ctx.filter = slotFilter;
 
-    if (drawable.kind === "image") {
-      const imageWidth = drawable.el.naturalWidth || drawable.el.width || 1;
-      const imageHeight = drawable.el.naturalHeight || drawable.el.height || 1;
-      drawCover(ctx, drawable.el, imageWidth, imageHeight, slot);
-      ctx.restore();
-      return;
-    }
-
-    const videoWidth = drawable.el.videoWidth || 1;
-    const videoHeight = drawable.el.videoHeight || 1;
-    drawCover(ctx, drawable.el, videoWidth, videoHeight, slot);
+    const imageWidth = drawable.el.naturalWidth || drawable.el.width || 1;
+    const imageHeight = drawable.el.naturalHeight || drawable.el.height || 1;
+    drawCover(ctx, drawable.el, imageWidth, imageHeight, slot);
     ctx.restore();
   });
 
   drawThemeOverlay(ctx, theme, overlayImages);
+  drawCellCutouts(ctx, layout, theme);
 }
 
 export async function composeFramePng(opts: {
@@ -400,6 +318,7 @@ export async function composeFramePng(opts: {
   const ctx = ensureCtx(canvas);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
+  const backgroundImage = await loadBackgroundImage(theme);
 
   drawFrameOnce(
     ctx,
@@ -409,106 +328,8 @@ export async function composeFramePng(opts: {
     outputFilter,
     theme,
     overlayImages,
+    backgroundImage,
   );
 
   return toPngBlob(canvas);
-}
-
-export async function recordFrameWebm(opts: {
-  layout: FrameLayout;
-  borderColor: string;
-  sources: FrameSource[];
-  outputFilter?: FourcutFilterId;
-  theme?: ThemeExportJson | null;
-  seconds: number;
-  fps?: number;
-  canvas?: HTMLCanvasElement;
-}) {
-  const {
-    layout,
-    borderColor,
-    sources,
-    outputFilter = "NONE",
-    theme = null,
-    seconds,
-  } = opts;
-
-  if (sources.length !== layout.slots.length) {
-    throw new Error("sources length must match slot count");
-  }
-
-  const fps = opts.fps ?? 30;
-
-  const canvas = opts.canvas ?? document.createElement("canvas");
-  canvas.width = layout.totalWidth;
-  canvas.height = layout.totalHeight;
-
-  const ctx = ensureCtx(canvas);
-  const drawables = await loadDrawables(sources);
-  const overlayImages = await loadOverlayImages(theme);
-  const videoDrawables = drawables.filter(
-    (drawable): drawable is { kind: "video"; el: HTMLVideoElement } =>
-      drawable.kind === "video",
-  );
-
-  const frameDurationMicroseconds = Math.round(1_000_000 / fps);
-  const totalFrames = Math.max(1, Math.round(seconds * fps) + 1);
-  const encoderSupport = await resolveVideoEncoderConfig(
-    layout.totalWidth,
-    layout.totalHeight,
-    fps,
-  );
-  const { ArrayBufferTarget, Muxer } = await import("webm-muxer");
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: encoderSupport.muxerVideoOptions,
-    firstTimestampBehavior: "offset",
-  });
-
-  const encoder = new VideoEncoder({
-    output: (chunk, meta) => {
-      muxer.addVideoChunk(chunk, meta);
-    },
-    error: (error) => {
-      throw error;
-    },
-  });
-
-  encoder.configure(encoderSupport.encoderConfig);
-
-  for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += 1) {
-    const elapsed = frameIndex / fps;
-    await syncVideoDrawablesToElapsedTime(videoDrawables, elapsed);
-
-    drawFrameOnce(
-      ctx,
-      layout,
-      borderColor,
-      drawables,
-      outputFilter,
-      theme,
-      overlayImages,
-    );
-
-    const frame = new VideoFrame(canvas, {
-      timestamp: frameIndex * frameDurationMicroseconds,
-      duration: frameDurationMicroseconds,
-    });
-    encoder.encode(frame, {
-      keyFrame: frameIndex === 0 || frameIndex % fps === 0,
-    });
-    frame.close();
-  }
-
-  await encoder.flush();
-  encoder.close();
-  muxer.finalize();
-
-  videoDrawables.forEach((drawable) => {
-    try {
-      drawable.el.pause();
-    } catch {}
-  });
-
-  return new Blob([muxer.target.buffer], { type: "video/webm" });
 }

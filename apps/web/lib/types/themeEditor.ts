@@ -69,17 +69,15 @@ export type ThemeBackground =
       type: "IMAGE";
       key?: string;
       opacity?: number;
-    }
-  | {
-      type: "VIDEO";
-      key?: string;
-      autoPlay?: boolean;
-      loop?: boolean;
+      // 클라이언트에서 key를 해석해 채우는 렌더 전용 URL (서버 전송 X).
+      url?: string;
     };
 
 export type ThemeExportJson = {
   frameId: FrameId;
   background?: ThemeBackground;
+  // 셀별 누끼(배경 제거) 상태. 에디터/미리보기 전용이며 서버 요청에는 포함되지 않는다.
+  cellCutouts?: boolean[];
   components: Array<{
     id: string;
     type: ComponentType;

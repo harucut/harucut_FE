@@ -1,7 +1,7 @@
 import { FOURCUT_FILTER_DEFINITIONS, type FourcutFilterId } from '@harucut/shared';
 
 export type FrameId = 'classic-4' | 'grid-4' | 'polaroid-4' | 'wide-4';
-export type MediaKind = 'image' | 'video';
+export type MediaKind = 'image';
 export type OutputTone = FourcutFilterId;
 
 export type MediaAsset = {
@@ -53,12 +53,6 @@ export type ThemeBackground =
       key?: string;
       opacity?: number;
       type: 'IMAGE';
-    }
-  | {
-      autoPlay?: boolean;
-      key?: string;
-      loop?: boolean;
-      type: 'VIDEO';
     };
 
 export type ThemeAsset = {
@@ -89,7 +83,7 @@ export type HistoryItem = {
   createdAt: string;
   frameId: FrameId;
   id: string;
-  kind: 'photo' | 'video';
+  kind: 'photo';
   mediaId?: number;
   previewMedia: MediaAsset[];
   remoteS3Key?: string;
@@ -132,35 +126,38 @@ export const QUICK_LINKS = [
   { href: '/history', icon: 'time-outline', label: '기록' },
 ] as const;
 
+// 핸드오프 TabBar(홈·기록·촬영·프레임·MY) 정본 순서. 촬영은 중앙 FAB로 돌출 렌더.
+// 업로드는 독립 탭에서 제거(홈의 '사진 불러오기' / 촬영 진입으로 흡수, 라우트는 유지).
 export const BOTTOM_NAV_ITEMS = [
   { href: '/home', icon: 'home-outline', iconActive: 'home', key: 'home', label: '홈' },
   {
-    href: '/shoot',
-    icon: 'camera-outline',
-    iconActive: 'camera',
-    key: 'shoot',
-    label: '촬영',
+    href: '/history',
+    icon: 'grid-outline',
+    iconActive: 'grid',
+    key: 'history',
+    label: '기록',
   },
   {
-    href: '/upload',
-    icon: 'cloud-upload-outline',
-    iconActive: 'cloud-upload',
-    key: 'upload',
-    label: '업로드',
+    center: true,
+    href: '/shoot',
+    icon: 'camera',
+    iconActive: 'camera',
+    key: 'shoot',
+    label: '',
   },
   {
     href: '/theme',
-    icon: 'color-palette-outline',
-    iconActive: 'color-palette',
+    icon: 'film-outline',
+    iconActive: 'film',
     key: 'theme',
-    label: '꾸미기',
+    label: '프레임',
   },
   {
-    href: '/history',
-    icon: 'time-outline',
-    iconActive: 'time',
-    key: 'history',
-    label: '기록',
+    href: '/mypage',
+    icon: 'person-outline',
+    iconActive: 'person',
+    key: 'mypage',
+    label: 'MY',
   },
 ] as const;
 
@@ -207,10 +204,10 @@ export const FRAME_CATALOG: FrameCatalogItem[] = [
 ];
 
 export const FRAME_BORDER_OPTIONS = [
-  { label: '코발트', value: '#2563EB' },
-  { label: '딥 네이비', value: '#1D4ED8' },
-  { label: '스카이 틴트', value: '#74A9FF' },
-  { label: '아이스 블루', value: '#C7DCFF' },
+  { label: '블랙', value: '#000000' },
+  { label: '그린', value: '#1ED760' },
+  { label: '아이보리', value: '#FAFAF7' },
+  { label: '차콜', value: '#232325' },
 ] as const;
 
 export type OutputToneOption = {
@@ -226,17 +223,51 @@ export const OUTPUT_TONE_OPTIONS: OutputToneOption[] = FOURCUT_FILTER_DEFINITION
 
 export const BACKGROUND_SWATCHES = [
   { label: '화이트', value: '#FFFFFF' },
-  { label: '블루 틴트', value: '#EEF5FF' },
-  { label: '미스트', value: '#E7F0FF' },
-  { label: '코발트', value: '#2563EB' },
+  { label: '크림', value: '#FAF7F0' },
+  { label: '민트', value: '#E4F7EC' },
+  { label: '그린', value: '#1ED760' },
 ] as const;
 
+// 핸드오프 app-decorate "프레임색" 스와치(스트립 색)
+export const FRAME_COLOR_SWATCHES = [
+  '#000000',
+  '#FFFFFF',
+  '#1ED760',
+  '#15151E',
+  '#E14B2A',
+  '#3A5A8C',
+  '#C8A24A',
+  '#9C6FB0',
+] as const;
+
+// 핸드오프 app-decorate "선택" 탭 글자색 스와치
+export const THEME_TEXT_COLOR_SWATCHES = [
+  '#FFFFFF',
+  '#0B0B0C',
+  '#1ED760',
+  '#FF5A8A',
+  '#FFD15C',
+  '#5AA9FF',
+] as const;
+
+// 핸드오프 decorate ED_STICKERS 정본(이모지 16종)
 export const THEME_STICKERS = [
-  { id: 'spark', label: '반짝', symbol: '✦' },
-  { id: 'heart', label: '하트', symbol: '♡' },
-  { id: 'star', label: '별', symbol: '★' },
-  { id: 'ribbon', label: '리본', symbol: '⌁' },
-  { id: 'note', label: '메모', symbol: '✎' },
+  { id: 'star', label: '별', symbol: '⭐️' },
+  { id: 'heart-pink', label: '핑크하트', symbol: '💖' },
+  { id: 'sparkles', label: '반짝', symbol: '✨' },
+  { id: 'blossom', label: '벚꽃', symbol: '🌸' },
+  { id: 'ribbon', label: '리본', symbol: '🎀' },
+  { id: 'cloud', label: '구름', symbol: '☁️' },
+  { id: 'fire', label: '불꽃', symbol: '🔥' },
+  { id: 'cool', label: '선글라스', symbol: '😎' },
+  { id: 'dog', label: '강아지', symbol: '🐶' },
+  { id: 'strawberry', label: '딸기', symbol: '🍓' },
+  { id: 'rainbow', label: '무지개', symbol: '🌈' },
+  { id: 'heart-red', label: '하트', symbol: '❤️' },
+  { id: 'crown', label: '왕관', symbol: '👑' },
+  { id: 'butterfly', label: '나비', symbol: '🦋' },
+  { id: 'clover', label: '클로버', symbol: '🍀' },
+  { id: 'camera', label: '카메라', symbol: '📷' },
 ] as const;
 
 export const LOGIN_FIELDS = [

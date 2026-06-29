@@ -1,10 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 
 import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -21,21 +19,14 @@ export function AppScrollView({
   children,
   contentContainerStyle,
 }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
-  const insets = useSafeAreaInsets();
   const styles = useUiStyles();
-  const { colors } = useHarucutTheme();
-  const bottomPadding = Math.max(insets.bottom, HARUCUT_SPACING.screen);
+  // 하단 안전영역은 (app)의 BottomNavigation, (public)/(legal) 레이아웃의 bottom safe-area가
+  // 처리한다. 스크롤 콘텐츠는 콘텐츠 간격만 둬서 안전영역 이중 적용(하단 여백 과다)을 막는다.
+  const bottomPadding = HARUCUT_SPACING.screen;
 
   return (
+    // 배경은 handoff처럼 단색 다크(colors.background)로 둔다. 이전의 그라데이션 + 초록 orb 2개는 제거.
     <View style={styles.screen}>
-      <LinearGradient
-        colors={[colors.backgroundGradientStart, colors.backgroundGradientEnd]}
-        end={{ x: 0.8, y: 1 }}
-        start={{ x: 0.1, y: 0 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View pointerEvents="none" style={styles.backgroundOrbTop} />
-      <View pointerEvents="none" style={styles.backgroundOrbRight} />
       <ScrollView
         contentContainerStyle={[
           styles.screenContent,
@@ -52,7 +43,6 @@ export function AppScrollView({
 
 export function BrandMark({ compact = false, href = '/home' }: { compact?: boolean; href?: string }) {
   const router = useRouter();
-  const { colors, isDark } = useHarucutTheme();
   const styles = useUiStyles();
 
   return (
@@ -62,17 +52,8 @@ export function BrandMark({ compact = false, href = '/home' }: { compact?: boole
       onPress={() => router.push(href as never)}
       style={styles.brandRow}>
       <View style={styles.brandIcon}>
-        <LinearGradient
-          colors={
-            isDark
-              ? ['rgba(59, 130, 246, 0.18)', 'rgba(255, 255, 255, 0.02)']
-              : ['rgba(255, 255, 255, 0.98)', 'rgba(239, 246, 255, 0.95)']
-          }
-          end={{ x: 0.9, y: 1 }}
-          start={{ x: 0, y: 0 }}
-          style={styles.brandIconGradient}>
-          <Ionicons color={colors.primary} name="sparkles-outline" size={18} />
-        </LinearGradient>
+        {/* 반짝이 placeholder 대신 실제 하루컷 로고(앱 아이콘)를 브랜드 마크로 사용 */}
+        <Image source={require('../../assets/images/icon.png')} style={styles.brandIconImage} />
       </View>
       <View style={{ flexShrink: 1 }}>
         {!compact ? (
@@ -229,7 +210,7 @@ export function ActionButton({
     variant === 'danger'
       ? styles.buttonLabelOnSolid
       : variant === 'primary'
-        ? styles.buttonLabelOnSolid
+        ? styles.buttonLabelOnPrimary
         : styles.buttonLabelDefault;
 
   return (
@@ -260,7 +241,9 @@ type FormFieldProps = TextInputProps & {
   secure?: boolean;
 };
 
-export function FormField({ error, label, secure = false, style, ...props }: FormFieldProps) {
+// React.memo로 감싸 부모(로그인/회원가입 화면)의 키 입력당 전체 리렌더가 입력 필드까지
+// 전파되지 않게 한다. 부모는 필드별 onChangeText 핸들러를 안정 참조로 넘겨야 효과가 난다.
+function FormFieldImpl({ error, label, secure = false, style, ...props }: FormFieldProps) {
   const [visible, setVisible] = React.useState(false);
   const { colors } = useHarucutTheme();
   const styles = useUiStyles();
@@ -296,6 +279,8 @@ export function FormField({ error, label, secure = false, style, ...props }: For
   );
 }
 
+export const FormField = React.memo(FormFieldImpl);
+
 export function SectionEyebrow({ children }: PropsWithChildren) {
   const styles = useUiStyles();
 
@@ -309,24 +294,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 11,
       fontWeight: '600',
       textDecorationLine: 'underline',
-    },
-    backgroundOrbRight: {
-      backgroundColor: colors.backgroundOrbRight,
-      borderRadius: 220,
-      height: 220,
-      position: 'absolute',
-      right: -70,
-      top: 84,
-      width: 220,
-    },
-    backgroundOrbTop: {
-      backgroundColor: colors.backgroundOrbTop,
-      borderRadius: 260,
-      height: 260,
-      left: -90,
-      position: 'absolute',
-      top: -70,
-      width: 260,
     },
     brandCompact: {
       color: colors.text,
@@ -350,6 +317,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       shadowOpacity: 1,
       shadowRadius: 30,
       width: 40,
+    },
+    brandIconImage: {
+      height: '100%',
+      width: '100%',
     },
     brandIconGradient: {
       alignItems: 'center',
@@ -401,6 +372,10 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     buttonLabelOnSolid: {
       color: '#FFFFFF',
+    },
+    // handoff .btn-primary: 그린 채움 위 거의 검정 텍스트(Spotify식). danger는 흰색 유지.
+    buttonLabelOnPrimary: {
+      color: '#06140A',
     },
     buttonDisabled: {
       opacity: 0.55,
@@ -526,7 +501,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     sectionEyebrow: {
       alignSelf: 'flex-start',
       backgroundColor: colors.primarySoft,
-      borderColor: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(37, 99, 235, 0.12)',
+      borderColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.12)',
       borderRadius: HARUCUT_RADII.chip,
       borderWidth: 1,
       color: colors.primaryStrong,

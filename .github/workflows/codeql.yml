@@ -29,13 +29,15 @@ jobs:
           - python
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: none
+          # 보안(code-scanning) + 코드 품질(code-quality, "Code quality findings") 동시 분석
+          analysis-kinds: code-scanning,code-quality
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4

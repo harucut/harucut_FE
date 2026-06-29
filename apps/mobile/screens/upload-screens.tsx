@@ -96,9 +96,6 @@ export function UploadSelectScreen() {
   }, [router, upload.frameId]);
 
   const selectedCount = upload.selectedAssetIds.length;
-  const selectedHasVideo = upload.assets.some(
-    (item) => upload.selectedAssetIds.includes(item.id) && item.kind === 'video'
-  );
   const previewMedia = useMemo(
     () =>
       upload.selectedAssetIds
@@ -110,7 +107,7 @@ export function UploadSelectScreen() {
   const handlePickAssets = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: true,
-      mediaTypes: ['images', 'videos'],
+      mediaTypes: ['images'],
       quality: 0.8,
       selectionLimit: 8,
     });
@@ -121,7 +118,7 @@ export function UploadSelectScreen() {
 
     const nextAssets: MediaAsset[] = result.assets.map((asset, index) => ({
       id: `upload-asset-${Date.now()}-${index}`,
-      kind: asset.type === 'video' ? 'video' : 'image',
+      kind: 'image',
       label: asset.fileName ?? `업로드 ${index + 1}`,
       uri: asset.uri,
     }));
@@ -133,7 +130,7 @@ export function UploadSelectScreen() {
     <AppScrollView>
       <PageHeader
         backLabel="프레임 다시 선택"
-        description="사진이나 영상을 넣을 프레임에 어울릴 4개를 골라 주세요."
+        description="사진을 넣을 프레임에 어울릴 4개를 골라 주세요."
         onPressBack={() => push('/upload')}
         title="업로드할 사진 선택"
       />
@@ -148,24 +145,24 @@ export function UploadSelectScreen() {
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.bodyText}>
           {upload.assets.length === 0
-            ? '먼저 사진이나 영상을 업로드해 주세요.'
+            ? '먼저 사진을 업로드해 주세요.'
             : `업로드한 미디어 ${upload.assets.length}개 중에서 4개를 골라 주세요.`}
         </Text>
         <ActionButton
           icon={<Ionicons color={colors.text} name="images-outline" size={16} />}
-          label="사진 또는 영상 추가하기"
+          label="사진 추가하기"
           onPress={() => void handlePickAssets()}
           variant="secondary"
         />
 
         <View style={styles.mediaGrid}>
           {upload.assets.map((item) => {
-            const selected = upload.selectedAssetIds.includes(item.id);
+            const order = upload.selectedAssetIds.indexOf(item.id);
             return (
               <ActionCard
                 key={item.id}
                 item={item}
-                selected={selected}
+                order={order}
                 onPress={() => toggleUploadSelection(item.id)}
               />
             );
@@ -196,14 +193,9 @@ export function UploadSelectScreen() {
             </Pill>
           ))}
         </View>
-        <Pill
-          active={upload.includeVideo}
-          onPress={() => setUploadOption('includeVideo', selectedHasVideo ? !upload.includeVideo : false)}>
-          영상 포함
-        </Pill>
-        <Text style={styles.bodyText}>선택한 미디어에 영상이 포함되어 있을 때만 영상 결과를 함께 보여줍니다.</Text>
         <ActionButton
-          label={`다음 단계로 (${selectedCount}/4)`}
+          disabled={selectedCount !== 4}
+          label={selectedCount === 4 ? '다음 — 결과 만들기' : `${Math.max(0, 4 - selectedCount)}개 더 골라주세요`}
           onPress={() => {
             if (selectedCount === 4) {
               push('/upload/result');
@@ -283,8 +275,12 @@ export function UploadResultScreen() {
   ]);
 
   const currentHistory = historyItems.find((item) => item.id === upload.persistedHistoryId) ?? null;
+  // 사용자가 탭한 순서(selectedAssetIds)를 보존해 미리보기/저장 결과가 일치하도록 한다.
   const previewMedia =
-    currentHistory?.previewMedia ?? upload.assets.filter((item) => upload.selectedAssetIds.includes(item.id));
+    currentHistory?.previewMedia ??
+    upload.selectedAssetIds
+      .map((id) => upload.assets.find((asset) => asset.id === id))
+      .filter((asset): asset is (typeof upload.assets)[number] => asset !== undefined);
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
@@ -361,7 +357,7 @@ export function UploadResultScreen() {
             <Text style={styles.sectionTitle}>결과 준비 완료</Text>
             <Text style={styles.bodyText}>마음에 드는 결과를 저장하거나 링크로 공유해 보세요.</Text>
           </View>
-          <Pill>{upload.includeVideo ? '이미지 + 영상' : '이미지'}</Pill>
+          <Pill>이미지</Pill>
         </View>
       </SurfaceCard>
 
@@ -369,9 +365,6 @@ export function UploadResultScreen() {
         <View collapsable={false} ref={previewRef}>
           <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
         </View>
-        {upload.includeVideo ? (
-          <FramePreview accentColor={upload.borderColor} frameId={upload.frameId} media={previewMedia} tone={upload.tone} />
-        ) : null}
       </SurfaceCard>
 
       {saveStatus === 'saving' ? (
@@ -429,30 +422,32 @@ export function UploadResultScreen() {
 function ActionCard({
   item,
   onPress,
-  selected,
+  order,
 }: {
   item: MediaAsset;
   onPress: () => void;
-  selected: boolean;
+  order: number;
 }) {
   const styles = useUploadStyles();
+  const selected = order >= 0;
 
   return (
     <Pressable
-      accessibilityLabel={`${item.label}${selected ? ', 선택됨' : ', 선택하기'}`}
+      accessibilityLabel={`${item.label}${selected ? `, ${order + 1}번째로 선택됨` : ', 선택하기'}`}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
       style={[styles.mediaCard, selected ? styles.mediaCardSelected : null]}>
       <Image accessibilityLabel={item.label} accessibilityRole="image" source={{ uri: item.uri }} style={styles.mediaImage} />
-      <View style={styles.mediaBadge}>
-        <Text style={styles.mediaBadgeText}>{selected ? '선택됨' : item.label}</Text>
-      </View>
-      {item.kind === 'video' ? (
-        <View style={styles.videoBadge}>
-          <Ionicons color="#FFFFFF" name="play" size={12} />
+      {selected ? (
+        <View style={styles.orderBadge}>
+          <Text style={styles.orderBadgeText}>{order + 1}</Text>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.mediaBadge}>
+          <Text numberOfLines={1} style={styles.mediaBadgeText}>{item.label}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -496,6 +491,22 @@ function createStyles(colors: HarucutColors) {
     mediaCardSelected: {
       borderColor: colors.primary,
     },
+    orderBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      height: 26,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      width: 26,
+    },
+    orderBadgeText: {
+      color: '#06140A',
+      fontSize: 13,
+      fontWeight: '800',
+    },
     mediaGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -519,17 +530,6 @@ function createStyles(colors: HarucutColors) {
       flexDirection: 'row',
       gap: 12,
       justifyContent: 'space-between',
-    },
-    videoBadge: {
-      alignItems: 'center',
-      backgroundColor: colors.overlayStrong,
-      borderRadius: 999,
-      bottom: 8,
-      height: 22,
-      justifyContent: 'center',
-      position: 'absolute',
-      right: 8,
-      width: 22,
     },
   });
 }

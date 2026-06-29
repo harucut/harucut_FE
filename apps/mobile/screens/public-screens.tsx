@@ -4,10 +4,9 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
-import { ActionButton, AppScrollView, BrandMark, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, BrandMark, FormField } from '@/components/harucut/ui';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { getApiConfig, getApiErrorMessage } from '@/lib/api-client';
 import { validateEmail, validatePassword, validateUsername } from '@/lib/auth-validation';
@@ -25,7 +24,7 @@ import { completeSocialLoginSession } from '@/lib/social-login';
 import { useSessionStore } from '@/store/use-session-store';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
-type SocialProvider = 'kakao' | 'naver';
+type SocialProvider = 'google' | 'kakao' | 'naver';
 
 function usePublicScreenTheme() {
   const { colors, isDark } = useHarucutTheme();
@@ -45,23 +44,27 @@ function AuthShell({
   footer?: React.ReactNode;
   title: string;
 }) {
-  const { styles } = usePublicScreenTheme();
+  const { colors, styles } = usePublicScreenTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const push = (path: string) => router.push(path as never);
-  const bottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView contentContainerStyle={{ paddingBottom: bottomPadding }}>
-      <PageHeader
-        description={description}
-        title={title}
-      />
+    <AppScrollView>
+      <View style={styles.authBackRow}>
+        <Pressable
+          accessibilityLabel="뒤로"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/' as never))}
+          style={styles.authBackButton}>
+          <Ionicons color={colors.text} name="chevron-back" size={24} />
+        </Pressable>
+      </View>
+      <View style={styles.authIntro}>
+        <Text style={styles.authTitle}>{title}</Text>
+        {description ? <Text style={styles.authDescription}>{description}</Text> : null}
+      </View>
       {children}
       {footer ? <View style={{ gap: 10 }}>{footer}</View> : null}
-      <Pressable accessibilityLabel="처음 화면으로 돌아가기" accessibilityRole="button" onPress={() => push('/')}>
-        <Text style={styles.authBackLink}>처음 화면으로 돌아가기</Text>
-      </Pressable>
     </AppScrollView>
   );
 }
@@ -117,14 +120,19 @@ function SocialButtons() {
         <View style={styles.socialLine} />
       </View>
       <SocialBrandButton
-        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오 로그인'}
+        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오로 계속하기'}
         onPress={() => void handleSocialLogin('kakao')}
         provider="kakao"
       />
       <SocialBrandButton
-        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버 로그인'}
+        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버로 계속하기'}
         onPress={() => void handleSocialLogin('naver')}
         provider="naver"
+      />
+      <SocialBrandButton
+        label={pending === 'google' ? 'Google 로그인 중...' : 'Google로 계속하기'}
+        onPress={() => void handleSocialLogin('google')}
+        provider="google"
       />
       <Text style={styles.socialConsentNotice}>
         소셜 계정으로 계속하면{' '}
@@ -148,10 +156,30 @@ function SocialBrandButton({
 }: {
   label: string;
   onPress: () => void;
-  provider: 'kakao' | 'naver';
+  provider: SocialProvider;
 }) {
   const { styles } = usePublicScreenTheme();
-  const isKakao = provider === 'kakao';
+
+  const buttonStyle =
+    provider === 'kakao'
+      ? styles.socialKakaoButton
+      : provider === 'naver'
+        ? styles.socialNaverButton
+        : styles.socialGoogleButton;
+
+  const iconBoxStyle =
+    provider === 'kakao'
+      ? styles.socialKakaoIconBox
+      : provider === 'naver'
+        ? styles.socialNaverIconBox
+        : styles.socialGoogleIconBox;
+
+  const labelStyle =
+    provider === 'kakao'
+      ? styles.socialKakaoLabel
+      : provider === 'naver'
+        ? styles.socialNaverLabel
+        : styles.socialGoogleLabel;
 
   return (
     <Pressable
@@ -160,32 +188,39 @@ function SocialBrandButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.socialButton,
-        isKakao ? styles.socialKakaoButton : styles.socialNaverButton,
+        buttonStyle,
         pressed ? styles.socialButtonPressed : null,
       ]}>
       <View style={styles.socialButtonInner}>
-        <View
-          style={[
-            styles.socialIconBox,
-            isKakao ? styles.socialKakaoIconBox : styles.socialNaverIconBox,
-          ]}>
-          {isKakao ? (
-            <View style={styles.kakaoMark}>
-              <View style={styles.kakaoMarkBubble} />
-              <View style={styles.kakaoMarkTail} />
-            </View>
+        <View style={[styles.socialIconBox, iconBoxStyle]}>
+          {provider === 'kakao' ? (
+            <Image
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              resizeMode="contain"
+              source={require('../assets/images/kakao-symbol.png')}
+              style={styles.kakaoLogo}
+            />
+          ) : provider === 'naver' ? (
+            <Image
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              resizeMode="contain"
+              source={require('../assets/images/naver-symbol.png')}
+              style={styles.naverLogo}
+            />
           ) : (
-            <Text style={styles.naverMark}>N</Text>
+            <Image
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              resizeMode="contain"
+              source={require('../assets/images/google-g-logo.png')}
+              style={styles.googleLogo}
+            />
           )}
         </View>
         <View style={styles.socialLabelWrap}>
-          <Text
-            style={[
-              styles.socialButtonLabel,
-              isKakao ? styles.socialKakaoLabel : styles.socialNaverLabel,
-            ]}>
-            {label}
-          </Text>
+          <Text style={[styles.socialButtonLabel, labelStyle]}>{label}</Text>
         </View>
       </View>
     </Pressable>
@@ -195,76 +230,57 @@ function SocialBrandButton({
 export function LandingScreen() {
   const { styles } = usePublicScreenTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const push = (path: string) => router.push(path as never);
   const showGuestTrialNotice = useSessionStore((state) => state.showGuestTrialNotice);
-  const landingBottomPadding = Math.max(insets.bottom, 16);
 
   return (
-    <AppScrollView
-      contentContainerStyle={[
-        styles.landingScrollContent,
-        { paddingBottom: landingBottomPadding },
-      ]}>
-      <View style={styles.landingHeader}>
-        <BrandMark href="/" />
+    <View style={styles.onboardingScreen}>
+      <View style={styles.onboardingHeader}>
+        <BrandMark compact href="/" />
       </View>
 
-      <View style={styles.landingMain}>
-        <View style={styles.heroCopy}>
-          <View style={styles.heroTitleStack}>
-            <Text style={styles.heroTitle}>오늘의 순간을</Text>
-            <Text style={styles.heroTitleGradient}>다시 보고 싶은 네 컷으로</Text>
-          </View>
-          <Text style={styles.heroBody}>어디에서나 촬영하고, 꾸미고, 기록을 남겨보세요.</Text>
-        </View>
-
-        <View style={styles.heroActions}>
-          <ActionButton label="시작하기" onPress={() => push('/login')} style={{ flex: 1 }} />
-          <ActionButton
-            label="체험하기"
-            onPress={showGuestTrialNotice}
-            style={{ flex: 1 }}
-            variant="secondary"
+      {/* 떠 있는 네 컷 프레임 — 웹 히어로 콜라주와 동일하게 3장(좌·중·우)을 겹쳐 중앙 배치 */}
+      <View pointerEvents="none" style={styles.onboardingFrames}>
+        <View style={styles.onboardingFrameLeft}>
+          <Image
+            accessibilityRole="image"
+            source={HERO_IMAGE_SOURCE}
+            style={styles.onboardingFrameImage}
           />
         </View>
-
-        <SurfaceCard style={styles.heroPreviewCard}>
-          <View style={styles.heroImageFrame}>
-            <Image
-              accessibilityLabel="다양한 친구들이 야외에서 셀카를 찍는 네 컷 프레임 예시"
-              accessibilityRole="image"
-              source={HERO_IMAGE_SOURCE}
-              style={styles.heroImage}
-            />
-          </View>
-          <View style={styles.heroCardCopy}>
-            <Text style={styles.heroCardBody}>완성된 네컷은 기록에서 다시 보고 공유할 수 있어요.</Text>
-          </View>
-        </SurfaceCard>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 16,
-            justifyContent: 'center',
-            paddingVertical: 4,
-          }}>
-          <Pressable
-            accessibilityLabel="서비스 이용약관 보기"
-            accessibilityRole="link"
-            onPress={() => push('/terms')}>
-            <Text style={styles.legalFooterLink}>서비스 이용약관</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="개인정보 처리방침 보기"
-            accessibilityRole="link"
-            onPress={() => push('/privacy')}>
-            <Text style={styles.legalFooterLink}>개인정보 처리방침</Text>
-          </Pressable>
+        <View style={styles.onboardingFrameCenter}>
+          <Image
+            accessibilityRole="image"
+            source={HERO_IMAGE_SOURCE}
+            style={styles.onboardingFrameImage}
+          />
+        </View>
+        <View style={styles.onboardingFrameRight}>
+          <Image
+            accessibilityRole="image"
+            source={HERO_IMAGE_SOURCE}
+            style={styles.onboardingFrameImage}
+          />
         </View>
       </View>
-    </AppScrollView>
+
+      <View style={styles.onboardingFooter}>
+        <View style={styles.onboardingTitleStack}>
+          <Text style={styles.onboardingTitle}>어디서든,</Text>
+          <Text style={styles.onboardingTitleAccent}>하루를 촬영해요</Text>
+        </View>
+        <Text style={styles.onboardingBody}>특별한 하루를 사진으로 남겨보세요.</Text>
+
+        {/* 로그인 우선. 회원가입은 로그인 화면에서 유도하고, 비회원은 체험하기로 바로 촬영. */}
+        <ActionButton label="로그인" onPress={() => push('/login')} />
+        <ActionButton
+          label="비회원 체험하기"
+          onPress={showGuestTrialNotice}
+          style={{ marginTop: 10 }}
+          variant="ghost"
+        />
+      </View>
+    </View>
   );
 }
 
@@ -278,6 +294,20 @@ export function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [remember, setRemember] = useState(true);
+
+  // 키 입력마다 새 인라인 핸들러를 만들면 memo된 FormField가 매번 리렌더되어, 가려진
+  // 비밀번호 입력의 노출→마스킹 왕복이 끊겨 보인다. 필드별 핸들러를 한 번만 만들어
+  // 안정 참조로 넘겨 바뀐 필드만 리렌더되게 한다.
+  const handleFieldChange = useMemo(
+    () =>
+      Object.fromEntries(
+        LOGIN_FIELDS.map((field) => [
+          field.key,
+          (value: string) => setForm((current) => ({ ...current, [field.key]: value })),
+        ]),
+      ) as Record<string, (value: string) => void>,
+    [],
+  );
 
   const handleLogin = async () => {
     const emailError = validateEmail(form.email);
@@ -312,7 +342,7 @@ export function LoginScreen() {
 
   return (
     <AuthShell
-      description="하루컷에 로그인하고 프레임과 기록을 이어서 관리해 보세요."
+      description="로그인하고 하루의 네 컷을 이어가요."
       footer={
         <>
           <SocialButtons />
@@ -324,13 +354,13 @@ export function LoginScreen() {
           </Text>
         </>
       }
-      title="로그인">
-      <SurfaceCard style={{ gap: 14 }}>
+      title="다시 오셨네요">
+      <View style={{ gap: 14 }}>
         {LOGIN_FIELDS.map((field) => (
           <FormField
             key={field.key}
             label={field.label}
-            onChangeText={(value) => setForm((current) => ({ ...current, [field.key]: value }))}
+            onChangeText={handleFieldChange[field.key]}
             placeholder={field.placeholder}
             secure={field.secure}
             value={form[field.key]}
@@ -357,7 +387,7 @@ export function LoginScreen() {
           onPress={() => void handleLogin()}
         />
         {error ? <Text style={styles.formError}>{error}</Text> : null}
-      </SurfaceCard>
+      </View>
     </AuthShell>
   );
 }
@@ -369,6 +399,18 @@ export function SignupScreen() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [form, setForm] = useState({ confirmPassword: '', password: '', username: '' });
+  // 키 입력당 화면 전체 리렌더가 memo된 FormField까지 번지지 않도록 필드별 핸들러를
+  // 안정 참조로 한 번만 만든다(가려진 비밀번호 입력 버벅임 방지).
+  const handleFieldChange = useMemo(
+    () =>
+      Object.fromEntries(
+        SIGNUP_FIELDS.map((field) => [
+          field.key,
+          (value: string) => setForm((current) => ({ ...current, [field.key]: value })),
+        ]),
+      ) as Record<string, (value: string) => void>,
+    [],
+  );
   const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -478,7 +520,7 @@ export function SignupScreen() {
 
   return (
     <AuthShell
-      description="이메일 인증 후 계정을 만들어 보세요."
+      description="금방 끝나요. 이메일 인증 후 바로 첫 네 컷을 찍으러 가요."
       footer={
         <>
           <SocialButtons />
@@ -491,7 +533,7 @@ export function SignupScreen() {
         </>
       }
       title="회원가입">
-      <SurfaceCard style={{ gap: 14 }}>
+      <View style={{ gap: 14 }}>
         <FormField
           label="이메일"
           onChangeText={(value) => {
@@ -549,7 +591,7 @@ export function SignupScreen() {
           <FormField
             key={field.key}
             label={field.label}
-            onChangeText={(value) => setForm((current) => ({ ...current, [field.key]: value }))}
+            onChangeText={handleFieldChange[field.key]}
             placeholder={field.placeholder}
             secure={field.secure}
             value={form[field.key]}
@@ -598,7 +640,7 @@ export function SignupScreen() {
 
         <ActionButton label={submitting ? '처리 중...' : '회원가입'} onPress={() => void handleSignup()} />
         {error ? <Text style={styles.formError}>{error}</Text> : null}
-      </SurfaceCard>
+      </View>
     </AuthShell>
   );
 }
@@ -693,7 +735,7 @@ export function ForgotPasswordScreen() {
       description={step === 'VERIFY_CODE' ? '이메일로 받은 인증 코드를 입력해 주세요.' : '새 비밀번호를 입력하고 다시 로그인하세요.'}
       title="비밀번호 재설정">
       {step === 'VERIFY_CODE' ? (
-        <SurfaceCard style={{ gap: 14 }}>
+        <View style={{ gap: 14 }}>
           <FormField
             editable={!codeRequested}
             label="이메일"
@@ -719,9 +761,9 @@ export function ForgotPasswordScreen() {
           <Text onPress={() => push('/login')} style={styles.authBackLink}>
             로그인으로 돌아가기
           </Text>
-        </SurfaceCard>
+        </View>
       ) : (
-        <SurfaceCard style={{ gap: 14 }}>
+        <View style={{ gap: 14 }}>
           <FormField
             label="새 비밀번호"
             onChangeText={setNewPassword}
@@ -741,7 +783,7 @@ export function ForgotPasswordScreen() {
             onPress={() => void handleResetPassword()}
           />
           {error ? <Text style={styles.formError}>{error}</Text> : null}
-        </SurfaceCard>
+        </View>
       )}
     </AuthShell>
   );
@@ -749,9 +791,34 @@ export function ForgotPasswordScreen() {
 
 function createStyles(colors: HarucutThemeColors, isDark: boolean) {
   return StyleSheet.create({
+    authBackRow: {
+      marginBottom: 6,
+    },
+    authBackButton: {
+      alignItems: 'center',
+      height: 40,
+      justifyContent: 'center',
+      marginLeft: -8,
+      width: 40,
+    },
+    authIntro: {
+      gap: 6,
+      marginBottom: 22,
+    },
+    authTitle: {
+      color: colors.text,
+      fontSize: 26,
+      fontWeight: '800',
+      letterSpacing: -0.6,
+    },
+    authDescription: {
+      color: colors.muted,
+      fontSize: 14,
+      lineHeight: 20,
+    },
     authBackLink: {
       color: colors.muted,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600',
       textAlign: 'center',
       textDecorationLine: 'underline',
@@ -773,8 +840,8 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       justifyContent: 'space-between',
     },
     codeNotice: {
-      backgroundColor: isDark ? 'rgba(37, 99, 235, 0.18)' : 'rgba(37, 99, 235, 0.08)',
-      borderColor: isDark ? 'rgba(96, 165, 250, 0.34)' : 'rgba(37, 99, 235, 0.18)',
+      backgroundColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.08)',
+      borderColor: isDark ? 'rgba(30, 215, 96, 0.34)' : 'rgba(30, 215, 96, 0.18)',
       borderRadius: 18,
       borderWidth: 1,
       paddingHorizontal: 14,
@@ -870,6 +937,109 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     heroPreviewCard: {
       gap: 14,
     },
+    onboardingScreen: {
+      backgroundColor: colors.background,
+      flex: 1,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    onboardingHeader: {
+      paddingHorizontal: 22,
+      paddingTop: 10,
+      zIndex: 2,
+    },
+    onboardingFrames: {
+      // 헤더와 푸터 사이 남는 공간을 채우고 그 중앙에 프레임을 띄운다(absolute top 고정 → flex 중앙정렬).
+      alignItems: 'center',
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      zIndex: 1,
+    },
+    onboardingFrameImage: {
+      borderRadius: 14,
+      height: '100%',
+      width: '100%',
+    },
+    onboardingFrameLeft: {
+      aspectRatio: 0.62,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      elevation: 6,
+      height: 192,
+      marginRight: -26,
+      marginTop: 22,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 28,
+      transform: [{ rotate: '-9deg' }],
+      zIndex: 1,
+    },
+    onboardingFrameCenter: {
+      aspectRatio: 0.62,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      elevation: 12,
+      height: 230,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOffset: { height: 22, width: 0 },
+      shadowOpacity: 0.62,
+      shadowRadius: 36,
+      transform: [{ rotate: '2deg' }],
+      zIndex: 3,
+    },
+    onboardingFrameRight: {
+      aspectRatio: 0.62,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      elevation: 8,
+      height: 192,
+      marginLeft: -26,
+      marginTop: 22,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOffset: { height: 16, width: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 28,
+      transform: [{ rotate: '9deg' }],
+      zIndex: 2,
+    },
+    onboardingFooter: {
+      paddingBottom: 30,
+      paddingHorizontal: 26,
+      paddingTop: 60,
+      zIndex: 2,
+    },
+    onboardingTitleStack: {
+      gap: 0,
+    },
+    onboardingTitle: {
+      color: colors.text,
+      fontSize: 30,
+      fontWeight: '800',
+      letterSpacing: -1,
+      lineHeight: 35,
+    },
+    onboardingTitleAccent: {
+      color: colors.primary,
+      fontSize: 30,
+      fontWeight: '500',
+      letterSpacing: -1,
+      lineHeight: 35,
+    },
+    onboardingBody: {
+      color: colors.muted,
+      fontSize: 14.5,
+      lineHeight: 23,
+      marginBottom: 26,
+      marginTop: 12,
+    },
     rememberRow: {
       alignItems: 'center',
       flexDirection: 'row',
@@ -880,34 +1050,17 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 11,
       fontWeight: '600',
     },
-    kakaoMark: {
-      height: 18,
-      position: 'relative',
-      width: 18,
+    kakaoLogo: {
+      height: 26,
+      width: 26,
     },
-    kakaoMarkBubble: {
-      backgroundColor: 'rgba(0, 0, 0, 0.85)',
-      borderRadius: 7,
-      height: 13,
-      left: 1,
-      position: 'absolute',
-      top: 2,
-      width: 15,
+    naverLogo: {
+      height: 30,
+      width: 30,
     },
-    kakaoMarkTail: {
-      backgroundColor: 'rgba(0, 0, 0, 0.85)',
-      bottom: 2,
-      height: 5,
-      left: 4,
-      position: 'absolute',
-      transform: [{ rotate: '45deg' }],
-      width: 5,
-    },
-    naverMark: {
-      color: '#FFFFFF',
-      fontSize: 18,
-      fontWeight: '900',
-      lineHeight: 20,
+    googleLogo: {
+      height: 20,
+      width: 20,
     },
     socialDivider: {
       alignItems: 'center',
@@ -976,6 +1129,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     socialNaverLabel: {
       color: '#FFFFFF',
     },
+    socialGoogleButton: {
+      backgroundColor: '#FFFFFF',
+      borderColor: isDark ? 'rgba(15, 23, 42, 0.16)' : 'rgba(60, 64, 67, 0.18)',
+      borderWidth: 1,
+      shadowColor: 'rgba(15, 23, 42, 0.08)',
+      shadowOffset: { height: 14, width: 0 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+    },
+    socialGoogleIconBox: {
+      backgroundColor: '#FFFFFF',
+    },
+    socialGoogleLabel: {
+      color: 'rgba(30, 30, 30, 0.88)',
+    },
     legalFooterLink: {
       color: colors.muted,
       fontSize: 11,
@@ -1008,7 +1176,7 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     },
     verifiedCard: {
       alignItems: 'flex-start',
-      backgroundColor: isDark ? 'rgba(37, 99, 235, 0.14)' : 'rgba(239, 246, 255, 0.96)',
+      backgroundColor: isDark ? 'rgba(30, 215, 96, 0.14)' : 'rgba(239, 246, 255, 0.96)',
       borderColor: colors.border,
       borderRadius: 18,
       borderWidth: 1,

@@ -9,6 +9,7 @@ import {
   PRESIGNED_UPLOAD_TYPES,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
+import { dataUrlToFile, type EditorDraft } from "@/lib/themeEditorDraft";
 import type {
   Asset,
   CommonStyleJson,
@@ -86,10 +87,22 @@ type State = {
   activeId: string | null;
   background: ThemeBackground;
   backgroundColor: string;
+  // 저장 시 업로드할 로컬 배경 이미지 파일(있을 때만).
+  pendingBackgroundFile: File | null;
+  // 셀별 누끼(배경 제거) 상태 — 4칸. 에디터/미리보기 전용(서버 미전송).
+  cellCutouts: boolean[];
+  // 누끼 편집 모드: 켜져 있을 때만 캔버스 셀 탭으로 누끼를 토글한다.
+  cutMode: boolean;
 
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
+  toggleCellCutout: (index: number) => void;
+  setCutMode: (on: boolean) => void;
   setBackgroundColor: (color: string) => void;
+  setBackgroundImage: (file: File) => void;
+  setBackgroundImageKey: (key: string) => void;
+  setBackgroundImageUrl: (url: string) => void;
+  clearBackgroundImage: () => void;
 
   addPhotoAssets: (
     files: FileList,
@@ -104,6 +117,9 @@ type State = {
     reason?: "IN_USE" | "NOT_FOUND";
   };
   resetPhotos: () => void;
+  // 저장 시: 캔버스에서 실제 사용 중인 로컬 사진만 S3에 업로드(isTemp:false)하고
+  // 컴포넌트 source를 S3 URL로 치환한다. 미사용 업로드 사진은 올리지 않는다.
+  finalizePhotosForSave: () => Promise<void>;
 
   addComponentFromAsset: (
     type: "PHOTO" | "STICKER",
@@ -128,6 +144,8 @@ type State = {
   // 숨김 레이어 제외하고 서버 전송용 JSON 생성
   exportJson: () => ThemeExportJson | null;
   importJson: (data: ThemeExportJson) => void;
+  // localStorage WIP 초안을 에디터 상태로 복원(dataURL 사진은 File로 되살림).
+  hydrateDraft: (draft: EditorDraft) => void;
 
   // Konva 트랜스포머 업데이트 트리거용 키
   renderKey: number;
@@ -144,11 +162,17 @@ function resetEditorState(get: () => State) {
       URL.revokeObjectURL(p.src);
     } catch {}
   }
+  if (state.background.type === "IMAGE" && state.background.url) {
+    try {
+      URL.revokeObjectURL(state.background.url);
+    } catch {}
+  }
 
   return {
     tab: "PHOTO" as ComponentType,
     components: [],
     activeId: null,
+    cellCutouts: [false, false, false, false],
     assets: {
       photos: [],
       stickers: state.assets.stickers,
@@ -157,6 +181,7 @@ function resetEditorState(get: () => State) {
       type: "COLOR" as const,
       value: "111827",
     },
+    pendingBackgroundFile: null,
   };
 }
 
@@ -176,6 +201,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     value: "111827",
   },
   backgroundColor: "111827",
+  pendingBackgroundFile: null,
+  cellCutouts: [false, false, false, false],
+  cutMode: false,
 
   // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
@@ -195,8 +223,22 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }),
 
   setTab: (t) => set({ tab: t }),
+  toggleCellCutout: (index) =>
+    set((s) => {
+      if (index < 0 || index > 3) return s;
+      const next = [...s.cellCutouts];
+      next[index] = !next[index];
+      return { cellCutouts: next };
+    }),
+  setCutMode: (on) => set({ cutMode: on }),
   setBackgroundColor: (color) =>
-    set(() => {
+    set((s) => {
+      // 색을 고르면 배경 이미지는 해제한다.
+      if (s.background.type === "IMAGE" && s.background.url) {
+        try {
+          URL.revokeObjectURL(s.background.url);
+        } catch {}
+      }
       const normalized = normalizeHexColor(color);
       return {
         background: {
@@ -204,26 +246,60 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           value: normalized,
         },
         backgroundColor: normalized,
+        pendingBackgroundFile: null,
+      };
+    }),
+  setBackgroundImage: (file) =>
+    set((s) => {
+      if (s.background.type === "IMAGE" && s.background.url) {
+        try {
+          URL.revokeObjectURL(s.background.url);
+        } catch {}
+      }
+      const url = URL.createObjectURL(file);
+      return {
+        background: { type: "IMAGE", url },
+        pendingBackgroundFile: file,
+      };
+    }),
+  setBackgroundImageKey: (key) =>
+    set((s) => {
+      if (s.background.type !== "IMAGE") return s;
+      return { background: { ...s.background, key } };
+    }),
+  // 저장된 원격 IMAGE 배경(key만 있음)을 편집/썸네일에 렌더하도록 해석된 url을 주입.
+  // 재업로드 대상이 아니므로 pendingBackgroundFile은 건드리지 않는다(기존 key 보존).
+  setBackgroundImageUrl: (url) =>
+    set((s) => {
+      if (s.background.type !== "IMAGE") return s;
+      return { background: { ...s.background, url } };
+    }),
+  clearBackgroundImage: () =>
+    set((s) => {
+      if (s.background.type === "IMAGE" && s.background.url) {
+        try {
+          URL.revokeObjectURL(s.background.url);
+        } catch {}
+      }
+      return {
+        background: { type: "COLOR", value: normalizeHexColor(s.backgroundColor) },
+        pendingBackgroundFile: null,
       };
     }),
 
-  // 업로드한 사진을 임시 S3에 저장하고 에셋으로 등록
+  // 업로드한 사진은 S3에 올리지 않고 로컬(blob)로만 보관한다.
+  // 실제 S3 업로드는 저장(onDone) 시 finalizePhotosForSave에서 사용 중인 사진만 처리한다.
   addPhotoAssets: async (files) => {
-    const uploaded: Asset[] = [];
+    const added: Asset[] = [];
     let failed = 0;
 
     for (const file of Array.from(files)) {
       try {
-        const { objectUrl, key } = await uploadToS3WithPresigned({
-          file,
-          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-          isTemp: true,
-        });
-        uploaded.push({
+        const src = URL.createObjectURL(file);
+        added.push({
           id: uid("asset"),
-          src: objectUrl,
+          src,
           name: file.name,
-          s3Key: key,
           file,
         });
       } catch {
@@ -231,14 +307,14 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       }
     }
 
-    if (uploaded.length > 0) {
+    if (added.length > 0) {
       set((s) => ({
-        assets: { ...s.assets, photos: [...uploaded, ...s.assets.photos] },
+        assets: { ...s.assets, photos: [...added, ...s.assets.photos] },
         tab: "PHOTO",
       }));
     }
 
-    return { added: uploaded.length, failed };
+    return { added: added.length, failed };
   },
 
   // 사용 중인 사진은 삭제 불가
@@ -251,11 +327,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
     try {
       const processedFile = await removeImageBackground(asset.file);
-      const { objectUrl, key } = await uploadToS3WithPresigned({
-        file: processedFile,
-        type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-        isTemp: true,
-      });
+      const objectUrl = URL.createObjectURL(processedFile);
+      const previousSrc = asset.src;
 
       set((current) => ({
         assets: {
@@ -266,18 +339,22 @@ export const useThemeEditorStore = create<State>((set, get) => ({
                   ...photo,
                   src: objectUrl,
                   name: processedFile.name,
-                  s3Key: key,
+                  s3Key: undefined,
                   file: processedFile,
                 }
               : photo,
           ),
         },
         components: current.components.map((component) =>
-          component.type === "PHOTO" && component.source === asset.src
+          component.type === "PHOTO" && component.source === previousSrc
             ? { ...component, source: objectUrl }
             : component,
         ),
       }));
+
+      try {
+        URL.revokeObjectURL(previousSrc);
+      } catch {}
 
       return { ok: true as const };
     } catch (error) {
@@ -319,6 +396,48 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }
     set((s) => ({
       assets: { ...s.assets, photos: [] },
+    }));
+  },
+
+  // 저장 시: 실제 캔버스에 올라간 로컬 사진만 S3에 업로드(isTemp:false)하고
+  // 컴포넌트 source/에셋 src를 S3 URL로 치환한다. 한 번 올린(또는 원격) 사진은 건너뛴다.
+  finalizePhotosForSave: async () => {
+    const { components, assets } = get();
+    const usedSrcs = new Set(
+      components
+        .filter((c) => c.type === "PHOTO")
+        .map((c) => c.source),
+    );
+    const pending = assets.photos.filter(
+      (a) => a.file && !a.s3Key && usedSrcs.has(a.src),
+    );
+    if (pending.length === 0) return;
+
+    const srcToRemote = new Map<string, string>();
+    for (const asset of pending) {
+      if (!asset.file) continue;
+      const { objectUrl } = await uploadToS3WithPresigned({
+        file: asset.file,
+        type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+        isTemp: false,
+      });
+      srcToRemote.set(asset.src, objectUrl);
+    }
+
+    set((s) => ({
+      components: s.components.map((c) =>
+        c.type === "PHOTO" && srcToRemote.has(c.source)
+          ? { ...c, source: srcToRemote.get(c.source) as string }
+          : c,
+      ),
+      assets: {
+        ...s.assets,
+        photos: s.assets.photos.map((a) =>
+          srcToRemote.has(a.src)
+            ? { ...a, src: srcToRemote.get(a.src) as string, s3Key: undefined }
+            : a,
+        ),
+      },
     }));
   },
 
@@ -534,7 +653,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components, backgroundColor, background } = get();
+    const { frameId, components, backgroundColor, background, cellCutouts } =
+      get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
@@ -549,6 +669,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     return {
       frameId,
       background: exportedBackground,
+      cellCutouts: [...cellCutouts],
       components: normalized
         .filter((c) => !c.hidden)
         .map((c) => ({
@@ -583,6 +704,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        cellCutouts: Array.isArray(data.cellCutouts)
+          ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
+          : [false, false, false, false],
         background: data.background ?? {
           type: "COLOR",
           value: "111827",
@@ -591,10 +715,64 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           data.background?.type === "COLOR"
             ? normalizeHexColor(data.background.value)
             : "111827",
+        pendingBackgroundFile: null,
         assets: {
           photos: [],
           stickers: s.assets.stickers,
         },
+      };
+    });
+  },
+
+  // localStorage WIP 초안을 에디터 상태로 복원한다. dataURL 사진은 File로 되살려
+  // 저장 시 finalizePhotosForSave가 S3에 올릴 수 있게 한다.
+  hydrateDraft: (draft) => {
+    set((s) => {
+      const photoSrcs = Array.from(
+        new Set(
+          draft.components
+            .filter((c) => c.type === "PHOTO")
+            .map((c) => c.source)
+            .filter((src) => src.startsWith("data:")),
+        ),
+      );
+      const photos: Asset[] = photoSrcs.map((src) => ({
+        id: uid("asset"),
+        src,
+        name: "draft.png",
+        file: dataUrlToFile(src, `draft-${crypto.randomUUID()}.png`),
+      }));
+
+      let pendingBackgroundFile: File | null = null;
+      if (
+        draft.background.type === "IMAGE" &&
+        draft.background.url?.startsWith("data:")
+      ) {
+        pendingBackgroundFile = dataUrlToFile(
+          draft.background.url,
+          `bg-${crypto.randomUUID()}.png`,
+        );
+      }
+
+      return {
+        frameId: draft.frameId,
+        tab: "PHOTO" as ComponentType,
+        components: normalizeZ(
+          draft.components.map((c) => ({
+            ...c,
+            locked: false,
+            hidden: false,
+          })) as EditorComponent[],
+        ),
+        activeId: null,
+        background: draft.background,
+        backgroundColor:
+          draft.background.type === "COLOR"
+            ? normalizeHexColor(draft.background.value)
+            : normalizeHexColor(draft.backgroundColor),
+        pendingBackgroundFile,
+        cellCutouts: [0, 1, 2, 3].map((i) => Boolean(draft.cellCutouts?.[i])),
+        assets: { photos, stickers: s.assets.stickers },
       };
     });
   },

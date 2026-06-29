@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
@@ -106,12 +107,12 @@ function LoginPageContent() {
 
   return (
     <AuthPageShell
-      title="로그인"
-      description="하루컷에 로그인하고 프레임과 기록을 이어서 관리해 보세요."
+      title="다시 오셨네요"
+      description="하루컷에 로그인하세요."
       footer={
         <>
           <SocialLoginSection mode="login" redirectTo={redirectTo} />
-          <p className="mt-2 text-center text-[11px] text-zinc-400">
+          <p className="mt-2 text-center text-[14px] text-[color:var(--hc-muted)]">
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
@@ -170,6 +171,11 @@ function LoginPageContent() {
         >
           {isSubmitting ? "로그인 중..." : "로그인"}
         </button>
+
+        {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영·꾸미기를 먼저 체험할 수 있게. */}
+        <GuestTrialStartButton className="rounded-full border border-[color:var(--hc-border)] py-2.5 text-center text-xs font-semibold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]">
+          비회원 체험하기
+        </GuestTrialStartButton>
       </form>
     </AuthPageShell>
   );

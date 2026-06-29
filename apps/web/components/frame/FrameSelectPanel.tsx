@@ -32,7 +32,7 @@ export function FrameSelectPanel({
   media,
   selectedIndexes,
   maxSelect,
-  emptyStateText = "선택 가능한 사진이나 영상이 아직 없어요.",
+  emptyStateText = "선택 가능한 사진이 아직 없어요.",
   incompleteButtonLabel,
   nextButtonLabel,
   onToggleSelect,
@@ -63,10 +63,10 @@ export function FrameSelectPanel({
   const canProceed = selectedCount === maxSelect;
 
   return (
-    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
       <section className="flex flex-col gap-3">
         {frameId ? (
-          <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 xl:hidden">
+          <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 lg:hidden">
             <p className="text-sm font-semibold text-zinc-100">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview
@@ -87,7 +87,7 @@ export function FrameSelectPanel({
               {emptyStateText}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
               {baseItems.map((item, index) => {
                 const slotIndex = selectedIndexes.indexOf(index);
                 const isSelected = slotIndex !== -1;
@@ -101,8 +101,8 @@ export function FrameSelectPanel({
                     aria-pressed={isSelected}
                     aria-label={
                       isSelected
-                        ? `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택 해제 (현재 ${order}번째로 선택됨)`
-                        : `${index + 1}번 ${item.type === "video" ? "영상" : "사진"} 선택`
+                        ? `${index + 1}번 사진 선택 해제 (현재 ${order}번째로 선택됨)`
+                        : `${index + 1}번 사진 선택`
                     }
                     className={[
                       "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
@@ -111,23 +111,12 @@ export function FrameSelectPanel({
                         : "border-zinc-700 hover:border-zinc-500",
                     ].join(" ")}
                   >
-                    {item.type === "video" ? (
-                      <video
-                        src={item.src}
-                        className="h-full w-full object-cover"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.src}
-                        alt={`shot-${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.src}
+                      alt={`shot-${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
 
                     <span className="pointer-events-none absolute left-1 top-1 rounded-full border border-black/10 bg-white px-1.5 py-0.5 text-[9px] font-bold text-black shadow-sm">
                       #{index + 1}
@@ -166,9 +155,9 @@ export function FrameSelectPanel({
         </section>
       </section>
 
-      <aside className="flex flex-col gap-3 xl:sticky xl:top-6">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-6">
         {frameId ? (
-          <section className="hidden flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 xl:flex">
+          <section className="hidden flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 lg:flex">
             <p className="text-sm font-semibold text-zinc-100">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview

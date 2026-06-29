@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FrameId } from "@/constants/frames";
 import { toThemeExportJson } from "@/lib/frameApi";
+import { getImageUrlByKey } from "@/lib/presignedUploadApi";
 import { getFrame } from "@/lib/remoteFrameApi";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
@@ -29,6 +30,19 @@ export function useRemoteFrameTheme(
         if (expectedFrameId && nextTheme.frameId !== expectedFrameId) {
           setThemeData(null);
           return;
+        }
+
+        // IMAGE 배경은 key만 오므로 렌더용 URL을 해석해 붙인다(실패 시 색 폴백).
+        if (
+          nextTheme.background?.type === "IMAGE" &&
+          nextTheme.background.key &&
+          !nextTheme.background.url
+        ) {
+          const url = await getImageUrlByKey(nextTheme.background.key);
+          if (cancelled) return;
+          if (url) {
+            nextTheme.background = { ...nextTheme.background, url };
+          }
         }
 
         setThemeData(nextTheme);
