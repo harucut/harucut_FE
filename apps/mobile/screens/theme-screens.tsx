@@ -325,7 +325,7 @@ export function ThemeStickerScreen() {
     }
   };
 
-  const handleRemoveFrame = async () => {
+  const performRemoveFrame = async () => {
     if (!themeEditor.selectedSavedFrameId) {
       return;
     }
@@ -340,6 +340,24 @@ export function ThemeStickerScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // 확인 없이 즉시 삭제되던 것을 방지 — 확인 다이얼로그를 거친다.
+  const handleRemoveFrame = () => {
+    if (!themeEditor.selectedSavedFrameId) {
+      return;
+    }
+
+    showNotice({
+      actions: [
+        { id: 'dismiss', label: '취소', variant: 'secondary' },
+        { id: 'dismiss', label: '삭제', variant: 'danger', onPress: () => void performRemoveFrame() },
+      ],
+      eyebrow: 'DELETE FRAME',
+      icon: 'trash-outline',
+      message: '이 프레임을 삭제하면 되돌릴 수 없어요. 정말 삭제할까요?',
+      title: '프레임을 삭제할까요?',
+    });
   };
 
   return (
@@ -605,7 +623,7 @@ export function ThemeStickerScreen() {
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="trash-outline" size={16} />}
             label="삭제"
-            onPress={() => void handleRemoveFrame()}
+            onPress={handleRemoveFrame}
             variant="danger"
           />
         ) : null}

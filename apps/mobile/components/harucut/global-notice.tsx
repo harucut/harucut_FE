@@ -77,7 +77,15 @@ export function GlobalNotice() {
               <ActionButton
                 key={action.id}
                 label={action.label}
-                onPress={() => handleAction(action.id)}
+                onPress={() => {
+                  // 액션에 커스텀 onPress가 있으면 노티스를 닫고 그 동작을 실행(확인 다이얼로그 용도).
+                  if (action.onPress) {
+                    clearNotice();
+                    action.onPress();
+                    return;
+                  }
+                  handleAction(action.id);
+                }}
                 variant={action.variant ?? 'primary'}
               />
             ))}

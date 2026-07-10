@@ -35,6 +35,7 @@ type ShootSessionState = {
   clearResults: () => void;
   setShots: (shots: ShotItem[]) => void;
   toggleSelect: (index: number) => void;
+  clearSelection: () => void;
   addShotPhoto: (photoDataUrl: string) => void;
   resetShots: () => void;
   reset: () => void;
@@ -103,6 +104,13 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   toggleSelect: (index) =>
     set({
       selectedIndexes: toggleIndexInSlots(get().selectedIndexes, index),
+      imageResult: null,
+    }),
+
+  // 4장 선택만 비운다(촬영본은 유지). '선택 초기화' 버튼이 세션 전체를 지우지 않도록.
+  clearSelection: () =>
+    set({
+      selectedIndexes: createEmptySlots(),
       imageResult: null,
     }),
 

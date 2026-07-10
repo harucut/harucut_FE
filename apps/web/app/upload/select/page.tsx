@@ -22,7 +22,7 @@ export default function UploadSelectPage() {
     borderColor,
     outputFilter,
     toggleSelect,
-    resetAll,
+    clearSelection,
     addMedia,
     setBorderColor,
     setOutputFilter,
@@ -96,7 +96,7 @@ export default function UploadSelectPage() {
           emptyStateText="아직 업로드한 사진이 없어요. 아래 버튼으로 사진을 추가해 주세요."
           nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}
-          onReset={resetAll}
+          onReset={clearSelection}
           onNext={handleNext}
           themeData={themeData}
           borderColor={effectiveBorderColor}

@@ -32,6 +32,7 @@ type UploadSessionState = {
   clearResults: () => void;
   addMedia: (items: FrameMedia[]) => void;
   toggleSelect: (index: number) => void;
+  clearSelection: () => void;
   resetAll: () => void;
 };
 
@@ -105,6 +106,13 @@ export const useUploadSession = create<UploadSessionState>((set, get) => ({
   toggleSelect: (index) =>
     set({
       selectedIndexes: toggleIndexInSlots(get().selectedIndexes, index),
+      imageResult: null,
+    }),
+
+  // 4장 선택만 비운다(업로드한 사진은 유지). '선택 초기화' 버튼이 세션 전체를 지우지 않도록.
+  clearSelection: () =>
+    set({
+      selectedIndexes: createEmptySlots(),
       imageResult: null,
     }),
 

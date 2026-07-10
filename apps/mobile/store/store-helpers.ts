@@ -22,6 +22,8 @@ export type NoticeAction = {
   id: NoticeActionId;
   label: string;
   variant?: ButtonVariant;
+  // 확인 다이얼로그처럼 액션에 임의 동작을 붙일 때 사용. 지정되면 노티스를 닫은 뒤 실행한다.
+  onPress?: () => void;
 };
 
 export type NoticeState = {
