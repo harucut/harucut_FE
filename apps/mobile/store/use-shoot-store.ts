@@ -106,7 +106,7 @@ export const useShootStore = create<ShootStore>((set, get) => ({
     set((state) => ({
       ...defaultShootSession(),
       // 촬영 시작 시 세션(촬영본/선택)만 초기화하고 고른 프레임(저장 프레임 포함)은 유지한다.
-      // 그래야 촬영 중에도 카메라 위 프레임 오버레이의 데코가 그대로 보인다.
+      // 촬영 프리뷰의 슬롯 비율과 배치·결과 단계의 프레임 표시가 이 값에 의존한다.
       borderColor: state.borderColor,
       frameId: state.frameId,
       selectedSavedFrameId: state.selectedSavedFrameId,

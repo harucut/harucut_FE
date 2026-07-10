@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
-import { CaptureFrameStage, FRAME_LAYOUTS, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
+import { FRAME_LAYOUTS, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
 import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
@@ -143,27 +143,14 @@ export function ShootCaptureScreen() {
   // 기본은 수동 촬영. 타이머 모드는 사용자가 직접 선택할 수 있다.
   const [captureMode, setCaptureMode] = useState<CaptureMode>('manual');
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
-  const savedFrames = useLibraryStore((state) => state.savedFrames);
-
-  const activeSavedFrame =
-    shoot.selectedSavedFrameId != null
-      ? savedFrames.find((frame) => frame.id === shoot.selectedSavedFrameId) ?? null
-      : null;
   const layout = shoot.frameId ? FRAME_LAYOUTS[shoot.frameId] : null;
   const slotCount = layout ? layout.slots.length : 4;
   // 8장을 슬롯 수로 순환 — 지금 찍는 칸 인덱스.
   const cameraSlotIndex = shoot.shots.length % slotCount;
-  // 각 칸에 가장 최근 촬영본을 채워 프레임이 완성돼 가는 모습을 보여준다(현재 칸은 카메라가 덮는다).
-  const capturedUris = layout
-    ? layout.slots.map((_, slotIndex) => {
-        if (slotIndex === cameraSlotIndex) return undefined;
-        for (let k = shoot.shots.length - 1; k >= 0; k -= 1) {
-          if (k % slotCount === slotIndex) return shoot.shots[k]?.uri;
-        }
-        return undefined;
-      })
-    : [];
-  const isTallFrame = layout ? layout.totalWidth / layout.totalHeight < 1 : true;
+  // 촬영 중에는 프레임을 씌우지 않고, 선택한 프레임의 슬롯 비율만 카메라 프리뷰에 반영한다.
+  // 프레임(테두리·데코)은 사진을 배치하는 다음 단계부터 보인다.
+  const currentSlot = layout ? layout.slots[cameraSlotIndex] : null;
+  const isTallSlot = currentSlot ? currentSlot.width / currentSlot.height < 1 : true;
   // 세션이 시작되면(촬영 중이거나 이미 한 장 이상 찍었으면) 모드/간격을 잠근다.
   // 수동 모드는 매 컷 후 isShooting이 false가 되므로 isShooting만으로는 부족하다.
   const sessionLocked = isShooting || shoot.shots.length > 0;
@@ -353,39 +340,34 @@ export function ShootCaptureScreen() {
 
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.statusRow}>
-          <Text style={styles.statusText}>프레임에 맞춰 8장을 촬영해요</Text>
+          <Text style={styles.statusText}>선택한 프레임 비율로 8장을 촬영해요</Text>
           <Pill>{shoot.shots.length} / {SHOOT_TOTAL}장 촬영됨</Pill>
         </View>
 
         <View style={styles.stageWrap}>
-          {layout && shoot.frameId ? (
-            <CaptureFrameStage
-              accentColor={shoot.borderColor}
-              backgroundColor={shoot.borderColor}
-              cameraSlotIndex={cameraSlotIndex}
-              capturedUris={capturedUris}
-              components={activeSavedFrame?.components ?? []}
-              frameId={shoot.frameId}
-              renderCamera={() =>
-                permission?.granted ? (
-                  <CameraView
-                    // 신 아키텍처(Fabric)에서는 facing prop만 바꿔도 실제 카메라가
-                    // 전환되지 않는 경우가 있어, key로 강제 remount해 후면/전면 전환을 보장한다.
-                    key={facing}
-                    facing={facing}
-                    onCameraReady={() => setIsCameraReady(true)}
-                    ref={cameraRef}
-                    style={StyleSheet.absoluteFill}
-                  />
-                ) : (
-                  <View style={styles.cameraSlotPlaceholder}>
-                    <Ionicons color="#FFFFFF" name="camera-outline" size={22} />
-                  </View>
-                )
-              }
-              slotColor={colors.backgroundCanvas}
-              style={isTallFrame ? styles.stageTall : styles.stageWide}
-            />
+          {layout && currentSlot ? (
+            <View
+              style={[
+                styles.cameraStage,
+                isTallSlot ? styles.stageTall : styles.stageWide,
+                { aspectRatio: currentSlot.width / currentSlot.height },
+              ]}>
+              {permission?.granted ? (
+                <CameraView
+                  // 신 아키텍처(Fabric)에서는 facing prop만 바꿔도 실제 카메라가
+                  // 전환되지 않는 경우가 있어, key로 강제 remount해 후면/전면 전환을 보장한다.
+                  key={facing}
+                  facing={facing}
+                  onCameraReady={() => setIsCameraReady(true)}
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : (
+                <View style={styles.cameraSlotPlaceholder}>
+                  <Ionicons color="#FFFFFF" name="camera-outline" size={22} />
+                </View>
+              )}
+            </View>
           ) : null}
 
           {isShooting && countdown ? (
@@ -398,6 +380,15 @@ export function ShootCaptureScreen() {
             </View>
           ) : null}
         </View>
+
+        {/* 찍은 컷 미리보기 — 프레임 없이 촬영하므로 진행 상황은 썸네일로 보여준다. */}
+        {shoot.shots.length > 0 ? (
+          <View style={styles.shotStrip}>
+            {shoot.shots.map((shot) => (
+              <Image key={shot.id} source={{ uri: shot.uri }} style={styles.shotThumb} />
+            ))}
+          </View>
+        ) : null}
 
         {permission && !permission.granted ? (
           <ActionButton
@@ -961,6 +952,13 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       flex: 1,
       justifyContent: 'center',
     },
+    cameraStage: {
+      backgroundColor: '#000000',
+      borderRadius: 16,
+      maxHeight: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+    },
     stageTall: {
       height: '100%',
     },
@@ -972,6 +970,17 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       height: 420,
       justifyContent: 'center',
       position: 'relative',
+    },
+    shotStrip: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      justifyContent: 'center',
+    },
+    shotThumb: {
+      borderRadius: 8,
+      height: 40,
+      width: 40,
     },
     countdownCircle: {
       alignItems: 'center',

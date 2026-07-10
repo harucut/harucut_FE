@@ -1,11 +1,9 @@
 "use client";
 
 import { RefreshCw, Timer } from "lucide-react";
-import { ThemeOverlaySvg } from "@/components/theme/editor/ThemeOverlaySvg";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StepProgress } from "@/components/layout/StepProgress";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
@@ -34,24 +32,15 @@ export default function CapturePage() {
     TIMER_OPTIONS,
   } = useCaptureFlow();
 
-  const { frameId, remoteFrameId, shots, borderColor } = useShootSession();
+  const { frameId, shots } = useShootSession();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
-  const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
 
   const slotCount = layout ? layout.slots.length : 0;
   // 8장을 4칸에 순환 배치하므로, 지금 찍는 칸은 shotCount를 슬롯 수로 나눈 나머지.
   const currentSlotIndex = slotCount > 0 ? shotCount % slotCount : 0;
-  // 각 칸에 가장 최근 촬영본을 채워, 실제 프레임이 완성돼 가는 모습을 그대로 보여준다.
-  const photoForSlot = (slotIdx: number): string | undefined => {
-    if (slotCount === 0) return undefined;
-    for (let k = shotCount - 1; k >= 0; k -= 1) {
-      if (k % slotCount === slotIdx) return shots[k]?.photo;
-    }
-    return undefined;
-  };
-
-  const pct = (value: number, total: number) => `${(value / total) * 100}%`;
+  // 촬영 중에는 프레임을 씌우지 않고, 선택한 프레임의 슬롯 비율만 프리뷰에 반영한다.
+  // 프레임(테두리·데코)은 사진을 배치하는 다음 단계부터 보인다.
   const currentSlot = layout ? layout.slots[currentSlotIndex] : null;
 
   return (
@@ -78,7 +67,7 @@ export default function CapturePage() {
             </span>
           </div>
 
-          {/* 전체 프레임 무대 — 카메라가 프레임 안에서 실제로 차지하는 칸 크기/위치 그대로 보인다. */}
+          {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
           <div
             className="relative mx-auto flex items-center justify-center"
             style={{ height: "min(58svh, 540px)", width: "100%" }}
@@ -87,74 +76,20 @@ export default function CapturePage() {
 
             {layout && currentSlot ? (
               <div
-                className="relative overflow-hidden rounded-xl shadow-[var(--hc-card-shadow)]"
+                className="relative overflow-hidden rounded-xl bg-black shadow-[var(--hc-card-shadow)]"
                 style={{
-                  aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
-                  backgroundColor: borderColor,
-                  height: layout.full === "h-full" ? "100%" : undefined,
-                  width: layout.full === "w-full" ? "100%" : undefined,
-                  maxWidth: "100%",
-                  maxHeight: "100%",
+                  aspectRatio: `${currentSlot.width} / ${currentSlot.height}`,
+                  width: `min(100%, calc(min(58svh, 540px) * ${currentSlot.width / currentSlot.height}))`,
                 }}
               >
-                {/* 이미 찍은 칸 + 아직 안 찍은 칸 플레이스홀더 (현재 칸은 아래 카메라가 덮는다) */}
-                {layout.slots.map((slot, idx) => {
-                  const photo = idx === currentSlotIndex ? undefined : photoForSlot(idx);
-                  return (
-                    <div
-                      key={idx}
-                      className="absolute overflow-hidden rounded-[2px]"
-                      style={{
-                        left: pct(slot.x, layout.totalWidth),
-                        top: pct(slot.y, layout.totalHeight),
-                        width: pct(slot.width, layout.totalWidth),
-                        height: pct(slot.height, layout.totalHeight),
-                        backgroundColor:
-                          idx === currentSlotIndex
-                            ? "transparent"
-                            : "var(--hc-surface-muted)",
-                        outline:
-                          idx === currentSlotIndex
-                            ? "2px solid var(--hc-primary)"
-                            : "none",
-                        outlineOffset: "-2px",
-                      }}
-                    >
-                      {photo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={photo}
-                          alt={`촬영 ${idx + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                  );
-                })}
-
-                {/* 라이브 카메라 — 현재 칸 위에 고정 위치로 올려 칸 이동 시에도 스트림이 끊기지 않게 한다. */}
+                {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다. */}
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="absolute z-[5] scale-x-[-1] rounded-[2px] object-cover"
-                  style={{
-                    left: pct(currentSlot.x, layout.totalWidth),
-                    top: pct(currentSlot.y, layout.totalHeight),
-                    width: pct(currentSlot.width, layout.totalWidth),
-                    height: pct(currentSlot.height, layout.totalHeight),
-                  }}
+                  className="absolute inset-0 h-full w-full scale-x-[-1] object-cover"
                 />
-
-                {/* 프레임 데코 오버레이 (사용자/원격 프레임). 좌표는 합성 결과와 동일. */}
-                {themeData ? (
-                  <ThemeOverlaySvg
-                    layout={layout}
-                    data={themeData}
-                    className="pointer-events-none absolute inset-0 z-10"
-                  />
-                ) : null}
 
                 {isShooting && countdown !== null ? (
                   <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40">
@@ -182,6 +117,21 @@ export default function CapturePage() {
               </div>
             )}
           </div>
+
+          {/* 찍은 컷 미리보기 — 프레임 없이 촬영하므로 진행 상황은 썸네일로 보여준다. */}
+          {shots.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {shots.map((shot, idx) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={idx}
+                  src={shot.photo}
+                  alt={`촬영 ${idx + 1}`}
+                  className="h-10 w-10 rounded-md border border-[color:var(--hc-border)] object-cover"
+                />
+              ))}
+            </div>
+          ) : null}
 
           {/* 촬영 모드: 타이머 / 수동. 촬영이 시작되면 잠긴다. */}
           <div className="mx-auto flex w-full max-w-[280px] items-center gap-1.5 rounded-full bg-[color:var(--hc-surface-muted)] p-1">
