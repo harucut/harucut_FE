@@ -442,6 +442,20 @@ span {
   box-shadow: var(--hc-input-shadow);
 }
 
+/*
+  iOS Safari는 입력 요소의 font-size가 16px 미만이면 포커스 시 뷰포트를 강제 확대(줌)한다.
+  디자인은 작은 입력 글꼴(11~13px)을 쓰므로 데스크톱 크기는 그대로 두고, 터치 기기
+  (pointer: coarse)에서만 모든 텍스트 입력을 16px로 올려 줌 튐을 막는다.
+*/
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="file"]),
+  textarea,
+  select {
+    /* Tailwind text-[11px] 등 유틸리티 클래스를 이기려면 !important가 필요하다. */
+    font-size: 16px !important;
+  }
+}
+
 .hc-input::placeholder {
   color: var(--hc-muted-soft);
 }
