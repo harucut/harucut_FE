@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
+import { SessionExpiryBridge } from "@/components/auth/SessionExpiryBridge";
 import { ColorThemeScript } from "@/components/theme/ColorThemeScript";
 import { ColorThemeSync } from "@/components/theme/ColorThemeSync";
 import "./globals.css";
@@ -58,6 +59,9 @@ export default function RootLayout({
         <ExternalBrowserGate />
         <Suspense fallback={null}>
           <GuestTrialBridge />
+        </Suspense>
+        <Suspense fallback={null}>
+          <SessionExpiryBridge />
         </Suspense>
         {children}
       </body>
