@@ -64,7 +64,9 @@ export type RemoteFrameComponent = {
   height: number;
   scale?: number;
   rotation?: number;
-  zIndex: number;
+  // 스웨거 ComponentResponse는 zIndex와 zindex를 모두 내려준다. 어느 쪽이든 읽는다.
+  zIndex?: number;
+  zindex?: number;
   style?: Record<string, unknown>;
   styleJson?: Record<string, unknown>;
 };

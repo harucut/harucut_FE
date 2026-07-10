@@ -25,6 +25,9 @@ export type CreateFrameRequest = {
     height: number;
     scale: number;
     rotation: number;
+    // 스웨거 ComponentRequest는 required 필드가 소문자 zindex다. 백엔드가 어느 쪽에
+    // 바인딩하든 유효성 검증을 통과하도록 zindex(계약)와 zIndex(호환)를 함께 보낸다.
+    zindex: number;
     zIndex: number;
     styleJson: Record<string, unknown>;
   }>;
@@ -124,6 +127,7 @@ export function toCreateFrameRequest(
       height: c.height,
       scale: c.scale ?? 1,
       rotation: c.rotation ?? 0,
+      zindex: c.zIndex,
       zIndex: c.zIndex,
       styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
       id: c.id,
@@ -145,7 +149,7 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
       height: component.height,
       scale: component.scale ?? 1,
       rotation: component.rotation ?? 0,
-      zIndex: component.zIndex,
+      zIndex: component.zIndex ?? component.zindex ?? index + 1,
       styleJson:
         (component.styleJson ?? component.style ?? {}) as Record<string, unknown>,
     })),

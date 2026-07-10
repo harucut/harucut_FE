@@ -33,7 +33,10 @@ type RemoteFrameComponent = {
   width: number;
   x: number;
   y: number;
-  zIndex: number;
+  // 스웨거 ComponentRequest/Response는 소문자 zindex를 쓴다(required). 요청엔 둘 다 보내고
+  // 응답은 둘 중 있는 값을 읽는다.
+  zIndex?: number;
+  zindex?: number;
 };
 
 type RemoteFrame = {
@@ -165,6 +168,7 @@ function toRequestComponent(component: ThemeEditorComponent): RemoteFrameCompone
     width: component.width,
     x: component.x,
     y: component.y,
+    zindex: component.zIndex,
     zIndex: component.zIndex,
   };
 }
@@ -183,7 +187,7 @@ function toSavedComponent(component: RemoteFrameComponent, index: number): Theme
     width: component.width,
     x: component.x,
     y: component.y,
-    zIndex: component.zIndex,
+    zIndex: component.zIndex ?? component.zindex ?? index + 1,
   };
 }
 
@@ -237,7 +241,9 @@ function toCreateFrameRequest(draft: ThemeFrameDraft): FrameCreateRequest {
     background: toRequestBackground(draft),
     canvasHeight: canvas.height,
     canvasWidth: canvas.width,
-    components,
+    // 자동 생성(caption/sticker) 컴포넌트는 zIndex만 갖고 있으므로, 소문자 zindex(스웨거 required)를
+    // 함께 채워 어느 쪽이든 유효성 검증을 통과하게 한다.
+    components: components.map((c) => ({ ...c, zindex: c.zindex ?? c.zIndex })),
     description: draft.description,
     frameType: frameTypeFromFrameId(draft.frameId),
     previewKey: draft.previewKey,
