@@ -1,9 +1,9 @@
 import * as MediaLibrary from 'expo-media-library';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 import { FRAME_LAYOUTS, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
@@ -178,6 +178,38 @@ export function ShootCaptureScreen() {
       tickResolveRef.current?.();
     };
   }, []);
+
+  // 촬영본이 있는데 안드로이드 하드웨어 백을 누르면, 확인 없이 사진이 사라지지 않도록
+  // 확인 다이얼로그를 띄운다(화면이 포커스일 때만 백 이벤트를 가로챈다).
+  useFocusEffect(
+    useCallback(() => {
+      const onBack = () => {
+        if (shoot.shots.length === 0) return false;
+        showNotice({
+          actions: [
+            { id: 'dismiss', label: '계속 촬영', variant: 'secondary' },
+            {
+              id: 'dismiss',
+              label: '나가기',
+              variant: 'danger',
+              onPress: () => {
+                resetShootSession();
+                router.replace('/shoot' as never);
+              },
+            },
+          ],
+          eyebrow: 'LEAVE CAPTURE',
+          icon: 'warning-outline',
+          message: '지금 나가면 찍은 사진이 모두 사라져요. 정말 나갈까요?',
+          title: '촬영을 그만둘까요?',
+        });
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => subscription.remove();
+    }, [shoot.shots.length, showNotice, resetShootSession, router]),
+  );
 
   // 카메라 권한이 없으면 요청하고, 끝내 거부되면 안내 후 false를 돌려준다.
   const ensureCameraPermission = async () => {

@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 
 import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -27,16 +27,27 @@ export function AppScrollView({
   return (
     // 배경은 handoff처럼 단색 다크(colors.background)로 둔다. 이전의 그라데이션 + 초록 orb 2개는 제거.
     <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.screenContent,
-          { paddingTop: HARUCUT_SPACING.screen + EXTRA_TOP_PADDING },
-          { paddingBottom: bottomPadding },
-          contentContainerStyle,
-        ]}
-        showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
+      {/*
+        키보드가 입력/버튼을 가리지 않도록 감싼다. Android는 기본 windowSoftInputMode가
+        adjustResize라 시스템이 이미 창을 줄이므로 behavior를 주지 않고(이중 보정 방지),
+        iOS만 padding으로 밀어 올린다.
+      */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.screenFill}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.screenContent,
+            { paddingTop: HARUCUT_SPACING.screen + EXTRA_TOP_PADDING },
+            { paddingBottom: bottomPadding },
+            contentContainerStyle,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}>
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -492,6 +503,9 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     screen: {
       backgroundColor: colors.background,
+      flex: 1,
+    },
+    screenFill: {
       flex: 1,
     },
     screenContent: {
