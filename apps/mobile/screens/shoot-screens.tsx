@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
@@ -234,6 +235,9 @@ export function ShootCaptureScreen() {
   // 한 장 촬영해서 세션에 추가하고, 추가 후 누적 장수를 돌려준다.
   const captureOneShot = async (shotIndex: number) => {
     if (!cameraRef.current) return shotIndex;
+
+    // 셔터 햅틱 — 물리 셔터 감각. 미지원 기기에서 던지는 에러는 무시(촬영 흐름 방해 금지).
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     const picture = await cameraRef.current.takePictureAsync({
       quality: 0.6,

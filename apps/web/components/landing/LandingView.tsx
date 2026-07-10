@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { Reveal } from "@/components/ui/Reveal";
 import type { FrameId } from "@/constants/frames";
 import { COMPANY } from "@/constants/company";
 
@@ -135,19 +136,31 @@ function HeroEditorial() {
       />
 
       {/* 헤드라인 — Pretendard Black, 초대형(type-first) */}
-      <h1 className="relative text-[46px] font-black leading-[1.02] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:tracking-[-4px]">
-        어디서든,
-        <br />
-        하루를 <span style={{ color: GREEN }}>촬영해요</span>
-      </h1>
-      <p className="relative mb-9 mt-6 max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]">
-        특별한 하루를 사진으로 남겨보세요.
-      </p>
+      <Reveal
+        as="span"
+        className="relative block text-[46px] font-black leading-[1.02] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:tracking-[-4px]"
+      >
+        <h1>
+          어디서든,
+          <br />
+          하루를 <span className="hc-gradient-text">촬영해요</span>
+        </h1>
+      </Reveal>
+      <Reveal
+        as="span"
+        delay={120}
+        className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
+      >
+        <p>특별한 하루를 사진으로 남겨보세요.</p>
+      </Reveal>
 
       {/* 히어로는 브랜드 비주얼만 — CTA(지금 시작하기)는 헤더 우측 상단이 담당한다. */}
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
-      <div className="relative mt-14 flex w-full items-end justify-center">
+      <Reveal
+        delay={220}
+        className="relative mt-14 flex w-full items-end justify-center"
+      >
         <div
           className="-mr-7 h-[120px] drop-shadow-2xl sm:h-[150px]"
           style={{ transform: "rotate(-12deg) translateY(10px)", zIndex: 1 }}
@@ -166,7 +179,7 @@ function HeroEditorial() {
         >
           <ShowcaseFrame id="polaroid-4" className="!h-full !w-auto" />
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -181,12 +194,12 @@ export function LandingView() {
       {/* HOW */}
       <section id="how" className="border-y border-white/10 bg-black">
         <div className="mx-auto max-w-[1160px] px-7 py-[76px]">
-          <div className="mb-10">
+          <Reveal className="mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
               찍고 — 꾸미고 — 남기고.
               <br />네 컷이면 끝.
             </h2>
-          </div>
+          </Reveal>
 
           <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
             <div className="h-[18px] border-b border-white/[0.06] bg-[repeating-linear-gradient(90deg,transparent_0_12px,rgba(255,255,255,.07)_12px_22px)]" />
@@ -225,11 +238,11 @@ export function LandingView() {
 
       {/* FRAMES */}
       <section id="frames" className="mx-auto max-w-[1160px] px-7 py-20">
-        <div className="mb-11">
+        <Reveal className="mb-11">
           <h2 className="text-[38px] font-extrabold tracking-[-1.2px]">
-            하루의 기분대로, <span style={{ color: GREEN }}>네 가지 프레임</span>
+            하루의 기분대로, <span className="hc-gradient-text">네 가지 프레임</span>
           </h2>
-        </div>
+        </Reveal>
         <div className="flex flex-wrap items-end justify-center gap-9">
           {FRAMES.map((f, i) => (
             <div key={f.id} className="text-center">

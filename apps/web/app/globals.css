@@ -18,6 +18,8 @@
   --hc-border-subtle: rgba(20, 20, 15, 0.1);
   --hc-border-strong: rgba(22, 180, 84, 0.34);
   --hc-surface: #ffffff;
+  /* 모바일 탭바 등 backdrop-blur 위에 얹는 반투명 카드 배경. 정의가 없어 탭바가 투명해지던 버그 수정. */
+  --hc-card: rgba(255, 255, 255, 0.9);
   --hc-surface-strong: #ffffff;
   --hc-surface-soft: rgba(255, 255, 255, 0.82);
   --hc-surface-highlight: #ffffff;
@@ -113,6 +115,7 @@ html[data-theme="dark"] {
   --hc-border-subtle: rgba(255, 255, 255, 0.08);
   --hc-border-strong: rgba(255, 255, 255, 0.2);
   --hc-surface: #18181a;
+  --hc-card: rgba(24, 24, 26, 0.9);
   --hc-surface-strong: #1c1c1e;
   --hc-surface-soft: #161617;
   --hc-surface-highlight: #232325;
@@ -500,4 +503,39 @@ span {
 .custom-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--hc-scrollbar-thumb) transparent;
+}
+
+/*
+  진입 모션 — 랜딩 등에서 뷰포트에 들어올 때 살짝 떠오르며 나타난다(모션 제로 → AI SaaS 톤).
+  .hc-reveal는 초기 숨김 상태, .hc-reveal--in이 붙으면 재생. transition-delay는 인라인 style로 스태거.
+  접근성: prefers-reduced-motion이면 모션 없이 즉시 표시.
+*/
+.hc-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.hc-reveal--in {
+  opacity: 1;
+  transform: none;
+}
+
+/* 그린 그라디언트 텍스트(헤드라인 강조어) — background-clip으로 글자에 그라디언트를 입힌다. */
+.hc-gradient-text {
+  background: linear-gradient(120deg, #1ed760 0%, #7ef0a8 55%, #1ed760 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hc-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
