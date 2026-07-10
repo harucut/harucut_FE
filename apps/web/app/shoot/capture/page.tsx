@@ -28,6 +28,7 @@ export default function CapturePage() {
     handleManualShutter,
     switchCamera,
     canFlipCamera,
+    cameraFacingMode,
     MAX_SHOTS,
     TIMER_OPTIONS,
   } = useCaptureFlow();
@@ -82,13 +83,16 @@ export default function CapturePage() {
                   width: `min(100%, calc(min(58svh, 540px) * ${currentSlot.width / currentSlot.height}))`,
                 }}
               >
-                {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다. */}
+                {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다.
+                    전면(user) 카메라만 좌우반전(셀피 감각), 후면은 그대로. */}
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="absolute inset-0 h-full w-full scale-x-[-1] object-cover"
+                  className={`absolute inset-0 h-full w-full object-cover ${
+                    cameraFacingMode === "user" ? "scale-x-[-1]" : ""
+                  }`}
                 />
 
                 {isShooting && countdown !== null ? (

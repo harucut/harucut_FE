@@ -99,7 +99,13 @@ export function useCaptureFlow() {
       const facingMode = nextFacingMode ?? cameraFacingMode;
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
+        // ideal 해상도를 요청해 기본 640x480 저해상도 스트림으로 떨어지지 않게 한다
+        // (인화·저장용 결과물 품질 확보). 지원 안 되면 브라우저가 근접 값으로 대체.
+        video: {
+          facingMode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       });
 
@@ -176,7 +182,8 @@ export function useCaptureFlow() {
     audio.play().catch(() => {});
   }, []);
 
-  // 현재 프레임을 좌우반전해서 캡처
+  // 현재 프레임을 캡처. 전면(user) 카메라만 셀피 감각을 위해 좌우반전하고,
+  // 후면(environment) 카메라는 반전하지 않는다(간판·텍스트가 뒤집혀 저장되던 버그 수정).
   const capturePhotoToDataUrl = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return null;
 
@@ -210,15 +217,17 @@ export function useCaptureFlow() {
     canvas.height = Math.max(1, Math.round(sh));
 
     ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
+    if (cameraFacingMode === "user") {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
     playShutterSound();
     return dataUrl;
-  }, [playShutterSound, captureSlot]);
+  }, [playShutterSound, captureSlot, cameraFacingMode]);
 
   // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
   // state updater 안에서 호출하지 않는다 — 라우팅 같은 사이드 이펙트가 함께 실행되므로
