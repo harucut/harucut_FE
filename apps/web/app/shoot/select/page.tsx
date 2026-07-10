@@ -9,6 +9,7 @@ import { StepProgress } from "@/components/layout/StepProgress";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 
 export default function ShootSelectPage() {
@@ -28,6 +29,9 @@ export default function ShootSelectPage() {
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const guestMode = accessMode === "guest";
+
+  // 아직 저장 전인 촬영본이 있으면 새로고침/이탈 시 유실 경고를 띄운다.
+  useUnsavedWorkGuard(shots.length > 0);
 
   useEffect(() => {
     if (!frameId) {

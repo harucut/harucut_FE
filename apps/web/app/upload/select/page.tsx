@@ -10,6 +10,7 @@ import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { useUploadSession } from "@/lib/uploadSessionStore";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 
 export default function UploadSelectPage() {
   const router = useRouter();
@@ -28,6 +29,9 @@ export default function UploadSelectPage() {
   } = useUploadSession();
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 업로드한 사진이 있는데 아직 저장 전이면 새로고침/이탈 시 유실 경고를 띄운다.
+  useUnsavedWorkGuard(media.length > 0);
 
   useEffect(() => {
     if (!frameId) {

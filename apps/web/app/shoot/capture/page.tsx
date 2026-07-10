@@ -6,6 +6,7 @@ import { StepProgress } from "@/components/layout/StepProgress";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 
 export default function CapturePage() {
@@ -36,6 +37,9 @@ export default function CapturePage() {
   const { frameId, shots } = useShootSession();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
+
+  // 찍은 컷이 있는데 아직 저장 전이면, 새로고침/이탈 시 유실 경고를 띄운다.
+  useUnsavedWorkGuard(shots.length > 0);
 
   const slotCount = layout ? layout.slots.length : 0;
   // 8장을 4칸에 순환 배치하므로, 지금 찍는 칸은 shotCount를 슬롯 수로 나눈 나머지.

@@ -28,6 +28,7 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
   clearEditorDraft,
   loadEditorDraft,
@@ -48,7 +49,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const setBackgroundImageUrl = useThemeEditorStore((s) => s.setBackgroundImageUrl);
   const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
+  const editorComponents = useThemeEditorStore((s) => s.components);
   const { remoteFrameId } = useThemeSession();
+
+  // 스티커/텍스트를 하나라도 얹었거나 배경을 이미지로 바꿨으면 편집 중으로 보고,
+  // 새로고침/이탈 시 유실 경고를 띄운다(저장 프레임 편집은 자동 초안 대상이 아니므로 특히 중요).
+  useUnsavedWorkGuard(editorComponents.length > 0 || background.type !== "COLOR");
+
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
