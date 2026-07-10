@@ -15,6 +15,6 @@ export async function PATCH(req: Request, context: RouteContext) {
 
   return proxyJson(req, {
     method: "PATCH",
-    url: `${BASE_URL}/api/auth/user/media/${mediaId}/display-name`,
+    url: `${BASE_URL}/api/auth/user/media/${encodeURIComponent(mediaId)}/display-name`,
   });
 }
