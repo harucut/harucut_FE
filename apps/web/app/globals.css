@@ -532,10 +532,51 @@ span {
   color: transparent;
 }
 
+/*
+  필름 연출 — 랜딩 HOW 섹션. 퍼포레이션 띠가 흘러가고(hc-film-strip),
+  현재 단계 칸 아래에서 그린 바가 차오른다(hc-film-progress).
+  퍼포레이션 패턴 주기가 22px라 그만큼 이동시키면 이음매 없이 반복된다.
+*/
+@keyframes hc-film-advance {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 22px 0;
+  }
+}
+
+.hc-film-strip {
+  animation: hc-film-advance 1.4s linear infinite;
+}
+
+@keyframes hc-film-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.hc-film-progress {
+  transform-origin: left center;
+  animation: hc-film-progress var(--hc-film-dwell, 2600ms) linear forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hc-reveal {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+
+  .hc-film-strip,
+  .hc-film-progress {
+    animation: none;
+  }
+
+  .hc-film-progress {
+    transform: none;
   }
 }
