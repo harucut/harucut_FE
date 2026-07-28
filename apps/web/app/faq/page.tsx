@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BrandMark } from "@/components/layout/BrandMark";
+import { MarketingFooter } from "@/components/layout/MarketingFooter";
+import { MarketingNav } from "@/components/layout/MarketingNav";
 import { FAQ_ITEMS } from "@/constants/faq";
 import { COMPANY } from "@/constants/company";
 
 export const metadata: Metadata = {
   title: "자주 묻는 질문 | 하루컷",
   description:
-    "하루컷 자주 묻는 질문 — 비회원 이용, 촬영, 워터마크·저장, 요금제 변경, 보관·공개 범위까지 한곳에서 확인하세요.",
+    "하루컷 자주 묻는 질문. 비회원 이용, 촬영, 워터마크·저장, 요금제 변경, 보관·공개 범위까지 한곳에서 확인하세요.",
   alternates: { canonical: "/faq" },
 };
 
@@ -37,20 +38,12 @@ export default function FaqPage() {
         }}
       />
 
-      {/* 헤더 — 로고 + 단일 primary CTA(로그인 우선) */}
-      <header className="sticky top-0 z-40 border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl">
-        <div className="mx-auto flex h-[60px] w-full max-w-3xl items-center justify-between px-4 sm:px-7">
-          <BrandMark href="/" />
-          <Link
-            href="/login"
-            className="hc-button-primary flex items-center rounded-full px-4 py-2 text-[13.5px] font-bold"
-          >
-            지금 시작하기
-          </Link>
-        </div>
-      </header>
+      {/* 헤더 — 랜딩/요금제와 동일한 공통 마케팅 네비 */}
+      <MarketingNav />
 
-      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-7 lg:py-14">
+      {/* 컨테이너는 nav·푸터와 같은 1160으로 맞춰 좌변을 정렬하고,
+          가독성을 위해 본문(질문/답변) 컬럼만 안쪽에서 폭을 제한한다. */}
+      <div className="mx-auto w-full max-w-[1160px] px-7 py-10 lg:py-14">
         <header className="mb-9">
           <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
             FAQ · 자주 묻는 질문
@@ -64,7 +57,7 @@ export default function FaqPage() {
         </header>
 
         {/* 전체 Q&A — 답변을 항상 노출(검색·접근성 친화). */}
-        <dl className="flex flex-col border-b border-[color:var(--hc-border)]">
+        <dl className="flex max-w-[820px] flex-col border-b border-[color:var(--hc-border)]">
           {FAQ_ITEMS.map((item) => (
             <div
               key={item.q}
@@ -81,7 +74,7 @@ export default function FaqPage() {
         </dl>
 
         {/* 추가 문의 + CTA */}
-        <section className="mt-10 flex flex-col items-center gap-3 rounded-[20px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-6 py-9 text-center">
+        <section className="mt-10 flex max-w-[820px] flex-col items-center gap-3 rounded-[20px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-6 py-9 text-center">
           <h2 className="text-[19px] font-extrabold tracking-tight">
             찾는 답이 없었나요?
           </h2>
@@ -110,35 +103,10 @@ export default function FaqPage() {
           </div>
         </section>
 
-        {/* 푸터 */}
-        <footer className="mt-10 flex flex-col items-center gap-3 border-t border-[color:var(--hc-border)] pt-7 text-center text-[color:var(--hc-muted)]">
-          <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 text-[12px] font-medium">
-            <Link
-              href="/pricing"
-              className="transition hover:text-[color:var(--hc-text)]"
-            >
-              요금제
-            </Link>
-            <span className="opacity-40">·</span>
-            <Link
-              href="/terms"
-              className="transition hover:text-[color:var(--hc-text)]"
-            >
-              이용약관
-            </Link>
-            <span className="opacity-40">·</span>
-            <Link
-              href="/privacy"
-              className="transition hover:text-[color:var(--hc-text)]"
-            >
-              개인정보 처리방침
-            </Link>
-          </div>
-          <p className="text-[11.5px]">
-            © 2026 {COMPANY.name}. All rights reserved.
-          </p>
-        </footer>
       </div>
+
+      {/* 푸터 — 랜딩/요금제와 공통(전자상거래법 표시사항 포함) */}
+      <MarketingFooter />
     </main>
   );
 }

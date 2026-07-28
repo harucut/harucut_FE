@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, X } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
-import { BrandMark } from "@/components/layout/BrandMark";
+import { MarketingFooter } from "@/components/layout/MarketingFooter";
+import { MarketingNav } from "@/components/layout/MarketingNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import {
   ENTERPRISE_TEASER,
@@ -18,31 +19,8 @@ import { COMPANY } from "@/constants/company";
 import { PRICING_FAQ } from "@/constants/faq";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
 
-// 비로그인 방문자용 마케팅 헤더. 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로
-// 비회원에겐 로고 + 인증 진입(시작하기·로그인)만 노출한다. 로그인 우선이라 primary=로그인.
-function PublicPricingNav() {
-  return (
-    <header className="sticky top-0 z-40 border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl">
-      <div className="mx-auto flex h-[60px] w-full max-w-5xl items-center justify-between px-4 sm:px-7">
-        <BrandMark href="/" />
-        <div className="flex items-center gap-2">
-          <Link
-            href="/signup"
-            className="rounded-full px-3.5 py-2 text-[13.5px] font-bold text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
-          >
-            시작하기
-          </Link>
-          <Link
-            href="/login"
-            className="hc-button-primary flex items-center rounded-full px-4 py-2 text-[13.5px] font-bold"
-          >
-            로그인
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
+// 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
+// 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로 비회원에겐 노출하지 않는다.
 
 // FAQ는 constants/faq.ts(단일 소스)로 이동 — 요금제는 PRICING_FAQ만, 전체는 /faq.
 
@@ -140,9 +118,9 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         authed ? "pb-[90px] lg:pb-0" : "pb-10"
       }`}
     >
-      {authed ? <AppNav publicShoot /> : <PublicPricingNav />}
+      {authed ? <AppNav publicShoot /> : <MarketingNav width="max-w-5xl" />}
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-6 sm:py-8 lg:gap-14 lg:py-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
         <header className="pt-1 lg:pt-0">
           <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
@@ -256,45 +234,10 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </Link>
         </section>
 
-        {/* 푸터 — 전자상거래법 사업자 정보. 값은 constants/company.ts 단일 소스. */}
-        <footer className="flex flex-col items-center gap-3 border-t border-[color:var(--hc-border)] pt-7 text-center text-[color:var(--hc-muted)]">
-          <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 text-[12px] font-medium">
-            <Link
-              href="/faq"
-              className="transition hover:text-[color:var(--hc-text)]"
-            >
-              자주 묻는 질문
-            </Link>
-            <span className="opacity-40">·</span>
-            <Link
-              href="/privacy"
-              className="transition hover:text-[color:var(--hc-text)]"
-            >
-              개인정보 처리방침
-            </Link>
-            <span className="opacity-40">·</span>
-            <a
-              href={`mailto:${COMPANY.email}`}
-              className="transition hover:text-[color:var(--hc-text)]"
-            >
-              고객문의
-            </a>
-          </div>
-
-          <div className="max-w-[560px] text-[11.5px] leading-[1.7] text-[color:var(--hc-muted-soft)]">
-            <p>
-              {COMPANY.name} · 대표 {COMPANY.owner} · 사업자등록번호{" "}
-              {COMPANY.bizRegNo}
-            </p>
-            <p>
-              통신판매업신고번호 {COMPANY.mailOrderNo} · 고객문의 {COMPANY.email}
-            </p>
-            <p>{COMPANY.address}</p>
-          </div>
-
-          <p className="text-[11.5px]">© 2026 {COMPANY.name}. All rights reserved.</p>
-        </footer>
       </div>
+
+      {/* 푸터 — 랜딩/FAQ와 공통(전자상거래법 표시사항 포함) */}
+      <MarketingFooter width="max-w-5xl" />
 
       {authed ? <MobileTabBar publicShoot /> : null}
     </main>

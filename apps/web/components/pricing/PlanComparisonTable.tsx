@@ -13,7 +13,9 @@ const FEATURE_ROWS = PLANS[0].feats.map((feat, rowIndex) => ({
 
 export function PlanComparisonTable() {
   return (
-    <div className="-mx-4 overflow-x-auto px-4">
+    // 좌우 거터만큼 빼내 표가 화면 끝까지 스크롤되게 한다.
+    // -mx/px 값은 부모(PricingView) 컨테이너 거터와 반드시 같아야 한다.
+    <div className="-mx-7 overflow-x-auto px-7">
       <table className="w-full min-w-[520px] border-collapse">
         <thead>
           <tr className="border-b border-[color:var(--hc-border)]">
