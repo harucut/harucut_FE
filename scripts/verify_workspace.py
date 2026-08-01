@@ -11,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 GROUPS: dict[str, list[list[str]]] = {
+    # lint:web을 가장 앞에 둔다 — 미사용 export·도달 불가 분기·죽은 파라미터는
+    # 빌드가 아니라 lint가 잡는다. 빠르고 실패가 잦은 검사부터 돌려 fail fast.
     "web": [
+        ["pnpm", "lint:web"],
         ["pnpm", "test:web"],
         ["pnpm", "build:web"],
     ],
@@ -20,6 +23,7 @@ GROUPS: dict[str, list[list[str]]] = {
         ["pnpm", "typecheck:mobile"],
     ],
     "standard": [
+        ["pnpm", "lint:web"],
         ["pnpm", "test:web"],
         ["pnpm", "build:web"],
         ["pnpm", "lint:mobile"],

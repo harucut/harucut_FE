@@ -32,3 +32,37 @@ jobs:
           python -m pip install --upgrade pip
       - name: Verify standard
         run: pnpm verify:standard
+
+  # 브라우저 검사는 별도 잡으로 뗀다 — playwright 브라우저 설치가 무거워
+  # verify 잡의 피드백을 늦추면 안 된다.
+  e2e:
+    runs-on: ubuntu-latest
+    name: e2e
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: pnpm test:e2e:install:web
+      # NEXT_PUBLIC_DEV_AUTH_BYPASS는 여기서 절대 설정하지 않는다.
+      # 켜지면 로그인 우회가 활성화돼 인증 가드 e2e가 통과해버린다 —
+      # 이 잡이 지키려는 바로 그 검사가 무력화된다.
+      - name: Run web e2e
+        run: pnpm test:e2e:web
+        env:
+          # 가드·접근성 스펙은 백엔드를 부르지 않는다. 다만 값이 비어 있으면
+          # /api/client/* 라우트가 설정 오류를 던지므로 placeholder를 넣어 둔다.
+          NEXT_PUBLIC_BASE_URL: http://localhost:8080
+      # 접근성 스펙은 위 전체 e2e에도 포함되지만, 실패 원인을 잡 로그에서
+      # 바로 구분하려고 별도 게이트로 한 번 더 명시한다.
+      - name: Run web a11y
+        run: pnpm test:a11y:web
+        env:
+          NEXT_PUBLIC_BASE_URL: http://localhost:8080
