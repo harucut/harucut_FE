@@ -21,7 +21,10 @@ type UploadedMediaInfo = {
 
 export const SUPPORTED_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif";
-export const SUPPORTED_FOURCUT_ACCEPT = SUPPORTED_IMAGE_ACCEPT;
+
+// 지원하지 않는 형식(heic/avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
+export const UNSUPPORTED_UPLOAD_MESSAGE =
+  "PNG·JPG·WEBP·GIF만 올릴 수 있어요.";
 
 export const PRESIGNED_UPLOAD_TYPES = {
   FRAME: "FRAME",
@@ -39,10 +42,6 @@ type PresignedUploadRequest = {
   contentType: PresignedUploadContentType;
   isTemp: boolean;
 };
-
-function isImageContentType(contentType: PresignedUploadContentType) {
-  return ["PNG", "JPEG", "WEBP", "GIF"].includes(contentType);
-}
 
 function normalizeRemoteUrl(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -134,8 +133,21 @@ export async function getImageUrlByKey(key: string): Promise<string | null> {
   }
 }
 
+// 사용자 화면에 그대로 노출돼도 되도록 한국어 문구로 만든다(디버깅용 원본 형식은 뒤에 덧붙임).
 function createUnsupportedTypeError(file: File) {
-  return new Error(`Unsupported upload file type: ${file.type || file.name}`);
+  return new Error(
+    `${UNSUPPORTED_UPLOAD_MESSAGE} (${file.type || file.name})`,
+  );
+}
+
+// 업로드 가능한 형식인지 미리 확인한다. 파일 선택 즉시 걸러내는 용도.
+export function isSupportedUploadFile(file: File) {
+  try {
+    resolveUploadContentType(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveUploadContentType(file: File): PresignedUploadContentType {
@@ -185,6 +197,7 @@ export async function uploadToS3WithPresigned(opts: {
   isTemp: boolean;
 }) {
   const { file, type, isTemp } = opts;
+  // 지원 형식만 통과시킨다(아니면 여기서 throw).
   const resolvedContentType = resolveUploadContentType(file);
 
   const body: PresignedUploadRequest = {
@@ -214,14 +227,11 @@ export async function uploadToS3WithPresigned(opts: {
 
   const fallbackObjectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
 
-  if (isImageContentType(resolvedContentType)) {
-    const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);
-    return {
-      key,
-      objectUrl: uploadedMediaInfo.objectUrl,
-      downloadUrl: uploadedMediaInfo.downloadUrl,
-    };
-  }
-
-  return { key, objectUrl: fallbackObjectUrl };
+  // 업로드 가능한 형식은 전부 이미지라 항상 다운로드 URL을 해석한다.
+  const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);
+  return {
+    key,
+    objectUrl: uploadedMediaInfo.objectUrl,
+    downloadUrl: uploadedMediaInfo.downloadUrl,
+  };
 }

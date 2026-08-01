@@ -15,6 +15,7 @@ jest.mock("@/lib/userMediaApi", () => ({
 
 import {
   PRESIGNED_UPLOAD_TYPES,
+  isSupportedUploadFile,
   resolveUploadContentType,
   uploadFourcutMedia,
   uploadToS3WithPresigned,
@@ -29,6 +30,18 @@ describe("presigned upload flow", () => {
   it("maps jpg files to the swagger JPEG enum", () => {
     const jpg = new File(["x"], "photo.jpg", { type: "image/jpeg" });
     expect(resolveUploadContentType(jpg)).toBe("JPEG");
+  });
+
+  it("rejects unsupported formats with a Korean message", () => {
+    const heic = new File(["x"], "iphone.heic", { type: "image/heic" });
+
+    expect(() => resolveUploadContentType(heic)).toThrow(
+      /PNG·JPG·WEBP·GIF만 올릴 수 있어요/,
+    );
+    expect(isSupportedUploadFile(heic)).toBe(false);
+    expect(
+      isSupportedUploadFile(new File(["x"], "ok.webp", { type: "image/webp" })),
+    ).toBe(true);
   });
 
   it("uses downloadUrl from presigned-img response after image upload", async () => {

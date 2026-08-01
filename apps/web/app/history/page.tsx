@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -17,21 +18,18 @@ import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
-import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import {
+  getUserMediaPreviewUrl,
+  getUserMediaTitle,
+} from "@/lib/userMediaPreview";
 import {
   getMediaDownloadUrl,
   listMyMedia,
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
-import type { UserMedia, UserMediaType } from "@/lib/api-types";
+import type { UserMedia } from "@/lib/api-types";
 
-type FilterValue = "ALL" | "PHOTO";
 type ViewMode = "grid" | "calendar";
-
-const FILTER_LABELS: { value: FilterValue; label: string }[] = [
-  { value: "ALL", label: "전체" },
-  { value: "PHOTO", label: "사진" },
-];
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_KO = [
@@ -48,10 +46,6 @@ const MONTH_KO = [
   "11월",
   "12월",
 ];
-
-function getMediaTypeLabel(type: UserMediaType) {
-  return "사진";
-}
 
 function getMediaExtension(item: UserMedia) {
   const candidates = [item.downloadUrl, item.originalFileName, item.s3Key];
@@ -113,14 +107,12 @@ function groupByMonth(items: UserMedia[]) {
 
 function MediaThumb({
   item,
-  previewItems,
   bare = false,
 }: {
   item: UserMedia;
-  previewItems: UserMedia[];
   bare?: boolean;
 }) {
-  const preview = getUserMediaPreview(item, previewItems);
+  const previewUrl = getUserMediaPreviewUrl(item);
 
   const shellClassName = bare
     ? "relative grid h-full w-full place-items-center overflow-hidden"
@@ -128,10 +120,10 @@ function MediaThumb({
 
   return (
     <div className={shellClassName}>
-      {preview.url ? (
+      {previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={preview.url}
+          src={previewUrl}
           alt={getUserMediaTitle(item)}
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
@@ -140,21 +132,13 @@ function MediaThumb({
           미리보기를 준비하는 중이에요.
         </div>
       )}
-      {!bare ? (
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
-          <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-          사진
-        </span>
-      ) : null}
     </div>
   );
 }
 
 export default function HistoryPage() {
-  const [filter, setFilter] = useState<FilterValue>("ALL");
   const [view, setView] = useState<ViewMode>("grid");
   const [items, setItems] = useState<UserMedia[]>([]);
-  const [previewItems, setPreviewItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -164,6 +148,7 @@ export default function HistoryPage() {
   const [draftName, setDraftName] = useState("");
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,21 +158,16 @@ export default function HistoryPage() {
       setError(null);
 
       try {
-        // 선택한 타입을 백엔드에 전달해 페이지네이션 너머의 항목까지 해당 타입으로
-        // 받아온다(클라이언트 필터는 첫 페이지만 걸러 누락이 생긴다).
-        const media = await listMyMedia(filter === "ALL" ? undefined : filter);
-        // 전체 미리보기·통계는 ALL 응답 기준으로 유지한다. 필터부터 먼저 로드돼도
-        // 미리보기가 비지 않도록, ALL이 아니면 전체를 함께 받아온다(실패 시 현 응답 대체).
-        const nextPreviewItems =
-          filter === "ALL" ? media : await listMyMedia().catch(() => media);
+        // 미디어는 사진 전용이라 타입 구분 없이 전체를 한 번만 받아온다.
+        const media = await listMyMedia();
 
         if (!cancelled) {
           setItems(sortMedia(media));
-          setPreviewItems(sortMedia(nextPreviewItems));
         }
       } catch (loadError) {
         console.error(loadError);
         if (!cancelled) {
+          setItems([]);
           setError(
             getUserFacingApiErrorMessage(loadError, "기록을 불러오지 못했어요."),
           );
@@ -204,7 +184,7 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter]);
+  }, [reloadKey]);
 
   useEffect(() => {
     if (!feedback) return undefined;
@@ -218,39 +198,17 @@ export default function HistoryPage() {
     };
   }, [feedback]);
 
-  const filteredItems = useMemo(() => {
-    if (filter === "ALL") return items;
-    return items.filter((item) => item.mediaType === filter);
-  }, [items, filter]);
-
-  const groups = useMemo(
-    () => groupByMonth(filteredItems),
-    [filteredItems],
-  );
-
-  const stats = useMemo(() => {
-    return {
-      // 전체 합계는 필터와 무관하게 ALL 응답 기준 previewItems로 센다.
-      total: previewItems.length,
-    };
-  }, [previewItems]);
-
-  const emptyText = useMemo(() => {
-    if (filter === "PHOTO") return "저장한 사진 기록이 아직 없어요.";
-    return "저장한 기록이 아직 없어요.";
-  }, [filter]);
+  const groups = useMemo(() => groupByMonth(items), [items]);
 
   // 달력용: 날짜가 있는 월만 모아 정렬한다.
-  // 달력에는 필터 칩이 보이지 않으므로, 그리드 필터와 무관하게 전체(previewItems)
-  // 기준으로 월을 모아 다른 타입/월이 조용히 누락되지 않게 한다.
   const calendarMonths = useMemo(() => {
     const keys = new Set<string>();
-    for (const item of previewItems) {
+    for (const item of items) {
       const key = monthKey(item);
       if (key) keys.add(key);
     }
     return [...keys].sort((a, b) => (a < b ? 1 : -1));
-  }, [previewItems]);
+  }, [items]);
 
   const activeMonth = useMemo(() => {
     if (monthCursor && calendarMonths.includes(monthCursor)) return monthCursor;
@@ -286,7 +244,7 @@ export default function HistoryPage() {
       const url = await getMediaDownloadUrl(item.mediaId);
       const result = await shareOrCopyLink({
         title: `${getUserMediaTitle(item)} | 하루컷`,
-        text: `${getMediaTypeLabel(item.mediaType)} 공유 링크`,
+        text: "사진 공유 링크",
         url,
       });
 
@@ -327,15 +285,13 @@ export default function HistoryPage() {
       const resolvedName =
         updated.displayName?.trim() || updated.displayname?.trim() || nextName;
 
-      const applyName = (current: UserMedia[]) =>
+      setItems((current) =>
         current.map((currentItem) =>
           currentItem.mediaId === item.mediaId
             ? { ...currentItem, displayName: resolvedName }
             : currentItem,
-        );
-
-      setItems(applyName);
-      setPreviewItems(applyName);
+        ),
+      );
       setEditingId(null);
       setDraftName("");
       setFeedback("파일 이름을 수정했어요.");
@@ -352,36 +308,19 @@ export default function HistoryPage() {
       <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
-        {/* 헤더 + 필터 + 뷰 토글 */}
+        {/* 헤더 + 뷰 토글 */}
         <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
           <div>
             <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
               기록
             </h1>
             <p className="mt-2 text-[13.5px] text-[color:var(--hc-muted)]">
-              남긴 하루컷 {loading ? "…" : stats.total}개 · 언제든 다시 내려받을 수
+              남긴 하루컷 {loading ? "…" : items.length}개 · 언제든 다시 내려받을 수
               있어요
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {view === "grid"
-              ? FILTER_LABELS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFilter(option.value)}
-                    className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
-                      filter === option.value
-                        ? "bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
-                        : "hc-button-secondary border text-[color:var(--hc-muted)]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))
-              : null}
-
             <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
               {(
                 [
@@ -413,12 +352,6 @@ export default function HistoryPage() {
           </div>
         ) : null}
 
-        {error ? (
-          <p className="text-[12px] text-[color:var(--hc-primary-strong)]">
-            {error}
-          </p>
-        ) : null}
-
         {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
@@ -428,18 +361,37 @@ export default function HistoryPage() {
               />
             ))}
           </div>
+        ) : error ? (
+          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
+          <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
+            <p className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
+            <button
+              type="button"
+              onClick={() => setReloadKey((prev) => prev + 1)}
+              className="hc-button-secondary rounded-full border px-5 py-2 text-[12.5px] font-semibold"
+            >
+              다시 시도
+            </button>
+          </div>
         ) : view === "calendar" ? (
           <CalendarView
-            items={previewItems}
-            previewItems={previewItems}
+            items={items}
             months={calendarMonths}
             activeMonth={activeMonth}
             onChangeMonth={setMonthCursor}
           />
-        ) : filteredItems.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
             <ImageIcon className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-            <p className="text-[13px] text-[color:var(--hc-muted)]">{emptyText}</p>
+            <p className="text-[13px] text-[color:var(--hc-muted)]">
+              저장한 기록이 아직 없어요.
+            </p>
+            <Link
+              href="/shoot"
+              className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
+            >
+              촬영 시작
+            </Link>
           </div>
         ) : (
           <div className="flex flex-col gap-8">
@@ -460,7 +412,7 @@ export default function HistoryPage() {
 
                     return (
                       <article key={item.mediaId} className="group flex flex-col gap-2.5">
-                        <MediaThumb item={item} previewItems={previewItems} />
+                        <MediaThumb item={item} />
 
                         <div className="flex flex-col gap-1">
                           {isEditing ? (
@@ -546,13 +498,11 @@ export default function HistoryPage() {
 
 function CalendarView({
   items,
-  previewItems,
   months,
   activeMonth,
   onChangeMonth,
 }: {
   items: UserMedia[];
-  previewItems: UserMedia[];
   months: string[];
   activeMonth: string | null;
   onChangeMonth: (key: string) => void;
@@ -663,7 +613,7 @@ function CalendarView({
               ) : null}
               {list ? (
                 <div className="relative mt-1 flex flex-1 items-center justify-center">
-                  <MediaThumb item={list[0]} previewItems={previewItems} bare />
+                  <MediaThumb item={list[0]} bare />
                   {list.length > 1 ? (
                     <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[9px] font-extrabold text-[color:var(--hc-primary-contrast)]">
                       +{list.length - 1}

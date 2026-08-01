@@ -29,9 +29,11 @@ type ShootStore = ShootSessionState & {
   resetShootSession: () => void;
   selectSavedFrameForShoot: (frame: SavedFrame) => void;
   setShootFrame: (frameId: FrameId | null) => void;
-  setShootOption: (
-    key: keyof Pick<ShootSessionState, 'borderColor' | 'tone'>,
-    value: string | boolean,
+  // 키마다 값 타입을 좁힌다. 넓은 string | boolean이면 setShootOption('tone', true)가
+  // 컴파일을 통과해 OUTPUT_TONE_OPTIONS 비교를 조용히 깨뜨린다.
+  setShootOption: <K extends 'borderColor' | 'tone'>(
+    key: K,
+    value: ShootSessionState[K],
   ) => void;
   toggleShootSelection: (id: string) => void;
 };
@@ -124,7 +126,7 @@ export const useShootStore = create<ShootStore>((set, get) => ({
       frameId,
       selectedSavedFrameId: null,
     }),
-  setShootOption: (key, value) => set({ [key]: value }),
+  setShootOption: (key, value) => set({ [key]: value } as Partial<ShootSessionState>),
   toggleShootSelection: (id) =>
     set((state) => ({
       selectedShotIds: limitSelection(state.selectedShotIds, id),

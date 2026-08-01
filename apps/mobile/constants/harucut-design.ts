@@ -72,8 +72,6 @@ export const HARUCUT_THEME_COLORS: Record<HarucutColorScheme, HarucutColors> = {
   },
 };
 
-export const HARUCUT_COLORS = HARUCUT_THEME_COLORS.light;
-
 export const HARUCUT_RADII = {
   card: 28,
   chip: 999,

@@ -1,5 +1,5 @@
 import type { UserProfile } from '@/constants/harucut-data';
-import { apiEnvelopeData, apiRequest, isUsingWebProxy } from '@/lib/api-client';
+import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
 
 type RemoteUserInfo = {
   email: string;
@@ -24,10 +24,7 @@ export function toUserProfile(user: RemoteUserInfo): UserProfile {
 
 export async function getMyUserProfile() {
   const user = await apiEnvelopeData<RemoteUserInfo>(
-    {
-      direct: '/api/auth/user/info',
-      proxy: '/api/client/user-info',
-    },
+    '/api/auth/user/info',
     {
       cache: 'no-store',
     },
@@ -43,20 +40,6 @@ export async function updateUsername(username: string) {
     throw new Error('닉네임을 입력해 주세요.');
   }
 
-  if (isUsingWebProxy()) {
-    await apiRequest(
-      {
-        direct: '/api/auth/user/change/username',
-        proxy: '/api/client/user/username',
-      },
-      {
-        body: { username: nextUsername },
-        method: 'PATCH',
-      },
-    );
-    return;
-  }
-
   await apiRequest(`/api/auth/user/change/username?username=${encodeURIComponent(nextUsername)}`, {
     method: 'PATCH',
   });
@@ -64,10 +47,7 @@ export async function updateUsername(username: string) {
 
 export async function updateProfileImage(s3Key: string) {
   await apiRequest(
-    {
-      direct: '/api/auth/user/change/profile-image',
-      proxy: '/api/client/user/change/profile-image',
-    },
+    '/api/auth/user/change/profile-image',
     {
       body: { s3Key },
       method: 'PATCH',
@@ -83,16 +63,15 @@ export type SubscriptionUsage = {
   frameRetentionUsedCount: number;
   frameRetentionRemainingCount: number;
   frameRetentionUnlimited: boolean;
+  // 아래 두 필드는 월 단위 한도(폐기된 영상 변환)의 결제 주기 값이다.
+  // 서버는 여전히 내려주지만 앱은 쓰지 않는다 — 계약 문서용으로만 남긴다.
   currentCycleStartAt: string;
   currentCycleEndAt: string;
 };
 
 export async function getSubscriptionUsage() {
   return apiEnvelopeData<SubscriptionUsage>(
-    {
-      direct: '/api/auth/user/subscription/usage',
-      proxy: '/api/client/user/subscription/usage',
-    },
+    '/api/auth/user/subscription/usage',
     {
       cache: 'no-store',
     },

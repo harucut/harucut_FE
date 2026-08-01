@@ -18,7 +18,7 @@ describe("composeFrame validations", () => {
       composeFramePng({
         layout,
         borderColor: "#000",
-        sources: [{ type: "image", src: "/a.png" }],
+        sources: [{ src: "/a.png" }],
       }),
     ).rejects.toThrow("sources length must match slot count");
   });

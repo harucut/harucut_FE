@@ -36,11 +36,13 @@ export type NoticeState = {
 
 export const defaultBorderColor = FRAME_BORDER_OPTIONS[0].value;
 
+// 웹(apps/web/constants/frames.ts)과 반드시 같은 문자열을 쓴다 —
+// 같은 프레임이 앱/웹에서 다른 이름으로 보이면 저장한 기록을 못 알아본다.
 const frameNames: Record<FrameId, string> = {
-  'classic-4': '클래식 4컷',
-  'grid-4': '2x2 그리드',
-  'polaroid-4': '폴라로이드 4컷',
-  'wide-4': '와이드 4컷',
+  'classic-4': '세로 4컷',
+  'grid-4': '네모 4컷',
+  'polaroid-4': '즉석사진 4컷',
+  'wide-4': '가로 4컷',
 };
 
 export function frameName(frameId: FrameId) {

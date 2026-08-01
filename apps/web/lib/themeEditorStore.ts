@@ -104,8 +104,9 @@ type State = {
   setBackgroundImageUrl: (url: string) => void;
   clearBackgroundImage: () => void;
 
+  // 호출부가 지원 형식만 미리 걸러 넘길 수 있어 File[]도 받는다.
   addPhotoAssets: (
-    files: FileList,
+    files: FileList | File[],
   ) => Promise<{ added: number; failed: number }>;
   removePhotoBackground: (assetId: string) => Promise<{
     ok: boolean;

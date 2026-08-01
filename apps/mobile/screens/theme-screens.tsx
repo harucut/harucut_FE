@@ -6,7 +6,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { captureRef } from 'react-native-view-shot';
 
 import { FrameCapacityMeter, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, PageHeader, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { BACKGROUND_SWATCHES, FRAME_COLOR_SWATCHES, THEME_STICKERS, THEME_TEXT_COLOR_SWATCHES, type ThemeAsset, type ThemeEditorComponent } from '@/constants/harucut-data';
 import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
@@ -84,14 +84,13 @@ export function ThemeFrameScreen() {
 
   const handleConfirmNewFrame = () => {
     if (!framesLoaded) return;
-    push(isAtCapacity ? '/mypage' : '/theme/sticker');
+    push(isAtCapacity ? '/pricing' : '/theme/sticker');
   };
 
   return (
     <AppScrollView>
       <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} />
-      <StepProgress current={1} label="프레임 선택" total={2} />
-      <FrameCapacityMeter onUpgrade={() => push('/mypage')} plan={plan} used={savedFrames.length} />
+      <FrameCapacityMeter onUpgrade={() => push('/pricing')} plan={plan} used={savedFrames.length} />
       <FramePickerSection
         confirmLabel={
           !framesLoaded
@@ -111,7 +110,7 @@ export function ThemeFrameScreen() {
         onAction={() => push('/theme/sticker')}
         onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForTheme}
-        onUpgrade={() => push('/mypage')}
+        onUpgrade={() => push('/pricing')}
         planLimit={plan.limit}
         selectedFrameId={themeEditor.frameId}
         selectedSavedFrameId={themeEditor.selectedSavedFrameId}
@@ -125,7 +124,6 @@ export function ThemeStickerScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useThemeScreenStyles();
-  const { colors: themeColors } = useHarucutTheme();
   const themeEditor = useThemeEditorStore();
   const setThemeTitle = useThemeEditorStore((state) => state.setThemeTitle);
   const setThemeDescription = useThemeEditorStore((state) => state.setThemeDescription);
@@ -234,6 +232,8 @@ export function ThemeStickerScreen() {
     setUploadingPhotos(true);
 
     let failed = 0;
+    // 첫 실패 사유만 안내에 덧붙인다(예: 지원하지 않는 이미지 형식).
+    let failedReason = '';
     const uploadedAssets: ThemeAsset[] = [];
 
     for (const asset of result.assets) {
@@ -254,12 +254,14 @@ export function ThemeStickerScreen() {
         uploadedAssets.push({
           id: `theme-photo-${Date.now()}-${uploadedAssets.length}`,
           label: filename,
-          mimeType: asset.mimeType,
           s3Key: uploaded.key,
           uri: uploaded.objectUrl,
         });
-      } catch {
+      } catch (error) {
         failed += 1;
+        if (!failedReason) {
+          failedReason = getApiErrorMessage(error, '');
+        }
       }
     }
 
@@ -272,7 +274,9 @@ export function ThemeStickerScreen() {
         actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
         eyebrow: 'UPLOAD',
         icon: 'warning-outline',
-        message: `${failed}개의 사진을 업로드하지 못했어요.`,
+        message: failedReason
+          ? `사진 ${failed}장을 업로드하지 못했어요. ${failedReason}`
+          : `사진 ${failed}장을 업로드하지 못했어요.`,
         title: '사진 업로드 실패',
       });
     }
@@ -571,7 +575,6 @@ export function ThemeStickerScreen() {
           <View style={{ gap: 12 }}>
             {activeComponent ? (
               <ThemeSelectionInspector
-                colors={themeColors}
                 component={activeComponent}
                 onChange={(patch) => updateThemeComponent(activeComponent.id, patch)}
                 onDelete={() => removeThemeComponent(activeComponent.id)}
@@ -711,13 +714,11 @@ function ColorSwatch({
 
 // 핸드오프 "선택" 탭: 회전·크기·(텍스트)색을 바꾸고 삭제한다.
 function ThemeSelectionInspector({
-  colors,
   component,
   onChange,
   onDelete,
   styles,
 }: {
-  colors: HarucutColors;
   component: ThemeEditorComponent;
   onChange: (patch: Partial<ThemeEditorComponent> & { styleJson?: ThemeEditorComponent['styleJson'] }) => void;
   onDelete: () => void;
@@ -906,11 +907,6 @@ function createStyles(colors: HarucutColors) {
       color: colors.muted,
       fontSize: 12,
       lineHeight: 18,
-    },
-    activeBadge: {
-      color: colors.primaryStrong,
-      fontSize: 11,
-      fontWeight: '700',
     },
     assetImage: {
       height: '100%',
@@ -1208,11 +1204,6 @@ function createStyles(colors: HarucutColors) {
     stickerTileSymbol: {
       fontSize: 24,
       lineHeight: 30,
-    },
-    stickerRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
     },
   });
 }

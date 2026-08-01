@@ -1,4 +1,4 @@
-import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
+import { apiEnvelopeData } from '@/lib/api-client';
 
 export type PresignedUploadContentType = 'GIF' | 'JPEG' | 'PNG' | 'WEBP';
 export type PresignedUploadType =
@@ -59,11 +59,9 @@ export function resolveUploadContentType(args: {
     return 'JPEG';
   }
 
-  return 'JPEG';
-}
-
-export function fourcutUploadType(_contentType: PresignedUploadContentType): PresignedUploadType {
-  return 'FOURCUT_PHOTO';
+  // 매칭 실패 시 JPEG으로 조용히 떨어뜨리지 않는다. .heic 같은 원본이 JPEG으로 presign·PUT되면
+  // S3 Content-Type이 실제 바이트와 어긋나 나중에 렌더가 깨진다(웹과 동일하게 즉시 중단).
+  throw new Error('지원하지 않는 이미지 형식이에요. JPG·PNG·WEBP·GIF 파일을 올려 주세요.');
 }
 
 async function createPresignedUpload(args: {
@@ -73,10 +71,7 @@ async function createPresignedUpload(args: {
   type: PresignedUploadType;
 }) {
   return apiEnvelopeData<PresignedUploadResponse>(
-    {
-      direct: '/api/auth/user/files/presigned-upload',
-      proxy: '/api/client/user/files/presigned-upload',
-    },
+    '/api/auth/user/files/presigned-upload',
     {
       body: args,
       method: 'POST',
@@ -86,10 +81,7 @@ async function createPresignedUpload(args: {
 
 export async function getPresignedImageUrl(key: string) {
   return apiEnvelopeData<string>(
-    {
-      direct: `/api/auth/user/files/presigned-img?key=${encodeURIComponent(key)}`,
-      proxy: `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
-    },
+    `/api/auth/user/files/presigned-img?key=${encodeURIComponent(key)}`,
     {
       cache: 'no-store',
     },

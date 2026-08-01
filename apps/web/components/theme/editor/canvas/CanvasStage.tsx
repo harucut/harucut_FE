@@ -33,11 +33,14 @@ export function CanvasStage() {
   const [backgroundImage, setBackgroundImage] =
     useState<HTMLImageElement | null>(null);
 
+  // 배경 URL이 사라지면 렌더 중에 즉시 비운다(effect에서 setState 하면 렌더가 한 번 더 돈다).
+  if (!backgroundImageUrl && backgroundImage) {
+    setBackgroundImage(null);
+  }
+
   useEffect(() => {
-    if (!backgroundImageUrl) {
-      setBackgroundImage(null);
-      return;
-    }
+    if (!backgroundImageUrl) return;
+
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     let active = true;

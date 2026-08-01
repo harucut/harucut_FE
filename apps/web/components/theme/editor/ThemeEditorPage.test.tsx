@@ -135,6 +135,10 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     FOURCUT_PHOTO: "FOURCUT_PHOTO",
   },
   uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
+  SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",
+  UNSUPPORTED_UPLOAD_MESSAGE: "PNG·JPG·WEBP·GIF만 올릴 수 있어요.",
+  isSupportedUploadFile: (file: File) =>
+    ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
 
 jest.mock("@/lib/canvas/renderThemePreview", () => ({
@@ -235,7 +239,7 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(container.textContent).toContain(
-        "요금제의 월간 프레임 생성 횟수를 초과했습니다.",
+        "요금제의 프레임 보관 개수를 다 썼어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
       );
     });
   });

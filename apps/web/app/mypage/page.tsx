@@ -20,13 +20,24 @@ import {
   User,
 } from "lucide-react";
 import { AuthField } from "@/components/auth/AuthField";
+import {
+  FrameCapacityMeter,
+  resolveFrameCapacity,
+} from "@/components/frame/FrameCapacityMeter";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
+import { getPlanDisplayName } from "@/constants/plans";
+import { resolvePlanInfo } from "@/constants/planLimits";
+import type { SubscriptionUsage } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
-import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
+import {
+  getMyUserInfo,
+  getSubscriptionUsage,
+  type UserInfo,
+} from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import { listMyFrames } from "@/lib/remoteFrameApi";
 
@@ -59,7 +70,7 @@ const SECTION_META: Record<
   plan: { icon: Sparkles, title: "요금제", sub: "플랜 및 결제 관리" },
   notif: { icon: Bell, title: "알림 설정", sub: "푸시, 주간 리마인더" },
   frames: { icon: ImageIcon, title: "내 프레임", sub: "보관한 프레임" },
-  pref: { icon: Settings, title: "설정", sub: "화질, 워터마크, 언어" },
+  pref: { icon: Settings, title: "설정", sub: "화질, 언어" },
 };
 
 // 데스크톱 사이드바에 노출하는 섹션(요금제는 별도 라우트로 이동)
@@ -88,11 +99,10 @@ export default function MyPage() {
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
-  const [stats, setStats] = useState<Stats>({
-    total: 0,
-    thisMonth: 0,
-    frames: 0,
-  });
+  // 조회 실패를 0으로 위장하지 않으려고 stats는 null로 시작한다.
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
 
   // 데스크톱: 우측 콘텐츠 섹션 / 모바일: 펼쳐진 메뉴 행
   const [section, setSection] = useState<SectionId>("account");
@@ -110,10 +120,7 @@ export default function MyPage() {
     return () => mql.removeEventListener("change", sync);
   }, []);
 
-  const fetchUser = async () => {
-    setLoading(true);
-    setErrors({});
-
+  const loadUser = async () => {
     try {
       const nextUser = await getMyUserInfo();
       setUser(nextUser);
@@ -128,12 +135,21 @@ export default function MyPage() {
     }
   };
 
+  const fetchUser = async () => {
+    setLoading(true);
+    setErrors({});
+    await loadUser();
+  };
+
   // 스탯 3셀은 우리 실제 데이터(기록 미디어 / 이번 달 / 보관 프레임)로 매핑한다.
-  const fetchStats = async () => {
+  // 조회에 실패하면 0이 아니라 statsError로 구분해 '기록이 사라진 것처럼' 보이지 않게 한다.
+  const loadStats = async () => {
     try {
-      const [media, frames] = await Promise.all([
-        listMyMedia().catch(() => []),
-        listMyFrames().catch(() => []),
+      const [media, frames, nextUsage] = await Promise.all([
+        listMyMedia(),
+        listMyFrames(),
+        // 구독 사용량은 못 받아도 목록 개수로 폴백하므로 실패를 무시한다.
+        getSubscriptionUsage().catch(() => null),
       ]);
 
       const now = new Date();
@@ -151,14 +167,26 @@ export default function MyPage() {
         thisMonth,
         frames: frames.length,
       });
+      setUsage(nextUsage);
+      setStatsError(null);
     } catch (error) {
       console.error(error);
+      setStats(null);
+      setStatsError("기록을 불러오지 못했어요.");
     }
   };
 
+  const fetchStats = async () => {
+    setStatsError(null);
+    await loadStats();
+  };
+
+  // 최초 진입은 초기 상태(loading=true, errors={}, statsError=null)와 같아
+  // 별도 setState 없이 바로 조회한다. setState는 응답이 온 뒤에만 일어난다.
   useEffect(() => {
-    void fetchUser();
-    void fetchStats();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
+    void loadUser();
+    void loadStats();
   }, []);
 
   const handleChangeUsername = async (e: FormEvent) => {
@@ -298,14 +326,29 @@ export default function MyPage() {
 
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
 
+  // 서버 등급(BASIC/PLUS/PRO) 대신 요금제 카드 이름(Free/Plus/Pro)으로 보여준다.
+  const planDisplayName = getPlanDisplayName(user?.planTier) ?? "Free";
+  const planPriceSuffix = user?.monthlyPrice
+    ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원`
+    : "";
+
+  // 프레임 보관 한도는 서버 구독 사용량을 우선 쓰고, 미조회 시 목록 개수로 폴백한다.
+  const frameCapacity = useMemo(
+    () => resolveFrameCapacity(resolvePlanInfo(user?.planTier), usage, stats?.frames ?? 0),
+    [user?.planTier, usage, stats?.frames],
+  );
+  const frameCapacityText = frameCapacity.unlimited
+    ? `보관한 프레임 ${frameCapacity.used}개 · 무제한`
+    : `보관한 프레임 ${frameCapacity.used}/${frameCapacity.plan.limit}개`;
+
   const statCells = useMemo(
     () =>
       [
-        { n: stats.total, l: "총 기록" },
-        { n: stats.thisMonth, l: "이번 달" },
-        { n: stats.frames, l: "보관 프레임" },
+        { n: stats ? `${stats.total}` : "—", l: "총 기록" },
+        { n: stats ? `${stats.thisMonth}` : "—", l: "이번 달" },
+        { n: stats ? `${frameCapacity.used}` : "—", l: "보관 프레임" },
       ] as const,
-    [stats],
+    [stats, frameCapacity.used],
   );
 
   // 핸드오프 색상: 메뉴 아이콘은 초록 틴트 위 초록 아이콘
@@ -331,18 +374,34 @@ export default function MyPage() {
   );
 
   const statStrip = (
-    <div className="flex">
-      {statCells.map((cell, i) => (
-        <div
-          key={cell.l}
-          className={`flex-1 text-center ${i ? "border-l border-[color:var(--hc-border-subtle)]" : ""}`}
-        >
-          <div className="text-[21px] font-semibold tabular-nums">{cell.n}</div>
-          <div className="mt-0.5 text-[12px] text-[color:var(--hc-muted)]">
-            {cell.l}
+    <div className="flex flex-col gap-2">
+      <div className="flex">
+        {statCells.map((cell, i) => (
+          <div
+            key={cell.l}
+            className={`flex-1 text-center ${i ? "border-l border-[color:var(--hc-border-subtle)]" : ""}`}
+          >
+            <div className="text-[21px] font-semibold tabular-nums">{cell.n}</div>
+            <div className="mt-0.5 text-[12px] text-[color:var(--hc-muted)]">
+              {cell.l}
+            </div>
           </div>
+        ))}
+      </div>
+      {statsError ? (
+        <div className="flex flex-col items-center gap-1.5 px-4">
+          <p className="text-center text-[11.5px] text-[color:var(--hc-muted)]">
+            {statsError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void fetchStats()}
+            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11.5px] font-semibold"
+          >
+            다시 시도
+          </button>
         </div>
-      ))}
+      ) : null}
     </div>
   );
 
@@ -464,10 +523,8 @@ export default function MyPage() {
             <span className="text-[11.5px]">현재 플랜</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
-            {user?.planTier ?? "BASIC"}
-            {user?.monthlyPrice
-              ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원`
-              : ""}
+            {planDisplayName}
+            {planPriceSuffix}
           </p>
         </div>
         <div>
@@ -499,9 +556,13 @@ export default function MyPage() {
 
   const framesSection = (
     <div className="flex flex-col gap-3">
-      <p className="text-[13px] text-[color:var(--hc-muted)]">
-        보관한 프레임 {stats.frames}개
-      </p>
+      {/* /theme와 같은 게이지를 써서 한도를 여기서도 바로 알 수 있게 한다. */}
+      <FrameCapacityMeter
+        plan={frameCapacity.plan}
+        used={frameCapacity.used}
+        remaining={frameCapacity.remaining}
+        onUpgrade={() => router.push("/pricing")}
+      />
       <button
         type="button"
         onClick={() => router.push("/theme")}
@@ -516,7 +577,7 @@ export default function MyPage() {
     <div className="flex flex-col gap-4">
       <ColorThemePreferencePanel />
       <p className="text-[12.5px] leading-5 text-[color:var(--hc-muted)]">
-        화질·워터마크·언어 설정은 순차적으로 추가될 예정이에요.
+        화질·언어 설정은 순차적으로 추가될 예정이에요.
       </p>
     </div>
   );
@@ -714,9 +775,9 @@ export default function MyPage() {
                           </span>
                           <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">
                             {id === "frames"
-                              ? `보관한 프레임 ${stats.frames}개`
+                              ? frameCapacityText
                               : id === "plan"
-                                ? `${user.planTier ?? "BASIC"}${user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원` : ""}`
+                                ? `${planDisplayName}${planPriceSuffix}`
                                 : meta.sub}
                           </span>
                         </span>

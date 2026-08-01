@@ -20,7 +20,10 @@ import {
 } from "@/lib/remoteFrameApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
+  SUPPORTED_IMAGE_ACCEPT,
+  UNSUPPORTED_UPLOAD_MESSAGE,
   getImageUrlByKey,
+  isSupportedUploadFile,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
@@ -34,6 +37,10 @@ import {
   loadEditorDraft,
   saveEditorDraft,
 } from "@/lib/themeEditorDraft";
+
+// 새 프레임을 만들 때 채워 두는 기본 이름·설명
+const DEFAULT_FRAME_TITLE = "새 테마 프레임";
+const DEFAULT_FRAME_DESCRIPTION = "하루컷에서 직접 꾸민 나만의 프레임";
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
@@ -60,12 +67,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // 원격 프레임은 불러온 값으로 채우고, 새 프레임은 기본값에서 시작한다.
+  const [title, setTitle] = useState(remoteFrameId ? "" : DEFAULT_FRAME_TITLE);
+  const [description, setDescription] = useState(
+    remoteFrameId ? "" : DEFAULT_FRAME_DESCRIPTION,
+  );
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
 
   useEffect(() => {
@@ -114,7 +125,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       } catch (error) {
         console.error(error);
         if (!cancelled) {
-          setLoadError("저장한 프레임을 불러오지 못했습니다.");
+          setLoadError("저장한 프레임을 불러오지 못했어요.");
         }
       } finally {
         if (!cancelled) {
@@ -130,12 +141,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [importJson, remoteFrameId, setBackgroundImageUrl]);
 
-  useEffect(() => {
-    if (remoteFrameId) return;
-
-    setTitle("새 테마 프레임");
-    setDescription("하루컷에서 직접 꾸민 나만의 프레임");
-  }, [remoteFrameId]);
+  // 새 프레임(원격 id 없음)이면 기본 이름·설명을 채운다.
+  // 원격 프레임에서 새 프레임으로 바뀌는 전환도 렌더 중에 맞춘다.
+  const [syncedRemoteFrameId, setSyncedRemoteFrameId] = useState(remoteFrameId);
+  if (syncedRemoteFrameId !== remoteFrameId) {
+    setSyncedRemoteFrameId(remoteFrameId);
+    if (!remoteFrameId) {
+      setTitle(DEFAULT_FRAME_TITLE);
+      setDescription(DEFAULT_FRAME_DESCRIPTION);
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -196,7 +211,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const onDone = async () => {
     if (isSaving || isLoadingFrame) return;
     if (hasRemoteLoadFailure) {
-      setSaveDialogError("저장한 프레임을 불러오지 못해 수정 저장을 막았습니다.");
+      setSaveDialogError("저장한 프레임을 불러오지 못해 수정 저장을 막았어요.");
       return;
     }
 
@@ -271,7 +286,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     } catch (error) {
       console.error(error);
       setSaveDialogError(
-        getUserFacingApiErrorMessage(error, "저장에 실패했습니다."),
+        getUserFacingApiErrorMessage(error, "저장에 실패했어요."),
       );
     } finally {
       setIsSaving(false);
@@ -290,7 +305,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       router.push("/theme");
     } catch (error) {
       console.error(error);
-      alert("삭제에 실패했습니다.");
+      alert("삭제에 실패했어요.");
     } finally {
       setIsDeleting(false);
     }
@@ -342,7 +357,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
         {isLoadingFrame ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
-            저장한 프레임을 불러오는 중입니다.
+            저장한 프레임을 불러오고 있어요.
           </section>
         ) : null}
 
@@ -393,12 +408,22 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   {background.type === "IMAGE" ? "배경 이미지 변경" : "배경 이미지"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={SUPPORTED_IMAGE_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) setBackgroundImage(file);
                       e.target.value = "";
+                      if (!file) return;
+
+                      // heic/avif 같은 형식은 저장 단계에서야 실패한다.
+                      // 편집을 다 끝낸 뒤 막히지 않도록 고른 즉시 걸러낸다.
+                      if (!isSupportedUploadFile(file)) {
+                        setBackgroundError(UNSUPPORTED_UPLOAD_MESSAGE);
+                        return;
+                      }
+
+                      setBackgroundError(null);
+                      setBackgroundImage(file);
                     }}
                   />
                 </label>
@@ -412,8 +437,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   </button>
                 ) : null}
               </div>
+              {backgroundError ? (
+                <p className="text-[11px] leading-4 text-red-300">
+                  {backgroundError}
+                </p>
+              ) : null}
               <p className="text-[11px] leading-4 text-[color:var(--hc-muted)]">
-                배경 이미지는 사진 칸 뒤에 깔려요.
+                배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF만 올릴 수
+                있어요.
               </p>
             </section>
           </div>

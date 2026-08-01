@@ -5,9 +5,10 @@ import { type ComponentProps, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FramePreview } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, BrandMark, FormField, Pill, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, BrandMark, FormField, SurfaceCard } from '@/components/harucut/ui';
 import type { HistoryItem } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
+import { getPlanDisplayName } from '@/constants/plan-limits';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { changePassword, exitAccount, logout } from '@/lib/auth-api';
 import { getApiErrorMessage } from '@/lib/api-client';
@@ -327,7 +328,6 @@ export function HomeScreen() {
   const loadRemoteFrames = useLibraryStore((state) => state.loadRemoteFrames);
   const accessMode = useSessionStore((state) => state.accessMode);
   const loadRemoteHistory = useLibraryStore((state) => state.loadRemoteHistory);
-  const savedFrames = useLibraryStore((state) => state.savedFrames);
   const user = useSessionStore((state) => state.user);
 
   const todayMoment = useCurrentDateLabel();
@@ -446,25 +446,13 @@ export function HomeScreen() {
           ))
         ) : recentItems.length > 0 ? (
           recentItems.map((item) => {
-            const previewAsset = historyPreviewAsset(item);
-            const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
-            const previewUri = previewAsset?.uri ?? '';
+            const previewUri = historyPreviewUri(item);
 
             return (
               <View key={item.id} style={styles.recentTile}>
                 <View style={styles.thumbCard}>
-                  {previewUri && previewKind === 'image' ? (
-                    <>
-                      <Image resizeMode="contain" source={{ uri: previewUri }} style={styles.thumbImage} />
-                      <View style={styles.thumbTypeBadge}>
-                        <Ionicons
-                          color="#FFFFFF"
-                          name="image"
-                          size={11}
-                        />
-                        <Text style={styles.thumbTypeText}>사진</Text>
-                      </View>
-                    </>
+                  {previewUri ? (
+                    <Image resizeMode="contain" source={{ uri: previewUri }} style={styles.thumbImage} />
                   ) : (
                     <View style={styles.thumbPlaceholder}>
                       <Ionicons
@@ -512,7 +500,6 @@ export function HistoryScreen() {
   const loadRemoteHistory = useLibraryStore((state) => state.loadRemoteHistory);
   const renameHistoryItem = useLibraryStore((state) => state.renameHistoryItem);
   const showNotice = useSessionStore((state) => state.showNotice);
-  const [filter, setFilter] = useState<'ALL' | 'PHOTO'>('ALL');
   const [view, setView] = useState<'grid' | 'calendar'>('grid');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
@@ -524,7 +511,7 @@ export function HistoryScreen() {
 
     try {
       const url = await resolveHistoryMediaUrl(item);
-      const result = await saveRemoteMediaToLibrary(url, item.title, item.kind);
+      const result = await saveRemoteMediaToLibrary(url, item.title);
 
       if (result.ok) {
         showNotice({
@@ -575,15 +562,7 @@ export function HistoryScreen() {
     }
   };
 
-  const filteredItems = useMemo(() => {
-    if (filter === 'ALL') {
-      return historyItems;
-    }
-
-    return historyItems.filter((item) => item.kind === 'photo');
-  }, [filter, historyItems]);
-
-  const monthGroups = useMemo(() => groupHistoryByMonth(filteredItems), [filteredItems]);
+  const monthGroups = useMemo(() => groupHistoryByMonth(historyItems), [historyItems]);
 
   // 달력용: 날짜가 있는 월만 모아 최신순 정렬.
   const calendarMonths = useMemo(() => {
@@ -611,15 +590,13 @@ export function HistoryScreen() {
   }, [accessMode, historyStatus, loadRemoteHistory]);
 
   const renderHistoryCard = (item: HistoryItem) => {
-    const previewAsset = historyPreviewAsset(item);
-    const previewKind = previewAsset?.previewKind ?? previewAsset?.kind;
-    const previewUri = previewAsset?.uri ?? '';
+    const previewUri = historyPreviewUri(item);
     const isEditing = editingId === item.id;
 
     return (
       <View key={item.id} style={styles.historyTile}>
         <View style={styles.thumbCard}>
-          {previewUri && previewKind === 'image' ? (
+          {previewUri ? (
             <Image resizeMode="contain" source={{ uri: previewUri }} style={styles.thumbImage} />
           ) : (
             <View style={styles.thumbPlaceholder}>
@@ -633,10 +610,6 @@ export function HistoryScreen() {
               </Text>
             </View>
           )}
-          <View style={styles.thumbTypeBadge}>
-            <Ionicons color="#FFFFFF" name="image" size={11} />
-            <Text style={styles.thumbTypeText}>사진</Text>
-          </View>
         </View>
 
         <View style={{ gap: 2 }}>
@@ -724,16 +697,6 @@ export function HistoryScreen() {
         </View>
       </View>
 
-      {view === 'grid' ? (
-        <View style={styles.filterRow}>
-          {(['ALL', 'PHOTO'] as const).map((value) => (
-            <Pill key={value} active={filter === value} onPress={() => setFilter(value)}>
-              {value === 'ALL' ? '전체' : '사진'}
-            </Pill>
-          ))}
-        </View>
-      ) : null}
-
       {isHistoryLoading ? (
         <SurfaceCard>
           <Text style={styles.bodyCopy}>저장한 기록을 불러오는 중이에요.</Text>
@@ -751,13 +714,9 @@ export function HistoryScreen() {
           onChangeMonth={setMonthCursor}
           styles={styles}
         />
-      ) : filteredItems.length === 0 ? (
+      ) : historyItems.length === 0 ? (
         <SurfaceCard>
-          <Text style={styles.bodyCopy}>
-            {filter === 'PHOTO'
-              ? '저장한 사진 기록이 아직 없어요.'
-              : '저장한 기록이 아직 없어요.'}
-          </Text>
+          <Text style={styles.bodyCopy}>저장한 기록이 아직 없어요.</Text>
         </SurfaceCard>
       ) : (
         monthGroups.map((group) => (
@@ -928,6 +887,11 @@ export function MyPageScreen() {
       );
     }).length;
   }, [historyItems]);
+  // 서버 등급(BASIC/PLUS/PRO)은 그대로 노출하지 않고 요금제 카드 이름으로 바꿔 보여준다.
+  const planName = getPlanDisplayName(user.planTier) ?? '알 수 없음';
+  const planPriceSuffix = user.monthlyPrice
+    ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원`
+    : '';
   const [openSection, setOpenSection] = useState<MyMenuId | null>(null);
   const [username, setUsername] = useState(user.username);
   const [oldPassword, setOldPassword] = useState('');
@@ -1137,7 +1101,7 @@ export function MyPageScreen() {
             {
               icon: 'sparkles-outline',
               id: 'plan',
-              sub: `${user.planTier}${user.monthlyPrice ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원` : ''}`,
+              sub: `${planName}${planPriceSuffix}`,
               title: '요금제',
             },
             {
@@ -1155,7 +1119,7 @@ export function MyPageScreen() {
             {
               icon: 'settings-outline',
               id: 'pref',
-              sub: '테마, 화질, 워터마크',
+              sub: '테마, 화질',
               title: '설정',
             },
           ] as {
@@ -1255,10 +1219,8 @@ export function MyPageScreen() {
                         <View style={styles.infoTile}>
                           <Text style={styles.linkBody}>플랜</Text>
                           <Text style={styles.linkTitle}>
-                            {user.planTier}
-                            {user.monthlyPrice
-                              ? ` · 월 ${user.monthlyPrice.toLocaleString('ko-KR')}원`
-                              : ''}
+                            {planName}
+                            {planPriceSuffix}
                           </Text>
                         </View>
                       </View>
@@ -1551,14 +1513,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       flexDirection: 'row',
       paddingVertical: 16,
     },
-    savedEmptyCard: {
-      backgroundColor: tintedSurface,
-      borderColor: colors.border,
-      borderRadius: 18,
-      borderStyle: 'dashed',
-      borderWidth: 1,
-      padding: 16,
-    },
     thumbMeta: {
       color: colors.muted,
       fontSize: 11,
@@ -1566,23 +1520,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     thumbTitle: {
       color: colors.text,
       fontSize: 13,
-      fontWeight: '700',
-    },
-    thumbTypeBadge: {
-      alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      borderRadius: 999,
-      flexDirection: 'row',
-      gap: 4,
-      left: 9,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      position: 'absolute',
-      top: 9,
-    },
-    thumbTypeText: {
-      color: '#FFFFFF',
-      fontSize: 10,
       fontWeight: '700',
     },
     topIconButton: {
@@ -1595,11 +1532,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       justifyContent: 'center',
       position: 'relative',
       width: 42,
-    },
-    filterRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
     },
     viewToggle: {
       backgroundColor: colors.cardStrong,
@@ -1739,21 +1671,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       fontSize: 8,
       fontWeight: '800',
     },
-    heroTitle: {
-      color: colors.text,
-      fontSize: 28,
-      fontWeight: '700',
-      lineHeight: 33.6,
-    },
-    heroTitleAccent: {
-      color: colors.primaryStrong,
-      fontSize: 28,
-      fontWeight: '700',
-      lineHeight: 33.6,
-    },
-    heroActionGroup: {
-      gap: 10,
-    },
     infoTile: {
       backgroundColor: tintedSurface,
       borderColor: colors.border,
@@ -1879,50 +1796,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       padding: 16,
       width: '100%',
     },
-    rowButtons: {
-      flexDirection: 'row',
-      gap: 10,
-    },
-    savedContinueCard: {
-      alignItems: 'center',
-      backgroundColor: tintedSurface,
-      borderColor: colors.border,
-      borderRadius: 18,
-      borderWidth: 1,
-      flexDirection: 'row',
-      gap: 12,
-      padding: 12,
-    },
-    frameUpgradeRow: {
-      alignItems: 'center',
-      backgroundColor: colors.primarySoft,
-      borderColor: colors.border,
-      borderRadius: 18,
-      borderWidth: 1,
-      flexDirection: 'row',
-      gap: 12,
-      padding: 14,
-    },
-    planNavRow: {
-      alignItems: 'center',
-      backgroundColor: tintedSurface,
-      borderColor: colors.border,
-      borderRadius: 18,
-      borderWidth: 1,
-      flexDirection: 'row',
-      gap: 12,
-      padding: 14,
-    },
-    planNavRowPressed: {
-      opacity: 0.85,
-    },
-    sectionEyebrow: {
-      color: colors.primary,
-      fontSize: 10,
-      fontWeight: '700',
-      letterSpacing: 1.6,
-      textTransform: 'uppercase',
-    },
     sectionHeader: {
       flexDirection: 'row',
       gap: 12,
@@ -1932,10 +1805,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: colors.text,
       fontSize: 18,
       fontWeight: '700',
-    },
-    statsWrap: {
-      alignItems: 'flex-start',
-      gap: 8,
     },
     themeOption: {
       backgroundColor: colors.cardStrong,

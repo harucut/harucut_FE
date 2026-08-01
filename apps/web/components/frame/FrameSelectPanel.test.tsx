@@ -5,10 +5,10 @@ describe("FrameSelectPanel", () => {
   const baseProps = {
     frameId: null,
     media: [
-      { type: "image" as const, src: "/1.png" },
-      { type: "image" as const, src: "/2.png" },
-      { type: "image" as const, src: "/3.png" },
-      { type: "image" as const, src: "/4.png" },
+      { src: "/1.png" },
+      { src: "/2.png" },
+      { src: "/3.png" },
+      { src: "/4.png" },
     ],
     maxSelect: 4,
     nextButtonLabel: "다음 단계",

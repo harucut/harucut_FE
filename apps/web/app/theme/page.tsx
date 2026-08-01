@@ -4,11 +4,13 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { resolvePlanInfo } from "@/constants/planLimits";
-import { FrameCapacityMeter } from "@/components/frame/FrameCapacityMeter";
+import {
+  FrameCapacityMeter,
+  resolveFrameCapacity,
+} from "@/components/frame/FrameCapacityMeter";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StepProgress } from "@/components/layout/StepProgress";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
@@ -26,23 +28,14 @@ function ThemePageContent() {
 
   const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
-  const basePlan = resolvePlanInfo(planTier);
-  // 프레임 보관 한도는 서버 구독 사용량을 우선 사용한다. 무제한(frameRetentionUnlimited 또는 -1)이면
-  // 한도를 Infinity로 둬 한도 게이트/요금제 유도를 막고, 유한 한도면 그 값을, 미조회 시 tier 기본값을 쓴다.
-  const unlimitedRetention =
-    usage != null &&
-    (usage.frameRetentionUnlimited || usage.frameRetentionLimit < 0);
-  // 서버가 0을 주면(예: Free 플랜은 커스텀 프레임 미제공) 그대로 0을 한도로 쓴다.
-  // 0은 유효한 한도이고, 미조회(usage 없음)일 때만 tier 기본값으로 폴백한다.
-  const serverFrameLimit =
-    usage && !usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0
-      ? usage.frameRetentionLimit
-      : null;
-  const plan = unlimitedRetention
-    ? { ...basePlan, limit: Number.POSITIVE_INFINITY, next: null, nextLimit: null }
-    : serverFrameLimit != null
-      ? { ...basePlan, limit: serverFrameLimit }
-      : basePlan;
+  // 보관 한도·사용량은 서버 구독 사용량을 우선 쓰고, 미조회 시에만 목록 개수로 폴백한다.
+  // (다운그레이드 초과분은 비활성 처리라 목록 길이가 실제 사용량보다 클 수 있다)
+  const capacity = resolveFrameCapacity(
+    resolvePlanInfo(planTier),
+    usage,
+    frames.length,
+  );
+  const plan = capacity.plan;
 
   const [selectedFrameId, setSelectedFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
@@ -104,7 +97,8 @@ function ThemePageContent() {
   ]);
 
   // 보관함이 요금제 한도에 도달하면 새 프레임 생성 진입을 막는다(서버 한도 우회 방지).
-  const isAtCapacity = frames.length >= plan.limit;
+  // 잔여 개수는 서버값(frameRetentionRemainingCount)을 우선한다.
+  const isAtCapacity = capacity.atCapacity;
 
   const handleConfirmNewFrame = () => {
     // 목록 로딩 전에는 frames가 빈 배열이라 한도를 알 수 없으므로 진입을 보류한다.
@@ -134,11 +128,11 @@ function ThemePageContent() {
           title="프레임 꾸미기"
           description="새 프레임을 만들거나 저장한 프레임을 이어서 꾸며보세요."
         />
-        <StepProgress current={1} total={2} label="프레임 선택" />
 
         <FrameCapacityMeter
           plan={plan}
-          used={frames.length}
+          used={capacity.used}
+          remaining={capacity.remaining}
           onUpgrade={() => router.push("/pricing")}
         />
 

@@ -25,7 +25,12 @@ import {
   type ThemeEditorComponent,
 } from '@/constants/harucut-data';
 import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
-import { buildGaugeDots, type GaugeDotState, type PlanInfo } from '@/constants/plan-limits';
+import {
+  buildGaugeDots,
+  getPlanDisplayName,
+  type GaugeDotState,
+  type PlanInfo,
+} from '@/constants/plan-limits';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 
 type ThemeComponentTransform = {
@@ -649,7 +654,9 @@ export function FrameCapacityMeter({
 }) {
   const { colors } = useHarucutTheme();
   const styles = useFrameStyles();
-  const { limit, name, next, nextLimit } = plan;
+  const { limit, name, next } = plan;
+  // 배지에는 서버 등급(BASIC 등)이 아니라 요금제 카드 이름(Free/Plus/Pro)을 보여준다.
+  const planLabel = getPlanDisplayName(name) ?? name;
   const unlimited = !Number.isFinite(limit);
   const full = !unlimited && used >= limit;
   const remaining = Math.max(0, limit - used);
@@ -661,7 +668,7 @@ export function FrameCapacityMeter({
         <View style={styles.meterPlanGroup}>
           <View style={styles.meterPlanBadge}>
             <Ionicons color={colors.primaryStrong} name="sparkles" size={12} />
-            <Text style={styles.meterPlanBadgeText}>{name}</Text>
+            <Text style={styles.meterPlanBadgeText}>{planLabel}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.meterCount}>
@@ -974,11 +981,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       top: 0,
       width: '100%',
     },
-    captureStage: {
-      borderRadius: 12,
-      overflow: 'hidden',
-      position: 'relative',
-    },
     previewShell: {
       borderColor: previewBorder,
       borderRadius: 8,
@@ -1140,10 +1142,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       alignItems: 'center',
       position: 'relative',
       width: '100%',
-    },
-    savedRefresh: {
-      fontSize: 11,
-      fontWeight: '700',
     },
     savedRefreshButton: {
       alignItems: 'center',

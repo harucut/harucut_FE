@@ -4,6 +4,8 @@ import type { ApiEnvelope } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
+  UNSUPPORTED_UPLOAD_MESSAGE,
+  isSupportedUploadFile,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 
@@ -17,11 +19,12 @@ async function requestProfileImageChange(s3Key: string) {
 
 export async function uploadProfileImage(file: File) {
   if (!file) {
-    throw new Error("No file selected");
+    throw new Error("파일을 선택해 주세요.");
   }
 
-  if (!file.type.toLowerCase().startsWith("image/")) {
-    throw new Error("Profile image must be an image file");
+  // 업로드 형식 판정은 presignedUploadApi 한 곳(isSupportedUploadFile)으로 모은다.
+  if (!isSupportedUploadFile(file)) {
+    throw new Error(UNSUPPORTED_UPLOAD_MESSAGE);
   }
 
   const { key } = await uploadToS3WithPresigned({

@@ -1,3 +1,4 @@
+import { getPlanErrorMessage } from '@harucut/shared';
 import Constants from 'expo-constants';
 
 export type ApiEnvelope<T> = {
@@ -6,13 +7,6 @@ export type ApiEnvelope<T> = {
   message?: string | null;
   status?: number;
 };
-
-type ApiPath =
-  | string
-  | {
-      direct: string;
-      proxy: string;
-    };
 
 type RequestOptions = {
   body?: unknown;
@@ -58,41 +52,12 @@ function configuredApiBaseUrl() {
   return DEFAULT_API_BASE_URL;
 }
 
-function configuredWebProxyBaseUrl() {
-  return process.env.EXPO_PUBLIC_WEB_API_BASE_URL?.trim() ?? '';
-}
-
+// 앱은 백엔드를 직접 호출한다. 네이티브 쿠키 저장소가 credentials: 'include'를 처리하므로
+// 웹 BFF(apps/web의 /api/client/*)를 경유할 이유가 없다. 브라우저용 제품은 apps/web이 맡는다.
 export function getApiConfig() {
-  const directBaseUrl = configuredApiBaseUrl();
-  const webProxyBaseUrl = configuredWebProxyBaseUrl();
-
-  if (directBaseUrl) {
-    return {
-      baseUrl: trimTrailingSlash(directBaseUrl),
-      mode: 'direct' as const,
-    };
-  }
-
-  if (webProxyBaseUrl) {
-    return {
-      baseUrl: trimTrailingSlash(webProxyBaseUrl),
-      mode: 'proxy' as const,
-    };
-  }
-
   return {
-    baseUrl: DEFAULT_API_BASE_URL,
-    mode: 'direct' as const,
+    baseUrl: trimTrailingSlash(configuredApiBaseUrl()),
   };
-}
-
-export function isUsingWebProxy() {
-  return getApiConfig().mode === 'proxy';
-}
-
-function resolvePath(path: ApiPath) {
-  if (typeof path === 'string') return path;
-  return getApiConfig().mode === 'proxy' ? path.proxy : path.direct;
 }
 
 function extractEnvelopeLike(value: unknown) {
@@ -132,8 +97,16 @@ export class ApiRequestError<T = unknown> extends Error {
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiRequestError && error.apiMessage) {
-    return error.apiMessage;
+  if (error instanceof ApiRequestError) {
+    // 요금제 관련 코드는 백엔드 원문(영문일 수 있음) 대신 우리 한국어 문구를 우선한다.
+    const planMessage = getPlanErrorMessage(error.code);
+    if (planMessage) {
+      return planMessage;
+    }
+
+    if (error.apiMessage) {
+      return error.apiMessage;
+    }
   }
 
   if (error instanceof Error && error.message && error.message !== 'API request failed') {
@@ -162,9 +135,8 @@ const SESSION_REFRESH_EXEMPT_PATHS = new Set<string>([
 // 못해 로그인된 사용자가 공개 화면에 머물고, exit를 예외로 두면 탈퇴 요청이 바로 401로
 // 실패해 계정 탈퇴를 진행할 수 없다.
 
-function isSessionRefreshExempt(path: ApiPath) {
-  const key = typeof path === 'string' ? path : path.direct;
-  return SESSION_REFRESH_EXEMPT_PATHS.has(key);
+function isSessionRefreshExempt(path: string) {
+  return SESSION_REFRESH_EXEMPT_PATHS.has(path);
 }
 
 // 401로 재발급까지 실패했을 때 호출되는 세션 종료 핸들러.
@@ -180,9 +152,9 @@ async function reissueAccessToken() {
   await apiRequest('/api/harucut/reissue', { method: 'POST', skipAuthRefresh: true });
 }
 
-export async function apiRequest<T>(path: ApiPath, options: RequestOptions = {}) {
+export async function apiRequest<T>(path: string, options: RequestOptions = {}) {
   const { baseUrl } = getApiConfig();
-  const url = `${baseUrl}${resolvePath(path)}`;
+  const url = `${baseUrl}${path}`;
   const hasBody = options.body !== undefined;
 
   const performFetch = () => {
@@ -257,7 +229,7 @@ export async function apiRequest<T>(path: ApiPath, options: RequestOptions = {})
   return data;
 }
 
-export async function apiEnvelopeData<T>(path: ApiPath, options: RequestOptions = {}) {
+export async function apiEnvelopeData<T>(path: string, options: RequestOptions = {}) {
   const envelope = await apiRequest<ApiEnvelope<T>>(path, options);
   return envelope.data;
 }

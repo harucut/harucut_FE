@@ -10,7 +10,7 @@ export type MediaDownloadResult =
   | { ok: true }
   | { ok: false; reason: 'failed' | 'no-url' | 'permission-denied' };
 
-function inferExtension(url: string, _kind: 'image' | 'photo') {
+function inferExtension(url: string) {
   const match = /\.([a-zA-Z0-9]{2,4})(?:[?#]|$)/.exec(url);
   if (match) {
     return match[1].toLowerCase();
@@ -31,7 +31,6 @@ function sanitizeFilename(value: string) {
 export async function saveRemoteMediaToLibrary(
   url: string | undefined,
   title: string,
-  kind: 'image' | 'photo' = 'photo',
 ): Promise<MediaDownloadResult> {
   if (!url) {
     return { ok: false, reason: 'no-url' };
@@ -44,7 +43,7 @@ export async function saveRemoteMediaToLibrary(
   }
 
   try {
-    const extension = inferExtension(url, kind);
+    const extension = inferExtension(url);
     const target = `${FileSystem.cacheDirectory ?? ''}${sanitizeFilename(title)}.${extension}`;
     const { uri } = await FileSystem.downloadAsync(url, target);
     await MediaLibrary.saveToLibraryAsync(uri);

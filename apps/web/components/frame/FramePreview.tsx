@@ -9,7 +9,6 @@ import {
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type FrameMedia = {
-  type: "image";
   src: string;
 };
 
@@ -87,9 +86,7 @@ export function FramePreview({
 
         const mediaItem: FrameMedia | null =
           media?.[idx] ??
-          (images && images[idx]
-            ? { type: "image", src: images[idx] as string }
-            : null);
+          (images && images[idx] ? { src: images[idx] as string } : null);
 
         if (mediaItem) {
           return (

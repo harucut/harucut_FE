@@ -52,7 +52,7 @@ export function LayersPanel() {
 
       {list.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[11px] text-zinc-400">
-          아직 추가된 요소가 없습니다.
+          아직 추가한 요소가 없어요.
         </div>
       ) : (
         <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto custom-scroll">

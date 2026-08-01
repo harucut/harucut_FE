@@ -283,16 +283,12 @@ function toSavedFrame(frame: RemoteFrame): SavedFrame {
     remoteFrameId: frame.frameId,
     stickers: stickerComponents.map((component) => component.source).filter(Boolean),
     title: frame.title,
-    updatedAt: new Date().toISOString(),
   };
 }
 
 export async function listRemoteFrames() {
   const frames = await apiEnvelopeData<RemoteFrame[]>(
-    {
-      direct: '/api/auth/user/frame',
-      proxy: '/api/client/user/frame',
-    },
+    '/api/auth/user/frame',
     {
       cache: 'no-store',
     },
@@ -303,10 +299,7 @@ export async function listRemoteFrames() {
 
 export async function createRemoteFrame(draft: ThemeFrameDraft) {
   await apiRequest(
-    {
-      direct: '/api/auth/user/frame',
-      proxy: '/api/client/user/frame',
-    },
+    '/api/auth/user/frame',
     {
       body: toCreateFrameRequest(draft),
       method: 'POST',
@@ -316,10 +309,7 @@ export async function createRemoteFrame(draft: ThemeFrameDraft) {
 
 export async function updateRemoteFrame(frameId: number, draft: ThemeFrameDraft) {
   await apiRequest(
-    {
-      direct: `/api/auth/user/frame/${frameId}`,
-      proxy: `/api/client/user/frame/${frameId}`,
-    },
+    `/api/auth/user/frame/${frameId}`,
     {
       body: toCreateFrameRequest(draft),
       method: 'PUT',
@@ -329,10 +319,7 @@ export async function updateRemoteFrame(frameId: number, draft: ThemeFrameDraft)
 
 export async function deleteRemoteFrame(frameId: number) {
   await apiRequest(
-    {
-      direct: `/api/auth/user/frame/${frameId}`,
-      proxy: `/api/client/user/frame/${frameId}`,
-    },
+    `/api/auth/user/frame/${frameId}`,
     {
       method: 'DELETE',
     },

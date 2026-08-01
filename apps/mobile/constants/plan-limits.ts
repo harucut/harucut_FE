@@ -20,6 +20,22 @@ export const PLAN_FRAME_LIMITS: Record<PlanTier, number> = {
 
 const PLAN_ORDER: PlanTier[] = ['BASIC', 'PLUS', 'PRO'];
 
+// 서버 등급(BASIC/PLUS/PRO)에 대응하는 요금제 카드 이름. 서버 원문을 그대로 노출하지 않는다.
+export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
+  BASIC: 'Free',
+  PLUS: 'Plus',
+  PRO: 'Pro',
+};
+
+/**
+ * 서버 등급을 카드 이름(Free/Plus/Pro)으로 바꾼다. 모르는 값이면 null.
+ * 웹 constants/plans.ts의 getPlanDisplayName과 같은 규약을 쓴다.
+ */
+export function getPlanDisplayName(tier: string | null | undefined): string | null {
+  const key = tier?.trim().toUpperCase();
+  return key === 'BASIC' || key === 'PLUS' || key === 'PRO' ? PLAN_DISPLAY_NAMES[key] : null;
+}
+
 /** 게이지에 그리는 점 최대 개수(유한 표시용 상한). PRO는 무제한이라 한도와 분리해 고정한다. */
 export const MAX_GAUGE_DOTS = 6;
 

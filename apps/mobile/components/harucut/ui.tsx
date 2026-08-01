@@ -138,29 +138,6 @@ export function SurfaceCard({
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function StepProgress({ current, label, total }: { current: number; label: string; total: number }) {
-  const styles = useUiStyles();
-
-  return (
-    <SurfaceCard style={{ paddingVertical: 14 }}>
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepLabel}>{label}</Text>
-        <Text style={styles.stepCount}>
-          {current}/{total}
-        </Text>
-      </View>
-      <View style={styles.stepTrack}>
-        {Array.from({ length: total }, (_, index) => (
-          <View
-            key={`${label}-${index}`}
-            style={[styles.stepBar, index < current ? styles.stepBarActive : null]}
-          />
-        ))}
-      </View>
-    </SurfaceCard>
-  );
-}
-
 export function Pill({
   active = false,
   children,
@@ -292,12 +269,6 @@ function FormFieldImpl({ error, label, secure = false, style, ...props }: FormFi
 
 export const FormField = React.memo(FormFieldImpl);
 
-export function SectionEyebrow({ children }: PropsWithChildren) {
-  const styles = useUiStyles();
-
-  return <Text style={styles.sectionEyebrow}>{children}</Text>;
-}
-
 function createStyles(colors: HarucutColors, isDark: boolean) {
   return StyleSheet.create({
     backLabel: {
@@ -332,11 +303,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     brandIconImage: {
       height: '100%',
       width: '100%',
-    },
-    brandIconGradient: {
-      alignItems: 'center',
-      flex: 1,
-      justifyContent: 'center',
     },
     brandRow: {
       alignItems: 'center',
@@ -511,48 +477,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     screenContent: {
       gap: HARUCUT_SPACING.section,
       padding: HARUCUT_SPACING.screen,
-    },
-    sectionEyebrow: {
-      alignSelf: 'flex-start',
-      backgroundColor: colors.primarySoft,
-      borderColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.12)',
-      borderRadius: HARUCUT_RADII.chip,
-      borderWidth: 1,
-      color: colors.primaryStrong,
-      fontSize: 11,
-      fontWeight: '700',
-      overflow: 'hidden',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    stepBar: {
-      backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(148, 163, 184, 0.24)',
-      borderRadius: HARUCUT_RADII.chip,
-      flex: 1,
-      height: 6,
-    },
-    stepBarActive: {
-      backgroundColor: colors.primary,
-    },
-    stepCount: {
-      color: colors.muted,
-      fontSize: 10,
-      fontWeight: '700',
-    },
-    stepHeader: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    stepLabel: {
-      color: colors.text,
-      fontSize: 11,
-      fontWeight: '700',
-    },
-    stepTrack: {
-      flexDirection: 'row',
-      gap: 8,
-      marginTop: 10,
     },
   });
 }
