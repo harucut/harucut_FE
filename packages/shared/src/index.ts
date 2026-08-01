@@ -1,4 +1,5 @@
 export { validateEmail, validatePassword, validateUsername } from './auth-validation';
+export { COMPANY } from './company';
 export {
   LEGAL_DOCUMENTS,
   PRIVACY_POLICY,
@@ -6,6 +7,7 @@ export {
   type LegalDocument,
   type LegalSection,
 } from './legal';
+export { PLAN_ERROR_MESSAGES, getPlanErrorMessage } from './plan-errors';
 export {
   DEFAULT_FOURCUT_FILTER,
   FOURCUT_FILTER_DEFINITIONS,

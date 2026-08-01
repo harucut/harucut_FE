@@ -23,7 +23,8 @@ const STEPS = [
   { n: "03", t: "기록하기", d: "사진으로 저장하고, 기록에 차곡차곡 모아요." },
 ] as const;
 
-// FAQ는 constants/faq.ts(단일 소스)로 이동 — 랜딩은 LANDING_FAQ(상위 5개)만, 전체는 /faq.
+// FAQ는 /faq 전용 페이지가 단독으로 맡는다 — 랜딩에 인라인 FAQ는 두지 않고,
+// 접근은 헤더 nav와 푸터 링크로만 한다.
 // 푸터는 components/layout/MarketingFooter로 분리 — 요금제·FAQ와 공통.
 
 function ShowcaseFrame({
@@ -42,8 +43,6 @@ function ShowcaseFrame({
     />
   );
 }
-
-// FAQ 목록은 /faq 전용 페이지로 분리 — 랜딩 인라인 FAQ는 제거(접근은 nav·푸터 링크).
 
 // 한 칸이 머무는 시간(ms). 아래 진행 바 애니메이션과 같은 값을 써야 싱크가 맞는다.
 const STEP_DWELL_MS = 2600;
@@ -289,8 +288,6 @@ export function LandingView() {
           </Reveal>
         </div>
       </section>
-
-      {/* FAQ는 /faq 전용 페이지로 분리 — 랜딩에선 헤더 nav·푸터 링크로만 접근. */}
 
       {/* CTA */}
       <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-5">

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { TERMS_OF_SERVICE } from "@harucut/shared";
 import { LegalDocumentView } from "@/components/legal/LegalDocumentView";
-import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
-import { PRICING_DOWNGRADE_NOTE } from "@/constants/plans";
 
 export const metadata: Metadata = {
   title: "서비스 이용약관 | 하루컷",
@@ -15,17 +14,24 @@ export default function TermsPage() {
     <LegalDocumentView
       document={TERMS_OF_SERVICE}
       extra={
-        <section className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <h2 className="text-sm font-semibold text-zinc-100">
+        // 결제가 아직 열리지 않아 약관에 확정 가격표를 두지 않는다. 요금제 안내로만 연결.
+        <section className="flex flex-col gap-3 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-5">
+          <h2 className="text-sm font-semibold text-[color:var(--hc-text)]">
             유료 서비스 요금 및 혜택
           </h2>
-          <p className="text-[12px] leading-6 text-zinc-400">
-            유료 플랜의 요금과 제공 혜택은 아래 표와 같습니다. 가격은 부가세 포함이며,
-            플랜은 마이페이지에서 언제든 변경할 수 있습니다.
+          <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
+            유료 플랜의 종류와 제공 혜택은{" "}
+            <Link
+              href="/pricing"
+              className="font-semibold text-[color:var(--hc-text)] underline underline-offset-4"
+            >
+              요금제 안내
+            </Link>
+            에서 확인할 수 있어요.
           </p>
-          <PlanComparisonTable />
-          <p className="text-[11px] leading-6 text-zinc-500">
-            {PRICING_DOWNGRADE_NOTE}
+          <p className="text-[11px] leading-6 text-[color:var(--hc-muted)]">
+            결제 기능은 준비 중이에요. 요금·결제주기 등 확정 조건은 결제가 열리는
+            시점에 요금제 화면에서 안내해요.
           </p>
         </section>
       }

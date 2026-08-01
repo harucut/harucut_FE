@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, X } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
@@ -10,13 +10,18 @@ import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import {
   ENTERPRISE_TEASER,
   PLANS,
+  PRICING_BILLING_PENDING,
   PRICING_DOWNGRADE_NOTE,
   PRICING_HEADLINE,
   PRICING_SUBTITLE,
+  PRICING_SUBTITLE_AUTHED,
+  toPlanId,
   type Plan,
+  type PlanId,
 } from "@/constants/plans";
 import { COMPANY } from "@/constants/company";
 import { PRICING_FAQ } from "@/constants/faq";
+import { getMyUserInfo } from "@/lib/userApi";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
 
 // 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
@@ -24,26 +29,41 @@ import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
 
 // FAQ는 constants/faq.ts(단일 소스)로 이동 — 요금제는 PRICING_FAQ만, 전체는 /faq.
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({
+  plan,
+  authed,
+  current,
+}: {
+  plan: Plan;
+  authed: boolean;
+  /** 이 카드가 지금 이용 중인 플랜인지. */
+  current: boolean;
+}) {
   const hot = plan.hot;
+  // 현재 플랜은 "인기" 같은 마케팅 배지보다 "현재 플랜"이 우선이다.
+  const badge = current ? "현재 플랜" : plan.badge;
 
   return (
     <div
       className={`relative flex flex-col rounded-[20px] border p-6 ${
-        hot
-          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] shadow-[var(--hc-button-shadow)]"
-          : "hc-surface-card"
+        current
+          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] shadow-[var(--hc-button-shadow)] ring-2 ring-[color:var(--hc-primary)]"
+          : hot
+            ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] shadow-[var(--hc-button-shadow)]"
+            : "hc-surface-card"
       }`}
     >
-      {plan.badge ? (
+      {badge ? (
         <span className="absolute right-4 top-4 rounded-full bg-[color:var(--hc-primary)] px-2.5 py-1 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
-          {plan.badge}
+          {badge}
         </span>
       ) : null}
 
       <span
         className={`text-[15px] font-extrabold tracking-[0.3px] ${
-          hot ? "text-[color:var(--hc-primary)]" : "text-[color:var(--hc-text)]"
+          hot || current
+            ? "text-[color:var(--hc-primary)]"
+            : "text-[color:var(--hc-text)]"
         }`}
       >
         {plan.name}
@@ -95,22 +115,64 @@ function PlanCard({ plan }: { plan: Plan }) {
         ))}
       </ul>
 
-      <Link
-        href="/signup"
-        className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition ${
-          hot
-            ? "hc-button-primary"
-            : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
-        }`}
-      >
-        {plan.cta}
-      </Link>
+      {/* CTA — 비회원은 가입 유도. 회원은 결제 연동 전이라 "준비 중"으로 비활성.
+          이용 중인 플랜은 누를 곳이 없다. */}
+      {current ? (
+        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[14.5px] font-extrabold text-[color:var(--hc-primary)]">
+          현재 이용 중
+        </span>
+      ) : authed ? (
+        <button
+          type="button"
+          disabled
+          aria-disabled
+          title={PRICING_BILLING_PENDING}
+          className="hc-surface-well mt-5 flex h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full border text-[14.5px] font-extrabold text-[color:var(--hc-muted)] opacity-70"
+        >
+          준비 중
+        </button>
+      ) : (
+        <Link
+          href="/signup"
+          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition ${
+            hot
+              ? "hc-button-primary"
+              : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
+          }`}
+        >
+          {plan.cta}
+        </Link>
+      )}
     </div>
   );
 }
 
 export function PricingView({ authed = false }: { authed?: boolean }) {
   const [open, setOpen] = useState(0);
+  const [currentPlanId, setCurrentPlanId] = useState<PlanId | null>(null);
+
+  // 현재 플랜은 로그인 상태에서만 조회한다. 비회원까지 호출하면 clientApi가
+  // 401 → 재발급 시도까지 태우게 되므로, 서버가 넘겨준 authed로 먼저 걸러낸다.
+  // 실패하면 조용히 넘어간다 — 배지가 안 붙을 뿐 가격표는 그대로 보여야 한다.
+  useEffect(() => {
+    if (!authed) return;
+    let cancelled = false;
+
+    getMyUserInfo()
+      .then((user) => {
+        if (!cancelled) setCurrentPlanId(toPlanId(user.planTier));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
+
+  // 비회원 전용 FAQ("비회원도 사용할 수 있나요?")는 로그인 후엔 의미가 없다.
+  const faqItems = authed
+    ? PRICING_FAQ.filter((item) => !item.guestOnly)
+    : PRICING_FAQ;
 
   return (
     <main
@@ -130,14 +192,19 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             {PRICING_HEADLINE}
           </h1>
           <p className="mt-3 max-w-[480px] text-[14px] leading-[1.5] text-[color:var(--hc-muted)]">
-            {PRICING_SUBTITLE}
+            {authed ? PRICING_SUBTITLE_AUTHED : PRICING_SUBTITLE}
           </p>
         </header>
 
         {/* 플랜 카드 — <lg 1열, lg+ 3열 */}
         <section className="grid items-stretch gap-4 md:grid-cols-3">
           {PLANS.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              authed={authed}
+              current={currentPlanId === plan.id}
+            />
           ))}
         </section>
 
@@ -150,6 +217,10 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               </span>
               <span className="rounded-full border border-[color:var(--hc-border-strong)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--hc-muted)]">
                 {ENTERPRISE_TEASER.badge}
+              </span>
+              {/* 가격 미정 — 다른 카드가 모두 가격을 보여주므로 여기도 상태를 밝힌다. */}
+              <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">
+                {ENTERPRISE_TEASER.price}
               </span>
             </div>
             <p className="max-w-[520px] text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
@@ -169,9 +240,9 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
             전체 스펙 비교
           </h2>
-          <PlanComparisonTable />
+          <PlanComparisonTable currentPlanId={currentPlanId} />
           <p className="text-[11px] leading-[1.6] text-[color:var(--hc-muted)]">
-            가격은 부가세 포함이에요. 플랜은 마이페이지에서 언제든 바꿀 수 있어요.
+            가격은 부가세 포함이에요. {PRICING_BILLING_PENDING}
             <br />
             {PRICING_DOWNGRADE_NOTE}
           </p>
@@ -183,7 +254,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             자주 묻는 질문
           </h2>
           <div className="flex flex-col">
-            {PRICING_FAQ.map((item, i) => {
+            {faqItems.map((item, i) => {
               const on = open === i;
               return (
                 <div
@@ -218,22 +289,24 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </div>
         </section>
 
-        {/* 하단 CTA */}
-        <section className="flex flex-col items-center gap-4 rounded-[20px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-6 py-10 text-center">
-          <h2 className="text-[22px] font-extrabold tracking-tight lg:text-[24px]">
-            비회원도 촬영은 무료예요
-          </h2>
-          <p className="max-w-[420px] text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
-            먼저 무료로 찍어보고, 저장·보관이 필요해지면 그때 플랜을 올리면 돼요.
-          </p>
-          <Link
-            href="/signup"
-            className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[14.5px] font-extrabold"
-          >
-            시작하기
-          </Link>
-        </section>
-
+        {/* 하단 CTA — 가입 유도라서 로그인 상태에서는 통째로 감춘다. */}
+        {authed ? null : (
+          <section className="flex flex-col items-center gap-4 rounded-[20px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-6 py-10 text-center">
+            <h2 className="text-[22px] font-extrabold tracking-tight lg:text-[24px]">
+              비회원도 촬영은 무료예요
+            </h2>
+            <p className="max-w-[420px] text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
+              먼저 무료로 찍어보고, 저장·보관이 필요해지면 그때 플랜을 올리면
+              돼요.
+            </p>
+            <Link
+              href="/signup"
+              className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[14.5px] font-extrabold"
+            >
+              시작하기
+            </Link>
+          </section>
+        )}
       </div>
 
       {/* 푸터 — 랜딩/FAQ와 공통(전자상거래법 표시사항 포함) */}

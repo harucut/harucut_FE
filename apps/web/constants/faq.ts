@@ -4,6 +4,8 @@ export type FaqItem = {
   q: string;
   a: string;
   surfaces?: ("landing" | "pricing")[];
+  // 비회원에게만 의미 있는 항목. 로그인 상태의 /pricing에서는 감춘다(/faq에는 항상 나온다).
+  guestOnly?: boolean;
 };
 
 export const FAQ_ITEMS: FaqItem[] = [
@@ -11,6 +13,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     q: "비회원도 사용할 수 있나요?",
     a: "네, 가입 없이도 촬영과 꾸미기를 바로 체험할 수 있어요. 다만 결과물 다운로드·저장, 기록 보관은 무료 가입(Free) 후 이용할 수 있어요.",
     surfaces: ["landing", "pricing"],
+    guestOnly: true,
   },
   {
     q: "촬영은 어떻게 하나요? 꼭 카메라가 있어야 하나요?",
@@ -26,13 +29,13 @@ export const FAQ_ITEMS: FaqItem[] = [
     surfaces: ["landing"],
   },
   {
-    q: "워터마크 없이 저장할 수 있나요?",
-    a: "워터마크는 모든 플랜에서 기본 포함이에요. Plus·Pro에서는 저장할 때 워터마크를 끄고 원본 화질로 내려받을 수 있고, 무료 Free는 항상 워터마크가 포함돼요.",
+    q: "무료 플랜과 유료 플랜은 뭐가 다른가요?",
+    a: "커스텀 프레임 개수, 사진 보관 기간, 보정 기능, 광고 노출이 달라요. 무료 Free는 사진을 3일간 보관하고 커스텀 프레임·보정은 쓸 수 없어요. Plus는 커스텀 프레임 3개와 3달 보관, Pro는 커스텀 프레임 무제한과 무제한 보관을 제공하고 둘 다 보정과 광고 제거가 포함돼요.",
     surfaces: ["landing", "pricing"],
   },
   {
     q: "플랜은 언제든 바꿀 수 있나요?",
-    a: "네. 마이페이지에서 언제든 플랜을 올리거나 내릴 수 있어요. 변경한 플랜은 다음 결제 주기부터 적용돼요. 요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.",
+    a: "결제 기능은 아직 준비 중이라 지금은 플랜을 바꿀 수 없어요. 결제가 열리면 마이페이지에서 올리거나 내릴 수 있고, 요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고 초과분은 삭제되지 않고 비활성화돼요.",
     surfaces: ["pricing"],
   },
   {
@@ -46,10 +49,8 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-// 랜딩은 전환에 중요한 상위 항목만(축약), 요금제는 결제 관련 항목만 노출한다.
-export const LANDING_FAQ = FAQ_ITEMS.filter((item) =>
-  item.surfaces?.includes("landing"),
-);
+// 요금제 페이지는 결제 관련 항목만 노출한다.
+// ("landing" 태그는 랜딩이 FAQ 섹션을 되살릴 때를 위해 데이터에만 남겨둔다.)
 export const PRICING_FAQ = FAQ_ITEMS.filter((item) =>
   item.surfaces?.includes("pricing"),
 );

@@ -1,46 +1,45 @@
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { COMPANY } from "@/constants/company";
 
 // 공개(마케팅) 페이지 공통 푸터.
-// 랜딩만 브랜드+법인 정보 전체를 갖고 요금제·FAQ는 "·"로 이은 링크 한 줄이라
-// 페이지마다 마감이 달라지던 것을 하나로 합쳤다. 전자상거래법 표시 항목도
-// 세 페이지 모두에서 동일하게 노출된다.
+// 레이아웃은 전부 좌측 정렬 한 덩어리다 — 고객센터 → 사업자 정보 → 구분선 →
+// 카피라이트+로고 → 바로가기 링크 순. 라벨/값을 표로 벌려 놓는 대신
+// "값 | 값 | 값" 한 줄로 이어 붙여 세로 길이를 줄인다(전자상거래법 표시 항목은 그대로 전부 노출).
 // tone="dark"는 딥다크 고정 무대(랜딩·기능), 기본값은 테마 연동.
-const FOOTER_COLS: {
-  title: string;
-  items: { label: string; href?: string }[];
-}[] = [
-  {
-    title: "바로가기",
-    items: [
-      { label: "기능", href: "/features" },
-      { label: "요금제", href: "/pricing" },
-      { label: "자주 묻는 질문", href: "/faq" },
-    ],
-  },
-  {
-    title: "정책",
-    items: [
-      { label: "이용약관", href: "/terms" },
-      { label: "개인정보 처리방침", href: "/privacy" },
-    ],
-  },
+
+const FOOTER_LINKS: { label: string; href: string }[] = [
+  { label: "기능", href: "/features" },
+  { label: "요금제", href: "/pricing" },
+  { label: "자주 묻는 질문", href: "/faq" },
+  { label: "이용약관", href: "/terms" },
+  { label: "개인정보 처리방침", href: "/privacy" },
 ];
 
-// 전자상거래법 제10조 표시사항. 값은 constants/company.ts 단일 소스에서만 온다.
-// 고객센터·운영시간까지 여기서 한 벌로 전부 노출한다(위 브랜드 영역과 중복시키지 않는다).
-const LEGAL_ROWS: [string, string][] = [
-  ["상호", COMPANY.name],
-  ["대표자", COMPANY.owner],
-  ["사업자등록번호", COMPANY.bizRegNo],
-  ["통신판매업 신고번호", COMPANY.mailOrderNo],
-  ["주소", COMPANY.address],
-  ["고객센터", `${COMPANY.email} · ${COMPANY.tel}`],
-  ["운영시간", COMPANY.hours],
-  ["결제대행", COMPANY.paymentAgent],
-  ["호스팅", COMPANY.hosting],
-];
+// "값 | 값 | 값" 한 줄. 좁은 화면에서는 자연스럽게 접히고, 구분자는 낭독에서 제외한다.
+function PipeRow({
+  items,
+  className = "",
+}: {
+  items: ReactNode[];
+  className?: string;
+}) {
+  return (
+    <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${className}`}>
+      {items.map((item, index) => (
+        <Fragment key={index}>
+          {index > 0 ? (
+            <span aria-hidden className="select-none opacity-30">
+              |
+            </span>
+          ) : null}
+          <span className="break-keep">{item}</span>
+        </Fragment>
+      ))}
+    </p>
+  );
+}
 
 export function MarketingFooter({
   tone = "auto",
@@ -55,7 +54,12 @@ export function MarketingFooter({
   const shell = dark
     ? "border-t border-white/[0.1] bg-[#161617]"
     : "border-t border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)]";
-  const bodyText = dark ? "text-[#6F6F73]" : "text-[color:var(--hc-muted-soft)]";
+  const headText = dark ? "text-white/85" : "text-[color:var(--hc-text)]";
+  // 법정 표시 텍스트도 본문과 같은 대비 등급을 쓴다.
+  // 이전 값(다크 #6F6F73 / 라이트 --hc-muted-soft)은 12px 일반 텍스트에서
+  // 각각 약 3.6:1, 약 2.9:1로 WCAG AA(4.5:1) 미달이었다 —
+  // 같은 푸터 안에 통과 줄과 미달 줄이 섞이지 않도록 bodyText로 통일한다.
+  const bodyText = dark ? "text-[#8A8A8E]" : "text-[color:var(--hc-muted)]";
   const linkText = dark
     ? "text-[#B3B3B3] hover:text-white"
     : "text-[color:var(--hc-muted)] hover:text-[color:var(--hc-text)]";
@@ -63,80 +67,71 @@ export function MarketingFooter({
 
   return (
     <footer className={shell}>
-      <div
-        className={`mx-auto flex w-full flex-wrap justify-between gap-8 px-7 pb-10 pt-12 ${width}`}
-      >
-        <div className="max-w-[300px]">
+      <div className={`mx-auto w-full px-7 pb-10 pt-12 ${width}`}>
+        <h2 className={`text-[12.5px] font-bold ${headText}`}>고객센터</h2>
+        <PipeRow
+          className={`mt-2.5 text-[13px] leading-[1.7] ${bodyText}`}
+          items={[
+            COMPANY.hours,
+            `이메일 ${COMPANY.email}`,
+            `전화 문의 ${COMPANY.tel}`,
+          ]}
+        />
+
+        {/* 전자상거래법 제10조 표시사항 */}
+        <div className={`mt-6 space-y-1.5 text-[12px] leading-[1.7] ${bodyText}`}>
+          <PipeRow
+            items={[
+              COMPANY.name,
+              `대표자 ${COMPANY.owner}`,
+              COMPANY.address,
+            ]}
+          />
+          <PipeRow
+            items={[
+              `사업자등록번호 ${COMPANY.bizRegNo}`,
+              `통신판매업 신고번호 ${COMPANY.mailOrderNo}`,
+            ]}
+          />
+          <PipeRow
+            items={[
+              `결제대행 ${COMPANY.paymentAgent}`,
+              `호스팅 ${COMPANY.hosting}`,
+              `민원담당자 ${COMPANY.complaintOfficer}`,
+            ]}
+          />
+          <p className="break-keep">{COMPANY.liability}</p>
+        </div>
+
+        <hr className={`my-7 border-t ${rule}`} />
+
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-5">
+          <span className={`text-[12px] ${bodyText}`}>
+            © 2026 {COMPANY.name}. All rights reserved.
+          </span>
           <BrandMark href="/" tone={dark ? "light" : undefined} />
-          <p className={`mt-3.5 text-[13px] leading-[1.6] ${bodyText}`}>
-            온라인 인생네컷 서비스.
-            <br />
-            하루를 네 컷으로 남기세요.
-          </p>
         </div>
 
-        <div className="flex flex-wrap gap-14">
-          {FOOTER_COLS.map((col) => (
-            <div key={col.title}>
-              <h6 className="mb-3.5 text-[13px] font-extrabold tracking-[.3px]">
-                {col.title}
-              </h6>
-              {col.items.map((it) =>
-                it.href ? (
-                  <Link
-                    key={it.label}
-                    href={it.href}
-                    className={`mb-2.5 block text-[13.5px] transition ${linkText}`}
-                  >
-                    {it.label}
-                  </Link>
-                ) : (
-                  <span
-                    key={it.label}
-                    className={`mb-2.5 block text-[13.5px] ${bodyText}`}
-                  >
-                    {it.label}
-                  </span>
-                ),
-              )}
-            </div>
+        <nav
+          aria-label="푸터 바로가기"
+          className={`mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px] font-semibold ${linkText}`}
+        >
+          {FOOTER_LINKS.map((item, index) => (
+            <Fragment key={item.href}>
+              {index > 0 ? (
+                <span aria-hidden className="select-none opacity-30">
+                  |
+                </span>
+              ) : null}
+              <Link
+                href={item.href}
+                className="underline underline-offset-4 transition"
+              >
+                {item.label}
+              </Link>
+            </Fragment>
           ))}
-        </div>
-      </div>
-
-      {/* 전자상거래법 표시사항 — 라벨/값을 dl로 끊어 한 덩어리 텍스트가 되지 않게 한다. */}
-      <div className={`border-t ${rule}`}>
-        <div className={`mx-auto w-full px-7 py-6 ${width}`}>
-          {/* 라벨 위 / 값 아래로 쌓아 라벨 길이(예: 통신판매업 신고번호)에 상관없이 정렬이 유지된다. */}
-          <dl
-            className={`grid gap-x-10 gap-y-4 text-[11.5px] leading-[1.6] sm:grid-cols-2 lg:grid-cols-3 ${bodyText}`}
-          >
-            {LEGAL_ROWS.map(([label, value]) => (
-              <div key={label} className="min-w-0">
-                <dt className="text-[10.5px] tracking-[0.4px] opacity-55">
-                  {label}
-                </dt>
-                <dd className="mt-1 break-keep">{value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <p
-            className={`mt-5 border-t pt-4 text-[11px] leading-[1.7] ${rule} ${bodyText}`}
-          >
-            {COMPANY.liability}
-            <br />
-            민원담당자: {COMPANY.complaintOfficer} ({COMPANY.tel} ·{" "}
-            {COMPANY.email})
-          </p>
-
-          <div
-            className={`mt-4 flex justify-between font-mono text-[11px] ${bodyText}`}
-          >
-            <span>© 2026 {COMPANY.name}</span>
-            <span>harucut.com</span>
-          </div>
-        </div>
+        </nav>
       </div>
     </footer>
   );

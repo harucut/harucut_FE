@@ -1,6 +1,6 @@
 // 하루컷 요금제 — 웹 요금제 페이지(PricingView)·앱(pricing-screen)이 공유하는 단일 소스.
 // 값 변경 시 이 파일과 mobile/screens/pricing-screen.tsx를 함께 맞춘다.
-// (Free 무료 / Plus ₩3,900 / Pro ₩9,900, 7행 피처. Enterprise는 추후 출시 예정.)
+// (Free 무료 / Plus ₩3,900 / Pro ₩9,900, 5행 피처. Enterprise는 추후 출시 예정.)
 
 export type PlanId = "basic" | "plus" | "pro";
 
@@ -15,16 +15,15 @@ export type Plan = {
   // 가격 옆 보조 텍스트(예: "/ 월", "가입 시 제공").
   sub: string;
   cta: string;
-  // 7행 피처 매트릭스(모든 플랜 동일한 행 순서/라벨).
+  // 5행 피처 매트릭스(모든 플랜 동일한 행 순서/라벨).
   feats: PlanFeature[];
   // Plus = 인기 강조.
   hot?: boolean;
   badge?: string;
 };
 
-// 7행 피처 라벨(순서 고정):
-// 커스텀 프레임 / 워터마크 해제 / 사진 보관 기간 / 보정 / 광고 제거 / AI (추후) / 동영상 (추후)
-// 워터마크는 전 플랜 기본 포함. Free는 제거 불가, Plus·Pro는 해제 가능(기본값은 항상 포함).
+// 5행 피처 라벨(순서 고정):
+// 커스텀 프레임 / 사진 보관 기간 / 보정 / 광고 제거 / AI (추후)
 export const PLANS: Plan[] = [
   {
     id: "basic",
@@ -34,12 +33,10 @@ export const PLANS: Plan[] = [
     cta: "무료로 시작하기",
     feats: [
       ["커스텀 프레임", false],
-      ["워터마크 해제", false, "기본 포함 (고정)"],
       ["사진 보관 기간", true, "3일"],
       ["보정", false],
       ["광고 제거", false, "보정·다운로드 시 노출"],
       ["AI (추후)", false],
-      ["동영상 (추후)", false],
     ],
   },
   {
@@ -52,12 +49,10 @@ export const PLANS: Plan[] = [
     badge: "인기",
     feats: [
       ["커스텀 프레임", true, "3개"],
-      ["워터마크 해제", true, "선택 (기본 포함)"],
       ["사진 보관 기간", true, "3달"],
       ["보정", true],
       ["광고 제거", true],
       ["AI (추후)", false],
-      ["동영상 (추후)", false, "미정"],
     ],
   },
   {
@@ -68,12 +63,10 @@ export const PLANS: Plan[] = [
     cta: "Pro 시작하기",
     feats: [
       ["커스텀 프레임", true, "무제한"],
-      ["워터마크 해제", true, "선택 (기본 포함)"],
       ["사진 보관 기간", true, "무제한"],
       ["보정", true],
       ["광고 제거", true],
       ["AI (추후)", true],
-      ["동영상 (추후)", false, "미정"],
     ],
   },
 ];
@@ -88,10 +81,29 @@ export const ENTERPRISE_TEASER = {
   cta: "도입 문의",
 } as const;
 
-// 요금제 페이지 헤더 카피.
+// 서버가 주는 등급("BASIC" | "PLUS" | "PRO")을 카드 id로 맞춘다.
+// 백엔드는 대문자, 카드는 소문자 id(basic/plus/pro)를 쓰므로 여기서 한 번만 흡수한다.
+// 모르는 값이면 null — 임의로 basic으로 떨어뜨려 "Free 이용 중"이라고 잘못 말하지 않는다.
+export function toPlanId(tier: string | null | undefined): PlanId | null {
+  if (!tier) return null;
+  const id = tier.toLowerCase();
+  return PLANS.some((plan) => plan.id === id) ? (id as PlanId) : null;
+}
+
+// 서버 등급을 카드 이름(Free/Plus/Pro)으로 바꾼다. 모르는 값이면 null.
+export function getPlanDisplayName(tier: string | null | undefined): string | null {
+  const id = toPlanId(tier);
+  return id ? (PLANS.find((plan) => plan.id === id)?.name ?? null) : null;
+}
+
+// 요금제 페이지 헤더 카피. 로그인 후에는 "비회원" 안내가 의미 없어 문장을 바꾼다.
 export const PRICING_HEADLINE = "나에게 맞는 플랜";
 export const PRICING_SUBTITLE =
   "비회원도 촬영은 무료예요. 커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요.";
+export const PRICING_SUBTITLE_AUTHED =
+  "커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요. 결제 기능은 준비 중이에요.";
+// 결제 미오픈 안내 — 요금제 카드 CTA·footnote가 함께 쓴다.
+export const PRICING_BILLING_PENDING = "결제 기능은 준비 중이에요.";
 // 요금제를 내릴 때의 안내(비활성화 정책).
 export const PRICING_DOWNGRADE_NOTE =
   "요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.";

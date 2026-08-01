@@ -8,7 +8,7 @@ import { COMPANY } from "@/constants/company";
 export const metadata: Metadata = {
   title: "자주 묻는 질문 | 하루컷",
   description:
-    "하루컷 자주 묻는 질문. 비회원 이용, 촬영, 워터마크·저장, 요금제 변경, 보관·공개 범위까지 한곳에서 확인하세요.",
+    "하루컷 자주 묻는 질문. 비회원 이용, 촬영, 커스텀 프레임, 요금제 차이, 보관·공개 범위까지 한곳에서 확인하세요.",
   alternates: { canonical: "/faq" },
 };
 

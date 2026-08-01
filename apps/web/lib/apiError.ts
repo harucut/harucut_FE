@@ -1,9 +1,6 @@
 "use client";
 
-const PLAN_ERROR_MESSAGES = {
-  "USR-102": "요금제의 월간 프레임 생성 횟수를 초과했습니다.",
-  "USR-103": "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
-} as const;
+import { getPlanErrorMessage } from "@harucut/shared";
 
 type ApiErrorDetails = {
   status?: number;
@@ -51,19 +48,34 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   return { status, code, message };
 }
 
+// 서버 응답에서 온 메시지만 골라낸다.
+// 일반 Error의 message(내부 영문 원문)는 사용자에게 보여주지 않는다.
+function getServerMessage(error: unknown): string | null {
+  const record = asRecord(error);
+  if (!record) return null;
+
+  if (typeof record.apiMessage === "string" && record.apiMessage.trim()) {
+    return record.apiMessage;
+  }
+
+  const data = asRecord(record.data);
+  if (typeof data?.message === "string" && data.message.trim()) {
+    return data.message;
+  }
+
+  return null;
+}
+
 export function getUserFacingApiErrorMessage(
   error: unknown,
   fallback: string,
 ) {
-  const { code, message } = getApiErrorDetails(error);
+  const { code } = getApiErrorDetails(error);
 
-  if (code && code in PLAN_ERROR_MESSAGES) {
-    return PLAN_ERROR_MESSAGES[code as keyof typeof PLAN_ERROR_MESSAGES];
+  const planMessage = getPlanErrorMessage(code);
+  if (planMessage) {
+    return planMessage;
   }
 
-  if (message?.trim()) {
-    return message;
-  }
-
-  return fallback;
+  return getServerMessage(error) ?? fallback;
 }

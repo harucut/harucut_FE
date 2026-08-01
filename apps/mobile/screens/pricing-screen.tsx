@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, AppScrollView } from '@/components/harucut/ui';
 import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
+import { PLAN_DISPLAY_NAMES } from '@/constants/plan-limits';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useSessionStore } from '@/store/use-session-store';
 
@@ -21,22 +22,20 @@ type Plan = {
   sub: string;
 };
 
-// 7행 피처 매트릭스. 웹 constants/plans.ts와 같은 값/순서를 공유한다.
-// 워터마크는 전 플랜 기본 포함. Free는 제거 불가, Plus·Pro는 해제 가능(기본값은 항상 포함).
+// 5행 피처 매트릭스. 웹 constants/plans.ts와 같은 값/순서를 공유한다.
+// 행 순서: 커스텀 프레임 / 사진 보관 기간 / 보정 / 광고 제거 / AI (추후)
 const PLANS: Plan[] = [
   {
     cta: '무료로 시작하기',
     feats: [
       ['커스텀 프레임', false],
-      ['워터마크 해제', false, '기본 포함 (고정)'],
       ['사진 보관 기간', true, '3일'],
       ['보정', false],
       ['광고 제거', false, '보정·다운로드 시 노출'],
       ['AI (추후)', false],
-      ['동영상 (추후)', false],
     ],
     id: 'basic',
-    name: 'Free',
+    name: PLAN_DISPLAY_NAMES.BASIC,
     price: '무료',
     sub: '가입 시 제공',
   },
@@ -45,16 +44,14 @@ const PLANS: Plan[] = [
     cta: 'Plus 시작하기',
     feats: [
       ['커스텀 프레임', true, '3개'],
-      ['워터마크 해제', true, '선택 (기본 포함)'],
       ['사진 보관 기간', true, '3달'],
       ['보정', true],
       ['광고 제거', true],
       ['AI (추후)', false],
-      ['동영상 (추후)', false, '미정'],
     ],
     hot: true,
     id: 'plus',
-    name: 'Plus',
+    name: PLAN_DISPLAY_NAMES.PLUS,
     price: '₩3,900',
     sub: '/ 월',
   },
@@ -62,15 +59,13 @@ const PLANS: Plan[] = [
     cta: 'Pro 시작하기',
     feats: [
       ['커스텀 프레임', true, '무제한'],
-      ['워터마크 해제', true, '선택 (기본 포함)'],
       ['사진 보관 기간', true, '무제한'],
       ['보정', true],
       ['광고 제거', true],
       ['AI (추후)', true],
-      ['동영상 (추후)', false, '미정'],
     ],
     id: 'pro',
-    name: 'Pro',
+    name: PLAN_DISPLAY_NAMES.PRO,
     price: '₩9,900',
     sub: '/ 월',
   },
@@ -81,28 +76,47 @@ const ENTERPRISE_TEASER = {
   badge: '추후',
   desc: '팬미팅·행사용 플랜이에요. 공간을 미리 만들어 두면 비회원도 QR로 입장해 그 자리에서 누구나 네 컷을 찍을 수 있어요.',
   name: 'Enterprise',
+  price: '준비 중',
 };
 
+// 서버가 주는 등급('BASIC'|'PLUS'|'PRO')을 카드 id로 맞춘다(웹 constants/plans.ts의 toPlanId와 동일).
+// 모르는 값이면 null — 임의로 basic으로 떨어뜨려 'Free 이용 중'이라고 잘못 말하지 않는다.
+function toPlanId(tier: string | null | undefined): Plan['id'] | null {
+  if (!tier) return null;
+  const id = tier.toLowerCase();
+  return PLANS.some((plan) => plan.id === id) ? (id as Plan['id']) : null;
+}
+
 function PlanCard({
+  current,
+  isMember,
   onPick,
   plan,
   styles,
   colors,
 }: {
   colors: HarucutColors;
+  /** 이 카드가 지금 이용 중인 플랜인지. */
+  current: boolean;
+  isMember: boolean;
   onPick: () => void;
   plan: Plan;
   styles: ReturnType<typeof createStyles>;
 }) {
+  // 현재 플랜은 '인기' 같은 마케팅 배지보다 '현재 플랜'이 우선이다.
+  const badge = current ? '현재 플랜' : plan.badge;
+
   return (
-    <View style={[styles.card, plan.hot ? styles.cardHot : null]}>
-      {plan.badge ? (
+    <View style={[styles.card, plan.hot ? styles.cardHot : null, current ? styles.cardCurrent : null]}>
+      {badge ? (
         <View style={styles.badge}>
-          <Text style={styles.badgeLabel}>{plan.badge}</Text>
+          <Text style={styles.badgeLabel}>{badge}</Text>
         </View>
       ) : null}
 
-      <Text style={[styles.planName, plan.hot ? styles.planNameHot : null]}>{plan.name}</Text>
+      <Text style={[styles.planName, plan.hot || current ? styles.planNameHot : null]}>
+        {plan.name}
+      </Text>
 
       <View style={styles.priceRow}>
         <Text style={styles.price}>{plan.price}</Text>
@@ -131,12 +145,28 @@ function PlanCard({
         ))}
       </View>
 
-      <ActionButton
-        label={plan.cta}
-        onPress={onPick}
-        style={styles.cta}
-        variant={plan.hot ? 'primary' : 'secondary'}
-      />
+      {/* CTA — 비회원은 가입 유도. 이용 중인 플랜은 누를 곳이 없고,
+          회원의 플랜 변경은 결제 연동 전이라 '준비 중'으로 비활성 표시한다. */}
+      {current ? (
+        <View style={styles.ctaCurrent}>
+          <Text style={styles.ctaCurrentLabel}>현재 이용 중</Text>
+        </View>
+      ) : isMember ? (
+        <ActionButton
+          disabled
+          label="준비 중"
+          onPress={onPick}
+          style={styles.cta}
+          variant="secondary"
+        />
+      ) : (
+        <ActionButton
+          label={plan.cta}
+          onPress={onPick}
+          style={styles.cta}
+          variant={plan.hot ? 'primary' : 'secondary'}
+        />
+      )}
     </View>
   );
 }
@@ -146,11 +176,15 @@ export function PricingScreen() {
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const accessMode = useSessionStore((state) => state.accessMode);
+  const planTier = useSessionStore((state) => state.user.planTier);
+  // 세션 스토어의 user는 비로그인일 때도 기본값(BASIC)을 갖는다.
+  // 회원일 때만 현재 플랜으로 인정해야 게스트에게 'Free 이용 중'이 뜨지 않는다.
+  const isMember = accessMode === 'member';
+  const currentPlanId = isMember ? toPlanId(planTier) : null;
 
+  // 회원 CTA는 비활성('준비 중')이라 눌리지 않는다. 비회원(anonymous·guest)만 가입 흐름으로 보낸다.
   const handlePick = () => {
-    // 결제 백엔드 연동은 범위 밖. 회원만 마이페이지로, 그 외(anonymous·guest)는
-    // 보호 라우트인 /mypage 대신 가입 흐름으로 안내한다.
-    router.push((accessMode === 'member' ? '/mypage' : '/signup') as never);
+    router.push('/signup' as never);
   };
 
   return (
@@ -175,7 +209,9 @@ export function PricingScreen() {
       <View style={styles.headerBlock}>
         <Text style={styles.headline}>나에게 맞는 플랜</Text>
         <Text style={styles.subtitle}>
-          비회원도 촬영은 무료예요. 커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요.
+          {isMember
+            ? '커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요. 결제 기능은 준비 중이에요.'
+            : '비회원도 촬영은 무료예요. 커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요.'}
         </Text>
       </View>
 
@@ -184,6 +220,8 @@ export function PricingScreen() {
           <PlanCard
             key={plan.id}
             colors={colors}
+            current={currentPlanId === plan.id}
+            isMember={isMember}
             onPick={handlePick}
             plan={plan}
             styles={styles}
@@ -197,12 +235,13 @@ export function PricingScreen() {
           <View style={styles.enterpriseBadge}>
             <Text style={styles.enterpriseBadgeLabel}>{ENTERPRISE_TEASER.badge}</Text>
           </View>
+          <Text style={styles.enterprisePrice}>{ENTERPRISE_TEASER.price}</Text>
         </View>
         <Text style={styles.enterpriseDesc}>{ENTERPRISE_TEASER.desc}</Text>
       </View>
 
       <Text style={styles.footnote}>
-        가격은 부가세 포함이에요. 요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.
+        결제 기능은 준비 중이에요. 가격은 부가세 포함이고, 요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.
       </Text>
     </AppScrollView>
   );
@@ -241,6 +280,11 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       shadowOpacity: isDark ? 0.26 : 1,
       shadowRadius: 38,
     },
+    cardCurrent: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
+      borderWidth: 2,
+    },
     cardHot: {
       borderColor: colors.primary,
       borderWidth: 1.5,
@@ -250,6 +294,20 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     cta: {
       marginTop: 20,
+    },
+    ctaCurrent: {
+      alignItems: 'center',
+      borderColor: colors.primary,
+      borderRadius: HARUCUT_RADII.chip,
+      borderWidth: 1,
+      height: 50,
+      justifyContent: 'center',
+      marginTop: 20,
+    },
+    ctaCurrentLabel: {
+      color: colors.primaryStrong,
+      fontSize: 14.5,
+      fontWeight: '800',
     },
     divider: {
       backgroundColor: colors.border,
@@ -292,6 +350,11 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       fontSize: 15,
       fontWeight: '800',
       letterSpacing: 0.3,
+    },
+    enterprisePrice: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: '700',
     },
     featIcon: {
       alignItems: 'center',
