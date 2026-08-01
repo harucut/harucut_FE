@@ -8,6 +8,12 @@
 - `/login`
 - `/signup`
 - `/forgot-password`
+- `/features`
+- `/faq`
+- `/pricing`
+- `/privacy`
+- `/terms`
+- `/oauth2/callback`
 
 보호 라우트:
 
@@ -15,10 +21,15 @@
 - `/shoot/*`
 - `/upload/*`
 - `/theme/*`
+- `/decorate`
 - `/history`
 - `/mypage`
 
-미들웨어 진입점은 [`apps/web/proxy.ts`](../apps/web/proxy.ts)입니다.
+미들웨어 진입점은 [`apps/web/proxy.ts`](../apps/web/proxy.ts)이고,
+보호 경로 판정은 [`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts)의
+`PROTECTED_PATHS`에 있습니다. 검색 노출 대상 공개 페이지는
+[`apps/web/app/sitemap.ts`](../apps/web/app/sitemap.ts)와 일치시킵니다
+(인증 페이지는 noindex라 sitemap에서 제외).
 
 ## redirectTo 계약
 
@@ -39,6 +50,88 @@
 안전하지 않거나 비어 있으면 `/home`으로 이동합니다.
 
 안전한 리다이렉트 파싱은 [`apps/web/lib/redirect.ts`](../apps/web/lib/redirect.ts)에 있습니다.
+
+## 게스트 체험 모드
+
+가입 없이 촬영을 체험하는 경로입니다. 판단 기준은 쿠키 하나
+(`GUEST_TRIAL_COOKIE = "harucut_guest_trial"`, 값 `"1"`)입니다.
+
+미들웨어 분기 순서([`apps/web/proxy.ts`](../apps/web/proxy.ts)):
+
+0. `DEV_AUTH_BYPASS`가 켜져 있으면 아래 판정을 전부 건너뛴다(아래 절 참고)
+1. 보호 경로가 아니면 그대로 통과
+2. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
+   이때 게스트 쿠키가 남아 있으면 응답에서 삭제한다(회원 전환)
+3. 게스트 쿠키만 있으면
+   - `/shoot`로 시작하는 경로: 통과
+   - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
+4. 둘 다 없으면 `/login?redirectTo=...`
+
+```text
+인증 쿠키 O                     -> 통과 (게스트 쿠키 삭제)
+게스트 쿠키 O + /shoot/*        -> 통과
+게스트 쿠키 O + 그 외 보호 경로 -> /shoot?guestNotice=restricted
+쿠키 없음                       -> /login?redirectTo=<원래 경로와 쿼리>
+```
+
+관련 파일:
+
+- [`apps/web/lib/guestTrialShared.ts`](../apps/web/lib/guestTrialShared.ts): 쿠키 이름 단일 출처
+- [`apps/web/lib/guestTrialStore.ts`](../apps/web/lib/guestTrialStore.ts): `accessMode`(`guest`/`member`),
+  쿠키 읽기·쓰기, 안내 문구(restricted / saved / share / trial)
+- `apps/web/components/guest/*`: `GuestTrialStartButton`(체험 시작),
+  `GuestTrialBridge`(쿠키로 `accessMode` 복원 + 로그인 후 보관본 자동 업로드),
+  `GuestTrialOverlay`(안내 표시)
+- [`apps/web/lib/pendingGuestSave.ts`](../apps/web/lib/pendingGuestSave.ts):
+  게스트가 저장을 누르면 결과 PNG를 localStorage에 보관했다가 인증 후 서버로 올린다
+
+게스트 체험은 촬영과 이미지 다운로드까지만 허용합니다. 기록 저장, 링크 공유 등
+서버 연동 기능은 로그인 후 사용합니다.
+
+## 소셜 로그인
+
+KAKAO, NAVER, GOOGLE 3종을 지원합니다.
+
+진입([`apps/web/lib/authLogin.ts`](../apps/web/lib/authLogin.ts)):
+
+```text
+loginKakao/loginNaver/loginGoogle
+  -> persistSocialLoginRedirect(redirectTo)
+  -> window.location.href = `${NEXT_PUBLIC_BASE_URL}/oauth2/authorization/{kakao|naver|google}`
+```
+
+복귀 경로 보존([`apps/web/lib/socialLoginRedirect.ts`](../apps/web/lib/socialLoginRedirect.ts)):
+
+- OAuth는 전체 페이지 리다이렉트라 메모리 상태가 날아갑니다.
+  `persistSocialLoginRedirect`가 `getSafeRedirectPath`로 검증한 경로만
+  sessionStorage(`social-login-redirect`)에 저장합니다.
+- 콜백에서 `consumeSocialLoginRedirect`가 한 번 읽고 즉시 지웁니다.
+
+콜백 처리([`apps/web/app/oauth2/callback/page.tsx`](../apps/web/app/oauth2/callback/page.tsx)):
+
+1. `/api/auth/status`로 계정 상태를 조회한다(`userStatus` / `accountStatus` / `status` 중 먼저 잡히는 값)
+2. `UserStatus`별 분기
+   - `ACTIVE`: 복귀 경로(없으면 `/home`)로 이동
+   - `DELETED_REQUESTED`: 재등록 여부를 확인한다. 수락하면 `reactivateAccount()`
+     후 복귀, 거절하거나 실패하면 로그아웃하고 `/login`
+   - `BLOCKED` / `DELETED`: 별도 화면 분기 없이 상태 값만 인식한다.
+     접근 차단은 서버 응답(권한 오류)에 따른 공통 에러 처리로 흡수된다
+3. 상태 조회 자체가 실패하면 로그아웃 후 `/login`
+
+## DEV_AUTH_BYPASS (로컬 전용)
+
+[`apps/web/lib/devAuthBypass.ts`](../apps/web/lib/devAuthBypass.ts)의 스위치입니다.
+
+```text
+DEV_AUTH_BYPASS = NODE_ENV !== "production" && NEXT_PUBLIC_DEV_AUTH_BYPASS === "1"
+```
+
+- 이중 잠금이라 `.env`에 값이 딸려가도 프로덕션 빌드에서는 항상 `false`입니다.
+- 켜면 **이 문서의 보호 계약이 전부 꺼집니다.** 미들웨어는 보호 경로 판정 전에
+  `NextResponse.next()`로 빠지고, `SessionExpiryBridge`의 401 → `/login` 이동도
+  멈춥니다. 게스트 체험 분기도 타지 않습니다.
+- 그래서 E2E는 반드시 끈 상태로 실행합니다. 켜진 채로 돌리면 "비인증 접근 시
+  로그인 리다이렉트" 시나리오가 통과하지 않고 조용히 깨집니다.
 
 ## 인증 페이지 내 이동 규칙
 
@@ -66,3 +159,4 @@
 
 비인증 E2E는 보호 라우트 접근 시 로그인으로 리다이렉트되는지를 우선 검증해야 합니다.
 보호된 전체 기능 흐름 E2E는 인증된 테스트 컨텍스트나 별도 인증 헬퍼가 필요합니다.
+E2E 실행 전에 `NEXT_PUBLIC_DEV_AUTH_BYPASS`가 꺼져 있는지 확인합니다.

@@ -56,6 +56,10 @@ pnpm lint:mobile
 pnpm typecheck:mobile
 ```
 
+E2E나 인증 흐름을 검증할 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS`를 끄고 실행한다.
+켜져 있으면 보호 라우트 리다이렉트와 401 처리가 모두 꺼져서 인증 시나리오가
+조용히 통과한다. 자세한 내용은 `docs/auth-routing.md`의 `DEV_AUTH_BYPASS` 절 참고.
+
 ## 문서
 
 - 설계와 운영 문서 모음: `docs/`

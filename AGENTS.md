@@ -4,6 +4,7 @@
 
 - `apps/web`: 기존 Next.js App Router 웹 앱
 - `apps/mobile`: Expo Router 기반 iOS/Android 앱
+- `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared` (`auth-validation.ts`, `fourcut-filters.ts`, `legal.ts`)
 - `docs/`: 서비스 흐름, 인증 라우팅, 모바일 설계, QA 체크리스트, ADR
 - `scripts/`: 검증 스크립트
 
@@ -29,17 +30,33 @@
 - API 통신과 에러 처리도 직접 확인한다
 - 직접 확인하지 않은 기능을 완료라고 쓰지 않는다
 
-## 보호 라우트
+## 라우트
+
+공개 라우트
+
+- `/`
+- `/login`
+- `/signup`
+- `/forgot-password`
+- `/features`
+- `/faq`
+- `/pricing`
+- `/privacy`
+- `/terms`
+- `/oauth2/callback`
+
+보호 라우트
 
 - `/home`
 - `/shoot/*`
 - `/upload/*`
 - `/theme/*`
+- `/decorate`
 - `/history`
 - `/mypage`
 
-보호 라우트 로직은 `apps/web/proxy.ts`에 있다.  
-비인증 접근은 `/login?redirectTo=...`로 보낸다.
+보호 라우트 로직은 `apps/web/proxy.ts`, 경로 목록은 `apps/web/lib/protectedPaths.ts`에 있다.  
+비인증 접근은 `/login?redirectTo=...`로 보낸다. (게스트 체험 예외는 `docs/auth-routing.md` 참조)
 
 ## 테스트 가이드
 
