@@ -107,8 +107,7 @@ function LoginPageContent() {
 
   return (
     <AuthPageShell
-      title="다시 오셨네요"
-      description="하루컷에 로그인하세요."
+      title="로그인"
       footer={
         <>
           <SocialLoginSection mode="login" redirectTo={redirectTo} />

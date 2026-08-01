@@ -19,6 +19,11 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      // 로컬 .env.local 에 개발용 로그인 우회가 켜져 있어도 e2e 서버에서는 끈다.
+      // 켜진 채로 돌면 인증 가드 테스트가 통째로 무의미해진다.
+      NEXT_PUBLIC_DEV_AUTH_BYPASS: "0",
+    },
   },
   projects: [
     {

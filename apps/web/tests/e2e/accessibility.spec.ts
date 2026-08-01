@@ -6,7 +6,17 @@ const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ??
   `http://localhost:${Number(process.env.PORT ?? 3000)}`;
 
-const publicRoutes = ["/", "/login", "/signup", "/forgot-password"] as const;
+const publicRoutes = [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/pricing",
+  "/faq",
+  "/features",
+  "/terms",
+  "/privacy",
+] as const;
 const authenticatedRoutes = [
   "/home",
   "/shoot",

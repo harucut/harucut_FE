@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { registerSessionExpiredHandler } from "@/lib/clientApi";
+import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { isProtectedPath } from "@/lib/protectedPaths";
 
@@ -14,6 +15,9 @@ export function SessionExpiryBridge() {
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
   useEffect(() => {
+    // 로컬 개발 우회 중에는 백엔드가 401을 줘도 로그인으로 튕기지 않는다.
+    if (DEV_AUTH_BYPASS) return;
+
     registerSessionExpiredHandler(() => {
       if (accessMode === "guest") return;
       if (!isProtectedPath(pathname)) return;
