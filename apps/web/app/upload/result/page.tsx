@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StepProgress } from "@/components/layout/StepProgress";
-import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
+import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
@@ -19,6 +18,7 @@ import {
   buildDefaultDisplayName,
   buildDownloadFilename,
   sanitizeDisplayName,
+  FOURCUT_OUTPUT_EXTENSION,
 } from "@/lib/fourcutOutput";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
 import {
@@ -26,6 +26,7 @@ import {
   unregisterGeneratedPngDebug,
 } from "@/lib/generatedImageDebug";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { shareOrCopyLink } from "@/lib/share";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { useUploadSession } from "@/lib/uploadSessionStore";
@@ -51,6 +52,18 @@ export default function UploadResultPage() {
   } = useUploadSession();
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const setDecorateSource = useDecorateSession((state) => state.setSource);
+  const setNotice = useGuestTrialStore((state) => state.setNotice);
+
+  // 촬영 결과 화면과 같은 전역 안내 오버레이를 쓴다(브라우저 alert 사용 안 함).
+  const showStatusNotice = (title: string, message: string) => {
+    setNotice({
+      actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+      eyebrow: "NOTICE",
+      icon: "sparkles",
+      message,
+      title,
+    });
+  };
 
   // 완성된 네컷을 꾸미기 에디터로 넘긴다(가능하면 blob으로 받아 캔버스 오염 방지).
   const handleDecorate = async () => {
@@ -83,8 +96,6 @@ export default function UploadResultPage() {
   const [isSharingImage, setIsSharingImage] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const debugImageUrlRef = useRef<string | null>(null);
-  const displayNameGenerationKeyRef = useRef<string | null>(null);
-  const defaultDisplayNameRef = useRef("");
   const imageGenerationKeyRef = useRef<string | null>(null);
 
   const selectedCount = useMemo(
@@ -97,20 +108,13 @@ export default function UploadResultPage() {
     [media, selectedIndexes],
   );
   const previewImage = useMemo(
-    () =>
-      selectedMedia.map((item): FrameMedia | null => {
-        if (!item) return null;
-        return { type: "image", src: item.src };
-      }),
+    () => selectedMedia.map((item): FrameMedia | null => (item ? { src: item.src } : null)),
     [selectedMedia],
   );
   const imageSources: FrameSource[] = useMemo(
     () =>
       selectedMedia
-        .map((item) => {
-          if (!item) return null;
-          return { type: "image", src: item.src } as const;
-        })
+        .map((item) => (item ? { src: item.src } : null))
         .filter((value): value is FrameSource => Boolean(value)),
     [selectedMedia],
   );
@@ -128,7 +132,6 @@ export default function UploadResultPage() {
 
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
-  const frameConfig = FRAME_CONFIGS.find((frame) => frame.id === frameId);
   const generationKey = useMemo(
     () =>
       JSON.stringify({
@@ -136,7 +139,7 @@ export default function UploadResultPage() {
         remoteFrameId,
         borderColor: effectiveBorderColor,
         outputFilter,
-        imageSources: imageSources.map((source) => `${source.type}:${source.src}`),
+        imageSources: imageSources.map((source) => source.src),
       }),
     [
       effectiveBorderColor,
@@ -146,19 +149,18 @@ export default function UploadResultPage() {
       remoteFrameId,
     ],
   );
-  if (displayNameGenerationKeyRef.current !== generationKey) {
-    displayNameGenerationKeyRef.current = generationKey;
-    defaultDisplayNameRef.current = buildDefaultDisplayName(
-      frameConfig?.name ?? "harucut",
-      "IMAGE",
-    );
-  }
-  const defaultDisplayName = defaultDisplayNameRef.current;
+  // 합성 입력(generationKey)이 바뀔 때마다 기본 파일명을 새로 만든다.
+  // buildDefaultDisplayName()은 시각 기반이라 인자가 없고, 호출할 때마다 값이 달라진다.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const defaultDisplayName = useMemo(() => buildDefaultDisplayName(), [generationKey]);
 
-  useEffect(() => {
+  // 합성 결과가 바뀌면 상태를 렌더 중에 맞춘다(effect로 하면 렌더가 한 번 더 돈다).
+  const [syncedImageResult, setSyncedImageResult] = useState(imageResult);
+  if (syncedImageResult !== imageResult) {
+    setSyncedImageResult(imageResult);
     setImageState(imageResult ? "done" : "idle");
     setImageNameDraft(imageResult?.displayName ?? "");
-  }, [imageResult]);
+  }
 
   useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
@@ -200,12 +202,7 @@ export default function UploadResultPage() {
           const file = new File([blob], `${displayName}.png`, {
             type: "image/png",
           });
-          const asset = await uploadGeneratedFourcutFile({
-            file,
-            kind: "IMAGE",
-            displayName,
-            extension: "png",
-          });
+          const asset = await uploadGeneratedFourcutFile({ file, displayName });
 
           if (!cancelled) {
             setImageResult(asset);
@@ -229,7 +226,6 @@ export default function UploadResultPage() {
   }, [
     defaultDisplayName,
     effectiveBorderColor,
-    frameConfig?.name,
     frameId,
     generationKey,
     imageResult,
@@ -285,7 +281,7 @@ export default function UploadResultPage() {
       setImageNameDraft(resolvedName);
     } catch (error) {
       console.error(error);
-      alert("이미지 이름을 저장하지 못했어요.");
+      showStatusNotice("이름을 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
     } finally {
       setIsSavingImageName(false);
     }
@@ -299,12 +295,13 @@ export default function UploadResultPage() {
       const url = await getMediaDownloadUrl(imageResult.mediaId);
       await downloadFromUrl(
         url,
-        buildDownloadFilename(imageResult.displayName, imageResult.extension),
+        buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
       );
     } catch (error) {
       console.error(error);
-      alert(
-        getUserFacingApiErrorMessage(error, "이미지를 다운로드하지 못했어요."),
+      showStatusNotice(
+        "이미지를 다운로드하지 못했어요",
+        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
       );
     } finally {
       setIsDownloadingImage(false);
@@ -324,12 +321,16 @@ export default function UploadResultPage() {
       });
 
       if (result === "copied") {
-        alert("이미지 링크를 복사했어요.");
+        showStatusNotice(
+          "링크를 복사했어요",
+          "이미지 링크를 바로 붙여넣어 공유할 수 있어요.",
+        );
       }
     } catch (error) {
       console.error(error);
-      alert(
-        getUserFacingApiErrorMessage(error, "이미지 링크를 준비하지 못했어요."),
+      showStatusNotice(
+        "이미지 링크를 준비하지 못했어요",
+        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
       );
     } finally {
       setIsSharingImage(false);
@@ -339,33 +340,37 @@ export default function UploadResultPage() {
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
-        <PageHeader title="업로드 결과" />
-        <StepProgress current={3} total={3} label="결과 확인" />
+        <PageHeader
+          title="업로드 결과"
+          backHref="/upload/select"
+          backLabel="사진 다시 고르기"
+          description="완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
+        />
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-zinc-100">
+              <p className="text-sm font-semibold text-[color:var(--hc-text)]">
                 {isPreparing ? "결과 준비 중" : "결과 준비 완료"}
               </p>
-              <p className="mt-1 text-[11px] text-zinc-500">
+              <p className="mt-1 text-[11px] text-[color:var(--hc-muted)]">
                 {isPreparing
                   ? "완성되면 바로 다운로드하거나 공유할 수 있어요."
                   : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
               </p>
             </div>
-            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] text-zinc-300">
+            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[10px] font-medium text-[color:var(--hc-primary-strong)]">
               이미지
             </span>
           </div>
         </section>
 
         {isPreparing ? (
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
             <div className="space-y-2 text-[11px]">
-              <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                <span>이미지 준비</span>
-                <span className="text-zinc-400">
+              <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
+                <span className="text-[color:var(--hc-text)]">이미지 준비</span>
+                <span className="text-[color:var(--hc-muted)]">
                   {imageState === "processing" ? "생성 중..." : "대기 중"}
                 </span>
               </div>
@@ -383,7 +388,7 @@ export default function UploadResultPage() {
           />
         </section>
 
-        {imageError ? <p className="text-[11px] text-red-300">{imageError}</p> : null}
+        {imageError ? <p className="text-[11px] text-red-500">{imageError}</p> : null}
 
         {imageState === "error" ? (
           <button
@@ -396,7 +401,7 @@ export default function UploadResultPage() {
               setImageState("idle");
               setImageError(null);
             }}
-            className="rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-900"
+            className="hc-button-secondary rounded-full border px-4 py-2 text-xs font-semibold transition"
           >
             다시 준비하기
           </button>
@@ -405,7 +410,7 @@ export default function UploadResultPage() {
         {imageResult ? (
           <GeneratedAssetDownloadCard
             title="이미지 다운로드"
-            description="기록으로 저장될 이미지 이름을 수정할 수 있어요."
+            description="기록으로 저장될 파일 이름을 수정하고 이미지를 내려받을 수 있어요."
             asset={imageResult}
             metaLabel="업로드 결과 · 이미지"
             draftName={imageNameDraft}
@@ -423,7 +428,7 @@ export default function UploadResultPage() {
           <button
             type="button"
             onClick={handleDecorate}
-            className="rounded-full border border-zinc-700 px-4 py-2.5 text-center text-sm font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+            className="hc-button-secondary rounded-full border px-4 py-2.5 text-center text-sm font-semibold transition"
           >
             네컷 꾸미기 — 스티커·텍스트·그리기
           </button>
@@ -432,13 +437,13 @@ export default function UploadResultPage() {
         <div className="flex gap-2">
           <Link
             href="/upload/select"
-            className="flex-1 rounded-full border border-zinc-700 px-4 py-2 text-center text-xs font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
           >
             사진 다시 고르기
           </Link>
           <Link
             href="/home"
-            className="flex-1 rounded-full border border-zinc-700 px-4 py-2 text-center text-xs font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
           >
             홈으로 가기
           </Link>

@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StepProgress } from "@/components/layout/StepProgress";
-import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
+import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
@@ -20,6 +19,7 @@ import {
   buildDefaultDisplayName,
   buildDownloadFilename,
   sanitizeDisplayName,
+  FOURCUT_OUTPUT_EXTENSION,
 } from "@/lib/fourcutOutput";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
 import {
@@ -28,14 +28,23 @@ import {
 } from "@/lib/generatedImageDebug";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { isNotNull } from "@/lib/guards";
+import { setPendingGuestSave } from "@/lib/pendingGuestSave";
+import { buildPathWithRedirect } from "@/lib/redirect";
 import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useDecorateSession } from "@/lib/decorateSessionStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 
 const IMAGE_DEBUG_SCOPE = "shoot-result-image";
+
+// 비회원이 로그인으로 넘어갈 때 쓰는 경로. 로그인 후 /home에서 보관해 둔 결과물을 자동 저장한다.
+const GUEST_LOGIN_HANDOFF_PATH = buildPathWithRedirect(
+  "/login",
+  "/home?resumeSave=1",
+);
 
 type ProcessingState = "idle" | "processing" | "done" | "error";
 
@@ -92,11 +101,10 @@ export default function ShootResultPage() {
   const [isSavingImageName, setIsSavingImageName] = useState(false);
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
+  const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const debugImageUrlRef = useRef<string | null>(null);
   const guestImageUrlRef = useRef<string | null>(null);
-  const displayNameGenerationKeyRef = useRef<string | null>(null);
-  const defaultDisplayNameRef = useRef("");
   const imageGenerationKeyRef = useRef<string | null>(null);
 
   const showStatusNotice = (title: string, message: string) => {
@@ -119,16 +127,13 @@ export default function ShootResultPage() {
     [selectedIndexes, shots],
   );
   const previewImage = useMemo(
-    () =>
-      selectedShots.map((shot): FrameMedia | null =>
-        shot ? { type: "image", src: shot.photo } : null,
-      ),
+    () => selectedShots.map((photo): FrameMedia | null => (photo ? { src: photo } : null)),
     [selectedShots],
   );
   const imageSources: FrameSource[] = useMemo(
     () =>
       selectedShots
-        .map((shot) => (shot ? ({ type: "image", src: shot.photo } as const) : null))
+        .map((photo) => (photo ? { src: photo } : null))
         .filter(isNotNull),
     [selectedShots],
   );
@@ -146,7 +151,6 @@ export default function ShootResultPage() {
 
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
-  const frameConfig = FRAME_CONFIGS.find((frame) => frame.id === frameId);
   const generationKey = useMemo(
     () =>
       JSON.stringify({
@@ -154,7 +158,7 @@ export default function ShootResultPage() {
         remoteFrameId,
         borderColor: effectiveBorderColor,
         outputFilter,
-        imageSources: imageSources.map((source) => `${source.type}:${source.src}`),
+        imageSources: imageSources.map((source) => source.src),
       }),
     [
       effectiveBorderColor,
@@ -165,20 +169,18 @@ export default function ShootResultPage() {
     ],
   );
 
-  if (displayNameGenerationKeyRef.current !== generationKey) {
-    displayNameGenerationKeyRef.current = generationKey;
-    defaultDisplayNameRef.current = buildDefaultDisplayName(
-      frameConfig?.name ?? "harucut",
-      "IMAGE",
-    );
-  }
+  // 합성 입력(generationKey)이 바뀔 때마다 기본 파일명을 새로 만든다.
+  // buildDefaultDisplayName()은 시각 기반이라 인자가 없고, 호출할 때마다 값이 달라진다.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const defaultDisplayName = useMemo(() => buildDefaultDisplayName(), [generationKey]);
 
-  const defaultDisplayName = defaultDisplayNameRef.current;
-
-  useEffect(() => {
+  // 합성 결과가 바뀌면 상태를 렌더 중에 맞춘다(effect로 하면 렌더가 한 번 더 돈다).
+  const [syncedImageResult, setSyncedImageResult] = useState(imageResult);
+  if (syncedImageResult !== imageResult) {
+    setSyncedImageResult(imageResult);
     setImageState(imageResult ? "done" : "idle");
     setImageNameDraft(imageResult?.displayName ?? "");
-  }, [imageResult]);
+  }
 
   useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
@@ -227,10 +229,8 @@ export default function ShootResultPage() {
               guestImageUrlRef.current = objectUrl;
               setImageResult({
                 mediaId: -1,
-                kind: "IMAGE",
                 objectUrl,
                 downloadUrl: objectUrl,
-                extension: "png",
                 displayName,
               });
               setImageState("done");
@@ -241,12 +241,7 @@ export default function ShootResultPage() {
             const file = new File([blob], `${displayName}.png`, {
               type: "image/png",
             });
-            const asset = await uploadGeneratedFourcutFile({
-              file,
-              kind: "IMAGE",
-              displayName,
-              extension: "png",
-            });
+            const asset = await uploadGeneratedFourcutFile({ file, displayName });
 
             if (!cancelled) {
               setImageResult(asset);
@@ -289,6 +284,9 @@ export default function ShootResultPage() {
       debugImageUrlRef.current = null;
     };
   }, []);
+
+  // 비회원 결과물은 메모리 blob이라 새로고침·이탈 한 번에 사라진다. 최소한 경고를 띄운다.
+  useUnsavedWorkGuard(guestMode && Boolean(imageResult));
 
   if (!frameId || !layout) return null;
 
@@ -350,16 +348,24 @@ export default function ShootResultPage() {
         const blob = await response.blob();
         downloadBlob(
           blob,
-          buildDownloadFilename(imageResult.displayName, imageResult.extension),
+          buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
         );
-        showGuestSavedNotice();
+        // 로그인으로 이어 가도 결과물이 남도록 미리 보관해 둔다.
+        const stored = await setPendingGuestSave(
+          blob,
+          imageResult.displayName,
+          Date.now(),
+        );
+        showGuestSavedNotice(
+          stored ? { loginHref: GUEST_LOGIN_HANDOFF_PATH } : undefined,
+        );
         return;
       }
 
       const url = await getMediaDownloadUrl(imageResult.mediaId);
       await downloadFromUrl(
         url,
-        buildDownloadFilename(imageResult.displayName, imageResult.extension),
+        buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
       );
     } catch (error) {
       console.error(error);
@@ -370,6 +376,47 @@ export default function ShootResultPage() {
     } finally {
       setIsDownloadingImage(false);
     }
+  };
+
+  // 비회원이 로그인으로 이동할 때 결과물을 보관한다. OAuth는 전체 페이지 리다이렉트라
+  // 메모리 blob URL로는 전부 유실되므로, 로그인 전에 localStorage로 옮겨 둔다.
+  const handleGuestLogin = async () => {
+    if (!imageResult) {
+      router.push(GUEST_LOGIN_HANDOFF_PATH);
+      return;
+    }
+
+    setIsHandingOffToLogin(true);
+    try {
+      const response = await fetch(imageResult.downloadUrl ?? imageResult.objectUrl);
+      if (!response.ok) {
+        throw new Error(`guest handoff failed: ${response.status}`);
+      }
+
+      const stored = await setPendingGuestSave(
+        await response.blob(),
+        imageResult.displayName,
+        Date.now(),
+      );
+      if (!stored) {
+        showStatusNotice(
+          "결과를 보관하지 못했어요",
+          "결과가 너무 커서 잠시 보관하지 못했어요. 먼저 이미지를 내려받아 주세요.",
+        );
+        return;
+      }
+    } catch (error) {
+      console.error(error);
+      showStatusNotice(
+        "결과를 보관하지 못했어요",
+        "로그인 중에 결과가 사라질 수 있어요. 먼저 이미지를 내려받아 주세요.",
+      );
+      return;
+    } finally {
+      setIsHandingOffToLogin(false);
+    }
+
+    router.push(GUEST_LOGIN_HANDOFF_PATH);
   };
 
   const handleShareImage = async () => {
@@ -415,7 +462,6 @@ export default function ShootResultPage() {
               : "완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
           }
         />
-        <StepProgress current={4} total={4} label="결과 확인" />
 
         <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
           <div className="flex items-center justify-between gap-3">
@@ -429,7 +475,7 @@ export default function ShootResultPage() {
                     ? "완성되면 이미지를 바로 다운로드할 수 있어요."
                     : "완성되면 바로 다운로드하거나 공유할 수 있어요."
                   : guestMode
-                    ? "지금은 이미지 다운로드만 가능하고, 링크 공유와 기록 저장은 로그인 후 이용할 수 있어요."
+                    ? "지금은 이미지 저장과 네컷 꾸미기를 체험할 수 있고, 링크 공유와 기록 저장은 로그인 후 이용할 수 있어요."
                     : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
               </p>
             </div>
@@ -513,8 +559,12 @@ export default function ShootResultPage() {
                 비회원 체험 결과 안내
               </p>
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                지금은 이미지를 기기에 저장할 수 있고, 링크 공유, 기록 저장, 업로드 시작,
-                프레임 꾸미기 같은 서버 연동 기능은 로그인 후에 이용할 수 있어요.
+                지금은 이미지 저장과 네컷 꾸미기를 체험할 수 있어요. 링크 공유, 기록 저장,
+                업로드 제작은 로그인 후에 이용할 수 있어요.
+              </p>
+              <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
+                체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
+                &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
               </p>
             </div>
 
@@ -532,7 +582,7 @@ export default function ShootResultPage() {
                 onClick={showGuestShareNotice}
                 className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
               >
-                링크 공유는 로그인 후 가능해요
+                링크 공유는 로그인 후에 이용할 수 있어요
               </button>
             </div>
           </section>
@@ -555,12 +605,23 @@ export default function ShootResultPage() {
           >
             {guestMode ? "다시 촬영하기" : "사진 다시 고르기"}
           </Link>
-          <Link
-            href={guestMode ? "/login" : "/home"}
-            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
-          >
-            {guestMode ? "로그인으로 이동" : "홈으로 가기"}
-          </Link>
+          {guestMode ? (
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              disabled={isHandingOffToLogin}
+              className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition disabled:opacity-40"
+            >
+              {isHandingOffToLogin ? "결과 보관 중..." : "로그인하고 저장하기"}
+            </button>
+          ) : (
+            <Link
+              href="/home"
+              className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
+            >
+              홈으로 가기
+            </Link>
+          )}
         </div>
 
         <canvas ref={canvasRef} className="hidden" />

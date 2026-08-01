@@ -44,13 +44,9 @@ function resolveInitialDisplayName(args: {
 
 export async function uploadGeneratedFourcutFile(args: {
   file: File;
-  kind: GeneratedFourcutAsset["kind"];
   displayName: string;
-  extension: GeneratedFourcutAsset["extension"];
 }) {
-  const { file, kind, extension } = args;
-
-  const uploaded = await uploadFourcutMedia(file, {
+  const uploaded = await uploadFourcutMedia(args.file, {
     displayName: args.displayName,
   });
   const displayName = resolveInitialDisplayName({
@@ -61,10 +57,8 @@ export async function uploadGeneratedFourcutFile(args: {
 
   return {
     mediaId: uploaded.mediaId,
-    kind,
     objectUrl: uploaded.objectUrl,
     downloadUrl: uploaded.downloadUrl,
-    extension,
     displayName,
   } satisfies GeneratedFourcutAsset;
 }

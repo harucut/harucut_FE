@@ -37,11 +37,14 @@ export function DecorateCanvas() {
   const stageRef = useRef<Konva.Stage | null>(null);
   const trRef = useRef<Konva.Transformer | null>(null);
 
+  // base가 사라지면 렌더 중에 즉시 비운다(effect에서 setState 하면 렌더가 한 번 더 돈다).
+  if (!base && baseImage) {
+    setBaseImage(null);
+  }
+
   useEffect(() => {
-    if (!base) {
-      setBaseImage(null);
-      return;
-    }
+    if (!base) return;
+
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     let active = true;

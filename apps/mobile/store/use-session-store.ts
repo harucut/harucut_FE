@@ -32,6 +32,12 @@ type SessionStore = {
   showNotice: (notice: NoticeState) => void;
 };
 
+// 비회원 체험에서 열려 있는 범위. 웹 lib/guestTrialStore.ts와 같은 문장을 쓴다.
+const GUEST_ALLOWED_SCOPE =
+  '비회원 체험에서는 촬영, 이미지 저장, 네컷 꾸미기를 이용할 수 있어요.';
+const GUEST_MEMBER_ONLY_SCOPE =
+  '링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요.';
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   accessMode: 'anonymous',
   notice: null,
@@ -91,9 +97,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ],
         eyebrow: 'GUEST MODE',
         icon: 'lock-closed-outline',
-        message:
-          '비회원 체험에서는 촬영과 이미지 다운로드만 가능합니다. 링크 공유나, 추가 기능들은 로그인 후에 사용할 수 있어요!',
-        title: '지금은 촬영 체험만 가능해요',
+        message: `${GUEST_ALLOWED_SCOPE} ${GUEST_MEMBER_ONLY_SCOPE}`,
+        title: '지금은 체험 기능만 이용할 수 있어요',
       },
     }),
   showGuestShareNotice: () =>
@@ -103,11 +108,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           { id: 'go-login', label: '로그인하고 계속하기' },
           { id: 'dismiss', label: '닫기', variant: 'secondary' },
         ],
-        eyebrow: 'DOWNLOAD ONLY',
+        eyebrow: 'GUEST MODE',
         icon: 'sparkles-outline',
-        message:
-          '비회원 체험에서는 링크 공유를 지원하지 않아요. 서버를 통해 결과를 저장하고 링크로 공유하는 기능은 로그인 후 사용할 수 있습니다.',
-        title: '지금은 이미지 다운로드만 가능해요',
+        message: `${GUEST_ALLOWED_SCOPE} ${GUEST_MEMBER_ONLY_SCOPE}`,
+        title: '링크 공유는 로그인 후에 이용할 수 있어요',
       },
     }),
   showGuestTrialNotice: () =>

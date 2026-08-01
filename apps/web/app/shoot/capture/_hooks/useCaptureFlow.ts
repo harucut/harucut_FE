@@ -11,8 +11,6 @@ const MAX_SHOTS = 8;
 // 선택 가능한 타이머 간격(초)
 export const TIMER_OPTIONS = [3, 5, 8] as const;
 export type TimerSeconds = (typeof TIMER_OPTIONS)[number];
-// 촬영 모드: 타이머(시작 전 간격 선택 → 8장 자동 연속) / 수동(셔터 1장씩)
-export type CaptureMode = "timer" | "manual";
 
 type ShootingState = {
   isShooting: boolean;
@@ -36,9 +34,7 @@ export function useCaptureFlow() {
   const [shotCount, setShotCount] = useState(0);
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
-  // 촬영 모드와 타이머 간격은 "촬영 시작 전에만" 변경 가능(시작 후 잠금)
-  // 기본은 수동 촬영. 타이머 모드는 사용자가 직접 선택할 수 있다.
-  const [captureMode, setCaptureMode] = useState<CaptureMode>("manual");
+  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 비활성으로 남는다).
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -52,6 +48,8 @@ export function useCaptureFlow() {
   // shooting.isShooting의 동기 미러. 상태는 비동기라, 첫 셔터 더블탭처럼 리렌더 이전의
   // stale 클로저가 세션을 두 번 시작/리셋해 첫 장을 날리는 것을 막는 가드로 쓴다.
   const isShootingRef = useRef(false);
+  // 진행 중인 카운트다운 타이머. 촬영 취소에서 즉시 정리하려고 따로 들고 있는다.
+  const countdownTimerRef = useRef<number | null>(null);
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
@@ -69,6 +67,15 @@ export function useCaptureFlow() {
   useEffect(() => {
     if (!frameId) router.replace("/shoot");
   }, [frameId, router]);
+
+  // 촬영 화면에 들어올 때마다 이전(완료·중단) 세션의 촬영본을 비운다.
+  // 모바일 shoot-screens와 같은 규약: 프레임은 유지하고 shots만 초기화한다.
+  // 이게 없으면 '다시 촬영'으로 돌아왔을 때 배지는 0/8인데 스토어에는 8장이 남아 있고,
+  // '촬영 시작'이 그 8장을 확인 없이 지워 버린다.
+  // shotCount·lastFinishedShotRef는 마운트마다 새로 시작하므로 여기서 건드릴 필요가 없다.
+  useEffect(() => {
+    resetShots();
+  }, [resetShots]);
 
   // 카메라 스트림 종료 및 상태 초기화
   const stopStream = useCallback(() => {
@@ -88,7 +95,7 @@ export function useCaptureFlow() {
           eyebrow: "CAMERA ACCESS",
           icon: "camera",
           message:
-            "현재 브라우저에서는 카메라를 지원하지 않습니다. 최신 브라우저에서 다시 시도해 주세요.",
+            "현재 브라우저에서는 카메라를 쓸 수 없어요. 최신 브라우저에서 다시 시도해 주세요.",
           title: "카메라를 사용할 수 없어요",
         });
         return;
@@ -125,7 +132,7 @@ export function useCaptureFlow() {
         eyebrow: "CAMERA ACCESS",
         icon: "camera",
         message:
-          "카메라 접근이 거부되었거나 오류가 발생했습니다. 브라우저 권한을 확인한 뒤 다시 시도해 주세요.",
+          "카메라 접근이 거부됐거나 오류가 났어요. 브라우저 권한을 확인한 뒤 다시 시도해 주세요.",
         title: "카메라 접근이 필요해요",
       });
     }
@@ -245,26 +252,15 @@ export function useCaptureFlow() {
     setShotCount(next);
 
     if (next < MAX_SHOTS) {
-      // 타이머 모드: 다음 컷까지 선택한 간격으로 자동 카운트다운.
-      // 수동 모드: 카운트다운 없이 다음 셔터를 기다린다.
-      setShooting((s) => ({
-        ...s,
-        countdown: captureMode === "timer" ? timerSeconds : null,
-      }));
+      // 다음 컷까지 선택한 간격으로 자동 카운트다운.
+      setShooting((s) => ({ ...s, countdown: timerSeconds }));
       return;
     }
 
     isShootingRef.current = false;
     setShooting({ isShooting: false, countdown: null });
     router.push("/shoot/select");
-  }, [
-    shotCount,
-    capturePhotoToDataUrl,
-    addShotPhoto,
-    captureMode,
-    timerSeconds,
-    router,
-  ]);
+  }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, router]);
 
   // 전체 자동 촬영 시작
   const startShooting = useCallback(() => {
@@ -287,22 +283,9 @@ export function useCaptureFlow() {
     lastFinishedShotRef.current = -1;
     isShootingRef.current = true;
 
-    // 타이머 모드: 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
-    // 수동 모드: 카운트다운 없이 첫 컷을 바로 찍고, 이후 셔터를 누를 때마다 1장씩.
-    if (captureMode === "timer") {
-      setShooting({ isShooting: true, countdown: timerSeconds });
-      return;
-    }
-
-    setShooting({ isShooting: true, countdown: null });
-    // 첫 수동 컷은 사용자가 셔터를 누를 때 찍힌다.
-  }, [
-    isCameraReady,
-    resetShots,
-    setNotice,
-    captureMode,
-    timerSeconds,
-  ]);
+    // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
+    setShooting({ isShooting: true, countdown: timerSeconds });
+  }, [isCameraReady, resetShots, setNotice, timerSeconds]);
 
   // 카운트다운 타이머
   useEffect(() => {
@@ -310,6 +293,7 @@ export function useCaptureFlow() {
     if (shooting.countdown === null) return;
 
     const timer = window.setTimeout(() => {
+      countdownTimerRef.current = null;
       // 이 effect는 isShooting/countdown 변경마다 재실행되므로 closure 값이 최신
       if (shooting.countdown !== null && shooting.countdown <= 1) {
         finishSingleShot();
@@ -322,7 +306,12 @@ export function useCaptureFlow() {
       });
     }, 1000);
 
-    return () => window.clearTimeout(timer);
+    countdownTimerRef.current = timer;
+
+    return () => {
+      window.clearTimeout(timer);
+      if (countdownTimerRef.current === timer) countdownTimerRef.current = null;
+    };
   }, [shooting.isShooting, shooting.countdown, finishSingleShot]);
 
   const handleShootNow = useCallback(() => {
@@ -330,37 +319,20 @@ export function useCaptureFlow() {
     finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
-  // 수동 모드 셔터: 한 번 누를 때마다 즉시 1장.
-  // 첫 셔터에서 세션을 리셋하고 바로 한 장 찍어, "누르면 즉시 촬영" 사양을 만족한다.
-  const handleManualShutter = useCallback(() => {
-    if (!isCameraReady) {
-      setNotice({
-        actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-        eyebrow: "CAMERA READY",
-        icon: "camera",
-        message: "촬영을 시작하기 전에 먼저 카메라를 켜 주세요.",
-        title: "카메라 준비가 필요해요",
-      });
-      return;
+  // 촬영 취소: 진행 중인 카운트다운을 즉시 끊고 세션을 시작 전 상태로 되돌린다.
+  // 8초 간격이면 8장을 다 찍는 데 1분 가까이 걸려, 중단 수단이 없으면 되돌릴 방법이 없다.
+  const cancelShooting = useCallback(() => {
+    if (countdownTimerRef.current !== null) {
+      window.clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
 
-    if (!isShootingRef.current) {
-      // 첫 컷: 세션 초기화 후 같은 클릭에서 바로 1장 촬영.
-      // 동기 ref로 가드해, 리렌더 전 더블탭이 세션을 두 번 리셋(첫 장 유실)하지 않게 한다.
-      isShootingRef.current = true;
-      resetShots();
-      setShotCount(0);
-      lastFinishedShotRef.current = -1;
-      setShooting({ isShooting: true, countdown: null });
-    }
-
-    finishSingleShot();
-  }, [
-    isCameraReady,
-    resetShots,
-    setNotice,
-    finishSingleShot,
-  ]);
+    isShootingRef.current = false;
+    lastFinishedShotRef.current = -1;
+    setShooting({ isShooting: false, countdown: null });
+    resetShots();
+    setShotCount(0);
+  }, [resetShots]);
 
   const switchCamera = useCallback(async () => {
     if (!canFlipCamera) return;
@@ -383,15 +355,13 @@ export function useCaptureFlow() {
     cameraFacingMode,
     canFlipCamera,
 
-    captureMode,
-    setCaptureMode,
     timerSeconds,
     setTimerSeconds,
 
     startCamera,
     startShooting,
     handleShootNow,
-    handleManualShutter,
+    cancelShooting,
     switchCamera,
 
     MAX_SHOTS,

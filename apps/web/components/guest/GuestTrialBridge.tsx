@@ -62,9 +62,7 @@ export function GuestTrialBridge() {
         );
         await uploadGeneratedFourcutFile({
           file,
-          kind: "IMAGE",
           displayName: pending.displayName,
-          extension: "png",
         });
         clearPendingGuestSave();
         stripResumeParam();

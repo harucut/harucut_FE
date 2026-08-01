@@ -9,7 +9,7 @@ const mockCreateObjectURL = jest.fn();
 const uploadSessionState = {
   frameId: "classic-4",
   remoteFrameId: null as number | null,
-  media: [] as Array<{ type: "image"; src: string }>,
+  media: [] as Array<{ src: string }>,
   selectedIndexes: [null, null, null, null] as Array<number | null>,
   borderColor: "#111827",
   outputFilter: "NONE",
@@ -54,6 +54,8 @@ jest.mock("@/lib/uploadSessionStore", () => ({
 
 jest.mock("@/lib/presignedUploadApi", () => ({
   SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",
+  isSupportedUploadFile: (file: File) =>
+    ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
 
 describe("UploadSelectPage", () => {
@@ -78,8 +80,38 @@ describe("UploadSelectPage", () => {
     });
 
     expect(mockCreateObjectURL).toHaveBeenCalledWith(file);
-    expect(mockAddMedia).toHaveBeenCalledWith([
-      { type: "image", src: "blob:preview-image" },
-    ]);
+    expect(mockAddMedia).toHaveBeenCalledWith([{ src: "blob:preview-image" }]);
+  });
+
+  it("skips unsupported formats and explains how many were dropped", () => {
+    const { container } = render(<UploadSelectPage />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+
+    const png = new File(["image"], "ok.png", { type: "image/png" });
+    const heic = new File(["image"], "iphone.heic", { type: "image/heic" });
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: { files: [png, heic] },
+    });
+
+    expect(mockCreateObjectURL).toHaveBeenCalledTimes(1);
+    expect(mockCreateObjectURL).toHaveBeenCalledWith(png);
+    expect(mockAddMedia).toHaveBeenCalledWith([{ src: "blob:preview-image" }]);
+    expect(container.textContent).toContain("1개는 지원하지 않는 형식이라 제외했어요.");
+  });
+
+  it("adds nothing when every selected file is unsupported", () => {
+    const { container } = render(<UploadSelectPage />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["image"], "shot.avif", { type: "image/avif" })],
+      },
+    });
+
+    expect(mockAddMedia).not.toHaveBeenCalled();
+    expect(mockCreateObjectURL).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("1개는 지원하지 않는 형식이라 제외했어요.");
   });
 });

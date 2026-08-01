@@ -1,13 +1,16 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
-import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedUploadFile,
+} from "@/lib/presignedUploadApi";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { useUploadSession } from "@/lib/uploadSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
@@ -29,6 +32,7 @@ export default function UploadSelectPage() {
   } = useUploadSession();
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
   // 업로드한 사진이 있는데 아직 저장 전이면 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(media.length > 0);
@@ -55,22 +59,26 @@ export default function UploadSelectPage() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    const items: FrameMedia[] = Array.from(files)
-      .map((file) => {
-        const url = URL.createObjectURL(file);
+    // accept와 실제 업로드 가능 형식(PNG·JPG·WEBP·GIF)을 같은 기준으로 맞춘다.
+    // heic/avif 같은 파일이 슬롯에 들어가면 결과 합성 단계에서야 실패한다.
+    const selected = Array.from(files);
+    const supported = selected.filter((file) => isSupportedUploadFile(file));
+    const skippedCount = selected.length - supported.length;
 
-        if (file.type.startsWith("image/")) {
-          return { type: "image" as const, src: url };
-        }
+    setUploadNotice(
+      skippedCount > 0
+        ? `${skippedCount}개는 지원하지 않는 형식이라 제외했어요. PNG·JPG·WEBP·GIF만 올릴 수 있어요.`
+        : null,
+    );
 
-        return null;
-      })
-      .filter((value): value is FrameMedia => value !== null);
+    event.target.value = "";
+    if (supported.length === 0) return;
 
-    if (items.length === 0) return;
+    const items: FrameMedia[] = supported.map((file) => ({
+      src: URL.createObjectURL(file),
+    }));
 
     addMedia(items);
-    event.target.value = "";
   };
 
   const handleNext = () => {
@@ -120,8 +128,15 @@ export default function UploadSelectPage() {
                 className="hidden"
               />
 
+              {uploadNotice ? (
+                <p className="text-[10px] leading-4 text-red-300">
+                  {uploadNotice}
+                </p>
+              ) : null}
+
               <p className="text-[10px] text-zinc-500">
                 여러 파일을 한 번에 넣고 프레임에 어울릴 4개를 선택할 수 있어요.
+                PNG·JPG·WEBP·GIF만 올릴 수 있어요.
               </p>
 
               <FrameOutputOptionsPanel

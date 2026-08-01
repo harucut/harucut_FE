@@ -14,14 +14,11 @@ import {
 } from "@/lib/frameFilters";
 import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 
-export type ShotItem = {
-  photo: string;
-};
-
 type ShootSessionState = {
   frameId: FrameId | null;
   remoteFrameId: number | null;
-  shots: ShotItem[];
+  // 촬영본은 data URL 문자열 배열이다.
+  shots: string[];
   selectedIndexes: SelectionSlot[];
   borderColor: string;
   outputFilter: FourcutFilterId;
@@ -33,7 +30,7 @@ type ShootSessionState = {
   setOutputFilter: (filter: FourcutFilterId) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
   clearResults: () => void;
-  setShots: (shots: ShotItem[]) => void;
+  setShots: (shots: string[]) => void;
   toggleSelect: (index: number) => void;
   clearSelection: () => void;
   addShotPhoto: (photoDataUrl: string) => void;
@@ -116,7 +113,7 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
 
   addShotPhoto: (photoDataUrl) =>
     set((state) => ({
-      shots: [...state.shots, { photo: photoDataUrl }],
+      shots: [...state.shots, photoDataUrl],
       imageResult: null,
     })),
 

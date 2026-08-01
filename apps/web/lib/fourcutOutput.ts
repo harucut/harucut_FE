@@ -1,13 +1,15 @@
 "use client";
 
+// 결과물은 PNG 이미지 한 종류다. 종류·확장자는 고정이라 값으로 들고 다니지 않는다.
 export type GeneratedFourcutAsset = {
   mediaId: number;
-  kind: "IMAGE";
   objectUrl: string;
   downloadUrl?: string;
-  extension: "png";
   displayName: string;
 };
+
+// 결과물 확장자. 파일명·File 생성에 공통으로 쓴다.
+export const FOURCUT_OUTPUT_EXTENSION = "png";
 
 export function sanitizeDisplayName(input: string, fallback: string) {
   const normalized = input
@@ -23,9 +25,8 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
-export function buildDefaultDisplayName(frameName: string, kind: GeneratedFourcutAsset["kind"]) {
-  void frameName;
-  void kind;
+// 기본 파일명은 생성 시각만 쓴다(harucut_YYYYMMDD_HHMMSS).
+export function buildDefaultDisplayName() {
   const now = new Date();
   const formatted = [
     now.getFullYear(),

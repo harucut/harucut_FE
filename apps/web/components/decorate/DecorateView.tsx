@@ -29,7 +29,6 @@ const DecorateCanvas = dynamic(
 export function DecorateView() {
   const router = useRouter();
   const imageSrc = useDecorateSession((s) => s.imageSrc);
-  const title = useDecorateSession((s) => s.title);
 
   const base = useDecorateStore((s) => s.base);
   const setBase = useDecorateStore((s) => s.setBase);
@@ -42,10 +41,14 @@ export function DecorateView() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // 꾸밀 이미지가 없을 때 돌아갈 곳. 게스트는 /home이 막혀 있어
+  // 그대로 보내면 /shoot?guestNotice=restricted로 한 번 더 튕긴다.
+  const fallbackHref = guestMode ? "/shoot" : "/home";
+
   // 결과 화면에서 넘어온 이미지의 실제 크기를 읽어 베이스로 등록.
   useEffect(() => {
     if (!imageSrc) {
-      router.replace("/home");
+      router.replace(fallbackHref);
       return;
     }
     let active = true;
@@ -60,13 +63,13 @@ export function DecorateView() {
       });
     };
     img.onerror = () => {
-      if (active) router.replace("/home");
+      if (active) router.replace(fallbackHref);
     };
     img.src = imageSrc;
     return () => {
       active = false;
     };
-  }, [imageSrc, router, setBase]);
+  }, [fallbackHref, imageSrc, router, setBase]);
 
   useEffect(() => () => reset(), [reset]);
 
@@ -94,7 +97,7 @@ export function DecorateView() {
     try {
       const blob = await composeBlob();
       if (!blob) return;
-      const displayName = buildDefaultDisplayName(title, "IMAGE");
+      const displayName = buildDefaultDisplayName();
       downloadBlob(blob, buildDownloadFilename(displayName, "png"));
     } catch (error) {
       console.error(error);
@@ -112,7 +115,7 @@ export function DecorateView() {
       try {
         const blob = await composeBlob();
         if (blob) {
-          const displayName = buildDefaultDisplayName(title, "IMAGE");
+          const displayName = buildDefaultDisplayName();
           const stored = await setPendingGuestSave(blob, displayName, Date.now());
           if (!stored) {
             notice(
@@ -133,14 +136,9 @@ export function DecorateView() {
     try {
       const blob = await composeBlob();
       if (!blob) return;
-      const displayName = buildDefaultDisplayName(title, "IMAGE");
+      const displayName = buildDefaultDisplayName();
       const file = new File([blob], `${displayName}.png`, { type: "image/png" });
-      await uploadGeneratedFourcutFile({
-        file,
-        kind: "IMAGE",
-        displayName,
-        extension: "png",
-      });
+      await uploadGeneratedFourcutFile({ file, displayName });
       notice("기록에 저장했어요", "기록 화면에서 다시 보거나 내려받을 수 있어요.");
     } catch (error) {
       console.error(error);
@@ -167,7 +165,7 @@ export function DecorateView() {
             {base ? (
               <DecorateCanvas />
             ) : (
-              <div className="flex h-[460px] w-full max-w-[340px] items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60 text-[12px] text-zinc-500">
+              <div className="flex h-[460px] w-full max-w-[340px] items-center justify-center rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] text-[12px] text-[color:var(--hc-muted)]">
                 불러오는 중...
               </div>
             )}
