@@ -110,8 +110,6 @@ export function ThemeFrameScreen() {
         onAction={() => push('/theme/sticker')}
         onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForTheme}
-        onUpgrade={() => push('/pricing')}
-        planLimit={plan.limit}
         selectedFrameId={themeEditor.frameId}
         selectedSavedFrameId={themeEditor.selectedSavedFrameId}
         title="저장한 프레임"

@@ -71,6 +71,9 @@ export type RemoteFrameComponent = {
   styleJson?: Record<string, unknown>;
 };
 
+// GET /api/auth/user/frame 응답.
+// 서버는 **활성 프레임만** 내려준다 — 다운그레이드로 비활성된 초과분은 응답에 없다.
+// 따라서 클라이언트가 보관 한도로 잠금 대상을 추정하면 안 된다(목록 = 사용 가능한 전부).
 export type RemoteFrame = {
   frameId: number;
   title: string;

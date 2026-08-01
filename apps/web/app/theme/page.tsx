@@ -167,8 +167,6 @@ function ThemePageContent() {
           onRefresh={refresh}
           onAction={handleOpenRemoteFrame}
           actionLabel="수정하기"
-          planLimit={plan.limit}
-          onUpgrade={() => router.push("/pricing")}
         />
       </div>
     </main>

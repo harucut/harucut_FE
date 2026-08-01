@@ -740,8 +740,6 @@ export function SavedFramesPanel({
   onAction,
   onRefresh,
   onSelect,
-  planLimit,
-  onUpgrade,
   selectedFrameId,
   selectedSavedFrameId,
   title,
@@ -753,10 +751,6 @@ export function SavedFramesPanel({
   onAction?: (frame: SavedFrame) => void;
   onRefresh: () => void;
   onSelect: (frame: SavedFrame) => void;
-  /** 요금제 보관 한도. 이 개수를 넘는 저장 프레임은 잠금(읽기전용)으로 표시 */
-  planLimit?: number;
-  /** 잠금 프레임의 업그레이드 CTA */
-  onUpgrade?: () => void;
   selectedFrameId: FrameId | null;
   selectedSavedFrameId: string | null;
   title: string;
@@ -766,9 +760,8 @@ export function SavedFramesPanel({
   const matchingFrames = selectedFrameId
     ? frames.filter((frame) => frame.frameId === selectedFrameId)
     : frames;
-  // 전체 저장 프레임 기준으로 한도를 넘는 프레임 id를 잠금 대상으로 표시한다.
-  const lockedIds =
-    planLimit === undefined ? new Set<string>() : new Set(frames.slice(planLimit).map((f) => f.id));
+  // 잠금 표시는 두지 않는다. 서버가 활성 프레임만 내려주므로 목록에 온 프레임은 전부
+  // 사용할 수 있다. 다운그레이드로 비활성된 프레임은 애초에 응답에 포함되지 않는다.
 
   return (
     <SurfaceCard>
@@ -792,22 +785,16 @@ export function SavedFramesPanel({
         <View style={styles.savedGrid}>
           {matchingFrames.map((frame) => {
             const selected = frame.id === selectedSavedFrameId;
-            const locked = lockedIds.has(frame.id);
             return (
               <View
                 key={frame.id}
-                style={[
-                  styles.savedCard,
-                  selected && !locked ? styles.savedCardSelected : null,
-                  locked ? styles.savedCardLocked : null,
-                ]}>
+                style={[styles.savedCard, selected ? styles.savedCardSelected : null]}>
                 <Pressable
                   accessibilityLabel={`${frame.title} 저장 프레임${
-                    locked ? ', 요금제 한도 초과로 잠김' : selected ? ', 선택됨' : ', 선택하기'
+                    selected ? ', 선택됨' : ', 선택하기'
                   }`}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: locked, selected }}
-                  disabled={locked}
+                  accessibilityState={{ selected }}
                   onPress={() => onSelect(frame)}
                   style={styles.savedPressable}>
                   <View style={styles.savedPreview}>
@@ -818,30 +805,16 @@ export function SavedFramesPanel({
                       components={frame.components}
                       frameId={frame.frameId}
                     />
-                    {locked ? (
-                      <View style={styles.savedLockOverlay}>
-                        <Ionicons color="#FFFFFF" name="lock-closed" size={18} />
-                      </View>
-                    ) : null}
                   </View>
                   <View style={styles.savedCopy}>
                     <Text style={styles.savedItemTitle}>{frame.title}</Text>
                     <Text style={styles.savedItemDescription}>{frame.description}</Text>
                     <Text style={styles.savedStatus}>
-                      {locked ? '요금제 한도 초과 · 잠금' : selected ? '선택됨' : '터치해서 선택'}
+                      {selected ? '선택됨' : '터치해서 선택'}
                     </Text>
                   </View>
                 </Pressable>
-                {locked ? (
-                  onUpgrade ? (
-                    <ActionButton
-                      label="업그레이드하고 잠금 해제"
-                      onPress={onUpgrade}
-                      style={{ minHeight: 38, paddingVertical: 10 }}
-                      variant="secondary"
-                    />
-                  ) : null
-                ) : onAction ? (
+                {onAction ? (
                   <ActionButton
                     label={actionLabel}
                     onPress={() => onAction(frame)}
@@ -1011,17 +984,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     },
     savedCardSelected: {
       borderColor: colors.primary,
-    },
-    savedLockOverlay: {
-      alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.55)',
-      borderRadius: 8,
-      bottom: 0,
-      justifyContent: 'center',
-      left: 0,
-      position: 'absolute',
-      right: 0,
-      top: 0,
     },
     meterTopRow: {
       alignItems: 'center',
