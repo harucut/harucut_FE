@@ -5,17 +5,33 @@ describe("apiError helpers", () => {
     const details = getApiErrorDetails({
       status: 403,
       data: {
-        code: "USR-103",
+        code: "SUBS-002",
         status: 403,
-        message: "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
+        message: "Requested history is beyond the plan's retention period.",
       },
     });
 
     expect(details).toEqual({
       status: 403,
-      code: "USR-103",
-      message: "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
+      code: "SUBS-002",
+      message: "Requested history is beyond the plan's retention period.",
     });
+  });
+
+  it("extracts field errors from a 400 validation envelope", () => {
+    const details = getApiErrorDetails({
+      status: 400,
+      data: {
+        code: "GEN-003",
+        status: 400,
+        message: "Validation failed.",
+        data: [{ field: "title", message: "제목은 필수입니다.", rejectedValue: "" }],
+      },
+    });
+
+    expect(details.fieldErrors).toEqual([
+      { field: "title", message: "제목은 필수입니다.", rejectedValue: "" },
+    ]);
   });
 
   it("prioritizes known plan-limit guidance over generic fallback text", () => {
@@ -23,42 +39,59 @@ describe("apiError helpers", () => {
       {
         status: 403,
         data: {
-          code: "USR-102",
+          code: "SUBS-003",
           status: 403,
-          message: "backend raw message",
+          message: "The number of stored frames exceeds the limit for the current plan.",
         },
       },
       "저장에 실패했어요.",
     );
 
     expect(message).toBe(
-      "요금제의 프레임 보관 개수를 다 썼어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
+      "지금 요금제로는 프레임을 저장할 수 없어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
     );
   });
 
-  it("shows the server envelope message when there is no known code", () => {
+  it("shows the server-provided field error for validation failures", () => {
     const message = getUserFacingApiErrorMessage(
       {
         status: 400,
         data: {
-          code: "GEN-400",
+          code: "GEN-003",
           status: 400,
-          message: "제목을 입력해 주세요.",
+          message: "Validation failed.",
+          data: [{ field: "title", message: "제목은 필수입니다." }],
         },
       },
       "저장에 실패했어요.",
     );
 
-    expect(message).toBe("제목을 입력해 주세요.");
+    expect(message).toBe("제목은 필수입니다.");
   });
 
-  it("shows apiMessage from ApiRequestError-like errors", () => {
+  it("maps known backend codes to Korean copy instead of the English envelope message", () => {
     const message = getUserFacingApiErrorMessage(
-      { status: 400, apiMessage: "닉네임이 중복이에요." },
+      {
+        status: 415,
+        data: {
+          code: "GEN-051",
+          status: 415,
+          message: "Unsupported media type.",
+        },
+      },
       "저장에 실패했어요.",
     );
 
-    expect(message).toBe("닉네임이 중복이에요.");
+    expect(message).toBe("PNG·JPG·WEBP·GIF만 올릴 수 있어요.");
+  });
+
+  it("never surfaces an unmapped English server message", () => {
+    const message = getUserFacingApiErrorMessage(
+      { status: 400, apiMessage: "Something went sideways.", code: "XYZ-999" },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe("저장에 실패했어요.");
   });
 
   it("hides internal Error messages and falls back to the given text", () => {

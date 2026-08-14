@@ -1,17 +1,17 @@
+import { parseServerDateTime, serverDateTimeToMillis } from '@harucut/shared';
+
 import type { FrameId, HistoryItem, MediaAsset } from '@/constants/harucut-data';
 import { apiEnvelopeData } from '@/lib/api-client';
 import { resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 
-// 서비스는 사진 전용이라 미디어 타입은 PHOTO 하나뿐이다.
-export type UserMediaType = 'PHOTO';
-
+// 스웨거 UserMediaResponse 대응. 서비스는 사진 전용이라 미디어 타입 구분 자체가 없다
+// (동영상 시절의 mediaType 은 서버 계약에서 사라졌다).
 export type UserMedia = {
   createdAt?: string;
   displayName?: string | null;
   displayname?: string | null;
   downloadUrl?: string | null;
   mediaId: number;
-  mediaType: UserMediaType;
   originalFileName?: string;
   s3Key: string;
 };
@@ -33,9 +33,8 @@ function getUserMediaTitle(item: UserMedia) {
 }
 
 function getCreatedAt(item: UserMedia) {
-  const createdAt = item.createdAt ? new Date(item.createdAt) : null;
-
-  return createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toISOString() : '';
+  // 서버는 오프셋 없는 LocalDateTime(실체는 UTC)을 준다. 그대로 파싱하면 9시간 밀린다.
+  return parseServerDateTime(item.createdAt)?.toISOString() ?? '';
 }
 
 function mediaToAsset(item: UserMedia): MediaAsset | null {
@@ -103,8 +102,8 @@ export async function listRemoteHistoryItems() {
 
   return media
     .sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = serverDateTimeToMillis(a.createdAt);
+      const bTime = serverDateTimeToMillis(b.createdAt);
 
       return bTime - aTime;
     })
@@ -113,7 +112,6 @@ export async function listRemoteHistoryItems() {
 
 export async function registerUserMedia(args: {
   displayName?: string;
-  mediaType: UserMediaType;
   s3Key: string;
 }) {
   return apiEnvelopeData<UserMedia>(
@@ -162,7 +160,6 @@ export async function uploadFourcutResult(args: {
   });
   const media = await registerUserMedia({
     displayName: args.displayName,
-    mediaType: 'PHOTO',
     s3Key: uploaded.key,
   });
 

@@ -19,6 +19,7 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
+import { getLoginPlatformLabel, parseServerDateTime } from "@harucut/shared";
 import { AuthField } from "@/components/auth/AuthField";
 import {
   FrameCapacityMeter,
@@ -154,8 +155,8 @@ export default function MyPage() {
 
       const now = new Date();
       const thisMonth = media.filter((item) => {
-        if (!item.createdAt) return false;
-        const created = new Date(item.createdAt);
+        const created = parseServerDateTime(item.createdAt);
+        if (!created) return false;
         return (
           created.getFullYear() === now.getFullYear() &&
           created.getMonth() === now.getMonth()
@@ -533,7 +534,7 @@ export default function MyPage() {
             <span className="text-[11.5px]">로그인 플랫폼</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
-            {user?.loginPlatform ?? "HARUCUT"}
+            {getLoginPlatformLabel(user?.loginPlatform)}
           </p>
         </div>
       </div>

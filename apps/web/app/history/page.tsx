@@ -12,6 +12,8 @@ import {
   PencilLine,
   Share2,
 } from "lucide-react";
+import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
+import { getImageUrlByKey } from "@/lib/presignedUploadApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
@@ -27,6 +29,11 @@ import {
   listMyMedia,
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
+import {
+  PLAN_HISTORY_RETENTION_LABELS,
+  resolvePlanInfo,
+} from "@/constants/planLimits";
+import { getMyUserInfo } from "@/lib/userApi";
 import type { UserMedia } from "@/lib/api-types";
 
 type ViewMode = "grid" | "calendar";
@@ -64,7 +71,7 @@ function getMediaExtension(item: UserMedia) {
 }
 
 function getItemTime(item: UserMedia) {
-  return item.createdAt ? new Date(item.createdAt).getTime() : 0;
+  return serverDateTimeToMillis(item.createdAt);
 }
 
 function sortMedia(items: UserMedia[]) {
@@ -73,8 +80,8 @@ function sortMedia(items: UserMedia[]) {
 
 /** YYYY-MM 키 (createdAt 기준). 날짜 정보가 없으면 null. */
 function monthKey(item: UserMedia) {
-  if (!item.createdAt) return null;
-  const date = new Date(item.createdAt);
+  const date = parseServerDateTime(item.createdAt);
+  if (!date) return null;
   if (Number.isNaN(date.getTime())) return null;
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -149,6 +156,9 @@ export default function HistoryPage() {
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // 서버가 요금제 보관 기간을 넘긴 기록을 목록에서 잘라 내려주므로, "없음"과 "기간 만료"를
+  // 구분해 안내하려면 요금제를 알아야 한다(조회 실패 시 null → 기간 안내를 생략한다).
+  const [planTier, setPlanTier] = useState<"BASIC" | "PLUS" | "PRO" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +173,14 @@ export default function HistoryPage() {
 
         if (!cancelled) {
           setItems(sortMedia(media));
+        }
+
+        // 보관 기간 안내용. 실패해도 목록 자체는 이미 받았으므로 조용히 넘어간다.
+        try {
+          const user = await getMyUserInfo();
+          if (!cancelled) setPlanTier(resolvePlanInfo(user.planTier).name);
+        } catch {
+          if (!cancelled) setPlanTier(null);
         }
       } catch (loadError) {
         console.error(loadError);
@@ -241,7 +259,11 @@ export default function HistoryPage() {
     setSharingId(item.mediaId);
 
     try {
-      const url = await getMediaDownloadUrl(item.mediaId);
+      // 다운로드 URL은 Content-Disposition: attachment가 박혀 있어 링크를 받은 사람에게
+      // 이미지가 바로 보이지 않는다. 공유에는 인라인 조회 URL을 쓴다(둘 다 24시간 유효).
+      const url =
+        (await getImageUrlByKey(item.s3Key)) ??
+        (await getMediaDownloadUrl(item.mediaId));
       const result = await shareOrCopyLink({
         title: `${getUserMediaTitle(item)} | 하루컷`,
         text: "사진 공유 링크",
@@ -249,7 +271,7 @@ export default function HistoryPage() {
       });
 
       if (result === "copied") {
-        setFeedback("공유 링크를 복사했어요.");
+        setFeedback("공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.");
       } else if (result === "shared") {
         setFeedback("공유 창을 열었어요.");
       }
@@ -315,8 +337,10 @@ export default function HistoryPage() {
               기록
             </h1>
             <p className="mt-2 text-[13.5px] text-[color:var(--hc-muted)]">
-              남긴 하루컷 {loading ? "…" : items.length}개 · 언제든 다시 내려받을 수
-              있어요
+              남긴 하루컷 {loading ? "…" : items.length}개
+              {planTier
+                ? ` · ${PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록을 볼 수 있어요`
+                : ""}
             </p>
           </div>
 
@@ -386,6 +410,15 @@ export default function HistoryPage() {
             <p className="text-[13px] text-[color:var(--hc-muted)]">
               저장한 기록이 아직 없어요.
             </p>
+            {planTier && planTier !== "PRO" ? (
+              <p className="text-[12px] text-[color:var(--hc-muted-soft)]">
+                {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
+                지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
+                <Link href="/pricing" className="underline">
+                  요금제 보기
+                </Link>
+              </p>
+            ) : null}
             <Link
               href="/shoot"
               className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
@@ -437,8 +470,8 @@ export default function HistoryPage() {
                             </p>
                           )}
                           <p className="text-[11.5px] text-[color:var(--hc-muted-soft)]">
-                            {item.createdAt
-                              ? new Date(item.createdAt).toLocaleDateString(
+                            {parseServerDateTime(item.createdAt)
+                              ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
                                   { month: "long", day: "numeric" },
                                 )
@@ -523,8 +556,9 @@ function CalendarView({
 
   const byDay = new Map<number, UserMedia[]>();
   for (const item of monthItems) {
-    if (!item.createdAt) continue;
-    const day = new Date(item.createdAt).getDate();
+    const created = parseServerDateTime(item.createdAt);
+    if (!created) continue;
+    const day = created.getDate();
     const bucket = byDay.get(day);
     if (bucket) bucket.push(item);
     else byDay.set(day, [item]);

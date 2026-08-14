@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Sparkles,
 } from "lucide-react";
+import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
@@ -141,8 +142,8 @@ function countThisMonth(items: UserMedia[]) {
   const y = now.getFullYear();
   const m = now.getMonth();
   return items.filter((item) => {
-    if (!item.createdAt) return false;
-    const d = new Date(item.createdAt);
+    const d = parseServerDateTime(item.createdAt);
+    if (!d) return false;
     return !Number.isNaN(d.getTime()) && d.getFullYear() === y && d.getMonth() === m;
   }).length;
 }
@@ -156,8 +157,8 @@ function countThisWeek(items: UserMedia[]) {
   weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const startMs = weekStart.getTime();
   return items.filter((item) => {
-    if (!item.createdAt) return false;
-    const d = new Date(item.createdAt);
+    const d = parseServerDateTime(item.createdAt);
+    if (!d) return false;
     return !Number.isNaN(d.getTime()) && d.getTime() >= startMs;
   }).length;
 }
@@ -205,8 +206,8 @@ export default function HomePage() {
         }
 
         const sortedMedia = [...mediaResult.media].sort((a, b) => {
-          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const aTime = serverDateTimeToMillis(a.createdAt);
+          const bTime = serverDateTimeToMillis(b.createdAt);
           return bTime - aTime;
         });
 

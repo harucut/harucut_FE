@@ -175,6 +175,13 @@ export function ThemeStickerScreen() {
       return;
     }
 
+    // 서버는 IMAGE 배경 응답의 key 자리에 이미 서명된 조회 URL을 넣어 준다.
+    // 그걸 다시 key로 넘기면 URL 문자열 자체를 S3 키로 서명해 깨진 주소가 나온다.
+    if (/^https?:\/\//i.test(background.key)) {
+      setThemeBackgroundPreview(background.key);
+      return;
+    }
+
     let cancelled = false;
     void getPresignedImageUrl(background.key)
       .then((url) => {
@@ -244,7 +251,6 @@ export function ThemeStickerScreen() {
             uri: asset.uri,
           }),
           filename,
-          isTemp: true,
           type: 'FRAME_COMPONENT',
           uri: asset.uri,
         });
@@ -293,7 +299,30 @@ export function ThemeStickerScreen() {
       return;
     }
 
-    setThemeBackgroundImage(result.assets[0].uri);
+    const asset = result.assets[0];
+    // 저장할 때가 아니라 고른 즉시 형식을 판정한다. 미지원 원본(HEIC 등)을 그대로 안고 있다가
+    // 저장 단계에서 실패하면 꾸민 내용을 날린다.
+    try {
+      resolveUploadContentType({
+        filename: asset.fileName,
+        mimeType: asset.mimeType,
+        uri: asset.uri,
+      });
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'UPLOAD',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '지원하지 않는 이미지 형식이에요.'),
+        title: '배경 이미지 사용 불가',
+      });
+      return;
+    }
+
+    setThemeBackgroundImage(asset.uri, {
+      filename: asset.fileName,
+      mimeType: asset.mimeType,
+    });
   };
 
   const handleSaveFrame = async () => {

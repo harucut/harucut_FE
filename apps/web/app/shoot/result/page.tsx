@@ -437,7 +437,10 @@ export default function ShootResultPage() {
       });
 
       if (result === "copied") {
-        showStatusNotice("링크를 복사했어요", "이미지 링크를 바로 붙여넣어 공유할 수 있어요.");
+        showStatusNotice(
+          "링크를 복사했어요",
+          "하루 동안 열리는 이미지 링크예요. 바로 붙여넣어 공유할 수 있어요.",
+        );
       }
     } catch (error) {
       console.error(error);

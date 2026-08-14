@@ -36,11 +36,11 @@ export const PRESIGNED_UPLOAD_TYPES = {
 export type PresignedUploadType =
   (typeof PRESIGNED_UPLOAD_TYPES)[keyof typeof PRESIGNED_UPLOAD_TYPES];
 
+// 스웨거 PresignedUploadRequest는 type·filename·contentType 세 필드만 받는다.
 type PresignedUploadRequest = {
   type: PresignedUploadType;
   filename: string;
   contentType: PresignedUploadContentType;
-  isTemp: boolean;
 };
 
 function normalizeRemoteUrl(value: string | null | undefined): string | null {
@@ -150,18 +150,58 @@ export function isSupportedUploadFile(file: File) {
   }
 }
 
-export function resolveUploadContentType(file: File): PresignedUploadContentType {
-  const mime = file.type.toLowerCase();
-  const ext = file.name.split(".").pop()?.trim().toLowerCase();
+// 백엔드 ContentType enum과 1:1(허용 확장자·MIME 모두 서버 계약 그대로).
+const EXTENSION_TO_CONTENT_TYPE: Record<string, PresignedUploadContentType> = {
+  gif: "GIF",
+  jpeg: "JPEG",
+  jpg: "JPEG",
+  png: "PNG",
+  webp: "WEBP",
+};
 
-  if (mime === "image/png" || ext === "png") return "PNG";
-  if (mime === "image/jpeg" || mime === "image/jpg" || ext === "jpg" || ext === "jpeg") {
-    return "JPEG";
+const MIME_TO_CONTENT_TYPE: Record<string, PresignedUploadContentType> = {
+  "image/gif": "GIF",
+  "image/jpeg": "JPEG",
+  "image/jpg": "JPEG",
+  "image/png": "PNG",
+  "image/webp": "WEBP",
+};
+
+const CONTENT_TYPE_TO_EXTENSION: Record<PresignedUploadContentType, string> = {
+  GIF: "gif",
+  JPEG: "jpg",
+  PNG: "png",
+  WEBP: "webp",
+};
+
+/**
+ * 업로드 형식과 파일명을 한 쌍으로 확정한다.
+ *
+ * 서버는 filename의 확장자와 contentType이 **같은 enum 항목에 동시에 속할 때만** presign을 내준다
+ * (아니면 415 GEN-051). 그래서 확장자를 1순위로 보고, 확장자가 지원 목록 밖인데 MIME만 맞으면
+ * (윈도우 크롬이 image/jpeg로 주는 .jfif/.pjpeg 등) 파일명 확장자를 형식에 맞춰 정규화한다.
+ * S3 key의 확장자도 이 filename에서 나온다.
+ */
+export function resolveUpload(file: File): {
+  contentType: PresignedUploadContentType;
+  filename: string;
+} {
+  const ext = file.name.split(".").pop()?.trim().toLowerCase() ?? "";
+  const contentType =
+    EXTENSION_TO_CONTENT_TYPE[ext] ?? MIME_TO_CONTENT_TYPE[file.type.toLowerCase()];
+
+  if (!contentType) {
+    throw createUnsupportedTypeError(file);
   }
-  if (mime === "image/webp" || ext === "webp") return "WEBP";
-  if (mime === "image/gif" || ext === "gif") return "GIF";
 
-  throw createUnsupportedTypeError(file);
+  const dot = file.name.lastIndexOf(".");
+  const base = (dot > 0 ? file.name.slice(0, dot) : file.name).trim() || "upload";
+
+  return { contentType, filename: `${base}.${CONTENT_TYPE_TO_EXTENSION[contentType]}` };
+}
+
+export function resolveUploadContentType(file: File): PresignedUploadContentType {
+  return resolveUpload(file).contentType;
 }
 
 export async function uploadFourcutMedia(
@@ -174,11 +214,9 @@ export async function uploadFourcutMedia(
   const uploaded = await uploadToS3WithPresigned({
     file,
     type: PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
-    isTemp: false,
   });
 
   const media = await registerUserMedia({
-    mediaType: "PHOTO",
     s3Key: uploaded.key,
     ...(opts.displayName ? { displayName: opts.displayName } : {}),
   });
@@ -194,17 +232,15 @@ export async function uploadFourcutMedia(
 export async function uploadToS3WithPresigned(opts: {
   file: File;
   type: PresignedUploadType;
-  isTemp: boolean;
 }) {
-  const { file, type, isTemp } = opts;
-  // 지원 형식만 통과시킨다(아니면 여기서 throw).
-  const resolvedContentType = resolveUploadContentType(file);
+  const { file, type } = opts;
+  // 지원 형식만 통과시킨다(아니면 여기서 throw). 파일명은 형식에 맞춰 정규화된 이름을 쓴다.
+  const resolved = resolveUpload(file);
 
   const body: PresignedUploadRequest = {
     type,
-    filename: file.name,
-    contentType: resolvedContentType,
-    isTemp,
+    filename: resolved.filename,
+    contentType: resolved.contentType,
   };
 
   const presigned = await clientApi.post<ApiEnvelope<PresignedUploadData>>(
@@ -213,6 +249,8 @@ export async function uploadToS3WithPresigned(opts: {
   );
 
   const { key, uploadUrl, contentType } = presigned.data.data;
+  // presigned PUT 서명에 content-type이 들어있다(X-Amz-SignedHeaders=content-type;host).
+  // 헤더를 빼거나 다른 값을 쓰면 S3가 403 SignatureDoesNotMatch로 거절한다.
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: {

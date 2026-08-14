@@ -180,7 +180,7 @@ describe("ThemeEditorPage save flow", () => {
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
       expect(mockUploadPresigned).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "FRAME", isTemp: false }),
+        expect.objectContaining({ type: "FRAME" }),
       );
       expect(mockAddDraft).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith("/theme");
@@ -223,13 +223,13 @@ describe("ThemeEditorPage save flow", () => {
     expect(mockCreateFrame).not.toHaveBeenCalled();
   });
 
-  it("shows the plan limit message when frame creation is rejected with USR-102", async () => {
+  it("shows the plan limit message when frame creation is rejected with SUBS-003", async () => {
     mockCreateFrame.mockRejectedValueOnce({
       status: 403,
       data: {
-        code: "USR-102",
+        code: "SUBS-003",
         status: 403,
-        message: "요금제의 월간 프레임 생성 횟수를 초과했습니다.",
+        message: "The number of stored frames exceeds the limit for the current plan.",
       },
     });
 
@@ -239,7 +239,7 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(container.textContent).toContain(
-        "요금제의 프레임 보관 개수를 다 썼어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
+        "지금 요금제로는 프레임을 저장할 수 없어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
       );
     });
   });

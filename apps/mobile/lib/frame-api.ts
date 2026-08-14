@@ -33,18 +33,22 @@ type RemoteFrameComponent = {
   width: number;
   x: number;
   y: number;
-  // 스웨거 ComponentRequest/Response는 소문자 zindex를 쓴다(required). 요청엔 둘 다 보내고
-  // 응답은 둘 중 있는 값을 읽는다.
+  // 스웨거 ComponentRequest/Response는 zIndex(카멜) 하나만 쓴다(둘 다 required).
+  // 소문자 zindex는 서버가 하위호환으로 받아줄 뿐 스펙에 없어 보내지 않는다.
+  // 응답 누락에 대비해 파싱용으로만 optional로 둔다.
   zIndex?: number;
-  zindex?: number;
 };
 
 type RemoteFrame = {
   background?: RemoteFrameBackground;
+  canvasHeight?: number;
+  canvasWidth?: number;
   components?: RemoteFrameComponent[];
   description?: string;
   frameId: number;
   frameType: RemoteFrameType;
+  // 관리자가 등록한 기본 제공 프레임. 목록에 섞여 오지만 수정/삭제는 403이라 읽기 전용이다.
+  isSystem?: boolean;
   source?: string;
   title: string;
 };
@@ -61,15 +65,12 @@ type FrameCreateRequest = {
 };
 
 type ThemeFrameDraft = {
-  accentColor: string;
   background?: ThemeBackground;
   backgroundColor: string;
-  caption: string;
   components?: ThemeEditorComponent[];
   description: string;
   frameId: FrameId;
   previewKey: string;
-  stickers: string[];
   title: string;
 };
 
@@ -132,9 +133,11 @@ function toRequestBackground(draft: ThemeFrameDraft): RemoteFrameBackground {
     };
   }
 
+  // 스웨거 ImageBackgroundAttributes 는 key/opacity/type 이 전부 required 다.
+  // 에디터에 불투명도 UI가 없어 opacity 가 비어 있으므로 기본값 1을 채워 보낸다.
   return {
     key: background.key,
-    opacity: background.opacity,
+    opacity: background.opacity ?? 1,
     type: 'IMAGE',
   };
 }
@@ -151,7 +154,7 @@ function toSavedBackground(background?: RemoteFrameBackground): ThemeBackground 
 
   return {
     key: background.key,
-    opacity: background.opacity,
+    opacity: background.opacity ?? 1,
     type: 'IMAGE',
   };
 }
@@ -168,7 +171,6 @@ function toRequestComponent(component: ThemeEditorComponent): RemoteFrameCompone
     width: component.width,
     x: component.x,
     y: component.y,
-    zindex: component.zIndex,
     zIndex: component.zIndex,
   };
 }
@@ -187,63 +189,21 @@ function toSavedComponent(component: RemoteFrameComponent, index: number): Theme
     width: component.width,
     x: component.x,
     y: component.y,
-    zIndex: component.zIndex ?? component.zindex ?? index + 1,
+    zIndex: component.zIndex ?? index + 1,
   };
 }
 
 function toCreateFrameRequest(draft: ThemeFrameDraft): FrameCreateRequest {
   const canvas = THEME_FRAME_CANVAS[draft.frameId];
-  const caption = draft.caption.trim();
-  const stickers = draft.stickers.filter((item) => item.trim());
-  const components: RemoteFrameComponent[] =
-    draft.components && draft.components.length > 0
-      ? draft.components.map(toRequestComponent)
-      : [
-          ...(caption
-            ? [
-                {
-                  height: 120,
-                  source: caption,
-                  styleJson: {
-                    accentColor: draft.accentColor,
-                    color: draft.accentColor,
-                    role: 'caption',
-                  },
-                  rotation: 0,
-                  scale: 1,
-                  type: 'TEXT' as const,
-                  width: canvas.width * 0.8,
-                  x: canvas.width * 0.1,
-                  y: canvas.height * 0.86,
-                  zIndex: 1,
-                },
-              ]
-            : []),
-          ...stickers.map((sticker, index) => ({
-            height: 96,
-            source: sticker,
-            styleJson: {
-              accentColor: draft.accentColor,
-              color: draft.accentColor,
-              role: 'sticker',
-            },
-            rotation: 0,
-            scale: 1,
-            type: 'TEXT' as const,
-            width: 96,
-            x: 120 + index * 112,
-            y: 120,
-            zIndex: index + 2,
-          })),
-        ];
 
   return {
     background: toRequestBackground(draft),
     canvasHeight: canvas.height,
     canvasWidth: canvas.width,
-    // 자동 생성(caption/sticker) 컴포넌트는 zIndex만 갖고 있으므로, 소문자 zindex(스웨거 required)를
-    // 함께 채워 어느 쪽이든 유효성 검증을 통과하게 한다.
-    components: components.map((c) => ({ ...c, zindex: c.zindex ?? c.zIndex })),
+    // 사용자가 실제로 배치한 컴포넌트만 보낸다. 예전에는 컴포넌트가 하나도 없으면
+    // 하드코딩 기본 캡션('today archive')과 기본 스티커를 TEXT 컴포넌트로 만들어 저장했는데,
+    // 앱에 캡션/스티커 편집 UI가 없어 사용자가 만들지 않은 텍스트가 서버 프레임에 섞였다.
+    components: (draft.components ?? []).map(toRequestComponent),
     description: draft.description,
     frameType: frameTypeFromFrameId(draft.frameId),
     previewKey: draft.previewKey,
@@ -254,6 +214,9 @@ function toCreateFrameRequest(draft: ThemeFrameDraft): FrameCreateRequest {
 function toSavedFrame(frame: RemoteFrame): SavedFrame {
   const components = frame.components ?? [];
   const savedComponents = components.map(toSavedComponent);
+  // role: 'caption' / 'sticker' 컴포넌트는 더 이상 앱이 만들지 않는다(자동 생성 폐지).
+  // 그 규약으로 이미 저장된 기존 프레임을 읽기 위한 하위호환 역매핑이다 —
+  // SavedFrame.caption(프리뷰 접근성 라벨)과 accentColor(촬영·업로드 테두리색)가 이 값을 쓴다.
   const captionComponent = components.find(
     (component) => component.type === 'TEXT' && componentStyle(component).role === 'caption',
   );
@@ -294,7 +257,11 @@ export async function listRemoteFrames() {
     },
   );
 
-  return Array.isArray(frames) ? frames.map(toSavedFrame) : [];
+  // 서버는 내 프레임 뒤에 기본 제공(시스템) 프레임을 붙여 내려준다. 내 소유가 아니라
+  // 수정/삭제가 403이므로 '저장한 프레임'에서는 제외한다(꾸미고 저장하는 순간 작업분이 날아간다).
+  return Array.isArray(frames)
+    ? frames.filter((frame) => !frame.isSystem).map(toSavedFrame)
+    : [];
 }
 
 export async function createRemoteFrame(draft: ThemeFrameDraft) {

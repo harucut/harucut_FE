@@ -81,7 +81,6 @@ function ThemePageContent() {
     if (targetIndex === -1) return;
 
     const targetFrame = frames[targetIndex];
-    if (targetIndex >= plan.limit) return;
 
     setFrameId(frameIdFromFrameType(targetFrame.frameType));
     setRemoteFrameId(targetFrame.frameId);
@@ -89,7 +88,6 @@ function ThemePageContent() {
   }, [
     frames,
     isLoading,
-    plan.limit,
     queriedRemoteFrameId,
     router,
     setFrameId,
@@ -146,9 +144,11 @@ function ThemePageContent() {
           confirmLabel={
             isLoading
               ? "불러오는 중..."
-              : isAtCapacity
-                ? "보관함이 가득 찼어요 · 업그레이드"
-                : "새 프레임 만들기"
+              : capacity.plan.limit <= 0 && !capacity.unlimited
+                ? "프레임 저장은 유료 요금제부터 · 업그레이드"
+                : isAtCapacity
+                  ? "보관함이 가득 찼어요 · 업그레이드"
+                  : "새 프레임 만들기"
           }
         />
 

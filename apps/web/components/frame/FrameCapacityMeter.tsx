@@ -83,7 +83,12 @@ export function FrameCapacityMeter({
   const remaining = unlimited
     ? 0
     : (remainingProp ?? Math.max(0, limit - used));
-  const full = !unlimited && remaining <= 0;
+  // 한도 0(무료 요금제)은 "다 썼다"가 아니라 "애초에 저장할 수 없다"이다. 문구를 분리한다.
+  const noCapacity = !unlimited && limit <= 0;
+  const full = !unlimited && !noCapacity && remaining <= 0;
+  // 다운그레이드 직후엔 used가 limit보다 클 수 있다. 클램프하면 프레임이 사라진 것처럼 보이므로
+  // 초과 상태를 그대로 드러낸다.
+  const overCapacity = !unlimited && used > limit;
   const dots = buildGaugeDots(used, limit);
 
   return (
@@ -104,9 +109,13 @@ export function FrameCapacityMeter({
             <p className="mt-0.5 text-[11px] text-[color:var(--hc-muted)]">
               {unlimited
                 ? "무제한으로 저장할 수 있어요"
-                : full
-                  ? "보관함이 가득 찼어요"
-                  : `${remaining}개 더 저장할 수 있어요`}
+                : noCapacity
+                  ? "지금 요금제로는 프레임을 저장할 수 없어요"
+                  : overCapacity
+                    ? `현재 요금제 한도는 ${limit}개예요`
+                    : full
+                      ? "보관함이 가득 찼어요"
+                      : `${remaining}개 더 저장할 수 있어요`}
             </p>
           </div>
         </div>
@@ -126,7 +135,7 @@ export function FrameCapacityMeter({
         {dots.map((state, i) => (
           <GaugeDot key={i} state={state} />
         ))}
-        {unlimited ? null : (
+        {unlimited || noCapacity ? null : (
           <span className="ml-1 text-[11px] text-[color:var(--hc-muted)]">
             {limit}개 이후는 상위 요금제
           </span>

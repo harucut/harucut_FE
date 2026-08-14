@@ -1,3 +1,4 @@
+import { getLoginPlatformLabel } from '@harucut/shared';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -928,7 +929,7 @@ export function MyPageScreen() {
         const asset = result.assets[0];
         const uploaded = await uploadLocalFileWithPresigned({
           filename: asset.fileName ?? 'profile.jpg',
-          isTemp: false,
+          mimeType: asset.mimeType,
           type: 'PROFILE',
           uri: asset.uri,
         });
@@ -1214,7 +1215,7 @@ export function MyPageScreen() {
                       <View style={styles.quickGrid}>
                         <View style={styles.infoTile}>
                           <Text style={styles.linkBody}>로그인 플랫폼</Text>
-                          <Text style={styles.linkTitle}>{user.loginPlatform}</Text>
+                          <Text style={styles.linkTitle}>{getLoginPlatformLabel(user.loginPlatform)}</Text>
                         </View>
                         <View style={styles.infoTile}>
                           <Text style={styles.linkBody}>플랜</Text>

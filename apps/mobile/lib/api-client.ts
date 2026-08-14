@@ -1,4 +1,4 @@
-import { getPlanErrorMessage } from '@harucut/shared';
+import { getApiErrorMessageByCode, getPlanErrorMessage } from '@harucut/shared';
 import Constants from 'expo-constants';
 
 export type ApiEnvelope<T> = {
@@ -98,15 +98,32 @@ export class ApiRequestError<T = unknown> extends Error {
 
 export function getApiErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
-    // 요금제 관련 코드는 백엔드 원문(영문일 수 있음) 대신 우리 한국어 문구를 우선한다.
+    // 백엔드 ErrorCode 메시지는 전부 영문이라 그대로 노출하지 않는다. 코드로 우리 문구를 찾는다.
     const planMessage = getPlanErrorMessage(error.code);
     if (planMessage) {
       return planMessage;
     }
 
-    if (error.apiMessage) {
-      return error.apiMessage;
+    // 검증 실패(400 GEN-003)만 data[]에 필드별 한국어 사유가 온다.
+    const fieldMessage = Array.isArray(error.data)
+      ? (error.data as Array<{ message?: unknown }>).find(
+          (item) => typeof item?.message === 'string' && item.message.trim(),
+        )?.message
+      : null;
+    if (typeof fieldMessage === 'string' && fieldMessage.trim()) {
+      return fieldMessage.trim();
     }
+
+    const mapped = getApiErrorMessageByCode(error.code);
+    if (mapped) {
+      return mapped;
+    }
+
+    if (__DEV__ && error.apiMessage) {
+      console.error(`[api] 미매핑 에러 code=${error.code ?? '?'} message=${error.apiMessage}`);
+    }
+
+    return fallback;
   }
 
   if (error instanceof Error && error.message && error.message !== 'API request failed') {

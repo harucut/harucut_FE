@@ -20,6 +20,14 @@ export const PLAN_FRAME_LIMITS: Record<PlanTier, number> = {
   PRO: Number.POSITIVE_INFINITY,
 };
 
+// 요금제별 기록(미디어) 보관 기간. 서버가 이 기간을 넘긴 기록을 목록에서 아예 잘라 내려주므로
+// (PlanTier.historyRetention), 화면에서 "기록이 없다"와 "기간이 지났다"를 구분하려면 이 값이 필요하다.
+export const PLAN_HISTORY_RETENTION_LABELS: Record<PlanTier, string> = {
+  BASIC: "최근 3일",
+  PLUS: "최근 3개월",
+  PRO: "무제한",
+};
+
 const PLAN_ORDER: PlanTier[] = ["BASIC", "PLUS", "PRO"];
 
 /** 게이지에 그리는 점 최대 개수(유한 표시용 상한). PRO는 무제한이라 한도와 분리해 고정한다. */
