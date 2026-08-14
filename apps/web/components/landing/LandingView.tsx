@@ -102,7 +102,8 @@ function HowFilm() {
             >
               <span
                 className="mb-[18px] block font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px] transition-colors duration-500"
-                style={{ color: on ? GREEN : "rgba(255,255,255,.16)" }}
+                // 비활성 단계도 읽을 수 있어야 한다 — .16은 대비 1.57로 WCAG AA(큰 글자 3:1) 미달이었다.
+                style={{ color: on ? GREEN : "rgba(255,255,255,.42)" }}
               >
                 {s.n}
               </span>
@@ -115,7 +116,8 @@ function HowFilm() {
               <p
                 className="text-[14.5px] leading-[1.65] transition-colors duration-500"
                 style={{
-                  color: on ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.32)",
+                  // .32는 대비 2.84로 본문 기준(4.5:1) 미달이라 .56으로 올렸다.
+                  color: on ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.56)",
                 }}
               >
                 {s.d}

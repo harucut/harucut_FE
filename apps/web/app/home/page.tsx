@@ -380,7 +380,7 @@ export default function HomePage() {
                 남겼어요.
                 <br />
                 이번 주 목표까지{" "}
-                <b className="text-[color:var(--hc-primary)]">{remainingToGoal}컷</b>{" "}
+                <b className="text-[color:var(--hc-primary-strong)]">{remainingToGoal}컷</b>{" "}
                 남았어요!
               </>
             )}

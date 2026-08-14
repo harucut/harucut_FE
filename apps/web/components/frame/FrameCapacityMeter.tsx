@@ -102,7 +102,7 @@ export function FrameCapacityMeter({
           <div className="min-w-0">
             <p className="text-[15px] font-extrabold text-[color:var(--hc-text)] lg:text-base">
               보관 {used}{" "}
-              <span className="font-semibold text-[color:var(--hc-muted-soft)]">
+              <span className="font-semibold text-[color:var(--hc-muted)]">
                 / {unlimited ? "무제한" : `${limit}개`}
               </span>
             </p>

@@ -83,7 +83,6 @@ function PlanCard({
           <li
             key={label}
             className="flex items-start gap-2.5"
-            style={{ opacity: on ? 1 : 0.4 }}
           >
             <span
               className={`mt-px grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full ${
@@ -98,7 +97,13 @@ function PlanCard({
                 <X className="h-[11px] w-[11px] text-[color:var(--hc-muted)]" />
               )}
             </span>
-            <span className="text-[13.5px] leading-[1.4] text-[color:var(--hc-text)]">
+            {/* 미지원 항목은 opacity로 흐리지 않는다 — 대비가 2.58까지 떨어져 읽기 어려웠다.
+                X 아이콘과 muted 색으로 구분하고 명도 대비는 지킨다. */}
+            <span
+              className={`text-[13.5px] leading-[1.4] ${
+                on ? "text-[color:var(--hc-text)]" : "text-[color:var(--hc-muted)]"
+              }`}
+            >
               {label}
               {note ? (
                 <b

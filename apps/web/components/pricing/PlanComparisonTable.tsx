@@ -30,7 +30,13 @@ export function PlanComparisonTable({
   return (
     // 좌우 거터만큼 빼내 표가 화면 끝까지 스크롤되게 한다.
     // -mx/px 값은 부모(PricingView) 컨테이너 거터와 반드시 같아야 한다.
-    <div className="-mx-7 overflow-x-auto px-7">
+    <div
+      className="-mx-7 overflow-x-auto px-7"
+      // 가로 스크롤 영역은 포커스를 받을 수 있어야 키보드로도 표를 끝까지 볼 수 있다.
+      tabIndex={0}
+      role="region"
+      aria-label="요금제 기능 비교표"
+    >
       <table className="w-full min-w-[520px] border-collapse">
         <thead>
           <tr className="border-b border-[color:var(--hc-border)]">

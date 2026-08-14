@@ -81,7 +81,7 @@ export default function FaqPage() {
           <p className="text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
             <a
               href={`mailto:${COMPANY.email}`}
-              className="font-semibold text-[color:var(--hc-primary)] underline underline-offset-4"
+              className="font-semibold text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               {COMPANY.email}
             </a>{" "}
