@@ -8,7 +8,6 @@ describe("user media preview helpers", () => {
     expect(
       getUserMediaTitle({
         mediaId: 1,
-        mediaType: "PHOTO",
         s3Key: "uploads/photo.png",
         displayName: "harucut_20260416_213654",
         originalFileName: "photo.png",
@@ -20,7 +19,6 @@ describe("user media preview helpers", () => {
     expect(
       getUserMediaPreviewUrl({
         mediaId: 1,
-        mediaType: "PHOTO",
         s3Key: "uploads/photo.png",
         downloadUrl: "https://cdn.example.com/photo.png",
       }),
@@ -31,7 +29,6 @@ describe("user media preview helpers", () => {
     expect(
       getUserMediaPreviewUrl({
         mediaId: 2,
-        mediaType: "PHOTO",
         s3Key: "uploads/photo.png",
       }),
     ).toBeNull();
@@ -39,7 +36,6 @@ describe("user media preview helpers", () => {
     expect(
       getUserMediaPreviewUrl({
         mediaId: 3,
-        mediaType: "PHOTO",
         s3Key: "uploads/photo.png",
         downloadUrl: "   ",
       }),

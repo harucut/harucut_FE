@@ -1,17 +1,14 @@
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, LoginResponseData } from "@/lib/api-types";
 
-export async function loginWithEmail(
-  email: string,
-  password: string,
-  options?: { remember?: boolean },
-) {
+// 백엔드 LocalLoginRequest는 email·password만 받는다(스웨거 기준).
+// 세션 지속 옵션(remember) 계약은 없으므로 보내지 않는다 — 추가되면 여기에 반영한다.
+export async function loginWithEmail(email: string, password: string) {
   const res = await clientApi.post<ApiEnvelope<LoginResponseData>>(
     "/api/client/auth/login",
     {
       email,
       password,
-      remember: Boolean(options?.remember),
     },
   );
 

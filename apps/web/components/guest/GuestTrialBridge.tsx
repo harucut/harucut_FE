@@ -17,8 +17,6 @@ export function GuestTrialBridge() {
   const searchParams = useSearchParams();
   const hydrateGuestMode = useGuestTrialStore((state) => state.hydrateGuestMode);
   const showGuestRestrictedNotice = useGuestTrialStore((state) => state.showGuestRestrictedNotice);
-  const showGuestShareNotice = useGuestTrialStore((state) => state.showGuestShareNotice);
-  const showGuestSavedNotice = useGuestTrialStore((state) => state.showGuestSavedNotice);
   const setNotice = useGuestTrialStore((state) => state.setNotice);
 
   useEffect(() => {
@@ -88,6 +86,8 @@ export function GuestTrialBridge() {
     })();
   }, [pathname, router, searchParams, setNotice]);
 
+  // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.
+  // 공유/저장 안내는 URL이 아니라 화면에서 직접 스토어 액션을 부른다(shoot/result 등).
   useEffect(() => {
     const guestNotice = searchParams.get("guestNotice");
     if (!guestNotice) {
@@ -96,24 +96,14 @@ export function GuestTrialBridge() {
 
     if (guestNotice === "restricted") {
       showGuestRestrictedNotice();
-    } else if (guestNotice === "share-only") {
-      showGuestShareNotice();
-    } else if (guestNotice === "saved") {
-      showGuestSavedNotice();
     }
 
+    // 값이 무엇이든 파라미터는 걷어내 URL을 원래대로 되돌린다.
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("guestNotice");
     const nextSearch = nextParams.toString();
     router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname);
-  }, [
-    pathname,
-    router,
-    searchParams,
-    showGuestRestrictedNotice,
-    showGuestSavedNotice,
-    showGuestShareNotice,
-  ]);
+  }, [pathname, router, searchParams, showGuestRestrictedNotice]);
 
   return <GuestTrialOverlay />;
 }

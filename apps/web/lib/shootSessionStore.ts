@@ -30,7 +30,6 @@ type ShootSessionState = {
   setOutputFilter: (filter: FourcutFilterId) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
   clearResults: () => void;
-  setShots: (shots: string[]) => void;
   toggleSelect: (index: number) => void;
   clearSelection: () => void;
   addShotPhoto: (photoDataUrl: string) => void;
@@ -88,13 +87,6 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
 
   clearResults: () =>
     set({
-      imageResult: null,
-    }),
-
-  setShots: (shots) =>
-    set({
-      shots,
-      selectedIndexes: createEmptySlots(),
       imageResult: null,
     }),
 

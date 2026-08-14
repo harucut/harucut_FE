@@ -129,9 +129,11 @@ export function upsertHistoryItem(
   return items.map((item) => (item.id === existingId ? nextItem : item));
 }
 
-// 세션 모드 전환(enterAnonymousMode 등) 시 작업 공간 스토어들을 초기화하기 위한 레지스트리.
+// 명시적 세션 이탈(로그아웃·탈퇴·게스트 전환) 시 작업 공간 스토어들을 초기화하기 위한 레지스트리.
 // 세션 스토어가 작업 공간 스토어를 직접 import하면 순환 참조가 생기므로,
-// 각 스토어 모듈이 로드될 때 자신의 hardReset을 등록한다.
+// 각 스토어 모듈이 로드될 때 자신의 hardReset을 등록한다(촬영·업로드·꾸미기 + 라이브러리 캐시).
+// 401 하드 만료는 사용자의 의사가 아니므로 이 경로를 쓰지 않는다 —
+// use-session-store의 endExpiredSession이 라이브러리만 비우고 작업 공간은 보존한다.
 const workspaceResets = new Set<() => void>();
 
 export function registerWorkspaceReset(reset: () => void) {

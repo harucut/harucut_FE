@@ -27,7 +27,6 @@ type UploadStore = UploadSessionState & {
   addUploadAssets: (assets: MediaAsset[]) => void;
   hardReset: () => void;
   persistUploadResult: (previewUri?: string | null) => Promise<string | null>;
-  resetUploadSession: () => void;
   selectSavedFrameForUpload: (frame: SavedFrame) => void;
   setUploadFrame: (frameId: FrameId) => void;
   // 키마다 값 타입을 좁힌다. 넓은 string | boolean이면 setUploadOption('tone', true)가
@@ -103,11 +102,6 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
 
     return nextItem.id;
   },
-  resetUploadSession: () =>
-    set((state) => ({
-      ...defaultUploadSession(),
-      frameId: state.frameId,
-    })),
   selectSavedFrameForUpload: (frame) =>
     set({
       borderColor: frame.accentColor,

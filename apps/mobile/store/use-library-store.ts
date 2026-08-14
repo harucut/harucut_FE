@@ -55,10 +55,12 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         savedFrames,
       });
     } catch (error) {
+      // savedFrames는 건드리지 않는다. []로 덮어쓰면 조회 실패가 '저장한 프레임 없음'으로
+      // 위장되고, 보관함 한도(savedFrames.length 기준) 게이트까지 통과시켜 버린다.
+      // 실패 표시는 frameStatus/frameError를 읽는 SavedFramesPanel이 담당한다.
       set({
         frameError: getApiErrorMessage(error, '저장한 프레임을 불러오지 못했어요.'),
         frameStatus: 'error',
-        savedFrames: [],
       });
     }
   },

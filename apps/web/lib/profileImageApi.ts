@@ -30,7 +30,6 @@ export async function uploadProfileImage(file: File) {
   const { key } = await uploadToS3WithPresigned({
     file,
     type: PRESIGNED_UPLOAD_TYPES.PROFILE,
-    isTemp: false,
   });
 
   await requestProfileImageChange(key);

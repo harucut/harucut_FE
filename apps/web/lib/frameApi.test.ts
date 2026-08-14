@@ -117,9 +117,11 @@ describe("frame api mapping", () => {
 
     const mapped = toThemeExportJson(remoteFrame);
 
+    // 스웨거 ImageBackgroundAttributes는 opacity가 required라 비어 있으면 1로 채운다.
     expect(mapped.background).toEqual({
       type: "IMAGE",
       key: "backgrounds/cover.png",
+      opacity: 1,
     });
 
     expect(
@@ -131,6 +133,41 @@ describe("frame api mapping", () => {
     ).toEqual({
       type: "IMAGE",
       key: "backgrounds/cover.png",
+      opacity: 1,
+    });
+  });
+
+  it("keeps an explicit background opacity instead of overwriting it with the default", () => {
+    const remoteFrame: RemoteFrame = {
+      frameId: 35,
+      title: "image-bg-translucent",
+      frameType: "WIDE",
+      background: {
+        type: "IMAGE",
+        key: "backgrounds/cover.png",
+        opacity: 0.4,
+      },
+      components: [],
+    };
+
+    const mapped = toThemeExportJson(remoteFrame);
+
+    expect(mapped.background).toEqual({
+      type: "IMAGE",
+      key: "backgrounds/cover.png",
+      opacity: 0.4,
+    });
+
+    expect(
+      toCreateFrameRequest(mapped, {
+        title: "t",
+        description: "d",
+        previewKey: "p",
+      }).background,
+    ).toEqual({
+      type: "IMAGE",
+      key: "backgrounds/cover.png",
+      opacity: 0.4,
     });
   });
 });

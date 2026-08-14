@@ -7,12 +7,10 @@ type DecorateSessionState = {
   imageSrc: string | null;
   title: string;
   setSource: (imageSrc: string, title?: string) => void;
-  clear: () => void;
 };
 
 export const useDecorateSession = create<DecorateSessionState>((set) => ({
   imageSrc: null,
   title: "하루컷",
   setSource: (imageSrc, title = "하루컷") => set({ imageSrc, title }),
-  clear: () => set({ imageSrc: null, title: "하루컷" }),
 }));

@@ -1,12 +1,5 @@
 export type FrameId = "classic-4" | "wide-4" | "grid-4" | "polaroid-4";
 
-export const FRAME_IDS: FrameId[] = [
-  "classic-4",
-  "wide-4",
-  "grid-4",
-  "polaroid-4",
-];
-
 export type FrameConfig = {
   id: FrameId;
   name: string;
@@ -39,7 +32,3 @@ export const FRAME_CONFIGS: FrameConfig[] = [
     slots: 4,
   },
 ];
-
-export function isFrameId(value: string): value is FrameId {
-  return FRAME_IDS.includes(value as FrameId);
-}

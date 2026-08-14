@@ -1,7 +1,7 @@
 "use client";
 
 import { clientApi } from "@/lib/clientApi";
-import type { ApiEnvelope, UserMedia, UserMediaType } from "@/lib/api-types";
+import type { ApiEnvelope, UserMedia } from "@/lib/api-types";
 
 export async function listMyMedia() {
   // 백엔드 GET /api/auth/user/media는 page(0부터)/size(기본 10) 기반 페이지네이션이라
@@ -33,8 +33,8 @@ export async function listMyMedia() {
   return out;
 }
 
+// 스웨거 UserMediaRegisterRequest는 s3Key(required)·displayName만 받는다.
 export async function registerUserMedia(args: {
-  mediaType: UserMediaType;
   s3Key: string;
   displayName?: string;
 }) {

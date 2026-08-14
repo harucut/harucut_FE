@@ -55,18 +55,16 @@ export async function updateProfileImage(s3Key: string) {
   );
 }
 
-// GET /api/auth/user/subscription/usage 응답.
+// GET /api/auth/user/subscription/usage 응답(스웨거 SubscriptionUsageResponse, 5개 필드 전부 required).
 // *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한.
+// 결제 주기 정보는 이 응답에 없다. 필요해지면 GET /api/auth/subscriptions 의
+// SubscriptionResponse.currentPeriodStart / currentPeriodEnd 를 써야 한다.
 export type SubscriptionUsage = {
   planTier: string;
   frameRetentionLimit: number;
   frameRetentionUsedCount: number;
   frameRetentionRemainingCount: number;
   frameRetentionUnlimited: boolean;
-  // 아래 두 필드는 월 단위 한도(폐기된 영상 변환)의 결제 주기 값이다.
-  // 서버는 여전히 내려주지만 앱은 쓰지 않는다 — 계약 문서용으로만 남긴다.
-  currentCycleStartAt: string;
-  currentCycleEndAt: string;
 };
 
 export async function getSubscriptionUsage() {
