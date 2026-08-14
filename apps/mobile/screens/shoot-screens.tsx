@@ -633,11 +633,11 @@ export function ShootResultScreen() {
 
   const currentHistory = historyItems.find((item) => item.id === shoot.persistedHistoryId) ?? null;
   // 사용자가 탭한 순서(selectedShotIds)를 보존해 미리보기/저장 결과가 일치하도록 한다.
-  const previewMedia =
-    currentHistory?.previewMedia ??
-    shoot.selectedShotIds
-      .map((id) => shoot.shots.find((shot) => shot.id === id))
-      .filter((shot): shot is (typeof shoot.shots)[number] => shot !== undefined);
+  // 서버 기록의 previewMedia는 4컷을 합성한 "결과물 1장"이라 슬롯 배열로 쓰면 안 된다
+  // (저장 성공 직후 미리보기가 1컷으로 붕괴하고, 그 화면을 다시 캡처해 내려받게 된다).
+  const previewMedia = shoot.selectedShotIds
+    .map((id) => shoot.shots.find((shot) => shot.id === id))
+    .filter((shot): shot is (typeof shoot.shots)[number] => shot !== undefined);
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');

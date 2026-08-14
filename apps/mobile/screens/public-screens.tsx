@@ -297,7 +297,7 @@ export function LandingScreen() {
 }
 
 export function LoginScreen() {
-  const { colors, styles } = usePublicScreenTheme();
+  const { styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const replace = (path: string) => router.replace(path as never);
@@ -305,7 +305,6 @@ export function LoginScreen() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [remember, setRemember] = useState(true);
 
   // 키 입력마다 새 인라인 핸들러를 만들면 memo된 FormField가 매번 리렌더되어, 가려진
   // 비밀번호 입력의 노출→마스킹 왕복이 끊겨 보인다. 필드별 핸들러를 한 번만 만들어
@@ -379,15 +378,6 @@ export function LoginScreen() {
         ))}
 
         <View style={styles.authMetaRow}>
-          <Pressable onPress={() => setRemember((current) => !current)} style={styles.rememberRow}>
-            <Ionicons
-              color={remember ? colors.primary : colors.muted}
-              name={remember ? 'checkbox' : 'square-outline'}
-              size={18}
-            />
-            <Text style={styles.rememberText}>로그인 상태 유지</Text>
-          </Pressable>
-
           <Text onPress={() => push('/forgot-password')} style={styles.forgotLink}>
             비밀번호 찾기
           </Text>
@@ -981,16 +971,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       lineHeight: 23,
       marginBottom: 26,
       marginTop: 12,
-    },
-    rememberRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: 6,
-    },
-    rememberText: {
-      color: colors.muted,
-      fontSize: 11,
-      fontWeight: '600',
     },
     kakaoLogo: {
       height: 26,
