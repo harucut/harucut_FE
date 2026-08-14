@@ -84,11 +84,32 @@ export function DecorateCanvas() {
       tr.getLayer()?.batchDraw();
       return;
     }
-    const node = stage.findOne(`#node-${activeId}`);
-    if (!node) return;
-    tr.nodes([node]);
-    tr.forceUpdate();
-    tr.getLayer()?.batchDraw();
+    // react-konva 19.2.5부터 리컨사일러 커밋이 queueMicrotask로 미뤄질 수 있다(19.2.1까지는 동기).
+    // 그래서 이 시점에 자식이 만든 Konva 노드가 아직 스테이지에 없을 수 있고, 예전처럼 한 번 찾고
+    // 포기하면 선택 핸들이 조용히 안 뜬다. 붙을 때까지 다음 프레임에 다시 시도하되,
+    // 없는 id를 계속 좇지 않도록 시도 횟수를 제한한다.
+    let frame = 0;
+    let attempts = 0;
+
+    const attach = () => {
+      const node = stage.findOne(`#node-${activeId}`);
+      if (!node) {
+        // 약 0.5초(30프레임)까지만 기다린다. 그 뒤엔 예전과 같이 조용히 포기한다.
+        if (attempts++ >= 30) return;
+        frame = requestAnimationFrame(attach);
+        return;
+      }
+
+      tr.nodes([node]);
+      tr.forceUpdate();
+      tr.getLayer()?.batchDraw();
+    };
+
+    attach();
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [activeId, renderKey, mode]);
 
   const sorted = useMemo(
