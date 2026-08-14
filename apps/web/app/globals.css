@@ -525,11 +525,18 @@ span {
 }
 
 /* 그린 그라디언트 텍스트(헤드라인 강조어) — background-clip으로 글자에 그라디언트를 입힌다. */
+/*
+  그라디언트 글자(다크 배경 전용). color를 transparent로 두면 background-clip이 안 먹는 환경에서
+  글자가 통째로 사라지고, 접근성 검사기도 실제 색을 알 수 없어 대비를 계산하지 못한다.
+  그래서 실제 색은 그라디언트 중간 톤으로 남기고, 시각적 투명화는 -webkit-text-fill-color가 맡는다.
+  (background-clip: text를 지원하는 브라우저는 -webkit-text-fill-color도 지원하므로 겉모습은 동일)
+*/
 .hc-gradient-text {
   background: linear-gradient(120deg, #1ed760 0%, #7ef0a8 55%, #1ed760 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  color: #7ef0a8;
+  -webkit-text-fill-color: transparent;
 }
 
 /*
