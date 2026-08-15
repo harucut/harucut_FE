@@ -28,6 +28,12 @@
         "canonical": "#18181a",
         "tonalRamp": ["#0b0b0c", "#131314", "#18181a", "#1c1c1e", "#232325", "#2e2e31", "#3a3a3d", "#5a5a5e"]
       },
+      "light-stage-tint": {
+        "role": "neutral",
+        "displayName": "종이 그늘 (라이트 무대의 아래쪽)",
+        "canonical": "#f1f1ee",
+        "tonalRamp": ["#1a1a18", "#333330", "#4d4d48", "#666660", "#808078", "#b3b3ac", "#f1f1ee", "#fafaf7"]
+      },
       "muted": {
         "role": "neutral",
         "displayName": "뮤트 그레이",
