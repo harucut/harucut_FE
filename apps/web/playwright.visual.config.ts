@@ -6,7 +6,8 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
 export default defineConfig({
   testDir: "./tests/visual",
   fullyParallel: false,
-  timeout: 30_000,
+  // e2e 설정과 같은 이유 — `next dev`의 첫 라우트 컴파일이 CI에서 30초를 넘길 수 있다.
+  timeout: process.env.CI ? 60_000 : 30_000,
   snapshotPathTemplate:
     "{testDir}/__screenshots__/{projectName}/{testFilePath}/{arg}{ext}",
   expect: {

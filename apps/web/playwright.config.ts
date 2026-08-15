@@ -7,7 +7,10 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
   workers: 2,
-  timeout: 30_000,
+  // e2e 서버는 `next dev`라 라우트를 처음 열 때 그 자리에서 컴파일한다. CI 러너에서는
+  // 워커 두 개가 서로 다른 라우트를 동시에 처음 열면 이 컴파일이 30초를 넘겨 page.goto가
+  // 타임아웃난다(제품 문제가 아니라 첫 컴파일 대기). CI에서만 여유를 준다.
+  timeout: process.env.CI ? 60_000 : 30_000,
   expect: { timeout: 5_000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
