@@ -168,6 +168,21 @@ function contrastIncomplete(results: { incomplete: IncompleteRule[] }) {
     .filter((rule) => rule.nodes.length > 0);
 }
 
+/**
+ * 화면의 이미지가 다 자리잡을 때까지 기다린다.
+ *
+ * 스티커 타일은 next/image 로 지연 로드된다. 로딩 중인 이미지가 섞인 채 스캔하면 그 위 글자의
+ * 배경이 그때그때 달라져 판정이 흔들린다(전체 실행에서 한 번 /decorate 가 그렇게 실패했다).
+ * 아직 뷰포트에 안 들어온 이미지는 영영 로드되지 않으므로, "로딩 중"인 것만 기다린다.
+ */
+async function waitForImagesToSettle(page: Page) {
+  await page.waitForFunction(() =>
+    Array.from(document.images).every(
+      (image) => image.complete || !image.getBoundingClientRect().width,
+    ),
+  );
+}
+
 async function expectNoAccessibilityViolations(page: Page, route?: string) {
   await page.locator("body").waitFor({ state: "visible" });
   // 스캔 직전에 한 번 더 확인한다. goto 직후에만 보면 "한 순간 그 경로였다"만 보장돼,
@@ -175,6 +190,7 @@ async function expectNoAccessibilityViolations(page: Page, route?: string) {
   if (route) expect(new URL(page.url()).pathname).toBe(route);
   await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
   await page.addStyleTag({ content: FLATTEN_PAGE_GRADIENT_CSS });
+  await waitForImagesToSettle(page);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])

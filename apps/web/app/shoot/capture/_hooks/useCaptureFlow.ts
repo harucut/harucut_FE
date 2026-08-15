@@ -191,7 +191,7 @@ export function useCaptureFlow() {
 
   // 현재 프레임을 캡처. 전면(user) 카메라만 셀피 감각을 위해 좌우반전하고,
   // 후면(environment) 카메라는 반전하지 않는다(간판·텍스트가 뒤집혀 저장되던 버그 수정).
-  const capturePhotoToDataUrl = useCallback(() => {
+  const capturePhotoToDataUrl = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return null;
 
     const video = videoRef.current;
@@ -231,21 +231,45 @@ export function useCaptureFlow() {
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    // 셔터음은 인코딩을 기다리지 않고 즉시 낸다 — 누른 순간과 소리가 붙어 있어야 한다.
     playShutterSound();
-    return dataUrl;
+
+    // toDataURL 은 메인 스레드에서 동기로 JPEG 을 인코딩한다. 촬영 한 장에 100ms 대가
+    // 통째로 멈춰서, 8 연사 동안 카운트다운과 프리뷰가 눈에 띄게 끊겼다.
+    // toBlob 은 인코딩을 브라우저에 맡기고 콜백으로 돌려주므로 그 구간이 사라진다.
+    return await new Promise<string | null>((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(null);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
   }, [playShutterSound, captureSlot, cameraFacingMode]);
 
   // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
   // state updater 안에서 호출하지 않는다 — 라우팅 같은 사이드 이펙트가 함께 실행되므로
-  const finishSingleShot = useCallback(() => {
-    // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리
+  const finishSingleShot = useCallback(async () => {
+    // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리.
+    // 인코딩을 기다리는 동안에도 다른 트리거가 끼어들 수 있으므로 await 전에 선점한다.
     if (lastFinishedShotRef.current >= shotCount) return;
-
-    const photoDataUrl = capturePhotoToDataUrl();
-    if (!photoDataUrl) return;
-
     lastFinishedShotRef.current = shotCount;
+
+    const photoDataUrl = await capturePhotoToDataUrl();
+    if (!photoDataUrl) {
+      // 인코딩이 실패했으면 이 컷은 아직 안 찍힌 것이다. 선점을 되돌려 다시 시도할 수 있게 한다.
+      lastFinishedShotRef.current = shotCount - 1;
+      return;
+    }
+
     addShotPhoto(photoDataUrl);
 
     const next = shotCount + 1;
@@ -296,7 +320,7 @@ export function useCaptureFlow() {
       countdownTimerRef.current = null;
       // 이 effect는 isShooting/countdown 변경마다 재실행되므로 closure 값이 최신
       if (shooting.countdown !== null && shooting.countdown <= 1) {
-        finishSingleShot();
+        void finishSingleShot();
         return;
       }
 
@@ -316,7 +340,7 @@ export function useCaptureFlow() {
 
   const handleShootNow = useCallback(() => {
     if (!shooting.isShooting || !isCameraReady) return;
-    finishSingleShot();
+    void finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
   // 촬영 취소: 진행 중인 카운트다운을 즉시 끊고 세션을 시작 전 상태로 되돌린다.

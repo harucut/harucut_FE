@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { STICKERS } from "@/constants/stickers.generated";
 import { useDecorateStore } from "@/lib/decorateStore";
 import type { TextStyleJson } from "@/lib/types/themeEditor";
@@ -200,10 +202,13 @@ export function DecoratePanel() {
               onClick={() => addSticker(sticker.src)}
               className="aspect-square rounded-lg border border-zinc-800 bg-zinc-950/60 p-1 transition hover:border-zinc-600"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              {/* 타일은 축소본으로 받는다(원본 39장 합계 40MB). 캔버스에는 원본을 얹는다. */}
+              <Image
                 src={sticker.src}
                 alt={sticker.name ?? "스티커"}
+                width={72}
+                height={72}
+                sizes="72px"
                 className="h-full w-full object-contain"
               />
             </button>

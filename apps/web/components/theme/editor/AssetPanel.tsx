@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import React, { useRef, useState } from "react";
 import { ImagePlus, Scissors, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
@@ -266,10 +268,17 @@ function StickerTab() {
               "
               title={sticker.name ?? "sticker"}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              {/*
+                72px 타일에 원본 PNG(최대 2MB, 39장 합계 40MB)를 그대로 내려받고 있었다.
+                next/image 로 바꾸면 같은 파일이 3KB대로 줄고 화면 밖 타일은 늦게 받는다.
+                캔버스에 얹을 때는 원본(sticker.src)을 그대로 쓴다.
+              */}
+              <Image
                 src={sticker.src}
-                alt={sticker.name ?? "sticker"}
+                alt={sticker.name ?? "스티커"}
+                width={72}
+                height={72}
+                sizes="72px"
                 className="h-full w-full object-contain p-2"
                 draggable={false}
               />
