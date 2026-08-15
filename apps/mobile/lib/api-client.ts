@@ -1,4 +1,8 @@
-import { getApiErrorMessageByCode, getPlanErrorMessage } from '@harucut/shared';
+import {
+  CLIENT_REISSUE_UNAVAILABLE_CODE,
+  getApiErrorMessageByCode,
+  getPlanErrorMessage,
+} from '@harucut/shared';
 import Constants from 'expo-constants';
 
 export type ApiEnvelope<T> = {
@@ -246,8 +250,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
     }
 
     // 재발급이 일시적으로 불가능했던 경우(unavailable)는 세션 만료로 단정하지 않는다.
-    // 최초 401을 그대로 던져 화면이 재시도 가능한 API 오류로 다루게 한다.
-    if (response.status === 401 && reissue !== 'unavailable') {
+    // 최초 401을 그대로 올리면 화면이 AUTH-012를 읽어 "로그인이 만료됐어요"를 띄우므로,
+    // 세션이 멀쩡한 사용자가 재로그인하게 된다. 재시도 가능한 오류로 바꿔 던진다.
+    if (response.status === 401 && reissue === 'unavailable') {
+      throw new ApiRequestError({
+        apiMessage: null,
+        code: CLIENT_REISSUE_UNAVAILABLE_CODE,
+        status: 503,
+      });
+    }
+
+    if (response.status === 401) {
       onSessionExpired?.();
     }
   }

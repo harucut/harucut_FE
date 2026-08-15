@@ -10,6 +10,7 @@ export {
 export { PLAN_ERROR_MESSAGES, getPlanErrorMessage } from './plan-errors';
 export {
   API_ERROR_MESSAGES,
+  CLIENT_REISSUE_UNAVAILABLE_CODE,
   getApiErrorMessageByCode,
 } from './api-error-messages';
 export {

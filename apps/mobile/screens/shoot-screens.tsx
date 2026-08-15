@@ -180,43 +180,52 @@ export function ShootCaptureScreen() {
     };
   }, []);
 
-  // 촬영본이 있는데 안드로이드 하드웨어 백을 누르면, 확인 없이 사진이 사라지지 않도록
-  // 확인 다이얼로그를 띄운다(화면이 포커스일 때만 백 이벤트를 가로챈다).
+  /**
+   * 촬영본이 있는 상태의 이탈을 한 번 확인받는다.
+   *
+   * 촬영본이 없으면 확인 없이 그대로 나간다(돌려주는 false로 호출부가 판단).
+   * 안드로이드 하드웨어 백과 헤더의 "프레임 다시 선택"이 같은 흐름을 쓴다 —
+   * 하드웨어 백이 없는 iOS에서는 헤더가 주된 이탈 수단이라, 한쪽만 막으면 의미가 없다.
+   */
+  const confirmLeaveCapture = useCallback(() => {
+    if (shoot.shots.length === 0) return false;
+    // 사용자가 고르는 동안 자동 촬영을 멈춘다. 재개는 확인창이 닫힐 때 아래 effect가 맡는다
+    // (배경 탭이나 모달 백버튼으로 닫아도 멈춘 채로 남지 않게).
+    burstPausedRef.current = true;
+    showNotice({
+      actions: [
+        // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
+        // 둘 다 'dismiss'면 키가 겹쳐 버튼이 누락되거나 이전 핸들러가 재사용된다.
+        { id: 'dismiss', label: '계속 촬영', variant: 'secondary' },
+        {
+          id: 'leave-capture',
+          label: '나가기',
+          variant: 'danger',
+          onPress: () => {
+            burstAbortedRef.current = true;
+            burstPausedRef.current = false;
+            resetShootSession();
+            router.replace('/shoot' as never);
+          },
+        },
+      ],
+      eyebrow: 'LEAVE CAPTURE',
+      icon: 'warning-outline',
+      message: '지금 나가면 찍은 사진이 모두 사라져요. 정말 나갈까요?',
+      title: '촬영을 그만둘까요?',
+    });
+    return true;
+  }, [shoot.shots.length, showNotice, resetShootSession, router]);
+
+  // 화면이 포커스일 때만 하드웨어 백 이벤트를 가로챈다.
   useFocusEffect(
     useCallback(() => {
-      const onBack = () => {
-        if (shoot.shots.length === 0) return false;
-        // 사용자가 고르는 동안 자동 촬영을 멈춘다. 재개는 확인창이 닫힐 때 아래 effect가 맡는다
-        // (배경 탭이나 모달 백버튼으로 닫아도 멈춘 채로 남지 않게).
-        burstPausedRef.current = true;
-        showNotice({
-          actions: [
-            // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
-            // 둘 다 'dismiss'면 키가 겹쳐 버튼이 누락되거나 이전 핸들러가 재사용된다.
-            { id: 'dismiss', label: '계속 촬영', variant: 'secondary' },
-            {
-              id: 'leave-capture',
-              label: '나가기',
-              variant: 'danger',
-              onPress: () => {
-                burstAbortedRef.current = true;
-                burstPausedRef.current = false;
-                resetShootSession();
-                router.replace('/shoot' as never);
-              },
-            },
-          ],
-          eyebrow: 'LEAVE CAPTURE',
-          icon: 'warning-outline',
-          message: '지금 나가면 찍은 사진이 모두 사라져요. 정말 나갈까요?',
-          title: '촬영을 그만둘까요?',
-        });
-        return true;
-      };
-
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBack);
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        confirmLeaveCapture,
+      );
       return () => subscription.remove();
-    }, [shoot.shots.length, showNotice, resetShootSession, router]),
+    }, [confirmLeaveCapture]),
   );
 
   // 확인창이 닫히면 자동 촬영을 재개한다. "계속 촬영" 버튼뿐 아니라 배경 탭·모달 백버튼으로
@@ -369,7 +378,11 @@ export function ShootCaptureScreen() {
     <AppScrollView>
       <PageHeader
         backLabel="프레임 다시 선택"
-        onPressBack={() => push('/shoot')}
+        // 하드웨어 백과 같은 확인 흐름을 태운다. 확인창을 띄웠으면 여기서 이동하지 않는다.
+        onPressBack={() => {
+          if (confirmLeaveCapture()) return;
+          push('/shoot');
+        }}
         title="사진 촬영"
       />
 

@@ -7,7 +7,19 @@
 // 유일한 예외는 검증 실패(GEN-003)다 — 이때만 data[]의 FieldErrorResponse.message가 한국어라
 // 그 값을 우선 쓴다(getApiErrorDetails의 fieldErrors 참고).
 
+/**
+ * 서버 코드가 아니라 클라이언트가 만들어 쓰는 코드. 서버 코드와 절대 겹치지 않게 접두사를 나눈다.
+ *
+ * 액세스 토큰 재발급이 5xx·네트워크 오류로 실패한 경우에 쓴다. 이때 최초 401을 그대로
+ * 올리면 화면이 "로그인이 만료됐어요"(AUTH-012)를 띄워, 세션이 멀쩡한 사용자를 재로그인시킨다.
+ */
+export const CLIENT_REISSUE_UNAVAILABLE_CODE = 'CLIENT-001';
+
 export const API_ERROR_MESSAGES: Record<string, string> = {
+  // ── 클라이언트 자체 코드 ──
+  [CLIENT_REISSUE_UNAVAILABLE_CODE]:
+    '일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.',
+
   // ── 공통 ──
   'GEN-001': '요청이 올바르지 않아요.',
   'GEN-002': '입력값을 다시 확인해 주세요.',

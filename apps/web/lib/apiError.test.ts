@@ -1,3 +1,4 @@
+import { CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 
 describe("apiError helpers", () => {
@@ -110,5 +111,18 @@ describe("apiError helpers", () => {
     );
 
     expect(message).toBe("저장에 실패했어요.");
+  });
+
+  // 재발급 엔드포인트가 5xx·네트워크 오류로 답하지 못한 경우. 최초 401을 그대로 올리면
+  // AUTH-012가 읽혀 "로그인이 만료됐어요"가 뜨고 멀쩡한 세션이 재로그인으로 밀린다.
+  it("shows a retryable message when token reissue was unavailable", () => {
+    const message = getUserFacingApiErrorMessage(
+      { status: 503, code: CLIENT_REISSUE_UNAVAILABLE_CODE },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe(
+      "일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    );
   });
 });

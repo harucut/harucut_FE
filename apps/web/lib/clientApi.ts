@@ -1,5 +1,7 @@
 "use client";
 
+import { CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
+
 type ApiEnvelopeLike = {
   code?: string;
   status?: number;
@@ -135,9 +137,19 @@ async function request<T>(
     if (reissue === "ok") {
       res = await doFetch();
     }
+
     // 재발급 서버가 일시적으로 못 답한 경우(unavailable)는 세션 만료로 단정하지 않는다.
-    // 최초 401을 그대로 돌려보내 화면이 재시도 가능한 API 오류로 다루게 한다.
-    if (res.status === 401 && reissue !== "unavailable") {
+    // 최초 401을 그대로 올리면 화면이 AUTH-012를 읽어 "로그인이 만료됐어요"를 띄우므로,
+    // 세션이 멀쩡한 사용자가 재로그인하게 된다. 재시도 가능한 오류로 바꿔 던진다.
+    if (res.status === 401 && reissue === "unavailable") {
+      throw new ApiRequestError({
+        status: 503,
+        code: CLIENT_REISSUE_UNAVAILABLE_CODE,
+        apiMessage: null,
+      });
+    }
+
+    if (res.status === 401) {
       onSessionExpired?.();
     }
   }
