@@ -32,7 +32,8 @@ const PLANS: Plan[] = [
       ['사진 보관 기간', true, '3일'],
       // 보정은 아직 플랜으로 막지 않는다(웹 constants/plans.ts와 같은 이유).
       ['보정', false, '결제 오픈 전까지 이용 가능'],
-      ['광고 제거', false, '보정·다운로드 시 노출'],
+      // 광고 역시 아직 붙이지 않았다(웹 constants/plans.ts와 같은 이유).
+      ['광고 제거', false, '결제 오픈 후 보정·다운로드 시 노출'],
       ['AI (추후)', false],
     ],
     id: 'basic',
