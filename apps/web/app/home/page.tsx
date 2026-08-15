@@ -205,7 +205,7 @@ export default function HomePage() {
   const weekCountLabel = statsUnknown ? "—" : `${weekCount}컷`;
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav userInitial={user?.username} />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
@@ -331,7 +331,11 @@ export default function HomePage() {
           <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
             {monthCountLabel}
           </span>
-          <p className="flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
+          {/*
+            불러오기 전후로 줄 수가 달라져 카드 높이가 바뀌었다(첫 화면 CLS 0.007 지분).
+            두 줄 자리를 미리 잡아 둔다 — 13px × 1.45 × 2줄.
+          */}
+          <p className="min-h-[38px] flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
             {statsUnknown ? (
               "기록을 불러오지 못해 이번 달 기록 수를 알 수 없어요."
             ) : (

@@ -27,12 +27,12 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   return (
     <nav
       aria-label="주요 메뉴"
-      className="fixed inset-x-0 bottom-0 z-40 flex h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-2 backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
     >
       <Link
         href="/home"
         aria-label="홈"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/home")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
@@ -45,7 +45,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/history"
         aria-label="기록"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/history")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
@@ -79,7 +79,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/theme"
         aria-label="프레임"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/theme")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
@@ -92,7 +92,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/mypage"
         aria-label="MY"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/mypage")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"

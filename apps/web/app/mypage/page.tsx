@@ -637,7 +637,7 @@ export default function MyPage() {
   );
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav userInitial={user?.username} />
 
       <div className="mx-auto w-full max-w-[1000px] px-4 py-5 sm:py-6 lg:py-8">

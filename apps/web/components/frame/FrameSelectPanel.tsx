@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import type { FrameId } from "@/constants/frames";
@@ -61,13 +61,39 @@ export function FrameSelectPanel({
     [selectedIndexes],
   );
   const canProceed = selectedCount === maxSelect;
+  const isFull = selectedCount >= maxSelect;
+
+  // 4장을 다 고른 뒤 다섯 번째를 누르면 아무 일도 일어나지 않았다 — 스토어가 조용히 무시한다.
+  // 눌린 게 안 먹힌 건지 사진이 잘못된 건지 알 길이 없어서, 왜 안 되는지 말해 준다.
+  const [limitNotice, setLimitNotice] = useState(false);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  const handleToggle = useCallback(
+    (index: number, alreadySelected: boolean) => {
+      if (isFull && !alreadySelected) {
+        setLimitNotice(true);
+        if (noticeTimer.current) clearTimeout(noticeTimer.current);
+        noticeTimer.current = setTimeout(() => setLimitNotice(false), 2600);
+        return;
+      }
+      setLimitNotice(false);
+      onToggleSelect(index);
+    },
+    [isFull, onToggleSelect],
+  );
 
   return (
     <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
       <section className="flex flex-col gap-3">
         {frameId ? (
-          <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 lg:hidden">
-            <p className="text-sm font-semibold text-zinc-100">프레임 미리보기</p>
+          <section className="flex flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:hidden">
+            <p className="text-sm font-semibold text-[color:var(--hc-text)]">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview
                 frameId={frameId}
@@ -83,7 +109,7 @@ export function FrameSelectPanel({
 
         <section className="space-y-2">
           {baseItems.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-4 text-center text-[11px] text-zinc-500">
+            <div className="rounded-2xl border border-dashed border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 text-center text-[12px] text-[color:var(--hc-muted)]">
               {emptyStateText}
             </div>
           ) : (
@@ -97,18 +123,22 @@ export function FrameSelectPanel({
                   <button
                     key={index}
                     type="button"
-                    onClick={() => onToggleSelect(index)}
+                    onClick={() => handleToggle(index, isSelected)}
                     aria-pressed={isSelected}
                     aria-label={
                       isSelected
                         ? `${index + 1}번 사진 선택 해제 (현재 ${order}번째로 선택됨)`
-                        : `${index + 1}번 사진 선택`
+                        : isFull
+                          ? `${index + 1}번 사진 — ${maxSelect}장을 다 골라 더 선택할 수 없어요`
+                          : `${index + 1}번 사진 선택`
                     }
                     className={[
                       "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
                         ? "border-[color:var(--hc-primary)] ring-2 ring-[color:var(--hc-accent-soft-border)]"
-                        : "border-zinc-700 hover:border-zinc-500",
+                        : isFull
+                          ? "border-[color:var(--hc-border)] opacity-45"
+                          : "border-[color:var(--hc-border)] hover:border-[color:var(--hc-border-strong)]",
                     ].join(" ")}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -134,11 +164,30 @@ export function FrameSelectPanel({
           )}
         </section>
 
-        <section className="flex items-center justify-between text-[11px] text-zinc-400">
+        {/*
+          role="status" 로 둬서 스크린리더도 듣는다. 자리를 항상 차지하게 두면 문구가 떴다
+          사라질 때 아래 버튼이 밀리지 않는다.
+        */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={[
+            "min-h-[18px] text-[12px] transition-opacity",
+            limitNotice
+              ? "text-[color:var(--hc-danger)] opacity-100"
+              : "text-[color:var(--hc-muted)] opacity-0",
+          ].join(" ")}
+        >
+          {limitNotice
+            ? `${maxSelect}장까지만 담을 수 있어요. 바꾸려면 담은 사진을 먼저 눌러 빼 주세요.`
+            : ""}
+        </p>
+
+        <section className="flex items-center justify-between text-[11px] text-[color:var(--hc-muted)]">
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex w-fit items-center gap-1 rounded-full border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-400 hover:bg-zinc-900"
+            className="inline-flex w-fit items-center gap-1 rounded-full border border-[color:var(--hc-border)] px-2.5 py-1.5 text-[11px] text-[color:var(--hc-muted)] transition hover:border-[color:var(--hc-border-strong)] hover:text-[color:var(--hc-text)]"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             선택 초기화
@@ -157,8 +206,8 @@ export function FrameSelectPanel({
 
       <aside className="flex flex-col gap-3 lg:sticky lg:top-6">
         {frameId ? (
-          <section className="hidden flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 lg:flex">
-            <p className="text-sm font-semibold text-zinc-100">프레임 미리보기</p>
+          <section className="hidden flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:flex">
+            <p className="text-sm font-semibold text-[color:var(--hc-text)]">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview
                 frameId={frameId}

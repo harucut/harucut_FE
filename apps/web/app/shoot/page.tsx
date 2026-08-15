@@ -21,8 +21,11 @@ function ShootPageContent() {
   const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
-  const [manualSelectedFrameId, setManualSelectedFrameId] = useState<FrameId | null>(
-    queriedFrameId ?? null,
+  // 기본값을 둔다. /upload·/theme 는 "classic-4" 로 시작하는데 여기만 null 이라,
+  // 촬영으로 들어온 사람이 유일하게 비활성 버튼("촬영할 프레임을 선택해주세요")을 먼저 봤다.
+  // 가장 흔한 4컷을 미리 골라 두고 바꾸고 싶으면 바꾸게 한다.
+  const [manualSelectedFrameId, setManualSelectedFrameId] = useState<FrameId>(
+    queriedFrameId ?? "classic-4",
   );
   const [selectedRemoteFrameId, setSelectedRemoteFrameId] = useState<number | null>(
     Number.isFinite(queriedRemoteFrameId) && queriedRemoteFrameId > 0
@@ -72,8 +75,7 @@ function ShootPageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmFrame}
-          confirmDisabled={!selectedFrameId}
-          confirmLabel={selectedFrameId ? "촬영 시작하기" : "촬영할 프레임을 선택해주세요"}
+          confirmLabel="촬영 시작하기"
         />
 
         {accessMode === "member" ? (

@@ -311,6 +311,37 @@ body {
   }
 
   /*
+    터치 기기의 최소 탭 영역. 시각 크기는 그대로 두고 눌리는 면만 넓힌다.
+    아이콘만 있는 버튼(h-8 w-8 = 32px)이나 얇은 칩이 손가락으로는 잘 안 눌렸다.
+    WCAG 2.5.8(AA)의 24px 은 어디서나 넘기고, 독립 컨트롤은 44px 를 목표로 한다.
+    문장 안에 들어간 인라인 링크는 대상에서 뺀다 — 줄 높이를 밀어 본문이 깨진다.
+  */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    a[class*="rounded-full"],
+    a[class*="inline-flex"] {
+      min-height: 44px;
+    }
+
+    button[class*="h-8"][class*="w-8"],
+    button[class*="h-9"][class*="w-9"] {
+      min-width: 44px;
+    }
+
+    /*
+      문장 안이 아닌 "홈으로"·"요금제 보기" 같은 밑줄 링크는 독립 컨트롤인데 높이가
+      14~20px 였다. 줄 높이를 밀지 않도록 세로 패딩 대신 인라인 블록 최소 높이를 준다.
+      WCAG 2.5.8(AA) 의 24px 를 하한으로 잡는다.
+    */
+    a[class*="underline"] {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+    }
+  }
+
+  /*
     등장 래퍼는 flex/grid 아이템으로 자주 쓰인다. min-width: auto 로 두면 안쪽 콘텐츠의
     최소 폭이 그대로 최소 폭이 돼 좁은 화면에서 넘친다(랜딩이 320px 에서 71px 넘쳤다).
   */
