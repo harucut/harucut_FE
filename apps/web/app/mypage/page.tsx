@@ -6,6 +6,7 @@ import {
   ReactElement,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -262,6 +263,10 @@ export default function MyPage() {
     }
   };
 
+  // 업로드에 성공하면 input 의 값도 비운다. 값을 남겨 두면 같은 파일을 다시 골랐을 때
+  // change 가 발생하지 않아 아무 일도 일어나지 않는다.
+  const profileInputRef = useRef<HTMLInputElement | null>(null);
+
   const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     setProfileFile(e.target.files?.[0] ?? null);
   };
@@ -279,6 +284,7 @@ export default function MyPage() {
       await uploadProfileImage(profileFile);
       await fetchUser();
       setProfileFile(null);
+      if (profileInputRef.current) profileInputRef.current.value = "";
       alert("프로필 이미지가 변경되었어요.");
     } catch (error) {
       console.error(error);
@@ -504,6 +510,7 @@ export default function MyPage() {
         <div className="flex items-center gap-2">
           <input
             id="mypage-profile-image"
+            ref={profileInputRef}
             type="file"
             accept={SUPPORTED_IMAGE_ACCEPT}
             onChange={handleProfileFileChange}

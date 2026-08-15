@@ -299,6 +299,25 @@ body {
   truncate 를 준 요소가 잘리지 않고 여러 줄로 감겼다.
 */
 @layer base {
+  /*
+    입력 요소는 기본 고유 폭이 20글자쯤 된다(실측 213px). flex/grid 안에서는 그 값이
+    최소 폭으로 작용해 w-full 을 줘도 줄어들지 않고, 좁은 화면에서 컨테이너를 밀어
+    가로 스크롤을 만든다. 320px 에서 비밀번호 찾기가 그랬다.
+  */
+  input,
+  select,
+  textarea {
+    min-width: 0;
+  }
+
+  /*
+    등장 래퍼는 flex/grid 아이템으로 자주 쓰인다. min-width: auto 로 두면 안쪽 콘텐츠의
+    최소 폭이 그대로 최소 폭이 돼 좁은 화면에서 넘친다(랜딩이 320px 에서 71px 넘쳤다).
+  */
+  .hc-reveal {
+    min-width: 0;
+  }
+
   h1,
   h2,
   h3 {

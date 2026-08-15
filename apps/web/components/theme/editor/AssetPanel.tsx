@@ -95,10 +95,14 @@ function PhotoTab() {
         multiple
         className="hidden"
         onChange={async (event) => {
-          if (!event.target.files) return;
+          // currentTarget 은 핸들러가 반환되면 null 이 된다. await 뒤에 만지면 TypeError 가 나고,
+          // 그 바람에 아래 value 초기화가 실행되지 않아 같은 파일을 다시 고르면 change 가
+          // 발생하지 않았다(무반응). 시작할 때 요소를 잡아 둔다.
+          const input = event.currentTarget;
+          if (!input.files) return;
 
           // 지원하지 않는 형식은 올리기 전에 걸러 사유를 먼저 알려준다.
-          const picked = Array.from(event.target.files);
+          const picked = Array.from(input.files);
           const supported = picked.filter(isSupportedUploadFile);
           const skipped = picked.length - supported.length;
 
@@ -107,7 +111,7 @@ function PhotoTab() {
           }
 
           if (supported.length === 0) {
-            event.currentTarget.value = "";
+            input.value = "";
             return;
           }
 
@@ -117,7 +121,7 @@ function PhotoTab() {
             alert(`${result.failed}개의 파일 업로드에 실패했어요.`);
           }
           setIsUploading(false);
-          event.currentTarget.value = "";
+          input.value = "";
         }}
       />
 

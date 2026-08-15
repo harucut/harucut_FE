@@ -11,6 +11,7 @@ import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { clientApi } from "@/lib/clientApi";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import {
@@ -96,8 +97,14 @@ function LoginPageContent() {
       window.location.href = redirectTarget;
     } catch (error) {
       console.error(error);
+      // 실패 원인은 하나가 아니다 — 가입되지 않은 계정(AUTH-020), 이메일 미인증(AUTH-004),
+      // 탈퇴한 계정(AUTH-006), 네트워크 장애까지 전부 "비밀번호가 틀렸다"로 말하면
+      // 사용자는 맞는 비밀번호를 계속 다시 친다. 서버 코드에 맞는 문구를 쓴다.
       setErrors({
-        common: "이메일 또는 비밀번호가 올바르지 않아요.",
+        common: getUserFacingApiErrorMessage(
+          error,
+          "이메일 또는 비밀번호가 올바르지 않아요.",
+        ),
       });
     } finally {
       setIsSubmitting(false);

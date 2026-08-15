@@ -262,8 +262,10 @@ export function LandingView() {
 
           {/* 같은 프레임·같은 사진, 꾸미기만 다르게 — 실제 렌더러로 그린 대비 */}
           <Reveal delay={140}>
-            <div className="flex items-center justify-center gap-4 sm:gap-7">
-              <div className="h-[210px] opacity-40 grayscale sm:h-[268px]">
+            {/* 높이로 폭이 정해지는 미리보기 두 장이라, 좁은 화면에서는 높이를 같이 줄여야
+                가로로 넘치지 않는다(320px 에서 21px 넘쳤다). clamp 로 매끄럽게 줄인다. */}
+            <div className="flex items-center justify-center gap-3 sm:gap-7">
+              <div className="h-[clamp(130px,34vw,268px)] opacity-40 grayscale">
                 <FramePreview
                   frameId="grid-4"
                   images={HERO_IMAGES}
@@ -277,7 +279,7 @@ export function LandingView() {
                 className="h-[1px] w-6 shrink-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,.28)_0_4px,transparent_4px_8px)] sm:w-9"
               />
 
-              <div className="h-[250px] drop-shadow-2xl sm:h-[320px]">
+              <div className="h-[clamp(156px,41vw,320px)] drop-shadow-2xl">
                 <FramePreview
                   frameId="grid-4"
                   images={HERO_IMAGES}
