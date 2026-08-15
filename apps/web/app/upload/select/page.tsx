@@ -129,7 +129,7 @@ export default function UploadSelectPage() {
               />
 
               {uploadNotice ? (
-                <p className="text-[10px] leading-4 text-red-300">
+                <p className="text-[10px] leading-4 text-[color:var(--hc-danger)]">
                   {uploadNotice}
                 </p>
               ) : null}

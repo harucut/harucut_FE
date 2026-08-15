@@ -388,7 +388,7 @@ export default function UploadResultPage() {
           />
         </section>
 
-        {imageError ? <p className="text-[11px] text-red-500">{imageError}</p> : null}
+        {imageError ? <p className="text-[11px] text-[color:var(--hc-danger)]">{imageError}</p> : null}
 
         {imageState === "error" ? (
           <button

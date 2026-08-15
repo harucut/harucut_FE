@@ -169,7 +169,7 @@ function SignupPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+          <p className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
             {errors.common}
           </p>
         ) : null}
@@ -246,7 +246,7 @@ function SignupPageContent() {
             </label>
           ))}
           {errors.consent ? (
-            <p className="text-[11px] text-red-300">{errors.consent}</p>
+            <p className="text-[11px] text-[color:var(--hc-danger)]">{errors.consent}</p>
           ) : null}
         </fieldset>
 

@@ -115,7 +115,7 @@ export function EmailCodeSection({
             <div
               className={`rounded-2xl border px-3 py-2 ${
                 isExpired
-                  ? "border-red-500/30 bg-red-500/10"
+                  ? "border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)]"
                   : "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)]"
               }`}
             >
@@ -124,12 +124,12 @@ export function EmailCodeSection({
                   <Clock3
                     size={14}
                     className={
-                      isExpired ? "text-red-200" : "text-[color:var(--hc-primary-strong)]"
+                      isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-primary-strong)]"
                     }
                   />
                   <p
                     className={`text-[10px] ${
-                      isExpired ? "text-red-200" : "text-[color:var(--hc-text)]"
+                      isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-text)]"
                     }`}
                   >
                     {isExpired
@@ -185,7 +185,7 @@ export function EmailCodeSection({
           </div>
 
           {codeError ? (
-            <p className="text-[11px] text-red-200">{codeError}</p>
+            <p className="text-[11px] text-[color:var(--hc-danger)]">{codeError}</p>
           ) : null}
         </>
       )}

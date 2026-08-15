@@ -10,6 +10,11 @@
   /* 라이트에서 초록 "글자"는 전부 이 값을 쓴다. --hc-primary(#16b454)는 흰 배경 2.4:1이라 글자로 못 쓴다.
      accent-soft 배경(#dbebdf) 위에서도 4.5:1을 넘도록 #0e7e39(4.18)에서 한 단계 더 내렸다. */
   --hc-primary-strong: #0b6b30;
+  /* 위험/오류. zinc 별칭과 달리 red-* 는 테마 재매핑이 없어서, 라이트에서 그대로 쓰면
+     되돌릴 수 없는 "삭제" 버튼이 1.29:1 로 거의 안 보였다. 토큰으로 승격한다. */
+  --hc-danger: #b42318;
+  --hc-danger-border: rgba(180, 35, 24, 0.34);
+  --hc-danger-soft-bg: rgba(180, 35, 24, 0.08);
   --hc-primary-hover: #129a47;
   --hc-primary-contrast: #06140a;
   --hc-background-tint: #f1f1ee;
@@ -109,6 +114,9 @@ html[data-theme="dark"] {
   --foreground: #ffffff;
   --hc-primary: #1ed760;
   --hc-primary-strong: #56dd86;
+  --hc-danger: #ffb4ab;
+  --hc-danger-border: rgba(255, 140, 130, 0.35);
+  --hc-danger-soft-bg: rgba(255, 90, 80, 0.12);
   --hc-primary-hover: #1fe267;
   --hc-primary-contrast: #06140a;
   --hc-background-tint: #161617;
@@ -284,19 +292,27 @@ body {
   background-color: var(--hc-surface-muted-hover) !important;
 }
 
-h1,
-h2,
-h3 {
-  text-wrap: balance;
-}
+/*
+  줄바꿈 품질 기본값. @layer base 안에 둬야 한다 — 레이어 없이 선언하면 Tailwind 유틸리티
+  (레이어 안에 있다)를 항상 이겨서, text-wrap 이 white-space 축을 점유하는 바람에
+  `truncate`/`whitespace-nowrap` 이 앱 전체에서 무력화된다. 실제로 그랬다:
+  truncate 를 준 요소가 잘리지 않고 여러 줄로 감겼다.
+*/
+@layer base {
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
 
-p,
-li,
-button,
-a,
-label,
-span {
-  text-wrap: pretty;
+  p,
+  li,
+  button,
+  a,
+  label,
+  span {
+    text-wrap: pretty;
+  }
 }
 
 .hc-page-app {

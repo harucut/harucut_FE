@@ -406,7 +406,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           <div className="flex flex-col">
             <BrandMark href="/home" compact className="opacity-80" />
             {loadError ? (
-              <p className="mt-1 text-[11px] text-red-300">{loadError}</p>
+              <p className="mt-1 text-[11px] text-[color:var(--hc-danger)]">{loadError}</p>
             ) : null}
           </div>
 
@@ -416,7 +416,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 type="button"
                 onClick={onDelete}
                 disabled={isDeleting || isSaving}
-                className="rounded-full border border-red-500/40 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                className="rounded-full border border-[color:var(--hc-danger-border)] px-4 py-2 text-xs font-semibold text-[color:var(--hc-danger)] hover:bg-[color:var(--hc-danger-soft-bg)] disabled:opacity-50"
               >
                 {isDeleting ? "삭제 중..." : "삭제"}
               </button>
@@ -526,7 +526,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 ) : null}
               </div>
               {backgroundError ? (
-                <p className="text-[11px] leading-4 text-red-300">
+                <p className="text-[11px] leading-4 text-[color:var(--hc-danger)]">
                   {backgroundError}
                 </p>
               ) : null}
@@ -610,7 +610,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 />
               </label>
               {saveDialogError ? (
-                <p className="text-[11px] leading-5 text-red-300">
+                <p className="text-[11px] leading-5 text-[color:var(--hc-danger)]">
                   {saveDialogError}
                 </p>
               ) : null}

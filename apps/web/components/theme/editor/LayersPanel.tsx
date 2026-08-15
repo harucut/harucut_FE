@@ -176,7 +176,7 @@ function LayerRow({
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 min-w-0"
       >
-        <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-200">
+        <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200">
           {c.type}
         </span>
 
@@ -191,14 +191,14 @@ function LayerRow({
             />
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-black/30 flex items-center justify-center text-[10px] text-zinc-300">
+          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-black/30 flex items-center justify-center text-[11px] text-zinc-300">
             T
           </div>
         )}
 
         <div className="min-w-0">
           <p className="text-xs text-zinc-200 truncate">{title}</p>
-          <p className="text-[10px] text-zinc-500">zIndex {c.zIndex}</p>
+          <p className="text-[11px] text-zinc-500">zIndex {c.zIndex}</p>
         </div>
       </button>
 
@@ -236,7 +236,7 @@ function MiniIconBtn({
       className={[
         "rounded-lg border p-2 inline-flex items-center justify-center",
         danger
-          ? "border-red-800/70 bg-red-950 text-red-200 hover:bg-red-900/60"
+          ? "border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] text-[color:var(--hc-danger)] hover:brightness-110"
           : active
           ? "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)] hover:bg-[color:var(--hc-accent-soft-bg)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] text-[color:var(--hc-muted)] hover:bg-[color:var(--hc-background-tint)]",

@@ -35,7 +35,7 @@ export function AuthField({
           type={inputType}
           className={[
             "hc-input h-9 w-full rounded-lg border px-3 pr-12 text-[11px]",
-            error ? "border-red-400/70" : "",
+            error ? "border-[color:var(--hc-danger-border)]" : "",
           ].join(" ")}
           {...inputProps}
         />
@@ -54,7 +54,7 @@ export function AuthField({
       </div>
 
       {error ? (
-        <p className="text-[10px] leading-relaxed text-red-400">{error}</p>
+        <p className="text-[10px] leading-relaxed text-[color:var(--hc-danger)]">{error}</p>
       ) : null}
     </div>
   );

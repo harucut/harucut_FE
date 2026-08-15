@@ -256,7 +256,7 @@ export function DecoratePanel() {
               <button
                 type="button"
                 onClick={removeActive}
-                className="rounded-full border border-red-500/40 px-3 py-1.5 text-[11px] text-red-200"
+                className="rounded-full border border-[color:var(--hc-danger-border)] px-3 py-1.5 text-[11px] text-[color:var(--hc-danger)]"
               >
                 삭제
               </button>
