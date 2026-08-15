@@ -10,11 +10,9 @@ import {
 } from "@/lib/reactKonva";
 import Konva from "konva";
 
+import { useStageFit } from "@/hooks/useStageFit";
 import { useDecorateStore } from "@/lib/decorateStore";
 import { EditableNode } from "@/components/theme/editor/canvas/EditableNode";
-
-const VIEW_MAX_W = 340;
-const VIEW_MAX_H = 460;
 
 export function DecorateCanvas() {
   const base = useDecorateStore((s) => s.base);
@@ -60,15 +58,7 @@ export function DecorateCanvas() {
     };
   }, [base]);
 
-  const { viewW, viewH, scale } = useMemo(() => {
-    if (!base) return { viewW: VIEW_MAX_W, viewH: VIEW_MAX_W, scale: 1 };
-    const s = Math.min(VIEW_MAX_W / base.width, VIEW_MAX_H / base.height);
-    return {
-      viewW: Math.round(base.width * s),
-      viewH: Math.round(base.height * s),
-      scale: s,
-    };
-  }, [base]);
+  const { containerRef, viewW, viewH, scale, ready } = useStageFit(base);
 
   const activeComponent = useMemo(
     () => components.find((c) => c.id === activeId) ?? null,
@@ -153,7 +143,8 @@ export function DecorateCanvas() {
   };
 
   return (
-    <div className="flex justify-center">
+    <div ref={containerRef} className="flex w-full justify-center">
+      {ready ? (
       <Stage
         ref={stageRef}
         width={viewW}
@@ -297,6 +288,7 @@ export function DecorateCanvas() {
           />
         </Layer>
       </Stage>
+      ) : null}
     </div>
   );
 }

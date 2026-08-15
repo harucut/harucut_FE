@@ -26,10 +26,23 @@ const authenticatedRoutes = [
   "/shoot",
   "/upload",
   "/theme",
-  "/theme/sticker",
   "/decorate",
   "/history",
   "/mypage",
+] as const;
+
+/**
+ * 직접 열면 세션 상태가 없어 되돌려보내는 화면들. UI 를 거쳐 들어가야 진짜 화면을 검사한다.
+ * 프레임 에디터가 여기 해당한다(app/theme/page.tsx 가 진입을 만들어 준다).
+ */
+const routesReachedThroughUi = [
+  {
+    route: "/theme/sticker",
+    async enter(page: Page) {
+      await page.goto("/theme");
+      await page.getByRole("button", { name: "새 프레임 만들기" }).click();
+    },
+  },
 ] as const;
 
 async function enableAuthenticatedContext(page: Page) {
@@ -155,8 +168,11 @@ function contrastIncomplete(results: { incomplete: IncompleteRule[] }) {
     .filter((rule) => rule.nodes.length > 0);
 }
 
-async function expectNoAccessibilityViolations(page: Page) {
+async function expectNoAccessibilityViolations(page: Page, route?: string) {
   await page.locator("body").waitFor({ state: "visible" });
+  // 스캔 직전에 한 번 더 확인한다. goto 직후에만 보면 "한 순간 그 경로였다"만 보장돼,
+  // 뒤늦게 다른 화면으로 갈아탄 뒤의 화면을 검사하게 된다(실제로 /theme/sticker가 그랬다).
+  if (route) expect(new URL(page.url()).pathname).toBe(route);
   await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
   await page.addStyleTag({ content: FLATTEN_PAGE_GRADIENT_CSS });
 
@@ -189,7 +205,7 @@ for (const route of publicRoutes) {
     await page.goto(route);
     await expectStayedOn(page, route);
 
-    await expectNoAccessibilityViolations(page);
+    await expectNoAccessibilityViolations(page, route);
   });
 }
 
@@ -208,6 +224,18 @@ for (const route of authenticatedRoutes) {
       await waitForCoachMark(page);
     }
 
-    await expectNoAccessibilityViolations(page);
+    await expectNoAccessibilityViolations(page, route);
+  });
+}
+
+for (const { route, enter } of routesReachedThroughUi) {
+  test(`authenticated route ${route} has no obvious accessibility violations`, async ({
+    page,
+  }) => {
+    await enableAuthenticatedContext(page);
+    await enter(page);
+    await expectStayedOn(page, route);
+
+    await expectNoAccessibilityViolations(page, route);
   });
 }

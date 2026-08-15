@@ -49,6 +49,8 @@ export type RemoteFrameBackground =
       type: "IMAGE";
       key?: string;
       opacity?: number;
+      // 서버가 채워 주는 조회용 서명 URL(응답 전용). 요청에 실어도 무시된다.
+      url?: string;
     };
 
 export type RemoteFrameComponent = {

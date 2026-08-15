@@ -461,17 +461,24 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 {BACKGROUND_COLORS.map((color) => {
                   const selected = backgroundColor === color.value;
                   return (
+                    // 라벨을 스와치 위에 얹으면 색마다 대비가 1.4~3.5:1 로 널뛴다.
+                    // 스와치는 색만 보여주고 이름은 아래에 둔다.
                     <button
                       key={color.id}
                       type="button"
                       onClick={() => setBackgroundColor(color.value)}
-                      className={`h-8 min-w-16 rounded-lg border px-2 text-[11px] ${
+                      aria-pressed={selected}
+                      className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[11px] ${
                         selected
                           ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
                           : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
                       }`}
-                      style={{ backgroundColor: `#${color.value}` }}
                     >
+                      <span
+                        aria-hidden
+                        className="block h-6 w-full rounded border border-[color:var(--hc-border-subtle)]"
+                        style={{ backgroundColor: `#${color.value}` }}
+                      />
                       {color.label}
                     </button>
                   );
@@ -480,11 +487,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
+                  aria-label="배경색 직접 고르기"
                   value={`#${backgroundColor}`}
                   onChange={(e) => setBackgroundColor(e.target.value)}
                   className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
                 />
                 <input
+                  aria-label="배경색 코드"
                   value={backgroundColor}
                   onChange={(e) => setBackgroundColor(e.target.value)}
                   className="h-9 flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-xs text-[color:var(--hc-text)]"
@@ -546,7 +555,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 </p>
               </div>
 
-              <div className="h-[330px] flex items-center justify-center">
+              {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
+              <div className="flex min-h-[330px] items-center justify-center">
                 <CanvasStage />
               </div>
             </section>
