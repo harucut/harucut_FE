@@ -45,6 +45,10 @@ const DEFAULT_FRAME_DESCRIPTION = "하루컷에서 직접 꾸민 나만의 프�
 /**
  * 이탈 경고 판정용 편집 상태 지문. 기준 시점과 지금을 비교하는 데만 쓴다.
  *
+ * 포함 범위는 자동 초안(saveEditorDraft)이 남기는 값과 같다 — 잃으면 아까운 작업이
+ * 곧 초안에 담기는 값이기 때문이다. cellCutouts는 서버 요청에는 안 들어가지만
+ * 저장 시 업로드하는 미리보기 렌더에 반영되므로 여기 포함한다.
+ *
  * 배경의 `url`은 뺀다. IMAGE 배경은 저장된 key만 들고 오고 서명 URL은 불러온 뒤에
  * 따로 주입하는 렌더 전용 값이라, 포함하면 사용자가 아무것도 안 해도 지문이 바뀐다.
  */
@@ -52,6 +56,7 @@ function buildEditorSignature(
   components: ReturnType<typeof useThemeEditorStore.getState>["components"],
   background: ReturnType<typeof useThemeEditorStore.getState>["background"],
   backgroundColor: string,
+  cellCutouts: boolean[],
 ) {
   return JSON.stringify({
     components,
@@ -60,6 +65,7 @@ function buildEditorSignature(
         ? { type: "IMAGE", key: background.key ?? null, opacity: background.opacity ?? null }
         : { type: "COLOR", value: background.value },
     backgroundColor,
+    cellCutouts,
   });
 }
 
@@ -79,14 +85,21 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const addDraft = useThemeDraftStore((s) => s.addDraft);
   const editorComponents = useThemeEditorStore((s) => s.components);
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
+  const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
   const { remoteFrameId } = useThemeSession();
 
   // 편집 중 판정은 "콘텐츠가 있는지"가 아니라 "기준 상태에서 바뀌었는지"로 한다.
   // 콘텐츠 유무로 보면 컴포넌트나 이미지 배경이 있는 저장 프레임을 열기만 해도
   // 매번 이탈 경고가 떠서, 아무것도 고치지 않은 사용자까지 붙잡는다.
   const editorSignature = useMemo(
-    () => buildEditorSignature(editorComponents, background, backgroundColor),
-    [editorComponents, background, backgroundColor],
+    () =>
+      buildEditorSignature(
+        editorComponents,
+        background,
+        backgroundColor,
+        cellCutouts,
+      ),
+    [editorComponents, background, backgroundColor, cellCutouts],
   );
   // 기준은 프레임마다 새로 잡되, 스토어가 이 프레임 상태로 자리잡은 뒤에 잡는다.
   // 너무 일찍 잡으면 기준이 남의 상태가 된다.
