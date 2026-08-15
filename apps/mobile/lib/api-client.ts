@@ -96,6 +96,28 @@ export class ApiRequestError<T = unknown> extends Error {
   }
 }
 
+// 검증 실패 응답은 envelope의 data가 배열이다: [{ field, message, rejectedValue }].
+// 그 중 첫 번째 유효한 message(서버가 한국어로 내려준다)를 그대로 쓴다.
+function findFieldErrorMessage(value: unknown): string | null {
+  const items = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)
+      ? ((value as { data: unknown[] }).data)
+      : null;
+
+  if (!items) return null;
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const message = (item as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return message.trim();
+    }
+  }
+
+  return null;
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
     // 백엔드 ErrorCode 메시지는 전부 영문이라 그대로 노출하지 않는다. 코드로 우리 문구를 찾는다.
@@ -105,13 +127,11 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
     }
 
     // 검증 실패(400 GEN-003)만 data[]에 필드별 한국어 사유가 온다.
-    const fieldMessage = Array.isArray(error.data)
-      ? (error.data as Array<{ message?: unknown }>).find(
-          (item) => typeof item?.message === 'string' && item.message.trim(),
-        )?.message
-      : null;
-    if (typeof fieldMessage === 'string' && fieldMessage.trim()) {
-      return fieldMessage.trim();
+    // error.data에는 파싱된 envelope 전체({ code, message, data: [...] })가 담기므로
+    // 배열은 그 안쪽 data에 있다. 혹시 배열이 그대로 들어온 경우도 함께 받는다.
+    const fieldMessage = findFieldErrorMessage(error.data);
+    if (fieldMessage) {
+      return fieldMessage;
     }
 
     const mapped = getApiErrorMessageByCode(error.code);
@@ -164,9 +184,24 @@ export function registerSessionExpiredHandler(handler: (() => void) | null) {
   onSessionExpired = handler;
 }
 
+/**
+ * 재발급 결과. 실패를 한 덩어리로 묶지 않는다.
+ * - `expired`: refresh 쿠키까지 만료·무효라 진짜로 세션이 끊긴 경우(401·403)
+ * - `unavailable`: 재발급 엔드포인트가 일시적으로 못 답한 경우(5xx·네트워크 오류)
+ *
+ * 후자를 세션 만료로 취급하면 지하철 같은 약전파 구간의 일시적 실패가 곧바로 로그아웃이 된다.
+ */
+type ReissueResult = 'expired' | 'ok' | 'unavailable';
+
 // 쿠키 기반 액세스 토큰 재발급(요청 본문 없음). 자체 401 재시도는 건너뛴다.
-async function reissueAccessToken() {
-  await apiRequest('/api/harucut/reissue', { method: 'POST', skipAuthRefresh: true });
+async function reissueAccessToken(): Promise<ReissueResult> {
+  try {
+    await apiRequest('/api/harucut/reissue', { method: 'POST', skipAuthRefresh: true });
+    return 'ok';
+  } catch (error) {
+    const status = error instanceof ApiRequestError ? error.status : undefined;
+    return status === 401 || status === 403 ? 'expired' : 'unavailable';
+  }
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}) {
@@ -201,23 +236,18 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
     !options.skipAuthRefresh &&
     !isSessionRefreshExempt(path)
   ) {
-    let reissued = false;
-    try {
-      await reissueAccessToken();
-      reissued = true;
-    } catch {
-      // 재발급 실패 — 세션이 끊긴 것으로 보고 아래 401 분기에서 종료를 알린다.
-    }
+    const reissue = await reissueAccessToken();
 
     // 재발급에 성공했을 때만 원요청을 재시도한다. 재시도 fetch의 오류(AbortSignal 취소,
     // 일시적 네트워크 오류 등)는 삼키지 않고 그대로 전파해, 유효한 회원 세션을 세션 만료로
-    // 오인해 로그아웃시키지 않는다. 재발급 자체가 실패한 경우에는 기존 401 응답이 유지되어
-    // 아래 분기에서 세션 종료를 알린다.
-    if (reissued) {
+    // 오인해 로그아웃시키지 않는다. 재발급 자체가 실패한 경우에는 기존 401 응답이 유지된다.
+    if (reissue === 'ok') {
       response = await performFetch();
     }
 
-    if (response.status === 401) {
+    // 재발급이 일시적으로 불가능했던 경우(unavailable)는 세션 만료로 단정하지 않는다.
+    // 최초 401을 그대로 던져 화면이 재시도 가능한 API 오류로 다루게 한다.
+    if (response.status === 401 && reissue !== 'unavailable') {
       onSessionExpired?.();
     }
   }

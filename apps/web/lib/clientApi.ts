@@ -77,17 +77,27 @@ export function registerSessionExpiredHandler(handler: (() => void) | null) {
   onSessionExpired = handler;
 }
 
+/**
+ * 재발급 결과. 실패를 한 덩어리로 묶지 않는다.
+ * - `expired`: refresh 쿠키까지 만료·무효라 진짜로 세션이 끊긴 경우(401·403)
+ * - `unavailable`: 재발급 엔드포인트가 일시적으로 못 답한 경우(5xx·네트워크 오류)
+ *
+ * 후자를 세션 만료로 취급하면 잠깐의 장애나 오프라인이 곧바로 로그인 화면 강제 이동이 된다.
+ */
+type ReissueResult = "ok" | "expired" | "unavailable";
+
 // 쿠키 기반 액세스 토큰 재발급. 자체 401 재시도는 하지 않는다(exempt).
-async function reissueAccessToken(): Promise<boolean> {
+async function reissueAccessToken(): Promise<ReissueResult> {
   try {
     const res = await fetch("/api/client/reissue", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
     });
-    return res.ok;
+    if (res.ok) return "ok";
+    return res.status === 401 || res.status === 403 ? "expired" : "unavailable";
   } catch {
-    return false;
+    return "unavailable";
   }
 }
 
@@ -119,13 +129,15 @@ async function request<T>(
   // 액세스 토큰 만료(401)면 쿠키 기반으로 1회 재발급 후 원요청을 재시도한다.
   // 재발급까지 실패하면(여전히 401) 세션이 끊긴 것으로 보고 등록된 만료 핸들러를 호출한다.
   if (res.status === 401 && !SESSION_REFRESH_EXEMPT_PATHS.has(path)) {
-    const reissued = await reissueAccessToken();
+    const reissue = await reissueAccessToken();
     // 재발급 성공 시에만 재시도한다. 재시도 fetch의 오류(취소·네트워크)는 그대로 전파해
     // 유효 세션을 만료로 오인하지 않는다. 재발급 실패면 최초 401 응답을 유지한다.
-    if (reissued) {
+    if (reissue === "ok") {
       res = await doFetch();
     }
-    if (res.status === 401) {
+    // 재발급 서버가 일시적으로 못 답한 경우(unavailable)는 세션 만료로 단정하지 않는다.
+    // 최초 401을 그대로 돌려보내 화면이 재시도 가능한 API 오류로 다루게 한다.
+    if (res.status === 401 && reissue !== "unavailable") {
       onSessionExpired?.();
     }
   }

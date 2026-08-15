@@ -36,7 +36,7 @@
 /login?redirectTo=<원래 경로와 쿼리>
 ```
 
-게스트 체험 쿠키가 있으면 `/shoot/*`만 예외로 통과합니다. 자세한 분기는
+게스트 체험 쿠키가 있으면 `/shoot/*`와 `/decorate/*`만 예외로 통과합니다. 자세한 분기는
 [docs/auth-routing.md](./auth-routing.md)의 "게스트 체험 모드" 절을 참고합니다.
 
 ## 촬영 흐름

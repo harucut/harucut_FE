@@ -65,6 +65,16 @@
 - 통합 검증: `pnpm verify:standard`
 - 모바일 수동/직접 확인: `docs/mobile-qa-checklist.md`
 
+### CI 실행 규칙
+
+PR의 `verify`·`e2e` 잡은 **자동으로 돌지 않는다**. 돌리려면 PR에 `run-ci` 라벨을 붙인다
+(라벨을 떼었다 다시 붙이면 재실행). Actions 탭에서 `verify` 워크플로를 수동 실행해도 된다.
+develop 브랜치 푸시는 라벨과 무관하게 항상 검사한다.
+
+라벨이 없으면 두 잡은 skipped로 끝나고, GitHub이 이를 필수 검사 통과로 인정해 병합은 막지 않는다.
+그만큼 **라벨을 붙이지 않고 병합하면 CI 검증 없이 들어간다** — 병합 전에 한 번은 라벨을 붙이거나
+로컬에서 `pnpm verify:standard`를 돌린다.
+
 ## 참고 문서
 
 - `README.md`

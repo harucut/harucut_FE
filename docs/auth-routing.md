@@ -63,15 +63,17 @@
 2. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
    이때 게스트 쿠키가 남아 있으면 응답에서 삭제한다(회원 전환)
 3. 게스트 쿠키만 있으면
-   - `/shoot`로 시작하는 경로: 통과
+   - `/shoot` 또는 `/decorate`로 시작하는 경로(`GUEST_ALLOWED_PREFIXES`): 통과 —
+     게스트 체험은 촬영에서 끝나지 않고 꾸미기까지 이어져야 완결된다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
 4. 둘 다 없으면 `/login?redirectTo=...`
 
 ```text
-인증 쿠키 O                     -> 통과 (게스트 쿠키 삭제)
-게스트 쿠키 O + /shoot/*        -> 통과
-게스트 쿠키 O + 그 외 보호 경로 -> /shoot?guestNotice=restricted
-쿠키 없음                       -> /login?redirectTo=<원래 경로와 쿼리>
+인증 쿠키 O                        -> 통과 (게스트 쿠키 삭제)
+게스트 쿠키 O + /shoot/*           -> 통과
+게스트 쿠키 O + /decorate/*        -> 통과
+게스트 쿠키 O + 그 외 보호 경로    -> /shoot?guestNotice=restricted
+쿠키 없음                          -> /login?redirectTo=<원래 경로와 쿼리>
 ```
 
 관련 파일:

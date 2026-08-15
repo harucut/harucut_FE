@@ -72,15 +72,26 @@ function baseNameOf(value: string) {
  * S3 key의 확장자도 이 filename에서 나오므로 정규화가 곧 저장 형식 정합이 된다.
  */
 export function resolveUpload(args: {
+  contentType?: PresignedUploadContentType | null;
   filename?: string | null;
   mimeType?: string | null;
   uri?: string;
 }): { contentType: PresignedUploadContentType; filename: string } {
   const rawName = args.filename?.trim() || '';
   const uri = args.uri ?? '';
-  const ext = extensionOf(rawName) || extensionOf(uri);
   const base = baseNameOf(rawName) || baseNameOf(uri) || `harucut-${Date.now()}`;
 
+  // 호출부가 형식을 이미 판정해 넘겼으면 그 값이 기준이다. 확장자·MIME으로 다시 추론하지 않는다.
+  // (.jfif처럼 확장자는 표에 없고 MIME만 맞는 파일은 호출부가 asset.mimeType으로 판정해 넘기는데,
+  //  여기서 재추론하면 mimeType 없이 온 그 값이 되레 미지원으로 튕긴다)
+  if (args.contentType) {
+    return {
+      contentType: args.contentType,
+      filename: `${base}.${CONTENT_TYPE_TO_EXTENSION[args.contentType]}`,
+    };
+  }
+
+  const ext = extensionOf(rawName) || extensionOf(uri);
   const contentType =
     EXTENSION_TO_CONTENT_TYPE[ext] ??
     MIME_TO_CONTENT_TYPE[args.mimeType?.trim().toLowerCase() ?? ''];
@@ -128,18 +139,14 @@ export async function getPresignedImageUrl(key: string) {
 }
 
 export async function uploadLocalFileWithPresigned(opts: UploadLocalFileOptions) {
-  const resolved = resolveUpload({
+  // 호출부가 형식을 지정했으면 그 값을 그대로 따르고, 파일명 확장자만 형식에 맞춰 다시 붙인다.
+  // (확장자와 contentType이 어긋나면 서버가 415로 거절한다)
+  const { contentType, filename } = resolveUpload({
+    contentType: opts.contentType,
     filename: opts.filename,
     mimeType: opts.mimeType,
     uri: opts.uri,
   });
-  // 호출부가 형식을 지정했으면 그 값을 따르되, 파일명 확장자는 항상 형식에 맞춰 다시 붙인다.
-  // (확장자와 contentType이 어긋나면 서버가 415로 거절한다)
-  const contentType = opts.contentType ?? resolved.contentType;
-  const filename =
-    contentType === resolved.contentType
-      ? resolved.filename
-      : `${resolved.filename.replace(/\.[^.]*$/, '')}.${CONTENT_TYPE_TO_EXTENSION[contentType]}`;
 
   const presigned = await createPresignedUpload({
     contentType,
