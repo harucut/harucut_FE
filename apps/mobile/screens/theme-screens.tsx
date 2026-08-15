@@ -6,7 +6,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { captureRef } from 'react-native-view-shot';
 
 import { FrameCapacityMeter, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, PageHeader, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, FormField, PageHeader, SurfaceCard } from '@/components/harucut/ui';
 import { BACKGROUND_SWATCHES, FRAME_COLOR_SWATCHES, THEME_STICKERS, THEME_TEXT_COLOR_SWATCHES, type ThemeAsset, type ThemeEditorComponent } from '@/constants/harucut-data';
 import { resolvePlanInfo } from '@/constants/plan-limits';
 import type { HarucutColors } from '@/constants/harucut-design';
@@ -84,14 +84,13 @@ export function ThemeFrameScreen() {
 
   const handleConfirmNewFrame = () => {
     if (!framesLoaded) return;
-    push(isAtCapacity ? '/mypage' : '/theme/sticker');
+    push(isAtCapacity ? '/pricing' : '/theme/sticker');
   };
 
   return (
     <AppScrollView>
       <PageHeader backLabel="처음으로" onPressBack={() => push('/home')} />
-      <StepProgress current={1} label="프레임 선택" total={2} />
-      <FrameCapacityMeter onUpgrade={() => push('/mypage')} plan={plan} used={savedFrames.length} />
+      <FrameCapacityMeter onUpgrade={() => push('/pricing')} plan={plan} used={savedFrames.length} />
       <FramePickerSection
         confirmLabel={
           !framesLoaded
@@ -111,8 +110,6 @@ export function ThemeFrameScreen() {
         onAction={() => push('/theme/sticker')}
         onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForTheme}
-        onUpgrade={() => push('/mypage')}
-        planLimit={plan.limit}
         selectedFrameId={themeEditor.frameId}
         selectedSavedFrameId={themeEditor.selectedSavedFrameId}
         title="저장한 프레임"
@@ -125,7 +122,6 @@ export function ThemeStickerScreen() {
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const styles = useThemeScreenStyles();
-  const { colors: themeColors } = useHarucutTheme();
   const themeEditor = useThemeEditorStore();
   const setThemeTitle = useThemeEditorStore((state) => state.setThemeTitle);
   const setThemeDescription = useThemeEditorStore((state) => state.setThemeDescription);
@@ -176,6 +172,13 @@ export function ThemeStickerScreen() {
   useEffect(() => {
     const background = themeEditor.background;
     if (background.type !== 'IMAGE' || !background.key || themeEditor.backgroundImageUri) {
+      return;
+    }
+
+    // 서버는 IMAGE 배경 응답의 key 자리에 이미 서명된 조회 URL을 넣어 준다.
+    // 그걸 다시 key로 넘기면 URL 문자열 자체를 S3 키로 서명해 깨진 주소가 나온다.
+    if (/^https?:\/\//i.test(background.key)) {
+      setThemeBackgroundPreview(background.key);
       return;
     }
 
@@ -234,6 +237,8 @@ export function ThemeStickerScreen() {
     setUploadingPhotos(true);
 
     let failed = 0;
+    // 첫 실패 사유만 안내에 덧붙인다(예: 지원하지 않는 이미지 형식).
+    let failedReason = '';
     const uploadedAssets: ThemeAsset[] = [];
 
     for (const asset of result.assets) {
@@ -246,7 +251,6 @@ export function ThemeStickerScreen() {
             uri: asset.uri,
           }),
           filename,
-          isTemp: true,
           type: 'FRAME_COMPONENT',
           uri: asset.uri,
         });
@@ -254,12 +258,14 @@ export function ThemeStickerScreen() {
         uploadedAssets.push({
           id: `theme-photo-${Date.now()}-${uploadedAssets.length}`,
           label: filename,
-          mimeType: asset.mimeType,
           s3Key: uploaded.key,
           uri: uploaded.objectUrl,
         });
-      } catch {
+      } catch (error) {
         failed += 1;
+        if (!failedReason) {
+          failedReason = getApiErrorMessage(error, '');
+        }
       }
     }
 
@@ -272,7 +278,9 @@ export function ThemeStickerScreen() {
         actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
         eyebrow: 'UPLOAD',
         icon: 'warning-outline',
-        message: `${failed}개의 사진을 업로드하지 못했어요.`,
+        message: failedReason
+          ? `사진 ${failed}장을 업로드하지 못했어요. ${failedReason}`
+          : `사진 ${failed}장을 업로드하지 못했어요.`,
         title: '사진 업로드 실패',
       });
     }
@@ -291,7 +299,30 @@ export function ThemeStickerScreen() {
       return;
     }
 
-    setThemeBackgroundImage(result.assets[0].uri);
+    const asset = result.assets[0];
+    // 저장할 때가 아니라 고른 즉시 형식을 판정한다. 미지원 원본(HEIC 등)을 그대로 안고 있다가
+    // 저장 단계에서 실패하면 꾸민 내용을 날린다.
+    try {
+      resolveUploadContentType({
+        filename: asset.fileName,
+        mimeType: asset.mimeType,
+        uri: asset.uri,
+      });
+    } catch (error) {
+      showNotice({
+        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
+        eyebrow: 'UPLOAD',
+        icon: 'warning-outline',
+        message: getApiErrorMessage(error, '지원하지 않는 이미지 형식이에요.'),
+        title: '배경 이미지 사용 불가',
+      });
+      return;
+    }
+
+    setThemeBackgroundImage(asset.uri, {
+      filename: asset.fileName,
+      mimeType: asset.mimeType,
+    });
   };
 
   const handleSaveFrame = async () => {
@@ -325,7 +356,7 @@ export function ThemeStickerScreen() {
     }
   };
 
-  const handleRemoveFrame = async () => {
+  const performRemoveFrame = async () => {
     if (!themeEditor.selectedSavedFrameId) {
       return;
     }
@@ -340,6 +371,25 @@ export function ThemeStickerScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // 확인 없이 즉시 삭제되던 것을 방지 — 확인 다이얼로그를 거친다.
+  const handleRemoveFrame = () => {
+    if (!themeEditor.selectedSavedFrameId) {
+      return;
+    }
+
+    showNotice({
+      actions: [
+        // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
+        { id: 'dismiss', label: '취소', variant: 'secondary' },
+        { id: 'remove-frame', label: '삭제', variant: 'danger', onPress: () => void performRemoveFrame() },
+      ],
+      eyebrow: 'DELETE FRAME',
+      icon: 'trash-outline',
+      message: '이 프레임을 삭제하면 되돌릴 수 없어요. 정말 삭제할까요?',
+      title: '프레임을 삭제할까요?',
+    });
   };
 
   return (
@@ -553,7 +603,6 @@ export function ThemeStickerScreen() {
           <View style={{ gap: 12 }}>
             {activeComponent ? (
               <ThemeSelectionInspector
-                colors={themeColors}
                 component={activeComponent}
                 onChange={(patch) => updateThemeComponent(activeComponent.id, patch)}
                 onDelete={() => removeThemeComponent(activeComponent.id)}
@@ -605,7 +654,7 @@ export function ThemeStickerScreen() {
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="trash-outline" size={16} />}
             label="삭제"
-            onPress={() => void handleRemoveFrame()}
+            onPress={handleRemoveFrame}
             variant="danger"
           />
         ) : null}
@@ -693,13 +742,11 @@ function ColorSwatch({
 
 // 핸드오프 "선택" 탭: 회전·크기·(텍스트)색을 바꾸고 삭제한다.
 function ThemeSelectionInspector({
-  colors,
   component,
   onChange,
   onDelete,
   styles,
 }: {
-  colors: HarucutColors;
   component: ThemeEditorComponent;
   onChange: (patch: Partial<ThemeEditorComponent> & { styleJson?: ThemeEditorComponent['styleJson'] }) => void;
   onDelete: () => void;
@@ -888,11 +935,6 @@ function createStyles(colors: HarucutColors) {
       color: colors.muted,
       fontSize: 12,
       lineHeight: 18,
-    },
-    activeBadge: {
-      color: colors.primaryStrong,
-      fontSize: 11,
-      fontWeight: '700',
     },
     assetImage: {
       height: '100%',
@@ -1190,11 +1232,6 @@ function createStyles(colors: HarucutColors) {
     stickerTileSymbol: {
       fontSize: 24,
       lineHeight: 30,
-    },
-    stickerRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
     },
   });
 }

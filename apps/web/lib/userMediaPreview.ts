@@ -12,15 +12,10 @@ export function getUserMediaTitle(item: UserMedia) {
   return item.s3Key.split("/").pop() || "기록";
 }
 
-export function getUserMediaPreview(
-  item: UserMedia,
-  items: UserMedia[],
-  resolvedUrls: Record<number, string> = {},
-) {
-  void items;
-
-  return {
-    kind: "image" as const,
-    url: resolvedUrls[item.mediaId] ?? item.downloadUrl,
-  };
+/**
+ * 기록 썸네일에 쓸 이미지 URL. 준비 전이거나 값이 없으면 null.
+ * 사진 전용이라 종류 분기는 없다.
+ */
+export function getUserMediaPreviewUrl(item: UserMedia): string | null {
+  return item.downloadUrl?.trim() || null;
 }

@@ -12,9 +12,9 @@ export type FrameLayout = {
   slots: Rect[];
 };
 
-export type FrameSource = { type: "image"; src: string };
+export type FrameSource = { src: string };
 
-type SlotDrawable = { kind: "image"; el: HTMLImageElement };
+type SlotDrawable = { el: HTMLImageElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
 
@@ -83,7 +83,7 @@ async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
     sources.map(async (source) => {
       const image = await loadImage(source.src);
-      return { kind: "image", el: image } as const;
+      return { el: image };
     }),
   );
 }

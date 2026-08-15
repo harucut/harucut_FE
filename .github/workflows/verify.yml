@@ -1,16 +1,35 @@
 name: verify
 
+# PR 검사는 자동으로 돌지 않는다. `run-ci` 라벨을 붙였을 때만 실행한다.
+#
+# 트리거 자체는 pull_request로 남겨 둔다. 워크플로를 아예 안 돌리면 필수 검사(verify)가
+# 영영 pending으로 남아 PR이 병합 불가로 잠기기 때문이다. 대신 잡 수준 `if`로 끊는다 —
+# 잡이 skipped로 끝나면 GitHub은 이를 필수 검사 통과로 인정하므로, 러너 시간은 쓰지 않으면서
+# 병합도 막히지 않는다.
+#
+# labeled를 types에 넣어야 라벨을 누르는 순간 워크플로가 다시 돌아 검사가 시작된다.
+# develop 푸시와 수동 실행(Actions 탭 > Run workflow)은 라벨과 무관하게 항상 돈다.
 on:
   pull_request:
     branches:
       - develop
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   push:
     branches:
       - develop
+  workflow_dispatch:
 
 jobs:
   verify:
+    # PR에서는 라벨이 있을 때만. push·workflow_dispatch는 항상.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'run-ci')
     runs-on: ubuntu-latest
     name: verify
     steps:
@@ -32,3 +51,40 @@ jobs:
           python -m pip install --upgrade pip
       - name: Verify standard
         run: pnpm verify:standard
+
+  # 브라우저 검사는 별도 잡으로 뗀다 — playwright 브라우저 설치가 무거워
+  # verify 잡의 피드백을 늦추면 안 된다.
+  e2e:
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'run-ci')
+    runs-on: ubuntu-latest
+    name: e2e
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: pnpm test:e2e:install:web
+      # NEXT_PUBLIC_DEV_AUTH_BYPASS는 여기서 절대 설정하지 않는다.
+      # 켜지면 로그인 우회가 활성화돼 인증 가드 e2e가 통과해버린다 —
+      # 이 잡이 지키려는 바로 그 검사가 무력화된다.
+      - name: Run web e2e
+        run: pnpm test:e2e:web
+        env:
+          # 가드·접근성 스펙은 백엔드를 부르지 않는다. 다만 값이 비어 있으면
+          # /api/client/* 라우트가 설정 오류를 던지므로 placeholder를 넣어 둔다.
+          NEXT_PUBLIC_BASE_URL: http://localhost:8080
+      # 접근성 스펙은 위 전체 e2e에도 포함되지만, 실패 원인을 잡 로그에서
+      # 바로 구분하려고 별도 게이트로 한 번 더 명시한다.
+      - name: Run web a11y
+        run: pnpm test:a11y:web
+        env:
+          NEXT_PUBLIC_BASE_URL: http://localhost:8080

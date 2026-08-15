@@ -15,6 +15,8 @@ jest.mock("@/lib/userMediaApi", () => ({
 
 import {
   PRESIGNED_UPLOAD_TYPES,
+  isSupportedUploadFile,
+  resolveUpload,
   resolveUploadContentType,
   uploadFourcutMedia,
   uploadToS3WithPresigned,
@@ -31,10 +33,50 @@ describe("presigned upload flow", () => {
     expect(resolveUploadContentType(jpg)).toBe("JPEG");
   });
 
-  it("uses downloadUrl from presigned-img response after image upload", async () => {
+  it("keeps the original filename when its extension is already supported", () => {
+    const jpg = new File(["x"], "photo.JPG", { type: "image/jpeg" });
+    expect(resolveUpload(jpg)).toEqual({ contentType: "JPEG", filename: "photo.jpg" });
+  });
+
+  // 서버는 filename 확장자와 contentType이 같은 enum 항목에 동시에 속해야만 presign을 내준다.
+  // 확장자가 지원 목록 밖이면(.jfif 등) 파일명을 형식에 맞춰 고쳐 보내야 415가 안 난다.
+  it("normalizes the filename when only the MIME type is supported", () => {
+    const jfif = new File(["x"], "windows-download.jfif", { type: "image/jpeg" });
+    expect(resolveUpload(jfif)).toEqual({
+      contentType: "JPEG",
+      filename: "windows-download.jpg",
+    });
+  });
+
+  // 파일명은 호출부가 지어내기도 해서(확장자를 .jpg로 고정하는 식) 바이트와 어긋날 수 있다.
+  // 형식 판정은 MIME이 이겨야 PNG를 image/jpeg로 올리는 사고가 안 난다.
+  it("prefers the MIME type over a mismatched filename extension", () => {
+    const png = new File(["x"], "theme-photo-1700000000000.jpg", {
+      type: "image/png",
+    });
+
+    expect(resolveUpload(png)).toEqual({
+      contentType: "PNG",
+      filename: "theme-photo-1700000000000.png",
+    });
+  });
+
+  it("rejects unsupported formats with a Korean message", () => {
+    const heic = new File(["x"], "iphone.heic", { type: "image/heic" });
+
+    expect(() => resolveUploadContentType(heic)).toThrow(
+      /PNG·JPG·WEBP·GIF만 올릴 수 있어요/,
+    );
+    expect(isSupportedUploadFile(heic)).toBe(false);
+    expect(
+      isSupportedUploadFile(new File(["x"], "ok.webp", { type: "image/webp" })),
+    ).toBe(true);
+  });
+
+  it("uses the presigned-img URL string after image upload", async () => {
     const key = "temp/users/u/components/test-image.png";
-    const downloadUrl =
-      "[https://example.com/test-image.png](https://example.com/test-image.png?sig=2)";
+    // 실제 계약은 Response<String> — data가 URL 문자열 그 자체다(객체 아님).
+    const downloadUrl = "https://example.com/test-image.png?sig=2";
 
     mockPost.mockResolvedValueOnce({
       data: {
@@ -58,9 +100,7 @@ describe("presigned upload flow", () => {
         code: "GEN-000",
         status: 200,
         message: null,
-        data: {
-          downloadUrl,
-        },
+        data: downloadUrl,
       },
       ok: true,
       status: 200,
@@ -75,7 +115,6 @@ describe("presigned upload flow", () => {
     const result = await uploadToS3WithPresigned({
       file: new File(["x"], "test-image.png", { type: "image/png" }),
       type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-      isTemp: true,
     });
 
     expect(mockGet).toHaveBeenCalledWith(
@@ -85,6 +124,56 @@ describe("presigned upload flow", () => {
       key,
       objectUrl: "https://example.com/test-image.png?sig=2",
       downloadUrl: "https://example.com/test-image.png?sig=2",
+    });
+  });
+
+  it("sends the presigned content type as the S3 PUT header", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        code: "GEN-000",
+        status: 200,
+        message: null,
+        data: {
+          key: "uploads/users/u/photo.png",
+          uploadUrl: "https://example.com/upload/photo.png?sig=1",
+          contentType: "image/png",
+          expiresIn: "PT24H",
+        },
+      },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    mockGet.mockResolvedValueOnce({
+      data: { code: "GEN-000", status: 200, message: null, data: "https://example.com/photo.png?sig=2" },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await uploadToS3WithPresigned({
+      file: new File(["x"], "photo.png", { type: "image/png" }),
+      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
+    });
+
+    // 서명에 content-type이 포함돼 있어(X-Amz-SignedHeaders=content-type;host)
+    // 헤더가 빠지거나 다르면 S3가 403 SignatureDoesNotMatch로 거절한다.
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://example.com/upload/photo.png?sig=1",
+      expect.objectContaining({
+        method: "PUT",
+        headers: { "Content-Type": "image/png" },
+      }),
+    );
+
+    // presign 요청 바디는 type/filename/contentType 세 필드가 전부다.
+    expect(mockPost).toHaveBeenCalledWith("/api/client/user/files/presigned-upload", {
+      type: "FOURCUT_PHOTO",
+      filename: "photo.png",
+      contentType: "PNG",
     });
   });
 
@@ -111,9 +200,7 @@ describe("presigned upload flow", () => {
         code: "GEN-000",
         status: 200,
         message: null,
-        data: {
-          downloadUrl: "https://example.com/photo.png?sig=2",
-        },
+        data: "https://example.com/photo.png?sig=2",
       },
       ok: true,
       status: 200,
@@ -122,7 +209,6 @@ describe("presigned upload flow", () => {
 
     mockRegisterUserMedia.mockResolvedValueOnce({
       mediaId: 1,
-      mediaType: "PHOTO",
       s3Key: "uploads/users/u/photo.png",
       downloadUrl: "https://example.com/photo.png?sig=3",
     });
@@ -137,7 +223,6 @@ describe("presigned upload flow", () => {
     );
 
     expect(mockRegisterUserMedia).toHaveBeenCalledWith({
-      mediaType: "PHOTO",
       s3Key: "uploads/users/u/photo.png",
     });
     expect(result.downloadUrl).toBe("https://example.com/photo.png?sig=3");

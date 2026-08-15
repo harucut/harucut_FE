@@ -40,7 +40,8 @@ function AuthShell({
   title,
 }: {
   children: React.ReactNode;
-  description: string;
+  // 로그인·회원가입은 제목만 두므로 선택값(웹 AuthPageShell과 동일).
+  description?: string;
   footer?: React.ReactNode;
   title: string;
 }) {
@@ -143,7 +144,7 @@ function SocialButtons() {
         <Text onPress={() => router.push('/privacy' as never)} style={styles.socialConsentLink}>
           개인정보 처리방침
         </Text>
-        에 동의하는 것으로 간주됩니다.
+        에 동의하는 것으로 간주돼요.
       </Text>
     </View>
   );
@@ -279,13 +280,24 @@ export function LandingScreen() {
           style={{ marginTop: 10 }}
           variant="ghost"
         />
+
+        {/* 약관·개인정보 처리방침 진입점 — 랜딩에서도 언제든 열어볼 수 있어야 한다. */}
+        <View style={styles.legalFooterRow}>
+          <Text onPress={() => push('/terms')} style={styles.legalFooterLink}>
+            서비스 이용약관
+          </Text>
+          <Text style={styles.legalFooterDivider}>·</Text>
+          <Text onPress={() => push('/privacy')} style={styles.legalFooterLink}>
+            개인정보 처리방침
+          </Text>
+        </View>
       </View>
     </View>
   );
 }
 
 export function LoginScreen() {
-  const { colors, styles } = usePublicScreenTheme();
+  const { styles } = usePublicScreenTheme();
   const router = useRouter();
   const push = (path: string) => router.push(path as never);
   const replace = (path: string) => router.replace(path as never);
@@ -293,7 +305,6 @@ export function LoginScreen() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [remember, setRemember] = useState(true);
 
   // 키 입력마다 새 인라인 핸들러를 만들면 memo된 FormField가 매번 리렌더되어, 가려진
   // 비밀번호 입력의 노출→마스킹 왕복이 끊겨 보인다. 필드별 핸들러를 한 번만 만들어
@@ -342,7 +353,6 @@ export function LoginScreen() {
 
   return (
     <AuthShell
-      description="로그인하고 하루의 네 컷을 이어가요."
       footer={
         <>
           <SocialButtons />
@@ -354,7 +364,7 @@ export function LoginScreen() {
           </Text>
         </>
       }
-      title="다시 오셨네요">
+      title="로그인">
       <View style={{ gap: 14 }}>
         {LOGIN_FIELDS.map((field) => (
           <FormField
@@ -368,15 +378,6 @@ export function LoginScreen() {
         ))}
 
         <View style={styles.authMetaRow}>
-          <Pressable onPress={() => setRemember((current) => !current)} style={styles.rememberRow}>
-            <Ionicons
-              color={remember ? colors.primary : colors.muted}
-              name={remember ? 'checkbox' : 'square-outline'}
-              size={18}
-            />
-            <Text style={styles.rememberText}>로그인 상태 유지</Text>
-          </Pressable>
-
           <Text onPress={() => push('/forgot-password')} style={styles.forgotLink}>
             비밀번호 찾기
           </Text>
@@ -520,7 +521,6 @@ export function SignupScreen() {
 
   return (
     <AuthShell
-      description="금방 끝나요. 이메일 인증 후 바로 첫 네 컷을 찍으러 가요."
       footer={
         <>
           <SocialButtons />
@@ -869,74 +869,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       flexDirection: 'row',
       gap: 10,
     },
-    heroBody: {
-      color: colors.muted,
-      fontSize: 15,
-      lineHeight: 24,
-    },
-    heroCardBody: {
-      color: colors.muted,
-      fontSize: 12,
-      lineHeight: 18,
-    },
-    heroCardTitle: {
-      color: colors.text,
-      fontSize: 18,
-      fontWeight: '700',
-      lineHeight: 24,
-    },
-    heroImage: {
-      height: '100%',
-      width: '100%',
-    },
-    heroCardCopy: {
-      gap: 6,
-    },
-    heroImageFrame: {
-      alignSelf: 'center',
-      aspectRatio: 0.75,
-      backgroundColor: colors.backgroundTint,
-      borderColor: colors.border,
-      borderRadius: 24,
-      borderWidth: 1,
-      overflow: 'hidden',
-      width: '86%',
-    },
-    heroTitle: {
-      color: colors.text,
-      fontSize: 34,
-      fontWeight: '700',
-      letterSpacing: 0,
-      lineHeight: 40.8,
-    },
-    heroTitleGradient: {
-      color: colors.primaryStrong,
-      fontSize: 34,
-      fontWeight: '700',
-      letterSpacing: 0,
-      lineHeight: 40.8,
-    },
-    heroTitleStack: {
-      gap: 0,
-    },
-    heroCopy: {
-      gap: 12,
-    },
-    landingHeader: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    landingMain: {
-      gap: 22,
-    },
-    landingScrollContent: {
-      flexGrow: 1,
-      gap: 28,
-    },
-    heroPreviewCard: {
-      gap: 14,
-    },
     onboardingScreen: {
       backgroundColor: colors.background,
       flex: 1,
@@ -1040,16 +972,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       marginBottom: 26,
       marginTop: 12,
     },
-    rememberRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: 6,
-    },
-    rememberText: {
-      color: colors.muted,
-      fontSize: 11,
-      fontWeight: '600',
-    },
     kakaoLogo: {
       height: 26,
       width: 26,
@@ -1144,10 +1066,21 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
     socialGoogleLabel: {
       color: 'rgba(30, 30, 30, 0.88)',
     },
+    legalFooterDivider: {
+      color: colors.muted,
+      fontSize: 11,
+    },
     legalFooterLink: {
       color: colors.muted,
       fontSize: 11,
       textDecorationLine: 'underline',
+    },
+    legalFooterRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'center',
+      marginTop: 18,
     },
     socialConsentLink: {
       color: colors.textSoft,
@@ -1163,11 +1096,6 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       color: colors.muted,
       fontSize: 10,
       fontWeight: '600',
-    },
-    tagRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
     },
     verifiedBody: {
       color: colors.muted,

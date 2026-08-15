@@ -20,9 +20,9 @@ type SessionStore = {
   user: UserProfile;
   bootstrapMemberSession: () => Promise<void>;
   clearNotice: () => void;
+  endExpiredSession: () => void;
   enterAnonymousMode: () => void;
   enterGuestMode: () => void;
-  enterMemberMode: () => void;
   refreshUserProfile: () => Promise<void>;
   setThemePreference: (value: HarucutThemePreference) => void;
   setUserProfile: (next: Partial<UserProfile>) => void;
@@ -32,24 +32,84 @@ type SessionStore = {
   showNotice: (notice: NoticeState) => void;
 };
 
+// 비회원 체험에서 열려 있는 범위.
+// 웹(lib/guestTrialStore.ts)은 꾸미기까지 열어 두지만 앱은 다르다. app/(app)/_layout.tsx가
+// 게스트를 /shoot 밖으로 못 나가게 막고, 촬영 결과를 꾸미는 라우트 자체가 앱에는 없다.
+// 그래서 문장을 웹과 맞추지 않고 앱에서 실제로 되는 것만 적는다.
+const GUEST_ALLOWED_SCOPE = '비회원 체험에서는 촬영과 이미지 저장을 이용할 수 있어요.';
+const GUEST_MEMBER_ONLY_SCOPE =
+  '링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요.';
+
+// 지금 작업 공간(촬영/업로드/꾸미기)에 남아 있는 결과물의 주인. 세션이 만료돼도 작업 공간은
+// 비우지 않으므로, 재로그인 때 "같은 사람인가"를 판단할 기준이 필요하다.
+// 작업 공간을 실제로 비운 순간(로그아웃/탈퇴/게스트 전환)에는 null로 되돌린다.
+let workspaceOwner: string | null = null;
+
+// 로그인한 계정이 작업 공간 주인과 다르면 이전 사용자의 로컬 결과물을 비운다.
+// 서버가 덮어써 주는 라이브러리와 달리 촬영/업로드/꾸미기 사진은 로컬에만 있어서,
+// 계정이 바뀌었는데 남겨 두면 다른 사람의 사진을 새 계정으로 저장할 수 있다.
+function claimWorkspace(user: UserProfile) {
+  const identity = user.email.trim().toLowerCase() || null;
+
+  // 식별자를 얻지 못한 경우(계약 위반 응답)도 "같은 사람임을 증명 못 함"으로 보고 비운다.
+  if (workspaceOwner !== null && workspaceOwner !== identity) {
+    resetAllWorkspaces();
+  }
+
+  workspaceOwner = identity;
+}
+
+// 작업 공간을 비우는 경로에서 호출한다. 주인이 사라지면 다음 로그인은 계정 비교 없이
+// 그대로 이어받는다(게스트 체험 결과물을 로그인 후에도 저장할 수 있어야 한다).
+function releaseWorkspace() {
+  resetAllWorkspaces();
+  workspaceOwner = null;
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   accessMode: 'anonymous',
   notice: null,
   themePreference: 'system',
   user: INITIAL_USER,
   bootstrapMemberSession: async () => {
-    set({ accessMode: 'member', notice: null });
+    set({ notice: null });
+
+    // 프로필(=계정 식별)을 먼저 확정한다. 계정이 바뀌었을 때의 작업 공간 초기화가
+    // 라이브러리 조회보다 늦게 돌면 방금 불러온 기록/프레임까지 지워 버린다.
+    //
+    // 회원 모드로 올리는 것도 식별이 끝난 뒤다. 먼저 올려 두면 프로필 조회가
+    // 네트워크 오류·5xx로 실패했을 때 claimWorkspace를 못 거친 회원 상태가 남아,
+    // 이전 계정의 로컬 촬영·업로드 결과가 보호 화면에 그대로 보인다.
+    try {
+      await get().refreshUserProfile();
+    } catch (error) {
+      set({ accessMode: 'anonymous', user: INITIAL_USER });
+      throw error;
+    }
+
+    set({ accessMode: 'member' });
+    claimWorkspace(get().user);
 
     const library = useLibraryStore.getState();
-    await Promise.all([
-      get().refreshUserProfile(),
-      library.loadRemoteHistory(),
-      library.loadRemoteFrames(),
-    ]);
+    await Promise.all([library.loadRemoteHistory(), library.loadRemoteFrames()]);
   },
   clearNotice: () => set({ notice: null }),
+  // 401 하드 만료 전용 종료 경로. 로그아웃/탈퇴와 달리 작업 공간(촬영/업로드/꾸미기)은 남긴다.
+  endExpiredSession: () => {
+    // 만료된 계정의 서버 캐시(기록·저장 프레임)는 남기면 안 되므로 비운다.
+    // 로컬 작업물은 재로그인 후 이어서 저장할 수 있도록 유지하고,
+    // 다른 계정으로 로그인하면 bootstrapMemberSession의 claimWorkspace가 그때 비운다.
+    useLibraryStore.getState().hardReset();
+    // accessMode/user 초기화는 app/_layout.tsx의 (app) 그룹 가드가 화면을 내리는 조건이라 필수다.
+    set({
+      accessMode: 'anonymous',
+      notice: null,
+      user: INITIAL_USER,
+    });
+  },
+  // 명시적 이탈(로그아웃/탈퇴)과 공개 화면 복귀. 사용자의 의사이므로 작업 공간까지 비운다.
   enterAnonymousMode: () => {
-    resetAllWorkspaces();
+    releaseWorkspace();
     set({
       accessMode: 'anonymous',
       notice: null,
@@ -57,16 +117,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
   enterGuestMode: () => {
-    resetAllWorkspaces();
+    releaseWorkspace();
     set({
       accessMode: 'guest',
-      notice: null,
-    });
-  },
-  enterMemberMode: () => {
-    useLibraryStore.getState().hardReset();
-    set({
-      accessMode: 'member',
       notice: null,
     });
   },
@@ -91,9 +144,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ],
         eyebrow: 'GUEST MODE',
         icon: 'lock-closed-outline',
-        message:
-          '비회원 체험에서는 촬영과 이미지 다운로드만 가능합니다. 링크 공유나, 추가 기능들은 로그인 후에 사용할 수 있어요!',
-        title: '지금은 촬영 체험만 가능해요',
+        message: `${GUEST_ALLOWED_SCOPE} ${GUEST_MEMBER_ONLY_SCOPE}`,
+        title: '지금은 체험 기능만 이용할 수 있어요',
       },
     }),
   showGuestShareNotice: () =>
@@ -103,11 +155,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           { id: 'go-login', label: '로그인하고 계속하기' },
           { id: 'dismiss', label: '닫기', variant: 'secondary' },
         ],
-        eyebrow: 'DOWNLOAD ONLY',
+        eyebrow: 'GUEST MODE',
         icon: 'sparkles-outline',
-        message:
-          '비회원 체험에서는 링크 공유를 지원하지 않아요. 서버를 통해 결과를 저장하고 링크로 공유하는 기능은 로그인 후 사용할 수 있습니다.',
-        title: '지금은 이미지 다운로드만 가능해요',
+        message: `${GUEST_ALLOWED_SCOPE} ${GUEST_MEMBER_ONLY_SCOPE}`,
+        title: '링크 공유는 로그인 후에 이용할 수 있어요',
       },
     }),
   showGuestTrialNotice: () =>
@@ -118,7 +169,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           { id: 'go-login', label: '로그인하기', variant: 'secondary' },
         ],
         message:
-          '가입 없이 촬영·꾸미기를 바로 체험할 수 있어요. 저장·기록 보관은 무료 가입 후 이용할 수 있어요.',
+          '가입 없이 촬영을 바로 체험하고 이미지로 저장할 수 있어요. 기록 보관과 공유는 무료 가입 후 이용할 수 있어요.',
         title: '무료로 체험해볼까요?',
       },
     }),
@@ -128,13 +179,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 // 401(액세스 토큰 만료)로 재발급까지 실패하면 회원 세션을 종료하고 로그인 화면으로 보낸다.
 // api-client는 스토어를 직접 import할 수 없어(순환 참조) 레지스트리로 위임받는다.
 // 회원이 아닐 때(게스트/비회원)의 401은 정상 흐름이므로 무시한다.
+// 작업 공간을 비우지 않는 이유는 endExpiredSession 주석 참고 — 만료는 사용자의 의사가 아니므로
+// 촬영/업로드/꾸미기 결과물을 날리지 않고, 재로그인 후 이어서 저장할 수 있게 둔다.
 registerSessionExpiredHandler(() => {
   const state = useSessionStore.getState();
   if (state.accessMode !== 'member') {
     return;
   }
 
-  state.enterAnonymousMode();
+  state.endExpiredSession();
   state.showNotice({
     actions: [{ id: 'dismiss', label: '확인' }],
     eyebrow: 'SESSION',

@@ -50,7 +50,6 @@ function LoginPageContent() {
     const formData = new FormData(e.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
-    const remember = formData.get("remember") === "true";
 
     const nextErrors: LoginErrors = {};
     const emailError = validateEmail(email);
@@ -66,7 +65,7 @@ function LoginPageContent() {
     }
 
     try {
-      const loginData = await loginWithEmail(email, password, { remember });
+      const loginData = await loginWithEmail(email, password);
 
       if (loginData?.userStatus === "DELETED_REQUESTED") {
         const shouldReactivate = window.confirm(
@@ -107,8 +106,7 @@ function LoginPageContent() {
 
   return (
     <AuthPageShell
-      title="다시 오셨네요"
-      description="하루컷에 로그인하세요."
+      title="로그인"
       footer={
         <>
           <SocialLoginSection mode="login" redirectTo={redirectTo} />
@@ -145,17 +143,8 @@ function LoginPageContent() {
           />
         ))}
 
-        <div className="flex items-center justify-between text-[10px] text-zinc-500">
-          <label className="inline-flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              name="remember"
-              value="true"
-              className="h-3.5 w-3.5 rounded border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-primary)] focus:ring-0"
-            />
-            <span>로그인 상태 유지</span>
-          </label>
-
+        {/* 세션 지속 옵션은 백엔드 계약에 없어 '로그인 상태 유지' 체크박스를 두지 않는다. */}
+        <div className="flex items-center justify-end text-[10px] text-zinc-500">
           <Link
             href={forgotPasswordHref}
             className="text-[10px] text-zinc-400 hover:text-zinc-200"

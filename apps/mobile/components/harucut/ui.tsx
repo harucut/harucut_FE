@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 
 import { HARUCUT_RADII, HARUCUT_SPACING, type ButtonVariant, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -27,16 +27,27 @@ export function AppScrollView({
   return (
     // 배경은 handoff처럼 단색 다크(colors.background)로 둔다. 이전의 그라데이션 + 초록 orb 2개는 제거.
     <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.screenContent,
-          { paddingTop: HARUCUT_SPACING.screen + EXTRA_TOP_PADDING },
-          { paddingBottom: bottomPadding },
-          contentContainerStyle,
-        ]}
-        showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
+      {/*
+        키보드가 입력/버튼을 가리지 않도록 감싼다. Android는 기본 windowSoftInputMode가
+        adjustResize라 시스템이 이미 창을 줄이므로 behavior를 주지 않고(이중 보정 방지),
+        iOS만 padding으로 밀어 올린다.
+      */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.screenFill}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.screenContent,
+            { paddingTop: HARUCUT_SPACING.screen + EXTRA_TOP_PADDING },
+            { paddingBottom: bottomPadding },
+            contentContainerStyle,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}>
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -125,29 +136,6 @@ export function SurfaceCard({
   const styles = useUiStyles();
 
   return <View style={[styles.card, style]}>{children}</View>;
-}
-
-export function StepProgress({ current, label, total }: { current: number; label: string; total: number }) {
-  const styles = useUiStyles();
-
-  return (
-    <SurfaceCard style={{ paddingVertical: 14 }}>
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepLabel}>{label}</Text>
-        <Text style={styles.stepCount}>
-          {current}/{total}
-        </Text>
-      </View>
-      <View style={styles.stepTrack}>
-        {Array.from({ length: total }, (_, index) => (
-          <View
-            key={`${label}-${index}`}
-            style={[styles.stepBar, index < current ? styles.stepBarActive : null]}
-          />
-        ))}
-      </View>
-    </SurfaceCard>
-  );
 }
 
 export function Pill({
@@ -281,12 +269,6 @@ function FormFieldImpl({ error, label, secure = false, style, ...props }: FormFi
 
 export const FormField = React.memo(FormFieldImpl);
 
-export function SectionEyebrow({ children }: PropsWithChildren) {
-  const styles = useUiStyles();
-
-  return <Text style={styles.sectionEyebrow}>{children}</Text>;
-}
-
 function createStyles(colors: HarucutColors, isDark: boolean) {
   return StyleSheet.create({
     backLabel: {
@@ -321,11 +303,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     brandIconImage: {
       height: '100%',
       width: '100%',
-    },
-    brandIconGradient: {
-      alignItems: 'center',
-      flex: 1,
-      justifyContent: 'center',
     },
     brandRow: {
       alignItems: 'center',
@@ -494,51 +471,12 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       backgroundColor: colors.background,
       flex: 1,
     },
+    screenFill: {
+      flex: 1,
+    },
     screenContent: {
       gap: HARUCUT_SPACING.section,
       padding: HARUCUT_SPACING.screen,
-    },
-    sectionEyebrow: {
-      alignSelf: 'flex-start',
-      backgroundColor: colors.primarySoft,
-      borderColor: isDark ? 'rgba(30, 215, 96, 0.18)' : 'rgba(30, 215, 96, 0.12)',
-      borderRadius: HARUCUT_RADII.chip,
-      borderWidth: 1,
-      color: colors.primaryStrong,
-      fontSize: 11,
-      fontWeight: '700',
-      overflow: 'hidden',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    stepBar: {
-      backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(148, 163, 184, 0.24)',
-      borderRadius: HARUCUT_RADII.chip,
-      flex: 1,
-      height: 6,
-    },
-    stepBarActive: {
-      backgroundColor: colors.primary,
-    },
-    stepCount: {
-      color: colors.muted,
-      fontSize: 10,
-      fontWeight: '700',
-    },
-    stepHeader: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    stepLabel: {
-      color: colors.text,
-      fontSize: 11,
-      fontWeight: '700',
-    },
-    stepTrack: {
-      flexDirection: 'row',
-      gap: 8,
-      marginTop: 10,
     },
   });
 }

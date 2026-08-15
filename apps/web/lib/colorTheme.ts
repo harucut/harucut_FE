@@ -1,27 +1,29 @@
+// localStorage에는 '선호(system/light/dark)'를 저장한다 — 확정된 테마가 아니다.
+// 외부(컴포넌트)에 공개하는 표면은 선호 기반 API 8개뿐이고, 나머지는 이 파일 내부 구현이다.
 export const COLOR_THEME_STORAGE_KEY = "harucut-web-color-theme";
-export const COLOR_THEME_ATTRIBUTE = "data-theme";
-export const COLOR_THEME_SYSTEM_QUERY = "(prefers-color-scheme: dark)";
+const COLOR_THEME_ATTRIBUTE = "data-theme";
+const COLOR_THEME_SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
-export const COLOR_THEMES = ["light", "dark"] as const;
+const COLOR_THEMES = ["light", "dark"] as const;
 export const COLOR_THEME_PREFERENCES = ["system", ...COLOR_THEMES] as const;
 
-export type ColorTheme = (typeof COLOR_THEMES)[number];
+type ColorTheme = (typeof COLOR_THEMES)[number];
 export type ColorThemePreference = (typeof COLOR_THEME_PREFERENCES)[number];
 
-export const DEFAULT_COLOR_THEME: ColorTheme = "light";
-export const DEFAULT_COLOR_THEME_PREFERENCE: ColorThemePreference = "system";
+const DEFAULT_COLOR_THEME: ColorTheme = "light";
+const DEFAULT_COLOR_THEME_PREFERENCE: ColorThemePreference = "system";
 
-export function isColorTheme(value: string | null | undefined): value is ColorTheme {
+function isColorTheme(value: string | null | undefined): value is ColorTheme {
   return value === "light" || value === "dark";
 }
 
-export function isColorThemePreference(
+function isColorThemePreference(
   value: string | null | undefined,
 ): value is ColorThemePreference {
   return value === "system" || isColorTheme(value);
 }
 
-export function getSystemColorTheme(): ColorTheme {
+function getSystemColorTheme(): ColorTheme {
   if (typeof window === "undefined" || !window.matchMedia) {
     return DEFAULT_COLOR_THEME;
   }
@@ -29,33 +31,24 @@ export function getSystemColorTheme(): ColorTheme {
   return window.matchMedia(COLOR_THEME_SYSTEM_QUERY).matches ? "dark" : "light";
 }
 
-export function resolveColorTheme(value: string | null | undefined): ColorTheme {
-  return isColorTheme(value) ? value : getSystemColorTheme();
-}
-
-export function resolveColorThemePreference(
+function resolveColorThemePreference(
   value: string | null | undefined,
 ): ColorThemePreference {
   return isColorThemePreference(value) ? value : DEFAULT_COLOR_THEME_PREFERENCE;
 }
 
-export function resolveEffectiveColorTheme(
+function resolveEffectiveColorTheme(
   preference: ColorThemePreference,
 ): ColorTheme {
   return preference === "system" ? getSystemColorTheme() : preference;
 }
 
-export function applyColorTheme(theme: ColorTheme) {
+function applyColorTheme(theme: ColorTheme) {
   if (typeof document === "undefined") return;
 
   const root = document.documentElement;
   root.setAttribute(COLOR_THEME_ATTRIBUTE, theme);
   root.style.colorScheme = theme;
-}
-
-export function persistColorTheme(theme: ColorTheme) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(COLOR_THEME_STORAGE_KEY, theme);
 }
 
 export function applyPreferredColorTheme(preference: ColorThemePreference) {
@@ -67,11 +60,6 @@ export function applyPreferredColorTheme(preference: ColorThemePreference) {
 export function persistColorThemePreference(preference: ColorThemePreference) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(COLOR_THEME_STORAGE_KEY, preference);
-}
-
-export function readStoredColorTheme() {
-  if (typeof window === "undefined") return DEFAULT_COLOR_THEME;
-  return resolveColorTheme(window.localStorage.getItem(COLOR_THEME_STORAGE_KEY));
 }
 
 export function readStoredColorThemePreference() {

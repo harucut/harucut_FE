@@ -6,7 +6,6 @@ import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StepProgress } from "@/components/layout/StepProgress";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { frameIdFromFrameType } from "@/lib/frameApi";
@@ -63,9 +62,8 @@ function ShootPageContent() {
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
           title="프레임 선택"
-          description="촬영할 4컷 프레임을 골라주세요."
+          description="촬영할 4컷 프레임을 골라 주세요."
         />
-        <StepProgress current={1} total={4} label="프레임 선택" />
 
         <FramePicker
           selectedFrameId={selectedFrameId}
@@ -81,7 +79,7 @@ function ShootPageContent() {
         {accessMode === "member" ? (
           <SavedFramesSection
             title="저장한 프레임"
-            emptyText="저장된 프레임이 없습니다."
+            emptyText="저장한 프레임이 없어요."
             selectedFrameId={selectedFrameId}
             frames={frames}
             isLoading={isLoading}

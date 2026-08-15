@@ -1,0 +1,33 @@
+name: ci-on-codex-review
+
+# Codex 리뷰가 끝나면 그때 CI를 돌린다.
+#
+# verify 워크플로는 `run-ci` 라벨이 붙은 PR에서만 실제 검사를 돈다. 이 워크플로는 Codex가
+# 리뷰를 제출한 순간 그 라벨을 대신 붙여 준다. 결과적으로 검사 순서가 "Codex 리뷰 → CI"로
+# 고정되고, 리뷰도 안 끝난 코드에 러너 시간을 쓰지 않는다.
+#
+# 라벨을 붙이는 방식을 쓰는 이유: pull_request_review에서 검사를 직접 돌리면 그 실행이
+# PR head 커밋이 아니라 머지 커밋에 붙어 PR 검사 목록에 잡히지 않는다. 라벨을 붙이면
+# verify 워크플로가 pull_request(labeled)로 다시 돌아 head 커밋에 정상적으로 기록된다.
+#
+# 라벨은 자동으로 떼지 않는다. 한 번 붙은 뒤의 푸시는 계속 검사한다 — 코드가 바뀌었으면
+# 다시 확인하는 게 맞다. 그만 돌리고 싶으면 라벨을 떼면 된다.
+on:
+  pull_request_review:
+    types:
+      - submitted
+
+permissions:
+  pull-requests: write
+
+jobs:
+  add-run-ci-label:
+    if: github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add run-ci label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        # 이미 붙어 있어도 실패하지 않는다(gh는 중복 추가를 무시한다).
+        run: gh pr edit "$PR_URL" --add-label run-ci

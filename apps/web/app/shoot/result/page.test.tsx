@@ -1,7 +1,8 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { create } from "zustand";
 import ShootResultPage from "@/app/shoot/result/page";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -9,11 +10,12 @@ const mockComposeFramePng = jest.fn();
 const mockUploadGeneratedFourcutFile = jest.fn();
 const mockCreateObjectURL = jest.fn();
 const mockRevokeObjectURL = jest.fn();
+const mockSetPendingGuestSave = jest.fn();
 
 type MockShootSessionState = {
   frameId: string | null;
   remoteFrameId: number | null;
-  shots: Array<{ photo: string }>;
+  shots: string[];
   selectedIndexes: Array<number | null>;
   borderColor: string;
   outputFilter: "NONE";
@@ -25,12 +27,7 @@ type MockShootSessionState = {
 const mockUseShootSession = create<MockShootSessionState>((set) => ({
   frameId: "classic-4" as string | null,
   remoteFrameId: null as number | null,
-  shots: [
-    { photo: "/shot-1.png" },
-    { photo: "/shot-2.png" },
-    { photo: "/shot-3.png" },
-    { photo: "/shot-4.png" },
-  ],
+  shots: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "#111827",
   outputFilter: "NONE",
@@ -45,10 +42,6 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/components/layout/PageHeader", () => ({
   PageHeader: () => <div data-testid="page-header" />,
-}));
-
-jest.mock("@/components/layout/StepProgress", () => ({
-  StepProgress: () => <div data-testid="step-progress" />,
 }));
 
 jest.mock("@/components/frame/FramePreview", () => ({
@@ -78,7 +71,12 @@ jest.mock("@/lib/shootSessionStore", () => ({
 
 jest.mock("@/lib/canvas/composeFrame", () => ({
   composeFramePng: (...args: unknown[]) => mockComposeFramePng(...args),
+  downloadBlob: jest.fn(),
   downloadFromUrl: jest.fn(),
+}));
+
+jest.mock("@/lib/pendingGuestSave", () => ({
+  setPendingGuestSave: (...args: unknown[]) => mockSetPendingGuestSave(...args),
 }));
 
 jest.mock("@/lib/fourcutProcessing", () => ({
@@ -101,16 +99,17 @@ describe("ShootResultPage", () => {
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
+    mockSetPendingGuestSave.mockResolvedValue(true);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["image"], { type: "image/png" }),
+    }) as unknown as typeof fetch;
+    useGuestTrialStore.setState({ accessMode: "member", notice: null });
 
     mockUseShootSession.setState({
       frameId: "classic-4",
       remoteFrameId: null,
-      shots: [
-        { photo: "/shot-1.png" },
-        { photo: "/shot-2.png" },
-        { photo: "/shot-3.png" },
-        { photo: "/shot-4.png" },
-      ],
+      shots: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "#111827",
       outputFilter: "NONE",
@@ -121,18 +120,10 @@ describe("ShootResultPage", () => {
       new Blob(["image"], { type: "image/png" }),
     );
     mockUploadGeneratedFourcutFile.mockImplementation(
-      async ({
-        displayName,
-      }: {
-        kind: "IMAGE";
-        displayName: string;
-        extension: "png";
-      }) => ({
+      async ({ displayName }: { file: File; displayName: string }) => ({
         mediaId: 1,
-        kind: "IMAGE",
         objectUrl: "https://example.com/image",
         downloadUrl: "https://example.com/image",
-        extension: "png",
         displayName,
       }),
     );
@@ -146,6 +137,71 @@ describe("ShootResultPage", () => {
     });
 
     expect(mockComposeFramePng).toHaveBeenCalledTimes(1);
-    expect(mockUploadGeneratedFourcutFile.mock.calls[0][0].kind).toBe("IMAGE");
+    // 선택한 4장이 고른 순서 그대로 합성에 들어가야 한다.
+    expect(mockComposeFramePng.mock.calls[0][0].sources).toEqual([
+      { src: "/shot-1.png" },
+      { src: "/shot-2.png" },
+      { src: "/shot-3.png" },
+      { src: "/shot-4.png" },
+    ]);
+
+    // 업로드 파일은 기본 표시 이름(harucut_YYYYMMDD_HHMMSS) + .png 규약을 따른다.
+    const { file, displayName } = mockUploadGeneratedFourcutFile.mock.calls[0][0];
+    expect(displayName).toMatch(/^harucut_\d{8}_\d{6}$/);
+    expect(file.name).toBe(`${displayName}.png`);
+    expect(file.type).toBe("image/png");
+  });
+
+  it("게스트가 로그인으로 이동하면 결과물을 보관하고 resumeSave 경로로 넘긴다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+
+    render(<ShootResultPage />);
+
+    // 게스트 결과물은 메모리 blob으로만 만들어진다. 생성이 끝난 뒤에 눌러야 한다.
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    const loginButton = await screen.findByRole("button", {
+      name: "로그인하고 저장하기",
+    });
+    fireEvent.click(loginButton);
+
+    await waitFor(() => {
+      expect(mockSetPendingGuestSave).toHaveBeenCalledTimes(1);
+    });
+
+    // 비회원 결과물은 서버에 올라가지 않는다.
+    expect(mockUploadGeneratedFourcutFile).not.toHaveBeenCalled();
+    expect(mockSetPendingGuestSave.mock.calls[0][0]).toBeInstanceOf(Blob);
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(
+        "/login?redirectTo=%2Fhome%3FresumeSave%3D1",
+      );
+    });
+  });
+
+  it("게스트 보관에 실패하면 로그인으로 넘기지 않고 안내한다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+    mockSetPendingGuestSave.mockResolvedValue(false);
+
+    render(<ShootResultPage />);
+
+    // 게스트 결과물은 메모리 blob으로만 만들어진다. 생성이 끝난 뒤에 눌러야 한다.
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    const loginButton = await screen.findByRole("button", {
+      name: "로그인하고 저장하기",
+    });
+    fireEvent.click(loginButton);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "결과를 보관하지 못했어요",
+      );
+    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

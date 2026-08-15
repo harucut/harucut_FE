@@ -1,8 +1,9 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { create } from "zustand";
 import UploadResultPage from "@/app/upload/result/page";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -10,6 +11,7 @@ const mockComposeFramePng = jest.fn();
 const mockUploadGeneratedFourcutFile = jest.fn();
 const mockCreateObjectURL = jest.fn();
 const mockRevokeObjectURL = jest.fn();
+const mockGetMediaDownloadUrl = jest.fn();
 
 type MockUploadSessionState = {
   frameId: string | null;
@@ -27,10 +29,10 @@ const mockUseUploadSession = create<MockUploadSessionState>((set) => ({
   frameId: "classic-4" as string | null,
   remoteFrameId: null as number | null,
   media: [
-    { type: "image" as const, src: "/image-1.png" },
-    { type: "image" as const, src: "/image-2.png" },
-    { type: "image" as const, src: "/image-3.png" },
-    { type: "image" as const, src: "/image-4.png" },
+    { src: "/image-1.png" },
+    { src: "/image-2.png" },
+    { src: "/image-3.png" },
+    { src: "/image-4.png" },
   ],
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "#111827",
@@ -48,16 +50,18 @@ jest.mock("@/components/layout/PageHeader", () => ({
   PageHeader: () => <div data-testid="page-header" />,
 }));
 
-jest.mock("@/components/layout/StepProgress", () => ({
-  StepProgress: () => <div data-testid="step-progress" />,
-}));
-
 jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
 }));
 
 jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
-  GeneratedAssetDownloadCard: () => <div data-testid="generated-asset-card" />,
+  GeneratedAssetDownloadCard: ({ onDownload }: { onDownload: () => void }) => (
+    <div data-testid="generated-asset-card">
+      <button type="button" onClick={onDownload}>
+        이미지 다운로드
+      </button>
+    </div>
+  ),
 }));
 
 jest.mock("@/hooks/useRemoteFrameTheme", () => ({
@@ -85,7 +89,7 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 
 jest.mock("@/lib/userMediaApi", () => ({
   updateMediaDisplayName: jest.fn(),
-  getMediaDownloadUrl: jest.fn(),
+  getMediaDownloadUrl: (...args: unknown[]) => mockGetMediaDownloadUrl(...args),
 }));
 
 jest.mock("@/lib/share", () => ({
@@ -98,15 +102,17 @@ describe("UploadResultPage", () => {
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
+    mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/image");
+    useGuestTrialStore.setState({ accessMode: "member", notice: null });
 
     mockUseUploadSession.setState({
       frameId: "classic-4",
       remoteFrameId: null,
       media: [
-        { type: "image", src: "/image-1.png" },
-        { type: "image", src: "/image-2.png" },
-        { type: "image", src: "/image-3.png" },
-        { type: "image", src: "/image-4.png" },
+        { src: "/image-1.png" },
+        { src: "/image-2.png" },
+        { src: "/image-3.png" },
+        { src: "/image-4.png" },
       ],
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "#111827",
@@ -118,18 +124,10 @@ describe("UploadResultPage", () => {
       new Blob(["image"], { type: "image/png" }),
     );
     mockUploadGeneratedFourcutFile.mockImplementation(
-      async ({
-        displayName,
-      }: {
-        kind: "IMAGE";
-        displayName: string;
-        extension: "png";
-      }) => ({
+      async ({ displayName }: { file: File; displayName: string }) => ({
         mediaId: 1,
-        kind: "IMAGE",
         objectUrl: "https://example.com/image",
         downloadUrl: "https://example.com/image",
-        extension: "png",
         displayName,
       }),
     );
@@ -143,6 +141,39 @@ describe("UploadResultPage", () => {
     });
 
     expect(mockComposeFramePng).toHaveBeenCalledTimes(1);
-    expect(mockUploadGeneratedFourcutFile.mock.calls[0][0].kind).toBe("IMAGE");
+    // 고른 4장이 순서 그대로 합성에 들어가야 한다.
+    expect(mockComposeFramePng.mock.calls[0][0].sources).toEqual([
+      { src: "/image-1.png" },
+      { src: "/image-2.png" },
+      { src: "/image-3.png" },
+      { src: "/image-4.png" },
+    ]);
+
+    // 업로드 파일은 기본 표시 이름(harucut_YYYYMMDD_HHMMSS) + .png 규약을 따른다.
+    const { file, displayName } = mockUploadGeneratedFourcutFile.mock.calls[0][0];
+    expect(displayName).toMatch(/^harucut_\d{8}_\d{6}$/);
+    expect(file.name).toBe(`${displayName}.png`);
+    expect(file.type).toBe("image/png");
+  });
+
+  it("다운로드에 실패하면 alert 대신 전역 안내를 띄운다", async () => {
+    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
+    mockGetMediaDownloadUrl.mockRejectedValue(new Error("download failed"));
+
+    render(<UploadResultPage />);
+
+    const downloadButton = await screen.findByRole("button", {
+      name: "이미지 다운로드",
+    });
+    fireEvent.click(downloadButton);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "이미지를 다운로드하지 못했어요",
+      );
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    alertSpy.mockRestore();
   });
 });

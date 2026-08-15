@@ -11,17 +11,24 @@ import type { ButtonVariant } from '@/constants/harucut-design';
 export type AccessMode = 'anonymous' | 'guest' | 'member';
 export type RemoteStatus = 'idle' | 'loading' | 'ready' | 'error';
 
+// GlobalNotice가 이 값을 React key로도 쓰므로, 한 노티스 안에서는 서로 달라야 한다.
+// 'dismiss' 아래 항목들은 확인 다이얼로그의 실행 버튼용이다 — onPress로 동작을 붙이고
+// 취소 버튼('dismiss')과 키가 겹치지 않게만 하면 된다(GlobalNotice의 default 분기가 닫아 준다).
 export type NoticeActionId =
   | 'dismiss'
   | 'go-login'
   | 'go-shoot'
   | 'go-landing'
-  | 'start-guest-trial';
+  | 'start-guest-trial'
+  | 'leave-capture'
+  | 'remove-frame';
 
 export type NoticeAction = {
   id: NoticeActionId;
   label: string;
   variant?: ButtonVariant;
+  // 확인 다이얼로그처럼 액션에 임의 동작을 붙일 때 사용. 지정되면 노티스를 닫은 뒤 실행한다.
+  onPress?: () => void;
 };
 
 export type NoticeState = {
@@ -34,11 +41,13 @@ export type NoticeState = {
 
 export const defaultBorderColor = FRAME_BORDER_OPTIONS[0].value;
 
+// 웹(apps/web/constants/frames.ts)과 반드시 같은 문자열을 쓴다 —
+// 같은 프레임이 앱/웹에서 다른 이름으로 보이면 저장한 기록을 못 알아본다.
 const frameNames: Record<FrameId, string> = {
-  'classic-4': '클래식 4컷',
-  'grid-4': '2x2 그리드',
-  'polaroid-4': '폴라로이드 4컷',
-  'wide-4': '와이드 4컷',
+  'classic-4': '세로 4컷',
+  'grid-4': '네모 4컷',
+  'polaroid-4': '즉석사진 4컷',
+  'wide-4': '가로 4컷',
 };
 
 export function frameName(frameId: FrameId) {
@@ -125,9 +134,11 @@ export function upsertHistoryItem(
   return items.map((item) => (item.id === existingId ? nextItem : item));
 }
 
-// 세션 모드 전환(enterAnonymousMode 등) 시 작업 공간 스토어들을 초기화하기 위한 레지스트리.
+// 명시적 세션 이탈(로그아웃·탈퇴·게스트 전환) 시 작업 공간 스토어들을 초기화하기 위한 레지스트리.
 // 세션 스토어가 작업 공간 스토어를 직접 import하면 순환 참조가 생기므로,
-// 각 스토어 모듈이 로드될 때 자신의 hardReset을 등록한다.
+// 각 스토어 모듈이 로드될 때 자신의 hardReset을 등록한다(촬영·업로드·꾸미기 + 라이브러리 캐시).
+// 401 하드 만료는 사용자의 의사가 아니므로 이 경로를 쓰지 않는다 —
+// use-session-store의 endExpiredSession이 라이브러리만 비우고 작업 공간은 보존한다.
 const workspaceResets = new Set<() => void>();
 
 export function registerWorkspaceReset(reset: () => void) {

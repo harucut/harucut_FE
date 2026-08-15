@@ -9,10 +9,15 @@ import {
   Image as ImageIcon,
   Sparkles,
 } from "lucide-react";
+import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
-import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import {
+  getUserMediaPreviewUrl,
+  getUserMediaTitle,
+} from "@/lib/userMediaPreview";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
@@ -137,8 +142,8 @@ function countThisMonth(items: UserMedia[]) {
   const y = now.getFullYear();
   const m = now.getMonth();
   return items.filter((item) => {
-    if (!item.createdAt) return false;
-    const d = new Date(item.createdAt);
+    const d = parseServerDateTime(item.createdAt);
+    if (!d) return false;
     return !Number.isNaN(d.getTime()) && d.getFullYear() === y && d.getMonth() === m;
   }).length;
 }
@@ -152,8 +157,8 @@ function countThisWeek(items: UserMedia[]) {
   weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const startMs = weekStart.getTime();
   return items.filter((item) => {
-    if (!item.createdAt) return false;
-    const d = new Date(item.createdAt);
+    const d = parseServerDateTime(item.createdAt);
+    if (!d) return false;
     return !Number.isNaN(d.getTime()) && d.getTime() >= startMs;
   }).length;
 }
@@ -161,32 +166,53 @@ function countThisWeek(items: UserMedia[]) {
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
-  const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
+  const [allMedia, setAllMedia] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDashboard() {
       setLoading(true);
+      setLoadError(null);
 
       try {
-        const [nextUser, nextMedia] = await Promise.all([
+        // 기록 조회 실패는 빈 상태로 삼키지 않고 에러 상태로 구분한다.
+        const [nextUser, mediaResult] = await Promise.all([
           getMyUserInfo().catch(() => null),
-          listMyMedia().catch(() => []),
+          listMyMedia().then(
+            (media) => ({ ok: true as const, media }),
+            (error: unknown) => ({ ok: false as const, error }),
+          ),
         ]);
 
         if (cancelled) return;
 
-        const sortedMedia = [...nextMedia].sort((a, b) => {
-          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        setUser(nextUser);
+
+        if (!mediaResult.ok) {
+          console.error(mediaResult.error);
+          setRecentMedia([]);
+          setAllMedia([]);
+          setLoadError(
+            getUserFacingApiErrorMessage(
+              mediaResult.error,
+              "기록을 불러오지 못했어요.",
+            ),
+          );
+          return;
+        }
+
+        const sortedMedia = [...mediaResult.media].sort((a, b) => {
+          const aTime = serverDateTimeToMillis(a.createdAt);
+          const bTime = serverDateTimeToMillis(b.createdAt);
           return bTime - aTime;
         });
 
-        setUser(nextUser);
         setRecentMedia(sortedMedia.slice(0, 4));
-        setPreviewMedia(sortedMedia);
+        setAllMedia(sortedMedia);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -199,7 +225,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const currentDateLabel = useCurrentDateLabel();
   // 헤딩 날짜는 currentDateLabel과 같은 자정 갱신에 묶어 재계산(별도 타이머 불필요).
@@ -207,16 +233,20 @@ export default function HomePage() {
 
   // currentDateLabel을 의존성에 포함해 날짜가 바뀌면(주/월 경계) 카운트도 다시 계산되게 한다.
   const monthCount = useMemo(
-    () => countThisMonth(previewMedia),
-    [previewMedia, currentDateLabel],
+    () => countThisMonth(allMedia),
+    [allMedia, currentDateLabel],
   );
   const weekCount = useMemo(
-    () => countThisWeek(previewMedia),
-    [previewMedia, currentDateLabel],
+    () => countThisWeek(allMedia),
+    [allMedia, currentDateLabel],
   );
   const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
   const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
   const progressWidth = `${Math.round(ringPct * 100)}%`;
+  // 조회에 실패했으면 0컷이라고 단정하지 않는다.
+  const statsUnknown = loadError !== null;
+  const monthCountLabel = statsUnknown ? "—" : `${monthCount}`;
+  const remainingToGoalLabel = statsUnknown ? "—" : `${remainingToGoal}컷`;
 
   return (
     <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
@@ -225,7 +255,7 @@ export default function HomePage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
         {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
         <header className="pt-1 lg:pt-0">
-          <h1 className="text-[25px] font-extrabold leading-[1.25] tracking-tight lg:text-[34px] lg:leading-[1.15]">
+          <h1 className="text-[25px] font-bold leading-[1.5] tracking-tight lg:text-[34px] lg:leading-[1.4]">
             <span className="text-[color:var(--hc-primary)]">{currentHeadingDate}</span>의
             <br />
             기록을 남겨보세요.
@@ -284,14 +314,14 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {/* 데스크톱(lg+) 액션 인덱스 → 촬영 / 업로드 / 꾸미기 (코치마크는 보이는 카드를 비춤) */}
+        {/* 데스크톱(lg+) 액션 카드 → 촬영 / 업로드 / 꾸미기 (코치마크는 보이는 카드를 비춤) */}
+        {/* 01·02·03 인덱스를 뺀 뒤 justify-center로 — justify-between은 자식이 하나면 위로 붙는다. */}
         <section className="hidden gap-3.5 lg:grid lg:grid-cols-3">
           <Link
             href="/shoot"
             data-coach="shoot"
-            className="group flex min-h-[108px] flex-col justify-between rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
+            className="group flex min-h-[108px] flex-col justify-center rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
           >
-            <span className="font-mono text-[11px] tracking-[0.18em] opacity-60">01</span>
             <span>
               <span className="flex items-center justify-between text-[19px] font-extrabold">
                 촬영하기
@@ -306,11 +336,8 @@ export default function HomePage() {
           <Link
             href="/upload"
             data-coach="upload"
-            className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
+            className="hc-surface-card group flex min-h-[108px] flex-col justify-center rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
           >
-            <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
-              02
-            </span>
             <span>
               <span className="flex items-center justify-between text-[19px] font-extrabold">
                 업로드하기
@@ -325,11 +352,8 @@ export default function HomePage() {
           <Link
             href="/theme"
             data-coach="theme"
-            className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
+            className="hc-surface-card group flex min-h-[108px] flex-col justify-center rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
           >
-            <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
-              03
-            </span>
             <span>
               <span className="flex items-center justify-between text-[19px] font-extrabold">
                 프레임 꾸미기
@@ -345,46 +369,50 @@ export default function HomePage() {
         {/* 모바일(&lt;lg) 스탯 카드 — 이번 달 컷 수 + 주간 목표 + 진행 링 */}
         <section className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 lg:hidden">
           <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary)]">
-            {monthCount}
+            {monthCountLabel}
           </span>
           <p className="flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
-            이번 달 <b className="text-[color:var(--hc-text)]">{monthCount}컷</b>을
-            남겼어요.
-            <br />
-            이번 주 목표까지{" "}
-            <b className="text-[color:var(--hc-primary)]">{remainingToGoal}컷</b> 남았어요!
+            {statsUnknown ? (
+              "기록을 불러오지 못해 이번 달 기록 수를 알 수 없어요."
+            ) : (
+              <>
+                이번 달 <b className="text-[color:var(--hc-text)]">{monthCount}컷</b>을
+                남겼어요.
+                <br />
+                이번 주 목표까지{" "}
+                <b className="text-[color:var(--hc-primary-strong)]">{remainingToGoal}컷</b>{" "}
+                남았어요!
+              </>
+            )}
           </p>
-          <ProgressRing pct={ringPct} />
+          <ProgressRing pct={statsUnknown ? 0 : ringPct} />
         </section>
 
         {/* 데스크톱(lg+) 주간 진행 스트립 */}
         <section className="hc-surface-card hidden items-center gap-5 rounded-2xl border p-[22px] lg:flex">
           <span className="flex items-baseline gap-2">
             <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary)]">
-              {monthCount}
+              {monthCountLabel}
             </span>
             <span className="text-[14px] text-[color:var(--hc-muted)]">컷 / 이번 달</span>
           </span>
           <span className="h-2 min-w-[160px] flex-1 overflow-hidden rounded-full bg-[color:var(--hc-surface-muted)]">
             <span
               className="block h-full rounded-full bg-[color:var(--hc-primary)]"
-              style={{ width: progressWidth }}
+              style={{ width: statsUnknown ? "0%" : progressWidth }}
             />
           </span>
           <span className="text-[13.5px] text-[color:var(--hc-muted)]">
             이번 주 목표까지{" "}
-            <b className="text-[color:var(--hc-text)]">{remainingToGoal}컷</b>
+            <b className="text-[color:var(--hc-text)]">{remainingToGoalLabel}</b>
           </span>
         </section>
 
         {/* 최근 기록 */}
         <section className="flex flex-col gap-4">
           <div className="flex items-end justify-between">
-            <h2 className="flex items-baseline gap-2 text-[17px] font-extrabold tracking-tight lg:text-[22px]">
+            <h2 className="text-[17px] font-extrabold tracking-tight lg:text-[22px]">
               최근 기록
-              <span className="hidden font-mono text-[13px] font-normal uppercase tracking-[0.18em] text-[color:var(--hc-muted-soft)] lg:inline">
-                Recent
-              </span>
             </h2>
             <Link
               href="/history"
@@ -403,9 +431,23 @@ export default function HomePage() {
                   className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
                 />
               ))
+            ) : loadError ? (
+              // 실패를 빈 상태로 위장하지 않는다. 문구 + 다시 시도.
+              <div className="hc-surface-well col-span-2 flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center md:col-span-4">
+                <p className="text-[13px] text-[color:var(--hc-muted)]">
+                  {loadError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((prev) => prev + 1)}
+                  className="hc-button-secondary rounded-full border px-5 py-2 text-[12.5px] font-semibold"
+                >
+                  다시 시도
+                </button>
+              </div>
             ) : recentMedia.length > 0 ? (
               recentMedia.map((item) => {
-                const preview = getUserMediaPreview(item, previewMedia);
+                const previewUrl = getUserMediaPreviewUrl(item);
 
                 return (
                   <Link
@@ -414,20 +456,16 @@ export default function HomePage() {
                     className="group flex flex-col gap-2"
                   >
                     <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
-                      {preview.url ? (
+                      {previewUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={preview.url}
+                          src={previewUrl}
                           alt={getUserMediaTitle(item)}
                           className="absolute inset-0 h-full w-full object-contain p-3"
                         />
                       ) : (
                         <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
                       )}
-                      <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
-                        <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-                        사진
-                      </span>
                     </div>
                     <p className="truncate text-[13.5px] font-bold tracking-tight">
                       {getUserMediaTitle(item)}
@@ -437,13 +475,12 @@ export default function HomePage() {
               })
             ) : (
               <div className="hc-surface-well col-span-2 flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center md:col-span-4">
-                <Sparkles className="h-6 w-6 text-[color:var(--hc-primary)]" />
                 <p className="text-[13px] text-[color:var(--hc-muted)]">
                   아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
                 </p>
                 <Link
                   href="/shoot"
-                  className="hc-button-primary rounded-full px-4 py-2 text-[12px] font-semibold"
+                  className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
                 >
                   촬영 시작
                 </Link>

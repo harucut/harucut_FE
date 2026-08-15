@@ -2,106 +2,30 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { BrandMark } from "@/components/layout/BrandMark";
+import { ArrowRight } from "lucide-react";
+import { MarketingFooter } from "@/components/layout/MarketingFooter";
+import { MarketingNav } from "@/components/layout/MarketingNav";
+import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { Reveal } from "@/components/ui/Reveal";
+import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
-import { COMPANY } from "@/constants/company";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
 
 const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.png");
 
+// 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [
-  { n: "01", k: "SHOOT", t: "촬영하기", d: "카메라로 8장을 찍거나, 갤러리에서 골라요." },
-  { n: "02", k: "DECORATE", t: "꾸미기", d: "프레임·텍스트·스티커로 나만의 네 컷을 완성해요." },
-  { n: "03", k: "KEEP", t: "기록하기", d: "사진으로 저장하고, 기록에 차곡차곡 모아요." },
+  { n: "01", t: "촬영하기", d: "카메라로 8장을 찍거나, 갤러리에서 골라요." },
+  { n: "02", t: "꾸미기", d: "프레임 위에 스티커와 글씨를 얹어요." },
+  { n: "03", t: "기록하기", d: "사진으로 저장하고, 기록에 차곡차곡 모아요." },
 ] as const;
 
-const FRAMES: { id: FrameId; name: string; border: string }[] = [
-  { id: "classic-4", name: "클래식", border: "#000000" },
-  { id: "wide-4", name: "와이드", border: "#18181A" },
-  { id: "grid-4", name: "2×2 그리드", border: GREEN },
-  { id: "polaroid-4", name: "폴라로이드", border: "#FAFAF7" },
-];
-
-// FAQ는 constants/faq.ts(단일 소스)로 이동 — 랜딩은 LANDING_FAQ(상위 5개)만, 전체는 /faq.
-
-const FOOTER_COLS: { title: string; items: { label: string; href?: string }[] }[] = [
-  {
-    title: "바로가기",
-    items: [
-      { label: "요금제", href: "/pricing" },
-      { label: "자주 묻는 질문", href: "/faq" },
-    ],
-  },
-  {
-    title: "정책",
-    items: [
-      { label: "이용약관", href: "/terms" },
-      { label: "개인정보 처리방침", href: "/privacy" },
-    ],
-  },
-];
-
-function WebNav() {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    // passive 리스너로 등록해 스크롤 중 브라우저가 핸들러의 preventDefault 여부를
-    // 기다리지 않도록 한다(스크롤 부드러움 향상). 마운트 시 현재 위치도 한 번 동기화한다.
-    const onScroll = () => setScrolled(window.scrollY > 10);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <header
-      className="sticky top-0 z-40 transition-all duration-300"
-      style={{
-        background: scrolled ? "rgba(11,11,12,.82)" : "transparent",
-        backdropFilter: scrolled ? "saturate(1.2) blur(14px)" : "none",
-        borderBottom: `1px solid ${scrolled ? "rgba(255,255,255,.1)" : "transparent"}`,
-      }}
-    >
-      <div className="mx-auto flex h-[72px] max-w-[1160px] items-center justify-between px-7">
-        <BrandMark href="/" tone="light" />
-        {/*
-          헤더는 로고 + CTA만. 히어로엔 버튼을 두지 않으므로(브랜드 비주얼만) primary CTA
-          (지금 시작하기)는 모바일에도 노출해 첫 화면에서 항상 진입 가능하게 한다. 요금제는 데스크톱만.
-        */}
-        <div className="flex items-center gap-2.5">
-          {/*
-            hover:bg-white/[0.07] (not bg-white/5): globals.css의 테마 매핑 규칙
-            [class*="bg-white/5"]가 부분 문자열 매칭이라 hover:bg-white/5까지 상시 적용해버려
-            라이트 시스템 테마에서 로그인 버튼이 흰 알약(글자 안 보임)으로 굳던 문제를 피한다.
-          */}
-          <Link
-            href="/pricing"
-            className="hidden rounded-full px-4 py-2 text-[13px] font-semibold text-white hover:bg-white/[0.07] lg:inline-flex"
-          >
-            요금제
-          </Link>
-          <Link
-            href="/faq"
-            className="hidden rounded-full px-4 py-2 text-[13px] font-semibold text-white hover:bg-white/[0.07] lg:inline-flex"
-          >
-            FAQ
-          </Link>
-          {/* 우측 상단 primary CTA: 지금 시작하기 → /login(로그인 우선). 가입·비회원 체험은 로그인 페이지에서. */}
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold"
-            style={{ background: GREEN, color: "#06140A" }}
-          >
-            지금 시작하기 <ArrowUpRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
+// FAQ는 /faq 전용 페이지가 단독으로 맡는다 — 랜딩에 인라인 FAQ는 두지 않고,
+// 접근은 헤더 nav와 푸터 링크로만 한다.
+// 푸터는 components/layout/MarketingFooter로 분리 — 요금제·FAQ와 공통.
 
 function ShowcaseFrame({
   id,
@@ -120,7 +44,115 @@ function ShowcaseFrame({
   );
 }
 
-// FAQ 목록은 /faq 전용 페이지로 분리 — 랜딩 인라인 FAQ는 제거(접근은 nav·푸터 링크).
+// 한 칸이 머무는 시간(ms). 아래 진행 바 애니메이션과 같은 값을 써야 싱크가 맞는다.
+const STEP_DWELL_MS = 2600;
+
+// HOW 섹션 — 필름이 한 칸씩 감기듯 01 → 02 → 03이 순서대로 밝아진다.
+// 내용은 항상 전부 보이고 강조만 이동하므로, 모션이 꺼져도 정보 손실이 없다.
+function HowFilm() {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    // 모션을 끈 사용자는 순환시키지 않고 전 단계를 동등하게 보여준다.
+    if (reduced || paused) return;
+    const id = window.setInterval(
+      () => setActive((i) => (i + 1) % STEPS.length),
+      STEP_DWELL_MS,
+    );
+    return () => window.clearInterval(id);
+  }, [reduced, paused]);
+
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
+      <TapeStrip
+        running={!reduced && !paused}
+        className="border-b border-white/[0.06]"
+      />
+
+      <div
+        className="grid md:grid-cols-3"
+        onMouseLeave={() => setPaused(false)}
+      >
+        {STEPS.map((s, i) => {
+          // 모션 off일 땐 전부 '현재'로 취급해 흐린 칸이 남지 않게 한다.
+          const on = reduced || i === active;
+          return (
+            <div
+              key={s.n}
+              // 포인터를 올린 칸에서 멈춘다 — 읽는 동안 넘어가버리지 않도록.
+              onMouseEnter={() => {
+                setPaused(true);
+                setActive(i);
+              }}
+              className="relative px-[30px] pb-[38px] pt-[34px] transition-colors duration-500"
+              style={{
+                borderLeft: i ? "1px dashed rgba(255,255,255,.12)" : "none",
+                background: on ? "rgba(255,255,255,.022)" : "transparent",
+              }}
+            >
+              <span
+                className="mb-[18px] block font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px] transition-colors duration-500"
+                // 비활성 단계도 읽을 수 있어야 한다 — .16은 대비 1.57로 WCAG AA(큰 글자 3:1) 미달이었다.
+                style={{ color: on ? GREEN : "rgba(255,255,255,.42)" }}
+              >
+                {s.n}
+              </span>
+              <h3
+                className="mb-2 text-[22px] font-extrabold tracking-[-.4px] transition-colors duration-500"
+                style={{ color: on ? "#FFFFFF" : "rgba(255,255,255,.62)" }}
+              >
+                {s.t}
+              </h3>
+              <p
+                className="text-[14.5px] leading-[1.65] transition-colors duration-500"
+                style={{
+                  // .32는 대비 2.84로 본문 기준(4.5:1) 미달이라 .56으로 올렸다.
+                  color: on ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.56)",
+                }}
+              >
+                {s.d}
+              </p>
+
+              {/* 노출 게이지 — 이 칸에 머무는 동안 그린이 차오른다 */}
+              <span
+                aria-hidden
+                className="absolute bottom-0 left-0 h-[2px] w-full"
+                style={{ background: "rgba(255,255,255,.06)" }}
+              />
+              {!reduced && i === active ? (
+                <span
+                  aria-hidden
+                  // key로 매 전환마다 리마운트해 애니메이션을 처음부터 재생시킨다.
+                  key={`${active}-${paused}`}
+                  className={`absolute bottom-0 left-0 h-[2px] w-full ${paused ? "" : "hc-film-progress"}`}
+                  style={{
+                    background: GREEN,
+                    ["--hc-film-dwell" as string]: `${STEP_DWELL_MS}ms`,
+                  }}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      <TapeStrip
+        running={!reduced && !paused}
+        className="border-t border-white/[0.06]"
+      />
+    </div>
+  );
+}
 
 // 히어로 — 에디토리얼/타입 우선: 초대형 Pretendard Black 헤드라인 +
 // 그린 글로우 + 하단에 흩뿌린 폴라로이드 콜라주(편집 디자인 느낌, 템플릿 탈피).
@@ -135,38 +167,50 @@ function HeroEditorial() {
       />
 
       {/* 헤드라인 — Pretendard Black, 초대형(type-first) */}
-      <h1 className="relative text-[46px] font-black leading-[1.02] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:tracking-[-4px]">
-        어디서든,
-        <br />
-        하루를 <span style={{ color: GREEN }}>촬영해요</span>
-      </h1>
-      <p className="relative mb-9 mt-6 max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]">
-        특별한 하루를 사진으로 남겨보세요.
-      </p>
+      <Reveal
+        as="span"
+        className="relative block text-[46px] font-black leading-[1.24] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:leading-[1.18] lg:tracking-[-4px]"
+      >
+        <h1>
+          어디서든,
+          <br />
+          하루를 <span className="hc-gradient-text">촬영해요</span>
+        </h1>
+      </Reveal>
+      <Reveal
+        as="span"
+        delay={120}
+        className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
+      >
+        <p>특별한 하루를 사진으로 남겨보세요.</p>
+      </Reveal>
 
       {/* 히어로는 브랜드 비주얼만 — CTA(지금 시작하기)는 헤더 우측 상단이 담당한다. */}
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
-      <div className="relative mt-14 flex w-full items-end justify-center">
+      <Reveal
+        delay={220}
+        className="relative mt-12 flex w-full items-end justify-center sm:mt-14"
+      >
         <div
-          className="-mr-7 h-[120px] drop-shadow-2xl sm:h-[150px]"
+          className="-mr-8 h-[150px] drop-shadow-2xl sm:-mr-10 sm:h-[196px] lg:h-[232px]"
           style={{ transform: "rotate(-12deg) translateY(10px)", zIndex: 1 }}
         >
           <ShowcaseFrame id="classic-4" className="!h-full !w-auto" />
         </div>
         <div
-          className="h-[150px] drop-shadow-2xl sm:h-[185px]"
+          className="h-[188px] drop-shadow-2xl sm:h-[244px] lg:h-[290px]"
           style={{ transform: "rotate(3deg)", zIndex: 3 }}
         >
           <ShowcaseFrame id="grid-4" className="!h-full !w-auto" />
         </div>
         <div
-          className="-ml-7 h-[120px] drop-shadow-2xl sm:h-[150px]"
+          className="-ml-8 h-[150px] drop-shadow-2xl sm:-ml-10 sm:h-[196px] lg:h-[232px]"
           style={{ transform: "rotate(12deg) translateY(10px)", zIndex: 2 }}
         >
           <ShowcaseFrame id="polaroid-4" className="!h-full !w-auto" />
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -174,87 +218,78 @@ function HeroEditorial() {
 export function LandingView() {
   return (
     <div className="min-h-dvh bg-[#0B0B0C] text-white">
-      <WebNav />
+      <MarketingNav tone="dark" />
 
       <HeroEditorial />
 
       {/* HOW */}
-      <section id="how" className="border-y border-white/10 bg-black">
+      <section id="how" className="border-y border-white/[0.1] bg-black">
         <div className="mx-auto max-w-[1160px] px-7 py-[76px]">
-          <div className="mb-10">
+          <Reveal className="mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
-              찍고 — 꾸미고 — 남기고.
+              찍고, 꾸미고, 남기고.
               <br />네 컷이면 끝.
             </h2>
-          </div>
+          </Reveal>
 
-          <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
-            <div className="h-[18px] border-b border-white/[0.06] bg-[repeating-linear-gradient(90deg,transparent_0_12px,rgba(255,255,255,.07)_12px_22px)]" />
-            <div className="grid md:grid-cols-3">
-              {STEPS.map((s, i) => (
-                <div
-                  key={s.n}
-                  className="relative px-[30px] pb-[38px] pt-[34px]"
-                  style={{ borderLeft: i ? "1px dashed rgba(255,255,255,.12)" : "none" }}
-                >
-                  <div className="mb-[18px] flex items-baseline gap-3">
-                    <span
-                      className="font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px]"
-                      style={{ color: i === 0 ? GREEN : "rgba(255,255,255,.16)" }}
-                    >
-                      {s.n}
-                    </span>
-                    <span
-                      className="font-mono text-[11px] tracking-[2px]"
-                      style={{ color: i === 0 ? GREEN : "rgba(255,255,255,.45)" }}
-                    >
-                      {s.k}
-                    </span>
-                  </div>
-                  <h3 className="mb-2 text-[22px] font-extrabold tracking-[-.4px] text-white">
-                    {s.t}
-                  </h3>
-                  <p className="text-[14.5px] leading-[1.65] text-white/60">{s.d}</p>
-                </div>
-              ))}
-            </div>
-            <div className="h-[18px] border-t border-white/[0.06] bg-[repeating-linear-gradient(90deg,transparent_0_12px,rgba(255,255,255,.07)_12px_22px)]" />
-          </div>
+          <HowFilm />
         </div>
       </section>
 
-      {/* FRAMES */}
-      <section id="frames" className="mx-auto max-w-[1160px] px-7 py-20">
-        <div className="mb-11">
-          <h2 className="text-[38px] font-extrabold tracking-[-1.2px]">
-            하루의 기분대로, <span style={{ color: GREEN }}>네 가지 프레임</span>
-          </h2>
-        </div>
-        <div className="flex flex-wrap items-end justify-center gap-9">
-          {FRAMES.map((f, i) => (
-            <div key={f.id} className="text-center">
-              <div
-                className="inline-block drop-shadow-2xl"
-                style={{
-                  transform: `rotate(${(i - 1.5) * 2}deg) translateZ(0)`,
-                  backfaceVisibility: "hidden",
-                  willChange: "transform",
-                }}
-              >
-                <div className={f.id === "wide-4" ? "w-[240px]" : "h-[210px]"}>
-                  <ShowcaseFrame
-                    id={f.id}
-                    className={f.id === "wide-4" ? "!w-full" : "!h-full !w-auto"}
-                  />
-                </div>
+      {/* CUSTOM FRAME — 프레임 종류(부스도 다 있는 것) 대신, 부스와 겹치지 않는
+          유일한 축이자 요금제 1행인 "커스텀 프레임"을 랜딩 주인공으로 세운다. */}
+      <section id="custom" className="mx-auto max-w-[1160px] px-7 py-20">
+        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
+          <Reveal>
+            <h2 className="text-[38px] font-extrabold leading-[1.14] tracking-[-1.2px]">
+              고르는 게 아니라,
+              <br />
+              <span className="hc-gradient-text">만드는 거예요.</span>
+            </h2>
+            <p className="mt-6 max-w-[420px] text-[15.5px] leading-[1.75] text-white/60">
+              부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
+              붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
+              전부 달라집니다.
+            </p>
+
+            <Link
+              href="/features"
+              className="mt-9 inline-flex items-center gap-1.5 text-[14.5px] font-bold text-white hover:opacity-80"
+            >
+              기능 자세히 보기 <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Reveal>
+
+          {/* 같은 프레임·같은 사진, 꾸미기만 다르게 — 실제 렌더러로 그린 대비 */}
+          <Reveal delay={140}>
+            <div className="flex items-center justify-center gap-4 sm:gap-7">
+              <div className="h-[210px] opacity-40 grayscale sm:h-[268px]">
+                <FramePreview
+                  frameId="grid-4"
+                  images={HERO_IMAGES}
+                  borderColor="#141416"
+                  className="!h-full !w-auto"
+                />
               </div>
-              <h4 className="mb-1 mt-5 text-[17px] font-extrabold">{f.name}</h4>
+
+              <div
+                aria-hidden
+                className="h-[1px] w-6 shrink-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,.28)_0_4px,transparent_4px_8px)] sm:w-9"
+              />
+
+              <div className="h-[250px] drop-shadow-2xl sm:h-[320px]">
+                <FramePreview
+                  frameId="grid-4"
+                  images={HERO_IMAGES}
+                  theme={DEMO_DECORATED_THEME}
+                  borderColor="#141416"
+                  className="!h-full !w-auto"
+                />
+              </div>
             </div>
-          ))}
+          </Reveal>
         </div>
       </section>
-
-      {/* FAQ는 /faq 전용 페이지로 분리 — 랜딩에선 헤더 nav·푸터 링크로만 접근. */}
 
       {/* CTA */}
       <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-5">
@@ -274,60 +309,7 @@ export function LandingView() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="border-t border-white/10 bg-[#161617]">
-        <div className="mx-auto flex max-w-[1160px] flex-wrap justify-between gap-8 px-7 pb-10 pt-12">
-          <div className="max-w-[280px]">
-            <BrandMark href="/" tone="light" />
-            <p className="mt-3.5 text-[13px] leading-[1.6] text-[#6F6F73]">
-              온라인 인생네컷 서비스.
-              <br />
-              하루를 네 컷으로 남기세요.
-            </p>
-            <a
-              href={`mailto:${COMPANY.email}`}
-              className="mt-3 inline-block text-[13px] text-[#B3B3B3] hover:text-white"
-            >
-              고객문의 {COMPANY.email}
-            </a>
-          </div>
-          <div className="flex flex-wrap gap-14">
-            {FOOTER_COLS.map((col) => (
-              <div key={col.title}>
-                <h6 className="mb-3.5 text-[13px] font-extrabold tracking-[.3px]">{col.title}</h6>
-                {col.items.map((it) =>
-                  it.href ? (
-                    <Link
-                      key={it.label}
-                      href={it.href}
-                      className="mb-2.5 block text-[13.5px] text-[#B3B3B3] hover:text-white"
-                    >
-                      {it.label}
-                    </Link>
-                  ) : (
-                    <span key={it.label} className="mb-2.5 block text-[13.5px] text-[#B3B3B3]">
-                      {it.label}
-                    </span>
-                  ),
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="border-t border-white/10">
-          <div className="mx-auto flex max-w-[1160px] flex-col gap-2 px-7 py-[18px] font-mono text-[11px] leading-[1.7] text-[#6F6F73]">
-            <p>
-              {COMPANY.name} · 대표 {COMPANY.owner} · 사업자등록번호{" "}
-              {COMPANY.bizRegNo} · 통신판매업신고번호 {COMPANY.mailOrderNo}
-            </p>
-            <p>{COMPANY.address}</p>
-            <div className="flex justify-between">
-              <span>© 2026 {COMPANY.name}</span>
-              <span>harucut.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter tone="dark" />
     </div>
   );
 }

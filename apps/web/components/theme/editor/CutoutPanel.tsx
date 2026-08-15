@@ -31,7 +31,7 @@ export function CutoutPanel() {
 
       <p className="text-[11px] leading-5 text-zinc-400">
         아래 버튼으로 칸을 골라 인물만 남기고 배경을 지워요. 다시 누르면 원래대로
-        돌아와요. 미리보기에서 칸을 직접 눌러 토글하려면 "캔버스 칸 탭"을 켜세요.
+        돌아와요. 미리보기에서 칸을 직접 눌러 토글하려면 ‘캔버스 칸 탭’을 켜세요.
       </p>
 
       <button

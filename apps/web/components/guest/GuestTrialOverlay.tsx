@@ -38,6 +38,16 @@ export function GuestTrialOverlay() {
   }
 
   const handleAction = (actionId: string) => {
+    // 액션에 href가 있으면 그 경로를 우선한다.
+    // 게스트 결과 보관 안내는 /login?redirectTo=/home?resumeSave=1 로 보내야
+    // 로그인 직후 GuestTrialBridge가 보관해 둔 결과를 자동으로 올린다.
+    const action = notice.actions.find((item) => item.id === actionId);
+    if (action?.href) {
+      clearNotice();
+      router.push(action.href);
+      return;
+    }
+
     switch (actionId) {
       case "dismiss":
         clearNotice();

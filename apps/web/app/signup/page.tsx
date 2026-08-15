@@ -141,7 +141,6 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
-      description="금방 끝나요. 바로 첫 네 컷을 찍으러 가요."
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />

@@ -14,14 +14,11 @@ import {
 } from "@/lib/frameFilters";
 import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 
-export type ShotItem = {
-  photo: string;
-};
-
 type ShootSessionState = {
   frameId: FrameId | null;
   remoteFrameId: number | null;
-  shots: ShotItem[];
+  // 촬영본은 data URL 문자열 배열이다.
+  shots: string[];
   selectedIndexes: SelectionSlot[];
   borderColor: string;
   outputFilter: FourcutFilterId;
@@ -33,8 +30,8 @@ type ShootSessionState = {
   setOutputFilter: (filter: FourcutFilterId) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
   clearResults: () => void;
-  setShots: (shots: ShotItem[]) => void;
   toggleSelect: (index: number) => void;
+  clearSelection: () => void;
   addShotPhoto: (photoDataUrl: string) => void;
   resetShots: () => void;
   reset: () => void;
@@ -93,22 +90,22 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       imageResult: null,
     }),
 
-  setShots: (shots) =>
-    set({
-      shots,
-      selectedIndexes: createEmptySlots(),
-      imageResult: null,
-    }),
-
   toggleSelect: (index) =>
     set({
       selectedIndexes: toggleIndexInSlots(get().selectedIndexes, index),
       imageResult: null,
     }),
 
+  // 4장 선택만 비운다(촬영본은 유지). '선택 초기화' 버튼이 세션 전체를 지우지 않도록.
+  clearSelection: () =>
+    set({
+      selectedIndexes: createEmptySlots(),
+      imageResult: null,
+    }),
+
   addShotPhoto: (photoDataUrl) =>
     set((state) => ({
-      shots: [...state.shots, { photo: photoDataUrl }],
+      shots: [...state.shots, photoDataUrl],
       imageResult: null,
     })),
 

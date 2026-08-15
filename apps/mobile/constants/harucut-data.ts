@@ -1,17 +1,13 @@
 import { FOURCUT_FILTER_DEFINITIONS, type FourcutFilterId } from '@harucut/shared';
 
 export type FrameId = 'classic-4' | 'grid-4' | 'polaroid-4' | 'wide-4';
-export type MediaKind = 'image';
 export type OutputTone = FourcutFilterId;
 
+// 사진 전용 서비스라 미디어 종류 구분은 두지 않는다(미리보기는 uri 유무로만 판단).
+// 원격 미디어 식별자는 HistoryItem.mediaId 하나로만 다룬다.
 export type MediaAsset = {
   id: string;
-  kind: MediaKind;
   label: string;
-  mimeType?: string | null;
-  previewKind?: MediaKind;
-  remoteMediaId?: number;
-  s3Key?: string;
   uri: string;
 };
 
@@ -58,7 +54,6 @@ export type ThemeBackground =
 export type ThemeAsset = {
   id: string;
   label: string;
-  mimeType?: string | null;
   s3Key?: string;
   uri: string;
 };
@@ -76,17 +71,14 @@ export type SavedFrame = {
   remoteFrameId?: number;
   stickers: string[];
   title: string;
-  updatedAt: string;
 };
 
 export type HistoryItem = {
   createdAt: string;
   frameId: FrameId;
   id: string;
-  kind: 'photo';
   mediaId?: number;
   previewMedia: MediaAsset[];
-  remoteS3Key?: string;
   source: 'shoot' | 'upload';
   title: string;
 };
@@ -100,9 +92,10 @@ export type UserProfile = {
   username: string;
 };
 
+// 프레임 카드 소개 카피. 이름·순서는 FRAME_CONFIGS가 단일 소스이고, 여기는 설명만 담당한다.
+// (웹 lib/frameCatalog.ts와 같은 규약 — 소비처 0건이던 category는 제거)
 export type FrameCatalogItem = {
   badge: string;
-  category: string;
   description: string;
   frameId: FrameId;
   name: string;
@@ -118,13 +111,6 @@ export const THEME_FRAME_CANVAS: Record<FrameId, { height: number; width: number
 };
 
 export const HERO_IMAGE_SOURCE = require('../assets/images/hero-image.png');
-
-export const QUICK_LINKS = [
-  { href: '/shoot', icon: 'camera-outline', label: '촬영' },
-  { href: '/upload', icon: 'cloud-upload-outline', label: '업로드' },
-  { href: '/theme', icon: 'color-palette-outline', label: '꾸미기' },
-  { href: '/history', icon: 'time-outline', label: '기록' },
-] as const;
 
 // 핸드오프 TabBar(홈·기록·촬영·프레임·MY) 정본 순서. 촬영은 중앙 FAB로 돌출 렌더.
 // 업로드는 독립 탭에서 제거(홈의 '사진 불러오기' / 촬영 진입으로 흡수, 라우트는 유지).
@@ -164,40 +150,37 @@ export const BOTTOM_NAV_ITEMS = [
 export const FRAME_CATALOG: FrameCatalogItem[] = [
   {
     badge: '정석 포토부스',
-    category: 'CLASSIC',
     description:
-      '가장 익숙한 인생네컷 비율로, 데이트와 일상 기록에 안정적으로 어울리는 레이아웃이에요.',
+      '네 컷이 세로로 길게 이어지는 가장 익숙한 구성이에요. 데이트와 일상 기록에 안정적으로 어울려요.',
     frameId: 'classic-4',
-    name: '클래식 4컷',
+    name: '세로 4컷',
     recommendedFor: ['데이트', '우정컷', '일상 기록'],
     shortLabel: 'BEST',
   },
   {
     badge: '배경까지 담는 구성',
-    category: 'WIDE',
-    description: '공간감과 표정을 함께 남기고 싶을 때 좋아요. 여행, 카페, 전시 기록에 특히 잘 맞아요.',
+    description:
+      '가로로 넓은 판형이라 공간감과 표정을 함께 남기기 좋아요. 여행, 카페, 전시 기록에 특히 잘 맞아요.',
     frameId: 'wide-4',
-    name: '와이드 4컷',
+    name: '가로 4컷',
     recommendedFor: ['여행', '공간 무드', '2인 이상'],
     shortLabel: 'MOOD',
   },
   {
     badge: '콘텐츠형 콜라주',
-    category: 'GRID',
     description:
-      '표정 변화나 소품 샷을 정리해서 보여주기 좋아 업로드형 제작에 강한 레이아웃이에요.',
+      '네 컷을 2×2로 반듯하게 모아 담아요. 표정 변화나 소품 샷을 정리해 보여주기 좋아 업로드형 제작에 강해요.',
     frameId: 'grid-4',
-    name: '2x2 그리드',
+    name: '네모 4컷',
     recommendedFor: ['업로드 제작', '표정 변주', '콘텐츠 컷'],
     shortLabel: 'EDIT',
   },
   {
     badge: '꾸미기 특화',
-    category: 'POLAROID',
     description:
-      '스티커와 텍스트, 배경을 올렸을 때 가장 감성적으로 완성되는 스크랩북 무드 레이아웃이에요.',
+      '즉석사진을 흩뿌린 듯 엇갈리게 배치해요. 스티커·텍스트·배경을 올리면 스크랩북처럼 완성돼요.',
     frameId: 'polaroid-4',
-    name: '폴라로이드 4컷',
+    name: '즉석사진 4컷',
     recommendedFor: ['기념일', '팬메이드', '테마 편집'],
     shortLabel: 'THEME',
   },

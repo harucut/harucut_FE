@@ -10,6 +10,7 @@ Harucut 프론트엔드 워크스페이스.
 
 - `apps/web`: Next.js App Router 기반 웹 앱
 - `apps/mobile`: Expo Router 기반 iOS/Android 앱
+- `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared` (`auth-validation.ts`, `fourcut-filters.ts`, `legal.ts`)
 - `docs/`: 서비스 흐름, 인증 라우팅, 모바일 설계, QA 체크리스트, ADR
 - `scripts/`: 검증 스크립트
 - `.github/`: 워크플로와 저장소 자동화 설정
@@ -51,6 +52,12 @@ pnpm dev:mobile
 - `/login`
 - `/signup`
 - `/forgot-password`
+- `/features`
+- `/faq`
+- `/pricing`
+- `/privacy`
+- `/terms`
+- `/oauth2/callback`
 
 보호 라우트
 
@@ -58,11 +65,13 @@ pnpm dev:mobile
 - `/shoot/*`
 - `/upload/*`
 - `/theme/*`
+- `/decorate`
 - `/history`
 - `/mypage`
 
-보호 라우트는 [apps/web/proxy.ts](./apps/web/proxy.ts)에서 처리한다.  
-비인증 상태에서 접근하면 `/login?redirectTo=<원래 경로>`로 이동한다.
+보호 라우트는 [apps/web/proxy.ts](./apps/web/proxy.ts)에서 처리하고, 경로 목록은
+[apps/web/lib/protectedPaths.ts](./apps/web/lib/protectedPaths.ts)에 있다.  
+비인증 상태에서 접근하면 `/login?redirectTo=<원래 경로>`로 이동한다. (게스트 체험 예외는 [docs/auth-routing.md](./docs/auth-routing.md) 참조)
 
 ## 문서
 

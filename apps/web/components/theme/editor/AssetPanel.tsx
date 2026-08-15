@@ -3,7 +3,11 @@
 import React, { useRef, useState } from "react";
 import { ImagePlus, Scissors, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
-import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  UNSUPPORTED_UPLOAD_MESSAGE,
+  isSupportedUploadFile,
+} from "@/lib/presignedUploadApi";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((state) => state.tab);
@@ -91,8 +95,22 @@ function PhotoTab() {
         onChange={async (event) => {
           if (!event.target.files) return;
 
+          // 지원하지 않는 형식은 올리기 전에 걸러 사유를 먼저 알려준다.
+          const picked = Array.from(event.target.files);
+          const supported = picked.filter(isSupportedUploadFile);
+          const skipped = picked.length - supported.length;
+
+          if (skipped > 0) {
+            alert(`${skipped}개는 지원하지 않는 형식이라 제외했어요. ${UNSUPPORTED_UPLOAD_MESSAGE}`);
+          }
+
+          if (supported.length === 0) {
+            event.currentTarget.value = "";
+            return;
+          }
+
           setIsUploading(true);
-          const result = await addAssets(event.target.files);
+          const result = await addAssets(supported);
           if (result.failed > 0) {
             alert(`${result.failed}개의 파일 업로드에 실패했어요.`);
           }

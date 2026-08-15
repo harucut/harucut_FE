@@ -16,7 +16,8 @@ export type UserInfo = {
   email: string;
   username: string;
   profileUrl: string | null;
-  loginPlatform?: "NAVER" | "KAKAO" | "HARUCUT" | null;
+  // 서버 Provider enum 5종. 구글/애플 로그인도 실제로 내려온다.
+  loginPlatform?: "GOOGLE" | "KAKAO" | "NAVER" | "APPLE" | "HARUCUT" | null;
   planTier?: "BASIC" | "PLUS" | "PRO" | null;
   monthlyPrice?: number | null;
 };
@@ -27,11 +28,8 @@ export type LoginResponseData = {
 
 export type PresignedUploadContentType = "JPEG" | "PNG" | "WEBP" | "GIF";
 
-export type UserMediaType = "PHOTO";
-
 export type UserMedia = {
   mediaId: number;
-  mediaType: UserMediaType;
   s3Key: string;
   displayName?: string | null;
   displayname?: string | null;
@@ -64,11 +62,15 @@ export type RemoteFrameComponent = {
   height: number;
   scale?: number;
   rotation?: number;
-  zIndex: number;
+  // 스웨거 ComponentResponse의 레이어 순서 필드는 zIndex 하나뿐이다(required).
+  zIndex?: number;
   style?: Record<string, unknown>;
   styleJson?: Record<string, unknown>;
 };
 
+// GET /api/auth/user/frame 응답.
+// 서버는 **활성 프레임만** 내려준다 — 다운그레이드로 비활성된 초과분은 응답에 없다.
+// 따라서 클라이언트가 보관 한도로 잠금 대상을 추정하면 안 된다(목록 = 사용 가능한 전부).
 export type RemoteFrame = {
   frameId: number;
   title: string;
@@ -77,16 +79,22 @@ export type RemoteFrame = {
   frameType: RemoteFrameType;
   background?: RemoteFrameBackground;
   components: RemoteFrameComponent[];
+  // 관리자가 등록한 기본 제공 프레임. 내 프레임 목록에 섞여 오지만 소유자가 아니라
+  // 수정/삭제 요청은 403이 된다(FrameServiceImpl.validateOwner). 읽기 전용으로만 다뤄야 한다.
+  isSystem?: boolean;
+  // frameType으로 서버가 고정하는 캔버스 크기(요청값은 저장되지 않는다).
+  canvasWidth?: number;
+  canvasHeight?: number;
 };
 
 // GET /api/auth/user/subscription/usage 응답 (프레임 보관 한도·사용량).
 // *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한을 의미한다.
+// 결제 주기(시작/만료)는 이 엔드포인트에 없다. 필요해지면
+// GET /api/auth/subscriptions 의 SubscriptionResponse.currentPeriodStart/currentPeriodEnd 를 쓴다.
 export type SubscriptionUsage = {
   planTier: string;
   frameRetentionLimit: number;
   frameRetentionUsedCount: number;
   frameRetentionRemainingCount: number;
   frameRetentionUnlimited: boolean;
-  currentCycleStartAt: string;
-  currentCycleEndAt: string;
 };

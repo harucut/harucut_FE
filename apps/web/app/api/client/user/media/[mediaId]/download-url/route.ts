@@ -15,7 +15,7 @@ export async function GET(req: Request, context: RouteContext) {
 
   const upstream = await forward(req, {
     method: "GET",
-    url: `${BASE_URL}/api/auth/user/media/${mediaId}/download-url`,
+    url: `${BASE_URL}/api/auth/user/media/${encodeURIComponent(mediaId)}/download-url`,
     forwardBody: false,
   });
 

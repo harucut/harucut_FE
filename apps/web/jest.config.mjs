@@ -19,8 +19,21 @@ const config = {
   testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
   // 빌드 산출물/외부 패키지는 테스트 대상에서 제외
   testPathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/node_modules/"],
-  // 커버리지 집계 대상 경로
-  collectCoverageFrom: ["lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "!**/*.d.ts"],
+  // 커버리지 집계 대상 경로.
+  // app/**도 포함한다 — 예전엔 lib/·components/만 잡아 페이지와 _hooks(촬영 훅 등)가
+  // 통째로 집계 밖이었고, 그래서 사각지대가 수치로 드러나지 않았다.
+  // 라우트 메타 파일(layout·not-found·sitemap 등)은 로직이 없어 제외한다.
+  collectCoverageFrom: [
+    "app/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "!**/*.d.ts",
+    "!app/**/layout.tsx",
+    "!app/**/loading.tsx",
+    "!app/**/error.tsx",
+    "!app/**/not-found.tsx",
+    "!app/{sitemap,robots,manifest}.ts",
+  ],
 };
 
 export default createJestConfig(config);

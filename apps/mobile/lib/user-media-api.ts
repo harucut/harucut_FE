@@ -1,20 +1,17 @@
+import { parseServerDateTime, serverDateTimeToMillis } from '@harucut/shared';
+
 import type { FrameId, HistoryItem, MediaAsset } from '@/constants/harucut-data';
-import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
-import {
-  fourcutUploadType,
-  resolveUploadContentType,
-  uploadLocalFileWithPresigned,
-} from '@/lib/file-storage-api';
+import { apiEnvelopeData } from '@/lib/api-client';
+import { resolveUploadContentType, uploadLocalFileWithPresigned } from '@/lib/file-storage-api';
 
-export type UserMediaType = 'PHOTO';
-
+// 스웨거 UserMediaResponse 대응. 서비스는 사진 전용이라 미디어 타입 구분 자체가 없다
+// (동영상 시절의 mediaType 은 서버 계약에서 사라졌다).
 export type UserMedia = {
   createdAt?: string;
   displayName?: string | null;
   displayname?: string | null;
-  downloadUrl?: string;
+  downloadUrl?: string | null;
   mediaId: number;
-  mediaType: UserMediaType;
   originalFileName?: string;
   s3Key: string;
 };
@@ -36,9 +33,8 @@ function getUserMediaTitle(item: UserMedia) {
 }
 
 function getCreatedAt(item: UserMedia) {
-  const createdAt = item.createdAt ? new Date(item.createdAt) : null;
-
-  return createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toISOString() : '';
+  // 서버는 오프셋 없는 LocalDateTime(실체는 UTC)을 준다. 그대로 파싱하면 9시간 밀린다.
+  return parseServerDateTime(item.createdAt)?.toISOString() ?? '';
 }
 
 function mediaToAsset(item: UserMedia): MediaAsset | null {
@@ -48,57 +44,43 @@ function mediaToAsset(item: UserMedia): MediaAsset | null {
 
   return {
     id: `remote-media-${item.mediaId}`,
-    kind: 'image',
     label: getUserMediaTitle(item),
-    previewKind: 'image',
-    remoteMediaId: item.mediaId,
     uri: item.downloadUrl,
   };
-}
-
-function mediaToPreviewAsset(item: UserMedia) {
-  return mediaToAsset(item);
 }
 
 export function mediaToHistoryItem(
   item: UserMedia,
   options: HistoryItemOptions = {},
 ): HistoryItem {
-  const asset = mediaToPreviewAsset(item);
+  const asset = mediaToAsset(item);
   const title = options.title?.trim() || getUserMediaTitle(item);
 
   return {
     createdAt: getCreatedAt(item),
     frameId: options.frameId ?? 'classic-4',
     id: `remote-history-${item.mediaId}`,
-    kind: 'photo',
     mediaId: item.mediaId,
     previewMedia: asset ? [asset] : [],
-    remoteS3Key: item.s3Key,
     source: options.source ?? 'upload',
     title,
   };
 }
 
-export async function listMyMedia(type?: UserMediaType) {
+export async function listMyMedia() {
   // 백엔드 GET /api/auth/user/media는 page(0부터)/size(기본 10) 기반 페이지네이션이고,
   // data는 페이지 객체({ content, totalPages, number })다. 이전엔 data를 배열로 가정해
   // Array.isArray가 항상 false였고 저장 미디어 목록이 늘 비어 있었다. 모든 페이지를 순회한다.
   const out: UserMedia[] = [];
   let page = 0;
   for (let guard = 0; guard < 100; guard += 1) {
-    const parts = [`page=${page}`, 'size=100'];
-    if (type) parts.unshift(`type=${encodeURIComponent(type)}`);
-    const query = `?${parts.join('&')}`;
+    const query = `?page=${page}&size=100`;
     const data = await apiEnvelopeData<
       | { content?: UserMedia[]; number?: number; totalPages?: number }
       | UserMedia[]
       | null
     >(
-      {
-        direct: `/api/auth/user/media${query}`,
-        proxy: `/api/client/user/media${query}`,
-      },
+      `/api/auth/user/media${query}`,
       {
         cache: 'no-store',
       },
@@ -120,8 +102,8 @@ export async function listRemoteHistoryItems() {
 
   return media
     .sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = serverDateTimeToMillis(a.createdAt);
+      const bTime = serverDateTimeToMillis(b.createdAt);
 
       return bTime - aTime;
     })
@@ -130,14 +112,10 @@ export async function listRemoteHistoryItems() {
 
 export async function registerUserMedia(args: {
   displayName?: string;
-  mediaType: UserMediaType;
   s3Key: string;
 }) {
   return apiEnvelopeData<UserMedia>(
-    {
-      direct: '/api/auth/user/media',
-      proxy: '/api/client/user/media',
-    },
+    '/api/auth/user/media',
     {
       body: args,
       method: 'POST',
@@ -147,10 +125,7 @@ export async function registerUserMedia(args: {
 
 export async function getMediaDownloadUrl(mediaId: number) {
   return apiEnvelopeData<string>(
-    {
-      direct: `/api/auth/user/media/${mediaId}/download-url`,
-      proxy: `/api/client/user/media/${mediaId}/download-url`,
-    },
+    `/api/auth/user/media/${mediaId}/download-url`,
     {
       cache: 'no-store',
     },
@@ -159,10 +134,7 @@ export async function getMediaDownloadUrl(mediaId: number) {
 
 export async function updateMediaDisplayName(mediaId: number, displayName: string) {
   return apiEnvelopeData<UserMedia>(
-    {
-      direct: `/api/auth/user/media/${mediaId}/display-name`,
-      proxy: `/api/client/user/media/${mediaId}/display-name`,
-    },
+    `/api/auth/user/media/${mediaId}/display-name`,
     {
       body: { displayName },
       method: 'PATCH',
@@ -183,12 +155,11 @@ export async function uploadFourcutResult(args: {
   const uploaded = await uploadLocalFileWithPresigned({
     contentType,
     filename: `${args.displayName}.jpg`,
-    type: fourcutUploadType(contentType),
+    type: 'FOURCUT_PHOTO',
     uri: args.uri,
   });
   const media = await registerUserMedia({
     displayName: args.displayName,
-    mediaType: 'PHOTO',
     s3Key: uploaded.key,
   });
 

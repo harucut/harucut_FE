@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
 
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ??
@@ -15,12 +16,23 @@ async function enableAuthenticatedContext(page: Page) {
   ]);
 }
 
+async function enableGuestContext(page: Page) {
+  await page.context().addCookies([
+    {
+      name: GUEST_TRIAL_COOKIE,
+      value: "1",
+      url: baseURL,
+    },
+  ]);
+}
+
 const protectedRoutes = [
   "/home",
   "/shoot",
   "/shoot/capture",
   "/upload",
   "/upload/select",
+  "/decorate",
   "/theme",
   "/theme/sticker",
   "/history",
@@ -45,6 +57,32 @@ test("preserves the original query string in redirectTo", async ({ page }) => {
   await expect
     .poll(() => new URL(page.url()).searchParams.get("redirectTo"))
     .toBe("/shoot/capture?mode=retry");
+});
+
+// 게스트 체험은 촬영과 꾸미기까지 허용한다(꾸미기 저장 시 로그인 유도).
+const guestAllowedRoutes = ["/shoot", "/decorate"];
+
+for (const route of guestAllowedRoutes) {
+  test(`keeps guests on ${route} instead of the login page`, async ({
+    page,
+  }) => {
+    await enableGuestContext(page);
+    await page.goto(route);
+
+    expect(new URL(page.url()).pathname).not.toBe("/login");
+  });
+}
+
+test("redirects guests away from non-trial protected routes", async ({
+  page,
+}) => {
+  await enableGuestContext(page);
+  await page.goto("/history");
+
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("guestNotice"))
+    .toBe("restricted");
 });
 
 const lateStepRoutes = [

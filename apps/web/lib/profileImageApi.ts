@@ -4,45 +4,32 @@ import type { ApiEnvelope } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
+  UNSUPPORTED_UPLOAD_MESSAGE,
+  isSupportedUploadFile,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 
-type ApiError = Error & {
-  status?: number;
-};
-
+// 스웨거상 프로필 이미지 변경은 PATCH만 존재한다(POST는 405). 이전의 POST 폴백을 제거.
 async function requestProfileImageChange(s3Key: string) {
-  try {
-    await clientApi.patch<ApiEnvelope<null>>(
-      "/api/client/user/change/profile-image",
-      { s3Key },
-    );
-    return;
-  } catch (err) {
-    const status = (err as ApiError).status;
-    if (status !== 404 && status !== 405) {
-      throw err;
-    }
-  }
-
-  await clientApi.post<ApiEnvelope<null>>("/api/client/user/change/profile-image", {
-    s3Key,
-  });
+  await clientApi.patch<ApiEnvelope<null>>(
+    "/api/client/user/change/profile-image",
+    { s3Key },
+  );
 }
 
 export async function uploadProfileImage(file: File) {
   if (!file) {
-    throw new Error("No file selected");
+    throw new Error("파일을 선택해 주세요.");
   }
 
-  if (!file.type.toLowerCase().startsWith("image/")) {
-    throw new Error("Profile image must be an image file");
+  // 업로드 형식 판정은 presignedUploadApi 한 곳(isSupportedUploadFile)으로 모은다.
+  if (!isSupportedUploadFile(file)) {
+    throw new Error(UNSUPPORTED_UPLOAD_MESSAGE);
   }
 
   const { key } = await uploadToS3WithPresigned({
     file,
     type: PRESIGNED_UPLOAD_TYPES.PROFILE,
-    isTemp: false,
   });
 
   await requestProfileImageChange(key);

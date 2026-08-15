@@ -19,7 +19,7 @@ const DEFAULT_FILTER: FourcutFilterId = "NONE";
 const shootSessionState = {
   frameId: null as string | null,
   remoteFrameId: null as number | null,
-  shots: [] as Array<{ photo: string }>,
+  shots: [] as string[],
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "111827",
   outputFilter: DEFAULT_FILTER,
@@ -35,7 +35,7 @@ const shootSessionState = {
 const uploadSessionState = {
   frameId: null as string | null,
   remoteFrameId: null as number | null,
-  media: [] as Array<{ type: "image"; src: string }>,
+  media: [] as Array<{ src: string }>,
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "111827",
   outputFilter: DEFAULT_FILTER,
@@ -144,7 +144,7 @@ describe("page-level multistep session guards", () => {
   });
 
   test("/shoot/select sends users back to /shoot when frameId is missing", async () => {
-    shootSessionState.shots = [{ photo: "/shot-1.png" }];
+    shootSessionState.shots = ["/shot-1.png"];
 
     render(<ShootSelectPage />);
 
@@ -166,7 +166,7 @@ describe("page-level multistep session guards", () => {
 
   test("/shoot/result sends users back to /shoot/select when 4 picks are not ready", async () => {
     shootSessionState.frameId = "classic-4";
-    shootSessionState.shots = [{ photo: "/shot-1.png" }];
+    shootSessionState.shots = ["/shot-1.png"];
     shootSessionState.selectedIndexes = [0, null, null, null];
 
     render(<ShootResultPage />);
@@ -178,7 +178,7 @@ describe("page-level multistep session guards", () => {
 
   test("/shoot/result sends users back to /shoot/select when selected sources are missing", async () => {
     shootSessionState.frameId = "classic-4";
-    shootSessionState.shots = [{ photo: "/shot-1.png" }];
+    shootSessionState.shots = ["/shot-1.png"];
     shootSessionState.selectedIndexes = [0, 1, 2, 3];
 
     render(<ShootResultPage />);
@@ -209,7 +209,7 @@ describe("page-level multistep session guards", () => {
 
   test("/upload/result sends users back to /upload/select when selected media sources are missing", async () => {
     uploadSessionState.frameId = "classic-4";
-    uploadSessionState.media = [{ type: "image", src: "/upload-1.png" }];
+    uploadSessionState.media = [{ src: "/upload-1.png" }];
     uploadSessionState.selectedIndexes = [0, 1, 2, 3];
 
     render(<UploadResultPage />);

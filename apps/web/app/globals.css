@@ -18,6 +18,8 @@
   --hc-border-subtle: rgba(20, 20, 15, 0.1);
   --hc-border-strong: rgba(22, 180, 84, 0.34);
   --hc-surface: #ffffff;
+  /* 모바일 탭바 등 backdrop-blur 위에 얹는 반투명 카드 배경. 정의가 없어 탭바가 투명해지던 버그 수정. */
+  --hc-card: rgba(255, 255, 255, 0.9);
   --hc-surface-strong: #ffffff;
   --hc-surface-soft: rgba(255, 255, 255, 0.82);
   --hc-surface-highlight: #ffffff;
@@ -113,6 +115,7 @@ html[data-theme="dark"] {
   --hc-border-subtle: rgba(255, 255, 255, 0.08);
   --hc-border-strong: rgba(255, 255, 255, 0.2);
   --hc-surface: #18181a;
+  --hc-card: rgba(24, 24, 26, 0.9);
   --hc-surface-strong: #1c1c1e;
   --hc-surface-soft: #161617;
   --hc-surface-highlight: #232325;
@@ -442,6 +445,20 @@ span {
   box-shadow: var(--hc-input-shadow);
 }
 
+/*
+  iOS Safari는 입력 요소의 font-size가 16px 미만이면 포커스 시 뷰포트를 강제 확대(줌)한다.
+  디자인은 작은 입력 글꼴(11~13px)을 쓰므로 데스크톱 크기는 그대로 두고, 터치 기기
+  (pointer: coarse)에서만 모든 텍스트 입력을 16px로 올려 줌 튐을 막는다.
+*/
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="file"]),
+  textarea,
+  select {
+    /* Tailwind text-[11px] 등 유틸리티 클래스를 이기려면 !important가 필요하다. */
+    font-size: 16px !important;
+  }
+}
+
 .hc-input::placeholder {
   color: var(--hc-muted-soft);
 }
@@ -486,4 +503,87 @@ span {
 .custom-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--hc-scrollbar-thumb) transparent;
+}
+
+/*
+  진입 모션 — 랜딩 등에서 뷰포트에 들어올 때 살짝 떠오르며 나타난다(모션 제로 → AI SaaS 톤).
+  .hc-reveal는 초기 숨김 상태, .hc-reveal--in이 붙으면 재생. transition-delay는 인라인 style로 스태거.
+  접근성: prefers-reduced-motion이면 모션 없이 즉시 표시.
+*/
+.hc-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.hc-reveal--in {
+  opacity: 1;
+  transform: none;
+}
+
+/* 그린 그라디언트 텍스트(헤드라인 강조어) — background-clip으로 글자에 그라디언트를 입힌다. */
+/*
+  그라디언트 글자(다크 배경 전용). color를 transparent로 두면 background-clip이 안 먹는 환경에서
+  글자가 통째로 사라지고, 접근성 검사기도 실제 색을 알 수 없어 대비를 계산하지 못한다.
+  그래서 실제 색은 그라디언트 중간 톤으로 남기고, 시각적 투명화는 -webkit-text-fill-color가 맡는다.
+  (background-clip: text를 지원하는 브라우저는 -webkit-text-fill-color도 지원하므로 겉모습은 동일)
+*/
+.hc-gradient-text {
+  background: linear-gradient(120deg, #1ed760 0%, #7ef0a8 55%, #1ed760 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #7ef0a8;
+  -webkit-text-fill-color: transparent;
+}
+
+/*
+  필름 연출 — 랜딩 HOW 섹션. 퍼포레이션 띠가 흘러가고(hc-film-strip),
+  현재 단계 칸 아래에서 그린 바가 차오른다(hc-film-progress).
+  퍼포레이션 패턴 주기가 22px라 그만큼 이동시키면 이음매 없이 반복된다.
+*/
+@keyframes hc-film-advance {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 22px 0;
+  }
+}
+
+.hc-film-strip {
+  animation: hc-film-advance 1.4s linear infinite;
+}
+
+@keyframes hc-film-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.hc-film-progress {
+  transform-origin: left center;
+  animation: hc-film-progress var(--hc-film-dwell, 2600ms) linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hc-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .hc-film-strip,
+  .hc-film-progress {
+    animation: none;
+  }
+
+  .hc-film-progress {
+    transform: none;
+  }
 }

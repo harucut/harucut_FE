@@ -16,10 +16,7 @@ type PasswordResetVerificationResponse = {
 
 export async function loginWithEmail(email: string, password: string) {
   return apiEnvelopeData<LoginResponse>(
-    {
-      direct: '/api/harucut/login',
-      proxy: '/api/client/auth/login',
-    },
+    '/api/harucut/login',
     {
       body: { email, password },
       method: 'POST',
@@ -29,10 +26,7 @@ export async function loginWithEmail(email: string, password: string) {
 
 export async function getAuthStatus() {
   return apiEnvelopeData<AuthStatusResponse>(
-    {
-      direct: '/api/auth/status',
-      proxy: '/api/auth/status',
-    },
+    '/api/auth/status',
     {
       cache: 'no-store',
     },
@@ -45,10 +39,7 @@ export async function signupWithEmail(args: {
   username: string;
 }) {
   await apiRequest(
-    {
-      direct: '/api/harucut/register',
-      proxy: '/api/client/auth/register',
-    },
+    '/api/harucut/register',
     {
       body: args,
       method: 'POST',
@@ -58,10 +49,7 @@ export async function signupWithEmail(args: {
 
 export async function sendEmailAuthCode(email: string) {
   await apiRequest(
-    {
-      direct: '/api/email-auth/code',
-      proxy: '/api/client/auth/email/code',
-    },
+    '/api/email-auth/code',
     {
       body: { email },
       method: 'POST',
@@ -71,10 +59,7 @@ export async function sendEmailAuthCode(email: string) {
 
 export async function verifyEmailAuthCode(email: string, code: string) {
   await apiRequest(
-    {
-      direct: '/api/email-auth/verification',
-      proxy: '/api/client/auth/email/verification',
-    },
+    '/api/email-auth/verification',
     {
       body: { email, code },
       method: 'POST',
@@ -85,10 +70,7 @@ export async function verifyEmailAuthCode(email: string, code: string) {
 export async function requestPasswordResetCode(email: string) {
   // 회원가입용(/api/email-auth/code)이 아닌 비밀번호 재설정 전용 코드 발송 엔드포인트.
   await apiRequest(
-    {
-      direct: '/api/harucut/reset/password/code',
-      proxy: '/api/client/auth/password/reset/code',
-    },
+    '/api/harucut/reset/password/code',
     {
       body: { email },
       method: 'POST',
@@ -98,10 +80,7 @@ export async function requestPasswordResetCode(email: string) {
 
 export async function verifyPasswordResetCode(email: string, code: string) {
   const data = await apiEnvelopeData<PasswordResetVerificationResponse>(
-    {
-      direct: '/api/harucut/reset/password/verification',
-      proxy: '/api/client/auth/password/reset/verification',
-    },
+    '/api/harucut/reset/password/verification',
     {
       body: { email, code },
       method: 'POST',
@@ -117,10 +96,7 @@ export async function verifyPasswordResetCode(email: string, code: string) {
 
 export async function resetPassword(resetToken: string, newPassword: string) {
   await apiRequest(
-    {
-      direct: '/api/harucut/reset/password',
-      proxy: '/api/client/auth/password/reset',
-    },
+    '/api/harucut/reset/password',
     {
       body: { newPassword, resetToken },
       method: 'PATCH',
@@ -130,10 +106,7 @@ export async function resetPassword(resetToken: string, newPassword: string) {
 
 export async function changePassword(oldPassword: string, newPassword: string) {
   await apiRequest(
-    {
-      direct: '/api/harucut/change/password',
-      proxy: '/api/client/auth/password/change',
-    },
+    '/api/harucut/change/password',
     {
       body: { newPassword, oldPassword },
       method: 'PATCH',
@@ -143,10 +116,7 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 
 export async function logout() {
   await apiRequest(
-    {
-      direct: '/api/harucut/logout',
-      proxy: '/api/client/logout',
-    },
+    '/api/harucut/logout',
     {
       method: 'DELETE',
     },
@@ -155,10 +125,7 @@ export async function logout() {
 
 export async function exitAccount() {
   await apiRequest(
-    {
-      direct: '/api/harucut/exit',
-      proxy: '/api/client/exit',
-    },
+    '/api/harucut/exit',
     {
       method: 'DELETE',
     },
@@ -167,10 +134,7 @@ export async function exitAccount() {
 
 export async function reactivateAccount() {
   await apiRequest(
-    {
-      direct: '/api/harucut/reactivate',
-      proxy: '/api/client/reactivate',
-    },
+    '/api/harucut/reactivate',
     {
       method: 'POST',
     },

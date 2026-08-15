@@ -1,13 +1,14 @@
+import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
-import { CaptureFrameStage, FRAME_LAYOUTS, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { FRAME_LAYOUTS, FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
+import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -21,8 +22,6 @@ const SHOOT_TOTAL = 8;
 // 선택 가능한 타이머 간격(초)
 const TIMER_OPTIONS = [3, 5, 8] as const;
 type TimerSeconds = (typeof TIMER_OPTIONS)[number];
-// 촬영 모드: 타이머(간격 선택 → 8장 자동 연속) / 수동(셔터 1장씩)
-type CaptureMode = 'manual' | 'timer';
 
 async function shareMedia(title: string, uri: string | undefined) {
   if (!uri) return;
@@ -90,7 +89,6 @@ export function ShootFrameScreen() {
           push('/home');
         }}
       />
-      <StepProgress current={1} label="프레임 선택" total={4} />
       <FramePickerSection
         confirmLabel={shoot.frameId ? '촬영 시작하기' : '촬영할 프레임을 선택해주세요'}
         onConfirm={() => {
@@ -103,7 +101,7 @@ export function ShootFrameScreen() {
       />
       {accessMode === 'member' ? (
         <SavedFramesPanel
-          emptyText="저장된 프레임이 없습니다."
+          emptyText="저장한 프레임이 없어요."
           frames={savedFrames}
           onRefresh={() => void loadRemoteFrames()}
           onSelect={selectSavedFrameForShoot}
@@ -129,43 +127,33 @@ export function ShootCaptureScreen() {
   // captureNowRef: "지금 이 컷을 바로 찍어라" 플래그. tickResolveRef: 진행 중인 1초 틱을 깨우는 resolver.
   const captureNowRef = useRef(false);
   const tickResolveRef = useRef<(() => void) | null>(null);
+  // 이탈 확인창이 떠 있는 동안 자동 촬영을 멈춰 둔다. 안 멈추면 모달 뒤에서 계속 찍혀,
+  // 사용자가 "계속 촬영"을 고르기도 전에 8장이 끝나고 선택 화면으로 넘어가 버린다.
+  const burstPausedRef = useRef(false);
+  // "나가기"를 고른 경우. 남은 컷을 더 찍지 않고 루프를 끝낸다.
+  const burstAbortedRef = useRef(false);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
   const shoot = useShootStore();
   const addShootShot = useShootStore((state) => state.addShootShot);
   const resetShootSession = useShootStore((state) => state.resetShootSession);
   const showNotice = useSessionStore((state) => state.showNotice);
+  const notice = useSessionStore((state) => state.notice);
   const [facing, setFacing] = useState<CameraType>('front');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
-  // 촬영 모드/타이머 간격은 시작 전에만 변경 가능(시작 후 잠금)
-  // 기본은 수동 촬영. 타이머 모드는 사용자가 직접 선택할 수 있다.
-  const [captureMode, setCaptureMode] = useState<CaptureMode>('manual');
+  // 타이머 간격은 시작 전에만 고른다(시작하면 선택 UI 자체가 사라진다).
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
-  const savedFrames = useLibraryStore((state) => state.savedFrames);
-
-  const activeSavedFrame =
-    shoot.selectedSavedFrameId != null
-      ? savedFrames.find((frame) => frame.id === shoot.selectedSavedFrameId) ?? null
-      : null;
   const layout = shoot.frameId ? FRAME_LAYOUTS[shoot.frameId] : null;
   const slotCount = layout ? layout.slots.length : 4;
   // 8장을 슬롯 수로 순환 — 지금 찍는 칸 인덱스.
   const cameraSlotIndex = shoot.shots.length % slotCount;
-  // 각 칸에 가장 최근 촬영본을 채워 프레임이 완성돼 가는 모습을 보여준다(현재 칸은 카메라가 덮는다).
-  const capturedUris = layout
-    ? layout.slots.map((_, slotIndex) => {
-        if (slotIndex === cameraSlotIndex) return undefined;
-        for (let k = shoot.shots.length - 1; k >= 0; k -= 1) {
-          if (k % slotCount === slotIndex) return shoot.shots[k]?.uri;
-        }
-        return undefined;
-      })
-    : [];
-  const isTallFrame = layout ? layout.totalWidth / layout.totalHeight < 1 : true;
-  // 세션이 시작되면(촬영 중이거나 이미 한 장 이상 찍었으면) 모드/간격을 잠근다.
-  // 수동 모드는 매 컷 후 isShooting이 false가 되므로 isShooting만으로는 부족하다.
+  // 촬영 중에는 프레임을 씌우지 않고, 선택한 프레임의 슬롯 비율만 카메라 프리뷰에 반영한다.
+  // 프레임(테두리·데코)은 사진을 배치하는 다음 단계부터 보인다.
+  const currentSlot = layout ? layout.slots[cameraSlotIndex] : null;
+  const isTallSlot = currentSlot ? currentSlot.width / currentSlot.height < 1 : true;
+  // 세션이 시작되면(촬영 중이거나 이미 한 장 이상 찍었으면) 간격 선택·카메라 전환을 잠근다.
   const sessionLocked = isShooting || shoot.shots.length > 0;
 
   useEffect(() => {
@@ -176,7 +164,7 @@ export function ShootCaptureScreen() {
 
   // 캡처 화면에 진입할 때마다 이전(완료·중단)된 세션의 촬영본을 비운다.
   // resetShootSession은 frameId/선택 프레임은 유지하고 shots만 초기화하므로,
-  // 재촬영 진입 시 모드·간격을 다시 고를 수 있고 수동 촬영이 9장째로 누적되지 않는다.
+  // 재촬영 진입 시 촬영 간격을 다시 고를 수 있다.
   useEffect(() => {
     resetShootSession();
   }, [resetShootSession]);
@@ -191,6 +179,63 @@ export function ShootCaptureScreen() {
       tickResolveRef.current?.();
     };
   }, []);
+
+  /**
+   * 촬영본이 있는 상태의 이탈을 한 번 확인받는다.
+   *
+   * 촬영본이 없으면 확인 없이 그대로 나간다(돌려주는 false로 호출부가 판단).
+   * 안드로이드 하드웨어 백과 헤더의 "프레임 다시 선택"이 같은 흐름을 쓴다 —
+   * 하드웨어 백이 없는 iOS에서는 헤더가 주된 이탈 수단이라, 한쪽만 막으면 의미가 없다.
+   */
+  const confirmLeaveCapture = useCallback(() => {
+    if (shoot.shots.length === 0) return false;
+    // 사용자가 고르는 동안 자동 촬영을 멈춘다. 재개는 확인창이 닫힐 때 아래 effect가 맡는다
+    // (배경 탭이나 모달 백버튼으로 닫아도 멈춘 채로 남지 않게).
+    burstPausedRef.current = true;
+    showNotice({
+      actions: [
+        // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
+        // 둘 다 'dismiss'면 키가 겹쳐 버튼이 누락되거나 이전 핸들러가 재사용된다.
+        { id: 'dismiss', label: '계속 촬영', variant: 'secondary' },
+        {
+          id: 'leave-capture',
+          label: '나가기',
+          variant: 'danger',
+          onPress: () => {
+            burstAbortedRef.current = true;
+            burstPausedRef.current = false;
+            resetShootSession();
+            router.replace('/shoot' as never);
+          },
+        },
+      ],
+      eyebrow: 'LEAVE CAPTURE',
+      icon: 'warning-outline',
+      message: '지금 나가면 찍은 사진이 모두 사라져요. 정말 나갈까요?',
+      title: '촬영을 그만둘까요?',
+    });
+    return true;
+  }, [shoot.shots.length, showNotice, resetShootSession, router]);
+
+  // 화면이 포커스일 때만 하드웨어 백 이벤트를 가로챈다.
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        confirmLeaveCapture,
+      );
+      return () => subscription.remove();
+    }, [confirmLeaveCapture]),
+  );
+
+  // 확인창이 닫히면 자동 촬영을 재개한다. "계속 촬영" 버튼뿐 아니라 배경 탭·모달 백버튼으로
+  // 닫는 경로도 있어서, 버튼 핸들러가 아니라 노티스가 사라지는 시점을 기준으로 푼다.
+  // "나가기"를 고른 경우는 burstAbortedRef가 이미 서 있어 재개해도 루프가 곧바로 끝난다.
+  useEffect(() => {
+    if (!notice) {
+      burstPausedRef.current = false;
+    }
+  }, [notice]);
 
   // 카메라 권한이 없으면 요청하고, 끝내 거부되면 안내 후 false를 돌려준다.
   const ensureCameraPermission = async () => {
@@ -216,15 +261,22 @@ export function ShootCaptureScreen() {
   const captureOneShot = async (shotIndex: number) => {
     if (!cameraRef.current) return shotIndex;
 
+    // 셔터 햅틱 — 물리 셔터 감각. 미지원 기기에서 던지는 에러는 무시(촬영 흐름 방해 금지).
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
     const picture = await cameraRef.current.takePictureAsync({
       quality: 0.6,
       shutterSound: false,
       skipProcessing: true,
     });
 
+    // takePictureAsync는 수백 ms가 걸린다. 그 사이 "나가기"를 골랐거나 화면을 벗어났으면
+    // 결과를 버린다. 안 그러면 방금 비운 전역 스토어에 사진 한 장과 선택 id가 되살아나,
+    // 지웠다고 안내한 촬영본이 /shoot에 남는다.
+    if (shouldStopBurst()) return shotIndex;
+
     const asset: MediaAsset = {
       id: `shoot-shot-${Date.now()}-${shotIndex}`,
-      kind: 'image',
       label: `촬영 ${shotIndex + 1}`,
       uri: picture.uri,
     };
@@ -248,7 +300,17 @@ export function ShootCaptureScreen() {
       tickResolveRef.current = finish;
     });
 
-  // 타이머 모드: 선택한 간격으로 8장을 자동 연속 촬영.
+  // 확인창이 닫힐 때까지(또는 화면을 벗어날 때까지) 카운트다운을 붙잡아 둔다.
+  const waitWhileBurstPaused = async () => {
+    while (burstPausedRef.current && isMountedRef.current && !burstAbortedRef.current) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+  };
+
+  // 루프를 더 진행하면 안 되는 상태인지 한 곳에서 판단한다.
+  const shouldStopBurst = () => !isMountedRef.current || burstAbortedRef.current;
+
+  // 촬영 시작: 선택한 간격으로 8장을 자동 연속 촬영.
   // 카운트다운 중 셔터를 탭하면 남은 대기를 스킵하고 그 컷을 즉시 찍는다(captureNowRef + tickResolveRef로 틱 인터럽트).
   const handleTimerBurst = async () => {
     if (!(await ensureCameraPermission())) return;
@@ -256,6 +318,8 @@ export function ShootCaptureScreen() {
 
     resetShootSession();
     captureNowRef.current = false;
+    burstPausedRef.current = false;
+    burstAbortedRef.current = false;
     setIsShooting(true);
 
     try {
@@ -264,8 +328,11 @@ export function ShootCaptureScreen() {
         captureNowRef.current = false;
 
         for (let remaining = timerSeconds; remaining > 0; remaining -= 1) {
-          // 카운트다운 도중 화면을 벗어났으면 즉시 중단(언마운트 후 setState 방지).
-          if (!isMountedRef.current) return;
+          // 이탈 확인창이 떠 있으면 여기서 멈춰 선다.
+          await waitWhileBurstPaused();
+          // 카운트다운 도중 화면을 벗어났거나 나가기를 골랐으면 즉시 중단
+          // (언마운트 후 setState 방지).
+          if (shouldStopBurst()) return;
           // 셔터를 탭했으면 남은 카운트다운을 건너뛴다.
           if (captureNowRef.current) break;
           setCountdown(remaining);
@@ -274,14 +341,16 @@ export function ShootCaptureScreen() {
           if (captureNowRef.current) break;
         }
 
+        // 촬영 직전 확인창이 떴으면 셔터를 누르지 않고 기다린다.
+        await waitWhileBurstPaused();
         // 촬영 직전 이탈했으면 더 찍지 않는다.
-        if (!isMountedRef.current) return;
+        if (shouldStopBurst()) return;
         captureNowRef.current = false;
         await captureOneShot(shotIndex);
       }
 
       // 완료 직전 이탈했으면 화면 전환하지 않는다.
-      if (!isMountedRef.current) return;
+      if (shouldStopBurst()) return;
       setCountdown(null);
       push('/shoot/select');
     } catch {
@@ -310,82 +379,48 @@ export function ShootCaptureScreen() {
     tickResolveRef.current();
   };
 
-  // 수동 모드: 셔터를 누를 때마다 즉시 1장. 8장째에서 자동으로 고르기 단계로 이동.
-  const handleManualShutter = async () => {
-    if (!(await ensureCameraPermission())) return;
-    if (!cameraRef.current || isShooting) return;
-
-    // 첫 컷이면 세션을 초기화한다.
-    const isFirst = shoot.shots.length === 0;
-    setIsShooting(true);
-
-    try {
-      if (isFirst) {
-        resetShootSession();
-      }
-
-      const total = await captureOneShot(isFirst ? 0 : shoot.shots.length);
-
-      // 촬영 도중 화면을 벗어났으면 네비게이션하지 않는다.
-      if (total >= SHOOT_TOTAL && isMountedRef.current) {
-        push('/shoot/select');
-      }
-    } catch {
-      showNotice({
-        actions: [{ id: 'dismiss', label: '닫기', variant: 'secondary' }],
-        eyebrow: 'CAPTURE ERROR',
-        icon: 'warning-outline',
-        message: '촬영을 완료하지 못했어요. 카메라 권한이나 디바이스 상태를 확인한 뒤 다시 시도해 주세요.',
-        title: '촬영을 마치지 못했어요',
-      });
-    } finally {
-      if (isMountedRef.current) setIsShooting(false);
-    }
-  };
-
   return (
     <AppScrollView>
       <PageHeader
         backLabel="프레임 다시 선택"
-        onPressBack={() => push('/shoot')}
+        // 하드웨어 백과 같은 확인 흐름을 태운다. 확인창을 띄웠으면 여기서 이동하지 않는다.
+        onPressBack={() => {
+          if (confirmLeaveCapture()) return;
+          push('/shoot');
+        }}
+        title="사진 촬영"
       />
-      <StepProgress current={2} label="사진 촬영" total={4} />
 
       <SurfaceCard style={{ gap: 14 }}>
         <View style={styles.statusRow}>
-          <Text style={styles.statusText}>프레임에 맞춰 8장을 촬영해요</Text>
+          <Text style={styles.statusText}>선택한 프레임 비율로 8장을 촬영해요</Text>
           <Pill>{shoot.shots.length} / {SHOOT_TOTAL}장 촬영됨</Pill>
         </View>
 
         <View style={styles.stageWrap}>
-          {layout && shoot.frameId ? (
-            <CaptureFrameStage
-              accentColor={shoot.borderColor}
-              backgroundColor={shoot.borderColor}
-              cameraSlotIndex={cameraSlotIndex}
-              capturedUris={capturedUris}
-              components={activeSavedFrame?.components ?? []}
-              frameId={shoot.frameId}
-              renderCamera={() =>
-                permission?.granted ? (
-                  <CameraView
-                    // 신 아키텍처(Fabric)에서는 facing prop만 바꿔도 실제 카메라가
-                    // 전환되지 않는 경우가 있어, key로 강제 remount해 후면/전면 전환을 보장한다.
-                    key={facing}
-                    facing={facing}
-                    onCameraReady={() => setIsCameraReady(true)}
-                    ref={cameraRef}
-                    style={StyleSheet.absoluteFill}
-                  />
-                ) : (
-                  <View style={styles.cameraSlotPlaceholder}>
-                    <Ionicons color="#FFFFFF" name="camera-outline" size={22} />
-                  </View>
-                )
-              }
-              slotColor={colors.backgroundCanvas}
-              style={isTallFrame ? styles.stageTall : styles.stageWide}
-            />
+          {layout && currentSlot ? (
+            <View
+              style={[
+                styles.cameraStage,
+                isTallSlot ? styles.stageTall : styles.stageWide,
+                { aspectRatio: currentSlot.width / currentSlot.height },
+              ]}>
+              {permission?.granted ? (
+                <CameraView
+                  // 신 아키텍처(Fabric)에서는 facing prop만 바꿔도 실제 카메라가
+                  // 전환되지 않는 경우가 있어, key로 강제 remount해 후면/전면 전환을 보장한다.
+                  key={facing}
+                  facing={facing}
+                  onCameraReady={() => setIsCameraReady(true)}
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : (
+                <View style={styles.cameraSlotPlaceholder}>
+                  <Ionicons color="#FFFFFF" name="camera-outline" size={22} />
+                </View>
+              )}
+            </View>
           ) : null}
 
           {isShooting && countdown ? (
@@ -394,10 +429,11 @@ export function ShootCaptureScreen() {
                 <Text style={styles.countdownText}>{countdown}</Text>
               </View>
               <Text style={styles.overlayCaption}>{shoot.shots.length}/{SHOOT_TOTAL}</Text>
-              <Text style={styles.overlayHint}>셔터를 누르면 바로 이 컷을 찍어요</Text>
             </View>
           ) : null}
         </View>
+
+        {/* 촬영 중에는 찍은 컷을 보여주지 않는다 — 촬영에만 집중하고, 확인은 다음 단계에서. */}
 
         {permission && !permission.granted ? (
           <ActionButton
@@ -407,32 +443,8 @@ export function ShootCaptureScreen() {
           />
         ) : null}
 
-        {/* 촬영 모드 토글: 타이머 / 수동. 촬영이 시작되면 잠긴다. */}
-        <View style={styles.modeToggle}>
-          {(
-            [
-              ['timer', '타이머'],
-              ['manual', '수동'],
-            ] as const
-          ).map(([mode, label]) => {
-            const active = captureMode === mode;
-            return (
-              <Pressable
-                accessibilityLabel={`${label} 모드`}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: sessionLocked, selected: active }}
-                disabled={sessionLocked}
-                key={mode}
-                onPress={() => setCaptureMode(mode)}
-                style={[styles.modeButton, active ? styles.modeButtonActive : null, sessionLocked ? styles.controlLocked : null]}>
-                <Text style={[styles.modeButtonText, active ? styles.modeButtonTextActive : null]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* 타이머 간격 칩(3/5/8초). 타이머 모드에서만 노출되고, 촬영 시작 후에는 잠긴다. */}
-        {captureMode === 'timer' ? (
+        {/* 촬영 간격 칩(3/5/8초) — 시작 전에만 고른다. 시작하면 통째로 사라진다. */}
+        {sessionLocked ? null : (
           <View style={styles.timerChipRow}>
             {TIMER_OPTIONS.map((seconds) => {
               const active = timerSeconds === seconds;
@@ -440,31 +452,27 @@ export function ShootCaptureScreen() {
                 <Pressable
                   accessibilityLabel={`${seconds}초 간격`}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: sessionLocked, selected: active }}
-                  disabled={sessionLocked}
+                  accessibilityState={{ selected: active }}
                   key={seconds}
                   onPress={() => setTimerSeconds(seconds)}
-                  style={[styles.timerChip, active ? styles.timerChipActive : null, sessionLocked ? styles.controlLocked : null]}>
+                  style={[styles.timerChip, active ? styles.timerChipActive : null]}>
                   <Ionicons color={active ? '#000000' : colors.text} name="timer-outline" size={13} />
                   <Text style={[styles.timerChipText, active ? styles.timerChipTextActive : null]}>{seconds}s</Text>
                 </Pressable>
               );
             })}
           </View>
-        ) : null}
+        )}
 
         <View style={{ gap: 8 }}>
-          <Text style={styles.bodyText}>
-            {!permission?.granted
-              ? '카메라 권한을 허용하면 촬영을 시작할 수 있어요.'
-              : captureMode === 'timer'
-                ? `"촬영 시작"을 누르면 ${timerSeconds}초 간격으로 8장을 자동으로 찍어요.`
-                : '셔터를 누를 때마다 한 장씩 총 8장을 찍어요.'}
-          </Text>
+          {permission?.granted ? null : (
+            <Text style={styles.bodyText}>카메라 권한을 허용하면 촬영을 시작할 수 있어요.</Text>
+          )}
           <Text style={styles.statusText}>카메라 {isCameraReady ? '준비 완료' : '아직 켜져 있지 않아요'}</Text>
         </View>
 
-        {/* 셔터 영역: 큰 원형 셔터(핸드오프) + 카메라 전환 */}
+        {/* 셔터 영역 — 전환 버튼을 absolute로 빼서, 메인 버튼이 그 유무와 무관하게
+            항상 좌우 정중앙에 오게 한다(예전 좌우 스페이서 방식은 중앙이 어긋났다). */}
         <View style={styles.shutterRow}>
           <Pressable
             accessibilityLabel="카메라 전환"
@@ -479,23 +487,17 @@ export function ShootCaptureScreen() {
             <Ionicons color={colors.text} name="camera-reverse-outline" size={18} />
           </Pressable>
 
+          {/* 시작 전엔 '촬영 시작', 촬영 중엔 언제든 눌러 남은 대기를 건너뛰고 즉시 한 컷. */}
           <Pressable
-            accessibilityLabel={
-              captureMode === 'manual' ? '한 장 촬영' : isShooting ? '지금 바로 촬영' : '촬영 시작'
-            }
+            accessibilityLabel={isShooting ? '지금 바로 촬영' : '촬영 시작'}
             accessibilityRole="button"
-            onPress={() =>
-              void (captureMode === 'manual'
-                ? handleManualShutter()
-                : isShooting
-                  ? handleShootNow()
-                  : handleTimerBurst())
-            }
-            style={styles.shutterButton}>
-            <View style={styles.shutterInner} />
+            onPress={() => void (isShooting ? handleShootNow() : handleTimerBurst())}
+            style={styles.shutterPress}>
+            <View style={styles.shutterButton}>
+              <View style={styles.shutterInner} />
+            </View>
+            <Text style={styles.shutterLabel}>{isShooting ? '바로 촬영' : '촬영 시작'}</Text>
           </Pressable>
-
-          <View style={styles.flipButtonSpacer} />
         </View>
 
         {shoot.shots.length >= SHOOT_TOTAL ? (
@@ -542,8 +544,8 @@ export function ShootSelectScreen() {
       <PageHeader
         backLabel="다시 촬영"
         onPressBack={() => push('/shoot/capture')}
+        title="사진 선택"
       />
-      <StepProgress current={3} label="사진 선택" total={4} />
 
       <SurfaceCard style={{ gap: 14 }}>
         <Text style={styles.sectionTitle}>프레임 미리보기</Text>
@@ -603,7 +605,7 @@ export function ShootSelectScreen() {
         </View>
         <ActionButton
           disabled={selectedCount !== 4}
-          label={selectedCount === 4 ? '다음 단계로' : '4장을 골라주세요'}
+          label={selectedCount === 4 ? '다음 단계로' : '4장을 골라 주세요'}
           onPress={() => {
             if (selectedCount === 4) {
               push('/shoot/result');
@@ -688,11 +690,11 @@ export function ShootResultScreen() {
 
   const currentHistory = historyItems.find((item) => item.id === shoot.persistedHistoryId) ?? null;
   // 사용자가 탭한 순서(selectedShotIds)를 보존해 미리보기/저장 결과가 일치하도록 한다.
-  const previewMedia =
-    currentHistory?.previewMedia ??
-    shoot.selectedShotIds
-      .map((id) => shoot.shots.find((shot) => shot.id === id))
-      .filter((shot): shot is (typeof shoot.shots)[number] => shot !== undefined);
+  // 서버 기록의 previewMedia는 4컷을 합성한 "결과물 1장"이라 슬롯 배열로 쓰면 안 된다
+  // (저장 성공 직후 미리보기가 1컷으로 붕괴하고, 그 화면을 다시 캡처해 내려받게 된다).
+  const previewMedia = shoot.selectedShotIds
+    .map((id) => shoot.shots.find((shot) => shot.id === id))
+    .filter((shot): shot is (typeof shoot.shots)[number] => shot !== undefined);
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
@@ -735,7 +737,6 @@ export function ShootResultScreen() {
   return (
     <AppScrollView>
       <PageHeader title="촬영 결과" />
-      <StepProgress current={4} label="결과 확인" total={4} />
 
       <SurfaceCard style={{ gap: 10 }}>
         <View style={styles.statusRow}>
@@ -743,7 +744,7 @@ export function ShootResultScreen() {
             <Text style={styles.sectionTitle}>결과 준비 완료</Text>
             <Text style={styles.bodyText}>
               {isGuest
-                ? '체험 결과는 기기에 바로 저장할 수 있어요. 링크 공유와 기록 저장은 로그인 후 사용할 수 있습니다.'
+                ? '체험 결과는 기기에 바로 저장할 수 있어요. 링크 공유와 기록 저장은 로그인 후 사용할 수 있어요.'
                 : '마음에 드는 결과를 저장하거나 링크로 공유해 보세요.'}
             </Text>
           </View>
@@ -805,7 +806,7 @@ export function ShootResultScreen() {
         <SurfaceCard style={{ gap: 12 }}>
           <Text style={styles.sectionTitle}>비회원 체험 안내</Text>
           <Text style={styles.bodyText}>
-            지금 결과는 기기에 저장할 수 있지만, 링크 공유와 기록 보관, 업로드 제작, 프레임 저장 같은 서버 연동 기능은 로그인 후 사용할 수 있어요.
+            지금은 이미지 저장을 체험할 수 있어요. 링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요. 이 결과는 화면을 벗어나면 사라져요.
           </Text>
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="download-outline" size={16} />}
@@ -814,7 +815,7 @@ export function ShootResultScreen() {
           />
           <ActionButton
             icon={<Ionicons color={colors.text} name="share-social-outline" size={16} />}
-            label="링크 공유는 로그인 후 가능해요"
+            label="링크 공유는 로그인 후에 이용할 수 있어요"
             onPress={showGuestShareNotice}
             variant="ghost"
           />
@@ -835,7 +836,7 @@ export function ShootResultScreen() {
           variant="ghost"
         />
         <ActionButton
-          label={isGuest ? '로그인으로 이동' : '홈으로 가기'}
+          label={isGuest ? '로그인하고 계속하기' : '홈으로 가기'}
           onPress={() => push(isGuest ? '/login' : '/home')}
           style={{ flex: 1 }}
           variant="secondary"
@@ -855,6 +856,7 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     controlLocked: {
       opacity: 0.45,
     },
+    // 전환 버튼은 좌측에 절대 배치 — 셔터가 항상 행의 정중앙에 오게 한다.
     flipButton: {
       alignItems: 'center',
       backgroundColor: colors.card,
@@ -863,36 +865,9 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       borderWidth: 1,
       height: 44,
       justifyContent: 'center',
+      left: 0,
+      position: 'absolute',
       width: 44,
-    },
-    flipButtonSpacer: {
-      height: 44,
-      width: 44,
-    },
-    modeButton: {
-      alignItems: 'center',
-      borderRadius: 999,
-      flex: 1,
-      height: 38,
-      justifyContent: 'center',
-    },
-    modeButtonActive: {
-      backgroundColor: '#FFFFFF',
-    },
-    modeButtonText: {
-      color: colors.muted,
-      fontSize: 13,
-      fontWeight: '700',
-    },
-    modeButtonTextActive: {
-      color: '#0B0B0C',
-    },
-    modeToggle: {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.cardMuted,
-      borderRadius: 999,
-      flexDirection: 'row',
-      gap: 6,
-      padding: 4,
     },
     shutterButton: {
       alignItems: 'center',
@@ -909,11 +884,20 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       height: 56,
       width: 56,
     },
+    shutterLabel: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    shutterPress: {
+      alignItems: 'center',
+      gap: 6,
+    },
     shutterRow: {
       alignItems: 'center',
       flexDirection: 'row',
-      gap: 28,
       justifyContent: 'center',
+      position: 'relative',
     },
     timerChip: {
       alignItems: 'center',
@@ -941,25 +925,18 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
     timerChipTextActive: {
       color: '#000000',
     },
-    cameraFrame: {
-      aspectRatio: 0.75,
-      backgroundColor: colors.backgroundCanvas,
-      borderRadius: 24,
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    cameraPlaceholder: {
-      alignItems: 'center',
-      flex: 1,
-      gap: 12,
-      justifyContent: 'center',
-      padding: 24,
-    },
     cameraSlotPlaceholder: {
       alignItems: 'center',
       backgroundColor: colors.backgroundCanvas,
       flex: 1,
       justifyContent: 'center',
+    },
+    cameraStage: {
+      backgroundColor: '#000000',
+      borderRadius: 16,
+      maxHeight: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
     },
     stageTall: {
       height: '100%',
@@ -999,22 +976,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
-    },
-    mediaBadge: {
-      backgroundColor: '#FFFFFF',
-      borderColor: 'rgba(17, 24, 39, 0.14)',
-      borderRadius: 999,
-      borderWidth: 1,
-      bottom: 8,
-      left: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      position: 'absolute',
-    },
-    mediaBadgeText: {
-      color: '#000000',
-      fontSize: 10,
-      fontWeight: '800',
     },
     mediaCard: {
       aspectRatio: 0.75,
@@ -1058,10 +1019,6 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       color: '#FFFFFF',
       fontSize: 12,
       fontWeight: '600',
-    },
-    overlayHint: {
-      color: 'rgba(255,255,255,0.82)',
-      fontSize: 11,
     },
     rowButtons: {
       flexDirection: 'row',

@@ -1,5 +1,5 @@
 import type { UserProfile } from '@/constants/harucut-data';
-import { apiEnvelopeData, apiRequest, isUsingWebProxy } from '@/lib/api-client';
+import { apiEnvelopeData, apiRequest } from '@/lib/api-client';
 
 type RemoteUserInfo = {
   email: string;
@@ -24,10 +24,7 @@ export function toUserProfile(user: RemoteUserInfo): UserProfile {
 
 export async function getMyUserProfile() {
   const user = await apiEnvelopeData<RemoteUserInfo>(
-    {
-      direct: '/api/auth/user/info',
-      proxy: '/api/client/user-info',
-    },
+    '/api/auth/user/info',
     {
       cache: 'no-store',
     },
@@ -43,20 +40,6 @@ export async function updateUsername(username: string) {
     throw new Error('닉네임을 입력해 주세요.');
   }
 
-  if (isUsingWebProxy()) {
-    await apiRequest(
-      {
-        direct: '/api/auth/user/change/username',
-        proxy: '/api/client/user/username',
-      },
-      {
-        body: { username: nextUsername },
-        method: 'PATCH',
-      },
-    );
-    return;
-  }
-
   await apiRequest(`/api/auth/user/change/username?username=${encodeURIComponent(nextUsername)}`, {
     method: 'PATCH',
   });
@@ -64,10 +47,7 @@ export async function updateUsername(username: string) {
 
 export async function updateProfileImage(s3Key: string) {
   await apiRequest(
-    {
-      direct: '/api/auth/user/change/profile-image',
-      proxy: '/api/client/user/change/profile-image',
-    },
+    '/api/auth/user/change/profile-image',
     {
       body: { s3Key },
       method: 'PATCH',
@@ -75,24 +55,21 @@ export async function updateProfileImage(s3Key: string) {
   );
 }
 
-// GET /api/auth/user/subscription/usage 응답.
+// GET /api/auth/user/subscription/usage 응답(스웨거 SubscriptionUsageResponse, 5개 필드 전부 required).
 // *Limit/*RemainingCount 가 -1 이거나 *Unlimited === true 이면 무제한.
+// 결제 주기 정보는 이 응답에 없다. 필요해지면 GET /api/auth/subscriptions 의
+// SubscriptionResponse.currentPeriodStart / currentPeriodEnd 를 써야 한다.
 export type SubscriptionUsage = {
   planTier: string;
   frameRetentionLimit: number;
   frameRetentionUsedCount: number;
   frameRetentionRemainingCount: number;
   frameRetentionUnlimited: boolean;
-  currentCycleStartAt: string;
-  currentCycleEndAt: string;
 };
 
 export async function getSubscriptionUsage() {
   return apiEnvelopeData<SubscriptionUsage>(
-    {
-      direct: '/api/auth/user/subscription/usage',
-      proxy: '/api/client/user/subscription/usage',
-    },
+    '/api/auth/user/subscription/usage',
     {
       cache: 'no-store',
     },

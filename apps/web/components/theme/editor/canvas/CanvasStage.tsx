@@ -33,11 +33,14 @@ export function CanvasStage() {
   const [backgroundImage, setBackgroundImage] =
     useState<HTMLImageElement | null>(null);
 
+  // 배경 URL이 사라지면 렌더 중에 즉시 비운다(effect에서 setState 하면 렌더가 한 번 더 돈다).
+  if (!backgroundImageUrl && backgroundImage) {
+    setBackgroundImage(null);
+  }
+
   useEffect(() => {
-    if (!backgroundImageUrl) {
-      setBackgroundImage(null);
-      return;
-    }
+    if (!backgroundImageUrl) return;
+
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     let active = true;
@@ -95,12 +98,32 @@ export function CanvasStage() {
       return;
     }
 
-    const node = stage.findOne(`#node-${activeId}`);
-    if (!node) return;
+    // react-konva 19.2.5부터 리컨사일러 커밋이 queueMicrotask로 미뤄질 수 있다(19.2.1까지는 동기).
+    // 그래서 이 시점에 자식이 만든 Konva 노드가 아직 스테이지에 없을 수 있고, 예전처럼 한 번 찾고
+    // 포기하면 선택 핸들이 조용히 안 뜬다. 붙을 때까지 다음 프레임에 다시 시도하되,
+    // 없는 id를 계속 좇지 않도록 시도 횟수를 제한한다.
+    let frame = 0;
+    let attempts = 0;
 
-    tr.nodes([node]);
-    tr.forceUpdate();
-    tr.getLayer()?.batchDraw();
+    const attach = () => {
+      const node = stage.findOne(`#node-${activeId}`);
+      if (!node) {
+        // 약 0.5초(30프레임)까지만 기다린다. 그 뒤엔 예전과 같이 조용히 포기한다.
+        if (attempts++ >= 30) return;
+        frame = requestAnimationFrame(attach);
+        return;
+      }
+
+      tr.nodes([node]);
+      tr.forceUpdate();
+      tr.getLayer()?.batchDraw();
+    };
+
+    attach();
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [activeId, renderKey]);
 
   // zIndex 기준으로 렌더 순서 보장

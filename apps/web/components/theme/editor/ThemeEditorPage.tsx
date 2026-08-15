@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { BACKGROUND_COLORS } from "@/constants/colors";
@@ -20,7 +20,10 @@ import {
 } from "@/lib/remoteFrameApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
+  SUPPORTED_IMAGE_ACCEPT,
+  UNSUPPORTED_UPLOAD_MESSAGE,
   getImageUrlByKey,
+  isSupportedUploadFile,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
@@ -28,11 +31,43 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
   clearEditorDraft,
   loadEditorDraft,
   saveEditorDraft,
 } from "@/lib/themeEditorDraft";
+
+// 새 프레임을 만들 때 채워 두는 기본 이름·설명
+const DEFAULT_FRAME_TITLE = "새 테마 프레임";
+const DEFAULT_FRAME_DESCRIPTION = "하루컷에서 직접 꾸민 나만의 프레임";
+
+/**
+ * 이탈 경고 판정용 편집 상태 지문. 기준 시점과 지금을 비교하는 데만 쓴다.
+ *
+ * 포함 범위는 자동 초안(saveEditorDraft)이 남기는 값과 같다 — 잃으면 아까운 작업이
+ * 곧 초안에 담기는 값이기 때문이다. cellCutouts는 서버 요청에는 안 들어가지만
+ * 저장 시 업로드하는 미리보기 렌더에 반영되므로 여기 포함한다.
+ *
+ * 배경의 `url`은 뺀다. IMAGE 배경은 저장된 key만 들고 오고 서명 URL은 불러온 뒤에
+ * 따로 주입하는 렌더 전용 값이라, 포함하면 사용자가 아무것도 안 해도 지문이 바뀐다.
+ */
+function buildEditorSignature(
+  components: ReturnType<typeof useThemeEditorStore.getState>["components"],
+  background: ReturnType<typeof useThemeEditorStore.getState>["background"],
+  backgroundColor: string,
+  cellCutouts: boolean[],
+) {
+  return JSON.stringify({
+    components,
+    background:
+      background.type === "IMAGE"
+        ? { type: "IMAGE", key: background.key ?? null, opacity: background.opacity ?? null }
+        : { type: "COLOR", value: background.value },
+    backgroundColor,
+    cellCutouts,
+  });
+}
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
@@ -48,17 +83,74 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const setBackgroundImageUrl = useThemeEditorStore((s) => s.setBackgroundImageUrl);
   const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
+  const editorComponents = useThemeEditorStore((s) => s.components);
+  const storeFrameId = useThemeEditorStore((s) => s.frameId);
+  const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
   const { remoteFrameId } = useThemeSession();
+
+  // 편집 중 판정은 "콘텐츠가 있는지"가 아니라 "기준 상태에서 바뀌었는지"로 한다.
+  // 콘텐츠 유무로 보면 컴포넌트나 이미지 배경이 있는 저장 프레임을 열기만 해도
+  // 매번 이탈 경고가 떠서, 아무것도 고치지 않은 사용자까지 붙잡는다.
+  const editorSignature = useMemo(
+    () =>
+      buildEditorSignature(
+        editorComponents,
+        background,
+        backgroundColor,
+        cellCutouts,
+      ),
+    [editorComponents, background, backgroundColor, cellCutouts],
+  );
+  // 기준은 프레임마다 새로 잡되, 스토어가 이 프레임 상태로 자리잡은 뒤에 잡는다.
+  // 너무 일찍 잡으면 기준이 남의 상태가 된다.
+  // - 새 프레임: 이전 프레임을 편집하다 들어오면 첫 렌더에는 스토어에 이전 상태가 남아 있고,
+  //   아래 setFrameId effect가 그때서야 초기화한다. 스토어 frameId가 맞춰질 때까지 기다린다.
+  // - 원격 프레임: 불러오기가 끝나야 기준이 정해진다(importJson이 스토어 frameId를 저장본 값으로
+  //   바꾸므로 여기서는 frameId 일치를 조건으로 쓸 수 없다).
+  const baselineKey = `${frameId}:${remoteFrameId ?? ""}`;
+  const [baseline, setBaseline] = useState<{
+    key: string;
+    signature: string | null;
+  }>({ key: baselineKey, signature: null });
+  const [isRemoteFrameSettled, setIsRemoteFrameSettled] = useState(false);
+  const isBaselineReady = remoteFrameId
+    ? isRemoteFrameSettled
+    : storeFrameId === frameId;
+
+  if (baseline.key !== baselineKey) {
+    setBaseline({ key: baselineKey, signature: null });
+    setIsRemoteFrameSettled(false);
+  } else if (baseline.signature === null && isBaselineReady) {
+    setBaseline({ key: baselineKey, signature: editorSignature });
+  }
+
+  const hasUnsavedCanvasChanges =
+    baseline.key === baselineKey &&
+    baseline.signature !== null &&
+    baseline.signature !== editorSignature;
+
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // 원격 프레임은 불러온 값으로 채우고, 새 프레임은 기본값에서 시작한다.
+  const [title, setTitle] = useState(remoteFrameId ? "" : DEFAULT_FRAME_TITLE);
+  const [description, setDescription] = useState(
+    remoteFrameId ? "" : DEFAULT_FRAME_DESCRIPTION,
+  );
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
+
+  // 저장 다이얼로그에 입력한 이름·설명도 아직 서버에 안 올라간 작업이다.
+  // 다이얼로그를 열면 현재 값으로 채워지므로, 그 값에서 달라졌을 때만 편집으로 센다.
+  const hasUnsavedSaveDialogInput =
+    isSaveDialogOpen &&
+    (draftTitle !== title || draftDescription !== description);
+
+  useUnsavedWorkGuard(hasUnsavedCanvasChanges || hasUnsavedSaveDialogInput);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
 
   useEffect(() => {
@@ -84,12 +176,22 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         importJson(imported);
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
+        // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
+        // 기다리면, 그 사이 사용자가 고친 내용이 기준으로 잡혀 이탈 경고가 안 뜬다
+        // (해석을 기다리는 동안에도 에디터는 조작 가능하다). 지문은 url을 안 보므로
+        // 여기서 확정해도 뒤따르는 URL 주입에 영향받지 않는다.
+        setIsRemoteFrameSettled(true);
 
         // IMAGE 배경(key만 있음)은 url을 해석해 캔버스/썸네일에 렌더되도록 주입.
         // 그래야 수정 저장 시 배경이 빠진 단색 썸네일로 저장되지 않는다.
         const importedKey =
           imported.background?.type === "IMAGE" ? imported.background.key : undefined;
-        if (importedKey) {
+        // 서버가 key 자리에 이미 서명된 URL을 준 경우엔 그대로 쓴다(재서명하면 주소가 깨진다).
+        const importedUrl =
+          imported.background?.type === "IMAGE" ? imported.background.url : undefined;
+        if (importedUrl) {
+          setBackgroundImageUrl(importedUrl);
+        } else if (importedKey) {
           const url = await getImageUrlByKey(importedKey);
           // 해석을 기다리는 동안 사용자가 새 배경(로컬 파일/다른 key)을 골랐을 수 있다.
           // 현재 배경이 여전히 같은 원격 key일 때만 적용해 stale URL 덮어쓰기를 막는다.
@@ -107,10 +209,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       } catch (error) {
         console.error(error);
         if (!cancelled) {
-          setLoadError("저장한 프레임을 불러오지 못했습니다.");
+          setLoadError("저장한 프레임을 불러오지 못했어요.");
         }
       } finally {
         if (!cancelled) {
+          // 불러오기가 실패한 경우에도 기준은 잡아 둔다. 안 잡으면 이후 편집이
+          // 아무리 쌓여도 이탈 경고가 영영 안 뜬다(성공 경로는 위에서 이미 잡았다).
+          setIsRemoteFrameSettled(true);
           setIsLoadingFrame(false);
         }
       }
@@ -123,12 +228,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [importJson, remoteFrameId, setBackgroundImageUrl]);
 
-  useEffect(() => {
-    if (remoteFrameId) return;
-
-    setTitle("새 테마 프레임");
-    setDescription("하루컷에서 직접 꾸민 나만의 프레임");
-  }, [remoteFrameId]);
+  // 새 프레임(원격 id 없음)이면 기본 이름·설명을 채운다.
+  // 원격 프레임에서 새 프레임으로 바뀌는 전환도 렌더 중에 맞춘다.
+  const [syncedRemoteFrameId, setSyncedRemoteFrameId] = useState(remoteFrameId);
+  if (syncedRemoteFrameId !== remoteFrameId) {
+    setSyncedRemoteFrameId(remoteFrameId);
+    if (!remoteFrameId) {
+      setTitle(DEFAULT_FRAME_TITLE);
+      setDescription(DEFAULT_FRAME_DESCRIPTION);
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -189,7 +298,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const onDone = async () => {
     if (isSaving || isLoadingFrame) return;
     if (hasRemoteLoadFailure) {
-      setSaveDialogError("저장한 프레임을 불러오지 못해 수정 저장을 막았습니다.");
+      setSaveDialogError("저장한 프레임을 불러오지 못해 수정 저장을 막았어요.");
       return;
     }
 
@@ -217,7 +326,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         const { key } = await uploadToS3WithPresigned({
           file: editorState.pendingBackgroundFile,
           type: PRESIGNED_UPLOAD_TYPES.FRAME,
-          isTemp: false,
         });
         useThemeEditorStore.getState().setBackgroundImageKey(key);
       }
@@ -240,7 +348,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       const { key: previewKey } = await uploadToS3WithPresigned({
         file: previewFile,
         type: PRESIGNED_UPLOAD_TYPES.FRAME,
-        isTemp: false,
       });
 
       const body = toCreateFrameRequest(themeJson, {
@@ -257,6 +364,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       clearEditorDraft();
+      // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
+      // /theme로 나가는 길에도 경고가 뜬다.
+      setBaseline({ key: baselineKey, signature: editorSignature });
       setTitle(nextTitle);
       setDescription(nextDescription);
       setIsSaveDialogOpen(false);
@@ -264,7 +374,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     } catch (error) {
       console.error(error);
       setSaveDialogError(
-        getUserFacingApiErrorMessage(error, "저장에 실패했습니다."),
+        getUserFacingApiErrorMessage(error, "저장에 실패했어요."),
       );
     } finally {
       setIsSaving(false);
@@ -283,7 +393,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       router.push("/theme");
     } catch (error) {
       console.error(error);
-      alert("삭제에 실패했습니다.");
+      alert("삭제에 실패했어요.");
     } finally {
       setIsDeleting(false);
     }
@@ -335,7 +445,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
         {isLoadingFrame ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
-            저장한 프레임을 불러오는 중입니다.
+            저장한 프레임을 불러오고 있어요.
           </section>
         ) : null}
 
@@ -386,12 +496,22 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   {background.type === "IMAGE" ? "배경 이미지 변경" : "배경 이미지"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={SUPPORTED_IMAGE_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) setBackgroundImage(file);
                       e.target.value = "";
+                      if (!file) return;
+
+                      // heic/avif 같은 형식은 저장 단계에서야 실패한다.
+                      // 편집을 다 끝낸 뒤 막히지 않도록 고른 즉시 걸러낸다.
+                      if (!isSupportedUploadFile(file)) {
+                        setBackgroundError(UNSUPPORTED_UPLOAD_MESSAGE);
+                        return;
+                      }
+
+                      setBackgroundError(null);
+                      setBackgroundImage(file);
                     }}
                   />
                 </label>
@@ -405,8 +525,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   </button>
                 ) : null}
               </div>
+              {backgroundError ? (
+                <p className="text-[11px] leading-4 text-red-300">
+                  {backgroundError}
+                </p>
+              ) : null}
               <p className="text-[11px] leading-4 text-[color:var(--hc-muted)]">
-                배경 이미지는 사진 칸 뒤에 깔려요.
+                배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF만 올릴 수
+                있어요.
               </p>
             </section>
           </div>

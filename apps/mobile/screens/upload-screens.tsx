@@ -6,7 +6,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 import { FramePickerSection, FramePreview, SavedFramesPanel } from '@/components/harucut/frame';
-import { ActionButton, AppScrollView, FormField, PageHeader, Pill, StepProgress, SurfaceCard } from '@/components/harucut/ui';
+import { ActionButton, AppScrollView, FormField, PageHeader, Pill, SurfaceCard } from '@/components/harucut/ui';
 import { FRAME_BORDER_OPTIONS, OUTPUT_TONE_OPTIONS, type HistoryItem, type MediaAsset } from '@/constants/harucut-data';
 import type { HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
@@ -58,7 +58,6 @@ export function UploadFrameScreen() {
         description="업로드로 만들 프레임을 먼저 골라 주세요."
         onPressBack={() => push('/home')}
       />
-      <StepProgress current={1} label="프레임 선택" total={3} />
       <FramePickerSection
         confirmLabel="업로드 시작하기"
         onConfirm={() => push('/upload/select')}
@@ -67,7 +66,7 @@ export function UploadFrameScreen() {
       />
       <SavedFramesPanel
         description="같은 타입으로 저장한 프레임을 불러와 바로 이어서 만들 수 있어요."
-        emptyText="저장된 프레임이 없습니다."
+        emptyText="저장한 프레임이 없어요."
         frames={savedFrames}
         onRefresh={() => void loadRemoteFrames()}
         onSelect={selectSavedFrameForUpload}
@@ -118,7 +117,6 @@ export function UploadSelectScreen() {
 
     const nextAssets: MediaAsset[] = result.assets.map((asset, index) => ({
       id: `upload-asset-${Date.now()}-${index}`,
-      kind: 'image',
       label: asset.fileName ?? `업로드 ${index + 1}`,
       uri: asset.uri,
     }));
@@ -146,7 +144,7 @@ export function UploadSelectScreen() {
         <Text style={styles.bodyText}>
           {upload.assets.length === 0
             ? '먼저 사진을 업로드해 주세요.'
-            : `업로드한 미디어 ${upload.assets.length}개 중에서 4개를 골라 주세요.`}
+            : `업로드한 사진 ${upload.assets.length}장 중에서 4장을 골라 주세요.`}
         </Text>
         <ActionButton
           icon={<Ionicons color={colors.text} name="images-outline" size={16} />}
@@ -195,7 +193,7 @@ export function UploadSelectScreen() {
         </View>
         <ActionButton
           disabled={selectedCount !== 4}
-          label={selectedCount === 4 ? '다음 — 결과 만들기' : `${Math.max(0, 4 - selectedCount)}개 더 골라주세요`}
+          label={selectedCount === 4 ? '다음 — 결과 만들기' : `${Math.max(0, 4 - selectedCount)}개 더 골라 주세요`}
           onPress={() => {
             if (selectedCount === 4) {
               push('/upload/result');
@@ -276,11 +274,11 @@ export function UploadResultScreen() {
 
   const currentHistory = historyItems.find((item) => item.id === upload.persistedHistoryId) ?? null;
   // 사용자가 탭한 순서(selectedAssetIds)를 보존해 미리보기/저장 결과가 일치하도록 한다.
-  const previewMedia =
-    currentHistory?.previewMedia ??
-    upload.selectedAssetIds
-      .map((id) => upload.assets.find((asset) => asset.id === id))
-      .filter((asset): asset is (typeof upload.assets)[number] => asset !== undefined);
+  // 서버에 저장된 기록의 previewMedia는 4컷을 합성한 "결과물 1장"이라 슬롯 배열로 쓰면 안 된다
+  // (저장 성공 직후 미리보기가 1컷으로 붕괴한다). 슬롯에는 항상 로컬 원본을 채운다.
+  const previewMedia = upload.selectedAssetIds
+    .map((id) => upload.assets.find((asset) => asset.id === id))
+    .filter((asset): asset is (typeof upload.assets)[number] => asset !== undefined);
 
   useEffect(() => {
     setDraftName(currentHistory?.title ?? '');
@@ -293,7 +291,7 @@ export function UploadResultScreen() {
 
     try {
       const url = await resolveHistoryMediaUrl(currentHistory);
-      const result = await saveRemoteMediaToLibrary(url, currentHistory.title, currentHistory.kind);
+      const result = await saveRemoteMediaToLibrary(url, currentHistory.title);
 
       if (result.ok) {
         showNotice({
@@ -349,7 +347,6 @@ export function UploadResultScreen() {
   return (
     <AppScrollView>
       <PageHeader title="업로드 결과" />
-      <StepProgress current={3} label="결과 확인" total={3} />
 
       <SurfaceCard style={{ gap: 10 }}>
         <View style={styles.statusRow}>

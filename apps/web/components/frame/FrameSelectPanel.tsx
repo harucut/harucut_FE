@@ -46,7 +46,7 @@ export function FrameSelectPanel({
   const baseItems: FrameMedia[] = useMemo(() => {
     if (media && media.length) return media;
     if (images && images.length) {
-      return images.map((src) => ({ type: "image" as const, src }));
+      return images.map((src) => ({ src }));
     }
     return [];
   }, [images, media]);

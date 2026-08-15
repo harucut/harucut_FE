@@ -104,8 +104,9 @@ type State = {
   setBackgroundImageUrl: (url: string) => void;
   clearBackgroundImage: () => void;
 
+  // 호출부가 지원 형식만 미리 걸러 넘길 수 있어 File[]도 받는다.
   addPhotoAssets: (
-    files: FileList,
+    files: FileList | File[],
   ) => Promise<{ added: number; failed: number }>;
   removePhotoBackground: (assetId: string) => Promise<{
     ok: boolean;
@@ -117,7 +118,7 @@ type State = {
     reason?: "IN_USE" | "NOT_FOUND";
   };
   resetPhotos: () => void;
-  // 저장 시: 캔버스에서 실제 사용 중인 로컬 사진만 S3에 업로드(isTemp:false)하고
+  // 저장 시: 캔버스에서 실제 사용 중인 로컬 사진만 S3에 업로드하고
   // 컴포넌트 source를 S3 URL로 치환한다. 미사용 업로드 사진은 올리지 않는다.
   finalizePhotosForSave: () => Promise<void>;
 
@@ -399,8 +400,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
-  // 저장 시: 실제 캔버스에 올라간 로컬 사진만 S3에 업로드(isTemp:false)하고
+  // 저장 시: 실제 캔버스에 올라간 로컬 사진만 S3에 업로드하고
   // 컴포넌트 source/에셋 src를 S3 URL로 치환한다. 한 번 올린(또는 원격) 사진은 건너뛴다.
+  // (업로드 계약에 임시/영구 구분은 없다. 편집 중 임시 업로드를 하지 않는 것으로 대신한다.)
   finalizePhotosForSave: async () => {
     const { components, assets } = get();
     const usedSrcs = new Set(
@@ -419,7 +421,6 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       const { objectUrl } = await uploadToS3WithPresigned({
         file: asset.file,
         type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-        isTemp: false,
       });
       srcToRemote.set(asset.src, objectUrl);
     }

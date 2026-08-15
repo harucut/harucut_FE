@@ -29,9 +29,11 @@ type ShootStore = ShootSessionState & {
   resetShootSession: () => void;
   selectSavedFrameForShoot: (frame: SavedFrame) => void;
   setShootFrame: (frameId: FrameId | null) => void;
-  setShootOption: (
-    key: keyof Pick<ShootSessionState, 'borderColor' | 'tone'>,
-    value: string | boolean,
+  // 키마다 값 타입을 좁힌다. 넓은 string | boolean이면 setShootOption('tone', true)가
+  // 컴파일을 통과해 OUTPUT_TONE_OPTIONS 비교를 조용히 깨뜨린다.
+  setShootOption: <K extends 'borderColor' | 'tone'>(
+    key: K,
+    value: ShootSessionState[K],
   ) => void;
   toggleShootSelection: (id: string) => void;
 };
@@ -106,7 +108,7 @@ export const useShootStore = create<ShootStore>((set, get) => ({
     set((state) => ({
       ...defaultShootSession(),
       // 촬영 시작 시 세션(촬영본/선택)만 초기화하고 고른 프레임(저장 프레임 포함)은 유지한다.
-      // 그래야 촬영 중에도 카메라 위 프레임 오버레이의 데코가 그대로 보인다.
+      // 촬영 프리뷰의 슬롯 비율과 배치·결과 단계의 프레임 표시가 이 값에 의존한다.
       borderColor: state.borderColor,
       frameId: state.frameId,
       selectedSavedFrameId: state.selectedSavedFrameId,
@@ -124,7 +126,7 @@ export const useShootStore = create<ShootStore>((set, get) => ({
       frameId,
       selectedSavedFrameId: null,
     }),
-  setShootOption: (key, value) => set({ [key]: value }),
+  setShootOption: (key, value) => set({ [key]: value } as Partial<ShootSessionState>),
   toggleShootSelection: (id) =>
     set((state) => ({
       selectedShotIds: limitSelection(state.selectedShotIds, id),

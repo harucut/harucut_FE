@@ -27,12 +27,13 @@ type UploadStore = UploadSessionState & {
   addUploadAssets: (assets: MediaAsset[]) => void;
   hardReset: () => void;
   persistUploadResult: (previewUri?: string | null) => Promise<string | null>;
-  resetUploadSession: () => void;
   selectSavedFrameForUpload: (frame: SavedFrame) => void;
   setUploadFrame: (frameId: FrameId) => void;
-  setUploadOption: (
-    key: keyof Pick<UploadSessionState, 'borderColor' | 'tone'>,
-    value: string | boolean,
+  // 키마다 값 타입을 좁힌다. 넓은 string | boolean이면 setUploadOption('tone', true)가
+  // 컴파일을 통과해 OUTPUT_TONE_OPTIONS 비교를 조용히 깨뜨린다.
+  setUploadOption: <K extends 'borderColor' | 'tone'>(
+    key: K,
+    value: UploadSessionState[K],
   ) => void;
   toggleUploadSelection: (id: string) => void;
 };
@@ -101,11 +102,6 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
 
     return nextItem.id;
   },
-  resetUploadSession: () =>
-    set((state) => ({
-      ...defaultUploadSession(),
-      frameId: state.frameId,
-    })),
   selectSavedFrameForUpload: (frame) =>
     set({
       borderColor: frame.accentColor,
@@ -118,7 +114,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       frameId,
       selectedSavedFrameId: null,
     }),
-  setUploadOption: (key, value) => set({ [key]: value }),
+  setUploadOption: (key, value) => set({ [key]: value } as Partial<UploadSessionState>),
   toggleUploadSelection: (id) =>
     set((state) => ({
       selectedAssetIds: limitSelection(state.selectedAssetIds, id),
