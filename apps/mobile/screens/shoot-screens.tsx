@@ -270,6 +270,11 @@ export function ShootCaptureScreen() {
       skipProcessing: true,
     });
 
+    // takePictureAsync는 수백 ms가 걸린다. 그 사이 "나가기"를 골랐거나 화면을 벗어났으면
+    // 결과를 버린다. 안 그러면 방금 비운 전역 스토어에 사진 한 장과 선택 id가 되살아나,
+    // 지웠다고 안내한 촬영본이 /shoot에 남는다.
+    if (shouldStopBurst()) return shotIndex;
+
     const asset: MediaAsset = {
       id: `shoot-shot-${Date.now()}-${shotIndex}`,
       label: `촬영 ${shotIndex + 1}`,
