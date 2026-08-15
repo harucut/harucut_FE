@@ -163,6 +163,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         importJson(imported);
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
+        // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
+        // 기다리면, 그 사이 사용자가 고친 내용이 기준으로 잡혀 이탈 경고가 안 뜬다
+        // (해석을 기다리는 동안에도 에디터는 조작 가능하다). 지문은 url을 안 보므로
+        // 여기서 확정해도 뒤따르는 URL 주입에 영향받지 않는다.
+        setIsRemoteFrameSettled(true);
 
         // IMAGE 배경(key만 있음)은 url을 해석해 캔버스/썸네일에 렌더되도록 주입.
         // 그래야 수정 저장 시 배경이 빠진 단색 썸네일로 저장되지 않는다.
@@ -195,7 +200,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         }
       } finally {
         if (!cancelled) {
-          // 성공이든 실패든 여기까지 오면 "불러온 뒤"다. 이제부터의 변화만 편집으로 센다.
+          // 불러오기가 실패한 경우에도 기준은 잡아 둔다. 안 잡으면 이후 편집이
+          // 아무리 쌓여도 이탈 경고가 영영 안 뜬다(성공 경로는 위에서 이미 잡았다).
           setIsRemoteFrameSettled(true);
           setIsLoadingFrame(false);
         }

@@ -72,11 +72,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   themePreference: 'system',
   user: INITIAL_USER,
   bootstrapMemberSession: async () => {
-    set({ accessMode: 'member', notice: null });
+    set({ notice: null });
 
     // 프로필(=계정 식별)을 먼저 확정한다. 계정이 바뀌었을 때의 작업 공간 초기화가
     // 라이브러리 조회보다 늦게 돌면 방금 불러온 기록/프레임까지 지워 버린다.
-    await get().refreshUserProfile();
+    //
+    // 회원 모드로 올리는 것도 식별이 끝난 뒤다. 먼저 올려 두면 프로필 조회가
+    // 네트워크 오류·5xx로 실패했을 때 claimWorkspace를 못 거친 회원 상태가 남아,
+    // 이전 계정의 로컬 촬영·업로드 결과가 보호 화면에 그대로 보인다.
+    try {
+      await get().refreshUserProfile();
+    } catch (error) {
+      set({ accessMode: 'anonymous', user: INITIAL_USER });
+      throw error;
+    }
+
+    set({ accessMode: 'member' });
     claimWorkspace(get().user);
 
     const library = useLibraryStore.getState();
