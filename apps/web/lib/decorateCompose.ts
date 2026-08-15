@@ -1,5 +1,6 @@
 "use client";
 
+import { fitCanvasScale } from "@/lib/canvas/composeFrame";
 import { loadImage } from "@/lib/canvas/loaders";
 import type { DecorComponent, DrawStroke } from "@/lib/decorateStore";
 import type { TextStyleJson } from "@/lib/types/themeEditor";
@@ -19,10 +20,14 @@ export async function composeDecoratedPng(opts: {
   const { base, components, strokes } = opts;
 
   const canvas = document.createElement("canvas");
-  canvas.width = base.width;
-  canvas.height = base.height;
+  // 합성 캔버스와 같은 넓이 상한을 지킨다. 베이스는 보통 합성 결과라 이미 상한 안이지만,
+  // 다른 경로로 큰 이미지가 들어와도 아이폰에서 빈 이미지가 나오지 않게 한다.
+  const outputScale = fitCanvasScale(base.width, base.height);
+  canvas.width = Math.floor(base.width * outputScale);
+  canvas.height = Math.floor(base.height * outputScale);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context not available");
+  if (outputScale !== 1) ctx.scale(outputScale, outputScale);
 
   // 1) 베이스 네컷
   const baseImg = await loadImage(base.src);
