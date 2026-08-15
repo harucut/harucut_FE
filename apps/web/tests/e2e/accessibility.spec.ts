@@ -60,16 +60,23 @@ const FREEZE_ANIMATIONS_CSS = `
   }
 `;
 
-// 온보딩 코치마크(components/onboarding/CoachMarks.tsx)는 마운트 350ms 뒤에 뜬다.
-// 그 전에 스캔하면 어떤 실행에서는 검사되고 어떤 실행에서는 빠져서, 느린 CI에서만
-// 위반이 잡히는 일이 생긴다(실제로 /home 말풍선 대비 미달이 그렇게 드러났다).
-// 뜰 화면에서는 뜬 뒤에 검사하도록 그 지연을 넘겨 기다린다.
-const COACH_MARK_DELAY_MS = 350;
+/**
+ * 온보딩 코치마크(components/onboarding/CoachMarks.tsx)가 뜰 때까지 기다린다.
+ *
+ * 코치마크는 hydration 뒤 effect가 걸고 350ms 지난 뒤에 뜬다. 그 전에 스캔하면 어떤
+ * 실행에서는 검사되고 어떤 실행에서는 빠져서, 느린 CI에서만 위반이 잡힌다(실제로 /home
+ * 말풍선 대비 미달이 그렇게 드러났다). 고정 대기로는 hydration이 늦는 만큼 다시 어긋나므로,
+ * 요소가 실제로 보일 때까지 기다린다. 스토리지 키가 비어 있는 새 컨텍스트에서는 반드시 뜬다.
+ */
+async function waitForCoachMark(page: Page) {
+  await page
+    .getByRole("dialog", { name: "기능 안내" })
+    .waitFor({ state: "visible" });
+}
 
 async function expectNoAccessibilityViolations(page: Page) {
   await page.locator("body").waitFor({ state: "visible" });
   await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
-  await page.waitForTimeout(COACH_MARK_DELAY_MS + 150);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
@@ -88,12 +95,19 @@ for (const route of publicRoutes) {
   });
 }
 
+// 코치마크를 띄우는 화면. 지금은 /home 하나뿐이다(app/home/page.tsx의 <CoachMarks id="home-v1">).
+const routesWithCoachMark = new Set<string>(["/home"]);
+
 for (const route of authenticatedRoutes) {
   test(`authenticated route ${route} has no obvious accessibility violations`, async ({
     page,
   }) => {
     await enableAuthenticatedContext(page);
     await page.goto(route);
+
+    if (routesWithCoachMark.has(route)) {
+      await waitForCoachMark(page);
+    }
 
     await expectNoAccessibilityViolations(page);
   });
