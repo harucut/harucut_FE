@@ -123,7 +123,9 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
           boxShadow: "0 18px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.08)",
         }}
       >
-        <p className="text-[11px] font-bold tracking-wide text-[color:var(--hc-primary)]">
+        {/* 이 말풍선은 --hc-surface(라이트에서 흰색) 위에 뜬다. --hc-primary(#16b454)는
+            흰 배경에서 대비 2.73:1로 AA(4.5:1) 미달이라, 글자에는 -strong을 쓴다. */}
+        <p className="text-[11px] font-bold tracking-wide text-[color:var(--hc-primary-strong)]">
           {index + 1} / {steps.length}
         </p>
         <h3 className="mt-1 text-[15px] font-bold text-[color:var(--hc-text)]">

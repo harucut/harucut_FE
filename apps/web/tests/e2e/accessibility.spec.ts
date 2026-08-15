@@ -60,9 +60,16 @@ const FREEZE_ANIMATIONS_CSS = `
   }
 `;
 
+// 온보딩 코치마크(components/onboarding/CoachMarks.tsx)는 마운트 350ms 뒤에 뜬다.
+// 그 전에 스캔하면 어떤 실행에서는 검사되고 어떤 실행에서는 빠져서, 느린 CI에서만
+// 위반이 잡히는 일이 생긴다(실제로 /home 말풍선 대비 미달이 그렇게 드러났다).
+// 뜰 화면에서는 뜬 뒤에 검사하도록 그 지연을 넘겨 기다린다.
+const COACH_MARK_DELAY_MS = 350;
+
 async function expectNoAccessibilityViolations(page: Page) {
   await page.locator("body").waitFor({ state: "visible" });
   await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
+  await page.waitForTimeout(COACH_MARK_DELAY_MS + 150);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
