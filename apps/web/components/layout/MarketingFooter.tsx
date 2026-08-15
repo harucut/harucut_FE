@@ -127,7 +127,9 @@ export function MarketingFooter({
               ) : null}
               <Link
                 href={item.href}
-                className="underline underline-offset-4 transition"
+                // "기능"처럼 두 글자짜리 라벨은 22px 밖에 안 돼 손가락으로 겨냥이 안 됐다.
+                // 밑줄 위치를 지키면서 최소 폭만 확보한다.
+                className="min-w-[44px] justify-center text-center underline underline-offset-4 transition"
               >
                 {item.label}
               </Link>
