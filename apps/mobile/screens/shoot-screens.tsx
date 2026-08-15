@@ -127,12 +127,18 @@ export function ShootCaptureScreen() {
   // captureNowRef: "지금 이 컷을 바로 찍어라" 플래그. tickResolveRef: 진행 중인 1초 틱을 깨우는 resolver.
   const captureNowRef = useRef(false);
   const tickResolveRef = useRef<(() => void) | null>(null);
+  // 이탈 확인창이 떠 있는 동안 자동 촬영을 멈춰 둔다. 안 멈추면 모달 뒤에서 계속 찍혀,
+  // 사용자가 "계속 촬영"을 고르기도 전에 8장이 끝나고 선택 화면으로 넘어가 버린다.
+  const burstPausedRef = useRef(false);
+  // "나가기"를 고른 경우. 남은 컷을 더 찍지 않고 루프를 끝낸다.
+  const burstAbortedRef = useRef(false);
   const { colors } = useHarucutTheme();
   const styles = useShootStyles();
   const shoot = useShootStore();
   const addShootShot = useShootStore((state) => state.addShootShot);
   const resetShootSession = useShootStore((state) => state.resetShootSession);
   const showNotice = useSessionStore((state) => state.showNotice);
+  const notice = useSessionStore((state) => state.notice);
   const [facing, setFacing] = useState<CameraType>('front');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -180,6 +186,9 @@ export function ShootCaptureScreen() {
     useCallback(() => {
       const onBack = () => {
         if (shoot.shots.length === 0) return false;
+        // 사용자가 고르는 동안 자동 촬영을 멈춘다. 재개는 확인창이 닫힐 때 아래 effect가 맡는다
+        // (배경 탭이나 모달 백버튼으로 닫아도 멈춘 채로 남지 않게).
+        burstPausedRef.current = true;
         showNotice({
           actions: [
             // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
@@ -190,6 +199,8 @@ export function ShootCaptureScreen() {
               label: '나가기',
               variant: 'danger',
               onPress: () => {
+                burstAbortedRef.current = true;
+                burstPausedRef.current = false;
                 resetShootSession();
                 router.replace('/shoot' as never);
               },
@@ -207,6 +218,15 @@ export function ShootCaptureScreen() {
       return () => subscription.remove();
     }, [shoot.shots.length, showNotice, resetShootSession, router]),
   );
+
+  // 확인창이 닫히면 자동 촬영을 재개한다. "계속 촬영" 버튼뿐 아니라 배경 탭·모달 백버튼으로
+  // 닫는 경로도 있어서, 버튼 핸들러가 아니라 노티스가 사라지는 시점을 기준으로 푼다.
+  // "나가기"를 고른 경우는 burstAbortedRef가 이미 서 있어 재개해도 루프가 곧바로 끝난다.
+  useEffect(() => {
+    if (!notice) {
+      burstPausedRef.current = false;
+    }
+  }, [notice]);
 
   // 카메라 권한이 없으면 요청하고, 끝내 거부되면 안내 후 false를 돌려준다.
   const ensureCameraPermission = async () => {
@@ -266,6 +286,16 @@ export function ShootCaptureScreen() {
       tickResolveRef.current = finish;
     });
 
+  // 확인창이 닫힐 때까지(또는 화면을 벗어날 때까지) 카운트다운을 붙잡아 둔다.
+  const waitWhileBurstPaused = async () => {
+    while (burstPausedRef.current && isMountedRef.current && !burstAbortedRef.current) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+  };
+
+  // 루프를 더 진행하면 안 되는 상태인지 한 곳에서 판단한다.
+  const shouldStopBurst = () => !isMountedRef.current || burstAbortedRef.current;
+
   // 촬영 시작: 선택한 간격으로 8장을 자동 연속 촬영.
   // 카운트다운 중 셔터를 탭하면 남은 대기를 스킵하고 그 컷을 즉시 찍는다(captureNowRef + tickResolveRef로 틱 인터럽트).
   const handleTimerBurst = async () => {
@@ -274,6 +304,8 @@ export function ShootCaptureScreen() {
 
     resetShootSession();
     captureNowRef.current = false;
+    burstPausedRef.current = false;
+    burstAbortedRef.current = false;
     setIsShooting(true);
 
     try {
@@ -282,8 +314,11 @@ export function ShootCaptureScreen() {
         captureNowRef.current = false;
 
         for (let remaining = timerSeconds; remaining > 0; remaining -= 1) {
-          // 카운트다운 도중 화면을 벗어났으면 즉시 중단(언마운트 후 setState 방지).
-          if (!isMountedRef.current) return;
+          // 이탈 확인창이 떠 있으면 여기서 멈춰 선다.
+          await waitWhileBurstPaused();
+          // 카운트다운 도중 화면을 벗어났거나 나가기를 골랐으면 즉시 중단
+          // (언마운트 후 setState 방지).
+          if (shouldStopBurst()) return;
           // 셔터를 탭했으면 남은 카운트다운을 건너뛴다.
           if (captureNowRef.current) break;
           setCountdown(remaining);
@@ -292,14 +327,16 @@ export function ShootCaptureScreen() {
           if (captureNowRef.current) break;
         }
 
+        // 촬영 직전 확인창이 떴으면 셔터를 누르지 않고 기다린다.
+        await waitWhileBurstPaused();
         // 촬영 직전 이탈했으면 더 찍지 않는다.
-        if (!isMountedRef.current) return;
+        if (shouldStopBurst()) return;
         captureNowRef.current = false;
         await captureOneShot(shotIndex);
       }
 
       // 완료 직전 이탈했으면 화면 전환하지 않는다.
-      if (!isMountedRef.current) return;
+      if (shouldStopBurst()) return;
       setCountdown(null);
       push('/shoot/select');
     } catch {
