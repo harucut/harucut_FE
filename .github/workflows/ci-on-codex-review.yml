@@ -3,12 +3,16 @@ name: ci-on-codex-review
 # Codex 리뷰가 끝나면 그때 CI를 돌린다.
 #
 # verify 워크플로는 `run-ci` 라벨이 붙은 PR에서만 실제 검사를 돈다. 이 워크플로는 Codex가
-# 리뷰를 제출한 순간 그 라벨을 대신 붙여 준다. 결과적으로 검사 순서가 "Codex 리뷰 → CI"로
+# 리뷰를 마친 순간 그 라벨을 대신 붙여 준다. 결과적으로 검사 순서가 "Codex 리뷰 → CI"로
 # 고정되고, 리뷰도 안 끝난 코드에 러너 시간을 쓰지 않는다.
 #
-# 라벨을 붙이는 방식을 쓰는 이유: pull_request_review에서 검사를 직접 돌리면 그 실행이
-# PR head 커밋이 아니라 머지 커밋에 붙어 PR 검사 목록에 잡히지 않는다. 라벨을 붙이면
-# verify 워크플로가 pull_request(labeled)로 다시 돌아 head 커밋에 정상적으로 기록된다.
+# Codex는 결과를 두 가지 형태로 남긴다. 지적이 있으면 리뷰(pull_request_review)로 올리고,
+# 없으면 "Didn't find any major issues" 같은 일반 코멘트(issue_comment)만 남긴다.
+# 둘 다 받아야 지적 없는 PR이 라벨을 못 받고 멈추는 일이 없다.
+#
+# 라벨을 붙이는 방식을 쓰는 이유: 이 이벤트들에서 검사를 직접 돌리면 그 실행이 PR head
+# 커밋이 아니라 머지 커밋(또는 기본 브랜치)에 붙어 PR 검사 목록에 잡히지 않는다. 라벨을
+# 붙이면 verify 워크플로가 pull_request(labeled)로 다시 돌아 head 커밋에 정상적으로 기록된다.
 #
 # 라벨은 자동으로 떼지 않는다. 한 번 붙은 뒤의 푸시는 계속 검사한다 — 코드가 바뀌었으면
 # 다시 확인하는 게 맞다. 그만 돌리고 싶으면 라벨을 떼면 된다.
@@ -16,18 +20,29 @@ on:
   pull_request_review:
     types:
       - submitted
+  issue_comment:
+    types:
+      - created
 
 permissions:
   pull-requests: write
 
 jobs:
   add-run-ci-label:
-    if: github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+    # 리뷰 이벤트는 Codex가 올린 것만, 코멘트 이벤트는 PR에 달린 Codex의 리뷰 결과만 받는다.
+    # (issue_comment는 이슈에도 발생하므로 pull_request 필드로 PR인지 먼저 가른다)
+    if: >-
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.user.login == 'chatgpt-codex-connector[bot]') ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.event.comment.user.login == 'chatgpt-codex-connector[bot]' &&
+       contains(github.event.comment.body, 'Reviewed commit:'))
     runs-on: ubuntu-latest
     steps:
       - name: Add run-ci label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_URL: ${{ github.event.pull_request.html_url || github.event.issue.html_url }}
         # 이미 붙어 있어도 실패하지 않는다(gh는 중복 추가를 무시한다).
         run: gh pr edit "$PR_URL" --add-label run-ci
