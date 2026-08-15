@@ -178,9 +178,12 @@ const CONTENT_TYPE_TO_EXTENSION: Record<PresignedUploadContentType, string> = {
  * 업로드 형식과 파일명을 한 쌍으로 확정한다.
  *
  * 서버는 filename의 확장자와 contentType이 **같은 enum 항목에 동시에 속할 때만** presign을 내준다
- * (아니면 415 GEN-051). 그래서 확장자를 1순위로 보고, 확장자가 지원 목록 밖인데 MIME만 맞으면
- * (윈도우 크롬이 image/jpeg로 주는 .jfif/.pjpeg 등) 파일명 확장자를 형식에 맞춰 정규화한다.
+ * (아니면 415 GEN-051). 그래서 형식을 먼저 확정하고 파일명 확장자를 거기에 맞춰 다시 붙인다.
  * S3 key의 확장자도 이 filename에서 나온다.
+ *
+ * MIME을 확장자보다 먼저 본다. 실제 바이트를 더 잘 반영하고, 확장자가 지원 목록 밖인 경우
+ * (윈도우 크롬이 image/jpeg로 주는 .jfif/.pjpeg 등)도 같은 규칙으로 처리된다.
+ * 앱(apps/mobile/lib/file-storage-api.ts)도 같은 우선순위를 쓴다.
  */
 export function resolveUpload(file: File): {
   contentType: PresignedUploadContentType;
@@ -188,7 +191,7 @@ export function resolveUpload(file: File): {
 } {
   const ext = file.name.split(".").pop()?.trim().toLowerCase() ?? "";
   const contentType =
-    EXTENSION_TO_CONTENT_TYPE[ext] ?? MIME_TO_CONTENT_TYPE[file.type.toLowerCase()];
+    MIME_TO_CONTENT_TYPE[file.type.toLowerCase()] ?? EXTENSION_TO_CONTENT_TYPE[ext];
 
   if (!contentType) {
     throw createUnsupportedTypeError(file);

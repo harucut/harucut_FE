@@ -48,6 +48,19 @@ describe("presigned upload flow", () => {
     });
   });
 
+  // 파일명은 호출부가 지어내기도 해서(확장자를 .jpg로 고정하는 식) 바이트와 어긋날 수 있다.
+  // 형식 판정은 MIME이 이겨야 PNG를 image/jpeg로 올리는 사고가 안 난다.
+  it("prefers the MIME type over a mismatched filename extension", () => {
+    const png = new File(["x"], "theme-photo-1700000000000.jpg", {
+      type: "image/png",
+    });
+
+    expect(resolveUpload(png)).toEqual({
+      contentType: "PNG",
+      filename: "theme-photo-1700000000000.png",
+    });
+  });
+
   it("rejects unsupported formats with a Korean message", () => {
     const heic = new File(["x"], "iphone.heic", { type: "image/heic" });
 

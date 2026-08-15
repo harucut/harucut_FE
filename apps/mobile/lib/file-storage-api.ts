@@ -67,9 +67,11 @@ function baseNameOf(value: string) {
  * 업로드 형식과 파일명을 한 쌍으로 확정한다.
  *
  * 백엔드는 filename의 확장자와 contentType enum이 **같은 항목에 동시에 속할 때만** 통과시킨다
- * (아니면 415 GEN-051). 그래서 판정 기준을 확장자로 잡고, 확장자가 지원 목록 밖인데 MIME만
- * 맞는 경우(.jfif, iOS HEIC→jpeg 변환 보고 등)에는 파일명 확장자를 contentType에 맞춰 정규화한다.
+ * (아니면 415 GEN-051). 그래서 형식을 먼저 확정하고 파일명 확장자를 거기에 맞춰 다시 붙인다.
  * S3 key의 확장자도 이 filename에서 나오므로 정규화가 곧 저장 형식 정합이 된다.
+ *
+ * 형식 판정 우선순위는 호출부가 준 contentType, 그다음 MIME, 마지막이 확장자다.
+ * 실제 바이트를 가장 잘 반영하는 순서이고, .jfif처럼 확장자가 지원 목록 밖인 경우도 함께 처리된다.
  */
 export function resolveUpload(args: {
   contentType?: PresignedUploadContentType | null;
@@ -91,10 +93,14 @@ export function resolveUpload(args: {
     };
   }
 
+  // MIME을 확장자보다 먼저 본다. 파일명은 없을 때 호출부가 임시로 지어내기도 해서
+  // (ImagePicker의 fileName이 없는 PNG를 `...jpg`로 만드는 식) 확장자를 먼저 믿으면
+  // PNG 바이트를 image/jpeg로 presign·PUT해 나중에 미리보기·다운로드 형식이 어긋난다.
+  // 파일명 확장자는 아래에서 어차피 contentType에 맞춰 다시 붙이므로 잃는 정보가 없다.
   const ext = extensionOf(rawName) || extensionOf(uri);
   const contentType =
-    EXTENSION_TO_CONTENT_TYPE[ext] ??
-    MIME_TO_CONTENT_TYPE[args.mimeType?.trim().toLowerCase() ?? ''];
+    MIME_TO_CONTENT_TYPE[args.mimeType?.trim().toLowerCase() ?? ''] ??
+    EXTENSION_TO_CONTENT_TYPE[ext];
 
   if (!contentType) {
     // 매칭 실패 시 JPEG으로 조용히 떨어뜨리지 않는다. .heic 같은 원본이 JPEG으로 presign·PUT되면

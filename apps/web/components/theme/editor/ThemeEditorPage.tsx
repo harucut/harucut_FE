@@ -78,6 +78,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
   const addDraft = useThemeDraftStore((s) => s.addDraft);
   const editorComponents = useThemeEditorStore((s) => s.components);
+  const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const { remoteFrameId } = useThemeSession();
 
   // 편집 중 판정은 "콘텐츠가 있는지"가 아니라 "기준 상태에서 바뀌었는지"로 한다.
@@ -87,31 +88,33 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     () => buildEditorSignature(editorComponents, background, backgroundColor),
     [editorComponents, background, backgroundColor],
   );
-  // 기준은 프레임마다 새로 잡는다. 원격 프레임은 불러오기가 끝나야 기준이 정해지므로,
-  // 그 전까지 signature를 null로 두어 "아직 기준 없음 = 편집 아님"으로 본다.
+  // 기준은 프레임마다 새로 잡되, 스토어가 이 프레임 상태로 자리잡은 뒤에 잡는다.
+  // 너무 일찍 잡으면 기준이 남의 상태가 된다.
+  // - 새 프레임: 이전 프레임을 편집하다 들어오면 첫 렌더에는 스토어에 이전 상태가 남아 있고,
+  //   아래 setFrameId effect가 그때서야 초기화한다. 스토어 frameId가 맞춰질 때까지 기다린다.
+  // - 원격 프레임: 불러오기가 끝나야 기준이 정해진다(importJson이 스토어 frameId를 저장본 값으로
+  //   바꾸므로 여기서는 frameId 일치를 조건으로 쓸 수 없다).
   const baselineKey = `${frameId}:${remoteFrameId ?? ""}`;
   const [baseline, setBaseline] = useState<{
     key: string;
     signature: string | null;
   }>({ key: baselineKey, signature: null });
   const [isRemoteFrameSettled, setIsRemoteFrameSettled] = useState(false);
+  const isBaselineReady = remoteFrameId
+    ? isRemoteFrameSettled
+    : storeFrameId === frameId;
 
   if (baseline.key !== baselineKey) {
     setBaseline({ key: baselineKey, signature: null });
     setIsRemoteFrameSettled(false);
-  } else if (
-    baseline.signature === null &&
-    (!remoteFrameId || isRemoteFrameSettled)
-  ) {
+  } else if (baseline.signature === null && isBaselineReady) {
     setBaseline({ key: baselineKey, signature: editorSignature });
   }
 
-  const hasUnsavedChanges =
+  const hasUnsavedCanvasChanges =
     baseline.key === baselineKey &&
     baseline.signature !== null &&
     baseline.signature !== editorSignature;
-
-  useUnsavedWorkGuard(hasUnsavedChanges);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
@@ -126,6 +129,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
+
+  // 저장 다이얼로그에 입력한 이름·설명도 아직 서버에 안 올라간 작업이다.
+  // 다이얼로그를 열면 현재 값으로 채워지므로, 그 값에서 달라졌을 때만 편집으로 센다.
+  const hasUnsavedSaveDialogInput =
+    isSaveDialogOpen &&
+    (draftTitle !== title || draftDescription !== description);
+
+  useUnsavedWorkGuard(hasUnsavedCanvasChanges || hasUnsavedSaveDialogInput);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
 
