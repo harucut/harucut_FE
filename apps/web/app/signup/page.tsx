@@ -169,7 +169,7 @@ function SignupPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
+          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
             {errors.common}
           </p>
         ) : null}

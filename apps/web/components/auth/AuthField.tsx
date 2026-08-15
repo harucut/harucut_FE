@@ -54,7 +54,7 @@ export function AuthField({
       </div>
 
       {error ? (
-        <p className="text-[10px] leading-relaxed text-[color:var(--hc-danger)]">{error}</p>
+        <p role="alert" className="text-[10px] leading-relaxed text-[color:var(--hc-danger)]">{error}</p>
       ) : null}
     </div>
   );

@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { GuestTrialOverlay } from "@/components/guest/GuestTrialOverlay";
+import { installFocusMemory } from "@/hooks/useModalDialog";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
 import {
@@ -10,6 +11,8 @@ import {
   dataUrlToFile,
   getPendingGuestSave,
 } from "@/lib/pendingGuestSave";
+
+installFocusMemory();
 
 export function GuestTrialBridge() {
   const pathname = usePathname();

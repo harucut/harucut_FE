@@ -3,6 +3,7 @@
 import { Camera, CheckCircle2, Lock, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 function NoticeIcon({ icon }: { icon?: "camera" | "check" | "lock" | "sparkles" }) {
@@ -32,6 +33,7 @@ export function GuestTrialOverlay() {
   const notice = useGuestTrialStore((state) => state.notice);
   const clearNotice = useGuestTrialStore((state) => state.clearNotice);
   const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
+  const dialogRef = useModalDialog(true, clearNotice);
 
   if (!notice) {
     return null;
@@ -77,7 +79,14 @@ export function GuestTrialOverlay() {
         onClick={clearNotice}
         className="absolute inset-0"
       />
-      <div className="hc-surface-hero relative w-full max-w-[460px] rounded-[32px] border p-5 backdrop-blur-xl sm:p-6">
+      {/* 선언만 있고 규약이 없던 오버레이다. 포커스 이동·트랩·Esc·복원을 훅이 맡는다. */}
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guest-notice-title"
+        className="hc-surface-hero relative w-full max-w-[460px] rounded-[32px] border p-5 backdrop-blur-xl sm:p-6"
+      >
         <button
           type="button"
           onClick={clearNotice}
@@ -95,7 +104,10 @@ export function GuestTrialOverlay() {
           ) : null}
 
           <div className="space-y-2">
-            <h2 className="text-[22px] font-semibold tracking-tight text-[color:var(--hc-text)]">
+            <h2
+              id="guest-notice-title"
+              className="text-[22px] font-semibold tracking-tight text-[color:var(--hc-text)]"
+            >
               {notice.title}
             </h2>
             <p className="text-[13px] leading-6 text-[color:var(--hc-muted)]">

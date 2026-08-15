@@ -371,7 +371,7 @@ export default function HistoryPage() {
         </header>
 
         {feedback ? (
-          <div className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
+          <div role="status" className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
             {feedback}
           </div>
         ) : null}
@@ -388,7 +388,7 @@ export default function HistoryPage() {
         ) : error ? (
           // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
+            <p role="alert" className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
             <button
               type="button"
               onClick={() => setReloadKey((prev) => prev + 1)}

@@ -67,7 +67,7 @@ export function ResetPasswordForm({
       />
 
       {errors.common ? (
-        <p className="text-[10px] text-[color:var(--hc-danger)]">{errors.common}</p>
+        <p role="alert" className="text-[10px] text-[color:var(--hc-danger)]">{errors.common}</p>
       ) : null}
 
       <button

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { BACKGROUND_COLORS } from "@/constants/colors";
@@ -31,6 +31,7 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
   clearEditorDraft,
@@ -142,6 +143,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
+  const closeSaveDialog = useCallback(() => setIsSaveDialogOpen(false), []);
+  const saveDialogRef = useModalDialog(isSaveDialogOpen, closeSaveDialog);
 
   // 저장 다이얼로그에 입력한 이름·설명도 아직 서버에 안 올라간 작업이다.
   // 다이얼로그를 열면 현재 값으로 채워지므로, 그 값에서 달라졌을 때만 편집으로 센다.
@@ -406,7 +409,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           <div className="flex flex-col">
             <BrandMark href="/home" compact className="opacity-80" />
             {loadError ? (
-              <p className="mt-1 text-[11px] text-[color:var(--hc-danger)]">{loadError}</p>
+              <p role="alert" className="mt-1 text-[11px] text-[color:var(--hc-danger)]">{loadError}</p>
             ) : null}
           </div>
 
@@ -579,6 +582,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       {isSaveDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-5 sm:items-center">
           <div
+            ref={saveDialogRef}
             aria-modal="true"
             aria-labelledby="theme-save-dialog-title"
             role="dialog"

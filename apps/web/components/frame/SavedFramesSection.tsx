@@ -72,7 +72,7 @@ export function SavedFramesSection({
         </button>
       </div>
 
-      {error ? <p className="mt-3 text-[11px] text-[color:var(--hc-danger)]">{error}</p> : null}
+      {error ? <p role="alert" className="mt-3 text-[11px] text-[color:var(--hc-danger)]">{error}</p> : null}
 
       {isLoading ? (
         <p className="mt-3 text-[11px] text-zinc-500">불러오는 중...</p>

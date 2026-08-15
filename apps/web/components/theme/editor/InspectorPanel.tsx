@@ -189,6 +189,9 @@ function TextInspector({
   );
 }
 
+// 라벨을 <label> 로 감싸 컨트롤과 연결한다. span 으로 두면 스크린리더가 슬라이더를
+// 이름 없이 "슬라이더"로만 읽는다 — 이 패널의 컨트롤 전부가 그랬다.
+// 각 Row 에는 폼 컨트롤이 하나씩만 들어간다(옆의 값 표시는 컨트롤이 아니다).
 function Row({
   label,
   children,
@@ -197,10 +200,10 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <label className="flex items-center gap-3">
       <span className="w-14 text-[11px] text-zinc-400">{label}</span>
       <div className="flex flex-1 items-center gap-2">{children}</div>
-    </div>
+    </label>
   );
 }
 
