@@ -32,9 +32,11 @@ type SessionStore = {
   showNotice: (notice: NoticeState) => void;
 };
 
-// 비회원 체험에서 열려 있는 범위. 웹 lib/guestTrialStore.ts와 같은 문장을 쓴다.
-const GUEST_ALLOWED_SCOPE =
-  '비회원 체험에서는 촬영, 이미지 저장, 네컷 꾸미기를 이용할 수 있어요.';
+// 비회원 체험에서 열려 있는 범위.
+// 웹(lib/guestTrialStore.ts)은 꾸미기까지 열어 두지만 앱은 다르다. app/(app)/_layout.tsx가
+// 게스트를 /shoot 밖으로 못 나가게 막고, 촬영 결과를 꾸미는 라우트 자체가 앱에는 없다.
+// 그래서 문장을 웹과 맞추지 않고 앱에서 실제로 되는 것만 적는다.
+const GUEST_ALLOWED_SCOPE = '비회원 체험에서는 촬영과 이미지 저장을 이용할 수 있어요.';
 const GUEST_MEMBER_ONLY_SCOPE =
   '링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요.';
 
@@ -156,7 +158,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           { id: 'go-login', label: '로그인하기', variant: 'secondary' },
         ],
         message:
-          '가입 없이 촬영·꾸미기를 바로 체험할 수 있어요. 저장·기록 보관은 무료 가입 후 이용할 수 있어요.',
+          '가입 없이 촬영을 바로 체험하고 이미지로 저장할 수 있어요. 기록 보관과 공유는 무료 가입 후 이용할 수 있어요.',
         title: '무료로 체험해볼까요?',
       },
     }),

@@ -749,7 +749,7 @@ export function ShootResultScreen() {
         <SurfaceCard style={{ gap: 12 }}>
           <Text style={styles.sectionTitle}>비회원 체험 안내</Text>
           <Text style={styles.bodyText}>
-            지금은 이미지 저장과 네컷 꾸미기를 체험할 수 있어요. 링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요. 이 결과는 화면을 벗어나면 사라져요.
+            지금은 이미지 저장을 체험할 수 있어요. 링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요. 이 결과는 화면을 벗어나면 사라져요.
           </Text>
           <ActionButton
             icon={<Ionicons color="#FFFFFF" name="download-outline" size={16} />}
