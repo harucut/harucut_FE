@@ -32,3 +32,7 @@ export const COMPANY = {
   /** 민원담당자 */
   complaintOfficer: '김규원',
 } as const;
+
+// 결제 오픈 여부. 결제대행사 표기처럼 "결제를 하고 있다"는 신호는 이 값이 켜질 때만 노출한다.
+// 아직 결제가 열리지 않았는데 결제대행사를 상시 표기하면 사실과 다르다.
+export const PAYMENTS_ENABLED = false;

@@ -22,9 +22,6 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
 
-// 핸드오프 문구에 맞춘 주간 목표 컷 수(임의 상수). 진행 링/남은 컷 계산의 기준.
-const WEEKLY_GOAL = 5;
-
 const HOME_COACH_STEPS: CoachStep[] = [
   {
     selector: '[data-coach="shoot"]',
@@ -97,44 +94,6 @@ function useCurrentDateLabel() {
   return dateLabel;
 }
 
-// 진행 링(SVG). 핸드오프 app 홈 스탯 카드의 그린 링.
-function ProgressRing({
-  pct,
-  size = 46,
-  stroke = 5,
-}: {
-  pct: number;
-  size?: number;
-  stroke?: number;
-}) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const clamped = Math.max(0, Math.min(1, pct));
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--hc-surface-muted)"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--hc-primary)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c * (1 - clamped)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
-  );
-}
 
 // createdAt이 같은 (자연) 월에 속하면 이번 달 기록으로 센다.
 function countThisMonth(items: UserMedia[]) {
@@ -240,13 +199,10 @@ export default function HomePage() {
     () => countThisWeek(allMedia),
     [allMedia, currentDateLabel],
   );
-  const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
-  const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
-  const progressWidth = `${Math.round(ringPct * 100)}%`;
   // 조회에 실패했으면 0컷이라고 단정하지 않는다.
   const statsUnknown = loadError !== null;
   const monthCountLabel = statsUnknown ? "—" : `${monthCount}`;
-  const remainingToGoalLabel = statsUnknown ? "—" : `${remainingToGoal}컷`;
+  const weekCountLabel = statsUnknown ? "—" : `${weekCount}컷`;
 
   return (
     <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
@@ -366,7 +322,11 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {/* 모바일(&lt;lg) 스탯 카드 — 이번 달 컷 수 + 주간 목표 + 진행 링 */}
+        {/*
+          모바일(&lt;lg) 스탯 카드 — 실제로 찍은 수만 보여준다.
+          예전에는 "이번 주 목표까지 N컷 남았어요"라고 했는데, 그 목표는 사용자가 정한 적도
+          제품이 약속한 적도 없는 상수(5)였다. 가입 첫 화면부터 빚을 지우는 문구였다.
+        */}
         <section className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 lg:hidden">
           <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
             {monthCountLabel}
@@ -379,16 +339,14 @@ export default function HomePage() {
                 이번 달 <b className="text-[color:var(--hc-text)]">{monthCount}컷</b>을
                 남겼어요.
                 <br />
-                이번 주 목표까지{" "}
-                <b className="text-[color:var(--hc-primary-strong)]">{remainingToGoal}컷</b>{" "}
-                남았어요!
+                그중 이번 주에 <b className="text-[color:var(--hc-text)]">{weekCount}컷</b>
+                이에요.
               </>
             )}
           </p>
-          <ProgressRing pct={statsUnknown ? 0 : ringPct} />
         </section>
 
-        {/* 데스크톱(lg+) 주간 진행 스트립 */}
+        {/* 데스크톱(lg+) 기록 스트립 */}
         <section className="hc-surface-card hidden items-center gap-5 rounded-2xl border p-[22px] lg:flex">
           <span className="flex items-baseline gap-2">
             <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
@@ -396,15 +354,9 @@ export default function HomePage() {
             </span>
             <span className="text-[14px] text-[color:var(--hc-muted)]">컷 / 이번 달</span>
           </span>
-          <span className="h-2 min-w-[160px] flex-1 overflow-hidden rounded-full bg-[color:var(--hc-surface-muted)]">
-            <span
-              className="block h-full rounded-full bg-[color:var(--hc-primary)]"
-              style={{ width: statsUnknown ? "0%" : progressWidth }}
-            />
-          </span>
+          <span className="flex-1" />
           <span className="text-[13px] text-[color:var(--hc-muted)]">
-            이번 주 목표까지{" "}
-            <b className="text-[color:var(--hc-text)]">{remainingToGoalLabel}</b>
+            이번 주 <b className="text-[color:var(--hc-text)]">{weekCountLabel}</b>
           </span>
         </section>
 

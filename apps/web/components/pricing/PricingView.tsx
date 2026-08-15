@@ -137,16 +137,28 @@ function PlanCard({
           준비 중
         </button>
       ) : (
-        <Link
-          href="/signup"
-          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
-            hot
-              ? "hc-button-primary"
-              : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
-          }`}
-        >
-          {plan.cta}
-        </Link>
+        <>
+          {/*
+            비회원에게도 "Plus 시작하기"라고 말하고 있었다. 눌러도 갈 수 있는 곳은 가입뿐이고
+            결제가 닫혀 있어 유료 플랜에는 어차피 못 올라간다 — 지킬 수 없는 약속이다.
+            실제로 일어나는 일(무료 가입)을 그대로 적고, 유료는 시점을 밝힌다.
+          */}
+          <Link
+            href="/signup"
+            className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
+              hot
+                ? "hc-button-primary"
+                : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
+            }`}
+          >
+            무료로 시작하기
+          </Link>
+          {plan.id === "basic" ? null : (
+            <p className="mt-2 text-center text-[12px] text-[color:var(--hc-muted)]">
+              {PRICING_BILLING_PENDING}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

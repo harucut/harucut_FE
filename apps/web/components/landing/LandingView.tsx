@@ -15,7 +15,9 @@ import type { FrameId } from "@/constants/frames";
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
 
-const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.png");
+// 랜딩 미리보기는 한 변이 200px 남짓인데 원본은 900x1200 PNG(1.2MB)였다. 같은 파일이
+// 화면에 20 번 들어가 첫 로드를 그대로 잡아먹었다. 표시 크기에 맞춘 webp(30KB)를 쓴다.
+const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.webp");
 
 // 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [
@@ -75,6 +77,20 @@ function HowFilm() {
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
+      {/*
+        자동으로 넘어가는 콘텐츠에는 멈출 수단이 있어야 한다(WCAG 2.2.2, Level A).
+        마우스를 올리면 멈추긴 했지만 키보드·터치 사용자에게는 멈출 길이 없었다.
+      */}
+      <div className="flex justify-end px-3 pt-2">
+        <button
+          type="button"
+          onClick={() => setPaused((v) => !v)}
+          aria-pressed={paused}
+          className="rounded-full border border-white/[0.16] px-3 py-1 text-[12px] font-semibold text-white/80 transition hover:text-white"
+        >
+          {paused ? "자동 넘김 켜기" : "자동 넘김 멈추기"}
+        </button>
+      </div>
       <TapeStrip
         running={!reduced && !paused}
         className="border-b border-white/[0.06]"

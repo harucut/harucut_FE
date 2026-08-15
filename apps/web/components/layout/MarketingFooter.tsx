@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { COMPANY } from "@/constants/company";
+import { COMPANY, PAYMENTS_ENABLED } from "@/constants/company";
 
 // 공개(마케팅) 페이지 공통 푸터.
 // 레이아웃은 전부 좌측 정렬 한 덩어리다 — 고객센터 → 사업자 정보 → 구분선 →
@@ -93,9 +93,11 @@ export function MarketingFooter({
               `통신판매업 신고번호 ${COMPANY.mailOrderNo}`,
             ]}
           />
+          {/* 결제대행사는 결제를 실제로 받을 때만 적는다. 아직 결제가 닫혀 있는데
+              상시 표기하면 사실과 다르다(PAYMENTS_ENABLED 로 켠다). */}
           <PipeRow
             items={[
-              `결제대행 ${COMPANY.paymentAgent}`,
+              ...(PAYMENTS_ENABLED ? [`결제대행 ${COMPANY.paymentAgent}`] : []),
               `호스팅 ${COMPANY.hosting}`,
               `민원담당자 ${COMPANY.complaintOfficer}`,
             ]}

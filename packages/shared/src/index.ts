@@ -1,5 +1,5 @@
 export { validateEmail, validatePassword, validateUsername } from './auth-validation';
-export { COMPANY } from './company';
+export { COMPANY, PAYMENTS_ENABLED } from './company';
 export {
   LEGAL_DOCUMENTS,
   PRIVACY_POLICY,

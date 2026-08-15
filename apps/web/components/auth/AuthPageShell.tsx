@@ -14,7 +14,7 @@ type Props = {
 };
 
 // 사진은 추후 교체될 placeholder.
-const COLLAGE = Array.from({ length: 4 }, () => "/hero-image.png");
+const COLLAGE = Array.from({ length: 4 }, () => "/hero-image.webp");
 
 export function AuthPageShell({ title, description, children, footer, icon }: Props) {
   return (

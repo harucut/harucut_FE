@@ -10,7 +10,7 @@ import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 // STUDIO 마케팅 스테이지는 랜딩과 같은 딥다크 고정.
 const GREEN = "#1ED760";
 
-const DEMO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.png");
+const DEMO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.webp");
 
 // 스티커 실물 — 39종 중 성격이 다른 것들만 골라 노출(에셋 자체가 브랜드 언어).
 const SHOWCASE_STICKERS = [
