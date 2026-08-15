@@ -24,7 +24,7 @@ export function CutoutPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">누끼</p>
-        <span className="inline-flex items-center gap-1 text-[11px] text-[color:var(--hc-primary)]">
+        <span className="inline-flex items-center gap-1 text-[11px] text-[color:var(--hc-primary-strong)]">
           <Scissors size={13} /> 배경 제거
         </span>
       </div>
@@ -40,7 +40,7 @@ export function CutoutPanel() {
         className={[
           "flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
           cutMode
-            ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
+            ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
             : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
         ].join(" ")}
         aria-pressed={cutMode}
@@ -60,7 +60,7 @@ export function CutoutPanel() {
               className={[
                 "flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
                 on
-                  ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
+                  ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
                   : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
               ].join(" ")}
               aria-pressed={on}

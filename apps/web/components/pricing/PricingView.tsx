@@ -62,7 +62,7 @@ function PlanCard({
       <span
         className={`text-[15px] font-extrabold tracking-[0.3px] ${
           hot || current
-            ? "text-[color:var(--hc-primary)]"
+            ? "text-[color:var(--hc-primary-strong)]"
             : "text-[color:var(--hc-text)]"
         }`}
       >
@@ -92,7 +92,7 @@ function PlanCard({
               }`}
             >
               {on ? (
-                <Check className="h-3 w-3 text-[color:var(--hc-primary)]" strokeWidth={3} />
+                <Check className="h-3 w-3 text-[color:var(--hc-primary-strong)]" strokeWidth={3} />
               ) : (
                 <X className="h-[11px] w-[11px] text-[color:var(--hc-muted)]" />
               )}
@@ -123,7 +123,7 @@ function PlanCard({
       {/* CTA — 비회원은 가입 유도. 회원은 결제 연동 전이라 "준비 중"으로 비활성.
           이용 중인 플랜은 누를 곳이 없다. */}
       {current ? (
-        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[14.5px] font-extrabold text-[color:var(--hc-primary)]">
+        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[14.5px] font-extrabold text-[color:var(--hc-primary-strong)]">
           현재 이용 중
         </span>
       ) : authed ? (
@@ -190,7 +190,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
         <header className="pt-1 lg:pt-0">
-          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
+          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
             PRICING · 요금제
           </span>
           <h1 className="mt-3 text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">

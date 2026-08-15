@@ -13,7 +13,14 @@ const DRAW_COLORS = [
   "#4d7cff",
   "#ff8ad4",
 ];
-const DRAW_WIDTHS = [6, 10, 18, 28];
+// 굵기 값과 사람이 부르는 이름을 한 쌍으로 둔다. 버튼 안이 점 하나뿐이라
+// 이름이 없으면 스크린리더에 "버튼"으로만 읽힌다.
+const DRAW_WIDTHS = [
+  { value: 6, label: "가늘게" },
+  { value: 10, label: "보통" },
+  { value: 18, label: "굵게" },
+  { value: 28, label: "아주 굵게" },
+] as const;
 
 function Section({
   title,
@@ -112,20 +119,23 @@ export function DecoratePanel() {
           />
         </div>
         <div className="flex items-center gap-2">
-          {DRAW_WIDTHS.map((w) => (
+          {DRAW_WIDTHS.map(({ value, label }) => (
             <button
-              key={w}
+              key={value}
               type="button"
-              onClick={() => setDrawWidth(w)}
+              onClick={() => setDrawWidth(value)}
+              aria-label={`펜 굵기 ${label}`}
+              aria-pressed={drawWidth === value}
               className={`flex h-8 flex-1 items-center justify-center rounded-lg border ${
-                drawWidth === w
+                drawWidth === value
                   ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)]"
                   : "border-zinc-700"
               }`}
             >
               <span
+                aria-hidden
                 className="rounded-full bg-zinc-200"
-                style={{ width: w, height: w }}
+                style={{ width: value, height: value }}
               />
             </button>
           ))}

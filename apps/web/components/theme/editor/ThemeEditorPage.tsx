@@ -467,7 +467,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       onClick={() => setBackgroundColor(color.value)}
                       className={`h-8 min-w-16 rounded-lg border px-2 text-[11px] ${
                         selected
-                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
+                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
                           : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
                       }`}
                       style={{ backgroundColor: `#${color.value}` }}

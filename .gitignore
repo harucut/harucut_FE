@@ -59,3 +59,6 @@ next-env.d.ts
 # 디자인 핸드오프 소스 (필요한 자산은 각 앱으로 복사; 원본은 로컬 참고용으로만 보관)
 /handoff/
 /deployimage/
+
+# impeccable 감사 중 생성되는 스크린샷 임시 폴더
+apps/web/.impeccable-shots/

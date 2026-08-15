@@ -135,7 +135,7 @@ function MediaThumb({
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
       ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted-soft)]">
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted)]">
           미리보기를 준비하는 중이에요.
         </div>
       )}
@@ -411,7 +411,7 @@ export default function HistoryPage() {
               저장한 기록이 아직 없어요.
             </p>
             {planTier && planTier !== "PRO" ? (
-              <p className="text-[12px] text-[color:var(--hc-muted-soft)]">
+              <p className="text-[12px] text-[color:var(--hc-muted)]">
                 {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
                 지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
                 <Link href="/pricing" className="underline">
@@ -434,7 +434,7 @@ export default function HistoryPage() {
                   <h2 className="text-[19px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+                  <span className="text-[12.5px] text-[color:var(--hc-muted)]">
                     {group.items.length}컷
                   </span>
                 </div>
@@ -469,7 +469,7 @@ export default function HistoryPage() {
                               {getUserMediaTitle(item)}
                             </p>
                           )}
-                          <p className="text-[11.5px] text-[color:var(--hc-muted-soft)]">
+                          <p className="text-[11.5px] text-[color:var(--hc-muted)]">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
@@ -600,7 +600,7 @@ function CalendarView({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+        <span className="text-[12.5px] text-[color:var(--hc-muted)]">
           이번 달 {monthItems.length}컷
         </span>
       </div>

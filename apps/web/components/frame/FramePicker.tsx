@@ -157,7 +157,7 @@ function FramePickerCard({
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-0.5">
               <p className="text-sm font-semibold text-zinc-50">{frameName}</p>
-              <p className="text-[11px] font-medium text-[color:var(--hc-primary)]">
+              <p className="text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
                 {meta.badge}
               </p>
             </div>

@@ -53,7 +53,7 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
+          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
       ].join(" ")}
     >
@@ -147,7 +147,7 @@ function PhotoTab() {
             "
             title="사진 업로드"
           >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary)]">
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary-strong)]">
               <ImagePlus size={18} />
               <span className="text-[10px]">
                 {isUploading ? "업로드 중" : "추가"}

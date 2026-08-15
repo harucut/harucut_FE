@@ -159,7 +159,7 @@ function SignupPageContent() {
             이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}
-              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
+              className="font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               로그인
             </Link>
@@ -227,7 +227,7 @@ function SignupPageContent() {
                 <span
                   className={
                     item.required
-                      ? "text-[color:var(--hc-primary)]"
+                      ? "text-[color:var(--hc-primary-strong)]"
                       : "text-zinc-500"
                   }
                 >

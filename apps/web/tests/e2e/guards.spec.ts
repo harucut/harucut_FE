@@ -1,12 +1,17 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
+import { stubAuthenticatedApi } from "./fixtures/apiStub";
 
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ??
   `http://localhost:${Number(process.env.PORT ?? 3000)}`;
 
 async function enableAuthenticatedContext(page: Page) {
+  // 쿠키만으로는 부족하다. 인증 게이트가 클라이언트에 있어서 백엔드가 401을 주면 화면이
+  // /login으로 갈아타고, 이 스펙이 검증하려는 "세션 상태가 없을 때의 복구"에 도달조차 못 한다.
+  // 백엔드가 떠 있는 개발 머신에서만 실패하던 원인이라, API를 고정 응답으로 막아 둔다.
+  await stubAuthenticatedApi(page);
   await page.context().addCookies([
     {
       name: "accessToken",

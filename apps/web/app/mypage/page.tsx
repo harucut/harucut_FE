@@ -437,10 +437,14 @@ export default function MyPage() {
       </form>
 
       <div className="flex flex-col gap-2">
-        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+        <label
+          htmlFor="mypage-email"
+          className="text-[13px] font-semibold text-[color:var(--hc-muted)]"
+        >
           이메일
         </label>
         <input
+          id="mypage-email"
           value={user?.email ?? ""}
           readOnly
           className="hc-input h-11 w-full cursor-default rounded-xl border px-3.5 text-[14px] text-[color:var(--hc-muted)] outline-none"
@@ -491,11 +495,15 @@ export default function MyPage() {
       </form>
 
       <div className="flex flex-col gap-2 border-t border-[color:var(--hc-border-subtle)] pt-5">
-        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+        <label
+          htmlFor="mypage-profile-image"
+          className="text-[13px] font-semibold text-[color:var(--hc-muted)]"
+        >
           프로필 이미지
         </label>
         <div className="flex items-center gap-2">
           <input
+            id="mypage-profile-image"
             type="file"
             accept={SUPPORTED_IMAGE_ACCEPT}
             onChange={handleProfileFileChange}
@@ -520,7 +528,7 @@ export default function MyPage() {
       <div className="hc-surface-well grid gap-2 rounded-2xl border p-4 sm:grid-cols-2">
         <div>
           <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
-            <CreditCard className="h-4 w-4 text-[color:var(--hc-primary)]" />
+            <CreditCard className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
             <span className="text-[11.5px]">현재 플랜</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
@@ -530,7 +538,7 @@ export default function MyPage() {
         </div>
         <div>
           <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
-            <User className="h-4 w-4 text-[color:var(--hc-primary)]" />
+            <User className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
             <span className="text-[11.5px]">로그인 플랫폼</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
@@ -768,7 +776,7 @@ export default function MyPage() {
                           className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl"
                           style={{ background: iconTint }}
                         >
-                          <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary)]" />
+                          <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary-strong)]" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[14.5px] font-bold">
@@ -802,7 +810,7 @@ export default function MyPage() {
               {/* 로그아웃 / 탈퇴 */}
               <div className="mt-1">{logoutAndExit}</div>
 
-              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted-soft)]">
+              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted)]">
                 하루컷 v1.0.0
               </p>
             </div>

@@ -7,7 +7,9 @@
   --background: #fafaf7;
   --foreground: #14140f;
   --hc-primary: #16b454;
-  --hc-primary-strong: #0e7e39;
+  /* 라이트에서 초록 "글자"는 전부 이 값을 쓴다. --hc-primary(#16b454)는 흰 배경 2.4:1이라 글자로 못 쓴다.
+     accent-soft 배경(#dbebdf) 위에서도 4.5:1을 넘도록 #0e7e39(4.18)에서 한 단계 더 내렸다. */
+  --hc-primary-strong: #0b6b30;
   --hc-primary-hover: #129a47;
   --hc-primary-contrast: #06140a;
   --hc-background-tint: #f1f1ee;
@@ -33,9 +35,9 @@
   --hc-icon-button-hover: #f1f1ee;
   --hc-accent-soft-bg: rgba(22, 180, 84, 0.1);
   --hc-accent-soft-border: rgba(22, 180, 84, 0.16);
-  --hc-accent-soft-text: #0e7e39;
+  --hc-accent-soft-text: #0b6b30;
   --hc-brand-badge-bg: #ffffff;
-  --hc-brand-badge-text: #0e7e39;
+  --hc-brand-badge-text: #0b6b30;
   --hc-brand-badge-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
   --hc-brand-overline: #5c5c57;
   --hc-soft-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
@@ -83,8 +85,10 @@
   --hc-zinc-800: #deded9;
   --hc-zinc-700: #c9c9c3;
   --hc-zinc-600: #a6a69f;
-  --hc-zinc-500: #94948d;
-  --hc-zinc-400: #6f6f69;
+  /* 라이트 별칭은 "어둡기 순서"만 보존한다. 둘 다 본문에 쓰이므로 4.5:1을 넘겨야 한다
+     (기존 #6f6f69=4.08, #94948d=2.47로 둘 다 미달이었다). */
+  --hc-zinc-500: #66665f;
+  --hc-zinc-400: #5c5c57;
   --hc-zinc-300: #4f4f49;
   --hc-zinc-200: #36362f;
   --hc-zinc-100: #232320;
@@ -475,12 +479,13 @@ span {
   color: var(--hc-accent-soft-text);
 }
 
+/* 강조 링크는 "글자"라 -strong 을 쓴다. 라이트의 --hc-primary 는 2.4:1 로 본문 기준 미달이다. */
 .hc-link-accent {
-  color: var(--hc-primary);
+  color: var(--hc-primary-strong);
 }
 
 .hc-link-accent:hover {
-  color: var(--hc-primary-hover);
+  color: var(--hc-primary);
 }
 
 .custom-scroll::-webkit-scrollbar {

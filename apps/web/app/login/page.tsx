@@ -114,7 +114,7 @@ function LoginPageContent() {
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
-              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
+              className="font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               회원가입
             </Link>

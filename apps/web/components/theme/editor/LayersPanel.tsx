@@ -238,7 +238,7 @@ function MiniIconBtn({
         danger
           ? "border-red-800/70 bg-red-950 text-red-200 hover:bg-red-900/60"
           : active
-          ? "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)] hover:bg-[color:var(--hc-accent-soft-bg)]"
+          ? "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)] hover:bg-[color:var(--hc-accent-soft-bg)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] text-[color:var(--hc-muted)] hover:bg-[color:var(--hc-background-tint)]",
         disabled ? "opacity-50 cursor-not-allowed" : "",
       ].join(" ")}

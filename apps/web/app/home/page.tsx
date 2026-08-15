@@ -256,7 +256,7 @@ export default function HomePage() {
         {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
         <header className="pt-1 lg:pt-0">
           <h1 className="text-[25px] font-bold leading-[1.5] tracking-tight lg:text-[34px] lg:leading-[1.4]">
-            <span className="text-[color:var(--hc-primary)]">{currentHeadingDate}</span>의
+            <span className="text-[color:var(--hc-primary-strong)]">{currentHeadingDate}</span>의
             <br />
             기록을 남겨보세요.
           </h1>
@@ -269,7 +269,7 @@ export default function HomePage() {
           className="flex items-center gap-3.5 rounded-[24px] bg-[color:var(--hc-primary)] p-[18px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] lg:hidden"
         >
           <span className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-[15px] bg-[#06140A]">
-            <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary)]" />
+            <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary-strong)]" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-extrabold">지금 촬영하기</span>
@@ -287,7 +287,7 @@ export default function HomePage() {
             data-coach="upload"
             className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
           >
-            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
+            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
             <span className="min-w-0">
               <span className="block whitespace-nowrap text-[13.5px] font-bold">
                 사진 불러오기
@@ -302,7 +302,7 @@ export default function HomePage() {
             data-coach="theme"
             className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
           >
-            <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
+            <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
             <span className="min-w-0">
               <span className="block whitespace-nowrap text-[13.5px] font-bold">
                 프레임 보기
@@ -368,7 +368,7 @@ export default function HomePage() {
 
         {/* 모바일(&lt;lg) 스탯 카드 — 이번 달 컷 수 + 주간 목표 + 진행 링 */}
         <section className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 lg:hidden">
-          <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary)]">
+          <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
             {monthCountLabel}
           </span>
           <p className="flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
@@ -391,7 +391,7 @@ export default function HomePage() {
         {/* 데스크톱(lg+) 주간 진행 스트립 */}
         <section className="hc-surface-card hidden items-center gap-5 rounded-2xl border p-[22px] lg:flex">
           <span className="flex items-baseline gap-2">
-            <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary)]">
+            <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
               {monthCountLabel}
             </span>
             <span className="text-[14px] text-[color:var(--hc-muted)]">컷 / 이번 달</span>

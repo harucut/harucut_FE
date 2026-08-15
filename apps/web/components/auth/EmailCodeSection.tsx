@@ -91,7 +91,7 @@ export function EmailCodeSection({
       {isVerified ? (
         <div className="hc-surface-hero rounded-2xl border px-3 py-3">
           <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] p-2 text-[color:var(--hc-primary)]">
+              <div className="mt-0.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] p-2 text-[color:var(--hc-primary-strong)]">
               <ShieldCheck size={16} />
             </div>
             <div className="min-w-0 flex-1">
@@ -124,7 +124,7 @@ export function EmailCodeSection({
                   <Clock3
                     size={14}
                     className={
-                      isExpired ? "text-red-200" : "text-[color:var(--hc-primary)]"
+                      isExpired ? "text-red-200" : "text-[color:var(--hc-primary-strong)]"
                     }
                   />
                   <p

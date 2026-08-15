@@ -53,7 +53,7 @@ export function PlanComparisonTable({
                 <span
                   className={`block text-[14px] font-extrabold ${
                     plan.hot
-                      ? "text-[color:var(--hc-primary)]"
+                      ? "text-[color:var(--hc-primary-strong)]"
                       : "text-[color:var(--hc-text)]"
                   }`}
                 >
@@ -100,7 +100,7 @@ export function PlanComparisonTable({
                     </span>
                   ) : cell.included ? (
                     <Check
-                      className="mx-auto h-4 w-4 text-[color:var(--hc-primary)]"
+                      className="mx-auto h-4 w-4 text-[color:var(--hc-primary-strong)]"
                       strokeWidth={3}
                     />
                   ) : (
