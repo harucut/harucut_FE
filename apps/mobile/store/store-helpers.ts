@@ -11,12 +11,17 @@ import type { ButtonVariant } from '@/constants/harucut-design';
 export type AccessMode = 'anonymous' | 'guest' | 'member';
 export type RemoteStatus = 'idle' | 'loading' | 'ready' | 'error';
 
+// GlobalNotice가 이 값을 React key로도 쓰므로, 한 노티스 안에서는 서로 달라야 한다.
+// 'dismiss' 아래 항목들은 확인 다이얼로그의 실행 버튼용이다 — onPress로 동작을 붙이고
+// 취소 버튼('dismiss')과 키가 겹치지 않게만 하면 된다(GlobalNotice의 default 분기가 닫아 준다).
 export type NoticeActionId =
   | 'dismiss'
   | 'go-login'
   | 'go-shoot'
   | 'go-landing'
-  | 'start-guest-trial';
+  | 'start-guest-trial'
+  | 'leave-capture'
+  | 'remove-frame';
 
 export type NoticeAction = {
   id: NoticeActionId;

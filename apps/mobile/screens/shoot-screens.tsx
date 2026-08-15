@@ -182,9 +182,11 @@ export function ShootCaptureScreen() {
         if (shoot.shots.length === 0) return false;
         showNotice({
           actions: [
+            // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
+            // 둘 다 'dismiss'면 키가 겹쳐 버튼이 누락되거나 이전 핸들러가 재사용된다.
             { id: 'dismiss', label: '계속 촬영', variant: 'secondary' },
             {
-              id: 'dismiss',
+              id: 'leave-capture',
               label: '나가기',
               variant: 'danger',
               onPress: () => {

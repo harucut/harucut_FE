@@ -381,8 +381,9 @@ export function ThemeStickerScreen() {
 
     showNotice({
       actions: [
+        // id는 GlobalNotice에서 React key로도 쓰이므로 액션마다 달라야 한다.
         { id: 'dismiss', label: '취소', variant: 'secondary' },
-        { id: 'dismiss', label: '삭제', variant: 'danger', onPress: () => void performRemoveFrame() },
+        { id: 'remove-frame', label: '삭제', variant: 'danger', onPress: () => void performRemoveFrame() },
       ],
       eyebrow: 'DELETE FRAME',
       icon: 'trash-outline',

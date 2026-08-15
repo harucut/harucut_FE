@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { BACKGROUND_COLORS } from "@/constants/colors";
@@ -42,6 +42,27 @@ import {
 const DEFAULT_FRAME_TITLE = "새 테마 프레임";
 const DEFAULT_FRAME_DESCRIPTION = "하루컷에서 직접 꾸민 나만의 프레임";
 
+/**
+ * 이탈 경고 판정용 편집 상태 지문. 기준 시점과 지금을 비교하는 데만 쓴다.
+ *
+ * 배경의 `url`은 뺀다. IMAGE 배경은 저장된 key만 들고 오고 서명 URL은 불러온 뒤에
+ * 따로 주입하는 렌더 전용 값이라, 포함하면 사용자가 아무것도 안 해도 지문이 바뀐다.
+ */
+function buildEditorSignature(
+  components: ReturnType<typeof useThemeEditorStore.getState>["components"],
+  background: ReturnType<typeof useThemeEditorStore.getState>["background"],
+  backgroundColor: string,
+) {
+  return JSON.stringify({
+    components,
+    background:
+      background.type === "IMAGE"
+        ? { type: "IMAGE", key: background.key ?? null, opacity: background.opacity ?? null }
+        : { type: "COLOR", value: background.value },
+    backgroundColor,
+  });
+}
+
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
   const setFrameId = useThemeEditorStore((s) => s.setFrameId);
@@ -59,9 +80,38 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const editorComponents = useThemeEditorStore((s) => s.components);
   const { remoteFrameId } = useThemeSession();
 
-  // 스티커/텍스트를 하나라도 얹었거나 배경을 이미지로 바꿨으면 편집 중으로 보고,
-  // 새로고침/이탈 시 유실 경고를 띄운다(저장 프레임 편집은 자동 초안 대상이 아니므로 특히 중요).
-  useUnsavedWorkGuard(editorComponents.length > 0 || background.type !== "COLOR");
+  // 편집 중 판정은 "콘텐츠가 있는지"가 아니라 "기준 상태에서 바뀌었는지"로 한다.
+  // 콘텐츠 유무로 보면 컴포넌트나 이미지 배경이 있는 저장 프레임을 열기만 해도
+  // 매번 이탈 경고가 떠서, 아무것도 고치지 않은 사용자까지 붙잡는다.
+  const editorSignature = useMemo(
+    () => buildEditorSignature(editorComponents, background, backgroundColor),
+    [editorComponents, background, backgroundColor],
+  );
+  // 기준은 프레임마다 새로 잡는다. 원격 프레임은 불러오기가 끝나야 기준이 정해지므로,
+  // 그 전까지 signature를 null로 두어 "아직 기준 없음 = 편집 아님"으로 본다.
+  const baselineKey = `${frameId}:${remoteFrameId ?? ""}`;
+  const [baseline, setBaseline] = useState<{
+    key: string;
+    signature: string | null;
+  }>({ key: baselineKey, signature: null });
+  const [isRemoteFrameSettled, setIsRemoteFrameSettled] = useState(false);
+
+  if (baseline.key !== baselineKey) {
+    setBaseline({ key: baselineKey, signature: null });
+    setIsRemoteFrameSettled(false);
+  } else if (
+    baseline.signature === null &&
+    (!remoteFrameId || isRemoteFrameSettled)
+  ) {
+    setBaseline({ key: baselineKey, signature: editorSignature });
+  }
+
+  const hasUnsavedChanges =
+    baseline.key === baselineKey &&
+    baseline.signature !== null &&
+    baseline.signature !== editorSignature;
+
+  useUnsavedWorkGuard(hasUnsavedChanges);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
@@ -134,6 +184,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         }
       } finally {
         if (!cancelled) {
+          // 성공이든 실패든 여기까지 오면 "불러온 뒤"다. 이제부터의 변화만 편집으로 센다.
+          setIsRemoteFrameSettled(true);
           setIsLoadingFrame(false);
         }
       }
@@ -282,6 +334,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       clearEditorDraft();
+      // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
+      // /theme로 나가는 길에도 경고가 뜬다.
+      setBaseline({ key: baselineKey, signature: editorSignature });
       setTitle(nextTitle);
       setDescription(nextDescription);
       setIsSaveDialogOpen(false);
