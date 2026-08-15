@@ -118,12 +118,12 @@ export function FrameSelectPanel({
                       className="h-full w-full object-cover"
                     />
 
-                    <span className="pointer-events-none absolute left-1 top-1 rounded-full border border-black/10 bg-white px-1.5 py-0.5 text-[9px] font-bold text-black shadow-sm">
+                    <span className="pointer-events-none absolute left-1 top-1 rounded-full border border-black/10 bg-white px-1.5 py-0.5 text-[11px] font-bold text-black shadow-sm">
                       #{index + 1}
                     </span>
 
                     {isSelected ? (
-                      <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[color:var(--hc-primary)] text-[10px] font-semibold text-[color:var(--hc-primary-contrast)]">
+                      <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[color:var(--hc-primary)] text-[11px] font-semibold text-[color:var(--hc-primary-contrast)]">
                         {order}
                       </span>
                     ) : null}
@@ -138,7 +138,7 @@ export function FrameSelectPanel({
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex w-fit items-center gap-1 rounded-full border border-zinc-700 px-2.5 py-1.5 text-[10px] text-zinc-400 hover:bg-zinc-900"
+            className="inline-flex w-fit items-center gap-1 rounded-full border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-400 hover:bg-zinc-900"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             선택 초기화

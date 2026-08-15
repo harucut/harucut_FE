@@ -35,7 +35,7 @@ export function ResetPasswordForm({
       className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"
     >
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
-        <p className="text-[10px] text-zinc-400">
+        <p className="text-[11px] text-zinc-400">
           인증이 완료되었어요. 새 비밀번호를 입력해 주세요.
         </p>
       </div>
@@ -67,7 +67,7 @@ export function ResetPasswordForm({
       />
 
       {errors.common ? (
-        <p role="alert" className="text-[10px] text-[color:var(--hc-danger)]">{errors.common}</p>
+        <p role="alert" className="text-[11px] text-[color:var(--hc-danger)]">{errors.common}</p>
       ) : null}
 
       <button
@@ -78,7 +78,7 @@ export function ResetPasswordForm({
         {isSubmitting ? "변경 중..." : "비밀번호 변경하기"}
       </button>
 
-      <div className="flex items-center justify-between text-[10px] text-zinc-500">
+      <div className="flex items-center justify-between text-[11px] text-zinc-500">
         <button
           type="button"
           onClick={onRestart}

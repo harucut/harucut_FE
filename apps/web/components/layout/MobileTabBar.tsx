@@ -39,7 +39,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
         }`}
       >
         <Home className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">홈</span>
+        <span className="text-[11px] font-medium">홈</span>
       </Link>
 
       <Link
@@ -52,7 +52,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
         }`}
       >
         <LayoutGrid className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">기록</span>
+        <span className="text-[11px] font-medium">기록</span>
       </Link>
 
       {publicShoot ? (
@@ -86,7 +86,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
         }`}
       >
         <Film className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">프레임</span>
+        <span className="text-[11px] font-medium">프레임</span>
       </Link>
 
       <Link
@@ -99,7 +99,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
         }`}
       >
         <User className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">MY</span>
+        <span className="text-[11px] font-medium">MY</span>
       </Link>
     </nav>
   );

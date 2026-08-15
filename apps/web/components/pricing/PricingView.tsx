@@ -100,7 +100,7 @@ function PlanCard({
             {/* 미지원 항목은 opacity로 흐리지 않는다 — 대비가 2.58까지 떨어져 읽기 어려웠다.
                 X 아이콘과 muted 색으로 구분하고 명도 대비는 지킨다. */}
             <span
-              className={`text-[13.5px] leading-[1.4] ${
+              className={`text-[13px] leading-[1.4] ${
                 on ? "text-[color:var(--hc-text)]" : "text-[color:var(--hc-muted)]"
               }`}
             >
@@ -123,7 +123,7 @@ function PlanCard({
       {/* CTA — 비회원은 가입 유도. 회원은 결제 연동 전이라 "준비 중"으로 비활성.
           이용 중인 플랜은 누를 곳이 없다. */}
       {current ? (
-        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[14.5px] font-extrabold text-[color:var(--hc-primary-strong)]">
+        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[15px] font-extrabold text-[color:var(--hc-primary-strong)]">
           현재 이용 중
         </span>
       ) : authed ? (
@@ -132,14 +132,14 @@ function PlanCard({
           disabled
           aria-disabled
           title={PRICING_BILLING_PENDING}
-          className="hc-surface-well mt-5 flex h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full border text-[14.5px] font-extrabold text-[color:var(--hc-muted)] opacity-70"
+          className="hc-surface-well mt-5 flex h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full border text-[15px] font-extrabold text-[color:var(--hc-muted)] opacity-70"
         >
           준비 중
         </button>
       ) : (
         <Link
           href="/signup"
-          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition ${
+          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
             hot
               ? "hc-button-primary"
               : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
@@ -220,7 +220,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               <span className="text-[15px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
                 {ENTERPRISE_TEASER.name}
               </span>
-              <span className="rounded-full border border-[color:var(--hc-border-strong)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--hc-muted)]">
+              <span className="rounded-full border border-[color:var(--hc-border-strong)] px-2 py-0.5 text-[11px] font-bold text-[color:var(--hc-muted)]">
                 {ENTERPRISE_TEASER.badge}
               </span>
               {/* 가격 미정 — 다른 카드가 모두 가격을 보여주므로 여기도 상태를 밝힌다. */}
@@ -234,7 +234,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </div>
           <a
             href={`mailto:${COMPANY.email}`}
-            className="hc-surface-well flex h-[46px] shrink-0 items-center justify-center rounded-full border px-6 text-[13.5px] font-extrabold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]"
+            className="hc-surface-well flex h-[46px] shrink-0 items-center justify-center rounded-full border px-6 text-[13px] font-extrabold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]"
           >
             {ENTERPRISE_TEASER.cta}
           </a>
@@ -306,7 +306,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             </p>
             <Link
               href="/signup"
-              className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[14.5px] font-extrabold"
+              className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[15px] font-extrabold"
             >
               시작하기
             </Link>

@@ -121,7 +121,7 @@ export function SavedFramesSection({
                           {frame.description || "저장한 프레임을 다음 단계에서 바로 적용할 수 있어요."}
                         </p>
                       </div>
-                      <span className="text-[10px] text-zinc-500">
+                      <span className="text-[11px] text-zinc-500">
                         {isSelected ? selectedStatusText : idleStatusText}
                       </span>
                     </div>
@@ -132,7 +132,7 @@ export function SavedFramesSection({
                       <button
                         type="button"
                         onClick={() => onAction(frame)}
-                        className="hc-accent-chip rounded-full border px-3 py-1 text-[10px] font-medium"
+                        className="hc-accent-chip rounded-full border px-3 py-1 text-[11px] font-medium"
                       >
                         {actionLabel}
                       </button>

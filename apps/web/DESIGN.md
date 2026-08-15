@@ -45,9 +45,27 @@ typography:
     letterSpacing: "-0.3px"
   body:
     fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
-    fontSize: "0.96875rem"
+    fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: 1.75
+    letterSpacing: "normal"
+  body-md:
+    fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 400
+    lineHeight: 1.7
+    letterSpacing: "normal"
+  body-sm:
+    fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 400
+    lineHeight: 1.65
+    letterSpacing: "normal"
+  label-lg:
+    fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 500
+    lineHeight: 1.5
     letterSpacing: "normal"
   label:
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace"
@@ -158,13 +176,19 @@ components:
 **Character:** 한국어를 제대로 다루는 산세리프 하나로 전부 소화하고, 계기판 성격의 정보(단계 번호, 촬영 카운트, 축 라벨)만 모노로 떼어낸다. 서체를 늘리는 대신 **굵기 대비를 크게 벌린다** — 900과 400 사이가 이 시스템의 주된 위계 장치다.
 
 ### Hierarchy
+작은 글자 스텝은 **11 / 12 / 13 / 14 / 15 / 16px** 여섯 개뿐이다. 0.5px 단위 중간값은 쓰지 않는다 —
+눈에 보이지도 않으면서 스텝만 두 배로 늘린다. 11px 미만도 쓰지 않는다(한국어 가독 하한).
+
 - **Display** (900, clamp 46→88px, 1.18, tracking -4px): 랜딩 헤드라인 전용. 화면을 압도하는 크기가 의도다.
-- **Headline** (800, 24→34px, 1.25, tracking -0.8px): 섹션 제목, 페이지 타이틀.
+- **Headline** (800, 19~40px, 1.25, tracking -0.8px): 섹션 제목, 페이지 타이틀.
 - **Title** (800, 15~16px, 1.4): 카드 제목, 버튼 라벨.
-- **Body** (400, 13~15.5px, 1.6~1.75): 설명 문장. 읽는 문단은 최대 460px 폭으로 묶는다.
-- **Label** (mono, 500, 11px, tracking 1.2px): 축 라벨, 단계 번호, 상태 표시. 대문자 라틴과 숫자가 주 용도다.
+- **Body** (400, 13~15px, 1.6~1.75): 설명 문장. 읽는 문단은 최대 460px 폭으로 묶는다.
+- **Label** (mono, 500, 11~12px, tracking 1.2px): 축 라벨, 단계 번호, 상태 표시. 이 시스템의 최소 크기다.
 
 ### Named Rules
+**여섯 스텝 규칙.** 작은 글자는 11·12·13·14·15·16px 중 하나다. 12.5px 같은 중간값을 만들면
+스텝이 흐려지고 화면마다 미묘하게 어긋난다. 11px 아래로는 내려가지 않는다.
+
 **모노는 계기판에만 규칙.** 모노 서체는 읽는 글이 아니라 **읽히는 값**에만 쓴다. 숫자, 단위, 축 이름, 상태 코드. 모노로 된 문장이 나오면 잘못 쓴 것이다.
 
 **터치 입력 16px 규칙.** iOS Safari는 16px 미만 입력에 포커스하면 화면을 확대한다. 디자인상 작은 입력을 쓰더라도 `pointer: coarse`에서는 16px로 올린다(globals.css에 이미 강제돼 있다).
@@ -244,6 +268,7 @@ components:
 ### Don't:
 - **Don't** 보라색 그라데이션 배경에 둥근 카드를 얹지 않는다. 그건 어느 제품에나 붙는 모양이다.
 - **Don't** 캐릭터나 이모지로 친근함을 만들지 않는다. 친근함은 문구에서 나온다.
+- **Don't** 글자에 그라디언트를 입히지 않는다. 헤드라인 강조어는 `.hc-accent-word`(단색 `--hc-primary`)를 쓴다. 강조는 굵기와 색으로 충분하고, 글자색이 투명해지면 접근성 검사가 대비를 계산하지 못해 그 글자가 검사에서 통째로 빠진다.
 - **Don't** `--hc-muted-soft`(#6F6F73)를 본문 글자에 쓰지 않는다. 플레이스홀더와 비활성 전용이다.
 - **Don't** 버튼 hover에 위치 이동을 넣지 않는다. 색과 그림자로만 반응한다.
 - **Don't** 모바일 높이에 `100vh`를 쓰지 않는다. `svh`/`dvh`를 쓴다.

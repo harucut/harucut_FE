@@ -135,7 +135,7 @@ function MediaThumb({
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
       ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted)]">
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-[color:var(--hc-muted)]">
           미리보기를 준비하는 중이에요.
         </div>
       )}
@@ -336,7 +336,7 @@ export default function HistoryPage() {
             <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
               기록
             </h1>
-            <p className="mt-2 text-[13.5px] text-[color:var(--hc-muted)]">
+            <p className="mt-2 text-[13px] text-[color:var(--hc-muted)]">
               남긴 하루컷 {loading ? "…" : items.length}개
               {planTier
                 ? ` · ${PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록을 볼 수 있어요`
@@ -392,7 +392,7 @@ export default function HistoryPage() {
             <button
               type="button"
               onClick={() => setReloadKey((prev) => prev + 1)}
-              className="hc-button-secondary rounded-full border px-5 py-2 text-[12.5px] font-semibold"
+              className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
             >
               다시 시도
             </button>
@@ -421,7 +421,7 @@ export default function HistoryPage() {
             ) : null}
             <Link
               href="/shoot"
-              className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
+              className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
             >
               촬영 시작
             </Link>
@@ -434,7 +434,7 @@ export default function HistoryPage() {
                   <h2 className="text-[19px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[12.5px] text-[color:var(--hc-muted)]">
+                  <span className="text-[13px] text-[color:var(--hc-muted)]">
                     {group.items.length}컷
                   </span>
                 </div>
@@ -469,7 +469,7 @@ export default function HistoryPage() {
                               {getUserMediaTitle(item)}
                             </p>
                           )}
-                          <p className="text-[11.5px] text-[color:var(--hc-muted)]">
+                          <p className="text-[11px] text-[color:var(--hc-muted)]">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
@@ -600,7 +600,7 @@ function CalendarView({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="text-[12.5px] text-[color:var(--hc-muted)]">
+        <span className="text-[13px] text-[color:var(--hc-muted)]">
           이번 달 {monthItems.length}컷
         </span>
       </div>
@@ -649,7 +649,7 @@ function CalendarView({
                 <div className="relative mt-1 flex flex-1 items-center justify-center">
                   <MediaThumb item={list[0]} bare />
                   {list.length > 1 ? (
-                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[9px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
                       +{list.length - 1}
                     </span>
                   ) : null}

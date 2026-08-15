@@ -155,7 +155,7 @@ function PhotoTab() {
           >
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary-strong)]">
               <ImagePlus size={18} />
-              <span className="text-[10px]">
+              <span className="text-[11px]">
                 {isUploading ? "업로드 중" : "추가"}
               </span>
             </div>
@@ -190,7 +190,7 @@ function PhotoTab() {
                 </button>
 
                 {isProcessing ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[10px] font-medium text-white">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[11px] font-medium text-white">
                     누끼를 정리하는 중이에요.
                   </div>
                 ) : null}
@@ -209,7 +209,7 @@ function PhotoTab() {
                       }
                     }}
                     disabled={isProcessing}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[11px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
                     title="누끼 제거"
                   >
                     <Scissors className="h-3 w-3" />

@@ -129,12 +129,12 @@ export default function UploadSelectPage() {
               />
 
               {uploadNotice ? (
-                <p className="text-[10px] leading-4 text-[color:var(--hc-danger)]">
+                <p className="text-[11px] leading-4 text-[color:var(--hc-danger)]">
                   {uploadNotice}
                 </p>
               ) : null}
 
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[11px] text-zinc-500">
                 여러 파일을 한 번에 넣고 프레임에 어울릴 4개를 선택할 수 있어요.
                 PNG·JPG·WEBP·GIF만 올릴 수 있어요.
               </p>

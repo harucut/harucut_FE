@@ -157,7 +157,7 @@ export default function CapturePage() {
                       className="h-full w-full object-cover"
                     />
                   ) : null}
-                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[9px] font-semibold text-white">
+                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[11px] font-semibold text-white">
                     {slotNumber}
                   </span>
                 </div>

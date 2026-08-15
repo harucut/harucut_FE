@@ -99,11 +99,11 @@ export function EmailCodeSection({
                 <p className="text-[11px] font-medium text-[color:var(--hc-text)]">
                   {verifiedText}
                 </p>
-                <span className="hc-accent-chip rounded-full border px-2 py-0.5 text-[10px] font-medium">
+                <span className="hc-accent-chip rounded-full border px-2 py-0.5 text-[11px] font-medium">
                   인증 완료
                 </span>
               </div>
-              <p className="mt-1 text-[10px] leading-relaxed text-[color:var(--hc-muted)]">
+              <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--hc-muted)]">
                 이메일을 수정하면 인증 코드 입력 영역이 다시 나타납니다.
               </p>
             </div>
@@ -128,7 +128,7 @@ export function EmailCodeSection({
                     }
                   />
                   <p
-                    className={`text-[10px] ${
+                    className={`text-[11px] ${
                       isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-text)]"
                     }`}
                   >
@@ -138,7 +138,7 @@ export function EmailCodeSection({
                   </p>
                 </div>
                 {!isExpired ? (
-                  <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[10px] font-medium">
+                  <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[11px] font-medium">
                     {formatRemainingTime(remainingSeconds)}
                   </span>
                 ) : null}

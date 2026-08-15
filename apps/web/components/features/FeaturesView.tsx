@@ -84,7 +84,7 @@ function AxisVisual({ index }: { index: number }) {
               <p className="text-[16px] font-extrabold tracking-[-.3px]">
                 {row.t}
               </p>
-              <p className="mt-1 text-[13.5px] text-white/75">{row.d}</p>
+              <p className="mt-1 text-[13px] text-white/75">{row.d}</p>
             </div>
           </div>
         ))}
@@ -146,7 +146,7 @@ function AxisVisual({ index }: { index: number }) {
                 {row.plan}
               </span>
               <span
-                className={`text-[13.5px] ${row.dim ? "text-white/75" : "font-bold text-white"}`}
+                className={`text-[13px] ${row.dim ? "text-white/75" : "font-bold text-white"}`}
               >
                 {row.span}
               </span>
@@ -178,7 +178,7 @@ export function FeaturesView() {
           <h1 className="text-[40px] font-black leading-[1.16] tracking-[-1.8px] sm:text-[56px] sm:tracking-[-2.6px]">
             하루컷은
             <br />
-            <span className="hc-gradient-text">무엇이 다를까요?</span>
+            <span className="hc-accent-word">무엇이 다를까요?</span>
           </h1>
         </Reveal>
       </section>
@@ -208,12 +208,12 @@ export function FeaturesView() {
                     <h2 className="text-[30px] font-extrabold leading-[1.25] tracking-[-.8px] sm:text-[34px]">
                       {axis.title}
                     </h2>
-                    <p className="mt-5 max-w-[460px] text-[15.5px] leading-[1.75] text-white/75">
+                    <p className="mt-5 max-w-[460px] text-[15px] leading-[1.75] text-white/75">
                       {axis.body}
                     </p>
 
                     {/* 부스와의 대비 — 취소선 대신 죽은 색으로 눌러 놓는다 */}
-                    <p className="mt-6 max-w-[460px] border-l border-white/[0.1] pl-4 text-[13.5px] leading-[1.65] text-white/70">
+                    <p className="mt-6 max-w-[460px] border-l border-white/[0.1] pl-4 text-[13px] leading-[1.65] text-white/70">
                       <span className="mr-2 font-bold text-white/85">
                         부스는
                       </span>
@@ -250,14 +250,14 @@ export function FeaturesView() {
             <h2 className="text-[24px] font-extrabold tracking-[-.7px]">
               어디까지 무료인지 먼저 볼까요?
             </h2>
-            <p className="mt-2.5 text-[14.5px] text-white/75">
+            <p className="mt-2.5 text-[15px] text-white/75">
               촬영과 기본 프레임은 가입만 해도 무료예요. 커스텀 프레임과 보관
               기간이 플랜에 따라 달라집니다.
             </p>
           </div>
           <Link
             href="/pricing"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 px-7 py-3 text-[14.5px] font-bold text-white hover:bg-white/[0.07]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 px-7 py-3 text-[15px] font-bold text-white hover:bg-white/[0.07]"
           >
             요금제 보기 <ArrowRight className="h-[17px] w-[17px]" />
           </Link>

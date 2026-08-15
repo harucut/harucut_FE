@@ -359,7 +359,7 @@ export default function UploadResultPage() {
                   : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
               </p>
             </div>
-            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[10px] font-medium text-[color:var(--hc-primary-strong)]">
+            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
               이미지
             </span>
           </div>

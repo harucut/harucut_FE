@@ -37,7 +37,7 @@ export function GeneratedAssetDownloadCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             {metaLabel ? (
-              <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-zinc-300">
+              <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-zinc-300">
                 {metaLabel}
               </span>
             ) : null}

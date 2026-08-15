@@ -68,7 +68,7 @@ export function MarketingFooter({
   return (
     <footer className={shell}>
       <div className={`mx-auto w-full px-7 pb-10 pt-12 ${width}`}>
-        <h2 className={`text-[12.5px] font-bold ${headText}`}>고객센터</h2>
+        <h2 className={`text-[13px] font-bold ${headText}`}>고객센터</h2>
         <PipeRow
           className={`mt-2.5 text-[13px] leading-[1.7] ${bodyText}`}
           items={[
@@ -114,7 +114,7 @@ export function MarketingFooter({
 
         <nav
           aria-label="푸터 바로가기"
-          className={`mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px] font-semibold ${linkText}`}
+          className={`mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] font-semibold ${linkText}`}
         >
           {FOOTER_LINKS.map((item, index) => (
             <Fragment key={item.href}>

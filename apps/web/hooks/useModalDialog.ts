@@ -9,32 +9,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
  * (여는 버튼을 눌러 열리는 알림 오버레이가 그랬다 — 실측으로 확인했다). 그러면 닫은 뒤
  * 돌려줄 자리를 잃는다. 그래서 focusin 을 계속 지켜보며 마지막 자리를 들고 있는다.
  */
-let lastFocused: HTMLElement | null = null;
-let installed = false;
-
-/**
- * 포커스 기억을 켠다. **앱이 뜰 때 한 번** 불러야 한다.
- *
- * 이 모듈이 다이얼로그와 함께 늦게 로드되면 "열기 전 자리"를 놓친다 — 여는 버튼을 누른
- * 시점에는 아직 리스너가 없기 때문이다. 실제로 알림 오버레이가 그래서 복원이 안 됐다.
- * 그래서 등록을 모듈 로드에 맡기지 않고, 항상 마운트되는 곳에서 명시적으로 설치한다.
- */
-export function installFocusMemory() {
-  if (installed || typeof document === "undefined") return;
-  installed = true;
-
-  const remember = (event: Event) => {
-    const target = event.target as HTMLElement | null;
-    if (!target || target === document.body) return;
-    // 다이얼로그 안에서 일어난 일은 "열기 전 자리"가 아니다.
-    if (target.closest('[role="dialog"]')) return;
-    lastFocused = target;
-  };
-
-  document.addEventListener("focusin", remember, true);
-  document.addEventListener("pointerdown", remember, true);
-}
-
 const FOCUSABLE = [
   "a[href]",
   "button:not([disabled])",
@@ -54,10 +28,6 @@ const FOCUSABLE = [
  *  - Esc 로 닫을 수 없고, 닫아도 포커스가 열기 전 자리로 돌아오지 않았다.
  *
  * 반환하는 ref 를 다이얼로그 컨테이너에 붙이면 된다.
- *
- * 알려진 한계: 상태로 열고 닫는 다이얼로그(프레임 저장)는 복원까지 확인했지만,
- * 언마운트로 닫히는 알림 오버레이는 "열기 전 자리"를 잡지 못해 복원이 되지 않는다.
- * 포커스 이동·트랩·Esc 는 양쪽 다 동작한다. 복원은 별도 과제로 남긴다.
  */
 export function useModalDialog(isOpen: boolean, onClose: () => void) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -69,9 +39,7 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
   // 열리기 직전의 포커스를 기억해 둔다. 렌더 뒤에 읽으면 이미 옮겨간 뒤라 늦다.
   useLayoutEffect(() => {
     if (!isOpen) return;
-    const active = document.activeElement as HTMLElement | null;
-    restoreFocusTo.current =
-      active && active !== document.body ? active : lastFocused;
+    restoreFocusTo.current = document.activeElement as HTMLElement | null;
   }, [isOpen]);
 
   useEffect(() => {

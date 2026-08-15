@@ -115,7 +115,7 @@ function HowFilm() {
                 {s.t}
               </h3>
               <p
-                className="text-[14.5px] leading-[1.65] transition-colors duration-500"
+                className="text-[15px] leading-[1.65] transition-colors duration-500"
                 style={{
                   // .32는 대비 2.84로 본문 기준(4.5:1) 미달이라 .56으로 올렸다.
                   color: on ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.56)",
@@ -175,7 +175,7 @@ function HeroEditorial() {
         <h1>
           어디서든,
           <br />
-          하루를 <span className="hc-gradient-text">촬영해요</span>
+          하루를 <span className="hc-accent-word">촬영해요</span>
         </h1>
       </Reveal>
       <Reveal
@@ -260,9 +260,9 @@ export function LandingView() {
             <h2 className="text-[38px] font-extrabold leading-[1.14] tracking-[-1.2px]">
               고르는 게 아니라,
               <br />
-              <span className="hc-gradient-text">만드는 거예요.</span>
+              <span className="hc-accent-word">만드는 거예요.</span>
             </h2>
-            <p className="mt-6 max-w-[420px] text-[15.5px] leading-[1.75] text-white/60">
+            <p className="mt-6 max-w-[420px] text-[15px] leading-[1.75] text-white/60">
               부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
               붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
               전부 달라집니다.
@@ -270,7 +270,7 @@ export function LandingView() {
 
             <Link
               href="/features"
-              className="mt-9 inline-flex items-center gap-1.5 text-[14.5px] font-bold text-white hover:opacity-80"
+              className="mt-9 inline-flex items-center gap-1.5 text-[15px] font-bold text-white hover:opacity-80"
             >
               기능 자세히 보기 <ArrowRight className="h-4 w-4" />
             </Link>

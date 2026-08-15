@@ -273,7 +273,7 @@ export default function HomePage() {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-extrabold">지금 촬영하기</span>
-            <span className="mt-0.5 block whitespace-nowrap text-[12.5px] font-medium opacity-75">
+            <span className="mt-0.5 block whitespace-nowrap text-[13px] font-medium opacity-75">
               프레임 고르고 8장 찍기
             </span>
           </span>
@@ -289,7 +289,7 @@ export default function HomePage() {
           >
             <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
             <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13.5px] font-bold">
+              <span className="block whitespace-nowrap text-[13px] font-bold">
                 사진 불러오기
               </span>
               <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
@@ -304,7 +304,7 @@ export default function HomePage() {
           >
             <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
             <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13.5px] font-bold">
+              <span className="block whitespace-nowrap text-[13px] font-bold">
                 프레임 보기
               </span>
               <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
@@ -327,7 +327,7 @@ export default function HomePage() {
                 촬영하기
                 <ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" />
               </span>
-              <span className="mt-1 block text-[12.5px] font-medium opacity-75">
+              <span className="mt-1 block text-[13px] font-medium opacity-75">
                 프레임 고르고 8장, 네 컷만 남겨요
               </span>
             </span>
@@ -343,7 +343,7 @@ export default function HomePage() {
                 업로드하기
                 <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
               </span>
-              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+              <span className="mt-1 block text-[13px] text-[color:var(--hc-muted)]">
                 찍어둔 사진으로 만들어요
               </span>
             </span>
@@ -359,7 +359,7 @@ export default function HomePage() {
                 프레임 꾸미기
                 <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
               </span>
-              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+              <span className="mt-1 block text-[13px] text-[color:var(--hc-muted)]">
                 만들어두면 촬영할 때 골라 써요
               </span>
             </span>
@@ -402,7 +402,7 @@ export default function HomePage() {
               style={{ width: statsUnknown ? "0%" : progressWidth }}
             />
           </span>
-          <span className="text-[13.5px] text-[color:var(--hc-muted)]">
+          <span className="text-[13px] text-[color:var(--hc-muted)]">
             이번 주 목표까지{" "}
             <b className="text-[color:var(--hc-text)]">{remainingToGoalLabel}</b>
           </span>
@@ -440,7 +440,7 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={() => setReloadKey((prev) => prev + 1)}
-                  className="hc-button-secondary rounded-full border px-5 py-2 text-[12.5px] font-semibold"
+                  className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
                 >
                   다시 시도
                 </button>
@@ -467,7 +467,7 @@ export default function HomePage() {
                         <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
                       )}
                     </div>
-                    <p className="truncate text-[13.5px] font-bold tracking-tight">
+                    <p className="truncate text-[13px] font-bold tracking-tight">
                       {getUserMediaTitle(item)}
                     </p>
                   </Link>
@@ -480,7 +480,7 @@ export default function HomePage() {
                 </p>
                 <Link
                   href="/shoot"
-                  className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
+                  className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
                 >
                   촬영 시작
                 </Link>

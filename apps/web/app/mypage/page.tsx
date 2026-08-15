@@ -397,13 +397,13 @@ export default function MyPage() {
       </div>
       {statsError ? (
         <div className="flex flex-col items-center gap-1.5 px-4">
-          <p className="text-center text-[11.5px] text-[color:var(--hc-muted)]">
+          <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
             {statsError}
           </p>
           <button
             type="button"
             onClick={() => void fetchStats()}
-            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11.5px] font-semibold"
+            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11px] font-semibold"
           >
             다시 시도
           </button>
@@ -436,7 +436,7 @@ export default function MyPage() {
           </button>
         </div>
         {errors.username ? (
-          <p className="text-[11.5px] text-[color:var(--hc-primary-strong)]">
+          <p className="text-[11px] text-[color:var(--hc-primary-strong)]">
             {errors.username}
           </p>
         ) : null}
@@ -536,7 +536,7 @@ export default function MyPage() {
         <div>
           <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
             <CreditCard className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
-            <span className="text-[11.5px]">현재 플랜</span>
+            <span className="text-[11px]">현재 플랜</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
             {planDisplayName}
@@ -546,7 +546,7 @@ export default function MyPage() {
         <div>
           <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
             <User className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
-            <span className="text-[11.5px]">로그인 플랫폼</span>
+            <span className="text-[11px]">로그인 플랫폼</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
             {getLoginPlatformLabel(user?.loginPlatform)}
@@ -592,7 +592,7 @@ export default function MyPage() {
   const prefSection = (
     <div className="flex flex-col gap-4">
       <ColorThemePreferencePanel />
-      <p className="text-[12.5px] leading-5 text-[color:var(--hc-muted)]">
+      <p className="text-[13px] leading-5 text-[color:var(--hc-muted)]">
         화질·언어 설정은 순차적으로 추가될 예정이에요.
       </p>
     </div>
@@ -629,7 +629,7 @@ export default function MyPage() {
         type="button"
         onClick={handleExit}
         disabled={isSubmitting}
-        className="mx-auto mt-3 block text-[12.5px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+        className="mx-auto mt-3 block text-[13px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
       >
         회원 탈퇴
       </button>
@@ -786,7 +786,7 @@ export default function MyPage() {
                           <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary-strong)]" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[14.5px] font-bold">
+                          <span className="block text-[15px] font-bold">
                             {meta.title}
                           </span>
                           <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">

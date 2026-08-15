@@ -151,10 +151,10 @@ function LoginPageContent() {
         ))}
 
         {/* 세션 지속 옵션은 백엔드 계약에 없어 '로그인 상태 유지' 체크박스를 두지 않는다. */}
-        <div className="flex items-center justify-end text-[10px] text-zinc-500">
+        <div className="flex items-center justify-end text-[11px] text-zinc-500">
           <Link
             href={forgotPasswordHref}
-            className="text-[10px] text-zinc-400 hover:text-zinc-200"
+            className="text-[11px] text-zinc-400 hover:text-zinc-200"
           >
             비밀번호 찾기
           </Link>

@@ -13,7 +13,7 @@ export default function NotFound() {
         <h1 className="mt-3 text-[24px] font-extrabold tracking-[-0.6px] text-[color:var(--hc-text)]">
           없는 페이지예요
         </h1>
-        <p className="mt-3 text-[15.5px] leading-[1.75] text-[color:var(--hc-muted)]">
+        <p className="mt-3 text-[15px] leading-[1.75] text-[color:var(--hc-muted)]">
           주소가 바뀌었거나 지워진 화면일 수 있어요.
         </p>
 

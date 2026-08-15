@@ -210,7 +210,7 @@ function Row({
 function SmallStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
-      <p className="text-[10px] text-zinc-500">{label}</p>
+      <p className="text-[11px] text-zinc-500">{label}</p>
       <p className="text-xs text-zinc-200">{value}</p>
     </div>
   );

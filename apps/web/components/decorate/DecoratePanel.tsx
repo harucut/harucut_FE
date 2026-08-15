@@ -180,7 +180,7 @@ export function DecoratePanel() {
                   key={align}
                   type="button"
                   onClick={() => update(active.id, { styleJson: { textAlign: align } })}
-                  className={`rounded-md border px-2 py-1 text-[10px] ${
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
                     activeTextStyle.textAlign === align
                       ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
                       : "border-zinc-700 text-zinc-400"

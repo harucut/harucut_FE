@@ -30,7 +30,7 @@ export default function GlobalRouteError({
         <h1 className="mt-3 text-[24px] font-extrabold tracking-[-0.6px] text-[color:var(--hc-text)]">
           화면을 여는 데 실패했어요
         </h1>
-        <p className="mt-3 text-[15.5px] leading-[1.75] text-[color:var(--hc-muted)]">
+        <p className="mt-3 text-[15px] leading-[1.75] text-[color:var(--hc-muted)]">
           잠시 후 다시 시도해 보세요. 계속 같은 화면이 나오면 홈으로 돌아간 뒤
           다시 들어와 주세요.
         </p>

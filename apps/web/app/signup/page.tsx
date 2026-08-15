@@ -144,7 +144,7 @@ function SignupPageContent() {
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
-          <p className="mt-2 text-center text-[10px] leading-5 text-zinc-500">
+          <p className="mt-2 text-center text-[11px] leading-5 text-zinc-500">
             소셜 계정으로 가입하면{" "}
             <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
               서비스 이용약관

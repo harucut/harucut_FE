@@ -46,7 +46,7 @@ export function CutoutPanel() {
         aria-pressed={cutMode}
       >
         <span>캔버스 칸 탭으로 누끼</span>
-        <span className="text-[10px]">{cutMode ? "켬" : "끔"}</span>
+        <span className="text-[11px]">{cutMode ? "켬" : "끔"}</span>
       </button>
 
       <div className="grid grid-cols-2 gap-2">
@@ -66,7 +66,7 @@ export function CutoutPanel() {
               aria-pressed={on}
             >
               <span>{i + 1}번 칸</span>
-              <span className="text-[10px]">{on ? "적용됨" : "끔"}</span>
+              <span className="text-[11px]">{on ? "적용됨" : "끔"}</span>
             </button>
           );
         })}
