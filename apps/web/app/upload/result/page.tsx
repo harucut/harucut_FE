@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { UPLOAD_FLOW_STEPS } from "@/constants/flowSteps";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -352,6 +354,8 @@ export default function UploadResultPage() {
           backLabel="사진 다시 고르기"
           description="완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
         />
+
+        <FlowSteps steps={UPLOAD_FLOW_STEPS} current={2} />
 
         <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
           <div className="flex items-center justify-between gap-3">

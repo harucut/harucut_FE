@@ -23,8 +23,15 @@ type ShootSessionState = {
   borderColor: string;
   outputFilter: FourcutFilterId;
   imageResult: GeneratedFourcutAsset | null;
+  /**
+   * 행사 이름. 행사장 QR 로 들어온 참가자는 `/shoot?event=...` 로 도착한다.
+   * 그 사람은 우리 서비스를 고른 적이 없고 "이 행사에서 찍는다"고만 알고 있으므로,
+   * 촬영이 끝날 때까지 어느 행사인지 화면에 남겨 둔다.
+   */
+  eventName: string | null;
 
   setFrameId: (id: FrameId) => void;
+  setEventName: (name: string | null) => void;
   setRemoteFrameId: (id: number | null) => void;
   setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
@@ -46,6 +53,7 @@ const initialState: Pick<
   | "borderColor"
   | "outputFilter"
   | "imageResult"
+  | "eventName"
 > = {
   frameId: null,
   remoteFrameId: null,
@@ -54,6 +62,7 @@ const initialState: Pick<
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
   outputFilter: DEFAULT_FOURCUT_FILTER,
   imageResult: null,
+  eventName: null,
 };
 
 export const useShootSession = create<ShootSessionState>((set, get) => ({
@@ -89,6 +98,8 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
     set({
       imageResult: null,
     }),
+
+  setEventName: (name) => set({ eventName: name }),
 
   toggleSelect: (index) =>
     set({

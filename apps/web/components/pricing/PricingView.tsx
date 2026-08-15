@@ -19,7 +19,6 @@ import {
   type Plan,
   type PlanId,
 } from "@/constants/plans";
-import { COMPANY } from "@/constants/company";
 import { PRICING_FAQ } from "@/constants/faq";
 import { getMyUserInfo } from "@/lib/userApi";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
@@ -225,31 +224,38 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           ))}
         </section>
 
-        {/* Enterprise — 추후 출시 예정(팬미팅·행사용 QR 촬영) */}
-        <section className="flex flex-col gap-3 rounded-[20px] border border-dashed border-[color:var(--hc-border-strong)] bg-[color:var(--hc-surface)] p-6 sm:flex-row sm:items-center sm:justify-between">
+        {/*
+          Enterprise — 팬미팅·행사용 QR 촬영.
+          예전에는 점선 테두리 + "추후" 배지 + 고스트 버튼이라, 지금 살 수 있는 유일한
+          B2B 상품이 화면에서 가장 약하게 그려져 있었다. 개인 요금제가 결제 대기인 지금
+          이게 실제로 파는 물건이므로, 그에 맞는 무게로 보여준다.
+        */}
+        <section className="flex flex-col gap-4 rounded-[20px] border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[16px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
                 {ENTERPRISE_TEASER.name}
               </span>
-              <span className="rounded-full border border-[color:var(--hc-border-strong)] px-2 py-0.5 text-[11px] font-bold text-[color:var(--hc-muted)]">
+              {/* 배경은 --hc-primary. -accent-soft-text(#0b6b30) 위에 -primary-contrast 를
+                  올리면 라이트에서 2.84:1 로 떨어진다(실측). */}
+              <span className="rounded-full bg-[color:var(--hc-primary)] px-2 py-0.5 text-[11px] font-bold text-[color:var(--hc-primary-contrast)]">
                 {ENTERPRISE_TEASER.badge}
               </span>
-              {/* 가격 미정 — 다른 카드가 모두 가격을 보여주므로 여기도 상태를 밝힌다. */}
-              <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">
+              {/* 다른 카드가 모두 가격을 보여주므로 여기도 값이 어떻게 정해지는지 밝힌다. */}
+              <span className="text-[12px] font-semibold text-[color:var(--hc-accent-soft-text)]">
                 {ENTERPRISE_TEASER.price}
               </span>
             </div>
-            <p className="max-w-[520px] text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
+            <p className="max-w-[520px] text-[13px] leading-[1.7] text-[color:var(--hc-text)]">
               {ENTERPRISE_TEASER.desc}
             </p>
           </div>
-          <a
-            href={`mailto:${COMPANY.email}`}
-            className="hc-surface-well flex h-[46px] shrink-0 items-center justify-center rounded-full border px-6 text-[13px] font-extrabold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]"
+          <Link
+            href={ENTERPRISE_TEASER.href}
+            className="hc-button-primary flex h-[46px] shrink-0 items-center justify-center rounded-full px-6 text-[13px] font-extrabold"
           >
             {ENTERPRISE_TEASER.cta}
-          </a>
+          </Link>
         </section>
 
         {/* 전체 스펙 비교 — 기능(행) × 플랜(열) 매트릭스 */}

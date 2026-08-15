@@ -6,6 +6,8 @@ import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPa
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import type { FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { UPLOAD_FLOW_STEPS } from "@/constants/flowSteps";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import {
   SUPPORTED_IMAGE_ACCEPT,
@@ -95,6 +97,8 @@ export default function UploadSelectPage() {
           backLabel="프레임 다시 선택"
           description="사진을 넣을 프레임에 어울릴 4장을 골라 주세요."
         />
+
+        <FlowSteps steps={UPLOAD_FLOW_STEPS} current={1} />
 
         <FrameSelectPanel
           frameId={frameId ?? null}

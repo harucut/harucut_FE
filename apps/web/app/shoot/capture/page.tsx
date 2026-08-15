@@ -2,6 +2,9 @@
 
 import { RefreshCw, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EventBanner } from "@/components/event/EventBanner";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -32,7 +35,7 @@ export default function CapturePage() {
     TIMER_OPTIONS,
   } = useCaptureFlow();
 
-  const { frameId, shots } = useShootSession();
+  const { frameId, shots, eventName } = useShootSession();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
 
@@ -69,6 +72,10 @@ export default function CapturePage() {
           backLabel="프레임 다시 선택"
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
         />
+
+        <FlowSteps steps={SHOOT_FLOW_STEPS} current={1} />
+
+        {eventName ? <EventBanner eventName={eventName} /> : null}
 
         <section className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
           <div className="flex items-center justify-between text-[11px] text-[color:var(--hc-muted)]">

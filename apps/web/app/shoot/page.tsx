@@ -6,6 +6,9 @@ import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EventBanner } from "@/components/event/EventBanner";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { frameIdFromFrameType } from "@/lib/frameApi";
@@ -17,7 +20,10 @@ function ShootPageContent() {
   const searchParams = useSearchParams();
   const queriedFrameId = parseFrameIdQuery(searchParams.get("frame"));
   const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
-  const { setFrameId, setRemoteFrameId, reset } = useShootSession();
+  const { setFrameId, setRemoteFrameId, setEventName, reset } = useShootSession();
+  // 행사장 QR 은 `/shoot?frame=...&event=행사이름` 으로 들어온다. 이름은 화면에만 쓰므로
+  // 길이를 잘라 두고(제목 한 줄), 앞뒤 공백은 버린다.
+  const eventName = (searchParams.get("event") ?? "").trim().slice(0, 40) || null;
   const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
@@ -35,7 +41,9 @@ function ShootPageContent() {
 
   useEffect(() => {
     reset();
-  }, [reset]);
+    // reset 이 세션을 비우므로 행사 이름은 그 뒤에 다시 넣는다.
+    setEventName(eventName);
+  }, [eventName, reset, setEventName]);
 
   const selectedRemoteFrame = useMemo(
     () =>
@@ -67,6 +75,10 @@ function ShootPageContent() {
           title="프레임 선택"
           description="촬영할 4컷 프레임을 골라 주세요."
         />
+
+        {eventName ? <EventBanner eventName={eventName} /> : null}
+
+        <FlowSteps steps={SHOOT_FLOW_STEPS} current={0} />
 
         <FramePicker
           selectedFrameId={selectedFrameId}

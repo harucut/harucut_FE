@@ -13,6 +13,7 @@ const GREEN = "#1ED760";
 
 const NAV_LINKS = [
   { href: "/features", label: "기능" },
+  { href: "/enterprise", label: "행사" },
   { href: "/pricing", label: "요금제" },
   { href: "/faq", label: "FAQ" },
 ] as const;

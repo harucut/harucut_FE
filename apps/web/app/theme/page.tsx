@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
+import { PAYMENTS_ENABLED } from "@/constants/company";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import {
   FrameCapacityMeter,
@@ -101,10 +102,10 @@ function ThemePageContent() {
   const handleConfirmNewFrame = () => {
     // 목록 로딩 전에는 frames가 빈 배열이라 한도를 알 수 없으므로 진입을 보류한다.
     if (isLoading) return;
-    if (isAtCapacity) {
-      router.push("/pricing");
-      return;
-    }
+    // 한도에 걸렸다고 에디터 자체를 막지 않는다. 예전에는 /pricing 으로 보냈는데,
+    // 결제가 아직 열려 있지 않아 거기서 할 수 있는 일이 없었다 — 무료 사용자에게는
+    // 프레임 만들기가 통째로 막힌 길이었다. 한도는 "보관"에 걸리는 것이고,
+    // 만들어서 지금 촬영에 쓰는 것은 막을 이유가 없다. 저장 시점에 서버가 판정한다.
     setFrameId(selectedFrameId);
     setRemoteFrameId(null);
     setSelectedRemoteFrameId(null);
@@ -131,7 +132,8 @@ function ThemePageContent() {
           plan={plan}
           used={capacity.used}
           remaining={capacity.remaining}
-          onUpgrade={() => router.push("/pricing")}
+          // 결제가 열리기 전에는 업그레이드 버튼이 아무 데도 데려다주지 못한다.
+          onUpgrade={PAYMENTS_ENABLED ? () => router.push("/pricing") : undefined}
         />
 
         <FramePicker
@@ -141,16 +143,17 @@ function ThemePageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmNewFrame}
-          confirmLabel={
-            isLoading
-              ? "불러오는 중..."
-              : capacity.plan.limit <= 0 && !capacity.unlimited
-                ? "프레임 저장은 유료 요금제부터 · 업그레이드"
-                : isAtCapacity
-                  ? "보관함이 가득 찼어요 · 업그레이드"
-                  : "새 프레임 만들기"
-          }
+          confirmLabel={isLoading ? "불러오는 중..." : "새 프레임 만들기"}
         />
+
+        {/* 보관이 안 되는 상태라면 만들기 전에 알려 준다 — 만든 뒤에 알면 늦다. */}
+        {!isLoading && isAtCapacity ? (
+          <p className="-mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+            {capacity.plan.limit <= 0 && !capacity.unlimited
+              ? "지금 요금제로는 프레임을 보관할 수 없어요. 만들어서 이번 촬영에는 바로 쓸 수 있고, 보관은 유료 요금제부터예요."
+              : "보관함이 가득 찼어요. 새로 만들어 이번 촬영에 쓸 수는 있지만, 저장하려면 기존 프레임을 지우거나 요금제를 올려야 해요."}
+          </p>
+        ) : null}
 
         <SavedFramesSection
           title="저장한 프레임"

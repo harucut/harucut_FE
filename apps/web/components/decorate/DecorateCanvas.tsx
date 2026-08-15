@@ -27,7 +27,14 @@ function useIsWideViewport() {
   return isWide;
 }
 
-/** 캔버스에 허용할 세로 상한. 뷰포트가 바뀌면 같이 바뀐다. */
+/**
+ * 캔버스에 허용할 세로 상한. 뷰포트가 바뀌면 같이 바뀐다.
+ *
+ * 캔버스 아래 조작법 안내가 두 줄(약 35px)을 차지한다. 그만큼을 빼지 않으면 캔버스가
+ * 배정된 칸을 넘겨 안내 문구가 아래 요소 위로 삐져나온다(1280×720 에서 11px 실측).
+ */
+const CANVAS_HELP_ALLOWANCE = 48;
+
 function useMaxStageHeight(isWide: boolean) {
   const [viewportHeight, setViewportHeight] = useState(0);
   useEffect(() => {
@@ -38,8 +45,8 @@ function useMaxStageHeight(isWide: boolean) {
   }, []);
   if (viewportHeight <= 0) return undefined;
   return isWide
-    ? Math.max(360, Math.min(viewportHeight * 0.68, 720))
-    : Math.max(240, Math.min(viewportHeight * 0.38, 420));
+    ? Math.max(320, Math.min(viewportHeight * 0.68, 720) - CANVAS_HELP_ALLOWANCE)
+    : Math.max(220, Math.min(viewportHeight * 0.38, 420) - CANVAS_HELP_ALLOWANCE);
 }
 
 export function DecorateCanvas() {

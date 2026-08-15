@@ -325,6 +325,34 @@ export function LandingView() {
         </div>
       </section>
 
+      {/*
+        EVENT — 행사(B2B) 축.
+        랜딩이 개인 사용자 이야기만 하고 있어서, 행사 주최자가 들어와도 자기 이야기를
+        찾을 자리가 없었다. 제품이 파는 두 축 중 하나가 화면에 아예 없던 셈이다.
+      */}
+      <section id="event" className="border-y border-white/[0.1] bg-black">
+        <div className="mx-auto flex max-w-[1160px] flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex max-w-[560px] flex-col gap-4">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-[11px] font-extrabold tracking-[1px] text-white/70">
+              FOR EVENTS
+            </span>
+            <h2 className="text-[28px] font-extrabold leading-[1.2] tracking-[-1px] text-white lg:text-[38px]">
+              행사에서는 부스 대신 QR 한 장
+            </h2>
+            <p className="text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
+              팬미팅·페스티벌·사내 행사에 전용 프레임을 만들어 드려요. 참가자는 앱도 가입도
+              없이 QR을 찍어 자기 휴대폰으로 남깁니다. 줄도, 인화 대기도 없어요.
+            </p>
+          </div>
+          <Link
+            href="/enterprise"
+            className="inline-flex h-12 w-fit shrink-0 items-center gap-2 rounded-full bg-white px-7 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]"
+          >
+            행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-5">
         <div
