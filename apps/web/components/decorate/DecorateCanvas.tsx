@@ -14,6 +14,34 @@ import { useStageFit } from "@/hooks/useStageFit";
 import { useDecorateStore } from "@/lib/decorateStore";
 import { EditableNode } from "@/components/theme/editor/canvas/EditableNode";
 
+/** lg(1024px) 이상인지. 도구 패널이 옆으로 붙는 기준과 같다. */
+function useIsWideViewport() {
+  const [isWide, setIsWide] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsWide(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  return isWide;
+}
+
+/** 캔버스에 허용할 세로 상한. 뷰포트가 바뀌면 같이 바뀐다. */
+function useMaxStageHeight(isWide: boolean) {
+  const [viewportHeight, setViewportHeight] = useState(0);
+  useEffect(() => {
+    const sync = () => setViewportHeight(window.innerHeight);
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+  if (viewportHeight <= 0) return undefined;
+  return isWide
+    ? Math.max(360, Math.min(viewportHeight * 0.68, 720))
+    : Math.max(240, Math.min(viewportHeight * 0.38, 420));
+}
+
 export function DecorateCanvas() {
   const base = useDecorateStore((s) => s.base);
   const components = useDecorateStore((s) => s.components);
@@ -27,6 +55,7 @@ export function DecorateCanvas() {
   const update = useDecorateStore((s) => s.updateComponent);
   const addStroke = useDecorateStore((s) => s.addStroke);
   const bumpRenderKey = useDecorateStore((s) => s.bumpRenderKey);
+  const removeActive = useDecorateStore((s) => s.removeActive);
 
   const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
   // 그리는 중인 선은 React 상태로 들고 있지 않는다. 포인터가 움직일 때마다 상태를 갱신하면
@@ -62,7 +91,11 @@ export function DecorateCanvas() {
     };
   }, [base]);
 
-  const { containerRef, viewW, viewH, scale, ready } = useStageFit(base);
+  // 캔버스는 이제 한 화면 안의 고정 자리에 산다. 모바일에서는 도구 패널이 아래에 붙으므로
+  // 높이의 38%까지만 쓰고, 도구가 옆으로 가는 lg 부터는 예전처럼 넉넉히 쓴다.
+  const isWide = useIsWideViewport();
+  const maxHeight = useMaxStageHeight(isWide);
+  const { containerRef, viewW, viewH, scale, ready } = useStageFit(base, { maxHeight });
 
   const activeComponent = useMemo(
     () => components.find((c) => c.id === activeId) ?? null,
@@ -151,6 +184,77 @@ export function DecorateCanvas() {
     if (points.length >= 4) addStroke(points);
   };
 
+  /**
+   * 캔버스를 키보드로도 다룬다.
+   *
+   * 이 편집기는 포인터로만 쓸 수 있었다. Tab 으로는 캔버스에 들어갈 수조차 없어서
+   * 스티커를 고르는 것도, 옮기는 것도, 지우는 것도 불가능했다. WCAG 2.1.1(키보드)
+   * 위반이자, 마우스를 못 쓰는 사람에게는 화면 전체가 잠긴 것과 같다.
+   *
+   * 화살표로 옮기고(Shift 로 크게), Delete 로 지우고, Tab 순환 대신 대괄호로 스티커를
+   * 옮겨 고른다. Escape 로 선택을 푼다. 조작법은 캔버스 아래에 글로도 적어 둔다.
+   */
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (mode === "draw") return;
+
+    const ordered = sorted;
+    if (ordered.length === 0) return;
+
+    // 선택 이동: 대괄호. Tab 을 쓰면 캔버스를 빠져나갈 방법이 없어진다.
+    if (event.key === "[" || event.key === "]") {
+      event.preventDefault();
+      const current = ordered.findIndex((c) => c.id === activeId);
+      const step = event.key === "]" ? 1 : -1;
+      const nextIndex =
+        current === -1
+          ? step === 1
+            ? 0
+            : ordered.length - 1
+          : (current + step + ordered.length) % ordered.length;
+      setActive(ordered[nextIndex].id);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (!activeId) return;
+      event.preventDefault();
+      setActive(null);
+      return;
+    }
+
+    if (!activeId) {
+      // 아직 아무것도 안 골랐는데 화살표를 누르면 첫 스티커부터 고른다.
+      if (event.key.startsWith("Arrow")) {
+        event.preventDefault();
+        setActive(ordered[0].id);
+      }
+      return;
+    }
+
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      removeActive();
+      return;
+    }
+
+    const target = components.find((c) => c.id === activeId);
+    if (!target) return;
+
+    // 이동 폭은 그림 크기에 비례한다 — 2000px 캔버스에서 1px 씩 옮기면 끝이 없다.
+    const step = (event.shiftKey ? 0.05 : 0.01) * Math.max(base.width, base.height);
+    const deltas: Record<string, [number, number]> = {
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+    };
+    const delta = deltas[event.key];
+    if (!delta) return;
+
+    event.preventDefault();
+    update(activeId, { x: target.x + delta[0], y: target.y + delta[1] });
+  };
+
   const deselectIfBase = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (e.target === e.target.getStage() || e.target.name() === "base") {
       setActive(null);
@@ -158,7 +262,20 @@ export function DecorateCanvas() {
   };
 
   return (
-    <div ref={containerRef} className="flex w-full justify-center">
+    <div ref={containerRef} className="flex w-full flex-col items-center gap-2">
+      {/*
+        role="application" 로 두어 스크린리더가 자체 단축키를 가로채지 않고 화살표를
+        그대로 흘려보내게 한다. 조작법은 aria-describedby 로 읽어 주고, 같은 내용을
+        눈으로도 보이게 아래에 적는다.
+      */}
+      <div
+        tabIndex={0}
+        role="application"
+        aria-label="네컷 꾸미기 캔버스"
+        aria-describedby="decorate-canvas-help"
+        onKeyDown={handleKeyDown}
+        className="rounded-2xl outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--hc-primary)]"
+      >
       {ready ? (
       <Stage
         ref={stageRef}
@@ -304,6 +421,14 @@ export function DecorateCanvas() {
         </Layer>
       </Stage>
       ) : null}
+      </div>
+      <p
+        id="decorate-canvas-help"
+        className="text-center text-[11px] leading-[1.6] text-[color:var(--hc-muted)]"
+      >
+        캔버스를 누르거나 Tab 으로 옮겨 온 뒤 <b>[</b> <b>]</b> 로 스티커를 고르고,
+        화살표로 옮겨요(Shift 를 누르면 크게). <b>Delete</b> 로 지우고 <b>Esc</b> 로 선택을 풀어요.
+      </p>
     </div>
   );
 }

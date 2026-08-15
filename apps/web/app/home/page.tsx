@@ -15,6 +15,7 @@ import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
 import {
+  getUserMediaDateLabel,
   getUserMediaPreviewUrl,
   getUserMediaTitle,
 } from "@/lib/userMediaPreview";
@@ -408,7 +409,8 @@ export default function HomePage() {
                 return (
                   <Link
                     key={item.mediaId}
-                    href="/history"
+                    // 넉 장이 전부 목록 맨 위로만 갔다. 누른 그 기록으로 데려간다.
+                    href={`/history#media-${item.mediaId}`}
                     className="group flex flex-col gap-2"
                   >
                     <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
@@ -426,6 +428,12 @@ export default function HomePage() {
                     <p className="truncate text-[13px] font-bold tracking-tight">
                       {getUserMediaTitle(item)}
                     </p>
+                    {/* 언제 찍은 것인지가 기록에서 가장 먼저 알고 싶은 정보다. */}
+                    {getUserMediaDateLabel(item) ? (
+                      <p className="-mt-1.5 text-[11px] text-[color:var(--hc-muted)]">
+                        {getUserMediaDateLabel(item)}
+                      </p>
+                    ) : null}
                   </Link>
                 );
               })

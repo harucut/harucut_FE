@@ -26,7 +26,6 @@ const authenticatedRoutes = [
   "/shoot",
   "/upload",
   "/theme",
-  "/decorate",
   "/history",
   "/mypage",
 ] as const;
@@ -43,7 +42,48 @@ const routesReachedThroughUi = [
       await page.getByRole("button", { name: "새 프레임 만들기" }).click();
     },
   },
+  // 꾸미기 편집기는 "완성한 네컷"이 메모리에 있어야 열린다. 직접 열면 1초쯤 뒤
+  // /home 으로 갈아타는데, 그 전에 스캔이 끝나 초록불이 뜨곤 했다(실측).
+  // 업로드 흐름을 실제로 태워 진짜 편집기를 검사한다.
+  {
+    route: "/upload/result",
+    enter: composeFourcutThroughUpload,
+  },
+  {
+    route: "/decorate",
+    async enter(page: Page) {
+      await composeFourcutThroughUpload(page);
+      await page.getByRole("button", { name: /네컷 꾸미기/ }).click();
+      await page.waitForURL("**/decorate");
+    },
+  },
 ] as const;
+
+/** 1×1 투명 PNG. 내용은 상관없고 "지원 형식의 파일"이면 된다. */
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/** 업로드 → 4장 선택 → 결과 합성까지 실제 UI 로 태운다. */
+async function composeFourcutThroughUpload(page: Page) {
+  await page.goto("/upload");
+  await page.getByRole("button", { name: "업로드 시작하기" }).click();
+  await page.waitForURL("**/upload/select");
+  await page.locator('input[type="file"]').setInputFiles(
+    Array.from({ length: 4 }, (_, index) => ({
+      name: `a11y-${index}.png`,
+      mimeType: "image/png",
+      buffer: TINY_PNG,
+    })),
+  );
+  for (let index = 1; index <= 4; index += 1) {
+    await page.getByRole("button", { name: `${index}번 사진 선택` }).click();
+  }
+  await page.getByRole("button", { name: "다음 단계로" }).click();
+  await page.waitForURL("**/upload/result");
+  await page.getByRole("button", { name: /네컷 꾸미기/ }).waitFor();
+}
 
 async function enableAuthenticatedContext(page: Page) {
   await stubAuthenticatedApi(page);
@@ -184,15 +224,16 @@ async function waitForImagesToSettle(page: Page) {
 
 async function expectNoAccessibilityViolations(page: Page, route?: string) {
   await page.locator("body").waitFor({ state: "visible" });
-  // 스캔 직전에 한 번 더 확인한다. goto 직후에만 보면 "한 순간 그 경로였다"만 보장돼,
-  // 뒤늦게 다른 화면으로 갈아탄 뒤의 화면을 검사하게 된다(실제로 /theme/sticker가 그랬다).
-  if (route) expect(new URL(page.url()).pathname).toBe(route);
   await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
   await page.addStyleTag({ content: FLATTEN_PAGE_GRADIENT_CSS });
   await waitForImagesToSettle(page);
   // 웹폰트(Pretendard)가 바뀌면 글자 크기와 줄바꿈이 달라져 겹침 판정과 색 표본이 흔들린다.
   // 병렬 실행으로 로딩이 늦어질 때만 간헐적으로 터지던 원인이라 폰트까지 기다린다.
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+  // 경로 확인은 모든 대기가 끝난 **스캔 직전**에 한다. 앞쪽에서 보면 "한 순간 그 경로였다"만
+  // 보장돼, 뒤늦게 갈아탄 화면을 검사하고도 초록불이 뜬다(/theme/sticker·/decorate 가 그랬다).
+  if (route) expect(new URL(page.url()).pathname).toBe(route);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])

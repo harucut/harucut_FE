@@ -264,29 +264,54 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   useEffect(() => {
     if (remoteFrameId) return;
     let timer: number | undefined;
+    let idle: number | undefined;
+
+    // 저장은 5MB 문자열을 만들고 쓰는 동기 작업이라 메인 스레드를 잡는다. 디바운스가 끝난
+    // 순간이 하필 사용자가 스티커를 끌고 있는 순간일 수 있어, 한가한 프레임까지 한 번 더
+    // 미룬다. 지원하지 않는 브라우저에서는 다음 틱에 그냥 실행한다.
+    const whenIdle = (run: () => void) => {
+      const ric = (
+        window as typeof window & {
+          requestIdleCallback?: (cb: IdleRequestCallback, o?: IdleRequestOptions) => number;
+        }
+      ).requestIdleCallback;
+      idle = ric
+        ? ric(() => run(), { timeout: 2000 })
+        : window.setTimeout(run, 0);
+    };
+
     const unsubscribe = useThemeEditorStore.subscribe(() => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        const s = useThemeEditorStore.getState();
-        if (!s.frameId) return;
-        const isEmptyDefault =
-          s.components.length === 0 && s.background.type === "COLOR";
-        if (isEmptyDefault) {
-          clearEditorDraft();
-          return;
-        }
-        void saveEditorDraft({
-          frameId: s.frameId,
-          backgroundColor: s.backgroundColor,
-          background: s.background,
-          cellCutouts: s.cellCutouts,
-          components: s.components,
-          now: Date.now(),
+        whenIdle(() => {
+          const s = useThemeEditorStore.getState();
+          if (!s.frameId) return;
+          const isEmptyDefault =
+            s.components.length === 0 && s.background.type === "COLOR";
+          if (isEmptyDefault) {
+            clearEditorDraft();
+            return;
+          }
+          void saveEditorDraft({
+            frameId: s.frameId,
+            backgroundColor: s.backgroundColor,
+            background: s.background,
+            cellCutouts: s.cellCutouts,
+            components: s.components,
+            now: Date.now(),
+          });
         });
       }, 1000);
     });
     return () => {
       window.clearTimeout(timer);
+      if (idle !== undefined) {
+        const cic = (
+          window as typeof window & { cancelIdleCallback?: (id: number) => void }
+        ).cancelIdleCallback;
+        if (cic) cic(idle);
+        else window.clearTimeout(idle);
+      }
       unsubscribe();
     };
   }, [remoteFrameId]);

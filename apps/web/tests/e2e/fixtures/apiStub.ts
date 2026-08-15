@@ -71,6 +71,12 @@ const MEDIA = [
 /** 화면이 실제로 이미지를 그리도록, 로컬 정적 자산을 조회 URL로 돌려준다. */
 const PRESIGNED_IMAGE_URL = "/hero-image.png";
 
+/**
+ * S3 PUT 자리. 실제 버킷 대신 같은 오리진의 가짜 주소를 주고 아래에서 200으로 받는다.
+ * 이게 없으면 업로드가 네트워크 오류로 끝나고, 결과 화면이 영영 만들어지지 않는다.
+ */
+const S3_STUB_PATH = "/__a11y-s3-put";
+
 export async function stubAuthenticatedApi(page: Page) {
   await page.route("**/api/client/**", async (route) => {
     const url = new URL(route.request().url());
@@ -83,7 +89,26 @@ export async function stubAuthenticatedApi(page: Page) {
         body: JSON.stringify(ENVELOPE(data)),
       });
 
+    const method = route.request().method();
+
     if (path.endsWith("/user-info")) return json(USER_INFO);
+    // 완성된 네컷 업로드: presigned 발급 → S3 PUT → 미디어 등록.
+    if (path.endsWith("/files/presigned-upload")) {
+      return json({
+        key: "uploads/users/a11y/generated.png",
+        uploadUrl: `${url.origin}${S3_STUB_PATH}`,
+        contentType: "image/png",
+      });
+    }
+    if (path.includes("/user/media") && method === "POST") {
+      return json({
+        mediaId: 9100,
+        s3Key: "uploads/users/a11y/generated.png",
+        displayName: "방금 만든 네컷",
+        downloadUrl: PRESIGNED_IMAGE_URL,
+        createdAt: "2026-08-15T02:11:00.000000",
+      });
+    }
     if (path.endsWith("/subscription/usage")) return json(SUBSCRIPTION_USAGE);
     if (path.endsWith("/files/presigned-img")) return json(PRESIGNED_IMAGE_URL);
     if (path.endsWith("/download-url")) return json(PRESIGNED_IMAGE_URL);
@@ -93,4 +118,8 @@ export async function stubAuthenticatedApi(page: Page) {
     // 그 밖의 호출(로그아웃·재발급 등)은 성공한 셈 치고 비운다.
     return json(null);
   });
+
+  await page.route(`**${S3_STUB_PATH}`, (route) =>
+    route.fulfill({ status: 200, body: "" }),
+  );
 }

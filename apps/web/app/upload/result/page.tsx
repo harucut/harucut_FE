@@ -77,11 +77,17 @@ export default function UploadResultPage() {
       } catch {
         // CORS/네트워크 실패 시 원본 URL로 진행한다.
       }
-      setDecorateSource(src, imageResult.displayName);
+      setDecorateSource(src, {
+        title: imageResult.displayName,
+        origin: "/upload/result",
+      });
       router.push("/decorate");
     } catch (error) {
       console.error(error);
-      setDecorateSource(imageResult.objectUrl, imageResult.displayName);
+      setDecorateSource(imageResult.objectUrl, {
+        title: imageResult.displayName,
+        origin: "/upload/result",
+      });
       router.push("/decorate");
     }
   };

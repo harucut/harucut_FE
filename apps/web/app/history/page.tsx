@@ -444,7 +444,12 @@ export default function HistoryPage() {
                     const isEditing = editingId === item.mediaId;
 
                     return (
-                      <article key={item.mediaId} className="group flex flex-col gap-2.5">
+                      <article
+                        key={item.mediaId}
+                        // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+                        id={`media-${item.mediaId}`}
+                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-[color:var(--hc-primary)]"
+                      >
                         <MediaThumb item={item} />
 
                         <div className="flex flex-col gap-1">

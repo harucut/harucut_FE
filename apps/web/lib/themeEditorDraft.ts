@@ -19,6 +19,20 @@ export type EditorDraft = {
   savedAt: number;
 };
 
+/**
+ * blob: → dataURL 변환 결과를 저장 호출 사이에도 들고 있는다.
+ *
+ * 예전에는 호출마다 캐시를 새로 만들어서, 스티커 하나를 옮길 때마다 사진 네 장을 전부
+ * 다시 읽어 base64 로 인코딩했다(1초 디바운스마다 반복). 같은 blob 은 내용이 바뀌지
+ * 않으므로 한 번만 읽으면 된다. blob: URL 은 해제되면 다시 못 읽으므로 캐시가 곧 보험이기도 하다.
+ * 편집 세션 하나가 다루는 이미지 수를 넉넉히 덮는 선에서 상한을 둔다.
+ */
+const MAX_CACHED_SOURCES = 24;
+const dataUrlCache = new Map<string, string>();
+
+/** 직전에 쓴 내용과 같으면 localStorage 쓰기를 건너뛴다(5MB setItem 이 17ms 였다). */
+let lastWrittenJson: string | null = null;
+
 function isLocalSrc(src: string | undefined): src is string {
   return Boolean(src && (src.startsWith("blob:") || src.startsWith("data:")));
 }
@@ -56,13 +70,16 @@ export async function saveEditorDraft(input: {
   if (typeof window === "undefined") return;
 
   try {
-    // 같은 blob을 여러 컴포넌트가 공유할 수 있어 src→dataURL 변환을 캐시한다.
-    const cache = new Map<string, string>();
+    // 같은 blob을 여러 컴포넌트가 공유할 수 있고, 저장은 편집 중 계속 반복된다.
     const resolve = async (src: string) => {
-      const cached = cache.get(src);
+      const cached = dataUrlCache.get(src);
       if (cached) return cached;
       const dataUrl = await toDataUrl(src);
-      cache.set(src, dataUrl);
+      if (dataUrlCache.size >= MAX_CACHED_SOURCES) {
+        const oldest = dataUrlCache.keys().next().value;
+        if (oldest !== undefined) dataUrlCache.delete(oldest);
+      }
+      dataUrlCache.set(src, dataUrl);
       return dataUrl;
     };
 
@@ -95,10 +112,25 @@ export async function saveEditorDraft(input: {
       clearEditorDraft();
       return;
     }
+    // savedAt 만 다른 동일 내용이면 쓰지 않는다.
+    if (lastWrittenJson !== null && sameExceptSavedAt(lastWrittenJson, json)) return;
     window.localStorage.setItem(DRAFT_KEY, json);
+    lastWrittenJson = json;
   } catch {
     // 직렬화/용량 오류는 무시한다(초안 저장은 베스트 에포트).
   }
+}
+
+/**
+ * savedAt 을 뺀 나머지가 같은지 본다. 초안은 매 저장마다 시각이 바뀌므로 문자열 비교만으로는
+ * 항상 다르게 나온다. savedAt 은 JSON 맨 뒤 고정 위치라 그 앞부분만 견주면 된다.
+ */
+function sameExceptSavedAt(a: string, b: string) {
+  const cut = (json: string) => {
+    const at = json.lastIndexOf(',"savedAt":');
+    return at === -1 ? json : json.slice(0, at);
+  };
+  return a.length === b.length && cut(a) === cut(b);
 }
 
 export function loadEditorDraft(): EditorDraft | null {
@@ -116,6 +148,7 @@ export function loadEditorDraft(): EditorDraft | null {
 
 export function clearEditorDraft(): void {
   if (typeof window === "undefined") return;
+  lastWrittenJson = null;
   try {
     window.localStorage.removeItem(DRAFT_KEY);
   } catch {}
