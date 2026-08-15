@@ -7,6 +7,7 @@ import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
@@ -182,10 +183,25 @@ function HeroEditorial() {
         delay={120}
         className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
-        <p>특별한 하루를 사진으로 남겨보세요.</p>
+        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
       </Reveal>
 
-      {/* 히어로는 브랜드 비주얼만 — CTA(지금 시작하기)는 헤더 우측 상단이 담당한다. */}
+      {/*
+        지금 단계의 목표는 "비회원 체험 -> 가입 전환"인데, 그 입구가 랜딩에 없었다.
+        헤더 CTA 를 눌러 /login 까지 가야 비회원 체험 버튼을 만났다. 첫 화면에서 바로 연다.
+        헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
+      */}
+      <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
+        <GuestTrialStartButton className="inline-flex items-center gap-1.5 rounded-full bg-white px-6 py-3 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]">
+          가입 없이 찍어보기
+        </GuestTrialStartButton>
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-1 rounded-full px-4 py-3 text-[14px] font-semibold text-white/80 underline underline-offset-4 transition hover:text-white"
+        >
+          로그인하고 시작하기 <ArrowRight className="h-4 w-4" />
+        </Link>
+      </Reveal>
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
       <Reveal

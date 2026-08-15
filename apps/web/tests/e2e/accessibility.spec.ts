@@ -191,6 +191,9 @@ async function expectNoAccessibilityViolations(page: Page, route?: string) {
   await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
   await page.addStyleTag({ content: FLATTEN_PAGE_GRADIENT_CSS });
   await waitForImagesToSettle(page);
+  // 웹폰트(Pretendard)가 바뀌면 글자 크기와 줄바꿈이 달라져 겹침 판정과 색 표본이 흔들린다.
+  // 병렬 실행으로 로딩이 늦어질 때만 간헐적으로 터지던 원인이라 폰트까지 기다린다.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
