@@ -55,6 +55,8 @@ export function DecoratePanel() {
   const activeId = useDecorateStore((s) => s.activeId);
   const update = useDecorateStore((s) => s.updateComponent);
   const removeActive = useDecorateStore((s) => s.removeActive);
+  const restoreRemoved = useDecorateStore((s) => s.restoreRemoved);
+  const canRestoreRemoved = useDecorateStore((s) => s.canRestoreRemoved);
   const duplicateActive = useDecorateStore((s) => s.duplicateActive);
   const moveActive = useDecorateStore((s) => s.moveActive);
 
@@ -265,6 +267,16 @@ export function DecoratePanel() {
               >
                 삭제
               </button>
+              {/* 삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 아예 없으면 편집을 조심스러워한다. */}
+              {canRestoreRemoved ? (
+                <button
+                  type="button"
+                  onClick={restoreRemoved}
+                  className="rounded-full border border-[color:var(--hc-border-strong)] px-3 py-1.5 text-[11px] text-[color:var(--hc-text)]"
+                >
+                  삭제 되돌리기
+                </button>
+              ) : null}
             </div>
           </div>
         </Section>

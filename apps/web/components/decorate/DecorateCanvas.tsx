@@ -29,7 +29,11 @@ export function DecorateCanvas() {
   const bumpRenderKey = useDecorateStore((s) => s.bumpRenderKey);
 
   const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
-  const [draftPoints, setDraftPoints] = useState<number[]>([]);
+  // 그리는 중인 선은 React 상태로 들고 있지 않는다. 포인터가 움직일 때마다 상태를 갱신하면
+  // 매 프레임 캔버스 전체가 리렌더되고 Konva 가 모든 노드를 다시 맞춘다(실측 22~27fps).
+  // 좌표는 ref 에 쌓고 Konva Line 을 직접 갱신한 뒤, 손을 뗄 때만 스토어에 커밋한다.
+  const draftPointsRef = useRef<number[]>([]);
+  const draftLineRef = useRef<Konva.Line | null>(null);
   const isDrawingRef = useRef(false);
 
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -117,23 +121,34 @@ export function DecorateCanvas() {
     return [pos.x / scale, pos.y / scale];
   };
 
+  const paintDraft = () => {
+    const line = draftLineRef.current;
+    if (!line) return;
+    line.points(draftPointsRef.current);
+    line.getLayer()?.batchDraw();
+  };
+
   const startDraw = () => {
     const p = pointerToBase();
     if (!p) return;
     isDrawingRef.current = true;
-    setDraftPoints([p[0], p[1]]);
+    draftPointsRef.current = [p[0], p[1]];
+    paintDraft();
   };
   const moveDraw = () => {
     if (!isDrawingRef.current) return;
     const p = pointerToBase();
     if (!p) return;
-    setDraftPoints((prev) => [...prev, p[0], p[1]]);
+    draftPointsRef.current.push(p[0], p[1]);
+    paintDraft();
   };
   const endDraw = () => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
-    if (draftPoints.length >= 4) addStroke(draftPoints);
-    setDraftPoints([]);
+    const points = draftPointsRef.current;
+    draftPointsRef.current = [];
+    paintDraft();
+    if (points.length >= 4) addStroke(points);
   };
 
   const deselectIfBase = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -207,16 +222,16 @@ export function DecorateCanvas() {
               tension={0.3}
             />
           ))}
-          {draftPoints.length >= 2 ? (
-            <Line
-              points={draftPoints}
-              stroke={drawColor}
-              strokeWidth={drawWidth}
-              lineCap="round"
-              lineJoin="round"
-              tension={0.3}
-            />
-          ) : null}
+          {/* 그리는 중인 선. points 는 React 가 아니라 위 paintDraft 가 직접 넣는다. */}
+          <Line
+            ref={draftLineRef}
+            points={[]}
+            stroke={drawColor}
+            strokeWidth={drawWidth}
+            lineCap="round"
+            lineJoin="round"
+            tension={0.3}
+          />
         </Layer>
 
         {/* 3) 스티커 / 텍스트 */}

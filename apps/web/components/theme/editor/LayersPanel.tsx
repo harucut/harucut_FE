@@ -27,6 +27,8 @@ export function LayersPanel() {
     moveLayerDown,
     toggleHidden,
     toggleLocked,
+    restoreRemoved,
+    canRestoreRemoved,
   } = useThemeEditorStore(
     useShallow((s) => ({
       components: s.components,
@@ -38,6 +40,8 @@ export function LayersPanel() {
       moveLayerDown: s.moveLayerDown,
       toggleHidden: s.toggleHidden,
       toggleLocked: s.toggleLocked,
+      restoreRemoved: s.restoreRemoved,
+      canRestoreRemoved: s.canRestoreRemoved,
     })),
   );
 
@@ -47,7 +51,18 @@ export function LayersPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">레이어</p>
-        <p className="text-[11px] text-zinc-500">클릭해서 선택</p>
+        {/* 삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 없으면 편집을 조심스러워한다. */}
+        {canRestoreRemoved ? (
+          <button
+            type="button"
+            onClick={restoreRemoved}
+            className="rounded-full border border-[color:var(--hc-border-strong)] px-3 py-1 text-[11px] font-semibold text-[color:var(--hc-text)]"
+          >
+            삭제 되돌리기
+          </button>
+        ) : (
+          <p className="text-[11px] text-zinc-500">클릭해서 선택</p>
+        )}
       </div>
 
       {list.length === 0 ? (

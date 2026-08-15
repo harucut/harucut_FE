@@ -63,6 +63,10 @@ type State = {
   updateComponent: (id: string, patch: DecorUpdatePatch) => void;
   setActive: (id: string | null) => void;
   removeActive: () => void;
+  // 방금 지운 요소를 되돌린다(1 단계).
+  restoreRemoved: () => void;
+  canRestoreRemoved: boolean;
+  lastRemoved: DecorComponent | null;
   duplicateActive: () => void;
   moveActive: (dir: "up" | "down") => void;
 
@@ -77,6 +81,8 @@ type State = {
 export const useDecorateStore = create<State>((set, get) => ({
   base: null,
   components: [],
+  lastRemoved: null,
+  canRestoreRemoved: false,
   strokes: [],
   activeId: null,
   mode: "select",
@@ -88,6 +94,8 @@ export const useDecorateStore = create<State>((set, get) => ({
     set({
       base,
       components: [],
+      lastRemoved: null,
+      canRestoreRemoved: false,
       strokes: [],
       activeId: null,
       mode: "select",
@@ -181,12 +189,29 @@ export const useDecorateStore = create<State>((set, get) => ({
 
   setActive: (activeId) => set({ activeId }),
 
+  // 삭제는 되돌릴 수 있어야 한다. 직전 삭제 한 건을 들고 있다가 복구한다.
   removeActive: () => {
     const { activeId } = get();
     if (!activeId) return;
+    set((s) => {
+      const removed = s.components.find((c) => c.id === activeId) ?? null;
+      return {
+        components: normalizeZ(s.components.filter((c) => c.id !== activeId)),
+        activeId: null,
+        lastRemoved: removed,
+        canRestoreRemoved: Boolean(removed),
+      };
+    });
+  },
+
+  restoreRemoved: () => {
+    const removed = get().lastRemoved;
+    if (!removed) return;
     set((s) => ({
-      components: normalizeZ(s.components.filter((c) => c.id !== activeId)),
-      activeId: null,
+      components: normalizeZ([...s.components, removed]),
+      activeId: removed.id,
+      lastRemoved: null,
+      canRestoreRemoved: false,
     }));
   },
 

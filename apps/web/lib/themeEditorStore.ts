@@ -132,6 +132,10 @@ type State = {
   updateComponent: (id: string, patch: UpdatePatch) => void;
 
   remove: (id: string) => void;
+  // 방금 지운 요소를 되돌린다. 없으면 아무 일도 하지 않는다.
+  restoreRemoved: () => void;
+  canRestoreRemoved: boolean;
+  lastRemoved: EditorComponent | null;
   duplicate: (id: string) => void;
 
   reset: () => void;
@@ -172,6 +176,8 @@ function resetEditorState(get: () => State) {
   return {
     tab: "PHOTO" as ComponentType,
     components: [],
+    lastRemoved: null,
+    canRestoreRemoved: false,
     activeId: null,
     cellCutouts: [false, false, false, false],
     assets: {
@@ -196,6 +202,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   components: [],
+  lastRemoved: null,
+  canRestoreRemoved: false,
   activeId: null,
   background: {
     type: "COLOR",
@@ -583,10 +591,28 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
+  // 삭제는 되돌릴 수 있어야 한다. 스티커 하나를 놓기까지 든 시간이 클릭 한 번에 사라지면
+  // 사용자는 편집 자체를 조심스러워한다. 직전 삭제 한 건을 들고 있다가 복구한다.
   remove: (id) => {
+    set((s) => {
+      const removed = s.components.find((c) => c.id === id) ?? null;
+      return {
+        components: normalizeZ(s.components.filter((c) => c.id !== id)),
+        activeId: s.activeId === id ? null : s.activeId,
+        lastRemoved: removed,
+        canRestoreRemoved: Boolean(removed),
+      };
+    });
+  },
+
+  restoreRemoved: () => {
+    const removed = get().lastRemoved;
+    if (!removed) return;
     set((s) => ({
-      components: normalizeZ(s.components.filter((c) => c.id !== id)),
-      activeId: s.activeId === id ? null : s.activeId,
+      components: normalizeZ([...s.components, removed]),
+      activeId: removed.id,
+      lastRemoved: null,
+      canRestoreRemoved: false,
     }));
   },
 
