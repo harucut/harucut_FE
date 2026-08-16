@@ -81,7 +81,7 @@ export const ENTERPRISE_TEASER = {
   name: "Enterprise",
   badge: "행사용",
   price: "규모에 맞춰 견적",
-  desc: "부스 대신 QR 한 장이에요. 행사 전용 프레임을 만들어 드리면 참가자는 가입 없이 자기 휴대폰으로 찍고 그 자리에서 가져가요.",
+  desc: "부스 대신 QR 한 장이에요. 행사 이름과 컷 구성을 맞춘 촬영 주소를 드리면, 참가자는 가입 없이 자기 휴대폰으로 찍고 그 자리에서 가져가요.",
   cta: "행사 도입 알아보기",
   href: "/enterprise",
 } as const;
