@@ -95,7 +95,7 @@ export function EnterpriseView() {
                     {step.who}
                   </span>
                 </div>
-                <h3 className="text-[17px] font-extrabold tracking-tight">
+                <h3 className="text-[16px] font-extrabold tracking-tight">
                   {step.title}
                 </h3>
                 <p className="text-[14px] leading-[1.7] text-[color:var(--hc-muted)]">

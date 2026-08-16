@@ -37,6 +37,21 @@ typography:
     fontWeight: 800
     lineHeight: 1.25
     letterSpacing: "-0.8px"
+  # 마케팅 화면(랜딩·기능·행사)의 섹션 제목. headline 클램프의 중간 지점을 고정값으로
+  # 쓰는 자리가 네 곳 있어(랜딩 1, 기능 2, 행사 1) 단계로 적어 둔다.
+  headline-sm:
+    fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
+    fontSize: "1.875rem"
+    fontWeight: 800
+    lineHeight: 1.25
+    letterSpacing: "-0.6px"
+  # 히어로 아래 한 문단. 본문(15px)보다 크고 headline 최소값(24px)보다 작은 자리다.
+  lede:
+    fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 400
+    lineHeight: 1.75
+    letterSpacing: "normal"
   title:
     fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
     fontSize: "1rem"
