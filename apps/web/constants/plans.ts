@@ -17,7 +17,7 @@ export type Plan = {
   cta: string;
   // 5행 피처 매트릭스(모든 플랜 동일한 행 순서/라벨).
   feats: PlanFeature[];
-  // Plus = 인기 강조.
+  // 강조 표시. 사용량 데이터가 없으므로 "인기" 같은 사실 주장은 쓰지 않는다.
   hot?: boolean;
   badge?: string;
 };
@@ -49,7 +49,6 @@ export const PLANS: Plan[] = [
     sub: "/ 월",
     cta: "Plus 시작하기",
     hot: true,
-    badge: "인기",
     feats: [
       ["커스텀 프레임", true, "3개"],
       ["사진 보관 기간", true, "3달"],
@@ -69,7 +68,8 @@ export const PLANS: Plan[] = [
       ["사진 보관 기간", true, "무제한"],
       ["보정", true],
       ["광고 제거", true],
-      ["AI (추후)", true],
+      // 아직 아무도 못 쓴다. 라벨이 "(추후)"인데 체크를 주면 Pro 는 지금 된다는 말이 된다.
+      ["AI (추후)", false],
     ],
   },
 ];

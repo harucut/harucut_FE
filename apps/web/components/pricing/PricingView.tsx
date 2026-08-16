@@ -7,6 +7,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { PAYMENTS_ENABLED } from "@/constants/company";
 import {
   ENTERPRISE_TEASER,
   PLANS,
@@ -38,7 +39,11 @@ function PlanCard({
   /** 이 카드가 지금 이용 중인 플랜인지. */
   current: boolean;
 }) {
-  const hot = plan.hot;
+  // 결제가 닫힌 동안에는 살 수 없는 카드를 강조하지 않는다. 시선은 지금 할 수 있는
+  // 것(무료 시작)으로 보낸다. 결제가 열리면 원래대로 Plus 가 강조된다.
+  const hot = PAYMENTS_ENABLED ? plan.hot : plan.id === "basic";
+  // 무료 플랜만 지금 시작할 수 있다.
+  const isPurchasable = PAYMENTS_ENABLED || plan.id === "basic";
   // 현재 플랜은 "인기" 같은 마케팅 배지보다 "현재 플랜"이 우선이다.
   const badge = current ? "현재 플랜" : plan.badge;
 
@@ -125,39 +130,26 @@ function PlanCard({
         <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[15px] font-extrabold text-[color:var(--hc-primary-strong)]">
           현재 이용 중
         </span>
-      ) : authed ? (
-        <button
-          type="button"
-          disabled
-          aria-disabled
-          title={PRICING_BILLING_PENDING}
-          className="hc-surface-well mt-5 flex h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full border text-[15px] font-extrabold text-[color:var(--hc-muted)] opacity-70"
-        >
-          준비 중
-        </button>
+      ) : !isPurchasable ? (
+        /*
+          ₩3,900 이 적힌 카드에 "무료로 시작하기" 버튼이 달려 있었다. 누르면 무료 가입으로
+          가는 게 맞지만, 가격 옆에 그 문구가 있으면 "Plus 를 공짜로 준다"로 읽힌다.
+          살 수 없는 동안에는 버튼을 두지 않고 상태만 말한다 — 로그인 여부와 상관없이 같다.
+        */
+        <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
+          결제 준비 중
+        </span>
       ) : (
-        <>
-          {/*
-            비회원에게도 "Plus 시작하기"라고 말하고 있었다. 눌러도 갈 수 있는 곳은 가입뿐이고
-            결제가 닫혀 있어 유료 플랜에는 어차피 못 올라간다 — 지킬 수 없는 약속이다.
-            실제로 일어나는 일(무료 가입)을 그대로 적고, 유료는 시점을 밝힌다.
-          */}
-          <Link
-            href="/signup"
-            className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
-              hot
-                ? "hc-button-primary"
-                : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
-            }`}
-          >
-            무료로 시작하기
-          </Link>
-          {plan.id === "basic" ? null : (
-            <p className="mt-2 text-center text-[12px] text-[color:var(--hc-muted)]">
-              {PRICING_BILLING_PENDING}
-            </p>
-          )}
-        </>
+        <Link
+          href={authed ? "/mypage" : "/signup"}
+          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
+            hot
+              ? "hc-button-primary"
+              : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
+          }`}
+        >
+          {plan.id === "basic" ? "무료로 시작하기" : `${plan.name} 시작하기`}
+        </Link>
       )}
     </div>
   );

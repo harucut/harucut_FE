@@ -13,6 +13,15 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  /*
+    빌드 산출물 위치를 환경변수로 바꿀 수 있게 둔다.
+
+    `next dev` 는 같은 산출물 디렉터리에 두 번째 인스턴스를 띄우지 못한다. 그래서 개발자가
+    브라우저로 보고 있는 서버가 떠 있으면 e2e 가 자기 서버를 못 띄우고, Playwright 는
+    reuseExistingServer 로 그 개발 서버를 집어 쓴다 — 로그인 우회가 켜진 서버를.
+    e2e 에만 다른 산출물 디렉터리를 주면 둘이 동시에 살 수 있다.
+  */
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: false,
   devIndicators: false,
   // 워크스페이스 공통 패키지는 TS 소스로 배포되므로 빌드에서 트랜스파일한다
