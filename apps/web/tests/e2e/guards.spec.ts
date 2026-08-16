@@ -131,3 +131,31 @@ for (const { route, expected } of lateStepRoutes) {
       .toBe(expected);
   });
 }
+
+/**
+ * 홈의 「최근 기록」 카드는 `/history#media-<id>` 로 들어온다.
+ *
+ * SPA 이동이라 첫 렌더에는 목록이 아직 없어서, 브라우저의 해시 스크롤이 한 번 헛돌고 끝난다.
+ * 그대로 두면 어느 카드를 눌러도 목록 맨 위로만 간다.
+ */
+test("scrolls to the linked record after the history list loads", async ({
+  page,
+}) => {
+  await stubAuthenticatedApi(page);
+  await page.context().addCookies([
+    { name: "accessToken", value: "guard-session", url: "http://localhost:3000" },
+  ]);
+
+  // 목록 맨 아래쪽 기록을 노린다 — 첫 화면에 보이는 것이면 "옮겼다"를 증명하지 못한다.
+  await page.goto("/history#media-9109");
+
+  const target = page.locator("#media-9109");
+  await expect(target).toBeVisible();
+
+  // 화면 안(뷰포트)에 들어와 있어야 한다.
+  const inView = await target.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return box.top >= 0 && box.bottom <= window.innerHeight;
+  });
+  expect(inView).toBe(true);
+});

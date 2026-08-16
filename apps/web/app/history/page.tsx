@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -215,6 +215,29 @@ export default function HistoryPage() {
       window.clearTimeout(timeoutId);
     };
   }, [feedback]);
+
+  /**
+   * 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+   *
+   * SPA 이동이라 첫 렌더는 아직 불러오는 중이고 `media-<id>` 요소가 없다. 브라우저·Next 의
+   * 해시 스크롤은 그 시점에 한 번 시도하고 끝나서, 목록이 그려진 뒤에는 아무 일도 일어나지
+   * 않는다. 결국 어느 카드를 눌러도 목록 맨 위였다. 목록이 채워진 뒤에 직접 찾아 옮긴다.
+   */
+  const scrolledToHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || items.length === 0) return;
+
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith("#media-")) return;
+    // 같은 해시로 두 번 옮기지 않는다(목록이 갱신될 때마다 화면이 튀지 않게).
+    if (scrolledToHashRef.current === hash) return;
+
+    const target = document.getElementById(hash.slice(1));
+    if (!target) return;
+
+    scrolledToHashRef.current = hash;
+    target.scrollIntoView({ block: "center" });
+  }, [loading, items, view]);
 
   const groups = useMemo(() => groupByMonth(items), [items]);
 

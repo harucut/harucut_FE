@@ -66,6 +66,17 @@ const MEDIA = [
     displayName: "카페에서",
     createdAt: "2026-08-13T09:40:00.000000",
   },
+  /*
+    아래 열 건은 "한 화면에 다 안 들어오는 목록"을 만들기 위한 것이다.
+    두 건만 있으면 어떤 기록이든 첫 화면에 보여서, 딥링크가 실제로 그 자리로 옮겼는지와
+    아무것도 안 하고 맨 위에 머문 것을 구분할 수 없다.
+  */
+  ...Array.from({ length: 10 }, (_, index) => ({
+    mediaId: 9100 + index,
+    s3Key: `uploads/users/a11y/fill-${index}.jpg`,
+    displayName: `지난 기록 ${index + 1}`,
+    createdAt: `2026-07-${String(20 - index).padStart(2, "0")}T04:00:00.000000`,
+  })),
 ];
 
 /** 화면이 실제로 이미지를 그리도록, 로컬 정적 자산을 조회 URL로 돌려준다. */
