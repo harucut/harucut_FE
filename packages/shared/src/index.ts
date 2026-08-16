@@ -2,6 +2,14 @@ export { validateEmail, validatePassword, validateUsername } from './auth-valida
 export { COMPANY, PAYMENTS_ENABLED } from './company';
 export { hasFinalConsonant, josa, withJosa, type JosaPair } from './josa';
 export {
+  ENTERPRISE_FACTS,
+  PLAN_FACTS,
+  toPlanId,
+  type PlanFacts,
+  type PlanFeature,
+  type PlanId,
+} from './plans';
+export {
   LEGAL_DOCUMENTS,
   PRIVACY_POLICY,
   TERMS_OF_SERVICE,

@@ -5,89 +5,38 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, AppScrollView } from '@/components/harucut/ui';
 import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
-import { PLAN_DISPLAY_NAMES } from '@/constants/plan-limits';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useSessionStore } from '@/store/use-session-store';
 
-type PlanFeature = [label: string, included: boolean, note?: string];
+import {
+  ENTERPRISE_FACTS,
+  PAYMENTS_ENABLED,
+  PLAN_FACTS,
+  toPlanId,
+  type PlanFacts,
+  type PlanFeature,
+  type PlanId,
+} from '@harucut/shared';
 
-type Plan = {
+// 요금제 사실(가격·피처 표·Enterprise 안내)은 packages/shared/src/plans.ts 가 단일 소스다.
+// 예전에는 웹과 앱이 같은 표를 각자 하드코딩하고 "함께 맞춘다"는 주석만 달아 뒀는데,
+// 웹에서 사실이 아닌 항목(근거 없는 "인기" 배지, 아직 못 쓰는 AI 의 체크)을 걷어냈을 때
+// 여기엔 그대로 남아 같은 제품이 플랫폼마다 다른 말을 했다. 이제 한 곳에서 읽는다.
+type Plan = PlanFacts & {
   badge?: string;
   cta: string;
-  feats: PlanFeature[];
-  hot?: boolean;
-  id: 'basic' | 'plus' | 'pro';
-  name: string;
-  price: string;
-  sub: string;
 };
 
-// 5행 피처 매트릭스. 웹 constants/plans.ts와 같은 값/순서를 공유한다.
-// 행 순서: 커스텀 프레임 / 사진 보관 기간 / 보정 / 광고 제거 / AI (추후)
-const PLANS: Plan[] = [
-  {
-    cta: '무료로 시작하기',
-    feats: [
-      ['커스텀 프레임', false],
-      ['사진 보관 기간', true, '3일'],
-      // 보정은 아직 플랜으로 막지 않는다(웹 constants/plans.ts와 같은 이유).
-      ['보정', false, '결제 오픈 전까지 이용 가능'],
-      // 광고 역시 아직 붙이지 않았다(웹 constants/plans.ts와 같은 이유).
-      ['광고 제거', false, '결제 오픈 후 보정·다운로드 시 노출'],
-      ['AI (추후)', false],
-    ],
-    id: 'basic',
-    name: PLAN_DISPLAY_NAMES.BASIC,
-    price: '무료',
-    sub: '가입 시 제공',
-  },
-  {
-    badge: '인기',
-    cta: 'Plus 시작하기',
-    feats: [
-      ['커스텀 프레임', true, '3개'],
-      ['사진 보관 기간', true, '3달'],
-      ['보정', true],
-      ['광고 제거', true],
-      ['AI (추후)', false],
-    ],
-    hot: true,
-    id: 'plus',
-    name: PLAN_DISPLAY_NAMES.PLUS,
-    price: '₩3,900',
-    sub: '/ 월',
-  },
-  {
-    cta: 'Pro 시작하기',
-    feats: [
-      ['커스텀 프레임', true, '무제한'],
-      ['사진 보관 기간', true, '무제한'],
-      ['보정', true],
-      ['광고 제거', true],
-      ['AI (추후)', true],
-    ],
-    id: 'pro',
-    name: PLAN_DISPLAY_NAMES.PRO,
-    price: '₩9,900',
-    sub: '/ 월',
-  },
-];
-
-// Enterprise — 추후 출시 예정(팬미팅·행사용 QR 촬영).
-const ENTERPRISE_TEASER = {
-  badge: '추후',
-  desc: '팬미팅·행사용 플랜이에요. 공간을 미리 만들어 두면 비회원도 QR로 입장해 그 자리에서 누구나 네 컷을 찍을 수 있어요.',
-  name: 'Enterprise',
-  price: '준비 중',
+const CTA_BY_ID: Record<PlanId, string> = {
+  basic: '무료로 시작하기',
+  plus: 'Plus 시작하기',
+  pro: 'Pro 시작하기',
 };
 
-// 서버가 주는 등급('BASIC'|'PLUS'|'PRO')을 카드 id로 맞춘다(웹 constants/plans.ts의 toPlanId와 동일).
-// 모르는 값이면 null — 임의로 basic으로 떨어뜨려 'Free 이용 중'이라고 잘못 말하지 않는다.
-function toPlanId(tier: string | null | undefined): Plan['id'] | null {
-  if (!tier) return null;
-  const id = tier.toLowerCase();
-  return PLANS.some((plan) => plan.id === id) ? (id as Plan['id']) : null;
-}
+const PLANS: Plan[] = PLAN_FACTS.map((plan) => ({
+  ...plan,
+  cta: CTA_BY_ID[plan.id],
+}));
 
 function PlanCard({
   current,
@@ -105,8 +54,12 @@ function PlanCard({
   plan: Plan;
   styles: ReturnType<typeof createStyles>;
 }) {
-  // 현재 플랜은 '인기' 같은 마케팅 배지보다 '현재 플랜'이 우선이다.
+  // 현재 플랜 표시가 다른 배지보다 우선이다.
   const badge = current ? '현재 플랜' : plan.badge;
+  // 무료 플랜만 지금 시작할 수 있다. 결제가 닫힌 동안에는 살 수 없는 카드를 강조하지 않고,
+  // 시선을 지금 할 수 있는 것으로 보낸다(웹과 같은 규칙).
+  const isPurchasable = PAYMENTS_ENABLED || plan.id === 'basic';
+  const hot = PAYMENTS_ENABLED ? plan.hot : plan.id === 'basic';
 
   return (
     <View style={[styles.card, plan.hot ? styles.cardHot : null, current ? styles.cardCurrent : null]}>
@@ -147,26 +100,27 @@ function PlanCard({
         ))}
       </View>
 
-      {/* CTA — 비회원은 가입 유도. 이용 중인 플랜은 누를 곳이 없고,
-          회원의 플랜 변경은 결제 연동 전이라 '준비 중'으로 비활성 표시한다. */}
+      {/*
+        CTA — 이용 중인 플랜은 누를 곳이 없다.
+
+        결제가 닫힌 동안 유료 카드에는 버튼을 두지 않는다(웹 PricingView 와 같은 규칙).
+        ₩3,900 이 적힌 카드에 "Plus 시작하기"가 달려 있으면 눌러서 올라갈 수 있다는
+        말이 되는데, 실제로는 아무도 유료 플랜에 올라갈 수 없다.
+      */}
       {current ? (
         <View style={styles.ctaCurrent}>
           <Text style={styles.ctaCurrentLabel}>현재 이용 중</Text>
         </View>
-      ) : isMember ? (
-        <ActionButton
-          disabled
-          label="준비 중"
-          onPress={onPick}
-          style={styles.cta}
-          variant="secondary"
-        />
+      ) : !isPurchasable ? (
+        <View style={styles.ctaCurrent}>
+          <Text style={styles.ctaCurrentLabel}>결제 준비 중</Text>
+        </View>
       ) : (
         <ActionButton
           label={plan.cta}
           onPress={onPick}
           style={styles.cta}
-          variant={plan.hot ? 'primary' : 'secondary'}
+          variant={hot ? 'primary' : 'secondary'}
         />
       )}
     </View>
@@ -233,13 +187,13 @@ export function PricingScreen() {
 
       <View style={styles.enterpriseCard}>
         <View style={styles.enterpriseHeader}>
-          <Text style={styles.enterpriseName}>{ENTERPRISE_TEASER.name}</Text>
+          <Text style={styles.enterpriseName}>{ENTERPRISE_FACTS.name}</Text>
           <View style={styles.enterpriseBadge}>
-            <Text style={styles.enterpriseBadgeLabel}>{ENTERPRISE_TEASER.badge}</Text>
+            <Text style={styles.enterpriseBadgeLabel}>{ENTERPRISE_FACTS.badge}</Text>
           </View>
-          <Text style={styles.enterprisePrice}>{ENTERPRISE_TEASER.price}</Text>
+          <Text style={styles.enterprisePrice}>{ENTERPRISE_FACTS.price}</Text>
         </View>
-        <Text style={styles.enterpriseDesc}>{ENTERPRISE_TEASER.desc}</Text>
+        <Text style={styles.enterpriseDesc}>{ENTERPRISE_FACTS.desc}</Text>
       </View>
 
       <Text style={styles.footnote}>
