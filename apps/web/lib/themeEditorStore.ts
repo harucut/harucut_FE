@@ -751,6 +751,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
+        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
+        // 끼어들어 그대로 저장된다.
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
+
         cellCutouts: Array.isArray(data.cellCutouts)
           ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
           : [false, false, false, false],
@@ -812,6 +819,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           })) as EditorComponent[],
         ),
         activeId: null,
+        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
+        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
+        // 끼어들어 그대로 저장된다.
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
         background: draft.background,
         backgroundColor:
           draft.background.type === "COLOR"

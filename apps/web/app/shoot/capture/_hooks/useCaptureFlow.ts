@@ -188,6 +188,10 @@ export function useCaptureFlow() {
   useEffect(() => {
     return () => {
       stopStream();
+      // 인코딩이 도는 중에 헤더의 뒤로 가기나 브랜드 링크로 화면을 떠나면 취소를 거치지
+      // 않는다. 그대로 두면 결과가 돌아와 전역 세션에 사진이 얹히고, 마지막 컷이었다면
+      // 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다. 취소와 같게 무효로 만든다.
+      shootGenerationRef.current += 1;
     };
   }, [stopStream]);
 

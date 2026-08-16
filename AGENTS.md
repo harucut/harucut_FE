@@ -39,6 +39,7 @@
 - `/signup`
 - `/forgot-password`
 - `/features`
+- `/enterprise`
 - `/faq`
 - `/pricing`
 - `/privacy`
@@ -56,7 +57,8 @@
 - `/mypage`
 
 보호 라우트 로직은 `apps/web/proxy.ts`, 경로 목록은 `apps/web/lib/protectedPaths.ts`에 있다.  
-비인증 접근은 `/login?redirectTo=...`로 보낸다. (게스트 체험 예외는 `docs/auth-routing.md` 참조)
+비인증 접근은 `/login?redirectTo=...`로 보낸다.
+예외 둘(게스트 체험, 행사 QR 진입 `/shoot?...&event=...`)은 `docs/auth-routing.md` 참조.
 
 ## 테스트 가이드
 
