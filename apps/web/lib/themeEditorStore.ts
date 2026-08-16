@@ -386,6 +386,15 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     );
     if (inUse) return { ok: false as const, reason: "IN_USE" as const };
 
+    // 되돌리기용 스냅샷이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
+    // 사진 탭에서 그 원본까지 지우면, 여기서 blob URL 이 해제된다. 그 상태로 되돌리기를
+    // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizePhotosForSave
+    // 가 원본 파일을 못 찾아 blob: 주소가 그대로 서버로 올라간다 — 깨진 프레임이 된다.
+    // 원본이 사라졌으면 되돌릴 수도 없으므로 스냅샷을 함께 버린다.
+    const snapshotUsesAsset =
+      state.lastRemoved?.type === "PHOTO" &&
+      state.lastRemoved.source === asset.src;
+
     try {
       URL.revokeObjectURL(asset.src);
     } catch {}
@@ -395,6 +404,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         ...s.assets,
         photos: s.assets.photos.filter((p) => p.id !== assetId),
       },
+      ...(snapshotUsesAsset
+        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
+        : {}),
     }));
 
     return { ok: true as const };
@@ -409,6 +421,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }
     set((s) => ({
       assets: { ...s.assets, photos: [] },
+      // 원본을 전부 버렸으므로 사진 레이어 스냅샷도 되살릴 수 없다(위 removePhotoAsset 참고).
+      ...(s.lastRemoved?.type === "PHOTO"
+        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
+        : {}),
     }));
   },
 

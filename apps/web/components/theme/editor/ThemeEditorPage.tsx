@@ -143,7 +143,23 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
-  const closeSaveDialog = useCallback(() => setIsSaveDialogOpen(false), []);
+  /*
+    저장이 도는 중에는 닫지 않는다. 취소 버튼은 비활성인데 Escape 만 열려 있으면,
+    업로드·미리보기 생성·API 호출이 끝나기 전에 편집기로 돌아가 캔버스를 더 만질 수 있다.
+    그러면 서버에는 예전 상태가 저장되는데 "저장됨" 기준선은 지금 상태로 갱신돼,
+    그 뒤의 편집이 저장된 것처럼 보인다(이탈 경고도 안 뜬다).
+
+    isSaving 을 의존성에 넣지 않고 ref 로 읽는다 — 콜백 정체성이 바뀌면 useModalDialog 의
+    effect 가 다시 돌면서 포커스를 첫 컨트롤로 되돌려, 저장을 누른 순간 포커스가 튄다.
+  */
+  const isSavingRef = useRef(false);
+  useEffect(() => {
+    isSavingRef.current = isSaving;
+  }, [isSaving]);
+  const closeSaveDialog = useCallback(() => {
+    if (isSavingRef.current) return;
+    setIsSaveDialogOpen(false);
+  }, []);
   const saveDialogRef = useModalDialog(isSaveDialogOpen, closeSaveDialog);
 
   // 저장 다이얼로그에 입력한 이름·설명도 아직 서버에 안 올라간 작업이다.

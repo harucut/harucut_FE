@@ -57,6 +57,19 @@ function ShootPageContent() {
     ? frameIdFromFrameType(selectedRemoteFrame.frameType)
     : manualSelectedFrameId;
 
+  /*
+    주소에 저장 프레임 번호가 있는데 그 프레임을 못 불러온 상태.
+
+    프레임 조회(`/api/auth/user/frame`)는 인증이 필요해서, 행사 QR로 들어온 비회원은
+    주최자가 만든 프레임을 애초에 읽을 수 없다. 회원이라도 남의 프레임이면 목록에 없다.
+    예전에는 이때 조용히 기본 레이아웃으로 떨어져서, 참가자는 "행사 프레임으로 찍고 있다"고
+    믿은 채 아무 장식 없는 네 컷을 들고 갔다. 조용히 다른 걸 주느니 사실대로 말한다.
+
+    남은 과제: 비인증으로 읽을 수 있는 공개 프레임 조회가 서버에 생기면 여기서 불러온다.
+  */
+  const requestedRemoteFrameMissing =
+    selectedRemoteFrameId != null && !isLoading && selectedRemoteFrame == null;
+
   const handleConfirmFrame = () => {
     if (!selectedFrameId) return;
 
@@ -77,6 +90,16 @@ function ShootPageContent() {
         />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
+
+        {requestedRemoteFrameMissing ? (
+          <p
+            role="status"
+            className="rounded-2xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3.5 py-3 text-[12px] leading-[1.6] text-[color:var(--hc-danger)]"
+          >
+            링크에 담긴 전용 프레임을 불러오지 못했어요. 아래에서 컷 구성을 고르면 촬영은
+            그대로 할 수 있어요.
+          </p>
+        ) : null}
 
         <FlowSteps steps={SHOOT_FLOW_STEPS} current={0} />
 
