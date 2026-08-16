@@ -8,10 +8,13 @@ import { HARUCUT_RADII, type HarucutColors } from '@/constants/harucut-design';
 import { useHarucutTheme } from '@/hooks/use-harucut-theme';
 import { useSessionStore } from '@/store/use-session-store';
 
+import * as Linking from 'expo-linking';
+
 import {
   ENTERPRISE_FACTS,
   PAYMENTS_ENABLED,
   PLAN_FACTS,
+  siteUrl,
   toPlanId,
   type PlanFacts,
   type PlanFeature,
@@ -201,6 +204,20 @@ export function PricingScreen() {
           <Text style={styles.enterprisePrice}>{ENTERPRISE_FACTS.price}</Text>
         </View>
         <Text style={styles.enterpriseDesc}>{ENTERPRISE_FACTS.desc}</Text>
+        {/*
+          앱에는 행사 소개 화면이 없다(출시 초기에는 문의를 사람이 받아 수동으로 세팅한다).
+          그래도 카드가 "지금 살 수 있는 상품"을 말하고 있으므로 진행할 길이 있어야 한다 —
+          예전에는 설명만 있고 문의로 갈 방법이 없었다. 웹의 소개·문의 화면을 외부
+          브라우저로 연다. 앱 안에 같은 화면을 다시 만들면 또 두 곳이 어긋난다.
+        */}
+        <ActionButton
+          label={ENTERPRISE_FACTS.cta}
+          onPress={() => {
+            void Linking.openURL(siteUrl(ENTERPRISE_FACTS.href));
+          }}
+          style={styles.enterpriseCta}
+          variant="secondary"
+        />
       </View>
 
       <Text style={styles.footnote}>
@@ -297,6 +314,9 @@ function createStyles(colors: HarucutColors, isDark: boolean) {
       gap: 8,
       marginTop: 14,
       padding: 18,
+    },
+    enterpriseCta: {
+      marginTop: 14,
     },
     enterpriseDesc: {
       color: colors.muted,

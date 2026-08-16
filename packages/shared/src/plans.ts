@@ -94,8 +94,23 @@ export const ENTERPRISE_FACTS = {
   price: '규모에 맞춰 견적',
   desc: '부스 대신 QR 한 장이에요. 행사 이름과 컷 구성을 맞춘 촬영 주소를 드리면, 참가자는 가입 없이 자기 휴대폰으로 찍고 그 자리에서 가져가요.',
   cta: '행사 도입 알아보기',
+  /** 웹 경로. 앱에서는 아래 SITE_ORIGIN 과 합쳐 외부 브라우저로 연다. */
   href: '/enterprise',
 } as const;
+
+/**
+ * 공개 웹사이트 오리진.
+ *
+ * 앱에는 행사 소개 화면이 없다(출시 초기에는 문의를 사람이 받아 수동으로 세팅한다).
+ * 그래서 앱의 Enterprise 카드는 이 주소 + ENTERPRISE_FACTS.href 를 외부 브라우저로 연다.
+ * 앱 안에 같은 화면을 다시 만들면 또 두 곳이 어긋난다.
+ */
+export const SITE_ORIGIN = 'https://www.harucut.com';
+
+/** 앱에서 웹 페이지를 열 때 쓰는 절대 주소. */
+export function siteUrl(path: string): string {
+  return `${SITE_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 /**
  * 서버가 주는 등급("BASIC" | "PLUS" | "PRO")을 카드 id 로 맞춘다.
