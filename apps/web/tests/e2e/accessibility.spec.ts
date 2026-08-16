@@ -105,7 +105,33 @@ async function composeFourcutThroughUpload(page: Page) {
   await page.getByRole("button", { name: /네컷 꾸미기/ }).waitFor();
 }
 
+/**
+ * 등장 애니메이션과 페이지 그라디언트를 **페이지 스크립트보다 먼저** 눌러 둔다.
+ *
+ * 예전에는 화면이 로드된 뒤에 스타일을 주입했다. 그런데 CSS 전이는 한번 시작되면 그 뒤에
+ * transition-duration 을 0으로 바꿔도 끝까지 재생된다. 그래서 주입 시점이 전이 시작과
+ * 겹치면 axe 가 반투명한 글자를 재서 실제 디자인과 무관한 대비 위반이 잡혔다
+ * (프로덕션 빌드 mobile-chrome 에서 랜딩 부제가 #B3B3B3 대신 #424744 로 측정됐다).
+ *
+ * 문서가 만들어지는 시점에 넣으면 opacity 가 처음부터 1이라 전이 자체가 일어나지 않는다.
+ */
+async function installStableRenderStyles(page: Page) {
+  await page.addInitScript((css: string) => {
+    const inject = () => {
+      const style = document.createElement("style");
+      style.setAttribute("data-a11y-freeze", "");
+      style.textContent = css;
+      (document.head ?? document.documentElement).appendChild(style);
+    };
+
+    if (document.documentElement) inject();
+    else document.addEventListener("DOMContentLoaded", inject, { once: true });
+  }, `${FREEZE_ANIMATIONS_CSS}
+${FLATTEN_PAGE_GRADIENT_CSS}`);
+}
+
 async function enableAuthenticatedContext(page: Page) {
+  await installStableRenderStyles(page);
   await stubAuthenticatedApi(page);
   await page.context().addCookies([
     {
@@ -281,6 +307,7 @@ for (const route of publicRoutes) {
   test(`public route ${route} has no obvious accessibility violations`, async ({
     page,
   }) => {
+    await installStableRenderStyles(page);
     await page.goto(route);
     await expectStayedOn(page, route);
 
