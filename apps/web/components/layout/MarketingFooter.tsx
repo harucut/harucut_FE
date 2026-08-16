@@ -102,7 +102,21 @@ export function MarketingFooter({
               `민원담당자 ${COMPANY.complaintOfficer}`,
             ]}
           />
-          <p className="break-keep">{COMPANY.liability}</p>
+          {/*
+            `베일런(Vailen)` 뒤에서 줄이 끊겨 조사 "에서"만 다음 줄로 넘어갔다.
+            break-keep 은 어절 안을 지키지만 괄호는 여전히 끊을 자리로 본다.
+            상호와 뒤에 붙는 조사를 한 덩어리로 묶는다.
+          */}
+          <p className="break-keep">
+            {COMPANY.liability.split(COMPANY.name).map((chunk, index) => (
+              <Fragment key={index}>
+                {index > 0 ? (
+                  <span className="whitespace-nowrap">{COMPANY.name}에서</span>
+                ) : null}
+                {index > 0 ? chunk.replace(/^에서/, "") : chunk}
+              </Fragment>
+            ))}
+          </p>
         </div>
 
         <hr className={`my-7 border-t ${rule}`} />

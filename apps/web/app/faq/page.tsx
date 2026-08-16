@@ -90,13 +90,13 @@ export default function FaqPage() {
           <div className="mt-2 flex flex-wrap justify-center gap-2">
             <Link
               href="/pricing"
-              className="hc-surface-well flex h-[44px] items-center rounded-full border px-5 text-[13px] font-bold text-[color:var(--hc-text)]"
+              className="hc-button-secondary flex h-12 items-center rounded-full border px-7 text-[15px] font-semibold"
             >
               요금제 보기
             </Link>
             <Link
               href="/login"
-              className="hc-button-primary flex h-[44px] items-center rounded-full px-5 text-[13px] font-bold"
+              className="hc-button-primary flex h-12 items-center rounded-full px-7 text-[15px] font-extrabold"
             >
               지금 시작하기
             </Link>

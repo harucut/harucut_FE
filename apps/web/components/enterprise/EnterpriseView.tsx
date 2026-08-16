@@ -11,8 +11,10 @@ import { COMPANY } from "@/constants/company";
 const FLOW = [
   {
     who: "주최자",
-    title: "행사 프레임을 만들어요",
-    body: "행사 이름·로고·색을 얹은 전용 프레임을 만듭니다. 원하는 이미지를 주시면 저희가 대신 만들어 드려요.",
+    title: "행사 촬영 화면을 맞춰요",
+    body: "행사 이름과 컷 구성을 정해 주시면 그 행사 전용 촬영 주소를 만들어 드려요.",
+    // 정정을 1000px 아래에 두면 팔고 난 뒤에 읽힌다. 약속하는 카드 안에서 바로 말한다.
+    note: "로고·색을 얹은 전용 프레임은 준비 중이라 일정 협의가 필요해요.",
   },
   {
     who: "주최자",
@@ -27,7 +29,7 @@ const FLOW = [
   {
     who: "참가자",
     title: "그 자리에서 자기 폰에 저장해요",
-    body: "찍은 네 컷을 바로 내려받아요. 줄 서서 인화를 기다리지 않아도 되고, 종이가 모자랄 일도 없어요.",
+    body: "찍은 네 컷을 바로 내려받아요. 줄 서서 인화를 기다리지 않아도 되고, 종이가 모자랄 일도 없어요.",
   },
 ] as const;
 
@@ -52,12 +54,17 @@ export function EnterpriseView() {
             <QrCode aria-hidden className="h-3.5 w-3.5" />
             행사·팬미팅용
           </span>
-          <h1 className="max-w-[15ch] text-[34px] font-extrabold leading-[1.14] tracking-[-1px] sm:text-[46px] lg:text-[58px]">
-            부스 대신 QR 한 장으로 네 컷을 찍어요
+          {/*
+            DESIGN.md 의 display-sm. 34→58px 사이를 매끈하게 오간다.
+            브레이크포인트마다 34/46/58 로 계단을 밟던 것을 클램프 하나로 바꿨다 —
+            중간 폭(예: 900px)에서 글자만 덩그러니 작게 남던 구간이 사라진다.
+          */}
+          <h1 className="max-w-[15ch] text-[clamp(2.125rem,5vw,3.625rem)] font-extrabold leading-[1.14] tracking-[-1px]">
+            부스 대신 QR 한 장으로 네 컷을 찍어요
           </h1>
           <p className="max-w-[52ch] text-[16px] leading-[1.75] text-[color:var(--hc-muted)] lg:text-[18px]">
-            행사 전용 프레임을 만들어 드리고, 행사 전용 촬영 QR을 드려요. 참가자는 앱을
-            받지도, 가입하지도 않고 자기 휴대폰으로 찍어 그 자리에서 가져갑니다.
+            행사 전용 촬영 QR을 만들어 드려요. 참가자는 앱을 받지도, 가입하지도 않고
+            행사 이름이 뜬 화면에서 자기 휴대폰으로 찍어 그 자리에서 가져갑니다.
           </p>
           <div className="flex flex-col gap-2.5 sm:flex-row">
             <a
@@ -100,6 +107,13 @@ export function EnterpriseView() {
                 <p className="text-[14px] leading-[1.7] text-[color:var(--hc-muted)]">
                   {step.body}
                 </p>
+                {"note" in step && step.note ? (
+                  // opacity 로 흐리면 대비가 같이 죽는다(흰 카드 위 4.13:1 로 AA 미달이었다).
+                  // 위계는 크기로만 낮추고 색은 토큰 그대로 쓴다.
+                  <p className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+                    {step.note}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ol>
@@ -111,14 +125,41 @@ export function EnterpriseView() {
             부스를 빌리는 것과 무엇이 다른가요
           </h2>
           {/*
-            좁은 화면에서는 표가 가로로 스크롤된다. 스크롤되는 영역은 키보드로도 들어가
-            움직일 수 있어야 한다 — tabIndex 가 없으면 마우스 없이는 오른쪽 열을 볼 수 없다.
+            좁은 화면(sm 미만)에서는 표를 쓰지 않는다.
+
+            390px 에서 컨테이너는 350px 인데 표는 최소 560px 이라 "부스 대여" 열이 통째로
+            화면 밖으로 나갔다. 스크롤된다는 시각 힌트도 없어서, 비교하라고 만든 자리가
+            한쪽만 보여 주고 있었다. 두 값이 세로로 붙어 있어야 비교가 된다.
+          */}
+          <ul className="flex flex-col gap-3 sm:hidden">
+            {COMPARISON.map(([label, ours, theirs]) => (
+              <li
+                key={label}
+                className="hc-surface-card rounded-[16px] border p-4"
+              >
+                <p className="font-mono text-[11px] tracking-[1.2px] text-[color:var(--hc-muted)]">
+                  {label}
+                </p>
+                <p className="mt-2 text-[14px] font-semibold leading-[1.6]">
+                  하루컷 · {ours}
+                </p>
+                <p className="mt-1 text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
+                  부스 대여 · {theirs}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          {/*
+            sm 이상에서만 표. 그래도 좁아지면 가로 스크롤이 생기므로, 스크롤 영역은
+            키보드로도 들어가 움직일 수 있어야 한다(tabIndex 가 없으면 마우스 없이는
+            오른쪽 열을 못 본다).
           */}
           <div
             tabIndex={0}
             role="region"
             aria-label="하루컷과 부스 대여 비교표"
-            className="overflow-x-auto rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--hc-primary)]"
+            className="hidden overflow-x-auto rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--hc-primary)] sm:block"
           >
             <table className="w-full min-w-[560px] border-collapse text-left">
               <caption className="sr-only">
@@ -166,7 +207,7 @@ export function EnterpriseView() {
             프레임과 QR을 직접 만들어 전달해 드립니다. 그래서 행사 규모와 일정에 맞춰
             조율할 수 있고, 대신 준비 기간이 필요해요 —{" "}
             <b className="font-bold text-[color:var(--hc-text)]">
-              행사 2주 전까지
+              행사 2주 전까지
             </b>{" "}
             문의해 주시면 여유 있게 준비할 수 있어요.
           </p>

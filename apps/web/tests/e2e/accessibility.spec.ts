@@ -40,7 +40,11 @@ const routesReachedThroughUi = [
     route: "/theme/sticker",
     async enter(page: Page) {
       await page.goto("/theme");
-      await page.getByRole("button", { name: "새 프레임 만들기" }).click();
+      // 프레임 목록이 오기 전에는 버튼이 비활성이다. 활성될 때까지 기다렸다 누른다 —
+      // 예전에는 로딩 중에 눌러 클릭이 삼켜지고 /theme 에 남았다.
+      const openEditor = page.getByRole("button", { name: "새 프레임 만들기" });
+      await expect(openEditor).toBeEnabled();
+      await openEditor.click();
     },
   },
   // 꾸미기 편집기는 "완성한 네컷"이 메모리에 있어야 열린다. 직접 열면 1초쯤 뒤

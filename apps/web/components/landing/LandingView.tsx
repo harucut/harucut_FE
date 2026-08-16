@@ -11,13 +11,15 @@ import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton"
 import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
 
 // 랜딩 미리보기는 한 변이 200px 남짓인데 원본은 900x1200 PNG(1.2MB)였다. 같은 파일이
 // 화면에 20 번 들어가 첫 로드를 그대로 잡아먹었다. 표시 크기에 맞춘 webp(30KB)를 쓴다.
-const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.webp");
+// 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
+const HERO_IMAGES = DEMO_PHOTOS;
 
 // 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [
@@ -48,13 +50,22 @@ function ShowcaseFrame({
 }
 
 // 한 칸이 머무는 시간(ms). 아래 진행 바 애니메이션과 같은 값을 써야 싱크가 맞는다.
-const STEP_DWELL_MS = 2600;
+//
+// 세 칸을 도는 데 걸리는 전체 시간(1500 × 3 = 4.5초)을 5초 아래로 잡는다.
+// WCAG 2.2.2 는 자동으로 시작해 5초를 넘게 움직이는 것에 멈출 수단을 요구한다.
+// 예전에는 무한 반복이라 "자동 넘김 멈추기" 버튼이 필요했는데, 이 모션은 정보를 나르지
+// 않는다 — 세 칸의 글은 항상 다 보이고 강조 색만 옮겨 다닌다. 정보가 없는 장식 때문에
+// 마케팅 화면에 조작 버튼을 두느니, 한 바퀴만 돌고 멈추게 해서 요구 자체를 없앤다.
+const STEP_DWELL_MS = 1500;
 
 // HOW 섹션 — 필름이 한 칸씩 감기듯 01 → 02 → 03이 순서대로 밝아진다.
 // 내용은 항상 전부 보이고 강조만 이동하므로, 모션이 꺼져도 정보 손실이 없다.
 function HowFilm() {
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
+  // 한 바퀴를 다 돌았는지. 인터벌 콜백에서만 켠다.
+  const [passDone, setPassDone] = useState(false);
+  // 포인터를 올린 칸. 자동 재생이 끝난 뒤에도 읽고 있는 칸을 짚어 준다.
+  const [hovered, setHovered] = useState<number | null>(null);
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
@@ -65,52 +76,43 @@ function HowFilm() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  // 재생이 끝난 상태. 모션을 끈 사용자에게는 처음부터 완성된 화면을 보여준다.
+  const settled = reduced || passDone;
+
   useEffect(() => {
-    // 모션을 끈 사용자는 순환시키지 않고 전 단계를 동등하게 보여준다.
-    if (reduced || paused) return;
-    const id = window.setInterval(
-      () => setActive((i) => (i + 1) % STEPS.length),
-      STEP_DWELL_MS,
-    );
+    if (reduced) return;
+
+    const id = window.setInterval(() => {
+      setActive((i) => {
+        const next = i + 1;
+        if (next >= STEPS.length) {
+          window.clearInterval(id);
+          setPassDone(true);
+          return i;
+        }
+        return next;
+      });
+    }, STEP_DWELL_MS);
+
     return () => window.clearInterval(id);
-  }, [reduced, paused]);
+  }, [reduced]);
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
-      {/*
-        자동으로 넘어가는 콘텐츠에는 멈출 수단이 있어야 한다(WCAG 2.2.2, Level A).
-        마우스를 올리면 멈추긴 했지만 키보드·터치 사용자에게는 멈출 길이 없었다.
-      */}
-      <div className="flex justify-end px-3 pt-2">
-        <button
-          type="button"
-          onClick={() => setPaused((v) => !v)}
-          aria-pressed={paused}
-          className="rounded-full border border-white/[0.16] px-3 py-1 text-[12px] font-semibold text-white/80 transition hover:text-white"
-        >
-          {paused ? "자동 넘김 켜기" : "자동 넘김 멈추기"}
-        </button>
-      </div>
       <TapeStrip
-        running={!reduced && !paused}
+        running={!reduced && !settled}
         className="border-b border-white/[0.06]"
       />
 
-      <div
-        className="grid md:grid-cols-3"
-        onMouseLeave={() => setPaused(false)}
-      >
+      <div className="grid md:grid-cols-3" onMouseLeave={() => setHovered(null)}>
         {STEPS.map((s, i) => {
-          // 모션 off일 땐 전부 '현재'로 취급해 흐린 칸이 남지 않게 한다.
-          const on = reduced || i === active;
+          // 재생이 끝나면 세 칸 모두 '현재'다. 흐린 칸을 남겨 둘 이유가 없다.
+          // 다만 포인터를 올린 칸이 있으면 그 칸만 짚는다.
+          const on = settled ? hovered === null || hovered === i : i === active;
           return (
             <div
               key={s.n}
-              // 포인터를 올린 칸에서 멈춘다 — 읽는 동안 넘어가버리지 않도록.
-              onMouseEnter={() => {
-                setPaused(true);
-                setActive(i);
-              }}
+              onMouseEnter={() => setHovered(i)}
               className="relative px-[30px] pb-[38px] pt-[34px] transition-colors duration-500"
               style={{
                 borderLeft: i ? "1px dashed rgba(255,255,255,.12)" : "none",
@@ -146,12 +148,12 @@ function HowFilm() {
                 className="absolute bottom-0 left-0 h-[2px] w-full"
                 style={{ background: "rgba(255,255,255,.06)" }}
               />
-              {!reduced && i === active ? (
+              {!reduced && !settled && i === active ? (
                 <span
                   aria-hidden
                   // key로 매 전환마다 리마운트해 애니메이션을 처음부터 재생시킨다.
-                  key={`${active}-${paused}`}
-                  className={`absolute bottom-0 left-0 h-[2px] w-full ${paused ? "" : "hc-film-progress"}`}
+                  key={active}
+                  className="hc-film-progress absolute bottom-0 left-0 h-[2px] w-full"
                   style={{
                     background: GREEN,
                     ["--hc-film-dwell" as string]: `${STEP_DWELL_MS}ms`,
@@ -164,7 +166,7 @@ function HowFilm() {
       </div>
 
       <TapeStrip
-        running={!reduced && !paused}
+        running={!reduced && !settled}
         className="border-t border-white/[0.06]"
       />
     </div>
@@ -199,7 +201,7 @@ function HeroEditorial() {
         delay={120}
         className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
-        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
+        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
       </Reveal>
 
       {/*
@@ -208,7 +210,7 @@ function HeroEditorial() {
         헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
       */}
       <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
-        <GuestTrialStartButton className="inline-flex items-center gap-1.5 rounded-full bg-white px-6 py-3 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]">
+        <GuestTrialStartButton className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold">
           가입 없이 찍어보기
         </GuestTrialStartButton>
         <Link
@@ -260,7 +262,7 @@ export function LandingView() {
           <Reveal className="mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
               찍고, 꾸미고, 남기고.
-              <br />네 컷이면 끝.
+              <br />네 컷이면 끝.
             </h2>
           </Reveal>
 
@@ -279,8 +281,8 @@ export function LandingView() {
               <span className="hc-accent-word">만드는 거예요.</span>
             </h2>
             <p className="mt-6 max-w-[420px] text-[15px] leading-[1.75] text-white/60">
-              부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
-              붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
+              부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
+              붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
               전부 달라집니다.
             </p>
 
@@ -340,13 +342,14 @@ export function LandingView() {
               행사에서는 부스 대신 QR 한 장
             </h2>
             <p className="text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
-              팬미팅·페스티벌·사내 행사에 전용 프레임을 만들어 드려요. 참가자는 앱도 가입도
-              없이 QR을 찍어 자기 휴대폰으로 남깁니다. 줄도, 인화 대기도 없어요.
+              팬미팅·페스티벌·사내 행사용 QR을 만들어 드려요. 참가자 화면에 행사 이름이 뜨고,
+              행사에 맞춘 컷 구성으로 앱도 가입도 없이 자기 휴대폰에 남깁니다. 줄도,
+              인화 대기도 없어요.
             </p>
           </div>
           <Link
             href="/enterprise"
-            className="inline-flex h-12 w-fit shrink-0 items-center gap-2 rounded-full bg-white px-7 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]"
+            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold w-fit"
           >
             행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
           </Link>
@@ -356,15 +359,20 @@ export function LandingView() {
       {/* CTA */}
       <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-5">
         <div
-          className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-10 py-9"
+          // 모바일에서 좌우 40px 패딩이 제목에 254px 밖에 안 남겨, 30px 글자가 억지로
+          // 두 줄로 접혔다(그 바람에 "네 컷"이 갈라졌다). 좁은 화면에선 패딩과 글자를 함께 줄인다.
+          className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-6 py-8 sm:px-10 sm:py-9"
           style={{ background: GREEN }}
         >
-          <h2 className="text-[30px] font-extrabold tracking-[-1px]" style={{ color: "#06140A" }}>
-            하루를 네 컷으로 남겨볼까요?
+          <h2
+            className="text-[24px] font-extrabold tracking-[-1px] sm:text-[30px]"
+            style={{ color: "#06140A" }}
+          >
+            하루를 네 컷으로 남겨볼까요?
           </h2>
           <Link
-            href="/signup"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-[30px] py-3.5 text-[16px] font-bold text-[#0B0B0C] hover:bg-zinc-100"
+            href="/login"
+            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold"
           >
             시작하기 <ArrowRight className="h-[19px] w-[19px]" />
           </Link>

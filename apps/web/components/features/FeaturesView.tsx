@@ -6,11 +6,13 @@ import { MarketingNav } from "@/components/layout/MarketingNav";
 import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 랜딩과 같은 딥다크 고정.
 const GREEN = "#1ED760";
 
-const DEMO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.webp");
+// 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
+const DEMO_IMAGES = DEMO_PHOTOS;
 
 // 스티커 실물 — 39종 중 성격이 다른 것들만 골라 노출(에셋 자체가 브랜드 언어).
 const SHOWCASE_STICKERS = [
@@ -257,7 +259,7 @@ export function FeaturesView() {
           </div>
           <Link
             href="/pricing"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 px-7 py-3 text-[15px] font-bold text-white hover:bg-white/[0.07]"
+            className="hc-button-secondary inline-flex h-12 shrink-0 items-center gap-2 rounded-full border px-7 text-[15px] font-semibold"
           >
             요금제 보기 <ArrowRight className="h-[17px] w-[17px]" />
           </Link>
@@ -279,7 +281,7 @@ export function FeaturesView() {
           </h2>
           <Link
             href="/login"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-[30px] py-3.5 text-[16px] font-bold text-[#0B0B0C] hover:bg-zinc-100"
+            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold"
           >
             시작하기 <ArrowRight className="h-[19px] w-[19px]" />
           </Link>

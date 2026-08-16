@@ -143,6 +143,10 @@ function ThemePageContent() {
             setSelectedRemoteFrameId(null);
           }}
           onConfirm={handleConfirmNewFrame}
+          // 라벨은 "불러오는 중..."인데 버튼은 눌렸다. 눌러도 handleConfirmNewFrame 이
+          // 조용히 빠져나가서, 목록이 늦게 오는 날에는 아무 반응 없는 버튼이 됐다.
+          // 상태와 라벨을 맞춘다.
+          confirmDisabled={isLoading}
           confirmLabel={isLoading ? "불러오는 중..." : "새 프레임 만들기"}
         />
 
