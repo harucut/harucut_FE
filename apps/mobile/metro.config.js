@@ -29,6 +29,17 @@ const IGNORED = [
   /[\\/]\.git[\\/].*/,
 ];
 
-config.resolver.blockList = IGNORED;
+// 기본값을 덮어쓰지 않고 **합친다**. getDefaultConfig() 가 이미 `.expo/types` 와 Metro 의
+// `__tests__` 같은 것을 빼 두는데, 통째로 대입하면 그게 사라져 Expo Router 가 타입 선언을
+// 다시 만들 때마다 불필요한 인덱싱과 Fast Refresh 가 생긴다.
+// blockList 는 RegExp 하나일 수도, 배열일 수도, 없을 수도 있어 세 경우를 모두 받는다.
+const existing = config.resolver.blockList;
+const existingList = Array.isArray(existing)
+  ? existing
+  : existing
+    ? [existing]
+    : [];
+
+config.resolver.blockList = [...existingList, ...IGNORED];
 
 module.exports = config;
