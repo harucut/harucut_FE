@@ -48,13 +48,22 @@ function ShowcaseFrame({
 }
 
 // 한 칸이 머무는 시간(ms). 아래 진행 바 애니메이션과 같은 값을 써야 싱크가 맞는다.
-const STEP_DWELL_MS = 2600;
+//
+// 세 칸을 도는 데 걸리는 전체 시간(1500 × 3 = 4.5초)을 5초 아래로 잡는다.
+// WCAG 2.2.2 는 자동으로 시작해 5초를 넘게 움직이는 것에 멈출 수단을 요구한다.
+// 예전에는 무한 반복이라 "자동 넘김 멈추기" 버튼이 필요했는데, 이 모션은 정보를 나르지
+// 않는다 — 세 칸의 글은 항상 다 보이고 강조 색만 옮겨 다닌다. 정보가 없는 장식 때문에
+// 마케팅 화면에 조작 버튼을 두느니, 한 바퀴만 돌고 멈추게 해서 요구 자체를 없앤다.
+const STEP_DWELL_MS = 1500;
 
 // HOW 섹션 — 필름이 한 칸씩 감기듯 01 → 02 → 03이 순서대로 밝아진다.
 // 내용은 항상 전부 보이고 강조만 이동하므로, 모션이 꺼져도 정보 손실이 없다.
 function HowFilm() {
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
+  // 한 바퀴를 다 돌았는지. 인터벌 콜백에서만 켠다.
+  const [passDone, setPassDone] = useState(false);
+  // 포인터를 올린 칸. 자동 재생이 끝난 뒤에도 읽고 있는 칸을 짚어 준다.
+  const [hovered, setHovered] = useState<number | null>(null);
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
@@ -65,52 +74,43 @@ function HowFilm() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  // 재생이 끝난 상태. 모션을 끈 사용자에게는 처음부터 완성된 화면을 보여준다.
+  const settled = reduced || passDone;
+
   useEffect(() => {
-    // 모션을 끈 사용자는 순환시키지 않고 전 단계를 동등하게 보여준다.
-    if (reduced || paused) return;
-    const id = window.setInterval(
-      () => setActive((i) => (i + 1) % STEPS.length),
-      STEP_DWELL_MS,
-    );
+    if (reduced) return;
+
+    const id = window.setInterval(() => {
+      setActive((i) => {
+        const next = i + 1;
+        if (next >= STEPS.length) {
+          window.clearInterval(id);
+          setPassDone(true);
+          return i;
+        }
+        return next;
+      });
+    }, STEP_DWELL_MS);
+
     return () => window.clearInterval(id);
-  }, [reduced, paused]);
+  }, [reduced]);
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
-      {/*
-        자동으로 넘어가는 콘텐츠에는 멈출 수단이 있어야 한다(WCAG 2.2.2, Level A).
-        마우스를 올리면 멈추긴 했지만 키보드·터치 사용자에게는 멈출 길이 없었다.
-      */}
-      <div className="flex justify-end px-3 pt-2">
-        <button
-          type="button"
-          onClick={() => setPaused((v) => !v)}
-          aria-pressed={paused}
-          className="rounded-full border border-white/[0.16] px-3 py-1 text-[12px] font-semibold text-white/80 transition hover:text-white"
-        >
-          {paused ? "자동 넘김 켜기" : "자동 넘김 멈추기"}
-        </button>
-      </div>
       <TapeStrip
-        running={!reduced && !paused}
+        running={!reduced && !settled}
         className="border-b border-white/[0.06]"
       />
 
-      <div
-        className="grid md:grid-cols-3"
-        onMouseLeave={() => setPaused(false)}
-      >
+      <div className="grid md:grid-cols-3" onMouseLeave={() => setHovered(null)}>
         {STEPS.map((s, i) => {
-          // 모션 off일 땐 전부 '현재'로 취급해 흐린 칸이 남지 않게 한다.
-          const on = reduced || i === active;
+          // 재생이 끝나면 세 칸 모두 '현재'다. 흐린 칸을 남겨 둘 이유가 없다.
+          // 다만 포인터를 올린 칸이 있으면 그 칸만 짚는다.
+          const on = settled ? hovered === null || hovered === i : i === active;
           return (
             <div
               key={s.n}
-              // 포인터를 올린 칸에서 멈춘다 — 읽는 동안 넘어가버리지 않도록.
-              onMouseEnter={() => {
-                setPaused(true);
-                setActive(i);
-              }}
+              onMouseEnter={() => setHovered(i)}
               className="relative px-[30px] pb-[38px] pt-[34px] transition-colors duration-500"
               style={{
                 borderLeft: i ? "1px dashed rgba(255,255,255,.12)" : "none",
@@ -146,12 +146,12 @@ function HowFilm() {
                 className="absolute bottom-0 left-0 h-[2px] w-full"
                 style={{ background: "rgba(255,255,255,.06)" }}
               />
-              {!reduced && i === active ? (
+              {!reduced && !settled && i === active ? (
                 <span
                   aria-hidden
                   // key로 매 전환마다 리마운트해 애니메이션을 처음부터 재생시킨다.
-                  key={`${active}-${paused}`}
-                  className={`absolute bottom-0 left-0 h-[2px] w-full ${paused ? "" : "hc-film-progress"}`}
+                  key={active}
+                  className="hc-film-progress absolute bottom-0 left-0 h-[2px] w-full"
                   style={{
                     background: GREEN,
                     ["--hc-film-dwell" as string]: `${STEP_DWELL_MS}ms`,
@@ -164,7 +164,7 @@ function HowFilm() {
       </div>
 
       <TapeStrip
-        running={!reduced && !paused}
+        running={!reduced && !settled}
         className="border-t border-white/[0.06]"
       />
     </div>
