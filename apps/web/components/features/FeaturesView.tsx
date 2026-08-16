@@ -259,7 +259,7 @@ export function FeaturesView() {
           </div>
           <Link
             href="/pricing"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 px-7 py-3 text-[15px] font-bold text-white hover:bg-white/[0.07]"
+            className="hc-button-secondary inline-flex h-12 shrink-0 items-center gap-2 rounded-full border px-7 text-[15px] font-semibold"
           >
             요금제 보기 <ArrowRight className="h-[17px] w-[17px]" />
           </Link>
@@ -281,7 +281,7 @@ export function FeaturesView() {
           </h2>
           <Link
             href="/login"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-[30px] py-3.5 text-[16px] font-bold text-[#0B0B0C] hover:bg-zinc-100"
+            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold"
           >
             시작하기 <ArrowRight className="h-[19px] w-[19px]" />
           </Link>

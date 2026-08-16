@@ -244,7 +244,9 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </div>
           <Link
             href={ENTERPRISE_TEASER.href}
-            className="hc-button-primary flex h-[46px] shrink-0 items-center justify-center rounded-full px-6 text-[13px] font-extrabold"
+            // 한 화면에 초록은 하나. 이 카드가 있는 화면엔 이미 요금제 CTA 가 초록이라
+            // 여기서는 한 단 낮춘다(DESIGN.md: 강조는 한 화면에 하나).
+            className="hc-button-secondary flex h-12 shrink-0 items-center justify-center rounded-full border px-7 text-[15px] font-semibold"
           >
             {ENTERPRISE_TEASER.cta}
           </Link>
@@ -315,8 +317,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               돼요.
             </p>
             <Link
-              href="/signup"
-              className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[15px] font-extrabold"
+              href="/login"
+              className="hc-button-primary mt-1 flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold"
             >
               시작하기
             </Link>

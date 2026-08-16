@@ -210,7 +210,7 @@ function HeroEditorial() {
         헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
       */}
       <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
-        <GuestTrialStartButton className="inline-flex items-center gap-1.5 rounded-full bg-white px-6 py-3 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]">
+        <GuestTrialStartButton className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold">
           가입 없이 찍어보기
         </GuestTrialStartButton>
         <Link
@@ -349,7 +349,7 @@ export function LandingView() {
           </div>
           <Link
             href="/enterprise"
-            className="inline-flex h-12 w-fit shrink-0 items-center gap-2 rounded-full bg-white px-7 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]"
+            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold w-fit"
           >
             행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
           </Link>
@@ -371,8 +371,8 @@ export function LandingView() {
             하루를 네 컷으로 남겨볼까요?
           </h2>
           <Link
-            href="/signup"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-[30px] py-3.5 text-[16px] font-bold text-[#0B0B0C] hover:bg-zinc-100"
+            href="/login"
+            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold"
           >
             시작하기 <ArrowRight className="h-[19px] w-[19px]" />
           </Link>
