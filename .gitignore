@@ -62,3 +62,7 @@ next-env.d.ts
 
 # impeccable 감사 중 생성되는 스크린샷 임시 폴더
 apps/web/.impeccable-shots/
+
+# 조사용 임시 스크립트·측정 결과. 접두사 zz- 로 만들고, 커밋에 딸려가지 않게 막는다
+# (실제로 axe 스캔 결과 zz-out.json 이 한 번 develop 까지 올라갔다).
+zz-*
