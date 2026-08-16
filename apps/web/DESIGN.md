@@ -31,6 +31,14 @@ typography:
     fontWeight: 900
     lineHeight: 1.18
     letterSpacing: "-4px"
+  # 보조 마케팅 히어로(행사 등). 랜딩 히어로(display)보다 한 단 작다.
+  # 34px에서 58px까지 매끈하게 커진다 — 브레이크포인트마다 튀지 않게 클램프로 적는다.
+  display-sm:
+    fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
+    fontSize: "clamp(2.125rem, 5vw, 3.625rem)"
+    fontWeight: 800
+    lineHeight: 1.14
+    letterSpacing: "-1px"
   headline:
     fontFamily: "Pretendard Variable, Pretendard, SUIT, sans-serif"
     fontSize: "clamp(1.5rem, 3vw, 2.125rem)"

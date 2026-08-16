@@ -199,7 +199,7 @@ function HeroEditorial() {
         delay={120}
         className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
-        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
+        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
       </Reveal>
 
       {/*
@@ -260,7 +260,7 @@ export function LandingView() {
           <Reveal className="mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
               찍고, 꾸미고, 남기고.
-              <br />네 컷이면 끝.
+              <br />네 컷이면 끝.
             </h2>
           </Reveal>
 
@@ -279,8 +279,8 @@ export function LandingView() {
               <span className="hc-accent-word">만드는 거예요.</span>
             </h2>
             <p className="mt-6 max-w-[420px] text-[15px] leading-[1.75] text-white/60">
-              부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
-              붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
+              부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
+              붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
               전부 달라집니다.
             </p>
 
@@ -340,8 +340,8 @@ export function LandingView() {
               행사에서는 부스 대신 QR 한 장
             </h2>
             <p className="text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
-              팬미팅·페스티벌·사내 행사에 전용 프레임을 만들어 드려요. 참가자는 앱도 가입도
-              없이 QR을 찍어 자기 휴대폰으로 남깁니다. 줄도, 인화 대기도 없어요.
+              팬미팅·페스티벌·사내 행사에 전용 프레임을 만들어 드려요. 참가자는 앱도 가입도
+              없이 QR을 찍어 자기 휴대폰으로 남깁니다. 줄도, 인화 대기도 없어요.
             </p>
           </div>
           <Link
@@ -356,11 +356,16 @@ export function LandingView() {
       {/* CTA */}
       <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-5">
         <div
-          className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-10 py-9"
+          // 모바일에서 좌우 40px 패딩이 제목에 254px 밖에 안 남겨, 30px 글자가 억지로
+          // 두 줄로 접혔다(그 바람에 "네 컷"이 갈라졌다). 좁은 화면에선 패딩과 글자를 함께 줄인다.
+          className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-6 py-8 sm:px-10 sm:py-9"
           style={{ background: GREEN }}
         >
-          <h2 className="text-[30px] font-extrabold tracking-[-1px]" style={{ color: "#06140A" }}>
-            하루를 네 컷으로 남겨볼까요?
+          <h2
+            className="text-[24px] font-extrabold tracking-[-1px] sm:text-[30px]"
+            style={{ color: "#06140A" }}
+          >
+            하루를 네 컷으로 남겨볼까요?
           </h2>
           <Link
             href="/signup"

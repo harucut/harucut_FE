@@ -27,7 +27,7 @@ const FLOW = [
   {
     who: "참가자",
     title: "그 자리에서 자기 폰에 저장해요",
-    body: "찍은 네 컷을 바로 내려받아요. 줄 서서 인화를 기다리지 않아도 되고, 종이가 모자랄 일도 없어요.",
+    body: "찍은 네 컷을 바로 내려받아요. 줄 서서 인화를 기다리지 않아도 되고, 종이가 모자랄 일도 없어요.",
   },
 ] as const;
 
@@ -52,8 +52,13 @@ export function EnterpriseView() {
             <QrCode aria-hidden className="h-3.5 w-3.5" />
             행사·팬미팅용
           </span>
-          <h1 className="max-w-[15ch] text-[34px] font-extrabold leading-[1.14] tracking-[-1px] sm:text-[46px] lg:text-[58px]">
-            부스 대신 QR 한 장으로 네 컷을 찍어요
+          {/*
+            DESIGN.md 의 display-sm. 34→58px 사이를 매끈하게 오간다.
+            브레이크포인트마다 34/46/58 로 계단을 밟던 것을 클램프 하나로 바꿨다 —
+            중간 폭(예: 900px)에서 글자만 덩그러니 작게 남던 구간이 사라진다.
+          */}
+          <h1 className="max-w-[15ch] text-[clamp(2.125rem,5vw,3.625rem)] font-extrabold leading-[1.14] tracking-[-1px]">
+            부스 대신 QR 한 장으로 네 컷을 찍어요
           </h1>
           <p className="max-w-[52ch] text-[16px] leading-[1.75] text-[color:var(--hc-muted)] lg:text-[18px]">
             행사 전용 프레임을 만들어 드리고, 행사 전용 촬영 QR을 드려요. 참가자는 앱을
@@ -166,7 +171,7 @@ export function EnterpriseView() {
             프레임과 QR을 직접 만들어 전달해 드립니다. 그래서 행사 규모와 일정에 맞춰
             조율할 수 있고, 대신 준비 기간이 필요해요 —{" "}
             <b className="font-bold text-[color:var(--hc-text)]">
-              행사 2주 전까지
+              행사 2주 전까지
             </b>{" "}
             문의해 주시면 여유 있게 준비할 수 있어요.
           </p>

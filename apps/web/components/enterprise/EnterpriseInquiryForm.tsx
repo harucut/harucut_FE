@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, Copy, Mail } from "lucide-react";
+import { withJosa } from "@harucut/shared";
 import { COMPANY } from "@/constants/company";
 
 const FIELDS = [
@@ -160,7 +161,10 @@ export function EnterpriseInquiryForm() {
       <p role="status" className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
         {canSend
           ? `메일 앱이 열리지 않으면 ${COMPANY.email} 로 직접 보내 주세요. ${COMPANY.hours} 안에 답장드려요.`
-          : `${missing.map((field) => field.label).join(", ")}을(를) 채우면 메일을 열 수 있어요.`}
+          : `${withJosa(
+              missing.map((field) => field.label).join(", "),
+              "을/를",
+            )} 채우면 메일을 열 수 있어요.`}
       </p>
     </form>
   );

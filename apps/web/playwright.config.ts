@@ -11,6 +11,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 5_000 },
   reporter: [["list"], ["html", { open: "never" }]],
+  globalSetup: "./tests/e2e/globalSetup.ts",
   use: {
     baseURL,
     trace: "on-first-retry",
