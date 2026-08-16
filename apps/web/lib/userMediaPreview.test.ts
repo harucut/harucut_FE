@@ -7,6 +7,41 @@ import {
 const NOW = new Date("2026-08-15T12:00:00+09:00");
 
 describe("user media preview helpers", () => {
+  // 서버는 저장할 때 이름 뒤에 확장자를 붙여 돌려준다(실측: "연결점검" -> "연결점검.png").
+  // 확장자만 보고 기계 이름으로 판정하면 사용자가 지은 이름이 전부 날짜로 갈아치워져,
+  // 기록 화면에서 이름을 바꿔도 목록 제목이 안 바뀌는 것처럼 보인다.
+  it.each(["졸업식.jpg", "연결점검.png", "제주도 마지막 날.webp"])(
+    "keeps a user-written name even when the server appended an extension (%s)",
+    (name) => {
+      expect(
+        getUserMediaTitle(
+          {
+            mediaId: 1,
+            s3Key: "uploads/photo.png",
+            displayName: name,
+            createdAt: "2026-08-15T09:12:00+09:00",
+          },
+          NOW,
+        ),
+      ).toBe(name.replace(/\.[a-z]+$/i, ""));
+    },
+  );
+
+  // 접두사가 같아도 뒤에 숫자가 없으면 사람이 지은 이름이다.
+  it("keeps names that only look like camera files", () => {
+    expect(
+      getUserMediaTitle(
+        {
+          mediaId: 1,
+          s3Key: "uploads/photo.png",
+          displayName: "IMG_우리집",
+          createdAt: "2026-08-15T09:12:00+09:00",
+        },
+        NOW,
+      ),
+    ).toBe("IMG_우리집");
+  });
+
   it("uses the user's own name for the media title", () => {
     expect(
       getUserMediaTitle(

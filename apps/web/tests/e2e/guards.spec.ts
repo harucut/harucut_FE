@@ -85,6 +85,32 @@ test("lets an event QR visitor shoot without signing up", async ({ page }) => {
 
 // event 없이 오는 /shoot 은 그대로 로그인으로 보낸다(위 protectedRoutes 가 검증한다).
 
+/**
+ * 촬영 화면에서 "프레임 다시 선택"으로 돌아와도 행사 맥락이 살아 있어야 한다.
+ *
+ * 돌아오는 주소에 행사 쿼리가 없으면 세션이 초기화되면서 행사 이름과 컷 구성이 함께
+ * 사라졌다. 참가자가 구성을 한 번 바꿔보려다 행사에서 튕겨 나오는 셈이었다.
+ */
+test("keeps the event context when going back to frame selection", async ({
+  page,
+}) => {
+  await page.goto("/shoot?frame=classic-4&event=%EC%97%AC%EB%A6%84%20%ED%8C%AC%EB%AF%B8%ED%8C%85");
+  await expect(page.getByText("여름 팬미팅")).toBeVisible();
+
+  await page.getByRole("button", { name: "촬영 시작하기" }).click();
+  await page.waitForURL("**/shoot/capture");
+  await expect(page.getByText("여름 팬미팅")).toBeVisible();
+
+  await page.getByRole("link", { name: "프레임 다시 선택" }).click();
+  // `**/shoot**` 로 기다리면 아직 /shoot/capture 인 상태에서 바로 통과해, 검사가
+  // 촬영 화면의 배너를 다시 보는 꼴이 된다. 프레임 선택 화면에 도착한 것을 정확히 본다.
+  await page.waitForURL((url) => new URL(url).pathname === "/shoot");
+  await expect(
+    page.getByRole("heading", { name: "프레임 선택" }),
+  ).toBeVisible();
+  await expect(page.getByText("여름 팬미팅")).toBeVisible();
+});
+
 // 게스트 체험은 촬영과 꾸미기까지 허용한다(꾸미기 저장 시 로그인 유도).
 const guestAllowedRoutes = ["/shoot", "/decorate"];
 

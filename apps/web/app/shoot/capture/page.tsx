@@ -51,6 +51,14 @@ export default function CapturePage() {
   // 8장을 다 찍으면 곧바로 다음 화면으로 넘어가므로, 표시용 번호는 MAX_SHOTS에서 멈춘다.
   const currentShotNumber = Math.min(shotCount + 1, MAX_SHOTS);
 
+  const backToFrameHref = (() => {
+    const params = new URLSearchParams();
+    if (frameId) params.set("frame", frameId);
+    if (eventName) params.set("event", eventName);
+    const query = params.toString();
+    return query ? `/shoot?${query}` : "/shoot";
+  })();
+
   return (
     /*
       촬영 화면은 스크롤하지 않는다. 프리뷰와 셔터가 한 화면에 같이 보여야 하는데,
@@ -68,7 +76,8 @@ export default function CapturePage() {
         <PageHeader
           title="사진 촬영"
           description={`${MAX_SHOTS}장을 찍고 다음 단계에서 4장을 골라요.`}
-          backHref="/shoot"
+          // 고른 컷 구성과 행사 맥락을 들고 돌아간다. 맨 주소로 보내면 둘 다 초기화된다.
+          backHref={backToFrameHref}
           backLabel="프레임 다시 선택"
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
         />

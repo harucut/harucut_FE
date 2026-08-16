@@ -23,7 +23,10 @@ function ShootPageContent() {
   const { setFrameId, setRemoteFrameId, setEventName, reset } = useShootSession();
   // 행사장 QR 은 `/shoot?frame=...&event=행사이름` 으로 들어온다. 이름은 화면에만 쓰므로
   // 길이를 잘라 두고(제목 한 줄), 앞뒤 공백은 버린다.
-  const eventName = (searchParams.get("event") ?? "").trim().slice(0, 40) || null;
+  const queriedEventName =
+    (searchParams.get("event") ?? "").trim().slice(0, 40) || null;
+  // 화면에는 세션에 자리잡은 값을 쓴다(쿼리 없이 돌아온 경우까지 덮는다).
+  const eventName = useShootSession((state) => state.eventName);
   const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
@@ -40,10 +43,13 @@ function ShootPageContent() {
   );
 
   useEffect(() => {
+    // 촬영 화면에서 "프레임 다시 선택"으로 돌아오면 주소에 행사 쿼리가 없다. 그때 세션을
+    // 비우고 이름까지 null 로 덮으면, 행사 참가자가 컷 구성을 한 번 바꿔보려다 행사 맥락을
+    // 통째로 잃는다. 쿼리가 없으면 이미 자리잡은 행사 이름을 그대로 이어 쓴다.
+    const carried = useShootSession.getState().eventName;
     reset();
-    // reset 이 세션을 비우므로 행사 이름은 그 뒤에 다시 넣는다.
-    setEventName(eventName);
-  }, [eventName, reset, setEventName]);
+    setEventName(queriedEventName ?? carried);
+  }, [queriedEventName, reset, setEventName]);
 
   const selectedRemoteFrame = useMemo(
     () =>
