@@ -13,6 +13,7 @@ const GREEN = "#1ED760";
 
 const NAV_LINKS = [
   { href: "/features", label: "기능" },
+  { href: "/enterprise", label: "행사" },
   { href: "/pricing", label: "요금제" },
   { href: "/faq", label: "FAQ" },
 ] as const;
@@ -46,8 +47,10 @@ export function MarketingNav({
     [class*="bg-white/5"]가 부분 문자열 매칭이라 hover:bg-white/5까지 상시 적용해버려
     라이트 시스템 테마에서 버튼이 흰 알약(글자 안 보임)으로 굳던 문제를 피한다.
   */
+  // 데스크톱은 브랜드 줄에, 모바일은 그 아래 줄에 놓는다. 예전에는 모바일에서 그냥 숨겨서
+  // 기능·요금제·FAQ 로 가는 길이 아예 없었다(햄버거도 없었다).
   const linkBase =
-    "hidden rounded-full px-4 py-2 text-[13px] font-semibold transition sm:inline-flex";
+    "inline-flex rounded-full px-4 py-2 text-[13px] font-semibold transition";
   const linkTone = dark
     ? "text-white hover:bg-white/[0.07]"
     : "text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]";
@@ -77,6 +80,7 @@ export function MarketingNav({
         <BrandMark href="/" tone={dark ? "light" : undefined} />
 
         <div className="flex items-center gap-2.5">
+          <div className="hidden items-center gap-2.5 sm:flex">
           {NAV_LINKS.map((link) => {
             const active = pathname === link.href;
             return (
@@ -92,6 +96,7 @@ export function MarketingNav({
               </Link>
             );
           })}
+          </div>
           {/* 우측 상단 primary CTA: 지금 시작하기 → /login(로그인 우선). 가입·비회원 체험은 로그인 페이지에서. */}
           <Link
             href="/login"
@@ -106,6 +111,28 @@ export function MarketingNav({
           </Link>
         </div>
       </div>
+
+      {/* 모바일 전용 보조 내비. 브랜드 줄에 넣을 자리가 없어 아래 줄로 뺀다. */}
+      <nav
+        aria-label="사이트 메뉴"
+        className="flex items-center gap-1 overflow-x-auto px-7 pb-2 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden"
+      >
+        {NAV_LINKS.map((link) => {
+          const active = pathname === link.href;
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={active ? "page" : undefined}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold transition ${linkTone} ${
+                active ? "" : dark ? "opacity-80" : "opacity-70"
+              }`}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
+      </nav>
     </header>
   );
 }

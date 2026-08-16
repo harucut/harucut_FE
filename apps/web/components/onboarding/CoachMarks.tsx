@@ -57,7 +57,13 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
     if (!active) return;
     const step = steps[index];
     const el = step ? findVisibleTarget(step.selector) : null;
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // 이미 화면 안에 있으면 스크롤하지 않는다. 부드러운 스크롤이 도는 동안 스포트라이트가
+    // 대상을 따라다니느라 위치가 계속 갱신됐다.
+    if (el) {
+      const box = el.getBoundingClientRect();
+      const inView = box.top >= 0 && box.bottom <= window.innerHeight;
+      if (!inView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
     // 스크롤 후 위치를 다시 측정
     const raf = window.requestAnimationFrame(measure);
 
@@ -101,10 +107,14 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
       {rect ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-2xl"
+          className="pointer-events-none absolute left-0 top-0 rounded-2xl"
+          /*
+            top/left 대신 transform 으로 옮긴다. 코치마크가 뜨는 순간 스포트라이트가
+            0.15 의 레이아웃 시프트를 만들고 있었다(실측). transform 은 레이아웃을 건드리지
+            않아 시프트로 잡히지 않고, 대상 위치를 다시 재도 화면이 밀리지 않는다.
+          */
           style={{
-            top: rect.top - pad,
-            left: rect.left - pad,
+            transform: `translate3d(${rect.left - pad}px, ${rect.top - pad}px, 0)`,
             width: rect.width + pad * 2,
             height: rect.height + pad * 2,
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.66)",
@@ -116,10 +126,9 @@ export function CoachMarks({ id, steps }: { id: string; steps: CoachStep[] }) {
       )}
 
       <div
-        className="absolute w-[300px] max-w-[calc(100vw-24px)] rounded-2xl border-2 border-[color:var(--hc-border-strong)] bg-[color:var(--hc-surface)] p-4 shadow-2xl"
+        className="absolute left-0 top-0 w-[300px] max-w-[calc(100vw-24px)] rounded-2xl border-2 border-[color:var(--hc-border-strong)] bg-[color:var(--hc-surface)] p-4 shadow-2xl"
         style={{
-          top: tooltipTop,
-          left: tooltipLeft,
+          transform: `translate3d(${tooltipLeft}px, ${tooltipTop}px, 0)`,
           boxShadow: "0 18px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.08)",
         }}
       >

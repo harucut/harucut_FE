@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -135,7 +135,7 @@ function MediaThumb({
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
       ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted-soft)]">
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-[color:var(--hc-muted)]">
           미리보기를 준비하는 중이에요.
         </div>
       )}
@@ -215,6 +215,29 @@ export default function HistoryPage() {
       window.clearTimeout(timeoutId);
     };
   }, [feedback]);
+
+  /**
+   * 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+   *
+   * SPA 이동이라 첫 렌더는 아직 불러오는 중이고 `media-<id>` 요소가 없다. 브라우저·Next 의
+   * 해시 스크롤은 그 시점에 한 번 시도하고 끝나서, 목록이 그려진 뒤에는 아무 일도 일어나지
+   * 않는다. 결국 어느 카드를 눌러도 목록 맨 위였다. 목록이 채워진 뒤에 직접 찾아 옮긴다.
+   */
+  const scrolledToHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || items.length === 0) return;
+
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith("#media-")) return;
+    // 같은 해시로 두 번 옮기지 않는다(목록이 갱신될 때마다 화면이 튀지 않게).
+    if (scrolledToHashRef.current === hash) return;
+
+    const target = document.getElementById(hash.slice(1));
+    if (!target) return;
+
+    scrolledToHashRef.current = hash;
+    target.scrollIntoView({ block: "center" });
+  }, [loading, items, view]);
 
   const groups = useMemo(() => groupByMonth(items), [items]);
 
@@ -326,7 +349,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
@@ -336,7 +359,7 @@ export default function HistoryPage() {
             <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
               기록
             </h1>
-            <p className="mt-2 text-[13.5px] text-[color:var(--hc-muted)]">
+            <p className="mt-2 text-[13px] text-[color:var(--hc-muted)]">
               남긴 하루컷 {loading ? "…" : items.length}개
               {planTier
                 ? ` · ${PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록을 볼 수 있어요`
@@ -371,7 +394,7 @@ export default function HistoryPage() {
         </header>
 
         {feedback ? (
-          <div className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
+          <div role="status" className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
             {feedback}
           </div>
         ) : null}
@@ -388,11 +411,11 @@ export default function HistoryPage() {
         ) : error ? (
           // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
+            <p role="alert" className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
             <button
               type="button"
               onClick={() => setReloadKey((prev) => prev + 1)}
-              className="hc-button-secondary rounded-full border px-5 py-2 text-[12.5px] font-semibold"
+              className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
             >
               다시 시도
             </button>
@@ -411,7 +434,7 @@ export default function HistoryPage() {
               저장한 기록이 아직 없어요.
             </p>
             {planTier && planTier !== "PRO" ? (
-              <p className="text-[12px] text-[color:var(--hc-muted-soft)]">
+              <p className="text-[12px] text-[color:var(--hc-muted)]">
                 {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
                 지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
                 <Link href="/pricing" className="underline">
@@ -421,7 +444,7 @@ export default function HistoryPage() {
             ) : null}
             <Link
               href="/shoot"
-              className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
+              className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
             >
               촬영 시작
             </Link>
@@ -434,7 +457,7 @@ export default function HistoryPage() {
                   <h2 className="text-[19px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+                  <span className="text-[13px] text-[color:var(--hc-muted)]">
                     {group.items.length}컷
                   </span>
                 </div>
@@ -444,7 +467,12 @@ export default function HistoryPage() {
                     const isEditing = editingId === item.mediaId;
 
                     return (
-                      <article key={item.mediaId} className="group flex flex-col gap-2.5">
+                      <article
+                        key={item.mediaId}
+                        // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+                        id={`media-${item.mediaId}`}
+                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-[color:var(--hc-primary)]"
+                      >
                         <MediaThumb item={item} />
 
                         <div className="flex flex-col gap-1">
@@ -469,7 +497,7 @@ export default function HistoryPage() {
                               {getUserMediaTitle(item)}
                             </p>
                           )}
-                          <p className="text-[11.5px] text-[color:var(--hc-muted-soft)]">
+                          <p className="text-[11px] text-[color:var(--hc-muted)]">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
@@ -600,7 +628,7 @@ function CalendarView({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+        <span className="text-[13px] text-[color:var(--hc-muted)]">
           이번 달 {monthItems.length}컷
         </span>
       </div>
@@ -649,7 +677,7 @@ function CalendarView({
                 <div className="relative mt-1 flex flex-1 items-center justify-center">
                   <MediaThumb item={list[0]} bare />
                   {list.length > 1 ? (
-                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[9px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
                       +{list.length - 1}
                     </span>
                   ) : null}

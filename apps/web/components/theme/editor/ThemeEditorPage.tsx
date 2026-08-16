@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
 import { BACKGROUND_COLORS } from "@/constants/colors";
@@ -31,6 +31,7 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useThemeDraftStore } from "@/lib/themeDraftStore";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
   clearEditorDraft,
@@ -142,6 +143,24 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
+  /*
+    저장이 도는 중에는 닫지 않는다. 취소 버튼은 비활성인데 Escape 만 열려 있으면,
+    업로드·미리보기 생성·API 호출이 끝나기 전에 편집기로 돌아가 캔버스를 더 만질 수 있다.
+    그러면 서버에는 예전 상태가 저장되는데 "저장됨" 기준선은 지금 상태로 갱신돼,
+    그 뒤의 편집이 저장된 것처럼 보인다(이탈 경고도 안 뜬다).
+
+    isSaving 을 의존성에 넣지 않고 ref 로 읽는다 — 콜백 정체성이 바뀌면 useModalDialog 의
+    effect 가 다시 돌면서 포커스를 첫 컨트롤로 되돌려, 저장을 누른 순간 포커스가 튄다.
+  */
+  const isSavingRef = useRef(false);
+  useEffect(() => {
+    isSavingRef.current = isSaving;
+  }, [isSaving]);
+  const closeSaveDialog = useCallback(() => {
+    if (isSavingRef.current) return;
+    setIsSaveDialogOpen(false);
+  }, []);
+  const saveDialogRef = useModalDialog(isSaveDialogOpen, closeSaveDialog);
 
   // 저장 다이얼로그에 입력한 이름·설명도 아직 서버에 안 올라간 작업이다.
   // 다이얼로그를 열면 현재 값으로 채워지므로, 그 값에서 달라졌을 때만 편집으로 센다.
@@ -261,29 +280,54 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   useEffect(() => {
     if (remoteFrameId) return;
     let timer: number | undefined;
+    let idle: number | undefined;
+
+    // 저장은 5MB 문자열을 만들고 쓰는 동기 작업이라 메인 스레드를 잡는다. 디바운스가 끝난
+    // 순간이 하필 사용자가 스티커를 끌고 있는 순간일 수 있어, 한가한 프레임까지 한 번 더
+    // 미룬다. 지원하지 않는 브라우저에서는 다음 틱에 그냥 실행한다.
+    const whenIdle = (run: () => void) => {
+      const ric = (
+        window as typeof window & {
+          requestIdleCallback?: (cb: IdleRequestCallback, o?: IdleRequestOptions) => number;
+        }
+      ).requestIdleCallback;
+      idle = ric
+        ? ric(() => run(), { timeout: 2000 })
+        : window.setTimeout(run, 0);
+    };
+
     const unsubscribe = useThemeEditorStore.subscribe(() => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        const s = useThemeEditorStore.getState();
-        if (!s.frameId) return;
-        const isEmptyDefault =
-          s.components.length === 0 && s.background.type === "COLOR";
-        if (isEmptyDefault) {
-          clearEditorDraft();
-          return;
-        }
-        void saveEditorDraft({
-          frameId: s.frameId,
-          backgroundColor: s.backgroundColor,
-          background: s.background,
-          cellCutouts: s.cellCutouts,
-          components: s.components,
-          now: Date.now(),
+        whenIdle(() => {
+          const s = useThemeEditorStore.getState();
+          if (!s.frameId) return;
+          const isEmptyDefault =
+            s.components.length === 0 && s.background.type === "COLOR";
+          if (isEmptyDefault) {
+            clearEditorDraft();
+            return;
+          }
+          void saveEditorDraft({
+            frameId: s.frameId,
+            backgroundColor: s.backgroundColor,
+            background: s.background,
+            cellCutouts: s.cellCutouts,
+            components: s.components,
+            now: Date.now(),
+          });
         });
       }, 1000);
     });
     return () => {
       window.clearTimeout(timer);
+      if (idle !== undefined) {
+        const cic = (
+          window as typeof window & { cancelIdleCallback?: (id: number) => void }
+        ).cancelIdleCallback;
+        if (cic) cic(idle);
+        else window.clearTimeout(idle);
+      }
       unsubscribe();
     };
   }, [remoteFrameId]);
@@ -406,7 +450,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           <div className="flex flex-col">
             <BrandMark href="/home" compact className="opacity-80" />
             {loadError ? (
-              <p className="mt-1 text-[11px] text-red-300">{loadError}</p>
+              <p role="alert" className="mt-1 text-[11px] text-[color:var(--hc-danger)]">{loadError}</p>
             ) : null}
           </div>
 
@@ -416,7 +460,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 type="button"
                 onClick={onDelete}
                 disabled={isDeleting || isSaving}
-                className="rounded-full border border-red-500/40 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                className="rounded-full border border-[color:var(--hc-danger-border)] px-4 py-2 text-xs font-semibold text-[color:var(--hc-danger)] hover:bg-[color:var(--hc-danger-soft-bg)] disabled:opacity-50"
               >
                 {isDeleting ? "삭제 중..." : "삭제"}
               </button>
@@ -461,17 +505,24 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 {BACKGROUND_COLORS.map((color) => {
                   const selected = backgroundColor === color.value;
                   return (
+                    // 라벨을 스와치 위에 얹으면 색마다 대비가 1.4~3.5:1 로 널뛴다.
+                    // 스와치는 색만 보여주고 이름은 아래에 둔다.
                     <button
                       key={color.id}
                       type="button"
                       onClick={() => setBackgroundColor(color.value)}
-                      className={`h-8 min-w-16 rounded-lg border px-2 text-[11px] ${
+                      aria-pressed={selected}
+                      className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[11px] ${
                         selected
-                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
+                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
                           : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
                       }`}
-                      style={{ backgroundColor: `#${color.value}` }}
                     >
+                      <span
+                        aria-hidden
+                        className="block h-6 w-full rounded border border-[color:var(--hc-border-subtle)]"
+                        style={{ backgroundColor: `#${color.value}` }}
+                      />
                       {color.label}
                     </button>
                   );
@@ -480,11 +531,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
+                  aria-label="배경색 직접 고르기"
                   value={`#${backgroundColor}`}
                   onChange={(e) => setBackgroundColor(e.target.value)}
                   className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
                 />
                 <input
+                  aria-label="배경색 코드"
                   value={backgroundColor}
                   onChange={(e) => setBackgroundColor(e.target.value)}
                   className="h-9 flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-xs text-[color:var(--hc-text)]"
@@ -526,7 +579,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 ) : null}
               </div>
               {backgroundError ? (
-                <p className="text-[11px] leading-4 text-red-300">
+                <p className="text-[11px] leading-4 text-[color:var(--hc-danger)]">
                   {backgroundError}
                 </p>
               ) : null}
@@ -546,7 +599,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 </p>
               </div>
 
-              <div className="h-[330px] flex items-center justify-center">
+              {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
+              <div className="flex min-h-[330px] items-center justify-center">
                 <CanvasStage />
               </div>
             </section>
@@ -569,6 +623,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       {isSaveDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-5 sm:items-center">
           <div
+            ref={saveDialogRef}
             aria-modal="true"
             aria-labelledby="theme-save-dialog-title"
             role="dialog"
@@ -610,7 +665,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 />
               </label>
               {saveDialogError ? (
-                <p className="text-[11px] leading-5 text-red-300">
+                <p className="text-[11px] leading-5 text-[color:var(--hc-danger)]">
                   {saveDialogError}
                 </p>
               ) : null}

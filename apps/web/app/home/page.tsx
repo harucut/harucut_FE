@@ -15,15 +15,13 @@ import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listMyMedia } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
 import {
+  getUserMediaDateLabel,
   getUserMediaPreviewUrl,
   getUserMediaTitle,
 } from "@/lib/userMediaPreview";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
-
-// 핸드오프 문구에 맞춘 주간 목표 컷 수(임의 상수). 진행 링/남은 컷 계산의 기준.
-const WEEKLY_GOAL = 5;
 
 const HOME_COACH_STEPS: CoachStep[] = [
   {
@@ -97,44 +95,6 @@ function useCurrentDateLabel() {
   return dateLabel;
 }
 
-// 진행 링(SVG). 핸드오프 app 홈 스탯 카드의 그린 링.
-function ProgressRing({
-  pct,
-  size = 46,
-  stroke = 5,
-}: {
-  pct: number;
-  size?: number;
-  stroke?: number;
-}) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const clamped = Math.max(0, Math.min(1, pct));
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--hc-surface-muted)"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--hc-primary)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c * (1 - clamped)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
-  );
-}
 
 // createdAt이 같은 (자연) 월에 속하면 이번 달 기록으로 센다.
 function countThisMonth(items: UserMedia[]) {
@@ -240,23 +200,20 @@ export default function HomePage() {
     () => countThisWeek(allMedia),
     [allMedia, currentDateLabel],
   );
-  const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
-  const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
-  const progressWidth = `${Math.round(ringPct * 100)}%`;
   // 조회에 실패했으면 0컷이라고 단정하지 않는다.
   const statsUnknown = loadError !== null;
   const monthCountLabel = statsUnknown ? "—" : `${monthCount}`;
-  const remainingToGoalLabel = statsUnknown ? "—" : `${remainingToGoal}컷`;
+  const weekCountLabel = statsUnknown ? "—" : `${weekCount}컷`;
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav userInitial={user?.username} />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
         {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
         <header className="pt-1 lg:pt-0">
           <h1 className="text-[25px] font-bold leading-[1.5] tracking-tight lg:text-[34px] lg:leading-[1.4]">
-            <span className="text-[color:var(--hc-primary)]">{currentHeadingDate}</span>의
+            <span className="text-[color:var(--hc-primary-strong)]">{currentHeadingDate}</span>의
             <br />
             기록을 남겨보세요.
           </h1>
@@ -269,11 +226,11 @@ export default function HomePage() {
           className="flex items-center gap-3.5 rounded-[24px] bg-[color:var(--hc-primary)] p-[18px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] lg:hidden"
         >
           <span className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-[15px] bg-[#06140A]">
-            <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary)]" />
+            <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary-strong)]" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-extrabold">지금 촬영하기</span>
-            <span className="mt-0.5 block whitespace-nowrap text-[12.5px] font-medium opacity-75">
+            <span className="mt-0.5 block whitespace-nowrap text-[13px] font-medium opacity-75">
               프레임 고르고 8장 찍기
             </span>
           </span>
@@ -287,9 +244,9 @@ export default function HomePage() {
             data-coach="upload"
             className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
           >
-            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
+            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
             <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13.5px] font-bold">
+              <span className="block whitespace-nowrap text-[13px] font-bold">
                 사진 불러오기
               </span>
               <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
@@ -302,9 +259,9 @@ export default function HomePage() {
             data-coach="theme"
             className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
           >
-            <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
+            <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
             <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13.5px] font-bold">
+              <span className="block whitespace-nowrap text-[13px] font-bold">
                 프레임 보기
               </span>
               <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
@@ -327,7 +284,7 @@ export default function HomePage() {
                 촬영하기
                 <ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" />
               </span>
-              <span className="mt-1 block text-[12.5px] font-medium opacity-75">
+              <span className="mt-1 block text-[13px] font-medium opacity-75">
                 프레임 고르고 8장, 네 컷만 남겨요
               </span>
             </span>
@@ -343,7 +300,7 @@ export default function HomePage() {
                 업로드하기
                 <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
               </span>
-              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+              <span className="mt-1 block text-[13px] text-[color:var(--hc-muted)]">
                 찍어둔 사진으로 만들어요
               </span>
             </span>
@@ -359,19 +316,27 @@ export default function HomePage() {
                 프레임 꾸미기
                 <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
               </span>
-              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
+              <span className="mt-1 block text-[13px] text-[color:var(--hc-muted)]">
                 만들어두면 촬영할 때 골라 써요
               </span>
             </span>
           </Link>
         </section>
 
-        {/* 모바일(&lt;lg) 스탯 카드 — 이번 달 컷 수 + 주간 목표 + 진행 링 */}
+        {/*
+          모바일(&lt;lg) 스탯 카드 — 실제로 찍은 수만 보여준다.
+          예전에는 "이번 주 목표까지 N컷 남았어요"라고 했는데, 그 목표는 사용자가 정한 적도
+          제품이 약속한 적도 없는 상수(5)였다. 가입 첫 화면부터 빚을 지우는 문구였다.
+        */}
         <section className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 lg:hidden">
-          <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary)]">
+          <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
             {monthCountLabel}
           </span>
-          <p className="flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
+          {/*
+            불러오기 전후로 줄 수가 달라져 카드 높이가 바뀌었다(첫 화면 CLS 0.007 지분).
+            두 줄 자리를 미리 잡아 둔다 — 13px × 1.45 × 2줄.
+          */}
+          <p className="min-h-[38px] flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
             {statsUnknown ? (
               "기록을 불러오지 못해 이번 달 기록 수를 알 수 없어요."
             ) : (
@@ -379,32 +344,24 @@ export default function HomePage() {
                 이번 달 <b className="text-[color:var(--hc-text)]">{monthCount}컷</b>을
                 남겼어요.
                 <br />
-                이번 주 목표까지{" "}
-                <b className="text-[color:var(--hc-primary-strong)]">{remainingToGoal}컷</b>{" "}
-                남았어요!
+                그중 이번 주에 <b className="text-[color:var(--hc-text)]">{weekCount}컷</b>
+                이에요.
               </>
             )}
           </p>
-          <ProgressRing pct={statsUnknown ? 0 : ringPct} />
         </section>
 
-        {/* 데스크톱(lg+) 주간 진행 스트립 */}
+        {/* 데스크톱(lg+) 기록 스트립 */}
         <section className="hc-surface-card hidden items-center gap-5 rounded-2xl border p-[22px] lg:flex">
           <span className="flex items-baseline gap-2">
-            <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary)]">
+            <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary-strong)]">
               {monthCountLabel}
             </span>
             <span className="text-[14px] text-[color:var(--hc-muted)]">컷 / 이번 달</span>
           </span>
-          <span className="h-2 min-w-[160px] flex-1 overflow-hidden rounded-full bg-[color:var(--hc-surface-muted)]">
-            <span
-              className="block h-full rounded-full bg-[color:var(--hc-primary)]"
-              style={{ width: statsUnknown ? "0%" : progressWidth }}
-            />
-          </span>
-          <span className="text-[13.5px] text-[color:var(--hc-muted)]">
-            이번 주 목표까지{" "}
-            <b className="text-[color:var(--hc-text)]">{remainingToGoalLabel}</b>
+          <span className="flex-1" />
+          <span className="text-[13px] text-[color:var(--hc-muted)]">
+            이번 주 <b className="text-[color:var(--hc-text)]">{weekCountLabel}</b>
           </span>
         </section>
 
@@ -440,7 +397,7 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={() => setReloadKey((prev) => prev + 1)}
-                  className="hc-button-secondary rounded-full border px-5 py-2 text-[12.5px] font-semibold"
+                  className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
                 >
                   다시 시도
                 </button>
@@ -452,7 +409,8 @@ export default function HomePage() {
                 return (
                   <Link
                     key={item.mediaId}
-                    href="/history"
+                    // 넉 장이 전부 목록 맨 위로만 갔다. 누른 그 기록으로 데려간다.
+                    href={`/history#media-${item.mediaId}`}
                     className="group flex flex-col gap-2"
                   >
                     <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
@@ -467,9 +425,15 @@ export default function HomePage() {
                         <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
                       )}
                     </div>
-                    <p className="truncate text-[13.5px] font-bold tracking-tight">
+                    <p className="truncate text-[13px] font-bold tracking-tight">
                       {getUserMediaTitle(item)}
                     </p>
+                    {/* 언제 찍은 것인지가 기록에서 가장 먼저 알고 싶은 정보다. */}
+                    {getUserMediaDateLabel(item) ? (
+                      <p className="-mt-1.5 text-[11px] text-[color:var(--hc-muted)]">
+                        {getUserMediaDateLabel(item)}
+                      </p>
+                    ) : null}
                   </Link>
                 );
               })
@@ -480,7 +444,7 @@ export default function HomePage() {
                 </p>
                 <Link
                   href="/shoot"
-                  className="hc-button-primary rounded-full px-5 py-2 text-[12.5px] font-semibold"
+                  className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
                 >
                   촬영 시작
                 </Link>

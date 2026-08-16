@@ -7,6 +7,7 @@ import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
@@ -14,7 +15,9 @@ import type { FrameId } from "@/constants/frames";
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
 
-const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.png");
+// 랜딩 미리보기는 한 변이 200px 남짓인데 원본은 900x1200 PNG(1.2MB)였다. 같은 파일이
+// 화면에 20 번 들어가 첫 로드를 그대로 잡아먹었다. 표시 크기에 맞춘 webp(30KB)를 쓴다.
+const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.webp");
 
 // 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [
@@ -74,6 +77,20 @@ function HowFilm() {
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
+      {/*
+        자동으로 넘어가는 콘텐츠에는 멈출 수단이 있어야 한다(WCAG 2.2.2, Level A).
+        마우스를 올리면 멈추긴 했지만 키보드·터치 사용자에게는 멈출 길이 없었다.
+      */}
+      <div className="flex justify-end px-3 pt-2">
+        <button
+          type="button"
+          onClick={() => setPaused((v) => !v)}
+          aria-pressed={paused}
+          className="rounded-full border border-white/[0.16] px-3 py-1 text-[12px] font-semibold text-white/80 transition hover:text-white"
+        >
+          {paused ? "자동 넘김 켜기" : "자동 넘김 멈추기"}
+        </button>
+      </div>
       <TapeStrip
         running={!reduced && !paused}
         className="border-b border-white/[0.06]"
@@ -114,7 +131,7 @@ function HowFilm() {
                 {s.t}
               </h3>
               <p
-                className="text-[14.5px] leading-[1.65] transition-colors duration-500"
+                className="text-[15px] leading-[1.65] transition-colors duration-500"
                 style={{
                   // .32는 대비 2.84로 본문 기준(4.5:1) 미달이라 .56으로 올렸다.
                   color: on ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.56)",
@@ -174,7 +191,7 @@ function HeroEditorial() {
         <h1>
           어디서든,
           <br />
-          하루를 <span className="hc-gradient-text">촬영해요</span>
+          하루를 <span className="hc-accent-word">촬영해요</span>
         </h1>
       </Reveal>
       <Reveal
@@ -182,10 +199,25 @@ function HeroEditorial() {
         delay={120}
         className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
-        <p>특별한 하루를 사진으로 남겨보세요.</p>
+        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
       </Reveal>
 
-      {/* 히어로는 브랜드 비주얼만 — CTA(지금 시작하기)는 헤더 우측 상단이 담당한다. */}
+      {/*
+        지금 단계의 목표는 "비회원 체험 -> 가입 전환"인데, 그 입구가 랜딩에 없었다.
+        헤더 CTA 를 눌러 /login 까지 가야 비회원 체험 버튼을 만났다. 첫 화면에서 바로 연다.
+        헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
+      */}
+      <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
+        <GuestTrialStartButton className="inline-flex items-center gap-1.5 rounded-full bg-white px-6 py-3 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]">
+          가입 없이 찍어보기
+        </GuestTrialStartButton>
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-1 rounded-full px-4 py-3 text-[14px] font-semibold text-white/80 underline underline-offset-4 transition hover:text-white"
+        >
+          로그인하고 시작하기 <ArrowRight className="h-4 w-4" />
+        </Link>
+      </Reveal>
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
       <Reveal
@@ -244,9 +276,9 @@ export function LandingView() {
             <h2 className="text-[38px] font-extrabold leading-[1.14] tracking-[-1.2px]">
               고르는 게 아니라,
               <br />
-              <span className="hc-gradient-text">만드는 거예요.</span>
+              <span className="hc-accent-word">만드는 거예요.</span>
             </h2>
-            <p className="mt-6 max-w-[420px] text-[15.5px] leading-[1.75] text-white/60">
+            <p className="mt-6 max-w-[420px] text-[15px] leading-[1.75] text-white/60">
               부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
               붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
               전부 달라집니다.
@@ -254,7 +286,7 @@ export function LandingView() {
 
             <Link
               href="/features"
-              className="mt-9 inline-flex items-center gap-1.5 text-[14.5px] font-bold text-white hover:opacity-80"
+              className="mt-9 inline-flex items-center gap-1.5 text-[15px] font-bold text-white hover:opacity-80"
             >
               기능 자세히 보기 <ArrowRight className="h-4 w-4" />
             </Link>
@@ -262,8 +294,10 @@ export function LandingView() {
 
           {/* 같은 프레임·같은 사진, 꾸미기만 다르게 — 실제 렌더러로 그린 대비 */}
           <Reveal delay={140}>
-            <div className="flex items-center justify-center gap-4 sm:gap-7">
-              <div className="h-[210px] opacity-40 grayscale sm:h-[268px]">
+            {/* 높이로 폭이 정해지는 미리보기 두 장이라, 좁은 화면에서는 높이를 같이 줄여야
+                가로로 넘치지 않는다(320px 에서 21px 넘쳤다). clamp 로 매끄럽게 줄인다. */}
+            <div className="flex items-center justify-center gap-3 sm:gap-7">
+              <div className="h-[clamp(130px,34vw,268px)] opacity-40 grayscale">
                 <FramePreview
                   frameId="grid-4"
                   images={HERO_IMAGES}
@@ -277,7 +311,7 @@ export function LandingView() {
                 className="h-[1px] w-6 shrink-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,.28)_0_4px,transparent_4px_8px)] sm:w-9"
               />
 
-              <div className="h-[250px] drop-shadow-2xl sm:h-[320px]">
+              <div className="h-[clamp(156px,41vw,320px)] drop-shadow-2xl">
                 <FramePreview
                   frameId="grid-4"
                   images={HERO_IMAGES}
@@ -288,6 +322,34 @@ export function LandingView() {
               </div>
             </div>
           </Reveal>
+        </div>
+      </section>
+
+      {/*
+        EVENT — 행사(B2B) 축.
+        랜딩이 개인 사용자 이야기만 하고 있어서, 행사 주최자가 들어와도 자기 이야기를
+        찾을 자리가 없었다. 제품이 파는 두 축 중 하나가 화면에 아예 없던 셈이다.
+      */}
+      <section id="event" className="border-y border-white/[0.1] bg-black">
+        <div className="mx-auto flex max-w-[1160px] flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex max-w-[560px] flex-col gap-4">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-[11px] font-extrabold tracking-[1px] text-white/70">
+              FOR EVENTS
+            </span>
+            <h2 className="text-[28px] font-extrabold leading-[1.2] tracking-[-1px] text-white lg:text-[38px]">
+              행사에서는 부스 대신 QR 한 장
+            </h2>
+            <p className="text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
+              팬미팅·페스티벌·사내 행사에 전용 프레임을 만들어 드려요. 참가자는 앱도 가입도
+              없이 QR을 찍어 자기 휴대폰으로 남깁니다. 줄도, 인화 대기도 없어요.
+            </p>
+          </div>
+          <Link
+            href="/enterprise"
+            className="inline-flex h-12 w-fit shrink-0 items-center gap-2 rounded-full bg-white px-7 text-[15px] font-extrabold text-[#0B0B0C] transition hover:bg-[#f1f1ee]"
+          >
+            행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 

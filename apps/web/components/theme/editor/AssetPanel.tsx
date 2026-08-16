@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import React, { useRef, useState } from "react";
 import { ImagePlus, Scissors, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
@@ -53,7 +55,7 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
+          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
       ].join(" ")}
     >
@@ -93,10 +95,14 @@ function PhotoTab() {
         multiple
         className="hidden"
         onChange={async (event) => {
-          if (!event.target.files) return;
+          // currentTarget 은 핸들러가 반환되면 null 이 된다. await 뒤에 만지면 TypeError 가 나고,
+          // 그 바람에 아래 value 초기화가 실행되지 않아 같은 파일을 다시 고르면 change 가
+          // 발생하지 않았다(무반응). 시작할 때 요소를 잡아 둔다.
+          const input = event.currentTarget;
+          if (!input.files) return;
 
           // 지원하지 않는 형식은 올리기 전에 걸러 사유를 먼저 알려준다.
-          const picked = Array.from(event.target.files);
+          const picked = Array.from(input.files);
           const supported = picked.filter(isSupportedUploadFile);
           const skipped = picked.length - supported.length;
 
@@ -105,7 +111,7 @@ function PhotoTab() {
           }
 
           if (supported.length === 0) {
-            event.currentTarget.value = "";
+            input.value = "";
             return;
           }
 
@@ -115,7 +121,7 @@ function PhotoTab() {
             alert(`${result.failed}개의 파일 업로드에 실패했어요.`);
           }
           setIsUploading(false);
-          event.currentTarget.value = "";
+          input.value = "";
         }}
       />
 
@@ -147,9 +153,9 @@ function PhotoTab() {
             "
             title="사진 업로드"
           >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary)]">
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary-strong)]">
               <ImagePlus size={18} />
-              <span className="text-[10px]">
+              <span className="text-[11px]">
                 {isUploading ? "업로드 중" : "추가"}
               </span>
             </div>
@@ -184,7 +190,7 @@ function PhotoTab() {
                 </button>
 
                 {isProcessing ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[10px] font-medium text-white">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[11px] font-medium text-white">
                     누끼를 정리하는 중이에요.
                   </div>
                 ) : null}
@@ -203,7 +209,7 @@ function PhotoTab() {
                       }
                     }}
                     disabled={isProcessing}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[11px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
                     title="누끼 제거"
                   >
                     <Scissors className="h-3 w-3" />
@@ -266,10 +272,17 @@ function StickerTab() {
               "
               title={sticker.name ?? "sticker"}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              {/*
+                72px 타일에 원본 PNG(최대 2MB, 39장 합계 40MB)를 그대로 내려받고 있었다.
+                next/image 로 바꾸면 같은 파일이 3KB대로 줄고 화면 밖 타일은 늦게 받는다.
+                캔버스에 얹을 때는 원본(sticker.src)을 그대로 쓴다.
+              */}
+              <Image
                 src={sticker.src}
-                alt={sticker.name ?? "sticker"}
+                alt={sticker.name ?? "스티커"}
+                width={72}
+                height={72}
+                sizes="72px"
                 className="h-full w-full object-contain p-2"
                 draggable={false}
               />

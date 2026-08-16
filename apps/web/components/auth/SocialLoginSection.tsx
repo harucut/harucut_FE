@@ -71,7 +71,7 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-[12.5px] text-[color:var(--hc-muted-soft)]">
+      <div className="flex items-center gap-2 text-[13px] text-[color:var(--hc-muted)]">
         <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
         <span>{dividerLabel}</span>
         <span className="h-px flex-1 bg-[color:var(--hc-border)]" />

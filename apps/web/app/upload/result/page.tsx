@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { UPLOAD_FLOW_STEPS } from "@/constants/flowSteps";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -77,11 +79,17 @@ export default function UploadResultPage() {
       } catch {
         // CORS/네트워크 실패 시 원본 URL로 진행한다.
       }
-      setDecorateSource(src, imageResult.displayName);
+      setDecorateSource(src, {
+        title: imageResult.displayName,
+        origin: "/upload/result",
+      });
       router.push("/decorate");
     } catch (error) {
       console.error(error);
-      setDecorateSource(imageResult.objectUrl, imageResult.displayName);
+      setDecorateSource(imageResult.objectUrl, {
+        title: imageResult.displayName,
+        origin: "/upload/result",
+      });
       router.push("/decorate");
     }
   };
@@ -347,6 +355,8 @@ export default function UploadResultPage() {
           description="완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
         />
 
+        <FlowSteps steps={UPLOAD_FLOW_STEPS} current={2} />
+
         <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -359,7 +369,7 @@ export default function UploadResultPage() {
                   : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
               </p>
             </div>
-            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[10px] font-medium text-[color:var(--hc-primary-strong)]">
+            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
               이미지
             </span>
           </div>
@@ -388,7 +398,7 @@ export default function UploadResultPage() {
           />
         </section>
 
-        {imageError ? <p className="text-[11px] text-red-500">{imageError}</p> : null}
+        {imageError ? <p className="text-[11px] text-[color:var(--hc-danger)]">{imageError}</p> : null}
 
         {imageState === "error" ? (
           <button

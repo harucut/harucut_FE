@@ -61,10 +61,10 @@ export function VerifyCodeForm({
       />
 
       {errors.common ? (
-        <p className="text-[10px] text-red-400">{errors.common}</p>
+        <p role="alert" className="text-[11px] text-[color:var(--hc-danger)]">{errors.common}</p>
       ) : null}
 
-      <div className="flex items-center justify-between text-[10px] text-zinc-500">
+      <div className="flex items-center justify-between text-[11px] text-zinc-500">
         <button
           type="button"
           onClick={onRestart}

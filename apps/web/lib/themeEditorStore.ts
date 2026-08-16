@@ -132,6 +132,12 @@ type State = {
   updateComponent: (id: string, patch: UpdatePatch) => void;
 
   remove: (id: string) => void;
+  // 방금 지운 요소를 되돌린다. 없으면 아무 일도 하지 않는다.
+  restoreRemoved: () => void;
+  canRestoreRemoved: boolean;
+  lastRemoved: EditorComponent | null;
+  /** 삭제 당시의 쌓임 순서(배열 인덱스). 되돌릴 때 그 자리에 다시 넣는다. */
+  lastRemovedIndex: number | null;
   duplicate: (id: string) => void;
 
   reset: () => void;
@@ -172,6 +178,9 @@ function resetEditorState(get: () => State) {
   return {
     tab: "PHOTO" as ComponentType,
     components: [],
+    lastRemoved: null,
+    lastRemovedIndex: null,
+    canRestoreRemoved: false,
     activeId: null,
     cellCutouts: [false, false, false, false],
     assets: {
@@ -196,6 +205,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   components: [],
+  lastRemoved: null,
+  lastRemovedIndex: null,
+  canRestoreRemoved: false,
   activeId: null,
   background: {
     type: "COLOR",
@@ -374,6 +386,15 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     );
     if (inUse) return { ok: false as const, reason: "IN_USE" as const };
 
+    // 되돌리기용 스냅샷이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
+    // 사진 탭에서 그 원본까지 지우면, 여기서 blob URL 이 해제된다. 그 상태로 되돌리기를
+    // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizePhotosForSave
+    // 가 원본 파일을 못 찾아 blob: 주소가 그대로 서버로 올라간다 — 깨진 프레임이 된다.
+    // 원본이 사라졌으면 되돌릴 수도 없으므로 스냅샷을 함께 버린다.
+    const snapshotUsesAsset =
+      state.lastRemoved?.type === "PHOTO" &&
+      state.lastRemoved.source === asset.src;
+
     try {
       URL.revokeObjectURL(asset.src);
     } catch {}
@@ -383,6 +404,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         ...s.assets,
         photos: s.assets.photos.filter((p) => p.id !== assetId),
       },
+      ...(snapshotUsesAsset
+        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
+        : {}),
     }));
 
     return { ok: true as const };
@@ -397,6 +421,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }
     set((s) => ({
       assets: { ...s.assets, photos: [] },
+      // 원본을 전부 버렸으므로 사진 레이어 스냅샷도 되살릴 수 없다(위 removePhotoAsset 참고).
+      ...(s.lastRemoved?.type === "PHOTO"
+        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
+        : {}),
     }));
   },
 
@@ -583,11 +611,45 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
+  // 삭제는 되돌릴 수 있어야 한다. 스티커 하나를 놓기까지 든 시간이 클릭 한 번에 사라지면
+  // 사용자는 편집 자체를 조심스러워한다. 직전 삭제 한 건을 들고 있다가 복구한다.
   remove: (id) => {
-    set((s) => ({
-      components: normalizeZ(s.components.filter((c) => c.id !== id)),
-      activeId: s.activeId === id ? null : s.activeId,
-    }));
+    set((s) => {
+      const index = s.components.findIndex((c) => c.id === id);
+      const removed = index === -1 ? null : s.components[index];
+      return {
+        components: normalizeZ(s.components.filter((c) => c.id !== id)),
+        activeId: s.activeId === id ? null : s.activeId,
+        lastRemoved: removed,
+        lastRemovedIndex: removed ? index : null,
+        canRestoreRemoved: Boolean(removed),
+      };
+    });
+  },
+
+  /**
+   * 삭제한 자리로 되돌린다.
+   *
+   * 예전에는 배열 끝에 붙이고 zIndex 를 다시 매겼다. 그래서 중간이나 맨 아래에 있던
+   * 요소를 지웠다 되돌리면 항상 맨 위로 올라왔고, 겹쳐 있던 스티커·사진의 합성 결과가
+   * 삭제 전과 달라졌다. "되돌리기"가 이전 상태로 돌아가지 않는 셈이었다.
+   * 삭제 당시의 자리(배열 인덱스 = 쌓임 순서)를 함께 들고 있다가 그 자리에 끼워 넣는다.
+   */
+  restoreRemoved: () => {
+    const removed = get().lastRemoved;
+    if (!removed) return;
+    set((s) => {
+      const next = [...s.components];
+      const at = Math.min(s.lastRemovedIndex ?? next.length, next.length);
+      next.splice(at, 0, removed);
+      return {
+        components: normalizeZ(next),
+        activeId: removed.id,
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
+      };
+    });
   },
 
   duplicate: (id) => {
@@ -705,6 +767,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
+        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
+        // 끼어들어 그대로 저장된다.
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
+
         cellCutouts: Array.isArray(data.cellCutouts)
           ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
           : [false, false, false, false],
@@ -766,6 +835,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           })) as EditorComponent[],
         ),
         activeId: null,
+        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
+        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
+        // 끼어들어 그대로 저장된다.
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
         background: draft.background,
         backgroundColor:
           draft.background.type === "COLOR"

@@ -91,7 +91,7 @@ export function EmailCodeSection({
       {isVerified ? (
         <div className="hc-surface-hero rounded-2xl border px-3 py-3">
           <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] p-2 text-[color:var(--hc-primary)]">
+              <div className="mt-0.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] p-2 text-[color:var(--hc-primary-strong)]">
               <ShieldCheck size={16} />
             </div>
             <div className="min-w-0 flex-1">
@@ -99,11 +99,11 @@ export function EmailCodeSection({
                 <p className="text-[11px] font-medium text-[color:var(--hc-text)]">
                   {verifiedText}
                 </p>
-                <span className="hc-accent-chip rounded-full border px-2 py-0.5 text-[10px] font-medium">
+                <span className="hc-accent-chip rounded-full border px-2 py-0.5 text-[11px] font-medium">
                   인증 완료
                 </span>
               </div>
-              <p className="mt-1 text-[10px] leading-relaxed text-[color:var(--hc-muted)]">
+              <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--hc-muted)]">
                 이메일을 수정하면 인증 코드 입력 영역이 다시 나타납니다.
               </p>
             </div>
@@ -115,7 +115,7 @@ export function EmailCodeSection({
             <div
               className={`rounded-2xl border px-3 py-2 ${
                 isExpired
-                  ? "border-red-500/30 bg-red-500/10"
+                  ? "border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)]"
                   : "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)]"
               }`}
             >
@@ -124,12 +124,12 @@ export function EmailCodeSection({
                   <Clock3
                     size={14}
                     className={
-                      isExpired ? "text-red-200" : "text-[color:var(--hc-primary)]"
+                      isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-primary-strong)]"
                     }
                   />
                   <p
-                    className={`text-[10px] ${
-                      isExpired ? "text-red-200" : "text-[color:var(--hc-text)]"
+                    className={`text-[11px] ${
+                      isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-text)]"
                     }`}
                   >
                     {isExpired
@@ -138,7 +138,7 @@ export function EmailCodeSection({
                   </p>
                 </div>
                 {!isExpired ? (
-                  <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[10px] font-medium">
+                  <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[11px] font-medium">
                     {formatRemainingTime(remainingSeconds)}
                   </span>
                 ) : null}
@@ -185,7 +185,7 @@ export function EmailCodeSection({
           </div>
 
           {codeError ? (
-            <p className="text-[11px] text-red-200">{codeError}</p>
+            <p className="text-[11px] text-[color:var(--hc-danger)]">{codeError}</p>
           ) : null}
         </>
       )}

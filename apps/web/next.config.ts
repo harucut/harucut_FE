@@ -18,7 +18,41 @@ const nextConfig: NextConfig = {
   // 워크스페이스 공통 패키지는 TS 소스로 배포되므로 빌드에서 트랜스파일한다
   transpilePackages: ["@harucut/shared"],
   async headers() {
-    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+    return [
+      { source: "/:path*", headers: SECURITY_HEADERS },
+      // public/ 의 정적 자산에는 캐시 정책이 없어 매 방문마다 다시 받아왔다.
+      // 스티커 PNG 78장·히어로 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
+      // 영구 immutable 은 못 주지만, 하루 캐시 + 하루 stale-while-revalidate 로
+      // 재방문의 왕복을 없앤다(바꾸면 최대 하루 뒤 반영된다).
+      {
+        source: "/stickers/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        source: "/:file(hero-image.webp|hero-image.png|og-image.png|shutter.mp3|google-g-logo.png|kakao-symbol.png|naver-symbol.png)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      // 아이콘·매니페스트는 훨씬 덜 바뀐다.
+      {
+        source: "/:file(favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|icon-192.png|icon-512.png|icon-maskable-512.png|site.webmanifest)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=604800, stale-while-revalidate=604800",
+          },
+        ],
+      },
+    ];
   },
 };
 

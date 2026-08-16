@@ -50,6 +50,15 @@ export function useCaptureFlow() {
   const isShootingRef = useRef(false);
   // 진행 중인 카운트다운 타이머. 촬영 취소에서 즉시 정리하려고 따로 들고 있는다.
   const countdownTimerRef = useRef<number | null>(null);
+  /**
+   * 촬영 회차 번호.
+   *
+   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 사용자가 촬영 취소를 누르면
+   * 세션이 비워진 뒤에 결과가 돌아온다. 그대로 두면 취소한 사진이 다시 담기고, 마지막 컷을
+   * 인코딩하던 중이었다면 /shoot/select 로 넘어가 취소 자체가 무효가 됐다.
+   * 시작·취소 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
+   */
+  const shootGenerationRef = useRef(0);
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
@@ -179,6 +188,10 @@ export function useCaptureFlow() {
   useEffect(() => {
     return () => {
       stopStream();
+      // 인코딩이 도는 중에 헤더의 뒤로 가기나 브랜드 링크로 화면을 떠나면 취소를 거치지
+      // 않는다. 그대로 두면 결과가 돌아와 전역 세션에 사진이 얹히고, 마지막 컷이었다면
+      // 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다. 취소와 같게 무효로 만든다.
+      shootGenerationRef.current += 1;
     };
   }, [stopStream]);
 
@@ -191,7 +204,7 @@ export function useCaptureFlow() {
 
   // 현재 프레임을 캡처. 전면(user) 카메라만 셀피 감각을 위해 좌우반전하고,
   // 후면(environment) 카메라는 반전하지 않는다(간판·텍스트가 뒤집혀 저장되던 버그 수정).
-  const capturePhotoToDataUrl = useCallback(() => {
+  const capturePhotoToDataUrl = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return null;
 
     const video = videoRef.current;
@@ -231,21 +244,50 @@ export function useCaptureFlow() {
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    // 셔터음은 인코딩을 기다리지 않고 즉시 낸다 — 누른 순간과 소리가 붙어 있어야 한다.
     playShutterSound();
-    return dataUrl;
+
+    // toDataURL 은 메인 스레드에서 동기로 JPEG 을 인코딩한다. 촬영 한 장에 100ms 대가
+    // 통째로 멈춰서, 8 연사 동안 카운트다운과 프리뷰가 눈에 띄게 끊겼다.
+    // toBlob 은 인코딩을 브라우저에 맡기고 콜백으로 돌려주므로 그 구간이 사라진다.
+    return await new Promise<string | null>((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(null);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
   }, [playShutterSound, captureSlot, cameraFacingMode]);
 
   // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
   // state updater 안에서 호출하지 않는다 — 라우팅 같은 사이드 이펙트가 함께 실행되므로
-  const finishSingleShot = useCallback(() => {
-    // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리
+  const finishSingleShot = useCallback(async () => {
+    // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리.
+    // 인코딩을 기다리는 동안에도 다른 트리거가 끼어들 수 있으므로 await 전에 선점한다.
     if (lastFinishedShotRef.current >= shotCount) return;
-
-    const photoDataUrl = capturePhotoToDataUrl();
-    if (!photoDataUrl) return;
-
     lastFinishedShotRef.current = shotCount;
+
+    const generation = shootGenerationRef.current;
+    const photoDataUrl = await capturePhotoToDataUrl();
+
+    // 인코딩 중에 취소됐으면 결과를 버린다. 선점도 되돌리지 않는다 — 취소가 이미 초기화했다.
+    if (shootGenerationRef.current !== generation) return;
+
+    if (!photoDataUrl) {
+      // 인코딩이 실패했으면 이 컷은 아직 안 찍힌 것이다. 선점을 되돌려 다시 시도할 수 있게 한다.
+      lastFinishedShotRef.current = shotCount - 1;
+      return;
+    }
+
     addShotPhoto(photoDataUrl);
 
     const next = shotCount + 1;
@@ -282,6 +324,7 @@ export function useCaptureFlow() {
     setShotCount(0);
     lastFinishedShotRef.current = -1;
     isShootingRef.current = true;
+    shootGenerationRef.current += 1;
 
     // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
     setShooting({ isShooting: true, countdown: timerSeconds });
@@ -296,7 +339,7 @@ export function useCaptureFlow() {
       countdownTimerRef.current = null;
       // 이 effect는 isShooting/countdown 변경마다 재실행되므로 closure 값이 최신
       if (shooting.countdown !== null && shooting.countdown <= 1) {
-        finishSingleShot();
+        void finishSingleShot();
         return;
       }
 
@@ -316,7 +359,7 @@ export function useCaptureFlow() {
 
   const handleShootNow = useCallback(() => {
     if (!shooting.isShooting || !isCameraReady) return;
-    finishSingleShot();
+    void finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
 
   // 촬영 취소: 진행 중인 카운트다운을 즉시 끊고 세션을 시작 전 상태로 되돌린다.
@@ -329,6 +372,8 @@ export function useCaptureFlow() {
 
     isShootingRef.current = false;
     lastFinishedShotRef.current = -1;
+    // 진행 중인 인코딩의 결과를 무효로 만든다.
+    shootGenerationRef.current += 1;
     setShooting({ isShooting: false, countdown: null });
     resetShots();
     setShotCount(0);

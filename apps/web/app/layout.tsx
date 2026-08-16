@@ -33,6 +33,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0B0B0C",
+  // standalone(홈 화면 설치)로 뜨면 노치·홈 인디케이터 영역까지 화면이 된다.
+  // cover 를 켜야 env(safe-area-inset-*) 가 실제 값을 갖는다.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -33,7 +33,7 @@ export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
   const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
 
   const shootButtonClass =
-    "hc-button-primary flex items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-bold";
+    "hc-button-primary flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold";
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl lg:block">
@@ -48,7 +48,7 @@ export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`whitespace-nowrap rounded-full px-3.5 py-2 text-[14.5px] font-bold transition ${
+                className={`whitespace-nowrap rounded-full px-3.5 py-2 text-[15px] font-bold transition ${
                   active
                     ? "bg-[color:var(--hc-surface-highlight)] text-[color:var(--hc-text)] shadow-sm"
                     : "text-[color:var(--hc-muted)] hover:text-[color:var(--hc-text)]"

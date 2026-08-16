@@ -6,6 +6,8 @@ import type { FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { UPLOAD_FLOW_STEPS } from "@/constants/flowSteps";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { parseFrameIdQuery } from "@/lib/frameCatalog";
@@ -59,6 +61,8 @@ function UploadFramePageContent() {
           title="프레임 선택"
           description="업로드로 만들 프레임을 먼저 골라 주세요."
         />
+
+        <FlowSteps steps={UPLOAD_FLOW_STEPS} current={0} />
 
         <FramePicker
           selectedFrameId={selectedFrameId}

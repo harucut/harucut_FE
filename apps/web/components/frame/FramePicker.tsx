@@ -139,7 +139,7 @@ function FramePickerCard({
           ].join(" ")}
         >
           {/* 짧은 태그 — 미리보기 모서리에 얹어 배치 성격을 한눈에 준다. */}
-          <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] text-white">
+          <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-0.5 text-[11px] font-bold tracking-[0.08em] text-white">
             {meta.shortLabel}
           </span>
 
@@ -157,7 +157,7 @@ function FramePickerCard({
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-0.5">
               <p className="text-sm font-semibold text-zinc-50">{frameName}</p>
-              <p className="text-[11px] font-medium text-[color:var(--hc-primary)]">
+              <p className="text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
                 {meta.badge}
               </p>
             </div>

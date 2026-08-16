@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { STICKERS } from "@/constants/stickers.generated";
 import { useDecorateStore } from "@/lib/decorateStore";
 import type { TextStyleJson } from "@/lib/types/themeEditor";
@@ -13,7 +15,14 @@ const DRAW_COLORS = [
   "#4d7cff",
   "#ff8ad4",
 ];
-const DRAW_WIDTHS = [6, 10, 18, 28];
+// 굵기 값과 사람이 부르는 이름을 한 쌍으로 둔다. 버튼 안이 점 하나뿐이라
+// 이름이 없으면 스크린리더에 "버튼"으로만 읽힌다.
+const DRAW_WIDTHS = [
+  { value: 6, label: "가늘게" },
+  { value: 10, label: "보통" },
+  { value: 18, label: "굵게" },
+  { value: 28, label: "아주 굵게" },
+] as const;
 
 function Section({
   title,
@@ -46,6 +55,8 @@ export function DecoratePanel() {
   const activeId = useDecorateStore((s) => s.activeId);
   const update = useDecorateStore((s) => s.updateComponent);
   const removeActive = useDecorateStore((s) => s.removeActive);
+  const restoreRemoved = useDecorateStore((s) => s.restoreRemoved);
+  const canRestoreRemoved = useDecorateStore((s) => s.canRestoreRemoved);
   const duplicateActive = useDecorateStore((s) => s.duplicateActive);
   const moveActive = useDecorateStore((s) => s.moveActive);
 
@@ -112,20 +123,23 @@ export function DecoratePanel() {
           />
         </div>
         <div className="flex items-center gap-2">
-          {DRAW_WIDTHS.map((w) => (
+          {DRAW_WIDTHS.map(({ value, label }) => (
             <button
-              key={w}
+              key={value}
               type="button"
-              onClick={() => setDrawWidth(w)}
+              onClick={() => setDrawWidth(value)}
+              aria-label={`펜 굵기 ${label}`}
+              aria-pressed={drawWidth === value}
               className={`flex h-8 flex-1 items-center justify-center rounded-lg border ${
-                drawWidth === w
+                drawWidth === value
                   ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)]"
                   : "border-zinc-700"
               }`}
             >
               <span
+                aria-hidden
                 className="rounded-full bg-zinc-200"
-                style={{ width: w, height: w }}
+                style={{ width: value, height: value }}
               />
             </button>
           ))}
@@ -166,7 +180,7 @@ export function DecoratePanel() {
                   key={align}
                   type="button"
                   onClick={() => update(active.id, { styleJson: { textAlign: align } })}
-                  className={`rounded-md border px-2 py-1 text-[10px] ${
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
                     activeTextStyle.textAlign === align
                       ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
                       : "border-zinc-700 text-zinc-400"
@@ -190,10 +204,13 @@ export function DecoratePanel() {
               onClick={() => addSticker(sticker.src)}
               className="aspect-square rounded-lg border border-zinc-800 bg-zinc-950/60 p-1 transition hover:border-zinc-600"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              {/* 타일은 축소본으로 받는다(원본 39장 합계 40MB). 캔버스에는 원본을 얹는다. */}
+              <Image
                 src={sticker.src}
                 alt={sticker.name ?? "스티커"}
+                width={72}
+                height={72}
+                sizes="72px"
                 className="h-full w-full object-contain"
               />
             </button>
@@ -246,13 +263,28 @@ export function DecoratePanel() {
               <button
                 type="button"
                 onClick={removeActive}
-                className="rounded-full border border-red-500/40 px-3 py-1.5 text-[11px] text-red-200"
+                className="rounded-full border border-[color:var(--hc-danger-border)] px-3 py-1.5 text-[11px] text-[color:var(--hc-danger)]"
               >
                 삭제
               </button>
             </div>
           </div>
         </Section>
+      ) : null}
+
+      {/*
+        삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 아예 없으면 편집을 조심스러워한다.
+        "선택한 요소" 블록 안에 두면 안 된다 — 삭제하는 순간 선택이 풀려 블록째 사라지므로,
+        정작 되돌리고 싶은 그 순간에 버튼이 화면에 없다.
+      */}
+      {canRestoreRemoved ? (
+        <button
+          type="button"
+          onClick={restoreRemoved}
+          className="w-full rounded-full border border-[color:var(--hc-border-strong)] px-3 py-2.5 text-[12px] font-semibold text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)]"
+        >
+          방금 지운 요소 되돌리기
+        </button>
       ) : null}
     </div>
   );

@@ -100,7 +100,7 @@ export function FrameOutputOptionsPanel({
                 <span className="block text-[11px] font-semibold text-zinc-100">
                   {filter.label}
                 </span>
-                <span className="mt-1 block text-[10px] text-zinc-400">
+                <span className="mt-1 block text-[11px] text-zinc-400">
                   {filter.description}
                 </span>
               </button>

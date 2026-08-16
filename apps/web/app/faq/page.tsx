@@ -45,7 +45,7 @@ export default function FaqPage() {
           가독성을 위해 본문(질문/답변) 컬럼만 안쪽에서 폭을 제한한다. */}
       <div className="mx-auto w-full max-w-[1160px] px-7 py-10 lg:py-14">
         <header className="mb-9">
-          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
+          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
             FAQ · 자주 묻는 질문
           </span>
           <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[32px]">
@@ -90,13 +90,13 @@ export default function FaqPage() {
           <div className="mt-2 flex flex-wrap justify-center gap-2">
             <Link
               href="/pricing"
-              className="hc-surface-well flex h-[44px] items-center rounded-full border px-5 text-[13.5px] font-bold text-[color:var(--hc-text)]"
+              className="hc-surface-well flex h-[44px] items-center rounded-full border px-5 text-[13px] font-bold text-[color:var(--hc-text)]"
             >
               요금제 보기
             </Link>
             <Link
               href="/login"
-              className="hc-button-primary flex h-[44px] items-center rounded-full px-5 text-[13.5px] font-bold"
+              className="hc-button-primary flex h-[44px] items-center rounded-full px-5 text-[13px] font-bold"
             >
               지금 시작하기
             </Link>

@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-15T11:00:00Z",
+  "title": "Design System: Harucut Web",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "비비드 그린",
+        "canonical": "#1ed760",
+        "tonalRamp": ["#04180b", "#06341a", "#08512a", "#0b6f3a", "#0f8d4a", "#14ac5b", "#1ed760", "#a6f3c4"]
+      },
+      "primary-strong": {
+        "role": "primary",
+        "displayName": "소프트 그린",
+        "canonical": "#56dd86",
+        "tonalRamp": ["#0a1f14", "#123c26", "#1a5a39", "#23794d", "#2d9862", "#3ab877", "#56dd86", "#bdf3d2"]
+      },
+      "stage": {
+        "role": "neutral",
+        "displayName": "무대 검정",
+        "canonical": "#0b0b0c",
+        "tonalRamp": ["#0b0b0c", "#161617", "#18181a", "#232325", "#3a3a3d", "#5a5a5e", "#6f6f73", "#b3b3b3"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "표면",
+        "canonical": "#18181a",
+        "tonalRamp": ["#0b0b0c", "#131314", "#18181a", "#1c1c1e", "#232325", "#2e2e31", "#3a3a3d", "#5a5a5e"]
+      },
+      "light-stage-tint": {
+        "role": "neutral",
+        "displayName": "종이 그늘 (라이트 무대의 아래쪽)",
+        "canonical": "#f1f1ee",
+        "tonalRamp": ["#1a1a18", "#333330", "#4d4d48", "#666660", "#808078", "#b3b3ac", "#f1f1ee", "#fafaf7"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "뮤트 그레이",
+        "canonical": "#b3b3b3",
+        "tonalRamp": ["#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#e6e6e6"]
+      },
+      "light-primary-strong": {
+        "role": "primary",
+        "displayName": "딥 그린 (라이트 테마 글자용)",
+        "canonical": "#0b6b30",
+        "tonalRamp": ["#02170a", "#042f15", "#074720", "#0a5f2b", "#0e7e39", "#149c48", "#3dd17f", "#c9f7da"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "랜딩 헤드라인 전용. 화면을 압도하는 크기가 의도다." },
+      "headline": { "displayName": "Headline", "purpose": "섹션 제목과 페이지 타이틀." },
+      "title": { "displayName": "Title", "purpose": "카드 제목과 버튼 라벨." },
+      "body": { "displayName": "Body", "purpose": "설명 문장. 읽는 문단은 최대 460px 폭." },
+      "label": { "displayName": "Label (mono)", "purpose": "축 라벨·단계 번호·상태 표시. 읽히는 값에만." }
+    },
+    "shadows": [
+      { "name": "card", "value": "0 18px 40px rgba(0, 0, 0, 0.5)", "purpose": "기본 카드. 다크 무대에서 살짝 떠 있는 느낌." },
+      { "name": "card-xl", "value": "0 20px 60px rgba(0, 0, 0, 0.6)", "purpose": "넓은 패널." },
+      { "name": "card-hero", "value": "0 24px 80px rgba(0, 0, 0, 0.7)", "purpose": "첫 화면의 주인공 카드." },
+      { "name": "button-green", "value": "0 10px 28px -12px rgba(30, 215, 96, 0.5)", "purpose": "초록 버튼 전용. 그림자에 색을 넣어 스스로 빛나 보이게 한다." },
+      { "name": "button-green-hover", "value": "0 14px 32px -12px rgba(30, 215, 96, 0.6)", "purpose": "초록 버튼 hover." }
+    ],
+    "motion": [
+      { "name": "control", "value": "180ms ease", "purpose": "버튼·입력의 색과 그림자 전환. 이동은 넣지 않는다." },
+      { "name": "reveal", "value": "600ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "등장 애니메이션(.hc-reveal). opacity 0→1 + 18px 상승." },
+      { "name": "film-step", "value": "500ms ease", "purpose": "필름 단계 전환의 색 변화." },
+      { "name": "film-dwell", "value": "2600ms linear", "purpose": "노출 게이지가 한 단계에 머무는 시간." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "container", "value": "1160px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "화면당 하나뿐인 주 행동. 초록 배경에 색 그림자.",
+      "html": "<button class=\"ds-btn-primary\">지금 시작하기</button>",
+      "css": ".ds-btn-primary { background: #1ed760; color: #06140a; border: none; border-radius: 9999px; padding: 12px 20px; font-size: 15px; font-weight: 800; letter-spacing: -0.3px; box-shadow: 0 10px 28px -12px rgba(30,215,96,0.5); cursor: pointer; transition: background-color 180ms ease, box-shadow 180ms ease; } .ds-btn-primary:hover { background: #1fe267; box-shadow: 0 14px 32px -12px rgba(30,215,96,0.6); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0c, 0 0 0 4px #1ed760; }"
+    },
+    {
+      "name": "Neutral Button",
+      "kind": "button",
+      "refersTo": "button-neutral",
+      "description": "초록만큼 강하되 색을 쓰지 않아야 할 때. 히어로의 보조 CTA.",
+      "html": "<button class=\"ds-btn-neutral\">둘러보기</button>",
+      "css": ".ds-btn-neutral { background: #ffffff; color: #0b0b0c; border: none; border-radius: 9999px; padding: 12px 20px; font-size: 15px; font-weight: 800; box-shadow: 0 16px 36px rgba(0,0,0,0.4); cursor: pointer; transition: background-color 180ms ease; } .ds-btn-neutral:hover { background: #f1f1ee; } .ds-btn-neutral:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0c, 0 0 0 4px #1ed760; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "보조 행동. 하이라이트 표면 위 흰 글자.",
+      "html": "<button class=\"ds-btn-secondary\">취소</button>",
+      "css": ".ds-btn-secondary { background: #232325; color: #ffffff; border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px; padding: 12px 20px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background-color 180ms ease; } .ds-btn-secondary:hover { background: #2e2e31; } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b0b0c, 0 0 0 4px #1ed760; }"
+    },
+    {
+      "name": "Accent Chip",
+      "kind": "chip",
+      "refersTo": "chip-accent",
+      "description": "상태·요금제·개수 표시. 누를 수 없어 보여야 하므로 그림자를 주지 않는다.",
+      "html": "<span class=\"ds-chip-accent\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z\"/></svg>PLUS</span>",
+      "css": ".ds-chip-accent { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 9999px; background: rgba(30,215,96,0.16); border: 1px solid rgba(30,215,96,0.3); color: #7beaa6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.2px; }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "기본 카드. 다크에서는 명도 계단이 먼저, 그림자는 보조.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-title\">보관 2 <span class=\"ds-card-sub\">/ 3개</span></p><p class=\"ds-card-body\">1개 더 저장할 수 있어요</p></div>",
+      "css": ".ds-card { background: #18181a; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); } .ds-card-title { margin: 0; color: #ffffff; font-size: 15px; font-weight: 800; letter-spacing: -0.3px; } .ds-card-sub { color: #b3b3b3; font-weight: 600; } .ds-card-body { margin: 4px 0 0; color: #b3b3b3; font-size: 11px; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "포커스는 초록 테두리 + 1px 링. outline을 지우되 반드시 링으로 대체한다.",
+      "html": "<input class=\"ds-input\" type=\"email\" placeholder=\"이메일을 입력해 주세요\" />",
+      "css": ".ds-input { width: 100%; background: #232325; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 14px; color: #ffffff; font-size: 15px; transition: border-color 180ms ease, box-shadow 180ms ease; } .ds-input::placeholder { color: #6f6f73; } .ds-input:focus { border-color: #1ed760; outline: none; box-shadow: 0 0 0 1px #1ed760; }"
+    },
+    {
+      "name": "Film Exposure Gauge",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "시그니처. 현재 단계에 초록이 차오르는 얇은 바. 감소 모션에서는 애니메이션이 멈춘다.",
+      "html": "<div class=\"ds-gauge\"><span class=\"ds-gauge-fill\"></span></div>",
+      "css": ".ds-gauge { position: relative; width: 100%; height: 2px; background: rgba(255,255,255,0.06); overflow: hidden; } .ds-gauge-fill { position: absolute; inset: 0; background: #1ed760; transform-origin: left center; animation: ds-gauge-run 2600ms linear forwards; } @keyframes ds-gauge-run { from { transform: scaleX(0); } to { transform: scaleX(1); } } @media (prefers-reduced-motion: reduce) { .ds-gauge-fill { animation: none; transform: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "주머니 속 스튜디오",
+    "overview": "하루컷은 역 앞 네컷 부스를 통째로 주머니에 넣은 제품이다. 그래서 화면은 놀이터가 아니라 장비처럼 생겼다. 딥다크 무대(#0B0B0C) 위에 요소를 정확히 놓고, 숫자와 라벨은 모노 서체로 각을 세우고, 노출 게이지와 테이프 스트립처럼 실제 촬영 장비의 부품을 빌려 쓴다. 정밀함이 신뢰를 만든다. 들뜸은 UI가 아니라 사진이 만든다. 인터페이스는 조용히 물러나고, 화면에서 가장 밝고 가장 색이 많은 것은 항상 사용자의 네 컷이다. 초록(#1ED760)은 장식이 아니라 지금 여기를 보라는 신호다. 라이트 테마는 다크의 반전이 아니라 같은 스튜디오의 낮이다.",
+    "keyCharacteristics": [
+      "어두운 무대, 밝은 피사체 — 사진이 언제나 화면에서 가장 밝다",
+      "아껴 쓰는 초록 — 강조는 한 화면에 하나",
+      "모노 라벨과 숫자 — 장비의 계기판 같은 정확함",
+      "필름의 리듬 — 테이프 스트립, 노출 게이지, 한 칸씩 감기는 단계",
+      "알약형 컨트롤 — 누를 것은 둥글게, 담을 것은 각지게"
+    ],
+    "rules": [
+      { "name": "한 화면 한 초록 규칙", "body": "하나의 뷰포트에서 초록으로 칠하는 요소는 원칙적으로 하나다. 주 CTA가 초록이면 그 화면의 칩·아이콘·게이지는 초록을 양보한다.", "section": "colors" },
+      { "name": "흐린 글자 금지 규칙", "body": "라이트 테마의 --hc-primary(#16B454)는 2.2~2.73:1이라 글자에도 아이콘에도 쓰지 않는다. 둘 다 --hc-primary-strong(#0B6B30, 최소 5.37:1)을 쓰고, --hc-primary는 면 채우기 전용이다.", "section": "colors" },
+      { "name": "사진이 제일 밝다 규칙", "body": "어떤 장식도 사용자의 사진보다 밝거나 채도가 높으면 안 된다.", "section": "colors" },
+      { "name": "모노는 계기판에만 규칙", "body": "모노 서체는 읽는 글이 아니라 읽히는 값에만 쓴다. 모노로 된 문장이 나오면 잘못 쓴 것이다.", "section": "typography" },
+      { "name": "터치 입력 16px 규칙", "body": "iOS Safari는 16px 미만 입력에 포커스하면 화면을 확대한다. pointer: coarse에서는 16px로 올린다.", "section": "typography" },
+      { "name": "계단 우선 규칙", "body": "다크에서 요소를 띄우고 싶으면 먼저 배경 명도를 한 칸 올린다. 그림자를 진하게 만드는 건 그다음이다.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 초록을 한 화면에 하나만 쓴다. 나머지 강조는 굵기와 여백으로 만든다.",
+      "Do 라이트 테마의 글자·아이콘 초록에는 --hc-primary-strong(#0B6B30)을 쓴다. --hc-primary는 면 채우기 전용이다.",
+      "Do 다크에서 깊이가 필요하면 배경 명도를 한 칸 올린다(#18181A → #232325).",
+      "Do 누르는 것은 알약, 담는 것은 12~20px 사각으로 만든다.",
+      "Do 숫자와 축 라벨은 모노 11px에 tracking 1.2px로 세운다.",
+      "Do 모든 모션에 prefers-reduced-motion 대체 상태를 준다.",
+      "Do 읽는 문단은 440~460px로 묶는다."
+    ],
+    "donts": [
+      "Don't 보라색 그라데이션 배경에 둥근 카드를 얹지 않는다.",
+      "Don't 캐릭터나 이모지로 친근함을 만들지 않는다. 친근함은 문구에서 나온다.",
+      "Don't 글자에 그라디언트를 입히지 않는다. 헤드라인 강조어는 .hc-accent-word(단색 --hc-primary)를 쓴다.",
+      "Don't --hc-muted-soft(#6F6F73)를 본문 글자에 쓰지 않는다.",
+      "Don't 버튼 hover에 위치 이동을 넣지 않는다.",
+      "Don't 모바일 높이에 100vh를 쓰지 않는다.",
+      "Don't outline: none을 대체 없이 쓰지 않는다.",
+      "Don't 사용자의 사진보다 밝거나 채도 높은 장식을 화면에 두지 않는다."
+    ]
+  }
+}

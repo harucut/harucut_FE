@@ -14,7 +14,7 @@ type Props = {
 };
 
 // 사진은 추후 교체될 placeholder.
-const COLLAGE = Array.from({ length: 4 }, () => "/hero-image.png");
+const COLLAGE = Array.from({ length: 4 }, () => "/hero-image.webp");
 
 export function AuthPageShell({ title, description, children, footer, icon }: Props) {
   return (
@@ -74,7 +74,9 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
       </aside>
 
       {/* 폼 패널 — 테마(라이트/다크) 반응. 폰/태블릿에선 앱 스타일 단일 컬럼 */}
-      <div className="hc-page-app flex items-center justify-center px-5 py-10 text-[color:var(--hc-text)]">
+      {/* grid 아이템이라 min-width: auto 가 걸린다. 입력의 기본 고유 폭(약 213px)이 그대로
+          최소 폭이 돼 320px 에서 컨테이너를 밀어냈다. min-w-0 으로 끊어 준다. */}
+      <div className="hc-page-app flex min-w-0 items-center justify-center px-5 py-10 text-[color:var(--hc-text)]">
         <div className="w-full max-w-[380px]">
           <div className="mb-8 lg:hidden">
             <BrandMark href="/" />

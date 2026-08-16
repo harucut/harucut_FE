@@ -27,32 +27,32 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   return (
     <nav
       aria-label="주요 메뉴"
-      className="fixed inset-x-0 bottom-0 z-40 flex h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-2 backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
     >
       <Link
         href="/home"
         aria-label="홈"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/home")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
         }`}
       >
         <Home className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">홈</span>
+        <span className="text-[11px] font-medium">홈</span>
       </Link>
 
       <Link
         href="/history"
         aria-label="기록"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/history")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
         }`}
       >
         <LayoutGrid className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">기록</span>
+        <span className="text-[11px] font-medium">기록</span>
       </Link>
 
       {publicShoot ? (
@@ -79,27 +79,27 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/theme"
         aria-label="프레임"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/theme")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
         }`}
       >
         <Film className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">프레임</span>
+        <span className="text-[11px] font-medium">프레임</span>
       </Link>
 
       <Link
         href="/mypage"
         aria-label="MY"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
           isActive("/mypage")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
         }`}
       >
         <User className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">MY</span>
+        <span className="text-[11px] font-medium">MY</span>
       </Link>
     </nav>
   );

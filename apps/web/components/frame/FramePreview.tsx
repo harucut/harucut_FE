@@ -93,8 +93,13 @@ export function FramePreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={idx}
+              loading="lazy"
+              decoding="async"
               src={mediaItem.src}
-              alt={`frame-slot-${idx + 1}`}
+              // 이 미리보기는 프레임 "구성"을 보여주는 그림이다. 슬롯 하나하나를
+              // "frame-slot-1" 이라고 읽어 주면 스크린리더에는 개발자 문자열만 남는다.
+              alt=""
+              aria-hidden
               className="absolute rounded-md object-cover"
               style={mediaStyle}
             />

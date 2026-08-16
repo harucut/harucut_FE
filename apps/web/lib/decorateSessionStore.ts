@@ -6,11 +6,19 @@ import { create } from "zustand";
 type DecorateSessionState = {
   imageSrc: string | null;
   title: string;
-  setSource: (imageSrc: string, title?: string) => void;
+  /** 어느 결과 화면에서 왔는지. 꾸미기에서 나갈 길을 만드는 데 쓴다. */
+  origin: string;
+  setSource: (imageSrc: string, opts?: { title?: string; origin?: string }) => void;
 };
 
 export const useDecorateSession = create<DecorateSessionState>((set) => ({
   imageSrc: null,
   title: "하루컷",
-  setSource: (imageSrc, title = "하루컷") => set({ imageSrc, title }),
+  origin: "/home",
+  setSource: (imageSrc, opts) =>
+    set({
+      imageSrc,
+      title: opts?.title ?? "하루컷",
+      origin: opts?.origin ?? "/home",
+    }),
 }));

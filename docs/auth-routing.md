@@ -9,6 +9,7 @@
 - `/signup`
 - `/forgot-password`
 - `/features`
+- `/enterprise`
 - `/faq`
 - `/pricing`
 - `/privacy`
@@ -66,15 +67,37 @@
    - `/shoot` 또는 `/decorate`로 시작하는 경로(`GUEST_ALLOWED_PREFIXES`): 통과 —
      게스트 체험은 촬영에서 끝나지 않고 꾸미기까지 이어져야 완결된다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
-4. 둘 다 없으면 `/login?redirectTo=...`
+4. **쿠키가 하나도 없어도 행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** —
+   응답에 게스트 쿠키를 심어 준다(아래 절 참고)
+5. 그 외에는 `/login?redirectTo=...`
 
 ```text
 인증 쿠키 O                        -> 통과 (게스트 쿠키 삭제)
 게스트 쿠키 O + /shoot/*           -> 통과
 게스트 쿠키 O + /decorate/*        -> 통과
 게스트 쿠키 O + 그 외 보호 경로    -> /shoot?guestNotice=restricted
+쿠키 없음 + /shoot?...&event=...   -> 통과 (게스트 쿠키를 심는다)
 쿠키 없음                          -> /login?redirectTo=<원래 경로와 쿼리>
 ```
+
+### 행사 QR 진입 (쿠키 없는 통과)
+
+행사장에서 QR을 찍은 참가자는 **쿠키가 하나도 없는 새 브라우저**로 도착합니다.
+이 예외가 없으면 미들웨어가 `/login`으로 먼저 돌려보내서, "가입 없이 바로 찍는다"는
+행사 흐름이 정작 행사장에서만 동작하지 않습니다.
+
+- 판정 조건: 경로가 정확히 `/shoot`이고 `event` 쿼리
+  (`EVENT_ENTRY_QUERY`, [`apps/web/lib/guestTrialShared.ts`](../apps/web/lib/guestTrialShared.ts))에
+  공백이 아닌 값이 있을 것. 하위 단계(`/shoot/capture` 등)는 여기서 심긴 쿠키로 이어집니다.
+- 통과할 때 응답에 `harucut_guest_trial=1`을 심습니다. 속성(`path`, `max-age`,
+  `SameSite`, https에서 `Secure`)은 클라이언트가 심는 것과 같은 값이어야 하므로
+  `GUEST_TRIAL_COOKIE_MAX_AGE`를 공유합니다.
+- **권한 관점**: 랜딩의 "가입 없이 찍어보기" 버튼을 누르면 누구나 얻는 것과 같은 자격입니다.
+  즉 새로 여는 문이 아니라, 그 버튼을 누를 기회가 없는 사람에게 같은 문을 열어 주는 것입니다.
+- 회귀 테스트: `apps/web/tests/e2e/guards.spec.ts`의
+  "lets an event QR visitor shoot without signing up".
+
+이 예외를 지우면 행사(B2B) 흐름이 통째로 죽습니다. 인증 분기를 정리할 때 함께 확인해 주세요.
 
 관련 파일:
 

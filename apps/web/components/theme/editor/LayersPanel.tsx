@@ -27,6 +27,8 @@ export function LayersPanel() {
     moveLayerDown,
     toggleHidden,
     toggleLocked,
+    restoreRemoved,
+    canRestoreRemoved,
   } = useThemeEditorStore(
     useShallow((s) => ({
       components: s.components,
@@ -38,6 +40,8 @@ export function LayersPanel() {
       moveLayerDown: s.moveLayerDown,
       toggleHidden: s.toggleHidden,
       toggleLocked: s.toggleLocked,
+      restoreRemoved: s.restoreRemoved,
+      canRestoreRemoved: s.canRestoreRemoved,
     })),
   );
 
@@ -47,7 +51,18 @@ export function LayersPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">레이어</p>
-        <p className="text-[11px] text-zinc-500">클릭해서 선택</p>
+        {/* 삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 없으면 편집을 조심스러워한다. */}
+        {canRestoreRemoved ? (
+          <button
+            type="button"
+            onClick={restoreRemoved}
+            className="rounded-full border border-[color:var(--hc-border-strong)] px-3 py-1 text-[11px] font-semibold text-[color:var(--hc-text)]"
+          >
+            삭제 되돌리기
+          </button>
+        ) : (
+          <p className="text-[11px] text-zinc-500">클릭해서 선택</p>
+        )}
       </div>
 
       {list.length === 0 ? (
@@ -176,7 +191,7 @@ function LayerRow({
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 min-w-0"
       >
-        <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-200">
+        <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200">
           {c.type}
         </span>
 
@@ -191,14 +206,14 @@ function LayerRow({
             />
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-black/30 flex items-center justify-center text-[10px] text-zinc-300">
+          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-black/30 flex items-center justify-center text-[11px] text-zinc-300">
             T
           </div>
         )}
 
         <div className="min-w-0">
           <p className="text-xs text-zinc-200 truncate">{title}</p>
-          <p className="text-[10px] text-zinc-500">zIndex {c.zIndex}</p>
+          <p className="text-[11px] text-zinc-500">zIndex {c.zIndex}</p>
         </div>
       </button>
 
@@ -236,9 +251,9 @@ function MiniIconBtn({
       className={[
         "rounded-lg border p-2 inline-flex items-center justify-center",
         danger
-          ? "border-red-800/70 bg-red-950 text-red-200 hover:bg-red-900/60"
+          ? "border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] text-[color:var(--hc-danger)] hover:brightness-110"
           : active
-          ? "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)] hover:bg-[color:var(--hc-accent-soft-bg)]"
+          ? "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)] hover:bg-[color:var(--hc-accent-soft-bg)]"
           : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] text-[color:var(--hc-muted)] hover:bg-[color:var(--hc-background-tint)]",
         disabled ? "opacity-50 cursor-not-allowed" : "",
       ].join(" ")}

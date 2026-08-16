@@ -19,12 +19,22 @@ export async function getFrame(frameId: number) {
   return res.data.data;
 }
 
+// 저장·수정 응답에는 방금 만들어진 프레임이 통째로 들어 있다(frameId 포함).
+// 예전에는 응답이 비어 있어 목록을 다시 받아 id를 추측해야 했다.
 export async function createFrame(body: CreateFrameRequest) {
-  await clientApi.post<ApiEnvelope<null>>("/api/client/user/frame", body);
+  const res = await clientApi.post<ApiEnvelope<RemoteFrame>>(
+    "/api/client/user/frame",
+    body,
+  );
+  return res.data.data;
 }
 
 export async function updateFrame(frameId: number, body: CreateFrameRequest) {
-  await clientApi.put<ApiEnvelope<null>>(`/api/client/user/frame/${frameId}`, body);
+  const res = await clientApi.put<ApiEnvelope<RemoteFrame>>(
+    `/api/client/user/frame/${frameId}`,
+    body,
+  );
+  return res.data.data;
 }
 
 export async function deleteFrame(frameId: number) {

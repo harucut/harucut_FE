@@ -18,6 +18,27 @@ type SlotDrawable = { el: HTMLImageElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
 
+/**
+ * 한 캔버스가 가질 수 있는 픽셀 수의 안전선.
+ *
+ * iOS Safari 는 캔버스 넓이(가로×세로)에 상한을 둔다 — 2^24(16,777,216)px 를 넘으면
+ * 캔버스가 통째로 비어 그려지거나 toBlob 이 null 을 돌려준다. 오류도 안 난다.
+ * 우리 레이아웃은 가로 4컷 6000×4000, 세로형 4000×6000 이 **24MP** 라 그 선을 넘는다.
+ * 아이폰에서 완성 단계가 빈 이미지로 끝날 수 있다는 뜻이다.
+ *
+ * 상한에 딱 붙이지 않고 조금 아래에 둔다(기기·메모리 상황에 따라 더 낮게 걸리기도 한다).
+ * 넘으면 비율을 유지한 채 줄인다 — 24MP → 16MP 는 한 변으로 0.82 배라,
+ * 6000×4000 이 4900×3266 이 된다. 인화·보관에는 여전히 충분한 해상도다.
+ */
+const MAX_CANVAS_PIXELS = 16_000_000;
+
+/** 넓이 상한에 맞춘 축소 배율. 상한 안이면 1. */
+export function fitCanvasScale(width: number, height: number) {
+  const pixels = width * height;
+  if (pixels <= MAX_CANVAS_PIXELS) return 1;
+  return Math.sqrt(MAX_CANVAS_PIXELS / pixels);
+}
+
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context not available");
@@ -312,10 +333,15 @@ export async function composeFramePng(opts: {
   }
 
   const canvas = opts.canvas ?? document.createElement("canvas");
-  canvas.width = layout.totalWidth;
-  canvas.height = layout.totalHeight;
+  // iOS 캔버스 넓이 상한을 넘지 않게 줄인다. 그리는 좌표는 레이아웃 원본 크기 그대로 두고
+  // 컨텍스트에 배율만 걸어, 그리는 쪽 코드는 상한을 몰라도 되게 한다.
+  const outputScale = fitCanvasScale(layout.totalWidth, layout.totalHeight);
+  // 올림하면 상한을 다시 넘길 수 있어(6000×4000 기준 134px 초과) 내림한다.
+  canvas.width = Math.floor(layout.totalWidth * outputScale);
+  canvas.height = Math.floor(layout.totalHeight * outputScale);
 
   const ctx = ensureCtx(canvas);
+  if (outputScale !== 1) ctx.scale(outputScale, outputScale);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
   const backgroundImage = await loadBackgroundImage(theme);

@@ -2,6 +2,9 @@
 
 import { RefreshCw, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EventBanner } from "@/components/event/EventBanner";
+import { FlowSteps } from "@/components/layout/FlowSteps";
+import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -32,7 +35,7 @@ export default function CapturePage() {
     TIMER_OPTIONS,
   } = useCaptureFlow();
 
-  const { frameId, shots } = useShootSession();
+  const { frameId, shots, eventName } = useShootSession();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
 
@@ -48,24 +51,42 @@ export default function CapturePage() {
   // 8장을 다 찍으면 곧바로 다음 화면으로 넘어가므로, 표시용 번호는 MAX_SHOTS에서 멈춘다.
   const currentShotNumber = Math.min(shotCount + 1, MAX_SHOTS);
 
+  const backToFrameHref = (() => {
+    const params = new URLSearchParams();
+    if (frameId) params.set("frame", frameId);
+    if (eventName) params.set("event", eventName);
+    const query = params.toString();
+    return query ? `/shoot?${query}` : "/shoot";
+  })();
+
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
+    /*
+      촬영 화면은 스크롤하지 않는다. 프리뷰와 셔터가 한 화면에 같이 보여야 하는데,
+      390×844 폰에서 셔터가 화면 아래 186px 지점에 있었다(실측). 자기 얼굴을 보면서
+      셔터를 누를 수가 없었다. 높이를 뷰포트에 묶고 남는 공간을 프리뷰가 가져간다.
+    */
+    <main className="hc-page-app flex h-dvh flex-col overflow-hidden px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-[color:var(--hc-text)]">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
         preload="auto"
         className="hidden"
       />
-      <div className="mx-auto flex w-full max-w-md flex-col gap-5">
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-3">
         <PageHeader
           title="사진 촬영"
           description={`${MAX_SHOTS}장을 찍고 다음 단계에서 4장을 골라요.`}
-          backHref="/shoot"
+          // 고른 컷 구성과 행사 맥락을 들고 돌아간다. 맨 주소로 보내면 둘 다 초기화된다.
+          backHref={backToFrameHref}
           backLabel="프레임 다시 선택"
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
         />
 
-        <section className="flex flex-col gap-3 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
+        <FlowSteps steps={SHOOT_FLOW_STEPS} current={1} />
+
+        {eventName ? <EventBanner eventName={eventName} /> : null}
+
+        <section className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
           <div className="flex items-center justify-between text-[11px] text-[color:var(--hc-muted)]">
             <span>사진을 촬영해요</span>
             <span className="rounded-full border border-[color:var(--hc-border)] px-2 py-0.5">
@@ -74,18 +95,18 @@ export default function CapturePage() {
           </div>
 
           {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
-          <div
-            className="relative mx-auto flex items-center justify-center"
-            style={{ height: "min(58svh, 540px)", width: "100%" }}
-          >
+          <div className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center">
             <canvas ref={canvasRef} className="hidden" />
 
             {layout && currentSlot ? (
               <div
                 className="relative overflow-hidden rounded-xl bg-black shadow-[var(--hc-card-shadow)]"
+                // 남는 높이를 다 쓰되 가로를 넘지 않게. 비율은 고른 프레임의 칸 비율 그대로.
                 style={{
                   aspectRatio: `${currentSlot.width} / ${currentSlot.height}`,
-                  width: `min(100%, calc(min(58svh, 540px) * ${currentSlot.width / currentSlot.height}))`,
+                  maxHeight: "100%",
+                  maxWidth: "100%",
+                  height: "100%",
                 }}
               >
                 {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다.
@@ -105,6 +126,37 @@ export default function CapturePage() {
                   <span className="absolute left-2 top-2 z-30 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
                     {currentSlotIndex + 1}번째 칸 · {currentShotNumber}번째 컷
                   </span>
+                ) : null}
+
+                {/*
+                  카메라가 아직 안 켜졌을 때 검은 사각형만 보였다. 무슨 일이 일어나는지,
+                  다음에 무엇이 필요한지 무대 안에서 말한다.
+                */}
+                {!isCameraReady ? (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/80 px-6 text-center">
+                    {isCheckingCameraPermission ? (
+                      <p className="text-[13px] font-semibold text-white">
+                        카메라를 준비하고 있어요…
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-[13px] font-semibold leading-[1.6] text-white">
+                          카메라를 켜면 여기에 화면이 보여요.
+                          <br />
+                          <span className="font-normal text-white/70">
+                            브라우저가 카메라 사용을 물어보면 허용해 주세요.
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void startCamera()}
+                          className="hc-button-primary inline-flex h-10 items-center rounded-full px-5 text-[13px] font-bold"
+                        >
+                          카메라 켜기
+                        </button>
+                      </>
+                    )}
+                  </div>
                 ) : null}
 
                 {isShooting && countdown !== null ? (
@@ -143,7 +195,7 @@ export default function CapturePage() {
               return (
                 <div
                   key={index}
-                  className={`relative h-10 w-10 overflow-hidden rounded-md border bg-[color:var(--hc-surface-muted)] ${
+                  className={`relative h-10 w-10 overflow-hidden rounded-md border bg-[color:var(--hc-surface-muted)] [@media(max-height:700px)]:h-8 [@media(max-height:700px)]:w-8 ${
                     isCurrent
                       ? "border-[color:var(--hc-primary)]"
                       : "border-[color:var(--hc-border)]"
@@ -157,20 +209,17 @@ export default function CapturePage() {
                       className="h-full w-full object-cover"
                     />
                   ) : null}
-                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[9px] font-semibold text-white">
+                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[11px] font-semibold text-white">
                     {slotNumber}
                   </span>
                 </div>
               );
             })}
           </div>
-          <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
-            작은 숫자는 프레임에서 들어갈 칸이에요.
-          </p>
-
           {/* 촬영 간격 칩(3/5/8초) — 시작 전에만 고른다.
-              촬영 중에도 자리를 지키고 비활성으로만 두어 레이아웃이 흔들리지 않게 한다. */}
-          <div className="flex flex-col items-center gap-1.5">
+              촬영 중에도 자리를 지키고 비활성으로만 두어 레이아웃이 흔들리지 않게 한다.
+              한 화면에 셔터까지 담아야 해서 라벨을 칩과 같은 줄에 둔다. */}
+          <div className="flex items-center justify-center gap-2">
             <span className="text-[11px] font-semibold text-[color:var(--hc-muted)]">
               촬영 간격
             </span>
@@ -198,19 +247,6 @@ export default function CapturePage() {
             </div>
           </div>
 
-          {/* 카메라가 꺼져 있으면 셔터가 비활성이라, 이때는 '카메라 켜기'가 유일한 행동이다. */}
-          {!isCameraReady && !isCheckingCameraPermission ? (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => void startCamera()}
-                className="inline-flex h-10 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-4 text-[12px] font-semibold text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
-              >
-                카메라 켜기
-              </button>
-            </div>
-          ) : null}
-
           {/* 셔터 영역 — 전환 버튼은 absolute로 빼서, 메인 버튼이 그 유무와 무관하게
               항상 좌우 정중앙에 오게 한다(예전 flex+스페이서 방식은 중앙이 어긋났다). */}
           <div className="relative flex items-center justify-center">
@@ -233,8 +269,8 @@ export default function CapturePage() {
               disabled={!isCameraReady}
               className="flex flex-col items-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)]">
-                <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)]" />
+              <span className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[60px]">
+                <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)] [@media(max-height:700px)]:h-[44px] [@media(max-height:700px)]:w-[44px]" />
               </span>
               <span className="text-[12px] font-bold">
                 {isShooting ? "바로 촬영" : "촬영 시작"}
@@ -253,16 +289,11 @@ export default function CapturePage() {
             ) : null}
           </div>
 
-          <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
+          <p className="text-center text-[11px] leading-[1.5] text-[color:var(--hc-muted)] [@media(max-height:700px)]:hidden">
             {isShooting
-              ? `${timerSeconds}초 간격으로 남은 ${remainingShots}장을 자동으로 찍어요. 셔터를 누르면 기다리지 않고 바로 찍어요.`
-              : `촬영 시작을 누르면 ${timerSeconds}초 간격으로 ${MAX_SHOTS}장을 자동으로 찍어요.`}
+              ? `${timerSeconds}초 간격으로 남은 ${remainingShots}장을 자동으로 찍어요. 셔터를 누르면 바로 찍고, 취소하면 지금까지 찍은 ${shotCount}장은 지워져요.`
+              : `촬영 시작을 누르면 ${timerSeconds}초 간격으로 ${MAX_SHOTS}장을 자동으로 찍어요. 아래 작은 숫자는 프레임에서 들어갈 칸이에요.`}
           </p>
-          {isShooting ? (
-            <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
-              촬영을 취소하면 지금까지 찍은 {shotCount}장은 지워져요.
-            </p>
-          ) : null}
         </section>
       </div>
     </main>

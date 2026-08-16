@@ -53,7 +53,7 @@ export function PlanComparisonTable({
                 <span
                   className={`block text-[14px] font-extrabold ${
                     plan.hot
-                      ? "text-[color:var(--hc-primary)]"
+                      ? "text-[color:var(--hc-primary-strong)]"
                       : "text-[color:var(--hc-text)]"
                   }`}
                 >
@@ -64,7 +64,7 @@ export function PlanComparisonTable({
                   {plan.sub ? ` ${plan.sub}` : ""}
                 </span>
                 {currentPlanId === plan.id ? (
-                  <span className="mt-1.5 inline-block rounded-full bg-[color:var(--hc-primary)] px-2 py-0.5 text-[10px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                  <span className="mt-1.5 inline-block rounded-full bg-[color:var(--hc-primary)] px-2 py-0.5 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
                     현재 플랜
                   </span>
                 ) : null}
@@ -100,7 +100,7 @@ export function PlanComparisonTable({
                     </span>
                   ) : cell.included ? (
                     <Check
-                      className="mx-auto h-4 w-4 text-[color:var(--hc-primary)]"
+                      className="mx-auto h-4 w-4 text-[color:var(--hc-primary-strong)]"
                       strokeWidth={3}
                     />
                   ) : (

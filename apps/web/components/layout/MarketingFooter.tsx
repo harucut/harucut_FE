@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { COMPANY } from "@/constants/company";
+import { COMPANY, PAYMENTS_ENABLED } from "@/constants/company";
 
 // 공개(마케팅) 페이지 공통 푸터.
 // 레이아웃은 전부 좌측 정렬 한 덩어리다 — 고객센터 → 사업자 정보 → 구분선 →
@@ -68,7 +68,7 @@ export function MarketingFooter({
   return (
     <footer className={shell}>
       <div className={`mx-auto w-full px-7 pb-10 pt-12 ${width}`}>
-        <h2 className={`text-[12.5px] font-bold ${headText}`}>고객센터</h2>
+        <h2 className={`text-[13px] font-bold ${headText}`}>고객센터</h2>
         <PipeRow
           className={`mt-2.5 text-[13px] leading-[1.7] ${bodyText}`}
           items={[
@@ -93,9 +93,11 @@ export function MarketingFooter({
               `통신판매업 신고번호 ${COMPANY.mailOrderNo}`,
             ]}
           />
+          {/* 결제대행사는 결제를 실제로 받을 때만 적는다. 아직 결제가 닫혀 있는데
+              상시 표기하면 사실과 다르다(PAYMENTS_ENABLED 로 켠다). */}
           <PipeRow
             items={[
-              `결제대행 ${COMPANY.paymentAgent}`,
+              ...(PAYMENTS_ENABLED ? [`결제대행 ${COMPANY.paymentAgent}`] : []),
               `호스팅 ${COMPANY.hosting}`,
               `민원담당자 ${COMPANY.complaintOfficer}`,
             ]}
@@ -114,7 +116,7 @@ export function MarketingFooter({
 
         <nav
           aria-label="푸터 바로가기"
-          className={`mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px] font-semibold ${linkText}`}
+          className={`mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] font-semibold ${linkText}`}
         >
           {FOOTER_LINKS.map((item, index) => (
             <Fragment key={item.href}>
@@ -125,7 +127,9 @@ export function MarketingFooter({
               ) : null}
               <Link
                 href={item.href}
-                className="underline underline-offset-4 transition"
+                // "기능"처럼 두 글자짜리 라벨은 22px 밖에 안 돼 손가락으로 겨냥이 안 됐다.
+                // 밑줄 위치를 지키면서 최소 폭만 확보한다.
+                className="min-w-[44px] justify-center text-center underline underline-offset-4 transition"
               >
                 {item.label}
               </Link>

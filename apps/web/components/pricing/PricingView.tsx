@@ -19,7 +19,6 @@ import {
   type Plan,
   type PlanId,
 } from "@/constants/plans";
-import { COMPANY } from "@/constants/company";
 import { PRICING_FAQ } from "@/constants/faq";
 import { getMyUserInfo } from "@/lib/userApi";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
@@ -62,7 +61,7 @@ function PlanCard({
       <span
         className={`text-[15px] font-extrabold tracking-[0.3px] ${
           hot || current
-            ? "text-[color:var(--hc-primary)]"
+            ? "text-[color:var(--hc-primary-strong)]"
             : "text-[color:var(--hc-text)]"
         }`}
       >
@@ -92,7 +91,7 @@ function PlanCard({
               }`}
             >
               {on ? (
-                <Check className="h-3 w-3 text-[color:var(--hc-primary)]" strokeWidth={3} />
+                <Check className="h-3 w-3 text-[color:var(--hc-primary-strong)]" strokeWidth={3} />
               ) : (
                 <X className="h-[11px] w-[11px] text-[color:var(--hc-muted)]" />
               )}
@@ -100,7 +99,7 @@ function PlanCard({
             {/* 미지원 항목은 opacity로 흐리지 않는다 — 대비가 2.58까지 떨어져 읽기 어려웠다.
                 X 아이콘과 muted 색으로 구분하고 명도 대비는 지킨다. */}
             <span
-              className={`text-[13.5px] leading-[1.4] ${
+              className={`text-[13px] leading-[1.4] ${
                 on ? "text-[color:var(--hc-text)]" : "text-[color:var(--hc-muted)]"
               }`}
             >
@@ -123,7 +122,7 @@ function PlanCard({
       {/* CTA — 비회원은 가입 유도. 회원은 결제 연동 전이라 "준비 중"으로 비활성.
           이용 중인 플랜은 누를 곳이 없다. */}
       {current ? (
-        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[14.5px] font-extrabold text-[color:var(--hc-primary)]">
+        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[15px] font-extrabold text-[color:var(--hc-primary-strong)]">
           현재 이용 중
         </span>
       ) : authed ? (
@@ -132,21 +131,33 @@ function PlanCard({
           disabled
           aria-disabled
           title={PRICING_BILLING_PENDING}
-          className="hc-surface-well mt-5 flex h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full border text-[14.5px] font-extrabold text-[color:var(--hc-muted)] opacity-70"
+          className="hc-surface-well mt-5 flex h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full border text-[15px] font-extrabold text-[color:var(--hc-muted)] opacity-70"
         >
           준비 중
         </button>
       ) : (
-        <Link
-          href="/signup"
-          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[14.5px] font-extrabold transition ${
-            hot
-              ? "hc-button-primary"
-              : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
-          }`}
-        >
-          {plan.cta}
-        </Link>
+        <>
+          {/*
+            비회원에게도 "Plus 시작하기"라고 말하고 있었다. 눌러도 갈 수 있는 곳은 가입뿐이고
+            결제가 닫혀 있어 유료 플랜에는 어차피 못 올라간다 — 지킬 수 없는 약속이다.
+            실제로 일어나는 일(무료 가입)을 그대로 적고, 유료는 시점을 밝힌다.
+          */}
+          <Link
+            href="/signup"
+            className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
+              hot
+                ? "hc-button-primary"
+                : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
+            }`}
+          >
+            무료로 시작하기
+          </Link>
+          {plan.id === "basic" ? null : (
+            <p className="mt-2 text-center text-[12px] text-[color:var(--hc-muted)]">
+              {PRICING_BILLING_PENDING}
+            </p>
+          )}
+        </>
       )}
     </div>
   );
@@ -190,7 +201,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
         <header className="pt-1 lg:pt-0">
-          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary)]">
+          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
             PRICING · 요금제
           </span>
           <h1 className="mt-3 text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">
@@ -213,31 +224,38 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           ))}
         </section>
 
-        {/* Enterprise — 추후 출시 예정(팬미팅·행사용 QR 촬영) */}
-        <section className="flex flex-col gap-3 rounded-[20px] border border-dashed border-[color:var(--hc-border-strong)] bg-[color:var(--hc-surface)] p-6 sm:flex-row sm:items-center sm:justify-between">
+        {/*
+          Enterprise — 팬미팅·행사용 QR 촬영.
+          예전에는 점선 테두리 + "추후" 배지 + 고스트 버튼이라, 지금 살 수 있는 유일한
+          B2B 상품이 화면에서 가장 약하게 그려져 있었다. 개인 요금제가 결제 대기인 지금
+          이게 실제로 파는 물건이므로, 그에 맞는 무게로 보여준다.
+        */}
+        <section className="flex flex-col gap-4 rounded-[20px] border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[16px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
                 {ENTERPRISE_TEASER.name}
               </span>
-              <span className="rounded-full border border-[color:var(--hc-border-strong)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--hc-muted)]">
+              {/* 배경은 --hc-primary. -accent-soft-text(#0b6b30) 위에 -primary-contrast 를
+                  올리면 라이트에서 2.84:1 로 떨어진다(실측). */}
+              <span className="rounded-full bg-[color:var(--hc-primary)] px-2 py-0.5 text-[11px] font-bold text-[color:var(--hc-primary-contrast)]">
                 {ENTERPRISE_TEASER.badge}
               </span>
-              {/* 가격 미정 — 다른 카드가 모두 가격을 보여주므로 여기도 상태를 밝힌다. */}
-              <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">
+              {/* 다른 카드가 모두 가격을 보여주므로 여기도 값이 어떻게 정해지는지 밝힌다. */}
+              <span className="text-[12px] font-semibold text-[color:var(--hc-accent-soft-text)]">
                 {ENTERPRISE_TEASER.price}
               </span>
             </div>
-            <p className="max-w-[520px] text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
+            <p className="max-w-[520px] text-[13px] leading-[1.7] text-[color:var(--hc-text)]">
               {ENTERPRISE_TEASER.desc}
             </p>
           </div>
-          <a
-            href={`mailto:${COMPANY.email}`}
-            className="hc-surface-well flex h-[46px] shrink-0 items-center justify-center rounded-full border px-6 text-[13.5px] font-extrabold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]"
+          <Link
+            href={ENTERPRISE_TEASER.href}
+            className="hc-button-primary flex h-[46px] shrink-0 items-center justify-center rounded-full px-6 text-[13px] font-extrabold"
           >
             {ENTERPRISE_TEASER.cta}
-          </a>
+          </Link>
         </section>
 
         {/* 전체 스펙 비교 — 기능(행) × 플랜(열) 매트릭스 */}
@@ -306,7 +324,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             </p>
             <Link
               href="/signup"
-              className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[14.5px] font-extrabold"
+              className="hc-button-primary mt-1 flex h-[50px] items-center justify-center rounded-full px-8 text-[15px] font-extrabold"
             >
               시작하기
             </Link>

@@ -144,7 +144,7 @@ function SignupPageContent() {
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
-          <p className="mt-2 text-center text-[10px] leading-5 text-zinc-500">
+          <p className="mt-2 text-center text-[11px] leading-5 text-zinc-500">
             소셜 계정으로 가입하면{" "}
             <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
               서비스 이용약관
@@ -159,7 +159,7 @@ function SignupPageContent() {
             이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}
-              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
+              className="font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               로그인
             </Link>
@@ -169,7 +169,7 @@ function SignupPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
             {errors.common}
           </p>
         ) : null}
@@ -227,7 +227,7 @@ function SignupPageContent() {
                 <span
                   className={
                     item.required
-                      ? "text-[color:var(--hc-primary)]"
+                      ? "text-[color:var(--hc-primary-strong)]"
                       : "text-zinc-500"
                   }
                 >
@@ -246,7 +246,7 @@ function SignupPageContent() {
             </label>
           ))}
           {errors.consent ? (
-            <p className="text-[11px] text-red-300">{errors.consent}</p>
+            <p className="text-[11px] text-[color:var(--hc-danger)]">{errors.consent}</p>
           ) : null}
         </fieldset>
 

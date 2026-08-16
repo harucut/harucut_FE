@@ -38,6 +38,8 @@ jobs:
           build-mode: none
           # 보안(code-scanning) + 코드 품질(code-quality, "Code quality findings") 동시 분석
           analysis-kinds: code-scanning,code-quality
+          # 분석 대상에서 벤더 에이전트 스킬을 제외한다(사유는 설정 파일에 적어 뒀다)
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4

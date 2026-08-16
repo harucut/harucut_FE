@@ -7,7 +7,14 @@
   --background: #fafaf7;
   --foreground: #14140f;
   --hc-primary: #16b454;
-  --hc-primary-strong: #0e7e39;
+  /* 라이트에서 초록 "글자"는 전부 이 값을 쓴다. --hc-primary(#16b454)는 흰 배경 2.4:1이라 글자로 못 쓴다.
+     accent-soft 배경(#dbebdf) 위에서도 4.5:1을 넘도록 #0e7e39(4.18)에서 한 단계 더 내렸다. */
+  --hc-primary-strong: #0b6b30;
+  /* 위험/오류. zinc 별칭과 달리 red-* 는 테마 재매핑이 없어서, 라이트에서 그대로 쓰면
+     되돌릴 수 없는 "삭제" 버튼이 1.29:1 로 거의 안 보였다. 토큰으로 승격한다. */
+  --hc-danger: #b42318;
+  --hc-danger-border: rgba(180, 35, 24, 0.34);
+  --hc-danger-soft-bg: rgba(180, 35, 24, 0.08);
   --hc-primary-hover: #129a47;
   --hc-primary-contrast: #06140a;
   --hc-background-tint: #f1f1ee;
@@ -33,9 +40,9 @@
   --hc-icon-button-hover: #f1f1ee;
   --hc-accent-soft-bg: rgba(22, 180, 84, 0.1);
   --hc-accent-soft-border: rgba(22, 180, 84, 0.16);
-  --hc-accent-soft-text: #0e7e39;
+  --hc-accent-soft-text: #0b6b30;
   --hc-brand-badge-bg: #ffffff;
-  --hc-brand-badge-text: #0e7e39;
+  --hc-brand-badge-text: #0b6b30;
   --hc-brand-badge-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
   --hc-brand-overline: #5c5c57;
   --hc-soft-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
@@ -83,8 +90,10 @@
   --hc-zinc-800: #deded9;
   --hc-zinc-700: #c9c9c3;
   --hc-zinc-600: #a6a69f;
-  --hc-zinc-500: #94948d;
-  --hc-zinc-400: #6f6f69;
+  /* 라이트 별칭은 "어둡기 순서"만 보존한다. 둘 다 본문에 쓰이므로 4.5:1을 넘겨야 한다
+     (기존 #6f6f69=4.08, #94948d=2.47로 둘 다 미달이었다). */
+  --hc-zinc-500: #66665f;
+  --hc-zinc-400: #5c5c57;
   --hc-zinc-300: #4f4f49;
   --hc-zinc-200: #36362f;
   --hc-zinc-100: #232320;
@@ -105,6 +114,9 @@ html[data-theme="dark"] {
   --foreground: #ffffff;
   --hc-primary: #1ed760;
   --hc-primary-strong: #56dd86;
+  --hc-danger: #ffb4ab;
+  --hc-danger-border: rgba(255, 140, 130, 0.35);
+  --hc-danger-soft-bg: rgba(255, 90, 80, 0.12);
   --hc-primary-hover: #1fe267;
   --hc-primary-contrast: #06140a;
   --hc-background-tint: #161617;
@@ -280,19 +292,77 @@ body {
   background-color: var(--hc-surface-muted-hover) !important;
 }
 
-h1,
-h2,
-h3 {
-  text-wrap: balance;
-}
+/*
+  줄바꿈 품질 기본값. @layer base 안에 둬야 한다 — 레이어 없이 선언하면 Tailwind 유틸리티
+  (레이어 안에 있다)를 항상 이겨서, text-wrap 이 white-space 축을 점유하는 바람에
+  `truncate`/`whitespace-nowrap` 이 앱 전체에서 무력화된다. 실제로 그랬다:
+  truncate 를 준 요소가 잘리지 않고 여러 줄로 감겼다.
+*/
+@layer base {
+  /*
+    입력 요소는 기본 고유 폭이 20글자쯤 된다(실측 213px). flex/grid 안에서는 그 값이
+    최소 폭으로 작용해 w-full 을 줘도 줄어들지 않고, 좁은 화면에서 컨테이너를 밀어
+    가로 스크롤을 만든다. 320px 에서 비밀번호 찾기가 그랬다.
+  */
+  input,
+  select,
+  textarea {
+    min-width: 0;
+  }
 
-p,
-li,
-button,
-a,
-label,
-span {
-  text-wrap: pretty;
+  /*
+    터치 기기의 최소 탭 영역. 시각 크기는 그대로 두고 눌리는 면만 넓힌다.
+    아이콘만 있는 버튼(h-8 w-8 = 32px)이나 얇은 칩이 손가락으로는 잘 안 눌렸다.
+    WCAG 2.5.8(AA)의 24px 은 어디서나 넘기고, 독립 컨트롤은 44px 를 목표로 한다.
+    문장 안에 들어간 인라인 링크는 대상에서 뺀다 — 줄 높이를 밀어 본문이 깨진다.
+  */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    a[class*="rounded-full"],
+    a[class*="inline-flex"] {
+      min-height: 44px;
+    }
+
+    button[class*="h-8"][class*="w-8"],
+    button[class*="h-9"][class*="w-9"] {
+      min-width: 44px;
+    }
+
+    /*
+      문장 안이 아닌 "홈으로"·"요금제 보기" 같은 밑줄 링크는 독립 컨트롤인데 높이가
+      14~20px 였다. 줄 높이를 밀지 않도록 세로 패딩 대신 인라인 블록 최소 높이를 준다.
+      WCAG 2.5.8(AA) 의 24px 를 하한으로 잡는다.
+    */
+    a[class*="underline"] {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+    }
+  }
+
+  /*
+    등장 래퍼는 flex/grid 아이템으로 자주 쓰인다. min-width: auto 로 두면 안쪽 콘텐츠의
+    최소 폭이 그대로 최소 폭이 돼 좁은 화면에서 넘친다(랜딩이 320px 에서 71px 넘쳤다).
+  */
+  .hc-reveal {
+    min-width: 0;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p,
+  li,
+  button,
+  a,
+  label,
+  span {
+    text-wrap: pretty;
+  }
 }
 
 .hc-page-app {
@@ -475,12 +545,13 @@ span {
   color: var(--hc-accent-soft-text);
 }
 
+/* 강조 링크는 "글자"라 -strong 을 쓴다. 라이트의 --hc-primary 는 2.4:1 로 본문 기준 미달이다. */
 .hc-link-accent {
-  color: var(--hc-primary);
+  color: var(--hc-primary-strong);
 }
 
 .hc-link-accent:hover {
-  color: var(--hc-primary-hover);
+  color: var(--hc-primary);
 }
 
 .custom-scroll::-webkit-scrollbar {
@@ -524,19 +595,14 @@ span {
   transform: none;
 }
 
-/* 그린 그라디언트 텍스트(헤드라인 강조어) — background-clip으로 글자에 그라디언트를 입힌다. */
 /*
-  그라디언트 글자(다크 배경 전용). color를 transparent로 두면 background-clip이 안 먹는 환경에서
-  글자가 통째로 사라지고, 접근성 검사기도 실제 색을 알 수 없어 대비를 계산하지 못한다.
-  그래서 실제 색은 그라디언트 중간 톤으로 남기고, 시각적 투명화는 -webkit-text-fill-color가 맡는다.
-  (background-clip: text를 지원하는 브라우저는 -webkit-text-fill-color도 지원하므로 겉모습은 동일)
+  헤드라인 강조어. 예전에는 그라디언트를 글자에 클립했는데 두 가지가 걸렸다 —
+  강조는 굵기와 색으로 충분한데 장식이 하나 더 얹혀 있었고, 글자색이 transparent 라
+  접근성 검사기가 대비를 계산하지 못해 검사에서 통째로 빠졌다. 단색으로 바꾼다.
+  (이 강조어가 쓰이는 면은 전부 딥다크 무대라 --hc-primary 로 7.2:1 이 나온다)
 */
-.hc-gradient-text {
-  background: linear-gradient(120deg, #1ed760 0%, #7ef0a8 55%, #1ed760 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: #7ef0a8;
-  -webkit-text-fill-color: transparent;
+.hc-accent-word {
+  color: var(--hc-primary);
 }
 
 /*

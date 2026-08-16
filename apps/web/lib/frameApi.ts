@@ -96,19 +96,12 @@ function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground 
     };
   }
 
-  // 서버는 IMAGE 배경 응답의 key 자리에 **이미 서명된 조회 URL**을 넣어 준다
-  // (FrameComponentAssembler.resolveBackgroundUrl → presignIfManaged). 이걸 다시 key로 보고
-  // presigned-img를 부르면 URL 문자열 자체를 S3 키로 서명해 깨진 주소가 나온다.
-  // 그래서 URL이면 렌더용 url을 함께 채워, 재서명 경로가 타지 않게 한다.
-  // (저장 시에는 서버가 normalizeManagedKey로 URL→키를 되돌리므로 key는 그대로 보내면 된다)
-  const rawKey = background.key;
-  const isResolvedUrl = typeof rawKey === "string" && /^https?:\/\//i.test(rawKey);
-
-  // 응답에도 같은 기본값을 적용해, 왕복(불러오기→저장) 시 opacity가 사라지지 않게 한다.
+  // 서버가 key(저장 키)와 url(서명된 조회 URL)을 분리해 내려준다.
+  // 응답에도 opacity 기본값을 적용해, 왕복(불러오기→저장) 시 값이 사라지지 않게 한다.
   return {
     type: "IMAGE",
-    key: rawKey,
-    ...(isResolvedUrl ? { url: rawKey } : {}),
+    key: background.key,
+    ...(background.url ? { url: background.url } : {}),
     opacity: background.opacity ?? 1,
   };
 }
@@ -145,18 +138,6 @@ export function toCreateFrameRequest(
   };
 }
 
-// 서버는 저장 시 컴포넌트 source의 선행 슬래시를 지운다(FrameAssetManager.stripLeadingSlash).
-// 그래서 로컬 스티커 "/stickers/x.png"가 "stickers/x.png"로 돌아오고, 에디터 경로(/theme/…)를
-// 기준으로 상대 해석돼 404가 난다. 읽을 때 다시 앞에 붙여 준다.
-// TEXT는 source 자리가 본문 텍스트라 절대 건드리면 안 된다.
-function restoreComponentSource(type: string, source: string) {
-  if (type === "TEXT" || !source) return source;
-  if (/^(https?:|data:|blob:|s3:|\/)/i.test(source)) return source;
-  // S3 키는 우리 정적 자산이 아니다(별도 서명이 필요하므로 손대지 않는다).
-  if (source.startsWith("uploads/")) return source;
-  return `/${source}`;
-}
-
 export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
   return {
     frameId: frameIdFromFrameType(frame.frameType),
@@ -164,10 +145,7 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
     components: frame.components.map((component, index) => ({
       id: String(component.id ?? `${component.type}-${index}`),
       type: component.type,
-      source: restoreComponentSource(
-        component.type,
-        component.source || component.key || "",
-      ),
+      source: component.source || component.key || "",
       x: component.x,
       y: component.y,
       width: component.width,

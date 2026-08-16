@@ -6,6 +6,7 @@ import {
   ReactElement,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -262,6 +263,10 @@ export default function MyPage() {
     }
   };
 
+  // 업로드에 성공하면 input 의 값도 비운다. 값을 남겨 두면 같은 파일을 다시 골랐을 때
+  // change 가 발생하지 않아 아무 일도 일어나지 않는다.
+  const profileInputRef = useRef<HTMLInputElement | null>(null);
+
   const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     setProfileFile(e.target.files?.[0] ?? null);
   };
@@ -279,6 +284,7 @@ export default function MyPage() {
       await uploadProfileImage(profileFile);
       await fetchUser();
       setProfileFile(null);
+      if (profileInputRef.current) profileInputRef.current.value = "";
       alert("프로필 이미지가 변경되었어요.");
     } catch (error) {
       console.error(error);
@@ -391,13 +397,13 @@ export default function MyPage() {
       </div>
       {statsError ? (
         <div className="flex flex-col items-center gap-1.5 px-4">
-          <p className="text-center text-[11.5px] text-[color:var(--hc-muted)]">
+          <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
             {statsError}
           </p>
           <button
             type="button"
             onClick={() => void fetchStats()}
-            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11.5px] font-semibold"
+            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11px] font-semibold"
           >
             다시 시도
           </button>
@@ -430,17 +436,21 @@ export default function MyPage() {
           </button>
         </div>
         {errors.username ? (
-          <p className="text-[11.5px] text-[color:var(--hc-primary-strong)]">
+          <p className="text-[11px] text-[color:var(--hc-primary-strong)]">
             {errors.username}
           </p>
         ) : null}
       </form>
 
       <div className="flex flex-col gap-2">
-        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+        <label
+          htmlFor="mypage-email"
+          className="text-[13px] font-semibold text-[color:var(--hc-muted)]"
+        >
           이메일
         </label>
         <input
+          id="mypage-email"
           value={user?.email ?? ""}
           readOnly
           className="hc-input h-11 w-full cursor-default rounded-xl border px-3.5 text-[14px] text-[color:var(--hc-muted)] outline-none"
@@ -491,11 +501,16 @@ export default function MyPage() {
       </form>
 
       <div className="flex flex-col gap-2 border-t border-[color:var(--hc-border-subtle)] pt-5">
-        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
+        <label
+          htmlFor="mypage-profile-image"
+          className="text-[13px] font-semibold text-[color:var(--hc-muted)]"
+        >
           프로필 이미지
         </label>
         <div className="flex items-center gap-2">
           <input
+            id="mypage-profile-image"
+            ref={profileInputRef}
             type="file"
             accept={SUPPORTED_IMAGE_ACCEPT}
             onChange={handleProfileFileChange}
@@ -520,8 +535,8 @@ export default function MyPage() {
       <div className="hc-surface-well grid gap-2 rounded-2xl border p-4 sm:grid-cols-2">
         <div>
           <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
-            <CreditCard className="h-4 w-4 text-[color:var(--hc-primary)]" />
-            <span className="text-[11.5px]">현재 플랜</span>
+            <CreditCard className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
+            <span className="text-[11px]">현재 플랜</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
             {planDisplayName}
@@ -530,8 +545,8 @@ export default function MyPage() {
         </div>
         <div>
           <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
-            <User className="h-4 w-4 text-[color:var(--hc-primary)]" />
-            <span className="text-[11.5px]">로그인 플랫폼</span>
+            <User className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
+            <span className="text-[11px]">로그인 플랫폼</span>
           </div>
           <p className="mt-1.5 text-[15px] font-bold">
             {getLoginPlatformLabel(user?.loginPlatform)}
@@ -577,7 +592,7 @@ export default function MyPage() {
   const prefSection = (
     <div className="flex flex-col gap-4">
       <ColorThemePreferencePanel />
-      <p className="text-[12.5px] leading-5 text-[color:var(--hc-muted)]">
+      <p className="text-[13px] leading-5 text-[color:var(--hc-muted)]">
         화질·언어 설정은 순차적으로 추가될 예정이에요.
       </p>
     </div>
@@ -614,7 +629,7 @@ export default function MyPage() {
         type="button"
         onClick={handleExit}
         disabled={isSubmitting}
-        className="mx-auto mt-3 block text-[12.5px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+        className="mx-auto mt-3 block text-[13px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
       >
         회원 탈퇴
       </button>
@@ -622,7 +637,7 @@ export default function MyPage() {
   );
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav userInitial={user?.username} />
 
       <div className="mx-auto w-full max-w-[1000px] px-4 py-5 sm:py-6 lg:py-8">
@@ -768,10 +783,10 @@ export default function MyPage() {
                           className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl"
                           style={{ background: iconTint }}
                         >
-                          <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary)]" />
+                          <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary-strong)]" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[14.5px] font-bold">
+                          <span className="block text-[15px] font-bold">
                             {meta.title}
                           </span>
                           <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">
@@ -802,7 +817,7 @@ export default function MyPage() {
               {/* 로그아웃 / 탈퇴 */}
               <div className="mt-1">{logoutAndExit}</div>
 
-              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted-soft)]">
+              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted)]">
                 하루컷 v1.0.0
               </p>
             </div>

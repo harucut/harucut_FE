@@ -11,11 +11,10 @@ import {
 } from "@/lib/reactKonva";
 import Konva from "konva";
 
+import { useStageFit } from "@/hooks/useStageFit";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { EditableNode } from "./EditableNode";
-
-const VIEW_SIZE = 330;
 
 export function CanvasStage() {
   const frameId = useThemeEditorStore((s) => s.frameId);
@@ -70,21 +69,15 @@ export function CanvasStage() {
     [components, activeId],
   );
 
-  // 고정 뷰 크기에 맞춰 캔버스 스케일 계산
-  const { viewW, viewH, scale } = useMemo(() => {
-    if (!layout) return { viewW: VIEW_SIZE, viewH: VIEW_SIZE, scale: 1 };
-
-    const s = Math.min(
-      VIEW_SIZE / layout.totalWidth,
-      VIEW_SIZE / layout.totalHeight,
-    );
-
-    return {
-      viewW: Math.round(layout.totalWidth * s),
-      viewH: Math.round(layout.totalHeight * s),
-      scale: s,
-    };
-  }, [layout]);
+  // 담긴 공간에 맞춰 캔버스 스케일 계산(고정 330px이 아니다)
+  const stageBase = useMemo(
+    () =>
+      layout
+        ? { width: layout.totalWidth, height: layout.totalHeight }
+        : null,
+    [layout],
+  );
+  const { containerRef, viewW, viewH, scale, ready } = useStageFit(stageBase);
 
   // 선택된 노드를 Konva Transformer에 연결
   useLayoutEffect(() => {
@@ -138,8 +131,9 @@ export function CanvasStage() {
   const frameH = layout.totalHeight;
 
   return (
-    <div className="w-[330px]">
+    <div ref={containerRef} className="w-full">
       <div className="flex justify-center">
+        {ready ? (
         <Stage
           ref={stageRef}
           width={viewW}
@@ -382,6 +376,7 @@ export function CanvasStage() {
             })}
           </Layer>
         </Stage>
+        ) : null}
       </div>
     </div>
   );

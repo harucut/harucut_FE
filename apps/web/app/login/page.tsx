@@ -11,6 +11,7 @@ import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { clientApi } from "@/lib/clientApi";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import {
@@ -96,8 +97,14 @@ function LoginPageContent() {
       window.location.href = redirectTarget;
     } catch (error) {
       console.error(error);
+      // 실패 원인은 하나가 아니다 — 가입되지 않은 계정(AUTH-020), 이메일 미인증(AUTH-004),
+      // 탈퇴한 계정(AUTH-006), 네트워크 장애까지 전부 "비밀번호가 틀렸다"로 말하면
+      // 사용자는 맞는 비밀번호를 계속 다시 친다. 서버 코드에 맞는 문구를 쓴다.
       setErrors({
-        common: "이메일 또는 비밀번호가 올바르지 않아요.",
+        common: getUserFacingApiErrorMessage(
+          error,
+          "이메일 또는 비밀번호가 올바르지 않아요.",
+        ),
       });
     } finally {
       setIsSubmitting(false);
@@ -114,7 +121,7 @@ function LoginPageContent() {
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
-              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
+              className="font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               회원가입
             </Link>
@@ -124,7 +131,7 @@ function LoginPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
             {errors.common}
           </p>
         ) : null}
@@ -144,10 +151,11 @@ function LoginPageContent() {
         ))}
 
         {/* 세션 지속 옵션은 백엔드 계약에 없어 '로그인 상태 유지' 체크박스를 두지 않는다. */}
-        <div className="flex items-center justify-end text-[10px] text-zinc-500">
+        <div className="flex items-center justify-end">
           <Link
             href={forgotPasswordHref}
-            className="text-[10px] text-zinc-400 hover:text-zinc-200"
+            // 17px 높이라 손가락으로 눌리지 않았다. 시각 크기는 그대로 두고 누를 면만 넓힌다.
+            className="inline-flex min-h-[44px] items-center px-1 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4 transition hover:text-[color:var(--hc-text)]"
           >
             비밀번호 찾기
           </Link>
