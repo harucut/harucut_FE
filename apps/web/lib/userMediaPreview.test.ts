@@ -55,6 +55,21 @@ describe("user media preview helpers", () => {
     ).toBe("2025년 12월 31일");
   });
 
+  // 서버는 오프셋 없는 UTC 를 준다. 로컬 시각으로 읽으면 한국에서 하루가 어긋난다.
+  it("reads the server's offset-less timestamp as UTC", () => {
+    expect(
+      getUserMediaDateLabel(
+        {
+          mediaId: 1,
+          s3Key: "uploads/photo.png",
+          // UTC 8/14 18:00 = KST 8/15 03:00
+          createdAt: "2026-08-14T18:00:00",
+        },
+        NOW,
+      ),
+    ).toBe("8월 15일");
+  });
+
   it("returns null for the date label when the server sent no date", () => {
     expect(
       getUserMediaDateLabel({ mediaId: 1, s3Key: "uploads/photo.png" }, NOW),

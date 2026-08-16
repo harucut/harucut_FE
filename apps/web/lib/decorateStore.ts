@@ -67,6 +67,8 @@ type State = {
   restoreRemoved: () => void;
   canRestoreRemoved: boolean;
   lastRemoved: DecorComponent | null;
+  /** 삭제 당시의 쌓임 순서(배열 인덱스). 되돌릴 때 그 자리에 다시 넣는다. */
+  lastRemovedIndex: number | null;
   duplicateActive: () => void;
   moveActive: (dir: "up" | "down") => void;
 
@@ -82,6 +84,7 @@ export const useDecorateStore = create<State>((set, get) => ({
   base: null,
   components: [],
   lastRemoved: null,
+  lastRemovedIndex: null,
   canRestoreRemoved: false,
   strokes: [],
   activeId: null,
@@ -95,6 +98,7 @@ export const useDecorateStore = create<State>((set, get) => ({
       base,
       components: [],
       lastRemoved: null,
+      lastRemovedIndex: null,
       canRestoreRemoved: false,
       strokes: [],
       activeId: null,
@@ -194,25 +198,41 @@ export const useDecorateStore = create<State>((set, get) => ({
     const { activeId } = get();
     if (!activeId) return;
     set((s) => {
-      const removed = s.components.find((c) => c.id === activeId) ?? null;
+      const index = s.components.findIndex((c) => c.id === activeId);
+      const removed = index === -1 ? null : s.components[index];
       return {
         components: normalizeZ(s.components.filter((c) => c.id !== activeId)),
         activeId: null,
         lastRemoved: removed,
+        lastRemovedIndex: removed ? index : null,
         canRestoreRemoved: Boolean(removed),
       };
     });
   },
 
+  /**
+   * 삭제한 자리로 되돌린다.
+   *
+   * 예전에는 배열 끝에 붙이고 zIndex 를 다시 매겼다. 그래서 중간이나 맨 아래에 있던
+   * 요소를 지웠다 되돌리면 항상 맨 위로 올라왔고, 겹쳐 있던 스티커·사진의 합성 결과가
+   * 삭제 전과 달라졌다. "되돌리기"가 이전 상태로 돌아가지 않는 셈이었다.
+   * 삭제 당시의 자리(배열 인덱스 = 쌓임 순서)를 함께 들고 있다가 그 자리에 끼워 넣는다.
+   */
   restoreRemoved: () => {
     const removed = get().lastRemoved;
     if (!removed) return;
-    set((s) => ({
-      components: normalizeZ([...s.components, removed]),
-      activeId: removed.id,
-      lastRemoved: null,
-      canRestoreRemoved: false,
-    }));
+    set((s) => {
+      const next = [...s.components];
+      const at = Math.min(s.lastRemovedIndex ?? next.length, next.length);
+      next.splice(at, 0, removed);
+      return {
+        components: normalizeZ(next),
+        activeId: removed.id,
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
+      };
+    });
   },
 
   duplicateActive: () => {

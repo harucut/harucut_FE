@@ -1,7 +1,10 @@
 "use client";
 
 import { create } from "zustand";
-import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
+import {
+  GUEST_TRIAL_COOKIE,
+  GUEST_TRIAL_COOKIE_MAX_AGE,
+} from "@/lib/guestTrialShared";
 
 export type GuestAccessMode = "guest" | "member";
 
@@ -72,7 +75,7 @@ function setGuestCookie(enabled: boolean) {
       : "";
 
   document.cookie = enabled
-    ? `${GUEST_TRIAL_COOKIE}=1; path=/; max-age=604800; SameSite=Lax${secure}`
+    ? `${GUEST_TRIAL_COOKIE}=1; path=/; max-age=${GUEST_TRIAL_COOKIE_MAX_AGE}; SameSite=Lax${secure}`
     : `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secure}`;
 }
 

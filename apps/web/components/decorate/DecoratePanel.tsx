@@ -267,19 +267,24 @@ export function DecoratePanel() {
               >
                 삭제
               </button>
-              {/* 삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 아예 없으면 편집을 조심스러워한다. */}
-              {canRestoreRemoved ? (
-                <button
-                  type="button"
-                  onClick={restoreRemoved}
-                  className="rounded-full border border-[color:var(--hc-border-strong)] px-3 py-1.5 text-[11px] text-[color:var(--hc-text)]"
-                >
-                  삭제 되돌리기
-                </button>
-              ) : null}
             </div>
           </div>
         </Section>
+      ) : null}
+
+      {/*
+        삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 아예 없으면 편집을 조심스러워한다.
+        "선택한 요소" 블록 안에 두면 안 된다 — 삭제하는 순간 선택이 풀려 블록째 사라지므로,
+        정작 되돌리고 싶은 그 순간에 버튼이 화면에 없다.
+      */}
+      {canRestoreRemoved ? (
+        <button
+          type="button"
+          onClick={restoreRemoved}
+          className="w-full rounded-full border border-[color:var(--hc-border-strong)] px-3 py-2.5 text-[12px] font-semibold text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)]"
+        >
+          방금 지운 요소 되돌리기
+        </button>
       ) : null}
     </div>
   );

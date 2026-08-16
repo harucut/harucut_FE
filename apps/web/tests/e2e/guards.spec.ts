@@ -64,6 +64,27 @@ test("preserves the original query string in redirectTo", async ({ page }) => {
     .toBe("/shoot/capture?mode=retry");
 });
 
+/**
+ * 행사장 QR 로 들어온 참가자.
+ *
+ * 쿠키가 하나도 없는 새 브라우저로 도착하므로, 프록시가 여기서 막으면 "가입 없이 바로
+ * 찍는다"는 행사 흐름이 정작 행사장에서만 동작하지 않는다.
+ */
+test("lets an event QR visitor shoot without signing up", async ({ page }) => {
+  await page.goto("/shoot?frame=classic-4&event=%EC%97%AC%EB%A6%84%20%ED%8C%AC%EB%AF%B8%ED%8C%85");
+
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
+  await expect(page.getByText("여름 팬미팅")).toBeVisible();
+
+  // 다음 단계로 이어질 수 있도록 비회원 체험 쿠키가 심겨야 한다.
+  const cookies = await page.context().cookies();
+  expect(
+    cookies.find((cookie) => cookie.name === "harucut_guest_trial")?.value,
+  ).toBe("1");
+});
+
+// event 없이 오는 /shoot 은 그대로 로그인으로 보낸다(위 protectedRoutes 가 검증한다).
+
 // 게스트 체험은 촬영과 꾸미기까지 허용한다(꾸미기 저장 시 로그인 유도).
 const guestAllowedRoutes = ["/shoot", "/decorate"];
 

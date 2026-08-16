@@ -4,6 +4,10 @@ const createJestConfig = nextJest({
   dir: "./",
 });
 
+// 날짜 표시 로직은 실행 환경의 시간대에 따라 결과가 달라진다. 개발 머신(KST)에서는
+// 통과하고 CI(UTC)에서는 깨지는 테스트가 생기므로, 제품이 서비스하는 시간대로 고정한다.
+process.env.TZ = "Asia/Seoul";
+
 const config = {
   // React 컴포넌트/DOM 테스트를 위해 브라우저 유사 환경 사용
   testEnvironment: "jest-environment-jsdom",

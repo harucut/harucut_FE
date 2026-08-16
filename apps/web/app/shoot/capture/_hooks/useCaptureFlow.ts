@@ -50,6 +50,15 @@ export function useCaptureFlow() {
   const isShootingRef = useRef(false);
   // 진행 중인 카운트다운 타이머. 촬영 취소에서 즉시 정리하려고 따로 들고 있는다.
   const countdownTimerRef = useRef<number | null>(null);
+  /**
+   * 촬영 회차 번호.
+   *
+   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 사용자가 촬영 취소를 누르면
+   * 세션이 비워진 뒤에 결과가 돌아온다. 그대로 두면 취소한 사진이 다시 담기고, 마지막 컷을
+   * 인코딩하던 중이었다면 /shoot/select 로 넘어가 취소 자체가 무효가 됐다.
+   * 시작·취소 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
+   */
+  const shootGenerationRef = useRef(0);
 
   const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
@@ -263,7 +272,12 @@ export function useCaptureFlow() {
     if (lastFinishedShotRef.current >= shotCount) return;
     lastFinishedShotRef.current = shotCount;
 
+    const generation = shootGenerationRef.current;
     const photoDataUrl = await capturePhotoToDataUrl();
+
+    // 인코딩 중에 취소됐으면 결과를 버린다. 선점도 되돌리지 않는다 — 취소가 이미 초기화했다.
+    if (shootGenerationRef.current !== generation) return;
+
     if (!photoDataUrl) {
       // 인코딩이 실패했으면 이 컷은 아직 안 찍힌 것이다. 선점을 되돌려 다시 시도할 수 있게 한다.
       lastFinishedShotRef.current = shotCount - 1;
@@ -306,6 +320,7 @@ export function useCaptureFlow() {
     setShotCount(0);
     lastFinishedShotRef.current = -1;
     isShootingRef.current = true;
+    shootGenerationRef.current += 1;
 
     // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
     setShooting({ isShooting: true, countdown: timerSeconds });
@@ -353,6 +368,8 @@ export function useCaptureFlow() {
 
     isShootingRef.current = false;
     lastFinishedShotRef.current = -1;
+    // 진행 중인 인코딩의 결과를 무효로 만든다.
+    shootGenerationRef.current += 1;
     setShooting({ isShooting: false, countdown: null });
     resetShots();
     setShotCount(0);
