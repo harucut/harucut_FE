@@ -124,8 +124,10 @@ function PlanCard({
         ))}
       </ul>
 
-      {/* CTA — 비회원은 가입 유도. 회원은 결제 연동 전이라 "준비 중"으로 비활성.
-          이용 중인 플랜은 누를 곳이 없다. */}
+      {/*
+        CTA — 이용 중인 플랜은 누를 곳이 없고, 결제가 닫힌 동안 나머지도 누를 곳이 없다.
+        지금 실제로 할 수 있는 것은 비회원이 무료로 가입하는 것 하나뿐이다.
+      */}
       {current ? (
         <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[15px] font-extrabold text-[color:var(--hc-primary-strong)]">
           현재 이용 중
@@ -139,9 +141,18 @@ function PlanCard({
         <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
           결제 준비 중
         </span>
+      ) : authed ? (
+        /*
+          이미 계정이 있는 사람에게는 "무료로 시작하기"가 할 말이 아니다. 게다가 결제가
+          닫혀 있어 플랜을 바꿀 수도 없다 — 마이페이지로 보내 봐야 거기 있는 요금제 동작은
+          이 화면으로 되돌아오는 링크뿐이라 왕복만 한다. 상태만 말한다.
+        */
+        <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
+          결제 준비 중
+        </span>
       ) : (
         <Link
-          href={authed ? "/mypage" : "/signup"}
+          href="/signup"
           className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
             hot
               ? "hc-button-primary"

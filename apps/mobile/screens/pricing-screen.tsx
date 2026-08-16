@@ -114,7 +114,9 @@ function PlanCard({
         <View style={styles.ctaCurrent}>
           <Text style={styles.ctaCurrentLabel}>현재 이용 중</Text>
         </View>
-      ) : !isPurchasable ? (
+      ) : !isPurchasable || isMember ? (
+        // 회원에게는 "무료로 시작하기"가 할 말이 아니고, 결제가 닫혀 있어 플랜을 바꿀 수도
+        // 없다. 마이페이지로 보내도 거기서 할 수 있는 일이 없어 왕복만 한다(웹과 같은 규칙).
         <View style={styles.ctaCurrent}>
           <Text style={styles.ctaCurrentLabel}>결제 준비 중</Text>
         </View>
@@ -142,15 +144,9 @@ export function PricingScreen() {
   const currentPlanId = isMember ? toPlanId(planTier) : null;
 
   // 회원 CTA는 비활성('준비 중')이라 눌리지 않는다. 비회원(anonymous·guest)만 가입 흐름으로 보낸다.
-  /*
-    카드 CTA 를 눌렀을 때.
-
-    로그인한 회원에게 회원가입 화면을 열지 않는다 — Plus·Pro 회원이 Free 카드를 보면
-    current 가 false 라 이 버튼이 눌리는데, 그대로 두면 이미 계정이 있는 사람에게
-    가입 화면이 뜬다. 회원은 플랜을 다루는 자리(마이페이지)로 보낸다.
-  */
+  // 카드 CTA. 회원에게는 버튼 자체가 뜨지 않으므로(위 PlanCard 참고) 비회원 가입만 남는다.
   const handlePick = () => {
-    router.push((isMember ? '/mypage' : '/signup') as never);
+    router.push('/signup' as never);
   };
 
   return (
