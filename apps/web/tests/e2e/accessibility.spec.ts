@@ -71,6 +71,12 @@ async function composeFourcutThroughUpload(page: Page) {
   await page.goto("/upload");
   await page.getByRole("button", { name: "업로드 시작하기" }).click();
   await page.waitForURL("**/upload/select");
+
+  // 등장 애니메이션(.hc-reveal)이 도는 동안에는 타일이 계속 움직여서 Playwright 가
+  // "element is not stable" 로 클릭을 미루다 타임아웃한다(CI 에서 실제로 그랬다).
+  // 클릭 전에 최종 상태로 고정한다.
+  await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
+
   await page.locator('input[type="file"]').setInputFiles(
     Array.from({ length: 4 }, (_, index) => ({
       name: `a11y-${index}.png`,
@@ -78,9 +84,22 @@ async function composeFourcutThroughUpload(page: Page) {
       buffer: TINY_PNG,
     })),
   );
+
+  // 네 장이 다 그려진 뒤에 고르기 시작한다. 목록이 커지는 도중에 누르면 그 사이 리렌더로
+  // 노드가 교체돼(detached) 클릭이 날아간다.
+  const tiles = page.getByRole("button", { name: /^\d+번 사진 선택$/ });
+  await expect(tiles).toHaveCount(4);
+  await waitForImagesToSettle(page);
+
   for (let index = 1; index <= 4; index += 1) {
-    await page.getByRole("button", { name: `${index}번 사진 선택` }).click();
+    const tile = page.getByRole("button", { name: `${index}번 사진 선택` });
+    await tile.click();
+    // 눌린 것이 반영될 때까지 기다린다 — 선택되면 aria-label 이 "선택 해제"로 바뀐다.
+    await expect(
+      page.getByRole("button", { name: new RegExp(`^${index}번 사진 선택 해제`) }),
+    ).toBeVisible();
   }
+
   await page.getByRole("button", { name: "다음 단계로" }).click();
   await page.waitForURL("**/upload/result");
   await page.getByRole("button", { name: /네컷 꾸미기/ }).waitFor();
@@ -292,6 +311,12 @@ for (const { route, enter } of routesReachedThroughUi) {
   test(`authenticated route ${route} has no obvious accessibility violations`, async ({
     page,
   }) => {
+    // 이 검사들은 화면을 UI 로 거쳐 들어간다. e2e 서버가 dev 서버(pnpm dev)라 CI 의 찬
+    // 러너에서는 /upload, /upload/select, /upload/result, /decorate 를 그때그때 컴파일하고,
+    // 그 합이 기본 제한 60초를 넘겨 타임아웃으로 죽었다. 검사 자체가 느린 게 아니라
+    // 첫 컴파일이 느린 것이므로 이 묶음에만 여유를 준다.
+    test.slow();
+
     await enableAuthenticatedContext(page);
     await enter(page);
     await expectStayedOn(page, route);
