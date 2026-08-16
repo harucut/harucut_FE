@@ -11,13 +11,15 @@ import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton"
 import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
 
 // 랜딩 미리보기는 한 변이 200px 남짓인데 원본은 900x1200 PNG(1.2MB)였다. 같은 파일이
 // 화면에 20 번 들어가 첫 로드를 그대로 잡아먹었다. 표시 크기에 맞춘 webp(30KB)를 쓴다.
-const HERO_IMAGES = Array.from({ length: 4 }, () => "/hero-image.webp");
+// 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
+const HERO_IMAGES = DEMO_PHOTOS;
 
 // 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [

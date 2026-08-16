@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { BrandMark } from "../layout/BrandMark";
 import { FramePreview } from "../frame/FramePreview";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 
 type Props = {
   title: string;
@@ -14,7 +15,8 @@ type Props = {
 };
 
 // 사진은 추후 교체될 placeholder.
-const COLLAGE = Array.from({ length: 4 }, () => "/hero-image.webp");
+// 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
+const COLLAGE = DEMO_PHOTOS;
 
 export function AuthPageShell({ title, description, children, footer, icon }: Props) {
   return (
