@@ -62,14 +62,14 @@ function PlanCard({
   const hot = PAYMENTS_ENABLED ? plan.hot : plan.id === 'basic';
 
   return (
-    <View style={[styles.card, plan.hot ? styles.cardHot : null, current ? styles.cardCurrent : null]}>
+    <View style={[styles.card, hot ? styles.cardHot : null, current ? styles.cardCurrent : null]}>
       {badge ? (
         <View style={styles.badge}>
           <Text style={styles.badgeLabel}>{badge}</Text>
         </View>
       ) : null}
 
-      <Text style={[styles.planName, plan.hot || current ? styles.planNameHot : null]}>
+      <Text style={[styles.planName, hot || current ? styles.planNameHot : null]}>
         {plan.name}
       </Text>
 
@@ -139,8 +139,15 @@ export function PricingScreen() {
   const currentPlanId = isMember ? toPlanId(planTier) : null;
 
   // 회원 CTA는 비활성('준비 중')이라 눌리지 않는다. 비회원(anonymous·guest)만 가입 흐름으로 보낸다.
+  /*
+    카드 CTA 를 눌렀을 때.
+
+    로그인한 회원에게 회원가입 화면을 열지 않는다 — Plus·Pro 회원이 Free 카드를 보면
+    current 가 false 라 이 버튼이 눌리는데, 그대로 두면 이미 계정이 있는 사람에게
+    가입 화면이 뜬다. 회원은 플랜을 다루는 자리(마이페이지)로 보낸다.
+  */
   const handlePick = () => {
-    router.push('/signup' as never);
+    router.push((isMember ? '/mypage' : '/signup') as never);
   };
 
   return (
