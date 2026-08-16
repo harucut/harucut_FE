@@ -8,6 +8,10 @@ name: verify
 # 병합도 막히지 않는다.
 #
 # labeled를 types에 넣어야 라벨을 누르는 순간 워크플로가 다시 돌아 검사가 시작된다.
+# `run-ci` 라벨은 **사람이 직접 붙일 때만** 붙는다. 예전에는 Codex 리뷰가 끝나면
+# ci-on-codex-review 워크플로가 대신 붙였는데, 그러면 CI 를 언제 돌릴지가 저장소 주인의
+# 손을 떠난다. 자동 부착은 걷어냈다 — 돌리고 싶을 때 PR 에 라벨을 붙이면 된다.
+#
 # develop 푸시와 수동 실행(Actions 탭 > Run workflow)은 라벨과 무관하게 항상 돈다.
 on:
   pull_request:
