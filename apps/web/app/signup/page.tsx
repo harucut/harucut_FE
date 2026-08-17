@@ -17,13 +17,20 @@ import {
   validateUsername,
 } from "@/lib/authValidation";
 import { signupWithEmail } from "@/lib/auth/authApi";
+import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import {
   buildPathWithRedirect,
   getSafeRedirectPath,
   resolveRedirectTarget,
 } from "@/lib/redirect";
-import { useEmailVerification } from "./_hooks/useEmailVerification";
+import {
+  useEmailVerification,
+  VERIFICATION_EXPIRED_MESSAGE,
+} from "./_hooks/useEmailVerification";
 
 type SignupFieldName = Extract<
   AuthFieldName,
@@ -106,6 +113,15 @@ function SignupPageContent() {
       nextErrors.email = "이메일 인증을 완료해 주세요.";
     } else if (verifiedEmail !== emailFromState) {
       nextErrors.email = "인증한 이메일과 현재 입력한 이메일이 달라요.";
+    } else if (
+      emailVerification.verifiedExpiresAt &&
+      Date.now() >= emailVerification.verifiedExpiresAt
+    ) {
+      // 서버는 인증 기록을 10분만 들고 있다. 지났으면 요청을 보내 봐야 AUTH-004 로 돌아오니
+      // 여기서 끊는다. 유효시간이 지나면 훅이 알아서 인증을 풀지만, 탭이 뒤에 있으면
+      // 타이머가 늦게 깨어날 수 있어 제출 시점에 한 번 더 본다.
+      emailVerification.reset();
+      nextErrors.email = VERIFICATION_EXPIRED_MESSAGE;
     }
 
     if (!consents.terms || !consents.privacy) {
@@ -130,9 +146,27 @@ function SignupPageContent() {
       router.push(loginHref);
     } catch (error) {
       console.error(error);
-      setErrors({
-        common: "회원가입에 실패했어요. 잠시 후 다시 시도해 주세요.",
-      });
+
+      // 서버가 준 코드를 버리지 않는다. 예전에는 무엇이 틀렸든 "잠시 후 다시 시도해 주세요"
+      // 하나로 뭉갰는데, 원인마다 사용자가 해야 할 일이 다르다 — 이미 쓰는 이메일(AUTH-030)은
+      // 다른 이메일을 써야 하고, 인증 만료(AUTH-004)는 다시 인증해야 한다. "잠시 후 다시"는
+      // 둘 다에게 틀린 안내다(기다린다고 풀리지 않는다).
+      const { code } = getApiErrorDetails(error);
+      const message = getUserFacingApiErrorMessage(
+        error,
+        "회원가입에 실패했어요. 잠시 후 다시 시도해 주세요.",
+      );
+
+      if (code === "AUTH-004") {
+        // 서버는 이 이메일이 인증되지 않았다고 본다. 화면만 "인증 완료"로 남겨 두면
+        // 사용자는 같은 버튼을 계속 누르게 된다. 인증 상태를 풀어 다시 받게 한다.
+        emailVerification.reset();
+        setErrors({ email: VERIFICATION_EXPIRED_MESSAGE });
+      } else if (code === "AUTH-030") {
+        setErrors({ email: message });
+      } else {
+        setErrors({ common: message });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -178,17 +212,27 @@ function SignupPageContent() {
         <EmailCodeSection
           email={email}
           setEmail={setEmail}
-          onEmailChange={emailVerification.handleEmailChange}
+          // 제출에서 붙인 이메일 오류(AUTH-004·AUTH-030)는 이 폼의 state 라, 사용자가 이메일을
+          // 고치거나 다시 인증해도 저절로 사라지지 않는다. 두 지점에서 직접 걷어낸다.
+          onEmailChange={(next) => {
+            setErrors((prev) => ({ ...prev, common: null, email: null }));
+            emailVerification.handleEmailChange(next);
+          }}
           code={emailVerification.emailCode}
           setCode={emailVerification.setEmailCode}
           isSending={emailVerification.isSendingCode}
           isVerifying={emailVerification.isVerifyingCode}
           isVerified={emailVerification.isEmailVerified}
           codeExpiresAt={emailVerification.codeExpiresAt}
+          verifiedExpiresAt={emailVerification.verifiedExpiresAt}
           emailError={errors.email ?? emailVerification.emailError}
           codeError={emailVerification.codeError}
           onSend={emailVerification.sendCode}
-          onVerify={emailVerification.verifyCode}
+          onVerify={async (verifyEmail, verifyCode) => {
+            const ok = await emailVerification.verifyCode(verifyEmail, verifyCode);
+            if (ok) setErrors((prev) => ({ ...prev, common: null, email: null }));
+            return ok;
+          }}
           verifiedText="이메일 인증이 완료되었어요."
         />
 
