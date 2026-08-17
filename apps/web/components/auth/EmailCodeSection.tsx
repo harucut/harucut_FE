@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Clock3, Mail, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Clock3, Mail } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { EMAIL_FIELD } from "@/components/auth/authFields";
@@ -88,26 +88,14 @@ export function EmailCodeSection({
         error={emailError}
       />
 
+      {/* 인증이 끝나면 한 줄이면 된다.
+          예전에는 같은 말을 세 번 했다 — 방패 아이콘 배지, "이메일 인증이 완료되었어요",
+          그리고 "인증 완료" 칩. 거기에 "이메일을 수정하면 인증 코드 입력 영역이 다시
+          나타납니다"까지 붙었는데, 그건 사용자가 알아야 할 사실이 아니라 화면이 스스로를
+          설명하는 말이었다. 이메일을 고치면 실제로 그렇게 되므로 미리 알려 줄 필요가 없다. */}
       {isVerified ? (
-        <div className="hc-surface-hero rounded-2xl border px-3 py-3">
-          <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] p-2 text-[color:var(--hc-primary-strong)]">
-              <ShieldCheck size={16} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-medium text-[color:var(--hc-text)]">
-                  {verifiedText}
-                </p>
-                <span className="hc-accent-chip rounded-full border px-2 py-0.5 text-[11px] font-medium">
-                  인증 완료
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--hc-muted)]">
-                이메일을 수정하면 인증 코드 입력 영역이 다시 나타납니다.
-              </p>
-            </div>
-          </div>
+        <div className="rounded-2xl border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] px-3 py-2">
+          <p className="text-[11px] font-medium text-[color:var(--hc-text)]">{verifiedText}</p>
         </div>
       ) : (
         <>
@@ -149,11 +137,18 @@ export function EmailCodeSection({
           {/* 인증 코드 입력 + 단일 토글 버튼을 한 줄로. 전송 전·만료 후엔 '코드 보내기',
              타이머가 도는 동안엔 '인증 확인'만 노출(번갈아). radius·높이는 다른 입력칸과 동일. */}
           <div className="flex items-stretch gap-2">
+            {/* 서버가 보내는 코드는 숫자가 아니라 영숫자 6자리다(예: VJG4K4).
+                inputMode="numeric" 이었을 때는 휴대폰에서 숫자 키패드가 떠서 글자를 칠 수 없었다. */}
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              // 대문자로 바꿔 담는 것은 보이기용이 아니라 보내는 값 자체다. CSS 로만 대문자로
+              // 보이게 하면 소문자로 친 사람은 화면엔 맞게 보이는데 서버엔 다른 값이 간다.
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="인증 코드 입력"
-              inputMode="numeric"
+              inputMode="text"
+              autoCapitalize="characters"
+              autoComplete="one-time-code"
+              maxLength={6}
               className="hc-input h-9 min-w-0 flex-1 rounded-lg border px-3 text-xs disabled:opacity-50"
             />
 

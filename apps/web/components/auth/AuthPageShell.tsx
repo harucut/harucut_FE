@@ -21,8 +21,12 @@ const COLLAGE = DEMO_PHOTOS;
 export function AuthPageShell({ title, description, children, footer, icon }: Props) {
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      {/* 브랜드 패널 — 데스크톱(lg+)에서만, handoff web 분할 레이아웃의 다크 스테이지 */}
-      <aside className="relative hidden overflow-hidden bg-[#0B0B0C] p-14 lg:flex lg:flex-col lg:justify-between">
+      {/* 브랜드 패널 — 데스크톱(lg+)에서만, handoff web 분할 레이아웃의 다크 스테이지.
+          두 칸은 서로의 높이를 따라가지 않는다. 예전에는 grid 아이템이 행 높이만큼 늘어나서,
+          입력이 많은 회원가입 화면에서 오른쪽이 길어지면 왼쪽 무대까지 같이 늘어났다
+          (1440x900 에서 943px). 폼이 길어질수록 사진이 위로 밀리고 아래 문구는 화면 밖으로
+          내려갔다. self-start 로 늘어나기를 끊고, h-dvh + sticky 로 무대는 한 화면에 고정한다. */}
+      <aside className="relative hidden overflow-hidden bg-[#0B0B0C] p-14 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:justify-between lg:self-start">
         <div className="relative z-10">
           <BrandMark href="/" tone="light" />
         </div>
