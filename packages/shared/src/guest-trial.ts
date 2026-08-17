@@ -17,20 +17,26 @@ export const GUEST_TRIAL_CTA_LABEL = '가입 없이 체험하기';
 /**
  * 체험에서 되는 것과, 가입해야 되는 것.
  *
- * 목록을 문장이 아니라 항목으로 두는 이유: 같은 목록이 모달·안내·FAQ 여러 문장에 나오는데,
- * 문장째로 복사해 두면 한쪽만 고쳐진다. 실제로 체험 시작 모달만 "업로드 제작"이 빠져 있어서,
- * 회원 전용 기능을 실제보다 적게 말하고 있었다.
+ * **찍고 그 사진을 받는 것까지**가 비회원의 범위다. 꾸미기부터는 가입 후다.
+ * 이미지 저장을 남긴 것은 행사(Enterprise) 때문이다 — QR로 들어온 참가자도 같은 게스트
+ * 자격으로 찍는데, 다운로드까지 막으면 "참가자는 가입 없이 찍고 그 자리에서 가져가요"라는
+ * 판매 문구(plans.ts·enterprise 페이지·FAQ)가 사실이 아니게 된다.
  *
- * 근거는 약관 제8조다 — "비회원 체험에서는 촬영, 이미지 저장(기기 다운로드), 네컷 꾸미기를
- * 이용할 수 있으며, 결과물의 서버 저장과 링크 공유, 업로드 제작 등은 회원만 이용할 수 있습니다."
+ * 실제 권한은 apps/web/proxy.ts 의 GUEST_ALLOWED_PREFIXES 와
+ * apps/mobile/app/(app)/_layout.tsx 의 게스트 가드가 정한다. 여기 목록은 그것을 말로 옮긴
+ * 것이라 한쪽만 바뀌면 화면이 거짓말을 한다. 약관 제8조도 같은 범위를 적는다.
+ *
+ * 목록을 문장이 아니라 항목으로 두는 이유: 같은 목록이 모달·안내·FAQ 여러 문장에 나오는데,
+ * 문장째로 복사해 두면 한쪽만 고쳐진다. 실제로 체험 시작 모달만 "업로드 제작"이 빠져 있어서
+ * 회원 전용 기능을 실제보다 적게 말하고 있었다.
  */
-export const GUEST_ALLOWED_ITEMS = '촬영, 이미지 저장, 네컷 꾸미기';
-export const GUEST_MEMBER_ONLY_ITEMS = '링크 공유, 기록 보관, 업로드 제작';
+export const GUEST_ALLOWED_ITEMS = '사진 촬영과 이미지 저장';
+export const GUEST_MEMBER_ONLY_ITEMS = '네컷 꾸미기, 링크 공유, 기록 보관, 업로드 제작';
 
 /** 체험을 시작할지 묻는 모달. 누른 버튼과 확인 버튼이 같은 말을 하도록 라벨을 맞춘다. */
 export const GUEST_TRIAL_NOTICE = {
   title: '가입 없이 체험해볼까요?',
-  message: `${GUEST_ALLOWED_ITEMS}를 바로 이용할 수 있어요. ${GUEST_MEMBER_ONLY_ITEMS}은 무료 가입 후 이용할 수 있어요.`,
+  message: `${GUEST_ALLOWED_ITEMS}을 바로 해볼 수 있어요. 꾸미기부터는 무료 가입 후 이용할 수 있어요.`,
   confirmLabel: GUEST_TRIAL_CTA_LABEL,
   loginLabel: '로그인하기',
 } as const;

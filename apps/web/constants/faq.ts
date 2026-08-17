@@ -11,11 +11,11 @@ export type FaqItem = {
 export const FAQ_ITEMS: FaqItem[] = [
   {
     q: "비회원도 사용할 수 있나요?",
-    // 실제로 비회원이 할 수 있는 범위. 예전에는 "결과물 다운로드·저장"까지 막힌다고
-    // 적혀 있었는데, app/shoot/result/page.tsx 의 guestMode 분기가 blob 을 받아 바로
-    // 내려받는다. 같은 제품의 guestTrialStore 문구는 된다고 말하고 있어서 사이트가
-    // 스스로와 어긋났다. 행사 참가자의 "가입 없이 그 자리에서 가져간다"도 이 사실에 기댄다.
-    a: "네, 가입 없이도 촬영·꾸미기·결과 이미지 다운로드까지 바로 체험할 수 있어요. 링크 공유와 기록 보관, 업로드 제작은 무료 가입(Free) 후 이용할 수 있어요.",
+    // 실제로 비회원이 할 수 있는 범위 — 찍고 그 이미지를 받는 데까지다.
+    // 권한의 출처는 proxy.ts 의 GUEST_ALLOWED_PREFIXES 이고, 이미지는
+    // app/shoot/result/page.tsx 의 guestMode 분기가 blob 으로 바로 내려받는다.
+    // 다운로드가 열려 있어야 행사 참가자의 "가입 없이 그 자리에서 가져간다"가 성립한다.
+    a: "네, 가입 없이도 촬영하고 결과 이미지를 바로 내려받을 수 있어요. 네컷 꾸미기와 링크 공유, 기록 보관, 업로드 제작은 무료 가입(Free) 후 이용할 수 있어요.",
     surfaces: ["landing", "pricing"],
     guestOnly: true,
   },

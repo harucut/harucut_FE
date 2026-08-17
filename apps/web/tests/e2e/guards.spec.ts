@@ -111,8 +111,8 @@ test("keeps the event context when going back to frame selection", async ({
   await expect(page.getByText("여름 팬미팅")).toBeVisible();
 });
 
-// 게스트 체험은 촬영과 꾸미기까지 허용한다(꾸미기 저장 시 로그인 유도).
-const guestAllowedRoutes = ["/shoot", "/decorate"];
+// 게스트 체험은 촬영까지다. 찍고 그 이미지를 받는 데까지만 열려 있다.
+const guestAllowedRoutes = ["/shoot"];
 
 for (const route of guestAllowedRoutes) {
   test(`keeps guests on ${route} instead of the login page`, async ({
@@ -125,17 +125,21 @@ for (const route of guestAllowedRoutes) {
   });
 }
 
-test("redirects guests away from non-trial protected routes", async ({
-  page,
-}) => {
-  await enableGuestContext(page);
-  await page.goto("/history");
+// /decorate 가 여기 있는 것이 핵심이다. 예전에는 게스트에게 열려 있었고,
+// "꾸미기는 가입 후"라고 말하는 화면 문구와 실제 권한이 어긋났다.
+const guestBlockedRoutes = ["/decorate", "/history", "/upload", "/theme"];
 
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("guestNotice"))
-    .toBe("restricted");
-});
+for (const route of guestBlockedRoutes) {
+  test(`redirects guests away from ${route}`, async ({ page }) => {
+    await enableGuestContext(page);
+    await page.goto(route);
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("guestNotice"))
+      .toBe("restricted");
+  });
+}
 
 const lateStepRoutes = [
   { route: "/shoot/select", expected: "/shoot" },

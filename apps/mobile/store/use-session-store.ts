@@ -1,7 +1,12 @@
 import { router } from 'expo-router';
 import { create } from 'zustand';
 
-import { GUEST_TRIAL_CTA_LABEL, GUEST_TRIAL_NOTICE } from '@harucut/shared';
+import {
+  GUEST_ALLOWED_ITEMS,
+  GUEST_MEMBER_ONLY_ITEMS,
+  GUEST_TRIAL_CTA_LABEL,
+  GUEST_TRIAL_NOTICE,
+} from '@harucut/shared';
 import { registerSessionExpiredHandler } from '@/lib/api-client';
 import { INITIAL_USER, type UserProfile } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
@@ -33,13 +38,11 @@ type SessionStore = {
   showNotice: (notice: NoticeState) => void;
 };
 
-// 비회원 체험에서 열려 있는 범위.
-// 웹(lib/guestTrialStore.ts)은 꾸미기까지 열어 두지만 앱은 다르다. app/(app)/_layout.tsx가
-// 게스트를 /shoot 밖으로 못 나가게 막고, 촬영 결과를 꾸미는 라우트 자체가 앱에는 없다.
-// 그래서 문장을 웹과 맞추지 않고 앱에서 실제로 되는 것만 적는다.
-const GUEST_ALLOWED_SCOPE = '비회원 체험에서는 촬영과 이미지 저장을 이용할 수 있어요.';
-const GUEST_MEMBER_ONLY_SCOPE =
-  '링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요.';
+// 비회원 체험에서 열려 있는 범위. 항목은 @harucut/shared 에 한 벌만 두고 여기서는 문장으로 감싼다.
+// 앱은 app/(app)/_layout.tsx 가 게스트를 /shoot 밖으로 못 나가게 막고, 웹은 proxy.ts 의
+// GUEST_ALLOWED_PREFIXES 가 같은 범위를 정한다 — 이제 두 플랫폼의 범위가 같다.
+const GUEST_ALLOWED_SCOPE = `체험 중에는 ${GUEST_ALLOWED_ITEMS}을 이용할 수 있어요.`;
+const GUEST_MEMBER_ONLY_SCOPE = `${GUEST_MEMBER_ONLY_ITEMS}은 로그인 후에 이용할 수 있어요.`;
 
 // 지금 작업 공간(촬영/업로드/꾸미기)에 남아 있는 결과물의 주인. 세션이 만료돼도 작업 공간은
 // 비우지 않으므로, 재로그인 때 "같은 사람인가"를 판단할 기준이 필요하다.
@@ -170,11 +173,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           { id: 'start-guest-trial', label: GUEST_TRIAL_CTA_LABEL },
           { id: 'go-login', label: GUEST_TRIAL_NOTICE.loginLabel, variant: 'secondary' },
         ],
-        // 설명만은 웹과 다르다 — 여기서는 사실이 다르기 때문이다. 앱의 게스트는
-        // app/(app)/_layout.tsx 에서 /shoot 밖으로 못 나가서 꾸미기를 쓸 수 없다.
-        // 웹 문구를 그대로 옮기면 앱에서 안 되는 것을 된다고 말하게 된다.
-        message:
-          '가입 없이 촬영을 바로 체험하고 이미지로 저장할 수 있어요. 기록 보관과 공유는 무료 가입 후 이용할 수 있어요.',
+        // 웹과 범위가 같아져서 문구도 같은 것을 쓴다(예전에는 웹만 꾸미기가 열려 있었다).
+        message: GUEST_TRIAL_NOTICE.message,
         title: GUEST_TRIAL_NOTICE.title,
       },
     }),
