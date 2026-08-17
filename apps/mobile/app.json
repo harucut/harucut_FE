@@ -14,8 +14,11 @@
         "backgroundColor": "#0B0B0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
+    },
+    "ios": {
+      "bundleIdentifier": "com.harucut.app",
+      "supportsTablet": false
     },
     "web": {
       "output": "static",
@@ -26,8 +29,17 @@
       [
         "expo-camera",
         {
+          "cameraPermission": "네컷 사진을 찍을 때 카메라를 사용해요.",
           "recordAudioAndroid": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
+          "photosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
+          "isAccessMediaLocationEnabled": false
         }
       ],
       [
