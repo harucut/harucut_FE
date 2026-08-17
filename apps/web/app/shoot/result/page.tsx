@@ -359,7 +359,8 @@ export default function ShootResultPage() {
         }
 
         const blob = await response.blob();
-        downloadBlob(
+        // 앱 셸 안에서는 네이티브가 사진첩에 넣는다 — 끝날 때까지 기다려야 실패를 잡는다.
+        await downloadBlob(
           blob,
           buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
         );

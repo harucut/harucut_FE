@@ -1,5 +1,7 @@
 "use client";
 
+import { nativeShare } from "@/lib/nativeBridge";
+
 type ShareLinkArgs = {
   title: string;
   text?: string;
@@ -32,6 +34,13 @@ async function copyText(value: string) {
 }
 
 export async function shareOrCopyLink(args: ShareLinkArgs): Promise<ShareLinkResult> {
+  // 앱 셸 안에는 navigator.share 가 없다(안드로이드 WebView 미지원). 그대로 두면 항상
+  // "링크 복사" 폴백으로 떨어져, 네이티브 공유 시트를 쓰던 앱보다 후퇴한다.
+  const native = await nativeShare({ title: args.title, message: args.text, url: args.url });
+  if (native) {
+    return native.ok ? "shared" : "cancelled";
+  }
+
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
       await navigator.share({

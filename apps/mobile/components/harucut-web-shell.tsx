@@ -1,0 +1,235 @@
+import * as Linking from 'expo-linking';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+
+import { SHELL_PLATFORM, SHELL_USER_AGENT_TOKEN, getWebOrigin } from '@/constants/shell';
+import {
+  beginTransfer,
+  haptic,
+  pushChunk,
+  saveBase64Chunks,
+  saveRemoteImage,
+  shareLink,
+  transferFilename,
+  type BridgeMessage,
+  type BridgeResult,
+} from '@/lib/native-bridge';
+
+const WEB_ORIGIN = getWebOrigin();
+
+/**
+ * 콘텐츠가 뜨기 전에 심는 표식.
+ *
+ * 웹은 이 값으로 "앱 안인가"를 판단한다(apps/web/lib/nativeBridge.ts). onLoad 뒤에 심으면
+ * 첫 렌더가 이미 브라우저 분기로 지나간 뒤라 늦다 — 그래서 BeforeContentLoaded 로 넣는다.
+ */
+const INJECT_BEFORE_LOAD = `
+  window.__HARUCUT_NATIVE__ = { version: 1, platform: ${JSON.stringify(SHELL_PLATFORM)} };
+  true;
+`;
+
+/** 우리 웹인가. 아니면 앱 안에서 열지 않고 바깥 브라우저로 보낸다. */
+function isInternal(url: string) {
+  return url.startsWith(WEB_ORIGIN);
+}
+
+export function HarucutWebShell() {
+  const webViewRef = useRef<WebView>(null);
+  const insets = useSafeAreaInsets();
+  const canGoBackRef = useRef(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const reply = useCallback((id: string, result: BridgeResult) => {
+    const payload = JSON.stringify(result);
+    webViewRef.current?.injectJavaScript(
+      `window.__harucutNativeResolve__ && window.__harucutNativeResolve__(${JSON.stringify(id)}, ${payload}); true;`,
+    );
+  }, []);
+
+  const onMessage = useCallback(
+    async (event: WebViewMessageEvent) => {
+      let message: BridgeMessage;
+      try {
+        message = JSON.parse(event.nativeEvent.data) as BridgeMessage;
+      } catch {
+        return;
+      }
+
+      switch (message.type) {
+        case 'haptic':
+          haptic(message.style);
+          return;
+        case 'save-url':
+          reply(message.id, await saveRemoteImage(message.url, message.filename));
+          return;
+        case 'save-begin':
+          beginTransfer(message.id, message.filename, message.total);
+          return;
+        case 'save-chunk':
+          pushChunk(message.id, message.index, message.data);
+          return;
+        case 'save-end':
+          reply(message.id, await saveBase64Chunks(message.id, transferFilename(message.id)));
+          return;
+        case 'share':
+          reply(
+            message.id,
+            await shareLink({ title: message.title, message: message.message, url: message.url }),
+          );
+          return;
+        default:
+          return;
+      }
+    },
+    [reply],
+  );
+
+  /**
+   * 하드웨어 뒤로가기.
+   *
+   * 셸이 처리하지 않으면 어느 화면에서든 앱이 통째로 닫힌다 — 웹 히스토리가 아무리 깊어도.
+   * 뒤로 갈 곳이 있으면 웹에게 넘기고, 없을 때만 기본 동작(앱 종료)에 맡긴다.
+   */
+  useFocusBackHandler(() => {
+    if (canGoBackRef.current) {
+      webViewRef.current?.goBack();
+      return true;
+    }
+    return false;
+  });
+
+  if (loadFailed) {
+    return (
+      <View style={[styles.fallback, { paddingTop: insets.top }]}>
+        <Text style={styles.fallbackTitle}>연결에 실패했어요</Text>
+        <Text style={styles.fallbackBody}>
+          네트워크 상태를 확인한 뒤 다시 시도해 주세요.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setLoadFailed(false);
+            setIsLoading(true);
+            webViewRef.current?.reload();
+          }}
+          style={styles.retryButton}>
+          <Text style={styles.retryLabel}>다시 시도</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <WebView
+        allowsBackForwardNavigationGestures
+        // 촬영 화면이 getUserMedia 를 쓴다. 이 두 값이 없으면 iOS 에서 미리보기가 전체화면으로
+        // 튀거나 사용자 제스처를 기다리다 카메라가 아예 안 열린다.
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        // 같은 오리진이면 카메라 권한을 매번 묻지 않는다(네이티브 권한은 이미 받은 뒤다).
+        mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+        applicationNameForUserAgent={SHELL_USER_AGENT_TOKEN}
+        // 웹이 세션 쿠키로 로그인 상태를 유지한다.
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        domStorageEnabled
+        javaScriptEnabled
+        injectedJavaScriptBeforeContentLoaded={INJECT_BEFORE_LOAD}
+        onMessage={onMessage}
+        onLoadEnd={() => setIsLoading(false)}
+        onNavigationStateChange={(state) => {
+          canGoBackRef.current = state.canGoBack;
+        }}
+        onShouldStartLoadWithRequest={(request) => {
+          // 우리 웹이면 그대로 연다.
+          if (isInternal(request.url) || request.url === 'about:blank') return true;
+
+          // 소셜 로그인은 백엔드 OAuth 로 시작해 각 제공자로 넘어간다 — 앱 안에서 이어져야
+          // 돌아온 쿠키가 이 WebView 저장소에 남는다. 밖으로 내보내면 로그인이 끊긴다.
+          if (/\/oauth2\/authorization\//.test(request.url)) return true;
+          if (/(kakao|naver|google|accounts\.google)/i.test(request.url)) return true;
+
+          // 나머지(약관 외부 링크·mailto·tel)는 바깥으로.
+          void Linking.openURL(request.url).catch(() => undefined);
+          return false;
+        }}
+        onError={() => setLoadFailed(true)}
+        onHttpError={(event) => {
+          // 404 같은 페이지 오류까지 통째로 실패 화면을 띄우면 웹의 자체 오류 화면을 가린다.
+          if (event.nativeEvent.statusCode >= 500) setLoadFailed(true);
+        }}
+        source={{ uri: WEB_ORIGIN }}
+        style={styles.webview}
+      />
+      {isLoading ? (
+        <View style={styles.loading} pointerEvents="none">
+          <ActivityIndicator color="#1ED760" size="large" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * 안드로이드 하드웨어 뒤로가기.
+ *
+ * 핸들러를 ref 로 들고 구독은 한 번만 건다 — 매 렌더마다 다시 구독하면 그 사이 눌린 키를
+ * 놓치고, 웹 히스토리 깊이가 바뀔 때마다 리스너가 갈린다.
+ */
+function useFocusBackHandler(handler: () => boolean) {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () =>
+      handlerRef.current(),
+    );
+    return () => subscription.remove();
+  }, []);
+}
+
+const styles = StyleSheet.create({
+  root: { backgroundColor: '#0B0B0C', flex: 1 },
+  webview: { backgroundColor: '#0B0B0C', flex: 1 },
+  loading: {
+    alignItems: 'center',
+    backgroundColor: '#0B0B0C',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  fallback: {
+    alignItems: 'center',
+    backgroundColor: '#0B0B0C',
+    flex: 1,
+    gap: 10,
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  fallbackTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  fallbackBody: { color: '#B3B3B3', fontSize: 14, textAlign: 'center' },
+  retryButton: {
+    backgroundColor: '#1ED760',
+    borderRadius: 999,
+    marginTop: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryLabel: { color: '#06140A', fontSize: 15, fontWeight: '800' },
+});

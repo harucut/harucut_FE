@@ -1,5 +1,6 @@
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { loadImage } from "@/lib/canvas/loaders";
+import { nativeSaveImageBlob, nativeSaveImageUrl } from "@/lib/nativeBridge";
 import {
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
@@ -54,7 +55,21 @@ function toPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
-export function downloadBlob(blob: Blob, filename: string) {
+/**
+ * 결과물을 기기에 저장한다.
+ *
+ * 앱 셸(WebView) 안에서는 `<a download>` 가 아무 일도 하지 않는다 — 안드로이드 WebView 는
+ * download 속성을 무시하고 blob 은 DownloadListener 로도 못 받으며, iOS WKWebView 에는
+ * 저장 UI 자체가 없다. 그래서 셸 안이면 네이티브에 넘겨 사진첩에 저장한다.
+ * 브라우저에서는 예전과 똑같이 링크를 만들어 누른다.
+ */
+export async function downloadBlob(blob: Blob, filename: string) {
+  const native = await nativeSaveImageBlob(blob, filename);
+  if (native) {
+    if (!native.ok) throw new Error(native.reason ?? "사진첩에 저장하지 못했어요.");
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -87,6 +102,16 @@ function filenameFromUrl(url: string) {
 }
 
 export async function downloadFromUrl(url: string, filename?: string) {
+  const name = filename ?? filenameFromUrl(url);
+
+  // 앱 셸 안이면 주소만 넘긴다 — 네이티브가 직접 내려받아 사진첩에 넣는다.
+  // 웹이 fetch 로 받아 base64 로 쪼개 보내는 것보다 훨씬 싸다.
+  const native = await nativeSaveImageUrl(url, name);
+  if (native) {
+    if (!native.ok) throw new Error(native.reason ?? "사진첩에 저장하지 못했어요.");
+    return;
+  }
+
   try {
     const res = await fetch(url, { method: "GET" });
     if (!res.ok) {
@@ -94,7 +119,7 @@ export async function downloadFromUrl(url: string, filename?: string) {
     }
 
     const blob = await res.blob();
-    downloadBlob(blob, filename ?? filenameFromUrl(url));
+    await downloadBlob(blob, name);
   } catch {
     triggerDownloadLink(url, filename);
   }
