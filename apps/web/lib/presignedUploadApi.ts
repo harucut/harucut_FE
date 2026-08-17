@@ -5,6 +5,7 @@ import type {
   PresignedUploadContentType,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
+import { getApiErrorDetails } from "@/lib/apiError";
 import { registerUserMedia } from "@/lib/userMediaApi";
 
 type PresignedUploadData = {
@@ -30,8 +31,35 @@ export const PRESIGNED_UPLOAD_TYPES = {
   FRAME: "FRAME",
   FRAME_COMPONENT: "FRAME_COMPONENT",
   PROFILE: "PROFILE",
+  /**
+   * 네컷 원본 사진.
+   *
+   * 이 이름이 백엔드에서 바뀌는 중이다 — 서버 합성(compose)을 들여오면서
+   * `FOURCUT_PHOTO` 가 `FOURCUT_SOURCE` 로 개명됐다. 두 백엔드를 같이 두고 실측했다:
+   *
+   *   type=FOURCUT_PHOTO   배포본 200 / 합성 백엔드 400(GEN-006)
+   *   type=FOURCUT_SOURCE  배포본 400 / 합성 백엔드 200
+   *
+   * 즉 새 백엔드가 배포되는 순간 지금 값으로는 촬영 결과 업로드가 통째로 400 이 된다.
+   * 어느 쪽이 뜨든 동작하도록 아래 FOURCUT_UPLOAD_TYPES 를 차례로 시도한다.
+   */
   FOURCUT_PHOTO: "FOURCUT_PHOTO",
 } as const;
+
+/**
+ * 네컷 원본 업로드 타입 후보 — 앞의 것부터 시도한다.
+ *
+ * 새 이름을 먼저 둔다. 새 백엔드가 뜨면 첫 시도에 통하고, 아직 배포 전이면 한 번 400 을 받고
+ * 옛 이름으로 넘어간다. 한 번 통한 이름은 세션 동안 기억해 매번 두 번 왕복하지 않는다.
+ */
+const FOURCUT_UPLOAD_TYPES = ["FOURCUT_SOURCE", "FOURCUT_PHOTO"] as const;
+
+let resolvedFourcutUploadType: string | null = null;
+
+/** 테스트에서 세션 기억을 지운다. */
+export function resetFourcutUploadTypeCache() {
+  resolvedFourcutUploadType = null;
+}
 
 export type PresignedUploadType =
   (typeof PRESIGNED_UPLOAD_TYPES)[keyof typeof PRESIGNED_UPLOAD_TYPES];
@@ -232,6 +260,41 @@ export async function uploadFourcutMedia(
   };
 }
 
+/**
+ * presigned URL 을 받아 온다. 네컷 원본만 타입 이름이 백엔드에서 개명 중이라
+ * 후보를 차례로 시도하고, 통한 이름을 기억한다(PRESIGNED_UPLOAD_TYPES 주석 참고).
+ */
+async function requestPresignedUpload(body: PresignedUploadRequest) {
+  const post = (type: string) =>
+    clientApi.post<ApiEnvelope<PresignedUploadData>>(
+      "/api/client/user/files/presigned-upload",
+      { ...body, type },
+    );
+
+  if (body.type !== PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO) {
+    return post(body.type);
+  }
+
+  if (resolvedFourcutUploadType) {
+    return post(resolvedFourcutUploadType);
+  }
+
+  let lastError: unknown = null;
+  for (const candidate of FOURCUT_UPLOAD_TYPES) {
+    try {
+      const res = await post(candidate);
+      resolvedFourcutUploadType = candidate;
+      return res;
+    } catch (error) {
+      // 400 은 "이 백엔드가 모르는 이름"이라는 뜻이라 다음 후보로 넘어간다.
+      // 401·403·5xx 는 이름 문제가 아니므로 그대로 올린다.
+      if (getApiErrorDetails(error).status !== 400) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 export async function uploadToS3WithPresigned(opts: {
   file: File;
   type: PresignedUploadType;
@@ -240,16 +303,11 @@ export async function uploadToS3WithPresigned(opts: {
   // 지원 형식만 통과시킨다(아니면 여기서 throw). 파일명은 형식에 맞춰 정규화된 이름을 쓴다.
   const resolved = resolveUpload(file);
 
-  const body: PresignedUploadRequest = {
+  const presigned = await requestPresignedUpload({
     type,
     filename: resolved.filename,
     contentType: resolved.contentType,
-  };
-
-  const presigned = await clientApi.post<ApiEnvelope<PresignedUploadData>>(
-    "/api/client/user/files/presigned-upload",
-    body,
-  );
+  });
 
   const { key, uploadUrl, contentType } = presigned.data.data;
   // presigned PUT 서명에 content-type이 들어있다(X-Amz-SignedHeaders=content-type;host).

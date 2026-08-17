@@ -170,8 +170,10 @@ describe("presigned upload flow", () => {
     );
 
     // presign 요청 바디는 type/filename/contentType 세 필드가 전부다.
+    // 네컷 원본 타입은 백엔드에서 개명 중이라 새 이름(FOURCUT_SOURCE)을 먼저 보낸다.
+    // 옛 이름으로의 폴백은 presignedUploadType.test.ts 가 따로 지킨다.
     expect(mockPost).toHaveBeenCalledWith("/api/client/user/files/presigned-upload", {
-      type: "FOURCUT_PHOTO",
+      type: "FOURCUT_SOURCE",
       filename: "photo.png",
       contentType: "PNG",
     });
