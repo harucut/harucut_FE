@@ -144,7 +144,8 @@ function SignupPageContent() {
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
-          <p className="mt-2 text-center text-[11px] leading-5 text-zinc-500">
+          {/* 로그인 페이지의 대응 문구와 같은 토큰을 쓴다. 하드코딩 text-zinc-500 은 다크에서 어긋났다. */}
+          <p className="mt-2 text-center text-[11px] leading-5 text-[color:var(--hc-muted)]">
             소셜 계정으로 가입하면{" "}
             <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
               서비스 이용약관
@@ -253,7 +254,7 @@ function SignupPageContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="hc-button-primary rounded-full py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "가입 중..." : "회원가입"}
         </button>

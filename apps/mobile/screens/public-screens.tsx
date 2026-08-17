@@ -3,7 +3,7 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 
 import { HERO_IMAGE_SOURCE, LOGIN_FIELDS, SIGNUP_FIELDS } from '@/constants/harucut-data';
 import { ActionButton, AppScrollView, BrandMark, FormField } from '@/components/harucut/ui';
@@ -22,9 +22,16 @@ import {
 } from '@/lib/auth-api';
 import { completeSocialLoginSession } from '@/lib/social-login';
 import { useSessionStore } from '@/store/use-session-store';
+import {
+  SOCIAL_BRAND_COLORS,
+  SOCIAL_LABELS,
+  SOCIAL_MARK_GAP,
+  SOCIAL_MARK_SIZE,
+  SOCIAL_PROVIDER_ORDER,
+  type SocialProvider,
+} from '@harucut/shared';
 
 type HarucutThemeColors = ReturnType<typeof useHarucutTheme>['colors'];
-type SocialProvider = 'google' | 'kakao' | 'naver';
 
 function usePublicScreenTheme() {
   const { colors, isDark } = useHarucutTheme();
@@ -120,21 +127,18 @@ function SocialButtons() {
         <Text style={styles.socialText}>또는 소셜 계정으로 계속하기</Text>
         <View style={styles.socialLine} />
       </View>
-      <SocialBrandButton
-        label={pending === 'kakao' ? '카카오 로그인 중...' : '카카오로 계속하기'}
-        onPress={() => void handleSocialLogin('kakao')}
-        provider="kakao"
-      />
-      <SocialBrandButton
-        label={pending === 'naver' ? '네이버 로그인 중...' : '네이버로 계속하기'}
-        onPress={() => void handleSocialLogin('naver')}
-        provider="naver"
-      />
-      <SocialBrandButton
-        label={pending === 'google' ? 'Google 로그인 중...' : 'Google로 계속하기'}
-        onPress={() => void handleSocialLogin('google')}
-        provider="google"
-      />
+      {/* 순서·문구·마크 크기는 웹과 같은 packages/shared 에서 온다.
+          예전에는 앱이 카카오부터, 웹이 구글부터였고 로고 크기도 앱 20/26/30, 웹 18/20/22 로 갈렸다.
+          로딩 중 문구("카카오 로그인 중...")는 없앴다 — 카카오 허용 라벨 4종 밖이라 규정 위반이고,
+          상태는 accessibilityState 로 알린다. */}
+      {SOCIAL_PROVIDER_ORDER.map((provider) => (
+        <SocialBrandButton
+          busy={pending === provider}
+          key={provider}
+          onPress={() => void handleSocialLogin(provider)}
+          provider={provider}
+        />
+      ))}
       <Text style={styles.socialConsentNotice}>
         소셜 계정으로 계속하면{' '}
         <Text onPress={() => router.push('/terms' as never)} style={styles.socialConsentLink}>
@@ -150,16 +154,24 @@ function SocialButtons() {
   );
 }
 
+/** 마크 PNG 는 scripts/gen-social-marks.mjs 가 packages/shared 의 경로에서 뽑는다. 손으로 고치지 말 것. */
+const SOCIAL_MARK_SOURCE: Record<SocialProvider, ImageSourcePropType> = {
+  google: require('../assets/images/social-google-g.png'),
+  kakao: require('../assets/images/social-kakao-bubble.png'),
+  naver: require('../assets/images/social-naver-n.png'),
+};
+
 function SocialBrandButton({
-  label,
+  busy,
   onPress,
   provider,
 }: {
-  label: string;
+  busy: boolean;
   onPress: () => void;
   provider: SocialProvider;
 }) {
   const { styles } = usePublicScreenTheme();
+  const label = SOCIAL_LABELS[provider];
 
   const buttonStyle =
     provider === 'kakao'
@@ -168,13 +180,6 @@ function SocialBrandButton({
         ? styles.socialNaverButton
         : styles.socialGoogleButton;
 
-  const iconBoxStyle =
-    provider === 'kakao'
-      ? styles.socialKakaoIconBox
-      : provider === 'naver'
-        ? styles.socialNaverIconBox
-        : styles.socialGoogleIconBox;
-
   const labelStyle =
     provider === 'kakao'
       ? styles.socialKakaoLabel
@@ -182,48 +187,28 @@ function SocialBrandButton({
         ? styles.socialNaverLabel
         : styles.socialGoogleLabel;
 
+  const markSize = SOCIAL_MARK_SIZE[provider];
+
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      // disabled prop 대신 상태만 알린다 — 진행 중에 버튼이 탭 순서에서 빠지면 포커스가 날아간다.
+      accessibilityState={{ busy, disabled: busy }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.socialButton,
         buttonStyle,
         pressed ? styles.socialButtonPressed : null,
       ]}>
-      <View style={styles.socialButtonInner}>
-        <View style={[styles.socialIconBox, iconBoxStyle]}>
-          {provider === 'kakao' ? (
-            <Image
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-              resizeMode="contain"
-              source={require('../assets/images/kakao-symbol.png')}
-              style={styles.kakaoLogo}
-            />
-          ) : provider === 'naver' ? (
-            <Image
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-              resizeMode="contain"
-              source={require('../assets/images/naver-symbol.png')}
-              style={styles.naverLogo}
-            />
-          ) : (
-            <Image
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-              resizeMode="contain"
-              source={require('../assets/images/google-g-logo.png')}
-              style={styles.googleLogo}
-            />
-          )}
-        </View>
-        <View style={styles.socialLabelWrap}>
-          <Text style={[styles.socialButtonLabel, labelStyle]}>{label}</Text>
-        </View>
-      </View>
+      <Image
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        resizeMode="contain"
+        source={SOCIAL_MARK_SOURCE[provider]}
+        style={{ height: markSize, width: markSize }}
+      />
+      <Text style={[styles.socialButtonLabel, labelStyle]}>{label}</Text>
     </Pressable>
   );
 }
@@ -790,6 +775,10 @@ export function ForgotPasswordScreen() {
 }
 
 function createStyles(colors: HarucutThemeColors, isDark: boolean) {
+  /** 소셜 버튼 색 — 각 사 지정값. 테마 갈래가 있는 것은 구글뿐이다. */
+  const socialColor = (provider: SocialProvider) =>
+    SOCIAL_BRAND_COLORS[provider][isDark ? 'dark' : 'light'];
+
   return StyleSheet.create({
     authBackRow: {
       marginBottom: 6,
@@ -972,99 +961,71 @@ function createStyles(colors: HarucutThemeColors, isDark: boolean) {
       marginBottom: 26,
       marginTop: 12,
     },
-    kakaoLogo: {
-      height: 26,
-      width: 26,
-    },
-    naverLogo: {
-      height: 30,
-      width: 30,
-    },
-    googleLogo: {
-      height: 20,
-      width: 20,
-    },
     socialDivider: {
       alignItems: 'center',
       flexDirection: 'row',
       gap: 8,
     },
+    /* 마크와 라벨이 한 묶음으로 가운데 정렬된다. 예전에는 왼쪽 48px 아이콘 레일을 두고
+       라벨을 paddingRight 48 로 상쇄했는데, 레일 배경·구분선이 세 버튼마다 달라
+       한 줄에 세 종류의 버튼이 서 있었다.
+       borderRadius 는 앱의 다른 버튼(HARUCUT_RADII.chip = 999)과 같은 알약이다. */
     socialButton: {
-      borderRadius: 12,
+      alignItems: 'center',
+      borderRadius: 999,
+      flexDirection: 'row',
+      gap: SOCIAL_MARK_GAP,
+      justifyContent: 'center',
+      minHeight: 48,
       overflow: 'hidden',
     },
-    socialButtonInner: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      minHeight: 48,
-    },
     socialButtonLabel: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '700',
-      letterSpacing: -0.1,
+      letterSpacing: -0.15,
     },
     socialButtonPressed: {
       opacity: 0.9,
     },
-    socialIconBox: {
-      alignItems: 'center',
-      height: 48,
-      justifyContent: 'center',
-      width: 48,
-    },
+    /* 색은 전부 packages/shared 의 SOCIAL_BRAND_COLORS 에서 온다 — 각 사 지정값이라
+       여기서 고를 수 있는 값이 아니다. 예전에는 앱이 네이버를 #03C75A(개정 전 색),
+       웹이 #007A3D(아예 비규정색)로 그려 같은 버튼이 플랫폼마다 달랐다. */
     socialKakaoButton: {
-      backgroundColor: '#FEE500',
+      backgroundColor: socialColor('kakao').bg,
       shadowColor: 'rgba(15, 23, 42, 0.08)',
       shadowOffset: { height: 14, width: 0 },
       shadowOpacity: 1,
       shadowRadius: 24,
     },
-    socialKakaoIconBox: {
-      backgroundColor: '#FEE500',
-    },
     socialKakaoLabel: {
-      color: 'rgba(0, 0, 0, 0.85)',
+      color: socialColor('kakao').label,
     },
     socialLine: {
       backgroundColor: colors.border,
       flex: 1,
       height: 1,
     },
-    socialLabelWrap: {
-      alignItems: 'center',
-      flex: 1,
-      justifyContent: 'center',
-      paddingRight: 48,
-    },
     socialNaverButton: {
-      backgroundColor: '#03C75A',
-      shadowColor: 'rgba(3, 199, 90, 0.22)',
-      shadowOffset: { height: 16, width: 0 },
+      backgroundColor: socialColor('naver').bg,
+      shadowColor: 'rgba(15, 23, 42, 0.08)',
+      shadowOffset: { height: 14, width: 0 },
       shadowOpacity: 1,
-      shadowRadius: 26,
-    },
-    socialNaverIconBox: {
-      backgroundColor: '#02B350',
-      borderRightColor: 'rgba(255, 255, 255, 0.15)',
-      borderRightWidth: 1,
+      shadowRadius: 24,
     },
     socialNaverLabel: {
-      color: '#FFFFFF',
+      color: socialColor('naver').label,
     },
     socialGoogleButton: {
-      backgroundColor: '#FFFFFF',
-      borderColor: isDark ? 'rgba(15, 23, 42, 0.16)' : 'rgba(60, 64, 67, 0.18)',
+      backgroundColor: socialColor('google').bg,
+      borderColor: socialColor('google').line ?? 'transparent',
       borderWidth: 1,
       shadowColor: 'rgba(15, 23, 42, 0.08)',
       shadowOffset: { height: 14, width: 0 },
       shadowOpacity: 1,
       shadowRadius: 24,
     },
-    socialGoogleIconBox: {
-      backgroundColor: '#FFFFFF',
-    },
     socialGoogleLabel: {
-      color: 'rgba(30, 30, 30, 0.88)',
+      color: socialColor('google').label,
     },
     legalFooterDivider: {
       color: colors.muted,

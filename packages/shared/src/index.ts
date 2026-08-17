@@ -38,3 +38,15 @@ export {
   type FourcutFilterDefinition,
   type FourcutFilterId,
 } from './fourcut-filters';
+export {
+  SOCIAL_BRAND_COLORS,
+  SOCIAL_LABELS,
+  SOCIAL_MARK_GAP,
+  SOCIAL_MARK_GEOMETRY,
+  SOCIAL_MARK_SIZE,
+  SOCIAL_PROVIDER_ORDER,
+  socialMarkToSvg,
+  type MarkGeometry,
+  type MarkPath,
+  type SocialProvider,
+} from './social-marks';

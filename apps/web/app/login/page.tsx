@@ -161,16 +161,18 @@ function LoginPageContent() {
           </Link>
         </div>
 
+        {/* 아래 소셜 버튼과 같은 h-12 알약이다. 예전에는 이쪽만 py-2.5(약 38px)·text-xs 라
+            같은 화면에서 버튼 높이와 글자 크기가 두 종류로 갈렸다. */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className="hc-button-primary rounded-full py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "로그인 중..." : "로그인"}
         </button>
 
         {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영·꾸미기를 먼저 체험할 수 있게. */}
-        <GuestTrialStartButton className="rounded-full border border-[color:var(--hc-border)] py-2.5 text-center text-xs font-semibold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]">
+        <GuestTrialStartButton className="inline-flex h-12 items-center justify-center rounded-full border border-[color:var(--hc-border)] text-[15px] font-bold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]">
           비회원 체험하기
         </GuestTrialStartButton>
       </form>

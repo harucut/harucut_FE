@@ -237,6 +237,54 @@ const UNDETERMINABLE_REASONS = [
   /too short to determine/i,
 ];
 
+/**
+ * 대비 검사에서 빼는 딱 하나 — 네이버 로그인 버튼.
+ *
+ * 네이버 가이드는 로그인 버튼의 배경과 글자색을 못박는다: "지정 컬러는 변경할 수 없으며",
+ * 그리고 금지 예시의 첫 항목이 "가이드에 지정되지 않은 배경 컬러"다. 지정 조합은
+ * 배경 #03A94D + 로고·레이블 #FFFFFF 인데, 이 조합의 대비가 3.09:1 이다. AA 문턱(4.5:1)에
+ * 못 미친다. 다크 렌디션 #05AC4F 는 2.99:1 로 더 나쁘다.
+ *
+ * 즉 우리가 고를 수 있는 것은 "네이버 규정 위반"이거나 "AA 미달"이지 둘 다 만족하는 값이
+ * 없다. 예전에는 앞쪽을 골라 #007A3D 로 어둡게 칠했는데(5.45:1), 그건 네이버가 이름을 대고
+ * 금지한 바로 그 행위였다. 그래서 지금은 지정색을 쓰고 이 한 건만 사유를 적어 뺀다.
+ * 네이버가 배포하는 공식 버튼 이미지 자체가 3.09:1 이라, 우리 화면이 벤더 산출물보다
+ * 나빠지는 것은 아니다.
+ *
+ * 예외는 **색까지 정확히 일치할 때만** 성립한다. 배경이나 글자색이 바뀌면 이 필터가
+ * 걸리지 않아 테스트가 다시 실패한다 — 아무 대비 문제나 삼키지 않는다.
+ */
+const BRAND_CONTRAST_EXEMPTIONS = [
+  { selector: ".hc-social-naver", fgColor: "#ffffff", bgColor: "#03a94d" },
+];
+
+type ContrastData = { fgColor?: string; bgColor?: string };
+type ViolationNode = { target?: unknown[]; any?: Array<{ data?: ContrastData }> };
+type ViolationRule = { id: string; nodes: ViolationNode[] };
+
+function isBrandExempt(node: ViolationNode) {
+  const target = node.target?.map((t) => String(t)).join(" ") ?? "";
+  return node.any?.some((check) =>
+    BRAND_CONTRAST_EXEMPTIONS.some(
+      (exempt) =>
+        target.includes(exempt.selector) &&
+        check.data?.fgColor?.toLowerCase() === exempt.fgColor &&
+        check.data?.bgColor?.toLowerCase() === exempt.bgColor,
+    ),
+  );
+}
+
+/** 위 예외에 정확히 해당하는 대비 위반만 걷어낸다. 나머지 규칙은 손대지 않는다. */
+function withoutBrandExemptions(violations: ViolationRule[]) {
+  return violations
+    .map((rule) =>
+      rule.id === "color-contrast"
+        ? { ...rule, nodes: rule.nodes.filter((node) => !isBrandExempt(node)) }
+        : rule,
+    )
+    .filter((rule) => rule.id !== "color-contrast" || rule.nodes.length > 0);
+}
+
 type IncompleteNode = { any?: Array<{ message?: string }> };
 type IncompleteRule = { id: string; nodes: IncompleteNode[] };
 
@@ -289,7 +337,7 @@ async function expectNoAccessibilityViolations(page: Page, route?: string) {
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
 
-  expect(accessibilityScanResults.violations).toEqual([]);
+  expect(withoutBrandExemptions(accessibilityScanResults.violations)).toEqual([]);
   expect(contrastIncomplete(accessibilityScanResults)).toEqual([]);
 }
 
