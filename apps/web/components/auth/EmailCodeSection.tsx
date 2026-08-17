@@ -1,7 +1,7 @@
 "use client";
 
 import { BadgeCheck, Clock3, Mail } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { EMAIL_FIELD } from "@/components/auth/authFields";
 
@@ -32,6 +32,21 @@ function formatRemainingTime(remainingSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * 마감까지 남은 초. **렌더할 때마다 지금 시각으로 다시 잰다.**
+ *
+ * 예전에는 `now` 를 state 에 담아 두고 1초마다 갱신했는데, 그 값을 컴포넌트가 처음 그려질 때
+ * 한 번 재고 인터벌은 코드를 보낸 뒤에야 시작했다. 그래서 페이지를 열어 두고 8초 뒤에
+ * 코드를 보내면 타이머가 05:00 이 아니라 **05:08** 에서 시작했다가 1초 뒤 04:58 로 튀었다.
+ * 늦게 누를수록 더 벌어졌다. 저장해 둔 시각은 낡는다 — 잴 때 재면 낡을 일이 없다.
+ *
+ * 올림으로 잰다. 5분 마감을 건 직후 남은 시간은 299.9초인데, 내림이면 04:59 부터 시작한다.
+ */
+function secondsUntil(deadline: number | null) {
+  if (!deadline) return 0;
+  return Math.max(Math.ceil((deadline - Date.now()) / 1000), 0);
+}
+
 export function EmailCodeSection({
   email,
   setEmail,
@@ -50,16 +65,18 @@ export function EmailCodeSection({
   onVerify,
   verifiedText = "이메일 인증이 완료되었어요.",
 }: Props) {
-  const [now, setNow] = useState(() => Date.now());
-
   // 인증 전에는 코드 시계(5분), 인증 뒤에는 인증 유효 시계(10분)가 돈다. 둘 다 없으면 멈춘다.
   const activeDeadline = isVerified ? verifiedExpiresAt : codeExpiresAt;
+
+  // 이 state 는 값을 쓰려고 두는 게 아니라 1초마다 다시 그리게 하려고 둔다.
+  // 남은 시간은 아래에서 그릴 때마다 직접 잰다(secondsUntil 주석 참고).
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!activeDeadline) return;
 
     const intervalId = window.setInterval(() => {
-      setNow(Date.now());
+      setTick((value) => value + 1);
     }, 1000);
 
     return () => {
@@ -67,15 +84,8 @@ export function EmailCodeSection({
     };
   }, [activeDeadline]);
 
-  const remainingSeconds = useMemo(() => {
-    if (!codeExpiresAt) return 0;
-    return Math.max(Math.floor((codeExpiresAt - now) / 1000), 0);
-  }, [codeExpiresAt, now]);
-
-  const verifiedRemainingSeconds = useMemo(() => {
-    if (!verifiedExpiresAt) return 0;
-    return Math.max(Math.floor((verifiedExpiresAt - now) / 1000), 0);
-  }, [verifiedExpiresAt, now]);
+  const remainingSeconds = secondsUntil(codeExpiresAt);
+  const verifiedRemainingSeconds = secondsUntil(verifiedExpiresAt);
 
   const hasSentCode = Boolean(codeExpiresAt);
   const isExpired = hasSentCode && remainingSeconds === 0;

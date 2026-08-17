@@ -39,6 +39,12 @@ export {
   type FourcutFilterId,
 } from './fourcut-filters';
 export {
+  GUEST_ALLOWED_ITEMS,
+  GUEST_MEMBER_ONLY_ITEMS,
+  GUEST_TRIAL_CTA_LABEL,
+  GUEST_TRIAL_NOTICE,
+} from './guest-trial';
+export {
   SOCIAL_BRAND_COLORS,
   SOCIAL_LABELS,
   SOCIAL_MARK_GAP,

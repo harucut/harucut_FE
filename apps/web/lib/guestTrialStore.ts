@@ -2,6 +2,11 @@
 
 import { create } from "zustand";
 import {
+  GUEST_ALLOWED_ITEMS,
+  GUEST_MEMBER_ONLY_ITEMS,
+  GUEST_TRIAL_NOTICE,
+} from "@harucut/shared";
+import {
   GUEST_TRIAL_COOKIE,
   GUEST_TRIAL_COOKIE_MAX_AGE,
 } from "@/lib/guestTrialShared";
@@ -45,11 +50,10 @@ type GuestTrialStore = {
   showGuestTrialNotice: () => void;
 };
 
-// 비회원 체험에서 열려 있는 범위. 안내 문구를 한 곳에서 관리해 화면마다 어긋나지 않게 한다.
-const GUEST_ALLOWED_SCOPE =
-  "비회원 체험에서는 촬영, 이미지 저장, 네컷 꾸미기를 이용할 수 있어요.";
-const GUEST_MEMBER_ONLY_SCOPE =
-  "링크 공유, 기록 저장, 업로드 제작은 로그인 후에 이용할 수 있어요.";
+// 되는 것·안 되는 것의 목록은 @harucut/shared 에 한 벌만 둔다(앱도 같은 값을 읽는다).
+// 여기서는 상황에 맞는 문장으로 감싸기만 한다.
+const GUEST_ALLOWED_SCOPE = `체험 중에는 ${GUEST_ALLOWED_ITEMS}를 이용할 수 있어요.`;
+const GUEST_MEMBER_ONLY_SCOPE = `${GUEST_MEMBER_ONLY_ITEMS}은 로그인 후에 이용할 수 있어요.`;
 
 function hasGuestCookie() {
   if (typeof document === "undefined") {
@@ -142,12 +146,13 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
     set({
       notice: {
         actions: [
-          { id: "start-guest-trial", label: "무료로 체험 시작" },
-          { id: "go-login", label: "로그인하기", variant: "secondary" },
+          // 누른 버튼과 확인 버튼이 같은 말을 한다. 예전에는 "가입 없이 찍어보기"를 눌렀는데
+          // "무료로 체험 시작"이 떠서, 같은 행동을 두 이름으로 만났다.
+          { id: "start-guest-trial", label: GUEST_TRIAL_NOTICE.confirmLabel },
+          { id: "go-login", label: GUEST_TRIAL_NOTICE.loginLabel, variant: "secondary" },
         ],
-        message:
-          "가입 없이 촬영·이미지 저장·꾸미기를 바로 체험할 수 있어요. 링크 공유와 기록 보관은 무료 가입 후 이용할 수 있어요.",
-        title: "무료로 체험해볼까요?",
+        message: GUEST_TRIAL_NOTICE.message,
+        title: GUEST_TRIAL_NOTICE.title,
       },
     }),
 }));

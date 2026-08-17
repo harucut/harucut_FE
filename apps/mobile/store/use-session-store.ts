@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { create } from 'zustand';
 
+import { GUEST_TRIAL_CTA_LABEL, GUEST_TRIAL_NOTICE } from '@harucut/shared';
 import { registerSessionExpiredHandler } from '@/lib/api-client';
 import { INITIAL_USER, type UserProfile } from '@/constants/harucut-data';
 import type { HarucutThemePreference } from '@/constants/harucut-design';
@@ -165,12 +166,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({
       notice: {
         actions: [
-          { id: 'start-guest-trial', label: '무료로 체험 시작' },
-          { id: 'go-login', label: '로그인하기', variant: 'secondary' },
+          // 누른 버튼과 확인 버튼이 같은 말을 한다(웹도 같은 상수를 읽는다).
+          { id: 'start-guest-trial', label: GUEST_TRIAL_CTA_LABEL },
+          { id: 'go-login', label: GUEST_TRIAL_NOTICE.loginLabel, variant: 'secondary' },
         ],
+        // 설명만은 웹과 다르다 — 여기서는 사실이 다르기 때문이다. 앱의 게스트는
+        // app/(app)/_layout.tsx 에서 /shoot 밖으로 못 나가서 꾸미기를 쓸 수 없다.
+        // 웹 문구를 그대로 옮기면 앱에서 안 되는 것을 된다고 말하게 된다.
         message:
           '가입 없이 촬영을 바로 체험하고 이미지로 저장할 수 있어요. 기록 보관과 공유는 무료 가입 후 이용할 수 있어요.',
-        title: '무료로 체험해볼까요?',
+        title: GUEST_TRIAL_NOTICE.title,
       },
     }),
   showNotice: (notice) => set({ notice }),

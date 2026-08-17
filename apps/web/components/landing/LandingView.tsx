@@ -210,9 +210,10 @@ function HeroEditorial() {
         헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
       */}
       <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
-        <GuestTrialStartButton className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold">
-          가입 없이 찍어보기
-        </GuestTrialStartButton>
+        {/* 문구는 넘기지 않는다 — 기본값이 곧 로그인 화면·앱과 같은 한 문구다.
+            예전에는 여기만 "가입 없이 찍어보기"였는데, 이 체험은 찍기만이 아니라
+            저장·꾸미기까지 되므로 실제보다 작게 말하는 문구이기도 했다. */}
+        <GuestTrialStartButton className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold" />
         <Link
           href="/login"
           className="inline-flex items-center gap-1 rounded-full px-4 py-3 text-[14px] font-semibold text-white/80 underline underline-offset-4 transition hover:text-white"

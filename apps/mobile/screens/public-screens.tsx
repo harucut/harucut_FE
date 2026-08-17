@@ -23,6 +23,7 @@ import {
 import { completeSocialLoginSession } from '@/lib/social-login';
 import { useSessionStore } from '@/store/use-session-store';
 import {
+  GUEST_TRIAL_CTA_LABEL,
   SOCIAL_BRAND_COLORS,
   SOCIAL_LABELS,
   SOCIAL_MARK_GAP,
@@ -260,7 +261,7 @@ export function LandingScreen() {
         {/* 로그인 우선. 회원가입은 로그인 화면에서 유도하고, 비회원은 체험하기로 바로 촬영. */}
         <ActionButton label="로그인" onPress={() => push('/login')} />
         <ActionButton
-          label="비회원 체험하기"
+          label={GUEST_TRIAL_CTA_LABEL}
           onPress={showGuestTrialNotice}
           style={{ marginTop: 10 }}
           variant="ghost"

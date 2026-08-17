@@ -86,7 +86,7 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(shootUrl);
   }
 
-  // 행사 QR은 "가입 없이 찍어보기"를 누른 것과 같은 자격이다 — 랜딩 버튼으로 누구나 얻을 수
+  // 행사 QR은 "가입 없이 체험하기"를 누른 것과 같은 자격이다 — 랜딩 버튼으로 누구나 얻을 수
   // 있는 것과 같은 권한이므로 새로 여는 문이 아니다. 대신 행사 참가자는 그 버튼을 누를
   // 기회 자체가 없으므로 여기서 대신 시작시킨다.
   if (isEventEntry(pathname, req.nextUrl.searchParams)) {

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { GUEST_TRIAL_CTA_LABEL } from "@harucut/shared";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 const DEFAULT_CLASS =
@@ -21,7 +22,7 @@ export function GuestTrialStartButton({
       onClick={showGuestTrialNotice}
       className={className ?? DEFAULT_CLASS}
     >
-      {children ?? "비회원 체험하기"}
+      {children ?? GUEST_TRIAL_CTA_LABEL}
     </button>
   );
 }
