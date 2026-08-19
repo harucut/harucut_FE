@@ -35,6 +35,13 @@ export type UserMedia = {
   s3Key: string;
   displayName?: string | null;
   displayname?: string | null;
+  /** 목록용 축소본(긴 변 512, JPEG). */
+  thumbnailUrl?: string | null;
+  /**
+   * 화면에 그대로 띄우기 위한 URL.
+   * `downloadUrl` 은 `Content-Disposition: attachment` 가 붙어 <img> 에 쓰기 나쁘다.
+   */
+  viewUrl?: string | null;
   downloadUrl?: string | null;
   originalFileName?: string;
   createdAt?: string;

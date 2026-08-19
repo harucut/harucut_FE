@@ -24,7 +24,7 @@ import {
   sanitizeDisplayName,
   FOURCUT_OUTPUT_EXTENSION,
 } from "@/lib/fourcutOutput";
-import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
+import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
   registerGeneratedPngDebug,
   unregisterGeneratedPngDebug,
@@ -251,10 +251,17 @@ export default function ShootResultPage() {
               URL.revokeObjectURL(objectUrl);
             }
           } else {
-            const file = new File([blob], `${displayName}.png`, {
-              type: "image/png",
+            // 로그인 사용자는 서버가 다시 그린다. 위에서 만든 blob 은 화면 미리보기와
+            // 디버그용이고, 보관함에 남는 것은 서버 합성 결과다 —
+            // 완성본을 올려 등록하는 API 가 사라졌다(lib/fourcutCompose.ts 주석).
+            const asset = await saveFourcutToServer({
+              sources: imageSources.map((source) => source.src),
+              layout: currentLayout,
+              outputFilter,
+              frameId: frameId as FrameId,
+              remoteFrameId,
+              displayName,
             });
-            const asset = await uploadGeneratedFourcutFile({ file, displayName });
 
             if (!cancelled) {
               setImageResult(asset);
@@ -281,6 +288,7 @@ export default function ShootResultPage() {
     effectiveBorderColor,
     frameId,
     generationKey,
+    remoteFrameId,
     guestMode,
     imageResult,
     imageSources,
@@ -584,8 +592,8 @@ export default function ShootResultPage() {
                 기록 보관, 업로드 제작은 로그인 후에 이용할 수 있어요.
               </p>
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
-                &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
+                체험 결과는 이 화면을 벗어나면 사라져요. 잊지 말고 이미지를 내려받아 주세요 —
+                비회원 때 만든 네컷은 로그인해도 기록으로 옮겨지지 않아요.
               </p>
             </div>
 
@@ -644,7 +652,7 @@ export default function ShootResultPage() {
               disabled={isHandingOffToLogin}
               className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition disabled:opacity-40"
             >
-              {isHandingOffToLogin ? "결과 보관 중..." : "로그인하고 저장하기"}
+              {isHandingOffToLogin ? "이동 중..." : "로그인하러 가기"}
             </button>
           ) : (
             <Link

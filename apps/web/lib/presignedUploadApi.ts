@@ -5,7 +5,6 @@ import type {
   PresignedUploadContentType,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
-import { registerUserMedia } from "@/lib/userMediaApi";
 
 type PresignedUploadData = {
   key: string;
@@ -225,31 +224,6 @@ export function resolveUploadContentType(file: File): PresignedUploadContentType
   return resolveUpload(file).contentType;
 }
 
-export async function uploadFourcutMedia(
-  file: File,
-  opts: { displayName?: string } = {},
-) {
-  // 지원하지 않는 파일 타입이면 업로드 전에 throw 한다.
-  resolveUploadContentType(file);
-
-  const uploaded = await uploadToS3WithPresigned({
-    file,
-    type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
-  });
-
-  const media = await registerUserMedia({
-    s3Key: uploaded.key,
-    ...(opts.displayName ? { displayName: opts.displayName } : {}),
-  });
-
-  return {
-    key: uploaded.key,
-    mediaId: media.mediaId,
-    objectUrl: media.downloadUrl ?? uploaded.objectUrl,
-    downloadUrl: media.downloadUrl ?? uploaded.downloadUrl,
-  };
-}
-
 /** presigned URL 을 받아 온다. */
 async function requestPresignedUpload(body: PresignedUploadRequest) {
   return clientApi.post<ApiEnvelope<PresignedUploadData>>(
@@ -261,6 +235,13 @@ async function requestPresignedUpload(body: PresignedUploadRequest) {
 export async function uploadToS3WithPresigned(opts: {
   file: File;
   type: PresignedUploadType;
+  /**
+   * 조회용 URL 해석을 건너뛴다.
+   *
+   * 합성 원본처럼 **key 만 필요한** 업로드에 쓴다. 원본은 합성 직후 서버가 지우므로
+   * 볼 일이 없는데, 기본 경로는 장당 presigned-img 를 한 번씩 더 부른다(4장이면 4번).
+   */
+  skipUrlResolve?: boolean;
 }) {
   const { file, type } = opts;
   // 지원 형식만 통과시킨다(아니면 여기서 throw). 파일명은 형식에 맞춰 정규화된 이름을 쓴다.
@@ -297,6 +278,10 @@ export async function uploadToS3WithPresigned(opts: {
   }
 
   const fallbackObjectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
+
+  if (opts.skipUrlResolve) {
+    return { key, objectUrl: fallbackObjectUrl, downloadUrl: undefined };
+  }
 
   // 업로드 가능한 형식은 전부 이미지라 항상 다운로드 URL을 해석한다.
   const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);

@@ -10,7 +10,6 @@ import {
   ComposeFailedError,
   ComposeTimeoutError,
   getComposeJob,
-  isComposeUnavailable,
   newIdempotencyKey,
   requestCompose,
   waitForCompose,
@@ -92,20 +91,6 @@ describe("waitForCompose", () => {
     await waitForCompose(1, { intervalMs: 0, onTick: (job) => seen.push(job.status) });
 
     expect(seen).toEqual(["PENDING", "DONE"]);
-  });
-});
-
-describe("isComposeUnavailable", () => {
-  // 배포본에는 이 엔드포인트가 아직 없다 — 404 GEN-031 이 온다(존재하지 않는 경로와 같은 응답).
-  // 그 경우에만 기존 클라이언트 합성으로 되돌아가고, 다른 실패는 실패로 다룬다.
-  it("404 는 '이 백엔드에 아직 없음'으로 본다", () => {
-    expect(isComposeUnavailable({ status: 404, code: "GEN-031" })).toBe(true);
-  });
-
-  it("권한·서버 오류는 폴백 사유가 아니다", () => {
-    expect(isComposeUnavailable({ status: 401 })).toBe(false);
-    expect(isComposeUnavailable({ status: 403 })).toBe(false);
-    expect(isComposeUnavailable({ status: 500 })).toBe(false);
   });
 });
 

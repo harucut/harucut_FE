@@ -22,7 +22,7 @@ import {
   sanitizeDisplayName,
   FOURCUT_OUTPUT_EXTENSION,
 } from "@/lib/fourcutOutput";
-import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
+import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
   registerGeneratedPngDebug,
   unregisterGeneratedPngDebug,
@@ -207,10 +207,16 @@ export default function UploadResultPage() {
             });
           }
 
-          const file = new File([blob], `${displayName}.png`, {
-            type: "image/png",
+          // blob 은 미리보기·디버그용이다. 보관함에 남는 것은 서버 합성 결과다
+          // (완성본 등록 API 가 사라졌다 — lib/fourcutCompose.ts 주석 참고).
+          const asset = await saveFourcutToServer({
+            sources: imageSources.map((source) => source.src),
+            layout: currentLayout,
+            outputFilter,
+            frameId: frameId as FrameId,
+            remoteFrameId,
+            displayName,
           });
-          const asset = await uploadGeneratedFourcutFile({ file, displayName });
 
           if (!cancelled) {
             setImageResult(asset);
@@ -236,6 +242,7 @@ export default function UploadResultPage() {
     effectiveBorderColor,
     frameId,
     generationKey,
+    remoteFrameId,
     imageResult,
     imageSources,
     layout,

@@ -1,7 +1,6 @@
 "use client";
 
 import { clientApi } from "@/lib/clientApi";
-import { getApiErrorDetails } from "@/lib/apiError";
 import type { ApiEnvelope } from "@/lib/api-types";
 
 /**
@@ -23,11 +22,12 @@ import type { ApiEnvelope } from "@/lib/api-types";
  * 원본 키는 **내 S3 루트 아래**여야 한다(서버가 prefix 를 검사해 남의 키를 막는다).
  * 합성이 성공하면 서버가 원본 4장을 지운다 — 결과만 보관함에 남는다.
  *
- * ## 아직 배포되지 않았다
+ * ## 404 를 "기능 없음"으로 읽지 말 것
  *
- * 이 엔드포인트는 백엔드 저장소 main 에는 있지만 배포본에는 없다(실측: 배포본에서 404 GEN-031,
- * 존재하지 않는 경로와 같은 응답). 그래서 `isComposeUnavailable()` 로 404 를 구분해
- * 호출부가 기존 클라이언트 합성으로 되돌아갈 수 있게 한다.
+ * 예전 주석은 이 엔드포인트가 배포본에 없다고 적어 두고 404 를 폴백 신호로 썼다.
+ * 지금은 살아 있고, 404(GEN-031)는 **"없는 프레임이거나 남의 프레임"**이라는 정상 도메인
+ * 에러다. 폴백 신호로 쓰면 프레임 지정 실수를 "서버에 기능이 없다"로 오독하게 된다.
+ * 게다가 되돌아갈 곳도 없어졌다 — 완성본을 등록하던 API 가 사라졌다(405).
  */
 
 export type ComposeStatus = "PENDING" | "DONE" | "FAILED";
@@ -51,11 +51,6 @@ export type ComposeRequest = {
    */
   idempotencyKey: string;
 };
-
-/** 이 백엔드에 서버 합성이 아직 없는가(404). 다른 실패와 구분해 폴백 판단에 쓴다. */
-export function isComposeUnavailable(error: unknown) {
-  return getApiErrorDetails(error).status === 404;
-}
 
 export async function requestCompose(body: ComposeRequest): Promise<ComposeJob> {
   const res = await clientApi.post<ApiEnvelope<ComposeJob>>(

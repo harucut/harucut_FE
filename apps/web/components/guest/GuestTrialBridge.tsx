@@ -4,10 +4,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { GuestTrialOverlay } from "@/components/guest/GuestTrialOverlay";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
-import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
 import {
   clearPendingGuestSave,
-  dataUrlToFile,
   getPendingGuestSave,
 } from "@/lib/pendingGuestSave";
 
@@ -23,10 +21,16 @@ export function GuestTrialBridge() {
     hydrateGuestMode();
   }, [hydrateGuestMode]);
 
-  // 비회원 저장(보류) → 로그인/회원가입 완료 후 /home?resumeSave=1 로 돌아오면
-  // 보관해 둔 결과물을 서버(기록)에 자동 업로드한다.
-  // 파라미터 제거로 effect가 재실행돼도 ref 가드로 1회만 처리하고, 업로드는 cancel하지 않아
-  // 완료 후 localStorage 정리/알림이 반드시 실행되게 한다(중복 업로드 방지).
+  // 비회원 때 만든 결과물을 로그인 후 기록에 자동 저장하던 자리다.
+  //
+  // 그 저장 경로가 백엔드에서 없어졌다 — 완성된 이미지를 등록하는 API 가 사라지고
+  // (POST /api/auth/user/media → 405), 남은 것은 **원본 4장을 받아 서버가 그리는** 합성뿐이다.
+  // 보류분은 이미 합쳐진 그림 한 장이라 그 입력이 될 수 없고, 원본 4장은 로그인 과정에서
+  // 페이지가 다시 뜨며 사라진다(세션 스토어는 메모리에만 있다).
+  //
+  // 그래서 자동 저장을 시도하지 않는다. 예전에는 실패하면 pending 을 남겨 새로고침마다
+  // 다시 시도했는데, 지금은 될 수 없는 시도라 **무한 재시도**가 된다 — 보류분을 정리하고
+  // 내려받기를 안내한다. 백엔드에 완성본 등록 수단이 생기면 되살릴 것.
   const resumeHandledRef = useRef(false);
   useEffect(() => {
     if (!searchParams.get("resumeSave")) {
@@ -37,8 +41,6 @@ export function GuestTrialBridge() {
     if (resumeHandledRef.current) return;
     resumeHandledRef.current = true;
 
-    // 성공(또는 보류 없음)일 때만 resumeSave를 제거한다. 업로드 실패 시에는
-    // 파라미터와 pending을 유지해, 새로고침/재진입 시 자동으로 다시 시도되게 한다(결과 유실 방지).
     const stripResumeParam = () => {
       const nextParams = new URLSearchParams(searchParams.toString());
       nextParams.delete("resumeSave");
@@ -47,43 +49,19 @@ export function GuestTrialBridge() {
     };
 
     const pending = getPendingGuestSave();
-    if (!pending) {
-      stripResumeParam();
-      return;
-    }
+    stripResumeParam();
+    if (!pending) return;
 
-    void (async () => {
-      try {
-        const file = dataUrlToFile(
-          pending.dataUrl,
-          `${pending.displayName}.png`,
-        );
-        await uploadGeneratedFourcutFile({
-          file,
-          displayName: pending.displayName,
-        });
-        clearPendingGuestSave();
-        stripResumeParam();
-        setNotice({
-          actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "SAVED",
-          icon: "check",
-          message:
-            "비회원 때 꾸민 네컷을 기록에 저장했어요. 기록 화면에서 다시 보거나 내려받을 수 있어요.",
-          title: "기록에 저장됐어요",
-        });
-      } catch (error) {
-        // 실패 시 resumeSave/pending을 그대로 둬 새로고침 시 자동 재시도되게 한다.
-        console.error(error);
-        setNotice({
-          actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "NOTICE",
-          icon: "lock",
-          message: "저장을 마치지 못했어요. 이 화면을 새로고침하면 자동으로 다시 시도해요.",
-          title: "저장을 완료하지 못했어요",
-        });
-      }
-    })();
+    // 될 수 없는 저장이므로 보류분을 남겨 두지 않는다(남기면 새로고침마다 다시 시도한다).
+    clearPendingGuestSave();
+    setNotice({
+      actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+      eyebrow: "NOTICE",
+      icon: "lock",
+      message:
+        "비회원 때 만든 네컷은 기록에 옮기지 못해요. 지금부터 찍는 네컷은 기록에 저장돼요.",
+      title: "기록으로 옮기지 못했어요",
+    });
   }, [pathname, router, searchParams, setNotice]);
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.

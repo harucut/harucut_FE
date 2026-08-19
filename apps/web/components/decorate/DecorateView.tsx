@@ -12,11 +12,7 @@ import {
   buildDefaultDisplayName,
   buildDownloadFilename,
 } from "@/lib/fourcutOutput";
-import { uploadGeneratedFourcutFile } from "@/lib/fourcutProcessing";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
-import { buildPathWithRedirect } from "@/lib/redirect";
-import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { DecoratePanel } from "@/components/decorate/DecoratePanel";
 
 // Konva 캔버스는 클라이언트 전용(SSR 비활성).
@@ -40,7 +36,6 @@ export function DecorateView() {
   const guestMode = accessMode === "guest";
 
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
   // 꾸밀 이미지가 없을 때 돌아갈 곳. 게스트는 /home이 막혀 있어
   // 그대로 보내면 /shoot?guestNotice=restricted로 한 번 더 튕긴다.
@@ -108,50 +103,6 @@ export function DecorateView() {
     }
   };
 
-  const handleSaveToRecords = async () => {
-    if (guestMode) {
-      // 비회원: 결과물을 보관해 두고 로그인/회원가입으로 보낸다.
-      // 인증을 마치면 /home 에서 GuestTrialBridge가 자동으로 서버(기록)에 저장한다.
-      setIsSaving(true);
-      try {
-        const blob = await composeBlob();
-        if (blob) {
-          const displayName = buildDefaultDisplayName();
-          const stored = await setPendingGuestSave(blob, displayName, Date.now());
-          if (!stored) {
-            notice(
-              "저장 준비에 실패했어요",
-              "결과가 너무 커서 잠시 보관하지 못했어요. 먼저 내려받아 주세요.",
-            );
-            return;
-          }
-        }
-        router.push(buildPathWithRedirect("/login", "/home?resumeSave=1"));
-      } finally {
-        setIsSaving(false);
-      }
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const blob = await composeBlob();
-      if (!blob) return;
-      const displayName = buildDefaultDisplayName();
-      const file = new File([blob], `${displayName}.png`, { type: "image/png" });
-      await uploadGeneratedFourcutFile({ file, displayName });
-      notice("기록에 저장했어요", "기록 화면에서 다시 보거나 내려받을 수 있어요.");
-    } catch (error) {
-      console.error(error);
-      notice(
-        "기록 저장에 실패했어요",
-        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
     /*
       편집기는 스크롤 문서가 아니라 한 화면이다. 예전에는 캔버스·도구·저장 버튼이 세로로
@@ -187,27 +138,20 @@ export function DecorateView() {
         </div>
 
         <div className="shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
-          {guestMode ? (
-            // 비회원에게 가장 중요한 다음 걸음은 "이 결과를 잃지 않는 것"이다.
-            // 예전에는 그 버튼이 보조 스타일이고, 파일로 받는 쪽이 주 버튼이었다.
-            <p className="mb-2 text-center text-[11px] leading-[1.5] text-[color:var(--hc-muted)]">
-              지금 나가면 이 네컷은 사라져요. 로그인하면 기록에 남아 언제든 다시 꺼낼 수 있어요.
-            </p>
-          ) : null}
+          {/* '기록에 저장'을 여기서 뺐다.
+              꾸민 결과는 이미 합쳐진 그림 한 장인데, 백엔드에서 완성 이미지를 등록하는 API 가
+              없어졌다(405). 남은 저장 수단인 서버 합성은 **원본 4장**을 받는 방식이라 이 결과물이
+              들어갈 자리가 없다. 눌러도 실패할 버튼을 두느니 내려받기만 남긴다.
+              백엔드에 완성본 등록 수단이 생기면 되살릴 것 — docs/backend-contract.md */}
+          <p className="mb-2 text-center text-[11px] leading-[1.5] text-[color:var(--hc-muted)]">
+            꾸민 네컷은 기록에 저장되지 않아요. 잊지 말고 내려받아 주세요.
+          </p>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleSaveToRecords}
-              disabled={isSaving || !base}
-              className="hc-button-primary flex-1 rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
-            >
-              {isSaving ? "저장 중..." : guestMode ? "로그인하고 저장" : "기록에 저장"}
-            </button>
             <button
               type="button"
               onClick={handleDownload}
               disabled={isDownloading || !base}
-              className="hc-button-secondary flex-1 rounded-full border px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
+              className="hc-button-primary flex-1 rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
             >
               {isDownloading ? "내려받는 중..." : "내려받기"}
             </button>

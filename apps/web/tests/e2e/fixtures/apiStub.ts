@@ -50,6 +50,24 @@ const FRAMES = [
     canvasWidth: 2000,
     canvasHeight: 6000,
   },
+  // 기본 제공(시스템) 프레임. 서버 합성은 여기서 frameId 를 찾는다 —
+  // 실제 백엔드도 종류별로 하나씩 등록해 두고 BASIC 계정에도 내려준다.
+  ...([
+    ["CLASSIC", 2000, 6000],
+    ["WIDE", 6000, 4000],
+    ["GRID", 4000, 6000],
+    ["POLAROID", 4000, 6000],
+  ] as const).map(([frameType, canvasWidth, canvasHeight], index) => ({
+    frameId: 201 + index,
+    title: `기본 ${frameType}`,
+    description: "하루컷 기본 프레임",
+    frameType,
+    background: { type: "COLOR", value: "ffffff" },
+    components: [],
+    isSystem: true,
+    canvasWidth,
+    canvasHeight,
+  })),
 ];
 
 // createdAt은 서버와 같은 "오프셋 없는 UTC" 형식으로 둔다(parseServerDateTime 경로를 그대로 태운다).
@@ -111,14 +129,13 @@ export async function stubAuthenticatedApi(page: Page) {
         contentType: "image/png",
       });
     }
-    if (path.includes("/user/media") && method === "POST") {
-      return json({
-        mediaId: 9100,
-        s3Key: "uploads/users/a11y/generated.png",
-        displayName: "방금 만든 네컷",
-        downloadUrl: PRESIGNED_IMAGE_URL,
-        createdAt: "2026-08-15T02:11:00.000000",
-      });
+    // 완성본 등록(POST /user/media)은 백엔드에서 없어졌다(405). 스텁으로 200을 흉내내면
+    // 실제로는 죽은 경로가 e2e 에서만 초록불이 된다 — 대신 서버 합성을 흉내낸다.
+    if (path.includes("/user/media/compose/")) {
+      return json({ jobId: 51, status: "DONE", mediaId: 9100 });
+    }
+    if (path.endsWith("/user/media/compose") && method === "POST") {
+      return json({ jobId: 51, status: "PENDING" });
     }
     if (path.endsWith("/subscription/usage")) return json(SUBSCRIPTION_USAGE);
     if (path.endsWith("/files/presigned-img")) return json(PRESIGNED_IMAGE_URL);

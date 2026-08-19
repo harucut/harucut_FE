@@ -1,6 +1,5 @@
 const mockGet = jest.fn();
 const mockPost = jest.fn();
-const mockRegisterUserMedia = jest.fn();
 
 jest.mock("@/lib/clientApi", () => ({
   clientApi: {
@@ -9,16 +8,11 @@ jest.mock("@/lib/clientApi", () => ({
   },
 }));
 
-jest.mock("@/lib/userMediaApi", () => ({
-  registerUserMedia: (...args: unknown[]) => mockRegisterUserMedia(...args),
-}));
-
 import {
   PRESIGNED_UPLOAD_TYPES,
   isSupportedUploadFile,
   resolveUpload,
   resolveUploadContentType,
-  uploadFourcutMedia,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 
@@ -178,54 +172,4 @@ describe("presigned upload flow", () => {
     });
   });
 
-  it("registers photo media after upload", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: {
-          key: "uploads/users/u/photo.png",
-          uploadUrl: "https://example.com/upload/photo.png?sig=1",
-          contentType: "image/png",
-          expiresIn: "PT24H",
-        },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
-    mockGet.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: "https://example.com/photo.png?sig=2",
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
-    mockRegisterUserMedia.mockResolvedValueOnce({
-      mediaId: 1,
-      s3Key: "uploads/users/u/photo.png",
-      downloadUrl: "https://example.com/photo.png?sig=3",
-    });
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-    });
-
-    const result = await uploadFourcutMedia(
-      new File(["x"], "photo.png", { type: "image/png" }),
-    );
-
-    expect(mockRegisterUserMedia).toHaveBeenCalledWith({
-      s3Key: "uploads/users/u/photo.png",
-    });
-    expect(result.downloadUrl).toBe("https://example.com/photo.png?sig=3");
-  });
 });

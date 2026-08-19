@@ -33,13 +33,21 @@ export async function listMyMedia() {
   return out;
 }
 
-// 스웨거 UserMediaRegisterRequest는 s3Key(required)·displayName만 받는다.
-export async function registerUserMedia(args: {
-  s3Key: string;
-  displayName?: string;
-}) {
-  const res = await clientApi.post<ApiEnvelope<UserMedia>>("/api/client/user/media", args);
-  return res.data.data;
+/**
+ * 방금 만들어진 미디어 한 건을 찾는다.
+ *
+ * 단건 조회 엔드포인트가 없어서 목록에서 고른다. 합성 결과는 항상 최신이라
+ * 첫 페이지에 들어온다. 못 찾으면 null — 호출부가 download-url 로 폴백한다.
+ */
+export async function findMyMedia(mediaId: number) {
+  const params = new URLSearchParams({ page: "0", size: "50" });
+  const res = await clientApi.get<
+    ApiEnvelope<{ content?: UserMedia[] } | UserMedia[] | null>
+  >(`/api/client/user/media?${params.toString()}`);
+
+  const data = res.data.data;
+  const list = Array.isArray(data) ? data : (data?.content ?? []);
+  return list.find((item) => item.mediaId === mediaId) ?? null;
 }
 
 export async function getMediaDownloadUrl(mediaId: number) {

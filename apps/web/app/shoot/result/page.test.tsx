@@ -7,7 +7,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockComposeFramePng = jest.fn();
-const mockUploadGeneratedFourcutFile = jest.fn();
+const mockSaveFourcutToServer = jest.fn();
 const mockCreateObjectURL = jest.fn();
 const mockRevokeObjectURL = jest.fn();
 const mockSetPendingGuestSave = jest.fn();
@@ -80,8 +80,7 @@ jest.mock("@/lib/pendingGuestSave", () => ({
 }));
 
 jest.mock("@/lib/fourcutProcessing", () => ({
-  uploadGeneratedFourcutFile: (...args: unknown[]) =>
-    mockUploadGeneratedFourcutFile(...args),
+  saveFourcutToServer: (...args: unknown[]) => mockSaveFourcutToServer(...args),
 }));
 
 jest.mock("@/lib/userMediaApi", () => ({
@@ -119,7 +118,7 @@ describe("ShootResultPage", () => {
     mockComposeFramePng.mockResolvedValue(
       new Blob(["image"], { type: "image/png" }),
     );
-    mockUploadGeneratedFourcutFile.mockImplementation(
+    mockSaveFourcutToServer.mockImplementation(
       async ({ displayName }: { file: File; displayName: string }) => ({
         mediaId: 1,
         objectUrl: "https://example.com/image",
@@ -133,7 +132,7 @@ describe("ShootResultPage", () => {
     render(<ShootResultPage />);
 
     await waitFor(() => {
-      expect(mockUploadGeneratedFourcutFile).toHaveBeenCalledTimes(1);
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
 
     expect(mockComposeFramePng).toHaveBeenCalledTimes(1);
@@ -145,11 +144,16 @@ describe("ShootResultPage", () => {
       { src: "/shot-4.png" },
     ]);
 
-    // 업로드 파일은 기본 표시 이름(harucut_YYYYMMDD_HHMMSS) + .png 규약을 따른다.
-    const { file, displayName } = mockUploadGeneratedFourcutFile.mock.calls[0][0];
-    expect(displayName).toMatch(/^harucut_\d{8}_\d{6}$/);
-    expect(file.name).toBe(`${displayName}.png`);
-    expect(file.type).toBe("image/png");
+    // 서버 합성에는 완성본이 아니라 **원본 4장**과 프레임 정보를 넘긴다.
+    const call = mockSaveFourcutToServer.mock.calls[0][0];
+    expect(call.displayName).toMatch(/^harucut_\d{8}_\d{6}$/);
+    expect(call.sources).toEqual([
+      "/shot-1.png",
+      "/shot-2.png",
+      "/shot-3.png",
+      "/shot-4.png",
+    ]);
+    expect(call.layout.slots).toHaveLength(4);
   });
 
   it("게스트가 로그인으로 이동하면 결과물을 보관하고 resumeSave 경로로 넘긴다", async () => {
@@ -163,7 +167,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 저장하기",
+      name: "로그인하러 가기",
     });
     fireEvent.click(loginButton);
 
@@ -172,7 +176,7 @@ describe("ShootResultPage", () => {
     });
 
     // 비회원 결과물은 서버에 올라가지 않는다.
-    expect(mockUploadGeneratedFourcutFile).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
     expect(mockSetPendingGuestSave.mock.calls[0][0]).toBeInstanceOf(Blob);
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith(
@@ -193,7 +197,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 저장하기",
+      name: "로그인하러 가기",
     });
     fireEvent.click(loginButton);
 

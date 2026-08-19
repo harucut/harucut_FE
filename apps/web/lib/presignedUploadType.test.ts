@@ -19,11 +19,6 @@ import { clientApi } from "@/lib/clientApi";
 jest.mock("@/lib/clientApi", () => ({
   clientApi: { get: jest.fn(), post: jest.fn() },
 }));
-jest.mock("@/lib/userMediaApi", () => ({
-  registerUserMedia: jest
-    .fn()
-    .mockResolvedValue({ mediaId: 1, downloadUrl: null }),
-}));
 
 const mockPost = clientApi.post as jest.Mock;
 const mockGet = clientApi.get as jest.Mock;
