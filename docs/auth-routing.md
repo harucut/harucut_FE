@@ -20,9 +20,7 @@
 
 - `/home`
 - `/shoot/*`
-- `/upload/*`
 - `/theme/*`
-- `/decorate`
 - `/history`
 - `/mypage`
 
@@ -64,8 +62,8 @@
 2. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
    이때 게스트 쿠키가 남아 있으면 응답에서 삭제한다(회원 전환)
 3. 게스트 쿠키만 있으면
-   - `/shoot` 또는 `/decorate`로 시작하는 경로(`GUEST_ALLOWED_PREFIXES`): 통과 —
-     게스트 체험은 촬영에서 끝나지 않고 꾸미기까지 이어져야 완결된다
+   - `/shoot`로 시작하는 경로(`GUEST_ALLOWED_PREFIXES`): 통과 —
+     비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
 4. **쿠키가 하나도 없어도 행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** —
    응답에 게스트 쿠키를 심어 준다(아래 절 참고)
@@ -74,7 +72,6 @@
 ```text
 인증 쿠키 O                        -> 통과 (게스트 쿠키 삭제)
 게스트 쿠키 O + /shoot/*           -> 통과
-게스트 쿠키 O + /decorate/*        -> 통과
 게스트 쿠키 O + 그 외 보호 경로    -> /shoot?guestNotice=restricted
 쿠키 없음 + /shoot?...&event=...   -> 통과 (게스트 쿠키를 심는다)
 쿠키 없음                          -> /login?redirectTo=<원래 경로와 쿼리>
@@ -105,7 +102,7 @@
 - [`apps/web/lib/guestTrialStore.ts`](../apps/web/lib/guestTrialStore.ts): `accessMode`(`guest`/`member`),
   쿠키 읽기·쓰기, 안내 문구(restricted / saved / share / trial)
 - `apps/web/components/guest/*`: `GuestTrialStartButton`(체험 시작),
-  `GuestTrialBridge`(쿠키로 `accessMode` 복원 + 로그인 후 보관본 자동 업로드),
+  `GuestTrialBridge`(쿠키로 `accessMode` 복원 + 로그인 후 보관한 원본 4장으로 서버 합성),
   `GuestTrialOverlay`(안내 표시)
 - [`apps/web/lib/pendingGuestSave.ts`](../apps/web/lib/pendingGuestSave.ts):
   게스트가 저장을 누르면 결과 PNG를 localStorage에 보관했다가 인증 후 서버로 올린다

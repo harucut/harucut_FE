@@ -49,7 +49,13 @@ jest.mock("@/components/frame/FramePreview", () => ({
 }));
 
 jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
-  GeneratedAssetDownloadCard: () => <div data-testid="generated-asset-card" />,
+  GeneratedAssetDownloadCard: ({ onDownload }: { onDownload: () => void }) => (
+    <div data-testid="generated-asset-card">
+      <button type="button" onClick={onDownload}>
+        이미지 다운로드
+      </button>
+    </div>
+  ),
 }));
 
 jest.mock("@/hooks/useRemoteFrameTheme", () => ({
@@ -83,9 +89,11 @@ jest.mock("@/lib/fourcutProcessing", () => ({
   saveFourcutToServer: (...args: unknown[]) => mockSaveFourcutToServer(...args),
 }));
 
+const mockGetMediaDownloadUrl = jest.fn();
+
 jest.mock("@/lib/userMediaApi", () => ({
   updateMediaDisplayName: jest.fn(),
-  getMediaDownloadUrl: jest.fn(),
+  getMediaDownloadUrl: (...args: unknown[]) => mockGetMediaDownloadUrl(...args),
 }));
 
 jest.mock("@/lib/share", () => ({
@@ -213,5 +221,33 @@ describe("ShootResultPage", () => {
       );
     });
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  // 이 케이스는 원래 업로드 결과 화면 테스트에만 있었다. 그 화면을 지우면서 함께 사라지면
+  // "실패를 alert 로 띄우지 않는다"는 방어가 통째로 없어져서 촬영 쪽으로 옮겨 왔다.
+  it("다운로드에 실패하면 alert 대신 전역 안내를 띄운다", async () => {
+    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
+    mockGetMediaDownloadUrl.mockRejectedValue(new Error("download failed"));
+
+    render(<ShootResultPage />);
+
+    // 합성이 끝나야 다운로드 카드가 뜬다.
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    const downloadButton = await screen.findByRole("button", {
+      name: "이미지 다운로드",
+    });
+    fireEvent.click(downloadButton);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "이미지를 다운로드하지 못했어요",
+      );
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    alertSpy.mockRestore();
   });
 });

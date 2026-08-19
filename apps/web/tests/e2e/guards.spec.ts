@@ -35,9 +35,6 @@ const protectedRoutes = [
   "/home",
   "/shoot",
   "/shoot/capture",
-  "/upload",
-  "/upload/select",
-  "/decorate",
   "/theme",
   "/theme/sticker",
   "/history",
@@ -125,9 +122,9 @@ for (const route of guestAllowedRoutes) {
   });
 }
 
-// /decorate 가 여기 있는 것이 핵심이다. 예전에는 게스트에게 열려 있었고,
-// "꾸미기는 가입 후"라고 말하는 화면 문구와 실제 권한이 어긋났다.
-const guestBlockedRoutes = ["/decorate", "/history", "/upload", "/theme"];
+// 게스트에게 열린 곳은 /shoot 뿐이다(proxy.ts GUEST_ALLOWED_PREFIXES).
+// 화면 문구가 "기록 보관·프레임 만들기는 가입 후"라고 말하는 것과 실제 권한이 맞아야 한다.
+const guestBlockedRoutes = ["/history", "/theme"];
 
 for (const route of guestBlockedRoutes) {
   test(`redirects guests away from ${route}`, async ({ page }) => {
@@ -144,8 +141,6 @@ for (const route of guestBlockedRoutes) {
 const lateStepRoutes = [
   { route: "/shoot/select", expected: "/shoot" },
   { route: "/shoot/result", expected: "/shoot" },
-  { route: "/upload/select", expected: "/upload" },
-  { route: "/upload/result", expected: "/upload" },
   { route: "/theme/sticker", expected: "/theme" },
 ] as const;
 

@@ -12,8 +12,6 @@ describe("route protection contract", () => {
     expect(PROTECTED_PATHS).toEqual([
       "/home",
       "/shoot",
-      "/upload",
-      "/decorate",
       "/history",
       "/theme",
       "/mypage",
@@ -24,8 +22,6 @@ describe("route protection contract", () => {
     for (const matcher of [
       '"/home/:path*"',
       '"/shoot/:path*"',
-      '"/upload/:path*"',
-      '"/decorate/:path*"',
       '"/history/:path*"',
       '"/theme/:path*"',
       '"/mypage"',
@@ -37,9 +33,7 @@ describe("route protection contract", () => {
   test("recognizes protected routes and subroutes", () => {
     expect(isProtectedPath("/home")).toBe(true);
     expect(isProtectedPath("/shoot/capture")).toBe(true);
-    expect(isProtectedPath("/upload/result")).toBe(true);
     expect(isProtectedPath("/theme/sticker")).toBe(true);
-    expect(isProtectedPath("/decorate")).toBe(true);
     expect(isProtectedPath("/history")).toBe(true);
     expect(isProtectedPath("/mypage")).toBe(true);
   });

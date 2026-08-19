@@ -20,10 +20,10 @@ function hasGuestTrialCookie(req: NextRequest) {
 
 // 로그인 없이 체험할 수 있는 보호 경로 — 촬영까지다.
 //
-// 예전에는 /decorate 도 열어 뒀지만, 비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지로
-// 좁혔다. 꾸미기부터는 가입 후다. 다운로드를 남긴 이유는 행사(Enterprise) 참가자 때문이다 —
-// QR로 들어온 참가자는 아래 isEventEntry 로 같은 게스트 자격을 받는데, 다운로드까지 막으면
-// "참가자는 가입 없이 찍고 그 자리에서 가져가요"라는 판매 문구가 사실이 아니게 된다.
+// 비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지다. 기록 보관과 프레임 제작은 가입 후다.
+// 다운로드를 남긴 이유는 행사(Enterprise) 참가자 때문이다 — QR로 들어온 참가자는 아래
+// isEventEntry 로 같은 게스트 자격을 받는데, 다운로드까지 막으면 "참가자는 가입 없이 찍고
+// 그 자리에서 가져가요"라는 판매 문구가 사실이 아니게 된다.
 const GUEST_ALLOWED_PREFIXES = ["/shoot"] as const;
 
 function isGuestAllowedPath(pathname: string) {
@@ -109,8 +109,6 @@ export const config = {
   matcher: [
     "/home/:path*",
     "/shoot/:path*",
-    "/upload/:path*",
-    "/decorate/:path*",
     "/history/:path*",
     "/theme/:path*",
     "/mypage",

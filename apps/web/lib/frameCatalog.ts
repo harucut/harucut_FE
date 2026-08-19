@@ -38,13 +38,13 @@ export const FRAME_CATALOG: FrameCatalogItem[] = [
     shortLabel: "EDIT",
     badge: "콘텐츠형 콜라주",
     description:
-      "네 컷을 2×2로 반듯하게 모아 담아요. 표정 변화나 소품 샷을 정리해 보여주기 좋아 업로드형 제작에 강해요.",
-    recommendedFor: ["업로드 제작", "표정 변주", "콘텐츠 컷"],
+      "네 컷을 2×2로 반듯하게 모아 담아요. 표정 변화나 소품 샷을 정리해 보여주기 좋아요.",
+    recommendedFor: ["표정 변주", "콘텐츠 컷", "단체 컷"],
   },
   {
     id: "polaroid-4",
     shortLabel: "THEME",
-    badge: "꾸미기 특화",
+    badge: "프레임 꾸미기 특화",
     description:
       "즉석사진을 흩뿌린 듯 엇갈리게 배치해요. 스티커·텍스트·배경을 올리면 스크랩북처럼 완성돼요.",
     recommendedFor: ["기념일", "팬메이드", "테마 편집"],

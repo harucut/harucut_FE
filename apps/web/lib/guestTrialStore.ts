@@ -125,7 +125,7 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
         eyebrow: "NEXT STEP",
         icon: "check",
         message:
-          "체험 결과 이미지를 기기에 저장했어요. 로그인하면 링크 공유, 기록 저장, 업로드 제작까지 바로 이어서 이용할 수 있어요.",
+          "체험 결과 이미지를 기기에 저장했어요. 로그인하면 링크 공유와 기록 저장까지 바로 이어서 이용할 수 있어요.",
         title: "체험 사진이 저장됐어요",
       },
     }),

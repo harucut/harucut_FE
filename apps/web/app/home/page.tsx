@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Camera,
   ChevronRight,
-  Image as ImageIcon,
   Sparkles,
 } from "lucide-react";
 import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
@@ -30,13 +29,8 @@ const HOME_COACH_STEPS: CoachStep[] = [
     body: "카메라로 8장을 찍고 마음에 드는 4장을 골라 네 컷을 만들어요.",
   },
   {
-    selector: '[data-coach="upload"]',
-    title: "사진 업로드",
-    body: "이미 찍어둔 사진으로도 바로 네 컷을 만들 수 있어요.",
-  },
-  {
     selector: '[data-coach="theme"]',
-    title: "꾸미기",
+    title: "프레임 꾸미기",
     body: "프레임 색·배경 이미지·텍스트·스티커로 나만의 프레임을 만들어요.",
   },
 ];
@@ -237,23 +231,8 @@ export default function HomePage() {
           <ChevronRight className="h-[22px] w-[22px] shrink-0" />
         </Link>
 
-        {/* 모바일(&lt;lg) 보조 2카드 — 사진 불러오기 / 프레임 보기 */}
-        <section className="grid grid-cols-2 gap-2.5 lg:hidden">
-          <Link
-            href="/upload"
-            data-coach="upload"
-            className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
-          >
-            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary-strong)]" />
-            <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13px] font-bold">
-                사진 불러오기
-              </span>
-              <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
-                갤러리에서
-              </span>
-            </span>
-          </Link>
+        {/* 모바일(&lt;lg) 보조 카드 — 프레임 보기 */}
+        <section className="grid grid-cols-1 gap-2.5 lg:hidden">
           <Link
             href="/theme"
             data-coach="theme"
@@ -271,9 +250,9 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {/* 데스크톱(lg+) 액션 카드 → 촬영 / 업로드 / 꾸미기 (코치마크는 보이는 카드를 비춤) */}
+        {/* 데스크톱(lg+) 액션 카드 → 촬영 / 프레임 꾸미기 (코치마크는 보이는 카드를 비춤) */}
         {/* 01·02·03 인덱스를 뺀 뒤 justify-center로 — justify-between은 자식이 하나면 위로 붙는다. */}
-        <section className="hidden gap-3.5 lg:grid lg:grid-cols-3">
+        <section className="hidden gap-3.5 lg:grid lg:grid-cols-2">
           <Link
             href="/shoot"
             data-coach="shoot"
@@ -286,22 +265,6 @@ export default function HomePage() {
               </span>
               <span className="mt-1 block text-[13px] font-medium opacity-75">
                 프레임 고르고 8장, 네 컷만 남겨요
-              </span>
-            </span>
-          </Link>
-
-          <Link
-            href="/upload"
-            data-coach="upload"
-            className="hc-surface-card group flex min-h-[108px] flex-col justify-center rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
-          >
-            <span>
-              <span className="flex items-center justify-between text-[19px] font-extrabold">
-                업로드하기
-                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
-              </span>
-              <span className="mt-1 block text-[13px] text-[color:var(--hc-muted)]">
-                찍어둔 사진으로 만들어요
               </span>
             </span>
           </Link>

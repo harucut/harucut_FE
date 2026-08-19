@@ -5,5 +5,3 @@
  * 달라진다. 한 곳에 두고 각 화면은 자기 번호만 안다.
  */
 export const SHOOT_FLOW_STEPS = ["프레임", "촬영", "고르기", "완성"] as const;
-
-export const UPLOAD_FLOW_STEPS = ["프레임", "사진 고르기", "완성"] as const;

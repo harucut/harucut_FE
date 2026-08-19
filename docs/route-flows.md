@@ -36,7 +36,7 @@
 /login?redirectTo=<원래 경로와 쿼리>
 ```
 
-게스트 체험 쿠키가 있으면 `/shoot/*`와 `/decorate/*`만 예외로 통과합니다. 자세한 분기는
+게스트 체험 쿠키가 있으면 `/shoot/*`만 예외로 통과합니다. 자세한 분기는
 [docs/auth-routing.md](./auth-routing.md)의 "게스트 체험 모드" 절을 참고합니다.
 
 ## 촬영 흐름
@@ -62,8 +62,8 @@
   -> frameId가 필요하다
   -> 촬영 결과가 필요하다
   -> 정확히 4칸이 선택되어 있어야 한다
-  -> 결과를 다운로드하거나 업로드한다
-  -> "꾸미기"를 누르면 /decorate
+  -> 원본 4장을 올려 서버가 합성하고, 결과를 기록에 남긴다
+  -> 결과를 다운로드하거나 링크로 공유한다
 ```
 
 클라이언트 측 복귀 규칙:
@@ -76,62 +76,6 @@
 /shoot/result   shots 없음            -> /shoot/select
 /shoot/result   4장 선택 안 됨       -> /shoot/select
 ```
-
-## 업로드 흐름
-
-```text
-/upload
-  -> 프레임과 선택 가능한 드래프트를 고른다
-  -> uploadSession에 frameId/draftId를 저장한다
-  -> /upload/select
-
-/upload/select
-  -> frameId가 필요하다
-  -> 이미지를 업로드한다
-  -> 4장을 고른다
-  -> /upload/result
-
-/upload/result
-  -> frameId가 필요하다
-  -> 업로드된 이미지가 필요하다
-  -> 정확히 4칸이 선택되어 있어야 한다
-  -> 4칸이 모두 채워졌을 때 PNG로 저장한다
-  -> "꾸미기"를 누르면 /decorate
-```
-
-클라이언트 측 복귀 규칙:
-
-```text
-/upload/select  frameId 없음          -> /upload
-/upload/result  frameId 없음          -> /upload
-/upload/result  업로드 이미지 없음    -> /upload/select
-/upload/result  4장 선택 안 됨       -> /upload/select
-```
-
-## 꾸미기 흐름
-
-`/decorate`는 촬영·업로드 결과의 마지막 단계입니다. 두 result 페이지가 합성된
-네컷 PNG를 세션에 담고 `/decorate`로 보냅니다.
-
-```text
-/shoot/result  -> setDecorateSource(합성 이미지) -> /decorate
-/upload/result -> setDecorateSource(합성 이미지) -> /decorate
-
-/decorate
-  -> 세션에 꾸미기 원본 이미지가 필요하다
-  -> 펜으로 그리기 / 텍스트 추가 / 스티커 배치
-  -> 이미지 다운로드
-  -> 기록에 저장 (회원)
-  -> 로그인하고 저장 (게스트: 결과를 보관하고 /login으로,
-     인증 후 /home의 GuestTrialBridge가 자동 업로드)
-```
-
-- 관련 파일: `apps/web/app/decorate/page.tsx`, `components/decorate/*`,
-  `lib/decorateSessionStore.ts`, `lib/decorateStore.ts`, `lib/decorateCompose.ts`
-- 캔버스는 `react-konva` 기반이라 SSR을 끄고 동적 로드합니다.
-- `/decorate`는 보호 라우트입니다(`lib/protectedPaths.ts`). 다만 게스트 체험은
-  `proxy.ts`의 `GUEST_ALLOWED_PREFIXES`(`/shoot`, `/decorate`)로 통과시켜
-  촬영부터 꾸미기까지 이어집니다. 저장 시점에만 로그인으로 유도합니다.
 
 ## 테마 흐름
 

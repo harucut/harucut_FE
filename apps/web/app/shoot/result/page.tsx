@@ -37,7 +37,6 @@ import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
-import { useDecorateSession } from "@/lib/decorateSessionStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 
@@ -74,38 +73,6 @@ export default function ShootResultPage() {
     (state) => state.showGuestRestrictedNotice,
   );
   const guestMode = accessMode === "guest";
-  const setDecorateSource = useDecorateSession((state) => state.setSource);
-
-  // 완성된 네컷을 꾸미기 에디터로 넘긴다. 캔버스 오염(taint) 방지를 위해
-  // 가능하면 이미지를 blob으로 받아 same-origin object URL로 전달한다.
-  const handleDecorate = async () => {
-    if (!imageResult) return;
-    try {
-      const url = guestMode
-        ? imageResult.objectUrl
-        : await getMediaDownloadUrl(imageResult.mediaId);
-      let src = url;
-      try {
-        const res = await fetch(url);
-        if (res.ok) src = URL.createObjectURL(await res.blob());
-      } catch {
-        // CORS/네트워크 실패 시 원본 URL로 진행한다.
-      }
-      setDecorateSource(src, {
-        title: imageResult.displayName,
-        origin: "/shoot/result",
-      });
-      router.push("/decorate");
-    } catch (error) {
-      console.error(error);
-      setDecorateSource(imageResult.objectUrl, {
-        title: imageResult.displayName,
-        origin: "/shoot/result",
-      });
-      router.push("/decorate");
-    }
-  };
-
   const [imageState, setImageState] = useState<ProcessingState>(
     imageResult ? "done" : "idle",
   );
@@ -513,7 +480,7 @@ export default function ShootResultPage() {
                     ? "완성되면 이미지를 바로 다운로드할 수 있어요."
                     : "완성되면 바로 다운로드하거나 공유할 수 있어요."
                   : guestMode
-                    ? "지금은 이미지 저장까지 해볼 수 있고, 꾸미기부터는 로그인 후 이용할 수 있어요."
+                    ? "지금은 이미지 저장까지 해볼 수 있고, 기록 보관부터는 로그인 후 이용할 수 있어요."
                     : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
               </p>
             </div>
@@ -597,8 +564,8 @@ export default function ShootResultPage() {
                 비회원 체험 결과 안내
               </p>
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                지금은 사진 촬영과 이미지 저장을 해볼 수 있어요. 네컷 꾸미기, 링크 공유,
-                기록 보관, 업로드 제작은 로그인 후에 이용할 수 있어요.
+                지금은 사진 촬영과 이미지 저장을 해볼 수 있어요. 링크 공유, 기록 보관,
+                프레임 만들기는 로그인 후에 이용할 수 있어요.
               </p>
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
                 체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
@@ -615,14 +582,14 @@ export default function ShootResultPage() {
               >
                 {isDownloadingImage ? "이미지 저장 중..." : "이미지 다운로드"}
               </button>
-              {/* 꾸미기와 링크 공유는 둘 다 회원 기능이라 같은 자리에서 같은 방식으로 안내한다.
-                  버튼을 감춰 버리면 체험하는 사람이 "가입하면 뭐가 더 되는지"를 못 본다. */}
+              {/* 버튼을 감춰 버리면 체험하는 사람이 "가입하면 뭐가 더 되는지"를 못 본다.
+                  그래서 회원 기능도 자리를 남기고 같은 방식으로 안내한다. */}
               <button
                 type="button"
                 onClick={showGuestRestrictedNotice}
                 className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
               >
-                네컷 꾸미기는 로그인 후에 이용할 수 있어요
+                기록 보관은 로그인 후에 이용할 수 있어요
               </button>
               <button
                 type="button"
@@ -633,18 +600,6 @@ export default function ShootResultPage() {
               </button>
             </div>
           </section>
-        ) : null}
-
-        {/* 게스트는 /decorate 로 못 간다(proxy.ts GUEST_ALLOWED_PREFIXES).
-            여기서 버튼을 내주면 눌러도 촬영 화면으로 되돌려지기만 한다. */}
-        {imageResult && !guestMode ? (
-          <button
-            type="button"
-            onClick={handleDecorate}
-            className="hc-button-secondary rounded-full border px-4 py-2.5 text-center text-sm font-semibold transition"
-          >
-            네컷 꾸미기 — 스티커·텍스트·그리기
-          </button>
         ) : null}
 
         <div className="flex gap-2">

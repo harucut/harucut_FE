@@ -1,8 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import ShootSelectPage from "@/app/shoot/select/page";
 import ShootResultPage from "@/app/shoot/result/page";
-import UploadSelectPage from "@/app/upload/select/page";
-import UploadResultPage from "@/app/upload/result/page";
 import StickerEditorPage from "@/app/theme/sticker/page";
 import type { FourcutFilterId } from "@/lib/frameFilters";
 
@@ -26,23 +24,6 @@ const shootSessionState = {
   imageResult: null,
   toggleSelect: noop,
   reset: noop,
-  setBorderColor: noop,
-  setOutputFilter: noop,
-  clearResults: noop,
-  setImageResult: noop,
-};
-
-const uploadSessionState = {
-  frameId: null as string | null,
-  remoteFrameId: null as number | null,
-  media: [] as Array<{ src: string }>,
-  selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
-  borderColor: "111827",
-  outputFilter: DEFAULT_FILTER,
-  imageResult: null,
-  toggleSelect: noop,
-  resetAll: noop,
-  addMedia: noop,
   setBorderColor: noop,
   setOutputFilter: noop,
   clearResults: noop,
@@ -103,10 +84,6 @@ jest.mock("@/lib/shootSessionStore", () => ({
   useShootSession: () => shootSessionState,
 }));
 
-jest.mock("@/lib/uploadSessionStore", () => ({
-  useUploadSession: () => uploadSessionState,
-}));
-
 jest.mock("@/lib/themeSessionStore", () => ({
   useThemeSession: () => themeSessionState,
 }));
@@ -121,16 +98,6 @@ describe("page-level multistep session guards", () => {
       frameId: null,
       remoteFrameId: null,
       shots: [],
-      selectedIndexes: [0, 1, 2, 3],
-      borderColor: "111827",
-      outputFilter: DEFAULT_FILTER,
-      imageResult: null,
-    });
-
-    Object.assign(uploadSessionState, {
-      frameId: null,
-      remoteFrameId: null,
-      media: [],
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "111827",
       outputFilter: DEFAULT_FILTER,
@@ -185,37 +152,6 @@ describe("page-level multistep session guards", () => {
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/shoot/select");
-    });
-  });
-
-  test("/upload/select sends users back to /upload when frameId is missing", async () => {
-    render(<UploadSelectPage />);
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/upload");
-    });
-  });
-
-  test("/upload/result sends users back to /upload/select when uploaded media are missing", async () => {
-    uploadSessionState.frameId = "classic-4";
-    uploadSessionState.media = [];
-
-    render(<UploadResultPage />);
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/upload/select");
-    });
-  });
-
-  test("/upload/result sends users back to /upload/select when selected media sources are missing", async () => {
-    uploadSessionState.frameId = "classic-4";
-    uploadSessionState.media = [{ src: "/upload-1.png" }];
-    uploadSessionState.selectedIndexes = [0, 1, 2, 3];
-
-    render(<UploadResultPage />);
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/upload/select");
     });
   });
 

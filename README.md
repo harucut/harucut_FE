@@ -63,9 +63,7 @@ pnpm dev:mobile
 
 - `/home`
 - `/shoot/*`
-- `/upload/*`
 - `/theme/*`
-- `/decorate`
 - `/history`
 - `/mypage`
 

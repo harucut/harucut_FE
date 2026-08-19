@@ -121,7 +121,7 @@ export async function stubAuthenticatedApi(page: Page) {
     const method = route.request().method();
 
     if (path.endsWith("/user-info")) return json(USER_INFO);
-    // 완성된 네컷 업로드: presigned 발급 → S3 PUT → 미디어 등록.
+    // 촬영 원본 업로드: presigned 발급 → S3 PUT → 서버 합성.
     if (path.endsWith("/files/presigned-upload")) {
       return json({
         key: "uploads/users/a11y/generated.png",

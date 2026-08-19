@@ -24,7 +24,7 @@ const HERO_IMAGES = DEMO_PHOTOS;
 // 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [
   { n: "01", t: "촬영하기", d: "카메라로 8장을 찍거나, 갤러리에서 골라요." },
-  { n: "02", t: "꾸미기", d: "프레임 위에 스티커와 글씨를 얹어요." },
+  { n: "02", t: "프레임 꾸미기", d: "프레임 위에 스티커와 글씨를 얹어요." },
   { n: "03", t: "기록하기", d: "사진으로 저장하고, 기록에 차곡차곡 모아요." },
 ] as const;
 
@@ -212,7 +212,7 @@ function HeroEditorial() {
       <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
         {/* 문구는 넘기지 않는다 — 기본값이 곧 로그인 화면·앱과 같은 한 문구다.
             예전에는 여기만 "가입 없이 찍어보기"였는데, 이 체험은 찍기만이 아니라
-            저장·꾸미기까지 되므로 실제보다 작게 말하는 문구이기도 했다. */}
+            이미지 저장까지 되므로 실제보다 작게 말하는 문구이기도 했다. */}
         <GuestTrialStartButton className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold" />
         <Link
           href="/login"
@@ -295,7 +295,7 @@ export function LandingView() {
             </Link>
           </Reveal>
 
-          {/* 같은 프레임·같은 사진, 꾸미기만 다르게 — 실제 렌더러로 그린 대비 */}
+          {/* 같은 프레임·같은 사진, 프레임 꾸미기만 다르게 — 실제 렌더러로 그린 대비 */}
           <Reveal delay={140}>
             {/* 높이로 폭이 정해지는 미리보기 두 장이라, 좁은 화면에서는 높이를 같이 줄여야
                 가로로 넘치지 않는다(320px 에서 21px 넘쳤다). clamp 로 매끄럽게 줄인다. */}

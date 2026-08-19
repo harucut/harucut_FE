@@ -50,9 +50,7 @@
 
 - `/home`
 - `/shoot/*`
-- `/upload/*`
 - `/theme/*`
-- `/decorate`
 - `/history`
 - `/mypage`
 

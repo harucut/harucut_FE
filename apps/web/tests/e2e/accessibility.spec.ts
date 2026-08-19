@@ -20,12 +20,11 @@ const publicRoutes = [
   "/privacy",
 ] as const;
 
-// 인증이 필요한 화면. 편집 화면(/decorate, /theme/sticker)이 여기 빠져 있으면
+// 인증이 필요한 화면. 편집 화면(/theme/sticker)이 여기 빠져 있으면
 // 정작 가장 복잡한 UI가 한 번도 검사되지 않는다.
 const authenticatedRoutes = [
   "/home",
   "/shoot",
-  "/upload",
   "/theme",
   "/history",
   "/mypage",
@@ -47,67 +46,7 @@ const routesReachedThroughUi = [
       await openEditor.click();
     },
   },
-  // 꾸미기 편집기는 "완성한 네컷"이 메모리에 있어야 열린다. 직접 열면 1초쯤 뒤
-  // /home 으로 갈아타는데, 그 전에 스캔이 끝나 초록불이 뜨곤 했다(실측).
-  // 업로드 흐름을 실제로 태워 진짜 편집기를 검사한다.
-  {
-    route: "/upload/result",
-    enter: composeFourcutThroughUpload,
-  },
-  {
-    route: "/decorate",
-    async enter(page: Page) {
-      await composeFourcutThroughUpload(page);
-      await page.getByRole("button", { name: /네컷 꾸미기/ }).click();
-      await page.waitForURL("**/decorate");
-    },
-  },
 ] as const;
-
-/** 1×1 투명 PNG. 내용은 상관없고 "지원 형식의 파일"이면 된다. */
-const TINY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
-
-/** 업로드 → 4장 선택 → 결과 합성까지 실제 UI 로 태운다. */
-async function composeFourcutThroughUpload(page: Page) {
-  await page.goto("/upload");
-  await page.getByRole("button", { name: "업로드 시작하기" }).click();
-  await page.waitForURL("**/upload/select");
-
-  // 등장 애니메이션(.hc-reveal)이 도는 동안에는 타일이 계속 움직여서 Playwright 가
-  // "element is not stable" 로 클릭을 미루다 타임아웃한다(CI 에서 실제로 그랬다).
-  // 클릭 전에 최종 상태로 고정한다.
-  await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
-
-  await page.locator('input[type="file"]').setInputFiles(
-    Array.from({ length: 4 }, (_, index) => ({
-      name: `a11y-${index}.png`,
-      mimeType: "image/png",
-      buffer: TINY_PNG,
-    })),
-  );
-
-  // 네 장이 다 그려진 뒤에 고르기 시작한다. 목록이 커지는 도중에 누르면 그 사이 리렌더로
-  // 노드가 교체돼(detached) 클릭이 날아간다.
-  const tiles = page.getByRole("button", { name: /^\d+번 사진 선택$/ });
-  await expect(tiles).toHaveCount(4);
-  await waitForImagesToSettle(page);
-
-  for (let index = 1; index <= 4; index += 1) {
-    const tile = page.getByRole("button", { name: `${index}번 사진 선택` });
-    await tile.click();
-    // 눌린 것이 반영될 때까지 기다린다 — 선택되면 aria-label 이 "선택 해제"로 바뀐다.
-    await expect(
-      page.getByRole("button", { name: new RegExp(`^${index}번 사진 선택 해제`) }),
-    ).toBeVisible();
-  }
-
-  await page.getByRole("button", { name: "다음 단계로" }).click();
-  await page.waitForURL("**/upload/result");
-  await page.getByRole("button", { name: /네컷 꾸미기/ }).waitFor();
-}
 
 /**
  * 등장 애니메이션과 페이지 그라디언트를 **페이지 스크립트보다 먼저** 눌러 둔다.
@@ -309,7 +248,7 @@ function contrastIncomplete(results: { incomplete: IncompleteRule[] }) {
  * 화면의 이미지가 다 자리잡을 때까지 기다린다.
  *
  * 스티커 타일은 next/image 로 지연 로드된다. 로딩 중인 이미지가 섞인 채 스캔하면 그 위 글자의
- * 배경이 그때그때 달라져 판정이 흔들린다(전체 실행에서 한 번 /decorate 가 그렇게 실패했다).
+ * 배경이 그때그때 달라져 판정이 흔들린다(전체 실행에서 실제로 그렇게 실패한 적이 있다).
  * 아직 뷰포트에 안 들어온 이미지는 영영 로드되지 않으므로, "로딩 중"인 것만 기다린다.
  */
 async function waitForImagesToSettle(page: Page) {
@@ -330,7 +269,7 @@ async function expectNoAccessibilityViolations(page: Page, route?: string) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   // 경로 확인은 모든 대기가 끝난 **스캔 직전**에 한다. 앞쪽에서 보면 "한 순간 그 경로였다"만
-  // 보장돼, 뒤늦게 갈아탄 화면을 검사하고도 초록불이 뜬다(/theme/sticker·/decorate 가 그랬다).
+  // 보장돼, 뒤늦게 갈아탄 화면을 검사하고도 초록불이 뜬다(/theme/sticker 가 그랬다).
   if (route) expect(new URL(page.url()).pathname).toBe(route);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
@@ -391,7 +330,7 @@ for (const { route, enter } of routesReachedThroughUi) {
     page,
   }) => {
     // 이 검사들은 화면을 UI 로 거쳐 들어간다. e2e 서버가 dev 서버(pnpm dev)라 CI 의 찬
-    // 러너에서는 /upload, /upload/select, /upload/result, /decorate 를 그때그때 컴파일하고,
+    // 러너에서는 /theme, /theme/sticker 를 그때그때 컴파일하고,
     // 그 합이 기본 제한 60초를 넘겨 타임아웃으로 죽었다. 검사 자체가 느린 게 아니라
     // 첫 컴파일이 느린 것이므로 이 묶음에만 여유를 준다.
     test.slow();
