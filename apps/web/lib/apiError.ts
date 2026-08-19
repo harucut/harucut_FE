@@ -16,6 +16,10 @@ type ApiErrorDetails = {
   fieldErrors?: ApiFieldError[];
 };
 
+// 한글이 한 글자라도 있으면 서버가 우리를 위해 쓴 문구로 본다.
+// (전역 g 플래그를 쓰면 lastIndex 가 남아 호출마다 결과가 뒤집힌다 — 쓰지 말 것)
+const HANGUL_PATTERN = /[가-힣]/;
+
 function asRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
@@ -106,8 +110,17 @@ export function getUserFacingApiErrorMessage(
     return planMessage;
   }
 
-  // 검증 실패는 서버가 필드별 한국어 사유를 준다(@field:NotBlank 등). 그게 가장 정확하다.
-  const fieldMessage = fieldErrors?.find((item) => item.message?.trim())?.message?.trim();
+  // 검증 실패(GEN-003)의 data[] 는 **한국어일 때만** 쓴다.
+  //
+  // 예전엔 이 자리 문구가 전부 한국어라고 보고 그대로 노출했는데, 새 백엔드에서는 섞여 나온다
+  // (2026-08-20 실측):
+  //   POST /api/harucut/register  → "must not be blank", "must be a well-formed email address"
+  //   POST .../presigned-upload   → "파일 크기는 필수입니다."
+  // 앞의 것들은 Bean Validation 기본 영문이라 그대로 띄우면 한국어 화면에 영어가 튀어나온다.
+  // 서버가 우리 문구를 직접 준 경우(한글 포함)만 채택하고, 아니면 코드 매핑으로 넘긴다.
+  const fieldMessage = fieldErrors
+    ?.map((item) => item.message?.trim())
+    .find((message) => message && HANGUL_PATTERN.test(message));
   if (fieldMessage) {
     return fieldMessage;
   }

@@ -91,6 +91,23 @@ function LoginPageContent() {
           });
           return;
         }
+
+        // 복구됐다고 지금 쿠키가 쓸 수 있게 되는 것은 아니다.
+        // 방금 받은 토큰에는 status=DELETED_REQUESTED 가 박혀 있고, reactivate 는 새 쿠키를
+        // 주지 않으면서 서버의 refresh 토큰까지 지운다 — 재발급도 막힌다(AUTH-011).
+        // 그대로 보내면 사용자는 /home 에 도착한 뒤 모든 요청이 403(GEN-021)으로 막힌다.
+        // 자격증명이 아직 이 함수 안에 있으니 조용히 다시 로그인해 ACTIVE 토큰을 받는다.
+        // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
+        try {
+          await loginWithEmail(email, password);
+        } catch (reloginError) {
+          console.error(reloginError);
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          setErrors({
+            common: "탈퇴는 취소됐어요. 다시 로그인해 주세요.",
+          });
+          return;
+        }
       }
 
       exitGuestMode();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import {
   requestPasswordResetCode,
@@ -64,8 +65,13 @@ export function useForgotPasswordFlow() {
       return true;
     } catch (error) {
       console.error(error);
+      // 가입되지 않은 계정(AUTH-020), 소셜 전용 계정, 재요청 쿨다운(AUTH-040, 429)이
+      // 전부 이 한 문장으로 뭉개지고 있었다. 서버 코드에 맞는 문구를 우선한다.
       setErrors({
-        common: "인증 코드를 보내지 못했어요. 잠시 후 다시 시도해 주세요.",
+        common: getUserFacingApiErrorMessage(
+          error,
+          "인증 코드를 보내지 못했어요. 잠시 후 다시 시도해 주세요.",
+        ),
       });
       return false;
     } finally {
@@ -114,7 +120,10 @@ export function useForgotPasswordFlow() {
     } catch (error) {
       console.error(error);
       setErrors({
-        common: "인증에 실패했어요. 이메일과 코드를 다시 확인해 주세요.",
+        common: getUserFacingApiErrorMessage(
+          error,
+          "인증에 실패했어요. 이메일과 코드를 다시 확인해 주세요.",
+        ),
       });
       return false;
     } finally {
@@ -159,7 +168,10 @@ export function useForgotPasswordFlow() {
     } catch (error) {
       console.error(error);
       setErrors({
-        common: "비밀번호 변경에 실패했어요. 잠시 후 다시 시도해 주세요.",
+        common: getUserFacingApiErrorMessage(
+          error,
+          "비밀번호 변경에 실패했어요. 잠시 후 다시 시도해 주세요.",
+        ),
       });
       return false;
     } finally {

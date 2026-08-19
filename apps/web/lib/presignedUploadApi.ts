@@ -5,7 +5,6 @@ import type {
   PresignedUploadContentType,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
-import { getApiErrorDetails } from "@/lib/apiError";
 import { registerUserMedia } from "@/lib/userMediaApi";
 
 type PresignedUploadData = {
@@ -32,43 +31,34 @@ export const PRESIGNED_UPLOAD_TYPES = {
   FRAME_COMPONENT: "FRAME_COMPONENT",
   PROFILE: "PROFILE",
   /**
-   * 네컷 원본 사진.
+   * 네컷 합성에 넣을 **원본** 사진.
    *
-   * 이 이름이 백엔드에서 바뀌는 중이다 — 서버 합성(compose)을 들여오면서
-   * `FOURCUT_PHOTO` 가 `FOURCUT_SOURCE` 로 개명됐다. 두 백엔드를 같이 두고 실측했다:
+   * 개명은 끝났다. 새 백엔드에는 `FOURCUT_SOURCE` 만 있고 옛 이름 `FOURCUT_PHOTO` 는
+   * 400(GEN-006)으로 거부된다(2026-08-20 실측). 그래서 두 이름을 번갈아 시도하던 폴백을
+   * 걷어냈다 — 남겨 두면 아래 fileSize 같은 검증 실패(400)를 "서버가 모르는 이름"으로
+   * 오해해 쓸데없이 두 번 왕복한 뒤 엉뚱한 에러를 던진다.
    *
-   *   type=FOURCUT_PHOTO   배포본 200 / 합성 백엔드 400(GEN-006)
-   *   type=FOURCUT_SOURCE  배포본 400 / 합성 백엔드 200
-   *
-   * 즉 새 백엔드가 배포되는 순간 지금 값으로는 촬영 결과 업로드가 통째로 400 이 된다.
-   * 어느 쪽이 뜨든 동작하도록 아래 FOURCUT_UPLOAD_TYPES 를 차례로 시도한다.
+   * ⚠️ **완성된 네컷을 올리는 타입은 없다.** 결과물은 서버 합성 API 가 만들어 저장한다
+   * (스웨거 PresignedUploadRequest.type 설명). docs/backend-contract.md 참고.
    */
-  FOURCUT_PHOTO: "FOURCUT_PHOTO",
+  FOURCUT_SOURCE: "FOURCUT_SOURCE",
 } as const;
 
-/**
- * 네컷 원본 업로드 타입 후보 — 앞의 것부터 시도한다.
- *
- * 새 이름을 먼저 둔다. 새 백엔드가 뜨면 첫 시도에 통하고, 아직 배포 전이면 한 번 400 을 받고
- * 옛 이름으로 넘어간다. 한 번 통한 이름은 세션 동안 기억해 매번 두 번 왕복하지 않는다.
- */
-const FOURCUT_UPLOAD_TYPES = ["FOURCUT_SOURCE", "FOURCUT_PHOTO"] as const;
+/** 백엔드 제한: 1 ~ 10485760 바이트. */
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-let resolvedFourcutUploadType: string | null = null;
-
-/** 테스트에서 세션 기억을 지운다. */
-export function resetFourcutUploadTypeCache() {
-  resolvedFourcutUploadType = null;
-}
+export const UPLOAD_TOO_LARGE_MESSAGE = "10MB 이하 이미지만 올릴 수 있어요.";
 
 export type PresignedUploadType =
   (typeof PRESIGNED_UPLOAD_TYPES)[keyof typeof PRESIGNED_UPLOAD_TYPES];
 
-// 스웨거 PresignedUploadRequest는 type·filename·contentType 세 필드만 받는다.
+// 스웨거 PresignedUploadRequest 는 네 필드 전부 required 다.
+// fileSize 를 빼면 400 GEN-003("파일 크기는 필수입니다.") 이 온다 — 실측.
 type PresignedUploadRequest = {
   type: PresignedUploadType;
   filename: string;
   contentType: PresignedUploadContentType;
+  fileSize: number;
 };
 
 function normalizeRemoteUrl(value: string | null | undefined): string | null {
@@ -244,7 +234,7 @@ export async function uploadFourcutMedia(
 
   const uploaded = await uploadToS3WithPresigned({
     file,
-    type: PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
+    type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
   });
 
   const media = await registerUserMedia({
@@ -260,39 +250,12 @@ export async function uploadFourcutMedia(
   };
 }
 
-/**
- * presigned URL 을 받아 온다. 네컷 원본만 타입 이름이 백엔드에서 개명 중이라
- * 후보를 차례로 시도하고, 통한 이름을 기억한다(PRESIGNED_UPLOAD_TYPES 주석 참고).
- */
+/** presigned URL 을 받아 온다. */
 async function requestPresignedUpload(body: PresignedUploadRequest) {
-  const post = (type: string) =>
-    clientApi.post<ApiEnvelope<PresignedUploadData>>(
-      "/api/client/user/files/presigned-upload",
-      { ...body, type },
-    );
-
-  if (body.type !== PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO) {
-    return post(body.type);
-  }
-
-  if (resolvedFourcutUploadType) {
-    return post(resolvedFourcutUploadType);
-  }
-
-  let lastError: unknown = null;
-  for (const candidate of FOURCUT_UPLOAD_TYPES) {
-    try {
-      const res = await post(candidate);
-      resolvedFourcutUploadType = candidate;
-      return res;
-    } catch (error) {
-      // 400 은 "이 백엔드가 모르는 이름"이라는 뜻이라 다음 후보로 넘어간다.
-      // 401·403·5xx 는 이름 문제가 아니므로 그대로 올린다.
-      if (getApiErrorDetails(error).status !== 400) throw error;
-      lastError = error;
-    }
-  }
-  throw lastError;
+  return clientApi.post<ApiEnvelope<PresignedUploadData>>(
+    "/api/client/user/files/presigned-upload",
+    body,
+  );
 }
 
 export async function uploadToS3WithPresigned(opts: {
@@ -303,10 +266,19 @@ export async function uploadToS3WithPresigned(opts: {
   // 지원 형식만 통과시킨다(아니면 여기서 throw). 파일명은 형식에 맞춰 정규화된 이름을 쓴다.
   const resolved = resolveUpload(file);
 
+  // 서버 한도를 넘는 파일은 발급 요청 전에 막는다. 그냥 보내면 400 GEN-003 이 오는데,
+  // 그 문구보다 여기서 크기를 짚어 주는 편이 사용자에게 낫다.
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error(UPLOAD_TOO_LARGE_MESSAGE);
+  }
+
   const presigned = await requestPresignedUpload({
     type,
     filename: resolved.filename,
     contentType: resolved.contentType,
+    // 이 값이 서명에 Content-Length 로 들어간다. 발급 후 다른 파일을 올리면 S3 가
+    // SignatureDoesNotMatch 로 거부하므로, 같은 file 객체를 그대로 PUT 해야 한다.
+    fileSize: file.size,
   });
 
   const { key, uploadUrl, contentType } = presigned.data.data;

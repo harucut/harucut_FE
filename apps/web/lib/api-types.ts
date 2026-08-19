@@ -12,7 +12,9 @@ export type UserStatus =
   | "BLOCKED";
 
 export type UserInfo = {
-  id: number;
+  // 서버가 주는 값은 숫자가 아니라 짧은 공개 식별자 문자열이다("Opwxk27uADEJ").
+  // 실측 2026-08-20 — docs/backend-contract.md
+  id: string;
   email: string;
   username: string;
   profileUrl: string | null;

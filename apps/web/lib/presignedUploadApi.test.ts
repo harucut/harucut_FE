@@ -156,7 +156,7 @@ describe("presigned upload flow", () => {
 
     await uploadToS3WithPresigned({
       file: new File(["x"], "photo.png", { type: "image/png" }),
-      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
+      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
     });
 
     // 서명에 content-type이 포함돼 있어(X-Amz-SignedHeaders=content-type;host)
@@ -169,13 +169,12 @@ describe("presigned upload flow", () => {
       }),
     );
 
-    // presign 요청 바디는 type/filename/contentType 세 필드가 전부다.
-    // 네컷 원본 타입은 백엔드에서 개명 중이라 새 이름(FOURCUT_SOURCE)을 먼저 보낸다.
-    // 옛 이름으로의 폴백은 presignedUploadType.test.ts 가 따로 지킨다.
+    // presign 요청 바디는 네 필드 전부 required 다. fileSize 가 빠지면 400 GEN-003.
     expect(mockPost).toHaveBeenCalledWith("/api/client/user/files/presigned-upload", {
       type: "FOURCUT_SOURCE",
       filename: "photo.png",
       contentType: "PNG",
+      fileSize: 1,
     });
   });
 

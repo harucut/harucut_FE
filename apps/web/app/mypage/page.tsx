@@ -20,7 +20,7 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { getLoginPlatformLabel, parseServerDateTime } from "@harucut/shared";
+import { getLoginPlatformLabel, josa, parseServerDateTime } from "@harucut/shared";
 import { AuthField } from "@/components/auth/AuthField";
 import {
   FrameCapacityMeter,
@@ -33,6 +33,7 @@ import { getPlanDisplayName } from "@/constants/plans";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import type { SubscriptionUsage } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import {
@@ -92,6 +93,15 @@ export default function MyPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 비밀번호는 이메일(HARUCUT) 가입 계정에만 있다.
+  // 아직 user 를 못 읽었으면 폼도 안내문도 띄우지 않는다 — 소셜 계정에 폼이 잠깐 보였다
+  // 사라지거나, 이메일 계정에 "비밀번호가 없어요"가 깜빡이는 쪽이 더 나쁘다.
+  // loginPlatform 이 비어 있으면 로컬 계정으로 본다(getLoginPlatformLabel 기본값과 같다).
+  const loginPlatformLabel = getLoginPlatformLabel(user?.loginPlatform);
+  const isSocialAccount =
+    !!user?.loginPlatform && user.loginPlatform !== "HARUCUT";
+  const canChangePassword = user != null && !isSocialAccount;
   const [errors, setErrors] = useState<Errors>({});
 
   const [username, setUsername] = useState("");
@@ -257,7 +267,12 @@ export default function MyPage() {
       setConfirmPassword("");
     } catch (error) {
       console.error(error);
-      setErrors({ common: "비밀번호 변경에 실패했어요." });
+      setErrors({
+        common: getUserFacingApiErrorMessage(
+          error,
+          "비밀번호 변경에 실패했어요.",
+        ),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -457,6 +472,10 @@ export default function MyPage() {
         />
       </div>
 
+      {/* 소셜로 가입한 계정에는 비밀번호가 없다. 폼을 보여 주면 사용자는 "현재 비밀번호"에
+          무엇을 넣을지 알 수 없고, 뭘 넣든 AUTH-008 로 실패한다. 스웨거도 이 메뉴를 소셜
+          계정에 노출하지 말라고 못박는다(PATCH /api/harucut/change/password 설명). */}
+      {canChangePassword ? (
       <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
         <AuthField
           id="oldPassword"
@@ -499,6 +518,12 @@ export default function MyPage() {
           {isSubmitting ? "변경 중..." : "변경사항 저장"}
         </button>
       </form>
+      ) : isSocialAccount ? (
+        <p className="text-[13px] text-[color:var(--hc-muted)]">
+          {loginPlatformLabel}
+          {josa(loginPlatformLabel, "으로/로")} 가입한 계정이라 비밀번호가 없어요.
+        </p>
+      ) : null}
 
       <div className="flex flex-col gap-2 border-t border-[color:var(--hc-border-subtle)] pt-5">
         <label

@@ -132,7 +132,7 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     FRAME: "FRAME",
     FRAME_COMPONENT: "FRAME_COMPONENT",
     PROFILE: "PROFILE",
-    FOURCUT_PHOTO: "FOURCUT_PHOTO",
+    FOURCUT_SOURCE: "FOURCUT_SOURCE",
   },
   uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
   SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",

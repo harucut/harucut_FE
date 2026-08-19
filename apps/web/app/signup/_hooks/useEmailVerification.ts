@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sendEmailAuthCode, verifyEmailAuthCode } from "@/lib/auth/authApi";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { validateEmail } from "@/lib/authValidation";
 
 /** 코드가 유효한 시간. 메일에도 "발송 시점부터 5분간 유효합니다"라고 적혀 나간다. */
@@ -66,7 +67,14 @@ export function useEmailVerification() {
       return true;
     } catch (error) {
       console.error(error);
-      setEmailError("인증 코드를 보내지 못했어요. 잠시 후 다시 시도해 주세요.");
+      // 실패 사유가 하나가 아니다 — 특히 재요청 쿨다운(AUTH-040, 429)은 버튼을 연달아 누르면
+      // 바로 걸리는데, 한 문장으로 뭉뚱그리면 사용자는 될 때까지 계속 누른다.
+      setEmailError(
+        getUserFacingApiErrorMessage(
+          error,
+          "인증 코드를 보내지 못했어요. 잠시 후 다시 시도해 주세요.",
+        ),
+      );
       return false;
     } finally {
       setIsSendingCode(false);
@@ -115,7 +123,9 @@ export function useEmailVerification() {
         return true;
       } catch (error) {
         console.error(error);
-        setCodeError("인증 코드가 올바르지 않아요.");
+        setCodeError(
+          getUserFacingApiErrorMessage(error, "인증 코드가 올바르지 않아요."),
+        );
         return false;
       } finally {
         setIsVerifyingCode(false);
