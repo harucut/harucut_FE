@@ -98,7 +98,7 @@ describe("ShootResultPage", () => {
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
-    mockSetPendingGuestSave.mockResolvedValue(true);
+    mockSetPendingGuestSave.mockReturnValue(true);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       blob: async () => new Blob(["image"], { type: "image/png" }),
@@ -167,7 +167,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하러 가기",
+      name: "로그인하고 저장하기",
     });
     fireEvent.click(loginButton);
 
@@ -175,9 +175,15 @@ describe("ShootResultPage", () => {
       expect(mockSetPendingGuestSave).toHaveBeenCalledTimes(1);
     });
 
-    // 비회원 결과물은 서버에 올라가지 않는다.
+    // 비회원은 이 시점에 서버를 부르지 않는다 — 로그인 후 GuestTrialBridge 가 합성한다.
     expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
-    expect(mockSetPendingGuestSave.mock.calls[0][0]).toBeInstanceOf(Blob);
+
+    // 보관하는 것은 완성본이 아니라 **원본 4장과 만드는 방법**이다.
+    expect(mockSetPendingGuestSave.mock.calls[0][0]).toMatchObject({
+      sources: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
+      frameId: "classic-4",
+      outputFilter: "NONE",
+    });
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith(
         "/login?redirectTo=%2Fhome%3FresumeSave%3D1",
@@ -187,7 +193,7 @@ describe("ShootResultPage", () => {
 
   it("게스트 보관에 실패하면 로그인으로 넘기지 않고 안내한다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
-    mockSetPendingGuestSave.mockResolvedValue(false);
+    mockSetPendingGuestSave.mockReturnValue(false);
 
     render(<ShootResultPage />);
 
@@ -197,7 +203,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하러 가기",
+      name: "로그인하고 저장하기",
     });
     fireEvent.click(loginButton);
 

@@ -355,6 +355,27 @@ export default function ShootResultPage() {
     }
   };
 
+  /**
+   * 로그인 뒤 다시 만들 수 있도록 재료를 보관한다.
+   *
+   * 완성본이 아니라 원본 4장을 담는다 — 완성본을 등록하는 API 가 없어졌고, 재료가 더 작다.
+   * 로그인을 마치면 GuestTrialBridge 가 이걸로 서버 합성을 돌린다.
+   */
+  const storeGuestHandoff = () => {
+    if (!frameId) return false;
+
+    return setPendingGuestSave(
+      {
+        sources: imageSources.map((source) => source.src),
+        frameId: frameId as FrameId,
+        remoteFrameId,
+        outputFilter,
+        displayName: defaultDisplayName,
+      },
+      Date.now(),
+    );
+  };
+
   const handleDownloadImage = async () => {
     if (!imageResult) return;
 
@@ -372,12 +393,9 @@ export default function ShootResultPage() {
           blob,
           buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
         );
-        // 로그인으로 이어 가도 결과물이 남도록 미리 보관해 둔다.
-        const stored = await setPendingGuestSave(
-          blob,
-          imageResult.displayName,
-          Date.now(),
-        );
+        // 로그인으로 이어 가도 다시 만들 수 있도록 **원본 4장과 만드는 방법**을 보관한다.
+        // 완성본이 아니라 재료를 담는 이유는 lib/pendingGuestSave.ts 주석 참고.
+        const stored = storeGuestHandoff();
         showGuestSavedNotice(
           stored ? { loginHref: GUEST_LOGIN_HANDOFF_PATH } : undefined,
         );
@@ -410,16 +428,7 @@ export default function ShootResultPage() {
 
     setIsHandingOffToLogin(true);
     try {
-      const response = await fetch(imageResult.downloadUrl ?? imageResult.objectUrl);
-      if (!response.ok) {
-        throw new Error(`guest handoff failed: ${response.status}`);
-      }
-
-      const stored = await setPendingGuestSave(
-        await response.blob(),
-        imageResult.displayName,
-        Date.now(),
-      );
+      const stored = storeGuestHandoff();
       if (!stored) {
         showStatusNotice(
           "결과를 보관하지 못했어요",
@@ -592,8 +601,8 @@ export default function ShootResultPage() {
                 기록 보관, 업로드 제작은 로그인 후에 이용할 수 있어요.
               </p>
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                체험 결과는 이 화면을 벗어나면 사라져요. 잊지 말고 이미지를 내려받아 주세요 —
-                비회원 때 만든 네컷은 로그인해도 기록으로 옮겨지지 않아요.
+                체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
+                &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
               </p>
             </div>
 
@@ -652,7 +661,7 @@ export default function ShootResultPage() {
               disabled={isHandingOffToLogin}
               className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition disabled:opacity-40"
             >
-              {isHandingOffToLogin ? "이동 중..." : "로그인하러 가기"}
+              {isHandingOffToLogin ? "결과 보관 중..." : "로그인하고 저장하기"}
             </button>
           ) : (
             <Link
