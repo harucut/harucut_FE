@@ -134,10 +134,11 @@ POST /api/events/{eventCode}/compose   { sourceKeys[4] }
 
 | 항목 | 상태 |
 |---|---|
-| 서버 합성 `POST /api/auth/user/media/compose` | 레포 main 에 **있음**, 배포본에는 **없음** |
-| 업로드 타입 | `FOURCUT_PHOTO` → **`FOURCUT_SOURCE`** 로 개명됨 |
+| 서버 합성 `POST /api/auth/user/media/compose` | **살아 있고 우리가 쓴다** (2026-08-21 실측) |
+| 업로드 타입 | `FOURCUT_SOURCE` — 개명 완료. `FOURCUT_PHOTO` 는 400 GEN-006 |
+| 완성본 등록 `POST /api/auth/user/media` | **삭제됨(405)** — 결과물은 서버 합성으로만 만든다 |
 | 이메일 인증 유효시간 | Redis TTL **10분** (지나면 가입 시 `AUTH-004`) |
 
-업로드 타입 개명은 배포되는 순간 기존 앱·웹의 촬영 결과 업로드를 깨뜨린다.
-프론트는 두 이름을 모두 시도하도록 이미 고쳐 뒀다(`apps/web/lib/presignedUploadApi.ts`).
-백엔드 배포 시점만 알려 주면 된다.
+개명은 이미 반영했다. 두 이름을 번갈아 시도하던 폴백은 제거했다 —
+지금 계약에 이름은 하나뿐이라 폴백이 오히려 실패를 늦게 드러낸다.
+정본은 [`docs/backend-contract.md`](./backend-contract.md) 다.

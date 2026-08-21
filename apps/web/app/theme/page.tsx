@@ -154,8 +154,8 @@ function ThemePageContent() {
         {!isLoading && isAtCapacity ? (
           <p className="-mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
             {capacity.plan.limit <= 0 && !capacity.unlimited
-              ? "지금 요금제로는 프레임을 보관할 수 없어요. 만들어서 이번 촬영에는 바로 쓸 수 있고, 보관은 유료 요금제부터예요."
-              : "보관함이 가득 찼어요. 새로 만들어 이번 촬영에 쓸 수는 있지만, 저장하려면 기존 프레임을 지우거나 요금제를 올려야 해요."}
+              ? "지금 요금제로는 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해서, 유료 요금제부터 이용할 수 있어요."
+              : "보관함이 가득 찼어요. 새 프레임을 저장하려면 기존 프레임을 지우거나 요금제를 올려야 해요."}
           </p>
         ) : null}
 

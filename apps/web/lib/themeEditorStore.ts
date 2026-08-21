@@ -5,6 +5,8 @@ import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { STICKERS } from "@/constants/stickers.generated";
 import { removeImageBackground } from "@/lib/backgroundRemoval";
+import { needsUpload } from "@/lib/canvas/componentSource";
+import { bakeTextLayerPng } from "@/lib/canvas/textLayer";
 import {
   PRESIGNED_UPLOAD_TYPES,
   uploadToS3WithPresigned,
@@ -118,9 +120,10 @@ type State = {
     reason?: "IN_USE" | "NOT_FOUND";
   };
   resetPhotos: () => void;
-  // 저장 시: 캔버스에서 실제 사용 중인 로컬 사진만 S3에 업로드하고
-  // 컴포넌트 source를 S3 URL로 치환한다. 미사용 업로드 사진은 올리지 않는다.
-  finalizePhotosForSave: () => Promise<void>;
+  // 저장 시: 캔버스에서 실제 쓰는 사진·스티커를 S3에 올리고 글자 층을 굽는다.
+  // 컴포넌트 source는 S3 key가 되고, 그릴 주소는 renderUrl로 옮긴다.
+  // 안 쓰는 자산은 올리지 않는다. (자세한 이유는 아래 구현부 주석)
+  finalizeAssetsForSave: () => Promise<void>;
 
   addComponentFromAsset: (
     type: "PHOTO" | "STICKER",
@@ -301,7 +304,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }),
 
   // 업로드한 사진은 S3에 올리지 않고 로컬(blob)로만 보관한다.
-  // 실제 S3 업로드는 저장(onDone) 시 finalizePhotosForSave에서 사용 중인 사진만 처리한다.
+  // 실제 S3 업로드는 저장(onDone) 시 finalizeAssetsForSave에서 사용 중인 자산만 처리한다.
   addPhotoAssets: async (files) => {
     const added: Asset[] = [];
     let failed = 0;
@@ -388,7 +391,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
     // 되돌리기용 스냅샷이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
     // 사진 탭에서 그 원본까지 지우면, 여기서 blob URL 이 해제된다. 그 상태로 되돌리기를
-    // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizePhotosForSave
+    // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizeAssetsForSave
     // 가 원본 파일을 못 찾아 blob: 주소가 그대로 서버로 올라간다 — 깨진 프레임이 된다.
     // 원본이 사라졌으면 되돌릴 수도 없으므로 스냅샷을 함께 버린다.
     const snapshotUsesAsset =
@@ -428,44 +431,111 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
-  // 저장 시: 실제 캔버스에 올라간 로컬 사진만 S3에 업로드하고
-  // 컴포넌트 source/에셋 src를 S3 URL로 치환한다. 한 번 올린(또는 원격) 사진은 건너뛴다.
-  // (업로드 계약에 임시/영구 구분은 없다. 편집 중 임시 업로드를 하지 않는 것으로 대신한다.)
-  finalizePhotosForSave: async () => {
-    const { components, assets } = get();
-    const usedSrcs = new Set(
-      components
-        .filter((c) => c.type === "PHOTO")
-        .map((c) => c.source),
-    );
-    const pending = assets.photos.filter(
-      (a) => a.file && !a.s3Key && usedSrcs.has(a.src),
-    );
-    if (pending.length === 0) return;
+  /**
+   * 저장 직전에 **서버가 읽을 수 있는 형태**로 바꾼다.
+   *
+   * 서버는 컴포넌트의 `source` 를 S3 key 로만 읽는다. 아래 셋 중 하나라도 남아 있으면
+   * 그 프레임으로 네컷 합성이 400 GEN-002 로 거부된다(docs/backend-contract.md 실측).
+   *   1. 아직 안 올린 로컬 사진(blob URL)
+   *   2. 기본 스티커의 정적 경로(`/stickers/sticker-001.png`) — 우리 웹서버 자산이라 서버가 못 본다
+   *   3. 글자(TEXT) — 서버는 글자를 그리지 않는다. 구운 PNG 의 key(`renderedKey`)를 같이 보내야 한다
+   *
+   * 예전 이름은 `finalizePhotosForSave` 였고 1번만 했다. 2·3번이 빠져 있어서
+   * **스티커나 글자를 넣은 프레임은 저장은 되는데 촬영 결과가 하나도 안 나왔다.**
+   *
+   * `source` 에는 key 를, 화면에 그릴 주소는 `renderUrl` 에 둔다(배경이 쓰는 것과 같은 방식).
+   * 예전에는 key 를 버리고 서명 URL 을 `source` 에 넣어서, 저장한 프레임이 URL 만료 뒤
+   * 빈칸이 되고 서버 합성도 통과하지 못했다.
+   */
+  finalizeAssetsForSave: async () => {
+    // 같은 원본을 두 번 올리지 않도록 경로별로 한 번만 올린다.
+    const uploaded = new Map<string, { key: string; url: string }>();
 
-    const srcToRemote = new Map<string, string>();
-    for (const asset of pending) {
-      if (!asset.file) continue;
-      const { objectUrl } = await uploadToS3WithPresigned({
-        file: asset.file,
+    const uploadOnce = async (src: string, file: File) => {
+      const cached = uploaded.get(src);
+      if (cached) return cached;
+
+      const { key, objectUrl } = await uploadToS3WithPresigned({
+        file,
         type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
       });
-      srcToRemote.set(asset.src, objectUrl);
+      const entry = { key, url: objectUrl || src };
+      uploaded.set(src, entry);
+      return entry;
+    };
+
+    // 1) 캔버스에 실제로 올라간 로컬 사진 (편집 중에는 임시 업로드를 하지 않는다)
+    const { components, assets } = get();
+    const usedPhotoSrcs = new Set(
+      components.filter((c) => c.type === "PHOTO").map((c) => c.source),
+    );
+    for (const asset of assets.photos) {
+      if (!asset.file || !usedPhotoSrcs.has(asset.src)) continue;
+      if (!needsUpload(asset.src)) continue;
+      await uploadOnce(asset.src, asset.file);
     }
 
-    set((s) => ({
-      components: s.components.map((c) =>
-        c.type === "PHOTO" && srcToRemote.has(c.source)
-          ? { ...c, source: srcToRemote.get(c.source) as string }
-          : c,
+    // 2) 기본 스티커 — 정적 경로를 받아다 그대로 올린다.
+    //    (서버가 기본 세트를 한 번만 올려 두면 이 왕복은 사라진다. 실측상 자산은 공용이어도
+    //     합성이 통과한다 — 본인 소유여야 하는 것은 촬영 원본 4장뿐이다.)
+    const stickerSrcs = Array.from(
+      new Set(
+        get()
+          .components.filter((c) => c.type === "STICKER" && needsUpload(c.source))
+          .map((c) => c.source),
       ),
+    );
+    for (const src of stickerSrcs) {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`스티커를 불러오지 못했어요 (${src})`);
+      const blob = await res.blob();
+      const name = src.split("/").pop() || "sticker.png";
+      await uploadOnce(
+        src,
+        new File([blob], name, { type: blob.type || "image/png" }),
+      );
+    }
+
+    // 3) 글자 — 편집 화면에서 본 픽셀 그대로 구워 올린다.
+    //    응답에는 renderedKey 가 안 실려서(합성 전용) 다시 저장할 때도 매번 새로 굽는다.
+    //    스타일이나 내용을 고쳤는데 옛 key 를 재사용하면 결과물만 조용히 어긋난다.
+    const textKeys = new Map<string, string>();
+    for (const component of get().components) {
+      if (component.type !== "TEXT") continue;
+      if (!component.source.trim()) continue;
+
+      const blob = await bakeTextLayerPng({
+        source: component.source,
+        width: component.width,
+        height: component.height,
+        styleJson: component.styleJson as Record<string, unknown> | undefined,
+      });
+      const { key } = await uploadToS3WithPresigned({
+        file: new File([blob], `text-${component.id}.png`, { type: "image/png" }),
+        type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+      });
+      textKeys.set(component.id, key);
+    }
+
+    if (uploaded.size === 0 && textKeys.size === 0) return;
+
+    set((s) => ({
+      components: s.components.map((c) => {
+        if (c.type === "TEXT") {
+          const renderedKey = textKeys.get(c.id);
+          return renderedKey ? { ...c, renderedKey } : c;
+        }
+
+        const entry = uploaded.get(c.source);
+        return entry ? { ...c, source: entry.key, renderUrl: entry.url } : c;
+      }),
       assets: {
         ...s.assets,
-        photos: s.assets.photos.map((a) =>
-          srcToRemote.has(a.src)
-            ? { ...a, src: srcToRemote.get(a.src) as string, s3Key: undefined }
-            : a,
-        ),
+        photos: s.assets.photos.map((a) => {
+          const entry = uploaded.get(a.src);
+          // src 는 화면용이라 그대로 두고, 올린 사실만 s3Key 로 남겨 재업로드를 막는다.
+          return entry ? { ...a, s3Key: entry.key } : a;
+        }),
       },
     }));
   },
@@ -739,6 +809,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           id: c.id,
           type: c.type,
           source: c.source,
+          // 렌더 전용 주소와 구운 글자 층 key. 전자는 요청에서 걸러지고,
+          // 후자는 TEXT 합성에 반드시 실려야 한다(lib/frameApi.ts).
+          ...(c.renderUrl ? { renderUrl: c.renderUrl } : {}),
+          ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
           x: c.x,
           y: c.y,
           width: c.width,
@@ -795,7 +869,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   // localStorage WIP 초안을 에디터 상태로 복원한다. dataURL 사진은 File로 되살려
-  // 저장 시 finalizePhotosForSave가 S3에 올릴 수 있게 한다.
+  // 저장 시 finalizeAssetsForSave가 S3에 올릴 수 있게 한다.
   hydrateDraft: (draft) => {
     set((s) => {
       const photoSrcs = Array.from(

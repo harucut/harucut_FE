@@ -115,6 +115,10 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
     }),
   // loginHref를 넘기면 "로그인하고 계속하기"가 그 경로로 이동한다.
   // 결과물을 미리 보관해 둔 뒤 로그인 후 자동 저장으로 이어 줄 때 쓴다.
+  //
+  // 보관에 실패했으면(용량 초과 등) loginHref 없이 부른다. 그때 같은 문구를 쓰면
+  // "로그인하면 기록에 저장된다"고 약속해 놓고 정작 아무것도 남지 않는다 —
+  // 사실대로 "이 기기에만 남았다"고 말한다.
   showGuestSavedNotice: (options) =>
     set({
       notice: {
@@ -124,8 +128,9 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
         ],
         eyebrow: "NEXT STEP",
         icon: "check",
-        message:
-          "체험 결과 이미지를 기기에 저장했어요. 로그인하면 링크 공유와 기록 저장까지 바로 이어서 이용할 수 있어요.",
+        message: options?.loginHref
+          ? "체험 결과 이미지를 기기에 저장했어요. 로그인하면 링크 공유와 기록 저장까지 바로 이어서 이용할 수 있어요."
+          : "체험 결과 이미지를 기기에 저장했어요. 다만 이 결과를 기록으로 옮길 준비는 하지 못했어요 — 로그인 후에는 다시 찍어야 기록에 남길 수 있어요.",
         title: "체험 사진이 저장됐어요",
       },
     }),

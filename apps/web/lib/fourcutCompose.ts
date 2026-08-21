@@ -4,6 +4,12 @@ import type { FrameId } from "@/constants/frames";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { loadImage } from "@/lib/canvas/loaders";
 import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
+import {
+  ComposeFailedError,
+  ComposeTimeoutError,
   newIdempotencyKey,
   requestCompose,
   waitForCompose,
@@ -17,6 +23,7 @@ import {
   PRESIGNED_UPLOAD_TYPES,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
+import type { RemoteFrame } from "@/lib/api-types";
 import { listAllFrames } from "@/lib/remoteFrameApi";
 import type { FrameLayout } from "@/lib/canvas/composeFrame";
 
@@ -107,13 +114,9 @@ async function renderSourceForSlot(
  * 등록돼 있고, 그 id 는 환경마다 다르다. 그래서 번호를 코드에 박지 않고 목록에서 찾는다 —
  * 시스템 프레임은 요금제 한도와 무관하게 BASIC 계정 목록에도 항상 들어온다(스웨거).
  */
-export async function resolveComposeFrameId(
-  frameId: FrameId | null,
-  remoteFrameId: number | null,
-): Promise<number> {
-  if (remoteFrameId != null) return remoteFrameId;
-  if (!frameId) throw new SystemFrameMissingError("classic-4");
-
+export async function findSystemFrame(
+  frameId: FrameId,
+): Promise<RemoteFrame | null> {
   const wanted = frameTypeFromFrameId(frameId);
   const frames = await listAllFrames();
 
@@ -121,10 +124,21 @@ export async function resolveComposeFrameId(
   // 서버가 목록을 최신순으로 주기 때문에, 그냥 첫 번째를 집으면 운영에 프레임을 하나 더
   // 올리는 순간 기존 사용자의 결과물이 조용히 다른 프레임으로 바뀐다.
   // (정상적으로는 종류당 하나여야 한다 — 여럿이면 백엔드 쪽 정리가 필요하다)
-  const system = frames
-    .filter((frame) => frame.isSystem && frame.frameType === wanted)
-    .sort((a, b) => a.frameId - b.frameId)[0];
+  return (
+    frames
+      .filter((frame) => frame.isSystem && frame.frameType === wanted)
+      .sort((a, b) => a.frameId - b.frameId)[0] ?? null
+  );
+}
 
+export async function resolveComposeFrameId(
+  frameId: FrameId | null,
+  remoteFrameId: number | null,
+): Promise<number> {
+  if (remoteFrameId != null) return remoteFrameId;
+  if (!frameId) throw new SystemFrameMissingError("classic-4");
+
+  const system = await findSystemFrame(frameId);
   if (!system) throw new SystemFrameMissingError(frameId);
   return system.frameId;
 }
@@ -132,6 +146,83 @@ export async function resolveComposeFrameId(
 export type ComposedFourcut = {
   mediaId: number;
 };
+
+export type ComposeFailure = {
+  message: string;
+  /** 같은 조건으로 다시 눌러 성공할 여지가 있는가. */
+  retryable: boolean;
+};
+
+/**
+ * 합성 실패를 사용자가 할 수 있는 일로 옮긴다.
+ *
+ * 예전에는 무엇이 잘못됐든 "이미지를 준비하지 못했어요. 다시 시도해 주세요." 하나였다.
+ * 그런데 실패의 상당수는 **다시 눌러도 절대 성공하지 않는 것**이라(없는 프레임, 서버가
+ * 읽지 못하는 스티커·글자, 요금제 한도), 그 문구가 사용자를 헛된 재시도에 가둔다.
+ * 프레임을 바꾸면 된다는 사실은 화면 어디에도 없었다.
+ */
+export function describeComposeFailure(error: unknown): ComposeFailure {
+  if (error instanceof SystemFrameMissingError) {
+    return {
+      message:
+        "이 프레임으로는 아직 저장할 수 없어요. 다른 프레임을 골라 주세요.",
+      retryable: false,
+    };
+  }
+
+  if (error instanceof ComposeTimeoutError) {
+    return {
+      message: "합성이 예상보다 오래 걸려요. 잠시 후 다시 시도해 주세요.",
+      retryable: true,
+    };
+  }
+
+  if (error instanceof ComposeFailedError) {
+    return {
+      message:
+        error.reason?.trim() ||
+        "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",
+      retryable: false,
+    };
+  }
+
+  const { code, status } = getApiErrorDetails(error);
+
+  // 프레임에 서버가 읽지 못하는 자산이 들어 있다. 되풀이해도 결과가 같다.
+  if (code === "GEN-002" || code === "GEN-003") {
+    return {
+      message:
+        "프레임에 넣은 스티커나 글자를 서버가 읽지 못했어요. 프레임 꾸미기에서 다시 저장한 뒤 시도해 주세요.",
+      retryable: false,
+    };
+  }
+
+  // 없는 프레임이거나 남의 프레임(GEN-031). 링크로 받은 전용 프레임에서 잘 난다.
+  if (code === "GEN-031" || status === 404) {
+    return {
+      message: "고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요.",
+      retryable: false,
+    };
+  }
+
+  if (code?.startsWith("SUBS-") || status === 403) {
+    return {
+      message: getUserFacingApiErrorMessage(
+        error,
+        "지금 요금제로는 저장할 수 없어요.",
+      ),
+      retryable: false,
+    };
+  }
+
+  return {
+    message: getUserFacingApiErrorMessage(
+      error,
+      "이미지를 준비하지 못했어요. 다시 시도해 주세요.",
+    ),
+    retryable: true,
+  };
+}
 
 /**
  * 원본 4장을 올리고 서버 합성을 기다린다.
@@ -145,6 +236,11 @@ export async function composeFourcutOnServer(args: {
   outputFilter: FourcutFilterId;
   frameId: FrameId | null;
   remoteFrameId: number | null;
+  /**
+   * 재시도에 같은 값을 다시 넘기면 서버가 기존 작업을 그대로 돌려준다.
+   * 생략하면 매번 새로 만든다(= 새 합성).
+   */
+  idempotencyKey?: string;
   signal?: AbortSignal;
 }): Promise<ComposedFourcut> {
   const { sources, layout, outputFilter, signal } = args;
@@ -153,33 +249,37 @@ export async function composeFourcutOnServer(args: {
     throw new Error("sources length must match slot count");
   }
 
-  // 프레임 조회와 원본 굽기를 같이 시작한다 — 서로 기다릴 이유가 없다.
-  const [composeFrameId, sourceKeys] = await Promise.all([
-    resolveComposeFrameId(args.frameId, args.remoteFrameId),
-    Promise.all(
-      sources.map(async (src, index) => {
-        const blob = await renderSourceForSlot(
-          src,
-          layout.slots[index],
-          outputFilter,
-        );
-        const file = new File([blob], `source-${index + 1}.jpg`, {
-          type: SOURCE_MIME,
-        });
-        const uploaded = await uploadToS3WithPresigned({
-          file,
-          type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
-          skipUrlResolve: true,
-        });
-        return uploaded.key;
-      }),
-    ),
-  ]);
+  // 프레임을 **먼저** 확정한다. 예전에는 업로드와 나란히 돌렸는데, 프레임 조회가
+  // 실패할 운명이어도 원본 4장은 이미 S3 로 나간 뒤라 쓰이지 않을 파일만 남았다
+  // (합성이 성공해야 서버가 원본을 지운다). 몇백 ms 를 아끼자고 치르기엔 비싼 값이다.
+  const composeFrameId = await resolveComposeFrameId(
+    args.frameId,
+    args.remoteFrameId,
+  );
+
+  const sourceKeys = await Promise.all(
+    sources.map(async (src, index) => {
+      const blob = await renderSourceForSlot(
+        src,
+        layout.slots[index],
+        outputFilter,
+      );
+      const file = new File([blob], `source-${index + 1}.jpg`, {
+        type: SOURCE_MIME,
+      });
+      const uploaded = await uploadToS3WithPresigned({
+        file,
+        type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
+        skipUrlResolve: true,
+      });
+      return uploaded.key;
+    }),
+  );
 
   const job = await requestCompose({
     frameId: composeFrameId,
     sourceKeys,
-    idempotencyKey: newIdempotencyKey(),
+    idempotencyKey: args.idempotencyKey ?? newIdempotencyKey(),
   });
 
   const done = await waitForCompose(job.jobId, { signal });

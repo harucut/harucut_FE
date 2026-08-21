@@ -88,7 +88,20 @@ export function getUserMediaTitle(item: UserMedia, now = new Date()) {
 /**
  * 기록 썸네일에 쓸 이미지 URL. 준비 전이거나 값이 없으면 null.
  * 사진 전용이라 종류 분기는 없다.
+ *
+ * 우선순위가 중요하다.
+ *  - `thumbnailUrl` 은 긴 변 512 축소본이다. 목록에 딱 맞는다.
+ *  - `viewUrl` 은 원본이지만 그대로 띄울 수 있다.
+ *  - `downloadUrl` 은 `Content-Disposition: attachment` 가 붙어 있어 마지막 수단이다.
+ *
+ * 예전에는 `downloadUrl` 만 썼다. 목록 한 줄마다 2000×6000 원본을 받아 오는 셈이라,
+ * 기록 화면이 항목 수에 비례해 무거웠다.
  */
 export function getUserMediaPreviewUrl(item: UserMedia): string | null {
-  return item.downloadUrl?.trim() || null;
+  return (
+    item.thumbnailUrl?.trim() ||
+    item.viewUrl?.trim() ||
+    item.downloadUrl?.trim() ||
+    null
+  );
 }

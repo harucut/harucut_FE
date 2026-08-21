@@ -80,7 +80,13 @@ function ShootPageContent() {
     if (!selectedFrameId) return;
 
     setFrameId(selectedFrameId);
-    setRemoteFrameId(selectedRemoteFrameId);
+    // 못 불러온 프레임 번호는 세션에 넣지 않는다.
+    //
+    // 예전에는 목록에 없는 번호도 그대로 실었다. 위 안내가 "컷 구성을 고르면 촬영은
+    // 그대로 할 수 있어요"라고 약속해 놓고, 사진을 다 찍은 뒤 저장 단계에서 서버가
+    // 404(GEN-031, 없는/남의 프레임)로 거절해 촬영본이 통째로 날아갔다.
+    // 번호를 버리면 기본 레이아웃으로 정상 저장된다 — 약속한 그대로다.
+    setRemoteFrameId(selectedRemoteFrame ? selectedRemoteFrameId : null);
     router.push("/shoot/capture");
   };
 

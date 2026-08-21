@@ -12,6 +12,7 @@ import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
+import { resolveThemeAssetUrls } from "@/lib/frameAssets";
 import {
   createFrame,
   deleteFrame,
@@ -30,7 +31,6 @@ import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
@@ -83,7 +83,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const setBackgroundImage = useThemeEditorStore((s) => s.setBackgroundImage);
   const setBackgroundImageUrl = useThemeEditorStore((s) => s.setBackgroundImageUrl);
   const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
-  const addDraft = useThemeDraftStore((s) => s.addDraft);
   const editorComponents = useThemeEditorStore((s) => s.components);
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
@@ -191,7 +190,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       try {
         const remoteFrame = await getFrame(remoteFrameId);
         if (cancelled) return;
-        const imported = toThemeExportJson(remoteFrame);
+        // 컴포넌트 자산은 S3 key 로 저장돼 있다. 그릴 주소를 먼저 붙여 두지 않으면
+        // 캔버스에 빈칸이 뜨고, 그 상태로 다시 저장하면 미리보기까지 빈 채로 올라간다.
+        const imported = await resolveThemeAssetUrls(toThemeExportJson(remoteFrame));
+        if (cancelled) return;
         importJson(imported);
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
@@ -374,8 +376,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         useThemeEditorStore.getState().setBackgroundImageKey(key);
       }
 
-      // 캔버스에서 실제 사용 중인 로컬 사진을 이 시점에 최종 업로드한다(편집 중엔 temp 업로드 없음).
-      await useThemeEditorStore.getState().finalizePhotosForSave();
+      // 캔버스에 올라간 사진·스티커를 이 시점에 S3로 올리고, 글자 층을 구워 둔다
+      // (편집 중엔 임시 업로드를 하지 않는다). 이걸 건너뛰면 저장은 되지만
+      // 그 프레임으로 찍은 네컷 합성이 400 GEN-002 로 죽는다.
+      await useThemeEditorStore.getState().finalizeAssetsForSave();
 
       const themeJson = exportJson();
       if (!themeJson) {
@@ -404,7 +408,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         await updateFrame(remoteFrameId, body);
       } else {
         await createFrame(body);
-        addDraft(themeJson, { name: nextTitle });
       }
 
       clearEditorDraft();

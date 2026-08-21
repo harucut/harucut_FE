@@ -8,10 +8,6 @@ const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const noop = jest.fn();
 
-const draftStoreState = {
-  drafts: [] as Array<{ id: string; frameId: string }>,
-};
-
 const DEFAULT_FILTER: FourcutFilterId = "NONE";
 
 const shootSessionState = {
@@ -70,11 +66,6 @@ jest.mock("@/components/theme/editor/ThemeEditorPage", () => ({
   ),
 }));
 
-jest.mock("@/lib/themeDraftStore", () => ({
-  useThemeDraftStore: (selector: (state: typeof draftStoreState) => unknown) =>
-    selector(draftStoreState),
-}));
-
 jest.mock("@/lib/themeBackground", () => ({
   DEFAULT_FRAME_BACKGROUND_COLOR: "111827",
   resolveFrameBackgroundColor: (_theme: unknown, borderColor: string) => borderColor,
@@ -91,8 +82,6 @@ jest.mock("@/lib/themeSessionStore", () => ({
 describe("page-level multistep session guards", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-
-    draftStoreState.drafts = [];
 
     Object.assign(shootSessionState, {
       frameId: null,

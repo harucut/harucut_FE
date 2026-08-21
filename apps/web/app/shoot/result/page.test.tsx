@@ -11,6 +11,7 @@ const mockSaveFourcutToServer = jest.fn();
 const mockCreateObjectURL = jest.fn();
 const mockRevokeObjectURL = jest.fn();
 const mockSetPendingGuestSave = jest.fn();
+const mockDescribeComposeFailure = jest.fn();
 
 type MockShootSessionState = {
   frameId: string | null;
@@ -89,6 +90,19 @@ jest.mock("@/lib/fourcutProcessing", () => ({
   saveFourcutToServer: (...args: unknown[]) => mockSaveFourcutToServer(...args),
 }));
 
+// 서버가 칠할 배경색 조회는 네트워크를 타므로 화면 테스트에서는 끊는다.
+jest.mock("@/hooks/useServerFrameBackground", () => ({
+  useServerFrameBackground: () => null,
+}));
+
+jest.mock("@/lib/composeApi", () => ({
+  newIdempotencyKey: () => "web-fixed-key",
+}));
+
+jest.mock("@/lib/fourcutCompose", () => ({
+  describeComposeFailure: (...args: unknown[]) => mockDescribeComposeFailure(...args),
+}));
+
 const mockGetMediaDownloadUrl = jest.fn();
 
 jest.mock("@/lib/userMediaApi", () => ({
@@ -126,6 +140,10 @@ describe("ShootResultPage", () => {
     mockComposeFramePng.mockResolvedValue(
       new Blob(["image"], { type: "image/png" }),
     );
+    mockDescribeComposeFailure.mockReturnValue({
+      message: "이미지를 준비하지 못했어요. 다시 시도해 주세요.",
+      retryable: true,
+    });
     mockSaveFourcutToServer.mockImplementation(
       async ({ displayName }: { file: File; displayName: string }) => ({
         mediaId: 1,
@@ -136,21 +154,17 @@ describe("ShootResultPage", () => {
     );
   });
 
-  it("generates the fourcut image once", async () => {
+  it("회원은 서버에만 합성을 맡기고 브라우저 합성은 돌리지 않는다", async () => {
     render(<ShootResultPage />);
 
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
 
-    expect(mockComposeFramePng).toHaveBeenCalledTimes(1);
-    // 선택한 4장이 고른 순서 그대로 합성에 들어가야 한다.
-    expect(mockComposeFramePng.mock.calls[0][0].sources).toEqual([
-      { src: "/shot-1.png" },
-      { src: "/shot-2.png" },
-      { src: "/shot-3.png" },
-      { src: "/shot-4.png" },
-    ]);
+    // 회원 결과물은 서버가 그리고 미리보기는 DOM(FramePreview)이 그린다.
+    // 여기서 캔버스 합성을 또 돌리면 최대 16MP 작업이 헛돌 뿐 아니라,
+    // 그게 실패하면 멀쩡한 서버 저장까지 취소된다.
+    expect(mockComposeFramePng).not.toHaveBeenCalled();
 
     // 서버 합성에는 완성본이 아니라 **원본 4장**과 프레임 정보를 넘긴다.
     const call = mockSaveFourcutToServer.mock.calls[0][0];
@@ -162,6 +176,69 @@ describe("ShootResultPage", () => {
       "/shot-4.png",
     ]);
     expect(call.layout.slots).toHaveLength(4);
+    // 재시도가 같은 작업을 가리키도록 멱등키를 함께 보낸다.
+    expect(call.idempotencyKey).toBe("web-fixed-key");
+  });
+
+  it("비회원은 브라우저가 그린 그림이 결과물이라 고른 순서 그대로 합성한다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockComposeFramePng).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockComposeFramePng.mock.calls[0][0].sources).toEqual([
+      { src: "/shot-1.png" },
+      { src: "/shot-2.png" },
+      { src: "/shot-3.png" },
+      { src: "/shot-4.png" },
+    ]);
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  it("합성이 실패하면 사유를 보여주고, 다시 준비하기가 실제로 다시 시도한다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("boom"));
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("이미지를 준비하지 못했어요. 다시 시도해 주세요."),
+      ).toBeInTheDocument();
+    });
+
+    // 실패했을 때 imageResult 는 이미 null 이라, 재시도가 상태를 비우는 것만으로는
+    // effect 의존성이 하나도 안 바뀐다. 그래서 예전에는 눌러도 아무 일이 없었다.
+    fireEvent.click(screen.getByRole("button", { name: "다시 준비하기" }));
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("다시 해도 소용없는 실패에서는 재시도 대신 프레임을 다시 고르게 한다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("nope"));
+    mockDescribeComposeFailure.mockReturnValue({
+      message: "고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요.",
+      retryable: false,
+    });
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요."),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "다시 준비하기" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "프레임 다시 고르기" }),
+    ).toBeInTheDocument();
   });
 
   it("게스트가 로그인으로 이동하면 결과물을 보관하고 resumeSave 경로로 넘긴다", async () => {

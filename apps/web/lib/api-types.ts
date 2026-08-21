@@ -77,6 +77,8 @@ export type RemoteFrameComponent = {
   zIndex?: number;
   style?: Record<string, unknown>;
   styleJson?: Record<string, unknown>;
+  // 참고: 서버는 `renderedKey` 를 **응답에 내려주지 않는다**(합성 전용).
+  // 그래서 저장된 TEXT 프레임을 다시 저장할 때는 글자 층을 항상 새로 구워야 한다.
 };
 
 // GET /api/auth/user/frame 응답.
@@ -93,6 +95,8 @@ export type RemoteFrame = {
   // 관리자가 등록한 기본 제공 프레임. 내 프레임 목록에 섞여 오지만 소유자가 아니라
   // 수정/삭제 요청은 403이 된다(FrameServiceImpl.validateOwner). 읽기 전용으로만 다뤄야 한다.
   isSystem?: boolean;
+  // 칸별 누끼(boolean 4개, 촬영 슬롯 순서). 서버가 저장·반환한다.
+  cellCutouts?: boolean[];
   // frameType으로 서버가 고정하는 캔버스 크기(요청값은 저장되지 않는다).
   canvasWidth?: number;
   canvasHeight?: number;

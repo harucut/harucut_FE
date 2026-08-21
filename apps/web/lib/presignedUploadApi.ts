@@ -200,7 +200,7 @@ const CONTENT_TYPE_TO_EXTENSION: Record<PresignedUploadContentType, string> = {
  *
  * MIME을 확장자보다 먼저 본다. 실제 바이트를 더 잘 반영하고, 확장자가 지원 목록 밖인 경우
  * (윈도우 크롬이 image/jpeg로 주는 .jfif/.pjpeg 등)도 같은 규칙으로 처리된다.
- * 앱(apps/mobile/lib/file-storage-api.ts)도 같은 우선순위를 쓴다.
+ * (앱은 웹뷰 셸이 된 뒤로 자체 업로드 경로가 없다 — 이 규칙 하나만 남았다.)
  */
 export function resolveUpload(file: File): {
   contentType: PresignedUploadContentType;

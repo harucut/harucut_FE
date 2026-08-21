@@ -7,7 +7,6 @@ const mockExportJson = jest.fn();
 const mockImportJson = jest.fn();
 const mockResetPhotos = jest.fn();
 const mockSetBackgroundColor = jest.fn();
-const mockAddDraft = jest.fn();
 const mockCreateFrame = jest.fn();
 const mockUpdateFrame = jest.fn();
 const mockDeleteFrame = jest.fn();
@@ -29,7 +28,7 @@ const editorStoreState = {
   components: [] as Array<{ hidden?: boolean }>,
   cellCutouts: [false, false, false, false],
   frameId: "classic",
-  finalizePhotosForSave: jest.fn().mockResolvedValue(undefined),
+  finalizeAssetsForSave: jest.fn().mockResolvedValue(undefined),
   hydrateDraft: jest.fn(),
 };
 
@@ -107,13 +106,6 @@ jest.mock("@/lib/themeEditorStore", () => ({
   useThemeEditorStore: themeEditorStoreMock,
 }));
 
-jest.mock("@/lib/themeDraftStore", () => ({
-  useThemeDraftStore: (selector: (s: unknown) => unknown) =>
-    selector({
-      addDraft: mockAddDraft,
-    }),
-}));
-
 jest.mock("@/lib/themeSessionStore", () => ({
   useThemeSession: () => ({
     remoteFrameId: mockRemoteFrameId,
@@ -135,6 +127,7 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     FOURCUT_SOURCE: "FOURCUT_SOURCE",
   },
   uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
+  getImageUrlByKey: jest.fn().mockResolvedValue(null),
   SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",
   UNSUPPORTED_UPLOAD_MESSAGE: "PNG·JPG·WEBP·GIF만 올릴 수 있어요.",
   isSupportedUploadFile: (file: File) =>
@@ -182,7 +175,6 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockUploadPresigned).toHaveBeenCalledWith(
         expect.objectContaining({ type: "FRAME" }),
       );
-      expect(mockAddDraft).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
   });
@@ -192,15 +184,17 @@ describe("ThemeEditorPage save flow", () => {
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
+    // 불러오기가 끝나야 저장 버튼이 열린다(자산 URL 해석까지 기다린다).
+    // getFrame 이 "호출됐다"만 보고 누르면 아직 비활성이라 대화상자가 안 뜬다.
     await waitFor(() => {
       expect(mockGetFrame).toHaveBeenCalledWith(7);
+      expect(getPrimarySaveButton(container)).not.toBeDisabled();
     });
 
     confirmSave(container);
 
     await waitFor(() => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
-      expect(mockAddDraft).not.toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
   });

@@ -1,4 +1,6 @@
+import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
+import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
 import { nativeSaveImageBlob, nativeSaveImageUrl } from "@/lib/nativeBridge";
 import {
@@ -140,7 +142,9 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
 
   const sources = Array.from(
     new Set(
-      theme.components.filter((component) => component.type !== "TEXT").map((component) => component.source),
+      theme.components
+        .filter((component) => component.type !== "TEXT")
+        .map((component) => componentImageSrc(component)),
     ),
   );
 
@@ -196,40 +200,12 @@ function drawThemeOverlay(
     ctx.translate(-component.width / 2, -component.height / 2);
 
     if (component.type === "TEXT") {
-      const style = component.styleJson ?? {};
-      const fontFamily =
-        typeof style.fontFamily === "string" ? style.fontFamily : "Pretendard";
-      const fontSize =
-        typeof style.fontSize === "number" ? style.fontSize : 128;
-      const fill = typeof style.color === "string" ? style.color : "#ffffff";
-      const align =
-        style.textAlign === "center" || style.textAlign === "right"
-          ? style.textAlign
-          : "left";
-      const lineHeight = Math.max(1, Math.round(fontSize * 1.15));
-      const lines = component.source.split("\n");
-
-      ctx.font = `${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = fill;
-      ctx.textBaseline = "top";
-      ctx.textAlign = align;
-
-      const textX =
-        align === "center"
-          ? component.width / 2
-          : align === "right"
-            ? component.width
-            : 0;
-
-      lines.forEach((line, index) => {
-        ctx.fillText(line, textX, index * lineHeight);
-      });
-
+      drawTextComponent(ctx, component.source, component.width, component.styleJson);
       ctx.restore();
       return;
     }
 
-    const image = overlayImages.get(component.source);
+    const image = overlayImages.get(componentImageSrc(component));
     if (image) {
       ctx.drawImage(image, 0, 0, component.width, component.height);
     }

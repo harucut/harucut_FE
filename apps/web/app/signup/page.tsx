@@ -136,8 +136,16 @@ function SignupPageContent() {
     }
 
     try {
-      // 마케팅 수신 동의(consents.marketing)는 UI/법적 고지용으로 수집한다.
-      // 백엔드 register 계약(email·username·password)에 동의 필드가 아직 없어 전송하지 않는다.
+      // ⚠️ 받은 동의를 아직 어디에도 보내지 않는다.
+      //
+      // `POST /api/harucut/register` 에 동의 필드가 없는 것은 맞지만, 서버에는 **전용
+      // 약관 API 가 따로 있다** — `GET /api/terms`(공개 목록), `POST /api/auth/terms/consents`,
+      // `GET /api/auth/terms/consents/me`. 동의 이력은 "법적 증빙용이라 수정·삭제되지 않는다"고
+      // 스웨거에 적혀 있다(docs/backend-contract.md 실측 2026-08-21).
+      //
+      // 그 API 는 인증이 필요해 가입 직후가 아니라 로그인 이후에 불러야 하고, 약관이 개정됐을 때의
+      // `NEEDS_RECONSENT` 재동의 화면도 함께 필요하다. 화면 하나를 새로 만드는 일이라 여기서
+      // 몰래 붙이지 않고 남겨 둔다.
       await signupWithEmail({
         email: verifiedEmail || emailFromState,
         password,

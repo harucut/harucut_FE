@@ -1,6 +1,8 @@
 "use client";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { componentImageSrc } from "@/lib/canvas/componentSource";
+import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
 import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
@@ -103,7 +105,11 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
   });
 
   const sources = Array.from(
-    new Set(theme.components.filter((c) => c.type !== "TEXT").map((c) => c.source)),
+    new Set(
+      theme.components
+        .filter((c) => c.type !== "TEXT")
+        .map((c) => componentImageSrc(c)),
+    ),
   );
   const imageMap = new Map<string, HTMLImageElement>();
 
@@ -133,34 +139,12 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
     ctx.translate(-c.width / 2, -c.height / 2);
 
     if (c.type === "TEXT") {
-      const style = c.styleJson ?? {};
-      const fontFamily =
-        typeof style.fontFamily === "string" ? style.fontFamily : "Pretendard";
-      const fontSize =
-        typeof style.fontSize === "number" ? style.fontSize : 128;
-      const fill = typeof style.color === "string" ? style.color : "#ffffff";
-      const align =
-        style.textAlign === "center" || style.textAlign === "right"
-          ? style.textAlign
-          : "left";
-      const lineHeight = Math.max(1, Math.round(fontSize * 1.15));
-      const lines = c.source.split("\n");
-
-      ctx.font = `${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = fill;
-      ctx.textBaseline = "top";
-      ctx.textAlign = align;
-
-      const textX =
-        align === "center" ? c.width / 2 : align === "right" ? c.width : 0;
-      lines.forEach((line, i) => {
-        ctx.fillText(line, textX, i * lineHeight);
-      });
+      drawTextComponent(ctx, c.source, c.width, c.styleJson);
       ctx.restore();
       return;
     }
 
-    const img = imageMap.get(c.source);
+    const img = imageMap.get(componentImageSrc(c));
     if (img) {
       ctx.drawImage(img, 0, 0, c.width, c.height);
     }

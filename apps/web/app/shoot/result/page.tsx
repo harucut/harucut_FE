@@ -24,6 +24,8 @@ import {
   sanitizeDisplayName,
   FOURCUT_OUTPUT_EXTENSION,
 } from "@/lib/fourcutOutput";
+import { newIdempotencyKey } from "@/lib/composeApi";
+import { describeComposeFailure } from "@/lib/fourcutCompose";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
   registerGeneratedPngDebug,
@@ -38,6 +40,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { useServerFrameBackground } from "@/hooks/useServerFrameBackground";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 
 const IMAGE_DEBUG_SCOPE = "shoot-result-image";
@@ -77,6 +80,13 @@ export default function ShootResultPage() {
     imageResult ? "done" : "idle",
   );
   const [imageError, setImageError] = useState<string | null>(null);
+  // 다시 시도해서 달라질 수 있는 실패인지. 없는 프레임이나 서버가 못 읽는 스티커처럼
+  // 몇 번을 눌러도 같은 결과인 실패에서는 재시도 버튼을 감춘다.
+  const [isImageErrorRetryable, setIsImageErrorRetryable] = useState(true);
+  // 재시도 버튼이 실제로 다시 돌게 하는 값.
+  // 실패했을 때 imageResult 는 이미 null 이라, 이 값을 안 바꾸면 아래 effect 의
+  // 의존성이 하나도 안 변해 effect 가 다시 돌지 않는다 — 버튼을 눌러도 "대기 중"에서 멈췄다.
+  const [retryNonce, setRetryNonce] = useState(0);
   const [imageNameDraft, setImageNameDraft] = useState(imageResult?.displayName ?? "");
   const [isSavingImageName, setIsSavingImageName] = useState(false);
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
@@ -129,7 +139,16 @@ export default function ShootResultPage() {
     }
   }, [frameId, imageSources.length, router, selectedCount, shots.length]);
 
-  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
+  // 회원은 서버가 그린 그림이 곧 결과물이고, 그 배경은 프레임에 저장된 값이다.
+  // 미리보기도 같은 값으로 그려야 화면과 내려받는 파일이 어긋나지 않는다.
+  const serverBackgroundColor = useServerFrameBackground(
+    frameId as FrameId | null,
+    !guestMode && !themeData,
+  );
+  const effectiveBorderColor = resolveFrameBackgroundColor(
+    themeData,
+    serverBackgroundColor ?? borderColor,
+  );
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
   const generationKey = useMemo(
     () =>
@@ -139,6 +158,7 @@ export default function ShootResultPage() {
         borderColor: effectiveBorderColor,
         outputFilter,
         imageSources: imageSources.map((source) => source.src),
+        retryNonce,
       }),
     [
       effectiveBorderColor,
@@ -146,8 +166,14 @@ export default function ShootResultPage() {
       imageSources,
       outputFilter,
       remoteFrameId,
+      retryNonce,
     ],
   );
+
+  // 합성 재시도는 같은 멱등키로 보낸다 — 서버가 기존 작업을 그대로 돌려줘 두 번 그리지 않는다.
+  // 입력이 바뀌면(다른 필터·다른 사진) 새 시도이므로 키도 새로 잡는다.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const idempotencyKey = useMemo(() => newIdempotencyKey(), [generationKey]);
 
   // 합성 입력(generationKey)이 바뀔 때마다 기본 파일명을 새로 만든다.
   // buildDefaultDisplayName()은 시각 기반이라 인자가 없고, 호출할 때마다 값이 달라진다.
@@ -170,16 +196,19 @@ export default function ShootResultPage() {
     const imageGenerationKey = `${generationKey}:image`;
 
     async function prepareOutputs() {
-      if (!imageResult) {
-        if (imageGenerationKeyRef.current === imageGenerationKey) {
-          return;
-        }
+      if (imageResult) return;
+      if (imageGenerationKeyRef.current === imageGenerationKey) return;
 
-        imageGenerationKeyRef.current = imageGenerationKey;
-        setImageError(null);
-        setImageState("processing");
+      imageGenerationKeyRef.current = imageGenerationKey;
+      setImageError(null);
+      setIsImageErrorRetryable(true);
+      setImageState("processing");
 
-        try {
+      const displayName = defaultDisplayName;
+
+      try {
+        if (guestMode) {
+          // 비회원은 보관함을 쓸 수 없어서, 브라우저가 그린 그림이 곧 결과물이다.
           const blob = await composeFramePng({
             layout: currentLayout,
             borderColor: effectiveBorderColor,
@@ -189,59 +218,67 @@ export default function ShootResultPage() {
             canvas: canvasRef.current ?? undefined,
           });
 
-          const displayName = defaultDisplayName;
-          if (!cancelled) {
-            debugImageUrlRef.current = registerGeneratedPngDebug({
-              scope: IMAGE_DEBUG_SCOPE,
-              blob,
-              filename: `${displayName}.png`,
-              previousUrl: debugImageUrlRef.current,
-            });
+          if (cancelled) return;
+
+          debugImageUrlRef.current = registerGeneratedPngDebug({
+            scope: IMAGE_DEBUG_SCOPE,
+            blob,
+            filename: `${displayName}.png`,
+            previousUrl: debugImageUrlRef.current,
+          });
+
+          const objectUrl = URL.createObjectURL(blob);
+          if (cancelled) {
+            URL.revokeObjectURL(objectUrl);
+            return;
           }
 
-          if (guestMode) {
-            const objectUrl = URL.createObjectURL(blob);
-            if (!cancelled) {
-              if (guestImageUrlRef.current?.startsWith("blob:")) {
-                URL.revokeObjectURL(guestImageUrlRef.current);
-              }
-
-              guestImageUrlRef.current = objectUrl;
-              setImageResult({
-                mediaId: -1,
-                objectUrl,
-                downloadUrl: objectUrl,
-                displayName,
-              });
-              setImageState("done");
-            } else {
-              URL.revokeObjectURL(objectUrl);
-            }
-          } else {
-            // 로그인 사용자는 서버가 다시 그린다. 위에서 만든 blob 은 화면 미리보기와
-            // 디버그용이고, 보관함에 남는 것은 서버 합성 결과다 —
-            // 완성본을 올려 등록하는 API 가 사라졌다(lib/fourcutCompose.ts 주석).
-            const asset = await saveFourcutToServer({
-              sources: imageSources.map((source) => source.src),
-              layout: currentLayout,
-              outputFilter,
-              frameId: frameId as FrameId,
-              remoteFrameId,
-              displayName,
-            });
-
-            if (!cancelled) {
-              setImageResult(asset);
-              setImageState("done");
-            }
+          if (guestImageUrlRef.current?.startsWith("blob:")) {
+            URL.revokeObjectURL(guestImageUrlRef.current);
           }
-        } catch (error) {
-          console.error(error);
-          if (!cancelled) {
-            setImageState("error");
-            setImageError("이미지를 준비하지 못했어요. 다시 시도해 주세요.");
-          }
+
+          guestImageUrlRef.current = objectUrl;
+          setImageResult({
+            mediaId: -1,
+            objectUrl,
+            downloadUrl: objectUrl,
+            displayName,
+          });
+          setImageState("done");
+          return;
         }
+
+        // 로그인 사용자는 **서버가 그린다.** 화면 미리보기는 아래 <FramePreview> 가
+        // DOM 으로 그리므로 여기서 캔버스 합성을 할 이유가 없다.
+        //
+        // 예전에는 회원 경로에서도 위 composeFramePng 을 먼저 돌렸는데, 그 결과를 쓰는 곳이
+        // 개발자용 디버그 전역 하나뿐이었다. 최대 16MP 캔버스 합성과 PNG 인코딩을 매번
+        // 헛돌리며 서버 합성 시작을 그만큼 늦췄고, 더 나쁘게는 그 로컬 합성이 실패하면
+        // 멀쩡히 성공했을 서버 저장까지 통째로 취소됐다.
+        const asset = await saveFourcutToServer({
+          sources: imageSources.map((source) => source.src),
+          layout: currentLayout,
+          outputFilter,
+          frameId: frameId as FrameId,
+          remoteFrameId,
+          displayName,
+          idempotencyKey,
+        });
+
+        if (!cancelled) {
+          setImageResult(asset);
+          setImageState("done");
+        }
+      } catch (error) {
+        console.error(error);
+        if (cancelled) return;
+
+        // 실패 사유를 버리지 않는다. 프레임을 바꾸면 되는 실패인지, 기다리면 되는 실패인지
+        // 사용자가 알아야 한다(lib/fourcutCompose.ts describeComposeFailure).
+        const failure = describeComposeFailure(error);
+        setImageState("error");
+        setImageError(failure.message);
+        setIsImageErrorRetryable(failure.retryable);
       }
     }
 
@@ -255,6 +292,7 @@ export default function ShootResultPage() {
     effectiveBorderColor,
     frameId,
     generationKey,
+    idempotencyKey,
     remoteFrameId,
     guestMode,
     imageResult,
@@ -337,7 +375,9 @@ export default function ShootResultPage() {
         frameId: frameId as FrameId,
         remoteFrameId,
         outputFilter,
-        displayName: defaultDisplayName,
+        // 사용자가 결과 화면에서 이름을 고쳤으면 그 이름으로 남긴다.
+        // 기본값을 쓰면 공들여 붙인 이름이 로그인 직후 조용히 사라진다.
+        displayName: imageResult?.displayName?.trim() || defaultDisplayName,
       },
       Date.now(),
     );
@@ -515,7 +555,7 @@ export default function ShootResultPage() {
 
         {imageError ? <p className="text-[11px] text-[color:var(--hc-danger)]">{imageError}</p> : null}
 
-        {imageState === "error" ? (
+        {imageState === "error" && isImageErrorRetryable ? (
           <button
             type="button"
             onClick={() => {
@@ -529,11 +569,23 @@ export default function ShootResultPage() {
               clearResults();
               setImageState("idle");
               setImageError(null);
+              // 실패했을 때 imageResult 는 이미 null 이라 clearResults() 만으로는
+              // effect 의존성이 하나도 안 바뀐다. 이 값을 올려야 실제로 다시 돈다.
+              setRetryNonce((nonce) => nonce + 1);
             }}
             className="hc-button-secondary rounded-full border px-4 py-2 text-xs font-semibold transition"
           >
             다시 준비하기
           </button>
+        ) : null}
+
+        {imageState === "error" && !isImageErrorRetryable ? (
+          <Link
+            href="/shoot"
+            className="hc-button-secondary inline-flex w-fit rounded-full border px-4 py-2 text-xs font-semibold transition"
+          >
+            프레임 다시 고르기
+          </Link>
         ) : null}
 
         {imageResult ? (

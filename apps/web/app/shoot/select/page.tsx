@@ -10,6 +10,7 @@ import { FlowSteps } from "@/components/layout/FlowSteps";
 import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { useServerFrameBackground } from "@/hooks/useServerFrameBackground";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
@@ -48,7 +49,14 @@ export default function ShootSelectPage() {
   }, [frameId, router, shots.length]);
 
   const hasCustomFrame = Boolean(themeData);
-  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
+  // 회원 결과물은 서버가 그리고, 그때 배경은 프레임에 저장된 값이다. 미리보기도 그 값으로
+  // 그려야 화면과 저장본이 같아진다(hooks/useServerFrameBackground 주석).
+  const serverComposed = !guestMode && !hasCustomFrame;
+  const serverBackgroundColor = useServerFrameBackground(frameId, serverComposed);
+  const effectiveBorderColor = resolveFrameBackgroundColor(
+    themeData,
+    serverBackgroundColor ?? borderColor,
+  );
 
   const handleNext = () => {
     router.push("/shoot/result");
@@ -90,6 +98,7 @@ export default function ShootSelectPage() {
               outputFilter={outputFilter}
               onOutputFilterChange={setOutputFilter}
               hasCustomFrame={hasCustomFrame}
+              serverComposed={serverComposed}
             />
           )}
         />

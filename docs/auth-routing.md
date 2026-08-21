@@ -105,7 +105,9 @@
   `GuestTrialBridge`(쿠키로 `accessMode` 복원 + 로그인 후 보관한 원본 4장으로 서버 합성),
   `GuestTrialOverlay`(안내 표시)
 - [`apps/web/lib/pendingGuestSave.ts`](../apps/web/lib/pendingGuestSave.ts):
-  게스트가 저장을 누르면 결과 PNG를 localStorage에 보관했다가 인증 후 서버로 올린다
+  게스트가 저장을 누르면 **원본 4장과 만드는 방법**을 localStorage에 보관했다가
+  로그인 후 서버 합성으로 기록에 남긴다(완성본 PNG를 올리던 방식은 그 API가
+  사라져 폐기됐다). 보관물은 하루가 지나면 버린다
 
 게스트 체험은 촬영과 이미지 다운로드까지만 허용합니다. 기록 저장, 링크 공유 등
 서버 연동 기능은 로그인 후 사용합니다.
