@@ -14,10 +14,20 @@ import {
 } from "@/lib/frameFilters";
 import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 
+/**
+ * 네 컷에 넣을 사진이 어디서 왔는지.
+ *
+ * 사진이 자리잡은 뒤로는(4장 고르기 → 서버 합성 → 내려받기) 출처를 알 필요가 없다 —
+ * 갤러리에서 고른 사진도 촬영본과 같은 data URL 이라 뒤 단계가 둘을 구분하지 않는다.
+ * 다만 화면에 뭐라고 쓸지는 달라진다("촬영한 사진이 없어요" / "불러온 사진이 없어요").
+ */
+export type ShootSource = "camera" | "upload";
+
 type ShootSessionState = {
   frameId: FrameId | null;
   remoteFrameId: number | null;
-  // 촬영본은 data URL 문자열 배열이다.
+  source: ShootSource;
+  // 촬영본은 data URL 문자열 배열이다. 갤러리에서 불러온 사진도 같은 형태로 맞춰 담는다.
   shots: string[];
   selectedIndexes: SelectionSlot[];
   borderColor: string;
@@ -31,6 +41,7 @@ type ShootSessionState = {
   eventName: string | null;
 
   setFrameId: (id: FrameId) => void;
+  setSource: (source: ShootSource) => void;
   setEventName: (name: string | null) => void;
   setRemoteFrameId: (id: number | null) => void;
   setBorderColor: (color: string) => void;
@@ -40,6 +51,8 @@ type ShootSessionState = {
   toggleSelect: (index: number) => void;
   clearSelection: () => void;
   addShotPhoto: (photoDataUrl: string) => void;
+  addShotPhotos: (photoDataUrls: string[]) => void;
+  removeShotPhoto: (index: number) => void;
   resetShots: () => void;
   reset: () => void;
 };
@@ -48,6 +61,7 @@ const initialState: Pick<
   ShootSessionState,
   | "frameId"
   | "remoteFrameId"
+  | "source"
   | "shots"
   | "selectedIndexes"
   | "borderColor"
@@ -57,6 +71,7 @@ const initialState: Pick<
 > = {
   frameId: null,
   remoteFrameId: null,
+  source: "camera",
   shots: [],
   selectedIndexes: createEmptySlots(),
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
@@ -99,6 +114,8 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       imageResult: null,
     }),
 
+  setSource: (source) => set({ source }),
+
   setEventName: (name) => set({ eventName: name }),
 
   toggleSelect: (index) =>
@@ -117,6 +134,21 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   addShotPhoto: (photoDataUrl) =>
     set((state) => ({
       shots: [...state.shots, photoDataUrl],
+      imageResult: null,
+    })),
+
+  addShotPhotos: (photoDataUrls) =>
+    set((state) => ({
+      shots: [...state.shots, ...photoDataUrls],
+      imageResult: null,
+    })),
+
+  // 한 장을 빼면 그 뒤 사진의 번호가 하나씩 당겨진다. 고른 자리는 번호로 들고 있으므로
+  // 같이 비운다 — 그대로 두면 사용자가 고른 것과 다른 사진이 슬롯에 들어간다.
+  removeShotPhoto: (index) =>
+    set((state) => ({
+      shots: state.shots.filter((_, i) => i !== index),
+      selectedIndexes: createEmptySlots(),
       imageResult: null,
     })),
 

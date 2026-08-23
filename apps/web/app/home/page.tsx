@@ -21,12 +21,13 @@ import {
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 
 const HOME_COACH_STEPS: CoachStep[] = [
   {
     selector: '[data-coach="shoot"]',
-    title: "촬영하기",
-    body: "카메라로 8장을 찍고 마음에 드는 4장을 골라 네 컷을 만들어요.",
+    title: "기록 남기기",
+    body: "카메라로 찍거나 갖고 있는 사진으로 네 컷을 만들어요.",
   },
   {
     selector: '[data-coach="theme"]',
@@ -119,6 +120,7 @@ function countThisWeek(items: UserMedia[]) {
 
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
   const [allMedia, setAllMedia] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,22 +216,23 @@ export default function HomePage() {
         </header>
 
         {/* 모바일(&lt;lg) 메인 CTA — 핸드오프 app 홈 그린 카드 */}
-        <Link
-          href="/shoot"
+        <button
+          type="button"
+          onClick={() => setSourceDialogOpen(true)}
           data-coach="shoot"
-          className="flex items-center gap-3.5 rounded-[24px] bg-[color:var(--hc-primary)] p-[18px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] lg:hidden"
+          className="flex w-full items-center gap-3.5 rounded-[24px] bg-[color:var(--hc-primary)] p-[18px] text-left text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] lg:hidden"
         >
           <span className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-[15px] bg-[#06140A]">
             <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary-strong)]" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-extrabold">지금 촬영하기</span>
+            <span className="block text-[16px] font-extrabold">기록 남기기</span>
             <span className="mt-0.5 block whitespace-nowrap text-[13px] font-medium opacity-75">
-              프레임 고르고 8장 찍기
+              찍거나 갖고 있는 사진으로
             </span>
           </span>
           <ChevronRight className="h-[22px] w-[22px] shrink-0" />
-        </Link>
+        </button>
 
         {/* 모바일(&lt;lg) 보조 카드 — 프레임 보기 */}
         <section className="grid grid-cols-1 gap-2.5 lg:hidden">
@@ -253,21 +256,22 @@ export default function HomePage() {
         {/* 데스크톱(lg+) 액션 카드 → 촬영 / 프레임 꾸미기 (코치마크는 보이는 카드를 비춤) */}
         {/* 01·02·03 인덱스를 뺀 뒤 justify-center로 — justify-between은 자식이 하나면 위로 붙는다. */}
         <section className="hidden gap-3.5 lg:grid lg:grid-cols-2">
-          <Link
-            href="/shoot"
+          <button
+            type="button"
+            onClick={() => setSourceDialogOpen(true)}
             data-coach="shoot"
-            className="group flex min-h-[108px] flex-col justify-center rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
+            className="group flex min-h-[108px] flex-col justify-center rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-left text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
           >
             <span>
               <span className="flex items-center justify-between text-[19px] font-extrabold">
-                촬영하기
+                기록 남기기
                 <ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" />
               </span>
               <span className="mt-1 block text-[13px] font-medium opacity-75">
-                프레임 고르고 8장, 네 컷만 남겨요
+                찍거나 갖고 있는 사진으로 네 컷을 만들어요
               </span>
             </span>
-          </Link>
+          </button>
 
           <Link
             href="/theme"
@@ -418,6 +422,10 @@ export default function HomePage() {
       </div>
       <MobileTabBar />
       <CoachMarks id="home-v1" steps={HOME_COACH_STEPS} />
+      <RecordSourceDialog
+        open={sourceDialogOpen}
+        onClose={() => setSourceDialogOpen(false)}
+      />
     </main>
   );
 }

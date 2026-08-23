@@ -64,7 +64,10 @@ export default function ShootResultPage() {
     setImageResult,
     clearResults,
     eventName,
+    source,
   } = useShootSession();
+  // 갤러리에서 온 사진이면 "다시 촬영"이라고 말하면 안 된다 — 찍은 적이 없다.
+  const fromUpload = source === "upload";
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const setNotice = useGuestTrialStore((state) => state.setNotice);
@@ -148,12 +151,28 @@ export default function ShootResultPage() {
     serverBackgroundColor ?? borderColor,
   );
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
+  /*
+    "이 입력으로 한 번만 만든다"를 가리키는 키.
+
+    ⚠️ 회원 경로에는 **색을 넣지 않는다.** 서버 합성은 색을 받지 않고
+    (`ComposeRequest` = frameId · sourceKeys · idempotencyKey) 프레임에 저장된 배경을 쓴다.
+    그런데 그 배경은 `useServerFrameBackground` 가 **나중에** 읽어 오므로, 색을 키에 넣으면
+    이런 일이 벌어진다:
+
+      진입      서버 배경 모름 → 기본색 → 키 K1 → 합성 #1
+      조회 완료  서버 배경 도착 → 색 바뀜 → 키 K2 → 합성 #2   ← 같은 네컷이 두 벌
+
+    실제로 보관함에 같은 이름의 mediaId 두 개가 남았다(2026-08-24 재현).
+    결과를 바꾸지 않는 값은 키에서 뺀다.
+
+    비회원은 반대다 — 결과물을 브라우저가 그리므로 색이 그림을 바꾼다. 그때는 키에 넣는다.
+  */
   const generationKey = useMemo(
     () =>
       JSON.stringify({
         frameId,
         remoteFrameId,
-        borderColor: effectiveBorderColor,
+        borderColor: guestMode ? effectiveBorderColor : null,
         outputFilter,
         imageSources: imageSources.map((source) => source.src),
         retryNonce,
@@ -161,6 +180,7 @@ export default function ShootResultPage() {
     [
       effectiveBorderColor,
       frameId,
+      guestMode,
       imageSources,
       outputFilter,
       remoteFrameId,
@@ -493,7 +513,7 @@ export default function ShootResultPage() {
     <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <PageHeader
-          title="촬영 결과"
+          title={fromUpload ? "네컷 결과" : "촬영 결과"}
           brandHref={guestMode ? "/shoot" : "/home"}
           description={
             guestMode
@@ -652,10 +672,16 @@ export default function ShootResultPage() {
 
         <div className="flex gap-2">
           <Link
-            href={guestMode ? "/shoot/capture" : "/shoot/select"}
+            href={
+              guestMode
+                ? fromUpload
+                  ? "/shoot/upload"
+                  : "/shoot/capture"
+                : "/shoot/select"
+            }
             className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
           >
-            {guestMode ? "다시 촬영하기" : "사진 다시 고르기"}
+            {guestMode && !fromUpload ? "다시 촬영하기" : "사진 다시 고르기"}
           </Link>
           {guestMode ? (
             <button

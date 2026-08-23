@@ -91,8 +91,10 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 }));
 
 // 서버가 칠할 배경색 조회는 네트워크를 타므로 화면 테스트에서는 끊는다.
+// 값을 바꿀 수 있게 둔 이유는 아래 "늦게 도착해도 두 번 만들지 않는다" 회귀 테스트 때문이다.
+let mockServerBackground: string | null = null;
 jest.mock("@/hooks/useServerFrameBackground", () => ({
-  useServerFrameBackground: () => null,
+  useServerFrameBackground: () => mockServerBackground,
 }));
 
 jest.mock("@/lib/composeApi", () => ({
@@ -117,6 +119,7 @@ jest.mock("@/lib/share", () => ({
 describe("ShootResultPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockServerBackground = null;
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
@@ -326,5 +329,35 @@ describe("ShootResultPage", () => {
     expect(alertSpy).not.toHaveBeenCalled();
 
     alertSpy.mockRestore();
+  });
+
+  /*
+    서버가 칠할 배경색은 화면이 뜬 뒤에 도착한다. 그 값이 합성 키에 들어 있으면
+    "색이 바뀌었다"는 이유로 같은 네컷을 한 번 더 만든다 — 보관함에 같은 이름의
+    기록이 두 개 남는다(2026-08-24 로컬에서 실제로 mediaId 두 개가 남았다).
+
+    회원 결과물은 서버가 그리고 서버 합성은 색을 아예 받지 않으므로
+    (ComposeRequest = frameId · sourceKeys · idempotencyKey) 색이 바뀌어도 다시 만들 이유가 없다.
+  */
+  it("서버 배경색이 늦게 도착해도 회원 저장을 두 번 하지 않는다", async () => {
+    mockSaveFourcutToServer.mockResolvedValue({
+      mediaId: 7,
+      objectUrl: "https://example.com/a.png",
+      downloadUrl: "https://example.com/a.png",
+      displayName: "harucut",
+    });
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 조회가 끝나 배경색이 자리잡는 순간.
+    mockServerBackground = "#ffffff";
+    view.rerender(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
   });
 });
