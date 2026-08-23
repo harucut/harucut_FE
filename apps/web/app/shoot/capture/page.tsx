@@ -18,13 +18,11 @@ export default function CapturePage() {
     isShooting,
     countdown,
     shotCount,
-    remainingShots,
     timerSeconds,
     setTimerSeconds,
     startCamera,
     startShooting,
     handleShootNow,
-    cancelShooting,
     switchCamera,
     canFlipCamera,
     cameraFacingMode,
@@ -44,7 +42,6 @@ export default function CapturePage() {
   // 촬영 중에는 프레임을 씌우지 않고, 선택한 프레임의 슬롯 비율만 프리뷰에 반영한다.
   // 프레임(테두리·데코)은 사진을 배치하는 다음 단계부터 보인다.
   const currentSlot = layout ? layout.slots[currentSlotIndex] : null;
-  // 8장을 다 찍으면 곧바로 다음 화면으로 넘어가므로, 표시용 번호는 MAX_SHOTS에서 멈춘다.
 
   const backToFrameHref = (() => {
     const params = new URLSearchParams();
@@ -78,11 +75,10 @@ export default function CapturePage() {
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
         <section className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
-          <div className="flex items-center justify-end text-[11px] text-[color:var(--hc-muted)]">
-            <span className="rounded-full border border-[color:var(--hc-border)] px-2 py-0.5">
-              {shotCount} / {MAX_SHOTS}장 촬영됨
-            </span>
-          </div>
+          {/*
+            "N / 8장 촬영됨" 칩은 걷어냈다. 시작 전에는 언제나 0/8 이라 알려 줄 것이 없고,
+            촬영 중에는 카운트다운 바로 아래에 같은 숫자가 뜬다.
+          */}
 
           {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
           <div className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center">
@@ -142,15 +138,82 @@ export default function CapturePage() {
                   </div>
                 ) : null}
 
+                {/*
+                  촬영 중에는 화면에 카운트다운만 남는다. 셔터를 따로 두지 않으므로
+                  "기다리지 않고 지금 찍기"는 이 화면을 눌러 쓴다 — 카메라 앱에서
+                  화면을 누르는 것과 같다. 대기 건너뛰기 기능은 그대로 살아 있다.
+                */}
                 {isShooting && countdown !== null ? (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40">
-                    <div className="pointer-events-auto flex flex-col items-center gap-2">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white text-2xl font-semibold text-white">
-                        {countdown}
-                      </div>
-                      <span className="text-[11px] font-semibold text-white">
-                        {shotCount}/{MAX_SHOTS}
-                      </span>
+                  <button
+                    type="button"
+                    onClick={handleShootNow}
+                    aria-label="기다리지 않고 지금 촬영"
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/40"
+                  >
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white text-2xl font-semibold text-white">
+                      {countdown}
+                    </span>
+                    <span className="text-[11px] font-semibold text-white">
+                      {shotCount}/{MAX_SHOTS}
+                    </span>
+                  </button>
+                ) : null}
+
+                {/*
+                  촬영 컨트롤은 **무대 안 아래쪽**에 얹는다. 밖에 두면 그만큼 카메라가 줄고,
+                  셔터가 화면 아래로 내려가 자기 얼굴을 보면서 누르기 어려워진다.
+
+                  버튼 모양은 위 "카메라 켜기"와 같은 알약이다 — 켜고 → 찍는, 이어지는 한
+                  동작이라 생김새가 같아야 한다.
+
+                  시작하면 통째로 사라진다. 그때부터 이 화면이 할 일은 카메라를 보여 주는
+                  것뿐이다. 영상 위에 얹히므로 아래쪽에 어두운 그라데이션을 깔고 칩에도
+                  각자 불투명 배경을 줘서, 뒤에 무엇이 오든 읽히게 한다.
+                */}
+                {isCameraReady && !isShooting ? (
+                  <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-3 pb-4 pt-12">
+                    <div className="flex items-center justify-center gap-2">
+                      {TIMER_OPTIONS.map((seconds) => {
+                        const active = timerSeconds === seconds;
+                        return (
+                          <button
+                            key={seconds}
+                            type="button"
+                            onClick={() => setTimerSeconds(seconds)}
+                            aria-pressed={active}
+                            className={`inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition ${
+                              active
+                                ? "bg-white text-[#0B0B0C]"
+                                : "bg-black/55 text-white ring-1 ring-white/30"
+                            }`}
+                          >
+                            <Timer className="h-3.5 w-3.5" />
+                            {seconds}s
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* 전환은 absolute 로 빼서, 촬영 버튼이 그 유무와 무관하게 정중앙에 온다. */}
+                    <div className="relative flex w-full items-center justify-center">
+                      {canFlipCamera ? (
+                        <button
+                          type="button"
+                          onClick={() => void switchCamera()}
+                          className="absolute left-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center gap-1.5 rounded-full bg-black/55 px-3.5 text-[11px] font-semibold text-white ring-1 ring-white/30"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          전환
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={startShooting}
+                        className="hc-button-primary inline-flex h-12 items-center rounded-full px-7 text-[15px] font-extrabold"
+                      >
+                        촬영 시작
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -163,91 +226,10 @@ export default function CapturePage() {
           </div>
 
           {/*
-            촬영 스트립(찍힌 컷 8칸)은 걷어냈다. 찍은 사진은 바로 다음 화면에서 크게 보고
-            고르므로, 여기서 작게 다시 보여 줄 이유가 없었다. 남은 장수는 위 "N / 8장 촬영됨"
-            칩이 말한다. 그만큼 카메라가 커진다 — 이 화면에서 정작 봐야 하는 것이다.
+            무대 밖에는 아무것도 두지 않는다. 촬영 스트립·간격 칩·셔터·안내 문구가 모두
+            여기 있었는데, 찍은 사진은 다음 화면에서 크게 보고 고르고 나머지는 무대 안으로
+            옮겼다. 화면이 통째로 카메라가 된다.
           */}
-
-          {/* 촬영 간격 칩(3/5/8초) — 시작 전에만 고른다.
-              촬영 중에도 자리를 지키고 비활성으로만 두어 레이아웃이 흔들리지 않게 한다.
-              한 화면에 셔터까지 담아야 해서 라벨을 칩과 같은 줄에 둔다. */}
-          <div className="flex items-center justify-center gap-2">
-            <div className="flex items-center justify-center gap-2">
-              {TIMER_OPTIONS.map((seconds) => {
-                const active = timerSeconds === seconds;
-                return (
-                  <button
-                    key={seconds}
-                    type="button"
-                    onClick={() => setTimerSeconds(seconds)}
-                    disabled={isShooting}
-                    aria-pressed={active}
-                    className={`inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      active
-                        ? "bg-white text-[#0B0B0C]"
-                        : "bg-[color:var(--hc-surface-muted)] text-[color:var(--hc-text)]"
-                    }`}
-                  >
-                    <Timer className="h-3.5 w-3.5" />
-                    {seconds}s
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 셔터 영역 — 전환 버튼은 absolute로 빼서, 메인 버튼이 그 유무와 무관하게
-              항상 좌우 정중앙에 오게 한다(예전 flex+스페이서 방식은 중앙이 어긋났다). */}
-          <div className="relative flex items-center justify-center">
-            {canFlipCamera ? (
-              <button
-                type="button"
-                onClick={() => void switchCamera()}
-                disabled={isShooting}
-                className="absolute left-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                전환
-              </button>
-            ) : null}
-
-            {/* 시작 전엔 '촬영 시작', 촬영 중엔 언제든 눌러 남은 대기를 건너뛰고 즉시 한 컷. */}
-            <button
-              type="button"
-              onClick={isShooting ? handleShootNow : startShooting}
-              disabled={!isCameraReady}
-              className="flex flex-col items-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[60px]">
-                <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)] [@media(max-height:700px)]:h-[44px] [@media(max-height:700px)]:w-[44px]" />
-              </span>
-              <span className="text-[12px] font-bold">
-                {isShooting ? "바로 촬영" : "촬영 시작"}
-              </span>
-            </button>
-
-            {/* 촬영 취소 — 8초 간격이면 8장에 1분 가까이 걸린다. 중단 수단을 항상 열어 둔다. */}
-            {isShooting ? (
-              <button
-                type="button"
-                onClick={cancelShooting}
-                className="absolute right-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] font-semibold text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
-              >
-                촬영 취소
-              </button>
-            ) : null}
-          </div>
-
-          {/*
-            시작 전 안내는 걷어냈다 — 간격 칩과 셔터 버튼이 이미 말하고 있어서 읽을 것만
-            늘었다. 촬영 중 문구는 남긴다. **취소하면 찍은 게 지워진다**는 것은 버튼만
-            봐서는 알 수 없고, 모르고 누르면 되돌릴 수 없다.
-          */}
-          {isShooting ? (
-            <p className="text-center text-[11px] leading-[1.5] text-[color:var(--hc-muted)] [@media(max-height:700px)]:hidden">
-              {`${timerSeconds}초 간격으로 남은 ${remainingShots}장을 자동으로 찍어요. 셔터를 누르면 바로 찍고, 취소하면 지금까지 찍은 ${shotCount}장은 지워져요.`}
-            </p>
-          ) : null}
         </section>
       </div>
     </main>
