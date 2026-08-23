@@ -225,7 +225,38 @@ function withoutBrandExemptions(violations: ViolationRule[]) {
 }
 
 type IncompleteNode = { any?: Array<{ message?: string }> };
+
+/**
+* 같은 사유를 **문구 대신 키로** 본다.
+ *
+ * 위 정규식은 axe 가 내보내는 영어 문장에 기대고 있었다. 그런데 axe 4.13 이 같은 사유의
+ * 문장을 "partially obscured by another element" → "partially overlaps other elements" 로
+ * 바꾸면서, 사유는 그대로인데 문장만 달라져 랜딩 히어로가 통째로 실패했다.
+ * (`elmPartiallyObscured` 와 `elmPartiallyObscuring` 은 같은 상황의 두 방향이다 —
+ * 가려진 쪽에서 보느냐 가리는 쪽에서 보느냐일 뿐이다.)
+ *
+ * `messageKey` 는 axe 가 문구를 바꿔도 유지하는 식별자라 이쪽이 덜 부서진다.
+ * 정규식은 옛 버전 호환으로 남겨 둔다 — 둘 중 하나만 맞아도 통과다.
+ */
+const UNDETERMINABLE_MESSAGE_KEYS = new Set([
+  // 그라데이션 위 글자(지역 장식 레이어).
+  "bgGradient",
+  // 사진 위 글자. 배경이 콘텐츠라 어떤 토큰으로도 보장할 수 없다.
+  "imgNode",
+  // 장식 레이어가 글자 위를 지나가 배경을 특정하지 못하는 경우.
+  "elmPartiallyObscured",
+  "elmPartiallyObscuring",
+]);
+
+type IncompleteCheck = { message?: string; data?: { messageKey?: string } };
+type IncompleteNode = { any?: IncompleteCheck[] };
 type IncompleteRule = { id: string; nodes: IncompleteNode[] };
+
+function isUndeterminable(check: IncompleteCheck) {
+  const key = check.data?.messageKey;
+  if (key && UNDETERMINABLE_MESSAGE_KEYS.has(key)) return true;
+  return UNDETERMINABLE_REASONS.some((reason) => reason.test(check.message ?? ""));
+}
 
 function contrastIncomplete(results: { incomplete: IncompleteRule[] }) {
   return results.incomplete
@@ -233,12 +264,7 @@ function contrastIncomplete(results: { incomplete: IncompleteRule[] }) {
     .map((rule) => ({
       ...rule,
       nodes: rule.nodes.filter(
-        (node) =>
-          !node.any?.some((check) =>
-            UNDETERMINABLE_REASONS.some((reason) =>
-              reason.test(check.message ?? ""),
-            ),
-          ),
+        (node) => !node.any?.some(isUndeterminable),
       ),
     }))
     .filter((rule) => rule.nodes.length > 0);
