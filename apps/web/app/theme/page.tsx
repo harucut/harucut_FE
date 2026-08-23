@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { FrameId } from "@/constants/frames";
+import { parseFrameIdQuery, type FrameId } from "@/constants/frames";
 import { PAYMENTS_ENABLED } from "@/constants/company";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import {
@@ -15,7 +15,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
-import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
 

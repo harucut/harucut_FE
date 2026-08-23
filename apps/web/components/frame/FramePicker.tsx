@@ -1,9 +1,8 @@
 "use client";
 
 import { Check, Circle } from "lucide-react";
-import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
+import { FRAME_CONFIGS, getFrameConfig, type FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
-import { getFrameCatalogItem } from "@/lib/frameCatalog";
 
 type FramePickerLayoutMode = "carousel" | "grid";
 
@@ -99,8 +98,8 @@ function FramePickerCard({
   onClick: () => void;
   mode?: FramePickerLayoutMode;
 }) {
-  // 이름·순서는 FRAME_CONFIGS, 소개 카피는 FRAME_CATALOG가 각각 단일 소스다.
-  const meta = getFrameCatalogItem(frameId);
+  // 이름·순서·짧은 태그 모두 FRAME_CONFIGS 가 단일 소스다.
+  const config = getFrameConfig(frameId);
 
   return (
     <button
@@ -140,7 +139,7 @@ function FramePickerCard({
         >
           {/* 짧은 태그 — 미리보기 모서리에 얹어 배치 성격을 한눈에 준다. */}
           <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-0.5 text-[11px] font-bold tracking-[0.08em] text-white">
-            {meta.shortLabel}
+            {config.shortLabel}
           </span>
 
           <div className={FRAME_PICKER_PREVIEW_VIEWPORT}>
@@ -153,40 +152,22 @@ function FramePickerCard({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <p className="text-sm font-semibold text-zinc-50">{frameName}</p>
-              <p className="text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
-                {meta.badge}
-              </p>
-            </div>
-            <span
+        {/* 이름과 선택 표시만 남긴다. 설명·추천 태그는 위 미리보기가 이미 보여주는 것을
+            말로 옮긴 것이라 걷어냈다(constants/frames.ts 주석). */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-sm font-semibold text-zinc-50">
+            {frameName}
+          </p>
+          <span
               className={[
                 "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
                 selected
                   ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
                   : "border-white/10 bg-black/20 text-zinc-400",
               ].join(" ")}
-            >
-              {selected ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
-            </span>
-          </div>
-
-          <p className="text-[12px] leading-[1.6] text-zinc-400">
-            {meta.description}
-          </p>
-
-          <ul className="flex flex-wrap gap-1.5">
-            {meta.recommendedFor.map((tag) => (
-              <li
-                key={tag}
-                className="rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] text-zinc-300"
-              >
-                {tag}
-              </li>
-            ))}
-          </ul>
+          >
+            {selected ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+          </span>
         </div>
       </div>
     </button>

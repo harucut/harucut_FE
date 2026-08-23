@@ -2,17 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { FrameId } from "@/constants/frames";
+import { parseFrameIdQuery, type FrameId } from "@/constants/frames";
 import { FramePicker } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { FlowSteps } from "@/components/layout/FlowSteps";
-import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { frameIdFromFrameType } from "@/lib/frameApi";
-import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useShootSession } from "@/lib/shootSessionStore";
 
 function ShootPageContent() {
@@ -112,8 +109,6 @@ function ShootPageContent() {
             그대로 할 수 있어요.
           </p>
         ) : null}
-
-        <FlowSteps steps={SHOOT_FLOW_STEPS} current={0} />
 
         <FramePicker
           selectedFrameId={selectedFrameId}

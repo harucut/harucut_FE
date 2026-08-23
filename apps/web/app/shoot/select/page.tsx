@@ -6,8 +6,6 @@ import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPa
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { FlowSteps } from "@/components/layout/FlowSteps";
-import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useServerFrameBackground } from "@/hooks/useServerFrameBackground";
@@ -72,8 +70,6 @@ export default function ShootSelectPage() {
           backLabel="다시 촬영"
           brandHref={guestMode ? "/shoot" : "/home"}
         />
-
-        <FlowSteps steps={SHOOT_FLOW_STEPS} current={2} />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 

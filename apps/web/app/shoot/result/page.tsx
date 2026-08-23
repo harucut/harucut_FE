@@ -7,8 +7,6 @@ import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDow
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { FlowSteps } from "@/components/layout/FlowSteps";
-import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -503,8 +501,6 @@ export default function ShootResultPage() {
               : "완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
           }
         />
-
-        <FlowSteps steps={SHOOT_FLOW_STEPS} current={3} />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 

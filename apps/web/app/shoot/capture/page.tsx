@@ -3,8 +3,6 @@
 import { RefreshCw, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { FlowSteps } from "@/components/layout/FlowSteps";
-import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -81,8 +79,6 @@ export default function CapturePage() {
           backLabel="프레임 다시 선택"
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
         />
-
-        <FlowSteps steps={SHOOT_FLOW_STEPS} current={1} />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
