@@ -92,31 +92,25 @@ function ThemePageContent() {
         <PageHeader
           backHref="/home"
           backLabel="처음으로"
-          title={
-            <span className="flex items-baseline gap-2">
-              프레임 꾸미기
-              {/*
-                몇 개까지 되는지는 만들기 전에 알아야 한다 — 다 꾸미고 저장하려는 순간
-                한도를 만나면 되돌릴 수 없다. 등급(PRO 같은 것)은 붙이지 않는다.
-                여기서 알고 싶은 건 등급이 아니라 "지금 몇 개 더 되는가"다.
-                불러오기 전에는 아무것도 안 쓴다 — 0/0 이 잠깐 스쳤다가 바뀌면 오히려 헷갈린다.
-                무제한은 ∞ 로 쓰되, 기호만으로는 뜻이 안 통하므로 aria-label 로 말을 붙인다.
-              */}
-              {isLoading ? null : (
-                <span
-                  className="text-[13px] font-semibold tabular-nums text-[color:var(--hc-muted)]"
-                  aria-label={
-                    capacity.unlimited
-                      ? "보관 개수 제한 없음"
-                      : `보관 ${capacity.used}개 / ${capacity.used + (capacity.remaining ?? 0)}개`
-                  }
-                >
-                  {capacity.unlimited
-                    ? "∞"
-                    : `${capacity.used}/${capacity.used + (capacity.remaining ?? 0)}`}
-                </span>
-              )}
-            </span>
+          title="프레임 꾸미기"
+          rightBelow={
+            /*
+              몇 개까지 되는지는 만들기 전에 알아야 한다 — 다 꾸미고 저장하려는 순간
+              한도를 만나면 되돌릴 수 없다. 등급(PRO 같은 것)은 붙이지 않는다.
+              여기서 알고 싶은 건 등급이 아니라 "지금 몇 개 더 되는가"다.
+
+              **무제한이면 아무것도 쓰지 않는다.** 셀 이유가 없는 사람에게 숫자를 주면
+              읽을 것만 늘어난다. 불러오기 전에도 비워 둔다 — 0/0 이 스쳤다 바뀌면
+              오히려 헷갈린다.
+            */
+            isLoading || capacity.unlimited ? null : (
+              <span
+                className="text-[12px] font-semibold tabular-nums text-[color:var(--hc-muted)]"
+                aria-label={`보관 ${capacity.used}개 / ${capacity.used + (capacity.remaining ?? 0)}개`}
+              >
+                {capacity.used}/{capacity.used + (capacity.remaining ?? 0)}
+              </span>
+            )
           }
         />
 

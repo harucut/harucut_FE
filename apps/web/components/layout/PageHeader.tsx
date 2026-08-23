@@ -14,6 +14,13 @@ type Props = {
   rightLabel?: string;
   brandHref?: string;
   showBrand?: boolean;
+  /**
+   * 오른쪽 위 요소(뒤로가기·아이콘) **아래**에 붙는 것.
+   *
+   * 제목 옆에 끼우면 제목의 일부처럼 읽힌다. 부가 정보는 제목이 아니라
+   * 오른쪽 열에 쌓는다.
+   */
+  rightBelow?: ReactNode;
 };
 
 export function PageHeader({
@@ -26,6 +33,7 @@ export function PageHeader({
   rightLabel,
   brandHref = "/home",
   showBrand = true,
+  rightBelow,
 }: Props) {
   return (
     <>
@@ -43,26 +51,29 @@ export function PageHeader({
           ) : null}
         </div>
 
-        {rightSlot ? (
-          rightHref ? (
+        <div className="flex flex-col items-end gap-1.5">
+          {rightSlot ? (
+            rightHref ? (
+              <Link
+                href={rightHref}
+                aria-label={rightLabel}
+                className="hc-button-icon flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
+              >
+                {rightSlot}
+              </Link>
+            ) : (
+              <div className="flex items-center justify-center">{rightSlot}</div>
+            )
+          ) : backHref && backLabel ? (
             <Link
-              href={rightHref}
-              aria-label={rightLabel}
-              className="hc-button-icon flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
+              href={backHref}
+              className="text-[11px] text-zinc-400 underline underline-offset-4"
             >
-              {rightSlot}
+              {backLabel}
             </Link>
-          ) : (
-            <div className="flex items-center justify-center">{rightSlot}</div>
-          )
-        ) : backHref && backLabel ? (
-          <Link
-            href={backHref}
-            className="text-[11px] text-zinc-400 underline underline-offset-4"
-          >
-            {backLabel}
-          </Link>
-        ) : null}
+          ) : null}
+          {rightBelow}
+        </div>
       </header>
 
       {description ? (
