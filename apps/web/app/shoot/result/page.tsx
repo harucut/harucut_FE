@@ -596,7 +596,9 @@ export default function ShootResultPage() {
 
         {imageState === "error" && !isImageErrorRetryable ? (
           <Link
-            href="/shoot"
+            // 업로드로 왔으면 업로드 쪽 프레임 고르기로 돌아간다. 그냥 /shoot 으로 보내면
+            // 다음이 카메라라, 갤러리로 만들던 사람이 촬영 화면에 떨어진다.
+            href={fromUpload ? "/shoot?source=upload" : "/shoot"}
             className="hc-button-secondary inline-flex w-fit rounded-full border px-4 py-2 text-xs font-semibold transition"
           >
             프레임 다시 고르기

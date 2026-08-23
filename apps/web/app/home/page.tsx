@@ -353,12 +353,15 @@ export default function HomePage() {
                 <p className="text-[13px] text-[color:var(--hc-muted)]">
                   아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
                 </p>
-                <Link
-                  href="/shoot"
+                {/* 위 큰 카드와 같은 것을 연다. 여기만 카메라로 직행하면 같은 뜻의
+                    버튼 둘이 다르게 동작한다. */}
+                <button
+                  type="button"
+                  onClick={() => setSourceDialogOpen(true)}
                   className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
                 >
-                  촬영 시작
-                </Link>
+                  기록 남기기
+                </button>
               </div>
             )}
           </div>

@@ -4,7 +4,6 @@ import { RefreshCw, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
@@ -34,7 +33,6 @@ export default function CapturePage() {
   } = useCaptureFlow();
 
   const { frameId, shots, eventName } = useShootSession();
-  const accessMode = useGuestTrialStore((state) => state.accessMode);
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
 
   // 찍은 컷이 있는데 아직 저장 전이면, 새로고침/이탈 시 유실 경고를 띄운다.
@@ -47,7 +45,6 @@ export default function CapturePage() {
   // 프레임(테두리·데코)은 사진을 배치하는 다음 단계부터 보인다.
   const currentSlot = layout ? layout.slots[currentSlotIndex] : null;
   // 8장을 다 찍으면 곧바로 다음 화면으로 넘어가므로, 표시용 번호는 MAX_SHOTS에서 멈춘다.
-  const currentShotNumber = Math.min(shotCount + 1, MAX_SHOTS);
 
   const backToFrameHref = (() => {
     const params = new URLSearchParams();
@@ -73,7 +70,6 @@ export default function CapturePage() {
       <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-3">
         <PageHeader
           title="사진 촬영"
-          description={`${MAX_SHOTS}장을 찍고 다음 단계에서 4장을 골라요.`}
           // 고른 컷 구성과 행사 맥락을 들고 돌아간다. 맨 주소로 보내면 둘 다 초기화된다.
           backHref={backToFrameHref}
           backLabel="프레임 다시 선택"
@@ -82,8 +78,7 @@ export default function CapturePage() {
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
         <section className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
-          <div className="flex items-center justify-between text-[11px] text-[color:var(--hc-muted)]">
-            <span>사진을 촬영해요</span>
+          <div className="flex items-center justify-end text-[11px] text-[color:var(--hc-muted)]">
             <span className="rounded-full border border-[color:var(--hc-border)] px-2 py-0.5">
               {shotCount} / {MAX_SHOTS}장 촬영됨
             </span>
@@ -115,13 +110,6 @@ export default function CapturePage() {
                     cameraFacingMode === "user" ? "scale-x-[-1]" : ""
                   }`}
                 />
-
-                {/* 지금 어느 칸을 찍는지 — 8장이 4칸을 순환하므로 칸 번호를 항상 보여준다. */}
-                {slotCount > 0 ? (
-                  <span className="absolute left-2 top-2 z-30 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
-                    {currentSlotIndex + 1}번째 칸 · {currentShotNumber}번째 컷
-                  </span>
-                ) : null}
 
                 {/*
                   카메라가 아직 안 켜졌을 때 검은 사각형만 보였다. 무슨 일이 일어나는지,
@@ -215,9 +203,6 @@ export default function CapturePage() {
               촬영 중에도 자리를 지키고 비활성으로만 두어 레이아웃이 흔들리지 않게 한다.
               한 화면에 셔터까지 담아야 해서 라벨을 칩과 같은 줄에 둔다. */}
           <div className="flex items-center justify-center gap-2">
-            <span className="text-[11px] font-semibold text-[color:var(--hc-muted)]">
-              촬영 간격
-            </span>
             <div className="flex items-center justify-center gap-2">
               {TIMER_OPTIONS.map((seconds) => {
                 const active = timerSeconds === seconds;
@@ -284,11 +269,16 @@ export default function CapturePage() {
             ) : null}
           </div>
 
-          <p className="text-center text-[11px] leading-[1.5] text-[color:var(--hc-muted)] [@media(max-height:700px)]:hidden">
-            {isShooting
-              ? `${timerSeconds}초 간격으로 남은 ${remainingShots}장을 자동으로 찍어요. 셔터를 누르면 바로 찍고, 취소하면 지금까지 찍은 ${shotCount}장은 지워져요.`
-              : `촬영 시작을 누르면 ${timerSeconds}초 간격으로 ${MAX_SHOTS}장을 자동으로 찍어요. 아래 작은 숫자는 프레임에서 들어갈 칸이에요.`}
-          </p>
+          {/*
+            시작 전 안내는 걷어냈다 — 간격 칩과 셔터 버튼이 이미 말하고 있어서 읽을 것만
+            늘었다. 촬영 중 문구는 남긴다. **취소하면 찍은 게 지워진다**는 것은 버튼만
+            봐서는 알 수 없고, 모르고 누르면 되돌릴 수 없다.
+          */}
+          {isShooting ? (
+            <p className="text-center text-[11px] leading-[1.5] text-[color:var(--hc-muted)] [@media(max-height:700px)]:hidden">
+              {`${timerSeconds}초 간격으로 남은 ${remainingShots}장을 자동으로 찍어요. 셔터를 누르면 바로 찍고, 취소하면 지금까지 찍은 ${shotCount}장은 지워져요.`}
+            </p>
+          ) : null}
         </section>
       </div>
     </main>

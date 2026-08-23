@@ -17,6 +17,7 @@ import { getImageUrlByKey } from "@/lib/presignedUploadApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
@@ -145,6 +146,7 @@ function MediaThumb({
 
 export default function HistoryPage() {
   const [view, setView] = useState<ViewMode>("grid");
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [items, setItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -442,12 +444,15 @@ export default function HistoryPage() {
                 </Link>
               </p>
             ) : null}
-            <Link
-              href="/shoot"
+            {/* 홈의 큰 카드와 같은 것을 연다 — 같은 뜻의 버튼이 화면마다 다르게
+                동작하면 안 된다(여기만 카메라로 직행했다). */}
+            <button
+              type="button"
+              onClick={() => setSourceDialogOpen(true)}
               className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
             >
-              촬영 시작
-            </Link>
+              기록 남기기
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-8">
@@ -553,6 +558,10 @@ export default function HistoryPage() {
         )}
       </div>
       <MobileTabBar />
+      <RecordSourceDialog
+        open={sourceDialogOpen}
+        onClose={() => setSourceDialogOpen(false)}
+      />
     </main>
   );
 }
