@@ -162,43 +162,12 @@ export default function CapturePage() {
             )}
           </div>
 
-          {/* 촬영 진행 스트립 — 프레임 없이 찍으므로, 몇 장을 찍었고 각 컷이 어느 칸에 들어가는지
-              여기서 보여준다. 아직 안 찍은 자리는 빈 칸으로 남겨 전체 진행도를 함께 읽게 한다. */}
-          <div
-            className="flex flex-wrap items-center justify-center gap-1.5"
-            aria-label={`촬영 진행 ${shotCount} / ${MAX_SHOTS}장`}
-          >
-            {Array.from({ length: MAX_SHOTS }, (_, index) => {
-              // 스토어보다 shotCount를 기준으로 잘라, 배지와 스트립이 어긋나지 않게 한다.
-              const shotPhoto = index < shotCount ? shots[index] : undefined;
-              const isCurrent = index === shotCount;
-              const slotNumber =
-                slotCount > 0 ? (index % slotCount) + 1 : index + 1;
+          {/*
+            촬영 스트립(찍힌 컷 8칸)은 걷어냈다. 찍은 사진은 바로 다음 화면에서 크게 보고
+            고르므로, 여기서 작게 다시 보여 줄 이유가 없었다. 남은 장수는 위 "N / 8장 촬영됨"
+            칩이 말한다. 그만큼 카메라가 커진다 — 이 화면에서 정작 봐야 하는 것이다.
+          */}
 
-              return (
-                <div
-                  key={index}
-                  className={`relative h-10 w-10 overflow-hidden rounded-md border bg-[color:var(--hc-surface-muted)] [@media(max-height:700px)]:h-8 [@media(max-height:700px)]:w-8 ${
-                    isCurrent
-                      ? "border-[color:var(--hc-primary)]"
-                      : "border-[color:var(--hc-border)]"
-                  }`}
-                >
-                  {shotPhoto ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={shotPhoto}
-                      alt={`촬영 ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : null}
-                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[11px] font-semibold text-white">
-                    {slotNumber}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
           {/* 촬영 간격 칩(3/5/8초) — 시작 전에만 고른다.
               촬영 중에도 자리를 지키고 비활성으로만 두어 레이아웃이 흔들리지 않게 한다.
               한 화면에 셔터까지 담아야 해서 라벨을 칩과 같은 줄에 둔다. */}
