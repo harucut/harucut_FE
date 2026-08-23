@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
 import { SessionExpiryBridge } from "@/components/auth/SessionExpiryBridge";
 import { AccountRecoveryBridge } from "@/components/auth/AccountRecoveryBridge";
+import { TermsConsentBridge } from "@/components/terms/TermsConsentBridge";
 import { ColorThemeScript } from "@/components/theme/ColorThemeScript";
 import { ColorThemeSync } from "@/components/theme/ColorThemeSync";
 import "./globals.css";
@@ -69,6 +70,9 @@ export default function RootLayout({
         </Suspense>
         <Suspense fallback={null}>
           <AccountRecoveryBridge />
+        </Suspense>
+        <Suspense fallback={null}>
+          <TermsConsentBridge />
         </Suspense>
         {children}
       </body>

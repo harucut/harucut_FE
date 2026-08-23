@@ -1,0 +1,83 @@
+"use client";
+
+import Link from "next/link";
+import type { ConsentChoice } from "@/hooks/useActiveTerms";
+
+type Props = {
+  items: ConsentChoice[];
+  checked: Record<string, boolean>;
+  onToggle: (code: string, next: boolean) => void;
+  error?: string | null;
+  disabled?: boolean;
+};
+
+/**
+ * 약관 동의 체크박스 묶음. 가입 화면과 재동의 화면이 같은 것을 쓴다.
+ *
+ * 두 화면이 갈리면 한쪽에만 새 약관이 뜨거나, 한쪽만 [필수] 표시가 빠진다 —
+ * 동의 화면에서 그런 불일치는 그대로 법적 흠결이 된다.
+ *
+ * 우리 약관 화면이 있는 코드는 그 페이지로 보내고, 없는 코드(관리자가 새로 만든 약관)는
+ * 서버가 준 본문을 그 자리에서 펼쳐 준다. **읽을 수 없는 항목에 동의를 받지 않는다.**
+ */
+export function TermsConsentFieldset({
+  items,
+  checked,
+  onToggle,
+  error,
+  disabled,
+}: Props) {
+  return (
+    <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+      <legend className="sr-only">약관 동의</legend>
+      {items.map((item) => (
+        <div key={item.code} className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-[12px] text-zinc-300">
+            <input
+              type="checkbox"
+              checked={checked[item.code] ?? false}
+              disabled={disabled}
+              onChange={(e) => onToggle(item.code, e.target.checked)}
+              className="h-4 w-4 accent-[color:var(--hc-primary)]"
+            />
+            <span>
+              <span
+                className={
+                  item.required
+                    ? "text-[color:var(--hc-primary-strong)]"
+                    : "text-zinc-500"
+                }
+              >
+                {item.required ? "[필수]" : "[선택]"}
+              </span>{" "}
+              {item.title}
+            </span>
+            {item.href ? (
+              <Link
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
+              >
+                보기
+              </Link>
+            ) : null}
+          </label>
+          {item.content ? (
+            <details className="ml-6">
+              <summary className="cursor-pointer text-[11px] text-zinc-500 underline underline-offset-4">
+                전문 보기
+              </summary>
+              <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-2 text-[11px] leading-5 text-zinc-400">
+                {item.content}
+              </p>
+            </details>
+          ) : null}
+        </div>
+      ))}
+      {error ? (
+        <p className="text-[11px] text-[color:var(--hc-danger)]">{error}</p>
+      ) : null}
+    </fieldset>
+  );
+}

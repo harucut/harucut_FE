@@ -27,6 +27,9 @@ import {
   getSafeRedirectPath,
   resolveRedirectTarget,
 } from "@/lib/redirect";
+import { useActiveTerms } from "@/hooks/useActiveTerms";
+import { TermsConsentFieldset } from "@/components/terms/TermsConsentFieldset";
+import { setPendingTermsConsent } from "@/lib/pendingTermsConsent";
 import {
   useEmailVerification,
   VERIFICATION_EXPIRED_MESSAGE,
@@ -42,24 +45,6 @@ type SignupErrors = Partial<Record<SignupFieldName, string | null>> & {
   consent?: string | null;
 };
 
-const CONSENT_ITEMS = [
-  { href: "/terms", key: "terms", label: "서비스 이용약관 동의", required: true },
-  {
-    href: "/privacy",
-    key: "privacy",
-    label: "개인정보 수집·이용 동의",
-    required: true,
-  },
-  {
-    href: "/privacy",
-    key: "marketing",
-    label: "마케팅 정보 수신 동의",
-    required: false,
-  },
-] as const;
-
-type ConsentKey = (typeof CONSENT_ITEMS)[number]["key"];
-
 function SignupPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -72,11 +57,10 @@ function SignupPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<SignupErrors>({});
   const [email, setEmail] = useState("");
-  const [consents, setConsents] = useState<Record<ConsentKey, boolean>>({
-    privacy: false,
-    terms: false,
-    marketing: false,
-  });
+  // 어떤 약관이 있고 무엇이 필수인지는 **서버가 정한다**(관리자가 등록한 활성 약관).
+  // 코드를 여기 박아 두면 관리자가 약관을 하나 더 만든 순간 화면에서 사라진다.
+  const activeTerms = useActiveTerms();
+  const [consents, setConsents] = useState<Record<string, boolean>>({});
 
   const emailVerification = useEmailVerification();
 
@@ -124,9 +108,14 @@ function SignupPageContent() {
       nextErrors.email = VERIFICATION_EXPIRED_MESSAGE;
     }
 
-    if (!consents.terms || !consents.privacy) {
-      nextErrors.consent =
-        "서비스 이용약관과 개인정보 수집·이용에 동의해야 가입할 수 있어요.";
+    // 필수 약관은 서버가 표시한 것만 필수다. 목록이 바뀌어도 여기 고칠 것이 없다.
+    const missingRequired = activeTerms.items.filter(
+      (item) => item.required && !consents[item.code],
+    );
+    if (missingRequired.length > 0) {
+      nextErrors.consent = `${missingRequired
+        .map((item) => item.title)
+        .join(", ")}에 동의해야 가입할 수 있어요.`;
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -136,16 +125,21 @@ function SignupPageContent() {
     }
 
     try {
-      // ⚠️ 받은 동의를 아직 어디에도 보내지 않는다.
+      // 동의를 여기서 바로 보낼 수는 없다. `POST /api/auth/terms/consents` 는 인증이
+      // 필요한데 우리 가입은 계정만 만들고 로그인시키지 않는다. 그래서 사용자가 고른 값을
+      // 보관해 두고, 로그인 직후 TermsConsentBridge 가 서버 장부에 기록한다.
       //
-      // `POST /api/harucut/register` 에 동의 필드가 없는 것은 맞지만, 서버에는 **전용
-      // 약관 API 가 따로 있다** — `GET /api/terms`(공개 목록), `POST /api/auth/terms/consents`,
-      // `GET /api/auth/terms/consents/me`. 동의 이력은 "법적 증빙용이라 수정·삭제되지 않는다"고
-      // 스웨거에 적혀 있다(docs/backend-contract.md 실측 2026-08-21).
-      //
-      // 그 API 는 인증이 필요해 가입 직후가 아니라 로그인 이후에 불러야 하고, 약관이 개정됐을 때의
-      // `NEEDS_RECONSENT` 재동의 화면도 함께 필요하다. 화면 하나를 새로 만드는 일이라 여기서
-      // 몰래 붙이지 않고 남겨 둔다.
+      // 보관에 실패해도 가입은 그대로 진행한다 — 필수 약관은 어차피 재동의 화면이 다시 받고,
+      // 여기서 막으면 사용자는 이유도 모른 채 가입이 안 되는 화면을 만난다.
+      if (activeTerms.fromServer) {
+        setPendingTermsConsent(
+          activeTerms.items.map((item) => ({
+            code: item.code,
+            agreed: Boolean(consents[item.code]),
+          })),
+        );
+      }
+
       await signupWithEmail({
         email: verifiedEmail || emailFromState,
         password,
@@ -258,50 +252,14 @@ function SignupPageContent() {
           />
         ))}
 
-        <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
-          <legend className="sr-only">약관 동의</legend>
-          {CONSENT_ITEMS.map((item) => (
-            <label
-              key={item.key}
-              className="flex items-center gap-2 text-[12px] text-zinc-300"
-            >
-              <input
-                type="checkbox"
-                checked={consents[item.key]}
-                onChange={(e) =>
-                  setConsents((current) => ({
-                    ...current,
-                    [item.key]: e.target.checked,
-                  }))
-                }
-                className="h-4 w-4 accent-[color:var(--hc-primary)]"
-              />
-              <span>
-                <span
-                  className={
-                    item.required
-                      ? "text-[color:var(--hc-primary-strong)]"
-                      : "text-zinc-500"
-                  }
-                >
-                  {item.required ? "[필수]" : "[선택]"}
-                </span>{" "}
-                {item.label}
-              </span>
-              <Link
-                href={item.href}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
-              >
-                보기
-              </Link>
-            </label>
-          ))}
-          {errors.consent ? (
-            <p className="text-[11px] text-[color:var(--hc-danger)]">{errors.consent}</p>
-          ) : null}
-        </fieldset>
+        <TermsConsentFieldset
+          items={activeTerms.items}
+          checked={consents}
+          onToggle={(code, next) =>
+            setConsents((current) => ({ ...current, [code]: next }))
+          }
+          error={errors.consent}
+        />
 
         <button
           type="submit"

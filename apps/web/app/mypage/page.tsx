@@ -29,6 +29,7 @@ import {
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
+import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import { getPlanDisplayName } from "@/constants/plans";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import type { SubscriptionUsage } from "@/lib/api-types";
@@ -71,7 +72,11 @@ const SECTION_META: Record<
     sub: "이메일, 닉네임, 비밀번호 변경",
   },
   plan: { icon: Sparkles, title: "요금제", sub: "플랜 및 결제 관리" },
-  notif: { icon: Bell, title: "알림 설정", sub: "푸시, 주간 리마인더" },
+  notif: {
+    icon: Bell,
+    title: "알림·약관 동의",
+    sub: "마케팅 수신 동의, 푸시",
+  },
   frames: { icon: ImageIcon, title: "내 프레임", sub: "보관한 프레임" },
   pref: { icon: Settings, title: "설정", sub: "화질, 언어" },
 };
@@ -588,12 +593,9 @@ export default function MyPage() {
     </div>
   );
 
-  const notifSection = (
-    <p className="text-[13px] leading-6 text-[color:var(--hc-muted)]">
-      알림 설정은 곧 제공될 예정이에요. 주간 리마인더와 좋아요 알림을 이곳에서
-      관리할 수 있게 준비하고 있어요.
-    </p>
-  );
+  // 마케팅 수신 동의를 거둘 자리가 그동안 없었다. 알림 설정이 곧 여기 붙을 자리라
+  // 같은 칸에 둔다 — 사용자가 "받을지 말지"를 찾는 곳이 한 군데여야 한다.
+  const notifSection = <TermsConsentPanel />;
 
   const framesSection = (
     <div className="flex flex-col gap-3">
@@ -626,7 +628,7 @@ export default function MyPage() {
   const sectionTitle: Record<SectionId, string> = {
     account: "계정 정보",
     plan: "요금제",
-    notif: "알림 설정",
+    notif: "알림·약관 동의",
     frames: "내 프레임",
     pref: "설정",
   };
