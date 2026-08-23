@@ -224,7 +224,6 @@ function withoutBrandExemptions(violations: ViolationRule[]) {
     .filter((rule) => rule.id !== "color-contrast" || rule.nodes.length > 0);
 }
 
-type IncompleteNode = { any?: Array<{ message?: string }> };
 
 /**
 * 같은 사유를 **문구 대신 키로** 본다.

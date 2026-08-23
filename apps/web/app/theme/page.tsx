@@ -114,14 +114,24 @@ function ThemePageContent() {
           }}
           savedFrameAction={{ label: "수정하기", onAction: handleOpenRemoteFrame }}
           belowPicker={
-            /* 보관이 안 되는 상태라면 만들기 전에 알려 준다 — 만든 뒤에 알면 늦다. */
-            !isLoading && isAtCapacity ? (
+            /*
+              몇 개까지 되는지는 **만들기 전에** 알아야 한다 — 만든 뒤에 알면 늦다.
+              요금제 이름(PRO 같은 것)은 붙이지 않는다. 여기서 알고 싶은 것은 등급이
+              아니라 "지금 몇 개 더 되는가"다. 등급은 마이페이지가 맡는다.
+            */
+            isLoading ? null : isAtCapacity ? (
               <p className="-mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
                 {capacity.plan.limit <= 0 && !capacity.unlimited
-                  ? "지금 요금제로는 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해서, 유료 요금제부터 이용할 수 있어요."
-                  : "보관함이 가득 찼어요. 새 프레임을 저장하려면 기존 프레임을 지우거나 요금제를 올려야 해요."}
+                  ? "지금은 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해요."
+                  : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."}
               </p>
-            ) : null
+            ) : (
+              <p className="-mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+                {capacity.unlimited
+                  ? "프레임은 개수 제한 없이 저장할 수 있어요."
+                  : `${capacity.used}개 저장했어요. ${capacity.remaining}개 더 저장할 수 있어요.`}
+              </p>
+            )
           }
         />
       </div>
