@@ -77,7 +77,6 @@ export default function CapturePage() {
           // 고른 컷 구성과 행사 맥락을 들고 돌아간다. 맨 주소로 보내면 둘 다 초기화된다.
           backHref={backToFrameHref}
           backLabel="프레임 다시 선택"
-          brandHref={accessMode === "guest" ? "/shoot" : "/home"}
         />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}

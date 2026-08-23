@@ -72,7 +72,6 @@ export default function ShootSelectPage() {
           description="프레임에 넣을 4장을 골라 주세요."
           backHref={sourceHref}
           backLabel={fromUpload ? "사진 다시 고르기" : "다시 촬영"}
-          brandHref={guestMode ? "/shoot" : "/home"}
         />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}

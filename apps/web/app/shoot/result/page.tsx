@@ -514,7 +514,6 @@ export default function ShootResultPage() {
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <PageHeader
           title={fromUpload ? "네컷 결과" : "촬영 결과"}
-          brandHref={guestMode ? "/shoot" : "/home"}
           description={
             guestMode
               ? "비회원 체험 결과 이미지를 내려받고, 이어서 로그인해 기능을 확장해 보세요."

@@ -91,7 +91,7 @@ function ThemePageContent() {
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref="/home"
-          backLabel="처음으로"
+          backLabel="홈으로"
           title="프레임 꾸미기"
           rightBelow={
             /*

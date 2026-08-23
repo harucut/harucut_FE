@@ -43,7 +43,6 @@ function ShootPageContent() {
         <PageHeader
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
-          brandHref={accessMode === "guest" ? "/shoot" : "/home"}
           title="프레임 선택"
         />
 
