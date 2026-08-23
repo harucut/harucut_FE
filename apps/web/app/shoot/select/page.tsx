@@ -69,7 +69,6 @@ export default function ShootSelectPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <PageHeader
           title="사진 선택"
-          description="프레임에 넣을 4장을 골라 주세요."
           backHref={sourceHref}
           backLabel={fromUpload ? "사진 다시 고르기" : "다시 촬영"}
         />

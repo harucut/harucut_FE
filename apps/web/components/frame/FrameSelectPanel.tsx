@@ -93,7 +93,6 @@ export function FrameSelectPanel({
       <section className="flex flex-col gap-3">
         {frameId ? (
           <section className="flex flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:hidden">
-            <p className="text-sm font-semibold text-[color:var(--hc-text)]">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview
                 frameId={frameId}
@@ -207,7 +206,6 @@ export function FrameSelectPanel({
       <aside className="flex flex-col gap-3 lg:sticky lg:top-6">
         {frameId ? (
           <section className="hidden flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:flex">
-            <p className="text-sm font-semibold text-[color:var(--hc-text)]">프레임 미리보기</p>
             <div className="flex justify-center">
               <FramePreview
                 frameId={frameId}

@@ -138,32 +138,31 @@ export default function CapturePage() {
                   </div>
                 ) : null}
 
+                {isShooting && countdown !== null ? (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-black/35">
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white text-2xl font-semibold text-white">
+                      {countdown}
+                    </span>
+                    <span className="rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      {shotCount}/{MAX_SHOTS}
+                    </span>
+                  </div>
+                ) : null}
+
                 {/*
                   촬영 관련 컨트롤은 **무대 한가운데**에 얹는다 — 바로 위 "카메라 켜기"가
                   섰던 그 자리다. 켜고 → 찍는, 이어지는 한 동작이라 같은 자리·같은 알약
                   모양이어야 한다.
 
-                  촬영이 시작돼도 **없애지 않고 비활성으로만 둔다.** 사라지면 그 자리가
-                  비면서 화면이 출렁이고, 무엇이 있었는지도 잊힌다. 회색으로 남겨 두면
-                  "지금은 못 바꾼다"는 것이 그대로 보인다.
+                  시작하면 사라진다. 둘 다 "시작하기 전에 정하는 것"이라, 시작한 뒤에는
+                  화면에 남을 이유가 없다 — 그때부터 이 화면이 할 일은 카메라를 보여 주는
+                  것뿐이다.
 
                   영상 위에 얹히므로 칩·버튼에 각자 불투명 배경을 줘서 뒤에 무엇이 오든
                   읽히게 한다.
                 */}
-                {isCameraReady ? (
+                {isCameraReady && !isShooting ? (
                   <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 px-3">
-                    {/* 촬영 중에는 남은 시간이 이 자리 맨 위에 온다. */}
-                    {isShooting && countdown !== null ? (
-                      <div className="flex flex-col items-center gap-1.5">
-                        <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white bg-black/45 text-2xl font-semibold text-white">
-                          {countdown}
-                        </span>
-                        <span className="rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
-                          {shotCount}/{MAX_SHOTS}
-                        </span>
-                      </div>
-                    ) : null}
-
                     <div className="flex items-center justify-center gap-2">
                       {TIMER_OPTIONS.map((seconds) => {
                         const active = timerSeconds === seconds;
@@ -172,9 +171,8 @@ export default function CapturePage() {
                             key={seconds}
                             type="button"
                             onClick={() => setTimerSeconds(seconds)}
-                            disabled={isShooting}
                             aria-pressed={active}
-                            className={`inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                            className={`inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition ${
                               active
                                 ? "bg-white text-[#0B0B0C]"
                                 : "bg-black/55 text-white ring-1 ring-white/30"
@@ -190,8 +188,7 @@ export default function CapturePage() {
                     <button
                       type="button"
                       onClick={startShooting}
-                      disabled={isShooting}
-                      className="hc-button-primary inline-flex h-12 items-center rounded-full px-7 text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-45"
+                      className="hc-button-primary inline-flex h-12 items-center rounded-full px-7 text-[15px] font-extrabold"
                     >
                       촬영 시작
                     </button>
@@ -227,16 +224,24 @@ export default function CapturePage() {
 
             <button
               type="button"
-              onClick={isShooting ? handleShootNow : startShooting}
-              disabled={!isCameraReady}
+              onClick={handleShootNow}
+              // 이 버튼이 하는 일은 "기다리지 않고 지금 한 컷"이라, 촬영이 돌고 있을 때만
+              // 할 수 있는 일이다. 시작 전에는 눌러도 할 일이 없으므로 회색으로 둔다 —
+              // 시작은 무대 한가운데 알약이 맡는다.
+              disabled={!isCameraReady || !isShooting}
+              // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다(시작은 무대 안 알약이 맡는다).
+              // 화면에서 글자가 빠져도 보조기술에는 남아야 한다.
+              aria-label="바로 촬영"
               className="flex flex-col items-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[60px]">
                 <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)] [@media(max-height:700px)]:h-[44px] [@media(max-height:700px)]:w-[44px]" />
               </span>
-              <span className="text-[12px] font-bold">
-                {isShooting ? "바로 촬영" : "촬영 시작"}
-              </span>
+              {/*
+                글자는 두지 않는다. 시작은 무대 한가운데 알약이 맡고, 이 동그라미는
+                촬영이 돌 때만 살아나는 셔터라 설명이 없어도 무엇인지 안다.
+                이름은 aria-label 로 남아 보조기술에는 계속 읽힌다.
+              */}
             </button>
           </div>
         </section>
