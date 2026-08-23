@@ -95,7 +95,6 @@ function ShootPageContent() {
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
           brandHref={accessMode === "guest" ? "/shoot" : "/home"}
           title="프레임 선택"
-          description="촬영할 4컷 프레임을 골라 주세요."
         />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}

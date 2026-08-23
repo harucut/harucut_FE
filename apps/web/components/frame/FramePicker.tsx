@@ -137,10 +137,13 @@ function FramePickerCard({
             mode === "grid" ? "min-h-[220px] p-3" : "min-h-[220px] p-4",
           ].join(" ")}
         >
-          {/* 짧은 태그 — 미리보기 모서리에 얹어 배치 성격을 한눈에 준다. */}
-          <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-0.5 text-[11px] font-bold tracking-[0.08em] text-white">
-            {config.shortLabel}
-          </span>
+          {/* 추천 표시. 한 장에만 붙어야 "이걸 고르면 무난하다"로 읽힌다 —
+              넷 다 칩을 달면 그냥 분류 라벨이 된다(constants/frames.ts 주석). */}
+          {config.recommended ? (
+            <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-0.5 text-[11px] font-bold tracking-[0.08em] text-white">
+              BEST
+            </span>
+          ) : null}
 
           <div className={FRAME_PICKER_PREVIEW_VIEWPORT}>
             <FramePreview

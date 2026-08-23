@@ -4,8 +4,16 @@ export type FrameConfig = {
   id: FrameId;
   name: string;
   slots: number;
-  /** 미리보기 모서리에 얹는 짧은 태그. */
-  shortLabel: string;
+  /**
+   * 추천 프레임. **하나에만 붙인다.**
+   *
+   * 예전에는 네 프레임에 각각 BEST·MOOD·EDIT·THEME 를 달았다. 그런데 MOOD·EDIT·THEME 는
+   * 가로 4컷이 왜 MOOD 인지 설명하지 못하는 분위기 단어였고, 무엇보다 **넷 다 칩을 달면
+   * BEST 가 추천으로 안 읽힌다** — 추천 표시는 혼자일 때만 작동한다.
+   *
+   * 라벨 문구는 데이터가 아니라 FramePicker 가 정한다. 여기는 "어느 것이 추천인가"만 안다.
+   */
+  recommended?: boolean;
 };
 
 // 표시 이름은 배치 형태를 그대로 부른다(세로/가로/네모/즉석사진).
@@ -21,25 +29,22 @@ export type FrameConfig = {
 export const FRAME_CONFIGS: FrameConfig[] = [
   {
     id: "classic-4",
-    shortLabel: "BEST",
+    recommended: true,
     name: "세로 4컷",
     slots: 4,
   },
   {
     id: "wide-4",
-    shortLabel: "MOOD",
     name: "가로 4컷",
     slots: 4,
   },
   {
     id: "grid-4",
-    shortLabel: "EDIT",
     name: "네모 4컷",
     slots: 4,
   },
   {
     id: "polaroid-4",
-    shortLabel: "THEME",
     name: "즉석사진 4컷",
     slots: 4,
   },
