@@ -8,8 +8,7 @@
  *
  * 사용자에게는 공들여 꾸민 프레임이 날아간 것으로 읽힌다. 실패는 "없음"이 아니라 "모름"이다.
  */
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import type { RemoteFrame } from "@/lib/api-types";
 
@@ -62,10 +61,10 @@ describe("SavedFramesSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("불러오지 못했으면 다시 시도할 자리를 준다", async () => {
+  it("불러오지 못했으면 다시 시도할 자리를 준다", () => {
     const { onRefresh } = renderSection({ error: ERROR, frames: [] });
 
-    await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 

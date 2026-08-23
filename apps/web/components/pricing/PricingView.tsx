@@ -199,7 +199,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         authed ? "pb-[90px] lg:pb-0" : "pb-10"
       }`}
     >
-      {authed ? <AppNav publicShoot /> : <MarketingNav width="max-w-5xl" />}
+      {authed ? <AppNav /> : <MarketingNav width="max-w-5xl" />}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}

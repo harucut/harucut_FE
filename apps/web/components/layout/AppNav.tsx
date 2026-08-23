@@ -2,17 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Camera } from "lucide-react";
+import { Bell } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type AppNavProps = {
   // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
   userInitial?: string | null;
-  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 CTA는 인증 여부를 확인해
-  // 로그인 사용자는 /shoot로 직행, 비회원은 게스트 체험 안내를 띄운다.
-  // (proxy가 비회원을 /login으로 막으므로) authed 페이지에서는 미지정.
-  publicShoot?: boolean;
 };
 
 const NAV_LINKS: { href: string; label: string }[] = [
@@ -24,16 +19,16 @@ const NAV_LINKS: { href: string; label: string }[] = [
 
 // 데스크톱(≥ lg) 전용 상단 네비게이션 (handoff app AppNav).
 // 모바일(< lg)에서는 숨기고 하단 MobileTabBar가 네비게이션을 담당한다.
-export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
+//
+// 촬영 CTA는 여기 두지 않는다. 데스크톱 상단은 네비게이션 자리이고, 촬영 진입은 홈의
+// 큰 카드가 맡는다. 모바일은 그대로 하단 탭바 가운데 FAB가 담당한다 — 이 컴포넌트는
+// lg 미만에서 아예 렌더되지 않으므로 여기 변경은 모바일에 닿지 않는다.
+export function AppNav({ userInitial }: AppNavProps) {
   const pathname = usePathname();
-  const { onShootCta } = usePublicShootCta();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
   const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
-
-  const shootButtonClass =
-    "hc-button-primary flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold";
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl lg:block">
@@ -61,22 +56,6 @@ export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          {publicShoot ? (
-            <button
-              type="button"
-              onClick={onShootCta}
-              className={shootButtonClass}
-            >
-              <Camera className="h-[17px] w-[17px]" />
-              촬영하기
-            </button>
-          ) : (
-            <Link href="/shoot" className={shootButtonClass}>
-              <Camera className="h-[17px] w-[17px]" />
-              촬영하기
-            </Link>
-          )}
-
           <button
             type="button"
             aria-label="알림"
