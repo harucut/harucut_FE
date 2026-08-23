@@ -39,12 +39,10 @@ export function RecordSourceDialog({ open, onClose }: Props) {
         aria-labelledby="record-source-title"
         className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-[var(--hc-card-shadow)]"
       >
+        {/* 부제는 두지 않는다 — 아래 두 카드가 이미 각자 무엇인지 말한다. */}
         <h2 id="record-source-title" className="text-[18px] font-extrabold">
           어떻게 남길까요?
         </h2>
-        <p className="mt-1 text-[13px] leading-6 text-[color:var(--hc-muted)]">
-          찍어서 남기거나, 갖고 있는 사진으로 만들 수 있어요.
-        </p>
 
         <div className="mt-4 flex flex-col gap-2.5">
           <Link

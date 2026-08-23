@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
 
 type AppNavProps = {
@@ -56,14 +55,6 @@ export function AppNav({ userInitial }: AppNavProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="알림"
-            className="hc-button-icon grid h-[42px] w-[42px] place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
-          >
-            <Bell className="h-[19px] w-[19px]" />
-          </button>
-
           <Link
             href="/mypage"
             aria-label="마이페이지"

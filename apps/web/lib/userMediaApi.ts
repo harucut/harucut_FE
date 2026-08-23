@@ -3,6 +3,25 @@
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, UserMedia } from "@/lib/api-types";
 
+/**
+ * 최근 것 몇 장만. **한 페이지만 부른다.**
+ *
+ * 홈은 최근 4장만 보여주는데 예전에는 `listMyMedia()` 로 보관함 전체를 순차로 긁었다
+ * (100건씩 최대 100페이지). 이번 달/이번 주 개수를 프론트가 세느라 그랬는데, 그 숫자를
+ * 걷어내면서 전체를 받을 이유도 없어졌다. 기록이 늘수록 첫 화면이 느려지던 자리다.
+ */
+export async function listRecentMedia(limit = 4) {
+  const params = new URLSearchParams();
+  params.set("page", "0");
+  params.set("size", String(Math.max(1, limit)));
+  const res = await clientApi.get<
+    ApiEnvelope<{ content?: UserMedia[] } | UserMedia[]>
+  >(`/api/client/user/media?${params.toString()}`);
+  const data = res.data.data;
+  const list = Array.isArray(data) ? data : (data?.content ?? []);
+  return list.slice(0, limit);
+}
+
 export async function listMyMedia() {
   // 백엔드 GET /api/auth/user/media는 page(0부터)/size(기본 10) 기반 페이지네이션이라
   // 모든 페이지를 순회해 전체 미디어를 모은다. (이전엔 첫 페이지 10개 외 항목이 누락됐다)

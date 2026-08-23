@@ -2,12 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PAYMENTS_ENABLED } from "@/constants/company";
 import { resolvePlanInfo } from "@/constants/planLimits";
-import {
-  FrameCapacityMeter,
-  resolveFrameCapacity,
-} from "@/components/frame/FrameCapacityMeter";
+import { resolveFrameCapacity } from "@/components/frame/FrameCapacityMeter";
 import { FrameChooser } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useMyFrames } from "@/hooks/useMyFrames";
@@ -32,7 +28,6 @@ function ThemePageContent() {
     usage,
     frames.length,
   );
-  const plan = capacity.plan;
 
   useEffect(() => {
     reset();
@@ -98,7 +93,6 @@ function ThemePageContent() {
           backHref="/home"
           backLabel="처음으로"
           title="프레임 꾸미기"
-          description="새 프레임을 만들거나 저장한 프레임을 이어서 꾸며보세요."
         />
 
         <FrameChooser
@@ -129,15 +123,7 @@ function ThemePageContent() {
               </p>
             ) : null
           }
-        >
-          <FrameCapacityMeter
-            plan={plan}
-            used={capacity.used}
-            remaining={capacity.remaining}
-            // 결제가 열리기 전에는 업그레이드 버튼이 아무 데도 데려다주지 못한다.
-            onUpgrade={PAYMENTS_ENABLED ? () => router.push("/pricing") : undefined}
-          />
-        </FrameChooser>
+        />
       </div>
     </main>
   );
