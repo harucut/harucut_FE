@@ -100,6 +100,7 @@ function ThemePageContent() {
                 한도를 만나면 되돌릴 수 없다. 등급(PRO 같은 것)은 붙이지 않는다.
                 여기서 알고 싶은 건 등급이 아니라 "지금 몇 개 더 되는가"다.
                 불러오기 전에는 아무것도 안 쓴다 — 0/0 이 잠깐 스쳤다가 바뀌면 오히려 헷갈린다.
+                무제한은 ∞ 로 쓰되, 기호만으로는 뜻이 안 통하므로 aria-label 로 말을 붙인다.
               */}
               {isLoading ? null : (
                 <span
@@ -111,7 +112,7 @@ function ThemePageContent() {
                   }
                 >
                   {capacity.unlimited
-                    ? "무한"
+                    ? "∞"
                     : `${capacity.used}/${capacity.used + (capacity.remaining ?? 0)}`}
                 </span>
               )}
