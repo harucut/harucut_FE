@@ -92,7 +92,31 @@ function ThemePageContent() {
         <PageHeader
           backHref="/home"
           backLabel="처음으로"
-          title="프레임 꾸미기"
+          title={
+            <span className="flex items-baseline gap-2">
+              프레임 꾸미기
+              {/*
+                몇 개까지 되는지는 만들기 전에 알아야 한다 — 다 꾸미고 저장하려는 순간
+                한도를 만나면 되돌릴 수 없다. 등급(PRO 같은 것)은 붙이지 않는다.
+                여기서 알고 싶은 건 등급이 아니라 "지금 몇 개 더 되는가"다.
+                불러오기 전에는 아무것도 안 쓴다 — 0/0 이 잠깐 스쳤다가 바뀌면 오히려 헷갈린다.
+              */}
+              {isLoading ? null : (
+                <span
+                  className="text-[13px] font-semibold tabular-nums text-[color:var(--hc-muted)]"
+                  aria-label={
+                    capacity.unlimited
+                      ? "보관 개수 제한 없음"
+                      : `보관 ${capacity.used}개 / ${capacity.used + (capacity.remaining ?? 0)}개`
+                  }
+                >
+                  {capacity.unlimited
+                    ? "무한"
+                    : `${capacity.used}/${capacity.used + (capacity.remaining ?? 0)}`}
+                </span>
+              )}
+            </span>
+          }
         />
 
         <FrameChooser
@@ -125,13 +149,7 @@ function ThemePageContent() {
                   ? "지금은 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해요."
                   : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."}
               </p>
-            ) : (
-              <p className="-mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
-                {capacity.unlimited
-                  ? "프레임은 개수 제한 없이 저장할 수 있어요."
-                  : `${capacity.used}개 저장했어요. ${capacity.remaining}개 더 저장할 수 있어요.`}
-              </p>
-            )
+            ) : null
           }
         />
       </div>
