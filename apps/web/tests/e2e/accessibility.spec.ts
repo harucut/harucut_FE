@@ -131,19 +131,6 @@ const FLATTEN_PAGE_GRADIENT_CSS = `
 `;
 
 /**
- * 온보딩 코치마크(components/onboarding/CoachMarks.tsx)가 뜰 때까지 기다린다.
- *
- * 코치마크는 hydration 뒤 effect가 걸고 350ms 지난 뒤에 뜬다. 그 전에 스캔하면 어떤
- * 실행에서는 검사되고 어떤 실행에서는 빠져서, 느린 러너에서만 위반이 잡힌다.
- * 스토리지 키가 비어 있는 새 컨텍스트에서는 반드시 뜬다.
- */
-async function waitForCoachMark(page: Page) {
-  await page
-    .getByRole("dialog", { name: "기능 안내" })
-    .waitFor({ state: "visible" });
-}
-
-/**
  * axe의 색 대비 판정에는 violations 말고 incomplete("판정 불가")도 있다. 그 안에 실제
  * 미달이 섞여 있어도 violations만 보면 통과로 읽히므로, 대비만큼은 판정 불가도 실패로 둔다.
  *
@@ -331,9 +318,6 @@ for (const route of publicRoutes) {
   });
 }
 
-// 코치마크를 띄우는 화면. 지금은 /home 하나뿐이다(app/home/page.tsx의 <CoachMarks id="home-v1">).
-const routesWithCoachMark = new Set<string>(["/home"]);
-
 for (const route of authenticatedRoutes) {
   test(`authenticated route ${route} has no obvious accessibility violations`, async ({
     page,
@@ -341,10 +325,6 @@ for (const route of authenticatedRoutes) {
     await enableAuthenticatedContext(page);
     await page.goto(route);
     await expectStayedOn(page, route);
-
-    if (routesWithCoachMark.has(route)) {
-      await waitForCoachMark(page);
-    }
 
     await expectNoAccessibilityViolations(page, route);
   });

@@ -15,21 +15,7 @@ import {
 } from "@/lib/userMediaPreview";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
-import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
-
-const HOME_COACH_STEPS: CoachStep[] = [
-  {
-    selector: '[data-coach="shoot"]',
-    title: "기록 남기기",
-    body: "카메라로 찍거나 갖고 있는 사진으로 네 컷을 만들어요.",
-  },
-  {
-    selector: '[data-coach="theme"]',
-    title: "프레임 꾸미기",
-    body: "프레임 색·배경 이미지·텍스트·스티커로 나만의 프레임을 만들어요.",
-  },
-];
 
 /** 홈에 보여 줄 최근 기록 수. 조회도 딱 이만큼만 받는다. */
 const RECENT_LIMIT = 4;
@@ -47,14 +33,14 @@ const HOME_CARD =
 /** 제목·설명은 여기 한 벌만 둔다. 화면 크기가 문구를 바꾸지 않는다. */
 const HOME_ACTIONS = [
   {
-    coach: "shoot",
+    id: "shoot",
     title: "기록 남기기",
     description: "찍거나 갖고 있는 사진으로 네 컷을 만들어요",
     href: null as string | null,
     primary: true,
   },
   {
-    coach: "theme",
+    id: "theme",
     title: "프레임 꾸미기",
     description: "만들어두면 촬영할 때 골라 써요",
     href: "/theme" as string | null,
@@ -241,19 +227,17 @@ export default function HomePage() {
 
             return action.href ? (
               <Link
-                key={action.coach}
+                key={action.id}
                 href={action.href}
-                data-coach={action.coach}
                 className={className}
               >
                 {body}
               </Link>
             ) : (
               <button
-                key={action.coach}
+                key={action.id}
                 type="button"
                 onClick={() => setSourceDialogOpen(true)}
-                data-coach={action.coach}
                 className={`${className} w-full`}
               >
                 {body}
@@ -368,7 +352,6 @@ export default function HomePage() {
         </section>
       </div>
       <MobileTabBar />
-      <CoachMarks id="home-v1" steps={HOME_COACH_STEPS} />
       <RecordSourceDialog
         open={sourceDialogOpen}
         onClose={() => setSourceDialogOpen(false)}
