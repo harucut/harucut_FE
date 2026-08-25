@@ -1,10 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { RefreshCw, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { useStageFit } from "@/hooks/useStageFit";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 
@@ -42,6 +44,33 @@ export default function CapturePage() {
   // 촬영 중에는 프레임을 씌우지 않고, 선택한 프레임의 슬롯 비율만 프리뷰에 반영한다.
   // 프레임(테두리·데코)은 사진을 배치하는 다음 단계부터 보인다.
   const currentSlot = layout ? layout.slots[currentSlotIndex] : null;
+
+  /*
+    프리뷰 무대를 슬롯 비율 그대로, 남은 공간 안에 넣는다.
+
+    예전에는 `aspectRatio` 에 `height:100%` 와 `maxWidth:100%` 를 같이 걸었다. 높이가
+    고정된 상태에서 가로가 상한에 걸리면 두 축이 모두 확정돼 `aspect-ratio` 가 무시된다.
+    실측으로 세로 4컷(슬롯 1700×1200, 가로 1.42)이 422×528(세로 0.80)로 그려졌다 —
+    프리뷰는 세로로 긴 화면을 보여 주는데 `capturePhotoToDataUrl` 은 같은 영상을 슬롯
+    비율로 가운데 잘라 저장하니, 본 것과 찍힌 것이 서로 다른 그림이 됐다.
+
+    그래서 두 축을 CSS 에 맡기지 않고 컨테이너 실측값으로 한 번에 계산한다.
+    이제 프리뷰의 잘림과 저장본의 잘림이 같은 사각형이다.
+  */
+  // 매 렌더마다 새 객체를 넘기면 useStageFit 의 메모가 계속 깨진다.
+  const stageBase = useMemo(
+    () =>
+      currentSlot
+        ? { width: currentSlot.width, height: currentSlot.height }
+        : null,
+    [currentSlot],
+  );
+  const {
+    containerRef: stageRef,
+    viewW,
+    viewH,
+    ready: stageReady,
+  } = useStageFit(stageBase, { fitToContainerHeight: true });
 
   const backToFrameHref = (() => {
     const params = new URLSearchParams();
@@ -81,19 +110,30 @@ export default function CapturePage() {
           */}
 
           {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
-          <div className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center">
+          <div
+            ref={stageRef}
+            className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center"
+          >
             <canvas ref={canvasRef} className="hidden" />
 
             {layout && currentSlot ? (
               <div
                 className="relative overflow-hidden rounded-xl bg-black shadow-[var(--hc-card-shadow)]"
-                // 남는 높이를 다 쓰되 가로를 넘지 않게. 비율은 고른 프레임의 칸 비율 그대로.
-                style={{
-                  aspectRatio: `${currentSlot.width} / ${currentSlot.height}`,
-                  maxHeight: "100%",
-                  maxWidth: "100%",
-                  height: "100%",
-                }}
+                /*
+                  실측한 컨테이너에 슬롯 비율을 그대로 넣은 크기다. 여기 보이는 사각형이
+                  곧 저장되는 사각형이다.
+
+                  첫 페인트(측정 전)에는 aspectRatio 로만 잡아 둔다. 가로를 기준으로 두므로
+                  이 순간에도 비율은 맞고, 세로가 넘칠 수 있는 구간만 측정 후 줄어든다.
+                */
+                style={
+                  stageReady
+                    ? { width: viewW, height: viewH }
+                    : {
+                        width: "100%",
+                        aspectRatio: `${currentSlot.width} / ${currentSlot.height}`,
+                      }
+                }
               >
                 {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다.
                     전면(user) 카메라만 좌우반전(셀피 감각), 후면은 그대로. */}
