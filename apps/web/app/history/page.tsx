@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -18,6 +18,7 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
+import { RenameMediaDialog } from "@/components/history/RenameMediaDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
@@ -153,8 +154,10 @@ export default function HistoryPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [draftName, setDraftName] = useState("");
+  // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(RenameMediaDialog 주석 참고).
+  // 대상 자체를 들고 있어야 다이얼로그가 지금 이름을 초깃값으로 받을 수 있다.
+  const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -314,18 +317,20 @@ export default function HistoryPage() {
   };
 
   const handleStartRename = (item: UserMedia) => {
-    setEditingId(item.mediaId);
-    setDraftName(getUserMediaTitle(item));
+    setRenameTarget(item);
+    setRenameError(null);
   };
 
-  const handleSaveName = async (item: UserMedia) => {
-    const nextName = draftName.trim();
-    if (!nextName) {
-      setFeedback("파일 이름은 비워둘 수 없어요.");
-      return;
-    }
+  // 다이얼로그가 마운트될 때마다 포커스를 잡으므로, 닫기 함수는 값이 바뀌지 않아야 한다.
+  // 인라인 화살표로 넘기면 페이지가 다시 그려질 때마다 포커스가 첫 컨트롤로 튄다.
+  const handleCloseRename = useCallback(() => {
+    setRenameTarget(null);
+    setRenameError(null);
+  }, []);
 
+  const handleSaveName = async (item: UserMedia, nextName: string) => {
     setSavingNameId(item.mediaId);
+    setRenameError(null);
 
     try {
       const updated = await updateMediaDisplayName(item.mediaId, nextName);
@@ -339,12 +344,14 @@ export default function HistoryPage() {
             : currentItem,
         ),
       );
-      setEditingId(null);
-      setDraftName("");
-      setFeedback("파일 이름을 수정했어요.");
-    } catch (renameError) {
-      console.error(renameError);
-      setFeedback("파일 이름을 수정하지 못했어요.");
+      setRenameTarget(null);
+      setFeedback("이름을 바꿨어요.");
+    } catch (error_) {
+      console.error(error_);
+      // 다이얼로그를 연 채로 사유를 보여 준다 — 뒤편 안내는 가려서 보이지 않는다.
+      setRenameError(
+        getUserFacingApiErrorMessage(error_, "이름을 바꾸지 못했어요."),
+      );
     } finally {
       setSavingNameId(null);
     }
@@ -469,7 +476,7 @@ export default function HistoryPage() {
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
                   {group.items.map((item) => {
-                    const isEditing = editingId === item.mediaId;
+                    const title = getUserMediaTitle(item);
 
                     return (
                       <article
@@ -481,27 +488,25 @@ export default function HistoryPage() {
                         <MediaThumb item={item} />
 
                         <div className="flex flex-col gap-1">
-                          {isEditing ? (
-                            <div className="flex gap-2">
-                              <input
-                                value={draftName}
-                                onChange={(e) => setDraftName(e.target.value)}
-                                className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px]"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void handleSaveName(item)}
-                                disabled={savingNameId === item.mediaId}
-                                className="hc-button-neutral rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
-                              >
-                                {savingNameId === item.mediaId ? "저장 중" : "저장"}
-                              </button>
-                            </div>
-                          ) : (
-                            <p className="truncate text-[14px] font-bold tracking-tight">
-                              {getUserMediaTitle(item)}
+                          {/* 이름 옆 연필이 곧 "고치기"다 — 아래 줄에는 이 기록으로 할
+                              일(저장·공유)만 남기고, 이름은 제 자리에서 손댄다.
+
+                              연필은 카드 오른쪽 끝이 아니라 이름 바로 옆에 붙인다. 끝에
+                              두면 이름이 짧을수록 멀어져 무엇을 고치는 표시인지 흐려진다.
+                              이름이 길면 잘리면서 자연히 끝으로 간다. */}
+                          <div className="flex items-center gap-0.5">
+                            <p className="min-w-0 truncate text-[14px] font-bold tracking-tight">
+                              {title}
                             </p>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => handleStartRename(item)}
+                              aria-label={`이름 바꾸기: ${title}`}
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+                            >
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                           <p className="text-[11px] text-[color:var(--hc-muted)]">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
@@ -512,7 +517,7 @@ export default function HistoryPage() {
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex gap-1.5">
                           <button
                             type="button"
                             onClick={() => void handleDownload(item)}
@@ -535,18 +540,6 @@ export default function HistoryPage() {
                               {sharingId === item.mediaId ? "준비 중" : "공유"}
                             </span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              isEditing
-                                ? setEditingId(null)
-                                : handleStartRename(item)
-                            }
-                            className="hc-button-secondary flex items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold"
-                          >
-                            <PencilLine className="h-3.5 w-3.5" />
-                            <span>{isEditing ? "취소" : "이름"}</span>
-                          </button>
                         </div>
                       </article>
                     );
@@ -562,6 +555,18 @@ export default function HistoryPage() {
         open={sourceDialogOpen}
         onClose={() => setSourceDialogOpen(false)}
       />
+      {/* 조건부로 붙였다 뗀다. 열 때마다 새로 마운트돼야 입력창이 그 기록의 지금 이름에서
+          시작하고, 닫을 때 포커스가 눌렀던 연필로 돌아온다(useModalDialog 의 정리 경로). */}
+      {renameTarget ? (
+        <RenameMediaDialog
+          key={renameTarget.mediaId}
+          currentName={getUserMediaTitle(renameTarget)}
+          saving={savingNameId === renameTarget.mediaId}
+          error={renameError}
+          onClose={handleCloseRename}
+          onSubmit={(nextName) => void handleSaveName(renameTarget, nextName)}
+        />
+      ) : null}
     </main>
   );
 }
