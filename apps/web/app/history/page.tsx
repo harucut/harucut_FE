@@ -364,17 +364,12 @@ export default function HistoryPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
         {/* 헤더 + 뷰 토글 */}
         <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
-          <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
-              기록
-            </h1>
-            <p className="mt-2 text-[13px] text-[color:var(--hc-muted)]">
-              남긴 하루컷 {loading ? "…" : items.length}개
-              {planTier
-                ? ` · ${PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록을 볼 수 있어요`
-                : ""}
-            </p>
-          </div>
+          {/* 부제는 두지 않는다 — 개수는 달마다 붙은 「N컷」이 이미 말하고, 보관 기간은
+              정작 필요한 자리(기록이 없을 때)에서 따로 안내한다. 늘 떠 있으면 자기
+              사진을 보러 온 화면 맨 위에서 요금제부터 읽게 된다. */}
+          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+            기록
+          </h1>
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
