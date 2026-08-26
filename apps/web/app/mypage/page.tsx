@@ -833,7 +833,6 @@ export default function MyPage() {
               <div className="hc-surface-card overflow-hidden rounded-[20px] border">
                 {MOBILE_SECTIONS.map((id, i) => {
                   const meta = SECTION_META[id];
-                  const Icon = meta.icon;
                   const isOpen = openMobile === id;
                   return (
                     <div
@@ -855,12 +854,10 @@ export default function MyPage() {
                         }}
                         className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left"
                       >
-                        <span
-                          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl"
-                          style={{ background: iconTint }}
-                        >
-                          <Icon className="h-[19px] w-[19px] text-[color:var(--hc-primary-strong)]" />
-                        </span>
+                        {/* 아이콘 타일을 두지 않는다. 다섯 줄이 전부 초록 틴트 타일을
+                            달고 있어서 "한 화면 한 초록"이 다섯 번 깨졌고, 정작 그
+                            아이콘들은 제목이 이미 하는 말을 그림으로 한 번 더 할 뿐이라
+                            줄마다 읽을 것만 늘렸다. */}
                         <span className="min-w-0 flex-1">
                           <span className="block text-[15px] font-bold">
                             {meta.title}
