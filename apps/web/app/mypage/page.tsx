@@ -10,18 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Bell,
-  Camera,
-  ChevronRight,
-  CreditCard,
-  Image as ImageIcon,
-  LogOut,
-  PencilLine,
-  Settings,
-  Sparkles,
-  User,
-} from "lucide-react";
+import { Camera, ChevronRight, LogOut, PencilLine } from "lucide-react";
 import { getLoginPlatformLabel, josa, parseServerDateTime } from "@harucut/shared";
 import { PasswordChangeDialog } from "@/components/mypage/PasswordChangeDialog";
 import { SettingRow } from "@/components/mypage/SettingRow";
@@ -67,36 +56,26 @@ type Stats = {
   frames: number;
 };
 
-// 메뉴 구성은 핸드오프(app/web)와 동일한 순서·아이콘을 따른다.
-const SECTION_META: Record<
-  SectionId,
-  { icon: typeof User; title: string; sub: string }
-> = {
-  account: {
-    icon: User,
-    title: "계정 정보",
-    sub: "이메일, 닉네임, 비밀번호 변경",
-  },
-  plan: { icon: Sparkles, title: "요금제", sub: "플랜 및 결제 관리" },
-  notif: {
-    icon: Bell,
-    title: "알림·약관 동의",
-    sub: "마케팅 수신 동의, 푸시",
-  },
-  frames: { icon: ImageIcon, title: "내 프레임", sub: "보관한 프레임" },
-  pref: { icon: Settings, title: "설정", sub: "화질, 언어" },
+const SECTION_META: Record<SectionId, { title: string; sub: string }> = {
+  account: { title: "계정 정보", sub: "이메일, 닉네임, 비밀번호 변경" },
+  plan: { title: "요금제", sub: "플랜 및 결제 관리" },
+  notif: { title: "알림·약관 동의", sub: "마케팅 수신 동의, 푸시" },
+  frames: { title: "내 프레임", sub: "보관한 프레임" },
+  pref: { title: "설정", sub: "화질, 언어" },
 };
 
-// 데스크톱 사이드바에 노출하는 섹션(요금제는 별도 라우트로 이동)
-const SIDEBAR_SECTIONS: SectionId[] = ["account", "notif", "frames", "pref"];
-// 앱(모바일) 레이아웃의 메뉴 행 순서
-const MOBILE_SECTIONS: SectionId[] = [
-  "account",
-  "plan",
-  "notif",
-  "frames",
-  "pref",
-];
+/**
+ * 한 줄로 쌓는다. 데스크톱과 모바일이 같은 순서, 같은 카드다.
+ *
+ * 예전에는 데스크톱이 260px 사이드바 + 우측 패널이었다. 그런데 섹션이 넷뿐이고 넷을
+ * 다 합쳐도 1,328px — 두 화면이 안 된다(실측). 사이드바는 섹션이 길어서 쌓으면 찾기
+ * 힘들 때 값을 하는데 여기는 반대였다. 사는 것은 "스크롤 안 함" 하나였고, 치르는 것은
+ * 전부 보려면 클릭 세 번과 **구조적으로 빈 오른쪽**이었다(사이드바 ~580px 대 우측 최대
+ * 450px — 오른쪽이 늘 더 짧다).
+ *
+ * 덤으로 이 파일이 `isDesktop` 뒤에 들고 있던 레이아웃 두 벌이 한 벌이 됐다.
+ */
+const SECTIONS: SectionId[] = ["account", "plan", "notif", "frames", "pref"];
 
 export default function MyPage() {
   const router = useRouter();
@@ -135,21 +114,14 @@ export default function MyPage() {
   const [statsError, setStatsError] = useState<string | null>(null);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
 
-  // 데스크톱: 우측 콘텐츠 섹션 / 모바일: 펼쳐진 메뉴 행
-  const [section, setSection] = useState<SectionId>("account");
+  /**
+   * 좁은 화면에서 펼쳐 둔 섹션. 넓은 화면은 전부 펼쳐 두므로 이 값을 보지 않는다.
+   *
+   * 예전에는 `isDesktop` 을 matchMedia 로 재서 레이아웃 두 벌 중 하나만 렌더했다.
+   * 같은 섹션 폼이 양쪽에 동시에 마운트되는 걸 막으려던 것인데, 레이아웃이 한 벌이
+   * 된 지금은 막을 것이 없다. 펼침 여부는 CSS(`lg:block`)가 가른다.
+   */
   const [openMobile, setOpenMobile] = useState<SectionId | null>(null);
-
-  // 데스크톱/모바일 레이아웃을 CSS로만 숨기면 같은 섹션 폼(동일 id)이 양쪽에
-  // 동시에 마운트된다. 뷰포트에 따라 한 쪽만 렌더해 중복 마운트를 막는다.
-  const [isDesktop, setIsDesktop] = useState(false);
-
-  useEffect(() => {
-    const mql = window.matchMedia("(min-width: 1024px)");
-    const sync = () => setIsDesktop(mql.matches);
-    sync();
-    mql.addEventListener("change", sync);
-    return () => mql.removeEventListener("change", sync);
-  }, []);
 
   const loadUser = async () => {
     try {
@@ -388,10 +360,6 @@ export default function MyPage() {
     [stats, frameCapacity.used],
   );
 
-  // 핸드오프 색상: 메뉴 아이콘은 초록 틴트 위 초록 아이콘
-  const iconTint =
-    "color-mix(in srgb, var(--hc-primary) 14%, transparent)" as const;
-
   /**
    * 프로필 이미지를 바꾸는 자리는 **그 이미지 자신**이다.
    *
@@ -587,39 +555,6 @@ export default function MyPage() {
     </div>
   );
 
-  const planSection = (
-    <div className="flex flex-col gap-3">
-      <div className="hc-surface-well grid gap-2 rounded-2xl border p-4 sm:grid-cols-2">
-        <div>
-          <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
-            <CreditCard className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
-            <span className="text-[11px]">현재 플랜</span>
-          </div>
-          <p className="mt-1.5 text-[15px] font-bold">
-            {planDisplayName}
-            {planPriceSuffix}
-          </p>
-        </div>
-        <div>
-          <div className="flex items-center gap-2 text-[color:var(--hc-muted)]">
-            <User className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
-            <span className="text-[11px]">로그인 플랫폼</span>
-          </div>
-          <p className="mt-1.5 text-[15px] font-bold">
-            {getLoginPlatformLabel(user?.loginPlatform)}
-          </p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => router.push("/pricing")}
-        className="hc-button-primary h-11 self-start rounded-full px-6 text-[13px] font-semibold"
-      >
-        요금제 보기
-      </button>
-    </div>
-  );
-
   // 마케팅 수신 동의를 거둘 자리가 그동안 없었다. 알림 설정이 곧 여기 붙을 자리라
   // 같은 칸에 둔다 — 사용자가 "받을지 말지"를 찾는 곳이 한 군데여야 한다.
   const notifSection = <TermsConsentPanel />;
@@ -652,20 +587,23 @@ export default function MyPage() {
     </div>
   );
 
-  const sectionTitle: Record<SectionId, string> = {
-    account: "계정 정보",
-    plan: "요금제",
-    notif: "알림·약관 동의",
-    frames: "내 프레임",
-    pref: "설정",
-  };
-
-  const sectionBody: Record<SectionId, ReactElement> = {
+  /*
+    요금제만 펼칠 내용이 없다 — 누르면 /pricing 으로 나간다. 예전에는 여기에도 패널이
+    있었는데(현재 플랜 + 로그인 플랫폼 + 「요금제 보기」 버튼), 로그인 플랫폼은 이제
+    이메일 줄이 말하고 현재 플랜은 이 줄 부제가 말한다. 남는 건 이동뿐이라 줄로 둔다.
+  */
+  const sectionBody: Partial<Record<SectionId, ReactElement>> = {
     account: accountSection,
-    plan: planSection,
     notif: notifSection,
     frames: framesSection,
     pref: prefSection,
+  };
+
+  /** 접힌 줄에서도 알 수 있어야 하는 값은 부제가 대신 말한다. */
+  const sectionSub = (id: SectionId) => {
+    if (id === "frames") return frameCapacityText;
+    if (id === "plan") return `${planDisplayName}${planPriceSuffix}`;
+    return SECTION_META[id].sub;
   };
 
   const logoutAndExit = (
@@ -694,8 +632,11 @@ export default function MyPage() {
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
       <AppNav userInitial={user?.username} />
 
-      <div className="mx-auto w-full max-w-[1000px] px-4 py-5 sm:py-6 lg:py-8">
-        <h1 className="text-[28px] font-extrabold tracking-tight lg:mb-7 lg:text-[34px]">
+      {/* 한 칸이므로 폭을 좁힌다. 예전 1000px 는 좌우 두 칸이 나눠 쓰던 폭이라,
+          그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
+          한 줄로 읽히지 않는다. */}
+      <div className="mx-auto w-full max-w-[680px] px-4 py-5 sm:py-6 lg:py-8">
+        <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
           마이페이지
         </h1>
 
@@ -734,174 +675,121 @@ export default function MyPage() {
             </p>
           </div>
         ) : (
-          <>
-            {/* ===== 데스크톱 (lg+) : 260px 사이드바 + 우측 콘텐츠 ===== */}
-            {isDesktop ? (
-            <div className="mt-2 hidden items-start gap-8 lg:grid lg:grid-cols-[260px_1fr]">
-              {/* 사이드바 */}
-              <div>
-                <div className="hc-surface-card mb-4 rounded-[20px] border p-6 text-center">
-                  {/* flex 로 가운데를 잡는다. `mx-auto` 는 여기서 아무 일도 하지
-                      않았다 — 감싼 div 가 폭이 꽉 찬 블록이라 좌우 여백이 애초에
-                      0이었고, 아바타만 왼쪽 끝에 붙어 아래 이름·이메일·스탯이
-                      가운데인 카드에서 혼자 어긋나 있었다. */}
-                  <div className="mb-3.5 flex justify-center">
-                    {renderAvatar(80, 30, true)}
-                  </div>
-                  <div className="text-[18px] font-extrabold">
-                    {user.username}
-                  </div>
-                  <div className="mt-1 truncate text-[12px] text-[color:var(--hc-muted)]">
-                    {user.email}
-                  </div>
-                  <div className="mt-4 border-t border-[color:var(--hc-border-subtle)] pt-4">
-                    {statStrip}
-                  </div>
+          <div className="mt-5 flex flex-col gap-5">
+            {/* 프로필 — 아바타·이름·이메일 한 줄 */}
+            <div className="flex items-center gap-4 px-0.5">
+              {renderAvatar(72, 28, true)}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[18px] font-extrabold">
+                  {user.username}
                 </div>
+                <div className="truncate text-[13px] text-[color:var(--hc-muted)]">
+                  {user.email}
+                </div>
+              </div>
+            </div>
 
-                <div className="hc-surface-card overflow-hidden rounded-[20px] border">
-                  {SIDEBAR_SECTIONS.map((id, i) => {
-                    const meta = SECTION_META[id];
-                    const Icon = meta.icon;
-                    const active = section === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setSection(id)}
-                        className={`flex w-full items-center gap-3 px-4 py-3.5 text-left ${i ? "border-t border-[color:var(--hc-border-subtle)]" : ""}`}
-                        style={active ? { background: iconTint } : undefined}
-                      >
-                        <Icon
-                          className="h-[19px] w-[19px]"
-                          style={{
-                            color: active
-                              ? "var(--hc-primary)"
-                              : "var(--hc-muted)",
-                          }}
-                        />
-                        <span
-                          className="text-[14px] font-bold"
-                          style={{
-                            color: active
-                              ? "var(--hc-primary-strong)"
-                              : "var(--hc-text)",
-                          }}
-                        >
+            <div className="hc-surface-card rounded-[20px] border py-4">
+              {statStrip}
+            </div>
+
+            {/* 섹션끼리는 바깥 간격보다 좁게 둔다. 프로필·스탯과 같은 20px 를 주면
+                다섯 장이 각자 떠 있는 것처럼 보여 한 목록으로 읽히지 않았다. */}
+            <div className="flex flex-col gap-3">
+            {SECTIONS.map((id) => {
+              const meta = SECTION_META[id];
+              const body = sectionBody[id];
+              const bodyId = `mypage-section-${id}`;
+
+              // 요금제는 펼치지 않고 나간다.
+              if (!body) {
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => router.push("/pricing")}
+                    className="hc-surface-card flex w-full items-center gap-3.5 rounded-[20px] border px-5 py-4 text-left"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-bold">
+                        {meta.title}
+                      </span>
+                      <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">
+                        {sectionSub(id)}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[color:var(--hc-muted)]" />
+                  </button>
+                );
+              }
+
+              const open = openMobile === id;
+
+              return (
+                <section
+                  key={id}
+                  className="hc-surface-card overflow-hidden rounded-[20px] border"
+                >
+                  {/*
+                    넓은 화면에서는 늘 펼쳐 두고, 좁은 화면에서는 접는다. 여는 여부를
+                    JS(`isDesktop`)로 정하지 않고 CSS 로 가른다 — 뷰포트를 재는 값은
+                    첫 렌더에 항상 false 라, JS 로 정하면 데스크톱에서 접힌 채 한 번
+                    그려졌다 펴지는 깜빡임이 생긴다.
+                  */}
+                  <h2 className="hidden px-5 pt-5 text-[17px] font-extrabold lg:block">
+                    {meta.title}
+                  </h2>
+
+                  <h2 className="lg:hidden">
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      aria-controls={bodyId}
+                      onClick={() =>
+                        setOpenMobile((prev) => (prev === id ? null : id))
+                      }
+                      className="flex w-full items-center gap-3.5 px-5 py-4 text-left"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-bold">
                           {meta.title}
                         </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4">{logoutAndExit}</div>
-              </div>
-
-              {/* 우측 콘텐츠 카드 */}
-              <div className="hc-surface-card rounded-[20px] border p-8">
-                <h2 className="mb-6 text-[21px] font-extrabold">
-                  {sectionTitle[section]}
-                </h2>
-                {sectionBody[section]}
-              </div>
-            </div>
-            ) : null}
-
-            {/* ===== 모바일/태블릿 (<lg) : 앱 MyPage 레이아웃 ===== */}
-            {!isDesktop ? (
-            <div className="mt-4 flex flex-col gap-5 lg:hidden">
-              {/* 프로필 */}
-              <div className="flex items-center gap-4 px-0.5 pb-1">
-                {renderAvatar(64, 24, true)}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[18px] font-extrabold">
-                    {user.username}
-                  </div>
-                  <div className="truncate text-[13px] text-[color:var(--hc-muted)]">
-                    {user.email}
-                  </div>
-                </div>
-              </div>
-
-              {/* 스탯 3셀 */}
-              <div className="hc-surface-card rounded-[20px] border py-4">
-                {statStrip}
-              </div>
-
-              {/* 그룹 메뉴 행 */}
-              <div className="hc-surface-card overflow-hidden rounded-[20px] border">
-                {MOBILE_SECTIONS.map((id, i) => {
-                  const meta = SECTION_META[id];
-                  const isOpen = openMobile === id;
-                  return (
-                    <div
-                      key={id}
-                      className={
-                        i
-                          ? "border-t border-[color:var(--hc-border-subtle)]"
-                          : ""
-                      }
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (id === "plan") {
-                            router.push("/pricing");
-                            return;
-                          }
-                          setOpenMobile((prev) => (prev === id ? null : id));
-                        }}
-                        className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left"
-                      >
-                        {/* 아이콘 타일을 두지 않는다. 다섯 줄이 전부 초록 틴트 타일을
-                            달고 있어서 "한 화면 한 초록"이 다섯 번 깨졌고, 정작 그
-                            아이콘들은 제목이 이미 하는 말을 그림으로 한 번 더 할 뿐이라
-                            줄마다 읽을 것만 늘렸다. */}
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[15px] font-bold">
-                            {meta.title}
-                          </span>
-                          <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">
-                            {id === "frames"
-                              ? frameCapacityText
-                              : id === "plan"
-                                ? `${planDisplayName}${planPriceSuffix}`
-                                : meta.sub}
-                          </span>
+                        <span className="block truncate text-[12px] font-normal text-[color:var(--hc-muted)]">
+                          {sectionSub(id)}
                         </span>
-                        <ChevronRight
-                          className="h-[18px] w-[18px] shrink-0 text-[color:var(--hc-muted)] transition-transform"
-                          style={
-                            isOpen ? { transform: "rotate(90deg)" } : undefined
-                          }
-                        />
-                      </button>
-                      {isOpen && id !== "plan" ? (
-                        <div className="border-t border-[color:var(--hc-border-subtle)] px-4 py-5">
-                          {sectionBody[id]}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
+                      </span>
+                      <ChevronRight
+                        className="h-[18px] w-[18px] shrink-0 text-[color:var(--hc-muted)] transition-transform"
+                        style={open ? { transform: "rotate(90deg)" } : undefined}
+                      />
+                    </button>
+                  </h2>
 
-              {/* 로그아웃 / 탈퇴 */}
-              <div className="mt-1">{logoutAndExit}</div>
-
-              <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted)]">
-                하루컷 v1.0.0
-              </p>
+                  <div
+                    id={bodyId}
+                    className={`${
+                      open
+                        ? "border-t border-[color:var(--hc-border-subtle)]"
+                        : "hidden"
+                    } px-5 py-5 lg:block lg:border-t-0 lg:pt-3`}
+                  >
+                    {body}
+                  </div>
+                </section>
+              );
+            })}
             </div>
-            ) : null}
-          </>
+
+            <div className="mt-1">{logoutAndExit}</div>
+
+            <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted)]">
+              하루컷 v1.0.0
+            </p>
+          </div>
         )}
       </div>
       <MobileTabBar />
 
-      {/* 조건부로 붙였다 뗀다 — 열 때마다 새로 마운트돼야 입력창이 그때의 값에서
-          시작하고, 닫을 때 포커스가 열었던 버튼으로 돌아온다. */}
       {nicknameOpen ? (
         <SingleFieldDialog
           title="닉네임 바꾸기"
