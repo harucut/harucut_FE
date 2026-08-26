@@ -18,7 +18,7 @@ import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
-import { RenameMediaDialog } from "@/components/history/RenameMediaDialog";
+import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
@@ -154,7 +154,7 @@ export default function HistoryPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
-  // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(RenameMediaDialog 주석 참고).
+  // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
   // 대상 자체를 들고 있어야 다이얼로그가 지금 이름을 초깃값으로 받을 수 있다.
   const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -550,12 +550,13 @@ export default function HistoryPage() {
         open={sourceDialogOpen}
         onClose={() => setSourceDialogOpen(false)}
       />
-      {/* 조건부로 붙였다 뗀다. 열 때마다 새로 마운트돼야 입력창이 그 기록의 지금 이름에서
-          시작하고, 닫을 때 포커스가 눌렀던 연필로 돌아온다(useModalDialog 의 정리 경로). */}
       {renameTarget ? (
-        <RenameMediaDialog
+        <SingleFieldDialog
           key={renameTarget.mediaId}
-          currentName={getUserMediaTitle(renameTarget)}
+          title="이름 바꾸기"
+          label="기록 이름"
+          placeholder="예: 바다에서"
+          initialValue={getUserMediaTitle(renameTarget)}
           saving={savingNameId === renameTarget.mediaId}
           error={renameError}
           onClose={handleCloseRename}

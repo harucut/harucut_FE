@@ -2,8 +2,8 @@
 
 import {
   ChangeEvent,
-  FormEvent,
   ReactElement,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -12,16 +12,20 @@ import {
 import { useRouter } from "next/navigation";
 import {
   Bell,
+  Camera,
   ChevronRight,
   CreditCard,
   Image as ImageIcon,
   LogOut,
+  PencilLine,
   Settings,
   Sparkles,
   User,
 } from "lucide-react";
 import { getLoginPlatformLabel, josa, parseServerDateTime } from "@harucut/shared";
-import { AuthField } from "@/components/auth/AuthField";
+import { PasswordChangeDialog } from "@/components/mypage/PasswordChangeDialog";
+import { SettingRow } from "@/components/mypage/SettingRow";
+import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import {
   FrameCapacityMeter,
   resolveFrameCapacity,
@@ -45,13 +49,15 @@ import {
 import { listMyMedia } from "@/lib/userMediaApi";
 import { listMyFrames } from "@/lib/remoteFrameApi";
 
-type Errors = {
-  common?: string | null;
-  username?: string | null;
-  oldPassword?: string | null;
-  newPassword?: string | null;
-  confirmPassword?: string | null;
-};
+/**
+ * 화면 맨 위 한 줄짜리 알림.
+ *
+ * 예전에는 성공을 `alert()` 로 알렸다(닉네임·비밀번호·프로필 이미지 셋 다). 브라우저
+ * 모달은 이 디자인의 것이 아닌 데다, 확인을 누르기 전까지 방금 바뀐 화면을 가린다 —
+ * 정작 사용자가 보고 싶은 건 바뀐 결과다. 실패는 초록 글자로 떴는데, 초록은 이 제품에서
+ * "지금 여기를 보라"는 신호이지 오류색이 아니다.
+ */
+type Notice = { kind: "ok" | "error"; text: string };
 
 type SectionId = "account" | "plan" | "notif" | "frames" | "pref";
 
@@ -107,13 +113,21 @@ export default function MyPage() {
   const isSocialAccount =
     !!user?.loginPlatform && user.loginPlatform !== "HARUCUT";
   const canChangePassword = user != null && !isSocialAccount;
-  const [errors, setErrors] = useState<Errors>({});
 
-  const [username, setUsername] = useState("");
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  /** 조회 자체가 실패한 경우. 알림과 달리 사라지지 않아야 한다. */
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // 고치는 일은 전부 다이얼로그가 맡는다. 페이지는 "지금 열려 있는가"와
+  // "저장 중인가"만 들고 있으면 된다 — 입력값은 다이얼로그 안에서 산다.
+  const [nicknameOpen, setNicknameOpen] = useState(false);
+  const [nicknameError, setNicknameError] = useState<string | null>(null);
+  const [savingNickname, setSavingNickname] = useState(false);
+
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [savingPassword, setSavingPassword] = useState(false);
+
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
   // 조회 실패를 0으로 위장하지 않으려고 stats는 null로 시작한다.
@@ -141,20 +155,22 @@ export default function MyPage() {
     try {
       const nextUser = await getMyUserInfo();
       setUser(nextUser);
-      setUsername(nextUser.username || "");
+      setLoadError(null);
     } catch (error) {
       console.error(error);
-      setErrors({
-        common: "내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
-      });
+      setLoadError("내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUser = async () => {
-    setLoading(true);
-    setErrors({});
+  /**
+   * 프로필 이미지처럼 서버가 값을 다시 내려주는 변경 뒤에 쓴다.
+   *
+   * `loading` 을 다시 켜지 않는다. 켜면 화면 전체가 스켈레톤으로 돌아갔다 오는데,
+   * 사용자는 아바타 한 장을 바꿨을 뿐이고 그 사이 페이지가 통째로 깜빡인다.
+   */
+  const refreshUser = async () => {
     await loadUser();
   };
 
@@ -198,7 +214,7 @@ export default function MyPage() {
     await loadStats();
   };
 
-  // 최초 진입은 초기 상태(loading=true, errors={}, statsError=null)와 같아
+  // 최초 진입은 초기 상태(loading=true, loadError=null, statsError=null)와 같아
   // 별도 setState 없이 바로 조회한다. setState는 응답이 온 뒤에만 일어난다.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
@@ -206,116 +222,101 @@ export default function MyPage() {
     void loadStats();
   }, []);
 
-  const handleChangeUsername = async (e: FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-    setIsSubmitting(true);
+  const closeNickname = useCallback(() => {
+    setNicknameOpen(false);
+    setNicknameError(null);
+  }, []);
 
-    const nextUsername = username.trim();
-    if (!nextUsername) {
-      setErrors({ username: "닉네임을 입력해 주세요." });
-      setIsSubmitting(false);
-      return;
-    }
+  const handleChangeUsername = async (nextUsername: string) => {
+    setSavingNickname(true);
+    setNicknameError(null);
 
     try {
       await clientApi.patch("/api/client/user/username", {
         username: nextUsername,
       });
       setUser((prev) => (prev ? { ...prev, username: nextUsername } : prev));
-      alert("닉네임이 변경되었어요.");
+      setNicknameOpen(false);
+      setNotice({ kind: "ok", text: "닉네임을 바꿨어요." });
     } catch (error) {
       console.error(error);
-      setErrors({ common: "닉네임 변경에 실패했어요." });
+      setNicknameError(
+        getUserFacingApiErrorMessage(error, "닉네임을 바꾸지 못했어요."),
+      );
     } finally {
-      setIsSubmitting(false);
+      setSavingNickname(false);
     }
   };
 
-  const handleChangePassword = async (e: FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-    setIsSubmitting(true);
+  const closePassword = useCallback(() => {
+    setPasswordOpen(false);
+    setPasswordError(null);
+  }, []);
 
-    if (!oldPassword) {
-      setErrors({ oldPassword: "현재 비밀번호를 입력해 주세요." });
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!newPassword) {
-      setErrors({ newPassword: "새 비밀번호를 입력해 주세요." });
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setErrors({ newPassword: "비밀번호는 8자 이상으로 설정해 주세요." });
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setErrors({ confirmPassword: "새 비밀번호가 서로 일치하지 않아요." });
-      setIsSubmitting(false);
-      return;
-    }
+  const handleChangePassword = async (values: {
+    oldPassword: string;
+    newPassword: string;
+  }) => {
+    setSavingPassword(true);
+    setPasswordError(null);
 
     try {
-      await clientApi.patch("/api/client/auth/password/change", {
-        oldPassword,
-        newPassword,
-      });
-      alert("비밀번호가 변경되었어요.");
-      setOldPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      await clientApi.patch("/api/client/auth/password/change", values);
+      setPasswordOpen(false);
+      setNotice({ kind: "ok", text: "비밀번호를 바꿨어요." });
     } catch (error) {
       console.error(error);
-      setErrors({
-        common: getUserFacingApiErrorMessage(
-          error,
-          "비밀번호 변경에 실패했어요.",
-        ),
-      });
+      setPasswordError(
+        getUserFacingApiErrorMessage(error, "비밀번호를 바꾸지 못했어요."),
+      );
     } finally {
-      setIsSubmitting(false);
+      setSavingPassword(false);
     }
   };
 
-  // 업로드에 성공하면 input 의 값도 비운다. 값을 남겨 두면 같은 파일을 다시 골랐을 때
-  // change 가 발생하지 않아 아무 일도 일어나지 않는다.
   const profileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setProfileFile(e.target.files?.[0] ?? null);
-  };
+  /**
+   * 파일을 고르면 **바로 올린다.**
+   *
+   * 예전에는 고르기와 올리기가 나뉘어 있어서, 파일을 고르고도 옆의 「업로드」를 누르지
+   * 않으면 아무 일도 일어나지 않았다. 고를 것이 한 장뿐이고 되돌릴 일도 없는 동작에
+   * 확인 단계를 두면 미완의 상태만 하나 늘어난다.
+   */
+  const handleProfileFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // 값을 바로 비운다. 남겨 두면 같은 파일을 다시 골랐을 때 change 가 발생하지 않아
+    // 아무 일도 일어나지 않는다(업로드가 실패해 다시 시도할 때 실제로 그랬다).
+    e.target.value = "";
+    if (!file) return;
 
-  const handleUploadProfileImage = async () => {
-    if (!profileFile) {
-      setErrors({ common: "업로드할 이미지를 선택해 주세요." });
-      return;
-    }
-
-    setErrors({});
     setIsUploadingProfile(true);
+    setNotice(null);
 
     try {
-      await uploadProfileImage(profileFile);
-      await fetchUser();
-      setProfileFile(null);
-      if (profileInputRef.current) profileInputRef.current.value = "";
-      alert("프로필 이미지가 변경되었어요.");
+      await uploadProfileImage(file);
+      await refreshUser();
+      setNotice({ kind: "ok", text: "프로필 이미지를 바꿨어요." });
     } catch (error) {
       console.error(error);
-      setErrors({ common: "프로필 이미지 업로드에 실패했어요." });
+      // uploadProfileImage 는 형식·용량을 자기 문구로 던진다. 그걸 살린다.
+      setNotice({
+        kind: "error",
+        text:
+          error instanceof Error && error.message
+            ? error.message
+            : getUserFacingApiErrorMessage(
+                error,
+                "프로필 이미지를 바꾸지 못했어요.",
+              ),
+      });
     } finally {
       setIsUploadingProfile(false);
     }
   };
 
   const handleLogout = async () => {
-    setErrors({});
+    setNotice(null);
     setIsSubmitting(true);
 
     try {
@@ -324,7 +325,7 @@ export default function MyPage() {
       router.refresh();
     } catch (error) {
       console.error(error);
-      setErrors({ common: "로그아웃에 실패했어요." });
+      setNotice({ kind: "error", text: "로그아웃에 실패했어요." });
     } finally {
       setIsSubmitting(false);
     }
@@ -336,7 +337,7 @@ export default function MyPage() {
     );
     if (!ok) return;
 
-    setErrors({});
+    setNotice(null);
     setIsSubmitting(true);
 
     try {
@@ -345,11 +346,20 @@ export default function MyPage() {
       router.refresh();
     } catch (error) {
       console.error(error);
-      setErrors({ common: "회원 탈퇴에 실패했어요." });
+      setNotice({ kind: "error", text: "회원 탈퇴에 실패했어요." });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // 성공 알림은 잠깐 떴다 사라진다. 실패는 남긴다 — 사용자가 무엇을 해야 하는지
+  // 읽을 시간이 필요하고, 대개 다시 시도해야 한다(기록 화면과 같은 규칙).
+  useEffect(() => {
+    if (notice?.kind !== "ok") return undefined;
+
+    const timeoutId = window.setTimeout(() => setNotice(null), 2400);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
 
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
 
@@ -382,23 +392,102 @@ export default function MyPage() {
   const iconTint =
     "color-mix(in srgb, var(--hc-primary) 14%, transparent)" as const;
 
-  const renderAvatar = (size: number, font: number) => (
-    <div
-      className="grid shrink-0 place-items-center overflow-hidden rounded-full bg-[color:var(--hc-primary)] font-extrabold text-[color:var(--hc-primary-contrast)]"
-      style={{ width: size, height: size, fontSize: font }}
-    >
-      {user?.profileUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={user.profileUrl}
-          alt="프로필 이미지"
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <span>{profileInitial}</span>
-      )}
-    </div>
-  );
+  /**
+   * 프로필 이미지를 바꾸는 자리는 **그 이미지 자신**이다.
+   *
+   * 예전에는 계정 정보 목록 저 아래에 파일 입력창과 「업로드」 버튼이 따로 있었다. 바꿀
+   * 대상은 화면 맨 위에 크게 떠 있는데 손잡이는 스크롤 밖에 있었고, 아바타 쪽에는 누를
+   * 수 있다는 표시가 하나도 없었다. 게다가 그 파일 입력창은 브라우저 기본 모양이라
+   * 이 화면에서 유일하게 디자인 밖에 있는 컨트롤이었다.
+   *
+   * 카메라 배지를 아바타 모서리에 얹는다. 대화상자는 배지가 열고, 고르는 즉시 올라간다.
+   *
+   * 배지를 `<label>` 이 아니라 `<button>` 으로 두는 이유: label 은 포커스를 받지 못해
+   * 키보드로 닿을 수 없다. 파일 입력은 감춰 두고 버튼이 눌러 준다.
+   */
+  const renderAvatar = (size: number, font: number, editable = false) => {
+    const badge = Math.max(26, Math.round(size * 0.34));
+    /*
+      눌리는 면은 44px, 보이는 원은 그대로.
+
+      globals.css 가 터치 기기에서 모든 버튼에 `min-height: 44px` 를 준다. 그 규칙의
+      의도는 "시각 크기는 그대로 두고 눌리는 면만 넓힌다" 인데, 배경과 테두리가 있는
+      이 배지에는 그대로 먹어서 26×44 짜리 흰 알약이 아바타를 덮었다(실측).
+
+      그래서 버튼 자신을 44px 투명 판으로 두고, 보이는 원은 그 안의 span 이 맡는다.
+      규칙을 끄지 않고 규칙이 원래 말한 모양이 된다. 데스크톱에서도 클릭 면이 넓어
+      손해가 없다.
+    */
+    const hit = 44;
+    const inset = (hit - badge) / 2;
+
+    return (
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <div
+          className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[color:var(--hc-primary)] font-extrabold text-[color:var(--hc-primary-contrast)]"
+          style={{ fontSize: font }}
+        >
+          {user?.profileUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.profileUrl}
+              alt="프로필 이미지"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span>{profileInitial}</span>
+          )}
+        </div>
+
+        {editable ? (
+          <>
+            <input
+              id="mypage-profile-image"
+              ref={profileInputRef}
+              type="file"
+              accept={SUPPORTED_IMAGE_ACCEPT}
+              onChange={(event) => void handleProfileFileChange(event)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => profileInputRef.current?.click()}
+              disabled={isUploadingProfile}
+              aria-label="프로필 이미지 바꾸기"
+              title="프로필 이미지 바꾸기"
+              className="group absolute grid place-items-center rounded-full focus-visible:outline-none disabled:opacity-60"
+              style={{
+                width: hit,
+                height: hit,
+                right: -inset,
+                bottom: -inset,
+              }}
+            >
+              {/* 테두리 색이 카드 바탕색이다 — 아바타와 배지 사이에 빈 틈을 만들어
+                  둘이 한 덩어리로 뭉개지지 않게 한다.
+                  포커스 링은 44px 투명 판이 아니라 보이는 원에 두른다. */}
+              <span
+                className="hc-button-icon grid place-items-center rounded-full border-2 border-[color:var(--hc-surface)] group-hover:bg-[color:var(--hc-icon-button-hover)] group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-[color:var(--hc-text)]"
+                style={{ width: badge, height: badge }}
+              >
+                <Camera style={{ width: badge * 0.46, height: badge * 0.46 }} />
+              </span>
+            </button>
+          </>
+        ) : null}
+
+        {editable && isUploadingProfile ? (
+          <div
+            role="status"
+            aria-label="프로필 이미지 올리는 중"
+            className="absolute inset-0 grid place-items-center rounded-full bg-[rgba(10,24,45,0.55)]"
+          >
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white" />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const statStrip = (
     <div className="flex flex-col gap-2">
@@ -434,129 +523,67 @@ export default function MyPage() {
 
   /* ---------- 섹션 콘텐츠 (데스크톱 우측 / 모바일 펼침 공용) ---------- */
 
+  /*
+    계정 화면은 폼이 아니라 **목록**이다.
+
+    예전에는 이 자리가 통째로 폼이었다 — 늘 열려 있는 닉네임 입력창, 못 고치는데도
+    입력창 모양인 이메일, 그리고 언제나 펼쳐진 비밀번호 세 칸. 마이페이지에서 가장
+    자주 하는 일은 "내 정보가 뭐였지" 확인인데 화면은 계속 채워 넣으라고 말했고,
+    정작 지금 내 닉네임이 무엇인지는 입력창 안을 들여다봐야 알 수 있었다.
+
+    지금은 값을 값으로 보여 주고 고치는 길만 곁에 둔다. 연필은 보이는 값을 고치고
+    (기록 화면의 이름 고치기와 같은 표시), 버튼은 값이 아닌 일을 한다.
+  */
   const accountSection = (
-    <div className="flex flex-col gap-6">
-      <form onSubmit={handleChangeUsername} className="flex flex-col gap-2">
-        <label className="text-[13px] font-semibold text-[color:var(--hc-muted)]">
-          닉네임
-        </label>
-        <div className="flex gap-2">
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="hc-input h-11 flex-1 rounded-xl border px-3.5 text-[14px] outline-none"
-            placeholder="닉네임을 입력해 주세요"
-          />
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="hc-button-primary h-11 rounded-full px-5 text-[13px] font-semibold disabled:opacity-50"
-          >
-            저장
-          </button>
-        </div>
-        {errors.username ? (
-          <p className="text-[11px] text-[color:var(--hc-primary-strong)]">
-            {errors.username}
-          </p>
-        ) : null}
-      </form>
-
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor="mypage-email"
-          className="text-[13px] font-semibold text-[color:var(--hc-muted)]"
-        >
-          이메일
-        </label>
-        <input
-          id="mypage-email"
-          value={user?.email ?? ""}
-          readOnly
-          className="hc-input h-11 w-full cursor-default rounded-xl border px-3.5 text-[14px] text-[color:var(--hc-muted)] outline-none"
-        />
-      </div>
-
-      {/* 소셜로 가입한 계정에는 비밀번호가 없다. 폼을 보여 주면 사용자는 "현재 비밀번호"에
-          무엇을 넣을지 알 수 없고, 뭘 넣든 AUTH-008 로 실패한다. 스웨거도 이 메뉴를 소셜
-          계정에 노출하지 말라고 못박는다(PATCH /api/harucut/change/password 설명). */}
-      {canChangePassword ? (
-      <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
-        <AuthField
-          id="oldPassword"
-          name="oldPassword"
-          type="password"
-          label="현재 비밀번호"
-          placeholder="현재 비밀번호를 입력해 주세요"
-          autoComplete="current-password"
-          value={oldPassword}
-          onChange={(e) => setOldPassword(e.target.value)}
-          error={errors.oldPassword}
-        />
-        <AuthField
-          id="newPassword"
-          name="newPassword"
-          type="password"
-          label="새 비밀번호"
-          placeholder="새 비밀번호를 입력해 주세요"
-          autoComplete="new-password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          error={errors.newPassword}
-        />
-        <AuthField
-          id="confirmPassword"
-          name="confirmPassword"
-          type="password"
-          label="새 비밀번호 확인"
-          placeholder="새 비밀번호를 한 번 더 입력해 주세요"
-          autoComplete="new-password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          error={errors.confirmPassword}
-        />
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="hc-button-primary mt-1 h-11 self-start rounded-full px-6 text-[13px] font-semibold disabled:opacity-50"
-        >
-          {isSubmitting ? "변경 중..." : "변경사항 저장"}
-        </button>
-      </form>
-      ) : isSocialAccount ? (
-        <p className="text-[13px] text-[color:var(--hc-muted)]">
-          {loginPlatformLabel}
-          {josa(loginPlatformLabel, "으로/로")} 가입한 계정이라 비밀번호가 없어요.
-        </p>
-      ) : null}
-
-      <div className="flex flex-col gap-2 border-t border-[color:var(--hc-border-subtle)] pt-5">
-        <label
-          htmlFor="mypage-profile-image"
-          className="text-[13px] font-semibold text-[color:var(--hc-muted)]"
-        >
-          프로필 이미지
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            id="mypage-profile-image"
-            ref={profileInputRef}
-            type="file"
-            accept={SUPPORTED_IMAGE_ACCEPT}
-            onChange={handleProfileFileChange}
-            disabled={isUploadingProfile}
-            className="block w-full text-[12px] text-[color:var(--hc-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[color:var(--hc-surface-muted)] file:px-3 file:py-2 file:text-[12px] file:font-semibold file:text-[color:var(--hc-text)] hover:file:bg-[color:var(--hc-surface-muted-hover)]"
-          />
+    <div className="flex flex-col divide-y divide-[color:var(--hc-border-subtle)]">
+      <SettingRow
+        label="닉네임"
+        value={user?.username || "이름 없음"}
+        inlineAction={
           <button
             type="button"
-            onClick={handleUploadProfileImage}
-            disabled={isUploadingProfile || !profileFile}
-            className="hc-button-primary h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[12px] font-semibold disabled:opacity-50"
+            onClick={() => {
+              setNicknameError(null);
+              setNicknameOpen(true);
+            }}
+            aria-label="닉네임 바꾸기"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
           >
-            {isUploadingProfile ? "업로드 중" : "업로드"}
+            <PencilLine className="h-3.5 w-3.5" />
           </button>
-        </div>
-      </div>
+        }
+      />
+
+      {/* 이메일은 바꿀 수 없다. 예전에는 readOnly 입력창이라 눌러 보고서야 알았다 —
+          고칠 수 없는 값이 입력창처럼 보이면 안 된다. */}
+      <SettingRow
+        label="이메일"
+        value={user?.email ?? "—"}
+        hint={`${loginPlatformLabel}${josa(loginPlatformLabel, "으로/로")} 로그인해요`}
+      />
+
+      {/* 소셜로 가입한 계정에는 비밀번호가 없다. 그 줄을 보여 주면 사용자는 "현재
+          비밀번호"에 무엇을 넣을지 알 수 없고, 뭘 넣든 AUTH-008 로 실패한다. 스웨거도
+          이 메뉴를 소셜 계정에 노출하지 말라고 못박는다
+          (PATCH /api/harucut/change/password 설명). */}
+      {canChangePassword ? (
+        <SettingRow
+          label="비밀번호"
+          value={<span className="tracking-[0.2em]">••••••••</span>}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                setPasswordError(null);
+                setPasswordOpen(true);
+              }}
+              className="hc-button-secondary rounded-full border px-4 py-2 text-[13px] font-semibold"
+            >
+              바꾸기
+            </button>
+          }
+        />
+      ) : null}
     </div>
   );
 
@@ -672,9 +699,25 @@ export default function MyPage() {
           마이페이지
         </h1>
 
-        {errors.common ? (
-          <p className="mt-3 text-[12px] text-[color:var(--hc-primary-strong)]">
-            {errors.common}
+        {notice ? (
+          <div
+            role="status"
+            className={
+              notice.kind === "ok"
+                ? "hc-feedback mt-3 rounded-2xl border px-4 py-3 text-[12px]"
+                : "mt-3 rounded-2xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-4 py-3 text-[12px] text-[color:var(--hc-danger)]"
+            }
+          >
+            {notice.text}
+          </div>
+        ) : null}
+
+        {loadError ? (
+          <p
+            role="alert"
+            className="mt-3 text-[12px] text-[color:var(--hc-danger)]"
+          >
+            {loadError}
           </p>
         ) : null}
 
@@ -703,7 +746,7 @@ export default function MyPage() {
                       0이었고, 아바타만 왼쪽 끝에 붙어 아래 이름·이메일·스탯이
                       가운데인 카드에서 혼자 어긋나 있었다. */}
                   <div className="mb-3.5 flex justify-center">
-                    {renderAvatar(80, 30)}
+                    {renderAvatar(80, 30, true)}
                   </div>
                   <div className="text-[18px] font-extrabold">
                     {user.username}
@@ -770,7 +813,7 @@ export default function MyPage() {
             <div className="mt-4 flex flex-col gap-5 lg:hidden">
               {/* 프로필 */}
               <div className="flex items-center gap-4 px-0.5 pb-1">
-                {renderAvatar(64, 24)}
+                {renderAvatar(64, 24, true)}
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[18px] font-extrabold">
                     {user.username}
@@ -859,6 +902,31 @@ export default function MyPage() {
         )}
       </div>
       <MobileTabBar />
+
+      {/* 조건부로 붙였다 뗀다 — 열 때마다 새로 마운트돼야 입력창이 그때의 값에서
+          시작하고, 닫을 때 포커스가 열었던 버튼으로 돌아온다. */}
+      {nicknameOpen ? (
+        <SingleFieldDialog
+          title="닉네임 바꾸기"
+          label="닉네임"
+          placeholder="닉네임을 입력해 주세요"
+          initialValue={user?.username ?? ""}
+          maxLength={20}
+          saving={savingNickname}
+          error={nicknameError}
+          onClose={closeNickname}
+          onSubmit={(next) => void handleChangeUsername(next)}
+        />
+      ) : null}
+
+      {passwordOpen ? (
+        <PasswordChangeDialog
+          saving={savingPassword}
+          error={passwordError}
+          onClose={closePassword}
+          onSubmit={(values) => void handleChangePassword(values)}
+        />
+      ) : null}
     </main>
   );
 }
