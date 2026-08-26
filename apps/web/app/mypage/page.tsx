@@ -698,7 +698,13 @@ export default function MyPage() {
               {/* 사이드바 */}
               <div>
                 <div className="hc-surface-card mb-4 rounded-[20px] border p-6 text-center">
-                  <div className="mx-auto mb-3.5">{renderAvatar(80, 30)}</div>
+                  {/* flex 로 가운데를 잡는다. `mx-auto` 는 여기서 아무 일도 하지
+                      않았다 — 감싼 div 가 폭이 꽉 찬 블록이라 좌우 여백이 애초에
+                      0이었고, 아바타만 왼쪽 끝에 붙어 아래 이름·이메일·스탯이
+                      가운데인 카드에서 혼자 어긋나 있었다. */}
+                  <div className="mb-3.5 flex justify-center">
+                    {renderAvatar(80, 30)}
+                  </div>
                   <div className="text-[18px] font-extrabold">
                     {user.username}
                   </div>
