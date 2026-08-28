@@ -33,12 +33,12 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { isNotNull } from "@/lib/guards";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
+import { nativeNotify } from "@/lib/nativeBridge";
 import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
-import { useServerFrameBackground } from "@/hooks/useServerFrameBackground";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 
 const IMAGE_DEBUG_SCOPE = "shoot-result-image";
@@ -140,39 +140,28 @@ export default function ShootResultPage() {
     }
   }, [frameId, imageSources.length, router, selectedCount, shots.length]);
 
-  // 회원은 서버가 그린 그림이 곧 결과물이고, 그 배경은 프레임에 저장된 값이다.
-  // 미리보기도 같은 값으로 그려야 화면과 내려받는 파일이 어긋나지 않는다.
-  const serverBackgroundColor = useServerFrameBackground(
-    frameId as FrameId | null,
-    !guestMode && !themeData,
-  );
-  const effectiveBorderColor = resolveFrameBackgroundColor(
-    themeData,
-    serverBackgroundColor ?? borderColor,
-  );
+  // 고른 색이 곧 저장본의 색이다 — 회원 경로는 이 값을 합성 요청에 실어 보내고,
+  // 비회원 경로는 브라우저가 이 색으로 그린다. 꾸민 프레임이면 프레임에 저장된 배경이
+  // 우선한다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
   /*
     "이 입력으로 한 번만 만든다"를 가리키는 키.
 
-    ⚠️ 회원 경로에는 **색을 넣지 않는다.** 서버 합성은 색을 받지 않고
-    (`ComposeRequest` = frameId · sourceKeys · idempotencyKey) 프레임에 저장된 배경을 쓴다.
-    그런데 그 배경은 `useServerFrameBackground` 가 **나중에** 읽어 오므로, 색을 키에 넣으면
-    이런 일이 벌어진다:
+    색이 다시 들어와 있다 — 이제 **회원 경로에서도 색이 결과를 바꾼다**
+    (`ComposeRequest.backgroundColor`). 서버는 같은 멱등키로 색만 바꿔 보내면 기존 작업을
+    그대로 재생하므로, 색이 키에 없으면 사용자가 색을 바꿔도 예전 그림이 그대로 나온다.
 
-      진입      서버 배경 모름 → 기본색 → 키 K1 → 합성 #1
-      조회 완료  서버 배경 도착 → 색 바뀜 → 키 K2 → 합성 #2   ← 같은 네컷이 두 벌
-
-    실제로 보관함에 같은 이름의 mediaId 두 개가 남았다(2026-08-24 재현).
-    결과를 바꾸지 않는 값은 키에서 뺀다.
-
-    비회원은 반대다 — 결과물을 브라우저가 그리므로 색이 그림을 바꾼다. 그때는 키에 넣는다.
+    예전에 색을 뺐던 이유는 사라졌다. 그때는 `useServerFrameBackground` 가 서버 배경을
+    **나중에** 읽어 와 색이 저절로 한 번 바뀌었고, 그래서 합성이 두 번 돌아 보관함에 같은
+    네컷이 두 벌 남았다(2026-08-24). 그 조회를 걷어냈으니 색은 사용자가 바꿀 때만 바뀐다.
   */
   const generationKey = useMemo(
     () =>
       JSON.stringify({
         frameId,
         remoteFrameId,
-        borderColor: guestMode ? effectiveBorderColor : null,
+        borderColor: effectiveBorderColor,
         outputFilter,
         imageSources: imageSources.map((source) => source.src),
         retryNonce,
@@ -180,7 +169,6 @@ export default function ShootResultPage() {
     [
       effectiveBorderColor,
       frameId,
-      guestMode,
       imageSources,
       outputFilter,
       remoteFrameId,
@@ -281,11 +269,20 @@ export default function ShootResultPage() {
           remoteFrameId,
           displayName,
           idempotencyKey,
+          backgroundColor: effectiveBorderColor,
         });
 
         if (!cancelled) {
           setImageResult(asset);
           setImageState("done");
+          // 서버 합성은 최대 90초까지 간다(lib/composeApi.ts). 그동안 앱을 벗어난 사람은
+          // 끝난 걸 알 방법이 없다 — 화면이 안 보일 때만 알린다. 보고 있으면 그냥 보인다.
+          if (document.visibilityState === "hidden") {
+            void nativeNotify({
+              title: "네컷이 완성됐어요",
+              body: "눌러서 보러 가기",
+            });
+          }
         }
       } catch (error) {
         console.error(error);
@@ -343,7 +340,7 @@ export default function ShootResultPage() {
   ) => {
     const sanitizedName = sanitizeDisplayName(nextName, asset.displayName);
     const updated = await updateMediaDisplayName(asset.mediaId, sanitizedName);
-    const resolvedName = updated.displayName?.trim() || updated.displayname?.trim() || sanitizedName;
+    const resolvedName = updated.displayName?.trim() || sanitizedName;
 
     updateAsset(resolvedName);
     return resolvedName;

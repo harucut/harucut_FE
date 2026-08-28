@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { create } from "zustand";
 import ShootResultPage from "@/app/shoot/result/page";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
@@ -90,13 +90,6 @@ jest.mock("@/lib/fourcutProcessing", () => ({
   saveFourcutToServer: (...args: unknown[]) => mockSaveFourcutToServer(...args),
 }));
 
-// 서버가 칠할 배경색 조회는 네트워크를 타므로 화면 테스트에서는 끊는다.
-// 값을 바꿀 수 있게 둔 이유는 아래 "늦게 도착해도 두 번 만들지 않는다" 회귀 테스트 때문이다.
-let mockServerBackground: string | null = null;
-jest.mock("@/hooks/useServerFrameBackground", () => ({
-  useServerFrameBackground: () => mockServerBackground,
-}));
-
 jest.mock("@/lib/composeApi", () => ({
   newIdempotencyKey: () => "web-fixed-key",
 }));
@@ -119,7 +112,6 @@ jest.mock("@/lib/share", () => ({
 describe("ShootResultPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockServerBackground = null;
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
@@ -332,14 +324,38 @@ describe("ShootResultPage", () => {
   });
 
   /*
-    서버가 칠할 배경색은 화면이 뜬 뒤에 도착한다. 그 값이 합성 키에 들어 있으면
-    "색이 바뀌었다"는 이유로 같은 네컷을 한 번 더 만든다 — 보관함에 같은 이름의
-    기록이 두 개 남는다(2026-08-24 로컬에서 실제로 mediaId 두 개가 남았다).
-
-    회원 결과물은 서버가 그리고 서버 합성은 색을 아예 받지 않으므로
-    (ComposeRequest = frameId · sourceKeys · idempotencyKey) 색이 바뀌어도 다시 만들 이유가 없다.
+    고른 배경색은 합성 요청에 실려 가야 한다(`ComposeRequest.backgroundColor`).
+    보내지 않으면 서버가 프레임에 저장된 배경으로 그려서, 화면에서 고른 색과
+    내려받는 파일의 색이 서로 다른 그림이 된다.
   */
-  it("서버 배경색이 늦게 도착해도 회원 저장을 두 번 하지 않는다", async () => {
+  it("회원 저장에 고른 배경색을 실어 보낸다", async () => {
+    mockSaveFourcutToServer.mockResolvedValue({
+      mediaId: 7,
+      objectUrl: "https://example.com/a.png",
+      downloadUrl: "https://example.com/a.png",
+      displayName: "harucut",
+    });
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    expect(mockSaveFourcutToServer).toHaveBeenCalledWith(
+      expect.objectContaining({ backgroundColor: "#111827" }),
+    );
+  });
+
+  /*
+    색을 바꾸면 다시 만들어야 한다.
+
+    서버는 같은 멱등키로 색만 바꿔 보내면 **기존 작업을 그대로 재생한다.** 그래서 색이
+    합성 키에 들어 있지 않으면, 사용자가 색을 바꿔도 예전 색 그대로인 그림이 나온다.
+    (예전에는 반대로 색을 키에서 빼는 것이 맞았다 — 그때는 서버가 색을 받지 않았고,
+     늦게 도착하는 서버 배경 조회 때문에 색이 저절로 바뀌어 합성이 두 번 돌았다.
+     그 조회를 걷어냈으므로 이제 색은 사용자가 바꿀 때만 바뀐다.)
+  */
+  it("배경색을 바꾸면 새로 합성한다", async () => {
     mockSaveFourcutToServer.mockResolvedValue({
       mediaId: 7,
       objectUrl: "https://example.com/a.png",
@@ -352,12 +368,18 @@ describe("ShootResultPage", () => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
 
-    // 조회가 끝나 배경색이 자리잡는 순간.
-    mockServerBackground = "#ffffff";
+    // 사용자가 다른 색을 골랐다. 실제 스토어의 setBorderColor 는 색을 바꾸면서
+    // imageResult 를 함께 비운다(lib/shootSessionStore.ts) — 그 동작을 그대로 흉내낸다.
+    act(() => {
+      mockUseShootSession.setState({ borderColor: "#ffffff", imageResult: null });
+    });
     view.rerender(<ShootResultPage />);
 
     await waitFor(() => {
-      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
     });
+    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: "#ffffff" }),
+    );
   });
 });
