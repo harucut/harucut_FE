@@ -6,9 +6,7 @@ import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPa
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
-import { useServerFrameBackground } from "@/hooks/useServerFrameBackground";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
@@ -33,9 +31,6 @@ export default function ShootSelectPage() {
   const fromUpload = source === "upload";
   const sourceHref = fromUpload ? "/shoot/upload" : "/shoot/capture";
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
-  const accessMode = useGuestTrialStore((state) => state.accessMode);
-  const guestMode = accessMode === "guest";
-
   // 아직 저장 전인 촬영본이 있으면 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(shots.length > 0);
 
@@ -51,14 +46,9 @@ export default function ShootSelectPage() {
   }, [frameId, router, shots.length, sourceHref]);
 
   const hasCustomFrame = Boolean(themeData);
-  // 회원 결과물은 서버가 그리고, 그때 배경은 프레임에 저장된 값이다. 미리보기도 그 값으로
-  // 그려야 화면과 저장본이 같아진다(hooks/useServerFrameBackground 주석).
-  const serverComposed = !guestMode && !hasCustomFrame;
-  const serverBackgroundColor = useServerFrameBackground(frameId, serverComposed);
-  const effectiveBorderColor = resolveFrameBackgroundColor(
-    themeData,
-    serverBackgroundColor ?? borderColor,
-  );
+  // 고른 색이 곧 저장본의 색이다 — 서버 합성에 그 색을 실어 보낸다. 꾸민 프레임일 때만
+  // 프레임에 저장된 배경을 쓴다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 
   const handleNext = () => {
     router.push("/shoot/result");
@@ -100,7 +90,6 @@ export default function ShootSelectPage() {
               outputFilter={outputFilter}
               onOutputFilterChange={setOutputFilter}
               hasCustomFrame={hasCustomFrame}
-              serverComposed={serverComposed}
             />
           )}
         />

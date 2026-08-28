@@ -28,6 +28,8 @@ export async function saveFourcutToServer(args: {
   displayName: string;
   /** 같은 시도의 재시도라면 같은 값을 넘긴다 — 서버가 두 번 그리지 않는다. */
   idempotencyKey?: string;
+  /** 사용자가 고른 배경색(`#RRGGBB`). 기본 프레임에서만 쓰인다. */
+  backgroundColor?: string;
   signal?: AbortSignal;
 }): Promise<GeneratedFourcutAsset> {
   const { mediaId } = await composeFourcutOnServer({
@@ -37,6 +39,7 @@ export async function saveFourcutToServer(args: {
     frameId: args.frameId,
     remoteFrameId: args.remoteFrameId,
     idempotencyKey: args.idempotencyKey,
+    backgroundColor: args.backgroundColor,
     signal: args.signal,
   });
 
@@ -58,7 +61,7 @@ export async function saveFourcutToServer(args: {
   const objectUrl = viewUrl ?? (await getMediaDownloadUrl(mediaId));
 
   // 이름 바꾸기가 실패했으면 보관함에 실제로 남은 이름을 쓴다(못 읽으면 요청한 이름으로 둔다).
-  const storedName = media?.displayName?.trim() || media?.displayname?.trim();
+  const storedName = media?.displayName?.trim();
   const displayName = renamed ? wantedName : storedName || wantedName;
 
   return {

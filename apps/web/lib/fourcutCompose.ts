@@ -52,6 +52,20 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
  *
  * 실측(docs/backend-contract.md): 색이 다른 4장을 CLASSIC 으로 합성한 결과의 슬롯 중심
  * 픽셀이 `constants/frameLayouts.ts` 좌표와 정확히 일치했다.
+ *
+ * ## 배경색은 이제 요청으로 보낸다
+ *
+ * 예전 계약에는 색을 실을 자리가 없어서, 사용자가 고른 색이 미리보기에만 반영되고 저장본은
+ * 프레임에 저장된 배경으로 나왔다. 그래서 회원에게는 색 고르기를 아예 막고
+ * (`FrameOutputOptionsPanel.serverComposed`), 미리보기를 사실에 맞추려고 서버 프레임의
+ * 배경을 따로 한 번 더 조회했다(`hooks/useServerFrameBackground`).
+ *
+ * 백엔드가 `ComposeRequest.backgroundColor` 를 열면서 그 우회로가 전부 필요 없어졌다.
+ * 색은 요청에 실어 보내고, 잠금과 추가 조회는 걷어냈다.
+ *
+ * 단, **단색(COLOR) 배경 프레임에서만 보낼 수 있다** — 이미지 배경 프레임에 보내면 400 이다.
+ * 그래서 꾸민 프레임(`remoteFrameId`)에는 보내지 않는다. 그 배경은 프레임에 저장돼 있고,
+ * 이미지일 수도 있다.
  */
 
 /** 원본은 사진이라 PNG 대신 JPEG 로 굽는다 — 슬롯 하나가 4MP까지 가서 PNG면 10MB 제한에 걸린다. */
@@ -225,6 +239,34 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
 }
 
 /**
+ * 합성을 요청한다. 색을 보냈다가 거절당하면 **색만 빼고 한 번 더** 시도한다.
+ *
+ * 서버는 단색(COLOR) 배경 프레임에만 `backgroundColor` 를 허용하고, 이미지 배경 프레임에
+ * 보내면 400(GEN-002/GEN-003)이다. 어느 쪽인지 미리 알려면 프레임을 한 번 더 조회해야
+ * 하는데, 그 조회를 걷어내려고 색을 보내게 된 것이라 앞뒤가 맞지 않는다.
+ * 흔한 길(단색 프레임)에는 추가 요청이 없고, 드문 길에서만 한 번 더 간다.
+ *
+ * 첫 요청이 400 이면 작업이 만들어지지 않았으므로 같은 멱등키를 다시 써도 안전하다.
+ */
+async function submitCompose(
+  base: { frameId: number; sourceKeys: string[]; idempotencyKey: string },
+  backgroundColor: string | undefined,
+) {
+  if (!backgroundColor) return requestCompose(base);
+
+  try {
+    return await requestCompose({ ...base, backgroundColor });
+  } catch (error) {
+    const { code } = getApiErrorDetails(error);
+    if (code === "GEN-002" || code === "GEN-003") {
+      // 이미지 배경 프레임이었다. 프레임에 저장된 배경으로 합성한다.
+      return requestCompose(base);
+    }
+    throw error;
+  }
+}
+
+/**
  * 원본 4장을 올리고 서버 합성을 기다린다.
  *
  * `sources` 는 사용자가 고른 순서 그대로여야 한다 — 서버가 그 순서로 슬롯에 넣는다.
@@ -241,6 +283,11 @@ export async function composeFourcutOnServer(args: {
    * 생략하면 매번 새로 만든다(= 새 합성).
    */
   idempotencyKey?: string;
+  /**
+   * 사용자가 고른 배경색(`#RRGGBB`). 기본 프레임에서만 의미가 있다 —
+   * 꾸민 프레임(`remoteFrameId`)은 저장된 배경을 쓰고, 그 배경이 이미지면 서버가 400 을 낸다.
+   */
+  backgroundColor?: string;
   signal?: AbortSignal;
 }): Promise<ComposedFourcut> {
   const { sources, layout, outputFilter, signal } = args;
@@ -276,11 +323,20 @@ export async function composeFourcutOnServer(args: {
     }),
   );
 
-  const job = await requestCompose({
+  // 꾸민 프레임은 저장된 배경을 그대로 쓴다. 그 배경이 이미지면 색을 보내는 순간 400 이라,
+  // "내 프레임인가"를 기준으로 보낼지 말지를 가른다.
+  const usesStoredBackground = args.remoteFrameId != null;
+  const wantedBackgroundColor = usesStoredBackground
+    ? undefined
+    : args.backgroundColor;
+
+  const base = {
     frameId: composeFrameId,
     sourceKeys,
     idempotencyKey: args.idempotencyKey ?? newIdempotencyKey(),
-  });
+  };
+
+  const job = await submitCompose(base, wantedBackgroundColor);
 
   const done = await waitForCompose(job.jobId, { signal });
   if (done.mediaId == null) {

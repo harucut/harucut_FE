@@ -13,14 +13,6 @@ type FrameOutputOptionsPanelProps = {
   outputFilter: FourcutFilterId;
   onOutputFilterChange: (filter: FourcutFilterId) => void;
   hasCustomFrame: boolean;
-  /**
-   * 결과물을 서버가 그리는가(=로그인 사용자).
-   *
-   * 서버 합성은 배경을 **프레임에 저장된 값**으로만 칠한다 — 합성 요청에 색을 실을 자리가
-   * 없다. 그래서 색을 고르게 두면 미리보기만 바뀌고 저장본은 그대로인, 사용자가 알 수 없는
-   * 거짓말이 된다. 고르지 못하게 막고 이유를 말한다.
-   */
-  serverComposed?: boolean;
 };
 
 export function FrameOutputOptionsPanel({
@@ -29,9 +21,10 @@ export function FrameOutputOptionsPanel({
   outputFilter,
   onOutputFilterChange,
   hasCustomFrame,
-  serverComposed = false,
 }: FrameOutputOptionsPanelProps) {
-  const backgroundLocked = hasCustomFrame || serverComposed;
+  // 회원도 색을 고를 수 있다 — 서버 합성이 `ComposeRequest.backgroundColor` 를 받는다.
+  // 잠기는 것은 꾸민 프레임뿐이다. 그 배경은 프레임에 저장돼 있고 이미지일 수도 있다.
+  const backgroundLocked = hasCustomFrame;
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex flex-col gap-4">
@@ -42,9 +35,7 @@ export function FrameOutputOptionsPanel({
 
           {backgroundLocked ? (
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] text-zinc-400">
-              {hasCustomFrame
-                ? "꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요."
-                : "배경 색상은 프레임에 저장된 값을 그대로 사용해요. 원하는 색으로 바꾸려면 프레임 꾸미기에서 배경색을 정해 저장한 뒤 그 프레임으로 찍어 주세요."}
+              꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요.
             </div>
           ) : (
             <div className="flex flex-col gap-3">
