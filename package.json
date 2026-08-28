@@ -65,9 +65,10 @@
     "web:mobile": "pnpm --dir apps/mobile web",
     "lint:mobile": "pnpm --dir apps/mobile lint",
     "typecheck:mobile": "pnpm --dir apps/mobile typecheck",
-    "verify:web": "python scripts/verify_workspace.py --group web",
-    "verify:mobile": "python scripts/verify_workspace.py --group mobile",
-    "verify:standard": "python scripts/verify_workspace.py --group standard"
+    "check:contract": "python3 scripts/check_backend_contract.py",
+    "verify:web": "python3 scripts/verify_workspace.py --group web",
+    "verify:mobile": "python3 scripts/verify_workspace.py --group mobile",
+    "verify:standard": "python3 scripts/verify_workspace.py --group standard"
   },
   "devDependencies": {
     "prettier": "^3.8.3"
