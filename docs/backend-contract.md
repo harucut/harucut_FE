@@ -313,3 +313,112 @@ BASIC 은 한도가 0이라 **"프레임 저장 후 목록 500"(`PRODUCT.md`) �
 **자산은 공용이어도 된다.** 성공한 두 건은 스티커·글자층이 *관리자* S3 루트에 있고 합성은
 *다른 일반 사용자*가 돌렸는데 통과했다. 본인 소유여야 하는 것은 `sourceKeys`(원본 4장)뿐이다.
 → 기본 스티커 세트를 서버가 한 번만 올려 두면 사용자마다 중복 업로드하지 않아도 된다.
+
+---
+
+# 계약 재대조 (2026-08-28)
+
+이번에는 **손으로 읽지 않고 기계로 맞췄다.** 같은 대조를 다시 하려면:
+
+```bash
+pnpm check:contract            # 요약
+pnpm check:contract -- --show-required   # 필수 요청 필드까지
+```
+
+`scripts/check_backend_contract.py` 가 도는 백엔드의 `/v3/api-docs` 를 읽고,
+에러코드는 **컨테이너 안 jar 의 ErrorCode enum** 에서 직접 뽑아 비교한다.
+스웨거 응답 예시만 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로
+잘못 짚기 때문이다 — 실제로 스웨거 기준 45개 vs jar 기준 52개로 갈렸다.
+
+## 이번 대조 결과
+
+| 항목 | 결과 |
+|---|---|
+| FE 프록시 33개 핸들러 → 백엔드 경로 | **33/33 존재** |
+| 호출되지 않는 프록시 라우트 | **없음** |
+| 에러코드 (jar 52개) ↔ FE 문구표 | **누락 0** |
+| FE 필수 요청 필드 | 15개 엔드포인트 전부 충족 |
+
+## 이번에 고친 어긋남
+
+1. **`ComposeRequest.backgroundColor` 가 열렸는데 안 쓰고 있었다.**
+   회원에게 배경색 고르기를 막아 두고(`FrameOutputOptionsPanel.serverComposed`),
+   미리보기를 서버 값에 맞추려고 프레임 목록을 한 번 더 조회했다
+   (`hooks/useServerFrameBackground` — 촬영 1회당 2번). 색을 요청에 실어 보내는 것으로
+   바꾸고 훅과 잠금을 걷어냈다.
+
+2. **에러코드 표에 서버에 없는 항목 10개가 있었다.**
+   `GEN-007/008/092/093/094`, `PAY-004/005/009/010`, `STOR-000` — 전부 제거했다.
+   위 표에서 "죽은 항목"으로 잡히던 것들이다. (`NOTICE-001` 은 이 문서가 죽었다고
+   적어 뒀지만 **지금은 서버에 있다** — 공지 API 가 그 뒤에 들어왔다.)
+
+3. **`UserMediaResponse` 에 없는 필드를 읽고 있었다.**
+   `displayname`(소문자)·`originalFileName` — jar 전체를 뒤져도 나오지 않는다.
+   두 필드와 그 폴백 8곳을 지웠다.
+
+4. 프록시 라우트 하나(`user-info`)만 상수 이름이 `BACKEND_BASE_URL` 이라 자동 대조에서
+   샜다. 30개 전부 `BASE_URL` 로 통일했다.
+
+## 아직 FE 가 안 쓰는 백엔드 기능
+
+프록시가 없을 뿐 백엔드에는 있다. 필요해지면 붙이면 된다.
+
+- 구독/결제 — `GET /api/auth/subscriptions`, `POST /api/auth/payments/subscribe`,
+  `POST /api/auth/subscriptions/cancel`, `GET /api/auth/payments`
+- 쿠폰 — `GET /api/auth/coupons`, `POST /api/auth/coupons/redeem`
+- 공지 — `GET /api/notices`, `GET /api/notices/{publicId}`
+- 사진 삭제 — `DELETE /api/auth/user/media/{mediaId}`
+- 관리자 API 전체(`/api/admin/*`), 웹훅(`/api/payments/webhook`, `/api/oauth2/unlink/naver`)
+
+---
+
+# ⚠️ 지금 백엔드는 **모든 등급이 무제한**이다 (2026-08-28 실측)
+
+가격표·기록 화면의 문구와 실제 서버가 어긋난다. **프론트에서 고칠 문제가 아니라 백엔드에
+확인할 문제**라 코드를 바꾸지 않고 여기 적어 둔다.
+
+## 무엇이 다른가
+
+| | 스웨거 설명 / 이 문서(8-20 실측) | 지금 도는 서버 |
+|---|---|---|
+| BASIC 프레임 보관 | 0개 (첫 프레임부터 403 `SUBS-003`) | **무제한** |
+| PLUS 프레임 보관 | 3개 | **무제한** |
+| PRO 프레임 보관 | 무제한 | 무제한 |
+| 보관 기간 (전 등급) | 3일 / 3개월 / 무제한 | **무제한** |
+
+## 근거 (셋 다 같은 말을 한다)
+
+1. **사용량 API** — 갓 만든 BASIC 계정:
+   ```
+   GET /api/auth/user/subscription/usage
+   {"planTier":"BASIC","frameRetentionLimit":-1,"frameRetentionUsedCount":0,
+    "frameRetentionRemainingCount":-1,"frameRetentionUnlimited":true}
+   ```
+   스웨거 설명은 같은 필드를 두고 "BASIC 0 / PLUS 3 / PRO -1"이라고 적어 뒀다.
+
+2. **실제로 저장된다** — BASIC 계정으로 프레임을 만들면 **200** 이다.
+   이 문서가 8-20 에 적어 둔 `403 SUBS-003` 이 더는 재현되지 않는다.
+
+3. **jar 안의 정책이 그렇다** — `PlanTier` enum 이 세 등급 모두
+   `FrameLimit$Unlimited` + `Retention$Unlimited` 로 만들어져 있다.
+   `FrameLimit$Limited`·`Retention$Days`·`Retention$Months` 클래스는 존재하지만
+   **jar 안 어떤 클래스도 참조하지 않는다**(전수 검사).
+
+## 그래서 화면이 서로 다른 말을 한다
+
+- 가격표(정적 문구): "무료 · 커스텀 프레임 ✗", "베이직 · 3개"
+- 마이페이지·프레임 화면: **무제한** — `resolveFrameCapacity` 가 정적 표보다
+  서버 `usage` 를 우선하기 때문이다(그게 맞다).
+- 기록 화면: "최근 3일 기록만 보여요" — 실제로는 안 잘린다.
+  보관 **기간**은 API 에 필드가 없어서 프론트가 알 길이 없고 정적 표에 의존한다.
+
+## 백엔드에 물어볼 것
+
+결제가 닫혀 있어서(`PAYMENTS_ENABLED=false`) **일부러 다 열어 둔 것인지**, 아니면 정책이
+빠진 것인지. 답에 따라 프론트가 할 일이 갈린다.
+
+- 의도된 것이라면 → 가격표 문구를 "결제 오픈 전까지 모두 무제한"으로 바꾼다.
+- 아니라면 → 백엔드가 정책을 되살린다. 프론트는 그대로 두면 맞는다.
+
+보관 **기간**은 어느 쪽이든 API 에 값이 없다. 화면에서 기간을 말하려면
+`SubscriptionUsageResponse` 에 필드가 하나 필요하다(프레임 개수처럼).

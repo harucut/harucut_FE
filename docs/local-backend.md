@@ -35,6 +35,41 @@ docker compose up -d
 
 고치고 나면 로그인 응답에 `Access-Control-Allow-Origin: http://localhost:3000` 이 실려 온다.
 
+## ⚠️ Apple Silicon(M1~) 에서 한 줄 더 필요하다
+
+`popeye0618/harucut` 는 **linux/amd64 만 배포된다.** arm64 맥에서 그냥 올리면 pull 자체가
+실패한다:
+
+```
+no matching manifest for linux/arm64/v8 in the manifest list entries
+```
+
+`docker-compose.yml` 의 `app` 서비스에 플랫폼을 못박으면 에뮬레이션으로 돈다.
+
+```yaml
+  app:
+    image: popeye0618/harucut:latest
+    platform: linux/amd64      # ← 이 줄
+```
+
+mysql·redis·mailpit 은 arm64 네이티브라 그대로 두면 된다. 에뮬레이션 탓에 Spring Boot
+기동이 **50초 안팎** 걸린다(네이티브는 20초대) — 느린 게 정상이다.
+
+### Docker Desktop 없이 쓰기 (colima)
+
+Docker Desktop 을 안 깔아도 된다. 관리자 암호도 GUI 도 필요 없다.
+
+```bash
+brew install colima docker docker-compose
+colima start --cpu 4 --memory 8 --disk 60
+```
+
+두 가지 함정:
+- brew 로 깐 compose 는 플러그인 경로를 따로 등록해야 `docker compose` 가 인식된다.
+  `~/.docker/config.json` 에 `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]`
+- **재부팅하면 colima 가 자동으로 안 뜬다.** 도커 명령이 갑자기 실패하면 `colima start` 부터
+  의심할 것. 자동 시작을 원하면 `brew services start colima`.
+
 ## 접속 주소
 
 | 주소 | 용도 |
@@ -45,6 +80,9 @@ docker compose up -d
 | http://localhost:8025 | 메일함(Mailpit). 인증 메일은 **전부 여기로만** 온다 |
 
 ## 회원가입 흐름 (로컬)
+
+> 인증 코드는 **영문 대문자 6자**다(`FNSDRK` 같은). 숫자가 아니라서 Mailpit 본문에서
+> `\d{6}` 으로 긁으면 엉뚱한 값을 집는다. 메일 본문의 `Verification Code` 다음 줄을 본다.
 
 메일이 실제로 안 나가므로 코드를 Mailpit 에서 꺼내야 한다.
 
