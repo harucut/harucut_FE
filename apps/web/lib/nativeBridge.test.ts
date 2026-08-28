@@ -8,8 +8,11 @@
 import {
   isNativeShell,
   nativeHaptic,
+  nativeNotify,
+  nativeRequestNotificationPermission,
   nativeSaveImageBlob,
   nativeSaveImageUrl,
+  nativeSetColorScheme,
   nativeShare,
 } from "@/lib/nativeBridge";
 
@@ -142,5 +145,59 @@ describe("셸 안", () => {
     const posted = enterShell();
     nativeHaptic("light");
     expect(posted[0]).toEqual({ type: "haptic", style: "light" });
+  });
+});
+
+/*
+  알림·테마는 이번에 새로 난 다리다. 앞의 것들과 같은 계약을 지켜야 한다 —
+  브라우저에서는 아무것도 하지 않고(null), 셸 안에서는 셸이 답할 때까지 기다린다.
+*/
+describe("알림", () => {
+  afterEach(leaveShell);
+
+  it("브라우저에서는 권한을 묻지 않는다", async () => {
+    leaveShell();
+    await expect(nativeRequestNotificationPermission()).resolves.toBeNull();
+    await expect(nativeNotify({ title: "x" })).resolves.toBeNull();
+  });
+
+  it("셸 안에서는 권한 요청을 넘기고 답을 기다린다", async () => {
+    const posted = enterShell();
+    const promise = nativeRequestNotificationPermission();
+
+    await waitFor(() => posted.some((item) => item.type === "notify-permission"));
+    replyTo(posted, "notify-permission", { ok: true });
+
+    await expect(promise).resolves.toEqual({ ok: true });
+  });
+
+  it("로컬 알림에 제목과 본문을 실어 보낸다", async () => {
+    const posted = enterShell();
+    const promise = nativeNotify({ title: "네컷이 완성됐어요", body: "눌러서 보러 가기" });
+
+    await waitFor(() => posted.some((item) => item.type === "notify-local"));
+    const message = posted.find((item) => item.type === "notify-local");
+    expect(message).toMatchObject({
+      title: "네컷이 완성됐어요",
+      body: "눌러서 보러 가기",
+    });
+
+    replyTo(posted, "notify-local", { ok: true });
+    await expect(promise).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("테마 전달", () => {
+  afterEach(leaveShell);
+
+  it("브라우저에서는 아무것도 보내지 않는다", () => {
+    leaveShell();
+    expect(() => nativeSetColorScheme("light")).not.toThrow();
+  });
+
+  it("셸 안에서는 답을 기다리지 않고 바로 보낸다", () => {
+    const posted = enterShell();
+    nativeSetColorScheme("light");
+    expect(posted).toContainEqual({ type: "theme", scheme: "light" });
   });
 });

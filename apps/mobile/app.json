@@ -15,7 +15,9 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.harucut.app",
@@ -48,6 +50,12 @@
           "dark": {
             "backgroundColor": "#0B0B0C"
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1ED760"
         }
       ]
     ],

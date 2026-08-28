@@ -1,5 +1,4 @@
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 /**
@@ -18,8 +17,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      {/* 웹이 자기 배경을 그린다. 상태바는 어두운 무대에 맞춰 밝은 글자로 고정. */}
-      <StatusBar style="light" />
+      {/*
+        상태바는 셸이 잡는다(components/harucut-web-shell.tsx). 여기서 고정하면 웹이
+        라이트 테마일 때 흰 배경 위에 흰 글자가 된다 — 두 곳에서 켜면 나중에 마운트된
+        쪽이 이기므로, 값을 아는 한 곳만 남긴다.
+      */}
       <Stack
         screenOptions={{
           headerShown: false,

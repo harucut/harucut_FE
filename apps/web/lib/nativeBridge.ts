@@ -28,7 +28,7 @@ type NativeShellInfo = {
   platform: "android" | "ios";
 };
 
-type NativeResult = { ok: boolean; reason?: string };
+type NativeResult = { ok: boolean; reason?: string; value?: string };
 
 declare global {
   interface Window {
@@ -181,4 +181,49 @@ export async function nativeShare(args: { title?: string; message?: string; url:
 export function nativeHaptic(style: "light" | "medium" | "heavy" = "medium") {
   if (!isNativeShell()) return;
   post({ type: "haptic", style });
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   알림
+
+   WebView 안에는 웹 Notification API 가 없다 — iOS WKWebView 는 지원하지 않고,
+   안드로이드 WebView 도 권한 UI 가 없어 조용히 거절된다. 그래서 셸에 넘긴다.
+   브라우저에서 열렸을 때는 전부 null 이라 호출부가 분기 하나만 두면 된다.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 알림 권한을 묻는다.
+ *
+ * **알림을 띄우려는 순간에 부르지 말 것.** 무엇에 동의하는지 모르는 채로는 대개 거절하고,
+ * 한 번 거절하면 시스템이 두 번째부터 대화상자를 띄우지 않는다. 사용자가 이유를 아는
+ * 자리에서(예: "다 되면 알려드릴까요?") 부른다.
+ */
+export async function nativeRequestNotificationPermission() {
+  if (!isNativeShell()) return null;
+  return request({ type: "notify-permission" }, { timeoutMs: 120_000 });
+}
+
+/**
+ * 로컬 알림. 권한이 없으면 묻지 않고 실패를 돌려준다.
+ *
+ * 쓰임새는 "기다려야 끝나는 일"이다 — 서버 합성이 최대 90초까지 걸리는데(lib/composeApi.ts),
+ * 그 사이 사용자가 앱을 벗어나면 끝난 걸 알 방법이 없다.
+ */
+export async function nativeNotify(args: {
+  title: string;
+  body?: string;
+  secondsFromNow?: number;
+}) {
+  if (!isNativeShell()) return null;
+  return request({ type: "notify-local", ...args });
+}
+
+/**
+ * 지금 화면이 밝은지 어두운지 셸에 알린다. 상태바 글자색이 이 값을 따라간다.
+ *
+ * 답을 기다리지 않는다 — 못 맞춰도 화면은 그대로 보인다.
+ */
+export function nativeSetColorScheme(scheme: "light" | "dark") {
+  if (!isNativeShell()) return;
+  post({ type: "theme", scheme });
 }
