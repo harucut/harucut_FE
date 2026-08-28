@@ -11,13 +11,18 @@ import {
   LayoutGrid,
   PencilLine,
   Share2,
+  Trash2,
 } from "lucide-react";
 import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
 import { getImageUrlByKey } from "@/lib/presignedUploadApi";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
@@ -27,6 +32,7 @@ import {
   getUserMediaTitle,
 } from "@/lib/userMediaPreview";
 import {
+  deleteMedia,
   getMediaDownloadUrl,
   listMyMedia,
   updateMediaDisplayName,
@@ -57,7 +63,7 @@ const MONTH_KO = [
 ];
 
 function getMediaExtension(item: UserMedia) {
-  const candidates = [item.downloadUrl, item.originalFileName, item.s3Key];
+  const candidates = [item.downloadUrl, item.s3Key];
 
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -159,6 +165,9 @@ export default function HistoryPage() {
   const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
+  // 삭제는 되돌릴 수 없다. 한 번 더 묻는 대상(카드)을 들고 있는다.
+  const [deleteTarget, setDeleteTarget] = useState<UserMedia | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // 서버가 요금제 보관 기간을 넘긴 기록을 목록에서 잘라 내려주므로, "없음"과 "기간 만료"를
@@ -334,8 +343,7 @@ export default function HistoryPage() {
 
     try {
       const updated = await updateMediaDisplayName(item.mediaId, nextName);
-      const resolvedName =
-        updated.displayName?.trim() || updated.displayname?.trim() || nextName;
+      const resolvedName = updated.displayName?.trim() || nextName;
 
       setItems((current) =>
         current.map((currentItem) =>
@@ -354,6 +362,41 @@ export default function HistoryPage() {
       );
     } finally {
       setSavingNameId(null);
+    }
+  };
+
+  /**
+   * 사진 삭제.
+   *
+   * 서버가 지운 뒤 목록에서도 뺀다. 다시 불러오지 않고 손으로 빼는 이유는, 전체 재조회가
+   * 페이지를 순회하는 비싼 호출이라(listMyMedia) 한 장 지우자고 치를 값이 아니어서다.
+   *
+   * 404 를 실패로 보여 주지 않는다 — 이미 없는 사진을 지우려 한 것이고, 사용자가 원한
+   * 상태(목록에 없음)는 이미 이뤄졌다. 화면에서만 빼면 된다.
+   */
+  const handleDelete = async (item: UserMedia) => {
+    setDeletingId(item.mediaId);
+    try {
+      await deleteMedia(item.mediaId);
+      setItems((current) =>
+        current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
+      );
+      setDeleteTarget(null);
+      setFeedback("사진을 지웠어요.");
+    } catch (error_) {
+      console.error(error_);
+      const { status } = getApiErrorDetails(error_);
+      if (status === 404) {
+        setItems((current) =>
+          current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
+        );
+        setDeleteTarget(null);
+        setFeedback("이미 지워진 사진이에요.");
+        return;
+      }
+      alert(getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -535,6 +578,17 @@ export default function HistoryPage() {
                               {sharingId === item.mediaId ? "준비 중" : "공유"}
                             </span>
                           </button>
+                          {/* 삭제는 되돌릴 수 없어서 저장·공유와 같은 무게로 두지 않는다.
+                              글자 없이 아이콘만, 색도 한 단 낮춰 실수로 누르지 않게 한다. */}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(item)}
+                            disabled={deletingId === item.mediaId}
+                            aria-label={`삭제: ${title}`}
+                            className="hc-button-secondary grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </article>
                     );
@@ -550,6 +604,19 @@ export default function HistoryPage() {
         open={sourceDialogOpen}
         onClose={() => setSourceDialogOpen(false)}
       />
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="이 사진을 지울까요?"
+          description={`"${getUserMediaTitle(deleteTarget)}" 를 지워요. 지운 사진은 되돌릴 수 없어요.`}
+          confirmLabel="지우기"
+          runningLabel="지우는 중"
+          running={deletingId === deleteTarget.mediaId}
+          destructive
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => void handleDelete(deleteTarget)}
+        />
+      ) : null}
+
       {renameTarget ? (
         <SingleFieldDialog
           key={renameTarget.mediaId}

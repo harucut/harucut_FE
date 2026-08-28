@@ -21,17 +21,22 @@ import {
 } from "@/components/frame/FrameCapacityMeter";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { NativeNotificationSetting } from "@/components/mobile/NativeNotificationSetting";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import { getPlanDisplayName } from "@/constants/plans";
+import { listMyCoupons, redeemCoupon } from "@/lib/couponApi";
 import { resolvePlanInfo } from "@/constants/planLimits";
-import type { SubscriptionUsage } from "@/lib/api-types";
+import type { MyCoupon,
+  Subscription,
+  SubscriptionUsage } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import {
   getMyUserInfo,
+  getMySubscription,
   getSubscriptionUsage,
   type UserInfo,
 } from "@/lib/userApi";
@@ -113,6 +118,14 @@ export default function MyPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  // 구독(결제 주기·자동갱신)과 사용량(보관 한도)은 다른 엔드포인트다. 둘 다 실패해도
+  // 화면은 떠야 하므로 null 로 눕히고, 그때는 해당 줄을 아예 그리지 않는다.
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [coupons, setCoupons] = useState<MyCoupon[]>([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponNotice, setCouponNotice] = useState<string | null>(null);
 
   /**
    * 좁은 화면에서 펼쳐 둔 섹션. 넓은 화면은 전부 펼쳐 두므로 이 값을 보지 않는다.
@@ -150,12 +163,16 @@ export default function MyPage() {
   // 조회에 실패하면 0이 아니라 statsError로 구분해 '기록이 사라진 것처럼' 보이지 않게 한다.
   const loadStats = async () => {
     try {
-      const [media, frames, nextUsage] = await Promise.all([
-        listMyMedia(),
-        listMyFrames(),
-        // 구독 사용량은 못 받아도 목록 개수로 폴백하므로 실패를 무시한다.
-        getSubscriptionUsage().catch(() => null),
-      ]);
+      const [media, frames, nextUsage, nextSubscription, nextCoupons] =
+        await Promise.all([
+          listMyMedia(),
+          listMyFrames(),
+          // 구독 사용량은 못 받아도 목록 개수로 폴백하므로 실패를 무시한다.
+          getSubscriptionUsage().catch(() => null),
+          // 구독 행이 없으면 404(SUBS-004). 정상 흐름에서는 안 생기지만 화면은 떠야 한다.
+          getMySubscription().catch(() => null),
+          listMyCoupons().catch(() => []),
+        ]);
 
       const now = new Date();
       const thisMonth = media.filter((item) => {
@@ -173,6 +190,8 @@ export default function MyPage() {
         frames: frames.length,
       });
       setUsage(nextUsage);
+      setSubscription(nextSubscription);
+      setCoupons(nextCoupons);
       setStatsError(null);
     } catch (error) {
       console.error(error);
@@ -335,8 +354,8 @@ export default function MyPage() {
 
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
 
-  // 서버 등급(BASIC/PLUS/PRO) 대신 요금제 카드 이름(Free/Plus/Pro)으로 보여준다.
-  const planDisplayName = getPlanDisplayName(user?.planTier) ?? "Free";
+  // 서버 등급(BASIC/PLUS/PRO) 대신 사람이 읽는 이름(무료/베이직/프로)으로 보여준다.
+  const planDisplayName = getPlanDisplayName(user?.planTier) ?? "무료";
   const planPriceSuffix = user?.monthlyPrice
     ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원`
     : "";
@@ -581,19 +600,183 @@ export default function MyPage() {
   const prefSection = (
     <div className="flex flex-col gap-4">
       <ColorThemePreferencePanel />
+      {/* 앱 안에서만 보인다. 브라우저에서는 아무것도 렌더하지 않는다. */}
+      <NativeNotificationSetting />
       <p className="text-[13px] leading-5 text-[color:var(--hc-muted)]">
         화질·언어 설정은 순차적으로 추가될 예정이에요.
       </p>
     </div>
   );
 
+  /**
+   * 쿠폰을 등록한다.
+   *
+   * `applied === false` 는 **실패가 아니다.** 이미 유료 사용자라 지금 덮어쓰지 않고
+   * 현재 구독이 끝난 뒤 시작하도록 예약한 것이다(lib/couponApi.ts). 두 경우의 안내가
+   * 달라야 해서 문구를 갈라 놓는다 — "지금부터"와 "언제부터"는 사용자에게 다른 소식이다.
+   */
+  const handleRedeemCoupon = async () => {
+    const code = couponCode.trim();
+    if (!code || couponBusy) return;
+
+    setCouponBusy(true);
+    setCouponError(null);
+    setCouponNotice(null);
+
+    try {
+      const result = await redeemCoupon(code);
+      const tierName = getPlanDisplayName(result.grantTier) ?? result.grantTier;
+
+      if (result.applied) {
+        setCouponNotice(`${tierName} 플랜이 지금부터 적용됐어요.`);
+      } else {
+        const startsAt = parseServerDateTime(result.startsAt);
+        setCouponNotice(
+          startsAt
+            ? `지금 쓰는 플랜이 끝나는 ${startsAt.toLocaleDateString("ko-KR", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}부터 ${tierName} 플랜이 시작돼요.`
+            : `지금 쓰는 플랜이 끝난 뒤 ${tierName} 플랜이 시작돼요.`,
+        );
+      }
+
+      setCouponCode("");
+      // 등급·쿠폰 목록이 함께 바뀐다. 화면의 다른 곳(부제·프레임 한도)도 같이 맞춘다.
+      await Promise.all([refreshUser(), loadStats()]);
+    } catch (error) {
+      console.error(error);
+      setCouponError(
+        getUserFacingApiErrorMessage(error, "쿠폰을 등록하지 못했어요."),
+      );
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const periodEnd = parseServerDateTime(subscription?.currentPeriodEnd);
+
   /*
-    요금제만 펼칠 내용이 없다 — 누르면 /pricing 으로 나간다. 예전에는 여기에도 패널이
-    있었는데(현재 플랜 + 로그인 플랫폼 + 「요금제 보기」 버튼), 로그인 플랫폼은 이제
-    이메일 줄이 말하고 현재 플랜은 이 줄 부제가 말한다. 남는 건 이동뿐이라 줄로 둔다.
+    요금제 줄은 오래 "누르면 /pricing 으로 나가는" 링크였다. 펼칠 내용이 없었기 때문이다.
+    지금은 있다 — 구독 만료일·자동갱신 여부(GET /api/auth/subscriptions)와 쿠폰 등록이다.
+    특히 쿠폰은 결제가 닫힌 지금 **유료 등급을 얻는 유일한 길**이라 들어갈 자리가 있어야 한다.
+    가격표로 나가는 길은 아래 버튼으로 남긴다.
   */
-  const sectionBody: Partial<Record<SectionId, ReactElement>> = {
+  const planSection = (
+    <div className="flex flex-col gap-4">
+      <div className="hc-surface-well rounded-2xl border px-4 py-3.5">
+        <p className="text-[13px] font-bold">
+          {planDisplayName}
+          {planPriceSuffix}
+        </p>
+        {/* 만료일은 유료일 때만 온다(BASIC 이면 키 자체가 없다). 없으면 줄을 그리지 않는다 —
+            "무기한"처럼 읽힐 빈 값을 두지 않는다. */}
+        {periodEnd ? (
+          <p className="mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+            {subscription?.autoRenew === false || subscription?.status === "CANCELED"
+              ? `${periodEnd.toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}까지 쓸 수 있어요. 자동 갱신은 꺼져 있어요.`
+              : `${periodEnd.toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}에 갱신돼요.`}
+          </p>
+        ) : null}
+        {subscription?.status === "PAST_DUE" ? (
+          <p className="mt-1 text-[12px] font-medium text-[color:var(--hc-danger)]">
+            정기 결제가 실패했어요. 결제 수단을 확인해 주세요.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label
+          htmlFor="mypage-coupon-code"
+          className="text-[13px] font-bold"
+        >
+          쿠폰 등록
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="mypage-coupon-code"
+            value={couponCode}
+            onChange={(event) => setCouponCode(event.target.value)}
+            // 서버가 대소문자·앞뒤 공백을 맞춰 주므로 여기서 강제로 대문자로 바꾸지 않는다.
+            // 입력하는 대로 보이는 편이 오타를 찾기 쉽다.
+            placeholder="쿠폰 코드"
+            maxLength={32}
+            disabled={couponBusy}
+            className="hc-input h-11 min-w-0 flex-1 rounded-full border px-4 text-[13px] disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={() => void handleRedeemCoupon()}
+            disabled={couponBusy || !couponCode.trim()}
+            className="hc-button-primary h-11 shrink-0 rounded-full px-5 text-[13px] font-semibold disabled:opacity-50"
+          >
+            {couponBusy ? "등록 중" : "등록"}
+          </button>
+        </div>
+        {couponError ? (
+          <p role="alert" className="text-[12px] font-medium text-[color:var(--hc-danger)]">
+            {couponError}
+          </p>
+        ) : null}
+        {couponNotice ? (
+          <p className="text-[12px] font-medium text-[color:var(--hc-primary-strong)]">
+            {couponNotice}
+          </p>
+        ) : null}
+      </div>
+
+      {coupons.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] font-bold">등록한 쿠폰</p>
+          <ul className="flex flex-col gap-1.5">
+            {coupons.map((coupon) => (
+              <li
+                key={coupon.publicId}
+                className="flex items-center justify-between gap-3 text-[12px]"
+              >
+                <span className="min-w-0 truncate text-[color:var(--hc-text)]">
+                  {coupon.couponName}
+                </span>
+                {/* RESERVED 는 "아직 안 쓴 것"이 아니라 "다음 차례를 기다리는 것"이다.
+                    그냥 '대기'라고 하면 사용자가 뭔가 더 해야 하는 줄 안다. */}
+                <span className="shrink-0 text-[color:var(--hc-muted)]">
+                  {coupon.status === "REDEEMED"
+                    ? "적용 중"
+                    : "다음 차례에 시작"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => router.push("/pricing")}
+        className="hc-button-secondary h-11 self-start rounded-full border px-6 text-[13px] font-semibold"
+      >
+        요금제 보기
+      </button>
+    </div>
+  );
+
+  /**
+   * 모든 섹션이 펼칠 본문을 갖는다. **Partial 이 아니다** — 새 섹션을 SectionId 에 더하면
+   * 여기서 컴파일이 깨져야 한다. 예전에는 Partial 이라 본문 없는 섹션이 조용히
+   * "누르면 나가는 줄"로 떨어졌고, 그 분기가 요금제에 본문이 생긴 뒤로도 남아 있었다.
+   */
+  const sectionBody: Record<SectionId, ReactElement> = {
     account: accountSection,
+    plan: planSection,
     notif: notifSection,
     frames: framesSection,
     pref: prefSection,
@@ -700,29 +883,6 @@ export default function MyPage() {
               const meta = SECTION_META[id];
               const body = sectionBody[id];
               const bodyId = `mypage-section-${id}`;
-
-              // 요금제는 펼치지 않고 나간다.
-              if (!body) {
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => router.push("/pricing")}
-                    className="hc-surface-card flex w-full items-center gap-3.5 rounded-[20px] border px-5 py-4 text-left"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[15px] font-bold">
-                        {meta.title}
-                      </span>
-                      <span className="block truncate text-[12px] text-[color:var(--hc-muted)]">
-                        {sectionSub(id)}
-                      </span>
-                    </span>
-                    <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[color:var(--hc-muted)]" />
-                  </button>
-                );
-              }
-
               const open = openMobile === id;
 
               return (
