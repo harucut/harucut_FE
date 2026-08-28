@@ -2,6 +2,7 @@
 
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope } from "@/lib/api-types";
+import { requireData } from "@/lib/apiEnvelope";
 
 /**
  * 네컷 서버 합성.
@@ -13,7 +14,7 @@ import type { ApiEnvelope } from "@/lib/api-types";
  * ## 계약 (로컬 백엔드로 실측)
  *
  *   POST /api/auth/user/media/compose      → 202 { jobId, status: "PENDING" }
- *        { frameId, sourceKeys[4], idempotencyKey }
+ *        { frameId, sourceKeys[4], idempotencyKey, backgroundColor? }
  *   GET  /api/auth/user/media/compose/{id} → 200 { jobId, status, mediaId?, failureReason? }
  *
  * `status` 는 PENDING · DONE · FAILED 셋뿐이다. RUNNING 이 없는 것은 의도된 설계다 —
@@ -50,6 +51,16 @@ export type ComposeRequest = {
    * 서버가 기존 Job 을 그대로 돌려주므로 더블클릭이 두 번 그리지 않는다.
    */
   idempotencyKey: string;
+  /**
+   * 배경색 덮어쓰기(`#RRGGBB`). 생략하면 프레임에 저장된 배경 그대로 합성한다.
+   *
+   * **단색(COLOR) 배경 프레임에서만 쓸 수 있다** — 이미지 배경 프레임에 보내면 400 이다.
+   *
+   * ⚠️ 같은 `idempotencyKey` 로 색만 바꿔 다시 보내면 **무시된다.** 서버가 기존 작업을
+   * 그대로 재생하기 때문이다. 색이 바뀌면 키도 새로 만들어야 한다
+   * (그래서 호출부의 generationKey 에 색이 들어간다).
+   */
+  backgroundColor?: string;
 };
 
 export async function requestCompose(body: ComposeRequest): Promise<ComposeJob> {
@@ -57,14 +68,14 @@ export async function requestCompose(body: ComposeRequest): Promise<ComposeJob> 
     "/api/client/user/media/compose",
     body,
   );
-  return res.data.data;
+  return requireData(res.data, "합성 작업");
 }
 
 export async function getComposeJob(jobId: number): Promise<ComposeJob> {
   const res = await clientApi.get<ApiEnvelope<ComposeJob>>(
     `/api/client/user/media/compose/${jobId}`,
   );
-  return res.data.data;
+  return requireData(res.data, "합성 상태");
 }
 
 export class ComposeFailedError extends Error {

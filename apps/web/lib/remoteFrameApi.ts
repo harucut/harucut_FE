@@ -3,6 +3,7 @@
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, RemoteFrame } from "@/lib/api-types";
 import type { CreateFrameRequest } from "@/lib/frameApi";
+import { requireData } from "@/lib/apiEnvelope";
 
 /**
  * 서버가 내려주는 프레임 **전부**. 내 프레임 + 기본 제공(시스템) 프레임이 섞여 있다.
@@ -25,7 +26,7 @@ export async function getFrame(frameId: number) {
   const res = await clientApi.get<ApiEnvelope<RemoteFrame>>(
     `/api/client/user/frame/${frameId}`,
   );
-  return res.data.data;
+  return requireData(res.data, "프레임");
 }
 
 // 저장·수정 응답에는 방금 만들어진 프레임이 통째로 들어 있다(frameId 포함).
@@ -35,7 +36,7 @@ export async function createFrame(body: CreateFrameRequest) {
     "/api/client/user/frame",
     body,
   );
-  return res.data.data;
+  return requireData(res.data, "저장된 프레임");
 }
 
 export async function updateFrame(frameId: number, body: CreateFrameRequest) {
@@ -43,7 +44,7 @@ export async function updateFrame(frameId: number, body: CreateFrameRequest) {
     `/api/client/user/frame/${frameId}`,
     body,
   );
-  return res.data.data;
+  return requireData(res.data, "수정된 프레임");
 }
 
 export async function deleteFrame(frameId: number) {

@@ -5,6 +5,7 @@ import type {
   PresignedUploadContentType,
 } from "@/lib/api-types";
 import { clientApi } from "@/lib/clientApi";
+import { requireData } from "@/lib/apiEnvelope";
 
 type PresignedUploadData = {
   key: string;
@@ -262,7 +263,10 @@ export async function uploadToS3WithPresigned(opts: {
     fileSize: file.size,
   });
 
-  const { key, uploadUrl, contentType } = presigned.data.data;
+  const { key, uploadUrl, contentType } = requireData(
+    presigned.data,
+    "업로드 주소",
+  );
   // presigned PUT 서명에 content-type이 들어있다(X-Amz-SignedHeaders=content-type;host).
   // 헤더를 빼거나 다른 값을 쓰면 S3가 403 SignatureDoesNotMatch로 거절한다.
   const uploadRes = await fetch(uploadUrl, {

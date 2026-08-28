@@ -2,6 +2,7 @@
 
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, UserMedia } from "@/lib/api-types";
+import { requireData } from "@/lib/apiEnvelope";
 
 /**
  * 최근 것 몇 장만. **한 페이지만 부른다.**
@@ -73,7 +74,7 @@ export async function getMediaDownloadUrl(mediaId: number) {
   const res = await clientApi.get<ApiEnvelope<string>>(
     `/api/client/user/media/${mediaId}/download-url`,
   );
-  return res.data.data;
+  return requireData(res.data, "다운로드 주소");
 }
 
 export async function updateMediaDisplayName(mediaId: number, displayName: string) {
@@ -81,5 +82,15 @@ export async function updateMediaDisplayName(mediaId: number, displayName: strin
     `/api/client/user/media/${mediaId}/display-name`,
     { displayName },
   );
-  return res.data.data;
+  return requireData(res.data, "이름을 바꾼 사진");
+}
+
+/**
+ * 사진 삭제.
+ *
+ * 404(GEN-031)는 "없는 사진"과 "남의 사진"을 구분하지 않는다. 화면에서도 구분하지 말 것 —
+ * 남의 것을 지우려 한 사람에게 "그건 존재한다"고 알려 주는 셈이 된다.
+ */
+export async function deleteMedia(mediaId: number) {
+  await clientApi.delete<ApiEnvelope<null>>(`/api/client/user/media/${mediaId}`);
 }

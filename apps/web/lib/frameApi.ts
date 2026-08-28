@@ -50,7 +50,7 @@ export type CreateFrameRequest = {
  * 우리 웹서버가 주는 정적 경로는 S3 에 존재하지 않아 합성이 거부된다.
  * 예전에 URL 을 그대로 저장한 프레임을 다시 저장할 때도 여기서 key 로 되돌린다.
  */
-export function toStorageKey(source: string): string {
+function toStorageKey(source: string): string {
   const value = source.trim();
   if (!/^https?:\/\//i.test(value)) return value;
 
