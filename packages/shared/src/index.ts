@@ -4,6 +4,7 @@ export { hasFinalConsonant, josa, withJosa, type JosaPair } from './josa';
 export {
   ENTERPRISE_FACTS,
   PLAN_FACTS,
+  PLAN_NAMES,
   SITE_ORIGIN,
   siteUrl,
   toPlanId,

@@ -5,7 +5,7 @@ import { PricingView } from "@/components/pricing/PricingView";
 export const metadata: Metadata = {
   title: "요금제 | 하루컷",
   description:
-    "하루컷 요금제 안내. 비회원도 촬영은 무료, 커스텀 프레임·보정·보관 기간은 Free·Plus·Pro 플랜에서 확인하세요.",
+    "하루컷 요금제 안내. 비회원도 촬영은 무료, 커스텀 프레임과 보관 기간은 무료·베이직·엔터프라이즈 플랜에서 확인하세요.",
   alternates: { canonical: "/pricing" },
 };
 

@@ -23,7 +23,7 @@ export type PlanFacts = {
   price: string;
   /** 가격 옆 보조 텍스트(예: "/ 월", "가입 시 제공"). */
   sub: string;
-  /** 5행 피처 매트릭스. 모든 플랜이 같은 행 순서·라벨을 쓴다. */
+  /** 피처 매트릭스. 모든 플랜이 같은 행 순서·라벨을 쓴다. */
   feats: PlanFeature[];
   /**
    * 시각적 강조 대상인지.
@@ -34,51 +34,75 @@ export type PlanFacts = {
   hot?: boolean;
 };
 
-// 5행 피처 라벨(순서 고정):
-// 커스텀 프레임 / 사진 보관 기간 / 보정 / 광고 제거 / AI (추후)
+/**
+ * 서버 등급 → 카드 id.
+ *
+ * **가격표에 카드가 없는 등급도 여기에는 있어야 한다.** PRO 는 더 이상 팔지 않지만
+ * 쿠폰(`grantTier: PRO`)으로 받은 사용자가 실제로 존재한다. 목록에서 지우면 그 사용자의
+ * 등급이 "모르는 값"이 되어 마이페이지·기록 화면이 무료로 잘못 표시한다.
+ */
+const SERVER_TIER_TO_PLAN_ID: Record<string, PlanId> = {
+  BASIC: 'basic',
+  PLUS: 'plus',
+  PRO: 'pro',
+};
+
+/**
+ * 등급 이름. 가격표에 카드가 없는 PRO 도 부를 이름은 있어야 한다(위 주석 참고).
+ */
+export const PLAN_NAMES: Record<PlanId, string> = {
+  basic: '무료',
+  plus: '베이직',
+  pro: '프로',
+};
+
+/**
+ * 가격표에 카드로 세우는 개인 요금제.
+ *
+ * ## 왜 두 장인가
+ *
+ * 파는 개인 플랜은 무료와 베이직 둘이다. 세 번째 자리는 행사용 Enterprise 가 받는다
+ * (`ENTERPRISE_FACTS`) — 화면에는 무료 · 베이직 · 엔터프라이즈 셋이 선다.
+ * PRO(₩9,900) 는 가격표에서 내렸다. 등급 자체는 서버에 남아 있고 쿠폰으로 받은 사용자도
+ * 있으므로 `PLAN_NAMES` 와 `toPlanId` 는 계속 PRO 를 안다.
+ *
+ * ## 피처 행은 서버가 실제로 가르는 것만 적는다
+ *
+ * 백엔드가 요금제로 가르는 것은 **딱 두 가지**다(2026-08-28 `/v3/api-docs` 실측):
+ *
+ *   - 커스텀 프레임 보관 개수 — `frameRetentionLimit` (BASIC 0 / PLUS 3 / PRO -1)
+ *   - 보관 기간 — 기간이 지난 프레임·사진은 `SUBS-002` 로 막힌다
+ *
+ * 그 밖에는 등급 개념이 아예 없다. 스펙 전문에 `광고`·`filter` 는 0건이고, `보정` 은
+ * 1건인데 그마저 "남은 개수를 0 으로 **보정**한다"는 다른 뜻이다.
+ *
+ * 그래서 예전 표의 "광고 제거"와 "AI (추후)" 행을 걷어냈다. 양쪽 다 X 인 행은 플랜을
+ * 고르는 데 아무 정보도 주지 않으면서, 유료 칸에 체크가 붙어 있던 동안에는 서버가 하지
+ * 않는 일을 한다고 말하고 있었다. 보정은 등급과 무관하게 모두 되므로 그렇게 적는다.
+ */
 export const PLAN_FACTS: PlanFacts[] = [
   {
     id: 'basic',
-    name: 'Free',
+    name: PLAN_NAMES.basic,
     price: '무료',
     sub: '가입 시 제공',
     feats: [
+      // 서버 한도가 0 이라 첫 프레임부터 403(SUBS-003) 이다. 실측으로 확인했다.
       ['커스텀 프레임', false],
       ['사진 보관 기간', true, '3일'],
-      // 보정은 아직 플랜으로 막지 않는다. 서버에 해당 권한 개념이 없고 결제도 열리기 전이라,
-      // 지금 클라이언트에서만 막으면 모두에게서 되는 기능을 빼앗는 셈이 된다.
-      ['보정', false, '결제 오픈 전까지 이용 가능'],
-      // 광고 역시 아직 붙이지 않았다. 결제가 열린 뒤부터 Free 에 노출한다는 계획을 적는다.
-      ['광고 제거', false, '결제 오픈 후 보정·다운로드 시 노출'],
-      ['AI (추후)', false],
+      ['보정 필터', true, '모든 플랜'],
     ],
   },
   {
     id: 'plus',
-    name: 'Plus',
+    name: PLAN_NAMES.plus,
     price: '₩3,900',
     sub: '/ 월',
     hot: true,
     feats: [
       ['커스텀 프레임', true, '3개'],
-      ['사진 보관 기간', true, '3달'],
-      ['보정', true],
-      ['광고 제거', true],
-      ['AI (추후)', false],
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '₩9,900',
-    sub: '/ 월',
-    feats: [
-      ['커스텀 프레임', true, '무제한'],
-      ['사진 보관 기간', true, '무제한'],
-      ['보정', true],
-      ['광고 제거', true],
-      // 아직 아무도 못 쓴다. 라벨이 "(추후)"인데 체크를 주면 Pro 는 지금 된다는 말이 된다.
-      ['AI (추후)', false],
+      ['사진 보관 기간', true, '3개월'],
+      ['보정 필터', true, '모든 플랜'],
     ],
   },
 ];
@@ -89,7 +113,7 @@ export const PLAN_FACTS: PlanFacts[] = [
  * 값은 행사 규모·기간에 따라 달라 정찰가를 붙이지 않고 견적으로 안내한다.
  */
 export const ENTERPRISE_FACTS = {
-  name: 'Enterprise',
+  name: '엔터프라이즈',
   badge: '행사용',
   price: '규모에 맞춰 견적',
   desc: '부스 대신 QR 한 장이에요. 행사 이름과 컷 구성을 맞춘 촬영 주소를 드리면, 참가자는 가입 없이 자기 휴대폰으로 찍고 그 자리에서 가져가요.',
@@ -114,10 +138,12 @@ export function siteUrl(path: string): string {
 
 /**
  * 서버가 주는 등급("BASIC" | "PLUS" | "PRO")을 카드 id 로 맞춘다.
- * 모르는 값이면 null — 임의로 basic 으로 떨어뜨려 "Free 이용 중"이라고 잘못 말하지 않는다.
+ * 모르는 값이면 null — 임의로 basic 으로 떨어뜨려 "무료 이용 중"이라고 잘못 말하지 않는다.
+ *
+ * PRO 는 가격표에 카드가 없지만 **여기서는 해석된다.** 쿠폰으로 PRO 를 받은 사용자가
+ * 있고, 그 사람의 등급을 "모르는 값"으로 만들면 화면이 무료로 잘못 표시한다.
  */
 export function toPlanId(tier: string | null | undefined): PlanId | null {
   if (!tier) return null;
-  const id = tier.toLowerCase();
-  return PLAN_FACTS.some((plan) => plan.id === id) ? (id as PlanId) : null;
+  return SERVER_TIER_TO_PLAN_ID[tier.trim().toUpperCase()] ?? null;
 }

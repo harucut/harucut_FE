@@ -54,7 +54,7 @@ const AXES = [
     body: "뽑은 종이 한 장은 지갑 안에서 색이 바래고, 나중엔 어디 뒀는지도 잊어버려요. 하루컷은 계정에 그대로 쌓여요. 날짜별로 다시 꺼내 보고, 원본 화질로 다시 받을 수 있어요.",
     booth: "종이 한 장뿐이라 잃어버리면 그걸로 끝이에요.",
     facts: [
-      ["보관", "Free 3일 · Plus 3달 · Pro 무제한"],
+      ["보관", "무료 3일 · 베이직 3개월"],
       ["기록", "날짜별로 다시 보기"],
       ["저장", "원본 화질 다시 받기"],
     ],
@@ -126,11 +126,12 @@ function AxisVisual({ index }: { index: number }) {
   }
 
   // 남는 기록 — 보관 기간을 게이지처럼 눕혀서 대비시킨다.
+  // 파는 플랜만 세운다. PRO 는 가격표에서 내렸으므로 여기서도 뺀다 —
+  // 살 수 없는 플랜의 막대가 제일 길면 "무제한을 판다"고 읽힌다.
   const rows = [
     { plan: "부스 종이", span: "그날 하루", pct: 4, dim: true },
-    { plan: "FREE", span: "3일", pct: 12, dim: true },
-    { plan: "PLUS", span: "3달", pct: 46, dim: false },
-    { plan: "PRO", span: "무제한", pct: 100, dim: false },
+    { plan: "무료", span: "3일", pct: 12, dim: true },
+    { plan: "베이직", span: "3개월", pct: 100, dim: false },
   ];
 
   return (
