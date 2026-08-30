@@ -18,6 +18,7 @@ export function GuestTrialBridge() {
   const searchParams = useSearchParams();
   const hydrateGuestMode = useGuestTrialStore((state) => state.hydrateGuestMode);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
   const showGuestRestrictedNotice = useGuestTrialStore((state) => state.showGuestRestrictedNotice);
   const setNotice = useGuestTrialStore((state) => state.setNotice);
 
@@ -37,7 +38,15 @@ export function GuestTrialBridge() {
   // 지금은 **회원이 된 순간 보관물이 있으면** 처리한다. resumeSave 는 주소만 정리한다.
   const resumeHandledRef = useRef(false);
   useEffect(() => {
-    if (accessMode !== "member") return;
+    /*
+      **쿠키를 읽기 전에는 판단하지 않는다.**
+
+      스토어의 초깃값은 "member" 라, 위 hydrateGuestMode() 가 반영되기 전 첫 렌더에서는
+      진짜 비회원도 회원으로 읽힌다. 그 순간 보관물이 있으면 인증 전용 서버 합성을 불러
+      401 이 나고, 화면에는 "저장을 완료하지 못했어요" 라는 엉뚱한 안내가 뜬다.
+      (비회원이 결과를 내려받아 보관물과 게스트 쿠키가 남은 채 새로고침하면 바로 이 상황이다.)
+    */
+    if (!hydrated || accessMode !== "member") return;
 
     const stripResumeParam = () => {
       if (!searchParams.get("resumeSave")) return;
@@ -101,7 +110,7 @@ export function GuestTrialBridge() {
         });
       }
     })();
-  }, [accessMode, pathname, router, searchParams, setNotice]);
+  }, [accessMode, hydrated, pathname, router, searchParams, setNotice]);
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.
   // 공유/저장 안내는 URL이 아니라 화면에서 직접 스토어 액션을 부른다(shoot/result 등).

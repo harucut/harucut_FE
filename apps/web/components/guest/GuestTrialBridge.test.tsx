@@ -55,7 +55,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   document.cookie = "harucut_guest_trial=; max-age=0";
   mockSearch = new URLSearchParams();
-  useGuestTrialStore.setState({ accessMode: "member", notice: null });
+  // hydrated 는 false 에서 시작한다 — 실제 앱과 같다. 컴포넌트가 마운트되며 쿠키를 읽는다.
+  useGuestTrialStore.setState({
+    accessMode: "member",
+    hydrated: false,
+    notice: null,
+  });
   mockGetPending.mockReturnValue(PENDING);
   mockSaveFourcutToServer.mockResolvedValue({
     mediaId: 1,
@@ -145,5 +150,28 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     expect(useGuestTrialStore.getState().notice?.message).toContain(
       "새로고침하면 다시 시도",
     );
+  });
+});
+
+/*
+  회귀 — 쿠키를 읽기 전에는 회원이라고 단정하지 않는다.
+
+  스토어의 초깃값이 "member" 라, hydrateGuestMode() 가 반영되기 전 첫 렌더에서는 진짜
+  비회원도 회원으로 읽힌다. 비회원이 결과를 내려받아 보관물과 게스트 쿠키가 남은 채
+  새로고침하면 바로 그 상황인데, 그때 인증 전용 서버 합성을 부르면 401 이 나고
+  화면에는 "저장을 완료하지 못했어요" 라는 엉뚱한 안내가 뜬다.
+*/
+describe("게스트 쿠키가 남아 있을 때", () => {
+  it("보관물이 있어도 서버 합성을 부르지 않는다", async () => {
+    document.cookie = "harucut_guest_trial=1";
+
+    render(<GuestTrialBridge />);
+
+    // 쿠키를 읽고 나면 guest 로 확정된다.
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+    });
+    expect(useGuestTrialStore.getState().hydrated).toBe(true);
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
   });
 });

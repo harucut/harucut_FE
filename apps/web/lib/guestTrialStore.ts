@@ -38,6 +38,13 @@ export type GuestNoticeState = {
 
 type GuestTrialStore = {
   accessMode: GuestAccessMode;
+  /**
+   * 쿠키를 읽어 accessMode 를 정했는가.
+   *
+   * 초깃값이 "member" 라, 이 값을 보지 않으면 **진짜 비회원도 첫 렌더에서는 회원으로 읽힌다.**
+   * 회원일 때만 하는 일(보관해 둔 네컷의 서버 합성)을 그 순간에 시작하면 401 이 난다.
+   */
+  hydrated: boolean;
   notice: GuestNoticeState | null;
   clearNotice: () => void;
   enterGuestMode: () => void;
@@ -85,19 +92,22 @@ function setGuestCookie(enabled: boolean) {
 
 export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
   accessMode: "member",
+  hydrated: false,
   notice: null,
   clearNotice: () => set({ notice: null }),
   enterGuestMode: () => {
     setGuestCookie(true);
-    set({ accessMode: "guest", notice: null });
+    // 사용자가 직접 고른 것이라 쿠키를 다시 읽을 필요가 없다 — 이 시점부터 값은 확정이다.
+    set({ accessMode: "guest", hydrated: true, notice: null });
   },
   exitGuestMode: () => {
     setGuestCookie(false);
-    set({ accessMode: "member", notice: null });
+    set({ accessMode: "member", hydrated: true, notice: null });
   },
   hydrateGuestMode: () =>
     set({
       accessMode: hasGuestCookie() ? "guest" : "member",
+      hydrated: true,
     }),
   setNotice: (notice) => set({ notice }),
   showGuestRestrictedNotice: () =>
