@@ -49,6 +49,22 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export const UPLOAD_TOO_LARGE_MESSAGE = "10MB 이하 이미지만 올릴 수 있어요.";
 
+/**
+ * 올리기 **전에** 우리가 걸러낸 것(형식·용량·파일 없음).
+ *
+ * 화면에 그대로 띄워도 되는 한국어 문구를 담는다. 반대로 네트워크·S3·백엔드에서 온 실패는
+ * 이 타입이 아니다 — 그쪽 메시지는 영문이라(`S3 upload failed: 403`,
+ * `Failed to fetch`) 사용자에게 보이면 안 되고, 에러 코드 매핑을 거쳐야 한다.
+ *
+ * 타입으로 가르는 이유: 문구를 문자열로 견주면 문구가 바뀔 때 조용히 어긋난다.
+ */
+export class UploadValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadValidationError";
+  }
+}
+
 export type PresignedUploadType =
   (typeof PRESIGNED_UPLOAD_TYPES)[keyof typeof PRESIGNED_UPLOAD_TYPES];
 
@@ -153,7 +169,7 @@ export async function getImageUrlByKey(key: string): Promise<string | null> {
 
 // 사용자 화면에 그대로 노출돼도 되도록 한국어 문구로 만든다(디버깅용 원본 형식은 뒤에 덧붙임).
 function createUnsupportedTypeError(file: File) {
-  return new Error(
+  return new UploadValidationError(
     `${UNSUPPORTED_UPLOAD_MESSAGE} (${file.type || file.name})`,
   );
 }
@@ -251,7 +267,7 @@ export async function uploadToS3WithPresigned(opts: {
   // 서버 한도를 넘는 파일은 발급 요청 전에 막는다. 그냥 보내면 400 GEN-003 이 오는데,
   // 그 문구보다 여기서 크기를 짚어 주는 편이 사용자에게 낫다.
   if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error(UPLOAD_TOO_LARGE_MESSAGE);
+    throw new UploadValidationError(UPLOAD_TOO_LARGE_MESSAGE);
   }
 
   const presigned = await requestPresignedUpload({

@@ -5,6 +5,7 @@ import { clientApi } from "@/lib/clientApi";
 import {
   PRESIGNED_UPLOAD_TYPES,
   UNSUPPORTED_UPLOAD_MESSAGE,
+  UploadValidationError,
   isSupportedUploadFile,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
@@ -19,12 +20,12 @@ async function requestProfileImageChange(s3Key: string) {
 
 export async function uploadProfileImage(file: File) {
   if (!file) {
-    throw new Error("파일을 선택해 주세요.");
+    throw new UploadValidationError("파일을 선택해 주세요.");
   }
 
   // 업로드 형식 판정은 presignedUploadApi 한 곳(isSupportedUploadFile)으로 모은다.
   if (!isSupportedUploadFile(file)) {
-    throw new Error(UNSUPPORTED_UPLOAD_MESSAGE);
+    throw new UploadValidationError(UNSUPPORTED_UPLOAD_MESSAGE);
   }
 
   const { key } = await uploadToS3WithPresigned({

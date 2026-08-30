@@ -25,12 +25,13 @@ import { NativeNotificationSetting } from "@/components/mobile/NativeNotificatio
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import { getPlanDisplayName } from "@/constants/plans";
+import { UploadValidationError } from "@/lib/presignedUploadApi";
 import { listMyCoupons, redeemCoupon } from "@/lib/couponApi";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import type { MyCoupon,
   Subscription,
   SubscriptionUsage } from "@/lib/api-types";
-import { ApiRequestError, clientApi } from "@/lib/clientApi";
+import { clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
@@ -291,26 +292,22 @@ export default function MyPage() {
     } catch (error) {
       console.error(error);
       /*
-        uploadProfileImage 는 형식·용량을 자기 문구로 던진다(`new Error("...")`). 그건 살린다.
+        올리기 전에 우리가 걸러낸 것(형식·용량·파일 없음)만 자기 문구를 살린다.
 
-        다만 **ApiRequestError 도 Error 를 상속한다.** `error instanceof Error` 만 보면 API
-        오류까지 이 가지로 빠져서, 매핑할 수 있는 코드(GEN-051 등)도 서버의 영문 메시지가
-        그대로 화면에 나가고 네트워크 오류는 "Failed to fetch" 가 보인다.
-        로컬 검증 오류만 자기 문구를 쓰고, 나머지는 코드 매핑에 맡긴다.
+        "ApiRequestError 가 아니면 로컬 오류" 로 가르면 안 된다 — S3 PUT 은 fetch 를 직접
+        부르므로 오프라인의 `TypeError("Failed to fetch")` 와 비정상 응답의
+        `Error("S3 upload failed: 403")` 도 ApiRequestError 가 아니다. 그것들까지 로컬로
+        오인하면 영문 원문이 그대로 화면에 나간다. 우리가 던진 것만 타입으로 가른다.
       */
-      const isLocalValidationError =
-        error instanceof Error &&
-        !(error instanceof ApiRequestError) &&
-        Boolean(error.message);
-
       setNotice({
         kind: "error",
-        text: isLocalValidationError
-          ? error.message
-          : getUserFacingApiErrorMessage(
-              error,
-              "프로필 이미지를 바꾸지 못했어요.",
-            ),
+        text:
+          error instanceof UploadValidationError
+            ? error.message
+            : getUserFacingApiErrorMessage(
+                error,
+                "프로필 이미지를 바꾸지 못했어요.",
+              ),
       });
     } finally {
       setIsUploadingProfile(false);
@@ -654,16 +651,30 @@ export default function MyPage() {
       }
 
       setCouponCode("");
-      // 등급·쿠폰 목록이 함께 바뀐다. 화면의 다른 곳(부제·프레임 한도)도 같이 맞춘다.
-      await Promise.all([refreshUser(), loadStats()]);
     } catch (error) {
       console.error(error);
       setCouponError(
         getUserFacingApiErrorMessage(error, "쿠폰을 등록하지 못했어요."),
       );
+      return;
     } finally {
       setCouponBusy(false);
     }
+
+    /*
+      화면 갱신은 **성공을 확정한 뒤 따로** 한다.
+
+      등급·쿠폰 목록이 바뀌었으니 부제와 프레임 한도도 맞춰야 하는데, 이 조회를 위 try 안에
+      두면 조회 하나가 실패했을 때 바깥 catch 로 떨어져 "쿠폰을 등록하지 못했어요" 가 뜬다.
+      쿠폰은 이미 서버에 적용됐는데도 그렇다 — 사용자는 성공 안내와 실패 안내를 함께 보고,
+      일회용 쿠폰을 다시 입력하려 든다.
+
+      조회가 실패해도 쿠폰은 적용된 것이 맞다. 화면이 잠깐 옛 값을 보일 뿐이라 조용히 넘긴다.
+    */
+    await Promise.all([
+      refreshUser().catch(() => undefined),
+      loadStats().catch(() => undefined),
+    ]);
   };
 
   const periodEnd = parseServerDateTime(subscription?.currentPeriodEnd);
