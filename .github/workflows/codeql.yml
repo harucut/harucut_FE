@@ -20,6 +20,11 @@ permissions:
 jobs:
   analyze:
     name: codeql (${{ matrix.language }})
+    # PR 에서는 `run-ci` 라벨이 붙었을 때만 돈다(verify.yml 과 같은 규칙).
+    # 잡이 skipped 로 끝나면 GitHub 은 필수 검사 통과로 인정하므로 병합은 막히지 않는다.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'run-ci')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
