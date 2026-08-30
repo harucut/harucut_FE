@@ -30,7 +30,7 @@ import { resolvePlanInfo } from "@/constants/planLimits";
 import type { MyCoupon,
   Subscription,
   SubscriptionUsage } from "@/lib/api-types";
-import { clientApi } from "@/lib/clientApi";
+import { ApiRequestError, clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
@@ -290,16 +290,27 @@ export default function MyPage() {
       setNotice({ kind: "ok", text: "프로필 이미지를 바꿨어요." });
     } catch (error) {
       console.error(error);
-      // uploadProfileImage 는 형식·용량을 자기 문구로 던진다. 그걸 살린다.
+      /*
+        uploadProfileImage 는 형식·용량을 자기 문구로 던진다(`new Error("...")`). 그건 살린다.
+
+        다만 **ApiRequestError 도 Error 를 상속한다.** `error instanceof Error` 만 보면 API
+        오류까지 이 가지로 빠져서, 매핑할 수 있는 코드(GEN-051 등)도 서버의 영문 메시지가
+        그대로 화면에 나가고 네트워크 오류는 "Failed to fetch" 가 보인다.
+        로컬 검증 오류만 자기 문구를 쓰고, 나머지는 코드 매핑에 맡긴다.
+      */
+      const isLocalValidationError =
+        error instanceof Error &&
+        !(error instanceof ApiRequestError) &&
+        Boolean(error.message);
+
       setNotice({
         kind: "error",
-        text:
-          error instanceof Error && error.message
-            ? error.message
-            : getUserFacingApiErrorMessage(
-                error,
-                "프로필 이미지를 바꾸지 못했어요.",
-              ),
+        text: isLocalValidationError
+          ? error.message
+          : getUserFacingApiErrorMessage(
+              error,
+              "프로필 이미지를 바꾸지 못했어요.",
+            ),
       });
     } finally {
       setIsUploadingProfile(false);
