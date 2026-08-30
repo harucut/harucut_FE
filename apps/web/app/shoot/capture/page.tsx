@@ -18,6 +18,7 @@ export default function CapturePage() {
     isCameraReady,
     isCheckingCameraPermission,
     isShooting,
+    cancelShooting,
     countdown,
     shotCount,
     timerSeconds,
@@ -283,6 +284,26 @@ export default function CapturePage() {
                 이름은 aria-label 로 남아 보조기술에는 계속 읽힌다.
               */}
             </button>
+
+            {/*
+              중단.
+
+              8초 간격 8장이면 1분 가까이 간다. 그동안 이 화면에서 촬영만 멈추고 처음으로
+              돌아갈 방법이 없었다 — 끝까지 기다리거나 셔터를 여덟 번 누르거나, 화면을
+              통째로 떠나는 수밖에 없었다.
+
+              무대는 그대로 비워 둔다. 촬영 중에 이미 쓰는 무대 **아래** 줄에, 왼쪽 전환
+              버튼과 대칭으로 둔다. 촬영이 돌 때만 나타나므로 시작 화면은 예전 그대로다.
+            */}
+            {isShooting ? (
+              <button
+                type="button"
+                onClick={cancelShooting}
+                className="absolute right-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
+              >
+                중단
+              </button>
+            ) : null}
           </div>
         </section>
       </div>
