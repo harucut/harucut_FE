@@ -5,6 +5,13 @@ on:
     branches:
       - develop
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      # 라벨을 붙이는 순간 워크플로가 다시 돌아야 검사가 시작된다. 이게 없으면 위 `if` 가
+      # 다시 평가되지 않아서, 라벨을 붙여도 다음 푸시 전까지 skipped 로 남는다.
+      - labeled
   push:
     branches:
       - develop
