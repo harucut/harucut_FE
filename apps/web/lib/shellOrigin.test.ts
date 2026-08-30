@@ -59,6 +59,22 @@ describe("isOAuthFlowUrl", () => {
     expect(isOAuthFlowUrl(`${API}/oauth2/authorization/kakao`, API)).toBe(true);
   });
 
+  /*
+    회귀. 시작만 열어 두면 제공자 인증을 마치고 돌아오는 콜백이 밖으로 밀려나고,
+    세션 쿠키가 외부 브라우저에 저장돼 앱은 계속 로그아웃 상태로 남는다.
+    경로는 백엔드 설정에서 확인했다(redirect-uri: "{baseUrl}/login/oauth2/code/{provider}").
+  */
+  it("백엔드 콜백 경로도 통과 — 안 그러면 로그인이 끝나지 않는다", () => {
+    expect(isOAuthFlowUrl(`${API}/login/oauth2/code/google`, API)).toBe(true);
+    expect(isOAuthFlowUrl(`${API}/login/oauth2/code/kakao?code=x&state=y`, API)).toBe(true);
+    expect(isOAuthFlowUrl(`${API}/login/oauth2/code/naver`, API)).toBe(true);
+  });
+
+  it("백엔드 오리진이어도 OAuth 와 무관한 경로는 막는다", () => {
+    expect(isOAuthFlowUrl(`${API}/api/auth/user/info`, API)).toBe(false);
+    expect(isOAuthFlowUrl(`${API}/`, API)).toBe(false);
+  });
+
   it("제공자 도메인은 하위 도메인까지 통과", () => {
     expect(isOAuthFlowUrl("https://accounts.google.com/o/oauth2/v2/auth", API)).toBe(true);
     expect(isOAuthFlowUrl("https://kauth.kakao.com/oauth/authorize", API)).toBe(true);

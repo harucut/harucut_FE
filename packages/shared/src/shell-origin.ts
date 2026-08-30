@@ -37,6 +37,20 @@ export function isSameOrigin(url: string, origin: string): boolean {
   return parsed !== null && parsed === originOf(origin);
 }
 
+/**
+ * 백엔드에서 소셜 로그인이 지나가는 경로. **둘 다 필요하다.**
+ *
+ * 시작만 열어 두면 제공자 인증을 마치고 돌아오는 **콜백이 밖으로 밀려난다.** 그러면 세션
+ * 쿠키가 외부 브라우저에 저장돼 WebView 는 계속 로그아웃 상태다 — 로그인이 끝나지 않는다.
+ *
+ * 경로는 Spring Security 기본값이고 백엔드 설정에서 확인했다
+ * (`application.yaml` 의 `redirect-uri: "{baseUrl}/login/oauth2/code/{provider}"`).
+ */
+const API_OAUTH_PATH_PREFIXES = [
+  '/oauth2/authorization/',
+  '/login/oauth2/code/',
+] as const;
+
 /** 소셜 로그인이 거쳐 가는 제공자 도메인. 하위 도메인까지 허용한다. */
 export const OAUTH_PROVIDER_DOMAINS = [
   'google.com',
@@ -68,11 +82,10 @@ export function isOAuthFlowUrl(url: string, apiOrigin: string): boolean {
   // 로그인 흐름은 전부 https 다. http 를 허용하면 중간에서 갈아치울 수 있다.
   if (parsed.protocol !== 'https:') return false;
 
-  if (
-    parsed.origin === originOf(apiOrigin) &&
-    parsed.pathname.startsWith('/oauth2/authorization/')
-  ) {
-    return true;
+  if (parsed.origin === originOf(apiOrigin)) {
+    return API_OAUTH_PATH_PREFIXES.some((prefix) =>
+      parsed.pathname.startsWith(prefix),
+    );
   }
 
   return OAUTH_PROVIDER_DOMAINS.some((domain) =>
