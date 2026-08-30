@@ -36,6 +36,24 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
   }, []);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
 
+  /*
+    onClose 는 ref 로 읽는다.
+
+    호출부는 대개 `onClose={() => setTarget(null)}` 처럼 인라인 화살표를 넘긴다. 그 값은
+    렌더마다 새 함수라, 아래 effect 의 의존성에 넣으면 **렌더할 때마다 정리 → 재실행**이
+    된다. 정리는 포커스를 열기 전 자리로 되돌리도록 예약하고 새 실행은 첫 컨트롤로 옮기므로,
+    다이얼로그 안에서 체크박스 하나만 눌러도 포커스가 맨 앞으로 튀거나 다음 프레임에
+    모달 뒤쪽으로 빠진다. 약관 재동의처럼 항목이 여럿인 화면에서 키보드·스크린리더 사용자가
+    그 자리에서 막힌다.
+
+    최신 콜백은 필요하되 재구독은 하지 않는다.
+  */
+  const onCloseRef = useRef(onClose);
+  // 렌더 중에 ref 를 건드리면 React Compiler 가 막는다. 렌더가 끝난 뒤에 갈아 끼운다.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   // 열리기 직전의 포커스를 기억해 둔다. 렌더 뒤에 읽으면 이미 옮겨간 뒤라 늦다.
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -61,7 +79,7 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -105,7 +123,7 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
         if (document.contains(target)) target.focus();
       });
     };
-  }, [isOpen, container, onClose]);
+  }, [isOpen, container]);
 
   return dialogRef;
 }

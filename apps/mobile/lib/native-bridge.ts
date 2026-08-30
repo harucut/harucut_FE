@@ -59,10 +59,18 @@ async function ensurePermission(): Promise<BridgeResult> {
 }
 
 async function saveLocalFile(uri: string): Promise<BridgeResult> {
-  const permission = await ensurePermission();
-  if (!permission.ok) return permission;
+  /*
+    권한 확인도 try 안에서 한다.
 
+    밖에 두고 조기 반환하면 아래 finally 를 건너뛴다. 이 함수가 불릴 때는 호출부가 이미
+    결과 파일을 캐시에 내려받았거나(saveRemoteImage) 조각을 이어 붙여 써 둔
+    뒤(saveBase64Chunks)라, 권한을 거절한 사용자가 저장을 다시 시도할 때마다 캐시 파일이
+    쌓인다. 지우는 책임은 성공 여부와 무관하다.
+  */
   try {
+    const permission = await ensurePermission();
+    if (!permission.ok) return permission;
+
     await MediaLibrary.saveToLibraryAsync(uri);
     return { ok: true };
   } catch (error) {
