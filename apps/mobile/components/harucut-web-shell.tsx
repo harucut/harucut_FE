@@ -14,7 +14,13 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { StatusBar } from 'expo-status-bar';
 
-import { SHELL_PLATFORM, SHELL_USER_AGENT_TOKEN, getWebOrigin } from '@/constants/shell';
+import {
+  SHELL_PLATFORM,
+  SHELL_USER_AGENT_TOKEN,
+  getWebOrigin,
+  isOAuthFlowUrl,
+  isWebOrigin,
+} from '@/constants/shell';
 import {
   beginTransfer,
   ensureAndroidChannel,
@@ -42,11 +48,6 @@ const INJECT_BEFORE_LOAD = `
   window.__HARUCUT_NATIVE__ = { version: 1, platform: ${JSON.stringify(SHELL_PLATFORM)} };
   true;
 `;
-
-/** 우리 웹인가. 아니면 앱 안에서 열지 않고 바깥 브라우저로 보낸다. */
-function isInternal(url: string) {
-  return url.startsWith(WEB_ORIGIN);
-}
 
 export function HarucutWebShell() {
   const webViewRef = useRef<WebView>(null);
@@ -77,6 +78,16 @@ export function HarucutWebShell() {
 
   const onMessage = useCallback(
     async (event: WebViewMessageEvent) => {
+      /*
+        누가 보낸 메시지인가.
+
+        WebView 안에서 열린 문서는 무엇이든 `window.ReactNativeWebView.postMessage` 를
+        쓸 수 있다. 오리진을 보지 않으면 소셜 로그인 중에 거쳐 가는 제공자 페이지나,
+        판정을 뚫고 들어온 외부 문서가 사진 저장·알림 권한·공유를 그대로 부를 수 있다.
+        브리지는 우리 웹에만 연다.
+      */
+      if (!isWebOrigin(event.nativeEvent.url)) return;
+
       let message: BridgeMessage;
       try {
         message = JSON.parse(event.nativeEvent.data) as BridgeMessage;
@@ -190,13 +201,14 @@ export function HarucutWebShell() {
           canGoBackRef.current = state.canGoBack;
         }}
         onShouldStartLoadWithRequest={(request) => {
-          // 우리 웹이면 그대로 연다.
-          if (isInternal(request.url) || request.url === 'about:blank') return true;
+          // 우리 웹이면 그대로 연다. 오리진을 통째로 견준다 — 접두사 비교는
+          // `https://www.harucut.com.evil.example/` 를 내부로 오인한다.
+          if (isWebOrigin(request.url) || request.url === 'about:blank') return true;
 
           // 소셜 로그인은 백엔드 OAuth 로 시작해 각 제공자로 넘어간다 — 앱 안에서 이어져야
           // 돌아온 쿠키가 이 WebView 저장소에 남는다. 밖으로 내보내면 로그인이 끊긴다.
-          if (/\/oauth2\/authorization\//.test(request.url)) return true;
-          if (/(kakao|naver|google|accounts\.google)/i.test(request.url)) return true;
+          // 판정은 **호스트**로 한다(constants/shell.ts isOAuthFlowUrl).
+          if (isOAuthFlowUrl(request.url)) return true;
 
           // 나머지(약관 외부 링크·mailto·tel)는 바깥으로.
           void Linking.openURL(request.url).catch(() => undefined);
@@ -233,7 +245,7 @@ export function HarucutWebShell() {
         */
         onOpenWindow={(event) => {
           const url = event.nativeEvent.targetUrl;
-          if (isInternal(url)) {
+          if (isWebOrigin(url)) {
             webViewRef.current?.injectJavaScript(
               `window.location.href = ${JSON.stringify(url)}; true;`,
             );

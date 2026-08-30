@@ -57,3 +57,9 @@ export {
   type MarkPath,
   type SocialProvider,
 } from './social-marks';
+export {
+  OAUTH_PROVIDER_DOMAINS,
+  isOAuthFlowUrl,
+  isSameOrigin,
+  originOf,
+} from './shell-origin';

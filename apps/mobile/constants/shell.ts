@@ -1,3 +1,7 @@
+import {
+  isOAuthFlowUrl as isOAuthFlow,
+  isSameOrigin,
+} from '@harucut/shared';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -39,3 +43,35 @@ export function getWebOrigin() {
 export const SHELL_USER_AGENT_TOKEN = `harucutapp/${Constants.expoConfig?.version ?? '1.0.0'}`;
 
 export const SHELL_PLATFORM: 'android' | 'ios' = Platform.OS === 'ios' ? 'ios' : 'android';
+
+/**
+ * 백엔드 오리진. 소셜 로그인은 여기서 시작한다(`/oauth2/authorization/{provider}`).
+ */
+const DEFAULT_API_ORIGIN = 'https://api.harucut.com';
+
+export function getApiOrigin() {
+  const fromEnv = process.env.EXPO_PUBLIC_API_ORIGIN?.trim();
+  const fromExtra = Constants.expoConfig?.extra?.apiOrigin;
+  const value =
+    (fromEnv && fromEnv.length > 0 ? fromEnv : undefined) ??
+    (typeof fromExtra === 'string' && fromExtra.trim().length > 0
+      ? fromExtra.trim()
+      : undefined) ??
+    DEFAULT_API_ORIGIN;
+  return trimTrailingSlash(value);
+}
+
+/**
+ * 우리 웹인가 / 소셜 로그인 흐름인가.
+ *
+ * 판정 규칙 자체는 `@harucut/shared` 에 있다 — 모바일에는 테스트 러너가 없고, 이 판정은
+ * 틀리면 조용히 위험해서(WebView 안 문서는 네이티브 브리지를 부를 수 있다) 웹 쪽 jest 로
+ * 지킨다. 여기서는 설정값만 붙여 준다.
+ */
+export function isWebOrigin(url: string) {
+  return isSameOrigin(url, getWebOrigin());
+}
+
+export function isOAuthFlowUrl(url: string) {
+  return isOAuthFlow(url, getApiOrigin());
+}

@@ -65,6 +65,7 @@
     },
     "extra": {
       "webOrigin": "https://www.harucut.com",
+      "apiOrigin": "https://api.harucut.com",
       "router": {},
       "eas": {
         "projectId": "1ccc6938-4a60-45f0-8a06-4db1a0101b0f"
