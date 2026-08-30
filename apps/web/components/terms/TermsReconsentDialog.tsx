@@ -52,6 +52,9 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
     못 받아도 화면은 그대로 뜬다 — 정적 링크가 있는 약관은 그 링크로 읽을 수 있다.
   */
   const [contentByCode, setContentByCode] = useState<Record<string, string>>({});
+  const [contentState, setContentState] = useState<"loading" | "done" | "failed">(
+    "loading",
+  );
   useEffect(() => {
     let cancelled = false;
     void fetchActiveTerms()
@@ -64,24 +67,45 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
               .map((item) => [item.code, item.content]),
           ),
         );
+        setContentState("done");
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setContentState("failed");
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  /**
+   * 읽을 수단이 아직 없는 약관인가.
+   *
+   * 정적 링크도 없고 본문도 못 받았으면 사용자는 **제목만 보고 동의**하게 된다.
+   * 그 동의는 받지 않는다 — 체크와 제출을 함께 막고 왜 막혔는지 말한다.
+   */
+  const isUnreadable = (code: string) =>
+    contentHref(code) === null && !contentByCode[code];
+
+
   const [checked, setChecked] = useState<Record<string, boolean>>(() =>
     // 선택 약관만 지금 값으로 채운다. 필수는 빈 칸에서 시작한다.
     Object.fromEntries(optional.map((item) => [item.code, item.status === "AGREED"])),
   );
+  /**
+   * 제출할 수 있는가.
+   *
+   * 필수 약관을 전부 체크했더라도, 읽을 수단이 없는 것이 하나라도 있으면 막는다.
+   * 본문 조회가 늦거나 실패한 사이에 "제목만 보고 한 동의"가 기록되지 않게 한다.
+   */
+  const canSubmit =
+    required.every((item) => checked[item.code]) &&
+    ![...required, ...optional].some((item) => isUnreadable(item.code));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 닫을 수 없는 다이얼로그다. 훅에는 포커스 이동·트랩만 맡기고 Esc 는 흘려보낸다.
   const dialogRef = useModalDialog(true, () => undefined);
 
-  const allRequiredChecked = required.every((item) => checked[item.code]);
   const revised = required.some((item) => item.status === "NEEDS_RECONSENT");
 
   const handleSubmit = async () => {
@@ -146,7 +170,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                   <input
                     type="checkbox"
                     checked={checked[item.code] ?? false}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isUnreadable(item.code)}
                     onChange={(e) =>
                       setChecked((current) => ({
                         ...current,
@@ -178,6 +202,14 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                     </Link>
                   ) : null}
                 </label>
+                {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
+                {isUnreadable(item.code) ? (
+                  <p className="ml-6 text-[11px] text-[color:var(--hc-muted)]">
+                    {contentState === "loading"
+                      ? "약관 본문을 불러오는 중이에요."
+                      : "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."}
+                  </p>
+                ) : null}
                 {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
                 {!href && contentByCode[item.code] ? (
                   <details className="ml-6">
@@ -202,7 +234,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={!allRequiredChecked || isSubmitting}
+            disabled={!canSubmit || isSubmitting}
             className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSubmitting ? "저장 중..." : "동의하고 계속하기"}
