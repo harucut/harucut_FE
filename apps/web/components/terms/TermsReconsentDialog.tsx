@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
-import { submitTermsConsents, type MyTermsConsent } from "@/lib/termsApi";
+import {
+  fetchActiveTerms,
+  submitTermsConsents,
+  type MyTermsConsent,
+} from "@/lib/termsApi";
 
 type Props = {
   consents: MyTermsConsent[];
@@ -27,22 +31,49 @@ type Props = {
  *    마케팅 수신 동의가 조용히 철회되면 안 된다.
  *  - **닫을 수 없다.** 대신 로그아웃으로 나갈 길을 준다. 필수 약관은 철회가 불가능하고
  *    (TERMS-003) 정책상 탈퇴로만 가능하므로, 동의하지 않겠다면 계정을 쓰지 않는 것이 맞다.
+ *  - **읽을 수 없는 항목에 동의를 받지 않는다.** 가입 화면(TermsConsentFieldset)과 같은
+ *    규칙이다. 아래 본문 조회 주석 참고.
  */
 export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   const required = useMemo(
     () => consents.filter((item) => item.required && item.status !== "AGREED"),
     [consents],
   );
-  const optional = useMemo(
-    () => consents.filter((item) => !item.required),
-    [consents],
-  );
+  const optional = useMemo(() => consents.filter((item) => !item.required), [consents]);
+
+  /*
+    약관 본문.
+
+    `MyTermsConsent` 에는 본문이 없고, 정적 링크(`contentHref`)는 tos·privacy·marketing
+    세 코드에만 있다. 관리자가 다른 코드로 필수 약관을 추가하면 사용자는 **제목만 보고**
+    동의해야 한다 — 가입 화면은 서버 본문을 펼쳐 주는데 여기만 그렇지 않았다.
+
+    활성 약관 목록에 본문 전문이 함께 온다(`ActiveTerms.content`). 인증도 필요 없다.
+    못 받아도 화면은 그대로 뜬다 — 정적 링크가 있는 약관은 그 링크로 읽을 수 있다.
+  */
+  const [contentByCode, setContentByCode] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    void fetchActiveTerms()
+      .then((terms) => {
+        if (cancelled) return;
+        setContentByCode(
+          Object.fromEntries(
+            terms
+              .filter((item) => item.content?.trim())
+              .map((item) => [item.code, item.content]),
+          ),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [checked, setChecked] = useState<Record<string, boolean>>(() =>
     // 선택 약관만 지금 값으로 채운다. 필수는 빈 칸에서 시작한다.
-    Object.fromEntries(
-      optional.map((item) => [item.code, item.status === "AGREED"]),
-    ),
+    Object.fromEntries(optional.map((item) => [item.code, item.status === "AGREED"])),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,10 +128,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
           <FileText className="h-5 w-5" />
         </span>
-        <h2
-          id="terms-reconsent-title"
-          className="mt-4 text-[18px] font-extrabold"
-        >
+        <h2 id="terms-reconsent-title" className="mt-4 text-[18px] font-extrabold">
           {revised ? "약관이 개정되었어요" : "약관 동의가 필요해요"}
         </h2>
         <p className="mt-1.5 text-[13px] leading-6 text-[color:var(--hc-muted)]">
@@ -113,53 +141,61 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
           {[...required, ...optional].map((item) => {
             const href = contentHref(item.code);
             return (
-              <label
-                key={item.code}
-                className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-[13px]"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked[item.code] ?? false}
-                  disabled={isSubmitting}
-                  onChange={(e) =>
-                    setChecked((current) => ({
-                      ...current,
-                      [item.code]: e.target.checked,
-                    }))
-                  }
-                  className="h-4 w-4 accent-[color:var(--hc-primary)]"
-                />
-                <span>
-                  <span
-                    className={
-                      item.required
-                        ? "text-[color:var(--hc-primary-strong)]"
-                        : "text-zinc-500"
+              <div key={item.code} className="flex flex-col gap-1">
+                <label className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-[13px]">
+                  <input
+                    type="checkbox"
+                    checked={checked[item.code] ?? false}
+                    disabled={isSubmitting}
+                    onChange={(e) =>
+                      setChecked((current) => ({
+                        ...current,
+                        [item.code]: e.target.checked,
+                      }))
                     }
-                  >
-                    {item.required ? "[필수]" : "[선택]"}
-                  </span>{" "}
-                  {item.title}
-                </span>
-                {href ? (
-                  <Link
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
-                  >
-                    보기
-                  </Link>
+                    className="h-4 w-4 accent-[color:var(--hc-primary)]"
+                  />
+                  <span>
+                    <span
+                      className={
+                        item.required
+                          ? "text-[color:var(--hc-primary-strong)]"
+                          : "text-zinc-500"
+                      }
+                    >
+                      {item.required ? "[필수]" : "[선택]"}
+                    </span>{" "}
+                    {item.title}
+                  </span>
+                  {href ? (
+                    <Link
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
+                    >
+                      보기
+                    </Link>
+                  ) : null}
+                </label>
+                {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
+                {!href && contentByCode[item.code] ? (
+                  <details className="ml-6">
+                    <summary className="cursor-pointer text-[11px] text-zinc-500 underline underline-offset-4">
+                      전문 보기
+                    </summary>
+                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-2 text-[11px] leading-5 text-zinc-400">
+                      {contentByCode[item.code]}
+                    </p>
+                  </details>
                 ) : null}
-              </label>
+              </div>
             );
           })}
         </div>
 
         {error ? (
-          <p className="mt-3 text-[12px] text-[color:var(--hc-danger)]">
-            {error}
-          </p>
+          <p className="mt-3 text-[12px] text-[color:var(--hc-danger)]">{error}</p>
         ) : null}
 
         <div className="mt-5 flex flex-col gap-2">
