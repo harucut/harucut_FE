@@ -70,6 +70,6 @@
     "verify:standard": "python scripts/verify_workspace.py --group standard"
   },
   "devDependencies": {
-    "prettier": "^3.8.3"
+    "prettier": "^3.9.6"
   }
 }
