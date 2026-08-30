@@ -146,27 +146,38 @@ export default function ShootResultPage() {
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
   /*
+    색이 결과물을 바꾸는가.
+
+    - 비회원: 브라우저가 그리므로 고른 색이 그대로 그림이 된다 → 바꾼다.
+    - 회원 + 기본 프레임: 합성 요청에 색을 실어 보낸다 → 바꾼다.
+    - 회원 + 꾸민 프레임: 서버가 **프레임에 저장된 배경**을 쓴다(색을 보내지 않는다) → 안 바꾼다.
+
+    마지막 경우가 중요하다. 꾸민 프레임의 배경은 `useRemoteFrameTheme` 이 **나중에** 읽어 와서
+    `effectiveBorderColor` 를 한 번 바꾼다. 그 값이 아래 키에 들어 있으면 진행 중이던 합성이
+    통째로 버려지고 새 멱등키로 다시 돈다 — 같은 네컷이 두 벌 남는다.
+  */
+  const colorAffectsOutput = guestMode || remoteFrameId == null;
+
+  /*
     "이 입력으로 한 번만 만든다"를 가리키는 키.
 
-    색이 다시 들어와 있다 — 이제 **회원 경로에서도 색이 결과를 바꾼다**
-    (`ComposeRequest.backgroundColor`). 서버는 같은 멱등키로 색만 바꿔 보내면 기존 작업을
-    그대로 재생하므로, 색이 키에 없으면 사용자가 색을 바꿔도 예전 그림이 그대로 나온다.
-
-    예전에 색을 뺐던 이유는 사라졌다. 그때는 `useServerFrameBackground` 가 서버 배경을
-    **나중에** 읽어 와 색이 저절로 한 번 바뀌었고, 그래서 합성이 두 번 돌아 보관함에 같은
-    네컷이 두 벌 남았다(2026-08-24). 그 조회를 걷어냈으니 색은 사용자가 바꿀 때만 바뀐다.
+    **결과를 바꾸지 않는 값은 넣지 않는다.** 넣으면 값이 늦게 도착할 때마다 진행 중인 작업이
+    취소되고 다시 시작한다. (2026-08-24 에 실제로 보관함에 같은 이름의 mediaId 두 개가 남았다.)
+    반대로 결과를 바꾸는 값을 빼면, 서버가 같은 멱등키로 온 요청을 기존 작업으로 재생해서
+    사용자가 색을 바꿔도 예전 그림이 그대로 나온다. 둘 다 조용히 틀리므로 기준을 위에 적어 뒀다.
   */
   const generationKey = useMemo(
     () =>
       JSON.stringify({
         frameId,
         remoteFrameId,
-        borderColor: effectiveBorderColor,
+        borderColor: colorAffectsOutput ? effectiveBorderColor : null,
         outputFilter,
         imageSources: imageSources.map((source) => source.src),
         retryNonce,
       }),
     [
+      colorAffectsOutput,
       effectiveBorderColor,
       frameId,
       imageSources,
@@ -198,6 +209,8 @@ export default function ShootResultPage() {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
 
     let cancelled = false;
+    /** 이 실행이 결과(성공이든 실패든)를 남겼는가. 아래 cleanup 이 쓴다. */
+    let settled = false;
     const currentLayout = layout;
     const imageGenerationKey = `${generationKey}:image`;
 
@@ -244,6 +257,7 @@ export default function ShootResultPage() {
           }
 
           guestImageUrlRef.current = objectUrl;
+          settled = true;
           setImageResult({
             mediaId: -1,
             objectUrl,
@@ -273,6 +287,7 @@ export default function ShootResultPage() {
         });
 
         if (!cancelled) {
+          settled = true;
           setImageResult(asset);
           setImageState("done");
           // 서버 합성은 최대 90초까지 간다(lib/composeApi.ts). 그동안 앱을 벗어난 사람은
@@ -291,6 +306,7 @@ export default function ShootResultPage() {
         // 실패 사유를 버리지 않는다. 프레임을 바꾸면 되는 실패인지, 기다리면 되는 실패인지
         // 사용자가 알아야 한다(lib/fourcutCompose.ts describeComposeFailure).
         const failure = describeComposeFailure(error);
+        settled = true;
         setImageState("error");
         setImageError(failure.message);
         setIsImageErrorRetryable(failure.retryable);
@@ -301,6 +317,18 @@ export default function ShootResultPage() {
 
     return () => {
       cancelled = true;
+
+      /*
+        끝맺지 못하고 끊겼으면 이 키를 "처리했다"고 남겨 두면 안 된다.
+
+        키는 비동기 작업을 **시작하기 전에** 찍힌다. 그래서 작업이 도는 도중 의존성이 바뀌면
+        (꾸민 프레임의 테마가 늦게 도착하는 경우가 그렇다) 이 cleanup 이 결과를 버리는데,
+        다시 도는 effect 는 같은 키를 보고 "이미 했다"며 그냥 돌아간다.
+        아무도 결과를 만들지 않아 화면이 영원히 "처리 중"에 남는다.
+      */
+      if (!settled && imageGenerationKeyRef.current === imageGenerationKey) {
+        imageGenerationKeyRef.current = null;
+      }
     };
   }, [
     defaultDisplayName,

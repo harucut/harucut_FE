@@ -59,8 +59,11 @@ jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
   ),
 }));
 
+// 꾸민 프레임의 테마는 네트워크를 세 번 타고 **늦게** 도착한다. 그 순간을 재현하려고
+// 값을 바꿀 수 있게 둔다.
+let mockThemeData: unknown = null;
 jest.mock("@/hooks/useRemoteFrameTheme", () => ({
-  useRemoteFrameTheme: () => null,
+  useRemoteFrameTheme: () => mockThemeData,
 }));
 
 jest.mock("@/lib/themeBackground", () => ({
@@ -122,6 +125,7 @@ describe("ShootResultPage", () => {
     }) as unknown as typeof fetch;
     useGuestTrialStore.setState({ accessMode: "member", notice: null });
 
+    mockThemeData = null;
     mockUseShootSession.setState({
       frameId: "classic-4",
       remoteFrameId: null,
@@ -381,5 +385,84 @@ describe("ShootResultPage", () => {
     expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
       expect.objectContaining({ backgroundColor: "#ffffff" }),
     );
+  });
+
+  /*
+    ── 회귀: 꾸민 프레임의 테마가 늦게 도착해도 합성은 한 번이다 ──
+
+    꾸민 프레임(remoteFrameId)으로 들어오면 themeData 가 비동기로 채워지면서
+    effectiveBorderColor 를 한 번 바꾼다. 그런데 **회원 + 꾸민 프레임에서는 서버가 프레임에
+    저장된 배경을 쓰므로 색이 결과를 바꾸지 않는다.** 그 값이 합성 키에 들어 있으면
+    진행 중이던 작업이 버려지고 새 멱등키로 다시 돌아 보관함에 같은 네컷이 두 벌 남는다.
+  */
+  it("꾸민 프레임의 테마가 늦게 와도 합성을 두 번 하지 않는다", async () => {
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+    mockSaveFourcutToServer.mockResolvedValue({
+      mediaId: 7,
+      objectUrl: "https://example.com/a.png",
+      downloadUrl: "https://example.com/a.png",
+      displayName: "harucut",
+    });
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 테마가 도착하면서 배경색이 바뀐 순간.
+    act(() => {
+      mockThemeData = { background: { type: "COLOR", value: "#ffffff" } };
+    });
+    view.rerender(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /*
+    ── 회귀: 진행 중 취소돼도 "처리 중"에 멈추지 않는다 ──
+
+    합성 키는 비동기 작업을 시작하기 **전에** 찍힌다. 도중에 의존성이 바뀌면 그 실행은
+    버려지는데, 다시 도는 effect 가 같은 키를 보고 "이미 했다"며 돌아가면 아무도 결과를
+    만들지 않아 화면이 영원히 처리 중에 남는다.
+  */
+  it("진행 중이던 합성이 끊겨도 결과를 만들어 낸다", async () => {
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+
+    let release: ((value: unknown) => void) | null = null;
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다 → 그 실행은 버려진다.
+    act(() => {
+      mockThemeData = { background: { type: "COLOR", value: "#ffffff" } };
+    });
+    view.rerender(<ShootResultPage />);
+
+    // 버려진 실행이 키를 물고 있으면 두 번째 실행이 그냥 돌아가 버린다.
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    // 붙잡아 둔 합성을 풀어 준다. act 로 감싸야 그 뒤의 상태 변경까지 테스트가 기다린다.
+    await act(async () => {
+      release?.({
+        mediaId: 7,
+        objectUrl: "https://example.com/a.png",
+        downloadUrl: "https://example.com/a.png",
+        displayName: "harucut",
+      });
+    });
+
   });
 });
