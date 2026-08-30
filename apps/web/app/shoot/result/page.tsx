@@ -290,8 +290,17 @@ export default function ShootResultPage() {
           settled = true;
           setImageResult(asset);
           setImageState("done");
-          // 서버 합성은 최대 90초까지 간다(lib/composeApi.ts). 그동안 앱을 벗어난 사람은
-          // 끝난 걸 알 방법이 없다 — 화면이 안 보일 때만 알린다. 보고 있으면 그냥 보인다.
+          /*
+            화면이 가려져 있을 때만 알린다. 보고 있으면 결과가 그냥 보인다.
+
+            ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가
+            WebView 의 자바스크립트를 멈춰서 폴링도 이 줄도 돌지 않고, 돌아왔을 때는 이미
+            visible 이라 조건이 거짓이 된다. 즉 여기서 덮이는 것은 **브라우저 탭이 가려진
+            경우**다(탭은 백그라운드에서도 스크립트가 돈다).
+
+            앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가
+            필요하고, docs/app-shell-backend-requests.md 3번에 적어 뒀다.
+          */
           if (document.visibilityState === "hidden") {
             void nativeNotify({
               title: "네컷이 완성됐어요",

@@ -10,7 +10,7 @@
   A. FE 프록시 라우트 → 백엔드에 그 경로/메서드가 실제로 있는가        (없으면 실패)
   B. FE 프록시 라우트를 부르는 곳이 있는가                              (없으면 경고)
   C. 백엔드 에러코드 ↔ FE 문구 표가 1:1 인가                            (누락은 실패)
-  D. FE 가 부르는 엔드포인트의 필수 요청 필드 목록                       (참고 출력)
+  D. FE 가 부르는 엔드포인트의 필수 요청 필드 목록                       (참고 출력, 검사 아님)
 
 쓰는 법
   docs/local-backend.md 대로 백엔드를 띄운 뒤:
@@ -164,7 +164,11 @@ def has_caller(route: str) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default=os.environ.get("HARUCUT_API", "http://localhost:8080"))
-    ap.add_argument("--show-required", action="store_true", help="D. 필수 요청 필드도 출력")
+    ap.add_argument(
+        "--show-required",
+        action="store_true",
+        help="D. 필수 요청 필드를 출력한다(검사가 아니라 참고용 목록이다)",
+    )
     args = ap.parse_args()
 
     spec = fetch_spec(args.base_url)
@@ -217,7 +221,11 @@ def main() -> int:
           f"· 누락 {len(missing)} · 죽음 {len(dead)}\n")
 
     if args.show_required:
-        print("D. FE 가 부르는 엔드포인트의 필수 요청 필드")
+        # ⚠️ 이건 **검사가 아니다.** 스웨거가 필수라고 적은 필드를 보여 줄 뿐,
+        # 프론트가 실제로 그 값을 싣는지는 보지 않는다(요청 본문이 코드에서 동적으로
+        # 만들어져 정적으로 읽기 어렵다). 빠뜨린 필드가 있어도 여기서는 안 걸린다 —
+        # 대조는 사람이 한다. 아래 출력은 그 대조를 도우려고 있는 것이다.
+        print("D. FE 가 부르는 엔드포인트의 필수 요청 필드 (참고용 목록 · 자동 검사 아님)")
         schemas = spec.get("components", {}).get("schemas", {})
         for method, path in sorted(called):
             op = backend[(method, path)]
