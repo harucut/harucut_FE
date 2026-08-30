@@ -48,7 +48,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@types/node": "^20.19.25",
+    "@types/node": "^26.4.0",
     "@types/react": "~19.2.18",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~55.0.0",
