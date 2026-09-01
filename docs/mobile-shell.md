@@ -152,6 +152,25 @@
 
 뒤의 둘은 같은 `remountWebView()` 를 거치므로 끊는 자리도 하나다.
 
+### `onError`·`onHttpError` 는 최상위 문서만 들고 온다
+
+정상적으로 열린 페이지에서 이미지·폰트·iframe 이 500 을 받아도 이 두 문에는 오지 않는다.
+`react-native-webview` 14.0.1 소스로 확인했다.
+
+- 안드로이드 `onHttpError` — `RNCWebViewClient.onReceivedHttpError` 가
+  `request.isForMainFrame()` 일 때만 이벤트를 쏜다. 프레임워크 콜백 자체는 모든 리소스에서
+  오지만 그 앞에서 걸러진다.
+- 안드로이드 `onError` — 라이브러리는 **deprecated 4인자** `onReceivedError` 만 덮는다.
+  AOSP `WebViewClient` 의 새 판(`WebResourceRequest`)이 `isForMainFrame()` 일 때만 그것을
+  부르므로 하위 리소스는 내려오지 않는다. SSL 하위 리소스 오류는 다른 문
+  (`SubResourceErrorEvent` → `onLoadSubResourceError`)으로 나가고, 셸은 그 문을 잇지 않았다.
+- iOS — `decidePolicyForNavigationResponse` 가 `navigationResponse.forMainFrame` 을 보고
+  (`RNCWebViewImpl.m`), `didFailProvisionalNavigation` 은 최상위 탐색에서만 온다.
+  하위 프레임까지 오는 `didFailNavigation:` 은 구현돼 있지 않다.
+
+즉 하위 리소스 하나 때문에 실패 화면으로 바뀌는 길은 없다. 가리는 것은 최상위 문서의
+상태코드뿐이다(5xx 만 실패, 404 는 웹의 자체 오류 화면에 맡긴다).
+
 ## 촬영 화질 — 실측과 남은 선택지
 
 ### 지금까지 네 레이아웃 모두 확대되고 있었다
@@ -193,9 +212,23 @@ Playwright 로 두 엔진에서 실제로 호출해 확인했다(2026-08-28):
 > 일이 잦다. 그래서 코드는 없으면 조용히 예전 경로로 떨어진다.
 > 실기기 확인은 `scripts/camera-probe.html` 을 폰에서 열면 된다(https 또는 localhost 필요).
 
-**붙였다.** 카메라를 켤 때 한 번 재 보고 스틸이 영상보다 이득일 때만 쓴다
-(`lib/canvas/stillCapture.ts`). 이득이 없거나 지원하지 않거나 `takePhoto()` 가 실패하면
-그대로 영상 프레임을 긁는다 — 촬영이 실패하지는 않는다.
+**붙였다.** 스틸이 영상보다 이득일 때만 쓴다(`lib/canvas/stillCapture.ts`). 지원하지 않거나
+`takePhoto()` 가 실패하면 그대로 영상 프레임을 긁는다 — 촬영이 실패하지는 않는다.
+
+이득인지는 **두 번 잰다.**
+
+| 언제 | 무엇으로 | 아니면 |
+|---|---|---|
+| 카메라를 켤 때 | `getPhotoCapabilities()` 의 최대 크기 | 촬영기를 아예 안 만든다 |
+| 첫 장을 찍고 | 받아 온 **비트맵의 실제 크기** | 그 사진을 버리고, 남은 컷은 찍지도 않는다 |
+
+두 번째가 왜 필요한가 — 기능 목록의 최대값은 **찍을 수 있는 한계**지 이번에 찍히는 크기가
+아니다. 크기를 지정하지 않고 부르면 기기는 자기 **기본 스틸 해상도**를 준다. 그 값이
+최대값보다, 심하면 지금 영상 프레임보다 작은 기기가 있다. 첫 번째만 믿으면 그런 기기에서
+여덟 장 전부가 영상 프레임보다 낮은 해상도로 저장된다 — 화질을 올리려고 붙인 경로가 반대로
+깎는다. 크기를 명시해 부르는 길(`takePhoto({ imageWidth, imageHeight })`)도 있지만 위 표의
+실측이 **인자 없는 호출**만 확인한 것이라 쓰지 않았다. 실측 재비교는 기기가 무엇을 주든
+성립한다.
 
 화각이 어긋나는 함정이 하나 있어서 따로 다뤘다. 폰 대부분은 **사진이 4:3(센서 전체)이고
 영상은 그 위아래를 잘라낸 16:9** 다. 스틸을 곧장 슬롯 비율로 자르면 사용자가 프리뷰에서 본

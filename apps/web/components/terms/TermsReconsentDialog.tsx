@@ -5,7 +5,10 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { clientApi } from "@/lib/clientApi";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
 import {
   fetchActiveTerms,
   submitTermsConsents,
@@ -123,6 +126,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
     required.every((item) => checked[item.code]) &&
     ![...required, ...optional].some((item) => isUnreadable(item.code));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 닫을 수 없는 다이얼로그다. 훅에는 포커스 이동·트랩만 맡기고 Esc 는 흘려보낸다.
@@ -132,7 +136,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
 
   const handleSubmit = async () => {
     // 제출 버튼은 disabled 로 잠그지 않는다(아래 주석 참고). 대신 여기서 막는다.
-    if (isSubmitting || !canSubmit) return;
+    if (isSubmitting || isLoggingOut || !canSubmit) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -159,8 +163,44 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
     }
   };
 
+  /**
+   * 나가는 유일한 출구. 실패를 삼키지 않는다.
+   *
+   * 쿠키를 지우는 것은 로그아웃 응답의 `Set-Cookie` 뿐이다 — 실패하면 그 헤더가 오지 않는다.
+   * 그대로 이동하면 인증 쿠키를 남긴 채 `/login` 에 도착하고, 로그인 화면의 세션 검사
+   * (`useRedirectIfAuthenticated`)가 사용자를 보호 화면으로 되돌린다. 닫을 수 없는 이
+   * 다이얼로그로 다시 와서 로그아웃만 무한히 반복하게 된다. 그래서 성공을 확인한 뒤에만
+   * 이동하고, 실패는 저장 실패와 같은 자리에 남겨 그대로 다시 누르게 한다.
+   *
+   * 백엔드는 토큰이 없거나 엉터리여도 200 + 쿠키 만료를 준다(실측 2026-09-02). 즉 여기서
+   * 잡히는 실패는 대개 요청이 백엔드에 닿지 못한 쪽(GEN-502)이고, 그때 쿠키는 그대로다.
+   *
+   * 401 만 예외로 이동시킨다. 서버가 이 토큰을 모른다는 뜻이라 세션 검사도 같은 답을 준다
+   * (`/api/auth/status` 401 → `authenticated: false`) — 되돌려 보내지지 않는다. 여기서
+   * 붙잡으면 이미 끊긴 세션 때문에 영영 못 나간다. 로그아웃은 재발급 대상도 아니라
+   * (`clientApi` 의 `SESSION_REFRESH_EXEMPT_PATHS`) 다시 눌러도 계속 401 이다.
+   */
   const handleLogout = async () => {
-    await clientApi.delete("/api/client/logout").catch(() => undefined);
+    // 로그아웃 버튼도 disabled 로 잠그지 않는다(아래 주석 참고). 대신 여기서 막는다.
+    if (isSubmitting || isLoggingOut) return;
+    setIsLoggingOut(true);
+    setError(null);
+    try {
+      await clientApi.delete("/api/client/logout");
+    } catch (err) {
+      console.error(err);
+      if (getApiErrorDetails(err).status !== 401) {
+        setError(
+          getUserFacingApiErrorMessage(
+            err,
+            "로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요.",
+          ),
+        );
+        setIsLoggingOut(false);
+        return;
+      }
+    }
+    // 이동을 시작하면 잠금을 풀지 않는다. 떠나는 동안 한 번 더 눌리지 않게 한다.
     window.location.href = "/login";
   };
 
@@ -286,18 +326,20 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
           <button
             type="button"
             onClick={handleSubmit}
-            aria-disabled={!canSubmit || isSubmitting}
+            aria-disabled={!canSubmit || isSubmitting || isLoggingOut}
             className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
             {isSubmitting ? "저장 중..." : "동의하고 계속하기"}
           </button>
+          {/* 실패하면 이 자리에 남아 안내를 읽어야 한다. 제출 버튼과 같은 이유로 disabled 를
+              쓰지 않는다 — 누른 순간 포커스가 body 로 떨어지면 안내를 놓친다. */}
           <button
             type="button"
             onClick={handleLogout}
-            disabled={isSubmitting}
-            className="h-10 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-4 disabled:opacity-40"
+            aria-disabled={isSubmitting || isLoggingOut}
+            className="h-10 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
-            동의하지 않고 로그아웃
+            {isLoggingOut ? "로그아웃 중..." : "동의하지 않고 로그아웃"}
           </button>
         </div>
       </div>

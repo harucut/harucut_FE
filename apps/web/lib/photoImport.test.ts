@@ -79,6 +79,14 @@ function photoFile(name: string, width: number, height: number) {
   return new File(["stub"], name, { type: "image/jpeg" });
 }
 
+/**
+ * 지원하지 않는 형식 한 장. 크기를 등록하지 않으므로, 혹시 걸러지지 않고 디코딩까지 가면
+ * "읽지 못함"으로 드러난다.
+ */
+function unsupportedFile(name: string) {
+  return new File(["stub"], name, { type: "image/heic" });
+}
+
 describe("importPhotoFiles 해상도 상한", () => {
   it("가로 원본은 가장 큰 가로 슬롯을 채울 만큼 남는다", async () => {
     const result = await importPhotoFiles([photoFile("a.jpg", 4000, 3000)]);
@@ -119,5 +127,61 @@ describe("importPhotoFiles 해상도 상한", () => {
 
     // 4:3 을 유지한 채 긴 변만 2400 으로.
     expect(baked).toEqual([{ width: 2400, height: 1800 }]);
+  });
+});
+
+/**
+ * 개수 상한은 **쓸 수 있는 사진에만** 건다.
+ *
+ * 화면(`app/shoot/upload/page.tsx`)이 먼저 자르던 시절, 앨범에서 28장을 골랐는데 앞 24장이
+ * heic 면 상한이 그 24장만 통과시키고 뒤의 쓸 수 있는 4장을 잘라 버려 결과가 0장이었다.
+ * 형식을 아는 곳이 거른 **뒤에** 자르면 그런 일이 없고, 자르는 자리는 여전히 디코딩 앞이다.
+ */
+describe("importPhotoFiles 개수 상한", () => {
+  it("지원하지 않는 형식이 앞에 몰려 있어도 쓸 수 있는 사진이 살아남는다", async () => {
+    const limit = 24;
+    const files = [
+      ...Array.from({ length: limit }, (_, index) =>
+        unsupportedFile(`heic-${index}.heic`),
+      ),
+      ...Array.from({ length: 4 }, (_, index) =>
+        photoFile(`ok-${index}.jpg`, 1200, 900),
+      ),
+    ];
+
+    const result = await importPhotoFiles(files, { limit });
+
+    // 상한(24)을 형식 거르기보다 먼저 걸면 여기가 0장이 된다.
+    expect(result.dataUrls).toHaveLength(4);
+    expect(result.overLimitCount).toBe(0);
+    expect(result.notice).toMatch(/24장은 지원하지 않는 형식/);
+    // 걸러진 것은 디코딩조차 하지 않는다("읽지 못함"으로 새지 않는다).
+    expect(baked).toHaveLength(4);
+    expect(result.notice).not.toMatch(/읽지 못해/);
+  });
+
+  it("지원 형식이 상한을 넘으면 넘은 만큼만 남기고 개수를 돌려준다", async () => {
+    const files = Array.from({ length: 6 }, (_, index) =>
+      photoFile(`ok-${index}.jpg`, 1200, 900),
+    );
+
+    const result = await importPhotoFiles(files, { limit: 4 });
+
+    expect(result.dataUrls).toHaveLength(4);
+    expect(result.overLimitCount).toBe(2);
+    // 잘린 두 장은 디코딩·재인코딩을 타지 않는다 — 상한이 막으려던 비용이 그것이다.
+    expect(baked).toHaveLength(4);
+  });
+
+  it("상한을 주지 않으면 지원 형식을 전부 변환한다", async () => {
+    const files = Array.from({ length: 5 }, (_, index) =>
+      photoFile(`ok-${index}.jpg`, 1200, 900),
+    );
+
+    const result = await importPhotoFiles(files);
+
+    expect(result.dataUrls).toHaveLength(5);
+    expect(result.overLimitCount).toBe(0);
+    expect(result.notice).toBeNull();
   });
 });

@@ -12,6 +12,13 @@ import { termsContentHref, type MyTermsConsent } from "@/lib/termsApi";
 
 const mockFetchActive = jest.fn();
 const mockSubmit = jest.fn();
+const mockDelete = jest.fn();
+
+jest.mock("@/lib/clientApi", () => ({
+  clientApi: {
+    delete: (...args: unknown[]) => mockDelete(...args),
+  },
+}));
 
 jest.mock("@/lib/termsApi", () => {
   const actual = jest.requireActual("@/lib/termsApi");
@@ -46,7 +53,26 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFetchActive.mockResolvedValue([]);
   mockSubmit.mockResolvedValue(undefined);
+  mockDelete.mockResolvedValue({ data: null, ok: true, status: 200 });
 });
+
+/**
+ * 로그인 화면으로 나갔는가.
+ *
+ * jsdom 은 실제 이동을 하지 않는다 — `window.location.href` 는 그대로 있고, 대신 가상 콘솔이
+ * "Not implemented: navigation" 을 `console.error` 로 흘린다. `location` 은 재정의할 수 없어
+ * (unforgeable) 스텁을 끼울 수도 없으므로 이동 시도는 그 신호로 읽는다.
+ */
+function didNavigate(consoleError: jest.SpyInstance) {
+  return consoleError.mock.calls
+    .flat()
+    .some((arg) => String(arg).includes("Not implemented: navigation"));
+}
+
+/** 서버가 준 실패. `status` 로만 갈리므로 그것만 채운다. */
+function apiError(status: number) {
+  return Object.assign(new Error(`logout failed: ${status}`), { status });
+}
 
 /** 관리자가 추가한 코드. `termsContentHref` 가 모르므로 정적 링크가 없다. */
 const refundPolicy: MyTermsConsent = {
@@ -199,4 +225,69 @@ describe("TermsReconsentDialog", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveClass("max-h-full", "overflow-y-auto");
   });
+
+  // 닫을 수 없는 화면의 유일한 출구다. 실패를 삼키고 이동하면 인증 쿠키가 남은 채
+  // /login 으로 가고, 세션 검사가 사용자를 이 화면으로 되돌려 출구가 사라진다.
+  it("로그아웃이 실패하면 나가지 않고 안내를 남긴다 — 다시 시도로 나간다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockDelete.mockRejectedValueOnce(apiError(502));
+
+    renderDialog([tos]);
+    await screen.findByRole("checkbox");
+
+    const logout = screen.getByRole("button", { name: "동의하지 않고 로그아웃" });
+    fireEvent.click(logout);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("로그아웃하지 못했어요.");
+    expect(didNavigate(consoleError)).toBe(false);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // 자리를 지켰으니 그대로 다시 누른다.
+    expect(logout).toHaveTextContent("동의하지 않고 로그아웃");
+    fireEvent.click(logout);
+
+    await waitFor(() => expect(didNavigate(consoleError)).toBe(true));
+    expect(mockDelete).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  // 제출 버튼과 같은 규칙이다 — 누른 버튼이 disabled 로 바뀌면 브라우저가 포커스를 body 로
+  // 내려놓고, 그 사용자는 방금 뜬 실패 안내를 읽지 못한다.
+  it("로그아웃 중에도 버튼이 포커스를 잃지 않는다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockDelete.mockRejectedValueOnce(apiError(502));
+
+    renderDialog([tos]);
+    await screen.findByRole("checkbox");
+
+    const logout = screen.getByRole("button", { name: "동의하지 않고 로그아웃" });
+    logout.focus();
+    fireEvent.click(logout);
+
+    expect(logout).toHaveTextContent("로그아웃 중...");
+    expect(logout).not.toBeDisabled();
+    expect(document.activeElement).toBe(logout);
+
+    await screen.findByRole("alert");
+    expect(document.activeElement).toBe(logout);
+    consoleError.mockRestore();
+  });
+
+  // 반대쪽 함정. 401 은 서버가 이 토큰을 모른다는 뜻이라 세션 검사도 같은 답을 준다.
+  // 여기서 붙잡으면 이미 끊긴 세션 때문에 닫을 수 없는 화면에 영영 갇힌다.
+  it("이미 끊긴 세션(401)은 붙잡지 않고 로그인 화면으로 보낸다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockDelete.mockRejectedValueOnce(apiError(401));
+
+    renderDialog([tos]);
+    await screen.findByRole("checkbox");
+
+    fireEvent.click(screen.getByRole("button", { name: "동의하지 않고 로그아웃" }));
+
+    await waitFor(() => expect(didNavigate(consoleError)).toBe(true));
+    expect(screen.queryByRole("alert")).toBeNull();
+    consoleError.mockRestore();
+  });
 });
+

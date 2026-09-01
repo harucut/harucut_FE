@@ -436,6 +436,26 @@ export function HarucutWebShell() {
           void Linking.openURL(request.url).catch(() => undefined);
           return false;
         }}
+        /*
+          로드 실패.
+
+          이 두 문에는 **최상위 문서의 실패만** 온다 — 정상적으로 열린 페이지에서 이미지·
+          폰트·iframe 이 500 을 받아도 여기까지 오지 않는다. 14.0.1 소스로 확인했다.
+
+          - 안드로이드 `onHttpError` — `RNCWebViewClient.onReceivedHttpError` 가
+            `request.isForMainFrame()` 일 때만 이벤트를 쏜다. 프레임워크 콜백 자체는 모든
+            리소스에서 오지만 그 앞에서 걸러진다.
+          - 안드로이드 `onError` — 라이브러리는 **deprecated 4인자** `onReceivedError` 만
+            덮는다. AOSP `WebViewClient` 의 새 판(`WebResourceRequest`)이 `isForMainFrame()`
+            일 때만 그것을 부르므로 하위 리소스는 내려오지 않는다. SSL 하위 리소스 오류는
+            아예 다른 문(`SubResourceErrorEvent` → `onLoadSubResourceError`)으로 나가고,
+            셸은 그 문을 잇지 않았다.
+          - iOS — `decidePolicyForNavigationResponse` 가 `navigationResponse.forMainFrame`
+            을 보고(RNCWebViewImpl.m), `didFailProvisionalNavigation` 은 최상위 탐색에서만
+            온다. 하위 프레임까지 오는 `didFailNavigation:` 은 구현돼 있지 않다.
+
+          그래서 여기서 가릴 것은 최상위 문서의 상태코드뿐이다.
+        */
         onError={() => showFailureScreen()}
         onHttpError={(event) => {
           // 404 같은 페이지 오류까지 통째로 실패 화면을 띄우면 웹의 자체 오류 화면을 가린다.

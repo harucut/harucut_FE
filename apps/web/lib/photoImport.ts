@@ -44,11 +44,28 @@ const MAX_EDGE = Math.max(
 /** 촬영본과 같은 인코딩(JPEG 0.92)을 쓴다 — 뒤 단계가 둘을 구분하지 않게. */
 const JPEG_QUALITY = 0.92;
 
+export type PhotoImportOptions = {
+  /**
+   * 변환할 최대 장수. **지원 형식만 남긴 뒤에** 자른다.
+   *
+   * 고른 순서대로 먼저 자르면 heic 가 앞에 몰린 선택에서 쓸 수 있는 사진이 통째로 밀려난다
+   * (28장 중 앞 24장이 heic 면 남는 것이 0장이었다). 자르는 자리는 그래도 디코딩 앞이라
+   * 상한이 막으려던 비용은 그대로 막는다.
+   */
+  limit?: number;
+};
+
 export type PhotoImportResult = {
   /** 촬영본과 같은 형태의 data URL 목록. */
   dataUrls: string[];
-  /** 형식이 안 맞아 건너뛴 파일이 있으면 사용자에게 보여 줄 문구. */
+  /** 형식이 안 맞거나 읽지 못해 건너뛴 파일이 있으면 사용자에게 보여 줄 문구. */
   notice: string | null;
+  /**
+   * 상한 때문에 변환하지 않은 장수.
+   *
+   * 문구는 여기서 만들지 않는다 — 상한이 왜 있는지(세션에 몇 장까지 담는지)는 화면이 안다.
+   */
+  overLimitCount: number;
 };
 
 function readAsImage(file: File): Promise<HTMLImageElement | null> {
@@ -90,17 +107,26 @@ function toScaledDataUrl(image: HTMLImageElement): string | null {
  * 지원하지 않는 형식(heic·avif 등)은 걸러 낸다. 그대로 통과시키면 사진을 다 고른 뒤
  * **합성 단계에서야** 실패해서, 되돌리기 가장 비싼 자리에서 문제를 만난다.
  * 읽지 못한 파일도 같은 이유로 여기서 걸러 개수를 알린다.
+ *
+ * `limit` 을 주면 개수 상한도 여기서 건다. 형식을 아는 곳이 한 곳뿐이어야
+ * "거른 뒤에 자른다"는 순서가 지켜진다.
  */
 export async function importPhotoFiles(
   files: File[],
+  { limit }: PhotoImportOptions = {},
 ): Promise<PhotoImportResult> {
   const supported = files.filter((file) => isSupportedUploadFile(file));
   const unsupportedCount = files.length - supported.length;
 
+  // 상한은 **쓸 수 있는 사진에만** 건다. 거르기가 먼저, 자르기가 나중이다.
+  const accepted =
+    limit == null ? supported : supported.slice(0, Math.max(0, limit));
+  const overLimitCount = supported.length - accepted.length;
+
   const dataUrls: string[] = [];
   let unreadableCount = 0;
 
-  for (const file of supported) {
+  for (const file of accepted) {
     const image = await readAsImage(file);
     const dataUrl = image ? toScaledDataUrl(image) : null;
     if (dataUrl) dataUrls.push(dataUrl);
@@ -117,5 +143,5 @@ export async function importPhotoFiles(
     notices.push(`${unreadableCount}장은 읽지 못해 제외했어요.`);
   }
 
-  return { dataUrls, notice: notices.join(" ") || null };
+  return { dataUrls, notice: notices.join(" ") || null, overLimitCount };
 }

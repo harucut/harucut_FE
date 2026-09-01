@@ -74,18 +74,20 @@ export function FrameChooser({
 }: Props) {
   const searchParams = useSearchParams();
   const queriedFrameId = parseFrameIdQuery(searchParams.get("frame"));
-  const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
+  const queriedRemoteFrameIdParam = Number(searchParams.get("remoteFrameId"));
+  /** 주소가 지목한 저장 프레임 번호. 없거나 숫자가 아니면 null. */
+  const queriedRemoteFrameId =
+    Number.isFinite(queriedRemoteFrameIdParam) && queriedRemoteFrameIdParam > 0
+      ? queriedRemoteFrameIdParam
+      : null;
 
   // 기본값을 둔다. 비워 두면 들어오자마자 비활성 버튼("프레임을 선택해주세요")을 먼저 만난다.
   // 가장 흔한 4컷을 미리 골라 두고 바꾸고 싶으면 바꾸게 한다.
   const [manualFrameId, setManualFrameId] = useState<FrameId>(
     queriedFrameId ?? "classic-4",
   );
-  const [selectedRemoteFrameId, setSelectedRemoteFrameId] = useState<number | null>(
-    Number.isFinite(queriedRemoteFrameId) && queriedRemoteFrameId > 0
-      ? queriedRemoteFrameId
-      : null,
-  );
+  const [selectedRemoteFrameId, setSelectedRemoteFrameId] =
+    useState<number | null>(queriedRemoteFrameId);
 
   const selectedRemoteFrame = useMemo(
     () =>
@@ -109,6 +111,24 @@ export function FrameChooser({
   const requestedRemoteFrameMissing =
     selectedRemoteFrameId != null && !isLoading && selectedRemoteFrame == null;
 
+  /*
+    **주소에서 온 번호를 아직 못 찾은** 상태.
+
+    이때 진행하면 `selectedRemoteFrame` 이 아직 null 이라 아래에서 번호가 버려지고,
+    링크로 지정한 프레임 대신 기본 레이아웃으로 촬영이 시작된다. 도착하면 풀리고,
+    없는 번호로 끝나면 위 안내로 넘어간다 — 막는 것은 조회가 도는 동안뿐이다.
+
+    "번호가 있고 조회 중"까지만 보면 **목록에서 손으로 고른 프레임**도 함께 걸린다 —
+    새로고침이 한 번 돌 때마다 이미 손에 든 선택이 잠기고, 링크로 들어온 적도 없는
+    사람에게 "링크에 담긴 프레임을 불러오는 중"이라고 말하게 된다. 그래서 번호의 출처가
+    주소인지, 그리고 아직 못 찾았는지까지 함께 본다.
+  */
+  const remoteFrameLookupPending =
+    queriedRemoteFrameId != null &&
+    selectedRemoteFrameId === queriedRemoteFrameId &&
+    selectedRemoteFrame == null &&
+    isLoading;
+
   const handleConfirm = () => {
     if (!selectedFrameId) return;
     onConfirm({
@@ -128,6 +148,16 @@ export function FrameChooser({
 
       {requestedRemoteFrameMissing ? missingRemoteFrameNotice : null}
 
+      {/* 버튼만 조용히 꺼 두면 반응 없는 버튼이 된다. 왜 기다리는지는 말해 준다. */}
+      {remoteFrameLookupPending ? (
+        <p
+          role="status"
+          className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]"
+        >
+          링크에 담긴 프레임을 불러오는 중이에요.
+        </p>
+      ) : null}
+
       <FramePicker
         selectedFrameId={selectedFrameId}
         onChangeSelected={(nextFrameId) => {
@@ -135,7 +165,7 @@ export function FrameChooser({
           setSelectedRemoteFrameId(null);
         }}
         onConfirm={handleConfirm}
-        confirmDisabled={confirmDisabled}
+        confirmDisabled={confirmDisabled || remoteFrameLookupPending}
         confirmLabel={confirmLabel}
       />
 
