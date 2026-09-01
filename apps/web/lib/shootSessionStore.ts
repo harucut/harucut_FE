@@ -78,30 +78,31 @@ function stableStringify(value: unknown): string {
  * 지우기만 해도 내용이 달라진 것으로 보여, 같은 그림이 새 멱등키로 두 벌 접수된다.
  * 서버에서 읽어 온 프레임에는 애초에 빈 레이어가 없으므로 그쪽에는 영향이 없다.
  *
- * `zIndex` 는 **살아남은 레이어 기준 순위로 바꿔서** 넣는다. 편집기의 `normalizeZ` 가
- * 빈 레이어까지 세어 1,2,3… 을 다시 매기므로, 빈 TEXT 를 스티커 사이에서 옮기기만 해도
- * 살아남은 레이어의 번호에 구멍이 생긴다. 그림에 나타나는 것은 **상대 순서**뿐이라
- * 번호를 그대로 지문에 넣으면 같은 그림이 다른 지문이 된다.
+ * 레이어는 **정규형**으로 바꿔서 넣는다(`withCanonicalLayerOrder`) — `zIndex` 로 안정
+ * 정렬한 뒤 번호를 1,2,3… 으로 다시 매긴다. 그림에 나타나는 것은 겹치는 **차례**뿐이고,
+ * 번호도 배열 순서도 아니다.
  */
 /**
- * `zIndex` 를 **순위로 다시 매긴다.** 번호 자체가 아니라 겹치는 차례만 그림에 나타난다.
+ * 겹치는 차례를 **정규형**으로 만든다 — `zIndex` 로 안정 정렬한 뒤 1,2,3… 을 다시 매긴다.
  *
- * 원래 배열 순서는 건드리지 않는다 — 지문은 `stableStringify` 로 만들어지므로 배열 순서가
- * 곧 지문이고, 여기서 정렬까지 하면 순서가 같은데 지문이 달라지는 반대쪽 함정이 생긴다.
+ * 두 가지 오탐을 같이 막는다.
+ *  - **번호의 구멍**: 편집기의 `normalizeZ` 는 빈 레이어까지 세어 번호를 매긴다. 빈 TEXT 를
+ *    스티커 사이에서 옮기기만 해도 살아남은 레이어의 번호가 밀린다.
+ *  - **배열 순서**: 레이어 순서를 쥔 것은 `zIndex` 다 — 그리는 쪽이 둘 다 `zIndex` 로
+ *    정렬한다(`canvas/renderThemePreview.ts:124`, `theme/editor/canvas/CanvasStage.tsx:124`).
+ *    그래서 서버가 같은 컴포넌트를 다른 배열 순서로 돌려줘도 그림은 같다. 배열 순서를
+ *    그대로 지문에 넣으면 그때마다 새 멱등키가 나가 같은 네컷이 두 벌 남는다.
+ *
+ * 같은 번호면 원래 배열 순서로 가른다(안정 정렬) — 그리는 쪽의 `sort` 도 안정 정렬이라
+ * 같은 차례가 된다.
  */
-function withRankedZIndex<T extends { zIndex: number }>(components: T[]): T[] {
-  const rankByIndex = new Map<number, number>();
-
-  components
-    .map((component, index) => [index, component.zIndex] as const)
-    // 같은 번호면 배열 순서로 가른다 — 편집기와 서버 응답 모두 그 순서를 지킨다.
-    .sort((a, b) => a[1] - b[1] || a[0] - b[0])
-    .forEach(([index], rank) => rankByIndex.set(index, rank + 1));
-
-  return components.map((component, index) => ({
-    ...component,
-    zIndex: rankByIndex.get(index) ?? component.zIndex,
-  }));
+function withCanonicalLayerOrder<T extends { zIndex: number }>(
+  components: T[],
+): T[] {
+  return components
+    .map((component, index) => ({ component, index }))
+    .sort((a, b) => a.component.zIndex - b.component.zIndex || a.index - b.index)
+    .map(({ component }, rank) => ({ ...component, zIndex: rank + 1 }));
 }
 
 export function buildFrameContentKey(
@@ -122,7 +123,7 @@ export function buildFrameContentKey(
               opacity: theme.background.opacity ?? 1,
             },
     cellCutouts: theme.cellCutouts ?? null,
-    components: withRankedZIndex(
+    components: withCanonicalLayerOrder(
       theme.components.filter((component) => !isBlankSourceComponent(component)),
     ).map((component) => ({
       type: component.type,

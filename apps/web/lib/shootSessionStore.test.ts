@@ -78,6 +78,24 @@ describe("buildFrameContentKey", () => {
     expect(buildFrameContentKey(blankFirst)).toBe(buildFrameContentKey(blankLast));
   });
 
+  /*
+    레이어 순서를 쥔 것은 `zIndex` 다 — 그리는 쪽이 둘 다 `zIndex` 로 정렬한다
+    (`canvas/renderThemePreview.ts`, `theme/editor/canvas/CanvasStage.tsx`).
+    그래서 서버가 같은 컴포넌트를 다른 배열 순서로 돌려줘도 그림은 같다.
+  */
+  it("배열 순서만 다르고 zIndex 가 같으면 지문도 같다", () => {
+    const ascending = theme([
+      component({ source: "uploads/a.png", zIndex: 1 }),
+      component({ source: "uploads/b.png", zIndex: 2 }),
+    ]);
+    const reversed = theme([
+      component({ source: "uploads/b.png", zIndex: 2 }),
+      component({ source: "uploads/a.png", zIndex: 1 }),
+    ]);
+
+    expect(buildFrameContentKey(ascending)).toBe(buildFrameContentKey(reversed));
+  });
+
   /* 반대쪽: 보이는 레이어의 겹치는 차례가 바뀌면 그림이 달라진다. */
   it("보이는 레이어의 순서가 바뀌면 지문도 달라진다", () => {
     const aOnTop = theme([
