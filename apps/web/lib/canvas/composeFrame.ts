@@ -1,5 +1,12 @@
+import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
+import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
+import {
+  NativeSaveError,
+  nativeSaveImageBlob,
+  nativeSaveImageUrl,
+} from "@/lib/nativeBridge";
 import {
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
@@ -21,14 +28,21 @@ type OverlayImageMap = Map<string, HTMLImageElement>;
 /**
  * 한 캔버스가 가질 수 있는 픽셀 수의 안전선.
  *
- * iOS Safari 는 캔버스 넓이(가로×세로)에 상한을 둔다 — 2^24(16,777,216)px 를 넘으면
- * 캔버스가 통째로 비어 그려지거나 toBlob 이 null 을 돌려준다. 오류도 안 난다.
- * 우리 레이아웃은 가로 4컷 6000×4000, 세로형 4000×6000 이 **24MP** 라 그 선을 넘는다.
- * 아이폰에서 완성 단계가 빈 이미지로 끝날 수 있다는 뜻이다.
+ * 확인된 것 — 이 상한은 우리 레이아웃 두 개를 겨냥해 일부러 잡은 값이다.
+ * 가로 4컷 6000×4000 과 세로형 4000×6000 이 **24MP** 로, 여기서만 축소가 걸린다
+ * (클래식 2000×6000 은 12MP 라 그대로 나간다). 넘으면 비율을 지킨 채 줄인다 —
+ * 24MP → 16MP 는 한 변으로 0.82 배라 6000×4000 이 4898×3265 가 된다.
+ * 인화·보관에는 여전히 충분한 해상도다.
  *
- * 상한에 딱 붙이지 않고 조금 아래에 둔다(기기·메모리 상황에 따라 더 낮게 걸리기도 한다).
- * 넘으면 비율을 유지한 채 줄인다 — 24MP → 16MP 는 한 변으로 0.82 배라,
- * 6000×4000 이 4900×3266 이 된다. 인화·보관에는 여전히 충분한 해상도다.
+ * 가정 — 왜 하필 16MP 인가는 아직 증명되지 않았다. iOS Safari 가 캔버스 넓이
+ * 2^24(16,777,216)px 를 넘으면 오류 없이 빈 캔버스를 그리거나 toBlob 이 null 을
+ * 준다는 이야기를 근거로, 거기에 딱 붙이지 않고 조금 아래에 둔 것이다.
+ * **실기기로 확인한 적이 없다.** 2026-09-01 데스크톱 WebKit 에서는 24MP 캔버스가
+ * 멀쩡히 그려지고 인코딩됐다 — 데스크톱에서는 재현되지 않는다는 것까지만 안다.
+ *
+ * 그래도 상한을 걷지 않는 이유는 비용이 비대칭이라서다. 가정이 맞는데 걷으면
+ * 완성 단계가 빈 이미지로 끝나고, 가정이 틀린 채 두면 해상도 0.82 배를 잃을 뿐이다.
+ * 값을 올리거나 내리려면 진짜 아이폰에서 재현/반증부터 해야 한다.
  */
 const MAX_CANVAS_PIXELS = 16_000_000;
 
@@ -54,7 +68,22 @@ function toPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
-export function downloadBlob(blob: Blob, filename: string) {
+/**
+ * 결과물을 기기에 저장한다.
+ *
+ * 앱 셸(WebView) 안에서는 `<a download>` 가 아무 일도 하지 않는다 — 안드로이드 WebView 는
+ * download 속성을 무시하고 blob 은 DownloadListener 로도 못 받으며, iOS WKWebView 에는
+ * 저장 UI 자체가 없다. 그래서 셸 안이면 네이티브에 넘겨 사진첩에 저장한다.
+ * 브라우저에서는 예전과 똑같이 링크를 만들어 누른다.
+ */
+export async function downloadBlob(blob: Blob, filename: string) {
+  const native = await nativeSaveImageBlob(blob, filename);
+  if (native) {
+    // 일반 Error 로 바꾸지 않는다 — 사유가 화면까지 못 간다(NativeSaveError 주석 참고).
+    if (!native.ok) throw new NativeSaveError(native);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -87,6 +116,16 @@ function filenameFromUrl(url: string) {
 }
 
 export async function downloadFromUrl(url: string, filename?: string) {
+  const name = filename ?? filenameFromUrl(url);
+
+  // 앱 셸 안이면 주소만 넘긴다 — 네이티브가 직접 내려받아 사진첩에 넣는다.
+  // 웹이 fetch 로 받아 base64 로 쪼개 보내는 것보다 훨씬 싸다.
+  const native = await nativeSaveImageUrl(url, name);
+  if (native) {
+    if (!native.ok) throw new NativeSaveError(native);
+    return;
+  }
+
   try {
     const res = await fetch(url, { method: "GET" });
     if (!res.ok) {
@@ -94,7 +133,7 @@ export async function downloadFromUrl(url: string, filename?: string) {
     }
 
     const blob = await res.blob();
-    downloadBlob(blob, filename ?? filenameFromUrl(url));
+    await downloadBlob(blob, name);
   } catch {
     triggerDownloadLink(url, filename);
   }
@@ -115,7 +154,9 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
 
   const sources = Array.from(
     new Set(
-      theme.components.filter((component) => component.type !== "TEXT").map((component) => component.source),
+      theme.components
+        .filter((component) => component.type !== "TEXT")
+        .map((component) => componentImageSrc(component)),
     ),
   );
 
@@ -171,94 +212,16 @@ function drawThemeOverlay(
     ctx.translate(-component.width / 2, -component.height / 2);
 
     if (component.type === "TEXT") {
-      const style = component.styleJson ?? {};
-      const fontFamily =
-        typeof style.fontFamily === "string" ? style.fontFamily : "Pretendard";
-      const fontSize =
-        typeof style.fontSize === "number" ? style.fontSize : 128;
-      const fill = typeof style.color === "string" ? style.color : "#ffffff";
-      const align =
-        style.textAlign === "center" || style.textAlign === "right"
-          ? style.textAlign
-          : "left";
-      const lineHeight = Math.max(1, Math.round(fontSize * 1.15));
-      const lines = component.source.split("\n");
-
-      ctx.font = `${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = fill;
-      ctx.textBaseline = "top";
-      ctx.textAlign = align;
-
-      const textX =
-        align === "center"
-          ? component.width / 2
-          : align === "right"
-            ? component.width
-            : 0;
-
-      lines.forEach((line, index) => {
-        ctx.fillText(line, textX, index * lineHeight);
-      });
-
+      drawTextComponent(ctx, component.source, component.width, component.styleJson);
       ctx.restore();
       return;
     }
 
-    const image = overlayImages.get(component.source);
+    const image = overlayImages.get(componentImageSrc(component));
     if (image) {
       ctx.drawImage(image, 0, 0, component.width, component.height);
     }
 
-    ctx.restore();
-  });
-}
-
-function traceRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-// 누끼(셀별 배경 제거) 비네트 — renderThemePreview와 동일하게 사용자 컴포넌트 위에
-// 그려, 에디터/썸네일뿐 아니라 실제 다운로드·공유 출력에서도 효과가 유지되게 한다.
-function drawCellCutouts(
-  ctx: CanvasRenderingContext2D,
-  layout: FrameLayout,
-  theme: ThemeExportJson | null,
-) {
-  const cutouts = theme?.cellCutouts ?? [];
-  layout.slots.forEach((slot, index) => {
-    if (!cutouts[index]) return;
-    const cx = slot.x + slot.width / 2;
-    const cy = slot.y + slot.height / 2;
-    const radius = Math.min(slot.width, slot.height) * 0.62;
-    ctx.save();
-    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.clip();
-    const grad = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(1, "rgba(11,11,12,0.82)");
-    ctx.fillStyle = grad;
-    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#1ED760";
-    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.stroke();
     ctx.restore();
   });
 }
@@ -309,7 +272,12 @@ function drawFrameOnce(
   });
 
   drawThemeOverlay(ctx, theme, overlayImages);
-  drawCellCutouts(ctx, layout, theme);
+  // 누끼는 **여기서 그리지 않는다.** 예전에는 `cellCutouts` 가 켜진 칸에 방사형 비네트 +
+  // 초록 링을 얹었는데, 그건 배경 제거가 아니라 이름만 누끼인 시각 효과였다.
+  // 실제 배경 제거는 촬영 사진 픽셀에 미리 구워지고(`lib/canvas/personCutout.ts`),
+  // 합성기는 이미 구워진 사진을 슬롯에 그대로 깐다.
+  // `cellCutouts` 플래그는 남는다 — 어느 칸을 구울지 저장·복원하는 데이터이지
+  // 여기서 그릴 값이 아니다(계약은 docs/backend-contract.md).
 }
 
 export async function composeFramePng(opts: {
@@ -333,10 +301,11 @@ export async function composeFramePng(opts: {
   }
 
   const canvas = opts.canvas ?? document.createElement("canvas");
-  // iOS 캔버스 넓이 상한을 넘지 않게 줄인다. 그리는 좌표는 레이아웃 원본 크기 그대로 두고
-  // 컨텍스트에 배율만 걸어, 그리는 쪽 코드는 상한을 몰라도 되게 한다.
+  // 캔버스 넓이 상한(MAX_CANVAS_PIXELS — 왜 그 값인지는 거기 적어 뒀다)을 넘지 않게 줄인다.
+  // 그리는 좌표는 레이아웃 원본 크기 그대로 두고 컨텍스트에 배율만 걸어,
+  // 그리는 쪽 코드는 상한을 몰라도 되게 한다.
   const outputScale = fitCanvasScale(layout.totalWidth, layout.totalHeight);
-  // 올림하면 상한을 다시 넘길 수 있어(6000×4000 기준 134px 초과) 내림한다.
+  // 올림하면 상한을 다시 넘긴다 — 6000×4000 은 4899×3266 = 16,000,134 로 134px 초과다.
   canvas.width = Math.floor(layout.totalWidth * outputScale);
   canvas.height = Math.floor(layout.totalHeight * outputScale);
 

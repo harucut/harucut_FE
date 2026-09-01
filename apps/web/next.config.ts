@@ -43,7 +43,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/:file(hero-image.webp|hero-image.png|og-image.png|shutter.mp3|google-g-logo.png|kakao-symbol.png|naver-symbol.png)",
+        // 소셜 로고 PNG 세 개가 여기 있었다. 이제 인라인 SVG 라 공개 파일이 아니다.
+        source: "/:file(hero-image.webp|hero-image.png|og-image.png|shutter.mp3)",
         headers: [
           {
             key: "Cache-Control",

@@ -118,15 +118,35 @@ function TextInspector({
 }) {
   const style = (c.styleJson ?? {}) as TextStyleJson;
 
+  // 서버는 컴포넌트 source 를 빈 값으로 받지 않는다(minLength 1). 그래서 글자를 지운
+  // 레이어는 저장 요청에서 빠진다(lib/frameApi.ts). 지우는 것 자체를 막으면 고쳐 쓰지도
+  // 못하므로, 막는 대신 사라질 것을 미리 알린다.
+  const isBlank = !c.source.trim();
+  const blankHintId = `text-source-hint-${c.id}`;
+
   return (
     <div className="flex flex-col gap-3">
-      <Row label="텍스트">
-        <input
-          value={c.source}
-          onChange={(e) => onChange({ source: e.target.value })}
-          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
-        />
-      </Row>
+      {/*
+        경고는 Row(=<label>) **밖**에 둔다. 안에 넣으면 라벨 텍스트로 딸려 들어가
+        입력칸 이름이 "텍스트 글자가 비어 있어요…" 가 되고, aria-describedby 로 한 번 더
+        읽혀 같은 문장을 두 번 듣는다. 이름은 "텍스트", 설명은 경고 하나로 나눈다.
+        들여쓰기(4.25rem)는 Row 의 라벨 칸(w-14) + gap-3 만큼이라 입력칸에 줄이 맞는다.
+      */}
+      <div className="flex flex-col gap-1">
+        <Row label="텍스트">
+          <input
+            value={c.source}
+            onChange={(e) => onChange({ source: e.target.value })}
+            aria-describedby={isBlank ? blankHintId : undefined}
+            className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          />
+        </Row>
+        {isBlank ? (
+          <p id={blankHintId} className="pl-[4.25rem] text-[11px] text-amber-300">
+            글자가 비어 있어요. 이 레이어는 저장되지 않아요.
+          </p>
+        ) : null}
+      </div>
 
       <Row label="폰트">
         <input

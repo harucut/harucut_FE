@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Camera, Film, Home, LayoutGrid, User } from "lucide-react";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type MobileTabBarProps = {
@@ -18,6 +20,9 @@ type MobileTabBarProps = {
 export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
   const { onShootCta } = usePublicShootCta();
+  // 가운데 버튼도 홈 카드와 **같은 것**을 연다. 하나는 고르라고 하고 하나는 바로
+  // 카메라로 가면, 같아 보이는 두 진입로가 다르게 동작한다.
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
@@ -25,6 +30,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
     "-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]";
 
   return (
+    <>
     <nav
       aria-label="주요 메뉴"
       className="fixed inset-x-0 bottom-0 z-40 flex min-h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
@@ -66,14 +72,15 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           <Camera className="h-[26px] w-[26px]" />
         </button>
       ) : (
-        <Link
-          href="/shoot"
-          aria-label="촬영"
+        <button
+          type="button"
+          aria-label="기록 남기기"
+          onClick={() => setSourceDialogOpen(true)}
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
           <Camera className="h-[26px] w-[26px]" />
-        </Link>
+        </button>
       )}
 
       <Link
@@ -102,5 +109,10 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
         <span className="text-[11px] font-medium">MY</span>
       </Link>
     </nav>
+    <RecordSourceDialog
+      open={sourceDialogOpen}
+      onClose={() => setSourceDialogOpen(false)}
+    />
+    </>
   );
 }

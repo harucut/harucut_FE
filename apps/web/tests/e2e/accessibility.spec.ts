@@ -20,12 +20,11 @@ const publicRoutes = [
   "/privacy",
 ] as const;
 
-// 인증이 필요한 화면. 편집 화면(/decorate, /theme/sticker)이 여기 빠져 있으면
+// 인증이 필요한 화면. 편집 화면(/theme/sticker)이 여기 빠져 있으면
 // 정작 가장 복잡한 UI가 한 번도 검사되지 않는다.
 const authenticatedRoutes = [
   "/home",
   "/shoot",
-  "/upload",
   "/theme",
   "/history",
   "/mypage",
@@ -47,67 +46,7 @@ const routesReachedThroughUi = [
       await openEditor.click();
     },
   },
-  // 꾸미기 편집기는 "완성한 네컷"이 메모리에 있어야 열린다. 직접 열면 1초쯤 뒤
-  // /home 으로 갈아타는데, 그 전에 스캔이 끝나 초록불이 뜨곤 했다(실측).
-  // 업로드 흐름을 실제로 태워 진짜 편집기를 검사한다.
-  {
-    route: "/upload/result",
-    enter: composeFourcutThroughUpload,
-  },
-  {
-    route: "/decorate",
-    async enter(page: Page) {
-      await composeFourcutThroughUpload(page);
-      await page.getByRole("button", { name: /네컷 꾸미기/ }).click();
-      await page.waitForURL("**/decorate");
-    },
-  },
 ] as const;
-
-/** 1×1 투명 PNG. 내용은 상관없고 "지원 형식의 파일"이면 된다. */
-const TINY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
-
-/** 업로드 → 4장 선택 → 결과 합성까지 실제 UI 로 태운다. */
-async function composeFourcutThroughUpload(page: Page) {
-  await page.goto("/upload");
-  await page.getByRole("button", { name: "업로드 시작하기" }).click();
-  await page.waitForURL("**/upload/select");
-
-  // 등장 애니메이션(.hc-reveal)이 도는 동안에는 타일이 계속 움직여서 Playwright 가
-  // "element is not stable" 로 클릭을 미루다 타임아웃한다(CI 에서 실제로 그랬다).
-  // 클릭 전에 최종 상태로 고정한다.
-  await page.addStyleTag({ content: FREEZE_ANIMATIONS_CSS });
-
-  await page.locator('input[type="file"]').setInputFiles(
-    Array.from({ length: 4 }, (_, index) => ({
-      name: `a11y-${index}.png`,
-      mimeType: "image/png",
-      buffer: TINY_PNG,
-    })),
-  );
-
-  // 네 장이 다 그려진 뒤에 고르기 시작한다. 목록이 커지는 도중에 누르면 그 사이 리렌더로
-  // 노드가 교체돼(detached) 클릭이 날아간다.
-  const tiles = page.getByRole("button", { name: /^\d+번 사진 선택$/ });
-  await expect(tiles).toHaveCount(4);
-  await waitForImagesToSettle(page);
-
-  for (let index = 1; index <= 4; index += 1) {
-    const tile = page.getByRole("button", { name: `${index}번 사진 선택` });
-    await tile.click();
-    // 눌린 것이 반영될 때까지 기다린다 — 선택되면 aria-label 이 "선택 해제"로 바뀐다.
-    await expect(
-      page.getByRole("button", { name: new RegExp(`^${index}번 사진 선택 해제`) }),
-    ).toBeVisible();
-  }
-
-  await page.getByRole("button", { name: "다음 단계로" }).click();
-  await page.waitForURL("**/upload/result");
-  await page.getByRole("button", { name: /네컷 꾸미기/ }).waitFor();
-}
 
 /**
  * 등장 애니메이션과 페이지 그라디언트를 **페이지 스크립트보다 먼저** 눌러 둔다.
@@ -192,19 +131,6 @@ const FLATTEN_PAGE_GRADIENT_CSS = `
 `;
 
 /**
- * 온보딩 코치마크(components/onboarding/CoachMarks.tsx)가 뜰 때까지 기다린다.
- *
- * 코치마크는 hydration 뒤 effect가 걸고 350ms 지난 뒤에 뜬다. 그 전에 스캔하면 어떤
- * 실행에서는 검사되고 어떤 실행에서는 빠져서, 느린 러너에서만 위반이 잡힌다.
- * 스토리지 키가 비어 있는 새 컨텍스트에서는 반드시 뜬다.
- */
-async function waitForCoachMark(page: Page) {
-  await page
-    .getByRole("dialog", { name: "기능 안내" })
-    .waitFor({ state: "visible" });
-}
-
-/**
  * axe의 색 대비 판정에는 violations 말고 incomplete("판정 불가")도 있다. 그 안에 실제
  * 미달이 섞여 있어도 violations만 보면 통과로 읽히므로, 대비만큼은 판정 불가도 실패로 둔다.
  *
@@ -238,7 +164,56 @@ const UNDETERMINABLE_REASONS = [
 ];
 
 /**
- * 같은 사유를 **문구 대신 키로** 본다.
+ * 대비 검사에서 빼는 딱 하나 — 네이버 로그인 버튼.
+ *
+ * 네이버 가이드는 로그인 버튼의 배경과 글자색을 못박는다: "지정 컬러는 변경할 수 없으며",
+ * 그리고 금지 예시의 첫 항목이 "가이드에 지정되지 않은 배경 컬러"다. 지정 조합은
+ * 배경 #03A94D + 로고·레이블 #FFFFFF 인데, 이 조합의 대비가 3.09:1 이다. AA 문턱(4.5:1)에
+ * 못 미친다. 다크 렌디션 #05AC4F 는 2.99:1 로 더 나쁘다.
+ *
+ * 즉 우리가 고를 수 있는 것은 "네이버 규정 위반"이거나 "AA 미달"이지 둘 다 만족하는 값이
+ * 없다. 예전에는 앞쪽을 골라 #007A3D 로 어둡게 칠했는데(5.45:1), 그건 네이버가 이름을 대고
+ * 금지한 바로 그 행위였다. 그래서 지금은 지정색을 쓰고 이 한 건만 사유를 적어 뺀다.
+ * 네이버가 배포하는 공식 버튼 이미지 자체가 3.09:1 이라, 우리 화면이 벤더 산출물보다
+ * 나빠지는 것은 아니다.
+ *
+ * 예외는 **색까지 정확히 일치할 때만** 성립한다. 배경이나 글자색이 바뀌면 이 필터가
+ * 걸리지 않아 테스트가 다시 실패한다 — 아무 대비 문제나 삼키지 않는다.
+ */
+const BRAND_CONTRAST_EXEMPTIONS = [
+  { selector: ".hc-social-naver", fgColor: "#ffffff", bgColor: "#03a94d" },
+];
+
+type ContrastData = { fgColor?: string; bgColor?: string };
+type ViolationNode = { target?: unknown[]; any?: Array<{ data?: ContrastData }> };
+type ViolationRule = { id: string; nodes: ViolationNode[] };
+
+function isBrandExempt(node: ViolationNode) {
+  const target = node.target?.map((t) => String(t)).join(" ") ?? "";
+  return node.any?.some((check) =>
+    BRAND_CONTRAST_EXEMPTIONS.some(
+      (exempt) =>
+        target.includes(exempt.selector) &&
+        check.data?.fgColor?.toLowerCase() === exempt.fgColor &&
+        check.data?.bgColor?.toLowerCase() === exempt.bgColor,
+    ),
+  );
+}
+
+/** 위 예외에 정확히 해당하는 대비 위반만 걷어낸다. 나머지 규칙은 손대지 않는다. */
+function withoutBrandExemptions(violations: ViolationRule[]) {
+  return violations
+    .map((rule) =>
+      rule.id === "color-contrast"
+        ? { ...rule, nodes: rule.nodes.filter((node) => !isBrandExempt(node)) }
+        : rule,
+    )
+    .filter((rule) => rule.id !== "color-contrast" || rule.nodes.length > 0);
+}
+
+
+/**
+* 같은 사유를 **문구 대신 키로** 본다.
  *
  * 위 정규식은 axe 가 내보내는 영어 문장에 기대고 있었다. 그런데 axe 4.13 이 같은 사유의
  * 문장을 "partially obscured by another element" → "partially overlaps other elements" 로
@@ -285,7 +260,7 @@ function contrastIncomplete(results: { incomplete: IncompleteRule[] }) {
  * 화면의 이미지가 다 자리잡을 때까지 기다린다.
  *
  * 스티커 타일은 next/image 로 지연 로드된다. 로딩 중인 이미지가 섞인 채 스캔하면 그 위 글자의
- * 배경이 그때그때 달라져 판정이 흔들린다(전체 실행에서 한 번 /decorate 가 그렇게 실패했다).
+ * 배경이 그때그때 달라져 판정이 흔들린다(전체 실행에서 실제로 그렇게 실패한 적이 있다).
  * 아직 뷰포트에 안 들어온 이미지는 영영 로드되지 않으므로, "로딩 중"인 것만 기다린다.
  */
 async function waitForImagesToSettle(page: Page) {
@@ -306,14 +281,14 @@ async function expectNoAccessibilityViolations(page: Page, route?: string) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   // 경로 확인은 모든 대기가 끝난 **스캔 직전**에 한다. 앞쪽에서 보면 "한 순간 그 경로였다"만
-  // 보장돼, 뒤늦게 갈아탄 화면을 검사하고도 초록불이 뜬다(/theme/sticker·/decorate 가 그랬다).
+  // 보장돼, 뒤늦게 갈아탄 화면을 검사하고도 초록불이 뜬다(/theme/sticker 가 그랬다).
   if (route) expect(new URL(page.url()).pathname).toBe(route);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
 
-  expect(accessibilityScanResults.violations).toEqual([]);
+  expect(withoutBrandExemptions(accessibilityScanResults.violations)).toEqual([]);
   expect(contrastIncomplete(accessibilityScanResults)).toEqual([]);
 }
 
@@ -343,9 +318,6 @@ for (const route of publicRoutes) {
   });
 }
 
-// 코치마크를 띄우는 화면. 지금은 /home 하나뿐이다(app/home/page.tsx의 <CoachMarks id="home-v1">).
-const routesWithCoachMark = new Set<string>(["/home"]);
-
 for (const route of authenticatedRoutes) {
   test(`authenticated route ${route} has no obvious accessibility violations`, async ({
     page,
@@ -353,10 +325,6 @@ for (const route of authenticatedRoutes) {
     await enableAuthenticatedContext(page);
     await page.goto(route);
     await expectStayedOn(page, route);
-
-    if (routesWithCoachMark.has(route)) {
-      await waitForCoachMark(page);
-    }
 
     await expectNoAccessibilityViolations(page, route);
   });
@@ -367,7 +335,7 @@ for (const { route, enter } of routesReachedThroughUi) {
     page,
   }) => {
     // 이 검사들은 화면을 UI 로 거쳐 들어간다. e2e 서버가 dev 서버(pnpm dev)라 CI 의 찬
-    // 러너에서는 /upload, /upload/select, /upload/result, /decorate 를 그때그때 컴파일하고,
+    // 러너에서는 /theme, /theme/sticker 를 그때그때 컴파일하고,
     // 그 합이 기본 제한 60초를 넘겨 타임아웃으로 죽었다. 검사 자체가 느린 게 아니라
     // 첫 컴파일이 느린 것이므로 이 묶음에만 여유를 준다.
     test.slow();

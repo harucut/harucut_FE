@@ -312,68 +312,47 @@ export function CanvasStage() {
             ))}
           </Layer>
 
-          {/* 4) 누끼(셀별 배경 제거) 오버레이 + 탭 토글 */}
+          {/* 4) 누끼로 구울 칸 표시 + 탭 토글.
+              **효과 미리보기가 아니다.** 예전에는 켜진 칸에 비네트 + 초록 링을 얹어
+              배경이 지워진 것처럼 보이게 했는데, 그건 배경 제거가 아니라 이름만 누끼인
+              시각 효과라 걷어냈다. 실제 배경 제거는 촬영 사진 픽셀에 구워진다
+              (`lib/canvas/personCutout.ts`) — 이 캔버스에는 촬영 사진이 없어서
+              보여줄 결과 자체가 없다. 그래서 남는 것은 "이 칸이 켜졌다"는 선택 표시뿐이다. */}
           <Layer listening={cutMode}>
-            {layout.slots.slice(0, 4).map((s, i) => {
-              const on = cellCutouts[i];
-              const cx = s.x + s.width / 2;
-              const cy = s.y + s.height / 2;
-              const radius = Math.min(s.width, s.height) * 0.62;
-              return (
-                <Group key={i}>
-                  {on ? (
-                    <>
-                      {/* 가장자리를 어둡게 해 피사체만 남은 듯한 비네트 마스크(MVP 시각 효과) */}
-                      <Rect
-                        x={s.x}
-                        y={s.y}
-                        width={s.width}
-                        height={s.height}
-                        cornerRadius={40}
-                        listening={false}
-                        fillRadialGradientStartPoint={{ x: cx - s.x, y: cy - s.y }}
-                        fillRadialGradientEndPoint={{ x: cx - s.x, y: cy - s.y }}
-                        fillRadialGradientStartRadius={radius * 0.6}
-                        fillRadialGradientEndRadius={radius}
-                        fillRadialGradientColorStops={[
-                          0,
-                          "rgba(0,0,0,0)",
-                          1,
-                          "rgba(11,11,12,0.82)",
-                        ]}
-                      />
-                      <Rect
-                        x={s.x}
-                        y={s.y}
-                        width={s.width}
-                        height={s.height}
-                        cornerRadius={40}
-                        listening={false}
-                        stroke="#1ED760"
-                        strokeWidth={10}
-                      />
-                    </>
-                  ) : null}
-                  {/* 셀 탭으로 누끼 토글 */}
+            {layout.slots.slice(0, 4).map((s, i) => (
+              <Group key={i}>
+                {cellCutouts[i] ? (
                   <Rect
                     x={s.x}
                     y={s.y}
                     width={s.width}
                     height={s.height}
                     cornerRadius={40}
-                    fill="rgba(0,0,0,0.001)"
-                    onMouseDown={(e) => {
-                      e.cancelBubble = true;
-                      toggleCellCutout(i);
-                    }}
-                    onTouchStart={(e) => {
-                      e.cancelBubble = true;
-                      toggleCellCutout(i);
-                    }}
+                    listening={false}
+                    stroke="#1ED760"
+                    strokeWidth={6}
+                    dash={[24, 16]}
                   />
-                </Group>
-              );
-            })}
+                ) : null}
+                {/* 셀 탭으로 누끼 토글 */}
+                <Rect
+                  x={s.x}
+                  y={s.y}
+                  width={s.width}
+                  height={s.height}
+                  cornerRadius={40}
+                  fill="rgba(0,0,0,0.001)"
+                  onMouseDown={(e) => {
+                    e.cancelBubble = true;
+                    toggleCellCutout(i);
+                  }}
+                  onTouchStart={(e) => {
+                    e.cancelBubble = true;
+                    toggleCellCutout(i);
+                  }}
+                />
+              </Group>
+            ))}
           </Layer>
         </Stage>
         ) : null}

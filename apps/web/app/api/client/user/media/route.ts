@@ -1,4 +1,4 @@
-import { buildResponse, forward, proxyJson } from "@/app/api/client/_proxy";
+import { buildResponse, forward } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -23,11 +23,4 @@ export async function GET(req: Request) {
   });
 
   return buildResponse(upstream, req);
-}
-
-export async function POST(req: Request) {
-  return proxyJson(req, {
-    method: "POST",
-    url: `${BASE_URL}/api/auth/user/media`,
-  });
 }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { centerCrop, cropPhotoToPreviewThenSlot } from "@/lib/canvas/captureCrop";
+import { prepareStillCapture, takeStillBitmap } from "@/lib/canvas/stillCapture";
 
 // 촬영 총 장수
 const MAX_SHOTS = 8;
@@ -40,6 +42,13 @@ export function useCaptureFlow() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  /**
+   * 스틸 촬영기. 이 기기에서 스틸이 영상보다 이득일 때만 채워진다(lib/canvas/stillCapture.ts).
+   * null 이면 예전처럼 영상 프레임을 긁는다.
+   */
+  const stillCaptureRef = useRef<Awaited<
+    ReturnType<typeof prepareStillCapture>
+  > | null>(null);
   const shutterAudioRef = useRef<HTMLAudioElement | null>(null);
   const autoStartAttemptedRef = useRef(false);
 
@@ -72,6 +81,27 @@ export function useCaptureFlow() {
     return layout.slots[shotCount % layout.slots.length];
   }, [frameId, shotCount]);
 
+  /**
+   * 카메라에 세로 스트림을 요청할지.
+   *
+   * **한 컷씩 바뀌는 `captureSlot` 이 아니라 프레임 기준으로 잡는다.** 한 레이아웃 안의
+   * 슬롯 넷은 치수가 모두 같아서 방향도 같은데, 매 컷 새로 만들어지는 captureSlot 을
+   * startCamera 의 의존성에 넣으면 촬영할 때마다 startCamera 의 정체가 바뀌고
+   * 자동 시작 effect 가 매번 다시 돈다. 값은 같은데 재구독만 하는 셈이다.
+   */
+  const wantsPortraitCapture = useMemo(() => {
+    if (!frameId) return true;
+    const slot = FRAME_LAYOUTS[frameId]?.slots[0];
+    return slot ? slot.height > slot.width : true;
+  }, [frameId]);
+
+  /** 슬롯 가로세로비. 위와 같은 이유로 프레임 기준이라 촬영 중에 바뀌지 않는다. */
+  const captureSlotAspect = useMemo(() => {
+    if (!frameId) return 1;
+    const slot = FRAME_LAYOUTS[frameId]?.slots[0];
+    return slot ? slot.width / slot.height : 1;
+  }, [frameId]);
+
   // 프레임 없이 들어오면 되돌리기
   useEffect(() => {
     if (!frameId) router.replace("/shoot");
@@ -92,6 +122,8 @@ export function useCaptureFlow() {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    // 트랙이 죽으면 촬영기도 못 쓴다. 다음 startCamera 에서 다시 만든다.
+    stillCaptureRef.current = null;
     setIsCameraReady(false);
   }, []);
 
@@ -114,18 +146,51 @@ export function useCaptureFlow() {
 
       const facingMode = nextFacingMode ?? cameraFacingMode;
 
+      /*
+        해상도는 **슬롯이 요구하는 만큼** 달라고 한다.
+
+        예전에는 방향과 무관하게 늘 가로 1920x1080 을 요청했다. 그런데 촬영본은 슬롯 비율로
+        가운데를 잘라 쓰고(capturePhotoToDataUrl), 그 조각을 슬롯 크기로 다시 늘린다
+        (lib/fourcutCompose.ts renderSourceForSlot). 그래서 **네 레이아웃 모두 확대**됐다:
+
+          classic  슬롯 1700x1200 ← 캡처 1530x1080   1.11배 확대
+          wide     슬롯 2400x1700 ← 캡처 1525x1080   1.57배 확대
+          grid     슬롯 1700x2400 ← 캡처  765x1080   2.22배 확대  ← 세로 슬롯에 가로 스트림
+          polaroid 슬롯 1700x2400 ← 캡처  765x1080   2.22배 확대
+
+        세로 슬롯이 가장 심하다. 가로 스트림에서 세로 조각을 떼면 폭이 통째로 날아간다.
+        그래서 슬롯이 세로면 세로 스트림을 요청한다. 4K 를 받으면 네 경우 모두 확대가
+        사라지거나(다운스케일) 1.11배까지 줄어든다.
+
+        `ideal` 이라 지원하지 않는 기기에서는 브라우저가 가장 가까운 값으로 낮춰 준다 —
+        요청이 실패하지는 않는다.
+      */
+      const longEdge = 3840;
+      const shortEdge = 2160;
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        // ideal 해상도를 요청해 기본 640x480 저해상도 스트림으로 떨어지지 않게 한다
-        // (인화·저장용 결과물 품질 확보). 지원 안 되면 브라우저가 근접 값으로 대체.
         video: {
           facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: wantsPortraitCapture ? shortEdge : longEdge },
+          height: { ideal: wantsPortraitCapture ? longEdge : shortEdge },
         },
         audio: false,
       });
 
       streamRef.current = stream;
+
+      /*
+        스틸 촬영을 쓸 수 있는지 **여기서 한 번만** 재 본다.
+        매 컷 재면 그만큼 셔터가 늦어지고, 기기 성능은 촬영 중에 바뀌지 않는다.
+        이득이 없거나 지원하지 않으면 null 이라 아래 촬영이 예전 경로로 간다.
+      */
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        stillCaptureRef.current = await prepareStillCapture(
+          track,
+          captureSlotAspect,
+        );
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -145,7 +210,7 @@ export function useCaptureFlow() {
         title: "카메라 접근이 필요해요",
       });
     }
-  }, [cameraFacingMode, setNotice, stopStream]);
+  }, [cameraFacingMode, wantsPortraitCapture, captureSlotAspect, setNotice, stopStream]);
 
   useEffect(() => {
     if (!frameId || isCameraReady || autoStartAttemptedRef.current) {
@@ -218,34 +283,78 @@ export function useCaptureFlow() {
     const targetWidth = captureSlot?.width ?? videoWidth;
     const targetHeight = captureSlot?.height ?? videoHeight;
     const targetAspect = targetWidth / targetHeight;
-    const videoAspect = videoWidth / videoHeight;
 
-    let sx = 0;
-    let sy = 0;
-    let sw = videoWidth;
-    let sh = videoHeight;
+    // 셔터음은 그림을 만들기 전에 낸다 — 누른 순간과 소리가 붙어 있어야 한다.
+    // 스틸 촬영은 수백 ms 가 걸릴 수 있어서 이 순서가 더 중요해졌다.
+    playShutterSound();
 
-    if (videoAspect > targetAspect) {
-      sw = videoHeight * targetAspect;
-      sx = (videoWidth - sw) / 2;
-    } else if (videoAspect < targetAspect) {
-      sh = videoWidth / targetAspect;
-      sy = (videoHeight - sh) / 2;
+    /*
+      가능하면 **사진 파이프라인**으로 찍는다(ImageCapture.takePhoto).
+      영상 프레임보다 크고, 카메라 앱이 쓰는 처리를 그대로 탄다.
+
+      스틸은 프리뷰와 화각이 다를 수 있어서(4:3 사진 vs 16:9 영상) 슬롯 비율로 곧장 자르면
+      화면에서 본 적 없는 부분이 결과물에 들어온다. 그래서 프리뷰 화각으로 먼저 맞춘 뒤
+      슬롯 비율로 자른다(lib/canvas/captureCrop.ts).
+
+      실패하면 null 이라 그대로 영상 프레임 경로로 내려간다 — 촬영이 실패하지는 않는다.
+    */
+    let source: CanvasImageSource = video;
+    let crop = centerCrop(videoWidth, videoHeight, targetAspect);
+
+    const stillCapture = stillCaptureRef.current;
+    if (stillCapture) {
+      const bitmap = await takeStillBitmap(stillCapture);
+      if (bitmap) {
+        source = bitmap;
+        crop = cropPhotoToPreviewThenSlot({
+          photoWidth: bitmap.width,
+          photoHeight: bitmap.height,
+          previewAspect: videoWidth / videoHeight,
+          slotAspect: targetAspect,
+        });
+      }
     }
 
-    canvas.width = Math.max(1, Math.round(sw));
-    canvas.height = Math.max(1, Math.round(sh));
+    const { sx, sy, sw, sh } = crop;
+
+    /*
+      자른 좌표(sx·sy·sw·sh)는 그대로 두고 **담는 그릇만** 슬롯 크기까지 줄인다.
+      화각은 위에서 이미 정했다 — 여기서 바꾸면 화면에서 본 것과 결과물이 달라진다.
+
+      4K 요청과 스틸 촬영을 붙인 뒤로 잘라낸 조각이 6~9MP 까지 나온다. 그 크기 그대로
+      담으면 둘이 걸린다.
+        - 8장을 data URL 로 세션에 들고 있어야 해서 모바일 메모리와 인코딩 비용이 그만큼 커진다.
+        - 비회원이 고른 4장은 localStorage 로 인계되는데(lib/pendingGuestSave.ts), 한도(대개
+          5MB)를 넘겨 setPendingGuestSave 가 실패한다. 그러면 로그인 뒤 기록 저장 흐름이
+          통째로 사라진다.
+      어차피 합성 단계가 슬롯 크기 캔버스에 그리므로(lib/fourcutCompose.ts renderSourceForSlot)
+      슬롯을 넘는 화소는 거기서 버려진다. 여기서 미리 버려도 결과물은 같다.
+
+      **슬롯보다 작게는 절대 줄이지 않는다**(`Math.min(1, ...)`). 이 PR 이 해상도를 올린 이유가
+      합성 단계의 확대를 없애는 것이었고, 상한을 슬롯 아래로 잡으면 그 확대가 그대로 돌아온다.
+      상한은 FRAME_LAYOUTS 에서 온 슬롯 치수(targetWidth·targetHeight)라 레이아웃이 늘거나
+      커져도 따라온다 — 숫자를 다시 박지 않는다. lib/photoImport.ts 도 불러온 사진에
+      같은 규칙을 쓴다.
+
+      가로·세로 비율을 모두 재는 건 반올림 오차 대비다. crop 은 targetAspect 로 잘려 나와
+      두 비가 같아야 하지만, 작은 쪽을 골라 두면 어느 쪽도 슬롯을 넘지 않는다.
+      프레임이 없어 captureSlot 이 null 이면 target 이 영상 크기라 배율이 1 이다 — 예전 동작.
+    */
+    const outputScale = Math.min(1, targetWidth / sw, targetHeight / sh);
+
+    canvas.width = Math.max(1, Math.round(sw * outputScale));
+    canvas.height = Math.max(1, Math.round(sh * outputScale));
 
     ctx.save();
     if (cameraFacingMode === "user") {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
-    // 셔터음은 인코딩을 기다리지 않고 즉시 낸다 — 누른 순간과 소리가 붙어 있어야 한다.
-    playShutterSound();
+    // 비트맵은 GPU 메모리를 잡는다. 8 연사면 금세 쌓이므로 그린 뒤 바로 놓아준다.
+    if (source !== video && "close" in source) source.close();
 
     // toDataURL 은 메인 스레드에서 동기로 JPEG 을 인코딩한다. 촬영 한 장에 100ms 대가
     // 통째로 멈춰서, 8 연사 동안 카운트다운과 프리뷰가 눈에 띄게 끊겼다.

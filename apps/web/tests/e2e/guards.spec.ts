@@ -35,9 +35,6 @@ const protectedRoutes = [
   "/home",
   "/shoot",
   "/shoot/capture",
-  "/upload",
-  "/upload/select",
-  "/decorate",
   "/theme",
   "/theme/sticker",
   "/history",
@@ -111,8 +108,8 @@ test("keeps the event context when going back to frame selection", async ({
   await expect(page.getByText("여름 팬미팅")).toBeVisible();
 });
 
-// 게스트 체험은 촬영과 꾸미기까지 허용한다(꾸미기 저장 시 로그인 유도).
-const guestAllowedRoutes = ["/shoot", "/decorate"];
+// 게스트 체험은 촬영까지다. 찍고 그 이미지를 받는 데까지만 열려 있다.
+const guestAllowedRoutes = ["/shoot"];
 
 for (const route of guestAllowedRoutes) {
   test(`keeps guests on ${route} instead of the login page`, async ({
@@ -125,23 +122,27 @@ for (const route of guestAllowedRoutes) {
   });
 }
 
-test("redirects guests away from non-trial protected routes", async ({
-  page,
-}) => {
-  await enableGuestContext(page);
-  await page.goto("/history");
+// 게스트에게 열린 곳은 /shoot 뿐이다(lib/protectedPaths.ts GUEST_ALLOWED_PREFIXES).
+// 화면 문구가 "기록 보관·프레임 만들기는 가입 후"라고 말하는 것과 실제 권한이 맞아야 한다.
+// /shoot/upload 는 접두사로는 열린 /shoot 안에 있는 회원 전용 예외다
+// (같은 파일 GUEST_MEMBER_ONLY_PREFIXES). 갤러리 불러오기는 가입 후다.
+const guestBlockedRoutes = ["/history", "/theme", "/shoot/upload"];
 
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("guestNotice"))
-    .toBe("restricted");
-});
+for (const route of guestBlockedRoutes) {
+  test(`redirects guests away from ${route}`, async ({ page }) => {
+    await enableGuestContext(page);
+    await page.goto(route);
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("guestNotice"))
+      .toBe("restricted");
+  });
+}
 
 const lateStepRoutes = [
   { route: "/shoot/select", expected: "/shoot" },
   { route: "/shoot/result", expected: "/shoot" },
-  { route: "/upload/select", expected: "/upload" },
-  { route: "/upload/result", expected: "/upload" },
   { route: "/theme/sticker", expected: "/theme" },
 ] as const;
 

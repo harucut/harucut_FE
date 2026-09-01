@@ -6,9 +6,6 @@ import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPa
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { FlowSteps } from "@/components/layout/FlowSteps";
-import { SHOOT_FLOW_STEPS } from "@/constants/flowSteps";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
@@ -28,11 +25,12 @@ export default function ShootSelectPage() {
     setBorderColor,
     setOutputFilter,
     eventName,
+    source,
   } = useShootSession();
+  // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
+  const fromUpload = source === "upload";
+  const sourceHref = fromUpload ? "/shoot/upload" : "/shoot/capture";
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
-  const accessMode = useGuestTrialStore((state) => state.accessMode);
-  const guestMode = accessMode === "guest";
-
   // 아직 저장 전인 촬영본이 있으면 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(shots.length > 0);
 
@@ -43,11 +41,13 @@ export default function ShootSelectPage() {
     }
 
     if (!shots.length) {
-      router.replace("/shoot/capture");
+      router.replace(sourceHref);
     }
-  }, [frameId, router, shots.length]);
+  }, [frameId, router, shots.length, sourceHref]);
 
   const hasCustomFrame = Boolean(themeData);
+  // 고른 색이 곧 저장본의 색이다 — 서버 합성에 그 색을 실어 보낸다. 꾸민 프레임일 때만
+  // 프레임에 저장된 배경을 쓴다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 
   const handleNext = () => {
@@ -59,13 +59,9 @@ export default function ShootSelectPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <PageHeader
           title="사진 선택"
-          description="프레임에 넣을 4장을 골라 주세요."
-          backHref="/shoot/capture"
-          backLabel="다시 촬영"
-          brandHref={guestMode ? "/shoot" : "/home"}
+          backHref={sourceHref}
+          backLabel={fromUpload ? "사진 다시 고르기" : "다시 촬영"}
         />
-
-        <FlowSteps steps={SHOOT_FLOW_STEPS} current={2} />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
@@ -74,7 +70,11 @@ export default function ShootSelectPage() {
           images={shots}
           selectedIndexes={selectedIndexes}
           maxSelect={4}
-          emptyStateText="촬영한 사진이 없어요. 다시 촬영해 주세요."
+          emptyStateText={
+            fromUpload
+              ? "불러온 사진이 없어요. 사진을 다시 골라 주세요."
+              : "촬영한 사진이 없어요. 다시 촬영해 주세요."
+          }
           incompleteButtonLabel="4장을 골라 주세요"
           nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}

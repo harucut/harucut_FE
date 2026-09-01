@@ -14,8 +14,17 @@
         "backgroundColor": "#0B0B0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.harucut.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "네컷 사진을 찍을 때 카메라를 사용해요."
+      }
     },
     "web": {
       "output": "static",
@@ -24,10 +33,11 @@
     "plugins": [
       "expo-router",
       [
-        "expo-camera",
+        "expo-media-library",
         {
-          "recordAudioAndroid": false,
-          "microphonePermission": false
+          "savePhotosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
+          "photosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
+          "isAccessMediaLocationEnabled": false
         }
       ],
       [
@@ -41,6 +51,12 @@
             "backgroundColor": "#0B0B0C"
           }
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1ED760"
+        }
       ]
     ],
     "experiments": {
@@ -48,7 +64,8 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiBaseUrl": "https://api.harucut.com",
+      "webOrigin": "https://www.harucut.com",
+      "apiOrigin": "https://api.harucut.com",
       "router": {},
       "eas": {
         "projectId": "1ccc6938-4a60-45f0-8a06-4db1a0101b0f"

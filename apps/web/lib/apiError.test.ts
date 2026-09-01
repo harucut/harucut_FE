@@ -70,6 +70,49 @@ describe("apiError helpers", () => {
     expect(message).toBe("제목은 필수입니다.");
   });
 
+  // 새 백엔드의 GEN-003 data[] 는 한국어와 Bean Validation 기본 영문이 섞여 나온다
+  // (2026-08-20 실측). 영문을 그대로 띄우면 한국어 화면에 영어가 튄다.
+  it("ignores English Bean Validation messages and falls back to the code mapping", () => {
+    const message = getUserFacingApiErrorMessage(
+      {
+        status: 400,
+        data: {
+          code: "GEN-003",
+          status: 400,
+          message: "Validation failed.",
+          data: [
+            { field: "username", message: "must not be blank" },
+            { field: "password", message: "size must be between 8 and 20" },
+          ],
+        },
+      },
+      "가입에 실패했어요.",
+    );
+
+    expect(message).toBe("입력값을 다시 확인해 주세요.");
+  });
+
+  // 섞여 있으면 한국어 쪽을 고른다.
+  it("picks the Korean field error when the list mixes languages", () => {
+    const message = getUserFacingApiErrorMessage(
+      {
+        status: 400,
+        data: {
+          code: "GEN-003",
+          status: 400,
+          message: "Validation failed.",
+          data: [
+            { field: "username", message: "must not be blank" },
+            { field: "fileSize", message: "파일 크기는 필수입니다." },
+          ],
+        },
+      },
+      "업로드에 실패했어요.",
+    );
+
+    expect(message).toBe("파일 크기는 필수입니다.");
+  });
+
   it("maps known backend codes to Korean copy instead of the English envelope message", () => {
     const message = getUserFacingApiErrorMessage(
       {

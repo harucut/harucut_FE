@@ -19,6 +19,10 @@ const config = {
     "^@/(.*)$": "<rootDir>/$1",
     "^@harucut/shared$": "<rootDir>/../../packages/shared/src/index.ts",
   },
+  // 수집 뿌리. 기본값은 rootDir 하나뿐이라 packages/shared 의 테스트가 통째로 빠졌다 —
+  // moduleNameMapper 로 소스를 끌어다 쓰면서 정작 그 패키지의 테스트는 CI 에서 한 번도
+  // 돌지 않았다. 약관·처리방침 문구처럼 회귀가 실제로 났던 것이 거기 있다.
+  roots: ["<rootDir>", "<rootDir>/../../packages/shared/src"],
   // *.test.ts, *.test.tsx 파일만 테스트 대상으로 수집
   testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
   // 빌드 산출물/외부 패키지는 테스트 대상에서 제외

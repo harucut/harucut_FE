@@ -63,9 +63,7 @@ pnpm dev:mobile
 
 - `/home`
 - `/shoot/*`
-- `/upload/*`
 - `/theme/*`
-- `/decorate`
 - `/history`
 - `/mypage`
 
@@ -75,9 +73,17 @@ pnpm dev:mobile
 
 ## 문서
 
+**[docs/README.md](./docs/README.md) 부터 본다** — 문서 지도와 *이미 확인이 끝난 사실*이
+거기 모여 있다(계약 대조 결과, 앱에서 정상이라 손대지 않은 것, 백엔드 대기 중인 것).
+같은 것을 다시 조사하기 전에 먼저 열 것.
+
 - 라우트 플로우: [docs/route-flows.md](./docs/route-flows.md)
 - 인증 및 리다이렉트: [docs/auth-routing.md](./docs/auth-routing.md)
-- 모바일 앱 설계: [docs/mobile-app-blueprint.md](./docs/mobile-app-blueprint.md)
+- 앱이 왜 웹뷰 셸인가: [docs/adr/ADR-0003-앱을-웹뷰-셸로.md](./docs/adr/ADR-0003-앱을-웹뷰-셸로.md)
+- 백엔드 계약 실측: [docs/backend-contract.md](./docs/backend-contract.md)
+- 로컬 백엔드 실행: [docs/local-backend.md](./docs/local-backend.md)
+- 앱 웹뷰 셸: [docs/mobile-shell.md](./docs/mobile-shell.md)
+- 백엔드에 요청할 것: [docs/app-shell-backend-requests.md](./docs/app-shell-backend-requests.md)
 - 작업 규칙: [AGENTS.md](./AGENTS.md)
 - 기여 가이드: [CONTRIBUTING.md](./CONTRIBUTING.md)
 

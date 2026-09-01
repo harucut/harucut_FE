@@ -70,6 +70,14 @@ const SESSION_REFRESH_EXEMPT_PATHS = new Set<string>([
   "/api/client/logout",
 ]);
 
+// 탈퇴요청(DELETED_REQUESTED) 상태로 판정됐을 때 호출되는 핸들러.
+// 세션 만료와 **다르다** — 토큰은 멀쩡하고 계정 상태만 막힌 것이라 로그아웃시키면 안 된다.
+let onDeletionRequested: (() => void) | null = null;
+
+export function registerDeletionRequestedHandler(handler: (() => void) | null) {
+  onDeletionRequested = handler;
+}
+
 // 재발급까지 실패해 세션이 끊긴 것으로 판정됐을 때 호출되는 핸들러.
 // 페이지가 로그인 유도 등을 붙일 수 있도록 레지스트리로 위임한다(기본 동작 없음 =
 // 각 화면의 기존 401 처리를 유지, 등록 시 전역 만료 처리 추가).
@@ -87,6 +95,45 @@ export function registerSessionExpiredHandler(handler: (() => void) | null) {
  * 후자를 세션 만료로 취급하면 잠깐의 장애나 오프라인이 곧바로 로그인 화면 강제 이동이 된다.
  */
 type ReissueResult = "ok" | "expired" | "unavailable";
+
+/**
+ * 서버가 탈퇴요청 계정의 일반 API 를 막을 때 쓰는 코드.
+ * 인가 거부는 전부 이 코드 하나로 오므로(GEN-021 = "Access denied."), 이것만으로는
+ * 탈퇴요청인지 알 수 없다. 그래서 /api/auth/status 로 상태를 한 번 더 확인한다.
+ */
+const ACCESS_DENIED_CODE = "GEN-021";
+
+// 상태 조회 자체와 탈퇴 취소는 이 검사에서 빼야 한다(자기 자신을 다시 부르는 순환 방지).
+const DELETION_CHECK_EXEMPT_PATHS = new Set<string>([
+  "/api/auth/status",
+  "/api/auth/session",
+  "/api/client/reactivate",
+  "/api/client/logout",
+]);
+
+/**
+ * 403 GEN-021 을 받았을 때 정말 탈퇴요청 상태인지 확인한다.
+ *
+ * 맞으면 등록된 핸들러(복구 안내로 유도)를 부른다. **로그아웃시키지 않는다** — 토큰은 여전히
+ * 유효하고, /api/auth/status 와 탈퇴 취소는 이 상태에서도 열려 있어서 복구 진입로가 살아 있다.
+ * 상태 조회가 실패하면 아무것도 하지 않는다 — 단순 권한 부족을 탈퇴요청으로 오인하지 않기 위해서다.
+ */
+async function checkDeletionRequested() {
+  try {
+    const res = await fetch("/api/auth/status", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return;
+
+    const body = (await res.json()) as { data?: { userStatus?: unknown } };
+    if (body?.data?.userStatus === "DELETED_REQUESTED") {
+      onDeletionRequested?.();
+    }
+  } catch {
+    // 네트워크 오류면 판단을 보류한다.
+  }
+}
 
 // 쿠키 기반 액세스 토큰 재발급. 자체 401 재시도는 하지 않는다(exempt).
 async function reissueAccessToken(): Promise<ReissueResult> {
@@ -166,6 +213,17 @@ async function request<T>(
 
   if (!res.ok) {
     const envelope = extractEnvelopeLike(data);
+
+    // 탈퇴요청 계정은 일반 API 가 전부 403 GEN-021 이 된다. 화면마다 따로 처리하는 대신
+    // 여기서 한 번 확인하고 복구 안내로 넘긴다. 에러는 그대로 던져 기존 처리도 살려 둔다.
+    if (
+      res.status === 403 &&
+      envelope?.code === ACCESS_DENIED_CODE &&
+      !DELETION_CHECK_EXEMPT_PATHS.has(path)
+    ) {
+      void checkDeletionRequested();
+    }
+
     throw new ApiRequestError<T>({
       status: res.status,
       data,

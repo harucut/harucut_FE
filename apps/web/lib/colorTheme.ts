@@ -1,3 +1,5 @@
+import { nativeSetColorScheme } from "@/lib/nativeBridge";
+
 // localStorage에는 '선호(system/light/dark)'를 저장한다 — 확정된 테마가 아니다.
 // 외부(컴포넌트)에 공개하는 표면은 선호 기반 API 8개뿐이고, 나머지는 이 파일 내부 구현이다.
 export const COLOR_THEME_STORAGE_KEY = "harucut-web-color-theme";
@@ -49,6 +51,11 @@ function applyColorTheme(theme: ColorTheme) {
   const root = document.documentElement;
   root.setAttribute(COLOR_THEME_ATTRIBUTE, theme);
   root.style.colorScheme = theme;
+
+  // 앱 셸 안이면 네이티브 상태바도 같이 맞춘다. 여기가 테마가 실제로 바뀌는 유일한
+  // 지점이라(선호값 변경·시스템 변경·다른 탭 동기화가 전부 여기로 모인다) 한 번만 걸면 된다.
+  // 브라우저에서는 아무 일도 하지 않는다.
+  nativeSetColorScheme(theme);
 }
 
 export function applyPreferredColorTheme(preference: ColorThemePreference) {

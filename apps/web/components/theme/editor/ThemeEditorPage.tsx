@@ -12,6 +12,7 @@ import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
+import { resolveThemeAssetUrls } from "@/lib/frameAssets";
 import {
   createFrame,
   deleteFrame,
@@ -27,10 +28,13 @@ import {
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
+import {
+  buildFrameContentKey,
+  useShootSession,
+} from "@/lib/shootSessionStore";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
-import { useThemeDraftStore } from "@/lib/themeDraftStore";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
@@ -47,8 +51,11 @@ const DEFAULT_FRAME_DESCRIPTION = "하루컷에서 직접 꾸민 나만의 프�
  * 이탈 경고 판정용 편집 상태 지문. 기준 시점과 지금을 비교하는 데만 쓴다.
  *
  * 포함 범위는 자동 초안(saveEditorDraft)이 남기는 값과 같다 — 잃으면 아까운 작업이
- * 곧 초안에 담기는 값이기 때문이다. cellCutouts는 서버 요청에는 안 들어가지만
- * 저장 시 업로드하는 미리보기 렌더에 반영되므로 여기 포함한다.
+ * 곧 초안에 담기는 값이기 때문이다. cellCutouts도 사용자가 칸마다 직접 켠 값이라
+ * 같은 기준으로 들어간다.
+ *
+ * 이 지문이 보는 것은 "사용자가 손댔는가" 하나뿐이라, 어떤 값이 서버로 가는지와는
+ * 무관하다. cellCutouts의 저장 계약은 docs/backend-contract.md 가 쥔다.
  *
  * 배경의 `url`은 뺀다. IMAGE 배경은 저장된 key만 들고 오고 서명 URL은 불러온 뒤에
  * 따로 주입하는 렌더 전용 값이라, 포함하면 사용자가 아무것도 안 해도 지문이 바뀐다.
@@ -83,7 +90,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const setBackgroundImage = useThemeEditorStore((s) => s.setBackgroundImage);
   const setBackgroundImageUrl = useThemeEditorStore((s) => s.setBackgroundImageUrl);
   const clearBackgroundImage = useThemeEditorStore((s) => s.clearBackgroundImage);
-  const addDraft = useThemeDraftStore((s) => s.addDraft);
   const editorComponents = useThemeEditorStore((s) => s.components);
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
@@ -153,6 +159,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     effect 가 다시 돌면서 포커스를 첫 컨트롤로 되돌려, 저장을 누른 순간 포커스가 튄다.
   */
   const isSavingRef = useRef(false);
+  /*
+    마지막으로 서버에 있는 것으로 아는 프레임의 **출력 지문**.
+
+    저장할 때 이 값과 비교해 「합성 결과가 달라졌는가」를 가른다. 판정의 소유자는
+    `buildFrameContentKey` 다(AGENTS.md 「규칙의 소유자」) — 편집기의 이탈 경고용 지문
+    (`buildEditorSignature`)을 대신 쓰면 안 된다. 그쪽은 `locked` 처럼 **그림에 안 나오는
+    값**까지 「고쳤다」로 보므로, 레이어를 잠그기만 해도 멱등키가 버려져 같은 그림이 두 벌
+    접수된다.
+
+    지문은 불러온 뒤 `exportJson()` 으로 잡는다 — 저장할 때와 **같은 파이프라인**이라야
+    왕복 정규화 차이가 「고쳤다」로 잡히지 않는다.
+  */
+  const savedContentKeyRef = useRef<string | null>(null);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -191,8 +210,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       try {
         const remoteFrame = await getFrame(remoteFrameId);
         if (cancelled) return;
-        const imported = toThemeExportJson(remoteFrame);
+        // 컴포넌트 자산은 S3 key 로 저장돼 있다. 그릴 주소를 먼저 붙여 두지 않으면
+        // 캔버스에 빈칸이 뜨고, 그 상태로 다시 저장하면 미리보기까지 빈 채로 올라간다.
+        const imported = await resolveThemeAssetUrls(toThemeExportJson(remoteFrame));
+        if (cancelled) return;
         importJson(imported);
+        savedContentKeyRef.current = buildFrameContentKey(
+          useThemeEditorStore.getState().exportJson(),
+        );
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
         // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
@@ -374,8 +399,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         useThemeEditorStore.getState().setBackgroundImageKey(key);
       }
 
-      // 캔버스에서 실제 사용 중인 로컬 사진을 이 시점에 최종 업로드한다(편집 중엔 temp 업로드 없음).
-      await useThemeEditorStore.getState().finalizePhotosForSave();
+      // 캔버스에 올라간 사진·스티커를 이 시점에 S3로 올리고, 글자 층을 구워 둔다
+      // (편집 중엔 임시 업로드를 하지 않는다). 이걸 건너뛰면 저장은 되지만
+      // 그 프레임으로 찍은 네컷 합성이 400 GEN-002 로 죽는다.
+      await useThemeEditorStore.getState().finalizeAssetsForSave();
 
       const themeJson = exportJson();
       if (!themeJson) {
@@ -402,9 +429,30 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
       if (remoteFrameId) {
         await updateFrame(remoteFrameId, body);
+        /*
+          **합성 결과가 달라진 저장에만** 촬영 세션의 결과와 멱등키를 버린다.
+
+          왜 버리나: 프레임 수정은 같은 id 로 가는 PUT 이라 `remoteFrameId` 가 안 변한다.
+          촬영 세션이 쓰던 멱등키를 그대로 다시 보내면 서버가 **수정 전 작업을 재생한다**
+          (docs/backend-contract.md D-4). 결과 화면도 프레임 내용의 지문으로 같은 것을
+          막지만, 그 지문은 프레임 **조회가 성공했을 때만** 생긴다 — 조회가 실패한
+          세션에서는 여기서 버리는 것만이 유일한 방어다.
+
+          왜 조건을 다나: 이름·설명만 고치거나 아무것도 안 고치고 다시 저장해도
+          `updateFrame` 은 200 이다. 그때까지 버리면 결과 화면이 **같은 그림을 새 멱등키로
+          다시 접수해** 보관함에 두 벌이 남는다(2026-08-24 에 실제로 남았다).
+
+          비교는 **방금 서버로 보낸 `themeJson`** 으로 한다. 사용자가 누른 시점의 편집기
+          상태가 아니라 `finalizeAssetsForSave()` 까지 끝난 뒤의 값이라, 저장을 누른 직후
+          끝난 누끼 작업처럼 **대기 중에 바뀐 것**도 여기 들어 있다.
+        */
+        const savedContentKey = buildFrameContentKey(themeJson);
+        if (savedContentKey !== savedContentKeyRef.current) {
+          useShootSession.getState().noteRemoteFrameEdited(remoteFrameId);
+        }
+        savedContentKeyRef.current = savedContentKey;
       } else {
         await createFrame(body);
-        addDraft(themeJson, { name: nextTitle });
       }
 
       clearEditorDraft();

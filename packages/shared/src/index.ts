@@ -4,6 +4,7 @@ export { hasFinalConsonant, josa, withJosa, type JosaPair } from './josa';
 export {
   ENTERPRISE_FACTS,
   PLAN_FACTS,
+  PLAN_NAMES,
   SITE_ORIGIN,
   siteUrl,
   toPlanId,
@@ -38,3 +39,27 @@ export {
   type FourcutFilterDefinition,
   type FourcutFilterId,
 } from './fourcut-filters';
+export {
+  GUEST_ALLOWED_ITEMS,
+  GUEST_MEMBER_ONLY_ITEMS,
+  GUEST_TRIAL_CTA_LABEL,
+  GUEST_TRIAL_NOTICE,
+} from './guest-trial';
+export {
+  SOCIAL_BRAND_COLORS,
+  SOCIAL_LABELS,
+  SOCIAL_MARK_GAP,
+  SOCIAL_MARK_GEOMETRY,
+  SOCIAL_MARK_SIZE,
+  SOCIAL_PROVIDER_ORDER,
+  socialMarkToSvg,
+  type MarkGeometry,
+  type MarkPath,
+  type SocialProvider,
+} from './social-marks';
+export {
+  OAUTH_PROVIDER_DOMAINS,
+  isOAuthFlowUrl,
+  isSameOrigin,
+  originOf,
+} from './shell-origin';

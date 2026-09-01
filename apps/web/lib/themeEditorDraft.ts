@@ -5,7 +5,7 @@ import type { EditorComponent, ThemeBackground } from "@/lib/types/themeEditor";
 
 // 프레임 꾸미기 작업 중 상태(WIP)를 브라우저 localStorage에 임시 보관한다.
 // 편집 중에는 S3 temp 업로드를 하지 않으므로, 새로고침/이탈 대비 초안을 로컬에 둔다.
-// 로컬 이미지(blob:)는 dataURL로 변환해 저장하고, 최종 저장 시 finalizePhotosForSave가 S3로 올린다.
+// 로컬 이미지(blob:)는 dataURL로 변환해 저장하고, 최종 저장 시 finalizeAssetsForSave가 S3로 올린다.
 const DRAFT_KEY = "harucut:theme-editor-draft:v1";
 // localStorage 용량(보통 ~5MB)을 넘기면 저장을 건너뛴다.
 const MAX_DRAFT_BYTES = 4_500_000;

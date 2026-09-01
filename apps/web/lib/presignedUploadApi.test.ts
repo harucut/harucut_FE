@@ -1,6 +1,5 @@
 const mockGet = jest.fn();
 const mockPost = jest.fn();
-const mockRegisterUserMedia = jest.fn();
 
 jest.mock("@/lib/clientApi", () => ({
   clientApi: {
@@ -9,16 +8,12 @@ jest.mock("@/lib/clientApi", () => ({
   },
 }));
 
-jest.mock("@/lib/userMediaApi", () => ({
-  registerUserMedia: (...args: unknown[]) => mockRegisterUserMedia(...args),
-}));
-
 import {
   PRESIGNED_UPLOAD_TYPES,
+  UploadValidationError,
   isSupportedUploadFile,
   resolveUpload,
   resolveUploadContentType,
-  uploadFourcutMedia,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 
@@ -156,7 +151,7 @@ describe("presigned upload flow", () => {
 
     await uploadToS3WithPresigned({
       file: new File(["x"], "photo.png", { type: "image/png" }),
-      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_PHOTO,
+      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
     });
 
     // 서명에 content-type이 포함돼 있어(X-Amz-SignedHeaders=content-type;host)
@@ -169,23 +164,49 @@ describe("presigned upload flow", () => {
       }),
     );
 
-    // presign 요청 바디는 type/filename/contentType 세 필드가 전부다.
+    // presign 요청 바디는 네 필드 전부 required 다. fileSize 가 빠지면 400 GEN-003.
     expect(mockPost).toHaveBeenCalledWith("/api/client/user/files/presigned-upload", {
-      type: "FOURCUT_PHOTO",
+      type: "FOURCUT_SOURCE",
       filename: "photo.png",
       contentType: "PNG",
+      fileSize: 1,
     });
   });
 
-  it("registers photo media after upload", async () => {
+  /*
+    fileSize 는 위아래가 다 막혀 있다 — `@Positive @Max(10485760)` 이라 0 은 400 GEN-003 이다
+    (실측: `{"field":"fileSize","message":"파일 크기는 0보다 커야 합니다."}`).
+    스웨거 JSON 의 `minimum: 0` 만 보고 하한이 없다고 읽으면 안 된다.
+
+    걸러내지 않으면 발급 요청이 한 번 나갔다가 400 으로 돌아오고, 화면은 우리가 준비한
+    한국어 문구 대신 에러 코드 매핑 결과를 띄운다. `UploadValidationError` 로 던져야
+    마이페이지가 "우리가 걸러낸 것"으로 알아보고 그 문구를 그대로 보여 준다.
+  */
+  it("0바이트 파일은 발급 요청 자체를 하지 않는다", async () => {
+    const empty = new File([], "empty.png", { type: "image/png" });
+    expect(empty.size).toBe(0);
+
+    await expect(
+      uploadToS3WithPresigned({
+        file: empty,
+        type: PRESIGNED_UPLOAD_TYPES.PROFILE,
+      }),
+    ).rejects.toThrow(UploadValidationError);
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  // 하한을 한 칸 어긋나게 잡으면 1바이트가 막힌다. 서버가 받아 주는 최솟값은 통과해야 한다.
+  it("1바이트 파일은 그대로 발급 요청한다", async () => {
     mockPost.mockResolvedValueOnce({
       data: {
         code: "GEN-000",
         status: 200,
         message: null,
         data: {
-          key: "uploads/users/u/photo.png",
-          uploadUrl: "https://example.com/upload/photo.png?sig=1",
+          key: "uploads/users/u/profile/one-byte.png",
+          uploadUrl: "https://example.com/upload/one-byte.png?sig=1",
           contentType: "image/png",
           expiresIn: "PT24H",
         },
@@ -195,36 +216,17 @@ describe("presigned upload flow", () => {
       headers: new Headers(),
     });
 
-    mockGet.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: "https://example.com/photo.png?sig=2",
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await uploadToS3WithPresigned({
+      file: new File(["x"], "one-byte.png", { type: "image/png" }),
+      type: PRESIGNED_UPLOAD_TYPES.PROFILE,
+      skipUrlResolve: true,
     });
 
-    mockRegisterUserMedia.mockResolvedValueOnce({
-      mediaId: 1,
-      s3Key: "uploads/users/u/photo.png",
-      downloadUrl: "https://example.com/photo.png?sig=3",
-    });
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-    });
-
-    const result = await uploadFourcutMedia(
-      new File(["x"], "photo.png", { type: "image/png" }),
+    expect(mockPost).toHaveBeenCalledWith(
+      "/api/client/user/files/presigned-upload",
+      expect.objectContaining({ fileSize: 1 }),
     );
-
-    expect(mockRegisterUserMedia).toHaveBeenCalledWith({
-      s3Key: "uploads/users/u/photo.png",
-    });
-    expect(result.downloadUrl).toBe("https://example.com/photo.png?sig=3");
   });
 });

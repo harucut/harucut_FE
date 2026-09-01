@@ -40,7 +40,7 @@ function PlanCard({
   current: boolean;
 }) {
   // 결제가 닫힌 동안에는 살 수 없는 카드를 강조하지 않는다. 시선은 지금 할 수 있는
-  // 것(무료 시작)으로 보낸다. 결제가 열리면 원래대로 Plus 가 강조된다.
+  // 것(무료 시작)으로 보낸다. 결제가 열리면 원래대로 베이직이 강조된다.
   const hot = PAYMENTS_ENABLED ? plan.hot : plan.id === "basic";
   // 무료 플랜만 지금 시작할 수 있다.
   const isPurchasable = PAYMENTS_ENABLED || plan.id === "basic";
@@ -135,7 +135,7 @@ function PlanCard({
       ) : !isPurchasable ? (
         /*
           ₩3,900 이 적힌 카드에 "무료로 시작하기" 버튼이 달려 있었다. 누르면 무료 가입으로
-          가는 게 맞지만, 가격 옆에 그 문구가 있으면 "Plus 를 공짜로 준다"로 읽힌다.
+          가는 게 맞지만, 가격 옆에 그 문구가 있으면 "베이직을 공짜로 준다"로 읽힌다.
           살 수 없는 동안에는 버튼을 두지 않고 상태만 말한다 — 로그인 여부와 상관없이 같다.
         */
         <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
@@ -199,7 +199,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         authed ? "pb-[90px] lg:pb-0" : "pb-10"
       }`}
     >
-      {authed ? <AppNav publicShoot /> : <MarketingNav width="max-w-5xl" />}
+      {authed ? <AppNav /> : <MarketingNav width="max-w-5xl" />}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
@@ -215,8 +215,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </p>
         </header>
 
-        {/* 플랜 카드 — <lg 1열, lg+ 3열 */}
-        <section className="grid items-stretch gap-4 md:grid-cols-3">
+        {/* 개인 플랜 카드 — <md 1열, md+ 2열. 세 번째 선택지는 아래 엔터프라이즈 섹션이다. */}
+        <section className="grid items-stretch gap-4 md:grid-cols-2">
           {PLANS.map((plan) => (
             <PlanCard
               key={plan.id}
@@ -226,6 +226,19 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             />
           ))}
         </section>
+
+        {/*
+          쿠폰으로 프로를 받은 사용자가 있다. 프로는 더 이상 팔지 않아 카드가 없는데,
+          그러면 이 사람만 어느 카드에도 "현재 플랜" 배지가 안 붙어 자기 등급이 사라진 것처럼
+          보인다. 카드를 되살리는 대신 한 줄로 말해 준다.
+        */}
+        {currentPlanId === "pro" ? (
+          <p className="-mt-6 text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
+            지금 <b className="font-bold text-[color:var(--hc-text)]">프로</b> 를 이용
+            중이에요. 새로 가입할 수는 없는 플랜이지만, 쓰던 혜택(커스텀 프레임 무제한·보관
+            기간 무제한)은 그대로예요.
+          </p>
+        ) : null}
 
         {/*
           Enterprise — 팬미팅·행사용 QR 촬영.

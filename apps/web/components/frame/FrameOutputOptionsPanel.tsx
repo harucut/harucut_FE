@@ -22,6 +22,9 @@ export function FrameOutputOptionsPanel({
   onOutputFilterChange,
   hasCustomFrame,
 }: FrameOutputOptionsPanelProps) {
+  // 회원도 색을 고를 수 있다 — 서버 합성이 `ComposeRequest.backgroundColor` 를 받는다.
+  // 잠기는 것은 꾸민 프레임뿐이다. 그 배경은 프레임에 저장돼 있고 이미지일 수도 있다.
+  const backgroundLocked = hasCustomFrame;
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex flex-col gap-4">
@@ -30,7 +33,7 @@ export function FrameOutputOptionsPanel({
             <h2 className="text-xs font-medium text-zinc-200">출력 옵션</h2>
           </div>
 
-          {hasCustomFrame ? (
+          {backgroundLocked ? (
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] text-zinc-400">
               꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요.
             </div>
@@ -80,7 +83,7 @@ export function FrameOutputOptionsPanel({
           <div>
             <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
             <p className="mt-1 text-[11px] text-zinc-500">
-              미리보기와 최종 이미지에 같은 필터가 적용돼요.
+              고른 보정 필터는 미리보기와 최종 이미지에 똑같이 적용돼요.
             </p>
           </div>
 

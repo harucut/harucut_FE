@@ -15,10 +15,20 @@ export type CreateFrameRequest = {
   canvasWidth: number;
   canvasHeight: number;
   background: RemoteFrameBackground;
+  /**
+   * 칸별 누끼. 보내려면 **정확히 4개**여야 하고 촬영 슬롯 순서다(스웨거).
+   * 생략하면 서버가 전부 끈 것으로 본다.
+   */
+  cellCutouts?: boolean[];
   components: Array<{
     id?: string;
     type: "PHOTO" | "STICKER" | "TEXT";
     source: string;
+    /**
+     * TEXT 전용. 글자 층을 구운 투명 PNG 의 S3 key.
+     * 저장 시점에는 선택이지만 **없으면 그 프레임으로 합성이 400 GEN-002 로 죽는다.**
+     */
+    renderedKey?: string;
     x: number;
     y: number;
     width: number;
@@ -31,6 +41,27 @@ export type CreateFrameRequest = {
     styleJson: Record<string, unknown>;
   }>;
 };
+
+/**
+ * S3 key 로 쓸 수 있는 값만 통과시킨다.
+ *
+ * 서버는 `source` 를 key 로 정규화하는데, presigned 조회 URL 은 경로가
+ * `.../uploads/users/xxx/...` 라 잘라내면 key 가 나온다. 반면 `/stickers/x.png` 처럼
+ * 우리 웹서버가 주는 정적 경로는 S3 에 존재하지 않아 합성이 거부된다.
+ * 예전에 URL 을 그대로 저장한 프레임을 다시 저장할 때도 여기서 key 로 되돌린다.
+ */
+function toStorageKey(source: string): string {
+  const value = source.trim();
+  if (!/^https?:\/\//i.test(value)) return value;
+
+  try {
+    const path = new URL(value).pathname.replace(/^\/+/, "");
+    const marker = path.indexOf("uploads/");
+    return marker >= 0 ? path.slice(marker) : path;
+  } catch {
+    return value;
+  }
+}
 
 export function frameTypeFromFrameId(frameId: FrameId): RemoteFrameType {
   if (frameId.startsWith("wide")) return "WIDE";
@@ -106,6 +137,29 @@ function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground 
   };
 }
 
+/**
+ * 저장 요청에서 **빠지는** 컴포넌트인가.
+ *
+ * `source` 는 required + minLength 1(@NotBlank)이다. 글자를 지운 TEXT 는 source 가 빈
+ * 문자열이라, 그 레이어 하나 때문에 저장 전체가 400 GEN-003
+ * (`components[0].source: must not be blank`)으로 죽는다 — 실측 확인.
+ * 빈 글자는 화면에 그려지는 것도 없고 `finalizeAssetsForSave` 도 이미 굽지 않고
+ * 건너뛰므로, 요청에서 빼고 나머지를 저장한다.
+ *
+ * **이 규칙의 소유자는 이 함수다.** `toCreateFrameRequest` 의 필터와 프레임 내용 지문
+ * (`shootSessionStore.buildFrameContentKey`)이 같이 쓴다 — 둘이 갈라지면 서버에 안 가는
+ * 레이어를 고친 것만으로 합성 멱등키가 버려져 같은 그림이 두 벌 접수된다.
+ */
+export function isBlankSourceComponent(component: {
+  type: ThemeExportJson["components"][number]["type"];
+  source: string;
+}): boolean {
+  const source =
+    component.type === "TEXT" ? component.source : toStorageKey(component.source);
+
+  return source.trim().length === 0;
+}
+
 export function toCreateFrameRequest(
   json: ThemeExportJson,
   meta: { title: string; description: string; previewKey: string },
@@ -122,19 +176,27 @@ export function toCreateFrameRequest(
     canvasWidth,
     canvasHeight,
     background: toRequestBackground(json.background),
-    components: json.components.map((c) => ({
-      type: c.type,
-      source: c.source,
-      x: c.x,
-      y: c.y,
-      width: c.width,
-      height: c.height,
-      scale: c.scale ?? 1,
-      rotation: c.rotation ?? 0,
-      zIndex: c.zIndex,
-      styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
-      id: c.id,
-    })),
+    // 4개가 아니면 서버가 거절하므로(minItems/maxItems 4) 온전할 때만 싣는다.
+    ...(json.cellCutouts?.length === 4 ? { cellCutouts: [...json.cellCutouts] } : {}),
+    components: json.components
+      .map((c) => ({
+        type: c.type,
+        // renderUrl 은 렌더 전용이라 보내지 않는다. 이미지 source 는 key 로 정규화한다.
+        source: c.type === "TEXT" ? c.source : toStorageKey(c.source),
+        ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+        x: c.x,
+        y: c.y,
+        width: c.width,
+        height: c.height,
+        scale: c.scale ?? 1,
+        rotation: c.rotation ?? 0,
+        zIndex: c.zIndex,
+        styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
+        id: c.id,
+      }))
+      // 규칙은 `isBlankSourceComponent` 가 쥔다(위 주석). 여기서 조건을 다시 쓰면
+      // 지문 쪽과 갈라진다.
+      .filter((c) => !isBlankSourceComponent(c)),
   };
 }
 
@@ -142,19 +204,39 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
   return {
     frameId: frameIdFromFrameType(frame.frameType),
     background: toThemeBackground(frame.background),
-    components: frame.components.map((component, index) => ({
-      id: String(component.id ?? `${component.type}-${index}`),
-      type: component.type,
-      source: component.source || component.key || "",
-      x: component.x,
-      y: component.y,
-      width: component.width,
-      height: component.height,
-      scale: component.scale ?? 1,
-      rotation: component.rotation ?? 0,
-      zIndex: component.zIndex ?? index + 1,
-      styleJson:
-        (component.styleJson ?? component.style ?? {}) as Record<string, unknown>,
-    })),
+    // 서버가 안 주면(구 프레임) 전부 꺼진 것으로 본다 — 스웨거의 생략 규칙과 같다.
+    cellCutouts:
+      frame.cellCutouts?.length === 4
+        ? [...frame.cellCutouts]
+        : [false, false, false, false],
+    components: frame.components.map((component, index) => {
+      // 응답은 그릴 값(`source`)과 순수 key(`key`)를 따로 준다.
+      // 스웨거: "수정 요청을 다시 만들 때 `source` 자리에 이 `key` 값을 넣는다."
+      // 그래서 key 를 source 로 되돌리고, 받은 URL 은 렌더 전용으로 옮긴다.
+      // TEXT 의 source 는 글자 내용이라 그대로 둔다.
+      const rawSource = component.source ?? "";
+      const isText = component.type === "TEXT";
+      const storageKey = isText ? rawSource : component.key || rawSource;
+      const renderUrl =
+        !isText && /^https?:\/\//i.test(rawSource) ? rawSource : undefined;
+
+      return {
+        id: String(component.id ?? `${component.type}-${index}`),
+        type: component.type,
+        source: storageKey,
+        ...(renderUrl ? { renderUrl } : {}),
+        x: component.x,
+        y: component.y,
+        width: component.width,
+        height: component.height,
+        scale: component.scale ?? 1,
+        rotation: component.rotation ?? 0,
+        zIndex: component.zIndex ?? index + 1,
+        styleJson: (component.styleJson ?? component.style ?? {}) as Record<
+          string,
+          unknown
+        >,
+      };
+    }),
   };
 }

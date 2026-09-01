@@ -8,7 +8,7 @@ import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
-import { validateEmail, validatePassword } from "@/lib/authValidation";
+import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -56,8 +56,15 @@ function LoginPageContent() {
     const emailError = validateEmail(email);
     if (emailError) nextErrors.email = emailError;
 
-    const passwordError = validatePassword(password);
-    if (passwordError) nextErrors.password = passwordError;
+    /*
+      로그인에는 가입 규칙을 걸지 않는다.
+
+      서버 `LoginRequest.password` 는 `minLength: 1` 뿐이다(실측). 가입용 `validatePassword` 는
+      8~20자에 문자 클래스까지 보는데, 그것을 로그인에 걸면 **맞는 비밀번호인데 틀렸다고 말한다** —
+      다른 클라이언트·시드·관리자가 만든 계정이나 규칙이 완화된 뒤의 계정이 그렇다.
+      비밀번호가 맞는지는 서버가 판정한다. 여기서는 빈 값만 막는다.
+    */
+    if (!password) nextErrors.password = "비밀번호를 입력해 주세요.";
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -88,6 +95,23 @@ function LoginPageContent() {
           await clientApi.delete("/api/client/logout").catch(() => undefined);
           setErrors({
             common: "탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.",
+          });
+          return;
+        }
+
+        // 복구됐다고 지금 쿠키가 쓸 수 있게 되는 것은 아니다.
+        // 방금 받은 토큰에는 status=DELETED_REQUESTED 가 박혀 있고, reactivate 는 새 쿠키를
+        // 주지 않으면서 서버의 refresh 토큰까지 지운다 — 재발급도 막힌다(AUTH-011).
+        // 그대로 보내면 사용자는 /home 에 도착한 뒤 모든 요청이 403(GEN-021)으로 막힌다.
+        // 자격증명이 아직 이 함수 안에 있으니 조용히 다시 로그인해 ACTIVE 토큰을 받는다.
+        // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
+        try {
+          await loginWithEmail(email, password);
+        } catch (reloginError) {
+          console.error(reloginError);
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          setErrors({
+            common: "탈퇴는 취소됐어요. 다시 로그인해 주세요.",
           });
           return;
         }
@@ -161,18 +185,19 @@ function LoginPageContent() {
           </Link>
         </div>
 
+        {/* 아래 소셜 버튼과 같은 h-12 알약이다. 예전에는 이쪽만 py-2.5(약 38px)·text-xs 라
+            같은 화면에서 버튼 높이와 글자 크기가 두 종류로 갈렸다. */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className="hc-button-primary rounded-full py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "로그인 중..." : "로그인"}
         </button>
 
-        {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영·꾸미기를 먼저 체험할 수 있게. */}
-        <GuestTrialStartButton className="rounded-full border border-[color:var(--hc-border)] py-2.5 text-center text-xs font-semibold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]">
-          비회원 체험하기
-        </GuestTrialStartButton>
+        {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영을 먼저 체험할 수 있게.
+            문구는 넘기지 않는다 — 기본값이 곧 랜딩·앱과 같은 @harucut/shared 의 한 문구다. */}
+        <GuestTrialStartButton className="inline-flex h-12 items-center justify-center rounded-full border border-[color:var(--hc-border)] text-[15px] font-bold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]" />
       </form>
     </AuthPageShell>
   );

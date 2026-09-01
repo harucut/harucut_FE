@@ -2,17 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Camera } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type AppNavProps = {
   // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
   userInitial?: string | null;
-  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 CTA는 인증 여부를 확인해
-  // 로그인 사용자는 /shoot로 직행, 비회원은 게스트 체험 안내를 띄운다.
-  // (proxy가 비회원을 /login으로 막으므로) authed 페이지에서는 미지정.
-  publicShoot?: boolean;
 };
 
 const NAV_LINKS: { href: string; label: string }[] = [
@@ -24,16 +18,16 @@ const NAV_LINKS: { href: string; label: string }[] = [
 
 // 데스크톱(≥ lg) 전용 상단 네비게이션 (handoff app AppNav).
 // 모바일(< lg)에서는 숨기고 하단 MobileTabBar가 네비게이션을 담당한다.
-export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
+//
+// 촬영 CTA는 여기 두지 않는다. 데스크톱 상단은 네비게이션 자리이고, 촬영 진입은 홈의
+// 큰 카드가 맡는다. 모바일은 그대로 하단 탭바 가운데 FAB가 담당한다 — 이 컴포넌트는
+// lg 미만에서 아예 렌더되지 않으므로 여기 변경은 모바일에 닿지 않는다.
+export function AppNav({ userInitial }: AppNavProps) {
   const pathname = usePathname();
-  const { onShootCta } = usePublicShootCta();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
   const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
-
-  const shootButtonClass =
-    "hc-button-primary flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold";
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl lg:block">
@@ -48,10 +42,21 @@ export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`whitespace-nowrap rounded-full px-3.5 py-2 text-[15px] font-bold transition ${
+                /*
+                  현재 위치는 바탕이 아니라 글자가 말한다.
+                  알약 바탕(--hc-surface-highlight)이 헤더 위에 떠 있는 칩처럼 읽혀서,
+                  "여기 있다"는 신호보다 그 도형 자체가 먼저 눈에 들어왔다. 라이트에서는
+                  흰 알약이 거의 흰 헤더 위에 얹혀 그림자만 남는 것도 문제였다.
+
+                  대신 이 시스템의 주된 위계 장치인 굵기 대비(800 ↔ 500)에 색을 얹는다.
+                  hover 는 색만 올리고 굵기는 그대로 둔다 — 굵기를 같이 올리면 hover 가
+                  활성과 구별되지 않고(예전엔 실제로 그랬다), 글자 폭이 변해 흔들린다.
+                  초록은 쓰지 않는다. 이 화면의 초록은 촬영 CTA 와 프로필 원이 이미 갖고 있다.
+                */
+                className={`whitespace-nowrap px-3.5 py-2 text-[15px] transition ${
                   active
-                    ? "bg-[color:var(--hc-surface-highlight)] text-[color:var(--hc-text)] shadow-sm"
-                    : "text-[color:var(--hc-muted)] hover:text-[color:var(--hc-text)]"
+                    ? "font-extrabold text-[color:var(--hc-text)]"
+                    : "font-medium text-[color:var(--hc-muted)] hover:text-[color:var(--hc-text)]"
                 }`}
               >
                 {label}
@@ -61,30 +66,6 @@ export function AppNav({ userInitial, publicShoot = false }: AppNavProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          {publicShoot ? (
-            <button
-              type="button"
-              onClick={onShootCta}
-              className={shootButtonClass}
-            >
-              <Camera className="h-[17px] w-[17px]" />
-              촬영하기
-            </button>
-          ) : (
-            <Link href="/shoot" className={shootButtonClass}>
-              <Camera className="h-[17px] w-[17px]" />
-              촬영하기
-            </Link>
-          )}
-
-          <button
-            type="button"
-            aria-label="알림"
-            className="hc-button-icon grid h-[42px] w-[42px] place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
-          >
-            <Bell className="h-[19px] w-[19px]" />
-          </button>
-
           <Link
             href="/mypage"
             aria-label="마이페이지"

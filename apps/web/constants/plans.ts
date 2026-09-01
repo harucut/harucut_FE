@@ -9,6 +9,7 @@
 import {
   ENTERPRISE_FACTS,
   PLAN_FACTS,
+  PLAN_NAMES,
   toPlanId as toPlanIdShared,
   type PlanFacts,
   type PlanFeature as SharedPlanFeature,
@@ -26,8 +27,10 @@ export type Plan = PlanFacts & {
 
 const CTA_BY_ID: Record<PlanId, string> = {
   basic: "무료로 시작하기",
-  plus: "Plus 시작하기",
-  pro: "Pro 시작하기",
+  plus: "베이직 시작하기",
+  // 가격표에 카드가 없어 실제로 쓰이지 않지만, PlanId 를 모두 채워 둬야
+  // 나중에 PRO 카드를 되살릴 때 라벨이 빠진 채로 나가지 않는다.
+  pro: "프로 시작하기",
 };
 
 export const PLANS: Plan[] = PLAN_FACTS.map((plan) => ({
@@ -39,18 +42,22 @@ export const ENTERPRISE_TEASER = ENTERPRISE_FACTS;
 
 export const toPlanId = toPlanIdShared;
 
-// 서버 등급을 카드 이름(Free/Plus/Pro)으로 바꾼다. 모르는 값이면 null.
+// 서버 등급을 사람이 읽는 이름(무료/베이직/프로)으로 바꾼다. 모르는 값이면 null.
+//
+// PLANS 에서 찾지 않는다 — PRO 는 가격표에 카드가 없어서 못 찾고, 그러면 마이페이지가
+// PRO 사용자에게 "무료"라고 말한다(호출부의 ?? "무료" 폴백에 걸린다).
 export function getPlanDisplayName(tier: string | null | undefined): string | null {
   const id = toPlanId(tier);
-  return id ? (PLANS.find((plan) => plan.id === id)?.name ?? null) : null;
+  return id ? PLAN_NAMES[id] : null;
 }
 
 // 요금제 페이지 헤더 카피. 로그인 후에는 "비회원" 안내가 의미 없어 문장을 바꾼다.
 export const PRICING_HEADLINE = "나에게 맞는 플랜";
+// 보정은 플랜과 무관하게 모두 되므로(서버에 등급 개념이 없다) 문구에서 뺀다.
 export const PRICING_SUBTITLE =
-  "비회원도 촬영은 무료예요. 커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요.";
+  "비회원도 촬영은 무료예요. 커스텀 프레임과 보관 기간이 플랜에 따라 달라요.";
 export const PRICING_SUBTITLE_AUTHED =
-  "커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요. 결제 기능은 준비 중이에요.";
+  "커스텀 프레임과 보관 기간이 플랜에 따라 달라요. 결제 기능은 준비 중이에요.";
 // 결제 미오픈 안내 — 요금제 카드 CTA·footnote가 함께 쓴다.
 export const PRICING_BILLING_PENDING = "결제 기능은 준비 중이에요.";
 // 요금제를 내릴 때의 안내(비활성화 정책).

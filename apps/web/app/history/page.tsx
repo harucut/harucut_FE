@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -11,13 +11,21 @@ import {
   LayoutGrid,
   PencilLine,
   Share2,
+  Trash2,
 } from "lucide-react";
 import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
 import { getImageUrlByKey } from "@/lib/presignedUploadApi";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
+import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
 import {
@@ -25,6 +33,7 @@ import {
   getUserMediaTitle,
 } from "@/lib/userMediaPreview";
 import {
+  deleteMedia,
   getMediaDownloadUrl,
   listMyMedia,
   updateMediaDisplayName,
@@ -55,7 +64,7 @@ const MONTH_KO = [
 ];
 
 function getMediaExtension(item: UserMedia) {
-  const candidates = [item.downloadUrl, item.originalFileName, item.s3Key];
+  const candidates = [item.downloadUrl, item.s3Key];
 
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -145,15 +154,21 @@ function MediaThumb({
 
 export default function HistoryPage() {
   const [view, setView] = useState<ViewMode>("grid");
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [items, setItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [draftName, setDraftName] = useState("");
+  // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
+  // 대상 자체를 들고 있어야 다이얼로그가 지금 이름을 초깃값으로 받을 수 있다.
+  const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
+  // 삭제는 되돌릴 수 없다. 한 번 더 묻는 대상(카드)을 들고 있는다.
+  const [deleteTarget, setDeleteTarget] = useState<UserMedia | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // 서버가 요금제 보관 기간을 넘긴 기록을 목록에서 잘라 내려주므로, "없음"과 "기간 만료"를
@@ -268,10 +283,12 @@ export default function HistoryPage() {
     } catch (downloadError) {
       console.error(downloadError);
       alert(
-        getUserFacingApiErrorMessage(
-          downloadError,
-          "다운로드를 준비하지 못했어요.",
-        ),
+        // 결과 화면과 같은 이유로 네이티브 안내를 먼저 본다(lib/nativeBridge.ts).
+        getNativeSaveErrorMessage(downloadError) ??
+          getUserFacingApiErrorMessage(
+            downloadError,
+            "다운로드를 준비하지 못했어요.",
+          ),
       );
     } finally {
       setDownloadingId(null);
@@ -312,23 +329,24 @@ export default function HistoryPage() {
   };
 
   const handleStartRename = (item: UserMedia) => {
-    setEditingId(item.mediaId);
-    setDraftName(getUserMediaTitle(item));
+    setRenameTarget(item);
+    setRenameError(null);
   };
 
-  const handleSaveName = async (item: UserMedia) => {
-    const nextName = draftName.trim();
-    if (!nextName) {
-      setFeedback("파일 이름은 비워둘 수 없어요.");
-      return;
-    }
+  // 다이얼로그가 마운트될 때마다 포커스를 잡으므로, 닫기 함수는 값이 바뀌지 않아야 한다.
+  // 인라인 화살표로 넘기면 페이지가 다시 그려질 때마다 포커스가 첫 컨트롤로 튄다.
+  const handleCloseRename = useCallback(() => {
+    setRenameTarget(null);
+    setRenameError(null);
+  }, []);
 
+  const handleSaveName = async (item: UserMedia, nextName: string) => {
     setSavingNameId(item.mediaId);
+    setRenameError(null);
 
     try {
       const updated = await updateMediaDisplayName(item.mediaId, nextName);
-      const resolvedName =
-        updated.displayName?.trim() || updated.displayname?.trim() || nextName;
+      const resolvedName = updated.displayName?.trim() || nextName;
 
       setItems((current) =>
         current.map((currentItem) =>
@@ -337,14 +355,51 @@ export default function HistoryPage() {
             : currentItem,
         ),
       );
-      setEditingId(null);
-      setDraftName("");
-      setFeedback("파일 이름을 수정했어요.");
-    } catch (renameError) {
-      console.error(renameError);
-      setFeedback("파일 이름을 수정하지 못했어요.");
+      setRenameTarget(null);
+      setFeedback("이름을 바꿨어요.");
+    } catch (error_) {
+      console.error(error_);
+      // 다이얼로그를 연 채로 사유를 보여 준다 — 뒤편 안내는 가려서 보이지 않는다.
+      setRenameError(
+        getUserFacingApiErrorMessage(error_, "이름을 바꾸지 못했어요."),
+      );
     } finally {
       setSavingNameId(null);
+    }
+  };
+
+  /**
+   * 사진 삭제.
+   *
+   * 서버가 지운 뒤 목록에서도 뺀다. 다시 불러오지 않고 손으로 빼는 이유는, 전체 재조회가
+   * 페이지를 순회하는 비싼 호출이라(listMyMedia) 한 장 지우자고 치를 값이 아니어서다.
+   *
+   * 404 를 실패로 보여 주지 않는다 — 이미 없는 사진을 지우려 한 것이고, 사용자가 원한
+   * 상태(목록에 없음)는 이미 이뤄졌다. 화면에서만 빼면 된다.
+   */
+  const handleDelete = async (item: UserMedia) => {
+    setDeletingId(item.mediaId);
+    try {
+      await deleteMedia(item.mediaId);
+      setItems((current) =>
+        current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
+      );
+      setDeleteTarget(null);
+      setFeedback("사진을 지웠어요.");
+    } catch (error_) {
+      console.error(error_);
+      const { status } = getApiErrorDetails(error_);
+      if (status === 404) {
+        setItems((current) =>
+          current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
+        );
+        setDeleteTarget(null);
+        setFeedback("이미 지워진 사진이에요.");
+        return;
+      }
+      alert(getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -355,17 +410,12 @@ export default function HistoryPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
         {/* 헤더 + 뷰 토글 */}
         <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
-          <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
-              기록
-            </h1>
-            <p className="mt-2 text-[13px] text-[color:var(--hc-muted)]">
-              남긴 하루컷 {loading ? "…" : items.length}개
-              {planTier
-                ? ` · ${PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록을 볼 수 있어요`
-                : ""}
-            </p>
-          </div>
+          {/* 부제는 두지 않는다 — 개수는 달마다 붙은 「N컷」이 이미 말하고, 보관 기간은
+              정작 필요한 자리(기록이 없을 때)에서 따로 안내한다. 늘 떠 있으면 자기
+              사진을 보러 온 화면 맨 위에서 요금제부터 읽게 된다. */}
+          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+            기록
+          </h1>
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
@@ -442,12 +492,15 @@ export default function HistoryPage() {
                 </Link>
               </p>
             ) : null}
-            <Link
-              href="/shoot"
+            {/* 홈의 큰 카드와 같은 것을 연다 — 같은 뜻의 버튼이 화면마다 다르게
+                동작하면 안 된다(여기만 카메라로 직행했다). */}
+            <button
+              type="button"
+              onClick={() => setSourceDialogOpen(true)}
               className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
             >
-              촬영 시작
-            </Link>
+              기록 남기기
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-8">
@@ -464,7 +517,7 @@ export default function HistoryPage() {
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
                   {group.items.map((item) => {
-                    const isEditing = editingId === item.mediaId;
+                    const title = getUserMediaTitle(item);
 
                     return (
                       <article
@@ -476,27 +529,25 @@ export default function HistoryPage() {
                         <MediaThumb item={item} />
 
                         <div className="flex flex-col gap-1">
-                          {isEditing ? (
-                            <div className="flex gap-2">
-                              <input
-                                value={draftName}
-                                onChange={(e) => setDraftName(e.target.value)}
-                                className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px]"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void handleSaveName(item)}
-                                disabled={savingNameId === item.mediaId}
-                                className="hc-button-neutral rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
-                              >
-                                {savingNameId === item.mediaId ? "저장 중" : "저장"}
-                              </button>
-                            </div>
-                          ) : (
-                            <p className="truncate text-[14px] font-bold tracking-tight">
-                              {getUserMediaTitle(item)}
+                          {/* 이름 옆 연필이 곧 "고치기"다 — 아래 줄에는 이 기록으로 할
+                              일(저장·공유)만 남기고, 이름은 제 자리에서 손댄다.
+
+                              연필은 카드 오른쪽 끝이 아니라 이름 바로 옆에 붙인다. 끝에
+                              두면 이름이 짧을수록 멀어져 무엇을 고치는 표시인지 흐려진다.
+                              이름이 길면 잘리면서 자연히 끝으로 간다. */}
+                          <div className="flex items-center gap-0.5">
+                            <p className="min-w-0 truncate text-[14px] font-bold tracking-tight">
+                              {title}
                             </p>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => handleStartRename(item)}
+                              aria-label={`이름 바꾸기: ${title}`}
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+                            >
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                           <p className="text-[11px] text-[color:var(--hc-muted)]">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
@@ -507,7 +558,7 @@ export default function HistoryPage() {
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex gap-1.5">
                           <button
                             type="button"
                             onClick={() => void handleDownload(item)}
@@ -530,17 +581,16 @@ export default function HistoryPage() {
                               {sharingId === item.mediaId ? "준비 중" : "공유"}
                             </span>
                           </button>
+                          {/* 삭제는 되돌릴 수 없어서 저장·공유와 같은 무게로 두지 않는다.
+                              글자 없이 아이콘만, 색도 한 단 낮춰 실수로 누르지 않게 한다. */}
                           <button
                             type="button"
-                            onClick={() =>
-                              isEditing
-                                ? setEditingId(null)
-                                : handleStartRename(item)
-                            }
-                            className="hc-button-secondary flex items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold"
+                            onClick={() => setDeleteTarget(item)}
+                            disabled={deletingId === item.mediaId}
+                            aria-label={`삭제: ${title}`}
+                            className="hc-button-secondary grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
                           >
-                            <PencilLine className="h-3.5 w-3.5" />
-                            <span>{isEditing ? "취소" : "이름"}</span>
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </article>
@@ -553,6 +603,36 @@ export default function HistoryPage() {
         )}
       </div>
       <MobileTabBar />
+      <RecordSourceDialog
+        open={sourceDialogOpen}
+        onClose={() => setSourceDialogOpen(false)}
+      />
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="이 사진을 지울까요?"
+          description={`"${getUserMediaTitle(deleteTarget)}" 를 지워요. 지운 사진은 되돌릴 수 없어요.`}
+          confirmLabel="지우기"
+          runningLabel="지우는 중"
+          running={deletingId === deleteTarget.mediaId}
+          destructive
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => void handleDelete(deleteTarget)}
+        />
+      ) : null}
+
+      {renameTarget ? (
+        <SingleFieldDialog
+          key={renameTarget.mediaId}
+          title="이름 바꾸기"
+          label="기록 이름"
+          placeholder="예: 바다에서"
+          initialValue={getUserMediaTitle(renameTarget)}
+          saving={savingNameId === renameTarget.mediaId}
+          error={renameError}
+          onClose={handleCloseRename}
+          onSubmit={(nextName) => void handleSaveName(renameTarget, nextName)}
+        />
+      ) : null}
     </main>
   );
 }

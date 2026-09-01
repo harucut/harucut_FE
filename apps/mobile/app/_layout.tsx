@@ -1,66 +1,33 @@
-import 'react-native-reanimated';
-
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { GlobalNotice } from '@/components/harucut/global-notice';
-import { useHarucutTheme } from '@/hooks/use-harucut-theme';
-import { getAuthStatus } from '@/lib/auth-api';
-import { useSessionStore } from '@/store/use-session-store';
-
+/**
+ * 앱 전체가 웹 셸 하나다.
+ *
+ * 예전에는 앱이 19개 라우트를 자기 화면으로 그렸다(screens/ 6,299줄). 그 화면들은 전부
+ * 웹에 1:1 로 있었고 앱 전용 화면은 하나도 없었다. 두 벌을 유지하는 동안 로고 크기·브랜드색·
+ * 버튼 순서·안내 문구가 계속 어긋났다 — 같은 변경을 두 번 구현하다 한쪽을 빼먹기 때문이다.
+ *
+ * 이제 화면은 웹 한 벌이고, 앱은 웹이 못 하는 것만 맡는다(사진첩 저장·공유·햅틱·뒤로가기·딥링크).
+ * 경계는 components/harucut-web-shell.tsx 와 lib/native-bridge.ts 에 있다.
+ *
+ * expo-router 는 라우팅이 아니라 **딥링크 등록** 때문에 남긴다 — harucut:// 는 소셜 로그인
+ * 복귀 경로이고, 앱 스킴이 사라지면 그 길이 끊긴다. 라우트는 index 하나뿐이다.
+ */
 export default function RootLayout() {
-  const { colors, isDark } = useHarucutTheme();
-  const accessMode = useSessionStore((state) => state.accessMode);
-  const bootstrapMemberSession = useSessionStore((state) => state.bootstrapMemberSession);
-
-  useEffect(() => {
-    if (accessMode !== 'anonymous' || Platform.OS === 'web') {
-      return;
-    }
-
-    let cancelled = false;
-
-    const restoreSession = async () => {
-      try {
-        const status = await getAuthStatus();
-
-        if (!cancelled && status?.userStatus === 'ACTIVE') {
-          await bootstrapMemberSession();
-        }
-      } catch {
-        // 저장된 서버 세션이 없으면 공개 화면으로 유지합니다.
-      }
-    };
-
-    void restoreSession();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessMode, bootstrapMemberSession]);
-
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <Stack
-          screenOptions={{
-            animation: 'fade',
-            contentStyle: { backgroundColor: colors.background },
-            headerShown: false,
-          }}
-        >
-          <Stack.Screen name="(public)" />
-          <Stack.Protected guard={accessMode !== 'anonymous'}>
-            <Stack.Screen name="(app)" />
-          </Stack.Protected>
-        </Stack>
-        <GlobalNotice />
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      {/*
+        상태바는 셸이 잡는다(components/harucut-web-shell.tsx). 여기서 고정하면 웹이
+        라이트 테마일 때 흰 배경 위에 흰 글자가 된다 — 두 곳에서 켜면 나중에 마운트된
+        쪽이 이기므로, 값을 아는 한 곳만 남긴다.
+      */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#0B0B0C' },
+        }}
+      />
+    </SafeAreaProvider>
   );
 }

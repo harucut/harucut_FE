@@ -27,6 +27,9 @@ export function validateEmail(email: string): string | null {
 export function validatePassword(password: string): string | null {
   if (!password) return '비밀번호를 입력해 주세요.';
   if (password.length < 8) return '비밀번호는 최소 8자 이상이어야 합니다.';
+  // 길이 초과를 문자 종류 문제로 말하지 않는다 — 아래 정규식이 {8,20} 이라 20자를 넘기면
+  // "영문, 숫자, 특수문자만" 이라는 엉뚱한 사유가 떴다. 서버도 8~20 을 강제한다.
+  if (password.length > 20) return '비밀번호는 20자 이하여야 합니다.';
   if (!PASSWORD_REGEX.test(password)) {
     return '영문, 숫자, 일부 특수문자(!@#$%^&* 등)만 사용할 수 있습니다.';
   }
