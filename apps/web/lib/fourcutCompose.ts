@@ -4,6 +4,10 @@ import type { FrameId } from "@/constants/frames";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { loadImage } from "@/lib/canvas/loaders";
 import {
+  cutoutPersonOnBlack,
+  isPersonCutoutUnavailable,
+} from "@/lib/canvas/personCutout";
+import {
   getApiErrorDetails,
   getUserFacingApiErrorMessage,
 } from "@/lib/apiError";
@@ -24,7 +28,7 @@ import {
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import type { RemoteFrame } from "@/lib/api-types";
-import { listAllFrames } from "@/lib/remoteFrameApi";
+import { getFrame, listAllFrames } from "@/lib/remoteFrameApi";
 import type { FrameLayout } from "@/lib/canvas/composeFrame";
 
 /**
@@ -43,6 +47,18 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
  *
  * 서버는 필터(뽀샤시·밝게·흑백)를 모른다. 그래서 **사용자가 고른 효과를 각 사진 픽셀에
  * 새겨서** 올린다. 서버는 효과가 이미 입혀진 사진을 받아 배치만 한다.
+ *
+ * ## 누끼도 여기서 굽는다
+ *
+ * 필터와 같은 이유다. 도는 서버의 스웨거가 `FrameCreateRequest.cellCutouts` 에 못박는다 —
+ * *"서버는 이 값으로 아무것도 그리지 않는다. 누끼(배경 제거 + 검은 배경)는 프론트가 원본
+ * 픽셀에 구워서 업로드해야 한다. 이 토글은 편집기가 저장 프레임을 다시 열 때 어느 칸이
+ * 누끼인지 복원하는 용도다."*
+ *
+ * 그래서 켜진 칸의 원본은 **올리기 전에** 사람만 남기고 배경을 검정으로 구운 것으로 바꾼다
+ * (`lib/canvas/personCutout.ts`). 토글이 어디서 오는지는 `resolveComposeFrame` 이 갖는다.
+ * 미해결 쟁점(서버가 정말 안 그리는가)은 `docs/backend-contract.md`
+ * 「누끼 한 줄은 지금 스웨거와 반대다」 절.
  *
  * ## 슬롯 크기로 잘라서 올린다
  *
@@ -71,6 +87,15 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
 /** 원본은 사진이라 PNG 대신 JPEG 로 굽는다 — 슬롯 하나가 4MP까지 가서 PNG면 10MB 제한에 걸린다. */
 const SOURCE_MIME = "image/jpeg";
 const SOURCE_QUALITY = 0.92;
+
+/**
+ * 누끼 중간 산출물의 JPEG 품질.
+ *
+ * 이 JPEG 은 **브라우저 밖으로 나가지 않는다** — 바로 다음 줄에서 다시 디코드해 슬롯
+ * 크기로 자르고 `SOURCE_QUALITY` 로 굽는다. 중간을 0.92 로 두면 같은 사진을 0.92 로 두 번
+ * 압축해 손실이 겹치므로, 여기서는 크기를 포기하고 손실을 없앤다(파일은 즉시 버려진다).
+ */
+const CUTOUT_INTERMEDIATE_QUALITY = 1;
 
 export class SystemFrameMissingError extends Error {
   constructor(readonly frameId: FrameId) {
@@ -120,6 +145,79 @@ async function renderSourceForSlot(
   });
 }
 
+/** 왜 누끼가 안 됐는지 한 줄로. 모델이 아는 실패면 그 사유를, 아니면 메시지를 쓴다. */
+function describeCutoutFailure(error: unknown): string {
+  if (isPersonCutoutUnavailable(error)) return error.reason;
+  return error instanceof Error ? error.message : String(error);
+}
+
+type PreparedSources = {
+  /** 굽기에 넘길 주소. 누끼가 성공한 칸만 원본 대신 blob URL 이 들어간다. */
+  sources: string[];
+  /** 다 쓰고 반드시 부른다. 안 부르면 blob 이 탭이 닫힐 때까지 산다. */
+  release: () => void;
+};
+
+/**
+ * 누끼가 켜진 칸의 원본을 **사람만 남고 배경이 검은** 사진으로 바꾼다.
+ *
+ * ## 원본 → 누끼 → 자르기·필터 순서인 이유
+ *
+ * 자르고 필터를 먹인 뒤에 누끼를 뜨면 세그멘테이션 입력이 흑백(`grayscale(1)`)이거나
+ * 흐린(`blur(0.45px)`) 그림이 된다. 모델은 사람 사진으로 배운 것이라 굳이 그걸 먹일 이유가
+ * 없다. 반대로 누끼를 먼저 뜨면 모델은 손대지 않은 원본을 보고, 뒤에 오는 필터는 검은
+ * 배경에 안전하다 — `grayscale`·`brightness`·`contrast`·`saturate` 는 순수 검정을 검정으로
+ * 남긴다. 자르기(`drawCover`)도 원본과 같은 식이라 사람 위치가 미리보기와 어긋나지 않는다.
+ *
+ * ## 한 장씩 도는 이유
+ *
+ * 실측(갤럭시 A32 · 안드로이드 13 · Chrome 151)으로 장당 약 450ms 다. `Promise.all` 로
+ * 네 장을 같이 걸어도 빨라지지 않는다 — `delegate:'CPU'` 라 wasm 이 메인 스레드에서
+ * **동기로** 돌아 세그멘테이션 구간은 어차피 줄을 선다. 대신 동시에 걸면 1700×1700 RGBA
+ * 11.6MB 짜리 버퍼와 캔버스가 네 벌 한꺼번에 살아서, 중저가 안드로이드에서 얻는 것 없이
+ * 메모리만 네 배로 쓴다. 그래서 순차다.
+ *
+ * 모델 로드 실패는 `personCutout` 이 캐시한다. 오프라인이어도 남은 칸이 각자 모델을 다시
+ * 받으러 나가지 않고 바로 원본으로 떨어진다.
+ *
+ * ## 실패하면 그 칸만 원본으로 간다
+ *
+ * 누끼 하나 때문에 촬영 전체를 잃지 않는다. 켠 칸이 원본으로 나가면 사용자가 기대한 그림은
+ * 아니지만, 던져서 네 장을 다 버리는 것보다 낫다 — 개발 로그에는 남긴다.
+ */
+async function bakePersonCutouts(
+  sources: string[],
+  cellCutouts: boolean[],
+): Promise<PreparedSources> {
+  const prepared = [...sources];
+  const objectUrls: string[] = [];
+  const release = () => {
+    for (const url of objectUrls) URL.revokeObjectURL(url);
+    objectUrls.length = 0;
+  };
+
+  for (let index = 0; index < sources.length; index += 1) {
+    if (cellCutouts[index] !== true) continue;
+
+    try {
+      const { blob } = await cutoutPersonOnBlack(sources[index], {
+        quality: CUTOUT_INTERMEDIATE_QUALITY,
+      });
+      const url = URL.createObjectURL(blob);
+      objectUrls.push(url);
+      prepared[index] = url;
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          `[compose] ${index + 1}번째 칸 누끼를 굽지 못해 원본을 그대로 올린다: ${describeCutoutFailure(error)}`,
+        );
+      }
+    }
+  }
+
+  return { sources: prepared, release };
+}
+
 /**
  * 합성에 쓸 서버 프레임 ID 를 찾는다.
  *
@@ -145,16 +243,65 @@ export async function findSystemFrame(
   );
 }
 
-export async function resolveComposeFrameId(
+export type ComposeFrameTarget = {
+  /** 합성 요청에 실을 서버 프레임 id. */
+  frameId: number;
+  /**
+   * 칸별 누끼 토글. 촬영 슬롯 순서로 **4개**다(스웨거 `minItems`/`maxItems` 4).
+   * 켜진 칸은 올리기 전에 픽셀에 누끼를 굽는다 — 서버는 이 값으로 아무것도 그리지 않는다.
+   */
+  cellCutouts: boolean[];
+};
+
+/**
+ * 프레임이 들고 있는 누끼 토글을 읽는다.
+ *
+ * 서버가 안 줬거나(누끼 필드가 생기기 전 프레임) 4개가 아니면 **전부 꺼진 것**으로 본다 —
+ * 스웨거의 생략 규칙이자 `frameApi.toThemeExportJson` 이 쓰는 규칙과 같은 것이다.
+ */
+function readCellCutouts(frame: RemoteFrame | null): boolean[] {
+  const flags = frame?.cellCutouts;
+  return flags?.length === 4
+    ? flags.map(Boolean)
+    : [false, false, false, false];
+}
+
+/**
+ * 이번 합성이 쓸 프레임을 확정한다 — id 와 **그 프레임의 누끼 토글**을 같이 돌려준다.
+ *
+ * 누끼 토글은 프레임에만 있다. 촬영 세션이 들고 다니는 것은 `frameId`(로컬 카탈로그 문자열)
+ * 와 `remoteFrameId`(서버 id) 둘뿐이라(`lib/shootSessionStore.ts`), 굽기에 필요한 값은
+ * 여기서 프레임을 집는 김에 같이 읽는다. 화면이 미리보기용으로 따로 읽는
+ * `hooks/useRemoteFrameTheme` 는 꾸민 프레임에서만 돌고 합성 경로로 내려오지 않는다.
+ */
+export async function resolveComposeFrame(
   frameId: FrameId | null,
   remoteFrameId: number | null,
-): Promise<number> {
-  if (remoteFrameId != null) return remoteFrameId;
+): Promise<ComposeFrameTarget> {
+  if (remoteFrameId != null) {
+    // 꾸민 프레임은 id 가 곧 답이라 예전에는 아무것도 묻지 않았다. 누끼 토글 때문에 한 번
+    // 읽는다 — 다만 **못 읽어도 합성은 보낸다.** 조회가 한 번 흔들렸다고 지금까지 되던
+    // 저장을 죽이는 것보다, 누끼 없이 저장되는 편이 낫다(사용자가 다시 찍지 않아도 된다).
+    const frame = await getFrame(remoteFrameId).catch((error: unknown) => {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          `[compose] 프레임(${remoteFrameId}) 조회에 실패해 누끼 없이 간다`,
+          error,
+        );
+      }
+      return null;
+    });
+
+    return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame) };
+  }
+
   if (!frameId) throw new SystemFrameMissingError("classic-4");
 
   const system = await findSystemFrame(frameId);
   if (!system) throw new SystemFrameMissingError(frameId);
-  return system.frameId;
+
+  // 시스템 프레임도 같은 필드를 달고 온다. 목록으로 이미 받았으니 더 물을 것이 없다.
+  return { frameId: system.frameId, cellCutouts: readCellCutouts(system) };
 }
 
 export type ComposedFourcut = {
@@ -323,8 +470,8 @@ async function uploadSources(files: File[]): Promise<string[]> {
  *
  * 뒤집으면 **합성이 실패하면 이미 올라간 원본은 그대로 남는다.** 프론트에는 지울 방법이
  * 없어서, 여기서는 "쓸 일 없는 원본을 덜 만드는 것"까지만 한다 — 프레임을 먼저 확정하고,
- * 4장을 다 구운 뒤에 올린다. 접수 이후(`submitCompose`·`waitForCompose`) 실패로 남는
- * 원본 정리는 백엔드 몫이다(`docs/app-shell-backend-requests.md` 4번).
+ * **누끼까지 포함해** 4장을 다 구운 뒤에 올린다. 접수 이후(`submitCompose`·`waitForCompose`)
+ * 실패로 남는 원본 정리는 백엔드 몫이다(`docs/app-shell-backend-requests.md` 4번).
  */
 export async function composeFourcutOnServer(args: {
   sources: string[];
@@ -353,7 +500,8 @@ export async function composeFourcutOnServer(args: {
   // 프레임을 **먼저** 확정한다. 예전에는 업로드와 나란히 돌렸는데, 프레임 조회가
   // 실패할 운명이어도 원본 4장은 이미 S3 로 나간 뒤라 쓰이지 않을 파일만 남았다
   // (합성이 성공해야 서버가 원본을 지운다). 몇백 ms 를 아끼자고 치르기엔 비싼 값이다.
-  const composeFrameId = await resolveComposeFrameId(
+  // 누끼 토글도 여기서 같이 받는다 — 굽기가 그 값을 봐야 한다.
+  const { frameId: composeFrameId, cellCutouts } = await resolveComposeFrame(
     args.frameId,
     args.remoteFrameId,
   );
@@ -361,16 +509,29 @@ export async function composeFourcutOnServer(args: {
   // 굽기와 올리기를 **나눈다**. 슬롯마다 "굽기 → 올리기"를 이어 붙여 4개를 동시에 돌리면,
   // 세 번째 굽기가 실패해도 나머지 세 장은 이미 S3 로 나간 뒤라 쓰이지 않을 원본만 남는다.
   // 굽기는 브라우저 안에서 끝나 실패해도 남는 게 없다 — 다 구운 다음에 올린다.
-  const files = await Promise.all(
-    sources.map(async (src, index) => {
-      const blob = await renderSourceForSlot(
-        src,
-        layout.slots[index],
-        outputFilter,
-      );
-      return new File([blob], `source-${index + 1}.jpg`, { type: SOURCE_MIME });
-    }),
-  );
+  //
+  // 누끼도 그래서 **굽기 쪽**이다. 올리는 중간에 누끼를 뜨면 한 장이 어긋나는 순간
+  // 절반만 올라간 상태가 된다.
+  const prepared = await bakePersonCutouts(sources, cellCutouts);
+
+  let files: File[];
+  try {
+    files = await Promise.all(
+      prepared.sources.map(async (src, index) => {
+        const blob = await renderSourceForSlot(
+          src,
+          layout.slots[index],
+          outputFilter,
+        );
+        return new File([blob], `source-${index + 1}.jpg`, {
+          type: SOURCE_MIME,
+        });
+      }),
+    );
+  } finally {
+    // 누끼 blob 은 여기까지만 쓴다. 성공이든 실패든 되돌려 준다.
+    prepared.release();
+  }
 
   const sourceKeys = await uploadSources(files);
 

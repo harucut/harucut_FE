@@ -159,31 +159,10 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
     ctx.stroke();
   });
 
-  // 누끼(셀별 배경 제거) 비네트 — 켜진 칸은 가장자리를 어둡게 해 피사체만 남긴 듯한 시각 효과
-  // CanvasStage처럼 사용자 컴포넌트(사진/스티커/글) 위에 그려야 에디터 캔버스와 일치한다.
-  const cutouts = theme.cellCutouts ?? [];
-  layout.slots.forEach((slot, i) => {
-    if (!cutouts[i]) return;
-    const cx = slot.x + slot.width / 2;
-    const cy = slot.y + slot.height / 2;
-    const radius = Math.min(slot.width, slot.height) * 0.62;
-    ctx.save();
-    drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.clip();
-    const grad = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(1, "rgba(11,11,12,0.82)");
-    ctx.fillStyle = grad;
-    drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#1ED760";
-    drawRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.stroke();
-    ctx.restore();
-  });
+  // 썸네일에는 누끼를 그리지 않는다. 여기는 사진이 없는 **프레임 테마** 미리보기고,
+  // 실제 배경 제거는 촬영 사진 픽셀에 구워진다(`lib/canvas/personCutout.ts`).
+  // 예전의 비네트 + 초록 링은 배경 제거가 아니라 이름만 누끼인 효과라 걷어냈다.
+  // `theme.cellCutouts` 는 저장·복원용 데이터로 그대로 남는다.
 
   return toPngBlob(canvas);
 }
