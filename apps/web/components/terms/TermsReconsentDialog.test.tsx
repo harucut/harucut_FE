@@ -319,12 +319,44 @@ describe("TermsReconsentDialog", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /서비스 이용약관/ }));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
 
+    // 제출은 열리되, 사용자가 건드리지 않은 항목은 페이로드에 넣지 않는다.
+    // 보내지 않은 코드는 서버가 건드리지 않는다(실측 2026-09-02).
     await waitFor(() =>
-      expect(mockSubmit).toHaveBeenCalledWith([
-        { code: "tos", agreed: true },
-        { code: "newsletter-policy", agreed: false },
-      ]),
+      expect(mockSubmit).toHaveBeenCalledWith([{ code: "tos", agreed: true }]),
     );
+  });
+
+  /**
+   * 반대 방향의 사고. 제출을 열어 준 대가로 **사용자가 고르지 않은 철회**가 기록되면 안 된다.
+   *
+   * 선택 약관이 `NEEDS_RECONSENT`(예전 버전에 동의함)이면 초기 체크는 비어 있다.
+   * 그 빈 값을 `agreed: false` 로 보내면 서버는 예전 동의를 지운다 — 실측으로
+   * `NEEDS_RECONSENT`(agreedVersion 1)가 `NOT_AGREED` 로 떨어졌다(2026-09-02).
+   * 체크박스는 비활성이라 사용자는 되돌릴 수도 없다. 동의는 법적 기록이다.
+   */
+  it("읽을 수 없는 선택 약관의 재동의 대기 상태를 철회로 보내지 않는다", async () => {
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    renderDialog([
+      tos,
+      {
+        ...newsletter,
+        status: "NEEDS_RECONSENT",
+        agreedVersion: 1,
+        latestVersion: 2,
+      },
+    ]);
+
+    const newsBox = await screen.findByRole("checkbox", { name: /뉴스레터/ });
+    // 비어 있고, 사용자가 손댈 수도 없는 칸이다.
+    expect(newsBox).not.toBeChecked();
+    expect(newsBox).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /서비스 이용약관/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
+
+    await waitFor(() => expect(mockSubmit).toHaveBeenCalled());
+    expect(mockSubmit).toHaveBeenCalledWith([{ code: "tos", agreed: true }]);
   });
 
   /**

@@ -90,6 +90,9 @@ export function useTermsContent() {
  *    동의를 거두는 것도, 동의할 필요가 없는 선택 약관 때문에 필수 재동의를 막는 것도
  *    아니다. 가입 화면(TermsConsentFieldset)·설정 패널(TermsConsentPanel)과 같은
  *    규칙이다. 위 `useTermsContent` 주석 참고.
+ *  - **사용자가 고르지 않은 철회도 기록하지 않는다.** 읽을 수 없는 항목에서 보내는 것은
+ *    사용자가 이 화면에서 직접 거둔 것뿐이고, 나머지는 페이로드에서 빼 서버 값을 그대로
+ *    둔다. 동의는 법적 기록이라 사용자가 고르지 않은 값을 쓰지 않는다.
  */
 export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   const required = useMemo(
@@ -118,6 +121,23 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
     // 선택 약관만 지금 값으로 채운다. 필수는 빈 칸에서 시작한다.
     Object.fromEntries(optional.map((item) => [item.code, item.status === "AGREED"])),
   );
+  /**
+   * 이 화면에서 사용자가 직접 누른 항목.
+   *
+   * 읽을 수 없는 약관을 페이로드에 넣을지는 **체크 여부가 아니라 이것으로** 가른다.
+   * 빈 체크에는 두 가지가 섞여 있다 — 사용자가 방금 거둔 것과, 서버가
+   * `NEEDS_RECONSENT`·`NOT_AGREED` 로 줘서 처음부터 비어 있던 것. 구별하지 않으면
+   * 뒤엣것이 사용자가 고르지 않은 철회로 나간다.
+   */
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  /**
+   * 사용자가 이 화면에서 직접 거둔 동의인가.
+   *
+   * 읽을 수 없는 항목이 페이로드에 남는 **유일한** 경우다. 읽지 못한 본문에 새 동의를
+   * 기록하지도, 사용자가 고르지 않은 철회를 기록하지도 않는다.
+   */
+  const isWithdrawnByUser = (code: string) =>
+    Boolean(touched[code]) && !checked[code];
   /**
    * 제출할 수 있는가.
    *
@@ -151,10 +171,20 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
       await submitTermsConsents([
         ...required.map((item) => ({ code: item.code, agreed: true })),
         ...optional
-          // 읽을 수 없는데 체크가 살아 있는 것은 **예전에 받아 둔 동의**다. 그대로 보내면
-          // 최신 버전에 대한 동의로 새로 기록된다 — 읽지 못한 본문에 동의시키는 셈이라
-          // 빼고, 서버에 있는 값을 그대로 둔다. 해제(철회)는 본문과 무관하므로 보낸다.
-          .filter((item) => !(isUnreadable(item.code) && checked[item.code]))
+          // 읽을 수 없는 항목은 **사용자가 직접 거둔 것만** 보낸다.
+          //
+          //  - 체크가 살아 있는 것은 예전에 받아 둔 동의다. 그대로 보내면 읽지 못한 최신
+          //    버전에 대한 동의로 새로 기록된다.
+          //  - 체크가 비어 있는 것도 대개 서버가 준 초기값이다. `NEEDS_RECONSENT` 를
+          //    `agreed: false` 로 보내면 예전 동의가 그대로 지워진다(실측 2026-09-02:
+          //    `NEEDS_RECONSENT`(agreedVersion 1) → `NOT_AGREED`). 체크박스는 비활성이라
+          //    사용자는 되돌릴 수도 없다.
+          //
+          // 빼면 서버 값이 그대로 남는다 — 보내지 않은 코드는 건드리지 않는다(실측).
+          // 해제(철회)는 본문과 무관하므로 사용자가 직접 누른 것이면 그대로 보낸다.
+          .filter(
+            (item) => !isUnreadable(item.code) || isWithdrawnByUser(item.code),
+          )
           .map((item) => ({
             code: item.code,
             agreed: Boolean(checked[item.code]),
@@ -258,12 +288,13 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       isSubmitting ||
                       (isUnreadable(item.code) && !checked[item.code])
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setChecked((current) => ({
                         ...current,
                         [item.code]: e.target.checked,
-                      }))
-                    }
+                      }));
+                      setTouched((current) => ({ ...current, [item.code]: true }));
+                    }}
                     className="h-4 w-4 accent-[color:var(--hc-primary)]"
                   />
                   <span>

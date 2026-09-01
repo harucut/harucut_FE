@@ -5,6 +5,9 @@ import { newIdempotencyKey } from "@/lib/composeApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { NativeSaveError } from "@/lib/nativeBridge";
+// 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 을 펼쳐 두었다.
+import { buildFrameContentKey } from "@/lib/shootSessionStore";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -26,9 +29,16 @@ type MockShootSessionState = {
   imageResult: GeneratedFourcutAsset | null;
   // 멱등키는 컴포넌트가 아니라 **세션**이 들고 있다(lib/shootSessionStore.ts).
   // 목도 그렇게 맞춰야 "페이지를 다시 열면 새 키가 잡힌다"는 결함을 관측할 수 있다.
-  composeIdempotency: { generationKey: string; idempotencyKey: string } | null;
+  composeIdempotency: {
+    generationKey: string;
+    frameContentKey: string | null;
+    idempotencyKey: string;
+  } | null;
   setImageResult: (imageResult: GeneratedFourcutAsset | null) => void;
-  ensureComposeIdempotencyKey: (generationKey: string) => string;
+  ensureComposeIdempotencyKey: (
+    generationKey: string,
+    frameTheme?: ThemeExportJson | null,
+  ) => string;
   clearResults: () => void;
 };
 
@@ -42,12 +52,28 @@ const mockUseShootSession = create<MockShootSessionState>((set, get) => ({
   imageResult: null,
   composeIdempotency: null,
   setImageResult: (imageResult) => set({ imageResult }),
-  ensureComposeIdempotencyKey: (generationKey) => {
+  // 진짜 구현과 같은 규칙이다(lib/shootSessionStore.ts). 지문을 모르는 동안은 키를
+  // 흔들지 않고, 알고 나서 달라졌을 때만 새 키를 잡으며 수정 전 결과를 버린다.
+  ensureComposeIdempotencyKey: (generationKey, frameTheme = null) => {
+    const frameContentKey = buildFrameContentKey(frameTheme);
     const current = get().composeIdempotency;
-    if (current?.generationKey === generationKey) return current.idempotencyKey;
+
+    if (current?.generationKey === generationKey) {
+      if (frameContentKey == null) return current.idempotencyKey;
+
+      if (current.frameContentKey == null) {
+        set({ composeIdempotency: { ...current, frameContentKey } });
+        return current.idempotencyKey;
+      }
+
+      if (current.frameContentKey === frameContentKey) return current.idempotencyKey;
+    }
 
     const idempotencyKey = newIdempotencyKey();
-    set({ composeIdempotency: { generationKey, idempotencyKey } });
+    set({
+      composeIdempotency: { generationKey, frameContentKey, idempotencyKey },
+      imageResult: null,
+    });
     return idempotencyKey;
   },
   clearResults: jest.fn(() => set({ imageResult: null })),
@@ -75,6 +101,47 @@ jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
   ),
 }));
 
+/*
+  꾸민 프레임 한 벌. `buildFrameContentKey` 가 실제로 읽는 필드를 갖춰 둔다 —
+  `renderUrl` 은 조회할 때마다 달라지는 서명 URL 이라 지문에 들어가면 안 된다.
+*/
+const DECORATED_THEME: ThemeExportJson = {
+  frameId: "classic-4",
+  background: { type: "COLOR", value: "#ffffff" },
+  cellCutouts: [false, false, false, false],
+  components: [
+    {
+      id: "sticker-1",
+      type: "STICKER",
+      source: "uploads/users/1/heart.png",
+      renderUrl: "https://s3.example.com/heart.png?sig=first",
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 100,
+      scale: 1,
+      rotation: 0,
+      zIndex: 1,
+      styleJson: {},
+    },
+  ],
+};
+
+/** 사용자가 배경색을 고친 같은 프레임. id 는 그대로다(수정은 같은 id 로 가는 PUT 이다). */
+const EDITED_THEME: ThemeExportJson = {
+  ...DECORATED_THEME,
+  background: { type: "COLOR", value: "#1ed760" },
+};
+
+/** 내용은 그대로인데 조회 서명만 새로 받은 같은 프레임. */
+const RESIGNED_THEME: ThemeExportJson = {
+  ...DECORATED_THEME,
+  components: DECORATED_THEME.components.map((component) => ({
+    ...component,
+    renderUrl: "https://s3.example.com/heart.png?sig=second",
+  })),
+};
+
 // 꾸민 프레임의 테마는 네트워크를 세 번 타고 **늦게** 도착한다. 그 순간을 재현하려고
 // 값을 바꿀 수 있게 둔다.
 let mockThemeData: unknown = null;
@@ -93,7 +160,10 @@ jest.mock("@/lib/guards", () => ({
   isNotNull: (value: unknown) => value != null,
 }));
 
+// 세션 상태만 목으로 갈아 끼우고 **지문 계산은 진짜를 쓴다.** 지문까지 목으로 덮으면
+// "렌더 전용 서명 URL 은 지문에 안 들어간다" 같은 판정이 통째로 사라진다.
 jest.mock("@/lib/shootSessionStore", () => ({
+  ...jest.requireActual("@/lib/shootSessionStore"),
   useShootSession: () => mockUseShootSession(),
 }));
 
@@ -624,7 +694,79 @@ describe("ShootResultPage", () => {
 
     // 테마가 도착하면서 배경색이 바뀐 순간.
     act(() => {
-      mockThemeData = { background: { type: "COLOR", value: "#ffffff" } };
+      mockThemeData = DECORATED_THEME;
+    });
+    view.rerender(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /*
+    ── 회귀: 프레임을 고치면 새 멱등키로 다시 만든다 ──
+
+    `remoteFrameId` 는 내용을 고쳐도 그대로다(수정은 같은 id 로 가는 PUT 이다). 그래서 옛
+    멱등키를 다시 보내면 서버가 **수정 전 작업을 재생한다** — 배경·스티커·누끼를 고치고
+    돌아와도 고치기 전 그림이 나온다(docs/backend-contract.md D-4).
+  */
+  it("프레임 내용을 고치면 새 멱등키로 다시 합성한다", async () => {
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+    mockThemeData = DECORATED_THEME;
+    mockSaveFourcutToServer.mockResolvedValue({
+      mediaId: 7,
+      objectUrl: "https://example.com/a.png",
+      downloadUrl: "https://example.com/a.png",
+      displayName: "harucut",
+    });
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ idempotencyKey: "web-key-1" }),
+    );
+
+    // 사용자가 편집기에서 배경을 고치고 돌아왔다 → 같은 id, 다른 내용.
+    act(() => {
+      mockThemeData = EDITED_THEME;
+    });
+    view.rerender(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+    // 키가 같으면 서버는 수정 전 작업을 그대로 재생한다.
+    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ idempotencyKey: "web-key-2" }),
+    );
+  });
+
+  /*
+    ── 회귀(반대쪽): 서명만 새로 받은 테마로는 다시 만들지 않는다 ──
+
+    컴포넌트의 `renderUrl` 과 배경 `url` 은 조회할 때마다 값이 달라지는 서명 URL 이다.
+    그것까지 지문에 넣으면 내용이 그대로인데도 매번 새 키가 나가, 같은 네컷이 보관함에
+    두 벌 남는다(위 「테마가 늦게 와도」와 같은 실패다).
+  */
+  it("조회 서명만 바뀐 테마로는 다시 합성하지 않는다", async () => {
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+    mockThemeData = DECORATED_THEME;
+    mockSaveFourcutToServer.mockResolvedValue({
+      mediaId: 7,
+      objectUrl: "https://example.com/a.png",
+      downloadUrl: "https://example.com/a.png",
+      displayName: "harucut",
+    });
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      mockThemeData = RESIGNED_THEME;
     });
     view.rerender(<ShootResultPage />);
 
@@ -658,7 +800,7 @@ describe("ShootResultPage", () => {
 
     // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다 → 그 실행은 버려진다.
     act(() => {
-      mockThemeData = { background: { type: "COLOR", value: "#ffffff" } };
+      mockThemeData = DECORATED_THEME;
     });
     view.rerender(<ShootResultPage />);
 
@@ -759,5 +901,109 @@ describe("useShootSession.ensureComposeIdempotencyKey", () => {
     expect(ensure("shot-a")).toBe("web-key-1");
     useRealShootSession.getState().reset();
     expect(ensure("shot-a")).toBe("web-key-2");
+  });
+
+  /*
+    ── 프레임 **내용** 축 ──
+
+    `generationKey` 는 프레임을 `remoteFrameId` 라는 맨 숫자로만 가리킨다. 내용을 고쳐도
+    id 는 그대로라 이 축이 따로 필요하다. 세 갈래를 다 못으로 박아 둔다 — 하나만 어긋나도
+    보관함에 두 벌이 남거나(과하게 새 키) 수정 전 그림이 나온다(모자라게 옛 키).
+  */
+  it("프레임을 아직 못 읽었으면 쓰던 키를 그대로 준다", () => {
+    const ensure = useRealShootSession.getState().ensureComposeIdempotencyKey;
+
+    expect(ensure("shot-a", DECORATED_THEME)).toBe("web-key-1");
+    // 화면을 다시 열면 테마가 도착하기 전까지 내용을 모른다. 여기서 새 키를 잡으면
+    // 진행 중인 합성이 버려지고 같은 네컷이 두 벌 접수된다.
+    expect(ensure("shot-a", null)).toBe("web-key-1");
+  });
+
+  it("처음 읽은 프레임 내용은 키를 바꾸지 않고 새겨 둔다", () => {
+    const ensure = useRealShootSession.getState().ensureComposeIdempotencyKey;
+
+    expect(ensure("shot-a", null)).toBe("web-key-1");
+    // 늦게 도착한 테마는 **지금 도는 작업이 쓴 내용**이다 — 새 키를 잡을 이유가 없다.
+    expect(ensure("shot-a", DECORATED_THEME)).toBe("web-key-1");
+    expect(useRealShootSession.getState().composeIdempotency?.frameContentKey).toBe(
+      buildFrameContentKey(DECORATED_THEME),
+    );
+    // 그 뒤에 내용이 바뀌면 그때는 알아본다.
+    expect(ensure("shot-a", EDITED_THEME)).toBe("web-key-2");
+  });
+
+  it("프레임 내용이 바뀌면 새 키를 잡고 수정 전 결과를 버린다", () => {
+    const ensure = useRealShootSession.getState().ensureComposeIdempotencyKey;
+
+    expect(ensure("shot-a", DECORATED_THEME)).toBe("web-key-1");
+    useRealShootSession.getState().setImageResult({
+      mediaId: 7,
+      objectUrl: "https://example.com/before-edit.png",
+      downloadUrl: "https://example.com/before-edit.png",
+      displayName: "harucut",
+    });
+
+    expect(ensure("shot-a", EDITED_THEME)).toBe("web-key-2");
+    // 그 그림은 수정 전 프레임으로 만든 것이다. 남겨 두면 화면이 다시 합성하지 않는다.
+    expect(useRealShootSession.getState().imageResult).toBeNull();
+  });
+
+  it("조회 서명만 새로 받은 프레임은 같은 키를 쓴다", () => {
+    const ensure = useRealShootSession.getState().ensureComposeIdempotencyKey;
+
+    expect(ensure("shot-a", DECORATED_THEME)).toBe("web-key-1");
+    expect(ensure("shot-a", RESIGNED_THEME)).toBe("web-key-1");
+  });
+});
+
+/*
+  지문은 **서버가 저장한 내용만** 담아야 한다. 렌더 전용 주소가 섞이면 내용이 그대로인데도
+  키가 매번 바뀌고, 반대로 내용 필드를 빠뜨리면 고친 프레임이 옛 키로 나간다.
+*/
+describe("buildFrameContentKey", () => {
+  it("못 읽은 프레임은 지문이 없다", () => {
+    expect(buildFrameContentKey(null)).toBeNull();
+  });
+
+  it("조회 서명만 달라진 같은 프레임은 같은 지문이다", () => {
+    expect(buildFrameContentKey(RESIGNED_THEME)).toBe(
+      buildFrameContentKey(DECORATED_THEME),
+    );
+  });
+
+  it("배경·스티커·누끼를 고치면 지문이 달라진다", () => {
+    const base = buildFrameContentKey(DECORATED_THEME);
+
+    expect(buildFrameContentKey(EDITED_THEME)).not.toBe(base);
+    expect(
+      buildFrameContentKey({
+        ...DECORATED_THEME,
+        cellCutouts: [true, false, false, false],
+      }),
+    ).not.toBe(base);
+    expect(
+      buildFrameContentKey({
+        ...DECORATED_THEME,
+        components: DECORATED_THEME.components.map((component) => ({
+          ...component,
+          x: component.x + 5,
+        })),
+      }),
+    ).not.toBe(base);
+  });
+
+  it("styleJson 의 키 순서는 지문을 흔들지 않는다", () => {
+    const withOrder = (styleJson: Record<string, unknown>) =>
+      buildFrameContentKey({
+        ...DECORATED_THEME,
+        components: DECORATED_THEME.components.map((component) => ({
+          ...component,
+          styleJson,
+        })),
+      });
+
+    expect(withOrder({ opacity: 0.5, rotationDeg: 3 })).toBe(
+      withOrder({ rotationDeg: 3, opacity: 0.5 }),
+    );
   });
 });

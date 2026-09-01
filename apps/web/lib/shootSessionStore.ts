@@ -14,6 +14,7 @@ import {
   type FourcutFilterId,
 } from "@/lib/frameFilters";
 import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 /**
  * 네 컷에 넣을 사진이 어디서 왔는지.
@@ -34,8 +35,74 @@ export type ShootSource = "camera" | "upload";
  */
 export type ComposeIdempotency = {
   generationKey: string;
+  /**
+   * 이 키를 잡을 때 본 **프레임 내용**의 지문. 아직 못 읽었으면 null.
+   *
+   * `generationKey` 는 프레임을 `remoteFrameId` 라는 맨 숫자로만 가리킨다. 내용을 고쳐도
+   * id 는 그대로라(수정은 같은 id 로 가는 PUT 이다) 지문을 따로 들고 있어야 한다.
+   */
+  frameContentKey: string | null;
   idempotencyKey: string;
 };
+
+/** 키 순서에 흔들리지 않게 직렬화한다. 같은 내용이 순서 때문에 다른 지문이 되면 안 된다. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entry]) => entry !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : 1));
+
+  return `{${entries
+    .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+    .join(",")}}`;
+}
+
+/**
+ * 꾸민 프레임의 **내용** 지문. 프레임을 아직 못 읽었으면 null(= 모른다).
+ *
+ * 왜 필요한가: 배경·스티커·누끼를 고쳐도 `remoteFrameId` 는 그대로다. id 만으로 멱등키를
+ * 잡으면 고친 뒤 다시 만들 때 서버가 **수정 전 작업을 재생한다**(같은 키 = 새로 그리지
+ * 않는다, docs/backend-contract.md D-4). `FrameResponse` 에는 `updatedAt`·`version` 이
+ * 없으므로 서버가 내려준 **내용 자체**로 지문을 만든다.
+ *
+ * 렌더 전용 주소(`renderUrl`, `background.url`)는 뺀다 — 서명 URL 이라 같은 프레임을 다시
+ * 읽을 때마다 달라진다. 넣으면 내용이 그대로인데도 매번 새 키가 나가 같은 네컷이 보관함에
+ * 두 벌 남는다. `id` 도 뺀다(서버가 다시 매기는 값이다).
+ */
+export function buildFrameContentKey(
+  theme: ThemeExportJson | null | undefined,
+): string | null {
+  if (!theme) return null;
+
+  return stableStringify({
+    frameId: theme.frameId,
+    background:
+      theme.background == null
+        ? null
+        : theme.background.type === "COLOR"
+          ? { type: "COLOR", value: theme.background.value }
+          : {
+              type: "IMAGE",
+              key: theme.background.key ?? "",
+              opacity: theme.background.opacity ?? 1,
+            },
+    cellCutouts: theme.cellCutouts ?? null,
+    components: theme.components.map((component) => ({
+      type: component.type,
+      source: component.source,
+      x: component.x,
+      y: component.y,
+      width: component.width,
+      height: component.height,
+      scale: component.scale,
+      rotation: component.rotation,
+      zIndex: component.zIndex,
+      styleJson: component.styleJson ?? null,
+    })),
+  });
+}
 
 type ShootSessionState = {
   frameId: FrameId | null;
@@ -62,7 +129,10 @@ type ShootSessionState = {
   setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
-  ensureComposeIdempotencyKey: (generationKey: string) => string;
+  ensureComposeIdempotencyKey: (
+    generationKey: string,
+    frameTheme?: ThemeExportJson | null,
+  ) => string;
   clearResults: () => void;
   toggleSelect: (index: number) => void;
   clearSelection: () => void;
@@ -133,13 +203,37 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
    * 위 설정 함수들은 `imageResult` 만 비우고 이 값은 건드리지 않는다 — 비울 필요가 없다.
    * 입력이 바뀌면 `generationKey` 가 달라져 여기서 키를 새로 잡는다. 반대로 옛 키를 그냥
    * 남겨 두면 서버가 예전 작업을 재생해서, 사용자가 사진이나 색을 바꿔도 예전 그림이 나온다.
+   *
+   * `frameTheme` 은 **`generationKey` 가 못 보는 축**이다. 프레임 내용을 고쳐도
+   * `remoteFrameId` 는 그대로라 `generationKey` 가 안 변하므로, 내용을 지문으로 바꿔
+   * (`buildFrameContentKey`) 세 갈래로 나눈다.
+   *
+   *  - 아직 **못 읽었을 때**(null): 쓰던 키를 그대로 준다. 테마는 네트워크로 늦게 오는데,
+   *    모른다고 새 키를 잡으면 진행 중인 합성이 버려지고 같은 네컷이 두 벌 접수된다.
+   *  - **처음 알게 됐을 때**: 지금 도는 작업이 쓴 내용이므로 키는 두고 지문만 새긴다.
+   *  - **달라졌을 때**: 사용자가 프레임을 고친 것이다. 새 키를 잡고, 같이 `imageResult` 도
+   *    버린다 — 그 그림은 수정 전 프레임으로 만든 것이라 화면에 남겨 두면 안 된다.
    */
-  ensureComposeIdempotencyKey: (generationKey) => {
+  ensureComposeIdempotencyKey: (generationKey, frameTheme = null) => {
+    const frameContentKey = buildFrameContentKey(frameTheme);
     const current = get().composeIdempotency;
-    if (current?.generationKey === generationKey) return current.idempotencyKey;
+
+    if (current?.generationKey === generationKey) {
+      if (frameContentKey == null) return current.idempotencyKey;
+
+      if (current.frameContentKey == null) {
+        set({ composeIdempotency: { ...current, frameContentKey } });
+        return current.idempotencyKey;
+      }
+
+      if (current.frameContentKey === frameContentKey) return current.idempotencyKey;
+    }
 
     const idempotencyKey = newIdempotencyKey();
-    set({ composeIdempotency: { generationKey, idempotencyKey } });
+    set({
+      composeIdempotency: { generationKey, frameContentKey, idempotencyKey },
+      imageResult: null,
+    });
     return idempotencyKey;
   },
 

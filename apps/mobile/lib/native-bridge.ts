@@ -139,32 +139,38 @@ function safeFilename(name: string) {
 }
 
 /**
+ * 권한 거절 하나를 사용자가 읽을 수 있는 실패로 바꾼다.
+ *
+ * 가르는 값은 `canAskAgain` 하나다 — 다시 물을 수 있으면 재시도 안내, 아니면 설정 안내.
+ * 두 문구가 갈라지지 않게 한 자리에 둔다.
+ */
+function photoPermissionFailure(canAskAgain: boolean): BridgeResult {
+  return canAskAgain
+    ? { ok: false, reason: '사진첩 저장 권한이 필요해요.', code: 'photo-permission-denied' }
+    : { ok: false, reason: '설정에서 사진 접근을 허용해 주세요.', code: 'photo-permission-blocked' };
+}
+
+/**
  * 사진첩 쓰기 권한. 저장만 할 것이므로 writeOnly 로 요청한다 —
  * 전체 사진 접근을 요구하면 사용자가 거절하기 쉽고 스토어 심사에서도 과한 요청이 된다.
  *
  * 두 실패에 code 를 단다(BridgeFailureCode). 여기서만 나오는 문구가 사용자가 **무엇을 해야
  * 하는지** 아는 유일한 자리라, 웹까지 그대로 가야 한다.
+ *
+ * 거절 뒤의 갈림은 **요청 결과의** canAskAgain 으로 판정한다. 묻기 전 값은 이 자리에서 늘
+ * true 다(위에서 걸러진다) — 그것으로 가르면 방금 거절한 사람이 전부 denied 로 떨어진다.
+ * iOS 는 첫 거절에서 곧바로, 안드로이드는 `다시 묻지 않음`을 고른 순간 이 값이 false 로
+ * 뒤집히고 그때부터 대화상자가 다시 뜨지 않는다. 그 사용자에게 `사진첩 저장 권한이 필요해요.`
+ * 만 보내면 **설정으로 가야 한다는 유일한 안내가 다음 저장 시도까지 사라진다.**
  */
 async function ensurePermission(): Promise<BridgeResult> {
   const current = await MediaLibrary.getPermissionsAsync(true);
   if (current.granted) return { ok: true };
-
-  if (!current.canAskAgain) {
-    return {
-      ok: false,
-      reason: '설정에서 사진 접근을 허용해 주세요.',
-      code: 'photo-permission-blocked',
-    };
-  }
+  // 묻기 전에 이미 막혀 있다. 요청해 봐야 대화상자가 뜨지 않으므로 묻지 않는다.
+  if (!current.canAskAgain) return photoPermissionFailure(false);
 
   const asked = await MediaLibrary.requestPermissionsAsync(true);
-  return asked.granted
-    ? { ok: true }
-    : {
-        ok: false,
-        reason: '사진첩 저장 권한이 필요해요.',
-        code: 'photo-permission-denied',
-      };
+  return asked.granted ? { ok: true } : photoPermissionFailure(asked.canAskAgain);
 }
 
 /**

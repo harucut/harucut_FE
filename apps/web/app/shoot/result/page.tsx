@@ -177,6 +177,11 @@ export default function ShootResultPage() {
     사용자가 색을 바꿔도 예전 그림이 그대로 나온다. 둘 다 조용히 틀리므로 기준을 위에 적어 뒀다.
 
     재시도용 nonce 도 넣지 않는다 — 결과를 바꾸는 값이 아니다(아래 runKey 참고).
+
+    **프레임 내용도 여기 넣지 않는다.** 내용(themeData)은 늦게 도착하는 값이라 여기 들어가면
+    위의 첫 번째 함정을 그대로 밟는다. 대신 아래 effect 가 세션에 내용을 통째로 넘겨
+    멱등키에서만 따진다 — 모르는 동안은 키를 흔들지 않고, 알고 나서 달라졌을 때만 새 키가
+    나간다(lib/shootSessionStore.ts).
   */
   const generationKey = useMemo(
     () =>
@@ -252,7 +257,27 @@ export default function ShootResultPage() {
     /** 이 실행이 결과(성공이든 실패든)를 남겼는가. 아래 cleanup 이 쓴다. */
     let settled = false;
     const currentLayout = layout;
-    const imageGenerationKey = `${runKey}:image`;
+
+    /*
+      이번 실행이 쓸 멱등키를 **결과를 확인하기 전에** 확정한다.
+
+      `remoteFrameId` 는 프레임 내용을 고쳐도 그대로다(수정은 같은 id 로 가는 PUT 이다).
+      그래서 내용이 바뀌었는지는 세션이 프레임 지문으로 따진다(lib/shootSessionStore.ts).
+      바뀌었으면 여기서 새 키가 잡히면서 `imageResult` 까지 버려진다 — 그래야 아래
+      `if (imageResult) return` 을 통과해 다시 합성한다. 늦게 도착한 테마를 합성 뒤에
+      확인하면 화면에는 이미 수정 전 그림이 박힌 뒤라 아무도 그것을 걷어내지 못한다.
+
+      게스트는 브라우저가 그리므로 서버 멱등키가 없다(빈 문자열).
+    */
+    const composeKey = guestMode
+      ? ""
+      : ensureComposeIdempotencyKey(generationKey, themeData);
+
+    /*
+      "이 실행은 이미 했다"를 가리키는 값. **멱등키를 함께 넣는다** — 프레임을 고쳐 키가
+      새로 잡히면 이 값도 달라져야, 아래 검사를 통과해 다시 합성한다.
+    */
+    const imageGenerationKey = `${runKey}#${composeKey}:image`;
 
     async function prepareOutputs() {
       if (imageResult) return;
@@ -325,9 +350,10 @@ export default function ShootResultPage() {
           키가 컴포넌트에 있으면 그때마다 새로 잡혀 같은 네컷이 한 벌 더 접수된다
           (앞선 실행의 결과는 `cancelled` 때문에 세션에도 안 남아 막아 주지 못한다).
 
-          재시도 버튼도 같은 이유로 이 키를 그대로 쓴다 — 입력이 그대로면 키도 그대로다.
+          재시도 버튼도 같은 이유로 이 키를 그대로 쓴다 — 입력과 프레임 내용이 그대로면
+          키도 그대로다. 위에서 이미 확정해 둔 값이라 여기서는 읽기만 한다.
         */
-        const idempotencyKey = ensureComposeIdempotencyKey(generationKey);
+        const idempotencyKey = ensureComposeIdempotencyKey(generationKey, themeData);
 
         const asset = await saveFourcutToServer({
           sources: imageSources.map((source) => source.src),

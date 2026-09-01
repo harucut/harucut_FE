@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { useModalDialog } from "@/hooks/useModalDialog";
-import { validatePassword } from "@/lib/authValidation";
 
 type Props = {
   saving: boolean;
@@ -19,6 +18,34 @@ type FieldErrors = {
   confirmPassword?: string | null;
 };
 
+/** 서버가 이 API 에 거는 유일한 제약. `ChangePasswordRequest.newPassword` 의 `@Size`. */
+const NEW_PASSWORD_LENGTH = { min: 8, max: 20 } as const;
+
+/**
+ * 새 비밀번호 길이 검사. **여기서 보는 것은 길이뿐이다.**
+ *
+ * 이 API 의 서버 규칙은 `@NotBlank` + `@Size(8, 20)` 이 전부고 `@Pattern` 이 없다
+ * (`ChangePasswordRequest`, 실행 중인 jar 실측). 가입용 공용 `validatePassword()` 를
+ * 그대로 쓰면 문자 화이트리스트가 따라와 **서버가 받아 주는 비밀번호를 화면이 막는다** —
+ * 실측 2026-09-02, `abcd~1234`(물결표)·`비밀번호12345678` 둘 다 200 GEN-000 이다.
+ * 로그인 화면에 가입 규칙을 걸던 것과 같은 종류의 실수라 반복하지 않는다.
+ *
+ * 길이는 반대로 여기서 잡아야 한다. 넘겨 보내면 400 GEN-003 이 오는데 그 사유가 영문
+ * (`size must be between 8 and 20`)이라 `apiError` 가 버리고 "입력값을 다시 확인해
+ * 주세요."만 남는다 — 어느 칸이 왜 틀렸는지 화면에서 사라진다.
+ *
+ * 서버가 나중에 문자 제한을 실제로 걸면 그때 공용 가입 규칙을 다시 가져온다.
+ */
+function validateNewPasswordLength(password: string): string | null {
+  if (password.length < NEW_PASSWORD_LENGTH.min) {
+    return `비밀번호는 최소 ${NEW_PASSWORD_LENGTH.min}자 이상이어야 합니다.`;
+  }
+  if (password.length > NEW_PASSWORD_LENGTH.max) {
+    return `비밀번호는 ${NEW_PASSWORD_LENGTH.max}자 이하여야 합니다.`;
+  }
+  return null;
+}
+
 /**
  * 비밀번호 바꾸기.
  *
@@ -31,6 +58,10 @@ type FieldErrors = {
  *
  * 검증은 여기서 끝낸다 — 서버에 보내기 전에 알 수 있는 것(빈 칸, 길이, 확인 불일치)을
  * 왕복시킬 이유가 없고, 실패가 어느 칸 문제인지도 그 칸 아래에서 말해야 한다.
+ *
+ * **다만 서버가 정하지 않은 규칙까지 여기서 세우지 않는다.** 가입용 공용
+ * `validatePassword()` 는 문자 화이트리스트까지 보는데, 이 API 는 그렇지 않다 —
+ * 아래 `NEW_PASSWORD_LENGTH` 주석 참고.
  */
 export function PasswordChangeDialog({
   saving,
@@ -51,12 +82,9 @@ export function PasswordChangeDialog({
     if (!newPassword) {
       return { newPassword: "새 비밀번호를 입력해 주세요." };
     }
-    // 길이·문자 종류 규칙은 공용 validatePassword 하나로 본다. 여기서 8자 하한만 세던
-    // 시절에는 21자가 그대로 서버로 갔고, 돌아온 400 의 사유가 영문(Bean Validation)이라
-    // apiError 가 버려서 "입력값을 다시 확인해 주세요."만 떴다 — 서버는 8~20자다.
-    const passwordError = validatePassword(newPassword);
-    if (passwordError) {
-      return { newPassword: passwordError };
+    const lengthError = validateNewPasswordLength(newPassword);
+    if (lengthError) {
+      return { newPassword: lengthError };
     }
     // 지금 것과 같으면 서버는 받아 주지만 바뀐 게 없다. 여기서 잡는 편이 친절하다.
     if (newPassword === oldPassword) {
@@ -117,7 +145,7 @@ export function PasswordChangeDialog({
             name="newPassword"
             type="password"
             label="새 비밀번호"
-            placeholder="8~20자"
+            placeholder={`${NEW_PASSWORD_LENGTH.min}~${NEW_PASSWORD_LENGTH.max}자`}
             autoComplete="new-password"
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}

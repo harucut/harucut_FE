@@ -139,13 +139,15 @@ COUPON  001 002 003 004 005 006 007 008
 
 옛 업로드 타입 `FOURCUT_PHOTO` 는 **400 `GEN-006`** 으로 거부된다. 개명은 이미 끝났다.
 
-BASIC 계정 실측:
+BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-28 이후 모든 등급이 무제한이다
+(이 문서 맨 아래 절). 지금은 `frameRetentionLimit: -1`, 프레임 저장도 **200** 이다.
+
 - `GET /api/auth/user/subscription/usage` → `{"planTier":"BASIC","frameRetentionLimit":0,"frameRetentionUsedCount":0,"frameRetentionRemainingCount":0,"frameRetentionUnlimited":false}`
 - `GET /api/auth/subscriptions` → `{"planTier":"BASIC","status":"ACTIVE","autoRenew":false}`
 - 프레임 저장 시도 → **403 `SUBS-003`** (한도가 0이라 첫 프레임부터 막힌다)
 
-BASIC 은 한도가 0이라 **"프레임 저장 후 목록 500"(`PRODUCT.md`) 는 이 계정으로 재현할 수 없다.**
-유료 플랜 계정이 생기면 다시 확인해야 한다 — 아직 해소됐다고 볼 근거가 없다.
+당시 BASIC 은 한도가 0이라 **"프레임 저장 후 목록 500"(`PRODUCT.md`) 를 이 계정으로 재현할 수 없었다.**
+한도가 풀린 지금은 그 걸림돌이 없어졌다 — 다만 「목록 500」 자체는 **아직 해소됐다고 볼 근거가 없다.**
 
 
 ---
@@ -389,7 +391,7 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
 스웨거 응답 예시만 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로
 잘못 짚기 때문이다 — 실제로 스웨거 기준 45개 vs jar 기준 52개로 갈렸다.
 
-## A·B·C — 스크립트가 본 것 (2026-09-01 실행)
+## A·B·C — 스크립트가 본 것 (2026-09-01 실행 · 2026-09-02 같은 digest 로 재실행, 결과 동일)
 
 측정 대상은 `popeye0618/harucut@sha256:d2bdf90f191abcc7…`(2026-08-28 빌드)다.
 **`:latest` 는 버전이 아니다** — 태그만 남기면 다음 사람이 같은 것을 쟀는지 알 수 없다.
@@ -407,7 +409,7 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
 그리고 **이 숫자를 다른 문서로 복사하지 않는다** — 「프록시 핸들러 수」가 이 문서(33개)와
 `docs/README.md`(37개)에 **같은 2026-08-28 날짜로 다르게** 적혀 있던 것이 이 규칙이 생긴 이유다.
 
-## D. 필수 요청 필드 — 스크립트가 검사하지 않는다 (2026-09-01 손 대조)
+## D. 필수 요청 필드 — 스크립트가 검사하지 않는다 (2026-09-01 손 대조 · 2026-09-02 재확인)
 
 `--show-required` 는 **스웨거가 필수라고 적은 필드를 출력할 뿐**, 프론트가 실제로 그 값을
 싣는지는 보지 않는다(요청 본문은 프록시가 아니라 `apps/web/lib` 에서 만들어져 정적으로 읽기
@@ -415,79 +417,22 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
 
 오늘 출력은 **16개 엔드포인트**다. 8-28 기록의 15개에서 하나 늘었다
 (`PATCH /api/auth/user/media/{mediaId}/display-name`) — 손 대조가 그날로 낡는다는 증거다.
-목록 자체는 명령으로 보고, 여기에는 **대조해서 나온 어긋남 다섯 건**만 남긴다.
-전부 이번에 로컬 백엔드에 실제로 요청을 보내 재현했다.
+목록 자체는 명령으로 보고, 여기에는 **대조해서 나온 어긋남**만 남긴다.
+전부 로컬 백엔드에 실제로 요청을 보내 재현했다.
 
-### D-1. 비밀번호 변경 다이얼로그가 상한(20자)을 모른다
+9-01 대조에서 다섯 건이었다. **셋은 그 뒤 프론트를 고쳐 맞췄다** — 아래
+「이번에 고친 어긋남」 5·6·7 로 옮겼다. 고친 것을 여기 결함으로 남겨 두면 다음 사람이
+이미 고친 코드를 다시 고친다. **여기 남은 어긋남은 두 건이다.**
 
-백엔드 `ChangePasswordRequest.newPassword` 는 `minLength 8 / maxLength 20` 이다. 재현:
-
-```
-PATCH /api/harucut/change/password   newPassword 21자
-→ 400 {"code":"GEN-003","data":[{"field":"newPassword",
-       "message":"size must be between 8 and 20"}]}
-   (20자는 200)
-```
-
-프론트 `components/mypage/PasswordChangeDialog.tsx` 의 `validate()` 는 **하한만** 본다
-(`MIN_LENGTH = 8`, :56). 상한 검사가 없고 placeholder 도 `8자 이상`(:118)이라
-**20자 제한이 이 화면 어디에도 나오지 않는다.** 그래서 21자가 그대로 서버까지 간다.
-
-돌아온 `GEN-003` 의 필드 메시지는 Bean Validation 기본 **영문**이고,
-`apps/web/lib/apiError.ts` 는 **한글이 든 필드 메시지만** 채택한다
-(`HANGUL_PATTERN`, :21·:120 — 영문이 한국어 화면에 튀어나오는 것을 막으려는 규칙이다).
-결과적으로 사용자는 코드 매핑 문구 **「입력값을 다시 확인해 주세요.」** 하나만 본다 —
-무엇이 틀렸는지 알 방법이 없다.
-
-같은 규칙을 **회원가입과 비밀번호 재설정은 제대로 말한다**
-(`packages/shared/src/auth-validation.ts:32` 「비밀번호는 20자 이하여야 합니다.」 —
-`signup/page.tsx:84`, `useForgotPasswordFlow.ts:146` 이 부른다). 이 다이얼로그 하나만 다르다.
-
-### D-2. 글자를 지운 TEXT 가 프레임 저장 전체를 400 으로 만든다
-
-백엔드 `ComponentRequest.source` 는 `minLength 1`(@NotBlank)이고, TEXT 의 `source` 는
-**글자 내용 그 자체**다(스웨거). 재현:
-
-```
-POST /api/auth/user/frame   components[0] = {"type":"TEXT","source":""}
-→ 400 {"code":"GEN-003","data":[{"field":"components[0].source",
-       "message":"must not be blank"}]}
-```
-
-만드는 자리는 막혀 있다 — `themeEditorStore.addText` 는 빈 값을 `"하루컷"` 으로 바꾼다(:633).
-**빈 값이 생기는 자리는 속성 패널이다**: `components/theme/editor/InspectorPanel.tsx:126` 이
-`source` 를 검사 없이 그대로 쓴다. 지운 뒤 저장하면
-`themeEditorStore.finalizeAssetsForSave` 는 그 컴포넌트를 건너뛰고(:524 `if (!component.source.trim()) continue;`)
-`renderedKey` 를 안 만드는데, `lib/frameApi.ts:161` 은 TEXT `source` 를 그대로 실어 보낸다.
-즉 **프론트는 빈 줄 알면서 보낸다.** 메시지도 영문이라 화면에는 D-1 과 같이
-「입력값을 다시 확인해 주세요.」만 뜬다.
-(백엔드 거절은 위 요청으로 재현했고, 편집기 쪽 경로는 코드를 따라 읽은 것이다 — 화면으로 눌러 보지는 않았다.)
-
-### D-3. 업로드 크기 가드가 상한에만 있다
-
-백엔드 `fileSize` 는 1 이상이어야 한다(스웨거 설명 「1 ~ 10485760」. 스키마의
-`minimum: 0` 은 설명과 어긋나 있고, **실제로는 0을 거절한다**). 재현:
-
-```
-POST /api/auth/user/files/presigned-upload   fileSize: 0
-→ 400 {"code":"GEN-003","data":[{"field":"fileSize",
-       "message":"파일 크기는 0보다 커야 합니다."}]}
-   (fileSize: 1 은 200)
-```
-
-프론트 `lib/presignedUploadApi.ts:269` 는 **상한만** 막는다
-(`file.size > MAX_UPLOAD_BYTES` → 「10MB 이하 이미지만 올릴 수 있어요.」).
-바로 위 주석(:267-268)이 「그 문구보다 여기서 크기를 짚어 주는 편이 사용자에게 낫다」인데,
-하한은 그 결정에서 빠져 있다. 0바이트 파일은 서버까지 가고,
-**이 메시지는 한국어라 `apiError` 가 그대로 채택한다** — 화면이 깨지지는 않지만
-상한과 하한이 서로 다른 사람이 쓴 문장으로 갈린다.
+번호는 9-01 대조 그대로 둔다(D-4·D-5). 비는 번호를 재활용하면 리뷰 스레드의 「D-1」이
+다른 것을 가리킨다.
 
 ### D-4. `generationKey` 가 프레임 **내용** 변경을 못 본다 → 서버가 옛 결과를 재생한다
 
-`app/shoot/result/page.tsx:177-193` 의 `generationKey` 는 `remoteFrameId` 를 **맨 숫자
-그대로** 담는다. 프레임 내용을 고쳐도 id 는 그대로라 키가 안 변하고,
-`lib/shootSessionStore.ts:137-144` 의 `ensureComposeIdempotencyKey` 는 같은 `generationKey`
-에 **이전 멱등키를 그대로** 돌려준다. 서버는 같은 멱등키를 새로 그리지 않는다. 재현:
+`app/shoot/result/page.tsx` 의 `generationKey` 는 `remoteFrameId` 를 **맨 숫자 그대로**
+담는다. 프레임 수정은 같은 id 로 가는 PUT 이라 내용을 고쳐도 키가 안 변하고,
+`lib/shootSessionStore.ts` 의 `ensureComposeIdempotencyKey` 는 같은 `generationKey` 에
+**이전 멱등키를 그대로** 돌려준다. 서버는 같은 멱등키를 새로 그리지 않는다. 재현:
 
 ```
 POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}   → 202 {"jobId":1,"status":"PENDING"}
@@ -499,9 +444,16 @@ POST .../media/compose  {frameId:7, …, idempotencyKey:"K-new"} → 202 {"jobId
 즉 프레임을 편집하고 결과 화면으로 돌아오면 **고치기 전 그림이 나온다.** 스웨거도 같은
 함정을 `backgroundColor` 설명에 적어 뒀다(같은 키로 색만 바꿔 보내면 무시된다).
 
-고치려면 `generationKey` 에 프레임 **내용**의 지문이 들어가야 한다. `FrameResponse` 에는
+고치려면 프레임 **내용**의 지문이 멱등키에 반영돼야 한다. `FrameResponse` 에는
 `updatedAt`·`version` 같은 필드가 없으므로(위 PUT 응답 참고) 서버 값으로는 만들 수 없고,
-프론트가 저장한 내용에서 직접 만들어야 한다.
+프론트가 읽어 온 내용에서 직접 만들어야 한다. 지문을 `generationKey` 에 **직접 넣으면 안
+된다** — 프레임 내용은 네트워크로 늦게 도착해서, 모르는 동안 키가 흔들리면 진행 중인 합성이
+버려지고 같은 네컷이 두 벌 접수된다(8-24 에 실제로 남았다). 지문은 따로 받아야 한다.
+
+**프론트 대응은 이 PR 에서 진행 중이다**(2026-09-02 확인) — `ensureComposeIdempotencyKey`
+가 `frameContentKey` 를 두 번째 인자로 받고, 결과 화면이 `buildFrameContentKey(themeData)`
+로 지문을 만든다. **끝났는지는 이 문단이 아니라 코드에서 본다**: 호출부가 지문을 실제로
+넘기는지 확인하고 이 항목을 지운다. 코드 주석이 이 항목을 「D-4」로 가리키므로 번호는 그대로 둔다.
 
 ### D-5. 로그인 화면이 **회원가입 규칙**으로 로그인을 막는다
 
@@ -510,17 +462,28 @@ POST .../media/compose  {frameId:7, …, idempotencyKey:"K-new"} → 202 {"jobId
 `packages/shared/src/auth-validation.ts:8` 의
 `^[A-Za-z0-9!@#$%^&*()\-_=+\[\]{};:,.?]{8,20}$` 다. 이 규칙 밖 비밀번호는 **요청이 나가지도 않는다.**
 
-그런 비밀번호는 **우리 화면으로 만들 수 있다** — D-1 의 다이얼로그가 문자 종류를 안 보기
-때문이다. 한 계정으로 끝까지 재현했다:
+백엔드에는 문자 종류 규칙이 아예 없다 — `register`·`change/password`·`reset/password`
+셋 다 스웨거 스키마에 `pattern` 이 없고, 라이브도 같다. 갓 만든 계정으로 2026-09-02 에
+끝까지 다시 재현했다(로컬 백엔드, 인증메일→가입→변경→로그인):
 
 ```
-PATCH /api/harucut/change/password  newPassword "abcd~1234efgh"  → 200   (~ 는 위 정규식 밖)
-POST  /api/harucut/login            같은 비밀번호                 → 200 ACTIVE
-validatePassword("abcd~1234efgh")   → "영문, 숫자, 일부 특수문자(!@#$%^&* 등)만 사용할 수 있습니다."
+PATCH /api/harucut/change/password  newPassword "abcd~1234"        → 200 GEN-000  (~ 는 위 정규식 밖)
+POST  /api/harucut/login            같은 비밀번호                   → 200 {"userStatus":"ACTIVE"}
+PATCH /api/harucut/change/password  newPassword "비밀번호12345678"   → 200 GEN-000  (한글도 받는다)
+PATCH /api/harucut/change/password  newPassword 21자                → 400 GEN-003 "size must be between 8 and 20"
+validatePassword("abcd~1234")       → "영문, 숫자, 일부 특수문자(!@#$%^&* 등)만 사용할 수 있습니다."
 ```
 
-**다이얼로그로 바꾼 비밀번호로 로그인 화면을 통과하지 못한다.** 백엔드는 받아 주는데
-브라우저가 막는 것이라 서버 로그에는 아무것도 안 남는다.
+**서버가 거는 것은 길이뿐인데 로그인 화면이 문자 종류까지 막는다.** 요청이 나가지 않으니
+서버 로그에도 아무것도 안 남는다.
+
+⚠️ **이 잠금은 우리 화면만으로 재현된다.** 마이페이지 비밀번호 변경 다이얼로그는
+서버 규칙 그대로 **길이만** 보므로(아래 「이번에 고친 어긋남」 5) `abcd~1234` 로 바꿔 준다.
+그 계정으로 로그인 화면에 돌아오면 같은 비밀번호가 거절된다. 가입(`signup/page.tsx:84`)과
+재설정(`useForgotPasswordFlow.ts:146`)은 아직 공용 규칙을 쓰지만, 그쪽은 *만들지 못하게*
+하는 것이라 이미 가진 비밀번호로 못 들어가는 것과 성격이 다르다.
+
+고칠 자리는 **로그인 화면**이다 — 서버가 `minLength 1` 만 요구하므로 빈 값만 잡으면 된다.
 
 길이 쪽은 **오늘은 재현되지 않는다**: `register`·`change/password`·`reset/password` 셋 다
 `maxLength 20` 이다. 앞의 둘은 라이브로 확인했고(21자 register → 400 GEN-003
@@ -547,6 +510,37 @@ validatePassword("abcd~1234efgh")   → "영문, 숫자, 일부 특수문자(!@#
 
 4. 프록시 라우트 하나(`user-info`)만 상수 이름이 `BACKEND_BASE_URL` 이라 자동 대조에서
    샜다. 30개 전부 `BASE_URL` 로 통일했다.
+
+5. **비밀번호 변경 다이얼로그가 상한(20자)을 몰랐다** (2026-09-02). 서버
+   `ChangePasswordRequest.newPassword` 는 `minLength 8 / maxLength 20` 인데 다이얼로그는
+   하한만 셌다 — 21자가 그대로 나갔고, 돌아온 `GEN-003` 의 필드 사유가 Bean Validation
+   기본 **영문**이라 `apiError` 의 `HANGUL_PATTERN` 이 버려서 화면에는
+   「입력값을 다시 확인해 주세요.」만 떴다. 지금은 위아래를 둘 다 잡는다
+   (`PasswordChangeDialog.tsx:39-47` `validateNewPasswordLength`, 호출 :85,
+   placeholder `NEW_PASSWORD_LENGTH` :148).
+
+   ⚠️ **가입용 공용 `validatePassword()` 를 끌어오지 않았다.** 이 API 의 서버 규칙은
+   `@NotBlank` + `@Size(8, 20)` 이 전부고 **`@Pattern` 이 없다** — 스웨거
+   `ChangePasswordRequest` 에 `pattern` 키가 없고, 라이브로도 그렇다(위 D-5 재현).
+   공용 규칙을 쓰면 서버가 받아 주는 비밀번호를 화면이 막는다. 대신 **로그인 화면 쪽이
+   여전히 공용 규칙을 쓰고 있어서 D-5 가 화면으로 재현되는 상태로 남았다** — 두 항목을
+   같이 읽어야 한다.
+
+6. **글자를 지운 TEXT 가 프레임 저장 전체를 400 으로 만들었다** (2026-09-02).
+   `ComponentRequest.source` 는 `minLength 1`(@NotBlank)이고 TEXT 의 `source` 는 글자 내용
+   그 자체라, 빈 레이어 하나가 `components[0].source: must not be blank` 로 저장을 통째로
+   죽였다. 지금은 `toCreateFrameRequest` 가 빈 source 컴포넌트를 요청에서 뺀다
+   (`lib/frameApi.ts:179`). 지우는 것 자체는 막지 않고 — 막으면 고쳐 쓰지도 못한다 —
+   사라진다는 사실을 속성 패널이 미리 말한다(`InspectorPanel.tsx:124,144-147`).
+
+7. **업로드 크기 가드가 상한에만 있었다** (2026-09-02). 서버 `fileSize` 는 1 이상이다
+   (스웨거 설명 「1 ~ 10485760」. 스키마의 `minimum: 0` 은 설명과 어긋나 있고 **실제로는
+   0을 거절한다** — `파일 크기는 0보다 커야 합니다.`). 지금은
+   `lib/presignedUploadApi.ts:280·:283` 이 위아래를 둘 다 막는다
+   (`MIN_UPLOAD_BYTES`·`MAX_UPLOAD_BYTES`, 빈 파일 문구는 `EMPTY_UPLOAD_MESSAGE`).
+
+5·6·7 은 **프론트만 고친 것이다.** 백엔드 제약은 셋 다 지금도 그대로라
+(2026-09-02 `/v3/api-docs` 재확인) 가드를 걷으면 그날로 다시 400 이다.
 
 ## 아직 FE 가 안 쓰는 백엔드 기능 (2026-09-01 재도출)
 

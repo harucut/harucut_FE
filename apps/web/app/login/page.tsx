@@ -8,7 +8,7 @@ import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
-import { validateEmail, validatePassword } from "@/lib/authValidation";
+import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -56,8 +56,15 @@ function LoginPageContent() {
     const emailError = validateEmail(email);
     if (emailError) nextErrors.email = emailError;
 
-    const passwordError = validatePassword(password);
-    if (passwordError) nextErrors.password = passwordError;
+    /*
+      로그인에는 가입 규칙을 걸지 않는다.
+
+      서버 `LoginRequest.password` 는 `minLength: 1` 뿐이다(실측). 가입용 `validatePassword` 는
+      8~20자에 문자 클래스까지 보는데, 그것을 로그인에 걸면 **맞는 비밀번호인데 틀렸다고 말한다** —
+      다른 클라이언트·시드·관리자가 만든 계정이나 규칙이 완화된 뒤의 계정이 그렇다.
+      비밀번호가 맞는지는 서버가 판정한다. 여기서는 빈 값만 막는다.
+    */
+    if (!password) nextErrors.password = "비밀번호를 입력해 주세요.";
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
