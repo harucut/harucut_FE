@@ -83,17 +83,19 @@ beforeEach(() => {
     hydrated: false,
     notice: null,
   });
-  mockGetPending.mockReturnValue(PENDING);
+  // 보관소는 IndexedDB 라 **전부 비동기**다(lib/pendingGuestSave.ts). 목도 그렇게 둔다 —
+  // 동기 목으로 두면 호출부가 await 를 빠뜨려도 테스트가 초록불이다.
+  mockGetPending.mockResolvedValue(PENDING);
   storedComposeKey = null;
   mintedKeyCount = 0;
-  mockEnsureComposeKey.mockImplementation(() => {
+  mockEnsureComposeKey.mockImplementation(async () => {
     if (!storedComposeKey) {
       mintedKeyCount += 1;
       storedComposeKey = `web-guest-${mintedKeyCount}`;
     }
     return storedComposeKey;
   });
-  mockClearPending.mockImplementation(() => {
+  mockClearPending.mockImplementation(async () => {
     storedComposeKey = null;
   });
   setSession(true);
@@ -193,7 +195,7 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
   });
 
   it("보관물이 없으면 resumeSave 파라미터만 걷어낸다", async () => {
-    mockGetPending.mockReturnValue(null);
+    mockGetPending.mockResolvedValue(null);
     mockSearch = new URLSearchParams("resumeSave=1");
 
     render(<GuestTrialBridge />);

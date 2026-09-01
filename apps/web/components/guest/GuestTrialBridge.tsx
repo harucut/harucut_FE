@@ -90,16 +90,6 @@ export function GuestTrialBridge() {
       router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname);
     };
 
-    const pending = getPendingGuestSave();
-    if (!pending) {
-      stripResumeParam();
-      return;
-    }
-
-    // 한 번 물었으면 같은 탭에서 다시 걸지 않는다(성공·실패 모두 아래에서 정리한다).
-    if (handoffPromptedRef.current) return;
-    handoffPromptedRef.current = true;
-
     let cancelled = false;
     /** 확인 안내를 실제로 띄웠는가. 아래 cleanup 이 쓴다. */
     let prompted = false;
@@ -120,7 +110,7 @@ export function GuestTrialBridge() {
         보관물이 사라진 뒤라면 null 이다. 그때는 예전처럼 새 키로 간다 — 재생할 앞선
         작업도 없다.
       */
-      const idempotencyKey = ensurePendingGuestSaveComposeKey() ?? undefined;
+      const idempotencyKey = (await ensurePendingGuestSaveComposeKey()) ?? undefined;
 
       try {
         await saveFourcutToServer({
@@ -135,7 +125,7 @@ export function GuestTrialBridge() {
           // 배경으로 그려서, 방금 내려받아 본 그림과 색이 갈린다.
           backgroundColor: entry.backgroundColor,
         });
-        clearPendingGuestSave();
+        await clearPendingGuestSave();
         stripResumeParam();
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -169,7 +159,7 @@ export function GuestTrialBridge() {
         // 다시 시도해요"라고만 안내했다.
         const failure = describeComposeFailure(error);
         if (!failure.retryable) {
-          clearPendingGuestSave();
+          await clearPendingGuestSave();
           stripResumeParam();
         }
 
@@ -186,6 +176,19 @@ export function GuestTrialBridge() {
     };
 
     void (async () => {
+      // 보관물 조회는 비동기다 — IndexedDB 에 담기 때문이다(lib/pendingGuestSave.ts).
+      // 읽는 동안 화면을 옮겼으면 여기서 끝낸다.
+      const pending = await getPendingGuestSave();
+      if (cancelled) return;
+      if (!pending) {
+        stripResumeParam();
+        return;
+      }
+
+      // 한 번 물었으면 같은 탭에서 다시 걸지 않는다(성공·실패 모두 아래에서 정리한다).
+      if (handoffPromptedRef.current) return;
+      handoffPromptedRef.current = true;
+
       // 쿠키가 아니라 서버에 묻는다. 로그아웃한 방문자에게 남의 결과물을 저장할지
       // 물어봐서는 안 되고, 물어본들 401 로 끝난다.
       const signedIn = await isSignedIn();
@@ -204,7 +207,7 @@ export function GuestTrialBridge() {
             label: "버리기",
             variant: "secondary",
             onSelect: () => {
-              clearPendingGuestSave();
+              void clearPendingGuestSave();
               stripResumeParam();
             },
           },

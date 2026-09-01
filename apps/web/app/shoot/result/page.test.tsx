@@ -154,7 +154,9 @@ describe("ShootResultPage", () => {
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
-    mockSetPendingGuestSave.mockReturnValue(true);
+    // 보관은 IndexedDB 라 비동기다(lib/pendingGuestSave.ts). 동기 목으로 두면 호출부가
+    // await 를 빠뜨려도(= 언제나 truthy 인 Promise 를 성공으로 읽어도) 테스트가 통과한다.
+    mockSetPendingGuestSave.mockResolvedValue(true);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       blob: async () => new Blob(["image"], { type: "image/png" }),
@@ -384,7 +386,7 @@ describe("ShootResultPage", () => {
 
   it("게스트 보관에 실패하면 로그인으로 넘기지 않고 안내한다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
-    mockSetPendingGuestSave.mockReturnValue(false);
+    mockSetPendingGuestSave.mockResolvedValue(false);
 
     render(<ShootResultPage />);
 

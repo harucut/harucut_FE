@@ -463,8 +463,11 @@ export default function ShootResultPage() {
    *
    * 완성본이 아니라 원본 4장을 담는다 — 완성본을 등록하는 API 가 없어졌고, 재료가 더 작다.
    * 로그인을 마치면 GuestTrialBridge 가 이걸로 서버 합성을 돌린다.
+   *
+   * 보관은 IndexedDB 라 비동기다(lib/pendingGuestSave.ts). 여기 두 호출부는 모두 이미
+   * 비동기 핸들러 안이라 `await` 로 끝난다.
    */
-  const storeGuestHandoff = () => {
+  const storeGuestHandoff = async () => {
     if (!frameId) return false;
 
     return setPendingGuestSave(
@@ -504,7 +507,7 @@ export default function ShootResultPage() {
         );
         // 로그인으로 이어 가도 다시 만들 수 있도록 **원본 4장과 만드는 방법**을 보관한다.
         // 완성본이 아니라 재료를 담는 이유는 lib/pendingGuestSave.ts 주석 참고.
-        const stored = storeGuestHandoff();
+        const stored = await storeGuestHandoff();
         showGuestSavedNotice(
           stored ? { loginHref: GUEST_LOGIN_HANDOFF_PATH } : undefined,
         );
@@ -528,7 +531,7 @@ export default function ShootResultPage() {
   };
 
   // 비회원이 로그인으로 이동할 때 결과물을 보관한다. OAuth는 전체 페이지 리다이렉트라
-  // 메모리 blob URL로는 전부 유실되므로, 로그인 전에 localStorage로 옮겨 둔다.
+  // 메모리 blob URL로는 전부 유실되므로, 로그인 전에 IndexedDB로 옮겨 둔다.
   const handleGuestLogin = async () => {
     if (!imageResult) {
       router.push(GUEST_LOGIN_HANDOFF_PATH);
@@ -537,7 +540,7 @@ export default function ShootResultPage() {
 
     setIsHandingOffToLogin(true);
     try {
-      const stored = storeGuestHandoff();
+      const stored = await storeGuestHandoff();
       if (!stored) {
         showStatusNotice(
           "결과를 보관하지 못했어요",
