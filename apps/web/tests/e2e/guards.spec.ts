@@ -122,9 +122,11 @@ for (const route of guestAllowedRoutes) {
   });
 }
 
-// 게스트에게 열린 곳은 /shoot 뿐이다(proxy.ts GUEST_ALLOWED_PREFIXES).
+// 게스트에게 열린 곳은 /shoot 뿐이다(lib/protectedPaths.ts GUEST_ALLOWED_PREFIXES).
 // 화면 문구가 "기록 보관·프레임 만들기는 가입 후"라고 말하는 것과 실제 권한이 맞아야 한다.
-const guestBlockedRoutes = ["/history", "/theme"];
+// /shoot/upload 는 접두사로는 열린 /shoot 안에 있는 회원 전용 예외다
+// (같은 파일 GUEST_MEMBER_ONLY_PREFIXES). 갤러리 불러오기는 가입 후다.
+const guestBlockedRoutes = ["/history", "/theme", "/shoot/upload"];
 
 for (const route of guestBlockedRoutes) {
   test(`redirects guests away from ${route}`, async ({ page }) => {

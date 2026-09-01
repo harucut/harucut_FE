@@ -37,10 +37,35 @@ function hasPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
+/**
+ * 같은 페이지를 가리키는 여러 주소 모양을 한 갈래로 되돌린다.
+ *
+ * App Router 는 한 라우트를 사람이 치는 주소로만 부르지 않는다. 세그먼트 프리페치는
+ * `/shoot/upload.segments/_tree.segment`, 그 밖에 `.html`·`.meta` 같은 꼬리표도 붙는다.
+ * 프록시가 받는 `nextUrl.pathname` 에는 이 꼬리표가 그대로 남아 있어서, 문자열을 있는 그대로
+ * 비교하면 **같은 페이지인데 회원 전용 판정만 빗나갔다** — 비회원 쿠키로
+ * `/shoot/upload.segments/...` 를 부르면 `/shoot/upload` 차단을 지나쳐 `/shoot` 허용에 걸렸다.
+ *
+ * 꼬리표를 나열해 지우는 대신 세그먼트마다 첫 `.` 에서 자른다. 이 앱의 라우트 세그먼트에는
+ * 점이 없으므로, 앞으로 Next 가 새 꼬리표를 만들어도 열리는 쪽이 아니라 닫히는 쪽으로 떨어진다.
+ * 경계는 그대로다 — `/shoot/uploads` 는 점이 없어 손대지 않는다.
+ */
+function toRoutePath(pathname: string) {
+  return pathname
+    .split("/")
+    .map((segment) => segment.split(".")[0])
+    .join("/");
+}
+
 /** 비회원 체험 쿠키만 가진 사람에게 열어 줄 경로인가. */
 export function isGuestAllowedPath(pathname: string) {
-  if (GUEST_MEMBER_ONLY_PREFIXES.some((prefix) => hasPrefix(pathname, prefix))) {
+  // 허용·차단 둘 다 정규화한 주소로 본다. 한쪽만 보면 주소 모양에 따라 판정이 갈린다.
+  const routePath = toRoutePath(pathname);
+
+  if (
+    GUEST_MEMBER_ONLY_PREFIXES.some((prefix) => hasPrefix(routePath, prefix))
+  ) {
     return false;
   }
-  return GUEST_ALLOWED_PREFIXES.some((prefix) => hasPrefix(pathname, prefix));
+  return GUEST_ALLOWED_PREFIXES.some((prefix) => hasPrefix(routePath, prefix));
 }
