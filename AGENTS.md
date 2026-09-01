@@ -9,11 +9,17 @@
 맡는다. ADR-0003(2026-08-18 채택)이 `screens/` 6,299줄 + 11,534줄을 셸·브리지 약 400줄로
 바꿨다.
 
-- `apps/mobile` 의 소스는 4개 파일이다 — `app/_layout.tsx`, `app/index.tsx`,
-  `components/harucut-web-shell.tsx`, `lib/native-bridge.ts`. 라우트는 1개다.
+- `apps/mobile` 의 소스는 5개 파일이다 — `app/_layout.tsx`, `app/index.tsx`,
+  `components/harucut-web-shell.tsx`, `lib/native-bridge.ts`, `constants/shell.ts`.
+  라우트는 1개다. 마지막 파일은 **어느 오리진이 브리지를 부를 수 있는지**를 쥔다 —
+  브리지의 문이라 목록에서 빠뜨리면 보안 경계 변경을 놓친다.
 - **그래서 "모바일 화면을 고쳐라"의 정답은 거의 항상 `apps/web` 이다.**
-- 네이티브가 맡는 것은 다섯 가지뿐이다: 사진첩 저장 · 공유 시트 · 햅틱 · 하드웨어 뒤로가기 ·
-  `harucut://` 딥링크. 이 목록의 소유자는 ADR-0003 「경계선」 절이다.
+- 네이티브가 맡는 것은 여섯 가지다: 사진첩 저장 · 공유 시트 · 햅틱 · **알림** ·
+  **상태바 색** · 하드웨어 뒤로가기. **이 목록의 소유자는
+  [`docs/mobile-shell.md`](docs/mobile-shell.md) 「네이티브가 맡는 것과 그 이유」 표다** —
+  ADR-0003 「경계선」은 2026-08-18 에 이렇게 정했다는 기록이고, 그 뒤로 목록이 달라졌다.
+  `harucut://` 딥링크는 **아직 구현되지 않았다**(`app.json` 에 scheme 만 있고 들어오는
+  URL 을 받는 코드가 없다). 목록에 없는 일을 셸에 얹지 않는다.
 - 브리지는 `apps/web/lib/nativeBridge.ts` ↔ `apps/mobile/lib/native-bridge.ts` **한 쌍**이다.
   한쪽만 고치면 프로토콜이 갈라진다. 항상 같이 고친다.
 - expo-router 라우트를 새로 만들지 않는다 — ADR-0003 을 되돌리는 일이다.
@@ -24,7 +30,7 @@
 ## 저장소 구조
 
 - `apps/web`: Next.js App Router 웹 앱. 화면은 전부 여기 있다.
-- `apps/mobile`: Expo 웹뷰 셸(위 참조). 소스 4개 파일.
+- `apps/mobile`: Expo 웹뷰 셸(위 참조). 소스 5개 파일.
 - `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared`.
   **목록을 문서에 복사하지 않는다** — `packages/shared/src/index.ts` 의 재수출이 곧 진실이다
   (현재 13개 모듈).

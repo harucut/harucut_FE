@@ -476,10 +476,10 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
    `ComponentRequest.source` 는 `minLength 1`(@NotBlank)이고 TEXT 의 `source` 는 글자 내용
    그 자체라, 빈 레이어 하나가 `components[0].source: must not be blank` 로 저장을 통째로
    죽였다. 지금은 `toCreateFrameRequest` 가 빈 source 컴포넌트를 요청에서 뺀다
-   (판정의 소유자는 `lib/frameApi.ts` 의 `isBlankSourceComponent` — 프레임 내용 지문도
-   같은 함수를 쓴다, 위 8번)
-   (`lib/frameApi.ts:179`). 지우는 것 자체는 막지 않고 — 막으면 고쳐 쓰지도 못한다 —
-   사라진다는 사실을 속성 패널이 미리 말한다(`InspectorPanel.tsx:124,144-147`).
+   — 판정은 `lib/frameApi.ts:153` 의 `isBlankSourceComponent` 가 쥐고, 요청 필터
+   (`:199`)와 프레임 내용 지문(위 8번)이 **같은 함수**를 쓴다.
+   지우는 것 자체는 막지 않고 — 막으면 고쳐 쓰지도 못한다 — 사라진다는 사실을 속성 패널이
+   미리 말한다(`InspectorPanel.tsx:124,144-147`).
 
 7. **업로드 크기 가드가 상한에만 있었다** (2026-09-02). 서버 `fileSize` 는 1 이상이다
    (스웨거 설명 「1 ~ 10485760」. 스키마의 `minimum: 0` 은 설명과 어긋나 있고 **실제로는
