@@ -1,4 +1,7 @@
-import { useThemeEditorStore } from "@/lib/themeEditorStore";
+import {
+  ASSET_QUEUE_WAIT_LIMIT_MS,
+  useThemeEditorStore,
+} from "@/lib/themeEditorStore";
 import type { EditorComponent, ThemeExportJson } from "@/lib/types/themeEditor";
 
 const mockUpload = jest.fn();
@@ -147,6 +150,12 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     useThemeEditorStore.getState().reset();
   });
 
+  // 가짜 타이머를 쓰는 테스트가 도중에 죽으면 finally 가 안 돌아 다음 테스트까지
+  // 가짜 타이머로 끌려간다(setTimeout 이 영영 안 울린다). 복구는 여기서 한다.
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("저장이 도중에 실패해 레이어가 key 로 바뀐 뒤에도 누끼 결과를 레이어에 반영한다", async () => {
     const assetId = await placePhoto();
 
@@ -176,13 +185,31 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     );
   });
 
-  it("누끼가 도는 동안 저장이 자산을 올려도 레이어를 놓치지 않는다", async () => {
+  it("누끼가 도는 동안 자산이 바뀌어도 결과 시점의 자산으로 레이어를 잇는다", async () => {
     const assetId = await placePhoto();
 
-    // 누끼는 초 단위로 걸리는데 그 사이 저장 버튼은 잠기지 않는다. 결과를 기다리는 동안
-    // 저장이 먼저 자산을 올리도록 세워 둔다 — await 앞에서 찍어 둔 스냅샷이 낡는 경우다.
+    // 누끼는 초 단위로 걸리고 그 사이 상태는 계속 움직인다. 여기서는 앞선 저장이
+    // 자산을 올려 레이어 source 가 key 로 바뀐 상태를 흉내 낸다 — await 앞에서 찍어 둔
+    // 스냅샷을 그대로 쓰면 previousKey 가 undefined 라 그 레이어를 못 찾는다.
+    const uploadedKey = "uploads/users/me/components/9-photo.png";
     mockRemoveImageBackground.mockImplementationOnce(async () => {
-      await useThemeEditorStore.getState().finalizeAssetsForSave();
+      useThemeEditorStore.setState((s) => ({
+        assets: {
+          ...s.assets,
+          photos: s.assets.photos.map((photo) =>
+            photo.id === assetId ? { ...photo, s3Key: uploadedKey } : photo,
+          ),
+        },
+        components: s.components.map((c) =>
+          c.id === PHOTO_LAYER_ID
+            ? {
+                ...c,
+                source: uploadedKey,
+                renderUrl: `https://cdn.example.com/${uploadedKey}?sig=x`,
+              }
+            : c,
+        ),
+      }));
       return new File(["cut"], "photo-cutout.png", { type: "image/png" });
     });
 
@@ -191,10 +218,125 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
       .removePhotoBackground(assetId);
     expect(result.ok).toBe(true);
 
-    // 스냅샷을 그대로 쓰면 previousKey 가 undefined 라 key 로 바뀐 레이어를 못 찾고,
-    // 누끼 전 원본이 그대로 남는다.
     expect(layer().source).toBe("blob:photo-cutout.png");
     expect(layer().renderUrl).toBeUndefined();
+  });
+
+  /**
+   * 저장 버튼은 누끼가 도는 동안에도 눌린다(`processingAssetId` 는 그 타일의 누끼
+   * 버튼만 막는다). 겹치면 저장은 시작 시점의 `src` 로만 업로드 결과를 되돌려 붙이므로,
+   * 그 사이 누끼가 만든 새 blob 은 key 로 바뀌지 않는다 — `exportJson()` 이 blob: 주소를
+   * 그대로 실어 보내고 서버는 그것을 읽지 못한다.
+   */
+  it("누끼가 도는 중에 누른 저장은 누끼가 끝난 뒤 최신 자산을 올린다", async () => {
+    const assetId = await placePhoto();
+
+    let releaseCutout: () => void = () => {};
+    const cutoutGate = new Promise<void>((resolve) => {
+      releaseCutout = resolve;
+    });
+    mockRemoveImageBackground.mockImplementationOnce(async () => {
+      await cutoutGate;
+      return new File(["cut"], "photo-cutout.png", { type: "image/png" });
+    });
+
+    const cutting = useThemeEditorStore
+      .getState()
+      .removePhotoBackground(assetId);
+    // 누끼가 도는 중에 저장 버튼을 누른 상황.
+    const saving = useThemeEditorStore.getState().finalizeAssetsForSave();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // 저장이 먼저 누끼 전 원본을 올려 버리면 누끼 결과는 어디에도 붙지 못한다.
+    expect(mockUpload).not.toHaveBeenCalled();
+
+    releaseCutout();
+    expect((await cutting).ok).toBe(true);
+    await saving;
+
+    // 올라간 것은 누끼 결과 하나뿐이고, 레이어도 그 key 를 가리켜야 한다.
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+    expect(mockUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file: expect.objectContaining({ name: "photo-cutout.png" }),
+      }),
+    );
+    expect(layer().source).toBe(
+      "uploads/users/me/components/1-photo-cutout.png",
+    );
+    // 서버로 나가는 값에 blob: 이 남으면 저장이 400 으로 죽는다.
+    expect(
+      useThemeEditorStore.getState().exportJson()?.components[0].source,
+    ).not.toMatch(/^blob:/);
+  });
+
+  /**
+   * 줄을 세운 값으로 저장이 **영영 안 끝나는 것**을 받아들일 수는 없다. 누끼는 WASM 모델을
+   * 받아 도는 일이라 멈출 수 있는데, 그때 저장 프로미스가 settle 하지 않으면 저장 모달을
+   * 닫을 방법이 사라진다 — 원래 막으려던 race 보다 나쁘다. 상한을 넘기면 그 시점의 자산
+   * 그대로 저장을 밀고 나가, 다시 누르면 되는 평범한 실패로 떨어뜨린다.
+   */
+  it("누끼가 끝나지 않아도 저장은 상한을 넘기면 진행된다", async () => {
+    const assetId = await placePhoto();
+    jest.useFakeTimers();
+
+    // 아무도 resolve 하지 않는 누끼 — 멈춘 상태를 그대로 흉내 낸다.
+    // (Once 로 두면 소비되지 않고 다음 테스트로 새어 나간다. 기본 구현은 beforeEach 가 되돌린다.)
+    mockRemoveImageBackground.mockImplementation(
+      () => new Promise<File>(() => {}),
+    );
+    void useThemeEditorStore.getState().removePhotoBackground(assetId);
+
+    let settled = false;
+    const saving = useThemeEditorStore
+      .getState()
+      .finalizeAssetsForSave()
+      .then(() => {
+        settled = true;
+      });
+
+    // 상한 전에는 여전히 줄을 지킨다(누끼 결과를 기다린다).
+    await jest.advanceTimersByTimeAsync(ASSET_QUEUE_WAIT_LIMIT_MS - 1);
+    expect(settled).toBe(false);
+    expect(mockUpload).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(1);
+    await saving;
+
+    // 핵심: 저장 프로미스가 끝났다. 그리고 누끼 전 원본으로라도 올라갔다.
+    expect(settled).toBe(true);
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+    expect(mockUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file: expect.objectContaining({ name: "photo.png" }),
+      }),
+    );
+  });
+
+  /**
+   * 줄은 모듈 전역이라 편집 세션을 넘어 산다. 멈춘 누끼를 그대로 두면 에디터를 닫고
+   * **다른 프레임**을 열어 누른 저장까지 붙잡혀, 상한 30초를 매번 기다리게 된다.
+   * 리셋에서 줄을 새로 판다(테스트 간 오염도 여기서 끊긴다).
+   */
+  it("리셋하면 이전 세션의 멈춘 누끼가 다음 저장을 붙잡지 않는다", async () => {
+    const assetId = await placePhoto();
+
+    mockRemoveImageBackground.mockImplementation(
+      () => new Promise<File>(() => {}),
+    );
+    void useThemeEditorStore.getState().removePhotoBackground(assetId);
+
+    // 누끼가 실제로 시작해 줄을 물고 있어야 "멈춘 작업"을 재현한 것이다.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockRemoveImageBackground).toHaveBeenCalledTimes(1);
+
+    // 에디터를 닫고 새 편집 세션을 시작한다.
+    useThemeEditorStore.getState().reset();
+    await placePhoto();
+
+    // 상한(가짜 타이머 없이 30초)에 기대지 않고 곧바로 끝나야 한다 — 상한은 최후의 보루다.
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
   });
 
   it("아직 올리지 않은 사진은 blob 주소로 연결하고 남의 레이어는 건드리지 않는다", async () => {

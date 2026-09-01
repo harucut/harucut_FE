@@ -10,6 +10,7 @@ jest.mock("@/lib/clientApi", () => ({
 
 import {
   PRESIGNED_UPLOAD_TYPES,
+  UploadValidationError,
   isSupportedUploadFile,
   resolveUpload,
   resolveUploadContentType,
@@ -172,4 +173,60 @@ describe("presigned upload flow", () => {
     });
   });
 
+  /*
+    fileSize 는 위아래가 다 막혀 있다 — `@Positive @Max(10485760)` 이라 0 은 400 GEN-003 이다
+    (실측: `{"field":"fileSize","message":"파일 크기는 0보다 커야 합니다."}`).
+    스웨거 JSON 의 `minimum: 0` 만 보고 하한이 없다고 읽으면 안 된다.
+
+    걸러내지 않으면 발급 요청이 한 번 나갔다가 400 으로 돌아오고, 화면은 우리가 준비한
+    한국어 문구 대신 에러 코드 매핑 결과를 띄운다. `UploadValidationError` 로 던져야
+    마이페이지가 "우리가 걸러낸 것"으로 알아보고 그 문구를 그대로 보여 준다.
+  */
+  it("0바이트 파일은 발급 요청 자체를 하지 않는다", async () => {
+    const empty = new File([], "empty.png", { type: "image/png" });
+    expect(empty.size).toBe(0);
+
+    await expect(
+      uploadToS3WithPresigned({
+        file: empty,
+        type: PRESIGNED_UPLOAD_TYPES.PROFILE,
+      }),
+    ).rejects.toThrow(UploadValidationError);
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  // 하한을 한 칸 어긋나게 잡으면 1바이트가 막힌다. 서버가 받아 주는 최솟값은 통과해야 한다.
+  it("1바이트 파일은 그대로 발급 요청한다", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        code: "GEN-000",
+        status: 200,
+        message: null,
+        data: {
+          key: "uploads/users/u/profile/one-byte.png",
+          uploadUrl: "https://example.com/upload/one-byte.png?sig=1",
+          contentType: "image/png",
+          expiresIn: "PT24H",
+        },
+      },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await uploadToS3WithPresigned({
+      file: new File(["x"], "one-byte.png", { type: "image/png" }),
+      type: PRESIGNED_UPLOAD_TYPES.PROFILE,
+      skipUrlResolve: true,
+    });
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/api/client/user/files/presigned-upload",
+      expect.objectContaining({ fileSize: 1 }),
+    );
+  });
 });

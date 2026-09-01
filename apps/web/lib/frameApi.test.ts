@@ -29,6 +29,26 @@ function makeJson(frameId: ThemeExportJson["frameId"]): ThemeExportJson {
   };
 }
 
+function textComponent(
+  id: string,
+  source: string,
+  zIndex: number,
+): ThemeExportJson["components"][number] {
+  return {
+    id,
+    type: "TEXT",
+    source,
+    x: 0,
+    y: 0,
+    width: 300,
+    height: 120,
+    scale: 1,
+    rotation: 0,
+    zIndex,
+    styleJson: {},
+  };
+}
+
 describe("frame api mapping", () => {
   it("maps canvas size and metadata from frame layout", () => {
     const json = makeJson("classic-4");
@@ -114,6 +134,30 @@ describe("frame api mapping", () => {
     );
     // renderUrl 은 계약에 없는 값이라 실리면 안 된다.
     expect(req.components[1]).not.toHaveProperty("renderUrl");
+  });
+
+  // 서버는 components[].source 를 required + minLength 1(@NotBlank)로 받는다.
+  // 편집 화면의 글자 입력에는 막는 것이 없어서, 글자를 지우면 source 가 "" 가 된다.
+  // 그 레이어 하나 때문에 저장 전체가 400 GEN-003
+  // (`components[0].source: must not be blank`)으로 죽던 자리다 — 로컬 백엔드로 실측.
+  it("글자가 빈 TEXT 레이어는 저장 요청에서 뺀다", () => {
+    const json: ThemeExportJson = {
+      frameId: "classic-4",
+      components: [
+        textComponent("t-empty", "", 1),
+        textComponent("t-space", "   ", 2),
+        textComponent("t-ok", "안녕", 3),
+      ],
+    };
+
+    const req = toCreateFrameRequest(json, {
+      title: "t",
+      description: "d",
+      previewKey: "p",
+    });
+
+    expect(req.components.map((c) => c.id)).toEqual(["t-ok"]);
+    expect(req.components[0].source).toBe("안녕");
   });
 
   it("서명 URL 로 저장돼 있던 옛 프레임도 key 로 되돌려 보낸다", () => {

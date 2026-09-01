@@ -155,21 +155,28 @@ export function toCreateFrameRequest(
     background: toRequestBackground(json.background),
     // 4개가 아니면 서버가 거절하므로(minItems/maxItems 4) 온전할 때만 싣는다.
     ...(json.cellCutouts?.length === 4 ? { cellCutouts: [...json.cellCutouts] } : {}),
-    components: json.components.map((c) => ({
-      type: c.type,
-      // renderUrl 은 렌더 전용이라 보내지 않는다. 이미지 source 는 key 로 정규화한다.
-      source: c.type === "TEXT" ? c.source : toStorageKey(c.source),
-      ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
-      x: c.x,
-      y: c.y,
-      width: c.width,
-      height: c.height,
-      scale: c.scale ?? 1,
-      rotation: c.rotation ?? 0,
-      zIndex: c.zIndex,
-      styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
-      id: c.id,
-    })),
+    components: json.components
+      .map((c) => ({
+        type: c.type,
+        // renderUrl 은 렌더 전용이라 보내지 않는다. 이미지 source 는 key 로 정규화한다.
+        source: c.type === "TEXT" ? c.source : toStorageKey(c.source),
+        ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+        x: c.x,
+        y: c.y,
+        width: c.width,
+        height: c.height,
+        scale: c.scale ?? 1,
+        rotation: c.rotation ?? 0,
+        zIndex: c.zIndex,
+        styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
+        id: c.id,
+      }))
+      // source 는 required + minLength 1(@NotBlank)이다. 글자를 지운 TEXT 는 source 가
+      // 빈 문자열이라, 그 레이어 하나 때문에 저장 전체가 400 GEN-003
+      // (`components[0].source: must not be blank`)으로 죽는다 — 실측 확인.
+      // 빈 글자는 화면에 그려지는 것도 없고 finalizeAssetsForSave 도 이미 굽지 않고
+      // 건너뛰므로, 요청에서 빼고 나머지를 저장한다.
+      .filter((c) => c.source.trim().length > 0),
   };
 }
 

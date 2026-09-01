@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { validatePassword } from "@/lib/authValidation";
 
 type Props = {
   saving: boolean;
@@ -17,9 +18,6 @@ type FieldErrors = {
   newPassword?: string | null;
   confirmPassword?: string | null;
 };
-
-/** 서버 규칙. 회원가입 화면과 같은 값이다. */
-const MIN_LENGTH = 8;
 
 /**
  * 비밀번호 바꾸기.
@@ -53,8 +51,12 @@ export function PasswordChangeDialog({
     if (!newPassword) {
       return { newPassword: "새 비밀번호를 입력해 주세요." };
     }
-    if (newPassword.length < MIN_LENGTH) {
-      return { newPassword: `비밀번호는 ${MIN_LENGTH}자 이상으로 설정해 주세요.` };
+    // 길이·문자 종류 규칙은 공용 validatePassword 하나로 본다. 여기서 8자 하한만 세던
+    // 시절에는 21자가 그대로 서버로 갔고, 돌아온 400 의 사유가 영문(Bean Validation)이라
+    // apiError 가 버려서 "입력값을 다시 확인해 주세요."만 떴다 — 서버는 8~20자다.
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return { newPassword: passwordError };
     }
     // 지금 것과 같으면 서버는 받아 주지만 바뀐 게 없다. 여기서 잡는 편이 친절하다.
     if (newPassword === oldPassword) {
@@ -115,7 +117,7 @@ export function PasswordChangeDialog({
             name="newPassword"
             type="password"
             label="새 비밀번호"
-            placeholder={`${MIN_LENGTH}자 이상`}
+            placeholder="8~20자"
             autoComplete="new-password"
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}

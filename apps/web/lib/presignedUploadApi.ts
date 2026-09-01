@@ -44,10 +44,20 @@ export const PRESIGNED_UPLOAD_TYPES = {
   FOURCUT_SOURCE: "FOURCUT_SOURCE",
 } as const;
 
-/** 백엔드 제한: 1 ~ 10485760 바이트. */
+/**
+ * 백엔드 제한: 1 ~ 10485760 바이트.
+ *
+ * 하한도 실재한다 — `fileSize` 는 `@Positive` 라 0 을 보내면 400 GEN-003 이다
+ * (실측: `{"field":"fileSize","message":"파일 크기는 0보다 커야 합니다."}`).
+ * 스웨거 JSON 에는 `minimum: 0` 으로 나오지만 그건 springdoc 이 `@Positive` 를 옮긴 모양일 뿐,
+ * 실제로 통과하는 최솟값은 1 이다.
+ */
+export const MIN_UPLOAD_BYTES = 1;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export const UPLOAD_TOO_LARGE_MESSAGE = "10MB 이하 이미지만 올릴 수 있어요.";
+
+export const EMPTY_UPLOAD_MESSAGE = "빈 파일은 올릴 수 없어요.";
 
 /**
  * 올리기 **전에** 우리가 걸러낸 것(형식·용량·파일 없음).
@@ -264,8 +274,12 @@ export async function uploadToS3WithPresigned(opts: {
   // 지원 형식만 통과시킨다(아니면 여기서 throw). 파일명은 형식에 맞춰 정규화된 이름을 쓴다.
   const resolved = resolveUpload(file);
 
-  // 서버 한도를 넘는 파일은 발급 요청 전에 막는다. 그냥 보내면 400 GEN-003 이 오는데,
+  // 서버 한도를 벗어난 파일은 발급 요청 전에 막는다. 그냥 보내면 400 GEN-003 이 오는데,
   // 그 문구보다 여기서 크기를 짚어 주는 편이 사용자에게 낫다.
+  // 위아래 둘 다 본다 — 0바이트 파일(내려받다 만 것, 동기화 중인 것)도 서버가 거절한다.
+  if (file.size < MIN_UPLOAD_BYTES) {
+    throw new UploadValidationError(EMPTY_UPLOAD_MESSAGE);
+  }
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new UploadValidationError(UPLOAD_TOO_LARGE_MESSAGE);
   }
