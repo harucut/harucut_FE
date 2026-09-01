@@ -19,6 +19,56 @@ const FOCUSABLE = [
 ].join(",");
 
 /**
+ * 지금 열려 있는 다이얼로그 컨테이너 목록. Escape 는 이 중 화면 맨 위 하나만 받는다.
+ *
+ * 이 훅은 keydown 을 `document` 에 capture 로 건다. `stopPropagation()` 은 **같은 요소에
+ * 걸린 다른 리스너를 멈추지 않는다.** 그래서 모달이 둘 열려 있으면 Escape 한 번에 두 훅의
+ * onClose 가 모두 돌았다. 루트 레이아웃의 게스트 인계 안내(z-120)와 약관 재동의(z-130)가
+ * 조회 결과로 나란히 열리는데, 약관 쪽은 닫을 수 없는 다이얼로그라 onClose 가 무동작이다 —
+ * 화면에서는 아무 일도 없는데 뒤에 있던 저장/버리기 확인만 조용히 사라졌다. `GuestTrialBridge`
+ * 의 `handoffPromptedRef` 때문에 새로고침 전에는 다시 뜨지도 않는다.
+ *
+ * **맨 위는 연 순서가 아니라 그려지는 순서다.** 게스트 인계 안내는 루트 레이아웃에 늘 붙어
+ * 있고 `isOpen` 만 토글되므로, 페이지 모달이 떠 있는 동안 알림이 오면 나중에 열린다. 그런데
+ * 두 배경은 z-index 가 같고(z-120) 이 오버레이는 `{children}` 보다 앞에 그려지니, 화면에서는
+ * 페이지 모달 **뒤에** 깔린다. 연 순서로 판정하면 보이지 않는 쪽이 Escape 를 먹고 정작 보이는
+ * 모달은 닫히지 않는다 — 원래 버그를 다른 얼굴로 되살리는 셈이다. 어느 조회가 먼저 끝났는지에
+ * 판정이 흔들리지 않도록, 키가 눌린 시점에 (실효 z-index, 문서 순서)로 비교한다.
+ *
+ * 등록은 열릴 때, 해제는 정리에서 하고 **정체성으로** 지운다(`lastIndexOf` + `splice`).
+ * 그래야 열린 순서와 사라지는 순서가 달라도 목록 자체는 정확하게 남는다.
+ */
+const openDialogs: HTMLElement[] = [];
+
+/**
+ * 컨테이너가 실제로 얹히는 z-index.
+ *
+ * 숫자는 훅이 쥔 요소가 아니라 그 위의 `fixed inset-0 z-[...]` 배경에 붙어 있다. 그래서
+ * 숫자 z-index 를 가진 가장 가까운 조상까지 올라가 읽는다. `auto` 는 쌓임 순서를 끌어올리지
+ * 않으니 0 으로 본다.
+ */
+function stackingOrder(element: HTMLElement): number {
+  let node: HTMLElement | null = element;
+
+  while (node) {
+    const value = Number.parseInt(window.getComputedStyle(node).zIndex, 10);
+    if (Number.isFinite(value)) return value;
+    node = node.parentElement;
+  }
+
+  return 0;
+}
+
+/** a 가 b 보다 위에 그려지는가. z-index 가 같으면 문서 순서상 뒤에 오는 쪽이 위다. */
+function paintsAbove(a: HTMLElement, b: HTMLElement): boolean {
+  const orderA = stackingOrder(a);
+  const orderB = stackingOrder(b);
+
+  if (orderA !== orderB) return orderA > orderB;
+  return (b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+/**
  * `aria-modal="true"` 를 선언한 다이얼로그가 실제로 모달처럼 동작하게 만든다.
  *
  * 선언만 하고 규약을 안 지키면 스크린리더·키보드 사용자에게는 오히려 거짓말이 된다.
@@ -76,8 +126,24 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
       container.focus();
     }
 
+    openDialogs.push(container);
+    const isTopmost = () =>
+      openDialogs.every(
+        (other) =>
+          other === container || !other.isConnected || !paintsAbove(other, container),
+      );
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        /*
+          겹쳐 있으면 맨 위 다이얼로그만 닫는다. 아래에 깔린 것은 못 본 척한다.
+
+          이 판정은 Escape 에만 건다. Tab 트랩까지 같이 막으면, 보이는데 맨 위는 아닌
+          다이얼로그가 트랩을 통째로 잃는다 — 첫/마지막 컨트롤에서 Tab 이 뒤쪽 화면으로
+          새어 나가고, `aria-modal` 을 선언해 놓고 규약을 어기는 상태로 돌아간다.
+        */
+        if (!isTopmost()) return;
+
         event.stopPropagation();
         onCloseRef.current();
         return;
@@ -135,6 +201,9 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
 
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
+
+      const stacked = openDialogs.lastIndexOf(container);
+      if (stacked !== -1) openDialogs.splice(stacked, 1);
 
       // 열기 전 자리로 포커스를 돌려준다. 이 정리 함수는 isOpen 이 false 가 될 때뿐 아니라
       // 컴포넌트가 통째로 사라질 때도 돈다 — 알림 오버레이처럼 언마운트로 닫히는 다이얼로그는
