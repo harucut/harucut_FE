@@ -344,7 +344,19 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     try {
       const processedFile = await removeImageBackground(asset.file);
       const objectUrl = URL.createObjectURL(processedFile);
-      const previousSrc = asset.src;
+      // 누끼는 초 단위로 걸리는데 그 사이 저장 버튼은 잠기지 않는다(processingAssetId 는
+      // 그 타일의 누끼 버튼만 막는다). 저장이 먼저 자산을 올리면 위에서 찍어 둔 asset 은
+      // 낡는다 — src 도 s3Key 도 바뀐 뒤다. 낡은 값으로 레이어를 찾으면 아래 매칭이
+      // 통째로 빗나가 누끼 전 원본이 그대로 남는다. 결과가 도착한 시점의 자산을 다시 본다.
+      const latest =
+        get().assets.photos.find((photo) => photo.id === assetId) ?? asset;
+      const previousSrc = latest.src;
+      // 저장을 한 번 시도했다면 이 사진은 이미 올라갔고, 배치된 레이어의 source 는
+      // blob 주소가 아니라 S3 key 다(finalizeAssetsForSave). 그 뒤 미리보기 업로드나
+      // createFrame/updateFrame 이 실패하면 편집 화면은 그 상태로 남는다.
+      // 이때 blob 주소만 견주면 레이어를 못 찾아 누끼 전 원본이 그대로 남고,
+      // 다시 저장해도 옛 key 가 서버로 간다. 올린 key 로도 자산-레이어 연결을 잇는다.
+      const previousKey = latest.s3Key;
 
       set((current) => ({
         assets: {
@@ -361,11 +373,18 @@ export const useThemeEditorStore = create<State>((set, get) => ({
               : photo,
           ),
         },
-        components: current.components.map((component) =>
-          component.type === "PHOTO" && component.source === previousSrc
-            ? { ...component, source: objectUrl }
-            : component,
-        ),
+        components: current.components.map((component) => {
+          if (component.type !== "PHOTO") return component;
+
+          const linked =
+            component.source === previousSrc ||
+            (Boolean(previousKey) && component.source === previousKey);
+          if (!linked) return component;
+
+          // renderUrl 은 올려 둔 누끼 전 원본을 가리킨다. 남겨 두면 캔버스와 미리보기
+          // PNG 가 그쪽을 먼저 쓰기 때문에(componentImageSrc) 화면은 그대로다.
+          return { ...component, source: objectUrl, renderUrl: undefined };
+        }),
       }));
 
       try {
