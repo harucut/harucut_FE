@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
@@ -18,6 +18,58 @@ type Props = {
   contentHref: (code: string) => string | null;
 };
 
+export type TermsContentState = "loading" | "done" | "failed";
+
+/**
+ * 약관 본문 확보.
+ *
+ * `MyTermsConsent` 에는 본문이 없고, 정적 링크(`termsContentHref`)는 tos·terms·privacy·
+ * marketing 네 코드에만 있다. 관리자가 다른 코드로 약관을 추가하면 사용자는 **제목만 보고**
+ * 동의하게 된다 — 가입 화면은 서버 본문을 펼쳐 주는데 여기와 설정 패널만 그렇지 않았다.
+ *
+ * 활성 약관 목록에 본문 전문이 함께 온다(`ActiveTerms.content`). 인증도 필요 없다.
+ * 못 받아도 화면은 그대로 뜬다 — 정적 링크가 있는 약관은 그 링크로 읽을 수 있다.
+ *
+ * 재동의 다이얼로그와 설정 패널이 같은 규칙을 쓰도록 훅 하나를 공유한다. 규칙이 갈라지면
+ * 한쪽에서만 제목만 보고 동의가 기록되는 상태로 되돌아간다.
+ */
+export function useTermsContent() {
+  const [contentByCode, setContentByCode] = useState<Record<string, string>>({});
+  const [state, setState] = useState<TermsContentState>("loading");
+  // 다시 시도용 카운터. 조회 실패는 "읽을 수단 없음"으로 굳으므로 되돌릴 길을 남긴다.
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchActiveTerms()
+      .then((terms) => {
+        if (cancelled) return;
+        setContentByCode(
+          Object.fromEntries(
+            terms
+              .filter((item) => item.content?.trim())
+              .map((item) => [item.code, item.content]),
+          ),
+        );
+        setState("done");
+      })
+      .catch(() => {
+        if (!cancelled) setState("failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // attempt 가 바뀌면 다시 부른다.
+  }, [attempt]);
+
+  const reload = useCallback(() => {
+    setState("loading");
+    setAttempt((current) => current + 1);
+  }, []);
+
+  return { contentByCode, state, reload };
+}
+
 /**
  * 필수 약관에 동의가 없을 때 붙잡는 화면.
  *
@@ -31,8 +83,8 @@ type Props = {
  *    마케팅 수신 동의가 조용히 철회되면 안 된다.
  *  - **닫을 수 없다.** 대신 로그아웃으로 나갈 길을 준다. 필수 약관은 철회가 불가능하고
  *    (TERMS-003) 정책상 탈퇴로만 가능하므로, 동의하지 않겠다면 계정을 쓰지 않는 것이 맞다.
- *  - **읽을 수 없는 항목에 동의를 받지 않는다.** 가입 화면(TermsConsentFieldset)과 같은
- *    규칙이다. 아래 본문 조회 주석 참고.
+ *  - **읽을 수 없는 항목에 동의를 받지 않는다.** 가입 화면(TermsConsentFieldset)·설정
+ *    패널(TermsConsentPanel)과 같은 규칙이다. 위 `useTermsContent` 주석 참고.
  */
 export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   const required = useMemo(
@@ -41,41 +93,11 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   );
   const optional = useMemo(() => consents.filter((item) => !item.required), [consents]);
 
-  /*
-    약관 본문.
-
-    `MyTermsConsent` 에는 본문이 없고, 정적 링크(`contentHref`)는 tos·privacy·marketing
-    세 코드에만 있다. 관리자가 다른 코드로 필수 약관을 추가하면 사용자는 **제목만 보고**
-    동의해야 한다 — 가입 화면은 서버 본문을 펼쳐 주는데 여기만 그렇지 않았다.
-
-    활성 약관 목록에 본문 전문이 함께 온다(`ActiveTerms.content`). 인증도 필요 없다.
-    못 받아도 화면은 그대로 뜬다 — 정적 링크가 있는 약관은 그 링크로 읽을 수 있다.
-  */
-  const [contentByCode, setContentByCode] = useState<Record<string, string>>({});
-  const [contentState, setContentState] = useState<"loading" | "done" | "failed">(
-    "loading",
-  );
-  useEffect(() => {
-    let cancelled = false;
-    void fetchActiveTerms()
-      .then((terms) => {
-        if (cancelled) return;
-        setContentByCode(
-          Object.fromEntries(
-            terms
-              .filter((item) => item.content?.trim())
-              .map((item) => [item.code, item.content]),
-          ),
-        );
-        setContentState("done");
-      })
-      .catch(() => {
-        if (!cancelled) setContentState("failed");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const {
+    contentByCode,
+    state: contentState,
+    reload: reloadContent,
+  } = useTermsContent();
 
   /**
    * 읽을 수단이 아직 없는 약관인가.
@@ -109,6 +131,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   const revised = required.some((item) => item.status === "NEEDS_RECONSENT");
 
   const handleSubmit = async () => {
+    // 제출 버튼은 disabled 로 잠그지 않는다(아래 주석 참고). 대신 여기서 막는다.
+    if (isSubmitting || !canSubmit) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -142,12 +166,18 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
 
   return (
     <div className="fixed inset-0 z-[130] flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
+      {/*
+        목록은 서버 약관 수만큼 늘어나고 전문을 펼치면 더 늘어난다. 패널이 뷰포트를 넘으면
+        제출·로그아웃 버튼이 화면 밖으로 잘리는데, 이 다이얼로그는 닫을 수도 없다.
+        오버레이가 아니라 패널을 캡한다 — flex 정렬에서 시작쪽으로 넘친 부분은 오버레이에
+        스크롤을 걸어도 닿지 않는다.
+      */}
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="terms-reconsent-title"
-        className="hc-surface-card w-full max-w-md rounded-3xl border p-6 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-[var(--hc-card-shadow)]"
       >
         <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
           <FileText className="h-5 w-5" />
@@ -207,7 +237,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                   <p className="ml-6 text-[11px] text-[color:var(--hc-muted)]">
                     {contentState === "loading"
                       ? "약관 본문을 불러오는 중이에요."
-                      : "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."}
+                      : "약관 본문을 불러오지 못했어요."}
                   </p>
                 ) : null}
                 {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
@@ -226,16 +256,38 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
           })}
         </div>
 
+        {/* 닫을 수 없는 화면이라 조회 실패가 그대로 잠김이 된다. 체크 상태를 잃지 않고 다시 부른다. */}
+        {contentState === "failed" ? (
+          <button
+            type="button"
+            onClick={reloadContent}
+            className="mt-3 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4"
+          >
+            약관 본문 다시 불러오기
+          </button>
+        ) : null}
+
+        {/* 저장 실패는 알려야 한다 — 다이얼로그 안에 있는 스크린리더 사용자에게도. */}
         {error ? (
-          <p className="mt-3 text-[12px] text-[color:var(--hc-danger)]">{error}</p>
+          <p role="alert" className="mt-3 text-[12px] text-[color:var(--hc-danger)]">
+            {error}
+          </p>
         ) : null}
 
         <div className="mt-5 flex flex-col gap-2">
+          {/*
+            disabled 가 아니라 aria-disabled 다.
+
+            포커스를 쥔 요소가 disabled 로 바뀌면 브라우저는 포커스를 body 로 내려놓는다.
+            키보드로 여기까지 와서 Enter 를 누른 사용자는 저장에 실패한 순간 모달 밖에
+            서 있게 되고, 그 뒤 Tab 은 뒤쪽 화면으로 새어 나간다. 눌림은 handleSubmit
+            앞머리에서 막는다.
+          */}
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={!canSubmit || isSubmitting}
-            className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
+            aria-disabled={!canSubmit || isSubmitting}
+            className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
             {isSubmitting ? "저장 중..." : "동의하고 계속하기"}
           </button>

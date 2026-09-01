@@ -94,8 +94,22 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
       const lastItem = items[items.length - 1];
       const active = document.activeElement;
 
+      /*
+        다이얼로그 밖으로 떨어진 포커스는 방향과 무관하게 안으로 끌어온다.
+
+        제출 중처럼 안의 컨트롤이 한꺼번에 disabled 되면 브라우저가 포커스를 body 로
+        내려놓는다. 예전에는 Shift+Tab 만 이 경우를 봐서, 그 상태의 Tab 은 문서 처음부터
+        다시 훑으며 모달 뒤쪽 요소로 새어 나갔다 — `aria-modal` 을 선언해 놓고 트랩이
+        풀린 상태다.
+      */
+      if (!container.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? lastItem : firstItem).focus();
+        return;
+      }
+
       // 양 끝에서 넘어가면 반대쪽으로 감는다 — 뒤쪽 화면으로 새지 않게.
-      if (event.shiftKey && (active === firstItem || !container.contains(active))) {
+      if (event.shiftKey && active === firstItem) {
         event.preventDefault();
         lastItem.focus();
       } else if (!event.shiftKey && active === lastItem) {
