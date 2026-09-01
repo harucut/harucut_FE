@@ -221,8 +221,11 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 - ⚠️ **같은 `idempotencyKey` 로 색만 바꿔 다시 보내면 무시된다** — 기존 작업이 그대로
   재생된다. 색을 바꿨으면 멱등키도 새로 잡아야 한다.
 
-프론트는 이미 보낸다 — `lib/composeApi.ts:63`(타입), `lib/fourcutCompose.ts:253-258`
-(이미지 배경이면 색을 빼고 보내는 분기), `app/shoot/result/page.tsx:323,479`(호출부).
+프론트는 이미 보낸다 — `lib/composeApi.ts:63`(타입),
+`lib/fourcutCompose.ts:544` 의 `wantedBackgroundColor`(꾸민 프레임이면 색을 빼고
+저장된 배경을 쓴다)와 `:398-409` 의 `submitCompose`(그래도 이미지 배경이라 400 이면
+색만 빼고 한 번 더 보낸다), 호출부는 `app/shoot/result/page.tsx:366`(합성)과
+`:525`(로그인 후 재합성).
 회원 잠금과 우회 훅도 걷혔다: `components/frame/FrameOutputOptionsPanel.tsx:25-27` 의
 `backgroundLocked` 는 이제 `hasCustomFrame` 이고(꾸민 프레임만 잠근다),
 예전 이 자리에 적혀 있던 `hooks/useServerFrameBackground.ts` 는 **없는 파일**이다.
@@ -424,6 +427,11 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
 「이번에 고친 어긋남」 5·6·7(첫 세 건)과 8·9(D-4·D-5)로 옮겼다. 고친 것을 여기 결함으로
 남겨 두면 다음 사람이 이미 고친 코드를 다시 고친다. **여기 남은 어긋남은 없다.**
 
+⚠️ **다만 8(D-4)에는 프론트가 끝까지 못 닫는 갈래가 하나 남는다** — 우리 편집기 밖(다른
+기기·다른 세션)에서 프레임을 고쳤고 이쪽 조회까지 실패한 경우다. 이건 프론트 결함이 아니라
+`FrameResponse` 에 수정 시각이 없어서 생기는 것이라, 결함 목록이 아니라 백엔드 요청으로
+들고 있다(`docs/app-shell-backend-requests.md` §6).
+
 번호는 9-01 대조 그대로 둔다(D-4·D-5). 코드 주석과 리뷰 스레드가 그 번호로 이 문서를
 가리키므로, 옮긴 뒤에도 「D-4」·「D-5」라는 이름은 살려 둔다.
 
@@ -498,8 +506,21 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
    두 벌 접수된다(8-24 에 실제로 남았다). 그래서 지문은 두 번째 인자로 따로 받고,
    「아직 못 읽음 → 키 유지 / 처음 읽음 → 지문만 각인 / 바뀜 → 새 키 + `imageResult: null`」
    세 갈래다. 지문에 `renderUrl`·`background.url` 은 **넣지 않는다**(조회마다 다시 서명돼서
-   넣으면 매번 새 키가 나온다). 남은 구멍 하나: **첫 테마 조회가 실패하면 지문이 null 로
-   남는다** — 그동안은 D-4 그대로다.
+   넣으면 매번 새 키가 나온다).
+
+   지문만으로는 구멍이 하나 남았다 — **첫 테마 조회가 실패하면 지문이 null 로 남아**, 그 뒤
+   프레임을 고쳐도 「처음 알게 됐을 때」로 보고 쓰던 키를 유지한다. 그래서 **편집기 저장
+   시점에도 키를 버린다**: `components/theme/editor/ThemeEditorPage.tsx` 가 `updateFrame`
+   200 뒤에 `useShootSession.getState().noteRemoteFrameEdited(remoteFrameId)` 를 부르고,
+   그 프레임이 지금 촬영에 쓰는 프레임이면 `composeIdempotency` 와 `imageResult` 를 함께
+   버린다. **저장은 조회와 달리 실패할 수 없는 사실**이라 지문을 못 읽었어도 쓸 수 있다.
+   회귀는 `ThemeEditorPage.test.tsx` 의 두 케이스가 지킨다(고친 프레임이 촬영 프레임일 때만
+   버린다).
+
+   ⚠️ **우리 편집기 밖에서 고친 경우는 여전히 못 본다** — 다른 기기·다른 세션에서 같은
+   계정으로 프레임을 고치면 이쪽은 조회로만 알 수 있고, 그 조회가 실패하면 옛 키가 나간다.
+   `FrameResponse.updatedAt` 을 받으면 이것까지 닫힌다
+   (`docs/app-shell-backend-requests.md` §6).
 
 9. **로그인 화면이 회원가입 규칙으로 로그인을 막았다** (D-5, 2026-09-02). 서버
    `LoginRequest.password` 는 `minLength 1` 뿐이다 — **상한도 문자 종류 제한도 없다.**
