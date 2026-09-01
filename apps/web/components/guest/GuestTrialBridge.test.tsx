@@ -16,6 +16,7 @@ const mockReplace = jest.fn();
 const mockSaveFourcutToServer = jest.fn();
 const mockGetPending = jest.fn();
 const mockClearPending = jest.fn();
+const mockEnsureComposeKey = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
 
 let mockSearch = new URLSearchParams();
@@ -33,6 +34,8 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 jest.mock("@/lib/pendingGuestSave", () => ({
   getPendingGuestSave: (...args: unknown[]) => mockGetPending(...args),
   clearPendingGuestSave: (...args: unknown[]) => mockClearPending(...args),
+  ensurePendingGuestSaveComposeKey: (...args: unknown[]) =>
+    mockEnsureComposeKey(...args),
 }));
 
 jest.mock("@/lib/fourcutCompose", () => ({
@@ -49,6 +52,13 @@ const PENDING = {
   backgroundColor: "#ffffff",
   savedAt: 0,
 };
+
+/**
+ * 보관물에 심긴 합성 멱등키. 실제 저장소와 같은 수명을 흉내 낸다 —
+ * 한 번 심으면 보관물이 지워질 때까지 같은 값이다.
+ */
+let storedComposeKey: string | null = null;
+let mintedKeyCount = 0;
 
 /** 로그인 여부는 쿠키가 아니라 `/api/auth/session` 응답이 정한다. */
 function setSession(authenticated: boolean) {
@@ -74,6 +84,18 @@ beforeEach(() => {
     notice: null,
   });
   mockGetPending.mockReturnValue(PENDING);
+  storedComposeKey = null;
+  mintedKeyCount = 0;
+  mockEnsureComposeKey.mockImplementation(() => {
+    if (!storedComposeKey) {
+      mintedKeyCount += 1;
+      storedComposeKey = `web-guest-${mintedKeyCount}`;
+    }
+    return storedComposeKey;
+  });
+  mockClearPending.mockImplementation(() => {
+    storedComposeKey = null;
+  });
   setSession(true);
   mockSaveFourcutToServer.mockResolvedValue({
     mediaId: 1,
@@ -230,6 +252,52 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     expect(useGuestTrialStore.getState().notice?.message).toContain(
       "새로고침하면 다시 시도",
     );
+  });
+
+  /*
+    회귀 — 재시도가 같은 네컷을 한 벌 더 만들지 않는다.
+
+    서버 합성이 **성공한 뒤에도** 이 인계는 실패할 수 있다(폴링 시간 초과, 이름 바꾸기 뒤의
+    URL 조회). 그런 실패에는 보관물을 남겨 재시도를 안내하는데, 그때 멱등키까지 새로 만들면
+    서버가 예전 작업을 재생하지 못하고 처음부터 다시 그린다 — 기록에 똑같은 네컷이 두 벌
+    남는다. 키는 보관물과 함께 살아 있어야 하고, 새로고침(= 다시 마운트)해도 같아야 한다.
+  */
+  it("재시도해도 처음 잡은 멱등키를 그대로 쓴다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("timeout"));
+
+    const first = render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    // 보관물이 남아 있어야 재시도가 성립한다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+
+    // 새로고침. 컴포넌트는 새로 마운트되고, 이어받을 것은 보관물뿐이다.
+    first.unmount();
+    useGuestTrialStore.setState({ hydrated: false, notice: null });
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    const [firstCall, secondCall] = mockSaveFourcutToServer.mock.calls;
+    expect(typeof firstCall[0].idempotencyKey).toBe("string");
+    expect(secondCall[0].idempotencyKey).toBe(firstCall[0].idempotencyKey);
   });
 
   /*

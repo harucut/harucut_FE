@@ -11,6 +11,7 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
   clearPendingGuestSave,
+  ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
   type PendingGuestSave,
 } from "@/lib/pendingGuestSave";
@@ -104,6 +105,23 @@ export function GuestTrialBridge() {
     let prompted = false;
 
     const runPendingSave = async (entry: PendingGuestSave) => {
+      /*
+        멱등키는 **보관물에 심어 두고 다시 쓴다.**
+
+        이 인계는 서버 합성이 성공한 뒤에도 실패할 수 있다 — 폴링 시간 초과, 이름 바꾸기
+        뒤의 URL 조회(lib/fourcutProcessing.ts). 그런 실패는 다시 해 볼 만한 것으로 보고
+        보관물을 남기는데(아래 catch), 키 없이 다시 부르면 `composeFourcutOnServer` 가
+        매번 새 키를 만들어 접수해서 **같은 네컷이 기록에 두 벌** 남는다. 같은 키면
+        서버가 이미 만든 작업을 그대로 재생하므로 한 벌로 끝난다.
+
+        재시도는 원본 4장을 S3 에 다시 올린다. 그 키들은 서버가 쳐다보지도 않고 예전 작업을
+        재생하므로, 남는 원본 정리는 백엔드 몫이다(lib/fourcutCompose.ts 주석 참고).
+
+        보관물이 사라진 뒤라면 null 이다. 그때는 예전처럼 새 키로 간다 — 재생할 앞선
+        작업도 없다.
+      */
+      const idempotencyKey = ensurePendingGuestSaveComposeKey() ?? undefined;
+
       try {
         await saveFourcutToServer({
           sources: entry.sources,
@@ -112,6 +130,7 @@ export function GuestTrialBridge() {
           frameId: entry.frameId,
           remoteFrameId: entry.remoteFrameId,
           displayName: entry.displayName,
+          idempotencyKey,
           // 비회원 때 고른 배경색 그대로 다시 그린다 — 빼면 서버가 프레임에 저장된
           // 배경으로 그려서, 방금 내려받아 본 그림과 색이 갈린다.
           backgroundColor: entry.backgroundColor,
