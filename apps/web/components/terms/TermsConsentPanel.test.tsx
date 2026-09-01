@@ -357,4 +357,70 @@ describe("TermsConsentPanel", () => {
     expect(newsletterBox).toBeEnabled();
     consoleError.mockRestore();
   });
+
+  /**
+   * 변경 실패 뒤의 재조회 실패는 최초 조회 실패와 다르다.
+   *
+   * 장애가 이어져 재조회까지 실패했다고 목록을 비우면 체크박스가 전부 사라진다 —
+   * 연결이 돌아와도 같은 화면에서 재시도할 자리가 없고, 사용자에게 실제로 필요한
+   * 저장 실패 문구도 일반 조회 오류로 덮인다.
+   */
+  it("변경 실패 뒤 재조회까지 실패해도 목록과 저장 오류가 남는다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    // 첫 조회만 성공한다. 실패 뒤의 재조회는 장애가 이어지는 상황이라 실패한다.
+    mockFetchMine
+      .mockResolvedValueOnce([refundPolicy, newsletterPolicy])
+      .mockRejectedValue(new Error("network"));
+    mockFetchActive.mockResolvedValue(bothReadable);
+    mockSubmit.mockRejectedValueOnce(new Error("network"));
+
+    render(<TermsConsentPanel />);
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("checkbox")).toHaveLength(2),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole("checkbox")[0]).toBeEnabled(),
+    );
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+
+    // 저장 실패 문구가 남는다. 재조회 실패가 조회 오류로 덮어쓰지 않는다.
+    expect(
+      await screen.findByText("동의 설정을 저장하지 못했어요."),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(mockFetchMine).toHaveBeenCalledTimes(2));
+    expect(
+      screen.queryByText("약관 동의 정보를 불러오지 못했어요."),
+    ).not.toBeInTheDocument();
+
+    // 목록은 그대로 있고, 실패한 항목은 눌리기 전 값으로 돌아가 있다.
+    const [refundBox, newsletterBox] = screen.getAllByRole("checkbox");
+    expect(refundBox).not.toBeChecked();
+    expect(refundBox).toBeEnabled();
+    expect(newsletterBox).toBeEnabled();
+
+    // 연결이 회복되면 같은 화면에서 같은 방향으로 다시 시도할 수 있다.
+    mockSubmit.mockResolvedValueOnce(undefined);
+    fireEvent.click(refundBox);
+
+    await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(2));
+    expect(mockSubmit).toHaveBeenNthCalledWith(2, [
+      { code: "refund-policy", agreed: true },
+    ]);
+    expect(refundBox).toBeChecked();
+    consoleError.mockRestore();
+  });
+
+  // 반대쪽 경계. 보여 줄 것이 없는 최초 조회 실패는 지금처럼 조회 오류만 남긴다.
+  it("최초 조회가 실패하면 빈 화면과 조회 오류를 보여 준다", async () => {
+    mockFetchMine.mockRejectedValue(new Error("network"));
+
+    render(<TermsConsentPanel />);
+
+    expect(
+      await screen.findByText("약관 동의 정보를 불러오지 못했어요."),
+    ).toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+  });
 });

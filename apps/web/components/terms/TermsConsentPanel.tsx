@@ -65,8 +65,14 @@ export function TermsConsentPanel() {
         }),
       );
     } catch {
-      setConsents([]);
-      setError("약관 동의 정보를 불러오지 못했어요.");
+      // **최초 조회 실패와 재조회 실패는 다르다.**
+      //
+      // 최초 조회는 아직 보여 줄 것이 없으니 빈 목록과 조회 오류가 맞다. 반면 변경
+      // 실패 뒤의 재조회는 이미 화면에 목록이 있다 — 여기서 비우면 체크박스가 전부
+      // 사라져, 연결이 돌아와도 같은 화면에서 동의·철회를 다시 누를 자리가 없다.
+      // 사용자에게 실제로 필요한 저장 실패 문구도 조회 오류로 덮이므로 둘 다 남긴다.
+      setConsents((current) => current ?? []);
+      setError((current) => current ?? "약관 동의 정보를 불러오지 못했어요.");
     }
   }, []);
 
@@ -125,6 +131,21 @@ export function TermsConsentPanel() {
       // 되돌리기 전에 내 잠금부터 푼다. 그래야 `load()` 가 이 항목만 서버 값으로
       // 되돌리고, 아직 나가 있는 다른 항목의 화면 값은 건드리지 않는다.
       markPending(item.code, false);
+      // 미리 그린 값은 여기서 먼저 눌리기 전으로 되돌린다. 아래 `load()` 가 성공하면
+      // 서버 값으로 다시 덮이지만, 그 조회까지 실패하면 저장되지 않은 값만 화면에
+      // 남는다 — 저장 실패 문구를 보면서 체크는 들어가 있는 꼴이라, 같은 동작을
+      // 재시도하려면 반대 방향을 눌러야 하는 화면이 된다.
+      setConsents((current) =>
+        (current ?? []).map((consent) =>
+          consent.code === item.code
+            ? {
+                ...consent,
+                status: item.status,
+                agreedVersion: item.agreedVersion,
+              }
+            : consent,
+        ),
+      );
       await load();
     }
   };
