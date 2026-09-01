@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { newIdempotencyKey } from "@/lib/composeApi";
+import { isBlankSourceComponent } from "@/lib/frameApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import {
   createEmptySlots,
@@ -70,6 +71,12 @@ function stableStringify(value: unknown): string {
  * 렌더 전용 주소(`renderUrl`, `background.url`)는 뺀다 — 서명 URL 이라 같은 프레임을 다시
  * 읽을 때마다 달라진다. 넣으면 내용이 그대로인데도 매번 새 키가 나가 같은 네컷이 보관함에
  * 두 벌 남는다. `id` 도 뺀다(서버가 다시 매기는 값이다).
+ *
+ * **저장 요청에서 빠지는 컴포넌트도 뺀다**(`isBlankSourceComponent` — 규칙의 소유자는
+ * `lib/frameApi.ts` 다). 글자를 지운 TEXT 는 `toCreateFrameRequest` 가 요청에서 빼므로
+ * 서버가 그리는 그림에 없다. 지문에 남겨 두면 **서버에 가지도 않는 레이어**를 옮기거나
+ * 지우기만 해도 내용이 달라진 것으로 보여, 같은 그림이 새 멱등키로 두 벌 접수된다.
+ * 서버에서 읽어 온 프레임에는 애초에 빈 레이어가 없으므로 그쪽에는 영향이 없다.
  */
 export function buildFrameContentKey(
   theme: ThemeExportJson | null | undefined,
@@ -89,18 +96,20 @@ export function buildFrameContentKey(
               opacity: theme.background.opacity ?? 1,
             },
     cellCutouts: theme.cellCutouts ?? null,
-    components: theme.components.map((component) => ({
-      type: component.type,
-      source: component.source,
-      x: component.x,
-      y: component.y,
-      width: component.width,
-      height: component.height,
-      scale: component.scale,
-      rotation: component.rotation,
-      zIndex: component.zIndex,
-      styleJson: component.styleJson ?? null,
-    })),
+    components: theme.components
+      .filter((component) => !isBlankSourceComponent(component))
+      .map((component) => ({
+        type: component.type,
+        source: component.source,
+        x: component.x,
+        y: component.y,
+        width: component.width,
+        height: component.height,
+        scale: component.scale,
+        rotation: component.rotation,
+        zIndex: component.zIndex,
+        styleJson: component.styleJson ?? null,
+      })),
   });
 }
 

@@ -137,6 +137,29 @@ function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground 
   };
 }
 
+/**
+ * 저장 요청에서 **빠지는** 컴포넌트인가.
+ *
+ * `source` 는 required + minLength 1(@NotBlank)이다. 글자를 지운 TEXT 는 source 가 빈
+ * 문자열이라, 그 레이어 하나 때문에 저장 전체가 400 GEN-003
+ * (`components[0].source: must not be blank`)으로 죽는다 — 실측 확인.
+ * 빈 글자는 화면에 그려지는 것도 없고 `finalizeAssetsForSave` 도 이미 굽지 않고
+ * 건너뛰므로, 요청에서 빼고 나머지를 저장한다.
+ *
+ * **이 규칙의 소유자는 이 함수다.** `toCreateFrameRequest` 의 필터와 프레임 내용 지문
+ * (`shootSessionStore.buildFrameContentKey`)이 같이 쓴다 — 둘이 갈라지면 서버에 안 가는
+ * 레이어를 고친 것만으로 합성 멱등키가 버려져 같은 그림이 두 벌 접수된다.
+ */
+export function isBlankSourceComponent(component: {
+  type: ThemeExportJson["components"][number]["type"];
+  source: string;
+}): boolean {
+  const source =
+    component.type === "TEXT" ? component.source : toStorageKey(component.source);
+
+  return source.trim().length === 0;
+}
+
 export function toCreateFrameRequest(
   json: ThemeExportJson,
   meta: { title: string; description: string; previewKey: string },
@@ -171,12 +194,9 @@ export function toCreateFrameRequest(
         styleJson: (c.styleJson ?? {}) as Record<string, unknown>,
         id: c.id,
       }))
-      // source 는 required + minLength 1(@NotBlank)이다. 글자를 지운 TEXT 는 source 가
-      // 빈 문자열이라, 그 레이어 하나 때문에 저장 전체가 400 GEN-003
-      // (`components[0].source: must not be blank`)으로 죽는다 — 실측 확인.
-      // 빈 글자는 화면에 그려지는 것도 없고 finalizeAssetsForSave 도 이미 굽지 않고
-      // 건너뛰므로, 요청에서 빼고 나머지를 저장한다.
-      .filter((c) => c.source.trim().length > 0),
+      // 규칙은 `isBlankSourceComponent` 가 쥔다(위 주석). 여기서 조건을 다시 쓰면
+      // 지문 쪽과 갈라진다.
+      .filter((c) => !isBlankSourceComponent(c)),
   };
 }
 

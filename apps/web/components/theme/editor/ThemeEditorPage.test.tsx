@@ -364,6 +364,37 @@ describe("ThemeEditorPage save flow", () => {
     });
   });
 
+  /*
+    ── 회귀: 저장 요청에서 빠지는 레이어는 지문에도 없다 ──
+
+    글자를 지운 TEXT 는 `toCreateFrameRequest` 가 요청에서 뺀다(`source` 가 @NotBlank 라
+    그 레이어 하나로 저장 전체가 400 이 된다). 서버가 그리는 그림에 없는 레이어이므로,
+    그것을 추가하거나 옮기기만 한 저장은 합성 결과를 바꾸지 않는다. 지문이 그 레이어를
+    보면 같은 그림이 새 멱등키로 두 벌 접수된다.
+  */
+  it("빈 TEXT 레이어만 늘어난 저장은 멱등키와 결과를 남겨 둔다", async () => {
+    mockRemoteFrameId = 7;
+    useShootSession.setState({
+      remoteFrameId: 7,
+      composeIdempotency: STALE_IDEMPOTENCY,
+      imageResult: IMAGE_RESULT,
+    });
+
+    const view = await renderLoadedEditor();
+    // 글자를 지운 TEXT 를 하나 올렸다 → 요청 본문에서는 빠진다.
+    mockExportJson.mockReturnValue({
+      ...BASE_THEME,
+      components: [{ type: "TEXT", source: "   ", x: 10, y: 10 }],
+    });
+    confirmSave(view.container);
+
+    await waitFor(() => {
+      expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
+    });
+    expect(useShootSession.getState().composeIdempotency).toEqual(STALE_IDEMPOTENCY);
+    expect(useShootSession.getState().imageResult).toEqual(IMAGE_RESULT);
+  });
+
   it("다른 프레임을 고쳤으면 촬영 세션을 건드리지 않는다", async () => {
     mockRemoteFrameId = 7;
     useShootSession.setState({

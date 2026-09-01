@@ -476,6 +476,8 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
    `ComponentRequest.source` 는 `minLength 1`(@NotBlank)이고 TEXT 의 `source` 는 글자 내용
    그 자체라, 빈 레이어 하나가 `components[0].source: must not be blank` 로 저장을 통째로
    죽였다. 지금은 `toCreateFrameRequest` 가 빈 source 컴포넌트를 요청에서 뺀다
+   (판정의 소유자는 `lib/frameApi.ts` 의 `isBlankSourceComponent` — 프레임 내용 지문도
+   같은 함수를 쓴다, 위 8번)
    (`lib/frameApi.ts:179`). 지우는 것 자체는 막지 않고 — 막으면 고쳐 쓰지도 못한다 —
    사라진다는 사실을 속성 패널이 미리 말한다(`InspectorPanel.tsx:124,144-147`).
 
@@ -529,9 +531,15 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
    상태가 아니라 `finalizeAssetsForSave()` 까지 끝난 값이라, 누르고 나서 끝난 누끼 작업처럼
    대기 중에 바뀐 것도 판정에 들어간다.
 
-   회귀는 `ThemeEditorPage.test.tsx` 의 다섯 케이스가 지킨다 — 출력이 달라지면 버리고,
+   지문은 **저장 요청에서 빠지는 레이어도 뺀다.** 글자를 지운 TEXT 는
+   `toCreateFrameRequest` 가 요청에서 빼므로(위 6번) 서버가 그리는 그림에 없다 — 지문이
+   그걸 보면 서버에 가지도 않는 레이어를 옮기기만 해도 두 벌이 접수된다. 그 규칙의
+   소유자는 `lib/frameApi.ts` 의 `isBlankSourceComponent` 이고, 요청 필터와 지문이
+   **같은 함수**를 쓴다.
+
+   회귀는 `ThemeEditorPage.test.tsx` 의 여섯 케이스가 지킨다 — 출력이 달라지면 버리고,
    그대로면 안 버리고, 편집기 상태만 바뀌면 안 버리고, 저장 대기 중에 끝난 변경도 잡고,
-   다른 프레임이면 안 건드린다.
+   빈 TEXT 만 늘어난 저장은 안 버리고, 다른 프레임이면 안 건드린다.
 
    ⚠️ **우리 편집기 밖에서 고친 경우는 여전히 못 본다** — 다른 기기·다른 세션에서 같은
    계정으로 프레임을 고치면 이쪽은 조회로만 알 수 있고, 그 조회가 실패하면 옛 키가 나간다.
