@@ -320,6 +320,8 @@ URL(`renderUrl`·`background.url`)은 뺀다 — 넣으면 내용이 그대로�
 고쳐도 새 키를 잡지 못했다. 그래서 **편집기 저장 시점에도 키를 버리게 했다**
 (`components/theme/editor/ThemeEditorPage.tsx` → `shootSessionStore.noteRemoteFrameEdited`).
 저장은 조회와 달리 실패할 수 없는 사실이라, 지문을 못 읽었어도 내용이 바뀐 것은 확실하다.
+단, **캔버스가 실제로 달라진 저장에만** 버린다 — 이름만 고친 저장까지 버리면 같은 그림이
+새 멱등키로 다시 접수돼 보관함에 두 벌이 남는다.
 
 **남은 것은 우리 편집기 밖에서 고친 경우뿐이다** — 다른 기기·다른 세션에서 같은 계정으로
 프레임을 고치면 이쪽 세션은 조회로만 알 수 있고, 그 조회가 실패하면 여전히 옛 키가 나간다.
@@ -361,7 +363,7 @@ jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `Compo
 | 3. 기기 토큰 등록 | `push`·`device`·`token`·`notif` 로 거른 경로 **0건** | **막힘** |
 | 4. 원본 파일 삭제 | `DELETE` 가 있는 경로는 7개뿐 — `admin/frames`·`admin/notices`·`admin/terms`·`user/frame/{id}`·`user/media/{id}`·`exit`·`logout`. **파일(key) 을 지우는 경로는 없다** | **막힘** |
 | 5. 요금제 한도 | 위 절 — 「무제한이 맞나」는 닫혔고, 「언제 켜나」가 남았다 | **답 대기** |
-| 6. 프레임 수정 시각 | `FrameResponse` 에 `updatedAt`·`version` 이 **없다**(2026-09-02 `/v3/api-docs`). 프론트는 조회한 내용의 지문으로 우회한다(`lib/shootSessionStore.ts` `buildFrameContentKey`), 그리고 편집기 저장 시점에도 멱등키를 버린다(`ThemeEditorPage` → `noteRemoteFrameEdited`) | **답 대기 · 급하지 않음** |
+| 6. 프레임 수정 시각 | `FrameResponse` 에 `updatedAt`·`version` 이 **없다**(2026-09-02 `/v3/api-docs`). 프론트는 조회한 내용의 지문으로 우회하고(`lib/shootSessionStore.ts` `buildFrameContentKey`), 편집기에서 **캔버스가 달라진 저장**이면 멱등키도 버린다(`ThemeEditorPage` → `noteRemoteFrameEdited`) | **답 대기 · 급하지 않음** |
 | 7. 셀 누끼를 Lambda 가 그리나 | jar 의 `ComposeSpecAssembler` 가 `cellCutouts` 를 `ComposeSpec` 에 싣는 것까지만 확인. 실제 렌더는 jar 밖(`LambdaComposeExecutor`)이라 여기서 못 본다. 프론트는 업로드 전에 이미 굽는다 | **답 대기** |
 
 계약 사실(응답 봉투·스키마·에러코드·업로드 타입 개명)은 이 문서가 소유하지 않는다.

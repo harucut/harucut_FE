@@ -514,8 +514,14 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
    200 뒤에 `useShootSession.getState().noteRemoteFrameEdited(remoteFrameId)` 를 부르고,
    그 프레임이 지금 촬영에 쓰는 프레임이면 `composeIdempotency` 와 `imageResult` 를 함께
    버린다. **저장은 조회와 달리 실패할 수 없는 사실**이라 지문을 못 읽었어도 쓸 수 있다.
-   회귀는 `ThemeEditorPage.test.tsx` 의 두 케이스가 지킨다(고친 프레임이 촬영 프레임일 때만
-   버린다).
+
+   **버리는 조건은 「캔버스가 실제로 달라졌을 때」다**(`hasUnsavedCanvasChanges`).
+   이름·설명만 고치거나 아무것도 안 고치고 다시 저장해도 `updateFrame` 은 200 이라,
+   조건 없이 버리면 결과 화면이 같은 그림을 새 멱등키로 다시 접수해 **보관함에 두 벌**이
+   남는다(8-24 의 실패와 같다). 그 지문이 보는 범위는 컴포넌트·배경·배경색·셀 누끼로,
+   제목·설명·미리보기 키를 빼는 `buildFrameContentKey` 와 같다.
+   회귀는 `ThemeEditorPage.test.tsx` 의 세 케이스가 지킨다 — 고쳤을 때만, 안 고쳤으면
+   그대로, 다른 프레임이면 안 건드림.
 
    ⚠️ **우리 편집기 밖에서 고친 경우는 여전히 못 본다** — 다른 기기·다른 세션에서 같은
    계정으로 프레임을 고치면 이쪽은 조회로만 알 수 있고, 그 조회가 실패하면 옛 키가 나간다.
