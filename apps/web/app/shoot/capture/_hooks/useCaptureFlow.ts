@@ -317,8 +317,33 @@ export function useCaptureFlow() {
 
     const { sx, sy, sw, sh } = crop;
 
-    canvas.width = Math.max(1, Math.round(sw));
-    canvas.height = Math.max(1, Math.round(sh));
+    /*
+      자른 좌표(sx·sy·sw·sh)는 그대로 두고 **담는 그릇만** 슬롯 크기까지 줄인다.
+      화각은 위에서 이미 정했다 — 여기서 바꾸면 화면에서 본 것과 결과물이 달라진다.
+
+      4K 요청과 스틸 촬영을 붙인 뒤로 잘라낸 조각이 6~9MP 까지 나온다. 그 크기 그대로
+      담으면 둘이 걸린다.
+        - 8장을 data URL 로 세션에 들고 있어야 해서 모바일 메모리와 인코딩 비용이 그만큼 커진다.
+        - 비회원이 고른 4장은 localStorage 로 인계되는데(lib/pendingGuestSave.ts), 한도(대개
+          5MB)를 넘겨 setPendingGuestSave 가 실패한다. 그러면 로그인 뒤 기록 저장 흐름이
+          통째로 사라진다.
+      어차피 합성 단계가 슬롯 크기 캔버스에 그리므로(lib/fourcutCompose.ts renderSourceForSlot)
+      슬롯을 넘는 화소는 거기서 버려진다. 여기서 미리 버려도 결과물은 같다.
+
+      **슬롯보다 작게는 절대 줄이지 않는다**(`Math.min(1, ...)`). 이 PR 이 해상도를 올린 이유가
+      합성 단계의 확대를 없애는 것이었고, 상한을 슬롯 아래로 잡으면 그 확대가 그대로 돌아온다.
+      상한은 FRAME_LAYOUTS 에서 온 슬롯 치수(targetWidth·targetHeight)라 레이아웃이 늘거나
+      커져도 따라온다 — 숫자를 다시 박지 않는다. lib/photoImport.ts 도 불러온 사진에
+      같은 규칙을 쓴다.
+
+      가로·세로 비율을 모두 재는 건 반올림 오차 대비다. crop 은 targetAspect 로 잘려 나와
+      두 비가 같아야 하지만, 작은 쪽을 골라 두면 어느 쪽도 슬롯을 넘지 않는다.
+      프레임이 없어 captureSlot 이 null 이면 target 이 영상 크기라 배율이 1 이다 — 예전 동작.
+    */
+    const outputScale = Math.min(1, targetWidth / sw, targetHeight / sh);
+
+    canvas.width = Math.max(1, Math.round(sw * outputScale));
+    canvas.height = Math.max(1, Math.round(sh * outputScale));
 
     ctx.save();
     if (cameraFacingMode === "user") {
