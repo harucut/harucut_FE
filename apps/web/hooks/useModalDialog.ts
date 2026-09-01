@@ -19,7 +19,8 @@ const FOCUSABLE = [
 ].join(",");
 
 /**
- * 지금 열려 있는 다이얼로그 컨테이너 목록. Escape 는 이 중 화면 맨 위 하나만 받는다.
+ * 지금 열려 있는 다이얼로그 목록. **키보드는 이 중 화면 맨 위 하나만 갖는다** — Escape 도,
+ * 열릴 때의 초기 포커스도, Tab 트랩도.
  *
  * 이 훅은 keydown 을 `document` 에 capture 로 건다. `stopPropagation()` 은 **같은 요소에
  * 걸린 다른 리스너를 멈추지 않는다.** 그래서 모달이 둘 열려 있으면 Escape 한 번에 두 훅의
@@ -35,10 +36,25 @@ const FOCUSABLE = [
  * 모달은 닫히지 않는다 — 원래 버그를 다른 얼굴로 되살리는 셈이다. 어느 조회가 먼저 끝났는지에
  * 판정이 흔들리지 않도록, 키가 눌린 시점에 (실효 z-index, 문서 순서)로 비교한다.
  *
- * 등록은 열릴 때, 해제는 정리에서 하고 **정체성으로** 지운다(`lastIndexOf` + `splice`).
- * 그래야 열린 순서와 사라지는 순서가 달라도 목록 자체는 정확하게 남는다.
+ * **포커스도 같은 임자를 따른다.** 한때 이 판정을 Escape 에만 걸었더니, 열림 effect 는 여전히
+ * 자기 첫 컨트롤로 포커스를 무조건 끌어갔고 Tab 도 다이얼로그마다 각자 처리했다. 약관
+ * 재동의(z-130)가 떠 있는데 게스트 인계 안내(z-120)가 뒤늦게 열리면 포커스가 화면 뒤에 가려진
+ * 안내 안으로 빨려 들어가고, "다른 모달이 쥔 포커스는 뺏지 않는다"는 Tab 쪽 예외 때문에 거기서
+ * 계속 순환했다 — 보이는 약관 모달을 키보드로는 손도 못 댄다. `aria-modal="true"` 를 선언한
+ * 이상 맨 위 하나 말고는 없는 셈 쳐야 한다. 임자가 하나면 서로 preventDefault 하며 포커스를
+ * 당기던 교착도 같이 사라진다.
+ *
+ * 등록은 열릴 때, 해제는 정리에서 한다. 항목은 열 때마다 새로 만드는 객체라 **정체성으로**
+ * 지운다 — 같은 컨테이너가 여닫히기를 반복해도(게스트 인계 안내가 그렇다) 목록이 어긋나지 않고,
+ * 열린 순서와 사라지는 순서가 달라도 남은 것만 정확히 남는다.
  */
-const openDialogs: HTMLElement[] = [];
+type OpenDialog = {
+  container: HTMLElement;
+  /** 이 다이얼로그 안으로 포커스를 넣는다. 위에 있던 것이 닫히면 물려받는 쪽이 이걸 쓴다. */
+  focusInside: () => void;
+};
+
+const openDialogs: OpenDialog[] = [];
 
 /**
  * 컨테이너가 실제로 얹히는 z-index.
@@ -66,6 +82,23 @@ function paintsAbove(a: HTMLElement, b: HTMLElement): boolean {
 
   if (orderA !== orderB) return orderA > orderB;
   return (b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+/**
+ * 지금 화면 맨 위에 그려지는 다이얼로그. 열린 것이 없으면 null.
+ *
+ * DOM 에서 이미 빠진 컨테이너는 겨루지 않는다. 언마운트로 닫히는 다이얼로그는 정리가 도는
+ * 시점과 노드가 사라지는 시점이 어긋날 수 있어, 그대로 두면 화면에 없는 것이 맨 위로 뽑힌다.
+ */
+function topmostDialog(): OpenDialog | null {
+  let top: OpenDialog | null = null;
+
+  for (const dialog of openDialogs) {
+    if (!dialog.container.isConnected) continue;
+    if (!top || paintsAbove(dialog.container, top.container)) top = dialog;
+  }
+
+  return top;
 }
 
 /**
@@ -119,31 +152,41 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
       );
 
     // 첫 컨트롤로 옮긴다. 없으면 컨테이너 자체에 준다(제목을 읽어 주도록).
-    const first = focusables()[0];
-    if (first) first.focus();
-    else {
+    const focusInside = () => {
+      const first = focusables()[0];
+      if (first) {
+        first.focus();
+        return;
+      }
       container.setAttribute("tabindex", "-1");
       container.focus();
-    }
+    };
 
-    openDialogs.push(container);
-    const isTopmost = () =>
-      openDialogs.every(
-        (other) =>
-          other === container || !other.isConnected || !paintsAbove(other, container),
-      );
+    const self: OpenDialog = { container, focusInside };
+    openDialogs.push(self);
+    const isTopmost = () => topmostDialog() === self;
+
+    /*
+      맨 위로 열렸을 때만 포커스를 가져온다.
+
+      아래에 깔릴 다이얼로그가 나중에 열리는 조합이 실제로 있다 — 약관 재동의(z-130)가 떠 있는
+      사이 게스트 인계 안내(z-120)가 조회 결과로 도착한다. 그때 포커스를 끌어가면 화면 뒤에
+      가려진 안내에 포커스가 갇힌다. 이쪽 차례는 위엣것이 닫힐 때 정리 함수가 넘겨준다.
+    */
+    if (isTopmost()) focusInside();
 
     const onKeyDown = (event: KeyboardEvent) => {
+      /*
+        겹쳐 있으면 맨 위 다이얼로그만 키를 받는다. 아래에 깔린 것은 못 본 척한다.
+
+        Tab 까지 이 판정에 넣는 이유: 임자를 하나로 두지 않으면 아래 다이얼로그가 자기 안에서
+        포커스를 계속 감아 돌려, 보이는 위 다이얼로그로 나갈 방법이 없다. 트랩을 잃는 것이
+        아니다 — 맨 위 다이얼로그가 자기 밖으로 떨어진 포커스를 모두 되끌어오므로, 뒤쪽 화면도
+        아래 다이얼로그도 포커스를 오래 쥐지 못한다.
+      */
+      if (!isTopmost()) return;
+
       if (event.key === "Escape") {
-        /*
-          겹쳐 있으면 맨 위 다이얼로그만 닫는다. 아래에 깔린 것은 못 본 척한다.
-
-          이 판정은 Escape 에만 건다. Tab 트랩까지 같이 막으면, 보이는데 맨 위는 아닌
-          다이얼로그가 트랩을 통째로 잃는다 — 첫/마지막 컨트롤에서 Tab 이 뒤쪽 화면으로
-          새어 나가고, `aria-modal` 을 선언해 놓고 규약을 어기는 상태로 돌아간다.
-        */
-        if (!isTopmost()) return;
-
         event.stopPropagation();
         onCloseRef.current();
         return;
@@ -166,22 +209,9 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
         제출 중처럼 안의 컨트롤이 한꺼번에 disabled 되면 브라우저가 포커스를 body 로
         내려놓는다. 예전에는 Shift+Tab 만 이 경우를 봐서, 그 상태의 Tab 은 문서 처음부터
         다시 훑으며 모달 뒤쪽 요소로 새어 나갔다 — `aria-modal` 을 선언해 놓고 트랩이
-        풀린 상태다.
+        풀린 상태다. 아래에 깔린 다이얼로그에 남아 있던 포커스도 여기서 회수한다.
       */
       if (!container.contains(active)) {
-        /*
-          단, 다른 모달이 쥔 포커스는 뺏지 않는다.
-
-          이 훅은 document 에 capture 리스너를 건다. 모달이 둘 열려 있으면 서로에게 상대의
-          포커스는 늘 "밖"이라, 두 리스너가 차례로 preventDefault 하고 각자 자기 첫 컨트롤로
-          끌어당긴다 — 순 결과는 제자리고 Tab 이 완전히 멈춘다. 루트 레이아웃에 게스트 인계
-          안내와 약관 재동의 모달이 나란히 있고 둘 다 조회 결과로 저절로 열리므로 실제로
-          겹친다. body 는 어느 다이얼로그에도 속하지 않으니 위 disabled 경우는 그대로 걸린다.
-        */
-        if (active instanceof Element && active.closest('[role="dialog"][aria-modal="true"]')) {
-          return;
-        }
-
         event.preventDefault();
         (event.shiftKey ? lastItem : firstItem).focus();
         return;
@@ -202,7 +232,7 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
 
-      const stacked = openDialogs.lastIndexOf(container);
+      const stacked = openDialogs.lastIndexOf(self);
       if (stacked !== -1) openDialogs.splice(stacked, 1);
 
       // 열기 전 자리로 포커스를 돌려준다. 이 정리 함수는 isOpen 이 false 가 될 때뿐 아니라
@@ -210,13 +240,26 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
       // "닫힘 상태 렌더"가 아예 없어서, 상태 변화만 보면 복원이 실행되지 않는다.
       const target = restoreFocusTo.current;
       restoreFocusTo.current = null;
-      if (!target) return;
 
-      // 다음 프레임에 되돌린다. 정리 함수는 다이얼로그 DOM 이 아직 제거되기 전에 도는데,
+      // 다음 프레임에 옮긴다. 정리 함수는 다이얼로그 DOM 이 아직 제거되기 전에 도는데,
       // 그 자리에서 포커스를 옮겨도 곧이어 포커스된 노드가 사라지면서 브라우저가 body 로
       // 되돌려 버린다(실측에서 그랬다). 제거가 끝난 뒤에 옮긴다.
       requestAnimationFrame(() => {
-        if (document.contains(target)) target.focus();
+        /*
+          아직 열려 있는 다이얼로그가 있으면 포커스는 그중 맨 위로 넘긴다.
+
+          겹쳐 있던 위엣것이 닫히면 아래 다이얼로그가 새 임자가 된다. 열기 전 자리로 돌려주면
+          포커스가 모달 뒤쪽 화면으로 빠져, 남은 다이얼로그는 열려 있는데 키보드로는 닿을 수
+          없다. 반대로 아래엣것이 먼저 닫힌 경우에는 이미 위엣것이 포커스를 쥐고 있으므로
+          건드리지 않는다 — 그대로 복원하면 보이는 다이얼로그에서 포커스를 뺏는 꼴이다.
+        */
+        const next = topmostDialog();
+        if (next) {
+          if (!next.container.contains(document.activeElement)) next.focusInside();
+          return;
+        }
+
+        if (target && document.contains(target)) target.focus();
       });
     };
   }, [isOpen, container]);

@@ -1,22 +1,27 @@
 /**
- * 모달이 겹쳤을 때의 Tab 트랩과 Escape 대상 판정을 고정한다.
+ * 모달이 겹쳤을 때 **키보드의 임자가 누구인가**를 고정한다. 초기 포커스, Tab 트랩, Escape
+ * 셋 다 화면 맨 위 하나만 갖는다.
  *
  * 이 훅은 keydown 을 `document` 에 capture 로 건다. 그래서 모달이 둘 열려 있으면 두 리스너가
- * 모든 키를 본다. 두 가지가 걸린다.
- *  - Tab: "밖으로 떨어진 포커스를 안으로 끌어온다"는 가지가 방향 구분 없이 돌게 된 뒤로는,
- *    서로가 상대의 포커스를 "밖"으로 보고 각자 preventDefault → 자기 첫 컨트롤로 당겼다.
- *    순 결과는 제자리이고 브라우저 기본 이동은 막혀서, 제출 버튼까지 갈 방법이 없어진다.
+ * 모든 키를 본다. 임자를 하나로 정하지 않으면 이렇게 어긋난다.
+ *  - 포커스: 열림 effect 가 자기 첫 컨트롤로 무조건 옮기면, 약관 재동의(z-130) 뒤에 뒤늦게
+ *    열린 게스트 안내(z-120)가 화면 뒤에서 포커스를 채간다. Tab 도 각자 처리하면 그 안에서만
+ *    순환해, 보이는 약관 모달은 키보드로 손도 못 댄다.
  *  - Escape: `stopPropagation()` 이 같은 요소의 다른 리스너를 못 멈추므로 두 onClose 가 모두
  *    돌았다. **맨 위 하나만** 받아야 하고, 그 "맨 위"는 연 순서가 아니라 그려지는 순서다.
  * 루트 레이아웃에 게스트 인계 안내와 약관 재동의가 나란히 붙어 있고 둘 다 조회 결과로 저절로
  * 열리므로 실제로 겹치는 조합이다.
  *
- * jsdom 은 Tab 순회를 구현하지 않는다. 그래서 포커스를 손으로 놓고 keydown 만 흘린 뒤
- * `document.activeElement` 와 preventDefault 여부로 판정한다. 또 jsdom 은 `offsetParent` 를
- * 언제나 null 로 주기 때문에 훅의 "보이는 요소" 필터가 전부 걸러 버린다 —
- * `TermsReconsentDialog.test.tsx` 와 같은 방식으로 부모 요소를 흉내 낸다.
+ * 키는 항상 **지금 포커스를 쥔 요소**에서 누른다. 보이는 버튼에 직접 dispatch 하면 실제
+ * `document.activeElement` 상태를 한 번도 태우지 못해, 포커스가 엉뚱한 모달에 갇힌 회귀를
+ * 놓친다.
+ *
+ * jsdom 은 Tab 순회를 구현하지 않는다. 그래서 keydown 만 흘린 뒤 `document.activeElement` 와
+ * preventDefault 여부로 판정한다. 또 jsdom 은 `offsetParent` 를 언제나 null 로 주기 때문에
+ * 훅의 "보이는 요소" 필터가 전부 걸러 버린다 — `TermsReconsentDialog.test.tsx` 와 같은 방식으로
+ * 부모 요소를 흉내 낸다.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 
 const originalOffsetParent = Object.getOwnPropertyDescriptor(
@@ -88,17 +93,141 @@ function LayeredDialog({
   );
 }
 
-// fireEvent 는 dispatchEvent 결과를 그대로 돌려준다 — preventDefault 가 걸리면 false.
-function pressTab(target: HTMLElement, init: { shiftKey?: boolean } = {}) {
-  return { notPrevented: fireEvent.keyDown(target, { key: "Tab", ...init }) };
+/**
+ * 지금 포커스를 쥔 요소에서 키를 누른다. 실제 키보드가 그렇게 동작한다.
+ *
+ * fireEvent 는 dispatchEvent 결과를 그대로 돌려준다 — preventDefault 가 걸리면 false.
+ */
+function pressKey(key: string, init: { shiftKey?: boolean } = {}) {
+  const target = (document.activeElement ?? document.body) as HTMLElement;
+  return { notPrevented: fireEvent.keyDown(target, { key, ...init }) };
 }
 
-function pressEscape(target: HTMLElement) {
-  fireEvent.keyDown(target, { key: "Escape" });
+const pressTab = (init: { shiftKey?: boolean } = {}) => pressKey("Tab", init);
+const pressEscape = () => pressKey("Escape");
+
+/**
+ * 정리 함수의 포커스 인계는 rAF 한 프레임 뒤에 일어난다 — 닫히는 다이얼로그 DOM 이 사라지기
+ * 전에 옮기면 브라우저가 포커스를 body 로 되돌린다. 그 한 프레임을 기다린다.
+ */
+async function nextFrame() {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+/** 실제 화면 배치: 게스트 인계 안내(z-120)는 루트 레이아웃이라 문서 순서가 앞이고, 약관은 z-130. */
+function stackedStage({ guestOpen, termsOpen }: { guestOpen: boolean; termsOpen: boolean }) {
+  return (
+    <>
+      <button type="button">여는 버튼</button>
+      <LayeredDialog name="게스트" isOpen={guestOpen} zIndex={120} />
+      <LayeredDialog name="약관" isOpen={termsOpen} zIndex={130} />
+    </>
+  );
 }
 
 describe("useModalDialog", () => {
-  it("모달이 둘 열려 있어도 나중 모달 안의 Tab 은 막지 않는다", () => {
+  it("열리면 첫 컨트롤로 포커스가 들어간다", () => {
+    render(<Dialog name="촬영 방식" />);
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "촬영 방식 처음" }),
+    );
+  });
+
+  it("모달이 둘 열려 있으면 맨 위 모달만 초기 포커스를 갖는다", () => {
+    render(
+      <>
+        <Dialog name="게스트" />
+        <Dialog name="약관" />
+      </>,
+    );
+
+    // 배경 z-index 가 같으면 문서 순서가 갈라 준다 — 뒤에 오는 약관이 위에 얹힌다.
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
+  });
+
+  it("아래에 깔릴 모달이 뒤늦게 열려도 포커스를 뺏지 않는다", () => {
+    const { rerender } = render(stackedStage({ guestOpen: false, termsOpen: true }));
+
+    const termsMiddle = screen.getByRole("button", { name: "약관 가운데" });
+    termsMiddle.focus();
+
+    // 약관 재동의(z-130)를 읽는 사이 게스트 인계 안내(z-120)가 조회 결과로 도착한다.
+    rerender(stackedStage({ guestOpen: true, termsOpen: true }));
+
+    /*
+      여기서 포커스를 끌어가면 화면 뒤에 가려진 안내에 포커스가 갇힌다 — 사용자 눈에는
+      아무 것도 안 바뀌었는데 키보드만 사라진 셈이다. 읽던 자리도 그대로여야 한다.
+    */
+    expect(document.activeElement).toBe(termsMiddle);
+  });
+
+  it("아래에 깔린 모달로 포커스가 새면 Tab 이 맨 위 모달로 되돌린다", () => {
+    render(stackedStage({ guestOpen: true, termsOpen: true }));
+
+    const termsFirst = screen.getByRole("button", { name: "약관 처음" });
+    expect(document.activeElement).toBe(termsFirst);
+
+    /*
+      아래 모달이 자체 트랩을 들고 있으면 여기서 자기 첫 컨트롤로 감아 돌린다 — 포커스가
+      보이지 않는 모달 안에서 영원히 순환한다. 맨 위 모달이 회수해야 한다.
+    */
+    screen.getByRole("button", { name: "게스트 마지막" }).focus();
+    expect(pressTab().notPrevented).toBe(false);
+    expect(document.activeElement).toBe(termsFirst);
+
+    // 가운데 컨트롤도 마찬가지다. 여기서 아무 일도 안 일어나면 Tab 이 통째로 멈춘 것이다.
+    screen.getByRole("button", { name: "게스트 가운데" }).focus();
+    expect(pressTab().notPrevented).toBe(false);
+    expect(document.activeElement).toBe(termsFirst);
+  });
+
+  it("맨 위 모달이 닫히면 남은 아래 모달로 포커스를 넘긴다", async () => {
+    const { rerender } = render(stackedStage({ guestOpen: false, termsOpen: false }));
+
+    const opener = screen.getByRole("button", { name: "여는 버튼" });
+    opener.focus();
+
+    rerender(stackedStage({ guestOpen: false, termsOpen: true }));
+    rerender(stackedStage({ guestOpen: true, termsOpen: true }));
+
+    // 동의를 마치면 약관만 닫히고 게스트 인계 안내는 그대로 남는다.
+    rerender(stackedStage({ guestOpen: true, termsOpen: false }));
+    await nextFrame();
+
+    /*
+      열기 전 자리로 돌려주면 포커스가 모달 뒤쪽 화면으로 빠진다 — 안내는 열려 있는데 키보드로
+      닿을 수 없다. 남은 것 중 맨 위가 새 임자다.
+    */
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "게스트 처음" }));
+  });
+
+  it("아래 모달이 닫혀도 맨 위 모달이 포커스를 지킨다", async () => {
+    const { rerender } = render(stackedStage({ guestOpen: false, termsOpen: false }));
+
+    const opener = screen.getByRole("button", { name: "여는 버튼" });
+    opener.focus();
+
+    // 게스트 안내가 먼저 열려 포커스를 쥐고, 그 위로 약관 재동의가 얹힌다.
+    rerender(stackedStage({ guestOpen: true, termsOpen: false }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "게스트 처음" }));
+
+    rerender(stackedStage({ guestOpen: true, termsOpen: true }));
+    const termsFirst = screen.getByRole("button", { name: "약관 처음" });
+    expect(document.activeElement).toBe(termsFirst);
+
+    rerender(stackedStage({ guestOpen: false, termsOpen: true }));
+    await nextFrame();
+
+    // 닫힌 쪽의 "열기 전 자리"로 되돌리면 보이는 약관 모달에서 포커스를 뺏는다.
+    expect(document.activeElement).toBe(termsFirst);
+  });
+
+  it("맨 위 모달 안의 Tab 은 막지 않는다", () => {
     render(
       <>
         <Dialog name="게스트" />
@@ -109,53 +238,25 @@ describe("useModalDialog", () => {
     const middle = screen.getByRole("button", { name: "약관 가운데" });
     middle.focus();
 
-    const { notPrevented } = pressTab(middle);
+    const { notPrevented } = pressTab();
 
-    // 브라우저 기본 순서가 그대로 돌아야 한다. 여기서 막히면 Tab 이 아무 일도 하지 않는다.
+    // 양 끝이 아니면 브라우저 기본 순서가 그대로 돌아야 한다. 여기서 막히면 Tab 이 멈춘다.
     expect(notPrevented).toBe(true);
-    // 앞 모달이 자기 첫 컨트롤로 채가지도, 뒤 모달이 되끌어오지도 않는다.
     expect(document.activeElement).toBe(middle);
   });
 
-  it("모달이 둘 열려 있어도 먼저 열린 모달 안의 Tab 은 막지 않는다", () => {
-    render(
-      <>
-        <Dialog name="게스트" />
-        <Dialog name="약관" />
-      </>,
-    );
+  it("맨 위 모달은 첫·마지막 컨트롤에서 Tab 을 감아 준다", () => {
+    render(stackedStage({ guestOpen: true, termsOpen: true }));
 
-    const middle = screen.getByRole("button", { name: "게스트 가운데" });
-    middle.focus();
+    const firstItem = screen.getByRole("button", { name: "약관 처음" });
+    const lastItem = screen.getByRole("button", { name: "약관 마지막" });
 
-    const { notPrevented } = pressTab(middle);
-
-    expect(notPrevented).toBe(true);
-    // 나중에 열린 모달이 포커스를 자기 쪽으로 끌어가면 안 된다.
-    expect(document.activeElement).toBe(middle);
-  });
-
-  it("맨 위가 아닌 모달도 첫·마지막 컨트롤에서 Tab 을 감아 준다", () => {
-    render(
-      <>
-        <LayeredDialog name="게스트" />
-        <LayeredDialog name="확인" />
-      </>,
-    );
-
-    const firstItem = screen.getByRole("button", { name: "게스트 처음" });
-    const lastItem = screen.getByRole("button", { name: "게스트 마지막" });
-
-    /*
-      Escape 를 맨 위 하나로 줄이면서 Tab 까지 같이 막으면, 보이는데 맨 위는 아닌 모달이
-      트랩을 통째로 잃는다 — 양 끝에서 포커스가 뒤쪽 화면으로 새어 나간다. 가운데 컨트롤만
-      보는 위 두 테스트로는 안 잡힌다.
-    */
+    // 양 끝에서 새어 나가면 아래 모달과 뒤쪽 화면으로 포커스가 넘어간다.
     lastItem.focus();
-    expect(pressTab(lastItem).notPrevented).toBe(false);
+    expect(pressTab().notPrevented).toBe(false);
     expect(document.activeElement).toBe(firstItem);
 
-    expect(pressTab(firstItem, { shiftKey: true }).notPrevented).toBe(false);
+    expect(pressTab({ shiftKey: true }).notPrevented).toBe(false);
     expect(document.activeElement).toBe(lastItem);
   });
 
@@ -166,9 +267,9 @@ describe("useModalDialog", () => {
     (document.activeElement as HTMLElement).blur();
     expect(document.activeElement).toBe(document.body);
 
-    const { notPrevented } = pressTab(document.body);
+    const { notPrevented } = pressTab();
 
-    // body 는 어느 다이얼로그에도 속하지 않는다 — 트랩이 그대로 걸려야 뒤쪽 화면으로 안 샌다.
+    // 트랩이 그대로 걸려야 뒤쪽 화면으로 안 샌다.
     expect(notPrevented).toBe(false);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
   });
@@ -184,7 +285,8 @@ describe("useModalDialog", () => {
       </>,
     );
 
-    pressEscape(screen.getByRole("button", { name: "약관 처음" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
+    pressEscape();
 
     /*
       `stopPropagation()` 은 같은 요소(document)에 걸린 다른 리스너를 멈추지 않는다. 판정이
@@ -212,7 +314,8 @@ describe("useModalDialog", () => {
     // 페이지 모달이 떠 있는 동안 인계 안내가 뒤늦게 도착한다 — 연 순서로는 게스트가 맨 위다.
     rerender(stage(true));
 
-    pressEscape(screen.getByRole("button", { name: "확인 처음" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "확인 처음" }));
+    pressEscape();
 
     // 보이는 모달이 닫히고, 뒤에 깔린 저장/버리기 확인은 살아 있어야 한다.
     expect(closeConfirm).toHaveBeenCalledTimes(1);
@@ -239,13 +342,14 @@ describe("useModalDialog", () => {
     // 나중에 열리고 문서 순서도 뒤지만, 배경 z-index 가 낮아 약관 밑에 깔린다.
     rerender(stage(true));
 
-    pressEscape(screen.getByRole("button", { name: "확인 처음" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
+    pressEscape();
 
     expect(closeTerms).toHaveBeenCalledTimes(1);
     expect(closeConfirm).not.toHaveBeenCalled();
   });
 
-  it("맨 위 모달이 사라지면 그 아래 모달이 Escape 를 받는다", () => {
+  it("맨 위 모달이 사라지면 그 아래 모달이 Escape 를 받는다", async () => {
     const closeGuest = jest.fn();
 
     // 열린 순서와 사라지는 순서가 다를 수 있다. 목록은 정체성으로 지워야 남은 것만 겨룬다.
@@ -261,8 +365,10 @@ describe("useModalDialog", () => {
         <Dialog name="게스트" onClose={closeGuest} />
       </>,
     );
+    await nextFrame();
 
-    pressEscape(screen.getByRole("button", { name: "게스트 처음" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "게스트 처음" }));
+    pressEscape();
 
     expect(closeGuest).toHaveBeenCalledTimes(1);
   });
@@ -282,7 +388,7 @@ describe("useModalDialog", () => {
     rerender(stage(false));
     rerender(stage(true));
 
-    pressEscape(screen.getByRole("button", { name: "게스트 처음" }));
+    pressEscape();
 
     expect(clearNotice).toHaveBeenCalledTimes(1);
   });
@@ -292,7 +398,7 @@ describe("useModalDialog", () => {
 
     render(<Dialog name="촬영 방식" onClose={onClose} />);
 
-    pressEscape(screen.getByRole("button", { name: "촬영 방식 처음" }));
+    pressEscape();
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
