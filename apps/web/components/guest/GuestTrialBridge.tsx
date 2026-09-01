@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { josa } from "@harucut/shared";
 import { useEffect, useRef } from "react";
 import { GuestTrialOverlay } from "@/components/guest/GuestTrialOverlay";
 import { getApiErrorDetails } from "@/lib/apiError";
@@ -191,7 +192,7 @@ export function GuestTrialBridge() {
         ],
         eyebrow: "NOTICE",
         icon: "check",
-        message: `이 기기에 비회원으로 만든 "${pending.displayName}" 이 남아 있어요. 지금 로그인한 계정 기록에 저장할까요? 내가 만든 것이 아니면 버려 주세요.`,
+        message: `이 기기에 비회원으로 만든 "${pending.displayName}"${josa(pending.displayName, "이/가")} 남아 있어요. 지금 로그인한 계정 기록에 저장할까요? 내가 만든 것이 아니면 버려 주세요.`,
         title: "비회원 때 만든 네컷이 남아 있어요",
       });
     })();

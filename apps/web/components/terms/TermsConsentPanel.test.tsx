@@ -106,4 +106,87 @@ describe("TermsConsentPanel", () => {
       "/privacy",
     );
   });
+
+  /**
+   * 이미 한 동의를 거두는 길은 본문과 무관하다.
+   *
+   * 마케팅 수신 동의는 언제든 거둘 수 있어야 한다(정보통신망법 §50). 본문 조회가
+   * 실패했다고 철회까지 잠그면 사용자는 자기가 준 동의에 갇힌다 — 읽을 수단이 없다는
+   * 이유로 막을 것은 **새 동의**뿐이다.
+   */
+  it("본문 조회가 실패해도 이미 동의한 선택 약관은 체크박스가 열려 있다", async () => {
+    mockFetchMine.mockResolvedValue([
+      { ...refundPolicy, status: "AGREED", agreedVersion: 1 },
+    ]);
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    render(<TermsConsentPanel />);
+
+    const checkbox = await screen.findByRole("checkbox");
+    // 본문을 못 읽는 상황이 맞는지 먼저 못 박는다.
+    expect(
+      await screen.findByText(
+        "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(checkbox).toBeChecked();
+    expect(checkbox).toBeEnabled();
+  });
+
+  /**
+   * 잠금과 제출은 같은 규칙을 따라야 한다.
+   *
+   * 체크박스만 열고 `toggle()` 가드를 그대로 두면 눌리는데 요청이 안 나간다 — 잠긴 것보다
+   * 헷갈리는 무반응이다. 두 자리 모두 주는 방향만 막는다.
+   */
+  it(
+    "본문 조회가 실패해도 이미 동의한 선택 약관을 해제하면 철회가 제출된다",
+    async () => {
+      mockFetchMine.mockResolvedValue([
+        { ...refundPolicy, status: "AGREED", agreedVersion: 1 },
+      ]);
+      mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+      render(<TermsConsentPanel />);
+
+      const checkbox = await screen.findByRole("checkbox");
+      await waitFor(() => expect(checkbox).toBeEnabled());
+
+      fireEvent.click(checkbox);
+
+      await waitFor(() =>
+        expect(mockSubmit).toHaveBeenCalledWith([
+          { code: "refund-policy", agreed: false },
+        ]),
+      );
+      expect(checkbox).not.toBeChecked();
+    },
+  );
+
+  // 같은 화면·같은 실패에서 방향만 다르다. 새 동의는 그대로 막혀 있어야 한다.
+  it("같은 실패에서 아직 동의하지 않은 선택 약관은 여전히 막혀 있다", async () => {
+    mockFetchMine.mockResolvedValue([
+      { ...refundPolicy, status: "AGREED", agreedVersion: 1 },
+      {
+        ...refundPolicy,
+        code: "newsletter-policy",
+        title: "뉴스레터 수신 동의",
+        status: "NOT_AGREED",
+      },
+    ]);
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    render(<TermsConsentPanel />);
+
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
+    const [agreedBox, notAgreedBox] = screen.getAllByRole("checkbox");
+
+    // 이미 한 동의는 열려 있고, 아직 안 한 동의는 잠겨 있다.
+    await waitFor(() => expect(agreedBox).toBeEnabled());
+    expect(notAgreedBox).toBeDisabled();
+
+    fireEvent.click(notAgreedBox);
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
 });

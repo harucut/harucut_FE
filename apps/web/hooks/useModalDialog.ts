@@ -103,6 +103,19 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
         풀린 상태다.
       */
       if (!container.contains(active)) {
+        /*
+          단, 다른 모달이 쥔 포커스는 뺏지 않는다.
+
+          이 훅은 document 에 capture 리스너를 건다. 모달이 둘 열려 있으면 서로에게 상대의
+          포커스는 늘 "밖"이라, 두 리스너가 차례로 preventDefault 하고 각자 자기 첫 컨트롤로
+          끌어당긴다 — 순 결과는 제자리고 Tab 이 완전히 멈춘다. 루트 레이아웃에 게스트 인계
+          안내와 약관 재동의 모달이 나란히 있고 둘 다 조회 결과로 저절로 열리므로 실제로
+          겹친다. body 는 어느 다이얼로그에도 속하지 않으니 위 disabled 경우는 그대로 걸린다.
+        */
+        if (active instanceof Element && active.closest('[role="dialog"][aria-modal="true"]')) {
+          return;
+        }
+
         event.preventDefault();
         (event.shiftKey ? lastItem : firstItem).focus();
         return;

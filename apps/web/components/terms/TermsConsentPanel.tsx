@@ -59,7 +59,11 @@ export function TermsConsentPanel() {
   const toggle = async (item: MyTermsConsent, next: boolean) => {
     // 읽을 수단이 없으면 동의를 기록하지 않는다. 체크박스도 잠겨 있지만, 장부에 남기는
     // 자리에서 한 번 더 막는다 — 여기서 새는 값은 되돌릴 수 없다.
-    if (isUnreadable(item.code)) return;
+    //
+    // 막는 것은 주는 방향(`next`)뿐이다. 거두는 방향까지 막으면 체크박스는 눌리는데
+    // 아무 일도 안 일어나는 무반응이 된다 — 잠긴 것보다 헷갈리고, 철회는 본문 없이도
+    // 언제나 할 수 있어야 한다.
+    if (next && isUnreadable(item.code)) return;
     setPendingCode(item.code);
     setError(null);
     // 응답을 기다리는 동안 화면부터 바꾼다. 실패하면 서버 값으로 되돌린다 —
@@ -115,10 +119,12 @@ export function TermsConsentPanel() {
                     type="checkbox"
                     checked={agreed}
                     // 필수 약관은 서버가 철회를 거부한다. 눌리는 척하지 않는다.
+                    // 본문을 못 읽는 약관은 새 동의만 막는다 — 이미 한 동의를 거두는 것은
+                    // 본문 없이도 언제나 할 수 있어야 한다.
                     disabled={
                       item.required ||
                       pendingCode === item.code ||
-                      isUnreadable(item.code)
+                      (isUnreadable(item.code) && !agreed)
                     }
                     onChange={(e) => void toggle(item, e.target.checked)}
                     className="h-4 w-4 accent-[color:var(--hc-primary)] disabled:opacity-50"
