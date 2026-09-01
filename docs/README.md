@@ -9,7 +9,7 @@
 |---|---|
 | 백엔드가 실제로 뭘 주고받나 (경로·필드·에러코드) | [backend-contract.md](./backend-contract.md) |
 | 로컬 백엔드 띄우기 (도커·Apple Silicon·계정 만들기) | [local-backend.md](./local-backend.md) |
-| 백엔드에 **요청해야 할 것** (OAuth·비회원 합성·푸시) | [app-shell-backend-requests.md](./app-shell-backend-requests.md) |
+| 백엔드에 **요청해야 할 것** (OAuth·비회원 합성·푸시·합성 원본 정리) | [app-shell-backend-requests.md](./app-shell-backend-requests.md) |
 | 앱(iOS·Android) 웹뷰 셸 구조와 촬영 화질 | [mobile-shell.md](./mobile-shell.md) |
 | 화면 이동 흐름 | [route-flows.md](./route-flows.md) |
 | 로그인·리다이렉트·게스트 체험 | [auth-routing.md](./auth-routing.md) |
@@ -28,12 +28,19 @@ pnpm check:contract                      # 요약
 pnpm check:contract -- --show-required   # 필수 요청 필드까지
 ```
 
-보는 것: ① 프론트 프록시가 부르는 경로가 백엔드에 있나 ② 아무도 안 부르는 프록시가 있나
-③ 에러코드 표가 서버와 1:1 인가. **필수 요청 필드는 검사하지 않는다** — `--show-required`
-는 스웨거가 필수라고 적은 필드를 보여 줄 뿐이고, 프론트가 실제로 싣는지는 사람이 대조한다
-(요청 본문이 코드에서 동적으로 만들어져 정적으로 읽기 어렵다). 에러코드는 **컨테이너 안 jar 의 `ErrorCode` enum** 에서
-직접 뽑는다 — 스웨거 응답 예시만 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은
-항목으로 잘못 짚는다(스웨거 45개 vs jar 52개로 갈렸다).
+보는 것은 셋뿐이다(A·B·C): ① 프론트 프록시가 부르는 경로가 백엔드에 있나 ② 아무도 안
+부르는 프록시가 있나 ③ 에러코드 표가 서버와 1:1 인가. 그래서 통과 문구도 `A·B·C 일치 ✓`
+라고만 나온다. **필수 요청 필드는 검사하지 않는다** — `--show-required` 는 스웨거가 필수라고
+적은 필드를 보여 줄 뿐이고, 프론트가 실제로 싣는지는 사람이 대조한다(요청 본문이 프록시가
+아니라 `apps/web/lib` 에서 만들어져 정적으로 읽기 어렵다). **필수 필드를 빠뜨려도 종료코드는
+0 이다** — 여기서 초록불이 떴다고 계약 전부가 맞았다는 뜻은 아니다.
+
+에러코드는 **컨테이너 안 jar 의 `ErrorCode` enum** 에서 직접 뽑는다 — 스웨거 응답 예시만
+보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로 잘못 짚는다
+(스웨거 45개 vs jar 52개로 갈렸다).
+
+스크립트가 검사 범위를 넘겨 말하지 않는지는 `python3 scripts/check_backend_contract_test.py`
+로 본다 — 백엔드도 도커도 없이 돈다.
 
 전체 검증은 `pnpm verify:standard` (lint·test·build·mobile). macOS 에서도 그냥 돈다.
 
@@ -48,7 +55,7 @@ pnpm check:contract -- --show-required   # 필수 요청 필드까지
 | 프론트 프록시 37개 핸들러 → 백엔드 경로 | **37/37 존재** |
 | 호출되지 않는 프록시 라우트 | 없음 |
 | 에러코드 (jar 52개) ↔ 프론트 문구표 | **누락 0 · 죽은 항목 0** |
-| 필수 요청 필드 (15개 엔드포인트) | 전부 충족 — **손으로 대조**(스크립트의 D 절은 목록 출력일 뿐 검사가 아니다) |
+| 필수 요청 필드 (15개 엔드포인트) | 전부 충족 — **2026-08-28 에 손으로 대조**(스크립트 D 절은 목록 출력일 뿐 검사가 아니라, 백엔드가 나가면 그날로 낡는다) |
 
 ## 앱에서 이미 정상이라 손대지 않은 것
 

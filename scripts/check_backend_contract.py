@@ -220,12 +220,17 @@ def main() -> int:
     print(f"   서버 {len(server)} · FE {len(fe_server)}(+클라 {len(CLIENT_ONLY_CODES)}) "
           f"· 누락 {len(missing)} · 죽음 {len(dead)}\n")
 
+    # ⚠️ D 는 **검사가 아니다.** 스웨거가 필수라고 적은 필드를 보여 줄 뿐,
+    # 프론트가 실제로 그 값을 싣는지는 보지 않는다(요청 본문은 프록시가 아니라
+    # apps/web/lib 에서 동적으로 만들어져 정적으로 읽기 어렵다). 빠뜨린 필드가 있어도
+    # 여기서는 안 걸린다 — 대조는 사람이 한다.
+    #
+    # 이 한 줄은 --show-required 없이도 **항상** 찍는다. 예전에는 이 한계를 독스트링·--help·
+    # 소스 주석·문서에만 적어 뒀는데, 그것들은 기본 `pnpm check:contract` 를 돌린 사람의
+    # 화면에 하나도 나오지 않는다. 그래서 필수 필드를 빠뜨린 채로도 화면에는 "계약 일치 ✓"
+    # 만 남았다. 한계는 판정이 나오는 그 화면에 적혀 있어야 읽힌다.
+    print("D. 필수 요청 필드 — 검사하지 않는다(스웨거 목록만 뽑고, 대조는 사람이 한다)")
     if args.show_required:
-        # ⚠️ 이건 **검사가 아니다.** 스웨거가 필수라고 적은 필드를 보여 줄 뿐,
-        # 프론트가 실제로 그 값을 싣는지는 보지 않는다(요청 본문이 코드에서 동적으로
-        # 만들어져 정적으로 읽기 어렵다). 빠뜨린 필드가 있어도 여기서는 안 걸린다 —
-        # 대조는 사람이 한다. 아래 출력은 그 대조를 도우려고 있는 것이다.
-        print("D. FE 가 부르는 엔드포인트의 필수 요청 필드 (참고용 목록 · 자동 검사 아님)")
         schemas = spec.get("components", {}).get("schemas", {})
         for method, path in sorted(called):
             op = backend[(method, path)]
@@ -239,7 +244,9 @@ def main() -> int:
                 req = s.get("required", [])
                 if req:
                     print(f"   {method:<6} {path:<46} {req}")
-        print()
+    else:
+        print("   목록은 --show-required 로 본다")
+    print()
 
     print("=" * 72)
     if problems:
@@ -250,10 +257,12 @@ def main() -> int:
         print(f"경고 {len(warnings)}건")
         for w in warnings:
             print(f"  ! {w}")
+    # 판정 문구는 검사한 범위만큼만 말한다. 그냥 "계약 일치 ✓" 라고 쓰면
+    # 본 적 없는 필수 요청 필드까지 맞춘 것처럼 읽힌다.
     if not problems and not warnings:
-        print("계약 일치 ✓")
+        print("A·B·C 일치 ✓ (필수 요청 필드는 검사 대상 아님 — 손으로 대조한다)")
     elif not problems:
-        print("치명적 불일치 없음 ✓ (경고만)")
+        print("A·B·C 치명적 불일치 없음 ✓ (경고만 · 필수 요청 필드는 검사 대상 아님)")
     return 1 if problems else 0
 
 
