@@ -115,6 +115,36 @@ describe("셸 안", () => {
     await expect(promise).resolves.toEqual({ ok: true });
   });
 
+  /*
+    조각을 이어 붙였을 때 유효한 base64 인지 본다.
+
+    네이티브는 조각별로 디코딩하지 않고 join('') 한 문자열 하나를 base64 로 읽는다
+    (apps/mobile/lib/native-bridge.ts 의 saveBase64Chunks). 그래서 조각 크기가 3의 배수가
+    아니면 중간 조각 끝에 `=` 가 붙어 그 뒤가 통째로 잘린다. 조각이 둘 이상 나오는 크기여야
+    이 검사가 뜻이 있다.
+  */
+  it("조각을 이어 붙이면 원본 바이트가 그대로 나온다", async () => {
+    const posted = enterShell();
+    const bytes = new Uint8Array(1_200_000);
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = i % 251;
+    const promise = nativeSaveImageBlob(new Blob([bytes], { type: "image/png" }), "cut.png");
+
+    await waitFor(() => posted.some((item) => item.type === "save-end"));
+
+    const chunks = posted.filter((item) => item.type === "save-chunk");
+    expect(chunks.length).toBeGreaterThan(1);
+
+    const joined = chunks.map((item) => item.data as string).join("");
+    // 마지막을 뺀 조각에 패딩이 붙으면 이어 붙인 결과가 base64 로 성립하지 않는다.
+    expect(joined.indexOf("=")).toBe(-1);
+
+    const decoded = Uint8Array.from(atob(joined), (ch) => ch.charCodeAt(0));
+    expect(decoded).toEqual(bytes);
+
+    replyTo(posted, "save-begin", { ok: true });
+    await expect(promise).resolves.toEqual({ ok: true });
+  });
+
   it("실패 사유를 그대로 전달한다", async () => {
     const posted = enterShell();
     const promise = nativeSaveImageUrl("https://x/y.png", "y.png");

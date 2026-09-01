@@ -93,6 +93,16 @@ export async function saveRemoteImage(url: string, filename: string): Promise<Br
     return await saveLocalFile(downloaded.uri);
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : '이미지를 받지 못했어요.' };
+  } finally {
+    /*
+      내려받은 파일은 성공 여부와 무관하게 지운다.
+
+      downloadAsync 는 상태 코드를 보지 않고 응답 본문을 그대로 target 에 쓴다. 사진 URL 이
+      만료돼 403 이 오면 그 오류 본문이 캐시 파일로 남는데, 위에서 조기 반환하면
+      saveLocalFile 의 finally 를 거치지 않아 지울 곳이 없다 — 재시도할 때마다 쌓인다.
+      성공 경로는 saveLocalFile 이 같은 파일을 이미 지운 뒤라 idempotent 로 무동작이다.
+    */
+    void FileSystem.deleteAsync(target, { idempotent: true }).catch(() => undefined);
   }
 }
 
@@ -192,17 +202,26 @@ Notifications.setNotificationHandler({
  * 안드로이드 13+ 는 런타임 권한(POST_NOTIFICATIONS)이 필요하고, 그 이전 버전은 항상 허용이다.
  * iOS 는 항상 물어봐야 한다. 이미 거절한 사람에게 다시 묻지 않는다 — 시스템이 두 번째부터는
  * 대화상자를 띄우지 않아서, 물어본 척만 하고 아무 일도 일어나지 않는다.
+ *
+ * 예외도 결과로 바꿔 돌려준다. 여기서 던지면 셸의 onMessage 밖으로 빠져나가 reply() 가
+ * 불리지 않고, 마이페이지의 `알림 켜기` 버튼이 웹 브리지 타임아웃 120초 동안 `여는 중`에
+ * 묶인다. reason 은 사용자 화면에 그대로 나가므로(NativeNotificationSetting) 네이티브
+ * 영문 메시지를 흘리지 않는다.
  */
 export async function ensureNotificationPermission(): Promise<BridgeResult> {
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return { ok: true };
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) return { ok: true };
 
-  if (!current.canAskAgain) {
-    return { ok: false, reason: '설정에서 알림을 허용해 주세요.' };
+    if (!current.canAskAgain) {
+      return { ok: false, reason: '설정에서 알림을 허용해 주세요.' };
+    }
+
+    const asked = await Notifications.requestPermissionsAsync();
+    return asked.granted ? { ok: true } : { ok: false, reason: '알림 권한이 필요해요.' };
+  } catch {
+    return { ok: false, reason: '알림 권한을 확인하지 못했어요.' };
   }
-
-  const asked = await Notifications.requestPermissionsAsync();
-  return asked.granted ? { ok: true } : { ok: false, reason: '알림 권한이 필요해요.' };
 }
 
 /**
@@ -217,10 +236,12 @@ export async function showLocalNotification(args: {
   body?: string;
   secondsFromNow?: number;
 }): Promise<BridgeResult> {
-  const permission = await Notifications.getPermissionsAsync();
-  if (!permission.granted) return { ok: false, reason: '알림 권한이 없어요.' };
-
+  // 권한 조회도 try 안에서 한다. 밖에 두면 알림 모듈이 실패했을 때 예외가 셸까지 올라가
+  // reply() 가 불리지 않고, notify-local 응답이 웹 타임아웃까지 끊긴다.
   try {
+    const permission = await Notifications.getPermissionsAsync();
+    if (!permission.granted) return { ok: false, reason: '알림 권한이 없어요.' };
+
     await Notifications.scheduleNotificationAsync({
       content: { title: args.title, body: args.body },
       trigger:

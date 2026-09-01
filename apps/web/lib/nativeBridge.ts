@@ -21,7 +21,16 @@
  * postMessage 한 번에 수 MB 짜리 문자열을 실으면 WebView 가 버벅이거나 잘린다.
  */
 
-const CHUNK_SIZE = 512 * 1024;
+/**
+ * 조각 크기는 **3의 배수**여야 한다.
+ *
+ * 조각마다 btoa 를 따로 걸기 때문에, 3으로 나누어떨어지지 않으면 마지막이 아닌 조각 끝에도
+ * `=` 패딩이 붙는다. 네이티브는 조각을 그대로 이어 붙여 **하나의** base64 로 디코딩하므로
+ * (apps/mobile/lib/native-bridge.ts 의 saveBase64Chunks) 첫 패딩 뒤가 통째로 잘리거나
+ * 디코딩이 실패한다 — PNG 손상 또는 저장 실패.
+ * 512KB(524288)는 3의 배수가 아니라 510KB 로 내린다 — 522240 = 3 × 174080.
+ */
+const CHUNK_SIZE = 510 * 1024;
 
 type NativeShellInfo = {
   version: number;
