@@ -1,5 +1,6 @@
 "use client";
 
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import {
   isSupportedUploadFile,
   UNSUPPORTED_UPLOAD_MESSAGE,
@@ -11,19 +12,34 @@ import {
  * 이 뒤의 단계(4장 고르기 → 서버 합성 → 내려받기)는 사진이 카메라에서 왔는지 파일에서
  * 왔는지 몰라도 된다. 그러려면 여기서 형태를 맞춰 줘야 한다 — 촬영본은 data URL 문자열이다.
  *
- * **비율은 건드리지 않는다.** 서버 합성이 슬롯에 `cover` 로 맞춰 자르고(2026-08-24 실측:
- * 16:9 원본의 모서리가 잘려 나가고 슬롯이 사진으로 꽉 찼다 — 배경색 여백이 남지 않았다),
- * 미리보기도 `object-cover` 라 화면과 결과물이 같은 규칙을 쓴다. 여기서 미리 자르면
- * 서버가 쓸 수 있었던 화소를 먼저 버리는 셈이다.
+ * **비율은 건드리지 않는다.** 합성 단계(`lib/fourcutCompose.ts` `renderSourceForSlot`)가
+ * 올리기 전에 슬롯 크기로 `cover` 잘라내고(2026-08-24 실측: 16:9 원본의 모서리가 잘려
+ * 나가고 슬롯이 사진으로 꽉 찼다 — 배경색 여백이 남지 않았다), 미리보기도 `object-cover` 라
+ * 화면과 결과물이 같은 규칙을 쓴다. 여기서 미리 자르면 뒤 단계가 쓸 수 있었던 화소를
+ * 먼저 버리는 셈이다.
  *
  * 크기만 줄인다. 이유가 둘이다.
  *  1. 비회원 결과는 원본 4장을 localStorage 에 보관했다가 로그인 뒤 올린다. 요즘 폰 사진을
  *     그대로 data URL 로 담으면 한 장에 수 MB 라 보관 한도(대개 5MB)에 바로 걸린다.
- *  2. 슬롯이 가장 큰 프레임도 1700×1200 이라 그 이상은 올리는 시간만 늘린다.
+ *  2. 슬롯보다 큰 화소는 어차피 잘려 나가니 올리는 시간만 늘린다.
  */
 
-/** 긴 변 상한. classic-4 슬롯(1700px)보다 넉넉하되 낭비하지 않는 선. */
-const MAX_EDGE = 2000;
+/**
+ * 긴 변 상한. **모든 슬롯의 가장 긴 변**에 맞춘다(지금은 2400px — wide-4 의 가로 2400,
+ * grid-4·polaroid-4 의 세로 2400).
+ *
+ * 이보다 낮게 잡으면 안 된다. 합성 단계가 캔버스를 슬롯 크기로 잡고 `drawCover` 로 그리는데
+ * (`lib/canvas/draw.ts` 의 `scale` 에는 1 상한이 없다) 원본에 화소가 남아 있어도 여기서 이미
+ * 버린 뒤라 도로 확대한 그림만 남는다. 예전 상한 2000px 은 classic-4(1700×1200)만 보고
+ * 잡은 값이라 wide-4·grid-4·polaroid-4 에서 1.2배 확대를 일으켰다.
+ *
+ * 레이아웃이 늘거나 커져도 따라오게 숫자를 다시 박지 않고 상수에서 뽑는다.
+ */
+const MAX_EDGE = Math.max(
+  ...Object.values(FRAME_LAYOUTS).flatMap((layout) =>
+    layout.slots.map((slot) => Math.max(slot.width, slot.height)),
+  ),
+);
 
 /** 촬영본과 같은 인코딩(JPEG 0.92)을 쓴다 — 뒤 단계가 둘을 구분하지 않게. */
 const JPEG_QUALITY = 0.92;

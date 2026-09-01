@@ -93,8 +93,12 @@ jest.mock("@/lib/fourcutProcessing", () => ({
   saveFourcutToServer: (...args: unknown[]) => mockSaveFourcutToServer(...args),
 }));
 
+// 멱등키가 **언제 새로 잡히는지**를 보려면 상수여서는 안 된다. 상수 목으로는
+// "재시도가 새 키를 만든다"는 결함을 원리상 관측할 수 없다.
+// (jest.mock 은 호이스팅되므로 변수명이 mock 으로 시작해야 참조할 수 있다.)
+let mockIdempotencyKeySeq = 0;
 jest.mock("@/lib/composeApi", () => ({
-  newIdempotencyKey: () => "web-fixed-key",
+  newIdempotencyKey: () => `web-key-${++mockIdempotencyKeySeq}`,
 }));
 
 jest.mock("@/lib/fourcutCompose", () => ({
@@ -112,9 +116,25 @@ jest.mock("@/lib/share", () => ({
   shareOrCopyLink: jest.fn(),
 }));
 
+const mockNativeNotify = jest.fn();
+
+jest.mock("@/lib/nativeBridge", () => ({
+  nativeNotify: (...args: unknown[]) => mockNativeNotify(...args),
+}));
+
+/** `document.visibilityState` 를 갈아 끼운다(jsdom 은 항상 "visible" 이다). */
+function stubVisibility(state: "hidden" | "visible") {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => state,
+  });
+}
+
 describe("ShootResultPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIdempotencyKeySeq = 0;
+    stubVisibility("visible");
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
     URL.revokeObjectURL = mockRevokeObjectURL;
@@ -123,7 +143,13 @@ describe("ShootResultPage", () => {
       ok: true,
       blob: async () => new Blob(["image"], { type: "image/png" }),
     }) as unknown as typeof fetch;
-    useGuestTrialStore.setState({ accessMode: "member", notice: null });
+    // 쿠키를 읽기 전에는 이 화면이 어느 쪽으로도 그리지 않는다(아래 회귀 테스트 참고).
+    // 실제 앱에서는 GuestTrialBridge 가 마운트하며 hydrateGuestMode() 로 이 값을 세운다.
+    useGuestTrialStore.setState({
+      accessMode: "member",
+      hydrated: true,
+      notice: null,
+    });
 
     mockThemeData = null;
     mockUseShootSession.setState({
@@ -176,7 +202,7 @@ describe("ShootResultPage", () => {
     ]);
     expect(call.layout.slots).toHaveLength(4);
     // 재시도가 같은 작업을 가리키도록 멱등키를 함께 보낸다.
-    expect(call.idempotencyKey).toBe("web-fixed-key");
+    expect(call.idempotencyKey).toBe("web-key-1");
   });
 
   it("비회원은 브라우저가 그린 그림이 결과물이라 고른 순서 그대로 합성한다", async () => {
@@ -215,6 +241,35 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
     });
+  });
+
+  /*
+    ── 회귀: 재시도는 같은 멱등키로 간다 ──
+
+    합성은 이미 끝났는데 그 뒤(다운로드 주소 조회, 폴링 시간 초과) 실패하면 화면은
+    재시도 가능한 오류가 된다. 이때 새 멱등키로 다시 보내면 서버가 기존 작업을 재생하지
+    못하고 새로 그려서, 같은 네컷이 보관함에 두 벌 남는다.
+    재실행용 nonce 는 effect 를 다시 돌리는 데만 쓰고 멱등키에는 닿지 않아야 한다.
+  */
+  it("재시도해도 멱등키는 그대로다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("download url failed"));
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("이미지를 준비하지 못했어요. 다시 시도해 주세요."),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "다시 준비하기" }));
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).toBe(
+      mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
+    );
   });
 
   it("다시 해도 소용없는 실패에서는 재시도 대신 프레임을 다시 고르게 한다", async () => {
@@ -267,6 +322,9 @@ describe("ShootResultPage", () => {
       sources: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
       frameId: "classic-4",
       outputFilter: "NONE",
+      // 고른 색까지 넘겨야 로그인 후 재합성이 같은 색으로 그린다.
+      // 빠지면 서버가 프레임 기본 배경으로 그려, 방금 내려받은 그림과 색이 갈린다.
+      backgroundColor: "#111827",
     });
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith(
@@ -464,5 +522,55 @@ describe("ShootResultPage", () => {
       });
     });
 
+  });
+
+  /*
+    ── 회귀: 쿠키를 읽기 전에는 어느 쪽으로도 그리지 않는다 ──
+
+    accessMode 의 초깃값은 "member" 라, 그 값으로 분기하면 진짜 비회원이 인증 전용
+    서버 합성을 불러 401 을 맞는다. 그렇다고 초깃값을 게스트로 넘겨짚어도 안 된다 —
+    브라우저가 그린 그림이 imageResult 에 박히면 회원인데도 기록에 아무것도 안 남는다.
+    답은 넘겨짚지 않고 기다리는 것이다.
+  */
+  it("게스트 쿠키를 읽기 전에는 서버 합성도 브라우저 합성도 시작하지 않는다", async () => {
+    useGuestTrialStore.setState({ accessMode: "member", hydrated: false });
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("frame-preview")).toBeInTheDocument();
+    });
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(mockComposeFramePng).not.toHaveBeenCalled();
+  });
+
+  /*
+    ── 지금 알림이 실제로 덮는 범위 ──
+
+    이 알림은 합성 응답을 받은 **뒤에** 도는 로컬 알림이라, 앱을 완전히 벗어나 OS 가
+    WebView 의 JS 를 멈춘 경우는 덮지 못한다(그건 서버 푸시가 필요하다 —
+    docs/app-shell-backend-requests.md 3번). 실제 계약이 무엇인지 못으로 박아 둔다.
+  */
+  it("문서가 가려져 있을 때만 완성 알림을 띄운다", async () => {
+    stubVisibility("hidden");
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+    });
+    expect(mockNativeNotify).toHaveBeenCalledWith({
+      title: "네컷이 완성됐어요",
+      body: "눌러서 보러 가기",
+    });
+  });
+
+  it("화면을 보고 있으면 알리지 않는다", async () => {
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    expect(mockNativeNotify).not.toHaveBeenCalled();
   });
 });

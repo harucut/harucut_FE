@@ -38,8 +38,22 @@ export type PendingGuestSave = {
   remoteFrameId: number | null;
   outputFilter: FourcutFilterId;
   displayName: string;
+  /**
+   * 비회원이 고른 배경색(`#RRGGBB`).
+   *
+   * 비회원 결과물은 브라우저가 이 색으로 그린다. 이 값을 빼고 인계하면 로그인 후
+   * 서버 합성이 색 없이 나가고, 서버는 **프레임에 저장된 배경**으로 그린다 —
+   * 방금 내려받아 본 그림과 기록에 남는 그림의 배경색이 갈린다.
+   *
+   * 선택 필드다. 이 필드가 없던 시절의 보관물은 `undefined` 로 읽히고, 그때는
+   * 색을 안 보내던 예전 동작 그대로 간다(키를 v3 로 올리면 그 보관물이 버려진다).
+   */
+  backgroundColor?: string;
   savedAt: number;
 };
+
+/** 서버가 받는 배경색 형식. 어긋나면 400 이라 보내지 않는 편이 낫다. */
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 /**
  * 보관한다. 용량 초과 등으로 실패하면 false — 호출부가 "먼저 내려받으라"고 안내한다.
@@ -100,7 +114,15 @@ export function getPendingGuestSave(
       return null;
     }
 
-    return parsed;
+    // 색이 깨졌으면 없는 것으로 본다. 형식이 어긋난 값을 그대로 실어 보내면
+    // 합성 요청이 400 으로 떨어져 보관물 전체를 잃는다.
+    const backgroundColor =
+      typeof parsed.backgroundColor === "string" &&
+      HEX_COLOR_PATTERN.test(parsed.backgroundColor)
+        ? parsed.backgroundColor
+        : undefined;
+
+    return { ...parsed, backgroundColor };
   } catch {
     clearPendingGuestSave();
     return null;

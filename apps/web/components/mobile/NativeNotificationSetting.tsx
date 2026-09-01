@@ -18,6 +18,11 @@ import {
  * 셸 여부는 `useSyncExternalStore` 로 읽는다. effect 에서 setState 하면 렌더가 한 번 더
  * 돌고(React Compiler 도 막는다), 서버 스냅샷을 false 로 두면 하이드레이션도 어긋나지 않는다.
  * 셸 여부는 앱이 켜진 뒤로 바뀌지 않으므로 구독은 빈 함수다.
+ *
+ * **약속하는 범위를 좁게 쓴다.** 이 알림은 웹이 완성 응답을 받은 뒤에 셸에 던지는
+ * 로컬 알림이라(app/shoot/result/page.tsx), 앱을 완전히 벗어나면 OS 가 WebView 의 JS 를
+ * 멈춰 아무것도 뜨지 않는다. 앱을 떠난 사이에도 알리려면 서버 푸시가 붙어야 하고,
+ * 필요한 엔드포인트는 docs/app-shell-backend-requests.md 3번에 적어 뒀다.
  */
 const subscribeNever = () => () => {};
 export function NativeNotificationSetting() {
@@ -38,7 +43,7 @@ export function NativeNotificationSetting() {
       const result = await nativeRequestNotificationPermission();
       setNotice(
         result?.ok
-          ? "알림을 켰어요. 네컷이 완성되면 알려드릴게요."
+          ? "알림을 켰어요. 앱을 켜 둔 동안 완성되면 알려드릴게요."
           : (result?.reason ?? "알림을 켜지 못했어요."),
       );
     } finally {
@@ -50,7 +55,8 @@ export function NativeNotificationSetting() {
     <div className="flex flex-col gap-2">
       <p className="text-[13px] font-bold">알림</p>
       <p className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
-        네컷 합성은 최대 1분 넘게 걸려요. 켜 두면 다 됐을 때 알려드려요.
+        네컷 합성은 최대 1분 넘게 걸려요. 앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때
+        알려드려요.
       </p>
       <button
         type="button"

@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  GUEST_ALLOWED_ITEMS,
+  GUEST_MEMBER_ONLY_ITEMS,
+  withJosa,
+} from "@harucut/shared";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -70,6 +75,7 @@ export default function ShootResultPage() {
   const fromUpload = source === "upload";
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
   const setNotice = useGuestTrialStore((state) => state.setNotice);
   const showGuestSavedNotice = useGuestTrialStore((state) => state.showGuestSavedNotice);
   const showGuestShareNotice = useGuestTrialStore((state) => state.showGuestShareNotice);
@@ -165,6 +171,8 @@ export default function ShootResultPage() {
     취소되고 다시 시작한다. (2026-08-24 에 실제로 보관함에 같은 이름의 mediaId 두 개가 남았다.)
     반대로 결과를 바꾸는 값을 빼면, 서버가 같은 멱등키로 온 요청을 기존 작업으로 재생해서
     사용자가 색을 바꿔도 예전 그림이 그대로 나온다. 둘 다 조용히 틀리므로 기준을 위에 적어 뒀다.
+
+    재시도용 nonce 도 넣지 않는다 — 결과를 바꾸는 값이 아니다(아래 runKey 참고).
   */
   const generationKey = useMemo(
     () =>
@@ -174,7 +182,6 @@ export default function ShootResultPage() {
         borderColor: colorAffectsOutput ? effectiveBorderColor : null,
         outputFilter,
         imageSources: imageSources.map((source) => source.src),
-        retryNonce,
       }),
     [
       colorAffectsOutput,
@@ -183,9 +190,19 @@ export default function ShootResultPage() {
       imageSources,
       outputFilter,
       remoteFrameId,
-      retryNonce,
     ],
   );
+
+  /*
+    effect 를 다시 돌리기 위한 키. **generationKey 와 분리한다.**
+
+    재시도는 같은 입력으로 같은 작업을 다시 가리키는 것이라 멱등키가 그대로여야 한다.
+    이 nonce 가 generationKey 에 들어 있으면 재시도마다 새 멱등키가 잡히고, 서버는
+    기존 작업을 재생하는 대신 새로 그린다 — 합성은 이미 끝났는데 그 뒤 다운로드 주소
+    조회가 실패하거나 폴링이 시간을 넘긴 경우(둘 다 재시도 가능한 오류로 뜬다),
+    같은 네컷이 보관함에 두 벌 남는다.
+  */
+  const runKey = `${generationKey}#${retryNonce}`;
 
   // 합성 재시도는 같은 멱등키로 보낸다 — 서버가 기존 작업을 그대로 돌려줘 두 번 그리지 않는다.
   // 입력이 바뀌면(다른 필터·다른 사진) 새 시도이므로 키도 새로 잡는다.
@@ -208,11 +225,22 @@ export default function ShootResultPage() {
   useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
 
+    /*
+      **쿠키를 읽기 전에는 어느 쪽으로도 그리지 않는다.**
+
+      accessMode 의 초깃값은 "member" 라, hydrateGuestMode() 가 반영되기 전에는 진짜
+      비회원도 회원으로 읽힌다. 그 값으로 아래 분기를 타면 비회원이 인증 전용 서버 합성을
+      불러 401 을 맞는다. 반대로 초깃값을 게스트로 넘겨짚어도 안 된다 — 브라우저가 그린
+      그림이 imageResult 에 박히면 회원인데도 기록에 아무것도 남지 않는다.
+      그래서 넘겨짚지 않고 **기다린다**(hydrated 가 참이 되면 effect 가 다시 돈다).
+    */
+    if (!hydrated) return;
+
     let cancelled = false;
     /** 이 실행이 결과(성공이든 실패든)를 남겼는가. 아래 cleanup 이 쓴다. */
     let settled = false;
     const currentLayout = layout;
-    const imageGenerationKey = `${generationKey}:image`;
+    const imageGenerationKey = `${runKey}:image`;
 
     async function prepareOutputs() {
       if (imageResult) return;
@@ -295,11 +323,18 @@ export default function ShootResultPage() {
 
             ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가
             WebView 의 자바스크립트를 멈춰서 폴링도 이 줄도 돌지 않고, 돌아왔을 때는 이미
-            visible 이라 조건이 거짓이 된다. 즉 여기서 덮이는 것은 **브라우저 탭이 가려진
-            경우**다(탭은 백그라운드에서도 스크립트가 돈다).
+            visible 이라 조건이 거짓이 된다.
+
+            여기서 덮이는 것은 **앱 셸 안인데 문서만 hidden 이고 JS 는 아직 도는 때**다
+            (안드로이드 WebView 가 대표적이다). 브라우저 탭은 아니다 — 셸 밖에서는
+            nativeNotify 가 그 자리에서 null 을 돌려주고 아무 일도 하지 않는다
+            (lib/nativeBridge.ts 의 isNativeShell 검사).
 
             앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가
             필요하고, docs/app-shell-backend-requests.md 3번에 적어 뒀다.
+
+            미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소
+            메시지가 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
           */
           if (document.visibilityState === "hidden") {
             void nativeNotify({
@@ -343,7 +378,8 @@ export default function ShootResultPage() {
     defaultDisplayName,
     effectiveBorderColor,
     frameId,
-    generationKey,
+    runKey,
+    hydrated,
     idempotencyKey,
     remoteFrameId,
     guestMode,
@@ -427,6 +463,10 @@ export default function ShootResultPage() {
         frameId: frameId as FrameId,
         remoteFrameId,
         outputFilter,
+        // 고른 색이 곧 저장본의 색이다 — 로그인 후 재합성에도 같은 색을 실어 보낸다.
+        // 빼면 서버가 프레임에 저장된 배경으로 그려, 방금 내려받은 그림과 색이 갈린다.
+        // 꾸민 프레임이어도 그대로 넣는다(서버 합성 쪽에서 알아서 버린다).
+        backgroundColor: effectiveBorderColor,
         // 사용자가 결과 화면에서 이름을 고쳤으면 그 이름으로 남긴다.
         // 기본값을 쓰면 공들여 붙인 이름이 로그인 직후 조용히 사라진다.
         displayName: imageResult?.displayName?.trim() || defaultDisplayName,
@@ -666,9 +706,10 @@ export default function ShootResultPage() {
               <p className="text-sm font-semibold text-[color:var(--hc-text)]">
                 비회원 체험 결과 안내
               </p>
+              {/* 목록은 @harucut/shared 한 벌에서 읽는다 — 모달·FAQ 와 같은 값을 말해야 한다. */}
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
-                지금은 사진 촬영과 이미지 저장을 해볼 수 있어요. 링크 공유, 기록 보관,
-                프레임 만들기는 로그인 후에 이용할 수 있어요.
+                지금은 {withJosa(GUEST_ALLOWED_ITEMS, "을/를")} 해볼 수 있어요.{" "}
+                {withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.
               </p>
               <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
                 체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나

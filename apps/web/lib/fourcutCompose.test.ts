@@ -13,6 +13,7 @@ import {
 } from "@/lib/fourcutCompose";
 
 const mockListAllFrames = jest.fn();
+const mockLoadImage = jest.fn();
 const mockUpload = jest.fn();
 const mockRequestCompose = jest.fn();
 const mockWaitForCompose = jest.fn();
@@ -33,7 +34,7 @@ jest.mock("@/lib/composeApi", () => ({
 }));
 
 jest.mock("@/lib/canvas/loaders", () => ({
-  loadImage: jest.fn().mockResolvedValue({ naturalWidth: 600, naturalHeight: 800 }),
+  loadImage: (...args: unknown[]) => mockLoadImage(...args),
 }));
 
 const layout = {
@@ -66,6 +67,7 @@ beforeEach(() => {
     cb(new Blob(["x"], { type: "image/jpeg" }));
   } as typeof HTMLCanvasElement.prototype.toBlob;
 
+  mockLoadImage.mockResolvedValue({ naturalWidth: 600, naturalHeight: 800 });
   mockUpload.mockImplementation(async ({ file }: { file: File }) => ({
     key: `uploads/users/me/fourcuts/sources/${file.name}`,
   }));
@@ -146,6 +148,89 @@ describe("composeFourcutOnServer", () => {
       ],
       idempotencyKey: "web-fixed-key",
     });
+  });
+
+  // 원본은 합성이 성공해야 서버가 지운다. 그래서 "합성에 못 쓸 원본"을 S3 에 올리는 순간
+  // 그건 지울 수단이 없는 고아 객체가 된다 — 프론트에 파일 삭제 엔드포인트가 없다.
+  // 아래 둘은 그 고아를 만드는 두 경로를 막아 둔다.
+  it("굽는 중에 한 장이 실패하면 원본을 한 장도 올리지 않는다", async () => {
+    mockListAllFrames.mockResolvedValue([
+      { frameId: 6, frameType: "CLASSIC", isSystem: true },
+    ]);
+
+    // 세 번째 사진만 못 읽는다. 슬롯마다 "굽기 → 올리기"를 이어 붙이면 나머지 세 장은
+    // 이미 S3 로 나간 뒤라, 쓰이지도 않을 원본이 사용자 버킷에 그대로 남았다.
+    mockLoadImage.mockImplementation(async (src: string) => {
+      if (src === "c") throw new Error("이미지를 읽지 못했다");
+      return { naturalWidth: 600, naturalHeight: 800 };
+    });
+
+    await expect(
+      composeFourcutOnServer({
+        sources: SOURCES,
+        layout,
+        outputFilter: "NONE",
+        frameId: "classic-4",
+        remoteFrameId: null,
+      }),
+    ).rejects.toThrow("이미지를 읽지 못했다");
+
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(mockRequestCompose).not.toHaveBeenCalled();
+  });
+
+  it("한 장이 실패해도 나머지 업로드가 끝난 뒤에 알리고 남은 key 를 흘리지 않는다", async () => {
+    mockListAllFrames.mockResolvedValue([
+      { frameId: 6, frameType: "CLASSIC", isSystem: true },
+    ]);
+
+    const uploadError = new Error("S3 upload failed: 500");
+    const finished: string[] = [];
+    let releaseRest = () => {};
+    const rest = new Promise<void>((resolve) => {
+      releaseRest = resolve;
+    });
+
+    mockUpload.mockImplementation(async ({ file }: { file: File }) => {
+      if (file.name === "source-1.jpg") throw uploadError;
+      await rest;
+      finished.push(file.name);
+      return { key: `uploads/users/me/fourcuts/sources/${file.name}` };
+    });
+
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    const settled: string[] = [];
+    const pending = composeFourcutOnServer({
+      sources: SOURCES,
+      layout,
+      outputFilter: "NONE",
+      frameId: "classic-4",
+      remoteFrameId: null,
+    }).catch((error: unknown) => {
+      settled.push("rejected");
+      return error;
+    });
+
+    // 남은 세 장이 아직 올라가는 중이다. 여기서 먼저 빠져나가면 그 key 를 영영 모르고,
+    // 사용자가 곧바로 재시도하면 끝나지 않은 업로드 위에 4장이 또 겹친다.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toEqual([]);
+
+    releaseRest();
+
+    // 오류는 감싸지 않고 그대로 올린다 — describeComposeFailure 가 에러 코드로 분기한다.
+    await expect(pending).resolves.toBe(uploadError);
+    expect(finished).toHaveLength(3);
+
+    // key 가 모자라니 합성은 접수하지 않는다.
+    expect(mockRequestCompose).not.toHaveBeenCalled();
+
+    // 지울 수단이 없으니 남은 key 는 로그로라도 남긴다(삭제 API 가 열리면 여기서 부른다).
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("source-2.jpg"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("source-4.jpg"));
+
+    warn.mockRestore();
   });
 
   it("슬롯 수와 원본 수가 다르면 올리기 전에 막는다", async () => {

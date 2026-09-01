@@ -267,10 +267,64 @@ async function submitCompose(
 }
 
 /**
+ * 원본 4장을 S3 에 올리고 key 를 슬롯 순서대로 돌려준다.
+ *
+ * `Promise.all` 은 첫 실패에 바로 빠져나간다. 그러면 아직 올라가는 중인 나머지 원본은
+ * **함수가 끝난 뒤에** S3 에 도착하고, 그 key 는 아무도 모르는 채로 남는다. 사용자가 곧바로
+ * 재시도하면 그 좀비 업로드 위에 4장이 또 겹친다. 그래서 전부 끝날 때까지 기다렸다가
+ * (= 무엇이 올라갔는지 다 안 뒤에) 첫 실패를 던진다.
+ *
+ * 남은 원본을 여기서 지우지는 못한다 — 프론트에 파일 삭제 엔드포인트가 없고
+ * (`/api/auth/user/files` 는 presigned-upload 뿐), 서버는 **합성에 성공했을 때만** 원본을
+ * 지운다. 지속 정리는 백엔드 몫으로 넘겼다(`docs/app-shell-backend-requests.md` 4번).
+ * 삭제 API 가 열리면 여기 모아 둔 `uploadedKeys` 를 그대로 넘기면 된다.
+ *
+ * 실패는 감싸지 않고 그대로 던진다 — `describeComposeFailure` 가 에러 코드로 분기한다.
+ */
+async function uploadSources(files: File[]): Promise<string[]> {
+  const results = await Promise.allSettled(
+    files.map((file) =>
+      uploadToS3WithPresigned({
+        file,
+        type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
+        skipUrlResolve: true,
+      }),
+    ),
+  );
+
+  const uploadedKeys: string[] = [];
+  let failure: PromiseRejectedResult | undefined;
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      uploadedKeys.push(result.value.key);
+    } else if (!failure) {
+      failure = result;
+    }
+  }
+
+  if (!failure) return uploadedKeys;
+
+  // 합성에 쓰지 못할 원본이 S3 에 남았다. 지울 수단이 없으니 무엇이 남았는지라도 남긴다.
+  if (uploadedKeys.length > 0 && process.env.NODE_ENV !== "production") {
+    console.warn(
+      `[compose] 합성에 쓰지 못한 원본이 S3 에 남았다: ${uploadedKeys.join(", ")}`,
+    );
+  }
+
+  throw failure.reason;
+}
+
+/**
  * 원본 4장을 올리고 서버 합성을 기다린다.
  *
  * `sources` 는 사용자가 고른 순서 그대로여야 한다 — 서버가 그 순서로 슬롯에 넣는다.
  * 합성에 성공하면 서버가 올린 원본 4장을 지운다(보관함에는 결과만 남는다).
+ *
+ * 뒤집으면 **합성이 실패하면 이미 올라간 원본은 그대로 남는다.** 프론트에는 지울 방법이
+ * 없어서, 여기서는 "쓸 일 없는 원본을 덜 만드는 것"까지만 한다 — 프레임을 먼저 확정하고,
+ * 4장을 다 구운 뒤에 올린다. 접수 이후(`submitCompose`·`waitForCompose`) 실패로 남는
+ * 원본 정리는 백엔드 몫이다(`docs/app-shell-backend-requests.md` 4번).
  */
 export async function composeFourcutOnServer(args: {
   sources: string[];
@@ -304,24 +358,21 @@ export async function composeFourcutOnServer(args: {
     args.remoteFrameId,
   );
 
-  const sourceKeys = await Promise.all(
+  // 굽기와 올리기를 **나눈다**. 슬롯마다 "굽기 → 올리기"를 이어 붙여 4개를 동시에 돌리면,
+  // 세 번째 굽기가 실패해도 나머지 세 장은 이미 S3 로 나간 뒤라 쓰이지 않을 원본만 남는다.
+  // 굽기는 브라우저 안에서 끝나 실패해도 남는 게 없다 — 다 구운 다음에 올린다.
+  const files = await Promise.all(
     sources.map(async (src, index) => {
       const blob = await renderSourceForSlot(
         src,
         layout.slots[index],
         outputFilter,
       );
-      const file = new File([blob], `source-${index + 1}.jpg`, {
-        type: SOURCE_MIME,
-      });
-      const uploaded = await uploadToS3WithPresigned({
-        file,
-        type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
-        skipUrlResolve: true,
-      });
-      return uploaded.key;
+      return new File([blob], `source-${index + 1}.jpg`, { type: SOURCE_MIME });
     }),
   );
+
+  const sourceKeys = await uploadSources(files);
 
   // 꾸민 프레임은 저장된 배경을 그대로 쓴다. 그 배경이 이미지면 색을 보내는 순간 400 이라,
   // "내 프레임인가"를 기준으로 보낼지 말지를 가른다.
