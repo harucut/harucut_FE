@@ -79,7 +79,7 @@ pnpm dev:mobile
 
 - 라우트 플로우: [docs/route-flows.md](./docs/route-flows.md)
 - 인증 및 리다이렉트: [docs/auth-routing.md](./docs/auth-routing.md)
-- 모바일 앱 설계: [docs/mobile-app-blueprint.md](./docs/mobile-app-blueprint.md)
+- 앱이 왜 웹뷰 셸인가: [docs/adr/ADR-0003-앱을-웹뷰-셸로.md](./docs/adr/ADR-0003-앱을-웹뷰-셸로.md)
 - 백엔드 계약 실측: [docs/backend-contract.md](./docs/backend-contract.md)
 - 로컬 백엔드 실행: [docs/local-backend.md](./docs/local-backend.md)
 - 앱 웹뷰 셸: [docs/mobile-shell.md](./docs/mobile-shell.md)

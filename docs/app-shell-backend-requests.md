@@ -7,7 +7,11 @@
 비회원·행사 참가자가 서버 합성 결과물을 받지 못한다. 3번은 없어도 앱은 돌지만
 서버가 사용자에게 먼저 말을 걸 수단이 없다.
 
-4번은 셸과 무관한 서버 합성 건이다. 창구가 같아 여기 모아 둔다.
+4·5번은 셸과 무관하다(합성 원본 정리, 요금제 한도). 창구가 같아 여기 모아 둔다.
+
+**백엔드에 남은 요청은 이 문서가 소유한다.** 다른 문서가 같은 목록을 복제하면 해결된 항목이
+한쪽에만 지워진다 — `docs/backend-contract.md` 의 테두리색 항목이 실제로 그렇게 됐다.
+각 항목이 오늘도 막혀 있는지는 맨 아래 「이번 세션에 확인한 것」 표에 적는다.
 
 ---
 
@@ -18,8 +22,12 @@
 웹 로그인은 백엔드 OAuth 엔드포인트로 **전체 페이지 이동**한다.
 
 ```ts
-// apps/web/lib/authLogin.ts
-window.location.href = `${backendBase}/oauth2/authorization/${provider}`;
+// apps/web/lib/authLogin.ts:9-11, :23
+export function socialAuthorizeUrl(provider: SocialProvider) {
+  return `${backendBase}/oauth2/authorization/${provider}`;
+}
+// startSocialLogin() 안에서
+window.location.href = socialAuthorizeUrl(provider);
 ```
 
 앱 안(WebView)에서 이걸 그대로 태우면 **구글이 차단한다** — 구글은 임베디드 웹뷰에서의
@@ -101,7 +109,10 @@ POST /api/harucut/oauth2/exchange
 if (!sourceKey.startsWith(S3Keys.userRoot(publicId))) throw FORBIDDEN;
 ```
 
-익명으로 부를 수 있는 경로는 백엔드 전체에 하나도 없다(컨트롤러 21개 전수 확인).
+익명으로 부를 수 있는 경로는 백엔드 전체에 하나도 없다(컨트롤러 **24개** 전수 확인,
+2026-09-01). 인증 없이 열려 있는 것은 `/api/email-auth/*`, `/api/harucut/{login,register,reissue,reset/*}`,
+`/api/notices*`, `/api/terms`, `/api/oauth2/unlink/naver`, `/api/payments/webhook` 뿐이고
+합성·업로드는 하나도 없다 — 익명으로 compose 를 부르면 `401 AUTH-010` 이다(재현).
 
 그런데 제품은 **비회원이 찍고 결과물을 가져가는 것**을 판매 문구로 걸고 있다:
 
@@ -182,8 +193,10 @@ DELETE /api/auth/devices/{token}                                       // 해제
 원본 4장은 **합성이 성공했을 때만** 서버가 지운다. 실패하면 그대로 남는다.
 
 ```java
-@RequestMapping("/api/auth/user/files")   // FileController — presigned-upload 뿐
+@RequestMapping("/api/auth/user/files")   // FileController — presigned-upload · presigned-img 둘
 ```
+
+엔드포인트는 둘이지만 **어느 쪽도 삭제가 아니다.** 그래서 아래 결론은 그대로다.
 
 프론트에는 지울 방법이 없다. 파일을 지우는 경로가 계약에 없고(프록시의 DELETE 는
 `user/media/{mediaId}`·`user/frame/{frameId}`·로그아웃·탈퇴뿐), 원본은 보관함에 등록되지
@@ -249,15 +262,60 @@ DELETE /api/auth/user/files   { "keys": ["<합성에 쓰려던 원본 key>", ...
 
 ---
 
-## 5. 참고 — 지금 확인된 사실들
+## 5. 요금제 한도를 언제 켜는가 (답 대기)
 
-| 항목 | 상태 |
-|---|---|
-| 서버 합성 `POST /api/auth/user/media/compose` | **살아 있고 우리가 쓴다** (2026-08-21 실측) |
-| 업로드 타입 | `FOURCUT_SOURCE` — 개명 완료. `FOURCUT_PHOTO` 는 400 GEN-006 |
-| 완성본 등록 `POST /api/auth/user/media` | **삭제됨(405)** — 결과물은 서버 합성으로만 만든다 |
-| 이메일 인증 유효시간 | Redis TTL **10분** (지나면 가입 시 `AUTH-004`) |
+이것도 셸과 무관하다. 창구가 같아 여기 모아 둔다.
 
-개명은 이미 반영했다. 두 이름을 번갈아 시도하던 폴백은 제거했다 —
-지금 계약에 이름은 하나뿐이라 폴백이 오히려 실패를 늦게 드러낸다.
+### 절반은 이번에 닫혔다 — 답은 "맞다"
+
+열려 있던 질문은 「백엔드가 등급별 한도를 안 걸고 있는 것 같은데 맞나」였다.
+**맞다. 세 등급이 전부 무제한이다.** 2026-09-01 재확인, 근거 셋:
+
+1. 갓 만든 BASIC 계정의 `GET /api/auth/user/subscription/usage` →
+   `{"planTier":"BASIC","frameRetentionLimit":-1,"frameRetentionRemainingCount":-1,"frameRetentionUnlimited":true}`
+   — 같은 필드의 스웨거 설명은 「BASIC 0 / PLUS 3 / PRO -1」로 정반대다.
+2. 그 계정으로 프레임을 저장하면 200 이다(`SUBS-003` 이 안 난다).
+3. jar 의 `com/harucut/subscription/enums/PlanTier.class` 상수풀에는
+   `FrameLimit$Unlimited`·`Retention$Unlimited` **둘만** 있다.
+   `subscription/policy/` 에 `FrameLimit$Limited`·`Retention$Days`·`Retention$Months` 클래스가
+   **분명히 존재하는데도** `PlanTier` 는 그중 아무것도 참조하지 않는다 — 만들어만 두고 안 붙였다.
+
+화면이 갈리는 지점과 자세한 실측은 [`docs/backend-contract.md`](./backend-contract.md)
+「모든 등급이 무제한」 절이 소유한다. 여기 옮겨 적지 않는다.
+
+### 남은 질문 둘
+
+**(a) `PlanTier` 를 한도 구현체에 언제 붙이나.**
+결제 오픈에 맞추는 것인지, 그 전에 켜는 것인지에 따라 프론트가 할 일이 갈린다 —
+의도된 개방이면 가격표 문구를 「결제 오픈 전까지 모두 무제한」으로 바꾸고,
+정책이 빠진 것이면 프론트는 그대로 두면 맞는다.
+
+⚠️ 물어볼 때 **「결제가 닫혀 있어서(`PAYMENTS_ENABLED=false`) 일부러 열어 둔 것 아니냐」고
+말하지 말 것.** `PAYMENTS_ENABLED` 는 백엔드 설정이 아니라 우리 쪽 상수다
+(`packages/shared/src/company.ts:44`). 컨테이너 환경변수에는 그런 이름이 없다.
+
+**(b) 보관 *기간*을 알 방법이 없다.**
+`SubscriptionUsageResponse` 는 필드가 다섯인데 전부 프레임 **개수**다
+(`planTier`, `frameRetentionLimit`, `frameRetentionUsedCount`,
+`frameRetentionRemainingCount`, `frameRetentionUnlimited`). 기간에 해당하는 값이 없으니
+화면에서 보관 기간을 말하려면 정적 표에 의존할 수밖에 없다 —
+서버가 실제로 며칠 뒤에 지우는지 프론트는 알 길이 없다. 개수처럼 기간도 필드 하나가 필요하다.
+
+---
+
+## 참고 — 이번 세션에 확인한 것 (2026-09-01)
+
+**1~4번은 오늘도 그대로 막혀 있고, 5번은 답 대기다.** 로컬 백엔드
+(`popeye0618/harucut@sha256:d2bdf90f191abcc7…`, 2026-08-28 빌드, 경로 53개)로 재확인:
+
+| 요청 | 확인한 것 | 상태 |
+|---|---|---|
+| 1. OAuth 교환 | `/v3/api-docs` 에 `exchange` 를 포함한 경로 **0건**. `CustomOAuth2SuccessHandler` 상수풀에 `/oauth2/callback`·`frontendUrl` 만 있고 앱 스킴 문자열이 없다 | **막힘** |
+| 2. 익명 합성 | `guest`·`anon`·`event` 를 포함한 경로 **0건**. 인증 없이 compose → `401 AUTH-010` | **막힘** |
+| 3. 기기 토큰 등록 | `push`·`device`·`token`·`notif` 로 거른 경로 **0건** | **막힘** |
+| 4. 원본 파일 삭제 | `DELETE` 가 있는 경로는 7개뿐 — `admin/frames`·`admin/notices`·`admin/terms`·`user/frame/{id}`·`user/media/{id}`·`exit`·`logout`. **파일(key) 을 지우는 경로는 없다** | **막힘** |
+| 5. 요금제 한도 | 위 절 — 「무제한이 맞나」는 닫혔고, 「언제 켜나」가 남았다 | **답 대기** |
+
+계약 사실(응답 봉투·스키마·에러코드·업로드 타입 개명)은 이 문서가 소유하지 않는다.
 정본은 [`docs/backend-contract.md`](./backend-contract.md) 다.
+인증코드 TTL·쿨다운 같은 로컬 실행 값은 [`docs/local-backend.md`](./local-backend.md) 가 소유한다.

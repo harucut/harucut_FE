@@ -133,7 +133,7 @@ COUPON  001 002 003 004 005 006 007 008
 | `FrameResponse` | — | `cellCutouts: boolean[]` **신규** |
 | `FrameCreateRequest` | — | `previewKey` **필수** (title·frameType·background 도 필수) |
 | `ComponentRequest` | `key`/`style` | `id: string`, `renderedKey`, `styleJson` |
-| `ComposeRequest` | — | `frameId`·`sourceKeys[]`·`idempotencyKey` **모두 필수** |
+| `ComposeRequest` | — | 필드 **넷**. `frameId`·`sourceKeys[]`·`idempotencyKey` 필수 + `backgroundColor` 선택(`^#[0-9a-fA-F]{6}$`) — 「배경색은 요청에 실어 보낸다」 절 |
 | `PresignedUploadRequest.type` | — | `PROFILE\|FRAME\|FRAME_COMPONENT\|FOURCUT_SOURCE` |
 | `POST /api/auth/user/media` | 있다고 가정 | **없다 → 405 `GEN-041`** |
 
@@ -194,24 +194,36 @@ BASIC 은 한도가 0이라 **"프레임 저장 후 목록 500"(`PRODUCT.md`) �
 
 | 항목 | 왜 |
 |---|---|
-| **사용자가 고른 테두리색** | `ComposeRequest` 에 배경/색 자리가 없다(실측 재확인 2026-08-21: `frameId`·`sourceKeys`·`idempotencyKey` 셋뿐). 배경은 **프레임에 저장된 값**만 쓴다. 색은 자유 입력(`<input type="color">`)이라 프레임을 미리 만들어 둘 수도 없고, BASIC 은 프레임 저장 한도가 0이라 즉석 생성도 막힌다 |
+| ~~사용자가 고른 테두리색~~ | **해결됨(2026-08-28)** — `ComposeRequest.backgroundColor` 가 열렸고 프론트도 보낸다. 바로 아래 절 |
 | ~~꾸미기(스티커·드로잉) 저장~~ | **해당 없음** — 이 제약 때문에 `/decorate` 기능 자체를 제거했다(2026-08). 프레임 꾸미기(`/theme/*`)는 그대로 남는다 |
 | ~~비회원 결과를 로그인 후 기록으로~~ | **해결됨** — 완성본 대신 **원본 4장을 보관**했다가 로그인 후 합성한다(`lib/pendingGuestSave.ts`). 백엔드 수단 불필요 |
 | ~~TEXT 가 든 프레임~~ | **해결됨(2026-08-21)** — 저장할 때 글자 층을 투명 PNG 로 구워 `renderedKey` 로 함께 보낸다(`lib/canvas/textLayer.ts`) |
 | ~~정적 경로 스티커~~ | **해결됨(2026-08-21)** — 저장 직전에 S3 로 올려 `source` 를 key 로 바꾼다(`themeEditorStore.finalizeAssetsForSave`) |
 
-**백엔드에 남은 요청은 테두리색 하나다.**
+**이 표에 남은 항목은 없다.** 백엔드에 남은 요청은 이 문서가 소유하지 않는다 —
+[`docs/app-shell-backend-requests.md`](./app-shell-backend-requests.md) 가 정본이고,
+여기 옮겨 적지 않는다. 테두리색이 정확히 그렇게 틀어졌다: 요청이 해결된 뒤에도 이 표에
+「막혀 있음」으로 남아, 같은 문서 뒤쪽(「이번에 고친 어긋남」)과 정면으로 어긋났다.
+해결 여부가 갈리는 항목은 한 곳에서만 관리한다.
 
-### 테두리색을 그때까지 어떻게 다루나
+### 배경색은 요청에 실어 보낸다 (2026-09-01 스키마 재확인)
 
-미리보기가 사용자가 고른 색을 보여 주고 저장본은 프레임 배경으로 나오면, 사용자는
-**자기가 본 적 없는 그림**을 받는다. 색을 한 번도 안 건드려도 어긋난다 — 우리 기본값
-(`#23262d`)과 서버에 등록된 시스템 프레임 배경을 맞춰 주는 코드가 없었기 때문이다.
+`ComposeRequest` 의 필드는 **넷**이다. `frameId`·`sourceKeys`·`idempotencyKey` 가 필수이고
+**`backgroundColor` 가 선택**으로 하나 더 있다(`pattern: ^#[0-9a-fA-F]{6}$`).
+직접 보려면 `curl -s http://localhost:8080/v3/api-docs | jq '.components.schemas.ComposeRequest'`.
 
-그래서 회원 경로에서는 **서버가 쓸 배경을 읽어 미리보기에 반영하고**
-(`hooks/useServerFrameBackground.ts`) 색 선택을 잠근다. 비회원은 결과물을 브라우저가
-그려 내려받으므로 고른 색이 실제로 적용된다 — 잠그지 않는다.
-`ComposeRequest.background` 가 생기면 이 훅과 잠금을 걷어내면 된다.
+스웨거가 그 자리에 못박아 둔 세 가지 — 프론트가 지켜야 한다:
+
+- **단색(`COLOR`) 배경 프레임에서만** 쓸 수 있다. 이미지 배경 프레임에 보내면 400 이다.
+- 생략하면 프레임에 저장된 배경 그대로 합성한다.
+- ⚠️ **같은 `idempotencyKey` 로 색만 바꿔 다시 보내면 무시된다** — 기존 작업이 그대로
+  재생된다. 색을 바꿨으면 멱등키도 새로 잡아야 한다.
+
+프론트는 이미 보낸다 — `lib/composeApi.ts:63`(타입), `lib/fourcutCompose.ts:253-258`
+(이미지 배경이면 색을 빼고 보내는 분기), `app/shoot/result/page.tsx:323,479`(호출부).
+회원 잠금과 우회 훅도 걷혔다: `components/frame/FrameOutputOptionsPanel.tsx:25-27` 의
+`backgroundLocked` 는 이제 `hasCustomFrame` 이고(꾸민 프레임만 잠근다),
+예전 이 자리에 적혀 있던 `hooks/useServerFrameBackground.ts` 는 **없는 파일**이다.
 
 ## 프레임 저장 형식 실측 (2026-08-21, 로컬 백엔드 · PRO 계정)
 
@@ -226,6 +238,32 @@ BASIC 은 한도가 0이라 **"프레임 저장 후 목록 500"(`PRODUCT.md`) �
 | **옛 형식**(`/stickers/x.png` + `renderedKey` 없는 TEXT) | 프레임 저장은 **200**, 그 프레임으로 합성은 **400 GEN-002** |
 | `background.value` 를 `#` 없이 `"23262d"` 로 | **먹는다** — 결과 배경 `rgb(35,38,45)` |
 | 슬롯 좌표 | `frameLayouts.ts` classic-4 와 정확히 일치, 캔버스 2000×6000 |
+
+### ⚠️ 누끼 한 줄은 지금 스웨거와 반대다 (2026-09-02 확인, 미해결)
+
+위 표 두 번째 줄("합성 결과에 반영된다")과 **도는 서버의 설명이 정면으로 다르다.**
+
+`FrameCreateRequest.cellCutouts` 의 스웨거 설명 전문:
+
+> ⚠️ **서버는 이 값으로 아무것도 그리지 않는다** — 누끼(배경 제거 + 검은 배경)는
+> 프론트가 원본 픽셀에 구워서 업로드해야 한다. 이 토글은 편집기가 저장 프레임을
+> 다시 열 때 어느 칸이 누끼인지 복원하는 용도다.
+
+**어느 쪽이 맞느냐에 따라 지금 회원 결과물이 깨져 있다.**
+`apps/web/lib/fourcutCompose.ts` 에는 `cellCutouts` 도 누끼도 **한 번도 안 나온다** — 회원 업로드
+경로는 누끼를 픽셀에 굽지 않는다. 스웨거가 맞다면 **회원은 누끼를 켜도 결과물에 안 나온다.**
+(비회원 경로는 다르다 — `composeFrame.ts:320` 의 `drawCellCutouts` 가 클라이언트에서 그린다.)
+
+양쪽 근거:
+
+| | 근거 |
+|---|---|
+| 서버가 그린다 (위 표) | 픽셀 실측 `rgb(55,9,10)` vs `rgb(0,255,0)`. jar 의 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `ComposeSpec` 에 싣는다 |
+| 서버가 안 그린다 (스웨거) | 위 설명문. 실제 렌더는 jar 밖 Lambda(`LambdaComposeExecutor`)라 jar 만 봐서는 확정 못 한다 |
+
+**백엔드에 물어야 할 것:** `ComposeSpec.cellCutouts` 를 Lambda 가 실제로 그리는가.
+그린다면 스웨거 설명이 낡았고, 안 그린다면 프론트가 회원 경로에서도 픽셀에 구워야 한다.
+확인 전까지 이 표의 해당 줄을 근거로 삼지 말 것.
 
 **저장이 성공한다고 쓸 수 있는 프레임이 아니다.** 저장(200)과 합성(400)이 갈리는 것이
 이 버그가 오래 안 보였던 이유다 — 사용자는 사진을 다 찍고 마지막 화면에서야 실패를 만났다.
@@ -316,41 +354,164 @@ BASIC 은 한도가 0이라 **"프레임 저장 후 목록 500"(`PRODUCT.md`) �
 
 ---
 
-# 계약 재대조 (2026-08-28)
+# 계약 재대조 (2026-09-01 재실행)
 
 경로·죽은 프록시·에러코드(A·B·C)는 **손으로 읽지 않고 기계로 맞췄다.**
-필수 요청 필드만 여전히 손이다 — 스크립트는 그걸 검사하지 않는다. 같은 대조를 다시 하려면:
+필수 요청 필드(D)만 여전히 손이다 — 스크립트가 「검사하지 않는다」고 스스로 출력한다.
+같은 대조를 다시 하려면:
 
 ```bash
-pnpm check:contract            # 요약
-pnpm check:contract -- --show-required   # 필수 요청 필드까지
+python3 scripts/check_backend_contract.py                  # A·B·C 요약
+python3 scripts/check_backend_contract.py --show-required  # D 목록까지
 ```
+
+⚠️ **`pnpm check:contract -- --show-required` 는 실패한다.** pnpm 이 `--` 를 그대로 넘겨서
+argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종료 2). pnpm 으로
+돌릴 거면 `--` 없이 `pnpm check:contract --show-required` 다. 위의 `python3` 두 줄이 확실하다.
 
 `scripts/check_backend_contract.py` 가 도는 백엔드의 `/v3/api-docs` 를 읽고,
 에러코드는 **컨테이너 안 jar 의 ErrorCode enum** 에서 직접 뽑아 비교한다.
 스웨거 응답 예시만 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로
 잘못 짚기 때문이다 — 실제로 스웨거 기준 45개 vs jar 기준 52개로 갈렸다.
 
-## 이번 대조 결과 — 스크립트가 본 것 (2026-08-28 실행)
+## A·B·C — 스크립트가 본 것 (2026-09-01 실행)
 
-그날 그 자리에서 나온 출력이다. **지금의 상태가 아니다** — 다시 알고 싶으면 다시 돌린다.
+측정 대상은 `popeye0618/harucut@sha256:d2bdf90f191abcc7…`(2026-08-28 빌드)다.
+**`:latest` 는 버전이 아니다** — 태그만 남기면 다음 사람이 같은 것을 쟀는지 알 수 없다.
+이 문서의 8-20 블록이 통째로 낡은 근본 원인이 그것이라, 숫자를 적을 때는 digest 를 함께 적는다.
 
-| 항목 | 그날 결과 |
+| 항목 | 결과 |
 |---|---|
-| A. FE 프록시 핸들러 → 백엔드 경로 | 33개 중 **33/33 존재** (지금은 핸들러가 37개다 — 다시 돌릴 것) |
+| 백엔드 규모 | 경로 53개 · (메서드, 경로) 쌍 62개 |
+| A. FE 프록시 핸들러 → 백엔드 경로 | 핸들러 37개 · **37/37 OK** |
 | B. 호출되지 않는 프록시 라우트 | **없음** |
-| C. 에러코드 (jar 52개) ↔ FE 문구표 | **누락 0** |
+| C. 에러코드 (jar 기준) ↔ FE 문구표 | 서버 52 · FE 52(+클라 1) · **누락 0 · 죽음 0** |
 
-## 손으로 대조한 것 — 스크립트가 검사하지 않는다 (2026-08-28)
+종료코드 0. **이 표는 그날의 출력이지 지금의 상태가 아니다.** 백엔드가 한 번 나가면
+그날로 낡으니, 알아야 하면 위 명령을 다시 돌린다.
+그리고 **이 숫자를 다른 문서로 복사하지 않는다** — 「프록시 핸들러 수」가 이 문서(33개)와
+`docs/README.md`(37개)에 **같은 2026-08-28 날짜로 다르게** 적혀 있던 것이 이 규칙이 생긴 이유다.
 
-| 항목 | 그날 결과 |
-|---|---|
-| FE 필수 요청 필드 (15개 엔드포인트) | 전부 충족 — **사람이 눈으로 대조** |
+## D. 필수 요청 필드 — 스크립트가 검사하지 않는다 (2026-09-01 손 대조)
 
-이 줄만 기계 결과가 아니다. `--show-required` 는 스웨거가 필수라고 적은 필드를 출력할 뿐,
-프론트가 실제로 그 값을 싣는지는 보지 않는다(요청 본문은 프록시가 아니라 `apps/web/lib`
-에서 만들어져 정적으로 읽기 어렵다). `pnpm check:contract` 가 0 으로 끝나도 필수 필드가
-빠진 건 안 걸린다. 백엔드가 한 번 나가면 이 줄은 그날로 낡는다.
+`--show-required` 는 **스웨거가 필수라고 적은 필드를 출력할 뿐**, 프론트가 실제로 그 값을
+싣는지는 보지 않는다(요청 본문은 프록시가 아니라 `apps/web/lib` 에서 만들어져 정적으로 읽기
+어렵다). 스크립트가 0 으로 끝나도 D 는 안 걸린다. 그래서 여기만 사람이 읽는다.
+
+오늘 출력은 **16개 엔드포인트**다. 8-28 기록의 15개에서 하나 늘었다
+(`PATCH /api/auth/user/media/{mediaId}/display-name`) — 손 대조가 그날로 낡는다는 증거다.
+목록 자체는 명령으로 보고, 여기에는 **대조해서 나온 어긋남 다섯 건**만 남긴다.
+전부 이번에 로컬 백엔드에 실제로 요청을 보내 재현했다.
+
+### D-1. 비밀번호 변경 다이얼로그가 상한(20자)을 모른다
+
+백엔드 `ChangePasswordRequest.newPassword` 는 `minLength 8 / maxLength 20` 이다. 재현:
+
+```
+PATCH /api/harucut/change/password   newPassword 21자
+→ 400 {"code":"GEN-003","data":[{"field":"newPassword",
+       "message":"size must be between 8 and 20"}]}
+   (20자는 200)
+```
+
+프론트 `components/mypage/PasswordChangeDialog.tsx` 의 `validate()` 는 **하한만** 본다
+(`MIN_LENGTH = 8`, :56). 상한 검사가 없고 placeholder 도 `8자 이상`(:118)이라
+**20자 제한이 이 화면 어디에도 나오지 않는다.** 그래서 21자가 그대로 서버까지 간다.
+
+돌아온 `GEN-003` 의 필드 메시지는 Bean Validation 기본 **영문**이고,
+`apps/web/lib/apiError.ts` 는 **한글이 든 필드 메시지만** 채택한다
+(`HANGUL_PATTERN`, :21·:120 — 영문이 한국어 화면에 튀어나오는 것을 막으려는 규칙이다).
+결과적으로 사용자는 코드 매핑 문구 **「입력값을 다시 확인해 주세요.」** 하나만 본다 —
+무엇이 틀렸는지 알 방법이 없다.
+
+같은 규칙을 **회원가입과 비밀번호 재설정은 제대로 말한다**
+(`packages/shared/src/auth-validation.ts:32` 「비밀번호는 20자 이하여야 합니다.」 —
+`signup/page.tsx:84`, `useForgotPasswordFlow.ts:146` 이 부른다). 이 다이얼로그 하나만 다르다.
+
+### D-2. 글자를 지운 TEXT 가 프레임 저장 전체를 400 으로 만든다
+
+백엔드 `ComponentRequest.source` 는 `minLength 1`(@NotBlank)이고, TEXT 의 `source` 는
+**글자 내용 그 자체**다(스웨거). 재현:
+
+```
+POST /api/auth/user/frame   components[0] = {"type":"TEXT","source":""}
+→ 400 {"code":"GEN-003","data":[{"field":"components[0].source",
+       "message":"must not be blank"}]}
+```
+
+만드는 자리는 막혀 있다 — `themeEditorStore.addText` 는 빈 값을 `"하루컷"` 으로 바꾼다(:633).
+**빈 값이 생기는 자리는 속성 패널이다**: `components/theme/editor/InspectorPanel.tsx:126` 이
+`source` 를 검사 없이 그대로 쓴다. 지운 뒤 저장하면
+`themeEditorStore.finalizeAssetsForSave` 는 그 컴포넌트를 건너뛰고(:524 `if (!component.source.trim()) continue;`)
+`renderedKey` 를 안 만드는데, `lib/frameApi.ts:161` 은 TEXT `source` 를 그대로 실어 보낸다.
+즉 **프론트는 빈 줄 알면서 보낸다.** 메시지도 영문이라 화면에는 D-1 과 같이
+「입력값을 다시 확인해 주세요.」만 뜬다.
+(백엔드 거절은 위 요청으로 재현했고, 편집기 쪽 경로는 코드를 따라 읽은 것이다 — 화면으로 눌러 보지는 않았다.)
+
+### D-3. 업로드 크기 가드가 상한에만 있다
+
+백엔드 `fileSize` 는 1 이상이어야 한다(스웨거 설명 「1 ~ 10485760」. 스키마의
+`minimum: 0` 은 설명과 어긋나 있고, **실제로는 0을 거절한다**). 재현:
+
+```
+POST /api/auth/user/files/presigned-upload   fileSize: 0
+→ 400 {"code":"GEN-003","data":[{"field":"fileSize",
+       "message":"파일 크기는 0보다 커야 합니다."}]}
+   (fileSize: 1 은 200)
+```
+
+프론트 `lib/presignedUploadApi.ts:269` 는 **상한만** 막는다
+(`file.size > MAX_UPLOAD_BYTES` → 「10MB 이하 이미지만 올릴 수 있어요.」).
+바로 위 주석(:267-268)이 「그 문구보다 여기서 크기를 짚어 주는 편이 사용자에게 낫다」인데,
+하한은 그 결정에서 빠져 있다. 0바이트 파일은 서버까지 가고,
+**이 메시지는 한국어라 `apiError` 가 그대로 채택한다** — 화면이 깨지지는 않지만
+상한과 하한이 서로 다른 사람이 쓴 문장으로 갈린다.
+
+### D-4. `generationKey` 가 프레임 **내용** 변경을 못 본다 → 서버가 옛 결과를 재생한다
+
+`app/shoot/result/page.tsx:177-193` 의 `generationKey` 는 `remoteFrameId` 를 **맨 숫자
+그대로** 담는다. 프레임 내용을 고쳐도 id 는 그대로라 키가 안 변하고,
+`lib/shootSessionStore.ts:137-144` 의 `ensureComposeIdempotencyKey` 는 같은 `generationKey`
+에 **이전 멱등키를 그대로** 돌려준다. 서버는 같은 멱등키를 새로 그리지 않는다. 재현:
+
+```
+POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}   → 202 {"jobId":1,"status":"PENDING"}
+PUT  /api/auth/user/frame/7   background #FFFFFF → #1ED760    → 200
+POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}   → 202 {"jobId":1, …}  ← 수정 전 작업
+POST .../media/compose  {frameId:7, …, idempotencyKey:"K-new"} → 202 {"jobId":2, …}
+```
+
+즉 프레임을 편집하고 결과 화면으로 돌아오면 **고치기 전 그림이 나온다.** 스웨거도 같은
+함정을 `backgroundColor` 설명에 적어 뒀다(같은 키로 색만 바꿔 보내면 무시된다).
+
+고치려면 `generationKey` 에 프레임 **내용**의 지문이 들어가야 한다. `FrameResponse` 에는
+`updatedAt`·`version` 같은 필드가 없으므로(위 PUT 응답 참고) 서버 값으로는 만들 수 없고,
+프론트가 저장한 내용에서 직접 만들어야 한다.
+
+### D-5. 로그인 화면이 **회원가입 규칙**으로 로그인을 막는다
+
+백엔드 `LoginRequest.password` 는 `minLength 1` 뿐이다 — **상한도 문자 종류 제한도 없다.**
+그런데 `app/login/page.tsx:59` 는 회원가입용 `validatePassword` 를 그대로 부르고, 그 규칙은
+`packages/shared/src/auth-validation.ts:8` 의
+`^[A-Za-z0-9!@#$%^&*()\-_=+\[\]{};:,.?]{8,20}$` 다. 이 규칙 밖 비밀번호는 **요청이 나가지도 않는다.**
+
+그런 비밀번호는 **우리 화면으로 만들 수 있다** — D-1 의 다이얼로그가 문자 종류를 안 보기
+때문이다. 한 계정으로 끝까지 재현했다:
+
+```
+PATCH /api/harucut/change/password  newPassword "abcd~1234efgh"  → 200   (~ 는 위 정규식 밖)
+POST  /api/harucut/login            같은 비밀번호                 → 200 ACTIVE
+validatePassword("abcd~1234efgh")   → "영문, 숫자, 일부 특수문자(!@#$%^&* 등)만 사용할 수 있습니다."
+```
+
+**다이얼로그로 바꾼 비밀번호로 로그인 화면을 통과하지 못한다.** 백엔드는 받아 주는데
+브라우저가 막는 것이라 서버 로그에는 아무것도 안 남는다.
+
+길이 쪽은 **오늘은 재현되지 않는다**: `register`·`change/password`·`reset/password` 셋 다
+`maxLength 20` 이다. 앞의 둘은 라이브로 확인했고(21자 register → 400 GEN-003
+「size must be between 8 and 20」), `reset/password` 는 스웨거 스키마 기준이다.
+20자를 넘는 비밀번호를 가진 계정을 만들 경로가 지금은 없다. 로그인 화면의 길이 검사는
+그래서 당장은 무해하지만, 백엔드가 상한을 풀면 그날 바로 잠금이 된다.
 
 ## 이번에 고친 어긋남
 
@@ -372,16 +533,44 @@ pnpm check:contract -- --show-required   # 필수 요청 필드까지
 4. 프록시 라우트 하나(`user-info`)만 상수 이름이 `BACKEND_BASE_URL` 이라 자동 대조에서
    샜다. 30개 전부 `BASE_URL` 로 통일했다.
 
-## 아직 FE 가 안 쓰는 백엔드 기능
+## 아직 FE 가 안 쓰는 백엔드 기능 (2026-09-01 재도출)
 
-프록시가 없을 뿐 백엔드에는 있다. 필요해지면 붙이면 된다.
+⚠️ **이 목록은 문서가 들고 있으면 안 되는 종류다.** 프록시가 붙는 순간 조용히 틀려지고,
+실제로 그렇게 틀려졌다 — 8-28 판은 쿠폰·구독·사진삭제를 「안 쓴다」고 적어 뒀는데
+셋 다 이미 프록시가 있고 화면이 부른다:
 
-- 구독/결제 — `GET /api/auth/subscriptions`, `POST /api/auth/payments/subscribe`,
-  `POST /api/auth/subscriptions/cancel`, `GET /api/auth/payments`
-- 쿠폰 — `GET /api/auth/coupons`, `POST /api/auth/coupons/redeem`
+- 쿠폰 — `apps/web/lib/couponApi.ts` → `/api/client/coupons`·`/api/client/coupons/redeem`
+  → `app/mypage/page.tsx:175,635`
+- 구독 — `apps/web/lib/userApi.ts:41` → `/api/client/subscriptions`
+- 사진 삭제 — `app/api/client/user/media/[mediaId]/route.ts` 의 DELETE → `app/history/page.tsx:380`
+
+**세는 방법**(`apps/web/app/api/client/**` 의 프록시 대상과 `/v3/api-docs` 를 차집합):
+
+```bash
+python3 - <<'EOF'
+import importlib.util
+spec = importlib.util.spec_from_file_location("chk", "scripts/check_backend_contract.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+be = m.collect_backend(m.fetch_spec("http://localhost:8080"))
+fe = {(mt, m.normalize(p)) for mt, p, _ in m.collect_fe_routes()}
+for mt, path in sorted(be, key=lambda x: (x[1], x[0])):
+    if (mt, m.normalize(path)) not in fe:
+        print(f"{mt:6} {path}")
+EOF
+```
+
+오늘 이 차집합은 **26개**다. 관리자 API 19개와 웹훅 2개
+(`/api/payments/webhook`, `/api/oauth2/unlink/naver`)를 빼면 **다섯 경로, 세 묶음**만 남는다:
+
+- 결제 — `GET /api/auth/payments`, `POST /api/auth/payments/subscribe`
+- 구독 해지 — `POST /api/auth/subscriptions/cancel`
 - 공지 — `GET /api/notices`, `GET /api/notices/{publicId}`
-- 사진 삭제 — `DELETE /api/auth/user/media/{mediaId}`
-- 관리자 API 전체(`/api/admin/*`), 웹훅(`/api/payments/webhook`, `/api/oauth2/unlink/naver`)
+
+레포 전체 grep(`apps`·`packages`·`scripts`, 빌드 산출물 제외)으로도 이 다섯은 호출부가
+0건이다. `/api/admin` 은 3건 걸리지만 전부 주석·안내 문구이고 호출이 아니다
+(`hooks/useActiveTerms.ts:23,83`, `lib/termsApi.ts:10`).
+
+다음에 이 목록이 필요하면 **여기를 읽지 말고 위 명령을 돌린다.**
 
 ---
 
@@ -427,11 +616,17 @@ pnpm check:contract -- --show-required   # 필수 요청 필드까지
 
 ## 백엔드에 물어볼 것
 
-결제가 닫혀 있어서(`PAYMENTS_ENABLED=false`) **일부러 다 열어 둔 것인지**, 아니면 정책이
-빠진 것인지. 답에 따라 프론트가 할 일이 갈린다.
+질문 자체는 [`docs/app-shell-backend-requests.md`](./app-shell-backend-requests.md) §5 가
+소유한다(요청은 한 곳에서만 관리한다). 요지는 **「일부러 다 열어 둔 것인지, 정책이 빠진 것인지」**이고,
+답에 따라 프론트가 할 일이 갈린다.
 
 - 의도된 것이라면 → 가격표 문구를 "결제 오픈 전까지 모두 무제한"으로 바꾼다.
 - 아니라면 → 백엔드가 정책을 되살린다. 프론트는 그대로 두면 맞는다.
 
-보관 **기간**은 어느 쪽이든 API 에 값이 없다. 화면에서 기간을 말하려면
-`SubscriptionUsageResponse` 에 필드가 하나 필요하다(프레임 개수처럼).
+⚠️ **물어볼 때 `PAYMENTS_ENABLED` 를 근거로 대지 말 것.** 이 문서가 예전에
+「결제가 닫혀 있어서(`PAYMENTS_ENABLED=false`)」라고 적어 뒀는데, 그것은 백엔드 설정이 아니라
+**우리 쪽 상수**다(`packages/shared/src/company.ts:44`, 쓰는 곳은 `PricingView.tsx`·`MarketingFooter.tsx`).
+컨테이너 환경변수에 그런 이름은 없다 — 그대로 인용하면 말이 안 통한다.
+
+보관 **기간**은 어느 쪽이든 API 에 값이 없다. `SubscriptionUsageResponse` 는 필드가 다섯인데
+전부 프레임 개수다. 화면에서 기간을 말하려면 필드가 하나 필요하다.

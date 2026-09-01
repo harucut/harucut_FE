@@ -22,9 +22,10 @@ export const GUEST_TRIAL_CTA_LABEL = '가입 없이 체험하기';
  * 자격으로 찍는데, 다운로드까지 막으면 "참가자는 가입 없이 찍고 그 자리에서 가져가요"라는
  * 판매 문구(plans.ts·enterprise 페이지·FAQ)가 사실이 아니게 된다.
  *
- * 실제 권한은 apps/web/proxy.ts 의 GUEST_ALLOWED_PREFIXES 와
- * apps/mobile/app/(app)/_layout.tsx 의 게스트 가드가 정한다. 여기 목록은 그것을 말로 옮긴
- * 것이라 한쪽만 바뀌면 화면이 거짓말을 한다. 약관 제8조도 같은 범위를 적는다.
+ * 실제 권한을 정하는 곳은 apps/web/lib/protectedPaths.ts 하나다. 앱도 같은 판정을
+ * 지난다 — ADR-0003 이후 앱은 웹을 WebView 로 띄우는 셸이라 네이티브 쪽에 따로 둘
+ * 게스트 가드가 없다. 여기 목록은 그 규칙을 말로 옮긴 것이라, 한쪽만 바뀌면 화면이
+ * 거짓말을 한다. 약관 제8조도 같은 범위를 적는다.
  *
  * 목록을 문장이 아니라 항목으로 두는 이유: 같은 목록이 모달·안내·FAQ 여러 문장에 나오는데,
  * 문장째로 복사해 두면 한쪽만 고쳐진다.
@@ -34,12 +35,12 @@ export const GUEST_ALLOWED_ITEMS = '사진 촬영과 이미지 저장';
 /**
  * 갤러리에서 사진 불러오기를 맨 앞에 둔다.
  *
- * 비회원이 실제로 막히는 자리가 거기다 — proxy.ts 가 `/shoot/upload` 를 잡아
- * `/shoot?guestNotice=restricted` 로 돌려보내고, 그때 뜨는 모달이 이 목록을 읽는다.
- * 목록에서 빠져 있는 동안 막힌 사람은 방금 막힌 것만 빼고 나머지를 안내받았다.
+ * 비회원이 실제로 막히는 자리가 거기다 — 갤러리 불러오기를 누르면 촬영 화면으로
+ * 돌아오면서 안내 모달이 뜨고, 그 모달이 읽는 목록이 여기다. 목록에서 빠져 있는 동안
+ * 막힌 사람은 방금 막힌 것만 빼고 나머지를 안내받았다.
  *
- * 경로 판정은 apps/web/lib/protectedPaths.ts 의 GUEST_MEMBER_ONLY_PREFIXES(`/shoot/upload`),
- * 고지는 약관 제8조가 쥔다. 셋이 같은 것을 가리켜야 화면이 거짓말을 하지 않는다.
+ * 경로 판정은 apps/web/lib/protectedPaths.ts, 고지는 약관 제8조가 쥔다.
+ * 셋이 같은 것을 가리켜야 화면이 거짓말을 하지 않는다.
  */
 export const GUEST_MEMBER_ONLY_ITEMS =
   '갤러리에서 사진 불러오기, 링크 공유, 기록 보관, 프레임 만들기';

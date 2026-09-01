@@ -1,108 +1,134 @@
 # AGENTS.md
 
+이 저장소의 규칙 원본. Codex 는 이 파일을 읽고, Claude Code 는 `CLAUDE.md` 를 읽는다.
+`CLAUDE.md` 는 이 파일을 가리키는 얇은 진입점이다 — **규칙을 고칠 때는 여기를 고친다.**
+
+## 아키텍처 — 앱은 웹뷰 셸이다
+
+**앱은 자기 화면을 그리지 않는다.** 웹을 WebView 로 띄우고, 웹이 못 하는 것만 네이티브가
+맡는다. ADR-0003(2026-08-18 채택)이 `screens/` 6,299줄 + 11,534줄을 셸·브리지 약 400줄로
+바꿨다.
+
+- `apps/mobile` 의 소스는 4개 파일이다 — `app/_layout.tsx`, `app/index.tsx`,
+  `components/harucut-web-shell.tsx`, `lib/native-bridge.ts`. 라우트는 1개다.
+- **그래서 "모바일 화면을 고쳐라"의 정답은 거의 항상 `apps/web` 이다.**
+- 네이티브가 맡는 것은 다섯 가지뿐이다: 사진첩 저장 · 공유 시트 · 햅틱 · 하드웨어 뒤로가기 ·
+  `harucut://` 딥링크. 이 목록의 소유자는 ADR-0003 「경계선」 절이다.
+- 브리지는 `apps/web/lib/nativeBridge.ts` ↔ `apps/mobile/lib/native-bridge.ts` **한 쌍**이다.
+  한쪽만 고치면 프로토콜이 갈라진다. 항상 같이 고친다.
+- expo-router 라우트를 새로 만들지 않는다 — ADR-0003 을 되돌리는 일이다.
+
+왜 이렇게 됐나: [`docs/adr/ADR-0003-앱을-웹뷰-셸로.md`](docs/adr/ADR-0003-앱을-웹뷰-셸로.md)
+지금 어떻게 도나: [`docs/mobile-shell.md`](docs/mobile-shell.md)
+
 ## 저장소 구조
 
-- `apps/web`: 기존 Next.js App Router 웹 앱
-- `apps/mobile`: Expo Router 기반 iOS/Android 앱
-- `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared` (`auth-validation.ts`, `fourcut-filters.ts`, `legal.ts`)
-- `docs/`: 서비스 흐름, 인증 라우팅, 모바일 설계, QA 체크리스트, ADR
-- `scripts/`: 검증 스크립트
+- `apps/web`: Next.js App Router 웹 앱. 화면은 전부 여기 있다.
+- `apps/mobile`: Expo 웹뷰 셸(위 참조). 소스 4개 파일.
+- `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared`.
+  **목록을 문서에 복사하지 않는다** — `packages/shared/src/index.ts` 의 재수출이 곧 진실이다
+  (현재 13개 모듈).
+- `docs/`: 진입점은 [`docs/README.md`](docs/README.md).
+- `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
+  `check_backend_contract_test.py` 셋이다. 나머지 둘은 검증이 아니다 —
+  `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지),
+  `gen-social-marks.mjs`(소셜 마크 에셋 생성기).
 
-현재 작업 원칙:
+## 규칙의 소유자
 
-- `apps/web`와 `apps/mobile` 모두 필요한 범위에서 수정할 수 있다
-- 작업 목적에 맞춰 실제 수정 범위를 명확히 한다
-- 루트와 문서는 워크스페이스 운영 규칙 정리에 사용한다
+한 규칙을 고치면 같이 봐야 할 곳이 있다. **아래 규칙은 여기 옮겨 적지 않는다 — 소유자를 연다.**
 
-## 브랜치 규칙
+| 규칙                              | 소유자                                                                                                                             | 같이 봐야 할 곳                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 라우트 보호·게스트 허용 판정      | `apps/web/lib/protectedPaths.ts` (`PROTECTED_PATHS`, `GUEST_ALLOWED_PREFIXES`, `GUEST_MEMBER_ONLY_PREFIXES`, `isGuestAllowedPath`) | 분기 순서는 `apps/web/proxy.ts`, 문서는 [`docs/auth-routing.md`](docs/auth-routing.md) |
+| 게스트가 되는 것·안 되는 것(문구) | `packages/shared/src/guest-trial.ts`                                                                                               | 실제 권한은 `protectedPaths.ts` 가 정한다. 문구와 권한이 갈리면 화면이 거짓말을 한다   |
+| 합성 멱등키                       | `apps/web/lib/shootSessionStore.ts` 의 `ensureComposeIdempotencyKey`                                                               | 호출처 `apps/web/app/shoot/result/page.tsx`, `apps/web/lib/pendingGuestSave.ts`        |
+| `cellCutouts` 계약                | [`docs/backend-contract.md`](docs/backend-contract.md)                                                                             | 저장되는가·누가 그리는가를 여기만 적는다                                               |
+| 모달 초기 포커스·Tab 트랩·Escape  | `apps/web/hooks/useModalDialog.ts`                                                                                                 | 모달을 새로 만들면 이 훅을 쓴다. 겹친 모달의 최상단 판정까지 여기 있다                 |
+| 네이티브 브리지 프로토콜          | `apps/web/lib/nativeBridge.ts` ↔ `apps/mobile/lib/native-bridge.ts`                                                                | 한 쌍. 둘을 같은 커밋에서 고친다                                                       |
+| 요금제 사실(이름·기능·표시)       | `packages/shared/src/plans.ts`                                                                                                     | 프레임 한도 상수는 `apps/web/constants/planLimits.ts` — 다른 패키지다                  |
 
-- 기준 브랜치: `develop`
-- 작업 브랜치: `issue/<number>-<slug>`
-- `main`, `develop`에는 직접 commit/push하지 않는다
-- 이슈와 PR 제목은 `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`, `perf:` 중 하나로 시작한다
-- `자동 생성`, `auto-generated` 같은 일반 제목은 금지한다
+라우트 목록도 여기 복사하지 않는다. 공개·보호 경로의 진실은 `apps/web/lib/protectedPaths.ts`,
+설명과 분기표는 [`docs/auth-routing.md`](docs/auth-routing.md) 가 갖는다.
+비인증 접근은 `/login?redirectTo=...` 로 보내고, 예외 둘(게스트 체험, 행사 QR `&event=`)도
+그 문서에 있다.
 
-## 앱 작업 원칙
+## 브랜치 · 커밋 · PR
 
-- 웹 변경은 `apps/web`, 모바일 변경은 `apps/mobile` 범위에서 진행한다
-- 웹과 모바일 연동이 필요한 작업은 두 앱을 함께 조정할 수 있다
-- 디자인과 사용성은 직접 확인한다
-- API 통신과 에러 처리도 직접 확인한다
-- 직접 확인하지 않은 기능을 완료라고 쓰지 않는다
+- 기준 브랜치: `develop`. 릴리즈 브랜치: `main`.
+- 작업 브랜치: **`<type>/<slug>`** — 예: `fix/social-login-buttons`, `chore/remove-stray-probe-output`.
+  (예전 문서가 말하던 `issue/<number>-<slug>` 로 만든 브랜치는 이 저장소에 하나도 없다.)
+- 커밋 메시지: **`<type>(<scope>): <한국어 요약>`** — 예: `fix(terms):`, `fix(shoot):`, `chore(scripts):`.
+- 이슈·PR 제목: **`<type>: <한국어 요약>`** — 스코프 없이.
+- `<type>` 은 `feat` `fix` `refactor` `docs` `chore` `ci` `test` `perf` 중 하나.
+- `main`, `develop`, `develop_loop` 에는 직접 commit/push 하지 않는다.
+- `자동 생성`, `auto-generated` 같은 일반 제목은 금지한다.
 
-## 라우트
+**훅은 지금 꺼져 있다.** `git config core.hooksPath` 가 빈 값이라 `.git/hooks` 를 본다.
+켜려면 한 번 실행한다.
 
-공개 라우트
+```bash
+git config core.hooksPath .githooks
+```
 
-- `/`
-- `/login`
-- `/signup`
-- `/forgot-password`
-- `/features`
-- `/enterprise`
-- `/faq`
-- `/pricing`
-- `/privacy`
-- `/terms`
-- `/oauth2/callback`
+켜도 `.githooks/pre-commit`·`pre-push` 가 막는 것은 보호 브랜치(`main|develop|develop_loop`)
+위의 commit/push 뿐이다 — **브랜치 이름은 검사하지 않는다.** pre-commit 의 에러 문구가 아직
+`issue/<number>-<slug>` 를 말하지만 문구일 뿐 강제되는 규칙이 아니다.
 
-보호 라우트
+## 검증
 
-- `/home`
-- `/shoot/*`
-- `/theme/*`
-- `/history`
-- `/mypage`
+- 통합: `pnpm verify:standard` — 락파일 검사 → `lint:web` → `test:web` → `build:web` →
+  `lint:mobile` → `typecheck:mobile`. 실제 목록은 `scripts/verify_workspace.py` 의 `GROUPS`.
+- 개별: `pnpm lint:web`, `pnpm test:web`, `pnpm build:web`, `pnpm lint:mobile`, `pnpm typecheck:mobile`
+- e2e: `pnpm test:e2e:web`
+- 앱 수동 확인: [`docs/mobile-qa-checklist.md`](docs/mobile-qa-checklist.md)
 
-보호 라우트 로직은 `apps/web/proxy.ts`, 경로 목록은 `apps/web/lib/protectedPaths.ts`에 있다.  
-비인증 접근은 `/login?redirectTo=...`로 보낸다.
-예외 둘(게스트 체험, 행사 QR 진입 `/shoot?...&event=...`)은 `docs/auth-routing.md` 참조.
+`pnpm lint:web` 을 빼먹지 않는다. 미사용 export·도달 불가 분기·죽은 파라미터는 빌드가 아니라
+lint 가 잡아서, `verify_workspace.py` 가 이것을 맨 앞에 둔다.
 
-## 테스트 가이드
+> **인증 흐름을 검증할 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 를 끈다.**
+> 켜져 있으면 `apps/web/proxy.ts:51-53` 이 보호 경로 판정을 통째로 건너뛴다(`return NextResponse.next()`).
+> 리다이렉트도 401 처리도 돌지 않으므로 **인증 e2e 가 조용히 초록불이 된다.**
+> 스위치는 `apps/web/lib/devAuthBypass.ts`, 설명은 `docs/auth-routing.md` 의 `DEV_AUTH_BYPASS` 절.
 
-- 웹 기준선 검증: `pnpm test:web`, `pnpm build:web`
-- 모바일 정적 검증: `pnpm lint:mobile`, `pnpm typecheck:mobile`
-- 통합 검증: `pnpm verify:standard`
-- 모바일 수동/직접 확인: `docs/mobile-qa-checklist.md`
+- 디자인과 사용성은 직접 확인한다. API 통신과 에러 처리도 직접 확인한다.
+- **직접 확인하지 않은 기능을 완료라고 쓰지 않는다.**
 
-### CI 실행 규칙
+계약 검사는 `pnpm check:contract`(로컬 백엔드 필요). 경로·죽은 프록시·에러코드만 본다 —
+**필수 요청 필드는 검사하지 않고, 빠뜨려도 종료코드는 0 이다.** 사용법과 한계의 소유자는
+`docs/README.md` 「계약이 어긋났는지 기계로 확인한다」 절과 `scripts/check_backend_contract.py`
+docstring 이다.
 
-PR의 `verify`·`e2e` 잡은 **자동으로 돌지 않는다**. `run-ci` 라벨이 붙었을 때만 돈다.
+## CI
 
-**라벨은 사람이 직접 붙인다.** 봇이나 워크플로가 대신 붙이지 않는다.
+- PR 의 `verify`·`e2e` 잡은 **`run-ci` 라벨이 붙었을 때만** 돈다. 라벨은 사람이 직접 붙인다.
+- `develop` 푸시와 Actions 탭 수동 실행은 라벨과 무관하게 항상 돈다.
+- 라벨이 없으면 두 잡은 skipped 로 끝나고 GitHub 이 이를 필수 검사 통과로 인정한다 —
+  **CI 없이 병합하는 것이 가능하다.** 병합 전에 라벨을 한 번 붙이거나 로컬에서
+  `pnpm verify:standard` 와 `pnpm test:e2e:web` 을 돌린다.
 
-예전에는 Codex 리뷰가 끝나면 `.github/workflows/ci-on-codex-review.yml` 이 자동으로
-붙였다. 그런데 라벨은 한 번 붙으면 떼기 전까지 남아서, 이후 푸시마다 검사가 계속 돌았다 —
-"언제 CI 를 돌릴지"가 저장소 주인의 손을 떠난다. 그래서 자동 부착을 걷어냈다(2026-08-17).
-
-- PR 에 `run-ci` 라벨을 붙이면 그 시점부터 검사한다.
-- Actions 탭에서 `verify` 워크플로를 수동 실행해도 된다.
-- develop 브랜치 푸시는 라벨과 무관하게 항상 검사한다.
-
-라벨이 한 번 붙으면 이후 푸시도 계속 검사한다. 그만 돌리려면 라벨을 뗀다.
-
-**감수하는 것:** 라벨이 없으면 두 잡은 skipped 로 끝나고, GitHub 이 이를 필수 검사 통과로
-인정해 병합을 막지 않는다. 즉 **CI 없이 병합하는 것이 가능하다.** 이건 알고 고른 것이다 —
-언제 돌릴지를 사람이 쥐는 대가다. 병합 전에 최소 한 번은 라벨을 붙이거나, 로컬에서
-`pnpm verify:standard` 와 `pnpm test:e2e:web` 을 돌려 확인한다.
+규칙의 소유자는 `.github/workflows/verify.yml` 상단 주석이다(왜 자동 부착을 걷어냈는지 포함).
 
 ## 참고 문서
 
-**먼저 `docs/README.md` 를 연다.** 문서 지도와 *이미 확인이 끝난 사실*이 거기 있다 —
-계약 대조 결과, 앱에서 이미 정상이라 손대지 않은 것(근거 포함), 백엔드 답을 기다리는 것.
-조사를 시작하기 전에 여기서 이미 답이 나와 있는지 본다.
+**먼저 [`docs/README.md`](docs/README.md) 를 연다.** 문서 지도와 *이미 확인이 끝난 사실*이
+거기 있다 — 계약 대조 결과, 앱에서 이미 정상이라 손대지 않은 것(근거 포함), 백엔드 답을
+기다리는 것. 조사를 시작하기 전에 여기서 이미 답이 나와 있는지 본다.
 
-경로·죽은 프록시·에러코드(A·B·C)가 어긋났는지는 손이 아니라 `pnpm check:contract` 로
-본다(로컬 백엔드 필요). **필수 요청 필드는 이 스크립트가 검사하지 않는다** — 사람이 손으로
-대조하고, 백엔드가 한 번 나가는 날 낡는다. `--show-required` 는 스웨거 목록을 뽑아 줄 뿐이고,
-필드를 빠뜨려도 종료코드는 0 이다. 자세한 것은 `docs/README.md` 의
-"계약이 어긋났는지 기계로 확인한다" 절.
+- [`docs/adr/ADR-0003-앱을-웹뷰-셸로.md`](docs/adr/ADR-0003-앱을-웹뷰-셸로.md) — 앱이 무엇을 하는가(왜)
+- [`docs/mobile-shell.md`](docs/mobile-shell.md) — 셸이 지금 어떻게 도나
+- [`docs/auth-routing.md`](docs/auth-routing.md) — 로그인·리다이렉트·게스트 체험
+- [`docs/route-flows.md`](docs/route-flows.md) — 화면 이동 흐름
+- [`docs/backend-contract.md`](docs/backend-contract.md) — 백엔드가 실제로 주고받는 것
+- [`docs/mobile-qa-checklist.md`](docs/mobile-qa-checklist.md) — 앱 수동 확인
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — 외부 기여자용 안내
+- [`README.md`](README.md)
 
-- `README.md`
-- `docs/route-flows.md`
-- `docs/auth-routing.md`
-- `docs/mobile-app-blueprint.md`
-- `docs/mobile-qa-checklist.md`
+## 도구별 차이
+
+`.claude/settings.local.json` 이 Claude Code 에서만 도는 훅을 켜 둔다 — Edit/Write 후와 Stop 에
+`.claude/skills/impeccable/scripts/hook.mjs`(디자인 점검). Codex 에는 이 훅이 없다.
+규칙 자체는 두 도구가 같은 것을 봐야 하므로 이 파일에 적는다.
 
 ## 응답 규칙
 

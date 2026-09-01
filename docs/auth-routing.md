@@ -16,19 +16,30 @@
 - `/terms`
 - `/oauth2/callback`
 
-보호 라우트:
+보호 라우트 — 다섯이고, **전부 접두사 판정**입니다(`/history/…`도 보호 대상):
 
 - `/home`
-- `/shoot/*`
-- `/theme/*`
+- `/shoot`
 - `/history`
+- `/theme`
 - `/mypage`
 
 미들웨어 진입점은 [`apps/web/proxy.ts`](../apps/web/proxy.ts)이고,
 보호 경로 판정은 [`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts)의
-`PROTECTED_PATHS`에 있습니다. 검색 노출 대상 공개 페이지는
+`PROTECTED_PATHS` + `isProtectedPath`에 있습니다. 위 목록은 그 상수의 사본이므로,
+**라우트가 늘면 코드를 고치고 여기를 맞춥니다**(반대 방향이 아닙니다).
+[`apps/web/lib/routeContracts.test.ts`](../apps/web/lib/routeContracts.test.ts)가 그 목록을
+계약으로 고정합니다.
+
+`proxy.ts`의 `config.matcher`는 별개입니다 — 미들웨어를 **어떤 요청에 돌릴지** 정합니다.
+지금 `/mypage`만 `:path*` 없이 걸려 있는데, 오늘은 하위 페이지가 없어서 문제가 없습니다.
+`/mypage/...`를 만든다면 matcher부터 넓혀야 합니다. `isProtectedPath`는 접두사 판정이라
+그 경로도 보호 대상으로 보지만, 미들웨어가 안 돌면 판정할 기회 자체가 없습니다.
+
+검색 노출 대상 공개 페이지는
 [`apps/web/app/sitemap.ts`](../apps/web/app/sitemap.ts)와 일치시킵니다
-(인증 페이지는 noindex라 sitemap에서 제외).
+(인증 페이지는 noindex라 sitemap에서 제외 — 지금 sitemap은 위 공개 목록에서
+`/login`·`/signup`·`/forgot-password`·`/oauth2/callback` 넷을 뺀 7개입니다).
 
 ## redirectTo 계약
 
@@ -61,8 +72,10 @@
 1. 보호 경로가 아니면 그대로 통과
 2. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
    이때 게스트 쿠키가 남아 있으면 응답에서 삭제한다(회원 전환)
-3. 게스트 쿠키만 있으면
-   - `/shoot`로 시작하는 경로(`GUEST_ALLOWED_PREFIXES`): 통과 —
+3. 게스트 쿠키만 있으면 `isGuestAllowedPath(pathname)`로 가른다
+   ([`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts) — 상수 둘도 여기 있다)
+   - `GUEST_MEMBER_ONLY_PREFIXES`(`/shoot/upload`)에 걸리면 **먼저 막는다**
+   - 남은 것 중 `GUEST_ALLOWED_PREFIXES`(`/shoot`)로 시작하면 통과 —
      비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
 4. **쿠키가 하나도 없어도 행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** —
@@ -70,12 +83,49 @@
 5. 그 외에는 `/login?redirectTo=...`
 
 ```text
-인증 쿠키 O                        -> 통과 (게스트 쿠키 삭제)
-게스트 쿠키 O + /shoot/*           -> 통과
-게스트 쿠키 O + 그 외 보호 경로    -> /shoot?guestNotice=restricted
-쿠키 없음 + /shoot?...&event=...   -> 통과 (게스트 쿠키를 심는다)
-쿠키 없음                          -> /login?redirectTo=<원래 경로와 쿼리>
+인증 쿠키 O                             -> 통과 (게스트 쿠키 삭제)
+게스트 쿠키 O + /shoot/upload           -> /shoot?guestNotice=restricted   ← 회원 전용
+게스트 쿠키 O + 그 밖의 /shoot/*        -> 통과
+게스트 쿠키 O + 그 외 보호 경로         -> /shoot?guestNotice=restricted
+쿠키 없음 + /shoot?...&event=...        -> 통과 (게스트 쿠키를 심는다)
+쿠키 없음                               -> /login?redirectTo=<원래 경로와 쿼리>
 ```
+
+### `/shoot/upload`는 `/shoot` 아래지만 회원 전용이다
+
+갤러리 불러오기는 원래 `/upload`(회원 전용)였다. 촬영 흐름으로 합치면서 `/shoot/upload`로
+옮겨 왔는데, `/shoot` 접두사 허용이 **비회원에게도 딸려 열어 버렸다.** 그래서
+`GUEST_MEMBER_ONLY_PREFIXES`가 따로 있고, 판정에서 허용보다 **먼저** 걸린다.
+
+범위를 정하는 곳과 집행하는 곳이 다르다. 약관 제8조와 `@harucut/shared`의
+`GUEST_ALLOWED_ITEMS`가 비회원 범위를 "사진 촬영과 이미지 저장"으로 못박고,
+`protectedPaths.ts`가 그것을 경로로 집행한다. 코드가 약관보다 넓으면 화면이 거짓말을 한다.
+
+경계는 접두사가 아니라 세그먼트로 본다(`hasPrefix`) — `/shoot/uploads`는 막히지 않는다.
+
+회귀 고정: [`apps/web/lib/routeContracts.test.ts`](../apps/web/lib/routeContracts.test.ts)의
+"갤러리 불러오기는 회원만" / "이름이 비슷한 다른 경로까지 막지는 않는다",
+그리고 `apps/web/tests/e2e/guards.spec.ts`의 `guestBlockedRoutes = ["/history", "/theme", "/shoot/upload"]`.
+
+### 주소 모양 — 판정 전에 정규화한다
+
+App Router는 한 라우트를 사람이 치는 주소로만 부르지 않는다. 세그먼트 프리페치는
+`/shoot/upload.segments/_tree.segment` 같은 주소로 들어온다. 프록시가 받는
+`nextUrl.pathname`에는 그 꼬리표가 그대로 남아 있어서, 문자열을 있는 그대로 비교하면
+**같은 페이지인데 회원 전용 판정만 빗나갔다** — 게스트 쿠키로 그 주소를 부르면
+`/shoot/upload` 차단을 지나쳐 `/shoot` 허용에 걸렸다.
+
+`toRoutePath()`(protectedPaths.ts)가 세그먼트마다 첫 `.`에서 잘라 한 갈래로 되돌린다.
+꼬리표를 나열해 지우지 않는 이유는, 새 꼬리표가 생겨도 열리는 쪽이 아니라 닫히는 쪽으로
+떨어지게 하기 위해서다. `isGuestAllowedPath`는 허용·차단을 **둘 다** 정규화한 주소로 본다 —
+한쪽만 정규화하면 주소 모양에 따라 판정이 갈린다.
+
+비대칭이 하나 있고, 의도된 것이다. `isProtectedPath`와 `proxy.ts`의 `isEventEntry`는
+정규화를 쓰지 않는다. 둘 다 정규화하지 않으면 **닫히는 쪽**으로 떨어지기 때문이다
+(꾸민 주소는 여전히 보호 경로로 잡히고, 행사 QR 예외는 정확히 `/shoot`일 때만 열린다).
+
+이 규칙을 다시 구현하려는 사람에게: 정규화 자체를 고정하는 테스트는 **아직 없다**.
+`routeContracts.test.ts`가 잡는 것은 `/shoot/upload`와 `/shoot/uploads` 경계까지다.
 
 ### 행사 QR 진입 (쿠키 없는 통과)
 
@@ -109,6 +159,12 @@
   보관했다가 로그인 후 서버 합성으로 기록에 남긴다(완성본 PNG를 올리던 방식은 그 API가
   사라져 폐기됐다). 보관물은 하루가 지나면 버린다
 
+**이 문서가 다루는 것은 "누가 어디를 지나갈 수 있나"까지입니다.** 게스트 결과물이 왜
+브라우저에서 만들어지는지(= 백엔드에 비회원 개념이 없다), 왜 네이티브 브리지가 base64
+조각으로 넘기는지, 그리고 **위 localStorage 보관이 보통 사진에서는 용량을 넘겨 실패한다는
+실측**은 [README.md의 "비회원 구조" 절](./README.md)이 갖습니다. 인계가 안 된다는 신고를
+받았다면 이 문서가 아니라 거기부터 봅니다.
+
 보관물을 계정에 옮기는 규칙 두 가지입니다.
 
 - **로그인 여부는 `/api/auth/session`에 묻습니다.** 게스트 쿠키가 없다는 것은 "체험 중이
@@ -131,7 +187,9 @@ KAKAO, NAVER, GOOGLE 3종을 지원합니다.
 
 ```text
 loginKakao/loginNaver/loginGoogle
-  -> persistSocialLoginRedirect(redirectTo)
+  -> startSocialLogin(provider, redirectTo)
+       -> persistSocialLoginRedirect(redirectTo)
+       -> persistSocialLoginProvider(provider)      ← 아래 DELETED_REQUESTED 복구가 이걸 쓴다
   -> window.location.href = `${NEXT_PUBLIC_BASE_URL}/oauth2/authorization/{kakao|naver|google}`
 ```
 
@@ -141,17 +199,44 @@ loginKakao/loginNaver/loginGoogle
   `persistSocialLoginRedirect`가 `getSafeRedirectPath`로 검증한 경로만
   sessionStorage(`social-login-redirect`)에 저장합니다.
 - 콜백에서 `consumeSocialLoginRedirect`가 한 번 읽고 즉시 지웁니다.
+- 같은 파일이 sessionStorage 키를 둘 더 씁니다 — `social-login-provider`(어느 제공자로
+  나갔나)와 `social-login-reactivated`(재등록 재시도를 이미 한 번 했나). 둘 다 아래
+  `DELETED_REQUESTED` 분기 전용이고, 그 분기가 존재하는 이유이기도 합니다.
 
 콜백 처리([`apps/web/app/oauth2/callback/page.tsx`](../apps/web/app/oauth2/callback/page.tsx)):
 
 1. `/api/auth/status`로 계정 상태를 조회한다(`userStatus` / `accountStatus` / `status` 중 먼저 잡히는 값)
 2. `UserStatus`별 분기
    - `ACTIVE`: 복귀 경로(없으면 `/home`)로 이동
-   - `DELETED_REQUESTED`: 재등록 여부를 확인한다. 수락하면 `reactivateAccount()`
-     후 복귀, 거절하거나 실패하면 로그아웃하고 `/login`
+   - `DELETED_REQUESTED`: 아래 별도 절
    - `BLOCKED` / `DELETED`: 별도 화면 분기 없이 상태 값만 인식한다.
      접근 차단은 서버 응답(권한 오류)에 따른 공통 에러 처리로 흡수된다
 3. 상태 조회 자체가 실패하면 로그아웃 후 `/login`
+
+### `DELETED_REQUESTED` — 복구한 뒤 소셜 인가를 한 번 더 탄다
+
+`window.confirm`으로 재등록 여부를 묻고, 거절하거나 `reactivateAccount()`가 실패하면
+로그아웃 후 `/login`입니다. 수락했을 때가 특이합니다 — **복귀하지 않습니다.**
+
+```text
+reactivateAccount() 성공
+  -> readSocialLoginProvider()
+       제공자를 알고, 아직 재시도한 적 없으면
+         -> markSocialLoginReactivated()
+         -> startSocialLogin(provider, redirectTarget)   ← 인가를 다시 탄다 (1회 한정)
+       모르거나 이미 한 번 했으면
+         -> clearSocialLoginProvider() -> alert -> /login
+```
+
+이유는 콜백 코드 주석에 있습니다. 복구는 됐지만 지금 손에 든 쿠키에는
+`status=DELETED_REQUESTED`가 박혀 있고, `reactivate`는 새 쿠키를 주지 않은 채 서버의
+refresh 토큰까지 지웁니다. 이메일 로그인과 달리 여기엔 다시 쓸 자격증명이 없으므로,
+들어온 소셜 인가를 한 번 더 태워 ACTIVE 토큰을 받습니다.
+`consumeSocialLoginRedirect`가 이미 소비한 복귀 경로를 다시 심어 두 번째 콜백이 같은 곳으로
+가게 하는 것도 이 자리입니다.
+
+`social-login-reactivated`가 재시도를 1회로 묶습니다. 없으면 서버가 계속
+`DELETED_REQUESTED`를 돌려줄 때 왕복이 끝나지 않습니다.
 
 ## DEV_AUTH_BYPASS (로컬 전용)
 
@@ -163,8 +248,11 @@ DEV_AUTH_BYPASS = NODE_ENV !== "production" && NEXT_PUBLIC_DEV_AUTH_BYPASS === "
 
 - 이중 잠금이라 `.env`에 값이 딸려가도 프로덕션 빌드에서는 항상 `false`입니다.
 - 켜면 **이 문서의 보호 계약이 전부 꺼집니다.** 미들웨어는 보호 경로 판정 전에
-  `NextResponse.next()`로 빠지고, `SessionExpiryBridge`의 401 → `/login` 이동도
-  멈춥니다. 게스트 체험 분기도 타지 않습니다.
+  `NextResponse.next()`로 빠지므로 게스트 체험 분기도 타지 않습니다.
+- 꺼지는 곳을 여기 나열하지 않습니다 — `DEV_AUTH_BYPASS`를 import 하는 곳이 곧 목록입니다
+  (`grep -rn DEV_AUTH_BYPASS apps/web`). 지금은 `proxy.ts`, `SessionExpiryBridge`,
+  `AccountRecoveryBridge`, `TermsConsentBridge` 넷이고, 약관 재동의 모달이 안 뜨는 이유를
+  찾는 사람이 자주 여기서 헤맵니다.
 - 그래서 E2E는 반드시 끈 상태로 실행합니다. 켜진 채로 돌리면 "비인증 접근 시
   로그인 리다이렉트" 시나리오가 통과하지 않고 조용히 깨집니다.
 
@@ -172,26 +260,23 @@ DEV_AUTH_BYPASS = NODE_ENV !== "production" && NEXT_PUBLIC_DEV_AUTH_BYPASS === "
 
 인증 페이지는 앱 내부 페이지와 다르게 동작하도록 정리되어 있습니다.
 
-- 좌상단 브랜드 링크는 `/`로 이동한다
+- 좌상단 브랜드 링크는 `/`로 이동한다 —
+  [`AuthPageShell.tsx`](../apps/web/components/auth/AuthPageShell.tsx)의 `<BrandMark href="/" />`.
+  흐름 화면의 `PageHeader`에는 브랜드 자리가 없다(그 파일 주석이 그렇게 못박는다)
 - 로그인, 회원가입, 비밀번호 재설정 사이를 이동할 때 `redirectTo`를 유지한다
 - 회원가입 완료 후 `/login`으로 갈 때도 `redirectTo`를 유지한다
 - 비밀번호 재설정에서 로그인으로 돌아갈 때도 `redirectTo`를 유지한다
 
+경로를 잇는 구현은 [`apps/web/lib/redirect.ts`](../apps/web/lib/redirect.ts)의
+`buildPathWithRedirect`입니다.
+
 이 규칙은 공개 인증 화면에서 `/home`으로 잘못 진입했다가 다시 로그인으로 튕기는 UX를 막기 위한 것입니다.
-
-## 헤더 계약
-
-[`apps/web/components/layout/PageHeader.tsx`](../apps/web/components/layout/PageHeader.tsx)는 다음 역할을 분리합니다.
-
-- `brandHref`: 좌상단 브랜드 링크 목적지
-- `rightHref`: 우측 아이콘 링크 목적지
-- `backHref` + `backLabel`: 텍스트형 뒤로 가기 링크
-
-우측 요소가 이미 버튼이라면 `rightSlot`만 넘기고 `rightHref`는 주지 않습니다.
-`backHref`를 우측 아이콘 링크 용도로 재사용하지 않습니다.
 
 ## 테스트 기준
 
 비인증 E2E는 보호 라우트 접근 시 로그인으로 리다이렉트되는지를 우선 검증해야 합니다.
 보호된 전체 기능 흐름 E2E는 인증된 테스트 컨텍스트나 별도 인증 헬퍼가 필요합니다.
-E2E 실행 전에 `NEXT_PUBLIC_DEV_AUTH_BYPASS`가 꺼져 있는지 확인합니다.
+
+`NEXT_PUBLIC_DEV_AUTH_BYPASS`는 손으로 확인하지 않아도 됩니다 — `playwright.config.ts`의
+`webServer.env`가 `"0"`을 박고, 이미 떠 있는 서버를 재사용하는 경우는
+`tests/e2e/globalSetup.ts`가 우회가 켜져 있는지 검사해 그 원인을 명시적으로 알려 줍니다.
