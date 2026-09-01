@@ -2,11 +2,13 @@
  * 비회원 결과 이관의 **후반부** — 로그인 뒤 보관물을 꺼내 서버 합성을 돌리는 쪽.
  *
  * 이쪽은 그동안 테스트가 하나도 없었다. 앞쪽(보관하기)만 덮여 있어서, 꺼내는 조건이나
- * 실패 처리가 잘못돼도 아무도 몰랐다 — 실제로 두 가지가 틀려 있었다.
+ * 실패 처리가 잘못돼도 아무도 몰랐다 — 실제로 네 가지가 틀려 있었다.
  *  1. `?resumeSave=1` 주소를 타야만 돌아서, 다른 경로로 로그인하면 영영 저장되지 않았다
  *  2. 영구 실패에도 "새로고침하면 다시 시도해요"라 안내해 무한 재업로드가 됐다
+ *  3. **게스트 쿠키가 없다는 것만으로 로그인했다고 보고** 서버 합성을 불렀다(401 거짓 실패)
+ *  4. **확인 없이** 계정에 저장해, 공용 기기에서 앞사람 네컷이 뒷사람 기록으로 넘어갔다
  */
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
@@ -22,10 +24,6 @@ jest.mock("next/navigation", () => ({
   usePathname: () => "/home",
   useRouter: () => ({ replace: mockReplace }),
   useSearchParams: () => mockSearch,
-}));
-
-jest.mock("@/components/guest/GuestTrialOverlay", () => ({
-  GuestTrialOverlay: () => <div data-testid="guest-overlay" />,
 }));
 
 jest.mock("@/lib/fourcutProcessing", () => ({
@@ -48,8 +46,22 @@ const PENDING = {
   remoteFrameId: null,
   outputFilter: "NONE",
   displayName: "내 네컷",
+  backgroundColor: "#ffffff",
   savedAt: 0,
 };
+
+/** 로그인 여부는 쿠키가 아니라 `/api/auth/session` 응답이 정한다. */
+function setSession(authenticated: boolean) {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ authenticated }),
+  }) as unknown as typeof fetch;
+}
+
+/** 확인 안내에서 버튼 하나를 누른다. */
+function pressNoticeAction(label: string) {
+  fireEvent.click(screen.getByRole("button", { name: label }));
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -62,6 +74,7 @@ beforeEach(() => {
     notice: null,
   });
   mockGetPending.mockReturnValue(PENDING);
+  setSession(true);
   mockSaveFourcutToServer.mockResolvedValue({
     mediaId: 1,
     objectUrl: "https://example.com/a.png",
@@ -75,10 +88,40 @@ beforeEach(() => {
 });
 
 describe("GuestTrialBridge 비회원 결과 이관", () => {
-  // 예전에는 resumeSave 쿼리가 있어야만 돌았다. 그 주소는 우리가 만든 로그인 링크
-  // 하나에서만 나오므로, OAuth 재로그인이나 앱 재실행으로 들어오면 보관물이 방치됐다.
-  it("resumeSave 쿼리가 없어도 회원이 되면 보관물을 저장한다", async () => {
+  /*
+    보관물에는 소유자 표식이 없고 24시간을 산다. 확인 없이 자동 저장하면 공용 기기에서
+    앞사람이 만든 네컷이 뒷사람 계정 기록으로 넘어간다. 그래서 묻고 나서 올린다.
+
+    (예전에는 resumeSave 쿼리가 있어야만 돌았다. 그 주소는 우리가 만든 로그인 링크
+     하나에서만 나오므로, OAuth 재로그인이나 앱 재실행으로 들어오면 보관물이 방치됐다.
+     쿼리 없이도 발견하는 것은 그대로 두고, 저장 여부만 사용자가 정한다.)
+  */
+  it("resumeSave 쿼리가 없어도 보관물을 발견하고, 저장할지 먼저 묻는다", async () => {
     render(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "비회원 때 만든 네컷이 남아 있어요",
+      );
+    });
+
+    // 묻기만 했을 뿐 아직 아무것도 올리지 않았다.
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(mockClearPending).not.toHaveBeenCalled();
+    expect(
+      useGuestTrialStore.getState().notice?.actions.map((action) => action.id),
+    ).toEqual(["save-guest-handoff", "discard-guest-handoff"]);
+  });
+
+  it("저장하기를 고르면 그때 서버 합성을 돌린다", async () => {
+    render(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
 
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
@@ -86,7 +129,31 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
 
     // 보관해 둔 이름을 그대로 쓴다(사용자가 결과 화면에서 고친 이름일 수 있다).
     expect(mockSaveFourcutToServer.mock.calls[0][0].displayName).toBe("내 네컷");
+    // 비회원 때 고른 배경색 그대로 다시 그린다 — 빠지면 서버 기본색으로 저장된다.
+    expect(mockSaveFourcutToServer.mock.calls[0][0].backgroundColor).toBe(
+      "#ffffff",
+    );
     expect(mockClearPending).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 저장됐어요",
+      );
+    });
+  });
+
+  it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {
+    render(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "버리기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("버리기");
+
+    expect(mockClearPending).toHaveBeenCalledTimes(1);
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().notice).toBeNull();
   });
 
   it("비회원 상태에서는 아무것도 하지 않는다", async () => {
@@ -100,6 +167,7 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
     });
+    expect(useGuestTrialStore.getState().notice).toBeNull();
   });
 
   it("보관물이 없으면 resumeSave 파라미터만 걷어낸다", async () => {
@@ -123,6 +191,12 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
 
     render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
 
     await waitFor(() => {
       expect(mockClearPending).toHaveBeenCalled();
@@ -140,6 +214,12 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
 
     render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
 
     await waitFor(() => {
       expect(useGuestTrialStore.getState().notice?.title).toBe(
@@ -150,6 +230,29 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     expect(useGuestTrialStore.getState().notice?.message).toContain(
       "새로고침하면 다시 시도",
     );
+  });
+
+  /*
+    올리는 사이에 세션이 끊긴 것은 "저장 실패"가 아니다. 그렇게 안내하면 사용자는
+    멀쩡한 결과물을 잃은 줄 알고, 보관물은 남아 있어 안내만 하루 동안 반복된다.
+  */
+  it("올리는 도중 401 이면 실패가 아니라 로그인 안내를 띄운다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce({ status: 401 });
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "로그인하면 이어서 저장할게요",
+      );
+    });
+    expect(mockClearPending).not.toHaveBeenCalled();
   });
 });
 
@@ -173,5 +276,29 @@ describe("게스트 쿠키가 남아 있을 때", () => {
     });
     expect(useGuestTrialStore.getState().hydrated).toBe(true);
     expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  회귀 — **게스트 쿠키가 없다 ≠ 로그인했다.**
+
+  accessMode 는 프론트가 심는 체험 쿠키 하나만 본다. 로그아웃했거나 세션이 끊긴
+  방문자도 전부 "member" 로 읽히므로, 그 값으로 인증 전용 서버 합성을 부르면 401 이 나고
+  화면에는 "저장을 완료하지 못했어요" 라는 거짓 실패가 뜬다. 보관물은 남으니 하루 동안
+  페이지를 열 때마다 같은 안내가 반복된다(한 번이 아니라 루프다).
+*/
+describe("게스트 쿠키도 없고 로그인도 아닐 때", () => {
+  it("보관물이 있어도 묻지도 올리지도 않는다", async () => {
+    setSession(false);
+
+    render(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().hydrated).toBe(true);
+    });
+
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(mockClearPending).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().notice).toBeNull();
   });
 });

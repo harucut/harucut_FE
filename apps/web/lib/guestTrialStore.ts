@@ -5,6 +5,7 @@ import {
   GUEST_ALLOWED_ITEMS,
   GUEST_MEMBER_ONLY_ITEMS,
   GUEST_TRIAL_NOTICE,
+  withJosa,
 } from "@harucut/shared";
 import {
   GUEST_TRIAL_COOKIE,
@@ -17,7 +18,9 @@ export type GuestNoticeActionId =
   | "dismiss"
   | "go-login"
   | "go-shoot"
-  | "start-guest-trial";
+  | "start-guest-trial"
+  | "save-guest-handoff"
+  | "discard-guest-handoff";
 
 export type GuestNoticeAction = {
   id: GuestNoticeActionId;
@@ -26,6 +29,14 @@ export type GuestNoticeAction = {
   // 액션 기본 경로 대신 이동할 경로. 비회원 결과물 인계처럼
   // redirectTo 쿼리가 필요한 경우에 쓴다.
   href?: string;
+  /*
+    누르면 실행할 동작.
+
+    비회원 보관물을 계정에 저장할지 묻는 확인처럼, 실제 일(서버 합성·보관물 폐기)을
+    쥐고 있는 쪽은 스토어가 아니라 그것을 띄운 컴포넌트다. 액션 이름마다 스토어에
+    분기를 늘리는 대신 콜백을 받는다.
+  */
+  onSelect?: () => void;
 };
 
 export type GuestNoticeState = {
@@ -59,8 +70,10 @@ type GuestTrialStore = {
 
 // 되는 것·안 되는 것의 목록은 @harucut/shared 에 한 벌만 둔다(앱도 같은 값을 읽는다).
 // 여기서는 상황에 맞는 문장으로 감싸기만 한다.
-const GUEST_ALLOWED_SCOPE = `체험 중에는 ${GUEST_ALLOWED_ITEMS}를 이용할 수 있어요.`;
-const GUEST_MEMBER_ONLY_SCOPE = `${GUEST_MEMBER_ONLY_ITEMS}은 로그인 후에 이용할 수 있어요.`;
+// 조사는 withJosa 로 고른다. 손으로 붙여 두면 목록 끝 항목이 바뀔 때마다 어긋난다 —
+// 실제로 "이미지 저장를", "프레임 만들기은" 이 나가고 있었다.
+const GUEST_ALLOWED_SCOPE = `체험 중에는 ${withJosa(GUEST_ALLOWED_ITEMS, "을/를")} 이용할 수 있어요.`;
+const GUEST_MEMBER_ONLY_SCOPE = `${withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.`;
 
 function hasGuestCookie() {
   if (typeof document === "undefined") {

@@ -30,7 +30,19 @@ export const GUEST_TRIAL_CTA_LABEL = '가입 없이 체험하기';
  * 문장째로 복사해 두면 한쪽만 고쳐진다.
  */
 export const GUEST_ALLOWED_ITEMS = '사진 촬영과 이미지 저장';
-export const GUEST_MEMBER_ONLY_ITEMS = '링크 공유, 기록 보관, 프레임 만들기';
+
+/**
+ * 갤러리에서 사진 불러오기를 맨 앞에 둔다.
+ *
+ * 비회원이 실제로 막히는 자리가 거기다 — proxy.ts 가 `/shoot/upload` 를 잡아
+ * `/shoot?guestNotice=restricted` 로 돌려보내고, 그때 뜨는 모달이 이 목록을 읽는다.
+ * 목록에서 빠져 있는 동안 막힌 사람은 방금 막힌 것만 빼고 나머지를 안내받았다.
+ *
+ * 경로 판정은 apps/web/lib/protectedPaths.ts 의 GUEST_MEMBER_ONLY_PREFIXES(`/shoot/upload`),
+ * 고지는 약관 제8조가 쥔다. 셋이 같은 것을 가리켜야 화면이 거짓말을 하지 않는다.
+ */
+export const GUEST_MEMBER_ONLY_ITEMS =
+  '갤러리에서 사진 불러오기, 링크 공유, 기록 보관, 프레임 만들기';
 
 /** 체험을 시작할지 묻는 모달. 누른 버튼과 확인 버튼이 같은 말을 하도록 라벨을 맞춘다. */
 export const GUEST_TRIAL_NOTICE = {

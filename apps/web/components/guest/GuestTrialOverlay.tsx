@@ -47,6 +47,15 @@ export function GuestTrialOverlay() {
     // 게스트 결과 보관 안내는 /login?redirectTo=/home?resumeSave=1 로 보내야
     // 로그인 직후 GuestTrialBridge가 보관해 둔 결과를 자동으로 올린다.
     const action = notice.actions.find((item) => item.id === actionId);
+
+    // 콜백이 붙은 액션은 그 콜백이 전부다. 비회원 보관물을 계정에 저장할지 묻는 확인처럼
+    // 이동이 아니라 동작이 목적인 버튼에 쓴다.
+    if (action?.onSelect) {
+      clearNotice();
+      action.onSelect();
+      return;
+    }
+
     if (action?.href) {
       clearNotice();
       router.push(action.href);
