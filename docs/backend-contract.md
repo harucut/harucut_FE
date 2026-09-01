@@ -420,76 +420,15 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
 목록 자체는 명령으로 보고, 여기에는 **대조해서 나온 어긋남**만 남긴다.
 전부 로컬 백엔드에 실제로 요청을 보내 재현했다.
 
-9-01 대조에서 다섯 건이었다. **셋은 그 뒤 프론트를 고쳐 맞췄다** — 아래
-「이번에 고친 어긋남」 5·6·7 로 옮겼다. 고친 것을 여기 결함으로 남겨 두면 다음 사람이
-이미 고친 코드를 다시 고친다. **여기 남은 어긋남은 두 건이다.**
+9-01 대조에서 다섯 건이었다. **다섯 건 모두 그 뒤 프론트를 고쳐 맞췄다** — 아래
+「이번에 고친 어긋남」 5·6·7(첫 세 건)과 8·9(D-4·D-5)로 옮겼다. 고친 것을 여기 결함으로
+남겨 두면 다음 사람이 이미 고친 코드를 다시 고친다. **여기 남은 어긋남은 없다.**
 
-번호는 9-01 대조 그대로 둔다(D-4·D-5). 비는 번호를 재활용하면 리뷰 스레드의 「D-1」이
-다른 것을 가리킨다.
+번호는 9-01 대조 그대로 둔다(D-4·D-5). 코드 주석과 리뷰 스레드가 그 번호로 이 문서를
+가리키므로, 옮긴 뒤에도 「D-4」·「D-5」라는 이름은 살려 둔다.
 
-### D-4. `generationKey` 가 프레임 **내용** 변경을 못 본다 → 서버가 옛 결과를 재생한다
-
-`app/shoot/result/page.tsx` 의 `generationKey` 는 `remoteFrameId` 를 **맨 숫자 그대로**
-담는다. 프레임 수정은 같은 id 로 가는 PUT 이라 내용을 고쳐도 키가 안 변하고,
-`lib/shootSessionStore.ts` 의 `ensureComposeIdempotencyKey` 는 같은 `generationKey` 에
-**이전 멱등키를 그대로** 돌려준다. 서버는 같은 멱등키를 새로 그리지 않는다. 재현:
-
-```
-POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}   → 202 {"jobId":1,"status":"PENDING"}
-PUT  /api/auth/user/frame/7   background #FFFFFF → #1ED760    → 200
-POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}   → 202 {"jobId":1, …}  ← 수정 전 작업
-POST .../media/compose  {frameId:7, …, idempotencyKey:"K-new"} → 202 {"jobId":2, …}
-```
-
-즉 프레임을 편집하고 결과 화면으로 돌아오면 **고치기 전 그림이 나온다.** 스웨거도 같은
-함정을 `backgroundColor` 설명에 적어 뒀다(같은 키로 색만 바꿔 보내면 무시된다).
-
-고치려면 프레임 **내용**의 지문이 멱등키에 반영돼야 한다. `FrameResponse` 에는
-`updatedAt`·`version` 같은 필드가 없으므로(위 PUT 응답 참고) 서버 값으로는 만들 수 없고,
-프론트가 읽어 온 내용에서 직접 만들어야 한다. 지문을 `generationKey` 에 **직접 넣으면 안
-된다** — 프레임 내용은 네트워크로 늦게 도착해서, 모르는 동안 키가 흔들리면 진행 중인 합성이
-버려지고 같은 네컷이 두 벌 접수된다(8-24 에 실제로 남았다). 지문은 따로 받아야 한다.
-
-**프론트 대응은 이 PR 에서 진행 중이다**(2026-09-02 확인) — `ensureComposeIdempotencyKey`
-가 `frameContentKey` 를 두 번째 인자로 받고, 결과 화면이 `buildFrameContentKey(themeData)`
-로 지문을 만든다. **끝났는지는 이 문단이 아니라 코드에서 본다**: 호출부가 지문을 실제로
-넘기는지 확인하고 이 항목을 지운다. 코드 주석이 이 항목을 「D-4」로 가리키므로 번호는 그대로 둔다.
-
-### D-5. 로그인 화면이 **회원가입 규칙**으로 로그인을 막는다
-
-백엔드 `LoginRequest.password` 는 `minLength 1` 뿐이다 — **상한도 문자 종류 제한도 없다.**
-그런데 `app/login/page.tsx:59` 는 회원가입용 `validatePassword` 를 그대로 부르고, 그 규칙은
-`packages/shared/src/auth-validation.ts:8` 의
-`^[A-Za-z0-9!@#$%^&*()\-_=+\[\]{};:,.?]{8,20}$` 다. 이 규칙 밖 비밀번호는 **요청이 나가지도 않는다.**
-
-백엔드에는 문자 종류 규칙이 아예 없다 — `register`·`change/password`·`reset/password`
-셋 다 스웨거 스키마에 `pattern` 이 없고, 라이브도 같다. 갓 만든 계정으로 2026-09-02 에
-끝까지 다시 재현했다(로컬 백엔드, 인증메일→가입→변경→로그인):
-
-```
-PATCH /api/harucut/change/password  newPassword "abcd~1234"        → 200 GEN-000  (~ 는 위 정규식 밖)
-POST  /api/harucut/login            같은 비밀번호                   → 200 {"userStatus":"ACTIVE"}
-PATCH /api/harucut/change/password  newPassword "비밀번호12345678"   → 200 GEN-000  (한글도 받는다)
-PATCH /api/harucut/change/password  newPassword 21자                → 400 GEN-003 "size must be between 8 and 20"
-validatePassword("abcd~1234")       → "영문, 숫자, 일부 특수문자(!@#$%^&* 등)만 사용할 수 있습니다."
-```
-
-**서버가 거는 것은 길이뿐인데 로그인 화면이 문자 종류까지 막는다.** 요청이 나가지 않으니
-서버 로그에도 아무것도 안 남는다.
-
-⚠️ **이 잠금은 우리 화면만으로 재현된다.** 마이페이지 비밀번호 변경 다이얼로그는
-서버 규칙 그대로 **길이만** 보므로(아래 「이번에 고친 어긋남」 5) `abcd~1234` 로 바꿔 준다.
-그 계정으로 로그인 화면에 돌아오면 같은 비밀번호가 거절된다. 가입(`signup/page.tsx:84`)과
-재설정(`useForgotPasswordFlow.ts:146`)은 아직 공용 규칙을 쓰지만, 그쪽은 *만들지 못하게*
-하는 것이라 이미 가진 비밀번호로 못 들어가는 것과 성격이 다르다.
-
-고칠 자리는 **로그인 화면**이다 — 서버가 `minLength 1` 만 요구하므로 빈 값만 잡으면 된다.
-
-길이 쪽은 **오늘은 재현되지 않는다**: `register`·`change/password`·`reset/password` 셋 다
-`maxLength 20` 이다. 앞의 둘은 라이브로 확인했고(21자 register → 400 GEN-003
-「size must be between 8 and 20」), `reset/password` 는 스웨거 스키마 기준이다.
-20자를 넘는 비밀번호를 가진 계정을 만들 경로가 지금은 없다. 로그인 화면의 길이 검사는
-그래서 당장은 무해하지만, 백엔드가 상한을 풀면 그날 바로 잠금이 된다.
+⚠️ **다음에 이 절을 다시 채울 때**: `--show-required` 출력은 프론트가 그 필드를 실제로
+싣는지 보지 않으므로, 스크립트가 0 으로 끝나도 여기는 사람이 다시 대조해야 한다.
 
 ## 이번에 고친 어긋남
 
@@ -521,10 +460,9 @@ validatePassword("abcd~1234")       → "영문, 숫자, 일부 특수문자(!@#
 
    ⚠️ **가입용 공용 `validatePassword()` 를 끌어오지 않았다.** 이 API 의 서버 규칙은
    `@NotBlank` + `@Size(8, 20)` 이 전부고 **`@Pattern` 이 없다** — 스웨거
-   `ChangePasswordRequest` 에 `pattern` 키가 없고, 라이브로도 그렇다(위 D-5 재현).
-   공용 규칙을 쓰면 서버가 받아 주는 비밀번호를 화면이 막는다. 대신 **로그인 화면 쪽이
-   여전히 공용 규칙을 쓰고 있어서 D-5 가 화면으로 재현되는 상태로 남았다** — 두 항목을
-   같이 읽어야 한다.
+   `ChangePasswordRequest` 에 `pattern` 키가 없고, 라이브로도 그렇다(아래 9 의 재현).
+   공용 규칙을 쓰면 서버가 받아 주는 비밀번호를 화면이 막는다. 로그인 화면도 같은 이유로
+   공용 규칙을 걷어냈다(아래 9) — 두 항목을 같이 읽어야 한다.
 
 6. **글자를 지운 TEXT 가 프레임 저장 전체를 400 으로 만들었다** (2026-09-02).
    `ComponentRequest.source` 는 `minLength 1`(@NotBlank)이고 TEXT 의 `source` 는 글자 내용
@@ -539,8 +477,53 @@ validatePassword("abcd~1234")       → "영문, 숫자, 일부 특수문자(!@#
    `lib/presignedUploadApi.ts:280·:283` 이 위아래를 둘 다 막는다
    (`MIN_UPLOAD_BYTES`·`MAX_UPLOAD_BYTES`, 빈 파일 문구는 `EMPTY_UPLOAD_MESSAGE`).
 
+8. **`generationKey` 가 프레임 내용 변경을 못 봤다 → 서버가 옛 결과를 재생했다**
+   (D-4, 2026-09-02). `generationKey` 는 `remoteFrameId` 를 맨 숫자 그대로 담는데 프레임
+   수정은 같은 id 로 가는 PUT 이라, 내용을 고쳐도 키가 안 변하고 서버는 같은 멱등키를 새로
+   그리지 않는다. 재현:
+
+   ```
+   POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}     → 202 {"jobId":1}
+   PUT  /api/auth/user/frame/7   background #FFFFFF → #1ED760      → 200
+   POST .../media/compose  {frameId:7, …, idempotencyKey:"K"}     → 202 {"jobId":1}  ← 수정 전 작업
+   POST .../media/compose  {frameId:7, …, idempotencyKey:"K-new"} → 202 {"jobId":2}
+   ```
+
+   `FrameResponse` 에 `updatedAt`·`version` 이 없어 서버 값으로는 지문을 만들 수 없다.
+   지금은 프론트가 읽어 온 내용에서 직접 만든다 — `lib/shootSessionStore.ts:74`
+   `buildFrameContentKey`, 호출부는 `app/shoot/result/page.tsx:274·:356` 이
+   `ensureComposeIdempotencyKey(generationKey, themeData)` 로 지문을 넘긴다.
+   지문을 `generationKey` 에 **직접 넣지 않은** 이유는 프레임 내용이 네트워크로 늦게
+   도착하기 때문이다 — 모르는 동안 키가 흔들리면 진행 중인 합성이 버려지고 같은 네컷이
+   두 벌 접수된다(8-24 에 실제로 남았다). 그래서 지문은 두 번째 인자로 따로 받고,
+   「아직 못 읽음 → 키 유지 / 처음 읽음 → 지문만 각인 / 바뀜 → 새 키 + `imageResult: null`」
+   세 갈래다. 지문에 `renderUrl`·`background.url` 은 **넣지 않는다**(조회마다 다시 서명돼서
+   넣으면 매번 새 키가 나온다). 남은 구멍 하나: **첫 테마 조회가 실패하면 지문이 null 로
+   남는다** — 그동안은 D-4 그대로다.
+
+9. **로그인 화면이 회원가입 규칙으로 로그인을 막았다** (D-5, 2026-09-02). 서버
+   `LoginRequest.password` 는 `minLength 1` 뿐이다 — **상한도 문자 종류 제한도 없다.**
+   그런데 `app/login/page.tsx` 가 가입용 `validatePassword`
+   (`packages/shared/src/auth-validation.ts:8`)를 그대로 불러서, 그 규칙 밖 비밀번호는
+   **요청이 나가지도 않았다.** 갓 만든 계정으로 끝까지 재현했다:
+
+   ```
+   PATCH /api/harucut/change/password  newPassword "abcd~1234"       → 200 GEN-000  (~ 는 정규식 밖)
+   POST  /api/harucut/login            같은 비밀번호                    → 200 {"userStatus":"ACTIVE"}
+   PATCH /api/harucut/change/password  newPassword "비밀번호12345678"    → 200 GEN-000  (한글도 받는다)
+   PATCH /api/harucut/change/password  newPassword 21자                → 400 GEN-003 "size must be between 8 and 20"
+   ```
+
+   지금은 `app/login/page.tsx:67` 이 빈 값만 잡는다(`if (!password)`). 회귀는
+   `app/login/page.test.tsx` 가 지킨다. 가입(`signup/page.tsx:84`)과
+   재설정(`useForgotPasswordFlow.ts:146`)은 그대로 공용 규칙을 쓴다 — 그쪽은 *만들지 못하게*
+   하는 것이라 이미 가진 비밀번호로 못 들어가는 것과 성격이 다르다.
+
 5·6·7 은 **프론트만 고친 것이다.** 백엔드 제약은 셋 다 지금도 그대로라
 (2026-09-02 `/v3/api-docs` 재확인) 가드를 걷으면 그날로 다시 400 이다.
+8·9 는 방향이 반대다 — 서버가 **안 거는** 제한을 화면이 걸고 있었고(9), 서버가 **못 주는**
+지문을 화면이 만들어야 했다(8). 둘 다 백엔드가 바뀌면 다시 봐야 한다
+(`FrameResponse.updatedAt` 요청은 `docs/app-shell-backend-requests.md` §6).
 
 ## 아직 FE 가 안 쓰는 백엔드 기능 (2026-09-01 재도출)
 
