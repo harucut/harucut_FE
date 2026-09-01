@@ -124,10 +124,23 @@ function SignupPageContent() {
       return;
     }
 
+    // 이 동의의 주인. 보관물에 같이 넣어 로그인한 계정과 대조하게 한다.
+    const signupEmail = verifiedEmail || emailFromState;
+
     try {
+      await signupWithEmail({
+        email: signupEmail,
+        password,
+        username,
+      });
+
       // 동의를 여기서 바로 보낼 수는 없다. `POST /api/auth/terms/consents` 는 인증이
       // 필요한데 우리 가입은 계정만 만들고 로그인시키지 않는다. 그래서 사용자가 고른 값을
-      // 보관해 두고, 로그인 직후 TermsConsentBridge 가 서버 장부에 기록한다.
+      // 가입 이메일과 함께 보관해 두고, 로그인 직후 TermsConsentBridge 가 계정을 대조한
+      // 뒤 서버 장부에 기록한다.
+      //
+      // 보관은 **가입이 성공한 뒤에만** 한다. 요청보다 앞서 남기면 가입이 깨졌을 때 선택만
+      // 기기에 남고, 다음에 이 기기에서 로그인한 다른 계정의 법적 이력으로 붙는다.
       //
       // 보관에 실패해도 가입은 그대로 진행한다 — 필수 약관은 어차피 재동의 화면이 다시 받고,
       // 여기서 막으면 사용자는 이유도 모른 채 가입이 안 되는 화면을 만난다.
@@ -137,14 +150,10 @@ function SignupPageContent() {
             code: item.code,
             agreed: Boolean(consents[item.code]),
           })),
+          signupEmail,
         );
       }
 
-      await signupWithEmail({
-        email: verifiedEmail || emailFromState,
-        password,
-        username,
-      });
       router.push(loginHref);
     } catch (error) {
       console.error(error);

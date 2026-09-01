@@ -7,7 +7,9 @@ import { isProtectedPath } from "@/lib/protectedPaths";
 import {
   clearPendingTermsConsent,
   getPendingTermsConsent,
+  isSameConsentAccount,
 } from "@/lib/pendingTermsConsent";
+import { getMyUserInfo } from "@/lib/userApi";
 import {
   fetchMyTermsConsents,
   pendingRequiredConsents,
@@ -68,20 +70,36 @@ export function TermsConsentBridge() {
 
     const stashed = getPendingTermsConsent();
     if (stashed) {
+      // 보관물은 **가입한 그 계정** 것이다. "로그인했다"만 보고 보내면, 한 기기에서
+      // 가입하고 다른 계정으로 로그인한 순간 고른 적 없는 사람의 장부에 붙는다.
+      // 동의 이력은 법적 증빙용이라 수정·삭제되지 않아 되돌릴 방법이 없다 —
+      // 특히 선택 약관(마케팅)은 수신 동의도 철회도 그대로 남는다. 그래서 대조한다.
+      let accountEmail: string | null = null;
       try {
-        await submitTermsConsents(stashed);
+        accountEmail = (await getMyUserInfo()).email;
+      } catch {
+        // 내 정보 조회가 흔들린 것뿐이면 보관물을 버릴 이유가 없다. 이번 회차만 건너뛴다.
+      }
+
+      if (accountEmail && !isSameConsentAccount(accountEmail, stashed.email)) {
+        // 주인이 아닌 계정이다. 남겨 둬도 주인이 이 기기로 돌아온다는 보장이 없다.
         clearPendingTermsConsent();
-      } catch (error) {
-        // 다시 보내도 결과가 같은 실패면 버린다. 안 그러면 로그인할 때마다 같은 요청이
-        // 나가고 매번 같은 이유로 실패한다. 남겨 두는 건 네트워크·인증 문제일 때뿐이다.
-        const { code } = getApiErrorDetails(error);
-        if (
-          code === "TERMS-001" ||
-          code === "TERMS-003" ||
-          code === "GEN-002" ||
-          code === "GEN-006"
-        ) {
+      } else if (accountEmail) {
+        try {
+          await submitTermsConsents(stashed.items);
           clearPendingTermsConsent();
+        } catch (error) {
+          // 다시 보내도 결과가 같은 실패면 버린다. 안 그러면 로그인할 때마다 같은 요청이
+          // 나가고 매번 같은 이유로 실패한다. 남겨 두는 건 네트워크·인증 문제일 때뿐이다.
+          const { code } = getApiErrorDetails(error);
+          if (
+            code === "TERMS-001" ||
+            code === "TERMS-003" ||
+            code === "GEN-002" ||
+            code === "GEN-006"
+          ) {
+            clearPendingTermsConsent();
+          }
         }
       }
     }
