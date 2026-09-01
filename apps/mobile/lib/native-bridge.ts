@@ -128,6 +128,8 @@ function sweepExpiredTransfers() {
  */
 export function cancelTransfers() {
   transfers.clear();
+  // 셸이 이걸 부르는 시점이 곧 진행 중이던 저장이 답을 돌려줄 수 없게 된 시점이다.
+  void sweepStaleTempDirs();
 }
 
 function safeFilename(name: string) {
@@ -179,9 +181,44 @@ async function ensurePermission(): Promise<BridgeResult> {
  * 씻어야 한다. 앱은 한 프로세스라 여기서 만든 값이면 충돌하지 않는다.
  */
 let tempDirSeq = 0;
+const TEMP_ROOT = `${FileSystem.cacheDirectory}harucut-save/`;
+
 function newTempDir() {
   tempDirSeq += 1;
-  return `${FileSystem.cacheDirectory}harucut-save/${Date.now()}-${tempDirSeq}/`;
+  return `${TEMP_ROOT}${Date.now()}-${tempDirSeq}/`;
+}
+
+/**
+ * 지난 실행이 남긴 임시 폴더를 걷는다.
+ *
+ * 저장 함수는 `finally` 에서 자기 폴더를 지우지만, 저장이 **중간에 끊기면**(문서 교체·콘텐츠
+ * 프로세스 사망·앱 종료) 그 promise 가 영영 끝나지 않아 `finally` 가 돌지 않는다. 그러면 잎
+ * 폴더가 그대로 남고, 시도할 때마다 하나씩 쌓인다.
+ *
+ * 나이는 폴더 이름 앞의 `Date.now()` 로 잰다 — 새 상태값이 필요 없다. TTL 은 전송 만료와 같은
+ * 값을 쓴다(디스크와 메모리의 기준이 갈리지 않게).
+ *
+ * **폴더째 지우지 않는다.** 다른 요청이 지금 그 아래에 내려받는 중일 수 있어, 통째로 지우면
+ * 멀쩡히 되던 저장이 실패로 바뀐다. 나이 필터가 그것을 막는다.
+ *
+ * 모듈 수준 타이머는 두지 않는다(앱이 사는 내내 남는다). 저장이 시작되는 순간이 곧 지난
+ * 찌꺼기를 되찾을 수 있는 순간이라, 그때 훑는다.
+ */
+async function sweepStaleTempDirs() {
+  try {
+    const names = await FileSystem.readDirectoryAsync(TEMP_ROOT);
+    const now = Date.now();
+    await Promise.all(
+      names.map(async (name) => {
+        const startedAt = Number(name.split("-")[0]);
+        if (!Number.isFinite(startedAt)) return;
+        if (now - startedAt <= TRANSFER_TTL_MS) return;
+        await FileSystem.deleteAsync(`${TEMP_ROOT}${name}`, { idempotent: true });
+      }),
+    );
+  } catch {
+    // 폴더가 아직 없거나 읽지 못하는 것은 정상이다 — 쓸기가 저장을 막지 않는다.
+  }
 }
 
 async function saveLocalFile(uri: string): Promise<BridgeResult> {
@@ -209,6 +246,7 @@ async function saveLocalFile(uri: string): Promise<BridgeResult> {
 
 /** 원격 이미지를 내려받아 사진첩에 넣는다. 서버 합성 결과처럼 https 주소가 있을 때 쓴다. */
 export async function saveRemoteImage(url: string, filename: string): Promise<BridgeResult> {
+  void sweepStaleTempDirs();
   const dir = newTempDir();
   const target = `${dir}${safeFilename(filename)}`;
 
@@ -244,6 +282,7 @@ export async function saveBase64Chunks(
   // 웹이 이미 포기한(120초) 요청을 뒤늦게 저장하면, 실패했다고 들은 사진이 한참 뒤에
   // 사진첩에 나타난다. 여기서도 한 번 걷어낸다.
   sweepExpiredTransfers();
+  void sweepStaleTempDirs();
 
   const transfer = transfers.get(id);
   transfers.delete(id);
@@ -284,6 +323,7 @@ function rejectionFor(total: number) {
 export function beginTransfer(id: string, filename: string, total: number) {
   // 맵이 자라는 유일한 자리다. 새 전송을 받는 김에 지난 것을 정리한다.
   sweepExpiredTransfers();
+  void sweepStaleTempDirs();
 
   const rejectedReason = rejectionFor(total);
 
