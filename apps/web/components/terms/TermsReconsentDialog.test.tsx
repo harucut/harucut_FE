@@ -92,6 +92,15 @@ const tos: MyTermsConsent = {
   latestVersion: 2,
 };
 
+/** 정적 링크가 없는 **선택** 약관. 동의할 필요가 없는데도 제출을 막던 자리다. */
+const newsletter: MyTermsConsent = {
+  code: "newsletter-policy",
+  title: "뉴스레터 수신 동의",
+  required: false,
+  status: "NOT_AGREED",
+  latestVersion: 1,
+};
+
 function renderDialog(consents: MyTermsConsent[]) {
   return render(
     <TermsReconsentDialog
@@ -288,6 +297,100 @@ describe("TermsReconsentDialog", () => {
     await waitFor(() => expect(didNavigate(consoleError)).toBe(true));
     expect(screen.queryByRole("alert")).toBeNull();
     consoleError.mockRestore();
+  });
+
+  /**
+   * 닫을 수 없는 화면에서 **동의할 필요도 없는 항목**이 출구를 막으면 안 된다.
+   *
+   * 정적 링크가 없는 선택 약관이 섞여 있고 본문 조회가 실패하면, 읽을 수 있는 필수 약관에
+   * 전부 동의해도 제출이 영영 잠겼다. 남는 길은 로그아웃뿐이었다.
+   */
+  it("읽을 수 없는 선택 약관은 필수 재동의를 막지 않는다", async () => {
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    renderDialog([tos, newsletter]);
+
+    // 본문을 못 읽는 상황이 맞는지 먼저 못 박는다.
+    expect(
+      await screen.findByText("약관 본문을 불러오지 못했어요."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /뉴스레터/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /서비스 이용약관/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
+
+    await waitFor(() =>
+      expect(mockSubmit).toHaveBeenCalledWith([
+        { code: "tos", agreed: true },
+        { code: "newsletter-policy", agreed: false },
+      ]),
+    );
+  });
+
+  /**
+   * 제출을 열었다고 읽지 못한 본문에 동의가 기록되면 안 된다.
+   *
+   * 체크가 살아 있는 것은 예전에 받아 둔 동의다. `agreed: true` 로 다시 보내면 사용자가
+   * 읽지 못한 최신 버전에 대한 동의로 갱신된다 — 페이로드에서 빼고 서버 값을 그대로 둔다.
+   */
+  it("읽을 수 없는 선택 약관의 기존 동의는 다시 보내지 않는다", async () => {
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    renderDialog([tos, { ...newsletter, status: "AGREED", agreedVersion: 1 }]);
+
+    const newsBox = await screen.findByRole("checkbox", { name: /뉴스레터/ });
+    expect(newsBox).toBeChecked();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /서비스 이용약관/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
+
+    await waitFor(() =>
+      expect(mockSubmit).toHaveBeenCalledWith([{ code: "tos", agreed: true }]),
+    );
+  });
+
+  // 설정 패널과 같은 규칙이다 — 막는 것은 주는 방향뿐이다. 이미 준 동의를 거두는 길은
+  // 본문과 무관하게 열려 있어야 한다(정보통신망법 §50).
+  it("읽을 수 없어도 이미 한 선택 동의는 거둘 수 있다", async () => {
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    renderDialog([tos, { ...newsletter, status: "AGREED", agreedVersion: 1 }]);
+
+    const newsBox = await screen.findByRole("checkbox", { name: /뉴스레터/ });
+    await waitFor(() => expect(newsBox).toBeEnabled());
+
+    fireEvent.click(newsBox);
+    expect(newsBox).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /서비스 이용약관/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
+
+    await waitFor(() =>
+      expect(mockSubmit).toHaveBeenCalledWith([
+        { code: "tos", agreed: true },
+        { code: "newsletter-policy", agreed: false },
+      ]),
+    );
+    // 거둔 뒤에는 다시 줄 수 없다. 새 동의는 여전히 막혀 있다.
+    expect(newsBox).toBeDisabled();
+  });
+
+  // 반대쪽. 필수 약관을 못 읽는 것은 그대로 막는다 — 읽지 못한 본문에 동의시키느니
+  // 로그아웃으로 내보내는 것이 맞다.
+  it("읽을 수 없는 필수 약관은 여전히 제출을 막는다", async () => {
+    mockFetchActive.mockRejectedValueOnce(new Error("network"));
+
+    renderDialog([tos, refundPolicy]);
+
+    const tosBox = await screen.findByRole("checkbox", {
+      name: /서비스 이용약관/,
+    });
+    fireEvent.click(tosBox);
+    expect(tosBox).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /환불 정책/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
+    expect(mockSubmit).not.toHaveBeenCalled();
   });
 });
 

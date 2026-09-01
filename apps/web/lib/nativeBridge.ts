@@ -37,7 +37,81 @@ type NativeShellInfo = {
   platform: "android" | "ios";
 };
 
-type NativeResult = { ok: boolean; reason?: string; value?: string };
+/**
+ * 실패 사유 중 **사용자에게 그대로 보여도 되는** 것에만 붙는 표식.
+ *
+ * `reason` 에는 두 가지가 섞여 온다 — 네이티브가 한국어로 쓴 안내와, catch 로 주워 온
+ * 원문(영문·기기별 문구)이다. 코드가 붙은 실패만 웹이 믿고 `reason` 을 그대로 띄운다.
+ *
+ * **값의 소유자는 `apps/mobile/lib/native-bridge.ts` 의 `BridgeFailureCode` 다.** 여기는
+ * 그것을 비추기만 한다 — 새 값을 여기서 만들지 않는다(프로토콜은 한 쌍이다).
+ */
+export type BridgeFailureCode =
+  /** 설정에서 켜야 한다. 다시 물어도 대화상자가 뜨지 않으므로 재시도 안내는 거짓말이 된다. */
+  | "photo-permission-blocked"
+  /** 이번에 거절했다. 다음에 다시 물을 수 있다. */
+  | "photo-permission-denied";
+
+const BRIDGE_FAILURE_CODES: readonly string[] = [
+  "photo-permission-blocked",
+  "photo-permission-denied",
+];
+
+/**
+ * 셸이 보낸 값을 그대로 믿지 않는다.
+ *
+ * 이 코드는 "reason 을 화면에 그대로 띄워도 된다"는 허가증이라, 모르는 값이 허가증 노릇을
+ * 하면 네이티브 영문 원문이 한국어 화면으로 샌다. 아는 값만 통과시킨다.
+ */
+function isBridgeFailureCode(value: unknown): value is BridgeFailureCode {
+  return typeof value === "string" && BRIDGE_FAILURE_CODES.includes(value);
+}
+
+type NativeResult = {
+  ok: boolean;
+  reason?: string;
+  code?: BridgeFailureCode;
+  value?: string;
+};
+
+/**
+ * 네이티브 저장 실패를 화면까지 실어 나르는 오류.
+ *
+ * 왜 일반 `Error` 로는 안 되나 — `getUserFacingApiErrorMessage()` 는 일반 Error 의 message 를
+ * **일부러** 버린다(`apps/web/lib/apiError.ts` 의 `getServerMessage`). 서버 영문 원문이 화면에
+ * 새는 것을 막는 장치인데, 저장 실패를 `new Error(reason)` 으로 바꾸면 여기에 같이 걸려
+ * "설정에서 사진 접근을 허용해 주세요." 까지 버려진다. 재시도로는 **절대** 풀리지 않는
+ * 권한 거절에 `잠시 후 다시 시도해 주세요.` 만 뜨고, 사용자는 무엇을 해야 하는지 모른다.
+ *
+ * 그래서 코드가 붙은 실패만 `userMessage` 를 갖는다. 호출부는 이 값이 있으면 그것을 띄우고,
+ * 없으면 지금까지처럼 화면별 폴백으로 간다(`getNativeSaveErrorMessage`).
+ *
+ * 문구 자체는 여기서 만들지 않는다 — 소유자는 네이티브다. 웹은 믿을지 말지만 정한다.
+ */
+export class NativeSaveError extends Error {
+  readonly code?: BridgeFailureCode;
+  /** 화면에 그대로 띄워도 되는 문구. 믿을 수 없는 실패면 undefined. */
+  readonly userMessage?: string;
+
+  constructor(result: { reason?: string; code?: unknown }) {
+    super(result.reason ?? "사진첩에 저장하지 못했어요.");
+    this.name = "NativeSaveError";
+
+    if (!isBridgeFailureCode(result.code)) return;
+    this.code = result.code;
+    this.userMessage = result.reason?.trim() || undefined;
+  }
+}
+
+/**
+ * 저장 실패가 **화면에 그대로 띄워도 되는** 문구를 갖고 있으면 그것을, 아니면 null.
+ *
+ * 호출부는 `getNativeSaveErrorMessage(error) ?? getUserFacingApiErrorMessage(error, 폴백)` 로
+ * 쓴다. null 이면 지금까지의 동작과 완전히 같다.
+ */
+export function getNativeSaveErrorMessage(error: unknown): string | null {
+  return error instanceof NativeSaveError ? error.userMessage ?? null : null;
+}
 
 declare global {
   interface Window {

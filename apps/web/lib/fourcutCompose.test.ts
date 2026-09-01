@@ -4,7 +4,7 @@
  * 실측 근거(docs/backend-contract.md):
  *  - 원본은 `type: FOURCUT_SOURCE` 로 올린다
  *  - 필터는 **서버가 모른다** — 올리기 전에 픽셀에 구워야 한다
- *  - 누끼도 **서버가 안 그린다** — 켠 칸은 올리기 전에 픽셀에 구워야 한다
+ *  - 누끼는 켠 칸을 **올리기 전에** 픽셀에 굽는다(계약의 소유자는 그 문서다)
  *  - `frameId` 는 내 프레임이거나 **시스템 프레임**이어야 한다
  *
  * 누끼 모델(MediaPipe wasm)은 jsdom 에서 못 돈다. 그래서 여기서 지키는 것은 **배선**이다 —
@@ -169,7 +169,7 @@ describe("resolveComposeFrame", () => {
     expect(mockGetFrame).toHaveBeenCalledWith(99);
   });
 
-  // 스웨거의 생략 규칙: 안 왔거나 4개가 아니면 전부 꺼진 것이다(구 프레임).
+  // 생략 규칙: 안 왔거나 4개가 아니면 전부 꺼진 것이다(구 프레임). 근거는 소유 문서.
   it("누끼가 4개가 아니면 전부 꺼진 것으로 본다", async () => {
     mockGetFrame.mockResolvedValue({
       frameId: 99,
@@ -313,8 +313,8 @@ describe("composeFourcutOnServer", () => {
 });
 
 /**
- * 스웨거가 못박은 것: **서버는 `cellCutouts` 로 아무것도 그리지 않는다.**
- * 그래서 켠 칸의 픽셀은 올리기 전에 여기서 바뀌어 있어야 한다.
+ * `docs/backend-contract.md` 가 정한 대로, 켠 칸의 픽셀은 올리기 전에 여기서 바뀌어 있어야
+ * 한다. 계약 자체는 그 문서가 갖는다 — 여기는 그 결과가 배선에 나타나는지만 본다.
  */
 describe("composeFourcutOnServer — 누끼를 원본 픽셀에 굽는다", () => {
   beforeEach(() => {

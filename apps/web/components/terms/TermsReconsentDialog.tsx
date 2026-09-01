@@ -86,8 +86,10 @@ export function useTermsContent() {
  *    마케팅 수신 동의가 조용히 철회되면 안 된다.
  *  - **닫을 수 없다.** 대신 로그아웃으로 나갈 길을 준다. 필수 약관은 철회가 불가능하고
  *    (TERMS-003) 정책상 탈퇴로만 가능하므로, 동의하지 않겠다면 계정을 쓰지 않는 것이 맞다.
- *  - **읽을 수 없는 항목에 동의를 받지 않는다.** 가입 화면(TermsConsentFieldset)·설정
- *    패널(TermsConsentPanel)과 같은 규칙이다. 위 `useTermsContent` 주석 참고.
+ *  - **읽을 수 없는 항목에 새 동의를 받지 않는다.** 막는 것은 주는 방향뿐이다 — 이미 한
+ *    동의를 거두는 것도, 동의할 필요가 없는 선택 약관 때문에 필수 재동의를 막는 것도
+ *    아니다. 가입 화면(TermsConsentFieldset)·설정 패널(TermsConsentPanel)과 같은
+ *    규칙이다. 위 `useTermsContent` 주석 참고.
  */
 export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   const required = useMemo(
@@ -106,7 +108,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
    * 읽을 수단이 아직 없는 약관인가.
    *
    * 정적 링크도 없고 본문도 못 받았으면 사용자는 **제목만 보고 동의**하게 된다.
-   * 그 동의는 받지 않는다 — 체크와 제출을 함께 막고 왜 막혔는지 말한다.
+   * 그 동의는 받지 않는다 — 새로 체크하는 것을 막고 왜 막혔는지 말한다.
    */
   const isUnreadable = (code: string) =>
     contentHref(code) === null && !contentByCode[code];
@@ -119,12 +121,16 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   /**
    * 제출할 수 있는가.
    *
-   * 필수 약관을 전부 체크했더라도, 읽을 수단이 없는 것이 하나라도 있으면 막는다.
-   * 본문 조회가 늦거나 실패한 사이에 "제목만 보고 한 동의"가 기록되지 않게 한다.
+   * 읽을 수단이 없으면 막는다 — 본문 조회가 늦거나 실패한 사이에 "제목만 보고 한 동의"가
+   * 기록되지 않게 한다. 다만 **막는 것은 필수 약관뿐이다.**
+   *
+   * 선택 약관까지 세면, 동의할 필요조차 없는 항목 하나가 필수 재동의를 영구히 잠근다 —
+   * 닫을 수 없는 화면이라 사용자에게는 로그아웃 말고 갈 곳이 없다. 읽을 수 없는 선택
+   * 약관은 제출을 막는 대신 아래 페이로드에서 뺀다.
    */
   const canSubmit =
     required.every((item) => checked[item.code]) &&
-    ![...required, ...optional].some((item) => isUnreadable(item.code));
+    !required.some((item) => isUnreadable(item.code));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,10 +150,15 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
       // 장부에 남는다. 전부 아니면 전무라 한 번에 보낸다.
       await submitTermsConsents([
         ...required.map((item) => ({ code: item.code, agreed: true })),
-        ...optional.map((item) => ({
-          code: item.code,
-          agreed: Boolean(checked[item.code]),
-        })),
+        ...optional
+          // 읽을 수 없는데 체크가 살아 있는 것은 **예전에 받아 둔 동의**다. 그대로 보내면
+          // 최신 버전에 대한 동의로 새로 기록된다 — 읽지 못한 본문에 동의시키는 셈이라
+          // 빼고, 서버에 있는 값을 그대로 둔다. 해제(철회)는 본문과 무관하므로 보낸다.
+          .filter((item) => !(isUnreadable(item.code) && checked[item.code]))
+          .map((item) => ({
+            code: item.code,
+            agreed: Boolean(checked[item.code]),
+          })),
       ]);
       onDone();
     } catch (err) {
@@ -240,7 +251,13 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                   <input
                     type="checkbox"
                     checked={checked[item.code] ?? false}
-                    disabled={isSubmitting || isUnreadable(item.code)}
+                    // 읽을 수 없는 약관은 **새로 체크하는 것만** 막는다. 이 화면을 띄운
+                    // 김에 예전 동의를 거두는 길까지 잠그지 않는다(TermsConsentPanel 과
+                    // 같은 규칙).
+                    disabled={
+                      isSubmitting ||
+                      (isUnreadable(item.code) && !checked[item.code])
+                    }
                     onChange={(e) =>
                       setChecked((current) => ({
                         ...current,

@@ -37,7 +37,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { isNotNull } from "@/lib/guards";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
-import { nativeNotify } from "@/lib/nativeBridge";
+import { getNativeSaveErrorMessage, nativeNotify } from "@/lib/nativeBridge";
 import { shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
@@ -99,6 +99,8 @@ export default function ShootResultPage() {
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
   const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
+  // 완성본 주소가 열리지 않는가(만료된 조회 URL·오프라인). 참이면 미리보기로 되돌아간다.
+  const [isResultImageBroken, setIsResultImageBroken] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const debugImageUrlRef = useRef<string | null>(null);
   const guestImageUrlRef = useRef<string | null>(null);
@@ -123,6 +125,8 @@ export default function ShootResultPage() {
     () => selectedIndexes.map((index) => (index == null ? null : shots[index] ?? null)),
     [selectedIndexes, shots],
   );
+  // 원본 4장으로 만드는 **구도 미리보기**. 완성 전(과 완성본을 못 불러왔을 때)만 쓴다 —
+  // 저장본에는 누끼와 서버가 그린 장식이 더 들어간다(아래 결과 영역 주석 참고).
   const previewImage = useMemo(
     () => selectedShots.map((photo): FrameMedia | null => (photo ? { src: photo } : null)),
     [selectedShots],
@@ -215,7 +219,20 @@ export default function ShootResultPage() {
     setSyncedImageResult(imageResult);
     setImageState(imageResult ? "done" : "idle");
     setImageNameDraft(imageResult?.displayName ?? "");
+    // 새 결과는 다시 불러 본다 — 앞 결과가 못 열렸다고 이것까지 접어 두면 안 된다.
+    setIsResultImageBroken(false);
   }
+
+  /*
+    완성본을 화면에 띄울 주소. 못 불러오면 null 로 떨어져 아래 미리보기로 되돌아간다.
+
+    회원 경로의 주소는 만료되는 조회 URL 이고(lib/fourcutProcessing.ts), 비회원 경로는
+    메모리 blob 이라 새로고침 한 번에 죽는다. 둘 다 빈 사각형을 남기느니 원본 미리보기라도
+    보여 주는 편이 낫다.
+  */
+  const resultImageSrc = isResultImageBroken
+    ? null
+    : imageResult?.objectUrl ?? null;
 
   useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
@@ -523,7 +540,10 @@ export default function ShootResultPage() {
       console.error(error);
       showStatusNotice(
         "이미지를 다운로드하지 못했어요",
-        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
+        // 앱에서 사진첩 권한이 막힌 실패는 네이티브 안내를 그대로 띄운다 —
+        // "설정에서 켜 주세요" 는 재시도로 풀리지 않아 폴백 문구가 거짓말이 된다.
+        getNativeSaveErrorMessage(error) ??
+          getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
       );
     } finally {
       setIsDownloadingImage(false);
@@ -645,14 +665,45 @@ export default function ShootResultPage() {
           </section>
         ) : null}
 
+        {/*
+          다 되면 **저장된 그림 자체**를 보여준다.
+
+          FramePreview 는 고른 원본 4장을 DOM 으로 겹쳐 그리는 구도 미리보기라, 저장본과
+          갈리는 자리가 있다. 회원 경로는 누끼(배경 제거)를 올리기 전에 픽셀에 굽고
+          (`lib/fourcutCompose.ts`) 프레임 장식은 서버가 그리는데, 둘 다 이 미리보기에는
+          없다 — 사용자는 배경이 그대로 남은 그림을 본 뒤 배경이 지워진 그림을 내려받았다.
+          비회원도 마찬가지로 브라우저가 그린 결과가 따로 있다.
+
+          미리보기에 누끼를 다시 굽는 길로 가지 않는다. 세그멘테이션은 실기기에서 장당
+          약 1초인데(lib/canvas/personCutout.ts), 그 픽셀은 이미 결과물 안에 들어 있다.
+          같은 일을 두 번 하는 대신 이미 만들어진 것을 띄운다.
+
+          아직 만들어지는 중이거나 완성본을 못 불러왔을 때만 미리보기가 자리를 지킨다.
+        */}
         <section className="mx-auto w-full max-w-md">
-          <FramePreview
-            frameId={frameId}
-            media={previewImage}
-            borderColor={effectiveBorderColor}
-            outputFilter={outputFilter}
-            theme={themeData}
-          />
+          {resultImageSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resultImageSrc}
+              alt="완성된 네컷 결과"
+              decoding="async"
+              // 완성본은 레이아웃과 같은 비율로 그려진다. 미리 잡아 두면 늦게 도착해도
+              // 화면이 밀리지 않는다.
+              style={{
+                aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
+              }}
+              className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] object-contain"
+              onError={() => setIsResultImageBroken(true)}
+            />
+          ) : (
+            <FramePreview
+              frameId={frameId}
+              media={previewImage}
+              borderColor={effectiveBorderColor}
+              outputFilter={outputFilter}
+              theme={themeData}
+            />
+          )}
         </section>
 
         {imageError ? <p className="text-[11px] text-[color:var(--hc-danger)]">{imageError}</p> : null}

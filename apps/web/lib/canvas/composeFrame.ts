@@ -2,7 +2,11 @@ import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
-import { nativeSaveImageBlob, nativeSaveImageUrl } from "@/lib/nativeBridge";
+import {
+  NativeSaveError,
+  nativeSaveImageBlob,
+  nativeSaveImageUrl,
+} from "@/lib/nativeBridge";
 import {
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
@@ -75,7 +79,8 @@ function toPngBlob(canvas: HTMLCanvasElement) {
 export async function downloadBlob(blob: Blob, filename: string) {
   const native = await nativeSaveImageBlob(blob, filename);
   if (native) {
-    if (!native.ok) throw new Error(native.reason ?? "사진첩에 저장하지 못했어요.");
+    // 일반 Error 로 바꾸지 않는다 — 사유가 화면까지 못 간다(NativeSaveError 주석 참고).
+    if (!native.ok) throw new NativeSaveError(native);
     return;
   }
 
@@ -117,7 +122,7 @@ export async function downloadFromUrl(url: string, filename?: string) {
   // 웹이 fetch 로 받아 base64 로 쪼개 보내는 것보다 훨씬 싸다.
   const native = await nativeSaveImageUrl(url, name);
   if (native) {
-    if (!native.ok) throw new Error(native.reason ?? "사진첩에 저장하지 못했어요.");
+    if (!native.ok) throw new NativeSaveError(native);
     return;
   }
 

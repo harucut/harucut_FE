@@ -22,6 +22,20 @@
  */
 export const CLIENT_REISSUE_UNAVAILABLE_CODE = 'CLIENT-001';
 
+/*
+  여기 넣지 않는 것 — **네이티브 브리지 실패 코드**(`photo-permission-blocked` 등).
+
+  이 표는 HTTP 응답의 `code` 를 우리 문구로 바꾸는 자리다. 브리지 실패는 응답이 아니라 앱 셸이
+  돌려주는 값이고, 문구의 소유자도 이미 네이티브다 — 여기에 같은 문구를 또 두면 두 벌이 되어
+  갈라진다. 웹은 문구를 갖지 않고 "그 사유를 믿을지"만 정한다
+  (`apps/web/lib/nativeBridge.ts` 의 `NativeSaveError`, 짝은 `apps/mobile/lib/native-bridge.ts`).
+
+  형식도 맞지 않는다. `scripts/check_backend_contract.py` 의 C 절은 이 표를 서버 ErrorCode
+  enum 과 1:1 로 대조하면서 `'[A-Z]+-\d{3}'` 만 코드로 읽고, 서버에 없는 코드는
+  `CLIENT_ONLY_CODES` 에 **선언된 것만** 봐준다. 케밥케이스 코드는 그 정규식에 걸리지 않아
+  대조에서 조용히 빠진다 — 검사기가 못 보는 항목이 표에 남는 쪽이 더 나쁘다.
+*/
+
 export const API_ERROR_MESSAGES: Record<string, string> = {
   // ── 클라이언트 자체 코드 ──
   [CLIENT_REISSUE_UNAVAILABLE_CODE]:

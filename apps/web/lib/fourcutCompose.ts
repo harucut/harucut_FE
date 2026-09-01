@@ -50,15 +50,16 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
  *
  * ## 누끼도 여기서 굽는다
  *
- * 필터와 같은 이유다. 도는 서버의 스웨거가 `FrameCreateRequest.cellCutouts` 에 못박는다 —
- * *"서버는 이 값으로 아무것도 그리지 않는다. 누끼(배경 제거 + 검은 배경)는 프론트가 원본
- * 픽셀에 구워서 업로드해야 한다. 이 토글은 편집기가 저장 프레임을 다시 열 때 어느 칸이
- * 누끼인지 복원하는 용도다."*
+ * 필터와 같은 이유다. **`cellCutouts` 계약(무엇이 저장되고 누가 그리는가)은 여기 적지
+ * 않는다** — 소유자는 `docs/backend-contract.md` 하나다(AGENTS.md 「규칙의 소유자」).
+ * 아직 확인 중인 쟁점이라, 옮겨 적는 순간 두 진실이 갈린다.
  *
- * 그래서 켜진 칸의 원본은 **올리기 전에** 사람만 남기고 배경을 검정으로 구운 것으로 바꾼다
- * (`lib/canvas/personCutout.ts`). 토글이 어디서 오는지는 `resolveComposeFrame` 이 갖는다.
- * 미해결 쟁점(서버가 정말 안 그리는가)은 `docs/backend-contract.md`
- * 「누끼 한 줄은 지금 스웨거와 반대다」 절.
+ * 그 문서가 정한 대로, 켜진 칸의 원본은 **올리기 전에** 사람만 남기고 배경을 검정으로 구운
+ * 것으로 바꾼다(`lib/canvas/personCutout.ts`). 토글이 어디서 오는지는 `resolveComposeFrame`
+ * 이 갖는다.
+ *
+ * 구운 픽셀이 사용자 눈에 닿는 곳은 결과 화면이다 — `app/shoot/result/page.tsx` 가 완성본을
+ * 그대로 띄운다. 원본으로 만든 미리보기를 그 자리에 두면 화면과 저장본이 갈린다.
  *
  * ## 슬롯 크기로 잘라서 올린다
  *
@@ -247,8 +248,8 @@ export type ComposeFrameTarget = {
   /** 합성 요청에 실을 서버 프레임 id. */
   frameId: number;
   /**
-   * 칸별 누끼 토글. 촬영 슬롯 순서로 **4개**다(스웨거 `minItems`/`maxItems` 4).
-   * 켜진 칸은 올리기 전에 픽셀에 누끼를 굽는다 — 서버는 이 값으로 아무것도 그리지 않는다.
+   * 칸별 누끼 토글. 촬영 슬롯 순서로 **4개**이고, 켜진 칸은 올리기 전에 픽셀에 누끼를
+   * 굽는다. 개수·저장·렌더링 계약은 `docs/backend-contract.md` 가 갖는다.
    */
   cellCutouts: boolean[];
 };
@@ -257,7 +258,7 @@ export type ComposeFrameTarget = {
  * 프레임이 들고 있는 누끼 토글을 읽는다.
  *
  * 서버가 안 줬거나(누끼 필드가 생기기 전 프레임) 4개가 아니면 **전부 꺼진 것**으로 본다 —
- * 스웨거의 생략 규칙이자 `frameApi.toThemeExportJson` 이 쓰는 규칙과 같은 것이다.
+ * `frameApi.toThemeExportJson` 이 쓰는 규칙과 같은 것이다(근거는 `docs/backend-contract.md`).
  */
 function readCellCutouts(frame: RemoteFrame | null): boolean[] {
   const flags = frame?.cellCutouts;

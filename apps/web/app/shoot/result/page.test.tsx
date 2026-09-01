@@ -4,6 +4,7 @@ import ShootResultPage from "@/app/shoot/result/page";
 import { newIdempotencyKey } from "@/lib/composeApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { NativeSaveError } from "@/lib/nativeBridge";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -13,6 +14,7 @@ const mockCreateObjectURL = jest.fn();
 const mockRevokeObjectURL = jest.fn();
 const mockSetPendingGuestSave = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
+const mockDownloadFromUrl = jest.fn();
 
 type MockShootSessionState = {
   frameId: string | null;
@@ -98,7 +100,7 @@ jest.mock("@/lib/shootSessionStore", () => ({
 jest.mock("@/lib/canvas/composeFrame", () => ({
   composeFramePng: (...args: unknown[]) => mockComposeFramePng(...args),
   downloadBlob: jest.fn(),
-  downloadFromUrl: jest.fn(),
+  downloadFromUrl: (...args: unknown[]) => mockDownloadFromUrl(...args),
 }));
 
 jest.mock("@/lib/pendingGuestSave", () => ({
@@ -134,7 +136,11 @@ jest.mock("@/lib/share", () => ({
 
 const mockNativeNotify = jest.fn();
 
+// nativeNotify 만 갈아 끼우고 나머지는 진짜를 쓴다. getNativeSaveErrorMessage 를 목으로
+// 덮으면 "네이티브 사유를 믿을지 말지" 판정이 통째로 사라져, 아래 회귀 테스트가
+// 자기 목만 확인하게 된다.
 jest.mock("@/lib/nativeBridge", () => ({
+  ...jest.requireActual("@/lib/nativeBridge"),
   nativeNotify: (...args: unknown[]) => mockNativeNotify(...args),
 }));
 
@@ -240,6 +246,43 @@ describe("ShootResultPage", () => {
       { src: "/shot-4.png" },
     ]);
     expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  /*
+    ── 화면에 뜬 그림과 저장된 그림은 같아야 한다 ──
+
+    FramePreview 는 고른 원본 4장을 겹쳐 그리는 **구도 미리보기**다. 회원 경로는 누끼(배경
+    제거)를 올리기 전에 픽셀에 굽고(lib/fourcutCompose.ts) 프레임 장식은 서버가 그리므로,
+    저장본에는 있는 것이 이 미리보기에는 없다. 그대로 두면 사용자는 배경이 남은 그림을 본 뒤
+    확인한 적 없는 배경 제거 결과를 내려받는다.
+  */
+  it("합성이 끝나면 원본 미리보기 대신 저장된 결과를 보여준다", async () => {
+    render(<ShootResultPage />);
+
+    const output = await screen.findByAltText("완성된 네컷 결과");
+    expect(output).toHaveAttribute("src", "https://example.com/image");
+    // 둘을 같이 두면 어느 쪽이 저장본인지 화면이 말해 주지 않는다.
+    expect(screen.queryByTestId("frame-preview")).not.toBeInTheDocument();
+  });
+
+  it("비회원도 브라우저가 그린 그 그림을 그대로 보여준다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+
+    render(<ShootResultPage />);
+
+    const output = await screen.findByAltText("완성된 네컷 결과");
+    // 비회원 결과물은 이 blob 이 전부다 — 내려받는 것도 화면에 뜨는 것도 같은 그림이어야 한다.
+    expect(output).toHaveAttribute("src", "blob:generated-image");
+  });
+
+  // 회원 완성본 주소는 만료되는 조회 URL 이고, 비회원 것은 새로고침에 죽는 blob 이다.
+  // 빈 사각형을 남기느니 구도 미리보기라도 세운다.
+  it("완성본을 못 불러오면 미리보기로 되돌아간다", async () => {
+    render(<ShootResultPage />);
+
+    fireEvent.error(await screen.findByAltText("완성된 네컷 결과"));
+
+    expect(await screen.findByTestId("frame-preview")).toBeInTheDocument();
   });
 
   it("합성이 실패하면 사유를 보여주고, 다시 준비하기가 실제로 다시 시도한다", async () => {
@@ -434,6 +477,67 @@ describe("ShootResultPage", () => {
     expect(alertSpy).not.toHaveBeenCalled();
 
     alertSpy.mockRestore();
+  });
+
+  /*
+    앱에서 사진첩 권한이 막힌 저장은 재시도로 풀리지 않는다.
+
+    폴백(`잠시 후 다시 시도해 주세요.`)만 띄우면 사용자는 설정을 열어야 한다는 것을 알 방법이
+    없다. 네이티브가 code 를 붙여 보낸 실패만 그 사유를 그대로 띄운다
+    (lib/nativeBridge.ts 의 NativeSaveError).
+  */
+  it("사진첩 권한이 막히면 네이티브 안내를 그대로 띄운다", async () => {
+    // jest.clearAllMocks() 는 호출 기록만 지우고 구현은 남긴다 — 앞 테스트가 걸어 둔
+    // 거절이 살아 있으면 downloadFromUrl 까지 가지도 못한 채 폴백 문구로 통과한다.
+    mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/download.png");
+    mockDownloadFromUrl.mockRejectedValue(
+      new NativeSaveError({
+        reason: "설정에서 사진 접근을 허용해 주세요.",
+        code: "photo-permission-blocked",
+      }),
+    );
+
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "이미지 다운로드" }));
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.message).toBe(
+        "설정에서 사진 접근을 허용해 주세요.",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.title).toBe(
+      "이미지를 다운로드하지 못했어요",
+    );
+    expect(mockDownloadFromUrl).toHaveBeenCalled();
+  });
+
+  // code 가 없는 실패는 네이티브 원문(영문·기기별 문구)일 수 있다. 화면에 새지 않는다.
+  it("믿을 수 없는 저장 실패는 폴백 문구로 덮는다", async () => {
+    mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/download.png");
+    mockDownloadFromUrl.mockRejectedValue(
+      new NativeSaveError({ reason: "MediaLibrary is not available on this device" }),
+    );
+
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "이미지 다운로드" }));
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "이미지를 다운로드하지 못했어요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toBe(
+      "잠시 후 다시 시도해 주세요.",
+    );
+    expect(mockDownloadFromUrl).toHaveBeenCalled();
   });
 
   /*

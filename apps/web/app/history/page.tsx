@@ -25,6 +25,7 @@ import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
+import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
 import { shareOrCopyLink } from "@/lib/share";
 import {
@@ -282,10 +283,12 @@ export default function HistoryPage() {
     } catch (downloadError) {
       console.error(downloadError);
       alert(
-        getUserFacingApiErrorMessage(
-          downloadError,
-          "다운로드를 준비하지 못했어요.",
-        ),
+        // 결과 화면과 같은 이유로 네이티브 안내를 먼저 본다(lib/nativeBridge.ts).
+        getNativeSaveErrorMessage(downloadError) ??
+          getUserFacingApiErrorMessage(
+            downloadError,
+            "다운로드를 준비하지 못했어요.",
+          ),
       );
     } finally {
       setDownloadingId(null);

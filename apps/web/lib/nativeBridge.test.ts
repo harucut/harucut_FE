@@ -6,7 +6,9 @@
  * 사라진다. 반대로 셸 안에서 null 을 돌려주면 앱이 `<a download>` 를 눌러 아무 일도 안 일어난다.
  */
 import {
+  getNativeSaveErrorMessage,
   isNativeShell,
+  NativeSaveError,
   nativeHaptic,
   nativeNotify,
   nativeRequestNotificationPermission,
@@ -36,7 +38,11 @@ function leaveShell() {
 }
 
 /** 셸이 하듯 결과를 돌려준다. */
-function replyTo(posted: Posted[], type: string, result: { ok: boolean; reason?: string }) {
+function replyTo(
+  posted: Posted[],
+  type: string,
+  result: { ok: boolean; reason?: string; code?: "photo-permission-blocked" },
+) {
   const message = posted.find((item) => item.type === type);
   if (!message?.id) throw new Error(`${type} 메시지를 못 찾았다`);
   window.__harucutNativeResolve__?.(message.id, result);
@@ -175,6 +181,71 @@ describe("셸 안", () => {
     const posted = enterShell();
     nativeHaptic("light");
     expect(posted[0]).toEqual({ type: "haptic", style: "light" });
+  });
+});
+
+/*
+  사진첩 권한 거절.
+
+  네이티브만 사용자가 **무엇을 해야 하는지** 안다("설정에서 켜 주세요"). 그 문구를 일반 Error
+  로 바꾸면 getUserFacingApiErrorMessage() 가 message 를 일부러 버려(apps/web/lib/apiError.ts),
+  재시도로는 절대 풀리지 않는 실패에 `잠시 후 다시 시도해 주세요.` 만 남는다.
+
+  reason 에는 네이티브 영문 원문도 섞여 오므로 아무 문구나 믿으면 안 된다 — 믿는 기준은
+  code 하나다. 값의 소유자는 apps/mobile/lib/native-bridge.ts 의 BridgeFailureCode.
+*/
+describe("저장 실패 사유", () => {
+  it("셸이 붙인 code 를 결과에 그대로 싣는다", async () => {
+    const posted = enterShell();
+    const promise = nativeSaveImageUrl("https://x/y.png", "y.png");
+    replyTo(posted, "save-url", {
+      ok: false,
+      reason: "설정에서 사진 접근을 허용해 주세요.",
+      code: "photo-permission-blocked",
+    });
+
+    await expect(promise).resolves.toEqual({
+      ok: false,
+      reason: "설정에서 사진 접근을 허용해 주세요.",
+      code: "photo-permission-blocked",
+    });
+  });
+
+  it("아는 code 가 붙은 실패만 사유를 화면에 그대로 내보낸다", () => {
+    const blocked = new NativeSaveError({
+      reason: "설정에서 사진 접근을 허용해 주세요.",
+      code: "photo-permission-blocked",
+    });
+    const denied = new NativeSaveError({
+      reason: "사진첩 저장 권한이 필요해요.",
+      code: "photo-permission-denied",
+    });
+
+    expect(getNativeSaveErrorMessage(blocked)).toBe("설정에서 사진 접근을 허용해 주세요.");
+    expect(getNativeSaveErrorMessage(denied)).toBe("사진첩 저장 권한이 필요해요.");
+  });
+
+  it("code 가 없거나 모르는 값이면 폴백으로 보낸다 — 네이티브 원문이 새지 않는다", () => {
+    // 기기별 영문 원문. catch 로 주워 온 것이라 화면에 띄우면 한국어 화면에 영어가 튄다.
+    const raw = new NativeSaveError({
+      reason: "MediaLibrary is not available on this device",
+    });
+    // 셸이 보낸 값은 그대로 믿지 않는다 — 모르는 코드는 허가증이 아니다.
+    const unknown = new NativeSaveError({
+      reason: "무엇이든 띄워 주세요",
+      code: "photo-permission-someday",
+    });
+
+    expect(getNativeSaveErrorMessage(raw)).toBeNull();
+    expect(getNativeSaveErrorMessage(unknown)).toBeNull();
+    // 그래도 원인 추적용 message 는 남는다(console.error 로만 나간다).
+    expect(raw.message).toBe("MediaLibrary is not available on this device");
+  });
+
+  it("저장과 무관한 오류에는 관여하지 않는다", () => {
+    expect(getNativeSaveErrorMessage(new Error("download failed: 500"))).toBeNull();
+    expect(getNativeSaveErrorMessage(null)).toBeNull();
+    expect(getNativeSaveErrorMessage({ code: "photo-permission-blocked" })).toBeNull();
   });
 });
 

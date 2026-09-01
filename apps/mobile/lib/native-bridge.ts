@@ -29,7 +29,30 @@ export type BridgeMessage =
   | { type: 'share'; id: string; title?: string; message?: string; url: string }
   | { type: 'haptic'; style?: 'light' | 'medium' | 'heavy' };
 
-export type BridgeResult = { ok: boolean; reason?: string; value?: string };
+/**
+ * 실패 사유 중 **사용자에게 그대로 보여도 되는** 것에만 붙는 표식.
+ *
+ * `reason` 에는 두 가지가 섞여 들어온다 — 우리가 한국어로 쓴 안내와, catch 로 주워 온 네이티브
+ * 원문(영문·기기별 문구)이다. 웹은 둘을 가릴 값이 없어 저장 실패를 전부 일반 `Error` 로 바꾸고
+ * (apps/web/lib/canvas/composeFrame.ts), `getUserFacingApiErrorMessage()` 는 일반 Error 의
+ * message 를 일부러 버린다(apps/web/lib/apiError.ts 의 getServerMessage). 그래서 **재시도로는
+ * 절대 풀리지 않는** 권한 거절에도 `잠시 후 다시 시도해 주세요.` 만 뜬다.
+ *
+ * 코드가 붙은 실패만 웹이 믿고 `reason` 을 그대로 띄운다. 코드가 없으면 지금처럼 폴백 문구다.
+ * 짝은 apps/web/lib/nativeBridge.ts — 프로토콜이므로 같이 고친다.
+ */
+export type BridgeFailureCode =
+  /** 설정에서 켜야 한다. 다시 물어도 대화상자가 뜨지 않으므로 재시도 안내는 거짓말이 된다. */
+  | 'photo-permission-blocked'
+  /** 이번에 거절했다. 다음에 다시 물을 수 있다. */
+  | 'photo-permission-denied';
+
+export type BridgeResult = {
+  ok: boolean;
+  reason?: string;
+  code?: BridgeFailureCode;
+  value?: string;
+};
 
 /** 조각을 모으는 중인 저장 요청 하나. */
 type Transfer = {
@@ -116,19 +139,49 @@ function safeFilename(name: string) {
 /**
  * 사진첩 쓰기 권한. 저장만 할 것이므로 writeOnly 로 요청한다 —
  * 전체 사진 접근을 요구하면 사용자가 거절하기 쉽고 스토어 심사에서도 과한 요청이 된다.
+ *
+ * 두 실패에 code 를 단다(BridgeFailureCode). 여기서만 나오는 문구가 사용자가 **무엇을 해야
+ * 하는지** 아는 유일한 자리라, 웹까지 그대로 가야 한다.
  */
 async function ensurePermission(): Promise<BridgeResult> {
   const current = await MediaLibrary.getPermissionsAsync(true);
   if (current.granted) return { ok: true };
 
   if (!current.canAskAgain) {
-    return { ok: false, reason: '설정에서 사진 접근을 허용해 주세요.' };
+    return {
+      ok: false,
+      reason: '설정에서 사진 접근을 허용해 주세요.',
+      code: 'photo-permission-blocked',
+    };
   }
 
   const asked = await MediaLibrary.requestPermissionsAsync(true);
   return asked.granted
     ? { ok: true }
-    : { ok: false, reason: '사진첩 저장 권한이 필요해요.' };
+    : {
+        ok: false,
+        reason: '사진첩 저장 권한이 필요해요.',
+        code: 'photo-permission-denied',
+      };
+}
+
+/**
+ * 저장 한 번에 쓰는 임시 폴더. 요청마다 다르다.
+ *
+ * 캐시 바로 밑에 두면 경로가 표시 이름 하나로 정해진다. 기록 화면은 **누른 카드의 버튼만**
+ * 잠그고(apps/web/app/history/page.tsx 의 downloadingId) 같은 이름의 기록도 허용하므로
+ * (lib/fourcutOutput.ts 의 buildDownloadFilename 은 표시 이름만 쓴다), 이름이 같은 두 저장이
+ * 겹치면 downloadAsync 가 서로의 파일을 덮어쓰고 먼저 끝난 쪽의 finally 가 아직 저장 중인
+ * 파일을 지운다 — 한쪽이 실패하거나 **남의 사진이 사진첩에 들어간다.**
+ *
+ * 사진첩에 남는 이름은 표시 이름 그대로여야 하므로(safeFilename) 파일명이 아니라 폴더를 가른다.
+ * 웹이 준 요청 id 를 쓰지 않는 이유는 그것도 경로가 되기 때문이다 — 표시 이름과 똑같이
+ * 씻어야 한다. 앱은 한 프로세스라 여기서 만든 값이면 충돌하지 않는다.
+ */
+let tempDirSeq = 0;
+function newTempDir() {
+  tempDirSeq += 1;
+  return `${FileSystem.cacheDirectory}harucut-save/${Date.now()}-${tempDirSeq}/`;
 }
 
 async function saveLocalFile(uri: string): Promise<BridgeResult> {
@@ -156,9 +209,12 @@ async function saveLocalFile(uri: string): Promise<BridgeResult> {
 
 /** 원격 이미지를 내려받아 사진첩에 넣는다. 서버 합성 결과처럼 https 주소가 있을 때 쓴다. */
 export async function saveRemoteImage(url: string, filename: string): Promise<BridgeResult> {
-  const target = `${FileSystem.cacheDirectory}${safeFilename(filename)}`;
+  const dir = newTempDir();
+  const target = `${dir}${safeFilename(filename)}`;
 
   try {
+    // downloadAsync 는 폴더를 만들어 주지 않는다.
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     const downloaded = await FileSystem.downloadAsync(url, target);
     if (downloaded.status !== 200) {
       return { ok: false, reason: `이미지를 받지 못했어요 (${downloaded.status})` };
@@ -168,14 +224,15 @@ export async function saveRemoteImage(url: string, filename: string): Promise<Br
     return { ok: false, reason: error instanceof Error ? error.message : '이미지를 받지 못했어요.' };
   } finally {
     /*
-      내려받은 파일은 성공 여부와 무관하게 지운다.
+      내려받은 파일은 성공 여부와 무관하게 폴더째 지운다.
 
       downloadAsync 는 상태 코드를 보지 않고 응답 본문을 그대로 target 에 쓴다. 사진 URL 이
       만료돼 403 이 오면 그 오류 본문이 캐시 파일로 남는데, 위에서 조기 반환하면
       saveLocalFile 의 finally 를 거치지 않아 지울 곳이 없다 — 재시도할 때마다 쌓인다.
-      성공 경로는 saveLocalFile 이 같은 파일을 이미 지운 뒤라 idempotent 로 무동작이다.
+      성공 경로는 saveLocalFile 이 안의 파일을 이미 지운 뒤라 빈 폴더만 사라진다.
+      요청마다 다른 폴더이므로 같이 도는 다른 저장을 건드리지 않는다.
     */
-    void FileSystem.deleteAsync(target, { idempotent: true }).catch(() => undefined);
+    void FileSystem.deleteAsync(dir, { idempotent: true }).catch(() => undefined);
   }
 }
 
@@ -197,15 +254,21 @@ export async function saveBase64Chunks(
     return { ok: false, reason: '이미지 조각이 일부 사라졌어요. 다시 시도해 주세요.' };
   }
 
-  const target = `${FileSystem.cacheDirectory}${safeFilename(filename)}`;
+  // 여기도 요청마다 다른 폴더를 쓴다 — 표시 이름이 같은 두 저장이 겹칠 수 있다(newTempDir).
+  const dir = newTempDir();
+  const target = `${dir}${safeFilename(filename)}`;
 
   try {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     await FileSystem.writeAsStringAsync(target, transfer.chunks.join(''), {
       encoding: FileSystem.EncodingType.Base64,
     });
     return await saveLocalFile(target);
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : '저장에 실패했어요.' };
+  } finally {
+    // 이어 붙이다 실패하면 saveLocalFile 까지 가지 못해 지울 곳이 없었다. 폴더째 지운다.
+    void FileSystem.deleteAsync(dir, { idempotent: true }).catch(() => undefined);
   }
 }
 
