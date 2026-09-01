@@ -28,7 +28,10 @@ import {
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
-import { useShootSession } from "@/lib/shootSessionStore";
+import {
+  buildFrameContentKey,
+  useShootSession,
+} from "@/lib/shootSessionStore";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
@@ -156,6 +159,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     effect 가 다시 돌면서 포커스를 첫 컨트롤로 되돌려, 저장을 누른 순간 포커스가 튄다.
   */
   const isSavingRef = useRef(false);
+  /*
+    마지막으로 서버에 있는 것으로 아는 프레임의 **출력 지문**.
+
+    저장할 때 이 값과 비교해 「합성 결과가 달라졌는가」를 가른다. 판정의 소유자는
+    `buildFrameContentKey` 다(AGENTS.md 「규칙의 소유자」) — 편집기의 이탈 경고용 지문
+    (`buildEditorSignature`)을 대신 쓰면 안 된다. 그쪽은 `locked` 처럼 **그림에 안 나오는
+    값**까지 「고쳤다」로 보므로, 레이어를 잠그기만 해도 멱등키가 버려져 같은 그림이 두 벌
+    접수된다.
+
+    지문은 불러온 뒤 `exportJson()` 으로 잡는다 — 저장할 때와 **같은 파이프라인**이라야
+    왕복 정규화 차이가 「고쳤다」로 잡히지 않는다.
+  */
+  const savedContentKeyRef = useRef<string | null>(null);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -199,6 +215,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         const imported = await resolveThemeAssetUrls(toThemeExportJson(remoteFrame));
         if (cancelled) return;
         importJson(imported);
+        savedContentKeyRef.current = buildFrameContentKey(
+          useThemeEditorStore.getState().exportJson(),
+        );
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
         // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
@@ -411,7 +430,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       if (remoteFrameId) {
         await updateFrame(remoteFrameId, body);
         /*
-          **캔버스가 실제로 달라졌을 때만** 촬영 세션의 결과와 멱등키를 버린다.
+          **합성 결과가 달라진 저장에만** 촬영 세션의 결과와 멱등키를 버린다.
 
           왜 버리나: 프레임 수정은 같은 id 로 가는 PUT 이라 `remoteFrameId` 가 안 변한다.
           촬영 세션이 쓰던 멱등키를 그대로 다시 보내면 서버가 **수정 전 작업을 재생한다**
@@ -422,13 +441,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           왜 조건을 다나: 이름·설명만 고치거나 아무것도 안 고치고 다시 저장해도
           `updateFrame` 은 200 이다. 그때까지 버리면 결과 화면이 **같은 그림을 새 멱등키로
           다시 접수해** 보관함에 두 벌이 남는다(2026-08-24 에 실제로 남았다).
-          `hasUnsavedCanvasChanges` 는 컴포넌트·배경·배경색·셀 누끼만 보고 제목·설명·
-          미리보기 키는 안 본다 — 합성 결과를 바꾸는 값의 범위가 `buildFrameContentKey`
-          와 같다.
+
+          비교는 **방금 서버로 보낸 `themeJson`** 으로 한다. 사용자가 누른 시점의 편집기
+          상태가 아니라 `finalizeAssetsForSave()` 까지 끝난 뒤의 값이라, 저장을 누른 직후
+          끝난 누끼 작업처럼 **대기 중에 바뀐 것**도 여기 들어 있다.
         */
-        if (hasUnsavedCanvasChanges) {
+        const savedContentKey = buildFrameContentKey(themeJson);
+        if (savedContentKey !== savedContentKeyRef.current) {
           useShootSession.getState().noteRemoteFrameEdited(remoteFrameId);
         }
+        savedContentKeyRef.current = savedContentKey;
       } else {
         await createFrame(body);
       }
