@@ -303,6 +303,46 @@ DELETE /api/auth/user/files   { "keys": ["<합성에 쓰려던 원본 key>", ...
 
 ---
 
+## 6. 프레임 수정 시각을 응답에 넣어 주세요 (있으면 좋음)
+
+**무엇을**: `FrameResponse` 에 `updatedAt`(또는 `version`) 한 필드.
+
+**왜**: 합성 멱등키를 무엇으로 잡을지가 여기 걸린다. 같은 키로 다시 오면 서버가 기존 작업을
+그대로 재생하는데(`ComposeRequest.idempotencyKey` 설명), 사용자가 테마 에디터로 프레임 **내용**을
+고쳐도 `frameId` 는 그대로다. 그래서 수정 전 결과가 재생된다.
+
+지금은 **조회로 받은 내용에서 지문을 만들어** 우회하고 있다(`lib/shootSessionStore.ts` 의
+`buildFrameContentKey`). 컴포넌트·배경·칸 누끼를 순서 안정 직렬화하고, 조회할 때마다 새로 서명되는
+URL(`renderUrl`·`background.url`)은 뺀다 — 넣으면 내용이 그대로인데도 매번 새 키가 나간다.
+
+이 우회에는 못 메우는 구멍이 하나 있다. **첫 조회가 실패하면 지문이 없는 채로 남고**, 그 뒤 프레임을
+고쳐도 새 키를 잡지 못한다. 서버가 수정 시각을 주면 이 구멍이 사라지고, 프론트가 응답 모양 전체를
+지문으로 쓰지 않아도 된다.
+
+**급하지 않다** — 지금 우회로 대부분의 경우가 덮인다.
+
+---
+
+## 7. 셀 누끼를 서버가 그리는지 알려 주세요 (답 대기)
+
+**무엇을**: `ComposeSpec.cellCutouts` 를 합성 Lambda 가 실제로 그리는가.
+
+**왜 묻나**: 스웨거와 이 레포의 실측 기록이 정면으로 다르다.
+
+| | 말하는 것 |
+|---|---|
+| `FrameCreateRequest.cellCutouts` 스웨거 설명 | "**서버는 이 값으로 아무것도 그리지 않는다** — 누끼는 프론트가 원본 픽셀에 구워서 업로드해야 한다" |
+| `docs/backend-contract.md` 실측 기록 | "된다 — 켠 칸만 가장자리가 어두워졌다(`rgb(55,9,10)` vs `rgb(0,255,0)`)" |
+
+jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `ComposeSpec` 에 싣는 것까지는
+확인했다. 다만 실제 렌더는 jar 밖 Lambda(`LambdaComposeExecutor`)라 여기서는 못 본다.
+
+**프론트는 스웨거를 따랐다.** 업로드 전에 원본 픽셀에 배경 제거를 굽는다
+(`lib/canvas/personCutout.ts` — MediaPipe selfie_segmenter, 실기기 갤럭시 A32 에서 장당 0.9~1.2초).
+그러니 **Lambda 도 그리고 있다면 두 번 그려진다.** 어느 쪽이 맞는지 알려 주시면 한쪽을 끄겠다.
+
+---
+
 ## 참고 — 이번 세션에 확인한 것 (2026-09-01)
 
 **1~4번은 오늘도 그대로 막혀 있고, 5번은 답 대기다.** 로컬 백엔드
