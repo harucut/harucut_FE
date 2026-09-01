@@ -27,7 +27,6 @@ import {
   sanitizeDisplayName,
   FOURCUT_OUTPUT_EXTENSION,
 } from "@/lib/fourcutOutput";
-import { newIdempotencyKey } from "@/lib/composeApi";
 import { describeComposeFailure } from "@/lib/fourcutCompose";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
@@ -67,6 +66,7 @@ export default function ShootResultPage() {
     outputFilter,
     imageResult,
     setImageResult,
+    ensureComposeIdempotencyKey,
     clearResults,
     eventName,
     source,
@@ -204,11 +204,6 @@ export default function ShootResultPage() {
   */
   const runKey = `${generationKey}#${retryNonce}`;
 
-  // 합성 재시도는 같은 멱등키로 보낸다 — 서버가 기존 작업을 그대로 돌려줘 두 번 그리지 않는다.
-  // 입력이 바뀌면(다른 필터·다른 사진) 새 시도이므로 키도 새로 잡는다.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const idempotencyKey = useMemo(() => newIdempotencyKey(), [generationKey]);
-
   // 합성 입력(generationKey)이 바뀔 때마다 기본 파일명을 새로 만든다.
   // buildDefaultDisplayName()은 시각 기반이라 인자가 없고, 호출할 때마다 값이 달라진다.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,6 +298,20 @@ export default function ShootResultPage() {
         // 개발자용 디버그 전역 하나뿐이었다. 최대 16MP 캔버스 합성과 PNG 인코딩을 매번
         // 헛돌리며 서버 합성 시작을 그만큼 늦췄고, 더 나쁘게는 그 로컬 합성이 실패하면
         // 멀쩡히 성공했을 서버 저장까지 통째로 취소됐다.
+
+        /*
+          멱등키는 **세션에서 이어받는다.** 컴포넌트가 들고 있으면 안 된다.
+
+          아래 cleanup 은 `cancelled` 만 세울 뿐 이미 나간 합성을 되돌리지 못한다 —
+          결과를 기다리는 중에 '사진 다시 고르기'나 뒤로가기로 화면을 떠나도 서버는 계속
+          그려서 보관함에 결과를 남긴다. 그런데 재진입은 이 컴포넌트를 새로 마운트하므로,
+          키가 컴포넌트에 있으면 그때마다 새로 잡혀 같은 네컷이 한 벌 더 접수된다
+          (앞선 실행의 결과는 `cancelled` 때문에 세션에도 안 남아 막아 주지 못한다).
+
+          재시도 버튼도 같은 이유로 이 키를 그대로 쓴다 — 입력이 그대로면 키도 그대로다.
+        */
+        const idempotencyKey = ensureComposeIdempotencyKey(generationKey);
+
         const asset = await saveFourcutToServer({
           sources: imageSources.map((source) => source.src),
           layout: currentLayout,
@@ -377,10 +386,11 @@ export default function ShootResultPage() {
   }, [
     defaultDisplayName,
     effectiveBorderColor,
+    ensureComposeIdempotencyKey,
     frameId,
+    generationKey,
     runKey,
     hydrated,
-    idempotencyKey,
     remoteFrameId,
     guestMode,
     imageResult,

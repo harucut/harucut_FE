@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { create } from "zustand";
 import ShootResultPage from "@/app/shoot/result/page";
+import { newIdempotencyKey } from "@/lib/composeApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
@@ -21,11 +22,15 @@ type MockShootSessionState = {
   borderColor: string;
   outputFilter: "NONE";
   imageResult: GeneratedFourcutAsset | null;
+  // 멱등키는 컴포넌트가 아니라 **세션**이 들고 있다(lib/shootSessionStore.ts).
+  // 목도 그렇게 맞춰야 "페이지를 다시 열면 새 키가 잡힌다"는 결함을 관측할 수 있다.
+  composeIdempotency: { generationKey: string; idempotencyKey: string } | null;
   setImageResult: (imageResult: GeneratedFourcutAsset | null) => void;
+  ensureComposeIdempotencyKey: (generationKey: string) => string;
   clearResults: () => void;
 };
 
-const mockUseShootSession = create<MockShootSessionState>((set) => ({
+const mockUseShootSession = create<MockShootSessionState>((set, get) => ({
   frameId: "classic-4" as string | null,
   remoteFrameId: null as number | null,
   shots: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
@@ -33,7 +38,16 @@ const mockUseShootSession = create<MockShootSessionState>((set) => ({
   borderColor: "#111827",
   outputFilter: "NONE",
   imageResult: null,
+  composeIdempotency: null,
   setImageResult: (imageResult) => set({ imageResult }),
+  ensureComposeIdempotencyKey: (generationKey) => {
+    const current = get().composeIdempotency;
+    if (current?.generationKey === generationKey) return current.idempotencyKey;
+
+    const idempotencyKey = newIdempotencyKey();
+    set({ composeIdempotency: { generationKey, idempotencyKey } });
+    return idempotencyKey;
+  },
   clearResults: jest.fn(() => set({ imageResult: null })),
 }));
 
@@ -69,6 +83,8 @@ jest.mock("@/hooks/useRemoteFrameTheme", () => ({
 jest.mock("@/lib/themeBackground", () => ({
   resolveFrameBackgroundColor: (_theme: unknown, borderColor: string) =>
     borderColor,
+  // 화면은 안 쓰지만 진짜 세션 스토어가 초깃값으로 읽는다(아래 스토어 테스트).
+  DEFAULT_FRAME_BACKGROUND_COLOR: "#111827",
 }));
 
 jest.mock("@/lib/guards", () => ({
@@ -160,6 +176,7 @@ describe("ShootResultPage", () => {
       borderColor: "#111827",
       outputFilter: "NONE",
       imageResult: null,
+      composeIdempotency: null,
     });
 
     mockComposeFramePng.mockResolvedValue(
@@ -267,6 +284,38 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
     });
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).toBe(
+      mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
+    );
+  });
+
+  /*
+    ── 회귀: 페이지를 다시 열어도 멱등키는 그대로다 ──
+
+    결과를 기다리는 중에 '사진 다시 고르기'나 브라우저 뒤로가기로 화면을 떠나면, effect 의
+    cleanup 은 `cancelled` 만 세울 뿐 이미 나간 합성을 되돌리지 못한다 — 서버는 계속 그려
+    보관함에 결과를 남긴다. 게다가 그 결과는 `cancelled` 때문에 세션에도 안 남는다.
+    그 상태로 다시 들어왔을 때 새 멱등키를 잡으면 같은 네컷이 한 벌 더 접수돼 두 벌 남는다.
+    재시도 버튼은 컴포넌트가 살아 있어 키가 유지되지만, 재진입은 새 마운트라 유지되지 않는다.
+  */
+  it("페이지를 나갔다 다시 들어와도 멱등키는 그대로다", async () => {
+    // 결과가 세션에 박히기 전에 떠나는 상황이다 — 첫 합성은 끝내지 않고 붙잡아 둔다.
+    mockSaveFourcutToServer.mockImplementation(() => new Promise(() => {}));
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 화면을 떠난다. 서버 쪽 합성은 이 시점에도 계속 돌고 있다.
+    view.unmount();
+
+    // 같은 사진·같은 프레임으로 결과 화면에 다시 들어온다.
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
     expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).toBe(
       mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
     );
@@ -572,5 +621,37 @@ describe("ShootResultPage", () => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
     expect(mockNativeNotify).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  위 화면 테스트는 세션 스토어를 목으로 갈아 끼운다. 그래서 "키를 세션이 들고 있다"까지는
+  보여 주지만, **입력이 바뀌면 키를 새로 잡는다**는 반대쪽 안전장치는 진짜 구현으로 봐야 한다.
+  옛 키를 그대로 다시 보내면 서버가 예전 작업을 재생해서, 새 사진을 골라도 예전 그림이 나온다.
+*/
+describe("useShootSession.ensureComposeIdempotencyKey", () => {
+  const { useShootSession: useRealShootSession } = jest.requireActual<
+    typeof import("@/lib/shootSessionStore")
+  >("@/lib/shootSessionStore");
+
+  beforeEach(() => {
+    mockIdempotencyKeySeq = 0;
+    useRealShootSession.getState().reset();
+  });
+
+  it("같은 입력이면 같은 키, 입력이 바뀌면 새 키를 준다", () => {
+    const ensure = useRealShootSession.getState().ensureComposeIdempotencyKey;
+
+    expect(ensure("shot-a")).toBe("web-key-1");
+    expect(ensure("shot-a")).toBe("web-key-1");
+    expect(ensure("shot-b")).toBe("web-key-2");
+  });
+
+  it("세션을 초기화하면 다음 촬영은 새 키로 간다", () => {
+    const ensure = useRealShootSession.getState().ensureComposeIdempotencyKey;
+
+    expect(ensure("shot-a")).toBe("web-key-1");
+    useRealShootSession.getState().reset();
+    expect(ensure("shot-a")).toBe("web-key-2");
   });
 });
