@@ -55,6 +55,29 @@ describe("pendingTermsConsent", () => {
   });
 
   // 공용 기기에서 오래 묵은 선택이 그대로 장부에 오르는 것을 막는다.
+  /*
+    `savedAt` 이 성한 숫자가 아니면 기한을 셀 수 없다. 숫자일 때만 검사하면 이 값들이
+    기한 검사를 통째로 건너뛰고 정상으로 돌아온다 — 여기 값은 **법적 동의 이력**으로
+    서버에 올라가므로(`TermsConsentBridge`), 하루가 한참 지난 선택 약관이 다음 사람의
+    동의로 제출될 수 있다. 미래 시각은 나이가 늘 음수라 영영 안 지워진다.
+  */
+  it.each([
+    ["없는", { items: ITEMS, email: EMAIL }],
+    ["NaN 인", { items: ITEMS, email: EMAIL, savedAt: Number.NaN }],
+    ["문자열인", { items: ITEMS, email: EMAIL, savedAt: String(NOW) }],
+    ["한참 미래인", { items: ITEMS, email: EMAIL, savedAt: NOW + 60 * 60 * 1000 }],
+  ])("savedAt 이 %s 보관물은 없는 것으로 보고 지운다", (_case, stored) => {
+    window.localStorage.setItem(
+      "harucut:pending-terms-consent:v1",
+      JSON.stringify(stored),
+    );
+
+    expect(getPendingTermsConsent(NOW)).toBeNull();
+    expect(
+      window.localStorage.getItem("harucut:pending-terms-consent:v1"),
+    ).toBeNull();
+  });
+
   it("기한이 지난 보관물은 없는 것으로 보고 지운다", () => {
     setPendingTermsConsent(ITEMS, EMAIL, NOW);
 

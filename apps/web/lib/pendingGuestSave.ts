@@ -1,6 +1,7 @@
 "use client";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
 import type { FrameId } from "@/constants/frames";
 import { newIdempotencyKey } from "@/lib/composeApi";
 import type { FourcutFilterId } from "@/lib/frameFilters";
@@ -63,12 +64,6 @@ const LEGACY_KEY_V2 = "harucut:pending-guest-save:v2";
  * 남의 얼굴이 튀어나올 수도 있다(공용 기기). 하루면 "찍고 로그인"을 마치기에 넉넉하다.
  */
 export const PENDING_GUEST_SAVE_TTL_MS = 24 * 60 * 60 * 1000;
-
-/**
- * 기기 시계가 앞서 있어도 봐주는 폭. 이보다 더 미래면 값이 성하지 않은 것으로 본다.
- * 미래 시각을 그대로 두면 `now - savedAt` 이 늘 음수라 기한이 영영 안 온다.
- */
-const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
 
 export type PendingGuestSave = {
   /** 고른 순서 그대로의 원본 4장(data URL). 이 순서가 곧 슬롯 순서다. */
@@ -277,22 +272,9 @@ function normalizeMeta(
 ): Omit<PendingGuestSave, "sources"> | null {
   // 모르는 프레임이면 레이아웃을 못 찾아 합성 직전에 TypeError 로 터진다.
   if (!parsed?.frameId || !FRAME_LAYOUTS[parsed.frameId]) return null;
-  /*
-    `savedAt` 이 성한 숫자가 아니면 **보관물째 버린다.**
-
-    예전에는 숫자일 때만 기한을 봤다. 그러면 값이 없거나 `NaN`·문자열인 레코드가 기한
-    검사를 통째로 건너뛰고 정상으로 돌아온다 — 하루 TTL 이 하려던 「공용 기기에서 앞사람
-    사진을 넘겨주지 않는다」가 바로 무력해진다. 마이그레이션한 localStorage 값이나 깨진
-    IndexedDB 레코드가 그렇게 될 수 있다.
-
-    미래 시각도 버린다. 기기 시계가 크게 어긋났거나 값이 조작된 것이라, 그대로 두면
-    영원히 안 지워진다(작은 오차는 허용한다 — 시계는 늘 조금씩 틀리다).
-  */
-  if (!Number.isFinite(parsed.savedAt)) return null;
-
-  const age = now - parsed.savedAt;
-  if (age > PENDING_GUEST_SAVE_TTL_MS) return null;
-  if (age < -CLOCK_SKEW_TOLERANCE_MS) return null;
+  // 기한 판정의 소유자는 `lib/pendingStorageTtl.ts` 다 — 약관 동의 보관물과 같이 쓴다.
+  // 성한 숫자가 아니거나 한참 미래면 보관물째 버린다(그 이유는 그 파일에 있다).
+  if (!isFreshSavedAt(parsed.savedAt, now, PENDING_GUEST_SAVE_TTL_MS)) return null;
 
   // 색이 깨졌으면 없는 것으로 본다. 형식이 어긋난 값을 그대로 실어 보내면
   // 합성 요청이 400 으로 떨어져 보관물 전체를 잃는다.

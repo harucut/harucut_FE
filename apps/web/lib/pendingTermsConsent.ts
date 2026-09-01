@@ -1,6 +1,7 @@
 "use client";
 
 import type { TermsAgreementItem } from "@/lib/termsApi";
+import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
 
 /**
  * 가입 화면에서 받은 동의를 **로그인할 때까지** 들고 있는 자리.
@@ -111,10 +112,15 @@ export function getPendingTermsConsent(
       clearPendingTermsConsent();
       return null;
     }
-    if (
-      typeof parsed.savedAt === "number" &&
-      now - parsed.savedAt > PENDING_TERMS_CONSENT_TTL_MS
-    ) {
+    /*
+      기한 판정의 소유자는 `lib/pendingStorageTtl.ts` 다 — 게스트 인계 보관물과 같이 쓴다.
+
+      여기 값은 **법적 동의 이력**으로 서버에 올라간다(`TermsConsentBridge`). 성한 숫자가
+      아니면 기한을 셀 수 없는데, 예전처럼 그냥 통과시키면 하루가 한참 지난 선택 약관까지
+      다음 사람의 동의로 제출된다. 그래서 게스트 사진보다 더 엄하게 볼 이유는 있어도
+      느슨하게 볼 이유는 없다.
+    */
+    if (!isFreshSavedAt(parsed.savedAt, now, PENDING_TERMS_CONSENT_TTL_MS)) {
       clearPendingTermsConsent();
       return null;
     }
