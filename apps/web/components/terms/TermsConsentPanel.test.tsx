@@ -4,7 +4,7 @@
  * 그래서 "읽을 수단이 있는가"를 못 박는다 — 관리자가 tos·privacy·marketing 밖의 코드로
  * 약관을 추가하면 정적 링크가 없어, 본문을 못 받은 사이에는 제목만 보고 한 동의가 남는다.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import type { MyTermsConsent } from "@/lib/termsApi";
 
@@ -30,6 +30,44 @@ const refundPolicy: MyTermsConsent = {
   status: "NOT_AGREED",
   latestVersion: 1,
 };
+
+/** 관리자가 추가한 두 번째 선택 약관. 동시 진행을 만들려면 선택 항목이 둘 필요하다. */
+const newsletterPolicy: MyTermsConsent = {
+  code: "newsletter-policy",
+  title: "뉴스레터 수신 동의",
+  required: false,
+  status: "NOT_AGREED",
+  latestVersion: 1,
+};
+
+/** 둘 다 본문이 있어 체크박스가 열려 있는 상태. 잠금만 남겨 두고 본다. */
+const bothReadable = [
+  {
+    code: "refund-policy",
+    title: "환불 정책 동의",
+    required: false,
+    version: 1,
+    content: "환불은 결제일로부터 7일 이내에 가능합니다.",
+  },
+  {
+    code: "newsletter-policy",
+    title: "뉴스레터 수신 동의",
+    required: false,
+    version: 1,
+    content: "매주 목요일에 소식을 보냅니다.",
+  },
+];
+
+/** 응답 도착 시점을 테스트가 쥔다. 느린 첫 요청을 흉내내려면 필요하다. */
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = () => res();
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -188,5 +226,135 @@ describe("TermsConsentPanel", () => {
 
     fireEvent.click(notAgreedBox);
     expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 잠금은 항목마다 따로 있어야 한다.
+   *
+   * 잠금이 코드 하나였을 때는 두 번째 항목을 누르는 순간 첫 항목이 다시 열렸다. 그
+   * 상태에서 첫 항목을 한 번 더 누르면 같은 약관에 동의와 철회가 나란히 날아가, 서버
+   * 장부가 화면의 마지막 선택과 반대로 굳을 수 있었다.
+   */
+  it("선택 약관 둘이 동시에 나가도 각 항목의 잠금은 따로 유지된다", async () => {
+    mockFetchMine.mockResolvedValue([refundPolicy, newsletterPolicy]);
+    mockFetchActive.mockResolvedValue(bothReadable);
+
+    const first = deferred();
+    const second = deferred();
+    mockSubmit
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    render(<TermsConsentPanel />);
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("checkbox")).toHaveLength(2),
+    );
+    const [refundBox, newsletterBox] = screen.getAllByRole("checkbox");
+    await waitFor(() => expect(refundBox).toBeEnabled());
+
+    fireEvent.click(refundBox);
+    expect(refundBox).toBeDisabled();
+
+    fireEvent.click(newsletterBox);
+    // 두 번째 클릭이 첫 항목의 잠금을 덮지 않는다.
+    expect(refundBox).toBeDisabled();
+    expect(newsletterBox).toBeDisabled();
+
+    expect(mockSubmit).toHaveBeenNthCalledWith(1, [
+      { code: "refund-policy", agreed: true },
+    ]);
+    expect(mockSubmit).toHaveBeenNthCalledWith(2, [
+      { code: "newsletter-policy", agreed: true },
+    ]);
+
+    await act(async () => {
+      first.resolve();
+      second.resolve();
+    });
+    expect(refundBox).toBeEnabled();
+    expect(newsletterBox).toBeEnabled();
+    expect(mockSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  // 한 요청의 완료가 남의 잠금을 풀면, 그 사이에 눌린 클릭이 중복 요청이 된다.
+  it("먼저 끝난 요청이 아직 나가 있는 항목의 잠금을 풀지 않는다", async () => {
+    mockFetchMine.mockResolvedValue([refundPolicy, newsletterPolicy]);
+    mockFetchActive.mockResolvedValue(bothReadable);
+
+    const first = deferred();
+    const second = deferred();
+    mockSubmit
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    render(<TermsConsentPanel />);
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("checkbox")).toHaveLength(2),
+    );
+    const [refundBox, newsletterBox] = screen.getAllByRole("checkbox");
+    await waitFor(() => expect(refundBox).toBeEnabled());
+
+    fireEvent.click(refundBox);
+    fireEvent.click(newsletterBox);
+
+    // 나중에 나간 요청이 먼저 끝난다.
+    await act(async () => {
+      second.resolve();
+    });
+    expect(newsletterBox).toBeEnabled();
+    expect(refundBox).toBeDisabled();
+
+    await act(async () => {
+      first.resolve();
+    });
+    expect(refundBox).toBeEnabled();
+    expect(mockSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  // 실패는 자기 항목만 되돌린다. 남의 화면까지 서버 값으로 덮으면, 그 요청이 성공한 뒤에도
+  // 화면은 꺼진 채로 남아 장부와 어긋난다.
+  it("한 항목의 실패가 아직 나가 있는 다른 항목의 화면을 되돌리지 않는다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockFetchMine.mockResolvedValue([refundPolicy, newsletterPolicy]);
+    mockFetchActive.mockResolvedValue(bothReadable);
+
+    const first = deferred();
+    const second = deferred();
+    mockSubmit
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    render(<TermsConsentPanel />);
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("checkbox")).toHaveLength(2),
+    );
+    const [refundBox, newsletterBox] = screen.getAllByRole("checkbox");
+    await waitFor(() => expect(refundBox).toBeEnabled());
+
+    fireEvent.click(refundBox);
+    fireEvent.click(newsletterBox);
+    expect(refundBox).toBeChecked();
+    expect(newsletterBox).toBeChecked();
+
+    await act(async () => {
+      first.reject(new Error("network"));
+    });
+
+    // 실패한 항목만 서버 값으로 돌아간다.
+    expect(refundBox).not.toBeChecked();
+    expect(refundBox).toBeEnabled();
+    // 아직 나가 있는 항목은 화면도 잠금도 그대로다.
+    expect(newsletterBox).toBeChecked();
+    expect(newsletterBox).toBeDisabled();
+
+    await act(async () => {
+      second.resolve();
+    });
+    expect(newsletterBox).toBeChecked();
+    expect(newsletterBox).toBeEnabled();
+    consoleError.mockRestore();
   });
 });

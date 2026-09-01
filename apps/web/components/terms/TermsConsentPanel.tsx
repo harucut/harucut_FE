@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTermsContent } from "@/components/terms/TermsReconsentDialog";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -25,7 +25,21 @@ import {
  */
 export function TermsConsentPanel() {
   const [consents, setConsents] = useState<MyTermsConsent[] | null>(null);
-  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  /**
+   * 지금 서버로 나가 있는 약관 코드들. **항목별로 센다.**
+   *
+   * 잠금이 코드 하나였을 때는 두 번째 항목을 누르는 순간 첫 항목이 다시 열렸다. 첫
+   * 항목을 한 번 더 누르면 같은 약관에 동의와 철회가 나란히 날아가, 장부에 남는 값을
+   * 사용자의 마지막 선택이 아니라 응답 도착 순서가 정했다. 먼저 끝난 요청이 아직 나가
+   * 있는 다른 요청의 잠금까지 풀어 버리는 것도 같은 뿌리다.
+   *
+   * `ref` 가 잠금의 원본이고 `state` 는 화면에 비추는 사본이다. 한 렌더 안에서 두 번
+   * 눌리면 상태 값은 아직 갱신 전이라 같은 코드를 두 번 통과시킨다.
+   */
+  const pendingCodesRef = useRef<ReadonlySet<string>>(new Set<string>());
+  const [pendingCodes, setPendingCodes] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
   const [error, setError] = useState<string | null>(null);
   // 동의 기록(`MyTermsConsent`)에는 본문이 없다. 활성 약관 목록에서 따로 받아 온다.
   const { contentByCode, state: contentState } = useTermsContent();
@@ -41,7 +55,15 @@ export function TermsConsentPanel() {
 
   const load = useCallback(async () => {
     try {
-      setConsents(await fetchMyTermsConsents());
+      const fresh = await fetchMyTermsConsents();
+      setConsents((current) =>
+        fresh.map((consent) => {
+          // 아직 나가 있는 항목은 결과가 정해지지 않았다. 화면에 미리 그린 값을 그대로
+          // 둔다 — 서버 값으로 덮으면 남의 요청 실패가 내 체크박스를 되돌린다.
+          if (!pendingCodesRef.current.has(consent.code)) return consent;
+          return current?.find((item) => item.code === consent.code) ?? consent;
+        }),
+      );
     } catch {
       setConsents([]);
       setError("약관 동의 정보를 불러오지 못했어요.");
@@ -56,6 +78,15 @@ export function TermsConsentPanel() {
     })();
   }, [load]);
 
+  /** 잠금은 항목별로 넣고 뺀다. 통째로 비우면 아직 나가 있는 다른 항목까지 열린다. */
+  const markPending = (code: string, pending: boolean) => {
+    const nextCodes = new Set(pendingCodesRef.current);
+    if (pending) nextCodes.add(code);
+    else nextCodes.delete(code);
+    pendingCodesRef.current = nextCodes;
+    setPendingCodes(nextCodes);
+  };
+
   const toggle = async (item: MyTermsConsent, next: boolean) => {
     // 읽을 수단이 없으면 동의를 기록하지 않는다. 체크박스도 잠겨 있지만, 장부에 남기는
     // 자리에서 한 번 더 막는다 — 여기서 새는 값은 되돌릴 수 없다.
@@ -64,7 +95,10 @@ export function TermsConsentPanel() {
     // 아무 일도 안 일어나는 무반응이 된다 — 잠긴 것보다 헷갈리고, 철회는 본문 없이도
     // 언제나 할 수 있어야 한다.
     if (next && isUnreadable(item.code)) return;
-    setPendingCode(item.code);
+    // 같은 약관이 이미 나가 있으면 두 번 보내지 않는다. 동의와 철회가 나란히 날아가면
+    // 장부는 화면의 마지막 선택과 반대로 굳을 수 있다.
+    if (pendingCodesRef.current.has(item.code)) return;
+    markPending(item.code, true);
     setError(null);
     // 응답을 기다리는 동안 화면부터 바꾼다. 실패하면 서버 값으로 되돌린다 —
     // 체크박스가 눌리지 않는 것처럼 보이면 사용자는 계속 다시 누른다.
@@ -82,14 +116,16 @@ export function TermsConsentPanel() {
 
     try {
       await submitTermsConsents([{ code: item.code, agreed: next }]);
+      markPending(item.code, false);
     } catch (err) {
       console.error(err);
       setError(
         getUserFacingApiErrorMessage(err, "동의 설정을 저장하지 못했어요."),
       );
+      // 되돌리기 전에 내 잠금부터 푼다. 그래야 `load()` 가 이 항목만 서버 값으로
+      // 되돌리고, 아직 나가 있는 다른 항목의 화면 값은 건드리지 않는다.
+      markPending(item.code, false);
       await load();
-    } finally {
-      setPendingCode(null);
     }
   };
 
@@ -123,7 +159,7 @@ export function TermsConsentPanel() {
                     // 본문 없이도 언제나 할 수 있어야 한다.
                     disabled={
                       item.required ||
-                      pendingCode === item.code ||
+                      pendingCodes.has(item.code) ||
                       (isUnreadable(item.code) && !agreed)
                     }
                     onChange={(e) => void toggle(item, e.target.checked)}
