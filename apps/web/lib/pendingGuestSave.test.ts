@@ -102,6 +102,11 @@ const store = {
   swallowWrites: false,
   openCount: 0,
   closeCount: 0,
+  /**
+   * 다른 탭이 옛 버전을 붙잡고 있어 `onblocked` 이 먼저 오고, 그쪽이 손을 놓으면서
+   * **그 뒤에** `onsuccess` 가 오는 모양. Safari 에서 타임아웃 뒤 늦게 열리는 것과 같다.
+   */
+  openBlocksThenSucceeds: false,
 };
 
 function resetStore() {
@@ -114,6 +119,7 @@ function resetStore() {
   store.swallowWrites = false;
   store.openCount = 0;
   store.closeCount = 0;
+  store.openBlocksThenSucceeds = false;
 }
 
 function makeObjectStore(mode: IDBTransactionMode): FakeObjectStore {
@@ -187,6 +193,13 @@ function installFakeIndexedDB() {
       queueMicrotask(() => {
         if (store.openFails) {
           request.onerror?.();
+          return;
+        }
+        if (store.openBlocksThenSucceeds) {
+          request.onblocked?.();
+          request.result = database;
+          // 막혔다고 알린 **뒤에** 열린다. 이미 끝난 약속에 붙은 연결이라 아무도 안 닫는다.
+          queueMicrotask(() => request.onsuccess?.());
           return;
         }
         request.result = database;
@@ -299,6 +312,22 @@ describe("pendingGuestSave", () => {
     store.openFails = true;
     expect(await setPendingGuestSave(ENTRY, NOW)).toBe(false);
     expect(await getPendingGuestSave(NOW)).toBeNull();
+  });
+
+  /*
+    열기는 **끝났다고 답한 뒤에도** 성공할 수 있다 — 다른 탭이 손을 놓거나(`onblocked`),
+    Safari 에서 타임아웃보다 늦게 열리는 경우다. 그때 받은 연결을 안 닫으면 아무도 못 닫는
+    연결이 남아, 다음 버전 올림과 삭제를 계속 막는다.
+  */
+  it("실패로 답한 뒤에 열린 연결도 닫는다", async () => {
+    store.openBlocksThenSucceeds = true;
+
+    expect(await setPendingGuestSave(ENTRY, NOW)).toBe(false);
+    // 늦은 onsuccess 는 다음 마이크로태스크에 온다.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.closeCount).toBeGreaterThan(0);
   });
 
   // 용량 초과는 요청이 아니라 **트랜잭션이 끝날 때** 드러난다. 요청만 보고 성공이라 하면
@@ -478,6 +507,19 @@ describe("pendingGuestSave", () => {
     [
       "모르는 프레임인",
       JSON.stringify({ ...ENTRY, frameId: "not-a-frame", savedAt: NOW }),
+    ],
+    /*
+      `savedAt` 이 성한 숫자가 아니면 기한을 셀 수 없다. 숫자일 때만 검사하면 이 값들이
+      기한 검사를 통째로 건너뛰고 정상으로 돌아온다 — 하루 TTL 이 하려던 「공용 기기에서
+      앞사람 사진을 넘겨주지 않는다」가 그 자리에서 무력해진다.
+    */
+    ["savedAt 이 없는", JSON.stringify({ ...ENTRY })],
+    ["savedAt 이 NaN 인", JSON.stringify({ ...ENTRY, savedAt: Number.NaN })],
+    ["savedAt 이 문자열인", JSON.stringify({ ...ENTRY, savedAt: String(NOW) })],
+    // 미래 시각은 `now - savedAt` 이 늘 음수라 그대로 두면 영원히 안 지워진다.
+    [
+      "savedAt 이 한참 미래인",
+      JSON.stringify({ ...ENTRY, savedAt: NOW + 60 * 60 * 1000 }),
     ],
   ])("%s 예전 보관물은 읽는 김에 걷어낸다", async (_case, raw) => {
     window.localStorage.setItem("harucut:pending-guest-save:v1", "old");

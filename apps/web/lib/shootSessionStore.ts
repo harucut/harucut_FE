@@ -77,7 +77,33 @@ function stableStringify(value: unknown): string {
  * 서버가 그리는 그림에 없다. 지문에 남겨 두면 **서버에 가지도 않는 레이어**를 옮기거나
  * 지우기만 해도 내용이 달라진 것으로 보여, 같은 그림이 새 멱등키로 두 벌 접수된다.
  * 서버에서 읽어 온 프레임에는 애초에 빈 레이어가 없으므로 그쪽에는 영향이 없다.
+ *
+ * `zIndex` 는 **살아남은 레이어 기준 순위로 바꿔서** 넣는다. 편집기의 `normalizeZ` 가
+ * 빈 레이어까지 세어 1,2,3… 을 다시 매기므로, 빈 TEXT 를 스티커 사이에서 옮기기만 해도
+ * 살아남은 레이어의 번호에 구멍이 생긴다. 그림에 나타나는 것은 **상대 순서**뿐이라
+ * 번호를 그대로 지문에 넣으면 같은 그림이 다른 지문이 된다.
  */
+/**
+ * `zIndex` 를 **순위로 다시 매긴다.** 번호 자체가 아니라 겹치는 차례만 그림에 나타난다.
+ *
+ * 원래 배열 순서는 건드리지 않는다 — 지문은 `stableStringify` 로 만들어지므로 배열 순서가
+ * 곧 지문이고, 여기서 정렬까지 하면 순서가 같은데 지문이 달라지는 반대쪽 함정이 생긴다.
+ */
+function withRankedZIndex<T extends { zIndex: number }>(components: T[]): T[] {
+  const rankByIndex = new Map<number, number>();
+
+  components
+    .map((component, index) => [index, component.zIndex] as const)
+    // 같은 번호면 배열 순서로 가른다 — 편집기와 서버 응답 모두 그 순서를 지킨다.
+    .sort((a, b) => a[1] - b[1] || a[0] - b[0])
+    .forEach(([index], rank) => rankByIndex.set(index, rank + 1));
+
+  return components.map((component, index) => ({
+    ...component,
+    zIndex: rankByIndex.get(index) ?? component.zIndex,
+  }));
+}
+
 export function buildFrameContentKey(
   theme: ThemeExportJson | null | undefined,
 ): string | null {
@@ -96,20 +122,20 @@ export function buildFrameContentKey(
               opacity: theme.background.opacity ?? 1,
             },
     cellCutouts: theme.cellCutouts ?? null,
-    components: theme.components
-      .filter((component) => !isBlankSourceComponent(component))
-      .map((component) => ({
-        type: component.type,
-        source: component.source,
-        x: component.x,
-        y: component.y,
-        width: component.width,
-        height: component.height,
-        scale: component.scale,
-        rotation: component.rotation,
-        zIndex: component.zIndex,
-        styleJson: component.styleJson ?? null,
-      })),
+    components: withRankedZIndex(
+      theme.components.filter((component) => !isBlankSourceComponent(component)),
+    ).map((component) => ({
+      type: component.type,
+      source: component.source,
+      x: component.x,
+      y: component.y,
+      width: component.width,
+      height: component.height,
+      scale: component.scale,
+      rotation: component.rotation,
+      zIndex: component.zIndex,
+      styleJson: component.styleJson ?? null,
+    })),
   });
 }
 
