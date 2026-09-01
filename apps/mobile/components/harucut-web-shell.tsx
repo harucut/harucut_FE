@@ -236,7 +236,7 @@ export function HarucutWebShell() {
    * 다시 열 주소는 마지막으로 보던 우리 웹 화면이다. 제공자 로그인 화면처럼 우리 웹 밖이면
    * 그 주소는 대개 한 번 쓰고 마는 것이라 첫 화면부터 다시 연다.
    */
-  const remountWebView = useCallback(() => {
+  const remountWebView = useCallback((options?: { keepRetryBudget?: boolean }) => {
     const lastUrl = currentUrlRef.current;
 
     // 옛 인스턴스와 함께 그 문서도 사라진다 — 보내던 조각은 이어 붙일 수도, 답을 돌려줄
@@ -246,7 +246,15 @@ export function HarucutWebShell() {
     currentUrlRef.current = null;
     historyResetPendingRef.current = false;
     canGoBackRef.current = false;
-    contentProcessReloadsRef.current = 0;
+    /*
+      예산은 기본적으로 되돌린다 — 사용자가 「다시 시도」를 누른 것처럼, 새로 시작하는
+      자리에서는 한 번의 사고 때문에 남은 기회가 없으면 안 된다.
+
+      다만 **렌더 프로세스가 죽어서** 다시 올리는 길은 예외다(`keepRetryBudget`).
+      거기서 예산을 되돌리면 죽을 때마다 0 으로 돌아가 상한이 영영 안 걸리고,
+      뜨는 도중 계속 죽는 기기에서는 사용자가 앱을 되살릴 방법이 없어진다.
+    */
+    if (!options?.keepRetryBudget) contentProcessReloadsRef.current = 0;
 
     setWebViewSession((session) => ({
       key: session.key + 1,
@@ -500,9 +508,22 @@ export function HarucutWebShell() {
           그래서 인스턴스를 새로 올린다.
         */
         onRenderProcessGone={() => {
-          // 조각을 끊는 일은 remountWebView 가 한다 — 새 인스턴스를 올리는 자리는 전부 같다.
+          /*
+            iOS 쪽(`onContentProcessDidTerminate`)과 **같은 예산을 쓴다.** 다시 올린 문서가
+            뜨는 도중 또 죽으면 이 콜백이 다시 오는데, 상한이 없으면 죽음·재마운트가
+            스스로 끝나지 않는다. 예산은 문서가 한 번 다 뜨면 `onLoadEnd` 가 되돌린다.
+          */
+          if (contentProcessReloadsRef.current >= MAX_CONTENT_PROCESS_RELOADS) {
+            // 여기서는 remountWebView 를 안 부르므로 조각을 직접 끊는다.
+            cancelTransfers();
+            setLoadFailed(true);
+            return;
+          }
+
+          contentProcessReloadsRef.current += 1;
           setIsLoading(true);
-          remountWebView();
+          // 조각을 끊는 일은 remountWebView 가 한다 — 새 인스턴스를 올리는 자리는 전부 같다.
+          remountWebView({ keepRetryBudget: true });
         }}
         /*
           target="_blank" 링크.
