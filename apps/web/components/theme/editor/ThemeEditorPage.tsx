@@ -28,6 +28,7 @@ import {
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
+import { useShootSession } from "@/lib/shootSessionStore";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
@@ -409,6 +410,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
       if (remoteFrameId) {
         await updateFrame(remoteFrameId, body);
+        /*
+          이 프레임으로 이미 네컷을 만들어 뒀다면 그 결과와 멱등키를 버린다.
+
+          프레임 수정은 같은 id 로 가는 PUT 이라 `remoteFrameId` 가 안 변한다. 촬영 세션이
+          쓰던 멱등키를 그대로 다시 보내면 서버가 **수정 전 작업을 재생한다**
+          (docs/backend-contract.md D-4). 결과 화면도 프레임 내용의 지문으로 같은 것을
+          막지만, 그 지문은 프레임 **조회가 성공했을 때만** 생긴다 — 조회가 실패한
+          세션에서는 여기서 버리는 것만이 유일한 방어다.
+        */
+        useShootSession.getState().noteRemoteFrameEdited(remoteFrameId);
       } else {
         await createFrame(body);
       }

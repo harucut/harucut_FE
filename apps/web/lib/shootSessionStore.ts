@@ -133,6 +133,7 @@ type ShootSessionState = {
     generationKey: string,
     frameTheme?: ThemeExportJson | null,
   ) => string;
+  noteRemoteFrameEdited: (remoteFrameId: number) => void;
   clearResults: () => void;
   toggleSelect: (index: number) => void;
   clearSelection: () => void;
@@ -235,6 +236,25 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       imageResult: null,
     });
     return idempotencyKey;
+  },
+
+  /**
+   * 우리 편집기에서 프레임을 **고쳐 저장했을 때** 부른다. 쓰던 멱등키와 결과를 버린다.
+   *
+   * 왜 지문만으로는 부족한가: 위 `buildFrameContentKey` 지문은 프레임 **조회가 성공했을
+   * 때만** 생긴다. 첫 조회가 실패한 세션은 지문이 `null` 로 남고, 그 뒤 프레임을 고쳐도
+   * `ensureComposeIdempotencyKey` 가 「처음 알게 됐을 때」로 보고 쓰던 키를 유지한다 —
+   * 서버가 수정 전 작업을 재생한다(docs/backend-contract.md D-4).
+   *
+   * 저장은 조회와 달리 **실패할 수 없는 사실**이다. 200 이 돌아왔으면 내용이 바뀐 것이
+   * 확실하므로, 지문을 못 읽었더라도 여기서 키를 버릴 수 있다.
+   *
+   * 지금 촬영에 쓰는 프레임일 때만 버린다 — 다른 프레임을 고친 것은 이 결과와 무관하다.
+   */
+  noteRemoteFrameEdited: (editedFrameId) => {
+    if (get().remoteFrameId !== editedFrameId) return;
+
+    set({ composeIdempotency: null, imageResult: null });
   },
 
   clearResults: () =>

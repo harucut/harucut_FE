@@ -138,11 +138,19 @@ jest.mock("@/lib/canvas/renderThemePreview", () => ({
   renderThemePreviewPng: (...args: unknown[]) => mockRenderPreview(...args),
 }));
 
+// 촬영 세션 스토어는 **진짜를 쓴다** — 저장이 실제로 그 상태를 버리는지가 검증 대상이다.
+import { useShootSession } from "@/lib/shootSessionStore";
+
 describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     window.alert = mockAlert;
     mockRemoteFrameId = null;
+    useShootSession.setState({
+      remoteFrameId: null,
+      composeIdempotency: null,
+      imageResult: null,
+    });
     editorStoreState.components = [];
     editorStoreState.background = { type: "COLOR", value: "111827" };
     editorStoreState.backgroundColor = "111827";
@@ -197,6 +205,76 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+  });
+
+  /*
+    ── 회귀: 프레임을 고쳐 저장하면 촬영 세션의 멱등키를 버린다 ──
+
+    프레임 수정은 같은 id 로 가는 PUT 이라 `remoteFrameId` 가 안 변한다. 결과 화면은
+    프레임 **내용의 지문**으로 변화를 알아채지만, 그 지문은 프레임 조회가 성공했을 때만
+    생긴다 — 조회가 실패한 세션에서는 지문이 null 로 남아 옛 멱등키가 그대로 나가고,
+    서버가 수정 전 작업을 재생한다(docs/backend-contract.md D-4).
+
+    저장은 조회와 달리 실패할 수 없는 사실이므로 여기서 버린다.
+  */
+  it("고친 프레임이 촬영 세션의 프레임이면 멱등키와 결과를 버린다", async () => {
+    mockRemoteFrameId = 7;
+    useShootSession.setState({
+      remoteFrameId: 7,
+      // 지문이 null 인 상태 = 프레임 조회가 실패했던 세션.
+      composeIdempotency: {
+        generationKey: "g",
+        frameContentKey: null,
+        idempotencyKey: "web-key-1",
+      },
+      imageResult: {
+        mediaId: 1,
+        objectUrl: "https://example.com/old.png",
+        downloadUrl: "https://example.com/old.png",
+        displayName: "harucut",
+      },
+    });
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => {
+      expect(mockGetFrame).toHaveBeenCalledWith(7);
+      expect(getPrimarySaveButton(container)).not.toBeDisabled();
+    });
+
+    confirmSave(container);
+
+    await waitFor(() => {
+      expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
+    });
+    await waitFor(() => {
+      expect(useShootSession.getState().composeIdempotency).toBeNull();
+      expect(useShootSession.getState().imageResult).toBeNull();
+    });
+  });
+
+  it("다른 프레임을 고쳤으면 촬영 세션을 건드리지 않는다", async () => {
+    mockRemoteFrameId = 7;
+    const untouched = {
+      generationKey: "g",
+      frameContentKey: null,
+      idempotencyKey: "web-key-1",
+    };
+    useShootSession.setState({
+      remoteFrameId: 9,
+      composeIdempotency: untouched,
+    });
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => {
+      expect(getPrimarySaveButton(container)).not.toBeDisabled();
+    });
+
+    confirmSave(container);
+
+    await waitFor(() => {
+      expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
+    });
+    expect(useShootSession.getState().composeIdempotency).toEqual(untouched);
   });
 
   it("blocks remote frame save when the initial load fails", async () => {
