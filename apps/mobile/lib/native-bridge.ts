@@ -31,8 +31,81 @@ export type BridgeMessage =
 
 export type BridgeResult = { ok: boolean; reason?: string; value?: string };
 
-/** 웹이 base64 로 쪼개 보내는 저장 요청을 모은다. */
-const transfers = new Map<string, { filename: string; total: number; chunks: string[] }>();
+/** 조각을 모으는 중인 저장 요청 하나. */
+type Transfer = {
+  filename: string;
+  total: number;
+  chunks: string[];
+  receivedChars: number;
+  startedAt: number;
+  /** 상한을 넘겨 더 받지 않기로 한 전송. save-end 가 이 문구를 그대로 돌려준다. */
+  rejectedReason?: string;
+};
+
+/**
+ * 웹이 base64 로 쪼개 보내는 저장 요청을 모은다.
+ *
+ * `save-begin` 뒤에 `save-end` 가 **오지 않는 경우가 있다** — WebView 가 이동·새로고침되거나
+ * 콘텐츠 프로세스가 죽으면 웹 쪽 약속은 사라지지만, 이 맵은 모듈 수준이라 셸이 WebView 만
+ * 다시 띄우는 동안에도 그대로 살아남는다. 그러면 저장을 다시 시도할 때마다 이미지 한 장이
+ * 통째로 새 id 로 쌓여 앱 메모리가 계속 늘어난다.
+ *
+ * 그래서 셋을 둔다 — 시간이 지난 것 걷어내기(TRANSFER_TTL_MS), 셸의 명시적 취소
+ * (cancelTransfers), 받는 양의 상한(MAX_TRANSFER_BYTES).
+ */
+const transfers = new Map<string, Transfer>();
+
+/**
+ * 미완료 전송을 버리는 기준 시간.
+ *
+ * 웹은 조각을 다 보낸 뒤 120초까지만 답을 기다린다(apps/web/lib/nativeBridge.ts 의
+ * nativeSaveImageBlob). 그보다 오래 남은 전송은 이어 붙여도 받을 사람이 없다.
+ */
+const TRANSFER_TTL_MS = 120_000;
+
+/**
+ * 한 번에 받을 수 있는 크기.
+ *
+ * 웹은 522240 바이트(510KB)씩 잘라 base64 로 싣는다(apps/web/lib/nativeBridge.ts 의
+ * CHUNK_SIZE). 4컷 결과 PNG 는 수 MB 라 24MB 면 넉넉하고, 그보다 큰 요청은 정상 흐름이
+ * 아니다 — 조각을 계속 받아 두면 그대로 앱 메모리가 된다.
+ * base64 는 3바이트를 4글자로 늘리므로 문자 수로 견줄 때는 같은 비율로 올려 잡는다.
+ */
+const CHUNK_BYTES = 510 * 1024;
+const MAX_TRANSFER_BYTES = 24 * 1024 * 1024;
+const MAX_TRANSFER_CHUNKS = Math.ceil(MAX_TRANSFER_BYTES / CHUNK_BYTES);
+const MAX_TRANSFER_CHARS = Math.ceil(MAX_TRANSFER_BYTES / 3) * 4;
+
+const NO_DATA_REASON = '저장할 데이터를 받지 못했어요.';
+const TOO_LARGE_REASON = '이미지가 너무 커서 저장할 수 없어요.';
+
+/**
+ * 시간이 지난 전송을 걷어낸다.
+ *
+ * 타이머를 걸지 않는다 — 모듈 수준 타이머는 앱이 사는 내내 남는다. 맵이 자라는 자리
+ * (beginTransfer)와 비우는 자리(saveBase64Chunks)에서만 훑으면 충분하다.
+ */
+function sweepExpiredTransfers() {
+  const now = Date.now();
+  transfers.forEach((transfer, id) => {
+    if (now - transfer.startedAt > TRANSFER_TTL_MS) transfers.delete(id);
+  });
+}
+
+/**
+ * 진행 중인 전송을 전부 버린다.
+ *
+ * 셸이 **문서가 실제로 사라질 때만** 부른다(components/harucut-web-shell.tsx). 다섯 자리다 —
+ * 새 문서 로드(onLoadStart), 콘텐츠 프로세스 종료, 로드 실패(onError·5xx), 렌더 프로세스
+ * 사망과 `다시 시도`(둘 다 remountWebView). 그 시점의 조각은 보낸 문서가 이미 사라져 이어
+ * 붙일 수도, 답을 돌려줄 수도 없다.
+ *
+ * 같은 문서 안의 기록 갱신(pushState·replaceState)에서는 부르지 않는다. 안드로이드가 그때도
+ * onLoadStart 를 쏘지만 웹의 약속은 아직 살아 있어, 끊으면 정상 저장이 실패한다.
+ */
+export function cancelTransfers() {
+  transfers.clear();
+}
 
 function safeFilename(name: string) {
   // 사용자 표시 이름이 그대로 파일명이 된다 — 경로 구분자와 금지 문자를 걷어낸다.
@@ -111,10 +184,15 @@ export async function saveBase64Chunks(
   id: string,
   filename: string,
 ): Promise<BridgeResult> {
+  // 웹이 이미 포기한(120초) 요청을 뒤늦게 저장하면, 실패했다고 들은 사진이 한참 뒤에
+  // 사진첩에 나타난다. 여기서도 한 번 걷어낸다.
+  sweepExpiredTransfers();
+
   const transfer = transfers.get(id);
   transfers.delete(id);
 
-  if (!transfer) return { ok: false, reason: '저장할 데이터를 받지 못했어요.' };
+  if (!transfer) return { ok: false, reason: NO_DATA_REASON };
+  if (transfer.rejectedReason) return { ok: false, reason: transfer.rejectedReason };
   if (transfer.chunks.filter(Boolean).length !== transfer.total) {
     return { ok: false, reason: '이미지 조각이 일부 사라졌어요. 다시 시도해 주세요.' };
   }
@@ -131,14 +209,51 @@ export async function saveBase64Chunks(
   }
 }
 
+/** 받기 전에 거절할 요청인가. 거절 사유가 없으면 undefined. */
+function rejectionFor(total: number) {
+  // total 이 정수가 아니거나 0 이하면 new Array(total) 이 던진다 — 그 예외는 셸의 onMessage
+  // 밖으로 빠져나가 save-end 가 답을 못 받고, 웹 버튼이 타임아웃까지 묶인다.
+  if (!Number.isInteger(total) || total <= 0) return NO_DATA_REASON;
+  if (total > MAX_TRANSFER_CHUNKS) return TOO_LARGE_REASON;
+  return undefined;
+}
+
 export function beginTransfer(id: string, filename: string, total: number) {
-  transfers.set(id, { filename, total, chunks: new Array<string>(total) });
+  // 맵이 자라는 유일한 자리다. 새 전송을 받는 김에 지난 것을 정리한다.
+  sweepExpiredTransfers();
+
+  const rejectedReason = rejectionFor(total);
+
+  transfers.set(id, {
+    filename,
+    total,
+    // 거절한 전송은 자리를 잡아 두지 않는다 — save-end 가 이유만 돌려주고 지운다.
+    chunks: rejectedReason ? [] : new Array<string>(total),
+    receivedChars: 0,
+    startedAt: Date.now(),
+    rejectedReason,
+  });
 }
 
 export function pushChunk(id: string, index: number, data: string) {
   const transfer = transfers.get(id);
-  if (!transfer) return;
+  if (!transfer || transfer.rejectedReason) return;
+  if (!Number.isInteger(index) || index < 0 || index >= transfer.total) return;
+  // 같은 조각이 두 번 오면 크기를 두 번 세지 않는다.
+  if (transfer.chunks[index] !== undefined) return;
+
+  const received = transfer.receivedChars + data.length;
+  if (received > MAX_TRANSFER_CHARS) {
+    // total 은 작게 알려 놓고 조각만 크게 보내는 경우까지 막는다. 이미 받은 것도 버려야
+    // 상한이 실제 메모리 상한이 된다.
+    transfer.chunks = [];
+    transfer.receivedChars = 0;
+    transfer.rejectedReason = TOO_LARGE_REASON;
+    return;
+  }
+
   transfer.chunks[index] = data;
+  transfer.receivedChars = received;
 }
 
 export function transferFilename(id: string) {

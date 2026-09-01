@@ -21,6 +21,137 @@
 | **상태바 색** | 웹은 상태바를 못 만진다. 웹이 자기 테마를 알려 주면 셸이 맞춘다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
 
+## 셸이 WebView 를 부리는 길 — `ref`
+
+셸이 WebView 에 지시하는 것은 전부 `webViewRef` 를 거친다. 그런데 **`<WebView>` 에 `ref` 가
+붙어 있지 않았다** — 선언만 있고 element 에는 넘기지 않아 `webViewRef.current` 가 늘 `null`
+이었다. `?.` 로 이어 놓은 **여섯 자리**가 통째로 무동작이었다.
+
+| 자리 | 하는 일 | 붙기 전 |
+|---|---|---|
+| `reply()` | `injectJavaScript` 로 브리지 응답을 웹에 돌려준다 | **답이 한 번도 가지 않았다** |
+| 하드웨어 뒤로가기 | `goBack` | 눌러도 아무 일 없음 |
+| 실패 화면 `다시 시도` | `reload` | 무동작 |
+| `onContentProcessDidTerminate` | `reload` | 흰 화면 그대로 |
+| `onRenderProcessGone` | `reload` | 흰 화면 그대로 |
+| `onOpenWindow` | `injectJavaScript` 로 같은 웹 안에서 연다 | 링크가 죽어 있었다 |
+
+가장 무거운 것은 `reply()` 다. 웹은 답을 기다리다 타임아웃까지 묶인다 —
+`save-end` 120초, `share`·`notify-permission` 120초, 나머지 60초
+(`apps/web/lib/nativeBridge.ts`). 즉 앱 안의 **저장·공유·알림 버튼이 전부 실패**했다.
+
+`ref` 를 붙이면서, 애초에 `reload()` 로는 되살아나지 않는 두 자리를 새 인스턴스로 바꿨다.
+
+- **실패 화면의 `다시 시도`** — 실패 화면은 WebView 를 트리에서 빼고 그린다. 그 사이 ref 는
+  비어 있어 `reload()` 를 부를 상대가 없다. `key` 를 바꿔 새 인스턴스를 올리고, 실패했던
+  주소를 다시 연다.
+- **`onRenderProcessGone`(안드로이드)** — 안드로이드는 이 콜백이 온 WebView 를 죽은 객체로
+  규정한다(`WebViewClient.onRenderProcessGone` 문서: 이후 어떤 메서드도 부르지 말고 뷰
+  계층에서 걷어낼 것). `reload()` 로는 살아나지 않아 새 인스턴스를 올린다.
+
+`onContentProcessDidTerminate`(iOS·macOS)는 그대로 `reload()` 다 — 여기서는 WebView 객체가
+살아 있고, URL 이 비었을 때도 라이브러리가 `source` 로 되돌아간다
+(`apple/RNCWebViewImpl.m` 의 `reload`). **다만 횟수를 센다** — 아래 "되살리기를 언제 멈추나".
+
+새 인스턴스를 올릴 때는 `canGoBack` 같은 이전 인스턴스 기준 값도 같이 비운다. 남겨 두면
+기록이 빈 WebView 에 `goBack()` 을 불러 뒤로가기가 먹통이 된다.
+
+### 지금 남은 자리와, 실패 화면에서 닿지 않는 것
+
+지금 `webViewRef.current` 를 쓰는 자리는 **다섯**이다. 위 표에서 `reload` 두 자리가 remount 로
+바뀌고, 로그인 기록 정리(`clearHistory`)가 새로 들어왔다.
+
+| 자리 | 실패 화면에서는 |
+|---|---|
+| `reply()` | **닿지 않는다.** 물어본 문서가 이미 사라져 답할 곳도 없다 |
+| `handleNavigation` 의 `clearHistory` | WebView 콜백이라 애초에 오지 않는다 |
+| 하드웨어 뒤로가기 `goBack` | **부르지 않는다** — 아래 참고 |
+| `onContentProcessDidTerminate` 의 `reload` | WebView 콜백이라 애초에 오지 않는다 |
+| `onOpenWindow` 의 `injectJavaScript` | WebView 콜백이라 애초에 오지 않는다 |
+
+즉 "`ref` 를 붙였으니 이제 모든 자리가 산다"가 아니다. **실패 화면 위에서는 ref 가 비어 있는
+것이 정상이고**, 그 화면에서 사람이 실제로 누를 수 있는 둘은 ref 를 쓰지 않는 길로 간다 —
+`다시 시도` 는 새 인스턴스를 올리고, 하드웨어 뒤로가기는 기본 동작(앱 종료)에 넘긴다.
+
+뒤로가기가 특히 그랬다. 실패 직전의 `canGoBack`(참)을 그대로 믿고 `goBack()` 을 부르면,
+닿는 곳은 없는데 안드로이드에는 "처리했다"고 답하는 꼴이 된다 — **눌러도 눌러도 아무 일이
+없고 앱을 빠져나갈 수도 없다.** 실패 화면에서는 곧바로 `false` 를 돌려준다.
+
+### 되살리기를 언제 멈추나
+
+`onContentProcessDidTerminate` → `reload()` 에는 상한이 있다(`MAX_CONTENT_PROCESS_RELOADS = 2`).
+되살린 문서가 뜨는 도중 또 죽으면 이 콜백이 다시 오고, 상한이 없으면 셸이 스스로 끝나지 않는
+순환을 만든다 — 화면은 계속 비어 있고 앱은 살아 있어 사용자가 끊을 방법이 없다.
+
+- 백그라운드 메모리 회수는 **한 번의 사건**이라 정상 경로는 `reload` 한 번으로 끝난다
+- 두 번째는 앱으로 돌아오는 순간에도 압박이 남아 곧바로 다시 회수당하는 경우를 덮는다
+- 완료된 로드 없이 세 번째로 죽으면 그건 회수가 아니라 **그 문서가 뜨는 동안 견디지 못하는
+  것**이라, 더 불러도 같다 → 실패 화면으로 내려 사용자에게 넘긴다
+
+예산은 문서가 한 번 다 뜨면(`onLoadEnd`) 되돌린다. 다 뜬 뒤에 죽는 것은 위의 정상 회수고,
+**뜨는 도중에 죽는 것만** 이 상한에 쌓인다.
+
+### 답도 우리 오리진에만 넣는다
+
+`onMessage` 는 **들어오는** 메시지를 우리 웹으로 제한한다. `reply()` 는 **나가는** 쪽도 본다 —
+공유 시트·권한 대화상자·사진첩 쓰기는 사용자 조작을 기다리므로, 답을 만드는 사이 화면이
+제공자 로그인 같은 남의 문서로 넘어가 있을 수 있다. 그러면 `injectJavaScript` 는 지금 떠 있는
+그 문서에서 돈다. 판정은 들어오는 쪽과 **같은 규칙**을 쓴다
+(`apps/mobile/constants/shell.ts` → `packages/shared/src/shell-origin.ts`).
+
+## 뒤로가기와 로그인 기록
+
+웹 콜백(`/oauth2/callback`)은 `window.location.href` 로 목적지를 열어 **기록에 남는다.**
+그대로 두면 뒤로가기가 콜백으로 돌아가고, 콜백은 이미 소비한 `redirectTo` 대신 또 홈으로
+보낸다 — 홈과 콜백을 오가며 앱을 닫지도 못한다.
+
+그래서 콜백을 벗어난 화면이 기록에 자리를 잡은 뒤(`loading === false`) `clearHistory()` 를
+**한 번** 부른다. 로드가 시작될 때 부르면 안드로이드가 아직 콜백을 '현재 항목'으로 보고
+있어서, 지우려던 콜백만 남는다.
+
+그 이벤트가 들고 온 `canGoBack` 은 `clearHistory` 이전 값이라 아직 참이다
+(`RNCWebViewClient.createWebViewEvent` 가 핸들러보다 먼저 채운다). **그 한 번만** 거짓으로
+본다. 다음 이벤트부터는 네이티브 값을 그대로 쓴다 — 같은 주소로 `pushState` 해서 모달을
+여는 흐름도 그 이벤트에서 뒤로가기를 되찾는다.
+
+감수하는 것 둘.
+
+- 로그인 이전 기록도 같이 사라진다. 콜백만 골라 건너뛸 방법이 없다.
+- 콜백 다음 화면이 자리를 잡기 전에 또 옮겨 가면 지우지 않는다. 표시를 오래 들고 다니다
+  엉뚱한 곳을 지우는 쪽이 더 나쁘다.
+
+## 저장 조각을 언제 버리나
+
+`save-begin` 뒤에 `save-end` 가 오지 않으면 조각이 앱 메모리에 남는다. 그래서 셸이
+`cancelTransfers()` 로 끊는다 — 다만 **끊을 자리를 가려야 한다.**
+
+안드로이드는 `doUpdateVisitedHistory` 에서 `onLoadStart` 를 쏜다
+(`RNCWebViewClient.java`). 거기에는 `history.pushState`·`replaceState` 처럼 **문서가 그대로
+살아 있는** 기록 갱신도 들어온다. 게스트 저장 도중 `로그인하고 저장`(`router.push`) 을
+누르면 바로 이 경우가 되고, 무조건 끊으면 살아 있는 저장이 실패한다.
+
+- 안드로이드: `loading` 이 참일 때만 끊는다 = 새 문서를 받아 오는 중
+- iOS: `decidePolicyForNavigationAction` 에서만 이 이벤트가 나오므로 같은 문서 안 이동은
+  애초에 오지 않는다 — 그대로 끊는다
+
+`loading` 은 진행률만이 아니다. 14.0.1 은 `!mLastLoadFailed && getProgress() != 100` 으로
+만든다(`RNCWebViewClient.createWebViewEvent`). 로드가 실패하면 `onReceivedError` 가
+`mLastLoadFailed` 를 세우고 완료 이벤트를 **합성해** 내보내는데, 그 뒤 다음 `onPageStarted`
+까지 이 값은 진행률과 무관하게 거짓이다. 즉 **실패 뒤에 오는 이벤트로는 이 문을 통과하지
+못한다** — 그래서 실패 경로는 `onError` 가 직접 끊는다.
+
+문서가 사라지는 자리는 다섯이고, 다섯이 모두 끊는다.
+
+| 자리 | 무엇이 사라지나 |
+|---|---|
+| `onLoadStart`(위 조건) | 새 문서로 교체 |
+| `onContentProcessDidTerminate` | 콘텐츠 프로세스 종료 (iOS·macOS) |
+| `onError` · 5xx `onHttpError` | 로드 실패 — 실패 화면이 WebView 를 트리에서 뺀다 |
+| `onRenderProcessGone` | 렌더 프로세스 사망 (안드로이드) |
+| 실패 화면 `다시 시도` | 새 인스턴스로 교체 |
+
+뒤의 둘은 같은 `remountWebView()` 를 거치므로 끊는 자리도 하나다.
+
 ## 촬영 화질 — 실측과 남은 선택지
 
 ### 지금까지 네 레이아웃 모두 확대되고 있었다
@@ -186,6 +317,7 @@ URL 에 토큰도, 교환용 코드도 없다.
    `onRenderProcessGone`(안드로이드)를 받아 다시 띄운다. 앱을 백그라운드에 두면 OS 가
    메모리 회수로 콘텐츠 프로세스를 먼저 죽이는데, 아무도 되살리지 않으면 사용자는
    강제 종료 말고 할 게 없었다. 셸 앱에서 가장 흔한 "먹통" 신고가 이 자리다.
+   되살리는 방법은 플랫폼마다 다르다 — 위 "셸이 WebView 를 부리는 길" 참고.
 2. **`target="_blank"` 링크가 안드로이드에서 아무 반응이 없던 것** — `setSupportMultipleWindows`
    기본값이 `true` 인데 `onOpenWindow` 핸들러가 없으면 링크가 그냥 무시된다.
    회원가입 화면이 약관·개인정보처리방침을 이 방식으로 연다 — **동의를 받는 화면에서
