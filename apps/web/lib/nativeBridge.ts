@@ -287,6 +287,22 @@ export async function nativeRequestNotificationPermission() {
 }
 
 /**
+ * 파일 선택기를 열기 **전에** 카메라 권한을 받아 둔다.
+ *
+ * 왜 필요한가: 안드로이드 셸은 `android.permission.CAMERA` 를 선언해 두었다(촬영 화면의
+ * `getUserMedia` 가 요구한다). react-native-webview 는 「선언돼 있는데 아직 안 받았다」이면
+ * 파일 선택기에서 **「사진 찍기」 항목을 통째로 뺀다.** 그래서 촬영 화면을 한 번도 안 쓴
+ * 사용자는 갤러리만 보게 된다.
+ *
+ * **답을 기다리되 실패해도 그냥 진행한다.** 거절해도 갤러리는 그대로 열리므로, 여기서
+ * 막으면 사용자가 하려던 일까지 못 하게 된다. 앱이 아니거나 iOS 면 아무 일도 안 한다.
+ */
+export async function nativeEnsureCameraPermission() {
+  if (!isNativeShell()) return null;
+  return request({ type: "camera-permission" }, { timeoutMs: 120_000 });
+}
+
+/**
  * 로컬 알림. 권한이 없으면 묻지 않고 실패를 돌려준다.
  *
  * 쓰임새는 "기다려야 끝나는 일"이다 — 서버 합성이 최대 90초까지 걸리는데(lib/composeApi.ts),

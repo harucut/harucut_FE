@@ -19,6 +19,7 @@
 | 햅틱 | `navigator.vibrate` 가 iOS 에서 동작하지 않는다 |
 | **알림** | WebView 안에는 Notification API 가 없다. iOS WKWebView 는 미지원, 안드로이드는 권한 UI 가 없어 조용히 거절된다 |
 | **상태바 색** | 웹은 상태바를 못 만진다. 웹이 자기 테마를 알려 주면 셸이 맞춘다 |
+| **카메라 권한(안드로이드)** | 웹 권한이 아니라 앱 권한이다. 셸이 `CAMERA` 를 선언해 두었는데 런타임 권한이 없으면 WebView 가 파일 선택기에서 「사진 찍기」를 통째로 뺀다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
 
 ## 셸이 WebView 를 부리는 길 — `ref`
@@ -271,10 +272,24 @@ Playwright 로 두 엔진에서 실제로 호출해 확인했다(2026-08-28):
 셸에 이미 필요한 설정이 들어 있다: `allowsInlineMediaPlayback`,
 `mediaPlaybackRequiresUserAction={false}`, `mediaCapturePermissionGrantType`.
 
-**남은 한 가지** — `app.json` 이 `android.permission.CAMERA` 를 선언하는데,
-사용자가 아직 카메라를 허용하지 않은 상태에서는 `<input type="file">` 의 chooser 에서
-"카메라로 찍기" 항목이 빠진다(`RNCWebViewModuleImpl.needsCameraPermission()`).
-갤러리 선택은 정상이다. 촬영을 한 번 하고 나면 사라지는 증상이라 급하지 않다.
+~~**남은 한 가지**~~ (2026-09-02 해결) — `app.json` 이 `android.permission.CAMERA` 를
+선언하는데, 사용자가 아직 카메라를 허용하지 않은 상태에서는 `<input type="file">` 의
+chooser 에서 "카메라로 찍기" 항목이 빠졌다(`RNCWebViewModuleImpl.java:216` 의
+`if (!needsCameraPermission())` — 그 조건이 참이면 카메라 인텐트를 `EXTRA_INITIAL_INTENTS`
+에 아예 안 넣는다). 촬영 화면을 한 번도 안 쓴 사용자에게만 보이던 증상이다.
+
+지금은 **웹이 선택기를 열기 전에 셸에 권한을 부탁한다** — `camera-permission` 브리지
+메시지(`apps/web/lib/nativeBridge.ts` `nativeEnsureCameraPermission` ↔
+`apps/mobile/lib/native-bridge.ts` `ensureCameraPermission`), 호출부는
+`apps/web/app/shoot/upload/page.tsx` 의 「사진 고르기」 버튼이다. `notify-permission` 과
+같은 모양이다 — 시점은 웹이 고르고 권한은 셸이 받는다.
+
+**거절해도 그대로 진행한다.** 갤러리는 열리므로 사용자가 하려던 일은 계속할 수 있다.
+iOS 는 이 개념이 없어 아무 일도 안 하고 성공으로 답한다(웹이 플랫폼을 몰라도 되게).
+
+⚠️ **실기기로 확인하지 못했다.** `apps/mobile` 에는 테스트 러너가 없고, chooser 항목이
+돌아오는 것은 실기기에서만 보인다. 지금 확인된 것은 브리지 프로토콜 왕복
+(`apps/web/lib/nativeBridge.test.ts`)과 라이브러리 소스의 분기 조건까지다.
 
 ## 소셜 로그인 — 지금 구조로는 구글이 언제 막혀도 이상하지 않다
 
