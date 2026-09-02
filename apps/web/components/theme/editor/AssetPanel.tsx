@@ -8,8 +8,8 @@ import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import {
   SUPPORTED_IMAGE_ACCEPT,
   UNSUPPORTED_UPLOAD_MESSAGE,
-  isSupportedUploadFile,
 } from "@/lib/presignedUploadApi";
+import { toUploadableFile } from "@/lib/imageDecode";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((state) => state.tab);
@@ -101,9 +101,22 @@ function PhotoTab() {
           const input = event.currentTarget;
           if (!input.files) return;
 
-          // 지원하지 않는 형식은 올리기 전에 걸러 사유를 먼저 알려준다.
+          /*
+            거르기 전에 **바꿔 본다.**
+
+            아이폰 기본 설정이 만드는 HEIC 는 백엔드가 안 받지만 여기서 JPEG 로 구우면
+            된다(`lib/imageDecode.ts`). 예전처럼 걸러 내기만 하면 아이폰에서 고른 사진이
+            통째로 「지원하지 않는 형식」이 된다.
+
+            바꾸는 데 실패한 것만 「제외했어요」로 센다 — 사유 문구는 변환기가 던지는
+            예외가 들고 있어서 여기서 다시 만들지 않는다.
+          */
           const picked = Array.from(input.files);
-          const supported = picked.filter(isSupportedUploadFile);
+          setIsUploading(true);
+          const converted = await Promise.allSettled(picked.map(toUploadableFile));
+          const supported = converted.flatMap((entry) =>
+            entry.status === "fulfilled" ? [entry.value] : [],
+          );
           const skipped = picked.length - supported.length;
 
           if (skipped > 0) {
@@ -111,11 +124,11 @@ function PhotoTab() {
           }
 
           if (supported.length === 0) {
+            setIsUploading(false);
             input.value = "";
             return;
           }
 
-          setIsUploading(true);
           const result = await addAssets(supported);
           if (result.failed > 0) {
             alert(`${result.failed}개의 파일 업로드에 실패했어요.`);
