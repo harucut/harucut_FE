@@ -81,8 +81,8 @@ git config core.hooksPath .githooks
 ```
 
 켜도 `.githooks/pre-commit`·`pre-push` 가 막는 것은 보호 브랜치(`main|develop|develop_loop`)
-위의 commit/push 뿐이다 — **브랜치 이름은 검사하지 않는다.** pre-commit 의 에러 문구가 아직
-`issue/<number>-<slug>` 를 말하지만 문구일 뿐 강제되는 규칙이 아니다.
+위의 commit/push 뿐이다 — **브랜치 이름 형태는 검사하지 않는다.** `<type>/<slug>` 는 사람이
+지키는 규칙이다.
 
 ## 검증
 

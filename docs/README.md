@@ -9,7 +9,7 @@
 |---|---|
 | 백엔드가 실제로 뭘 주고받나 (경로·필드·에러코드) | [backend-contract.md](./backend-contract.md) |
 | 로컬 백엔드 띄우기 (도커·Apple Silicon·계정 만들기) | [local-backend.md](./local-backend.md) |
-| 백엔드에 **요청해야 할 것** (OAuth·비회원 합성·푸시·합성 원본 정리) | [app-shell-backend-requests.md](./app-shell-backend-requests.md) |
+| 백엔드에 **요청해야 할 것** (전체 목록과 오늘 상태는 그 문서가 쥔다) | [app-shell-backend-requests.md](./app-shell-backend-requests.md) |
 | 앱(iOS·Android) 웹뷰 셸 구조와 촬영 화질 | [mobile-shell.md](./mobile-shell.md) |
 | 화면 이동 흐름 | [route-flows.md](./route-flows.md) |
 | 로그인·리다이렉트·게스트 체험 | [auth-routing.md](./auth-routing.md) |
@@ -259,3 +259,8 @@ BASIC 계정으로 프레임 저장 성공(200), jar 의 `PlanTier` enum 이 세
 | 서버 발신 알림 | **백엔드** | 기기 토큰 등록 엔드포인트 0건. 로컬 알림만 넣었다 |
 | 요금제 정책 | **백엔드** | 위 "요금제" 절 |
 | 네이티브 카메라 전환 | **결정** | ADR-0003 을 되돌리는 일 |
+
+⚠️ **백엔드 요청의 정본은 이 표가 아니다.** 여기 있는 것은 자주 묻는 넷뿐이고, 전체
+목록과 오늘 상태는 [`app-shell-backend-requests.md`](./app-shell-backend-requests.md) 맨
+아래 표가 쥔다(현재 §1~§7). 이 표에 개수를 적어 두면 그쪽이 늘 때 조용히 낡는다 —
+실제로 §4·§6·§7 이 빠진 채로 있었다.
