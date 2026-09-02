@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { nativeEnsureCameraPermission } from "@/lib/nativeBridge";
 import { useRouter } from "next/navigation";
 import { ImagePlus, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -134,7 +135,21 @@ export default function ShootUploadPage() {
 
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={async () => {
+            /*
+              선택기를 열기 **전에** 카메라 권한을 받아 둔다.
+
+              안드로이드 셸은 `android.permission.CAMERA` 를 선언해 두었는데(촬영 화면이
+              요구한다), 그 권한을 아직 안 받았으면 WebView 가 파일 선택기에서
+              **「사진 찍기」 항목을 통째로 뺀다.** 촬영 화면을 한 번도 안 쓴 사용자는
+              갤러리만 보게 된다(apps/web/lib/nativeBridge.ts 의 주석 참고).
+
+              **결과를 보지 않는다.** 거절해도 갤러리는 그대로 열리므로 하려던 일은
+              계속할 수 있다. 앱이 아니거나 iOS 면 아무 일도 일어나지 않는다.
+            */
+            await nativeEnsureCameraPermission();
+            fileInputRef.current?.click();
+          }}
           disabled={isImporting}
           className="hc-button-secondary flex h-12 items-center justify-center gap-2 rounded-2xl border text-[14px] font-semibold disabled:opacity-50"
         >

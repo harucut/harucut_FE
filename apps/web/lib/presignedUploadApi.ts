@@ -19,10 +19,23 @@ type UploadedMediaInfo = {
   downloadUrl?: string;
 };
 
+/**
+ * 파일 선택기에 넘기는 `accept`. **서버가 받는 형식보다 넓다.**
+ *
+ * HEIC/HEIF 가 여기 들어 있는 이유: 서버는 안 받지만 **우리가 JPEG 로 바꿔서 보낸다**
+ * (`lib/imageDecode.ts` 의 `toUploadableFile`). 빼 두면 아이폰 사진이 선택기에서 흐리게
+ * 나와, 변환기를 붙여 놔도 파일이 거기까지 오지 못한다.
+ *
+ * 확장자와 MIME 을 **둘 다** 적는다. 안드로이드 파일 선택기는 HEIC 에
+ * `application/octet-stream` 이나 빈 문자열을 주는 경우가 있어 MIME 만으로는 못 걸린다.
+ *
+ * 「서버가 받는 형식」의 소유자는 이 파일의 `EXTENSION_TO_CONTENT_TYPE` 표다 — 그 표에
+ * HEIC 를 넣으면 안 된다. 서버는 정말로 안 받는다(415 GEN-051).
+ */
 export const SUPPORTED_IMAGE_ACCEPT =
-  "image/png,image/jpeg,image/webp,image/gif";
+  "image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif";
 
-// 지원하지 않는 형식(heic/avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
+// 지원하지 않는 형식(avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
 export const UNSUPPORTED_UPLOAD_MESSAGE =
   "PNG·JPG·WEBP·GIF만 올릴 수 있어요.";
 

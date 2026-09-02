@@ -46,6 +46,14 @@ export {
   GUEST_TRIAL_NOTICE,
 } from './guest-trial';
 export {
+  BRAND_MARK_BAR,
+  BRAND_MARK_BAR_SHADES,
+  BRAND_MARK_BODY,
+  BRAND_MARK_VIEWBOX,
+  brandMarkBarRect,
+  brandMarkToSvg,
+} from './brand-mark';
+export {
   SOCIAL_BRAND_COLORS,
   SOCIAL_LABELS,
   SOCIAL_MARK_GAP,

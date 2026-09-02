@@ -11,6 +11,7 @@ import {
   NativeSaveError,
   nativeHaptic,
   nativeNotify,
+  nativeEnsureCameraPermission,
   nativeRequestNotificationPermission,
   nativeSaveImageBlob,
   nativeSaveImageUrl,
@@ -285,6 +286,46 @@ describe("알림", () => {
 
     replyTo(posted, "notify-local", { ok: true });
     await expect(promise).resolves.toEqual({ ok: true });
+  });
+});
+
+/*
+  ── 카메라 권한 ──
+
+  웹 권한이 아니라 **안드로이드 앱 권한**이라 웹이 직접 못 받는다. 셸이 `CAMERA` 를
+  매니페스트에 선언해 두었는데 런타임 권한이 없으면, WebView 가 파일 선택기에서
+  「사진 찍기」 항목을 통째로 뺀다(RNCWebViewModuleImpl.java 의 needsCameraPermission).
+*/
+describe("카메라 권한", () => {
+  afterEach(leaveShell);
+
+  it("브라우저에서는 아무것도 묻지 않는다", async () => {
+    leaveShell();
+    await expect(nativeEnsureCameraPermission()).resolves.toBeNull();
+  });
+
+  it("셸 안에서는 요청을 넘기고 답을 기다린다", async () => {
+    const posted = enterShell();
+    const promise = nativeEnsureCameraPermission();
+
+    await waitFor(() => posted.some((item) => item.type === "camera-permission"));
+    replyTo(posted, "camera-permission", { ok: true });
+
+    await expect(promise).resolves.toEqual({ ok: true });
+  });
+
+  /*
+    거절해도 **호출부는 계속 간다.** 갤러리는 그대로 열리므로, 실패를 던지면 사용자가
+    하려던 일까지 못 하게 된다.
+  */
+  it("거절당해도 던지지 않고 결과로 돌려준다", async () => {
+    const posted = enterShell();
+    const promise = nativeEnsureCameraPermission();
+
+    await waitFor(() => posted.some((item) => item.type === "camera-permission"));
+    replyTo(posted, "camera-permission", { ok: false });
+
+    await expect(promise).resolves.toEqual({ ok: false });
   });
 });
 

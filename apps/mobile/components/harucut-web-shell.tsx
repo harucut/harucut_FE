@@ -25,6 +25,7 @@ import {
   beginTransfer,
   cancelTransfers,
   ensureAndroidChannel,
+  ensureCameraPermission,
   ensureNotificationPermission,
   haptic,
   pushChunk,
@@ -203,6 +204,9 @@ export function HarucutWebShell() {
           return;
         case 'notify-permission':
           reply(askerUrl, message.id, await ensureNotificationPermission());
+          return;
+        case 'camera-permission':
+          reply(askerUrl, message.id, await ensureCameraPermission());
           return;
         case 'notify-local':
           reply(

@@ -1,10 +1,8 @@
 "use client";
 
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import {
-  isSupportedUploadFile,
-  UNSUPPORTED_UPLOAD_MESSAGE,
-} from "@/lib/presignedUploadApi";
+import { canUploadAsIs, decodeImageFile, looksLikeHeif } from "@/lib/imageDecode";
+import { UNSUPPORTED_UPLOAD_MESSAGE } from "@/lib/presignedUploadApi";
 
 /**
  * 갤러리에서 고른 사진을 촬영본과 **같은 모양**으로 바꾼다.
@@ -48,9 +46,9 @@ export type PhotoImportOptions = {
   /**
    * 변환할 최대 장수. **지원 형식만 남긴 뒤에** 자른다.
    *
-   * 고른 순서대로 먼저 자르면 heic 가 앞에 몰린 선택에서 쓸 수 있는 사진이 통째로 밀려난다
-   * (28장 중 앞 24장이 heic 면 남는 것이 0장이었다). 자르는 자리는 그래도 디코딩 앞이라
-   * 상한이 막으려던 비용은 그대로 막는다.
+   * 고른 순서대로 먼저 자르면 못 읽는 파일이 앞에 몰린 선택에서 쓸 수 있는 사진이 통째로
+   * 밀려난다(28장 중 앞 24장이 그런 파일이면 남는 것이 0장이었다). 자르는 자리는 그래도
+   * 디코딩 앞이라 상한이 막으려던 비용은 그대로 막는다.
    */
   limit?: number;
 };
@@ -68,25 +66,43 @@ export type PhotoImportResult = {
   overLimitCount: number;
 };
 
-function readAsImage(file: File): Promise<HTMLImageElement | null> {
-  return new Promise((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      // 그려 넣은 뒤에는 필요 없다. 안 풀면 고른 사진 수만큼 메모리가 남는다.
-      URL.revokeObjectURL(objectUrl);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(null);
-    };
-    image.src = objectUrl;
-  });
+/**
+ * 백엔드가 받는 형식이거나, **바꿔서 보낼 수 있는** 형식인가.
+ *
+ * 아이폰 기본 설정이 만드는 HEIC 는 백엔드가 안 받지만 여기서 JPEG 로 구워 보내면 된다
+ * (`lib/imageDecode.ts`). 그래서 「지금 그대로 올릴 수 있는가」와 「고쳐서 올릴 수 있는가」를
+ * 나눠 본다 — 예전에는 앞의 것만 봐서 아이폰 갤러리 사진이 통째로 걸러졌다.
+ *
+ * HEIF 판정은 **MIME 이 아니라 바이트**로 한다. 안드로이드 파일 선택기는 HEIC 에
+ * `application/octet-stream` 을 주거나 아예 빈 문자열을 준다 — MIME 을 믿으면 그 파일들이
+ * 여기서 잘려 변환 경로에 닿지도 못한다.
+ */
+async function canImportPhoto(file: File): Promise<boolean> {
+  if (canUploadAsIs(file)) return true;
+
+  /*
+    브라우저가 스스로 읽을 수 있는 형식은 통과시킨다 — AVIF 가 그렇다(크롬 85+·사파리
+    16.4+). 읽어서 캔버스에 그리면 나가는 것은 어차피 JPEG 이므로 서버 계약과 무관하다.
+    못 읽으면 아래 `decodeImageFile` 이 null 을 주고 「읽지 못했어요」로 세어진다.
+
+    동영상을 여기서 막는 것이 이 줄의 일이다. `video/mp4` 는 디코드해 봐야 실패하는데,
+    그때 뜨는 문구가 「읽지 못했어요」라 사용자가 무엇이 잘못됐는지 모른다.
+  */
+  if (file.type.startsWith("image/")) return true;
+
+  // 앞 12 바이트면 브랜드까지 읽힌다. 파일 전체를 메모리에 올리지 않는다.
+  // MIME 이 비어 오는 경우(안드로이드 파일 선택기의 HEIC)가 여기로 온다.
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+
+  return looksLikeHeif(head);
 }
 
-function toScaledDataUrl(image: HTMLImageElement): string | null {
-  const { naturalWidth: width, naturalHeight: height } = image;
+function toScaledDataUrl(image: {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+}): string | null {
+  const { width, height } = image;
   if (!width || !height) return null;
 
   const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
@@ -97,16 +113,17 @@ function toScaledDataUrl(image: HTMLImageElement): string | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image.source, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
 }
 
 /**
  * 고른 파일들을 촬영본과 같은 data URL 로 바꾼다.
  *
- * 지원하지 않는 형식(heic·avif 등)은 걸러 낸다. 그대로 통과시키면 사진을 다 고른 뒤
- * **합성 단계에서야** 실패해서, 되돌리기 가장 비싼 자리에서 문제를 만난다.
- * 읽지 못한 파일도 같은 이유로 여기서 걸러 개수를 알린다.
+ * **HEIC 는 여기서 JPEG 로 바꿔 준다**(`lib/imageDecode.ts`) — 아이폰 기본 설정이 만드는
+ * 형식이라 걸러 내면 아이폰 갤러리 사진이 통째로 막힌다. 그래도 못 읽는 형식(avif·mp4 등)은
+ * 걸러 낸다. 그대로 통과시키면 사진을 다 고른 뒤 **합성 단계에서야** 실패해서, 되돌리기
+ * 가장 비싼 자리에서 문제를 만난다. 읽지 못한 파일도 같은 이유로 여기서 걸러 개수를 알린다.
  *
  * `limit` 을 주면 개수 상한도 여기서 건다. 형식을 아는 곳이 한 곳뿐이어야
  * "거른 뒤에 자른다"는 순서가 지켜진다.
@@ -115,23 +132,42 @@ export async function importPhotoFiles(
   files: File[],
   { limit }: PhotoImportOptions = {},
 ): Promise<PhotoImportResult> {
-  const supported = files.filter((file) => isSupportedUploadFile(file));
+  /*
+    바이트를 읽어야 해서 비동기다. `filter` 로는 못 하므로 판정을 먼저 모아 놓고 거른다.
+    12 바이트씩이라 장수가 많아도 값이 싸다.
+  */
+  const verdicts = await Promise.all(files.map((file) => canImportPhoto(file)));
+  const supported = files.filter((_, index) => verdicts[index]);
   const unsupportedCount = files.length - supported.length;
-
-  // 상한은 **쓸 수 있는 사진에만** 건다. 거르기가 먼저, 자르기가 나중이다.
-  const accepted =
-    limit == null ? supported : supported.slice(0, Math.max(0, limit));
-  const overLimitCount = supported.length - accepted.length;
 
   const dataUrls: string[] = [];
   let unreadableCount = 0;
+  let attempted = 0;
 
-  for (const file of accepted) {
-    const image = await readAsImage(file);
+  /*
+    상한은 **성공한 장수**로 센다. 「앞에서부터 limit 장을 잘라서 그것만 시도」가 아니다.
+
+    싸게 거를 수 있는 것(동영상, 이미지가 아닌 것)은 위에서 이미 걸렀지만, 남은 것 중에도
+    열어 봐야 아는 실패가 있다 — 깨진 파일, 우리가 못 푸는 형식. 그걸 먼저 잘라 두면 그
+    실패들이 상한 자리를 먹고 뒤의 멀쩡한 사진이 통째로 밀려난다(28장 중 앞 24장이 그런
+    파일이면 남는 것이 0장이었다 — 8-28 에 실제로 그랬다).
+
+    비용은 예전과 같은 자리에 있다. 성공하면 그 즉시 멈추므로 정상적인 선택에서는 딱
+    `limit` 장만 푼다. 실패가 있을 때만 그만큼 더 열어 보는데, 그것이 바로 사용자가
+    구제받는 경우다.
+  */
+  for (const file of supported) {
+    if (limit != null && dataUrls.length >= Math.max(0, limit)) break;
+
+    attempted += 1;
+    const image = await decodeImageFile(file);
     const dataUrl = image ? toScaledDataUrl(image) : null;
     if (dataUrl) dataUrls.push(dataUrl);
     else unreadableCount += 1;
   }
+
+  // 상한을 채워서 **열어 보지도 않은** 장수. 문구는 화면이 만든다(위 타입 주석 참고).
+  const overLimitCount = supported.length - attempted;
 
   const notices: string[] = [];
   if (unsupportedCount > 0) {

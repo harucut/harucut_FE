@@ -23,10 +23,11 @@ import {
   PRESIGNED_UPLOAD_TYPES,
   SUPPORTED_IMAGE_ACCEPT,
   UNSUPPORTED_UPLOAD_MESSAGE,
+  UploadValidationError,
   getImageUrlByKey,
-  isSupportedUploadFile,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
+import { toUploadableFile } from "@/lib/imageDecode";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import {
   buildFrameContentKey,
@@ -599,20 +600,32 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                     type="file"
                     accept={SUPPORTED_IMAGE_ACCEPT}
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
+                      // `await` 뒤에는 이 요소가 이미 null 이다. 먼저 비운다 —
+                      // 안 그러면 같은 파일을 다시 골라도 change 가 안 온다.
                       e.target.value = "";
                       if (!file) return;
 
-                      // heic/avif 같은 형식은 저장 단계에서야 실패한다.
-                      // 편집을 다 끝낸 뒤 막히지 않도록 고른 즉시 걸러낸다.
-                      if (!isSupportedUploadFile(file)) {
-                        setBackgroundError(UNSUPPORTED_UPLOAD_MESSAGE);
-                        return;
-                      }
+                      /*
+                        고른 **즉시** 백엔드가 받는 형식으로 바꾼다.
 
-                      setBackgroundError(null);
-                      setBackgroundImage(file);
+                        저장 단계에서야 막으면 편집을 다 끝낸 뒤에 막힌다. 그렇다고 거르기만
+                        하면 아이폰 사진(HEIC)으로는 배경을 아예 못 넣는다. 여기서 바꿔 두면
+                        캔버스 미리보기도 그 파일을 쓰므로, 안드로이드에서 원본 HEIC 가
+                        빈칸으로 뜨던 것도 같이 사라진다.
+                      */
+                      try {
+                        const uploadable = await toUploadableFile(file);
+                        setBackgroundError(null);
+                        setBackgroundImage(uploadable);
+                      } catch (error) {
+                        setBackgroundError(
+                          error instanceof UploadValidationError
+                            ? error.message
+                            : UNSUPPORTED_UPLOAD_MESSAGE,
+                        );
+                      }
                     }}
                   />
                 </label>

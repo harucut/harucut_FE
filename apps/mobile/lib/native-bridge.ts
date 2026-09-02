@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
 import * as Notifications from 'expo-notifications';
-import { Platform, Share } from 'react-native';
+import { PermissionsAndroid, Platform, Share } from 'react-native';
 
 /**
  * 웹(WebView) 이 네이티브에 부탁하는 일들.
@@ -21,6 +21,7 @@ import { Platform, Share } from 'react-native';
 export type BridgeMessage =
   | { type: 'save-url'; id: string; url: string; filename: string }
   | { type: 'notify-permission'; id: string }
+  | { type: 'camera-permission'; id: string }
   | { type: 'notify-local'; id: string; title: string; body?: string; secondsFromNow?: number }
   | { type: 'theme'; scheme: 'light' | 'dark' }
   | { type: 'save-begin'; id: string; filename: string; mime: string; total: number }
@@ -399,10 +400,16 @@ export function haptic(style: 'light' | 'medium' | 'heavy' = 'medium') {
 /* ──────────────────────────────────────────────────────────────────────────
    알림
 
-   웹이 못 하는 일이라 네이티브가 맡는다. 지금 쓰는 것은 **로컬 알림**이다 —
-   합성(최대 90초)처럼 기다려야 하는 일에서 사용자가 앱을 벗어나도 끝났다고 알린다.
-   서버가 보내는 원격 푸시는 백엔드에 토큰을 받을 엔드포인트가 아직 없다
-   (docs/mobile-shell.md 의 "백엔드에 필요한 것" 참고). 토큰을 꺼내는 길만 열어 둔다.
+   웹이 못 하는 일이라 네이티브가 맡는다. 지금 쓰는 것은 **로컬 알림**뿐이다 —
+   합성(최대 90초)처럼 기다려야 하는 일에서 끝났다고 알린다.
+
+   덮는 범위를 정확히 적어 둔다: 앱을 백그라운드로 보내면 OS 가 WebView 의 JS 를 멈추므로
+   폴링도 이 코드도 안 돈다. 그래서 실제로 덮이는 것은 **셸 안이고 JS 는 아직 도는데 문서만
+   가려진 때**다(안드로이드 WebView 가 그렇다).
+
+   서버가 보내는 원격 푸시는 백엔드에 토큰을 받을 엔드포인트가 없다
+   (docs/app-shell-backend-requests.md §3). **토큰을 꺼내는 코드는 일부러 넣지 않았다** —
+   보낼 곳이 없어 쓸 수 없는 스텁을 남기지 않는다.
    ────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -445,6 +452,49 @@ export async function ensureNotificationPermission(): Promise<BridgeResult> {
     return asked.granted ? { ok: true } : { ok: false, reason: '알림 권한이 필요해요.' };
   } catch {
     return { ok: false, reason: '알림 권한을 확인하지 못했어요.' };
+  }
+}
+
+/**
+ * 카메라 **런타임 권한**. 웹이 파일 선택기를 열기 전에 부른다.
+ *
+ * 왜 웹이 못 하나: 이건 웹 권한이 아니라 **안드로이드 앱 권한**이다. 우리는 `app.json` 에
+ * `android.permission.CAMERA` 를 선언해 두었는데(촬영 화면의 `getUserMedia` 가 그걸
+ * 요구한다), react-native-webview 는 「매니페스트에 선언돼 있는데 아직 안 받았다」이면
+ * 파일 선택기에서 **카메라 항목을 통째로 뺀다**
+ * (`RNCWebViewModuleImpl.java:216` 의 `if (!needsCameraPermission())`).
+ *
+ * 그래서 촬영 화면을 한 번도 안 쓴 사용자는 「사진 올리기」에서 갤러리만 보게 된다 —
+ * 「사진 찍기」가 아예 없다. 권한을 미리 받아 두면 그 항목이 돌아온다.
+ *
+ * iOS 는 이 개념이 없다(선택기가 시스템 것이고 카메라는 그때 따로 묻는다). 그래서
+ * 안드로이드가 아니면 **아무것도 안 하고 성공으로 답한다** — 웹이 플랫폼을 몰라도 되게.
+ *
+ * 거절해도 실패로 보지 않는다. 갤러리는 그대로 열리므로 사용자는 하려던 일을 계속할 수
+ * 있다. 여기서 실패를 돌려주면 호출부가 선택기를 아예 안 여는 쪽으로 흐르기 쉽다.
+ */
+export async function ensureCameraPermission(): Promise<BridgeResult> {
+  if (Platform.OS !== 'android') return { ok: true };
+
+  try {
+    const already = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+    );
+    if (already) return { ok: true };
+
+    const result = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: '카메라 권한',
+        message: '사진을 고를 때 그 자리에서 찍을 수 있게 해요.',
+        buttonPositive: '확인',
+        buttonNegative: '나중에',
+      },
+    );
+
+    return { ok: result === PermissionsAndroid.RESULTS.GRANTED };
+  } catch {
+    return { ok: false };
   }
 }
 
