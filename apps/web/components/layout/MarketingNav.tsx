@@ -49,8 +49,9 @@ export function MarketingNav({
   */
   // 데스크톱은 브랜드 줄에, 모바일은 그 아래 줄에 놓는다. 예전에는 모바일에서 그냥 숨겨서
   // 기능·요금제·FAQ 로 가는 길이 아예 없었다(햄버거도 없었다).
+  // 좁은 화면에서는 링크 넷이 브랜드와 한 줄에 들어가야 하므로 가로 패딩을 줄인다.
   const linkBase =
-    "inline-flex rounded-full px-4 py-2 text-[13px] font-semibold transition";
+    "inline-flex rounded-full px-2.5 py-2 text-[13px] font-semibold transition sm:px-4";
   const linkTone = dark
     ? "text-white hover:bg-white/[0.07]"
     : "text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]";
@@ -80,30 +81,48 @@ export function MarketingNav({
         <BrandMark href="/" tone={dark ? "light" : undefined} />
 
         <div className="flex items-center gap-2.5">
-          <div className="hidden items-center gap-2.5 sm:flex">
-          {NAV_LINKS.map((link) => {
-            const active = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={`${linkBase} ${linkTone} ${
-                  active ? "" : dark ? "opacity-80" : "opacity-70"
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-          </div>
-          {/* 우측 상단 primary CTA: 지금 시작하기 → /login(로그인 우선). 가입·비회원 체험은 로그인 페이지에서. */}
+          {/*
+            모바일에서도 링크를 브랜드와 같은 줄에 둔다.
+
+            예전에는 자리가 없어 아래 줄로 뺐는데, 그 바람에 헤더가 113px 이 돼 첫 화면의
+            13% 를 내비가 먹었다. 자리를 만든 건 아래 CTA 를 숨긴 것이다 — 360px 기준
+            브랜드 77 + 링크 211 = 288px 로 사용 가능 폭 304px 에 들어간다(CTA 를 넣으면 412px).
+          */}
+          <nav
+            aria-label="사이트 메뉴"
+            className="flex items-center gap-1 sm:gap-2.5"
+          >
+            {NAV_LINKS.map((link) => {
+              const active = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`${linkBase} ${linkTone} ${
+                    active ? "" : dark ? "opacity-80" : "opacity-70"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+          {/*
+            우측 상단 primary CTA: 지금 시작하기 → /login(로그인 우선). 가입·비회원 체험은
+            로그인 페이지에서.
+
+            모바일에서는 숨긴다. 히어로 바로 아래에 CTA 두 개가 이미 있어 첫 화면에 같은
+            행동이 세 번 놓였고(그중 둘은 목적지가 /login 으로 같다), 초록도 브랜드·이 버튼·
+            헤드라인 세 곳에 흩어져 "강조는 한 화면에 하나"가 깨졌다. 좁은 화면에서 자리를
+            차지할 값을 못 한다.
+          */}
           <Link
             href="/login"
             className={
               dark
-                ? "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold"
-                : "hc-button-primary inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold"
+                ? "hidden items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold sm:inline-flex"
+                : "hc-button-primary hidden items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold sm:inline-flex"
             }
             style={dark ? { background: GREEN, color: "#06140A" } : undefined}
           >
@@ -111,28 +130,6 @@ export function MarketingNav({
           </Link>
         </div>
       </div>
-
-      {/* 모바일 전용 보조 내비. 브랜드 줄에 넣을 자리가 없어 아래 줄로 뺀다. */}
-      <nav
-        aria-label="사이트 메뉴"
-        className="flex items-center gap-1 overflow-x-auto px-7 pb-2 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden"
-      >
-        {NAV_LINKS.map((link) => {
-          const active = pathname === link.href;
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              aria-current={active ? "page" : undefined}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold transition ${linkTone} ${
-                active ? "" : dark ? "opacity-80" : "opacity-70"
-              }`}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
-      </nav>
     </header>
   );
 }

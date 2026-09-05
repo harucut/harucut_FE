@@ -201,7 +201,7 @@ function HeroEditorial() {
         delay={120}
         className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
-        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
+        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
       </Reveal>
 
       {/*
@@ -218,7 +218,7 @@ function HeroEditorial() {
           href="/login"
           className="inline-flex items-center gap-1 rounded-full px-4 py-3 text-[14px] font-semibold text-white/80 underline underline-offset-4 transition hover:text-white"
         >
-          로그인하고 시작하기 <ArrowRight className="h-4 w-4" />
+          로그인 <ArrowRight className="h-4 w-4" />
         </Link>
       </Reveal>
 
