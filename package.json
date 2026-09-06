@@ -62,7 +62,6 @@
     "dev-client:mobile": "pnpm --dir apps/mobile dev-client",
     "android:mobile": "pnpm --dir apps/mobile android",
     "android-dev:mobile": "pnpm --dir apps/mobile android:dev",
-    "web:mobile": "pnpm --dir apps/mobile web",
     "lint:mobile": "pnpm --dir apps/mobile lint",
     "typecheck:mobile": "pnpm --dir apps/mobile typecheck",
     "check:contract": "python3 scripts/check_backend_contract.py",

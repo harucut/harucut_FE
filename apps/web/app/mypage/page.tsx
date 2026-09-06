@@ -400,7 +400,7 @@ export default function MyPage() {
    * 배지를 `<label>` 이 아니라 `<button>` 으로 두는 이유: label 은 포커스를 받지 못해
    * 키보드로 닿을 수 없다. 파일 입력은 감춰 두고 버튼이 눌러 준다.
    */
-  const renderAvatar = (size: number, font: number, editable = false) => {
+  const renderAvatar = (size: number, font: number) => {
     const badge = Math.max(26, Math.round(size * 0.34));
     /*
       눌리는 면은 44px, 보이는 원은 그대로.
@@ -419,7 +419,7 @@ export default function MyPage() {
     return (
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <div
-          className="grid h-full w-full place-items-center overflow-hidden rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-highlight)] font-extrabold text-[color:var(--hc-text)]"
+          className="grid h-full w-full place-items-center overflow-hidden rounded-full border border-(--hc-border) bg-(--hc-surface-highlight) font-extrabold text-(--hc-text)"
           style={{ fontSize: font }}
         >
           {user?.profileUrl ? (
@@ -434,44 +434,40 @@ export default function MyPage() {
           )}
         </div>
 
-        {editable ? (
-          <>
-            <input
-              id="mypage-profile-image"
-              ref={profileInputRef}
-              type="file"
-              accept={SUPPORTED_IMAGE_ACCEPT}
-              onChange={(event) => void handleProfileFileChange(event)}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => profileInputRef.current?.click()}
-              disabled={isUploadingProfile}
-              aria-label="프로필 이미지 바꾸기"
-              title="프로필 이미지 바꾸기"
-              className="group absolute grid place-items-center rounded-full focus-visible:outline-none disabled:opacity-60"
-              style={{
-                width: hit,
-                height: hit,
-                right: -inset,
-                bottom: -inset,
-              }}
-            >
-              {/* 테두리 색이 카드 바탕색이다 — 아바타와 배지 사이에 빈 틈을 만들어
-                  둘이 한 덩어리로 뭉개지지 않게 한다.
-                  포커스 링은 44px 투명 판이 아니라 보이는 원에 두른다. */}
-              <span
-                className="hc-button-icon grid place-items-center rounded-full border-2 border-[color:var(--hc-surface)] group-hover:bg-[color:var(--hc-icon-button-hover)] group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-[color:var(--hc-text)]"
-                style={{ width: badge, height: badge }}
-              >
-                <Camera style={{ width: badge * 0.46, height: badge * 0.46 }} />
-              </span>
-            </button>
-          </>
-        ) : null}
+        <input
+          id="mypage-profile-image"
+          ref={profileInputRef}
+          type="file"
+          accept={SUPPORTED_IMAGE_ACCEPT}
+          onChange={(event) => void handleProfileFileChange(event)}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => profileInputRef.current?.click()}
+          disabled={isUploadingProfile}
+          aria-label="프로필 이미지 바꾸기"
+          title="프로필 이미지 바꾸기"
+          className="group absolute grid place-items-center rounded-full focus-visible:outline-none disabled:opacity-60"
+          style={{
+            width: hit,
+            height: hit,
+            right: -inset,
+            bottom: -inset,
+          }}
+        >
+          {/* 테두리 색이 카드 바탕색이다 — 아바타와 배지 사이에 빈 틈을 만들어
+              둘이 한 덩어리로 뭉개지지 않게 한다.
+              포커스 링은 44px 투명 판이 아니라 보이는 원에 두른다. */}
+          <span
+            className="hc-button-icon grid place-items-center rounded-full border-2 border-(--hc-surface) group-hover:bg-(--hc-icon-button-hover) group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-(--hc-text)"
+            style={{ width: badge, height: badge }}
+          >
+            <Camera style={{ width: badge * 0.46, height: badge * 0.46 }} />
+          </span>
+        </button>
 
-        {editable && isUploadingProfile ? (
+        {isUploadingProfile ? (
           <div
             role="status"
             aria-label="프로필 이미지 올리는 중"
@@ -490,10 +486,10 @@ export default function MyPage() {
         {statCells.map((cell, i) => (
           <div
             key={cell.l}
-            className={`flex-1 text-center ${i ? "border-l border-[color:var(--hc-border-subtle)]" : ""}`}
+            className={`flex-1 text-center ${i ? "border-l border-(--hc-border-subtle)" : ""}`}
           >
             <div className="text-[21px] font-semibold tabular-nums">{cell.n}</div>
-            <div className="mt-0.5 text-[12px] text-[color:var(--hc-muted)]">
+            <div className="mt-0.5 text-[12px] text-(--hc-muted)">
               {cell.l}
             </div>
           </div>
@@ -501,7 +497,7 @@ export default function MyPage() {
       </div>
       {statsError ? (
         <div className="flex flex-col items-center gap-1.5 px-4">
-          <p className="text-center text-[11px] text-[color:var(--hc-muted)]">
+          <p className="text-center text-[11px] text-(--hc-muted)">
             {statsError}
           </p>
           <button
@@ -530,7 +526,7 @@ export default function MyPage() {
     (기록 화면의 이름 고치기와 같은 표시), 버튼은 값이 아닌 일을 한다.
   */
   const accountSection = (
-    <div className="flex flex-col divide-y divide-[color:var(--hc-border-subtle)]">
+    <div className="flex flex-col divide-y divide-(--hc-border-subtle)">
       <SettingRow
         label="닉네임"
         value={user?.username || "이름 없음"}
@@ -542,7 +538,7 @@ export default function MyPage() {
               setNicknameOpen(true);
             }}
             aria-label="닉네임 바꾸기"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-(--hc-muted) transition hover:bg-(--hc-surface-highlight) hover:text-(--hc-text)"
           >
             <PencilLine className="h-3.5 w-3.5" />
           </button>
@@ -610,7 +606,7 @@ export default function MyPage() {
       <ColorThemePreferencePanel />
       {/* 앱 안에서만 보인다. 브라우저에서는 아무것도 렌더하지 않는다. */}
       <NativeNotificationSetting />
-      <p className="text-[13px] leading-5 text-[color:var(--hc-muted)]">
+      <p className="text-[13px] leading-5 text-(--hc-muted)">
         화질·언어 설정은 순차적으로 추가될 예정이에요.
       </p>
     </div>
@@ -695,7 +691,7 @@ export default function MyPage() {
         {/* 만료일은 유료일 때만 온다(BASIC 이면 키 자체가 없다). 없으면 줄을 그리지 않는다 —
             "무기한"처럼 읽힐 빈 값을 두지 않는다. */}
         {periodEnd ? (
-          <p className="mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+          <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
             {subscription?.autoRenew === false || subscription?.status === "CANCELED"
               ? `${periodEnd.toLocaleDateString("ko-KR", {
                   year: "numeric",
@@ -710,7 +706,7 @@ export default function MyPage() {
           </p>
         ) : null}
         {subscription?.status === "PAST_DUE" ? (
-          <p className="mt-1 text-[12px] font-medium text-[color:var(--hc-danger)]">
+          <p className="mt-1 text-[12px] font-medium text-(--hc-danger)">
             정기 결제가 실패했어요. 결제 수단을 확인해 주세요.
           </p>
         ) : null}
@@ -745,12 +741,12 @@ export default function MyPage() {
           </button>
         </div>
         {couponError ? (
-          <p role="alert" className="text-[12px] font-medium text-[color:var(--hc-danger)]">
+          <p role="alert" className="text-[12px] font-medium text-(--hc-danger)">
             {couponError}
           </p>
         ) : null}
         {couponNotice ? (
-          <p className="text-[12px] font-medium text-[color:var(--hc-primary-strong)]">
+          <p className="text-[12px] font-medium text-(--hc-primary-strong)">
             {couponNotice}
           </p>
         ) : null}
@@ -765,12 +761,12 @@ export default function MyPage() {
                 key={coupon.publicId}
                 className="flex items-center justify-between gap-3 text-[12px]"
               >
-                <span className="min-w-0 truncate text-[color:var(--hc-text)]">
+                <span className="min-w-0 truncate text-(--hc-text)">
                   {coupon.couponName}
                 </span>
                 {/* RESERVED 는 "아직 안 쓴 것"이 아니라 "다음 차례를 기다리는 것"이다.
                     그냥 '대기'라고 하면 사용자가 뭔가 더 해야 하는 줄 안다. */}
-                <span className="shrink-0 text-[color:var(--hc-muted)]">
+                <span className="shrink-0 text-(--hc-muted)">
                   {coupon.status === "REDEEMED"
                     ? "적용 중"
                     : "다음 차례에 시작"}
@@ -826,7 +822,7 @@ export default function MyPage() {
         type="button"
         onClick={handleExit}
         disabled={isSubmitting}
-        className="mx-auto mt-1 flex min-h-[44px] w-fit items-center px-2 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+        className="mx-auto mt-1 flex min-h-11 w-fit items-center px-2 text-[13px] text-(--hc-muted) underline underline-offset-3 transition hover:text-(--hc-text) disabled:opacity-50"
       >
         회원 탈퇴
       </button>
@@ -834,13 +830,13 @@ export default function MyPage() {
   );
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       <AppNav userInitial={user?.username} />
 
       {/* 한 칸이므로 폭을 좁힌다. 예전 1000px 는 좌우 두 칸이 나눠 쓰던 폭이라,
           그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
           한 줄로 읽히지 않는다. */}
-      <div className="mx-auto w-full max-w-[680px] px-4 py-5 sm:py-6 lg:py-8">
+      <div className="mx-auto w-full max-w-170 px-4 py-5 sm:py-6 lg:py-8">
         <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
           마이페이지
         </h1>
@@ -851,7 +847,7 @@ export default function MyPage() {
             className={
               notice.kind === "ok"
                 ? "hc-feedback mt-3 rounded-2xl border px-4 py-3 text-[12px]"
-                : "mt-3 rounded-2xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-4 py-3 text-[12px] text-[color:var(--hc-danger)]"
+                : "mt-3 rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
             }
           >
             {notice.text}
@@ -861,7 +857,7 @@ export default function MyPage() {
         {loadError ? (
           <p
             role="alert"
-            className="mt-3 text-[12px] text-[color:var(--hc-danger)]"
+            className="mt-3 text-[12px] text-(--hc-danger)"
           >
             {loadError}
           </p>
@@ -869,13 +865,13 @@ export default function MyPage() {
 
         {loading ? (
           <div className="hc-surface-card mt-5 rounded-[20px] border p-5">
-            <p className="text-[12px] text-[color:var(--hc-muted)]">
+            <p className="text-[12px] text-(--hc-muted)">
               정보를 불러오는 중…
             </p>
           </div>
         ) : !user ? (
           <div className="hc-surface-card mt-5 rounded-[20px] border p-5">
-            <p className="text-[12px] text-[color:var(--hc-muted)]">
+            <p className="text-[12px] text-(--hc-muted)">
               내 정보를 불러오지 못했어요.
             </p>
           </div>
@@ -883,12 +879,12 @@ export default function MyPage() {
           <div className="mt-5 flex flex-col gap-5">
             {/* 프로필 — 아바타·이름·이메일 한 줄 */}
             <div className="flex items-center gap-4 px-0.5">
-              {renderAvatar(72, 28, true)}
+              {renderAvatar(72, 28)}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[18px] font-extrabold">
                   {user.username}
                 </div>
-                <div className="truncate text-[13px] text-[color:var(--hc-muted)]">
+                <div className="truncate text-[13px] text-(--hc-muted)">
                   {user.email}
                 </div>
               </div>
@@ -941,13 +937,13 @@ export default function MyPage() {
                         </span>
                         <span
                           id={`${bodyId}-sub`}
-                          className="block truncate text-[12px] font-normal text-[color:var(--hc-muted)]"
+                          className="block truncate text-[12px] font-normal text-(--hc-muted)"
                         >
                           {sectionSub(id)}
                         </span>
                       </span>
                       <ChevronRight
-                        className="h-[18px] w-[18px] shrink-0 text-[color:var(--hc-muted)] transition-transform"
+                        className="h-4.5 w-4.5 shrink-0 text-(--hc-muted) transition-transform"
                         style={open ? { transform: "rotate(90deg)" } : undefined}
                       />
                     </button>
@@ -957,7 +953,7 @@ export default function MyPage() {
                     id={bodyId}
                     className={`${
                       open
-                        ? "border-t border-[color:var(--hc-border-subtle)]"
+                        ? "border-t border-(--hc-border-subtle)"
                         : "hidden"
                     } px-5 py-5 lg:block lg:border-t-0 lg:pt-3`}
                   >
@@ -970,7 +966,7 @@ export default function MyPage() {
 
             <div className="mt-1">{logoutAndExit}</div>
 
-            <p className="pb-2 text-center text-[11px] text-[color:var(--hc-muted)]">
+            <p className="pb-2 text-center text-[11px] text-(--hc-muted)">
               하루컷 v1.0.0
             </p>
           </div>

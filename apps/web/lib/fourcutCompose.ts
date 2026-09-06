@@ -99,7 +99,7 @@ const SOURCE_QUALITY = 0.92;
 const CUTOUT_INTERMEDIATE_QUALITY = 1;
 
 export class SystemFrameMissingError extends Error {
-  constructor(readonly frameId: FrameId) {
+  constructor() {
     super("이 프레임으로는 아직 저장할 수 없어요.");
     this.name = "SystemFrameMissingError";
   }
@@ -296,10 +296,10 @@ export async function resolveComposeFrame(
     return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame) };
   }
 
-  if (!frameId) throw new SystemFrameMissingError("classic-4");
+  if (!frameId) throw new SystemFrameMissingError();
 
   const system = await findSystemFrame(frameId);
-  if (!system) throw new SystemFrameMissingError(frameId);
+  if (!system) throw new SystemFrameMissingError();
 
   // 시스템 프레임도 같은 필드를 달고 온다. 목록으로 이미 받았으니 더 물을 것이 없다.
   return { frameId: system.frameId, cellCutouts: readCellCutouts(system) };

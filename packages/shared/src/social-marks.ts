@@ -97,7 +97,7 @@ export const SOCIAL_MARK_GEOMETRY: Record<SocialProvider, MarkGeometry> = {
 /**
  * 버튼 색 — 전부 각 사 지정값이다.
  *
- * 카카오: 컨테이너 #FEE500 / 심볼 #000000 / 레이블 #000000 85%. "위의 색상 규정에 벗어난
+ * 카카오: 컨테이너 #FEE500 / 레이블 #000000 85%. "위의 색상 규정에 벗어난
  *   색상을 적용해서는 안 됩니다." 테마별 변형이 아예 없어 라이트·다크가 같다.
  * 네이버: 2025년 하반기 개정색 #03A94D. 예전 #03C75A 도, 우리가 쓰던 #007A3D 도 아니다.
  *   다크 렌디션 #05AC4F 가 따로 있지만 흰 글자 대비가 2.99:1 로 비텍스트 3:1 문턱에도 못 미쳐
@@ -107,16 +107,16 @@ export const SOCIAL_MARK_GEOMETRY: Record<SocialProvider, MarkGeometry> = {
  */
 export const SOCIAL_BRAND_COLORS = {
   kakao: {
-    light: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', mark: '#000000', line: null },
-    dark: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', mark: '#000000', line: null },
+    light: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', line: null },
+    dark: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', line: null },
   },
   naver: {
-    light: { bg: '#03A94D', label: '#FFFFFF', mark: '#FFFFFF', line: null },
-    dark: { bg: '#03A94D', label: '#FFFFFF', mark: '#FFFFFF', line: null },
+    light: { bg: '#03A94D', label: '#FFFFFF', line: null },
+    dark: { bg: '#03A94D', label: '#FFFFFF', line: null },
   },
   google: {
-    light: { bg: '#FFFFFF', label: '#1F1F1F', mark: null, line: '#747775' },
-    dark: { bg: '#131314', label: '#E3E3E3', mark: null, line: '#8E918F' },
+    light: { bg: '#FFFFFF', label: '#1F1F1F', line: '#747775' },
+    dark: { bg: '#131314', label: '#E3E3E3', line: '#8E918F' },
   },
 } as const;
 

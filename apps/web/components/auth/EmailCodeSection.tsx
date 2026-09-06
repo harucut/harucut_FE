@@ -22,7 +22,6 @@ type Props = {
   codeError?: string | null;
   onSend: (email: string) => Promise<boolean>;
   onVerify: (email: string, code: string) => Promise<boolean>;
-  verifiedText?: string;
 };
 
 function formatRemainingTime(remainingSeconds: number) {
@@ -63,7 +62,6 @@ export function EmailCodeSection({
   codeError,
   onSend,
   onVerify,
-  verifiedText = "이메일 인증이 완료되었어요.",
 }: Props) {
   // 인증 전에는 코드 시계(5분), 인증 뒤에는 인증 유효 시계(10분)가 돈다. 둘 다 없으면 멈춘다.
   const activeDeadline = isVerified ? verifiedExpiresAt : codeExpiresAt;
@@ -115,8 +113,10 @@ export function EmailCodeSection({
           나타납니다"까지 붙었는데, 그건 사용자가 알아야 할 사실이 아니라 화면이 스스로를
           설명하는 말이었다. 이메일을 고치면 실제로 그렇게 되므로 미리 알려 줄 필요가 없다. */}
       {isVerified ? (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] px-3 py-2">
-          <p className="text-[11px] font-medium text-[color:var(--hc-text)]">{verifiedText}</p>
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) px-3 py-2">
+          <p className="text-[11px] font-medium text-(--hc-text)">
+            이메일 인증이 완료되었어요.
+          </p>
           {/* 인증을 마쳐도 시계는 계속 돈다 — 서버가 인증 기록을 10분만 들고 있다.
               예전에는 여기서 카운트다운이 사라져서, 남은 칸을 채우다 시간을 넘긴 사람은
               가입 버튼을 눌러야 비로소 실패를 알았다. */}
@@ -132,8 +132,8 @@ export function EmailCodeSection({
             <div
               className={`rounded-2xl border px-3 py-2 ${
                 isExpired
-                  ? "border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)]"
-                  : "border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)]"
+                  ? "border-(--hc-danger-border) bg-(--hc-danger-soft-bg)"
+                  : "border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg)"
               }`}
             >
               <div className="flex items-center justify-between gap-3">
@@ -141,12 +141,12 @@ export function EmailCodeSection({
                   <Clock3
                     size={14}
                     className={
-                      isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-primary-strong)]"
+                      isExpired ? "text-(--hc-danger)" : "text-(--hc-primary-strong)"
                     }
                   />
                   <p
                     className={`text-[11px] ${
-                      isExpired ? "text-[color:var(--hc-danger)]" : "text-[color:var(--hc-text)]"
+                      isExpired ? "text-(--hc-danger)" : "text-(--hc-text)"
                     }`}
                   >
                     {isExpired
@@ -216,7 +216,7 @@ export function EmailCodeSection({
           </div>
 
           {codeError ? (
-            <p id="email-code-error" role="alert" className="text-[12px] text-[color:var(--hc-danger)]">
+            <p id="email-code-error" role="alert" className="text-[12px] text-(--hc-danger)">
               {codeError}
             </p>
           ) : null}

@@ -2,10 +2,6 @@
 
 import type { Config } from "@imgly/background-removal";
 
-type RemoveImageBackgroundOptions = {
-  progress?: Config["progress"];
-};
-
 let removeBackgroundModulePromise:
   | Promise<typeof import("@imgly/background-removal")>
   | null = null;
@@ -24,10 +20,7 @@ export function buildBackgroundRemovedFileName(fileName: string) {
   return `${withoutExtension}-cutout.png`;
 }
 
-export async function removeImageBackground(
-  file: File,
-  options: RemoveImageBackgroundOptions = {},
-) {
+export async function removeImageBackground(file: File) {
   const { removeBackground } = await getRemoveBackgroundModule();
   const config: Config = {
     model: "isnet_quint8",
@@ -37,7 +30,6 @@ export async function removeImageBackground(
       format: "image/png",
       quality: 1,
     },
-    progress: options.progress,
   };
 
   const blob = await removeBackground(file, config);

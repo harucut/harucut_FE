@@ -97,8 +97,6 @@ type WaitOptions = {
   intervalMs?: number;
   /** 이 시간을 넘기면 ComposeTimeoutError. */
   timeoutMs?: number;
-  /** 진행 상황을 화면에 보여줄 때 쓴다. */
-  onTick?: (job: ComposeJob, elapsedMs: number) => void;
   signal?: AbortSignal;
 };
 
@@ -111,7 +109,7 @@ type WaitOptions = {
  */
 export async function waitForCompose(
   jobId: number,
-  { intervalMs = 1000, timeoutMs = 90_000, onTick, signal }: WaitOptions = {},
+  { intervalMs = 1000, timeoutMs = 90_000, signal }: WaitOptions = {},
 ): Promise<ComposeJob> {
   const startedAt = Date.now();
 
@@ -120,7 +118,6 @@ export async function waitForCompose(
 
     const job = await getComposeJob(jobId);
     const elapsed = Date.now() - startedAt;
-    onTick?.(job, elapsed);
 
     if (job.status === "DONE") return job;
     if (job.status === "FAILED") throw new ComposeFailedError(job.failureReason);

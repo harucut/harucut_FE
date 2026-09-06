@@ -38,6 +38,9 @@
 - `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
   `check_backend_contract_test.py` 셋이다. 나머지 하나는 검증이 아니다 —
   `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지).
+  웹 전용 검사 하나가 더 있다 — `apps/web/scripts/check-canonical-classes.mjs`
+  (`pnpm check:classes:web`). 임의값 Tailwind 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을
+  막는다. 추측이 아니라 후보를 실제로 컴파일해 값으로 비교한다.
 
 ## 규칙의 소유자
 
@@ -80,14 +83,16 @@ git config core.hooksPath .githooks
 ```
 
 켜도 `.githooks/pre-commit`·`pre-push` 가 막는 것은 보호 브랜치(`main|develop|develop_loop`)
-위의 commit/push 뿐이다 — **브랜치 이름은 검사하지 않는다.** pre-commit 의 에러 문구가 아직
-`issue/<number>-<slug>` 를 말하지만 문구일 뿐 강제되는 규칙이 아니다.
+위의 commit/push 뿐이다 — **브랜치 이름은 검사하지 않는다.** pre-commit 의 에러 문구는
+`<type>/<slug>` 브랜치로 옮기라고 안내하지만, 안내일 뿐 강제되는 규칙이 아니다.
 
 ## 검증
 
-- 통합: `pnpm verify:standard` — 락파일 검사 → `lint:web` → `test:web` → `build:web` →
-  `lint:mobile` → `typecheck:mobile`. 실제 목록은 `scripts/verify_workspace.py` 의 `GROUPS`.
-- 개별: `pnpm lint:web`, `pnpm test:web`, `pnpm build:web`, `pnpm lint:mobile`, `pnpm typecheck:mobile`
+- 통합: `pnpm verify:standard` — 락파일 검사 → `lint:web` → `check:classes:web` → `typecheck:shared`
+  → `test:web` → `build:web` → `lint:mobile` → `typecheck:mobile`.
+  실제 목록은 `scripts/verify_workspace.py` 의 `GROUPS`.
+- 개별: `pnpm lint:web`, `pnpm check:classes:web`, `pnpm typecheck:shared`, `pnpm test:web`,
+  `pnpm build:web`, `pnpm lint:mobile`, `pnpm typecheck:mobile`
 - e2e: `pnpm test:e2e:web`
 - 앱 수동 확인: [`docs/mobile-qa-checklist.md`](docs/mobile-qa-checklist.md)
 

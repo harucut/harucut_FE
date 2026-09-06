@@ -81,17 +81,6 @@ describe("waitForCompose", () => {
       waitForCompose(1, { intervalMs: 0, timeoutMs: 0 }),
     ).rejects.toBeInstanceOf(ComposeTimeoutError);
   });
-
-  it("진행 상황을 알려 준다", async () => {
-    mockGet
-      .mockResolvedValueOnce(envelope({ jobId: 1, status: "PENDING" }))
-      .mockResolvedValueOnce(envelope({ jobId: 1, status: "DONE", mediaId: 3 }));
-
-    const seen: string[] = [];
-    await waitForCompose(1, { intervalMs: 0, onTick: (job) => seen.push(job.status) });
-
-    expect(seen).toEqual(["PENDING", "DONE"]);
-  });
 });
 
 describe("newIdempotencyKey", () => {

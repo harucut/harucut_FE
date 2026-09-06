@@ -23,12 +23,15 @@
 
 ```text
 /  -> 랜딩 페이지
-   -> /home               메인 CTA
-   -> /login              인증 CTA
-   -> /signup             인증 CTA
-   -> /features           기능 소개
-   -> /pricing            요금제
+   -> /shoot              히어로 주 CTA(「가입 없이 체험하기」 → 안내 모달 → 게스트 체험 쿠키)
+   -> /login              히어로 보조 CTA · 하단 CTA · 헤더 CTA(헤더 CTA 는 좁은 화면에서 숨긴다)
+   -> /features           헤더 nav · 본문 「기능 자세히 보기」
+   -> /enterprise         헤더 nav · 본문 「행사 도입 알아보기」
+   -> /pricing            헤더 nav
+   -> /faq                헤더 nav
 ```
+
+랜딩에는 회원가입 링크가 없습니다 — `/signup` 으로는 `/login` 화면에서 이어집니다.
 
 비인증 사용자가 보호 라우트로 진입하면 미들웨어가 다음 형태로 보냅니다.
 
