@@ -31,7 +31,6 @@
   --hc-surface-soft: rgba(255, 255, 255, 0.82);
   --hc-surface-highlight: #ffffff;
   --hc-surface-muted: #f1f1ee;
-  --hc-surface-muted-hover: #e8e8e4;
   --hc-surface-inset: linear-gradient(180deg, #f1f1ee 0%, #fafaf7 100%);
   --hc-input-bg: #e8e8e4;
   --hc-input-border: rgba(20, 20, 15, 0.16);
@@ -41,14 +40,9 @@
   --hc-accent-soft-bg: rgba(22, 180, 84, 0.1);
   --hc-accent-soft-border: rgba(22, 180, 84, 0.16);
   --hc-accent-soft-text: #0b6b30;
-  --hc-brand-badge-bg: #ffffff;
-  --hc-brand-badge-text: #0b6b30;
-  --hc-brand-badge-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
-  --hc-brand-overline: #5c5c57;
   --hc-soft-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
   --hc-shadow: rgba(20, 20, 15, 0.14);
   --hc-card-shadow: 0 18px 40px rgba(20, 20, 15, 0.1);
-  --hc-card-shadow-xl: 0 20px 60px rgba(20, 20, 15, 0.12);
   --hc-card-shadow-hero: 0 30px 80px rgba(20, 20, 15, 0.16);
   --hc-button-shadow: 0 16px 36px rgba(22, 180, 84, 0.24);
   --hc-button-shadow-hover: 0 20px 44px rgba(14, 126, 57, 0.2);
@@ -59,14 +53,8 @@
   --hc-ink-button-bg: #14140f;
   --hc-ink-button-hover: #2b2b25;
   --hc-ink-button-text: #fafaf7;
-  --hc-hero-button-bg: #16b454;
-  --hc-hero-button-hover: #129a47;
-  --hc-hero-button-text: #06140a;
-  --hc-hero-gradient-end: #3dd17f;
-  --hc-theme-toggle-bg: #ffffff;
   --hc-theme-toggle-active-bg: rgba(22, 180, 84, 0.12);
   --hc-theme-toggle-active-text: #0e7e39;
-  --hc-theme-toggle-shadow: 0 18px 48px rgba(20, 20, 15, 0.18);
   /* 소셜 로그인 — 각 사 공식 규격값이라 우리가 고르는 색이 아니다. 근거는 socialMarks.tsx 주석 참고.
      구글 Light: Fill #FFFFFF / Stroke #747775 1px inside / Font #1F1F1F
      카카오: 컨테이너 #FEE500 / 레이블 #000000 85% ("위의 색상 규정에 벗어난 색상을 적용해서는 안 됩니다")
@@ -85,20 +73,10 @@
   --hc-page-gradient-app:
     radial-gradient(circle at top, rgba(30, 215, 96, 0.1), transparent 28%),
     linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
-  --hc-page-gradient-showcase:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.12), transparent 24%),
-    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
   --hc-page-gradient-landing:
     radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
     radial-gradient(circle at 88% 18%, rgba(22, 180, 84, 0.1), transparent 18%),
     linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
-  --hc-page-overlay-landing:
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.28),
-      transparent 42%,
-      rgba(22, 180, 84, 0.08) 100%
-    );
   --hc-scrollbar-thumb: rgba(22, 180, 84, 0.42);
   --hc-scrollbar-thumb-hover: rgba(22, 180, 84, 0.64);
   --hc-zinc-950: #f1f1ee;
@@ -114,13 +92,6 @@
   --hc-zinc-200: #36362f;
   --hc-zinc-100: #232320;
   --hc-zinc-50: #14140f;
-  --hc-emerald-100: #d7f5e3;
-  --hc-emerald-200: #a8e9c4;
-  --hc-emerald-300: #5fd592;
-  --hc-emerald-400: #2bc76f;
-  --hc-emerald-500: #16b454;
-  --hc-lime-100: #d7f5e3;
-  --hc-lime-200: #a8e9c4;
 }
 
 /* STUDIO 디자인 — 다크: 딥다크 무대(#0B0B0C) + 비비드 그린(#1ED760).
@@ -155,7 +126,6 @@ html[data-theme="dark"],
   --hc-surface-soft: #161617;
   --hc-surface-highlight: #232325;
   --hc-surface-muted: rgba(0, 0, 0, 0.3);
-  --hc-surface-muted-hover: rgba(0, 0, 0, 0.45);
   --hc-surface-inset: #000000;
   --hc-input-bg: #232325;
   --hc-input-border: rgba(255, 255, 255, 0.12);
@@ -165,14 +135,9 @@ html[data-theme="dark"],
   --hc-accent-soft-bg: rgba(30, 215, 96, 0.16);
   --hc-accent-soft-border: rgba(30, 215, 96, 0.3);
   --hc-accent-soft-text: #7beaa6;
-  --hc-brand-badge-bg: rgba(255, 255, 255, 0.06);
-  --hc-brand-badge-text: #56dd86;
-  --hc-brand-badge-shadow: none;
-  --hc-brand-overline: #6f6f73;
   --hc-soft-shadow: none;
   --hc-shadow: rgba(0, 0, 0, 0.6);
   --hc-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
-  --hc-card-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
   --hc-card-shadow-hero: 0 24px 80px rgba(0, 0, 0, 0.7);
   --hc-button-shadow: 0 10px 28px -12px rgba(30, 215, 96, 0.5);
   --hc-button-shadow-hover: 0 14px 32px -12px rgba(30, 215, 96, 0.6);
@@ -183,14 +148,8 @@ html[data-theme="dark"],
   --hc-ink-button-bg: #ffffff;
   --hc-ink-button-hover: #f1f1ee;
   --hc-ink-button-text: #0b0b0c;
-  --hc-hero-button-bg: #1ed760;
-  --hc-hero-button-hover: #1fe267;
-  --hc-hero-button-text: #06140a;
-  --hc-hero-gradient-end: #56dd86;
-  --hc-theme-toggle-bg: #161617;
   --hc-theme-toggle-active-bg: rgba(30, 215, 96, 0.16);
   --hc-theme-toggle-active-text: #7beaa6;
-  --hc-theme-toggle-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
   /* 구글만 공식 Dark 렌디션(Fill #131314 / Stroke #8E918F / Font #E3E3E3)이 있어 테마를 따른다.
      카카오는 테마별 변형 자체가 없다 — #FEE500 고정이고 다른 색은 금지다.
      네이버는 다크 렌디션 #05AC4F 가 있지만 흰 글자 대비가 2.99:1 로 비텍스트 3:1 문턱에도 못 미친다.
@@ -207,13 +166,9 @@ html[data-theme="dark"],
   --hc-frame-picker-preview-outer: #e7ecf2;
   --hc-frame-picker-preview-inner: #171c24;
   --hc-page-gradient-app: #0b0b0c;
-  --hc-page-gradient-showcase:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
-    linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
   --hc-page-gradient-landing:
     radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
     linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
-  --hc-page-overlay-landing: transparent;
   --hc-scrollbar-thumb: rgba(111, 111, 115, 0.5);
   --hc-scrollbar-thumb-hover: rgba(30, 215, 96, 0.6);
   --hc-zinc-950: #0b0b0c;
@@ -227,18 +182,9 @@ html[data-theme="dark"],
   --hc-zinc-200: #e4e4e4;
   --hc-zinc-100: #f4f4f4;
   --hc-zinc-50: #fafafa;
-  --hc-emerald-100: #c9f7da;
-  --hc-emerald-200: #7beaa6;
-  --hc-emerald-300: #56dd86;
-  --hc-emerald-400: #2fd06b;
-  --hc-emerald-500: #1ed760;
-  --hc-lime-100: #c9f7da;
-  --hc-lime-200: #7beaa6;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   /* 전역 폰트는 Pretendard 단일. (Geist 기본값 제거 — layout.tsx에서 웹폰트 로드) */
   --font-sans:
     "Pretendard Variable", Pretendard, SUIT, -apple-system, BlinkMacSystemFont,
@@ -257,13 +203,6 @@ html[data-theme="dark"],
   --color-zinc-200: var(--hc-zinc-200);
   --color-zinc-100: var(--hc-zinc-100);
   --color-zinc-50: var(--hc-zinc-50);
-  --color-emerald-100: var(--hc-emerald-100);
-  --color-emerald-200: var(--hc-emerald-200);
-  --color-emerald-300: var(--hc-emerald-300);
-  --color-emerald-400: var(--hc-emerald-400);
-  --color-emerald-500: var(--hc-emerald-500);
-  --color-lime-100: var(--hc-lime-100);
-  --color-lime-200: var(--hc-lime-200);
 }
 
 body {
@@ -353,7 +292,6 @@ body {
 
     button[class*="h-8"][class*="w-8"],
     button[class*="h-9"][class*="w-9"],
-    button[class*="h-[30px]"][class*="w-[30px]"],
     a[class*="h-8"][class*="w-8"],
     a[class*="h-9"][class*="w-9"],
     a[class*="h-11"][class*="w-11"] {
@@ -401,18 +339,9 @@ body {
   color: var(--hc-text);
 }
 
-.hc-page-showcase {
-  background: var(--hc-page-gradient-showcase);
-  color: var(--hc-text);
-}
-
 .hc-page-landing {
   background: var(--hc-page-gradient-landing);
   color: var(--hc-text);
-}
-
-.hc-page-landing-overlay {
-  background: var(--hc-page-overlay-landing);
 }
 
 .hc-accent-chip {
@@ -427,37 +356,15 @@ body {
   box-shadow: var(--hc-card-shadow);
 }
 
-.hc-surface-card-xl {
-  background: var(--hc-surface);
-  border-color: var(--hc-border);
-  box-shadow: var(--hc-card-shadow-xl);
-}
-
 .hc-surface-hero {
   background: var(--hc-surface-highlight);
   border-color: var(--hc-border);
   box-shadow: var(--hc-card-shadow-hero);
 }
 
-.hc-surface-soft {
-  background: var(--hc-surface-soft);
-  border-color: var(--hc-border);
-  box-shadow: var(--hc-soft-shadow);
-}
-
 .hc-surface-well {
   background: var(--hc-surface-muted);
   border-color: var(--hc-border);
-}
-
-.hc-surface-well-hover:hover {
-  background: var(--hc-surface-muted-hover);
-  border-color: var(--hc-border-strong);
-}
-
-.hc-surface-inset {
-  background: var(--hc-surface-inset);
-  border-color: var(--hc-border-subtle);
 }
 
 .hc-button-primary {
@@ -473,22 +380,6 @@ body {
 
 .hc-button-primary:hover {
   background: var(--hc-primary-hover);
-  box-shadow: var(--hc-button-shadow-hover);
-}
-
-.hc-button-hero {
-  background: var(--hc-hero-button-bg);
-  color: var(--hc-hero-button-text);
-  box-shadow: var(--hc-button-shadow);
-  transition:
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
-}
-
-.hc-button-hero:hover {
-  background: var(--hc-hero-button-hover);
   box-shadow: var(--hc-button-shadow-hover);
 }
 
@@ -615,7 +506,6 @@ body {
   반응해야 한다. DESIGN.md 대로 위치는 움직이지 않고 밝기·면만 바꾼다.
 */
 .hc-button-primary:active,
-.hc-button-hero:active,
 .hc-button-neutral:active {
   filter: brightness(0.92);
 }

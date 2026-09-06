@@ -4,6 +4,7 @@
  * 왜 shared 로 올렸나: 예전에는 웹과 앱이 같은 PNG 를 각자 다른 크기로 그리고 있었다.
  * 로고는 웹 18/20/22px, 앱 20/26/30px. 네이버 버튼색은 웹 #007A3D, 앱 #03C75A — 같은 제품의
  * 같은 버튼이 플랫폼마다 다른 크기, 다른 색이었다. 값을 한 곳에서 읽게 만든다.
+ * (그 뒤 ADR-0003 으로 앱이 웹을 그대로 띄우게 되어, 지금 이 값을 그리는 곳은 웹 하나다.)
  *
  * 여기 있는 것은 **각 사의 규격**이지 우리 취향이 아니다. 바꾸려면 각 사 가이드를 먼저 볼 것.
  *  - 카카오 https://developers.kakao.com/docs/ko/kakaologin/design-guide
@@ -35,9 +36,6 @@ export const SOCIAL_MARK_SIZE: Record<SocialProvider, number> = {
   kakao: 18,
   naver: 16,
 };
-
-/** 마크와 라벨 사이 간격. 네이버 "가운데 정렬 시 로고와 레이블의 간격은 8px을 유지해 주세요". */
-export const SOCIAL_MARK_GAP = 8;
 
 export type MarkPath = { d: string; fill: string };
 
@@ -139,7 +137,14 @@ export const SOCIAL_LABELS: Record<SocialProvider, string> = {
   google: 'Google 로그인',
 };
 
-/** 마크 기하를 SVG 문자열로. 앱용 PNG 를 뽑는 scripts/gen-social-marks.mjs 가 쓴다. */
+/**
+ * 마크 기하를 SVG 문자열로.
+ *
+ * 화면에 그리는 쪽은 이 함수를 쓰지 않는다 — 웹은 SOCIAL_MARK_GEOMETRY 로 직접 <path> 를
+ * 그린다(apps/web/components/auth/socialMarks.tsx). 여기 남은 이유는 규격 테스트다:
+ * socialLogin.test.ts 가 이 문자열로 "구글 G 를 단색으로 칠하지 않는다" 같은 각 사 금지
+ * 조항을 검사한다.
+ */
 export function socialMarkToSvg(provider: SocialProvider, fill?: string): string {
   const { viewBox, paths } = SOCIAL_MARK_GEOMETRY[provider];
   const body = paths

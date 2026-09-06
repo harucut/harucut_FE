@@ -18,8 +18,6 @@ const NAV_LINKS = [
   { href: "/faq", label: "FAQ" },
 ] as const;
 
-export const MARKETING_NAV_HEIGHT = 72;
-
 export function MarketingNav({
   cta = "quiet",
   width = "max-w-[1160px]",

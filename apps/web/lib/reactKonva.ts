@@ -18,7 +18,6 @@ import {
   Layer as RKLayer,
   Rect as RKRect,
   Group as RKGroup,
-  Line as RKLine,
   Transformer as RKTransformer,
   Image as RKImage,
   Text as RKText,
@@ -59,7 +58,6 @@ export const Stage = RKStage as unknown as KonvaComponent;
 export const Layer = RKLayer as unknown as KonvaComponent;
 export const Rect = RKRect as unknown as KonvaComponent;
 export const Group = RKGroup as unknown as KonvaComponent;
-export const Line = RKLine as unknown as KonvaComponent;
 export const Transformer = RKTransformer as unknown as KonvaComponent;
 export const Image = RKImage as unknown as KonvaComponent;
 export const Text = RKText as unknown as KonvaComponent;

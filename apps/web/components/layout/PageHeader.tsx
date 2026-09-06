@@ -16,8 +16,6 @@ type Props = {
    */
   backLabel?: string;
   rightSlot?: ReactNode;
-  rightHref?: string;
-  rightLabel?: string;
   /**
    * 오른쪽 위 요소 **아래**에 붙는 것.
    *
@@ -51,8 +49,6 @@ export function PageHeader({
   backHref = "",
   backLabel,
   rightSlot,
-  rightHref,
-  rightLabel,
   rightBelow,
   onBackClick,
 }: Props) {
@@ -82,17 +78,7 @@ export function PageHeader({
 
         <div className="absolute right-0 top-0 flex flex-col items-end gap-1.5">
           {rightSlot ? (
-            rightHref ? (
-              <Link
-                href={rightHref}
-                aria-label={rightLabel}
-                className="hc-button-icon flex h-11 w-11 items-center justify-center rounded-full border text-[12px]"
-              >
-                {rightSlot}
-              </Link>
-            ) : (
-              <div className="flex items-center justify-center">{rightSlot}</div>
-            )
+            <div className="flex items-center justify-center">{rightSlot}</div>
           ) : null}
           {rightBelow}
         </div>

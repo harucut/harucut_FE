@@ -36,9 +36,8 @@
   (현재 13개 모듈).
 - `docs/`: 진입점은 [`docs/README.md`](docs/README.md).
 - `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
-  `check_backend_contract_test.py` 셋이다. 나머지 둘은 검증이 아니다 —
-  `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지),
-  `gen-social-marks.mjs`(소셜 마크 에셋 생성기).
+  `check_backend_contract_test.py` 셋이다. 나머지 하나는 검증이 아니다 —
+  `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지).
 
 ## 규칙의 소유자
 
