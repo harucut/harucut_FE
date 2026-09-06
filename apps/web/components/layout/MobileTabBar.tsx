@@ -27,7 +27,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
     pathname === href || pathname.startsWith(`${href}/`);
 
   const shootButtonClass =
-    "-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]";
+    "-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition active:brightness-90";
 
   return (
     <>
@@ -38,7 +38,8 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/home"
         aria-label="홈"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/home") ? "page" : undefined}
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/home")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
@@ -51,7 +52,8 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/history"
         aria-label="기록"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/history") ? "page" : undefined}
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/history")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
@@ -86,7 +88,8 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/theme"
         aria-label="프레임"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/theme") ? "page" : undefined}
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/theme")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"
@@ -99,7 +102,8 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       <Link
         href="/mypage"
         aria-label="MY"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/mypage") ? "page" : undefined}
+        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/mypage")
             ? "text-[color:var(--hc-text)]"
             : "text-[color:var(--hc-muted)]"

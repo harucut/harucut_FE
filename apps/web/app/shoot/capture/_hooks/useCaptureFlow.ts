@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { nativeHaptic } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { centerCrop, cropPhotoToPreviewThenSlot } from "@/lib/canvas/captureCrop";
@@ -287,6 +288,8 @@ export function useCaptureFlow() {
     // 셔터음은 그림을 만들기 전에 낸다 — 누른 순간과 소리가 붙어 있어야 한다.
     // 스틸 촬영은 수백 ms 가 걸릴 수 있어서 이 순서가 더 중요해졌다.
     playShutterSound();
+    // 소리와 같은 프레임에 진동(apple-design: 시각·소리·촉각은 한 순간에). 셸 밖에서는 아무 일도 없다.
+    nativeHaptic("medium");
 
     /*
       가능하면 **사진 파이프라인**으로 찍는다(ImageCapture.takePhoto).

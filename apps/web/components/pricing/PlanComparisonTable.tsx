@@ -37,16 +37,17 @@ export function PlanComparisonTable({
       role="region"
       aria-label="요금제 기능 비교표"
     >
-      <table className="w-full min-w-[520px] border-collapse">
+      {/* 플랜이 둘이라 520px 이 필요 없다. 393px 폰에서 '베이직' 열이 통째로 화면 밖에 있었다. */}
+      <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-[color:var(--hc-border)]">
-            <th className="py-3 pr-3 text-left text-[12px] font-medium text-[color:var(--hc-muted)]">
+            <th className="w-[40%] py-3 pr-3 text-left text-[12px] font-medium text-[color:var(--hc-muted)]">
               기능
             </th>
             {PLANS.map((plan) => (
               <th
                 key={plan.id}
-                className={`px-3 py-3 text-center ${
+                className={`px-2 py-3 text-center sm:px-3 ${
                   plan.hot ? "bg-[color:var(--hc-accent-soft-bg)]" : ""
                 }`}
               >
@@ -84,7 +85,7 @@ export function PlanComparisonTable({
               {row.cells.map((cell, i) => (
                 <td
                   key={PLANS[i].id}
-                  className={`px-3 py-3 text-center align-middle ${
+                  className={`px-2 py-3 text-center align-middle sm:px-3 ${
                     PLANS[i].hot ? "bg-[color:var(--hc-accent-soft-bg)]" : ""
                   }`}
                 >

@@ -28,41 +28,49 @@ export function TermsConsentFieldset({
   disabled,
 }: Props) {
   return (
-    <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+    <fieldset className="flex flex-col gap-0 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-1">
       <legend className="sr-only">약관 동의</legend>
       {items.map((item) => (
         <div key={item.code} className="flex flex-col gap-1">
-          <label className="flex items-center gap-2 text-[12px] text-zinc-300">
-            <input
-              type="checkbox"
-              checked={checked[item.code] ?? false}
-              disabled={disabled}
-              onChange={(e) => onToggle(item.code, e.target.checked)}
-              className="h-4 w-4 accent-[color:var(--hc-primary)]"
-            />
-            <span>
-              <span
-                className={
-                  item.required
-                    ? "text-[color:var(--hc-primary-strong)]"
-                    : "text-zinc-500"
-                }
-              >
-                {item.required ? "[필수]" : "[선택]"}
-              </span>{" "}
-              {item.title}
-            </span>
+          {/*
+            한 줄이 44px 다. 예전에는 16px 체크박스·17px 줄·11px '보기' 가 26px 간격으로 붙어
+            손가락으로 고르기 어려웠다. '보기' 는 label 안에 있으면 어느 쪽을 누른 건지 애매해서
+            형제로 뺀다 — label 은 체크박스만, 링크는 약관만 연다.
+          */}
+          <div className="flex min-h-[44px] items-center gap-2">
+            <label className="flex min-w-0 flex-1 items-center gap-3 py-2 text-[13px] text-zinc-300">
+              <input
+                type="checkbox"
+                checked={checked[item.code] ?? false}
+                disabled={disabled}
+                onChange={(e) => onToggle(item.code, e.target.checked)}
+                className="h-5 w-5 shrink-0 accent-[color:var(--hc-primary)]"
+              />
+              <span>
+                <span
+                  className={
+                    item.required
+                      ? "text-[color:var(--hc-primary-strong)]"
+                      : "text-[color:var(--hc-muted)]"
+                  }
+                >
+                  {item.required ? "[필수]" : "[선택]"}
+                </span>{" "}
+                {item.title}
+              </span>
+            </label>
             {item.href ? (
               <Link
                 href={item.href}
                 target="_blank"
                 rel="noreferrer"
-                className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
+                aria-label={`${item.title} 전문 보기`}
+                className="inline-flex min-h-[44px] shrink-0 items-center px-2 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4 hover:text-[color:var(--hc-text)]"
               >
                 보기
               </Link>
             ) : null}
-          </label>
+          </div>
           {item.content ? (
             <details className="ml-6">
               <summary className="cursor-pointer text-[11px] text-zinc-500 underline underline-offset-4">
@@ -76,7 +84,7 @@ export function TermsConsentFieldset({
         </div>
       ))}
       {error ? (
-        <p className="text-[11px] text-[color:var(--hc-danger)]">{error}</p>
+        <p role="alert" className="pb-2 text-[12px] text-[color:var(--hc-danger)]">{error}</p>
       ) : null}
     </fieldset>
   );

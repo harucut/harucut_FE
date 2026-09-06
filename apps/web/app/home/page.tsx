@@ -219,10 +219,16 @@ export default function HomePage() {
               </>
             );
 
+            /*
+              주 카드는 중립(흰 면·검은 글자)이다. 예전에는 초록이었는데 탭바의 촬영 버튼이 같은
+              다이얼로그를 여는 같은 초록이라 첫 화면에 같은 행동이 두 번 초록으로 놓였다
+              (DESIGN.md 「한 화면 한 초록」). 탭바는 모든 탭에 상주하는 전역 진입로라 초록을 거기
+              남기고, 카드는 크기·굵기·그림자로 무게를 갖는다. 보조 카드는 한 단 낮춘다.
+            */
             const className = `group ${HOME_CARD} ${
               action.primary
-                ? "bg-[color:var(--hc-primary)] text-left text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] hover:shadow-[var(--hc-button-shadow-hover)]"
-                : "hc-surface-card border hover:border-[color:var(--hc-border-strong)]"
+                ? "bg-[color:var(--hc-neutral-button-bg)] text-left text-[color:var(--hc-neutral-button-text)] shadow-[var(--hc-neutral-button-shadow)] hover:bg-[color:var(--hc-neutral-button-hover)]"
+                : "hc-surface-well border hover:border-[color:var(--hc-border-strong)]"
             }`;
 
             return action.href ? (
@@ -254,7 +260,7 @@ export default function HomePage() {
             </h2>
             <Link
               href="/history"
-              className="hc-link-accent flex items-center gap-1 text-[13px] font-semibold"
+              className="hc-link-accent inline-flex min-h-[44px] items-center gap-1 px-1 text-[13px] font-semibold"
             >
               전체보기
               <ArrowRight className="hidden h-3.5 w-3.5 lg:inline" />
@@ -272,7 +278,7 @@ export default function HomePage() {
           <div
             className={
               loading || recentMedia.length > 0
-                ? "-mx-4 flex snap-x gap-3.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0"
+                ? "-mx-4 flex snap-x scroll-px-4 gap-3.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0"
                 : "grid grid-cols-1 gap-3.5 sm:gap-4"
             }
           >

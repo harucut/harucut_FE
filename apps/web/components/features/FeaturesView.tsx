@@ -172,7 +172,7 @@ function AxisVisual({ index }: { index: number }) {
 
 export function FeaturesView() {
   return (
-    <div className="min-h-dvh bg-[#0B0B0C] text-white">
+    <main className="min-h-dvh bg-[#0B0B0C] text-white">
       <MarketingNav tone="dark" />
 
       {/* 페이지 헤드 — 랜딩 히어로보다 한 단계 낮은 타입 스케일 */}
@@ -290,6 +290,6 @@ export function FeaturesView() {
       </section>
 
       <MarketingFooter tone="dark" />
-    </div>
+    </main>
   );
 }

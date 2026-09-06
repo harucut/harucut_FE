@@ -46,7 +46,7 @@ export function FrameOutputOptionsPanel({
                     type="button"
                     onClick={() => onBorderColorChange(color.value)}
                     className={[
-                      "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[11px]",
+                      "inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[12px]",
                       borderColor === color.value
                         ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
                         : "border-zinc-700 text-zinc-300",
@@ -64,15 +64,22 @@ export function FrameOutputOptionsPanel({
               <div className="flex items-center gap-2">
                 <input
                   type="color"
+                  aria-label="배경색 고르기"
                   value={normalizeHexColor(borderColor)}
                   onChange={(e) => onBorderColorChange(e.target.value)}
-                  className="hc-input h-9 w-12 rounded-lg border"
+                  className="hc-input h-11 w-12 shrink-0 rounded-lg border"
                 />
                 <input
+                  aria-label="배경색 HEX 코드"
                   value={borderColor}
                   onChange={(e) => onBorderColorChange(normalizeHexColor(e.target.value))}
-                  className="hc-input h-9 flex-1 rounded-lg border px-3 text-[11px]"
+                  className="hc-input h-11 min-w-0 flex-1 rounded-lg border px-3 font-mono text-[13px] tracking-[0.06em]"
                   placeholder="#23262d"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  maxLength={7}
                 />
               </div>
             </div>
@@ -82,7 +89,7 @@ export function FrameOutputOptionsPanel({
         <div className="flex flex-col gap-2">
           <div>
             <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
-            <p className="mt-1 text-[11px] text-zinc-500">
+            <p className="mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
               고른 보정 필터는 미리보기와 최종 이미지에 똑같이 적용돼요.
             </p>
           </div>
@@ -94,16 +101,16 @@ export function FrameOutputOptionsPanel({
                 type="button"
                 onClick={() => onOutputFilterChange(filter.id)}
                 className={[
-                  "rounded-2xl border px-3 py-2 text-left transition-colors",
+                  "min-h-[44px] rounded-2xl border px-3 py-2.5 text-left transition-colors",
                   outputFilter === filter.id
                     ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)]"
                     : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
                 ].join(" ")}
               >
-                <span className="block text-[11px] font-semibold text-zinc-100">
+                <span className="block text-[12px] font-semibold text-zinc-100">
                   {filter.label}
                 </span>
-                <span className="mt-1 block text-[11px] text-zinc-400">
+                <span className="mt-1 block text-[12px] text-zinc-400">
                   {filter.description}
                 </span>
               </button>

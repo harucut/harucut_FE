@@ -93,14 +93,16 @@ export function FrameSelectPanel({
       <section className="flex flex-col gap-3">
         {frameId ? (
           <section className="flex flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:hidden">
-            <div className="flex justify-center">
+            {/* 폭만 220px 로 묶으면 세로 4컷(1:3)은 660px 가 돼 첫 화면을 통째로 먹고, 고를 사진도
+                다음 버튼도 스크롤 뒤에 숨는다. 높이를 잡고 폭은 비율이 정하게 한다. */}
+            <div className="flex h-[min(36dvh,300px)] justify-center">
               <FramePreview
                 frameId={frameId}
                 media={slotMedia}
                 theme={themeData}
                 borderColor={borderColor}
                 outputFilter={outputFilter}
-                className="w-full max-w-[220px]"
+                className="max-h-full w-auto max-w-full"
               />
             </div>
           </section>
@@ -143,16 +145,14 @@ export function FrameSelectPanel({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={item.src}
-                      alt={`shot-${index + 1}`}
+                      alt={`${index + 1}번 사진`}
                       className="h-full w-full object-cover"
                     />
 
-                    <span className="pointer-events-none absolute left-1 top-1 rounded-full border border-black/10 bg-white px-1.5 py-0.5 text-[11px] font-bold text-black shadow-sm">
-                      #{index + 1}
-                    </span>
-
+                    {/* 배지는 선택 순서 하나만. 원본 순번(#n)은 고를 때 쓰는 정보가 아니고,
+                        aria-label 이 이미 두 정보를 다 말한다. 미선택 타일은 사진만 남는다. */}
                     {isSelected ? (
-                      <span className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[color:var(--hc-primary)] text-[11px] font-semibold text-[color:var(--hc-primary-contrast)]">
+                      <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--hc-primary)] font-mono text-[12px] font-bold tabular-nums text-[color:var(--hc-primary-contrast)] shadow-sm">
                         {order}
                       </span>
                     ) : null}
@@ -182,13 +182,14 @@ export function FrameSelectPanel({
             : ""}
         </p>
 
-        <section className="flex items-center justify-between text-[11px] text-[color:var(--hc-muted)]">
+        {/* 흐름의 주 CTA 는 업로드 화면(h-12 · 15px · 800)과 같은 크기다. 화면마다 달랐다. */}
+        <section className="flex items-center gap-2">
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex w-fit items-center gap-1 rounded-full border border-[color:var(--hc-border)] px-2.5 py-1.5 text-[11px] text-[color:var(--hc-muted)] transition hover:border-[color:var(--hc-border-strong)] hover:text-[color:var(--hc-text)]"
+            className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] px-4 text-[13px] text-[color:var(--hc-muted)] transition hover:border-[color:var(--hc-border-strong)] hover:text-[color:var(--hc-text)]"
           >
-            <RotateCcw className="h-3.5 w-3.5" />
+            <RotateCcw className="h-4 w-4" />
             선택 초기화
           </button>
 
@@ -196,7 +197,7 @@ export function FrameSelectPanel({
             type="button"
             disabled={!canProceed}
             onClick={onNext}
-            className="hc-button-primary rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+            className="hc-button-primary inline-flex h-12 flex-1 items-center justify-center rounded-full px-5 text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
           >
             {canProceed ? nextButtonLabel : incompleteButtonLabel ?? nextButtonLabel}
           </button>

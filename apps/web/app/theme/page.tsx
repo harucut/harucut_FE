@@ -108,7 +108,7 @@ function ThemePageContent() {
                 className="text-[12px] font-semibold tabular-nums text-[color:var(--hc-muted)]"
                 aria-label={`보관 ${capacity.used}개 / ${capacity.used + (capacity.remaining ?? 0)}개`}
               >
-                {capacity.used}/{capacity.used + (capacity.remaining ?? 0)}
+                보관 {capacity.used}/{capacity.used + (capacity.remaining ?? 0)}
               </span>
             )
           }
@@ -119,10 +119,10 @@ function ThemePageContent() {
           isLoading={isLoading}
           error={error}
           onRefresh={refresh}
-          // 라벨은 "불러오는 중..."인데 버튼은 눌렸다. 눌러도 조용히 빠져나가서, 목록이
+          // 라벨은 "불러오는 중…"인데 버튼은 눌렸다. 눌러도 조용히 빠져나가서, 목록이
           // 늦게 오는 날에는 아무 반응 없는 버튼이 됐다. 상태와 라벨을 맞춘다.
           confirmDisabled={isLoading}
-          confirmLabel={isLoading ? "불러오는 중..." : "새 프레임 만들기"}
+          confirmLabel={isLoading ? "불러오는 중…" : "새 프레임 만들기"}
           // 확인은 **언제나 새 프레임**이다. 목록에서 고른 것은 컷 구성만 따라가고,
           // 그 프레임을 이어서 고치는 길은 아래 "수정하기"다.
           onConfirm={({ frameId }) => {

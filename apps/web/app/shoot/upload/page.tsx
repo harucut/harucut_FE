@@ -139,7 +139,7 @@ export default function ShootUploadPage() {
           className="hc-button-secondary flex h-12 items-center justify-center gap-2 rounded-2xl border text-[14px] font-semibold disabled:opacity-50"
         >
           <ImagePlus className="h-[18px] w-[18px]" />
-          {isImporting ? "불러오는 중..." : "사진 고르기"}
+          {isImporting ? "불러오는 중…" : "사진 고르기"}
         </button>
 
         {notice ? (
@@ -170,13 +170,17 @@ export default function ShootUploadPage() {
                     alt={`불러온 사진 ${index + 1}`}
                     className="h-full w-full object-cover"
                   />
+                  {/* 보이는 원은 24px, 눌리는 면은 44px. 터치 규칙(min-height 44)이 폭 24 버튼을
+                      세로 타원으로 늘리던 것을 막는다. */}
                   <button
                     type="button"
                     onClick={() => removeShotPhoto(index)}
                     aria-label={`불러온 사진 ${index + 1} 빼기`}
-                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white"
+                    className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-full"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white">
+                      <X className="h-3.5 w-3.5" />
+                    </span>
                   </button>
                 </div>
               ))}

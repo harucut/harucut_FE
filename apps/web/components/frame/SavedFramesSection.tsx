@@ -38,7 +38,7 @@ export function SavedFramesSection({
   onAction,
   actionLabel = "열기",
   selectedStatusText = "선택됨",
-  idleStatusText = "클릭해서 선택",
+  idleStatusText = "눌러서 선택",
 }: SavedFramesSectionProps) {
   const matchingFrames = useMemo(
     () =>
@@ -78,7 +78,7 @@ export function SavedFramesSection({
         <div>
           <h2 className="text-sm font-semibold">{title}</h2>
           {description ? (
-            <p className="mt-1 text-[11px] text-[color:var(--hc-muted)]">{description}</p>
+            <p className="mt-1 text-[12px] text-[color:var(--hc-muted)]">{description}</p>
           ) : null}
         </div>
         <button
@@ -86,7 +86,7 @@ export function SavedFramesSection({
           onClick={onRefresh}
           aria-label="새로고침"
           title="새로고침"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--hc-border)] text-[color:var(--hc-muted)] transition hover:border-[color:var(--hc-border-strong)] hover:text-[color:var(--hc-text)]"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--hc-border)] text-[color:var(--hc-muted)] transition hover:border-[color:var(--hc-border-strong)] hover:text-[color:var(--hc-text)]"
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </button>
@@ -100,7 +100,7 @@ export function SavedFramesSection({
       ) : null}
 
       {isLoading ? (
-        <p className="mt-3 text-[12px] text-[color:var(--hc-muted)]">불러오는 중...</p>
+        <p className="mt-3 text-[12px] text-[color:var(--hc-muted)]">불러오는 중…</p>
       ) : failedWithNothing ? (
         <div role="alert" className="mt-3 flex flex-col items-start gap-2">
           <p className="text-[12px] text-[color:var(--hc-danger)]">{error}</p>
@@ -163,11 +163,11 @@ export function SavedFramesSection({
                         <p className="truncate text-sm font-semibold text-[color:var(--hc-text)]">
                           {frame.title || `프레임 #${frame.frameId}`}
                         </p>
-                        <p className="mt-1 line-clamp-2 text-[11px] text-[color:var(--hc-muted)]">
+                        <p className="mt-1 line-clamp-2 text-[12px] text-[color:var(--hc-muted)]">
                           {frame.description || "저장한 프레임을 다음 단계에서 바로 적용할 수 있어요."}
                         </p>
                       </div>
-                      <span className="text-[11px] text-[color:var(--hc-muted)]">
+                      <span className="text-[12px] text-[color:var(--hc-muted)]">
                         {isSelected ? selectedStatusText : idleStatusText}
                       </span>
                     </div>
@@ -178,7 +178,7 @@ export function SavedFramesSection({
                       <button
                         type="button"
                         onClick={() => onAction(frame)}
-                        className="hc-accent-chip rounded-full border px-3 py-1 text-[11px] font-medium"
+                        className="hc-button-secondary rounded-full border px-3.5 py-1.5 text-[12px] font-semibold"
                       >
                         {actionLabel}
                       </button>

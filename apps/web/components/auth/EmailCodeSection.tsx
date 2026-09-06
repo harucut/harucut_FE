@@ -92,7 +92,7 @@ export function EmailCodeSection({
   // 타이머가 도는 동안엔 '인증 확인'만, 전송 전·만료 후엔 '코드 보내기'만 (번갈아 노출).
   const showVerify = hasSentCode && !isExpired;
   const sendButtonLabel =
-    isSending ? "전송 중..." : hasSentCode ? "코드 다시 보내기" : "코드 보내기";
+    isSending ? "전송 중…" : hasSentCode ? "코드 다시 보내기" : "코드 보내기";
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -169,6 +169,11 @@ export function EmailCodeSection({
             {/* 서버가 보내는 코드는 숫자가 아니라 영숫자 6자리다(예: VJG4K4).
                 inputMode="numeric" 이었을 때는 휴대폰에서 숫자 키패드가 떠서 글자를 칠 수 없었다. */}
             <input
+              id="email-code"
+              name="code"
+              aria-label="인증 코드"
+              aria-invalid={Boolean(codeError)}
+              aria-describedby={codeError ? "email-code-error" : undefined}
               value={code}
               // 대문자로 바꿔 담는 것은 보이기용이 아니라 보내는 값 자체다. CSS 로만 대문자로
               // 보이게 하면 소문자로 친 사람은 화면엔 맞게 보이는데 서버엔 다른 값이 간다.
@@ -177,8 +182,10 @@ export function EmailCodeSection({
               inputMode="text"
               autoCapitalize="characters"
               autoComplete="one-time-code"
+              autoCorrect="off"
+              spellCheck={false}
               maxLength={6}
-              className="hc-input h-9 min-w-0 flex-1 rounded-lg border px-3 text-xs disabled:opacity-50"
+              className="hc-input h-11 min-w-0 flex-1 rounded-xl border px-3.5 font-mono text-[14px] tracking-[0.12em] placeholder:font-sans placeholder:tracking-normal disabled:opacity-50"
             />
 
             {showVerify ? (
@@ -188,10 +195,10 @@ export function EmailCodeSection({
                 onClick={async () => {
                   await onVerify(email.trim(), code.trim());
                 }}
-                className="hc-accent-chip inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+                className="hc-accent-chip inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-4 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <BadgeCheck size={14} />
-                <span>{isVerifying ? "확인 중..." : "인증 확인"}</span>
+                <span>{isVerifying ? "확인 중…" : "인증 확인"}</span>
               </button>
             ) : (
               <button
@@ -200,7 +207,7 @@ export function EmailCodeSection({
                 onClick={async () => {
                   await onSend(email.trim());
                 }}
-                className="hc-button-secondary inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+                className="hc-button-secondary inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-4 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Mail size={14} />
                 <span>{sendButtonLabel}</span>
@@ -209,7 +216,9 @@ export function EmailCodeSection({
           </div>
 
           {codeError ? (
-            <p className="text-[11px] text-[color:var(--hc-danger)]">{codeError}</p>
+            <p id="email-code-error" role="alert" className="text-[12px] text-[color:var(--hc-danger)]">
+              {codeError}
+            </p>
           ) : null}
         </>
       )}

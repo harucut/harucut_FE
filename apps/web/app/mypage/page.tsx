@@ -826,7 +826,7 @@ export default function MyPage() {
         type="button"
         onClick={handleExit}
         disabled={isSubmitting}
-        className="mx-auto mt-3 block text-[13px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+        className="mx-auto mt-1 flex min-h-[44px] w-fit items-center px-2 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-[3px] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
       >
         회원 탈퇴
       </button>
@@ -870,7 +870,7 @@ export default function MyPage() {
         {loading ? (
           <div className="hc-surface-card mt-5 rounded-[20px] border p-5">
             <p className="text-[12px] text-[color:var(--hc-muted)]">
-              정보를 불러오는 중...
+              정보를 불러오는 중…
             </p>
           </div>
         ) : !user ? (

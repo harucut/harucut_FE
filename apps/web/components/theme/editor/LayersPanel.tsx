@@ -61,12 +61,12 @@ export function LayersPanel() {
             삭제 되돌리기
           </button>
         ) : (
-          <p className="text-[11px] text-zinc-500">클릭해서 선택</p>
+          <p className="text-[12px] text-[color:var(--hc-muted)]">눌러서 선택</p>
         )}
       </div>
 
       {list.length === 0 ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[11px] text-zinc-400">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[12px] text-zinc-400">
           아직 추가한 요소가 없어요.
         </div>
       ) : (
@@ -196,7 +196,7 @@ function LayerRow({
         </span>
 
         {c.type !== "TEXT" ? (
-          <div className="h-8 w-8 overflow-hidden rounded-lg border border-zinc-800 bg-black/30">
+          <div className="h-8 w-8 overflow-hidden rounded-lg border border-zinc-800 bg-[color:var(--hc-surface-muted)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={c.source}
@@ -206,14 +206,14 @@ function LayerRow({
             />
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-black/30 flex items-center justify-center text-[11px] text-zinc-300">
+          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-[color:var(--hc-surface-muted)] flex items-center justify-center text-[11px] text-zinc-300">
             T
           </div>
         )}
 
         <div className="min-w-0">
           <p className="text-xs text-zinc-200 truncate">{title}</p>
-          <p className="text-[11px] text-zinc-500">zIndex {c.zIndex}</p>
+          <p className="text-[11px] text-[color:var(--hc-muted)]">zIndex {c.zIndex}</p>
         </div>
       </button>
 

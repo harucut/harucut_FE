@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { RefreshCw, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { isNativeShell } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useStageFit } from "@/hooks/useStageFit";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
+
+const subscribeNever = () => () => undefined;
 
 export default function CapturePage() {
   const {
@@ -35,6 +38,8 @@ export default function CapturePage() {
 
   const { frameId, shots, eventName } = useShootSession();
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
+  // 앱 셸 안인지는 클라이언트에서만 알 수 있다. 서버 스냅샷은 false 로 두어 하이드레이션이 어긋나지 않게 한다.
+  const inShell = useSyncExternalStore(subscribeNever, isNativeShell, () => false);
 
   // 찍은 컷이 있는데 아직 저장 전이면, 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(shots.length > 0);
@@ -164,7 +169,9 @@ export default function CapturePage() {
                           카메라를 켜면 여기에 화면이 보여요.
                           <br />
                           <span className="font-normal text-white/70">
-                            브라우저가 카메라 사용을 물어보면 허용해 주세요.
+                            {inShell
+                              ? "앱이 카메라 사용을 물어보면 허용해 주세요."
+                              : "브라우저가 카메라 사용을 물어보면 허용해 주세요."}
                           </span>
                         </p>
                         <button
@@ -256,7 +263,7 @@ export default function CapturePage() {
                 type="button"
                 onClick={() => void switchCamera()}
                 disabled={isShooting}
-                className="absolute left-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)] disabled:cursor-not-allowed disabled:opacity-45"
+                className="absolute left-0 top-1/2 inline-flex h-11 -translate-y-1/2 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[12px] font-medium text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)] active:bg-[color:var(--hc-surface-highlight)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 전환
@@ -273,7 +280,9 @@ export default function CapturePage() {
               // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다(시작은 무대 안 알약이 맡는다).
               // 화면에서 글자가 빠져도 보조기술에는 남아야 한다.
               aria-label="바로 촬영"
-              className="flex flex-col items-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
+              // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 위치 이동 금지 규칙은 hover 얘기고,
+              // 눌림은 물리 피드백이라 살짝 줄어든다. 촬영 중이 아니면 반응하지 않는다(disabled).
+              className="flex flex-col items-center gap-1.5 transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
             >
               <span className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[60px]">
                 <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)] [@media(max-height:700px)]:h-[44px] [@media(max-height:700px)]:w-[44px]" />
@@ -299,7 +308,7 @@ export default function CapturePage() {
               <button
                 type="button"
                 onClick={cancelShooting}
-                className="absolute right-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
+                className="absolute right-0 top-1/2 inline-flex h-11 -translate-y-1/2 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[12px] font-medium text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)] active:bg-[color:var(--hc-surface-highlight)]"
               >
                 중단
               </button>

@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
@@ -10,7 +9,7 @@ import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
-import { BrandMark } from "@/components/layout/BrandMark";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
 import { resolveThemeAssetUrls } from "@/lib/frameAssets";
 import {
@@ -494,46 +493,47 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
-        <header className="flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            <BrandMark href="/home" compact className="opacity-80" />
-            {loadError ? (
-              <p role="alert" className="mt-1 text-[11px] text-[color:var(--hc-danger)]">{loadError}</p>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {remoteFrameId ? (
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={isDeleting || isSaving}
-                className="rounded-full border border-[color:var(--hc-danger-border)] px-4 py-2 text-xs font-semibold text-[color:var(--hc-danger)] hover:bg-[color:var(--hc-danger-soft-bg)] disabled:opacity-50"
-              >
-                {isDeleting ? "삭제 중..." : "삭제"}
-              </button>
-            ) : null}
-            <Link
-              href="/theme"
-              className="text-xs text-zinc-400 underline underline-offset-4"
-              onClick={() => {
-                useThemeEditorStore.getState().reset();
-                clearEditorDraft();
-                router.push("/theme");
-              }}
-            >
-              프레임 목록으로 돌아가기
-            </Link>
-            <button
-              type="button"
-              onClick={openSaveDialog}
-              disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
-              className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
-            >
-              {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
-            </button>
-          </div>
-        </header>
+        {/*
+          다른 흐름 화면과 같은 PageHeader — [<] 제목 [저장]. 예전에는 로고 + 밑줄 링크(16px 높이) +
+          초록 알약이었고 화면 제목(h1)이 없어서 여기가 어디인지 헤더가 말하지 않았다.
+          모바일에서는 저장이 캔버스 두 화면 위에 있어 헤더를 붙여 둔다(lg 이상은 한 화면에 다 들어온다).
+        */}
+        <div className="sticky top-0 z-20 -mx-4 -mt-6 bg-[color:var(--hc-surface-soft)] px-4 pb-2 pt-6 backdrop-blur-md lg:static lg:mx-0 lg:mt-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+          <PageHeader
+            backHref="/theme"
+            backLabel="프레임 목록으로"
+            title={remoteFrameId ? "프레임 수정" : "프레임 꾸미기"}
+            onBackClick={() => {
+              useThemeEditorStore.getState().reset();
+              clearEditorDraft();
+            }}
+            rightSlot={
+              <div className="flex items-center gap-2">
+                {remoteFrameId ? (
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    disabled={isDeleting || isSaving}
+                    className="inline-flex h-11 items-center rounded-full border border-[color:var(--hc-danger-border)] px-4 text-[13px] font-semibold text-[color:var(--hc-danger)] hover:bg-[color:var(--hc-danger-soft-bg)] disabled:opacity-50"
+                  >
+                    {isDeleting ? "삭제 중…" : "삭제"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={openSaveDialog}
+                  disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
+                  className="hc-button-primary inline-flex h-11 items-center rounded-full px-5 text-[13px] font-extrabold disabled:opacity-50"
+                >
+                  {isSaving ? "저장 중…" : remoteFrameId ? "수정 저장" : "저장"}
+                </button>
+              </div>
+            }
+          />
+        </div>
+        {loadError ? (
+          <p role="alert" className="text-[12px] text-[color:var(--hc-danger)]">{loadError}</p>
+        ) : null}
 
         {isLoadingFrame ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
@@ -560,7 +560,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       type="button"
                       onClick={() => setBackgroundColor(color.value)}
                       aria-pressed={selected}
-                      className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[11px] ${
+                      className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[12px] ${
                         selected
                           ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
                           : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
@@ -582,18 +582,29 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   aria-label="배경색 직접 고르기"
                   value={`#${backgroundColor}`}
                   onChange={(e) => setBackgroundColor(e.target.value)}
-                  className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
+                  className="hc-input h-11 w-12 shrink-0 rounded-lg border"
                 />
-                <input
-                  aria-label="배경색 코드"
-                  value={backgroundColor}
-                  onChange={(e) => setBackgroundColor(e.target.value)}
-                  className="h-9 flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-xs text-[color:var(--hc-text)]"
-                  placeholder="ffffff"
-                />
+                {/* 값은 '#' 없이 저장된다. 코드 입력이라는 것이 보이게 접두를 화면에만 붙인다. */}
+                <div className="hc-input flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border px-3">
+                  <span aria-hidden className="font-mono text-[13px] text-[color:var(--hc-muted)]">
+                    #
+                  </span>
+                  <input
+                    aria-label="배경색 코드"
+                    value={backgroundColor}
+                    onChange={(e) => setBackgroundColor(e.target.value)}
+                    className="min-w-0 flex-1 bg-transparent font-mono text-[13px] tracking-[0.06em] text-[color:var(--hc-text)] outline-none"
+                    placeholder="ffffff"
+                    inputMode="text"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    maxLength={7}
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-text)] hover:border-[color:var(--hc-primary)]">
+                <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-[color:var(--hc-border)] px-3 text-[12px] font-semibold text-[color:var(--hc-text)] hover:border-[color:var(--hc-primary)]">
                   {background.type === "IMAGE" ? "배경 이미지 변경" : "배경 이미지"}
                   <input
                     type="file"
@@ -620,7 +631,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   <button
                     type="button"
                     onClick={clearBackgroundImage}
-                    className="h-9 rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-muted)] hover:border-[color:var(--hc-primary)]"
+                    className="h-11 rounded-lg border border-[color:var(--hc-border)] px-3 text-[12px] font-semibold text-[color:var(--hc-muted)] hover:border-[color:var(--hc-primary)]"
                   >
                     이미지 제거
                   </button>
@@ -631,7 +642,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   {backgroundError}
                 </p>
               ) : null}
-              <p className="text-[11px] leading-4 text-[color:var(--hc-muted)]">
+              <p className="text-[12px] leading-5 text-[color:var(--hc-muted)]">
                 배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF만 올릴 수
                 있어요.
               </p>
@@ -642,7 +653,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">미리보기</p>
-                <p className="text-[11px] text-zinc-500">
+                <p className="text-[12px] text-[color:var(--hc-muted)]">
                   스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.
                 </p>
               </div>
@@ -684,29 +695,29 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               >
                 {remoteFrameId ? "저장한 프레임 수정" : "프레임 저장"}
               </h2>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              <p className="mt-1 text-[13px] leading-5 text-[color:var(--hc-muted)]">
                 저장할 프레임 이름과 설명을 입력해 주세요.
               </p>
             </div>
 
             <div className="mt-4 grid gap-3">
-              <label className="grid gap-1.5 text-[11px] font-semibold text-zinc-300">
+              <label className="grid gap-1.5 text-[12px] font-semibold text-zinc-300">
                 프레임 이름
                 <input
                   value={draftTitle}
                   onChange={(e) => setDraftTitle(e.target.value)}
-                  className="h-10 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-sm font-normal text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+                  className="hc-input h-11 rounded-xl border px-3 text-sm font-normal"
                   disabled={isSaving}
                   maxLength={40}
                   placeholder="프레임 이름을 입력해 주세요"
                 />
               </label>
-              <label className="grid gap-1.5 text-[11px] font-semibold text-zinc-300">
+              <label className="grid gap-1.5 text-[12px] font-semibold text-zinc-300">
                 프레임 설명
                 <textarea
                   value={draftDescription}
                   onChange={(e) => setDraftDescription(e.target.value)}
-                  className="min-h-24 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-sm font-normal text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+                  className="hc-input min-h-24 rounded-xl border px-3 py-2 text-sm font-normal"
                   disabled={isSaving}
                   maxLength={160}
                   placeholder="프레임 설명을 입력해 주세요"
@@ -738,7 +749,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 disabled={isSaving}
                 className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
               >
-                {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
+                {isSaving ? "저장 중…" : remoteFrameId ? "수정 저장" : "저장"}
               </button>
             </div>
           </div>

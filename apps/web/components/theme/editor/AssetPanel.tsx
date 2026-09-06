@@ -81,7 +81,7 @@ function PhotoTab() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[11px] leading-5 text-zinc-400">
+        <p className="text-[13px] leading-[1.65] text-zinc-400">
           업로드한 사진은 여러 번 사용할 수 있고, 필요한 사진은 누끼를 딴 버전으로
           바로 바꿔 쓸 수 있어요. 첫 실행은 모델 다운로드 때문에 조금 오래 걸릴 수
           있어요.
@@ -126,7 +126,7 @@ function PhotoTab() {
       />
 
       {photos.length === 0 ? (
-        <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] p-3 text-[11px] text-[color:var(--hc-muted)]">
+        <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] p-3 text-[12px] text-[color:var(--hc-muted)]">
           아직 업로드한 사진이 없어요. 아래 추가 버튼으로 사진을 넣어보세요.
         </div>
       ) : null}
@@ -301,17 +301,17 @@ function TextTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+      <label className="flex flex-col gap-1 text-[12px] text-zinc-400">
         <span>텍스트 내용</span>
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder="텍스트를 입력해 주세요"
-          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          className="hc-input h-11 w-full rounded-lg border px-3 text-[13px]"
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+      <label className="flex flex-col gap-1 text-[12px] text-zinc-400">
         <span>폰트 크기</span>
         <input
           type="number"
@@ -319,7 +319,7 @@ function TextTab() {
           max={420}
           value={fontSize}
           onChange={(event) => setFontSize(Number(event.target.value) || 0)}
-          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          className="hc-input h-11 w-full rounded-lg border px-3 text-[13px] tabular-nums"
         />
       </label>
 
@@ -331,7 +331,7 @@ function TextTab() {
         텍스트 추가
       </button>
 
-      <div className="text-[11px] text-zinc-400">
+      <div className="text-[12px] text-zinc-400">
         추가한 뒤 속성 패널에서 글꼴, 크기, 정렬을 바꿀 수 있어요.
       </div>
     </div>

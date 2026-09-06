@@ -145,7 +145,7 @@ function LoginPageContent() {
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
-              className="font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
+              className="inline-flex min-h-[44px] items-center px-1 font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               회원가입
             </Link>
@@ -155,7 +155,7 @@ function LoginPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
+          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3.5 py-2.5 text-[13px] leading-[1.6] text-[color:var(--hc-danger)]">
             {errors.common}
           </p>
         ) : null}
@@ -192,7 +192,7 @@ function LoginPageContent() {
           disabled={isSubmitting}
           className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isSubmitting ? "로그인 중..." : "로그인"}
+          {isSubmitting ? "로그인 중…" : "로그인"}
         </button>
 
         {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영을 먼저 체험할 수 있게.

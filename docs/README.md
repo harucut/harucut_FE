@@ -14,6 +14,7 @@
 | 화면 이동 흐름 | [route-flows.md](./route-flows.md) |
 | 로그인·리다이렉트·게스트 체험 | [auth-routing.md](./auth-routing.md) |
 | 앱 QA 수동 확인 | [mobile-qa-checklist.md](./mobile-qa-checklist.md) |
+| 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
 | 지난 계획 — **실행 기준 아님** | [archive/](./archive/) (각 문서 머리에 왜 보관인지 적혀 있다) |
 
@@ -168,7 +169,7 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 | 의심했던 것 | 실제 | 근거 |
 |---|---|---|
 | 안드로이드 카메라 런타임 권한을 아무도 요청 안 한다 | **`react-native-webview` 가 직접 요청한다** | `RNCWebChromeClient.onPermissionRequest` 가 `RESOURCE_VIDEO_CAPTURE` → `Manifest.permission.CAMERA` 로 옮겨 `requestPermissions` 호출 |
-| 세이프에어리어(노치)를 셸이 안 잡는다 | **웹이 잡는다** | `viewportFit: "cover"` + 화면들이 `env(safe-area-inset-*)` 사용 |
+| 세이프에어리어(노치)를 셸이 안 잡는다 | **반은 맞았다 → 2026-09-06 셸이 잡게 고쳤다** | 웹은 `env(safe-area-inset-bottom)` 만 5곳에서 쓰고 **top 은 0곳**이었다. 안드로이드 WebView 는 상태바 높이를 env 에 주지 않고 iOS 는 RN-webview 기본값이 `never` 라 모든 화면 상단이 상태바 아래로 들어갔다. 지금은 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비운다 — [`docs/mobile-shell.md`](mobile-shell.md) 표 「안전영역」 |
 | 안드로이드 13+ `POST_NOTIFICATIONS` 가 빠졌다 | **라이브러리가 넣는다** | `expo-notifications` 의 `android/src/main/AndroidManifest.xml` 에 선언 → Gradle 머지 |
 
 ## 촬영 화질 — 두 가지를 고쳤다

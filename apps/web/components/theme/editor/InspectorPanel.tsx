@@ -40,8 +40,8 @@ export function InspectorPanel() {
     return (
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
         <p className="text-sm font-semibold">속성</p>
-        <p className="mt-2 text-[11px] text-zinc-400">
-          캔버스에서 요소를 선택해세요.
+        <p className="mt-2 text-[12px] text-zinc-400">
+          캔버스에서 요소를 선택하세요.
         </p>
       </section>
     );
@@ -53,7 +53,7 @@ export function InspectorPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">속성</p>
-        <span className="text-[11px] text-zinc-500">{active.type}</span>
+        <span className="text-[11px] text-[color:var(--hc-muted)]">{active.type}</span>
       </div>
 
       {/* 공통 */}
@@ -221,7 +221,7 @@ function Row({
 }) {
   return (
     <label className="flex items-center gap-3">
-      <span className="w-14 text-[11px] text-zinc-400">{label}</span>
+      <span className="w-14 text-[12px] text-zinc-400">{label}</span>
       <div className="flex flex-1 items-center gap-2">{children}</div>
     </label>
   );
@@ -230,8 +230,8 @@ function Row({
 function SmallStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
-      <p className="text-[11px] text-zinc-500">{label}</p>
-      <p className="text-xs text-zinc-200">{value}</p>
+      <p className="text-[11px] text-[color:var(--hc-muted)]">{label}</p>
+      <p className="font-mono text-xs tabular-nums text-zinc-200">{value}</p>
     </div>
   );
 }

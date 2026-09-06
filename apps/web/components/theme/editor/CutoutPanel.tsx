@@ -29,7 +29,7 @@ export function CutoutPanel() {
         </span>
       </div>
 
-      <p className="text-[11px] leading-5 text-zinc-400">
+      <p className="text-[13px] leading-[1.65] text-zinc-400">
         아래 버튼으로 칸을 골라 인물만 남기고 배경을 지워요. 다시 누르면 원래대로
         돌아와요. 미리보기에서 칸을 직접 눌러 토글하려면 ‘캔버스 칸 탭’을 켜세요.
       </p>
@@ -38,7 +38,7 @@ export function CutoutPanel() {
         type="button"
         onClick={() => setCutMode(!cutMode)}
         className={[
-          "flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
+          "flex min-h-[44px] items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
           cutMode
             ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
             : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
@@ -58,7 +58,7 @@ export function CutoutPanel() {
               type="button"
               onClick={() => toggleCellCutout(i)}
               className={[
-                "flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                "flex min-h-[44px] items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
                 on
                   ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
                   : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",

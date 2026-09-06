@@ -429,7 +429,7 @@ export default function HistoryPage() {
                   key={id}
                   type="button"
                   onClick={() => setView(id)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-bold transition ${
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
                     view === id
                       ? "bg-white text-[#0B0B0C]"
                       : "text-[color:var(--hc-muted)]"
@@ -543,7 +543,7 @@ export default function HistoryPage() {
                               type="button"
                               onClick={() => handleStartRename(item)}
                               aria-label={`이름 바꾸기: ${title}`}
-                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+                              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
                             >
                               <PencilLine className="h-3.5 w-3.5" />
                             </button>
@@ -563,7 +563,7 @@ export default function HistoryPage() {
                             type="button"
                             onClick={() => void handleDownload(item)}
                             disabled={downloadingId === item.mediaId}
-                            className="hc-button-primary flex flex-1 items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
                           >
                             <Download className="h-3.5 w-3.5" />
                             <span>
@@ -574,7 +574,7 @@ export default function HistoryPage() {
                             type="button"
                             onClick={() => void handleShare(item)}
                             disabled={sharingId === item.mediaId}
-                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
                           >
                             <Share2 className="h-3.5 w-3.5" />
                             <span>
@@ -588,7 +588,7 @@ export default function HistoryPage() {
                             onClick={() => setDeleteTarget(item)}
                             disabled={deletingId === item.mediaId}
                             aria-label={`삭제: ${title}`}
-                            className="hc-button-secondary grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+                            className="hc-button-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>

@@ -684,7 +684,7 @@ export default function ShootResultPage() {
               <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
                 <span className="text-[color:var(--hc-text)]">이미지 준비</span>
                 <span className="text-[color:var(--hc-muted)]">
-                  {imageState === "processing" ? "생성 중..." : "대기 중"}
+                  {imageState === "processing" ? "생성 중…" : "대기 중"}
                 </span>
               </div>
             </div>
@@ -814,7 +814,7 @@ export default function ShootResultPage() {
                 disabled={isDownloadingImage}
                 className="hc-button-primary rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
               >
-                {isDownloadingImage ? "이미지 저장 중..." : "이미지 다운로드"}
+                {isDownloadingImage ? "이미지 저장 중…" : "이미지 다운로드"}
               </button>
               {/* 버튼을 감춰 버리면 체험하는 사람이 "가입하면 뭐가 더 되는지"를 못 본다.
                   그래서 회원 기능도 자리를 남기고 같은 방식으로 안내한다. */}
@@ -845,7 +845,7 @@ export default function ShootResultPage() {
                   : "/shoot/capture"
                 : "/shoot/select"
             }
-            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
+            className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition"
           >
             {guestMode && !fromUpload ? "다시 촬영하기" : "사진 다시 고르기"}
           </Link>
@@ -854,14 +854,14 @@ export default function ShootResultPage() {
               type="button"
               onClick={handleGuestLogin}
               disabled={isHandingOffToLogin}
-              className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition disabled:opacity-40"
+              className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition disabled:opacity-40"
             >
-              {isHandingOffToLogin ? "결과 보관 중..." : "로그인하고 저장하기"}
+              {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 저장하기"}
             </button>
           ) : (
             <Link
               href="/home"
-              className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
+              className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition"
             >
               홈으로 가기
             </Link>

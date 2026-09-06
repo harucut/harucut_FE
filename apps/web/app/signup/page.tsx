@@ -190,7 +190,7 @@ function SignupPageContent() {
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
           {/* 로그인 페이지의 대응 문구와 같은 토큰을 쓴다. 하드코딩 text-zinc-500 은 다크에서 어긋났다. */}
-          <p className="mt-2 text-center text-[11px] leading-5 text-[color:var(--hc-muted)]">
+          <p className="mt-2 text-center text-[13px] leading-6 text-[color:var(--hc-muted)]">
             소셜 계정으로 가입하면{" "}
             <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
               서비스 이용약관
@@ -205,7 +205,7 @@ function SignupPageContent() {
             이미 계정이 있으신가요?{" "}
             <Link
               href={loginHref}
-              className="font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
+              className="inline-flex min-h-[44px] items-center px-1 font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
             >
               로그인
             </Link>
@@ -215,7 +215,7 @@ function SignupPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3 py-2 text-[11px] text-[color:var(--hc-danger)]">
+          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3.5 py-2.5 text-[13px] leading-[1.6] text-[color:var(--hc-danger)]">
             {errors.common}
           </p>
         ) : null}
@@ -275,7 +275,7 @@ function SignupPageContent() {
           disabled={isSubmitting}
           className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isSubmitting ? "가입 중..." : "회원가입"}
+          {isSubmitting ? "가입 중…" : "회원가입"}
         </button>
       </form>
     </AuthPageShell>

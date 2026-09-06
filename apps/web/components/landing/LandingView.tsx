@@ -252,7 +252,7 @@ function HeroEditorial() {
 
 export function LandingView() {
   return (
-    <div className="min-h-dvh bg-[#0B0B0C] text-white">
+    <main className="min-h-dvh bg-[#0B0B0C] text-white">
       <MarketingNav tone="dark" />
 
       <HeroEditorial />
@@ -381,6 +381,6 @@ export function LandingView() {
       </section>
 
       <MarketingFooter tone="dark" />
-    </div>
+    </main>
   );
 }

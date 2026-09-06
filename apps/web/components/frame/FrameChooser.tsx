@@ -189,7 +189,7 @@ export function FrameChooser({
           onAction={savedFrameAction?.onAction}
           actionLabel={savedFrameAction?.label}
           selectedStatusText="선택됨"
-          idleStatusText="클릭해서 선택"
+          idleStatusText="눌러서 선택"
         />
       )}
     </>
