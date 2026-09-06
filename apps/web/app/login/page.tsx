@@ -197,7 +197,8 @@ function LoginPageContent() {
 
         {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영을 먼저 체험할 수 있게.
             문구는 넘기지 않는다 — 기본값이 곧 랜딩·앱과 같은 @harucut/shared 의 한 문구다. */}
-        <GuestTrialStartButton className="inline-flex h-12 items-center justify-center rounded-full border border-[color:var(--hc-border)] text-[15px] font-bold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]" />
+        {/* 주 CTA(로그인)와 같은 무게의 알약이 다섯 개 서 있었다. 체험은 보조 길이라 글자로 둔다. 누르는 면은 44px. */}
+        <GuestTrialStartButton className="inline-flex min-h-[44px] items-center justify-center text-[14px] font-semibold text-[color:var(--hc-text)] underline underline-offset-4 transition hover:text-[color:var(--hc-primary-strong)]" />
       </form>
     </AuthPageShell>
   );

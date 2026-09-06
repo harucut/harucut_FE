@@ -649,44 +649,30 @@ export default function ShootResultPage() {
           title={fromUpload ? "네컷 결과" : "촬영 결과"}
           description={
             guestMode
-              ? "비회원 체험 결과 이미지를 내려받고, 이어서 로그인해 기능을 확장해 보세요."
-              : "완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
+              ? "이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요."
+              : "완성된 네 컷을 저장하거나 링크로 공유해 보세요."
           }
         />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
-        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-[color:var(--hc-text)]">
-                {isPreparing ? "결과 준비 중" : "결과 준비 완료"}
-              </p>
-              <p className="mt-1 text-[11px] text-[color:var(--hc-muted)]">
-                {isPreparing
-                  ? guestMode
-                    ? "완성되면 이미지를 바로 다운로드할 수 있어요."
-                    : "완성되면 바로 다운로드하거나 공유할 수 있어요."
-                  : guestMode
-                    ? "지금은 이미지 저장까지 해볼 수 있고, 기록 보관부터는 로그인 후 이용할 수 있어요."
-                    : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
-              </p>
-            </div>
-            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
-              {guestMode ? "이미지 다운로드" : "이미지"}
-            </span>
-          </div>
-        </section>
-
+        {/*
+          준비 중일 때만 상태 카드를 둔다. 예전에는 다 된 뒤에도 "결과 준비 완료 / 마음에 드는 결과를
+          저장하거나…" 카드가 헤더 설명과 같은 말을 한 번 더 했고, 옆의 '이미지' 초록 칩은 아무
+          정보가 없었다. 완성되면 그림과 다운로드 카드가 곧 상태다.
+        */}
         {isPreparing ? (
-          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
-            <div className="space-y-2 text-[11px]">
-              <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
-                <span className="text-[color:var(--hc-text)]">이미지 준비</span>
-                <span className="text-[color:var(--hc-muted)]">
-                  {imageState === "processing" ? "생성 중…" : "대기 중"}
-                </span>
-              </div>
+          <section
+            role="status"
+            aria-live="polite"
+            className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4"
+          >
+            <p className="text-sm font-semibold text-[color:var(--hc-text)]">결과 준비 중</p>
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3.5 py-2.5 text-[12px]">
+              <span className="text-[color:var(--hc-text)]">이미지</span>
+              <span className="text-[color:var(--hc-muted)]">
+                {imageState === "processing" ? "생성 중…" : "대기 중"}
+              </span>
             </div>
           </section>
         ) : null}
@@ -807,30 +793,27 @@ export default function ShootResultPage() {
               </p>
             </div>
 
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleDownloadImage}
-                disabled={isDownloadingImage}
-                className="hc-button-primary rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
-              >
-                {isDownloadingImage ? "이미지 저장 중…" : "이미지 다운로드"}
-              </button>
-              {/* 버튼을 감춰 버리면 체험하는 사람이 "가입하면 뭐가 더 되는지"를 못 본다.
-                  그래서 회원 기능도 자리를 남기고 같은 방식으로 안내한다. */}
+            {/*
+              다운로드 버튼은 위 카드에 하나면 된다 — 같은 화면에 같은 버튼이 둘이었다.
+              회원 기능은 감추지 않고 자리를 남긴다(가입하면 무엇이 더 되는지 보여야 한다).
+              다만 문장을 버튼 모양에 담지 않는다 — 잠긴 기능임을 말하는 조용한 줄이다.
+            */}
+            <div className="mt-4 flex flex-col divide-y divide-[color:var(--hc-border)] rounded-2xl border border-[color:var(--hc-border)]">
               <button
                 type="button"
                 onClick={showGuestRestrictedNotice}
-                className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
+                className="flex min-h-[44px] items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)]"
               >
-                기록 보관은 로그인 후에 이용할 수 있어요
+                <span>기록 보관</span>
+                <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">로그인 후</span>
               </button>
               <button
                 type="button"
                 onClick={showGuestShareNotice}
-                className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
+                className="flex min-h-[44px] items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)]"
               >
-                링크 공유는 로그인 후에 이용할 수 있어요
+                <span>링크 공유</span>
+                <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">로그인 후</span>
               </button>
             </div>
           </section>

@@ -75,6 +75,8 @@ function PhotoTab() {
 
   const [isDraggingTiles, setIsDraggingTiles] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  // 실패·제외 안내는 화면 안에서 말한다. window.alert 는 이 디자인의 것이 아니고 모바일에서 탭을 멈춘다.
+  const [notice, setNotice] = useState<string | null>(null);
   const [processingAssetId, setProcessingAssetId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -106,9 +108,11 @@ function PhotoTab() {
           const supported = picked.filter(isSupportedUploadFile);
           const skipped = picked.length - supported.length;
 
-          if (skipped > 0) {
-            alert(`${skipped}개는 지원하지 않는 형식이라 제외했어요. ${UNSUPPORTED_UPLOAD_MESSAGE}`);
-          }
+          setNotice(
+            skipped > 0
+              ? `${skipped}개는 지원하지 않는 형식이라 제외했어요. ${UNSUPPORTED_UPLOAD_MESSAGE}`
+              : null,
+          );
 
           if (supported.length === 0) {
             input.value = "";
@@ -118,12 +122,18 @@ function PhotoTab() {
           setIsUploading(true);
           const result = await addAssets(supported);
           if (result.failed > 0) {
-            alert(`${result.failed}개의 파일 업로드에 실패했어요.`);
+            setNotice(`${result.failed}개의 파일 업로드에 실패했어요.`);
           }
           setIsUploading(false);
           input.value = "";
         }}
       />
+
+      {notice ? (
+        <p role="status" className="text-[12px] leading-5 text-[color:var(--hc-danger)]">
+          {notice}
+        </p>
+      ) : null}
 
       {photos.length === 0 ? (
         <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] p-3 text-[12px] text-[color:var(--hc-muted)]">
@@ -205,7 +215,7 @@ function PhotoTab() {
                       setProcessingAssetId(null);
 
                       if (!result.ok && result.reason === "PROCESS_FAILED") {
-                        alert("누끼 제거에 실패했어요.");
+                        setNotice("누끼 제거에 실패했어요.");
                       }
                     }}
                     disabled={isProcessing}
@@ -222,7 +232,7 @@ function PhotoTab() {
                       event.stopPropagation();
                       const result = removePhotoAsset(photo.id);
                       if (!result.ok && result.reason === "IN_USE") {
-                        alert("프레임에 사용 중인 사진은 삭제할 수 없어요.");
+                        setNotice("프레임에 사용 중인 사진은 삭제할 수 없어요.");
                       }
                     }}
                     className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] p-1.5 text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)]"

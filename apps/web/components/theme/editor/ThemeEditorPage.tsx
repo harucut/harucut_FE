@@ -10,6 +10,7 @@ import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
 import { resolveThemeAssetUrls } from "@/lib/frameAssets";
 import {
@@ -93,6 +94,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
   const { remoteFrameId } = useThemeSession();
+  // 저장 다이얼로그에서 알려 준다. 예전에는 저장을 누른 순간 window.alert 로 끼어들었다.
+  const hiddenLayerCount = editorComponents.filter((c) => c.hidden).length;
 
   // 편집 중 판정은 "콘텐츠가 있는지"가 아니라 "기준 상태에서 바뀌었는지"로 한다.
   // 콘텐츠 유무로 보면 컴포넌트나 이미지 배경이 있는 저장 프레임을 열기만 해도
@@ -139,6 +142,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   // 원격 프레임은 불러온 값으로 채우고, 새 프레임은 기본값에서 시작한다.
   const [title, setTitle] = useState(remoteFrameId ? "" : DEFAULT_FRAME_TITLE);
   const [description, setDescription] = useState(
@@ -370,12 +375,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       return;
     }
 
-    const state = useThemeEditorStore.getState();
-    const hiddenCount = state.components.filter((c) => c.hidden).length;
-    if (hiddenCount > 0) {
-      alert("숨겨진 레이어가 있어요.");
-    }
-
     const nextTitle = draftTitle.trim() || "테마 프레임";
     const nextDescription =
       draftDescription.trim() ||
@@ -472,19 +471,26 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     }
   };
 
-  const onDelete = async () => {
+  // 되돌릴 수 없는 삭제는 window.confirm 대신 ConfirmDialog 로 묻는다 — 브라우저 창은 모바일
+  // 사파리에서 탭을 멈추고 진행 상태를 그릴 수 없다(components/ui/ConfirmDialog.tsx).
+  const onDelete = () => {
     if (!remoteFrameId || isDeleting) return;
+    setActionError(null);
+    setIsDeleteConfirmOpen(true);
+  };
 
-    const ok = confirm("이 프레임을 삭제할까요?");
-    if (!ok) return;
+  const performDelete = async () => {
+    if (!remoteFrameId || isDeleting) return;
 
     setIsDeleting(true);
     try {
       await deleteFrame(remoteFrameId);
+      setIsDeleteConfirmOpen(false);
       router.push("/theme");
     } catch (error) {
       console.error(error);
-      alert("삭제에 실패했어요.");
+      setIsDeleteConfirmOpen(false);
+      setActionError("프레임을 지우지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsDeleting(false);
     }
@@ -531,8 +537,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             }
           />
         </div>
-        {loadError ? (
-          <p role="alert" className="text-[12px] text-[color:var(--hc-danger)]">{loadError}</p>
+        {loadError || actionError ? (
+          <p role="alert" className="text-[12px] text-[color:var(--hc-danger)]">
+            {loadError ?? actionError}
+          </p>
         ) : null}
 
         {isLoadingFrame ? (
@@ -679,6 +687,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         </div>
       </div>
 
+      {isDeleteConfirmOpen && remoteFrameId ? (
+        <ConfirmDialog
+          title="이 프레임을 지울까요?"
+          description="지운 프레임은 되돌릴 수 없어요."
+          confirmLabel="지우기"
+          runningLabel="지우는 중…"
+          running={isDeleting}
+          destructive
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={() => void performDelete()}
+        />
+      ) : null}
+
       {isSaveDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-5 sm:items-center">
           <div
@@ -698,6 +719,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               <p className="mt-1 text-[13px] leading-5 text-[color:var(--hc-muted)]">
                 저장할 프레임 이름과 설명을 입력해 주세요.
               </p>
+              {hiddenLayerCount > 0 ? (
+                <p className="mt-2 text-[12px] leading-5 text-[color:var(--hc-muted)]">
+                  숨긴 레이어가 {hiddenLayerCount}개 있어요.
+                </p>
+              ) : null}
             </div>
 
             <div className="mt-4 grid gap-3">

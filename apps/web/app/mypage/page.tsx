@@ -419,7 +419,7 @@ export default function MyPage() {
     return (
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <div
-          className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[color:var(--hc-primary)] font-extrabold text-[color:var(--hc-primary-contrast)]"
+          className="grid h-full w-full place-items-center overflow-hidden rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-highlight)] font-extrabold text-[color:var(--hc-text)]"
           style={{ fontSize: font }}
         >
           {user?.profileUrl ? (
@@ -930,13 +930,19 @@ export default function MyPage() {
                       onClick={() =>
                         setOpenMobile((prev) => (prev === id ? null : id))
                       }
+                      // 헤딩의 이름은 제목만. 부제까지 한 이름으로 읽히면 「계정 정보이메일, 닉네임…」이 된다.
+                      aria-label={meta.title}
+                      aria-describedby={`${bodyId}-sub`}
                       className="flex w-full items-center gap-3.5 px-5 py-4 text-left"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15px] font-bold">
                           {meta.title}
                         </span>
-                        <span className="block truncate text-[12px] font-normal text-[color:var(--hc-muted)]">
+                        <span
+                          id={`${bodyId}-sub`}
+                          className="block truncate text-[12px] font-normal text-[color:var(--hc-muted)]"
+                        >
                           {sectionSub(id)}
                         </span>
                       </span>

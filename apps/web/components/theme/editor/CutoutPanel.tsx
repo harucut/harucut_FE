@@ -24,7 +24,7 @@ export function CutoutPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">누끼</p>
-        <span className="inline-flex items-center gap-1 text-[11px] text-[color:var(--hc-primary-strong)]">
+        <span className="inline-flex items-center gap-1 text-[12px] text-[color:var(--hc-muted)]">
           <Scissors size={13} /> 배경 제거
         </span>
       </div>
