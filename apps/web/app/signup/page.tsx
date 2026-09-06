@@ -273,7 +273,7 @@ function SignupPageContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
+          className="hc-button-ink inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSubmitting ? "가입 중…" : "회원가입"}
         </button>

@@ -190,6 +190,7 @@ function HeroEditorial() {
       {/* 헤드라인 — Pretendard Black, 초대형(type-first) */}
       <Reveal
         as="span"
+        immediate
         className="relative block text-[46px] font-black leading-[1.24] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:leading-[1.18] lg:tracking-[-4px]"
       >
         <h1>
@@ -200,6 +201,7 @@ function HeroEditorial() {
       </Reveal>
       <Reveal
         as="span"
+        immediate
         delay={120}
         className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
@@ -211,7 +213,7 @@ function HeroEditorial() {
         헤더 CTA 를 눌러 /login 까지 가야 비회원 체험 버튼을 만났다. 첫 화면에서 바로 연다.
         헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
       */}
-      <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
+      <Reveal immediate delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
         {/* 문구는 넘기지 않는다 — 기본값이 곧 로그인 화면·앱과 같은 한 문구다.
             예전에는 여기만 "가입 없이 찍어보기"였는데, 이 체험은 찍기만이 아니라
             이미지 저장까지 되므로 실제보다 작게 말하는 문구이기도 했다. */}
@@ -226,6 +228,7 @@ function HeroEditorial() {
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
       <Reveal
+        immediate
         delay={220}
         className="relative mt-12 flex w-full items-end justify-center sm:mt-14"
       >

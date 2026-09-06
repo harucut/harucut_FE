@@ -56,6 +56,9 @@
   --hc-neutral-button-hover: #f1f1ee;
   --hc-neutral-button-text: #14140f;
   --hc-neutral-button-shadow: 0 12px 32px rgba(20, 20, 15, 0.08);
+  --hc-ink-button-bg: #14140f;
+  --hc-ink-button-hover: #2b2b25;
+  --hc-ink-button-text: #fafaf7;
   --hc-hero-button-bg: #16b454;
   --hc-hero-button-hover: #129a47;
   --hc-hero-button-text: #06140a;
@@ -177,6 +180,9 @@ html[data-theme="dark"],
   --hc-neutral-button-hover: #f1f1ee;
   --hc-neutral-button-text: #0b0b0c;
   --hc-neutral-button-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  --hc-ink-button-bg: #ffffff;
+  --hc-ink-button-hover: #f1f1ee;
+  --hc-ink-button-text: #0b0b0c;
   --hc-hero-button-bg: #1ed760;
   --hc-hero-button-hover: #1fe267;
   --hc-hero-button-text: #06140a;
@@ -501,6 +507,27 @@ body {
   background: var(--hc-neutral-button-hover);
 }
 
+/*
+  잉크 버튼 — 초록을 쓸 수 없는 자리의 주 CTA. 로그인·회원가입은 바로 아래 네이버 버튼이
+  브랜드 초록(#03A94D, 가이드가 색을 못박는다)이라, 우리 초록(#16B454)을 나란히 두면 라이트에서
+  같은 버튼 둘로 읽혔다. 라이트에서는 잉크(#14140F), 다크에서는 흰색 — 그 테마에서 가장 강한 무채색.
+*/
+.hc-button-ink {
+  background: var(--hc-ink-button-bg);
+  color: var(--hc-ink-button-text);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.hc-button-ink:hover {
+  background: var(--hc-ink-button-hover);
+}
+
+.hc-button-ink:active {
+  filter: brightness(0.92);
+}
+
 .hc-button-secondary {
   background: var(--hc-surface-soft);
   border-color: var(--hc-border);
@@ -691,6 +718,27 @@ body {
 }
 
 /*
+  첫 화면(히어로)용 즉시 재생판. IntersectionObserver 를 기다리는 .hc-reveal 은 하이드레이션
+  전까지 opacity 0 이라 LCP 요소(헤드라인)가 JS 가 돌기 전에는 그려지지 않았다. 이쪽은 CSS
+  애니메이션이라 첫 페인트에서 바로 시작한다. 스태거는 --hc-reveal-delay.
+*/
+@keyframes hc-reveal-now {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hc-reveal-now {
+  animation: hc-reveal-now 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--hc-reveal-delay, 0ms);
+}
+
+/*
   헤드라인 강조어. 예전에는 그라디언트를 글자에 클립했는데 두 가지가 걸렸다 —
   강조는 굵기와 색으로 충분한데 장식이 하나 더 얹혀 있었고, 글자색이 transparent 라
   접근성 검사기가 대비를 계산하지 못해 검사에서 통째로 빠졌다. 단색으로 바꾼다.
@@ -741,6 +789,7 @@ body {
 
   .hc-film-strip,
   .hc-film-progress,
+  .hc-reveal-now,
   .animate-pulse {
     animation: none;
   }
