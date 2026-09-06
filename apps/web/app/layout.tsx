@@ -34,7 +34,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B0B0C",
+  // 시스템 선호 기준 초깃값. 저장된 선호가 다르면 lib/colorTheme.ts 가 첫 페인트 전에 덮어쓴다.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0c" },
+  ],
   // standalone(홈 화면 설치)로 뜨면 노치·홈 인디케이터 영역까지 화면이 된다.
   // cover 를 켜야 env(safe-area-inset-*) 가 실제 값을 갖는다.
   viewportFit: "cover",

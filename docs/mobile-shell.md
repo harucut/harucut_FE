@@ -19,6 +19,7 @@
 | 햅틱 | `navigator.vibrate` 가 iOS 에서 동작하지 않는다 |
 | **알림** | WebView 안에는 Notification API 가 없다. iOS WKWebView 는 미지원, 안드로이드는 권한 UI 가 없어 조용히 거절된다 |
 | **상태바 색** | 웹은 상태바를 못 만진다. 웹이 자기 테마를 알려 주면 셸이 맞춘다 |
+| **안전영역** | WebView 안에서는 `env(safe-area-inset-*)` 가 믿을 만하지 않다 — 안드로이드 WebView 는 edge-to-edge 로 상태바·내비바 뒤까지 그리면서 그 높이를 env 에 주지 않고, iOS 는 react-native-webview 기본값(`contentInsetAdjustmentBehavior=never`)이라 스크롤뷰가 상태바를 비키지 않는다. 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비우고 무대색(`STAGE_COLORS`)으로 칠한다. iOS 하단 홈 인디케이터만 웹의 `env(safe-area-inset-bottom)` 이 맡는다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
 
 ## 셸이 WebView 를 부리는 길 — `ref`
