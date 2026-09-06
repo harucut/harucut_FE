@@ -6,8 +6,12 @@ import React, { useRef, useState } from "react";
 import { ImagePlus, Scissors, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import {
+  EMPTY_UPLOAD_MESSAGE,
+  MAX_UPLOAD_BYTES,
+  MIN_UPLOAD_BYTES,
   SUPPORTED_IMAGE_ACCEPT,
   UNSUPPORTED_UPLOAD_MESSAGE,
+  UPLOAD_TOO_LARGE_MESSAGE,
   isSupportedUploadFile,
 } from "@/lib/presignedUploadApi";
 
@@ -103,16 +107,44 @@ function PhotoTab() {
           const input = event.currentTarget;
           if (!input.files) return;
 
-          // 지원하지 않는 형식은 올리기 전에 걸러 사유를 먼저 알려준다.
+          // 형식도 크기도 올리기 전에 걸러 사유를 먼저 알려준다.
+          // 여기서 통과시켜도 서버 한도(1~10485760 바이트)를 벗어난 파일은 저장할 때
+          // presign 발급이 400 으로 막힌다 — 편집을 다 끝낸 뒤에 알게 되는 자리다.
+          // 순서는 배경 이미지 입력(ThemeEditorPage)과 같은 형식 → 하한 → 상한으로 맞춘다.
+          // 규칙의 주인은 uploadToS3WithPresigned 이고 여기는 사유를 먼저 말하는 층이다.
           const picked = Array.from(input.files);
-          const supported = picked.filter(isSupportedUploadFile);
-          const skipped = picked.length - supported.length;
+          const supported: File[] = [];
+          let unsupportedCount = 0;
+          let emptyCount = 0;
+          let tooLargeCount = 0;
 
-          setNotice(
-            skipped > 0
-              ? `${skipped}개는 지원하지 않는 형식이라 제외했어요. ${UNSUPPORTED_UPLOAD_MESSAGE}`
-              : null,
-          );
+          for (const file of picked) {
+            if (!isSupportedUploadFile(file)) {
+              unsupportedCount += 1;
+              continue;
+            }
+            if (file.size < MIN_UPLOAD_BYTES) {
+              emptyCount += 1;
+              continue;
+            }
+            if (file.size > MAX_UPLOAD_BYTES) {
+              tooLargeCount += 1;
+              continue;
+            }
+            supported.push(file);
+          }
+
+          // 사유별로 센다. 한 줄로 뭉치면 어느 파일을 바꿔서 다시 고르면 되는지 알 수 없다.
+          // 문구는 presignedUploadApi 것을 그대로 쓴다 — 규칙이 바뀌면 한 곳만 고치면 된다.
+          const notices = [
+            { count: unsupportedCount, message: UNSUPPORTED_UPLOAD_MESSAGE },
+            { count: emptyCount, message: EMPTY_UPLOAD_MESSAGE },
+            { count: tooLargeCount, message: UPLOAD_TOO_LARGE_MESSAGE },
+          ]
+            .filter((reason) => reason.count > 0)
+            .map((reason) => `${reason.count}개를 제외했어요. ${reason.message}`);
+
+          setNotice(notices.join(" ") || null);
 
           if (supported.length === 0) {
             input.value = "";
@@ -122,7 +154,10 @@ function PhotoTab() {
           setIsUploading(true);
           const result = await addAssets(supported);
           if (result.failed > 0) {
-            setNotice(`${result.failed}개의 파일 업로드에 실패했어요.`);
+            // 제외 사유도 같이 남긴다. 업로드 실패로 덮어 버리면 방금 사라진 파일이
+            // 왜 빠졌는지 알 길이 없어진다.
+            notices.push(`${result.failed}개의 파일 업로드에 실패했어요.`);
+            setNotice(notices.join(" "));
           }
           setIsUploading(false);
           input.value = "";
@@ -210,6 +245,9 @@ function PhotoTab() {
                     type="button"
                     onClick={async (event) => {
                       event.stopPropagation();
+                      // 지난 안내를 먼저 지운다. 같은 실패가 다시 나면 문구가 그대로라
+                      // 눌린 건지 알 수 없었다 — 비웠다가 결과가 나오면 다시 세운다.
+                      setNotice(null);
                       setProcessingAssetId(photo.id);
                       const result = await removePhotoBackground(photo.id);
                       setProcessingAssetId(null);

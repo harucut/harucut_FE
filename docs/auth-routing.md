@@ -36,6 +36,13 @@
 `/mypage/...`를 만든다면 matcher부터 넓혀야 합니다. `isProtectedPath`는 접두사 판정이라
 그 경로도 보호 대상으로 보지만, 미들웨어가 안 돌면 판정할 기회 자체가 없습니다.
 
+matcher에는 보호 라우트가 아닌 `/oauth2/callback`도 들어 있습니다. 막으려고 넣은 것이
+아니라 **게스트 쿠키를 걷으러** 들어가는 것입니다(아래 「게스트 쿠키는 소셜 콜백에서만
+걷는다」). 그 문자열은 `proxy.ts`의 `SOCIAL_LOGIN_CALLBACK` 상수와 같아야 하고
+(matcher는 Next가 빌드 때 읽어서 상수를 못 쓴다),
+[`apps/web/proxy.test.ts`](../apps/web/proxy.test.ts)의
+"콜백 경로가 matcher 에 들어 있다"가 그 일치를 고정합니다.
+
 검색 노출 대상 공개 페이지는
 [`apps/web/app/sitemap.ts`](../apps/web/app/sitemap.ts)와 일치시킵니다
 (인증 페이지는 noindex라 sitemap에서 제외 — 지금 sitemap은 위 공개 목록에서
@@ -69,27 +76,61 @@
 미들웨어 분기 순서([`apps/web/proxy.ts`](../apps/web/proxy.ts)):
 
 0. `DEV_AUTH_BYPASS`가 켜져 있으면 아래 판정을 전부 건너뛴다(아래 절 참고)
-1. 보호 경로가 아니면 그대로 통과
-2. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
-   이때 게스트 쿠키가 남아 있으면 응답에서 삭제한다(회원 전환)
-3. 게스트 쿠키만 있으면 `isGuestAllowedPath(pathname)`로 가른다
+1. **소셜 로그인 콜백(`/oauth2/callback`)이면 통과** — 보호 경로 판정보다 먼저 본다.
+   여기서만 게스트 쿠키를 걷고, 그것도 **인증 쿠키가 함께 있을 때만** 걷는다(아래 절 참고)
+2. 보호 경로가 아니면 그대로 통과
+3. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
+   **게스트 쿠키는 건드리지 않는다**(아래 절 참고)
+4. 게스트 쿠키만 있으면 `isGuestAllowedPath(pathname)`로 가른다
    ([`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts) — 상수 둘도 여기 있다)
    - `GUEST_MEMBER_ONLY_PREFIXES`(`/shoot/upload`)에 걸리면 **먼저 막는다**
    - 남은 것 중 `GUEST_ALLOWED_PREFIXES`(`/shoot`)로 시작하면 통과 —
      비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
-4. **쿠키가 하나도 없어도 행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** —
+5. **쿠키가 하나도 없어도 행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** —
    응답에 게스트 쿠키를 심어 준다(아래 절 참고)
-5. 그 외에는 `/login?redirectTo=...`
+6. 그 외에는 `/login?redirectTo=...`
 
 ```text
-인증 쿠키 O                             -> 통과 (게스트 쿠키 삭제)
-게스트 쿠키 O + /shoot/upload           -> /shoot?guestNotice=restricted   ← 회원 전용
-게스트 쿠키 O + 그 밖의 /shoot/*        -> 통과
-게스트 쿠키 O + 그 외 보호 경로         -> /shoot?guestNotice=restricted
-쿠키 없음 + /shoot?...&event=...        -> 통과 (게스트 쿠키를 심는다)
-쿠키 없음                               -> /login?redirectTo=<원래 경로와 쿼리>
+/oauth2/callback + 인증 쿠키 O + 게스트 쿠키 O  -> 통과 (게스트 쿠키 삭제)
+/oauth2/callback + 인증 쿠키 X                  -> 통과 (게스트 쿠키 그대로)
+인증 쿠키 O (그 밖의 보호 경로)                 -> 통과 (게스트 쿠키 그대로)
+게스트 쿠키 O + /shoot/upload                   -> /shoot?guestNotice=restricted   ← 회원 전용
+게스트 쿠키 O + 그 밖의 /shoot/*                -> 통과
+게스트 쿠키 O + 그 외 보호 경로                 -> /shoot?guestNotice=restricted
+쿠키 없음 + /shoot?...&event=...                -> 통과 (게스트 쿠키를 심는다)
+쿠키 없음                                       -> /login?redirectTo=<원래 경로와 쿼리>
 ```
+
+### 게스트 쿠키는 소셜 콜백에서만 걷는다
+
+예전에는 **보호 경로에서 인증 쿠키만 보이면** 게스트 쿠키를 지웠습니다. 지금은 그러지
+않습니다 — 지우는 자리는 소셜 로그인 콜백 하나뿐입니다.
+
+프록시가 볼 수 있는 것은 쿠키가 **있는지**뿐입니다. 값이 유효한지는 백엔드에 물어야 알 수
+있고 미들웨어는 묻지 않으므로, 만료됐거나 서버가 이미 회수한 토큰도 "로그인"으로 읽습니다.
+그 상태에서 지우면, 죽은 쿠키를 든 방문자가 "가입 없이 찍어보기"로 방금 심은 게스트 쿠키를
+**다음 요청에서 도로 잃습니다.** 그 화면은 메모리 값으로 버티지만, 새로고침 한 번이면
+`hydrateGuestMode`([`guestTrialStore.ts`](../apps/web/lib/guestTrialStore.ts))가 쿠키를 못
+찾아 회원으로 되돌아가고, 촬영 화면이 인증 API에서 401을 받아 "로그인이 풀렸어요"로
+끝납니다. 몇 번을 눌러도 체험이 시작되지 않습니다.
+
+콜백이 그 자리인 이유는, 백엔드가 소셜 인가를 마치고 **인증 쿠키를 심은 뒤** 그 주소로
+돌려보내기 때문입니다([`docs/mobile-shell.md`](./mobile-shell.md) 「소셜 로그인」 절의
+"지금 흐름 (실측)" — `CustomOAuth2SuccessHandler` 가 `Set-Cookie` 를 붙여 302 로 보냅니다).
+거기 인증 쿠키가 있다는 것은 방금 로그인했다는 뜻입니다. 그래서 **게스트 쿠키와 인증 쿠키가
+둘 다 있을 때만** 걷습니다 — 인가에 실패해 빈손으로 돌아온 사람에게서 체험까지 뺏을 이유는
+없습니다.
+
+콜백 페이지는 성공하면 `window.location.href`로 문서를 새로 받아 zustand에 남은 게스트
+상태를 비우지만, **쿠키는 문서를 새로 받아도 살아남습니다.** 그대로 두면 체험하다 가입한
+사람이 로그인을 마친 뒤에도 계속 비회원으로 읽혀 자기 프레임과 기록을 못 봅니다.
+이메일 로그인은 같은 일을 클라이언트에서 합니다 —
+[`apps/web/app/login/page.tsx`](../apps/web/app/login/page.tsx)의 `exitGuestMode()`.
+
+회귀 고정: [`apps/web/proxy.test.ts`](../apps/web/proxy.test.ts)의 「proxy 회원 전환」
+세 가지 — "인증 쿠키가 남아 있어도 비회원 체험 쿠키를 지우지 않는다",
+"소셜 로그인 콜백에서는 체험 쿠키를 걷는다", "콜백에 빈손으로 돌아왔으면 체험을 그대로 둔다".
 
 ### `/shoot/upload`는 `/shoot` 아래지만 회원 전용이다
 
@@ -202,6 +243,9 @@ loginKakao/loginNaver/loginGoogle
 - 같은 파일이 sessionStorage 키를 둘 더 씁니다 — `social-login-provider`(어느 제공자로
   나갔나)와 `social-login-reactivated`(재등록 재시도를 이미 한 번 했나). 둘 다 아래
   `DELETED_REQUESTED` 분기 전용이고, 그 분기가 존재하는 이유이기도 합니다.
+
+콜백에 도착하면 페이지보다 미들웨어가 먼저 돕니다 — 게스트 쿠키를 걷는 자리가 거기입니다
+(위 「게스트 쿠키는 소셜 콜백에서만 걷는다」).
 
 콜백 처리([`apps/web/app/oauth2/callback/page.tsx`](../apps/web/app/oauth2/callback/page.tsx)):
 

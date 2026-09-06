@@ -116,8 +116,43 @@ COUPON  001 002 003 004 005 006 007 008
 | `SUBS-006` | 400 | There is no auto-renewal to cancel… | 해지할 자동 갱신이 없을 때 |
 | `COUPON-008` | 400 | Coupons cannot be used on an unlimited subscription. | 무제한 구독에 쿠폰 |
 
-우리 맵에만 있고 서버엔 없는 코드(죽은 항목, 해는 없음):
-`GEN-007/008/092/093/094`, `STOR-000`, `PAY-004/005/009/010`, `NOTICE-001`.
+**죽은 항목(우리 맵에만 있고 서버엔 없는 코드)은 지금 0 이다** — 2026-09-07
+`pnpm check:contract` 결과가 `누락 0 · 죽음 0`(서버 52 · FE 52).
+예전에 여기 적혀 있던 `GEN-007/008/092/093/094`·`STOR-000`·`PAY-004/005/009/010` 은 그 뒤
+표에서 걷어냈고, `NOTICE-001` 은 서버가 실제로 내는 코드로 확인돼 남아 있다.
+
+### 클라이언트가 만드는 코드는 서버 코드가 아니다 (`CLIENT-*`)
+
+위 전수는 **서버 enum 전부**다. 그런데 화면이 받는 `code` 에는 서버가 낸 적 없는 값이
+섞인다 — 프론트가 스스로 만들어 붙이는 코드다. 그래서 접두사를 `CLIENT-` 로 갈라 둔다.
+서버 네임스페이스(`GEN-` 등)를 빌려 쓰면 서버 코드인 척하면서 어느 대조에도 걸리지 않는다.
+
+**목록의 소유자는 `scripts/check_backend_contract.py` 의 `CLIENT_ONLY_CODES` 다** —
+아래 표는 그 사본이므로, 코드를 새로 만들면 거기와 문구표를 고치고 여기를 맞춘다.
+
+| 코드 | 상태 | 만드는 곳 | 언제 |
+|---|---|---|---|
+| `CLIENT-001` | 503 | [`apps/web/lib/clientApi.ts`](../apps/web/lib/clientApi.ts) | 401 뒤 액세스 토큰 재발급이 **일시적으로** 실패(5xx·네트워크). 최초 401 을 그대로 올리면 화면이 `AUTH-012`("로그인이 만료됐어요")를 읽어 멀쩡한 세션을 재로그인시킨다 |
+| `CLIENT-002` | 500 | [`apps/web/app/api/client/_proxy.ts`](../apps/web/app/api/client/_proxy.ts) | `NEXT_PUBLIC_BASE_URL` 이 없거나 무효해서 upstream URL 자체를 만들지 못했다. **요청이 나가지도 않았다** |
+| `CLIENT-003` | 502 | 같은 파일 | Next 서버가 백엔드에 닿지 못했다(`fetch` 가 던짐). **백엔드는 이 요청을 본 적이 없다** |
+
+`CLIENT-002`·`CLIENT-003` 은 커밋 `7593408` 전까지 `GEN-500`·`GEN-502` 로 나갔다.
+서버 enum 에 없는 코드라 문구표에 걸리지 않았고, 그래서 화면은 호출부 폴백을 띄웠다 —
+로그인 화면이라면 백엔드가 죽은 것을 **"이메일 또는 비밀번호가 올바르지 않아요"** 라고 말했다
+(`app/login/page.tsx` 가 그 문장을 폴백으로 넘긴다).
+
+지켜야 할 두 가지:
+
+- **문구표에 짝이 있어야 한다.** 표의 코드는 전부 `packages/shared/src/api-error-messages.ts`
+  의 「클라이언트 자체 코드」 블록에 있다. 없는 코드를 내면 위 폴백 사고가 그대로 재현된다.
+  프록시 쪽은 상수를 import 하지 못하고(그 트리의 route 가 전부 `runtime = "edge"` 라
+  `@harucut/shared` 배럴을 끌어오면 edge 번들에 shared 가 통째로 딸려 온다) 문자열로만
+  맞춰 두므로, 코드 이름을 바꾸면 두 파일을 같은 커밋에서 고친다.
+  회귀 고정: `app/api/client/_proxy.test.ts` 의
+  "only invents codes that the shared message table can translate".
+- **대조에서 빼야 한다.** `scripts/check_backend_contract.py` 의 `CLIENT_ONLY_CODES` 가
+  C 절에서 이 코드들을 FE 집합에서 덜어낸 뒤 서버 enum 과 비교한다. 거기 등록하지 않으면
+  "서버에 없는 죽은 코드" 로 센다.
 
 ---
 
@@ -191,6 +226,32 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 그래서 `lib/fourcutCompose.ts` 가 고른 4장을 **슬롯 크기로 자르고 필터를 입혀** JPEG 으로 올린다.
 슬롯과 같은 비율·크기로 올리면 서버의 cover 배치가 1:1 이 되어 미리보기와 어긋날 여지가 없다.
 (PNG 가 아니라 JPEG 인 이유: 슬롯 하나가 4MP까지 가서 PNG면 10MB 업로드 제한에 걸린다)
+
+## 합성 실패 사유(`failureReason`)는 화면에 그대로 쓸 수 없다 (2026-09-07 `/v3/api-docs` 재확인)
+
+폴링 응답(`GET /api/auth/user/media/compose/{jobId}` → `ComposeJobResponse`)은 필드가 넷이다 —
+`jobId`·`status`·`mediaId`·`failureReason`. `status` 는 `PENDING`·`DONE`·`FAILED` 셋뿐이고
+(진행률도 `RUNNING` 도 없다), `mediaId` 는 `DONE` 일 때만·`failureReason` 은 `FAILED` 일 때만
+**키 자체가 붙는다**(null 체크가 아니라 필드 존재 체크로 다루라고 스웨거가 적어 뒀다).
+
+그 `failureReason` 설명에 스웨거가 이렇게 못박아 뒀다:
+
+> 실패 사유. **`FAILED` 일 때만 실린다.** 사용자에게 그대로 보여줄 문구는 아니다
+
+사람에게 읽히라고 만든 값이 아니라는 뜻이다. 게다가 스웨거가 든 예시 값 자체가 한국어라
+(`"원본 이미지를 읽을 수 없습니다"`) **"한국어면 우리 문구"** 식 관문으로도 못 거른다 —
+`apiError.ts` 가 `GEN-003` 의 `data[].message` 를 가려 쓰는 그 방법이 여기서는 통하지 않는다.
+
+그래서 프론트는 이 값을 통째로 버린다. `lib/composeApi.ts` 가 `FAILED` 를 보면
+`ComposeFailedError(job.failureReason)` 로 던지고, `lib/fourcutCompose.ts` 의
+`describeComposeFailure` 는 그것을 화면 문구로 옮기지 않는다 — 고정 문구
+"서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요."(재시도 불가)를 내고,
+원문은 개발 빌드의 콘솔에만 남긴다.
+
+**대신 잃는 것**: 응답에 코드가 없어 프론트가 사유별로 갈라 줄 수 없다 — 원본을 읽지 못한
+것인지, 프레임 자산을 읽지 못한 것인지 가릴 값이 없다. 그래서 실패는 늘 같은 한 문장이 된다.
+코드를 함께 달라는 요청은 [`docs/app-shell-backend-requests.md`](./app-shell-backend-requests.md)
+§8 이 소유한다 — 요청 목록은 여기 복제하지 않는다.
 
 ## 아직 막혀 있는 것
 

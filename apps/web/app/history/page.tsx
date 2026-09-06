@@ -27,7 +27,7 @@ import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
-import { shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import {
   getUserMediaPreviewUrl,
   getUserMediaTitle,
@@ -340,10 +340,15 @@ export default function HistoryPage() {
       console.error(shareError);
       setFeedback({
         kind: "error",
-        text: getUserFacingApiErrorMessage(
-          shareError,
-          "공유 링크를 준비하지 못했어요.",
-        ),
+        // 링크를 못 만든 것과 만들어 놓고 복사만 거부당한 것을 한 문구로 묶지 않는다 — 사용자가
+        // 할 일이 다르다. 앞은 잠시 뒤 다시 누르면 되지만, 뒤는 복사를 허용하기 전에는 몇 번을
+        // 눌러도 같은 자리에서 막힌다(lib/share.ts 의 CopyFailedError).
+        text: isCopyFailedError(shareError)
+          ? "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."
+          : getUserFacingApiErrorMessage(
+              shareError,
+              "공유 링크를 준비하지 못했어요.",
+            ),
       });
     } finally {
       setSharingId(null);

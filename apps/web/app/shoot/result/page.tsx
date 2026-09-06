@@ -38,7 +38,7 @@ import { isNotNull } from "@/lib/guards";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
 import { getNativeSaveErrorMessage, nativeNotify } from "@/lib/nativeBridge";
-import { shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
@@ -680,6 +680,16 @@ export default function ShootResultPage() {
       }
     } catch (error) {
       console.error(error);
+      // 링크는 이미 만들어졌고 복사만 거부당한 경우다(lib/share.ts 의 CopyFailedError).
+      // "링크를 준비하지 못했어요 / 잠시 후 다시" 로 말하면 원인도 틀리고, 사용자는
+      // 기다렸다 다시 눌러 같은 자리에서 또 막힌다 — 해야 할 일이 다르므로 갈라 안내한다.
+      if (isCopyFailedError(error)) {
+        showStatusNotice(
+          "링크를 복사하지 못했어요",
+          "링크는 만들었지만 브라우저가 복사를 막았어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요.",
+        );
+        return;
+      }
       showStatusNotice(
         "이미지 링크를 준비하지 못했어요",
         getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),

@@ -7,6 +7,7 @@ const mockExportJson = jest.fn();
 const mockImportJson = jest.fn();
 const mockResetPhotos = jest.fn();
 const mockSetBackgroundColor = jest.fn();
+const mockSetBackgroundImageKey = jest.fn();
 const mockCreateFrame = jest.fn();
 const mockUpdateFrame = jest.fn();
 const mockDeleteFrame = jest.fn();
@@ -17,14 +18,21 @@ const mockAlert = jest.fn();
 
 let mockRemoteFrameId: number | null = null;
 
+// 저장 전 배경 업로드 분기를 켜려면 IMAGE 배경도 넣을 수 있어야 한다.
+type MockBackground =
+  | { type: "COLOR"; value: string }
+  | { type: "IMAGE"; key: string | null; url?: string };
+
 const editorStoreState = {
   setFrameId: mockSetFrameId,
   exportJson: mockExportJson,
   importJson: mockImportJson,
   resetPhotos: mockResetPhotos,
-  background: { type: "COLOR" as const, value: "111827" },
+  background: { type: "COLOR", value: "111827" } as MockBackground,
   backgroundColor: "111827",
   setBackgroundColor: mockSetBackgroundColor,
+  pendingBackgroundFile: null as File | null,
+  setBackgroundImageKey: mockSetBackgroundImageKey,
   components: [] as Array<{ hidden?: boolean }>,
   cellCutouts: [false, false, false, false],
   frameId: "classic",
@@ -183,6 +191,7 @@ describe("ThemeEditorPage save flow", () => {
     editorStoreState.components = [];
     editorStoreState.background = { type: "COLOR", value: "111827" };
     editorStoreState.backgroundColor = "111827";
+    editorStoreState.pendingBackgroundFile = null;
 
     editorStoreState.finalizeAssetsForSave = jest
       .fn()
@@ -212,11 +221,42 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
+      // 미리보기는 key 로만 저장 요청에 실린다 — 조회용 URL 을 얻는 왕복은 낭비라
+      // 건너뛴다. 빠지면 저장 한 번에 쓸모없는 요청이 하나 더 나간다.
       expect(mockUploadPresigned).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "FRAME" }),
+        expect.objectContaining({ type: "FRAME", skipUrlResolve: true }),
       );
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+  });
+
+  /*
+    저장 한 번에 올라가는 배경·미리보기는 **둘 다 key 만** 쓴다. 배경은 이미 고른 파일의
+    로컬 주소로 그려져 있고 `setBackgroundImageKey` 도 url 을 건드리지 않는다.
+    조회용 URL 해석이 되살아나면 저장할 때마다 쓸모없는 왕복이 두 번 늘어난다.
+  */
+  it("배경·미리보기 업로드 모두 조회용 URL 해석을 건너뛴다", async () => {
+    editorStoreState.background = { type: "IMAGE", key: null };
+    editorStoreState.pendingBackgroundFile = new File(["bg"], "bg.png", {
+      type: "image/png",
+    });
+    mockUploadPresigned
+      .mockResolvedValueOnce({ key: "background-key" })
+      .mockResolvedValueOnce({ key: "preview-key" });
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    confirmSave(container);
+
+    await waitFor(() => {
+      expect(mockCreateFrame).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockSetBackgroundImageKey).toHaveBeenCalledWith("background-key");
+    expect(mockUploadPresigned).toHaveBeenCalledTimes(2);
+    for (const [args] of mockUploadPresigned.mock.calls) {
+      expect(args).toMatchObject({ skipUrlResolve: true });
+    }
   });
 
   it("updates a remote frame without touching local drafts", async () => {

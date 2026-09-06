@@ -41,8 +41,9 @@ ERROR_MAP_FILES = [
 # 서버가 아니라 **프론트가 스스로 만드는** 코드. C 대조에서 "서버에 없다" 로 세면 안 된다.
 #   CLIENT-001 재발급 자체가 불가능한 상태(clientApi)
 #   CLIENT-002 NEXT_PUBLIC_BASE_URL 이 없거나 잘못됨(프록시가 백엔드 주소를 못 만든다)
-#   CLIENT-003 백엔드에 닿지 못함(fetch 자체가 던졌다 — 서버는 아무 코드도 못 준다)
-CLIENT_ONLY_CODES = {"CLIENT-001", "CLIENT-002", "CLIENT-003"}
+#   CLIENT-003 백엔드에 닿지 못함(프록시의 fetch 가 던졌다 — 서버는 아무 코드도 못 준다)
+#   CLIENT-004 Next 서버에조차 닿지 못함(브라우저의 fetch 가 던졌다 — 003 의 한 칸 앞 구간)
+CLIENT_ONLY_CODES = {"CLIENT-001", "CLIENT-002", "CLIENT-003", "CLIENT-004"}
 CALLER_DIRS = [
     "apps/web/lib", "apps/web/app", "apps/web/components",
     "apps/web/hooks", "apps/web/tests", "packages",
