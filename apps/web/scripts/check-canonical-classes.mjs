@@ -54,22 +54,39 @@ const files = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
 
 const VALUE_RE = /(?<![\w-])([a-z][a-z0-9-]*)-\[([^\]\s"`]+)\]/g;
 const PROP_RE = /(?<![\w:-])\[([a-z-]+):([^\]\s"`]+)\]/g;
+/** 색/불투명도의 임의 표기 — `border-white/[0.08]`. `/` 뒤라서 VALUE_RE 에 안 걸린다. */
+const ALPHA_RE = /(?<![\w-])([a-z][a-z0-9-]*(?:-[a-z0-9]+)*)\/\[([0-9.]+)\]/g;
+/** v3 식 앞자리 important — `!h-full`. v4 는 뒤에 붙인다(`h-full!`). */
+const BANG_RE = /(?<![\w$.])!([a-z][a-z0-9:./-]*(?:\[[^\]\s"`]+\])?)(?=[\s"'`]|$)/g;
+
+/**
+ * **문자열 리터럴 안만 본다.** 예전에는 줄 전체를 훑어서 `if (!cancelled)` 의 부정 연산자가
+ * `!cancelled` 클래스로 잡혔다(컴파일 단계에서 걸러지긴 하지만 목록이 지저분해진다).
+ * 클래스는 언제나 따옴표나 백틱 안에 있다.
+ */
+function stringChunks(line) {
+  const out = [];
+  const re = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|`([^`\\]*(?:\\.[^`\\]*)*)`/g;
+  for (const m of line.matchAll(re)) out.push(m[1] ?? m[2] ?? m[3] ?? "");
+  return out;
+}
 
 /** class -> [{file, line}] */
 const found = new Map();
+function note(cls, f, i) {
+  if (!found.has(cls)) found.set(cls, []);
+  const uses = found.get(cls);
+  if (!uses.some((u) => u.file === f && u.line === i)) uses.push({ file: f, line: i });
+}
 for (const f of files) {
   const text = readFileSync(join(ROOT, f), "utf8");
-  const lines = text.split("\n");
-  lines.forEach((line, i) => {
-    for (const m of line.matchAll(VALUE_RE)) {
-      const cls = `${m[1]}-[${m[2]}]`;
-      if (!found.has(cls)) found.set(cls, []);
-      found.get(cls).push({ file: f, line: i + 1 });
-    }
-    for (const m of line.matchAll(PROP_RE)) {
-      const cls = `[${m[1]}:${m[2]}]`;
-      if (!found.has(cls)) found.set(cls, []);
-      found.get(cls).push({ file: f, line: i + 1 });
+  text.split("\n").forEach((line, idx) => {
+    const i = idx + 1;
+    for (const chunk of stringChunks(line)) {
+      for (const m of chunk.matchAll(VALUE_RE)) note(`${m[1]}-[${m[2]}]`, f, i);
+      for (const m of chunk.matchAll(PROP_RE)) note(`[${m[1]}:${m[2]}]`, f, i);
+      for (const m of chunk.matchAll(ALPHA_RE)) note(`${m[1]}/[${m[2]}]`, f, i);
+      for (const m of chunk.matchAll(BANG_RE)) note(`!${m[1]}`, f, i);
     }
   });
 }
@@ -99,6 +116,21 @@ const pairs = [];
 for (const cls of found.keys()) {
   if (cls.startsWith("[")) {
     for (const c of PROP_UTIL[cls.slice(1, -1)] ?? []) pairs.push([cls, c]);
+    continue;
+  }
+  if (cls.startsWith("!")) {
+    // v3 앞자리 important -> v4 뒷자리. 컴파일 비교가 진짜 유틸리티인지까지 걸러 준다.
+    pairs.push([cls, `${cls.slice(1)}!`]);
+    continue;
+  }
+  const alpha = /^([a-z][a-z0-9-]*(?:-[a-z0-9]+)*)\/\[([0-9.]+)\]$/.exec(cls);
+  if (alpha) {
+    // `/[0.08]` 은 알파 0.08 = 8%. 정규형은 퍼센트 숫자다.
+    const pct = Number(alpha[2]) * 100;
+    if (Number.isFinite(pct)) {
+      const text = Number(pct.toFixed(4)).toString();
+      pairs.push([cls, `${alpha[1]}/${text}`]);
+    }
     continue;
   }
   const m = /^([a-z][a-z0-9-]*)-\[(.+)\]$/.exec(cls);

@@ -292,6 +292,8 @@ Tailwind v4 는 임의값(`[...]`)으로 쓸 수 있는 것에 대부분 **이�
 | `text-(--hc-muted)` | `text-[color:var(--hc-muted)]` | 만들어지는 CSS 가 **글자 하나까지 같다** |
 | `h-11` · `gap-2.5` · `max-w-170` | `h-[44px]` · `gap-[10px]` · `max-w-[680px]` | `--spacing` 이 `0.25rem` 이라 값이 같다. 게다가 화면 전체가 같은 단위(rem)로 커진다 — px 로 박아 두면 시스템 글꼴을 키운 사용자에게서 어떤 칸은 커지고 어떤 칸은 안 커진다 |
 | `rounded-xl` · `leading-normal` · `aspect-3/4` | `rounded-[12px]` · `leading-[1.5]` · `aspect-[3/4]` | 테마 값과 정확히 같다 |
+| `border-white/8` | `border-white/[0.08]` | 불투명도는 퍼센트 숫자로 쓴다(0.08 = 8%) |
+| `h-full!` | `!h-full` | v4 는 important 를 **뒤**에 붙인다. 앞자리는 v3 문법이다 |
 
 **임의값을 그대로 두는 것도 있다.** 글자 크기(`text-[13px]`)는 정규형이 없다 — `text-sm` 은
 `line-height` 까지 같이 바꾸므로 같은 것이 아니다. 자간(`tracking-[-0.6px]`), `border-[1.5px]`,

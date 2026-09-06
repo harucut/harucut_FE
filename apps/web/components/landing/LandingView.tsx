@@ -100,10 +100,10 @@ function HowFilm() {
   }, [reduced]);
 
   return (
-    <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
+    <div className="overflow-hidden rounded-[10px] border border-white/8 bg-[#0E0E0F]">
       <TapeStrip
         running={!reduced && !settled}
-        className="border-b border-white/[0.06]"
+        className="border-b border-white/6"
       />
 
       <div className="grid md:grid-cols-3" onMouseLeave={() => setHovered(null)}>
@@ -169,7 +169,7 @@ function HowFilm() {
 
       <TapeStrip
         running={!reduced && !settled}
-        className="border-t border-white/[0.06]"
+        className="border-t border-white/6"
       />
     </div>
   );
@@ -236,19 +236,19 @@ function HeroEditorial() {
           className="-mr-8 h-37.5 drop-shadow-2xl sm:-mr-10 sm:h-49 lg:h-58"
           style={{ transform: "rotate(-12deg) translateY(10px)", zIndex: 1 }}
         >
-          <ShowcaseFrame id="classic-4" className="!h-full !w-auto" />
+          <ShowcaseFrame id="classic-4" className="h-full! w-auto!" />
         </div>
         <div
           className="h-47 drop-shadow-2xl sm:h-61 lg:h-72.5"
           style={{ transform: "rotate(3deg)", zIndex: 3 }}
         >
-          <ShowcaseFrame id="grid-4" className="!h-full !w-auto" />
+          <ShowcaseFrame id="grid-4" className="h-full! w-auto!" />
         </div>
         <div
           className="-ml-8 h-37.5 drop-shadow-2xl sm:-ml-10 sm:h-49 lg:h-58"
           style={{ transform: "rotate(12deg) translateY(10px)", zIndex: 2 }}
         >
-          <ShowcaseFrame id="polaroid-4" className="!h-full !w-auto" />
+          <ShowcaseFrame id="polaroid-4" className="h-full! w-auto!" />
         </div>
       </Reveal>
     </section>
@@ -263,7 +263,7 @@ export function LandingView() {
       <HeroEditorial />
 
       {/* HOW */}
-      <section id="how" className="border-y border-white/[0.1] bg-black">
+      <section id="how" className="border-y border-white/10 bg-black">
         <div className="mx-auto max-w-290 px-7 py-19">
           <Reveal className="mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
@@ -310,7 +310,7 @@ export function LandingView() {
                   frameId="grid-4"
                   images={HERO_IMAGES}
                   borderColor="#141416"
-                  className="!h-full !w-auto"
+                  className="h-full! w-auto!"
                 />
               </div>
 
@@ -325,7 +325,7 @@ export function LandingView() {
                   images={HERO_IMAGES}
                   theme={DEMO_DECORATED_THEME}
                   borderColor="#141416"
-                  className="!h-full !w-auto"
+                  className="h-full! w-auto!"
                 />
               </div>
             </div>
@@ -338,7 +338,7 @@ export function LandingView() {
         랜딩이 개인 사용자 이야기만 하고 있어서, 행사 주최자가 들어와도 자기 이야기를
         찾을 자리가 없었다. 제품이 파는 두 축 중 하나가 화면에 아예 없던 셈이다.
       */}
-      <section id="event" className="border-y border-white/[0.1] bg-black">
+      <section id="event" className="border-y border-white/10 bg-black">
         <div className="mx-auto flex max-w-290 flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex max-w-140 flex-col gap-4">
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-[11px] font-extrabold tracking-[1px] text-white/70">

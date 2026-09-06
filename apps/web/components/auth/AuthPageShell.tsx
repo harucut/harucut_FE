@@ -46,7 +46,7 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
               frameId="classic-4"
               images={COLLAGE}
               borderColor="#0B0B0C"
-              className="!h-full !w-auto"
+              className="h-full! w-auto!"
             />
           </div>
           <div
@@ -61,7 +61,7 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
               frameId="grid-4"
               images={COLLAGE}
               borderColor="#0B0B0C"
-              className="!h-full !w-auto"
+              className="h-full! w-auto!"
             />
           </div>
         </div>

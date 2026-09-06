@@ -72,7 +72,7 @@ function AxisVisual({ index }: { index: number }) {
         ].map((row, i) => (
           <div
             key={row.t}
-            className="flex items-center gap-5 rounded-[10px] border border-white/[0.08] bg-[#0E0E0F] px-6 py-6"
+            className="flex items-center gap-5 rounded-[10px] border border-white/8 bg-[#0E0E0F] px-6 py-6"
             style={{ borderColor: i ? undefined : "rgba(30,215,96,.28)" }}
           >
             <span
@@ -104,7 +104,7 @@ function AxisVisual({ index }: { index: number }) {
             images={DEMO_IMAGES}
             theme={DEMO_DECORATED_THEME}
             borderColor="#141416"
-            className="!h-full !w-auto"
+            className="h-full! w-auto!"
           />
         </div>
         {/* 스티커 실물 — 붙이기 전 상태 그대로 흩뿌려 놓는다. */}
@@ -135,7 +135,7 @@ function AxisVisual({ index }: { index: number }) {
   ];
 
   return (
-    <div className="w-full rounded-[10px] border border-white/[0.08] bg-[#0E0E0F] px-7 py-8">
+    <div className="w-full rounded-[10px] border border-white/8 bg-[#0E0E0F] px-7 py-8">
       <div className="flex flex-col gap-6">
         {rows.map((row) => (
           <div key={row.plan}>
@@ -154,7 +154,7 @@ function AxisVisual({ index }: { index: number }) {
                 {row.span}
               </span>
             </div>
-            <div className="h-0.75 w-full overflow-hidden rounded-full bg-white/[0.07]">
+            <div className="h-0.75 w-full overflow-hidden rounded-full bg-white/7">
               <div
                 className="h-full rounded-full"
                 style={{
@@ -187,11 +187,11 @@ export function FeaturesView() {
       </section>
 
       {/* 세 축 — 좌우 번갈아 배치. 카드 그리드 대신 점선 구분의 에디토리얼 레이아웃 */}
-      <section className="border-t border-white/[0.1]">
+      <section className="border-t border-white/10">
         {AXES.map((axis, i) => (
           <div
             key={axis.n}
-            className={i ? "border-t border-dashed border-white/[0.12]" : ""}
+            className={i ? "border-t border-dashed border-white/12" : ""}
           >
             <div className="mx-auto max-w-290 px-7 py-18">
               <Reveal>
@@ -216,14 +216,14 @@ export function FeaturesView() {
                     </p>
 
                     {/* 부스와의 대비 — 취소선 대신 죽은 색으로 눌러 놓는다 */}
-                    <p className="mt-6 max-w-115 border-l border-white/[0.1] pl-4 text-[13px] leading-[1.65] text-white/70">
+                    <p className="mt-6 max-w-115 border-l border-white/10 pl-4 text-[13px] leading-[1.65] text-white/70">
                       <span className="mr-2 font-bold text-white/85">
                         부스는
                       </span>
                       {axis.booth}
                     </p>
 
-                    <dl className="mt-8 flex flex-col gap-3 border-t border-white/[0.08] pt-6">
+                    <dl className="mt-8 flex flex-col gap-3 border-t border-white/8 pt-6">
                       {axis.facts.map(([k, v]) => (
                         <div key={k} className="flex items-baseline gap-5">
                           <dt className="w-14 shrink-0 text-[12px] font-semibold text-white/75">
@@ -246,7 +246,7 @@ export function FeaturesView() {
       </section>
 
       {/* 요금제로 잇기 */}
-      <section className="border-y border-white/[0.1] bg-black">
+      <section className="border-y border-white/10 bg-black">
         <TapeStrip />
         <div className="mx-auto flex max-w-290 flex-wrap items-center justify-between gap-6 px-7 py-14">
           <div>

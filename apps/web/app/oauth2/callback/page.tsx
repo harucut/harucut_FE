@@ -1,5 +1,20 @@
 "use client";
 
+/*
+  이 파일의 이동은 전부 **일부러 문서를 새로 받는다**(`window.location.href`).
+  `useRouter().push` 는 클라이언트 전환이라 인증 경계에서 셋이 어긋난다.
+
+  1. `proxy.ts` 의 보호 경로 판정은 문서 요청에서만 돈다 — 클라이언트 전환은 지나친다.
+  2. zustand 스토어(게스트 체험 상태·세션 캐시)가 그대로 살아남는다. 소셜 로그인은
+     "여기서부터 다른 사람"이 되는 지점이라 남아 있으면 안 된다.
+  3. 서버 컴포넌트가 **예전 쿠키로 만든 RSC 캐시**를 다시 쓸 수 있다. 여기서 바뀌는 것이
+     바로 그 쿠키다(탈퇴 취소 경로는 토큰의 status 까지 갈아 끼운다 — 아래 주석 참고).
+
+  그래서 `@next/next/no-location-assign-relative-destination` 을 이 파일에서만 끈다.
+  같은 이유로 로그인 성공(app/login/page.tsx)과 재동의 로그아웃도 같은 방식이다.
+*/
+/* eslint-disable @next/next/no-location-assign-relative-destination */
+
 import { useEffect, useRef, useState } from "react";
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, UserStatus } from "@/lib/api-types";

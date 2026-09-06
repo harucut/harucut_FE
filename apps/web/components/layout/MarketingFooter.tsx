@@ -52,7 +52,7 @@ export function MarketingFooter({
   const dark = tone === "dark";
 
   const shell = dark
-    ? "border-t border-white/[0.1] bg-[#161617]"
+    ? "border-t border-white/10 bg-[#161617]"
     : "border-t border-(--hc-border) bg-(--hc-surface-soft)";
   const headText = dark ? "text-white/85" : "text-(--hc-text)";
   // 법정 표시 텍스트도 본문과 같은 대비 등급을 쓴다.
@@ -63,7 +63,7 @@ export function MarketingFooter({
   const linkText = dark
     ? "text-[#B3B3B3] hover:text-white"
     : "text-(--hc-muted) hover:text-(--hc-text)";
-  const rule = dark ? "border-white/[0.1]" : "border-(--hc-border)";
+  const rule = dark ? "border-white/10" : "border-(--hc-border)";
 
   return (
     <footer className={shell}>

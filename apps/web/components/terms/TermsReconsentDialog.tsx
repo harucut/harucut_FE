@@ -242,6 +242,9 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
       }
     }
     // 이동을 시작하면 잠금을 풀지 않는다. 떠나는 동안 한 번 더 눌리지 않게 한다.
+    // 클라이언트 전환이 아니라 문서를 새로 받는다 — 로그아웃 직후라 쿠키가 바뀌었고,
+    // 스토어에 남은 세션 캐시와 RSC 캐시를 통째로 버려야 한다(app/oauth2/callback 주석 참고).
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/login";
   };
 
