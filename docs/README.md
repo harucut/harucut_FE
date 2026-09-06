@@ -56,8 +56,18 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료�
 로 본다 — 백엔드도 도커도 없이 돈다.
 
 전체 검증은 `pnpm verify:standard`. 맨 앞에 `pnpm install --frozen-lockfile` 락파일 검사가
-붙고 그다음이 lint:web·test:web·build:web·lint:mobile·typecheck:mobile 이다 — 목록의
-진실은 `scripts/verify_workspace.py` 의 `GROUPS` 딕셔너리다. macOS 에서도 그냥 돈다.
+붙고 그다음이 lint:web·**check:classes:web**·**typecheck:shared**·test:web·build:web·
+lint:mobile·typecheck:mobile 이다 — 목록의 진실은 `scripts/verify_workspace.py` 의 `GROUPS`
+딕셔너리다. macOS 에서도 그냥 돈다.
+
+새로 붙은 둘은 이렇다.
+
+- `check:classes:web` — Tailwind 임의값 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을 막는다
+  (`apps/web/scripts/check-canonical-classes.mjs`). 표를 들고 있지 않고 후보를 실제로 컴파일해
+  값으로 비교하므로 Tailwind 가 올라가도 따라간다. 규칙과 예외는 `apps/web/DESIGN.md`
+  「클래스 표기 — 정규형을 쓴다」.
+- `typecheck:shared` — 루트 `tsconfig.json` 으로 `packages/*/src` 를 검사한다. 이게 없던 동안
+  `packages/shared` 의 `*.test.ts` 두 개는 **jest 는 도는데 타입은 아무도 안 보는** 상태였다.
 
 E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 검증이 조용히 통과한다.
 규칙과 강제 장치는 [auth-routing.md](./auth-routing.md#dev_auth_bypass-로컬-전용) 에 있다.

@@ -33,7 +33,9 @@
 - `apps/mobile`: Expo 웹뷰 셸(위 참조). 소스 5개 파일.
 - `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared`.
   **목록을 문서에 복사하지 않는다** — `packages/shared/src/index.ts` 의 재수출이 곧 진실이다
-  (현재 13개 모듈).
+  (현재 14개 모듈). 자기 `package.json` 에 의존성이 없다 — 툴체인을 `apps/web` 것에서 빌려 쓴다.
+  타입 검사는 루트 `tsconfig.json`(`pnpm typecheck:shared`), 테스트는 `apps/web` 의 jest 가
+  `roots` 로 끌어다 돌린다.
 - `docs/`: 진입점은 [`docs/README.md`](docs/README.md).
 - `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
   `check_backend_contract_test.py` 셋이다. 나머지 하나는 검증이 아니다 —
