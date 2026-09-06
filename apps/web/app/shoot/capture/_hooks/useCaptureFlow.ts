@@ -37,7 +37,7 @@ export function useCaptureFlow() {
   const [shotCount, setShotCount] = useState(0);
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
-  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 비활성으로 남는다).
+  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 사라진다).
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -58,19 +58,16 @@ export function useCaptureFlow() {
   // shooting.isShooting의 동기 미러. 상태는 비동기라, 첫 셔터 더블탭처럼 리렌더 이전의
   // stale 클로저가 세션을 두 번 시작/리셋해 첫 장을 날리는 것을 막는 가드로 쓴다.
   const isShootingRef = useRef(false);
-  // 진행 중인 카운트다운 타이머. 촬영 취소에서 즉시 정리하려고 따로 들고 있는다.
-  const countdownTimerRef = useRef<number | null>(null);
   /**
    * 촬영 회차 번호.
    *
-   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 사용자가 촬영 취소를 누르면
-   * 세션이 비워진 뒤에 결과가 돌아온다. 그대로 두면 취소한 사진이 다시 담기고, 마지막 컷을
-   * 인코딩하던 중이었다면 /shoot/select 로 넘어가 취소 자체가 무효가 됐다.
-   * 시작·취소 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
+   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 화면을 떠나면(헤더의 뒤로 가기)
+   * 언마운트 뒤에 결과가 돌아온다. 그대로 두면 떠난 세션에 사진이 얹히고, 마지막 컷을
+   * 인코딩하던 중이었다면 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다.
+   * 시작·언마운트 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
    */
   const shootGenerationRef = useRef(0);
 
-  const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
     typeof navigator !== "undefined" &&
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -250,13 +247,11 @@ export function useCaptureFlow() {
     };
   }, [frameId, isCameraReady, startCamera]);
 
-  // 언마운트 시 정리
+  // 언마운트 시 정리. 촬영을 멈추는 길은 이것 하나다 — 화면에 중단 버튼은 없고 헤더의 뒤로 가기가
+  // 그 역할이라, 스트림을 닫고 진행 중인 인코딩의 결과를 무효로 만든다(shootGenerationRef 주석).
   useEffect(() => {
     return () => {
       stopStream();
-      // 인코딩이 도는 중에 헤더의 뒤로 가기나 브랜드 링크로 화면을 떠나면 취소를 거치지
-      // 않는다. 그대로 두면 결과가 돌아와 전역 세션에 사진이 얹히고, 마지막 컷이었다면
-      // 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다. 취소와 같게 무효로 만든다.
       shootGenerationRef.current += 1;
     };
   }, [stopStream]);
@@ -391,7 +386,7 @@ export function useCaptureFlow() {
     const generation = shootGenerationRef.current;
     const photoDataUrl = await capturePhotoToDataUrl();
 
-    // 인코딩 중에 취소됐으면 결과를 버린다. 선점도 되돌리지 않는다 — 취소가 이미 초기화했다.
+    // 인코딩 중에 화면을 떠났으면 결과를 버린다. 선점도 되돌리지 않는다 — 떠난 화면이다.
     if (shootGenerationRef.current !== generation) return;
 
     if (!photoDataUrl) {
@@ -448,7 +443,6 @@ export function useCaptureFlow() {
     if (shooting.countdown === null) return;
 
     const timer = window.setTimeout(() => {
-      countdownTimerRef.current = null;
       // 이 effect는 isShooting/countdown 변경마다 재실행되므로 closure 값이 최신
       if (shooting.countdown !== null && shooting.countdown <= 1) {
         void finishSingleShot();
@@ -461,35 +455,13 @@ export function useCaptureFlow() {
       });
     }, 1000);
 
-    countdownTimerRef.current = timer;
-
-    return () => {
-      window.clearTimeout(timer);
-      if (countdownTimerRef.current === timer) countdownTimerRef.current = null;
-    };
+    return () => window.clearTimeout(timer);
   }, [shooting.isShooting, shooting.countdown, finishSingleShot]);
 
   const handleShootNow = useCallback(() => {
     if (!shooting.isShooting || !isCameraReady) return;
     void finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
-
-  // 촬영 취소: 진행 중인 카운트다운을 즉시 끊고 세션을 시작 전 상태로 되돌린다.
-  // 8초 간격이면 8장을 다 찍는 데 1분 가까이 걸려, 중단 수단이 없으면 되돌릴 방법이 없다.
-  const cancelShooting = useCallback(() => {
-    if (countdownTimerRef.current !== null) {
-      window.clearTimeout(countdownTimerRef.current);
-      countdownTimerRef.current = null;
-    }
-
-    isShootingRef.current = false;
-    lastFinishedShotRef.current = -1;
-    // 진행 중인 인코딩의 결과를 무효로 만든다.
-    shootGenerationRef.current += 1;
-    setShooting({ isShooting: false, countdown: null });
-    resetShots();
-    setShotCount(0);
-  }, [resetShots]);
 
   const switchCamera = useCallback(async () => {
     if (!canFlipCamera) return;
@@ -508,7 +480,6 @@ export function useCaptureFlow() {
     isShooting: shooting.isShooting,
     countdown: shooting.countdown,
     shotCount,
-    remainingShots,
     cameraFacingMode,
     canFlipCamera,
 
@@ -518,7 +489,6 @@ export function useCaptureFlow() {
     startCamera,
     startShooting,
     handleShootNow,
-    cancelShooting,
     switchCamera,
 
     MAX_SHOTS,

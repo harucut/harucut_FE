@@ -5,8 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { getEffectiveColorTheme, syncThemeColorMeta } from "@/lib/colorTheme";
-import { nativeSetColorScheme } from "@/lib/nativeBridge";
+import { useDarkStage } from "@/hooks/useDarkStage";
 
 // 공개(마케팅) 페이지 공통 상단 네비 — 랜딩/요금제/FAQ가 각자 다른 헤더를 갖고 있어
 // 높이·링크·CTA가 제각각이던 것을 하나로 통일한다.
@@ -45,20 +44,8 @@ export function MarketingNav({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  /*
-    마케팅 무대는 사용자 테마와 무관하게 어둡다. 셸의 상태바 글자색·무대색과 브라우저의
-    theme-color 는 `data-theme` 만 보고 정해지므로, 라이트 사용자가 이 무대를 열면 어두운 무대 위에
-    검은 상태바 글자가 놓였다. 무대에 있는 동안만 '다크' 라고 알리고 떠날 때 실제 테마로 되돌린다.
-  */
-  useEffect(() => {
-    nativeSetColorScheme("dark");
-    syncThemeColorMeta("dark");
-    return () => {
-      const actual = getEffectiveColorTheme();
-      nativeSetColorScheme(actual);
-      syncThemeColorMeta(actual);
-    };
-  }, []);
+  // 마케팅 무대는 사용자 테마와 무관하게 어둡다. 무대에 있는 동안 상태바·theme-color 도 다크.
+  useDarkStage();
 
   // hover 색은 부분일치 매핑에 걸리지 않는 arbitrary 값으로 쓴다(예전 globals.css 의
   // `[class*="hover:bg-white"]` 규칙이 라이트 테마에서 흰 알약+흰 글자를 만들었다 — 규칙은 걷어냈다).
