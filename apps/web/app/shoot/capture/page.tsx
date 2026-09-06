@@ -145,11 +145,11 @@ export default function CapturePage() {
             return (
               <span
                 key={index}
-                className={`h-[30px] w-[22px] rounded-[5px] border-[1.5px] transition-colors ${
+                className={`h-7.5 w-5.5 rounded-[5px] border-[1.5px] transition-colors ${
                   done
-                    ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-primary)]"
+                    ? "border-(--hc-primary) bg-(--hc-primary)"
                     : current
-                      ? "border-[color:var(--hc-primary)] bg-transparent shadow-[0_0_0_3px_rgba(30,215,96,0.22)]"
+                      ? "border-(--hc-primary) bg-transparent shadow-[0_0_0_3px_rgba(30,215,96,0.22)]"
                       : "border-[rgba(255,255,255,0.28)] bg-[rgba(255,255,255,0.04)]"
                 }`}
               />
@@ -263,7 +263,7 @@ export default function CapturePage() {
               ) : null}
             </div>
           ) : (
-            <div className="flex h-full w-full items-center justify-center rounded-xl border border-[color:var(--hc-border)] bg-black text-[11px] text-zinc-400">
+            <div className="flex h-full w-full items-center justify-center rounded-xl border border-(--hc-border) bg-black text-[11px] text-zinc-400">
               프레임을 먼저 선택해 주세요
             </div>
           )}
@@ -310,7 +310,7 @@ export default function CapturePage() {
           헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인 인코딩을 정리한다),
           전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
         */}
-        <div className="relative flex h-[88px] shrink-0 items-center justify-center [@media(max-height:700px)]:h-[72px]">
+        <div className="relative flex h-22 shrink-0 items-center justify-center [@media(max-height:700px)]:h-18">
           {canFlipCamera ? (
             <button
               type="button"
@@ -331,9 +331,9 @@ export default function CapturePage() {
               // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다. 화면에서 글자가 빠져도 보조기술에는 남는다.
               aria-label="바로 촬영"
               // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
-              className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-white transition active:scale-[0.96] [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[60px]"
+              className="grid h-18 w-18 place-items-center rounded-full border-4 border-white transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >
-              <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)] [@media(max-height:700px)]:h-[44px] [@media(max-height:700px)]:w-[44px]" />
+              <span className="h-13.5 w-13.5 rounded-full bg-(--hc-primary) [@media(max-height:700px)]:h-11 [@media(max-height:700px)]:w-11" />
             </button>
           ) : isCameraReady ? (
             <button

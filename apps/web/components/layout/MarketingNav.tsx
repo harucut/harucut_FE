@@ -20,7 +20,7 @@ const NAV_LINKS = [
 
 export function MarketingNav({
   cta = "quiet",
-  width = "max-w-[1160px]",
+  width = "max-w-290",
 }: {
   /**
    * 우측 CTA 의 무게. 본문에 초록 CTA 가 없는 화면(랜딩·기능 — 히어로 버튼이 흰색)만 "primary".
@@ -64,7 +64,7 @@ export function MarketingNav({
       }}
     >
       <div
-        className={`mx-auto flex h-[72px] w-full items-center justify-between px-7 ${width}`}
+        className={`mx-auto flex h-18 w-full items-center justify-between px-7 ${width}`}
       >
         <BrandMark href="/" tone="light" />
 

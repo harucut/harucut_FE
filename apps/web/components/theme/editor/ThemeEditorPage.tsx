@@ -497,14 +497,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
         {/*
           다른 흐름 화면과 같은 PageHeader — [<] 제목 [저장]. 예전에는 로고 + 밑줄 링크(16px 높이) +
           초록 알약이었고 화면 제목(h1)이 없어서 여기가 어디인지 헤더가 말하지 않았다.
           모바일에서는 저장이 캔버스 두 화면 위에 있어 헤더를 붙여 둔다(lg 이상은 한 화면에 다 들어온다).
         */}
-        <div className="sticky top-0 z-20 -mx-4 -mt-6 bg-[color:var(--hc-surface-soft)] px-4 pb-2 pt-6 backdrop-blur-md lg:static lg:mx-0 lg:mt-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+        <div className="sticky top-0 z-20 -mx-4 -mt-6 bg-(--hc-surface-soft) px-4 pb-2 pt-6 backdrop-blur-md lg:static lg:mx-0 lg:mt-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <PageHeader
             backHref="/theme"
             backLabel="프레임 목록으로"
@@ -520,7 +520,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                     type="button"
                     onClick={onDelete}
                     disabled={isDeleting || isSaving}
-                    className="inline-flex h-11 items-center rounded-full border border-[color:var(--hc-danger-border)] px-4 text-[13px] font-semibold text-[color:var(--hc-danger)] hover:bg-[color:var(--hc-danger-soft-bg)] disabled:opacity-50"
+                    className="inline-flex h-11 items-center rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger) hover:bg-(--hc-danger-soft-bg) disabled:opacity-50"
                   >
                     {isDeleting ? "삭제 중…" : "삭제"}
                   </button>
@@ -538,7 +538,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           />
         </div>
         {loadError || actionError ? (
-          <p role="alert" className="text-[12px] text-[color:var(--hc-danger)]">
+          <p role="alert" className="text-[12px] text-(--hc-danger)">
             {loadError ?? actionError}
           </p>
         ) : null}
@@ -570,13 +570,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       aria-pressed={selected}
                       className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[12px] ${
                         selected
-                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
-                          : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
+                          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+                          : "border-(--hc-border) text-(--hc-muted)"
                       }`}
                     >
                       <span
                         aria-hidden
-                        className="block h-6 w-full rounded border border-[color:var(--hc-border-subtle)]"
+                        className="block h-6 w-full rounded border border-(--hc-border-subtle)"
                         style={{ backgroundColor: `#${color.value}` }}
                       />
                       {color.label}
@@ -594,14 +594,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 />
                 {/* 값은 '#' 없이 저장된다. 코드 입력이라는 것이 보이게 접두를 화면에만 붙인다. */}
                 <div className="hc-input flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border px-3">
-                  <span aria-hidden className="font-mono text-[13px] text-[color:var(--hc-muted)]">
+                  <span aria-hidden className="font-mono text-[13px] text-(--hc-muted)">
                     #
                   </span>
                   <input
                     aria-label="배경색 코드"
                     value={backgroundColor}
                     onChange={(e) => setBackgroundColor(e.target.value)}
-                    className="min-w-0 flex-1 bg-transparent font-mono text-[13px] tracking-[0.06em] text-[color:var(--hc-text)] outline-none"
+                    className="min-w-0 flex-1 bg-transparent font-mono text-[13px] tracking-[0.06em] text-(--hc-text) outline-none"
                     placeholder="ffffff"
                     inputMode="text"
                     autoComplete="off"
@@ -612,7 +612,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-[color:var(--hc-border)] px-3 text-[12px] font-semibold text-[color:var(--hc-text)] hover:border-[color:var(--hc-primary)]">
+                <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-text) hover:border-(--hc-primary)">
                   {background.type === "IMAGE" ? "배경 이미지 변경" : "배경 이미지"}
                   <input
                     type="file"
@@ -639,18 +639,18 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   <button
                     type="button"
                     onClick={clearBackgroundImage}
-                    className="h-11 rounded-lg border border-[color:var(--hc-border)] px-3 text-[12px] font-semibold text-[color:var(--hc-muted)] hover:border-[color:var(--hc-primary)]"
+                    className="h-11 rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-muted) hover:border-(--hc-primary)"
                   >
                     이미지 제거
                   </button>
                 ) : null}
               </div>
               {backgroundError ? (
-                <p className="text-[11px] leading-4 text-[color:var(--hc-danger)]">
+                <p className="text-[11px] leading-4 text-(--hc-danger)">
                   {backgroundError}
                 </p>
               ) : null}
-              <p className="text-[12px] leading-5 text-[color:var(--hc-muted)]">
+              <p className="text-[12px] leading-5 text-(--hc-muted)">
                 배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF만 올릴 수
                 있어요.
               </p>
@@ -661,13 +661,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">미리보기</p>
-                <p className="text-[12px] text-[color:var(--hc-muted)]">
+                <p className="text-[12px] text-(--hc-muted)">
                   스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.
                 </p>
               </div>
 
               {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
-              <div className="flex min-h-[330px] items-center justify-center">
+              <div className="flex min-h-82.5 items-center justify-center">
                 <CanvasStage />
               </div>
             </section>
@@ -716,11 +716,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               >
                 {remoteFrameId ? "저장한 프레임 수정" : "프레임 저장"}
               </h2>
-              <p className="mt-1 text-[13px] leading-5 text-[color:var(--hc-muted)]">
+              <p className="mt-1 text-[13px] leading-5 text-(--hc-muted)">
                 저장할 프레임 이름과 설명을 입력해 주세요.
               </p>
               {hiddenLayerCount > 0 ? (
-                <p className="mt-2 text-[12px] leading-5 text-[color:var(--hc-muted)]">
+                <p className="mt-2 text-[12px] leading-5 text-(--hc-muted)">
                   숨긴 레이어가 {hiddenLayerCount}개 있어요.
                 </p>
               ) : null}
@@ -750,7 +750,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 />
               </label>
               {saveDialogError ? (
-                <p className="text-[11px] leading-5 text-[color:var(--hc-danger)]">
+                <p className="text-[11px] leading-5 text-(--hc-danger)">
                   {saveDialogError}
                 </p>
               ) : null}

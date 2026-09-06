@@ -30,8 +30,8 @@ export function AppNav({ userInitial }: AppNavProps) {
   const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
 
   return (
-    <header className="sticky top-0 z-40 hidden border-b border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)] backdrop-blur-xl lg:block">
-      <div className="mx-auto flex h-[68px] w-full max-w-5xl items-center gap-9 px-7">
+    <header className="sticky top-0 z-40 hidden border-b border-(--hc-border) bg-(--hc-surface-soft) backdrop-blur-xl lg:block">
+      <div className="mx-auto flex h-17 w-full max-w-5xl items-center gap-9 px-7">
         <BrandMark href="/home" />
 
         <nav className="flex gap-2">
@@ -55,8 +55,8 @@ export function AppNav({ userInitial }: AppNavProps) {
                 */
                 className={`whitespace-nowrap px-3.5 py-2 text-[15px] transition ${
                   active
-                    ? "font-extrabold text-[color:var(--hc-text)]"
-                    : "font-medium text-[color:var(--hc-muted)] hover:text-[color:var(--hc-text)]"
+                    ? "font-extrabold text-(--hc-text)"
+                    : "font-medium text-(--hc-muted) hover:text-(--hc-text)"
                 }`}
               >
                 {label}
@@ -69,7 +69,7 @@ export function AppNav({ userInitial }: AppNavProps) {
           <Link
             href="/mypage"
             aria-label="마이페이지"
-            className="grid h-[42px] w-[42px] place-items-center rounded-full bg-[color:var(--hc-primary)] text-[15px] font-extrabold text-[color:var(--hc-primary-contrast)]"
+            className="grid h-10.5 w-10.5 place-items-center rounded-full bg-(--hc-primary) text-[15px] font-extrabold text-(--hc-primary-contrast)"
           >
             {initial || "MY"}
           </Link>

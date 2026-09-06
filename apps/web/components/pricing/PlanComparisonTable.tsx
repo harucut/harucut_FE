@@ -40,32 +40,32 @@ export function PlanComparisonTable({
       {/* 플랜이 둘이라 520px 이 필요 없다. 393px 폰에서 '베이직' 열이 통째로 화면 밖에 있었다. */}
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-[color:var(--hc-border)]">
-            <th className="w-[40%] py-3 pr-3 text-left text-[12px] font-medium text-[color:var(--hc-muted)]">
+          <tr className="border-b border-(--hc-border)">
+            <th className="w-[40%] py-3 pr-3 text-left text-[12px] font-medium text-(--hc-muted)">
               기능
             </th>
             {PLANS.map((plan) => (
               <th
                 key={plan.id}
                 className={`px-2 py-3 text-center sm:px-3 ${
-                  plan.hot ? "bg-[color:var(--hc-accent-soft-bg)]" : ""
+                  plan.hot ? "bg-(--hc-accent-soft-bg)" : ""
                 }`}
               >
                 <span
                   className={`block text-[14px] font-extrabold ${
                     plan.hot
-                      ? "text-[color:var(--hc-primary-strong)]"
-                      : "text-[color:var(--hc-text)]"
+                      ? "text-(--hc-primary-strong)"
+                      : "text-(--hc-text)"
                   }`}
                 >
                   {plan.name}
                 </span>
-                <span className="mt-0.5 block text-[11px] font-medium text-[color:var(--hc-muted)]">
+                <span className="mt-0.5 block text-[11px] font-medium text-(--hc-muted)">
                   {plan.price === "무료" ? "₩0" : plan.price}
                   {plan.sub ? ` ${plan.sub}` : ""}
                 </span>
                 {currentPlanId === plan.id ? (
-                  <span className="mt-1.5 inline-block rounded-full bg-[color:var(--hc-primary)] px-2 py-0.5 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                  <span className="mt-1.5 inline-block rounded-full bg-(--hc-primary) px-2 py-0.5 text-[11px] font-extrabold text-(--hc-primary-contrast)">
                     현재 플랜
                   </span>
                 ) : null}
@@ -75,10 +75,10 @@ export function PlanComparisonTable({
         </thead>
         <tbody>
           {FEATURE_ROWS.map((row) => (
-            <tr key={row.label} className="border-b border-[color:var(--hc-border)]">
+            <tr key={row.label} className="border-b border-(--hc-border)">
               <th
                 scope="row"
-                className="py-3 pr-3 text-left text-[13px] font-semibold text-[color:var(--hc-text)]"
+                className="py-3 pr-3 text-left text-[13px] font-semibold text-(--hc-text)"
               >
                 {row.label}
               </th>
@@ -86,26 +86,26 @@ export function PlanComparisonTable({
                 <td
                   key={PLANS[i].id}
                   className={`px-2 py-3 text-center align-middle sm:px-3 ${
-                    PLANS[i].hot ? "bg-[color:var(--hc-accent-soft-bg)]" : ""
+                    PLANS[i].hot ? "bg-(--hc-accent-soft-bg)" : ""
                   }`}
                 >
                   {cell.note ? (
                     <span
                       className={`text-[13px] font-semibold ${
                         cell.included
-                          ? "text-[color:var(--hc-text)]"
-                          : "text-[color:var(--hc-muted)]"
+                          ? "text-(--hc-text)"
+                          : "text-(--hc-muted)"
                       }`}
                     >
                       {cell.note}
                     </span>
                   ) : cell.included ? (
                     <Check
-                      className="mx-auto h-4 w-4 text-[color:var(--hc-primary-strong)]"
+                      className="mx-auto h-4 w-4 text-(--hc-primary-strong)"
                       strokeWidth={3}
                     />
                   ) : (
-                    <X className="mx-auto h-4 w-4 text-[color:var(--hc-muted)]" />
+                    <X className="mx-auto h-4 w-4 text-(--hc-muted)" />
                   )}
                 </td>
               ))}

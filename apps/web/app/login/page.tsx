@@ -141,11 +141,11 @@ function LoginPageContent() {
       footer={
         <>
           <SocialLoginSection mode="login" redirectTo={redirectTo} />
-          <p className="mt-2 text-center text-[14px] text-[color:var(--hc-muted)]">
+          <p className="mt-2 text-center text-[14px] text-(--hc-muted)">
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
-              className="inline-flex min-h-[44px] items-center px-1 font-medium text-[color:var(--hc-primary-strong)] underline underline-offset-4"
+              className="inline-flex min-h-11 items-center px-1 font-medium text-(--hc-primary-strong) underline underline-offset-4"
             >
               회원가입
             </Link>
@@ -155,7 +155,7 @@ function LoginPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p role="alert" className="rounded-xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3.5 py-2.5 text-[13px] leading-[1.6] text-[color:var(--hc-danger)]">
+          <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
             {errors.common}
           </p>
         ) : null}
@@ -179,7 +179,7 @@ function LoginPageContent() {
           <Link
             href={forgotPasswordHref}
             // 17px 높이라 손가락으로 눌리지 않았다. 시각 크기는 그대로 두고 누를 면만 넓힌다.
-            className="inline-flex min-h-[44px] items-center px-1 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4 transition hover:text-[color:var(--hc-text)]"
+            className="inline-flex min-h-11 items-center px-1 text-[12px] text-(--hc-muted) underline underline-offset-4 transition hover:text-(--hc-text)"
           >
             비밀번호 찾기
           </Link>
@@ -200,7 +200,7 @@ function LoginPageContent() {
         {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영을 먼저 체험할 수 있게.
             문구는 넘기지 않는다 — 기본값이 곧 랜딩·앱과 같은 @harucut/shared 의 한 문구다. */}
         {/* 주 CTA(로그인)와 같은 무게의 알약이 다섯 개 서 있었다. 체험은 보조 길이라 글자로 둔다. 누르는 면은 44px. */}
-        <GuestTrialStartButton className="inline-flex min-h-[44px] items-center justify-center text-[14px] font-semibold text-[color:var(--hc-text)] underline underline-offset-4 transition hover:text-[color:var(--hc-primary-strong)]" />
+        <GuestTrialStartButton className="inline-flex min-h-11 items-center justify-center text-[14px] font-semibold text-(--hc-text) underline underline-offset-4 transition hover:text-(--hc-primary-strong)" />
       </form>
     </AuthPageShell>
   );

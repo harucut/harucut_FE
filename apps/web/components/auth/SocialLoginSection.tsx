@@ -23,7 +23,7 @@ type Props = {
  * 간격은 8px을 유지해 주세요"(그래서 gap-2), 구글 logo_alignment center.
  *
  * 알약 모양은 DESIGN.md L244 "버튼·칩·토글은 전부 border-radius: 9999px" 를 따른 것이다.
- * 예전 rounded-[12px] 는 사이트 전체에서 이 규칙을 어기는 유일한 버튼이었다.
+ * 예전 rounded-xl 는 사이트 전체에서 이 규칙을 어기는 유일한 버튼이었다.
  * (카카오 가이드는 컨테이너 반경을 12px 로 적지만, 형태보다 색·심볼·문구 규정이 훨씬 강하게
  * 못박혀 있고 카카오도 PSD 원본 수정 경로를 공식 제공한다. 이웃 버튼과 모양이 어긋나는 쪽이
  * 사용자에게 더 크게 어색해서 알약을 택했다.)
@@ -33,10 +33,10 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-[13px] text-[color:var(--hc-muted)]">
-        <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
+      <div className="flex items-center gap-2 text-[13px] text-(--hc-muted)">
+        <span className="h-px flex-1 bg-(--hc-border)" />
         <span>{dividerLabel}</span>
-        <span className="h-px flex-1 bg-[color:var(--hc-border)]" />
+        <span className="h-px flex-1 bg-(--hc-border)" />
       </div>
 
       {/* 순서·문구·마크 크기는 모두 shared 에서 온다. 예전에는 웹이 구글부터, 앱이 카카오부터였다. */}

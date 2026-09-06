@@ -290,11 +290,16 @@ body {
       min-height: 44px;
     }
 
-    button[class*="h-8"][class*="w-8"],
-    button[class*="h-9"][class*="w-9"],
-    a[class*="h-8"][class*="w-8"],
-    a[class*="h-9"][class*="w-9"],
-    a[class*="h-11"][class*="w-11"] {
+    /*
+      부분일치(*=)가 아니라 **정확일치(~=)** 다. 클래스는 공백으로 나뉜 토큰이라 ~= 가 맞고,
+      *= 는 h-8 이 h-8.5·h-82.5 에도, w-11 이 min-w-11 에도 걸린다(간격 스케일을 쓰기
+      시작하면 그런 이름이 실제로 생긴다).
+    */
+    button[class~="h-8"][class~="w-8"],
+    button[class~="h-9"][class~="w-9"],
+    a[class~="h-8"][class~="w-8"],
+    a[class~="h-9"][class~="w-9"],
+    a[class~="h-11"][class~="w-11"] {
       min-width: 44px;
     }
 

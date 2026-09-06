@@ -246,7 +246,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-130 flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
       {/*
         목록은 서버 약관 수만큼 늘어나고 전문을 펼치면 더 늘어난다. 패널이 뷰포트를 넘으면
         제출·로그아웃 버튼이 화면 밖으로 잘리는데, 이 다이얼로그는 닫을 수도 없다.
@@ -258,7 +258,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="terms-reconsent-title"
-        className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-(--hc-card-shadow)"
       >
         <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
           <FileText className="h-5 w-5" />
@@ -266,7 +266,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         <h2 id="terms-reconsent-title" className="mt-4 text-[18px] font-extrabold">
           {revised ? "약관이 개정되었어요" : "약관 동의가 필요해요"}
         </h2>
-        <p className="mt-1.5 text-[13px] leading-6 text-[color:var(--hc-muted)]">
+        <p className="mt-1.5 text-[13px] leading-6 text-(--hc-muted)">
           {revised
             ? "계속 이용하시려면 개정된 약관에 다시 동의해 주세요."
             : "서비스를 이용하려면 아래 약관에 동의해 주세요."}
@@ -295,13 +295,13 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       }));
                       setTouched((current) => ({ ...current, [item.code]: true }));
                     }}
-                    className="h-4 w-4 accent-[color:var(--hc-primary)]"
+                    className="h-4 w-4 accent-(--hc-primary)"
                   />
                   <span>
                     <span
                       className={
                         item.required
-                          ? "text-[color:var(--hc-primary-strong)]"
+                          ? "text-(--hc-primary-strong)"
                           : "text-zinc-500"
                       }
                     >
@@ -322,7 +322,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                 </label>
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
-                  <p className="ml-6 text-[11px] text-[color:var(--hc-muted)]">
+                  <p className="ml-6 text-[11px] text-(--hc-muted)">
                     {contentState === "loading"
                       ? "약관 본문을 불러오는 중이에요."
                       : "약관 본문을 불러오지 못했어요."}
@@ -349,7 +349,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
           <button
             type="button"
             onClick={reloadContent}
-            className="mt-3 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4"
+            className="mt-3 text-[12px] text-(--hc-muted) underline underline-offset-4"
           >
             약관 본문 다시 불러오기
           </button>
@@ -357,7 +357,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
 
         {/* 저장 실패는 알려야 한다 — 다이얼로그 안에 있는 스크린리더 사용자에게도. */}
         {error ? (
-          <p role="alert" className="mt-3 text-[12px] text-[color:var(--hc-danger)]">
+          <p role="alert" className="mt-3 text-[12px] text-(--hc-danger)">
             {error}
           </p>
         ) : null}
@@ -385,7 +385,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             type="button"
             onClick={handleLogout}
             aria-disabled={isSubmitting || isLoggingOut}
-            className="h-10 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
+            className="h-10 text-[13px] text-(--hc-muted) underline underline-offset-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
             {isLoggingOut ? "로그아웃 중…" : "동의하지 않고 로그아웃"}
           </button>

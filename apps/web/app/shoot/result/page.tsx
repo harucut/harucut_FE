@@ -643,7 +643,7 @@ export default function ShootResultPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text) lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <PageHeader
           title={fromUpload ? "네컷 결과" : "촬영 결과"}
@@ -665,12 +665,12 @@ export default function ShootResultPage() {
           <section
             role="status"
             aria-live="polite"
-            className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4"
+            className="rounded-[28px] border border-(--hc-border) bg-(--hc-surface) p-4"
           >
-            <p className="text-sm font-semibold text-[color:var(--hc-text)]">결과 준비 중</p>
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3.5 py-2.5 text-[12px]">
-              <span className="text-[color:var(--hc-text)]">이미지</span>
-              <span className="text-[color:var(--hc-muted)]">
+            <p className="text-sm font-semibold text-(--hc-text)">결과 준비 중</p>
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-(--hc-border) bg-(--hc-surface-strong) px-3.5 py-2.5 text-[12px]">
+              <span className="text-(--hc-text)">이미지</span>
+              <span className="text-(--hc-muted)">
                 {imageState === "processing" ? "생성 중…" : "대기 중"}
               </span>
             </div>
@@ -704,7 +704,7 @@ export default function ShootResultPage() {
               style={{
                 aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
               }}
-              className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] object-contain"
+              className="w-full rounded-lg border border-(--hc-border) bg-(--hc-surface-strong) object-contain"
               onError={() => setIsResultImageBroken(true)}
             />
           ) : (
@@ -718,7 +718,7 @@ export default function ShootResultPage() {
           )}
         </section>
 
-        {imageError ? <p className="text-[11px] text-[color:var(--hc-danger)]">{imageError}</p> : null}
+        {imageError ? <p className="text-[11px] text-(--hc-danger)">{imageError}</p> : null}
 
         {imageState === "error" && isImageErrorRetryable ? (
           <button
@@ -779,15 +779,15 @@ export default function ShootResultPage() {
         {guestMode && imageResult ? (
           <section className="hc-surface-hero rounded-[28px] border p-4">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-[color:var(--hc-text)]">
+              <p className="text-sm font-semibold text-(--hc-text)">
                 비회원 체험 결과 안내
               </p>
               {/* 목록은 @harucut/shared 한 벌에서 읽는다 — 모달·FAQ 와 같은 값을 말해야 한다. */}
-              <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
+              <p className="text-[12px] leading-6 text-(--hc-muted)">
                 지금은 {withJosa(GUEST_ALLOWED_ITEMS, "을/를")} 해볼 수 있어요.{" "}
                 {withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.
               </p>
-              <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
+              <p className="text-[12px] leading-6 text-(--hc-muted)">
                 체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
                 &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
               </p>
@@ -798,22 +798,22 @@ export default function ShootResultPage() {
               회원 기능은 감추지 않고 자리를 남긴다(가입하면 무엇이 더 되는지 보여야 한다).
               다만 문장을 버튼 모양에 담지 않는다 — 잠긴 기능임을 말하는 조용한 줄이다.
             */}
-            <div className="mt-4 flex flex-col divide-y divide-[color:var(--hc-border)] rounded-2xl border border-[color:var(--hc-border)]">
+            <div className="mt-4 flex flex-col divide-y divide-(--hc-border) rounded-2xl border border-(--hc-border)">
               <button
                 type="button"
                 onClick={showGuestRestrictedNotice}
-                className="flex min-h-[44px] items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)]"
+                className="flex min-h-11 items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-highlight)"
               >
                 <span>기록 보관</span>
-                <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">로그인 후</span>
+                <span className="text-[12px] font-medium text-(--hc-muted)">로그인 후</span>
               </button>
               <button
                 type="button"
                 onClick={showGuestShareNotice}
-                className="flex min-h-[44px] items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-[color:var(--hc-text)] transition hover:bg-[color:var(--hc-surface-highlight)]"
+                className="flex min-h-11 items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-highlight)"
               >
                 <span>링크 공유</span>
-                <span className="text-[12px] font-medium text-[color:var(--hc-muted)]">로그인 후</span>
+                <span className="text-[12px] font-medium text-(--hc-muted)">로그인 후</span>
               </button>
             </div>
           </section>

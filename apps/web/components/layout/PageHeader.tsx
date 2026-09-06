@@ -55,14 +55,14 @@ export function PageHeader({
   return (
     <>
       {/* 좌우 버튼은 44px 정원이다 — 터치 규칙이 button 만 넓히고 a 는 넓히지 않아 36×44 타원이 됐다. */}
-      <header className="relative flex min-h-[44px] items-center justify-center">
+      <header className="relative flex min-h-11 items-center justify-center">
         {backHref ? (
           <Link
             href={backHref}
             aria-label={backLabel || "뒤로"}
             title={backLabel || "뒤로"}
             onClick={onBackClick}
-            className="hc-button-icon absolute left-0 top-0 grid h-11 w-11 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
+            className="hc-button-icon absolute left-0 top-0 grid h-11 w-11 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text)"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
@@ -85,7 +85,7 @@ export function PageHeader({
       </header>
 
       {description ? (
-        <p className="text-center text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">{description}</p>
+        <p className="text-center text-[12px] leading-[1.6] text-(--hc-muted)">{description}</p>
       ) : null}
     </>
   );

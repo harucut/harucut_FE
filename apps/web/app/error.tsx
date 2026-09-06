@@ -23,14 +23,14 @@ export default function GlobalRouteError({
 
   return (
     <main className="hc-page-app flex min-h-dvh items-center justify-center px-6 py-16">
-      <div className="w-full max-w-[420px] text-center">
-        <p className="font-mono text-[11px] tracking-[1.2px] text-[color:var(--hc-muted)]">
+      <div className="w-full max-w-105 text-center">
+        <p className="font-mono text-[11px] tracking-[1.2px] text-(--hc-muted)">
           ERROR
         </p>
-        <h1 className="mt-3 text-[24px] font-extrabold tracking-[-0.6px] text-[color:var(--hc-text)]">
+        <h1 className="mt-3 text-[24px] font-extrabold tracking-[-0.6px] text-(--hc-text)">
           화면을 여는 데 실패했어요
         </h1>
-        <p className="mt-3 text-[15px] leading-[1.75] text-[color:var(--hc-muted)]">
+        <p className="mt-3 text-[15px] leading-[1.75] text-(--hc-muted)">
           잠시 후 다시 시도해 보세요. 계속 같은 화면이 나오면 홈으로 돌아간 뒤
           다시 들어와 주세요.
         </p>
@@ -45,7 +45,7 @@ export default function GlobalRouteError({
           </button>
           <Link
             href="/"
-            className="w-full rounded-full border border-[color:var(--hc-border)] px-5 py-3 text-[16px] font-semibold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)] sm:w-auto"
+            className="w-full rounded-full border border-(--hc-border) px-5 py-3 text-[16px] font-semibold text-(--hc-text) transition hover:border-(--hc-border-strong) sm:w-auto"
           >
             홈으로
           </Link>
@@ -53,7 +53,7 @@ export default function GlobalRouteError({
 
         {/* digest 는 서버 로그와 대조할 수 있는 유일한 단서라 화면에 남긴다. */}
         {error.digest ? (
-          <p className="mt-6 font-mono text-[11px] text-[color:var(--hc-muted-soft)]">
+          <p className="mt-6 font-mono text-[11px] text-(--hc-muted-soft)">
             오류 코드 {error.digest}
           </p>
         ) : null}

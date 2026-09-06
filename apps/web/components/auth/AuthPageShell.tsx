@@ -35,7 +35,7 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
           className="pointer-events-none absolute inset-0 flex items-center justify-center"
         >
           <div
-            className="-mr-6 h-[300px] drop-shadow-2xl"
+            className="-mr-6 h-75 drop-shadow-2xl"
             style={{
               transform: "rotate(-7deg) translateZ(0)",
               backfaceVisibility: "hidden",
@@ -50,7 +50,7 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
             />
           </div>
           <div
-            className="h-[330px] drop-shadow-2xl"
+            className="h-82.5 drop-shadow-2xl"
             style={{
               transform: "rotate(5deg) translateZ(0)",
               backfaceVisibility: "hidden",
@@ -83,21 +83,21 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
       {/* grid 아이템이라 min-width: auto 가 걸린다. 입력의 기본 고유 폭(약 213px)이 그대로
           최소 폭이 돼 320px 에서 컨테이너를 밀어냈다. min-w-0 으로 끊어 준다. */}
       {/* 위 정렬로 고정한다. 세로 가운데면 짧은 화면(비밀번호 찾기)만 로고가 115px 아래로 뛰어 화면을 오갈 때 튄다. */}
-      <div className="hc-page-app flex min-w-0 items-start justify-center px-5 py-10 text-[color:var(--hc-text)]">
-        <div className="w-full max-w-[380px]">
+      <div className="hc-page-app flex min-w-0 items-start justify-center px-5 py-10 text-(--hc-text)">
+        <div className="w-full max-w-95">
           <div className="mb-8 lg:hidden">
             <BrandMark href="/" />
           </div>
           {icon === "lock" ? (
-            <div className="mb-5 grid h-[60px] w-[60px] place-items-center rounded-[18px] bg-[color:var(--hc-accent-soft-bg)]">
-              <Lock size={28} className="text-[color:var(--hc-primary-strong)]" />
+            <div className="mb-5 grid h-15 w-15 place-items-center rounded-[18px] bg-(--hc-accent-soft-bg)">
+              <Lock size={28} className="text-(--hc-primary-strong)" />
             </div>
           ) : null}
-          <h1 className="text-[28px] font-extrabold tracking-tight text-[color:var(--hc-text)]">
+          <h1 className="text-[28px] font-extrabold tracking-tight text-(--hc-text)">
             {title}
           </h1>
           {description ? (
-            <p className="mt-2 text-sm leading-6 text-[color:var(--hc-muted)]">{description}</p>
+            <p className="mt-2 text-sm leading-6 text-(--hc-muted)">{description}</p>
           ) : null}
           <div className="mt-7">{children}</div>
           {footer ? <div className="pt-5">{footer}</div> : null}

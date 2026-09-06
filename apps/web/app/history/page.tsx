@@ -132,7 +132,7 @@ function MediaThumb({
 
   const shellClassName = bare
     ? "relative grid h-full w-full place-items-center overflow-hidden"
-    : "hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]";
+    : "hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)";
 
   return (
     <div className={shellClassName}>
@@ -144,7 +144,7 @@ function MediaThumb({
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
       ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-[color:var(--hc-muted)]">
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-(--hc-muted)">
           미리보기를 준비하는 중이에요.
         </div>
       )}
@@ -404,7 +404,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
@@ -432,10 +432,10 @@ export default function HistoryPage() {
                   className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
                     view === id
                       ? "bg-white text-[#0B0B0C]"
-                      : "text-[color:var(--hc-muted)]"
+                      : "text-(--hc-muted)"
                   }`}
                 >
-                  <Icon className="h-[15px] w-[15px]" />
+                  <Icon className="h-3.75 w-3.75" />
                   {label}
                 </button>
               ))}
@@ -454,14 +454,14 @@ export default function HistoryPage() {
             {Array.from({ length: 4 }, (_, index) => (
               <div
                 key={index}
-                className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+                className="aspect-3/4 animate-pulse rounded-[18px] bg-(--hc-surface-muted)"
               />
             ))}
           </div>
         ) : error ? (
           // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p role="alert" className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
+            <p role="alert" className="text-[13px] text-(--hc-muted)">{error}</p>
             <button
               type="button"
               onClick={() => setReloadKey((prev) => prev + 1)}
@@ -479,12 +479,12 @@ export default function HistoryPage() {
           />
         ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <ImageIcon className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-            <p className="text-[13px] text-[color:var(--hc-muted)]">
+            <ImageIcon className="h-7 w-7 text-(--hc-muted-soft)" />
+            <p className="text-[13px] text-(--hc-muted)">
               저장한 기록이 아직 없어요.
             </p>
             {planTier && planTier !== "PRO" ? (
-              <p className="text-[12px] text-[color:var(--hc-muted)]">
+              <p className="text-[12px] text-(--hc-muted)">
                 {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
                 지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
                 <Link href="/pricing" className="underline">
@@ -510,7 +510,7 @@ export default function HistoryPage() {
                   <h2 className="text-[19px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[13px] text-[color:var(--hc-muted)]">
+                  <span className="text-[13px] text-(--hc-muted)">
                     {group.items.length}컷
                   </span>
                 </div>
@@ -524,7 +524,7 @@ export default function HistoryPage() {
                         key={item.mediaId}
                         // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
                         id={`media-${item.mediaId}`}
-                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-[color:var(--hc-primary)]"
+                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-(--hc-primary)"
                       >
                         <MediaThumb item={item} />
 
@@ -543,12 +543,12 @@ export default function HistoryPage() {
                               type="button"
                               onClick={() => handleStartRename(item)}
                               aria-label={`이름 바꾸기: ${title}`}
-                              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+                              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-(--hc-muted) transition hover:bg-(--hc-surface-highlight) hover:text-(--hc-text)"
                             >
                               <PencilLine className="h-3.5 w-3.5" />
                             </button>
                           </div>
-                          <p className="text-[11px] text-[color:var(--hc-muted)]">
+                          <p className="text-[11px] text-(--hc-muted)">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
@@ -588,7 +588,7 @@ export default function HistoryPage() {
                             onClick={() => setDeleteTarget(item)}
                             disabled={deletingId === item.mediaId}
                             aria-label={`삭제: ${title}`}
-                            className="hc-button-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+                            className="hc-button-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text) disabled:opacity-50"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -651,8 +651,8 @@ function CalendarView({
   if (!activeMonth) {
     return (
       <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-        <CalendarDays className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-        <p className="text-[13px] text-[color:var(--hc-muted)]">
+        <CalendarDays className="h-7 w-7 text-(--hc-muted-soft)" />
+        <p className="text-[13px] text-(--hc-muted)">
           달력으로 볼 기록이 아직 없어요.
         </p>
       </div>
@@ -695,7 +695,7 @@ function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <b className="min-w-[120px] text-center text-[20px] tracking-tight">
+          <b className="min-w-30 text-center text-[20px] tracking-tight">
             {year}년 {month}월
           </b>
           <button
@@ -708,7 +708,7 @@ function CalendarView({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="text-[13px] text-[color:var(--hc-muted)]">
+        <span className="text-[13px] text-(--hc-muted)">
           이번 달 {monthItems.length}컷
         </span>
       </div>
@@ -737,7 +737,7 @@ function CalendarView({
           return (
             <div
               key={index}
-              className={`relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl border p-1.5 ${
+              className={`relative flex aspect-3/4 flex-col overflow-hidden rounded-xl border p-1.5 ${
                 day ? "hc-surface-card" : "border-transparent"
               }`}
             >
@@ -757,7 +757,7 @@ function CalendarView({
                 <div className="relative mt-1 flex flex-1 items-center justify-center">
                   <MediaThumb item={list[0]} bare />
                   {list.length > 1 ? (
-                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                    <span className="absolute right-0 top-0 rounded-full bg-(--hc-primary) px-1.5 text-[11px] font-extrabold text-(--hc-primary-contrast)">
                       +{list.length - 1}
                     </span>
                   ) : null}

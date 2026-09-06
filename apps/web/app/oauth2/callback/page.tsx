@@ -139,7 +139,7 @@ export default function OAuthCallbackPage() {
   }, []);
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <h1 className="text-base font-semibold">로그인 처리 중</h1>
         <p className="text-sm text-zinc-400">{message}</p>

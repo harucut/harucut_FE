@@ -37,17 +37,17 @@ export function GeneratedAssetDownloadCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             {metaLabel ? (
-              <span className="inline-flex rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-muted)] px-2 py-1 text-[11px] text-[color:var(--hc-muted)]">
+              <span className="inline-flex rounded-full border border-(--hc-border) bg-(--hc-surface-muted) px-2 py-1 text-[11px] text-(--hc-muted)">
                 {metaLabel}
               </span>
             ) : null}
             <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
-            <p className="mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">{description}</p>
+            <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">{description}</p>
           </div>
         </div>
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="fourcut-file-name" className="text-[12px] text-[color:var(--hc-muted)]">
+          <label htmlFor="fourcut-file-name" className="text-[12px] text-(--hc-muted)">
             파일 이름
           </label>
           <div className="flex gap-2">

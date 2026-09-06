@@ -38,7 +38,7 @@ function ShootPageContent() {
   }, [queriedEventName, reset, setEventName, setSource, source]);
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)] sm:px-4 lg:px-8 lg:py-10">
+    <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref={accessMode === "guest" ? "/" : "/home"}
@@ -63,7 +63,7 @@ function ShootPageContent() {
           missingRemoteFrameNotice={
             <p
               role="status"
-              className="rounded-2xl border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] px-3.5 py-3 text-[12px] leading-[1.6] text-[color:var(--hc-danger)]"
+              className="rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-3 text-[12px] leading-[1.6] text-(--hc-danger)"
             >
               링크에 담긴 전용 프레임을 불러오지 못했어요. 아래에서 컷 구성을 고르면
               만드는 것은 그대로 할 수 있어요.

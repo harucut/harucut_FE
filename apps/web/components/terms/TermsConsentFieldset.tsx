@@ -37,21 +37,21 @@ export function TermsConsentFieldset({
             손가락으로 고르기 어려웠다. '보기' 는 label 안에 있으면 어느 쪽을 누른 건지 애매해서
             형제로 뺀다 — label 은 체크박스만, 링크는 약관만 연다.
           */}
-          <div className="flex min-h-[44px] items-center gap-2">
+          <div className="flex min-h-11 items-center gap-2">
             <label className="flex min-w-0 flex-1 items-center gap-3 py-2 text-[13px] text-zinc-300">
               <input
                 type="checkbox"
                 checked={checked[item.code] ?? false}
                 disabled={disabled}
                 onChange={(e) => onToggle(item.code, e.target.checked)}
-                className="h-5 w-5 shrink-0 accent-[color:var(--hc-primary)]"
+                className="h-5 w-5 shrink-0 accent-(--hc-primary)"
               />
               <span>
                 <span
                   className={
                     item.required
-                      ? "text-[color:var(--hc-primary-strong)]"
-                      : "text-[color:var(--hc-muted)]"
+                      ? "text-(--hc-primary-strong)"
+                      : "text-(--hc-muted)"
                   }
                 >
                   {item.required ? "[필수]" : "[선택]"}
@@ -65,7 +65,7 @@ export function TermsConsentFieldset({
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`${item.title} 전문 보기`}
-                className="inline-flex min-h-[44px] shrink-0 items-center px-2 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4 hover:text-[color:var(--hc-text)]"
+                className="inline-flex min-h-11 shrink-0 items-center px-2 text-[12px] text-(--hc-muted) underline underline-offset-4 hover:text-(--hc-text)"
               >
                 보기
               </Link>
@@ -84,7 +84,7 @@ export function TermsConsentFieldset({
         </div>
       ))}
       {error ? (
-        <p role="alert" className="pb-2 text-[12px] text-[color:var(--hc-danger)]">{error}</p>
+        <p role="alert" className="pb-2 text-[12px] text-(--hc-danger)">{error}</p>
       ) : null}
     </fieldset>
   );

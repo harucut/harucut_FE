@@ -11,7 +11,7 @@ export function TapeStrip({
   return (
     <div
       aria-hidden
-      className={`h-[18px] bg-[repeating-linear-gradient(90deg,transparent_0_12px,rgba(255,255,255,.07)_12px_22px)] ${
+      className={`h-4.5 bg-[repeating-linear-gradient(90deg,transparent_0_12px,rgba(255,255,255,.07)_12px_22px)] ${
         running ? "hc-film-strip" : ""
       } ${className}`}
     />

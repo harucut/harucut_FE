@@ -55,8 +55,8 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
-          : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
+          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+          : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
       ].join(" ")}
     >
       {children}
@@ -130,13 +130,13 @@ function PhotoTab() {
       />
 
       {notice ? (
-        <p role="status" className="text-[12px] leading-5 text-[color:var(--hc-danger)]">
+        <p role="status" className="text-[12px] leading-5 text-(--hc-danger)">
           {notice}
         </p>
       ) : null}
 
       {photos.length === 0 ? (
-        <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] p-3 text-[12px] text-[color:var(--hc-muted)]">
+        <div className="rounded-xl border border-(--hc-border) bg-(--hc-surface-strong) p-3 text-[12px] text-(--hc-muted)">
           아직 업로드한 사진이 없어요. 아래 추가 버튼으로 사진을 넣어보세요.
         </div>
       ) : null}
@@ -146,7 +146,7 @@ function PhotoTab() {
           flex gap-2 overflow-x-auto pb-2
           snap-x snap-mandatory
           [-webkit-overflow-scrolling:touch]
-          [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+          scrollbar-none [&::-webkit-scrollbar]:hidden
         "
       >
         <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
@@ -156,14 +156,14 @@ function PhotoTab() {
             disabled={isUploading}
             className="
               group relative
-              aspect-square w-[96px] shrink-0
+              aspect-square w-24 shrink-0
               snap-start overflow-hidden rounded-xl
-              border border-dashed border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]
-              hover:border-[color:var(--hc-primary)] hover:bg-[color:var(--hc-accent-soft-bg)] disabled:opacity-50
+              border border-dashed border-(--hc-border) bg-(--hc-surface-strong)
+              hover:border-(--hc-primary) hover:bg-(--hc-accent-soft-bg) disabled:opacity-50
             "
             title="사진 업로드"
           >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary-strong)]">
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-(--hc-muted) group-hover:text-(--hc-primary-strong)">
               <ImagePlus size={18} />
               <span className="text-[11px]">
                 {isUploading ? "업로드 중" : "추가"}
@@ -177,7 +177,7 @@ function PhotoTab() {
             return (
               <div
                 key={photo.id}
-                className="relative aspect-square w-[96px] shrink-0 snap-start overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+                className="relative aspect-square w-24 shrink-0 snap-start overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
               >
                 <button
                   type="button"
@@ -263,7 +263,7 @@ function StickerTab() {
           flex gap-2 overflow-x-auto pb-2
           snap-x snap-mandatory
           [-webkit-overflow-scrolling:touch]
-          [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+          scrollbar-none [&::-webkit-scrollbar]:hidden
         "
       >
         <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
@@ -276,7 +276,7 @@ function StickerTab() {
                 addComponent("STICKER", sticker.src);
               }}
               className="
-                group relative aspect-square w-[72px] shrink-0
+                group relative aspect-square w-18 shrink-0
                 snap-start overflow-hidden rounded-xl
                 border border-zinc-800 bg-zinc-950
               "
@@ -418,7 +418,7 @@ export function HorizontalScroller({
         flex gap-2 overflow-x-auto pb-2
         cursor-grab select-none
         snap-x snap-mandatory
-        [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+        scrollbar-none [&::-webkit-scrollbar]:hidden
       "
     >
       {children}

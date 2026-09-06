@@ -67,7 +67,7 @@ export function ResetPasswordForm({
       />
 
       {errors.common ? (
-        <p role="alert" className="text-[12px] text-[color:var(--hc-danger)]">{errors.common}</p>
+        <p role="alert" className="text-[12px] text-(--hc-danger)">{errors.common}</p>
       ) : null}
 
       {/* 로그인·회원가입 CTA 와 같은 h-12 · 15px · 800. 이 화면만 36px·11px 였다. */}
@@ -83,14 +83,14 @@ export function ResetPasswordForm({
         <button
           type="button"
           onClick={onRestart}
-          className="inline-flex min-h-[44px] items-center px-1 text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
+          className="inline-flex min-h-11 items-center px-1 text-(--hc-muted) transition hover:text-(--hc-text)"
         >
           처음부터 다시
         </button>
         <button
           type="button"
           onClick={onGoLogin}
-          className="inline-flex min-h-[44px] items-center px-1 text-[color:var(--hc-muted)] underline underline-offset-4 transition hover:text-[color:var(--hc-text)]"
+          className="inline-flex min-h-11 items-center px-1 text-(--hc-muted) underline underline-offset-4 transition hover:text-(--hc-text)"
         >
           로그인으로 이동
         </button>

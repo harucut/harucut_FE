@@ -55,7 +55,7 @@ export default function ShootSelectPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <PageHeader
           title="사진 선택"

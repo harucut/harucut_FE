@@ -46,6 +46,8 @@
     "start": "pnpm start:web",
     "start:web": "cd apps/web && node ./node_modules/next/dist/bin/next start --hostname localhost",
     "lint:web": "pnpm --dir apps/web lint",
+    "check:classes:web": "pnpm --dir apps/web check:classes",
+    "typecheck:shared": "node apps/web/node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test:web": "pnpm --dir apps/web test",
     "test:coverage:web": "pnpm --dir apps/web test:coverage",
     "test:e2e:web": "pnpm --dir apps/web test:e2e",

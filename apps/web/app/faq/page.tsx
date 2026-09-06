@@ -26,7 +26,7 @@ const faqJsonLd = {
 
 export default function FaqPage() {
   return (
-    <main className="hc-stage-dark hc-page-app min-h-dvh pb-16 text-[color:var(--hc-text)]">
+    <main className="hc-stage-dark hc-page-app min-h-dvh pb-16 text-(--hc-text)">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -43,27 +43,27 @@ export default function FaqPage() {
 
       {/* 컨테이너는 nav·푸터와 같은 1160으로 맞춰 좌변을 정렬하고,
           가독성을 위해 본문(질문/답변) 컬럼만 안쪽에서 폭을 제한한다. */}
-      <div className="mx-auto w-full max-w-[1160px] px-7 py-10 lg:py-14">
+      <div className="mx-auto w-full max-w-290 px-7 py-10 lg:py-14">
         <header className="mb-9">
           <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[32px]">
             궁금한 점이 있으신가요?
           </h1>
-          <p className="mt-3 max-w-[520px] text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
+          <p className="mt-3 max-w-130 text-[14px] leading-[1.6] text-(--hc-muted)">
             하루컷을 쓰면서 자주 나오는 질문을 모았어요. 더 궁금한 점은 고객문의로 알려주세요.
           </p>
         </header>
 
         {/* 전체 Q&A — 답변을 항상 노출(검색·접근성 친화). */}
-        <dl className="flex max-w-[820px] flex-col border-b border-[color:var(--hc-border)]">
+        <dl className="flex max-w-205 flex-col border-b border-(--hc-border)">
           {FAQ_ITEMS.map((item) => (
             <div
               key={item.q}
-              className="border-t border-[color:var(--hc-border)] py-6"
+              className="border-t border-(--hc-border) py-6"
             >
-              <dt className="text-[17px] font-bold tracking-tight text-[color:var(--hc-text)]">
+              <dt className="text-[17px] font-bold tracking-tight text-(--hc-text)">
                 {item.q}
               </dt>
-              <dd className="mt-2.5 max-w-[680px] text-[15px] leading-[1.7] text-[color:var(--hc-muted)]">
+              <dd className="mt-2.5 max-w-170 text-[15px] leading-[1.7] text-(--hc-muted)">
                 {item.a}
               </dd>
             </div>
@@ -71,14 +71,14 @@ export default function FaqPage() {
         </dl>
 
         {/* 추가 문의 + CTA */}
-        <section className="mt-10 flex max-w-[820px] flex-col items-center gap-3 rounded-[20px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-6 py-9 text-center">
+        <section className="mt-10 flex max-w-205 flex-col items-center gap-3 rounded-[20px] border border-(--hc-border) bg-(--hc-surface) px-6 py-9 text-center">
           <h2 className="text-[19px] font-extrabold tracking-tight">
             찾는 답이 없었나요?
           </h2>
-          <p className="text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
+          <p className="text-[14px] leading-[1.6] text-(--hc-muted)">
             <a
               href={`mailto:${COMPANY.email}`}
-              className="font-semibold text-[color:var(--hc-primary-strong)] underline underline-offset-4"
+              className="font-semibold text-(--hc-primary-strong) underline underline-offset-4"
             >
               {COMPANY.email}
             </a>{" "}

@@ -48,7 +48,7 @@ export function FrameOutputOptionsPanel({
                     className={[
                       "inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[12px]",
                       borderColor === color.value
-                        ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
+                        ? "border-(--hc-primary) text-(--hc-primary-strong)"
                         : "border-zinc-700 text-zinc-300",
                     ].join(" ")}
                   >
@@ -89,7 +89,7 @@ export function FrameOutputOptionsPanel({
         <div className="flex flex-col gap-2">
           <div>
             <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
-            <p className="mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+            <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
               고른 보정 필터는 미리보기와 최종 이미지에 똑같이 적용돼요.
             </p>
           </div>
@@ -101,9 +101,9 @@ export function FrameOutputOptionsPanel({
                 type="button"
                 onClick={() => onOutputFilterChange(filter.id)}
                 className={[
-                  "min-h-[44px] rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                  "min-h-11 rounded-2xl border px-3 py-2.5 text-left transition-colors",
                   outputFilter === filter.id
-                    ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)]"
+                    ? "border-(--hc-primary) bg-(--hc-accent-soft-bg)"
                     : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
                 ].join(" ")}
               >

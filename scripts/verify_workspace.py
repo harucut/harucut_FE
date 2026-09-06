@@ -24,6 +24,7 @@ GROUPS: dict[str, list[list[str]]] = {
     # 빌드가 아니라 lint가 잡는다. 빠르고 실패가 잦은 검사부터 돌려 fail fast.
     "web": [
         ["pnpm", "lint:web"],
+        ["pnpm", "check:classes:web"],
         ["pnpm", "test:web"],
         ["pnpm", "build:web"],
     ],
@@ -34,6 +35,8 @@ GROUPS: dict[str, list[list[str]]] = {
     "standard": [
         LOCKFILE_CHECK,
         ["pnpm", "lint:web"],
+        ["pnpm", "check:classes:web"],
+        ["pnpm", "typecheck:shared"],
         ["pnpm", "test:web"],
         ["pnpm", "build:web"],
         ["pnpm", "lint:mobile"],

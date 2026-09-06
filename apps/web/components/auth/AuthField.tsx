@@ -25,7 +25,7 @@ export function AuthField({
 
   return (
     <div className="flex flex-col gap-1.5 text-[13px]">
-      <label htmlFor={id} className="font-medium text-[color:var(--hc-text)]">
+      <label htmlFor={id} className="font-medium text-(--hc-text)">
         {label}
       </label>
 
@@ -40,7 +40,7 @@ export function AuthField({
           type={inputType}
           className={[
             "hc-input h-11 w-full rounded-xl border px-3.5 pr-12 text-[14px]",
-            error ? "border-[color:var(--hc-danger-border)]" : "",
+            error ? "border-(--hc-danger-border)" : "",
           ].join(" ")}
           {...(type === "email"
             ? { spellCheck: false, autoCapitalize: "none", inputMode: "email" as const }
@@ -52,7 +52,7 @@ export function AuthField({
           <button
             type="button"
             onClick={() => setShow((prev) => !prev)}
-            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-(--hc-muted) transition hover:bg-(--hc-surface-highlight) hover:text-(--hc-text)"
             aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
             title={show ? "비밀번호 숨기기" : "비밀번호 보기"}
           >
@@ -62,7 +62,7 @@ export function AuthField({
       </div>
 
       {error ? (
-        <p role="alert" className="text-[12px] leading-relaxed text-[color:var(--hc-danger)]">{error}</p>
+        <p role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)">{error}</p>
       ) : null}
     </div>
   );

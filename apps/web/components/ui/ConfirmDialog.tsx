@@ -41,7 +41,7 @@ export function ConfirmDialog({
   const dialogRef = useModalDialog(true, onClose);
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="닫기"
@@ -54,7 +54,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby={description ? "confirm-dialog-desc" : undefined}
-        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-(--hc-card-shadow)"
       >
         <h2 id="confirm-dialog-title" className="text-[18px] font-extrabold">
           {title}
@@ -63,7 +63,7 @@ export function ConfirmDialog({
         {description ? (
           <p
             id="confirm-dialog-desc"
-            className="mt-2 text-[13px] leading-[1.6] text-[color:var(--hc-muted)]"
+            className="mt-2 text-[13px] leading-[1.6] text-(--hc-muted)"
           >
             {description}
           </p>
@@ -90,7 +90,7 @@ export function ConfirmDialog({
             */
             className={`flex-1 rounded-full px-5 py-3 text-[13px] font-semibold disabled:opacity-50 ${
               destructive
-                ? "border border-[color:var(--hc-danger-border)] bg-[color:var(--hc-danger-soft-bg)] text-[color:var(--hc-danger)]"
+                ? "border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) text-(--hc-danger)"
                 : "hc-button-primary"
             }`}
           >

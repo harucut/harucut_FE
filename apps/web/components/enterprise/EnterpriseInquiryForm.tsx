@@ -88,12 +88,12 @@ export function EnterpriseInquiryForm() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {FIELDS.map((field) => (
           <label key={field.id} className="flex min-w-0 flex-col gap-1.5">
-            <span className="text-[12px] font-bold text-[color:var(--hc-text)]">
+            <span className="text-[12px] font-bold text-(--hc-text)">
               {field.label}
               {field.required ? (
-                <span className="ml-1 text-[color:var(--hc-danger)]">*</span>
+                <span className="ml-1 text-(--hc-danger)">*</span>
               ) : (
-                <span className="ml-1 font-medium text-[color:var(--hc-muted)]">
+                <span className="ml-1 font-medium text-(--hc-muted)">
                   (선택)
                 </span>
               )}
@@ -112,9 +112,9 @@ export function EnterpriseInquiryForm() {
       </div>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-[12px] font-bold text-[color:var(--hc-text)]">
+        <span className="text-[12px] font-bold text-(--hc-text)">
           하고 싶은 말
-          <span className="ml-1 font-medium text-[color:var(--hc-muted)]">(선택)</span>
+          <span className="ml-1 font-medium text-(--hc-muted)">(선택)</span>
         </span>
         <textarea
           value={memo}
@@ -158,7 +158,7 @@ export function EnterpriseInquiryForm() {
         메일이 실제로 나가는지는 사용자의 메일 앱에 달려 있다. 보냈다고 단정하지 않고,
         받는 주소를 그대로 보여 준다.
       */}
-      <p role="status" className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+      <p role="status" className="text-[12px] leading-[1.6] text-(--hc-muted)">
         {canSend
           ? `메일 앱이 열리지 않으면 ${COMPANY.email} 로 직접 보내 주세요. ${COMPANY.hours} 안에 답장드려요.`
           : `${withJosa(

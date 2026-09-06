@@ -87,7 +87,7 @@ function ThemePageContent() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)] sm:px-4 lg:px-8 lg:py-10">
+    <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref="/home"
@@ -105,7 +105,7 @@ function ThemePageContent() {
             */
             isLoading || capacity.unlimited ? null : (
               <span
-                className="text-[12px] font-semibold tabular-nums text-[color:var(--hc-muted)]"
+                className="text-[12px] font-semibold tabular-nums text-(--hc-muted)"
                 aria-label={`보관 ${capacity.used}개 / ${capacity.used + (capacity.remaining ?? 0)}개`}
               >
                 보관 {capacity.used}/{capacity.used + (capacity.remaining ?? 0)}
@@ -139,7 +139,7 @@ function ThemePageContent() {
               아니라 "지금 몇 개 더 되는가"다. 등급은 마이페이지가 맡는다.
             */
             isLoading ? null : isAtCapacity ? (
-              <p className="-mt-1 text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+              <p className="-mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
                 {capacity.plan.limit <= 0 && !capacity.unlimited
                   ? "지금은 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해요."
                   : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."}

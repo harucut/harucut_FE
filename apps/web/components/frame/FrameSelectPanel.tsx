@@ -92,7 +92,7 @@ export function FrameSelectPanel({
     <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
       <section className="flex flex-col gap-3">
         {frameId ? (
-          <section className="flex flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:hidden">
+          <section className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-3 lg:hidden">
             {/* 폭만 220px 로 묶으면 세로 4컷(1:3)은 660px 가 돼 첫 화면을 통째로 먹고, 고를 사진도
                 다음 버튼도 스크롤 뒤에 숨는다. 높이를 잡고 폭은 비율이 정하게 한다. */}
             <div className="flex h-[min(36dvh,300px)] justify-center">
@@ -110,7 +110,7 @@ export function FrameSelectPanel({
 
         <section className="space-y-2">
           {baseItems.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 text-center text-[12px] text-[color:var(--hc-muted)]">
+            <div className="rounded-2xl border border-dashed border-(--hc-border) bg-(--hc-surface) p-4 text-center text-[12px] text-(--hc-muted)">
               {emptyStateText}
             </div>
           ) : (
@@ -134,12 +134,12 @@ export function FrameSelectPanel({
                           : `${index + 1}번 사진 선택`
                     }
                     className={[
-                      "group relative aspect-[3/4] overflow-hidden rounded-xl border bg-black text-left transition",
+                      "group relative aspect-3/4 overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
-                        ? "border-[color:var(--hc-primary)] ring-2 ring-[color:var(--hc-accent-soft-border)]"
+                        ? "border-(--hc-primary) ring-2 ring-(--hc-accent-soft-border)"
                         : isFull
-                          ? "border-[color:var(--hc-border)] opacity-45"
-                          : "border-[color:var(--hc-border)] hover:border-[color:var(--hc-border-strong)]",
+                          ? "border-(--hc-border) opacity-45"
+                          : "border-(--hc-border) hover:border-(--hc-border-strong)",
                     ].join(" ")}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -152,7 +152,7 @@ export function FrameSelectPanel({
                     {/* 배지는 선택 순서 하나만. 원본 순번(#n)은 고를 때 쓰는 정보가 아니고,
                         aria-label 이 이미 두 정보를 다 말한다. 미선택 타일은 사진만 남는다. */}
                     {isSelected ? (
-                      <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--hc-primary)] font-mono text-[12px] font-bold tabular-nums text-[color:var(--hc-primary-contrast)] shadow-sm">
+                      <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-(--hc-primary) font-mono text-[12px] font-bold tabular-nums text-(--hc-primary-contrast) shadow-sm">
                         {order}
                       </span>
                     ) : null}
@@ -171,10 +171,10 @@ export function FrameSelectPanel({
           role="status"
           aria-live="polite"
           className={[
-            "min-h-[18px] text-[12px] transition-opacity",
+            "min-h-4.5 text-[12px] transition-opacity",
             limitNotice
-              ? "text-[color:var(--hc-danger)] opacity-100"
-              : "text-[color:var(--hc-muted)] opacity-0",
+              ? "text-(--hc-danger) opacity-100"
+              : "text-(--hc-muted) opacity-0",
           ].join(" ")}
         >
           {limitNotice
@@ -187,7 +187,7 @@ export function FrameSelectPanel({
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] px-4 text-[13px] text-[color:var(--hc-muted)] transition hover:border-[color:var(--hc-border-strong)] hover:text-[color:var(--hc-text)]"
+            className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-full border border-(--hc-border) px-4 text-[13px] text-(--hc-muted) transition hover:border-(--hc-border-strong) hover:text-(--hc-text)"
           >
             <RotateCcw className="h-4 w-4" />
             선택 초기화
@@ -206,7 +206,7 @@ export function FrameSelectPanel({
 
       <aside className="flex flex-col gap-3 lg:sticky lg:top-6">
         {frameId ? (
-          <section className="hidden flex-col gap-2 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3 lg:flex">
+          <section className="hidden flex-col gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-3 lg:flex">
             <div className="flex justify-center">
               <FramePreview
                 frameId={frameId}
@@ -214,7 +214,7 @@ export function FrameSelectPanel({
                 theme={themeData}
                 borderColor={borderColor}
                 outputFilter={outputFilter}
-                className="w-full max-w-[240px]"
+                className="w-full max-w-60"
               />
             </div>
           </section>

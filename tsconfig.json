@@ -1,4 +1,18 @@
 {
-  "references": [{ "path": "./apps/web" }, { "path": "./apps/mobile" }],
-  "exclude": ["node_modules", "apps/**/node_modules", "apps/**/.expo"]
+  "//": "루트 tsconfig 는 packages/* 를 위한 것이다. 앱 둘은 각자 tsconfig 로 검사한다(typecheck:web / typecheck:mobile).",
+  "//references": "프로젝트 참조(references)를 걸면 안 된다 — 참조 대상은 composite: true 와 emit 이 필요한데 apps/web(Next)·apps/mobile(Expo)은 둘 다 noEmit 이다. 참조를 걸어 두었더니 편집기에 'must have setting composite: true' 오류가 넷 상시로 떴다. files: [] 만 남기는 것도 안 된다 — references 없는 빈 files 는 TS18002 다.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "include": ["packages/*/src/**/*.ts"],
+  "exclude": ["node_modules", "apps/**/node_modules", "apps/**/.expo", "packages/*/src/**/*.test.ts"]
 }
