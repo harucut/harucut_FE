@@ -675,6 +675,49 @@ body {
   animation: hc-film-progress var(--hc-film-dwell, 2600ms) linear forwards;
 }
 
+/*
+  촬영 카운트다운 — 숫자가 바뀔 때 한 번 톡 안착한다.
+
+  얼굴 위의 진행 링을 걷어내면서 "시간이 흐른다"를 무엇이 말할지가 비었다. 링의 연속 스윕은
+  1초를 잇지만 3px 헤어라인이라 팔 길이 밖에서 사실상 안 보였고, reduced-motion 에서는 아예
+  꺼졌다. 대신 숫자 자체를 메트로놈으로 쓴다 — 큰 면적이라 멀리서도, 곁눈으로도 보인다.
+*/
+@keyframes hc-count-tick {
+  from {
+    opacity: 0.7;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hc-count-tick {
+  animation: hc-count-tick 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+  찍힌 순간의 무채색 플래시.
+
+  소리는 행사장 소음에 묻히고, 폰을 거치대에 올리면 햅틱은 아무에게도 안 간다. 남는 것이
+  게이지 한 칸뿐이라 "지금 찍혔다"가 약하다. 전면 플래시는 카메라의 오래된 관습이고
+  초록을 쓰지 않는다. **기본 opacity 는 0** 이라 모션을 끈 기기에서 흰 화면이 남지 않는다.
+*/
+@keyframes hc-capture-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.hc-capture-flash {
+  opacity: 0;
+  animation: hc-capture-flash 220ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hc-reveal {
     opacity: 1;
@@ -685,6 +728,8 @@ body {
   .hc-film-strip,
   .hc-film-progress,
   .hc-reveal-now,
+  .hc-count-tick,
+  .hc-capture-flash,
   .animate-pulse {
     animation: none;
   }

@@ -14,10 +14,6 @@ import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 
 const subscribeNever = () => () => undefined;
 
-// 카운트다운 링. r=44 원의 둘레 — stroke-dasharray 와 offset 의 기준값.
-const RING_RADIUS = 44;
-const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-
 export default function CapturePage() {
   const {
     videoRef,
@@ -92,12 +88,6 @@ export default function CapturePage() {
     const query = params.toString();
     return query ? `/shoot?${query}` : "/shoot";
   })();
-
-  // 링은 남은 초의 비율만큼 남는다. 1초마다 한 칸씩 줄고, 그 사이는 CSS 가 잇는다.
-  const ringOffset =
-    countdown !== null
-      ? RING_LENGTH * (1 - Math.min(countdown, timerSeconds) / timerSeconds)
-      : 0;
 
   return (
     /*
@@ -221,45 +211,15 @@ export default function CapturePage() {
               ) : null}
 
               {/*
-                카운트다운 — 숫자 하나와 남은 시간 링. "n번째 컷" 같은 라벨은 없다(위 게이지가
-                말한다). 링은 컷마다 새로 시작하도록 shotCount 로 키를 준다 — 안 그러면 다음 컷의
-                가득 찬 링으로 되감기는 애니메이션이 먼저 보인다.
+                찍힌 순간의 플래시. 카운트다운은 여기 없다 — 아래 띠에 있다(그 자리 주석 참고).
+                컷마다 새로 재생하려고 shotCount 로 키를 준다.
               */}
-              {isShooting && countdown !== null ? (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30">
-                  <span className="relative grid h-24 w-24 place-items-center">
-                    <svg
-                      key={shotCount}
-                      viewBox="0 0 96 96"
-                      aria-hidden
-                      className="absolute inset-0 h-full w-full -rotate-90"
-                    >
-                      <circle
-                        cx="48"
-                        cy="48"
-                        r={RING_RADIUS}
-                        fill="none"
-                        stroke="rgba(255,255,255,0.28)"
-                        strokeWidth="3"
-                      />
-                      <circle
-                        cx="48"
-                        cy="48"
-                        r={RING_RADIUS}
-                        fill="none"
-                        stroke="var(--hc-primary)"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeDasharray={RING_LENGTH}
-                        strokeDashoffset={ringOffset}
-                        className="motion-safe:transition-[stroke-dashoffset] motion-safe:duration-1000 motion-safe:ease-linear"
-                      />
-                    </svg>
-                    <span className="text-[44px] font-semibold leading-none tabular-nums text-white">
-                      {countdown}
-                    </span>
-                  </span>
-                </div>
+              {shotCount > 0 ? (
+                <span
+                  key={shotCount}
+                  aria-hidden
+                  className="hc-capture-flash pointer-events-none absolute inset-0 z-20 bg-white"
+                />
               ) : null}
             </div>
           ) : (
@@ -270,35 +230,55 @@ export default function CapturePage() {
         </div>
 
         {/*
-          타이머 간격. 시작하기 전에 정하는 것이라 시작하면 사라진다 — 자리는 남겨 아래 띠가
-          움직이지 않게 한다(apple-design: 위치 이동 금지).
+          간격을 **고르던 자리에서 그 간격을 센다.** 시작 전에는 3·5·8초 칩, 촬영 중에는 남은 초.
+
+          카운트다운이 프리뷰 밖에 있는 이유:
+            - 얼굴을 가리지 않는다. 예전 링(96px)은 세로 4컷 프리뷰 높이의 38% 를 덮었다.
+            - 대비가 보장된다. 무대 배경(#0B0B0C) 위라 뒤에 뭐가 찍히든 흰 글자가 읽힌다.
+              얼굴 위에 있을 때는 밝은 하늘 앞에서 1.4:1 까지 떨어졌고, 그걸 가리려고 화면을
+              30% 어둡게 덮어야 했다 — 그 스크림도 같이 사라졌다.
+            - 초록이 하나로 돌아온다. 진행 초록은 위 8컷 게이지가 혼자 갖는다.
+          높이를 72px 로 고정해 두 상태가 같은 자리를 쓴다 — 시작해도 아래 띠가 움직이지 않는다.
         */}
-        <div
-          className={`flex h-11 shrink-0 items-center justify-center gap-2 ${
-            isShooting ? "invisible" : ""
-          }`}
-          aria-hidden={isShooting}
-        >
-          {TIMER_OPTIONS.map((seconds) => {
-            const active = timerSeconds === seconds;
-            return (
-              <button
-                key={seconds}
-                type="button"
-                onClick={() => setTimerSeconds(seconds)}
-                aria-pressed={active}
-                className={`inline-flex h-11 items-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition ${
-                  active
-                    ? "bg-white text-[#0B0B0C]"
-                    : "bg-transparent text-white ring-1 ring-[rgba(255,255,255,0.3)]"
-                }`}
-              >
-                <Timer className="h-3.5 w-3.5" />
-                {seconds}s
-              </button>
-            );
-          })}
+        <div className="flex h-18 shrink-0 items-center justify-center gap-2">
+          {isShooting ? (
+            // key 로 매 초 애니메이션을 새로 재생한다 — 링의 연속 스윕을 대신하는 메트로놈.
+            <span
+              key={countdown ?? 0}
+              className="hc-count-tick text-[56px] font-extrabold leading-none tabular-nums text-white"
+            >
+              {countdown}
+            </span>
+          ) : (
+            TIMER_OPTIONS.map((seconds) => {
+              const active = timerSeconds === seconds;
+              return (
+                <button
+                  key={seconds}
+                  type="button"
+                  onClick={() => setTimerSeconds(seconds)}
+                  aria-pressed={active}
+                  className={`inline-flex h-11 items-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition ${
+                    active
+                      ? "bg-white text-[#0B0B0C]"
+                      : "bg-transparent text-white ring-1 ring-[rgba(255,255,255,0.3)]"
+                  }`}
+                >
+                  <Timer className="h-3.5 w-3.5" />
+                  {seconds}s
+                </button>
+              );
+            })
+          )}
         </div>
+
+        {/*
+          보조기술에는 매초가 아니라 **컷마다 한 번** 알린다. 매초 읽으면 TTS 지연 때문에
+          3초 간격에서 "일" 이 셔터 뒤에 읽힌다 — 도움이 아니라 방해다.
+        */}
+        <p aria-live="polite" className="sr-only">
+          {isShooting ? `${shotCount + 1}번째 컷, ${timerSeconds}초 뒤 촬영` : ""}
+        </p>
 
         {/*
           아래 띠. 가운데 자리 하나가 **카메라 켜기 → 촬영 시작 → 셔터**로 바뀐다. 켜고 → 시작하고

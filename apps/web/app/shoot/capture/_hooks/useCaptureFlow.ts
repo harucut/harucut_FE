@@ -18,6 +18,15 @@ export type TimerSeconds = (typeof TIMER_OPTIONS)[number];
 type ShootingState = {
   isShooting: boolean;
   countdown: number | null;
+  /**
+   * 촬영 회차. 한 컷이 끝날 때마다 올라간다.
+   *
+   * 카운트다운 타이머를 **반드시** 처음부터 다시 돌리려고 둔다. 셔터로 직접 찍은 사람은
+   * 세던 초를 버리고 다음 컷을 준비할 시간을 온전히 받아야 하는데, `countdown` 값만 보면
+   * 그게 안 된다 — 카운트가 이미 최대값일 때(간격의 첫 1초 안에) 누르면 값이 그대로라
+   * effect 가 다시 돌지 않고, 이미 흐르던 1초가 이어져 첫 칸이 짧아진다.
+   */
+  cycle: number;
 };
 
 type CameraFacingMode = "user" | "environment";
@@ -33,6 +42,7 @@ export function useCaptureFlow() {
   const [shooting, setShooting] = useState<ShootingState>({
     isShooting: false,
     countdown: null,
+    cycle: 0,
   });
   const [shotCount, setShotCount] = useState(0);
   const [cameraFacingMode, setCameraFacingMode] =
@@ -401,13 +411,13 @@ export function useCaptureFlow() {
     setShotCount(next);
 
     if (next < MAX_SHOTS) {
-      // 다음 컷까지 선택한 간격으로 자동 카운트다운.
-      setShooting((s) => ({ ...s, countdown: timerSeconds }));
+      // 다음 컷까지 선택한 간격으로 자동 카운트다운. cycle 을 올려 타이머를 처음부터 다시 돌린다.
+      setShooting((s) => ({ ...s, countdown: timerSeconds, cycle: s.cycle + 1 }));
       return;
     }
 
     isShootingRef.current = false;
-    setShooting({ isShooting: false, countdown: null });
+    setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
     router.push("/shoot/select");
   }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, router]);
 
@@ -434,7 +444,7 @@ export function useCaptureFlow() {
     shootGenerationRef.current += 1;
 
     // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
-    setShooting({ isShooting: true, countdown: timerSeconds });
+    setShooting((s) => ({ isShooting: true, countdown: timerSeconds, cycle: s.cycle + 1 }));
   }, [isCameraReady, resetShots, setNotice, timerSeconds]);
 
   // 카운트다운 타이머
@@ -456,7 +466,8 @@ export function useCaptureFlow() {
     }, 1000);
 
     return () => window.clearTimeout(timer);
-  }, [shooting.isShooting, shooting.countdown, finishSingleShot]);
+    // cycle 이 의존성에 있어야 촬영 직후 **같은 초로 되돌아가는 경우에도** 1초가 새로 시작한다.
+  }, [shooting.isShooting, shooting.countdown, shooting.cycle, finishSingleShot]);
 
   const handleShootNow = useCallback(() => {
     if (!shooting.isShooting || !isCameraReady) return;
