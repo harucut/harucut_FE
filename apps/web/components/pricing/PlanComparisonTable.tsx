@@ -61,7 +61,7 @@ export function PlanComparisonTable({
                   {plan.name}
                 </span>
                 <span className="mt-0.5 block text-[11px] font-medium text-[color:var(--hc-muted)]">
-                  {plan.price}
+                  {plan.price === "무료" ? "₩0" : plan.price}
                   {plan.sub ? ` ${plan.sub}` : ""}
                 </span>
                 {currentPlanId === plan.id ? (

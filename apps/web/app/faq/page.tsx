@@ -26,7 +26,7 @@ const faqJsonLd = {
 
 export default function FaqPage() {
   return (
-    <main className="hc-page-app min-h-dvh pb-16 text-[color:var(--hc-text)]">
+    <main className="hc-stage-dark hc-page-app min-h-dvh pb-16 text-[color:var(--hc-text)]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -45,10 +45,7 @@ export default function FaqPage() {
           가독성을 위해 본문(질문/답변) 컬럼만 안쪽에서 폭을 제한한다. */}
       <div className="mx-auto w-full max-w-[1160px] px-7 py-10 lg:py-14">
         <header className="mb-9">
-          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
-            FAQ · 자주 묻는 질문
-          </span>
-          <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[32px]">
+          <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[32px]">
             궁금한 점이 있으신가요?
           </h1>
           <p className="mt-3 max-w-[520px] text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">

@@ -45,6 +45,8 @@ function ShowcaseFrame({
       images={HERO_IMAGES}
       borderColor="#0B0B0C"
       className={className}
+      // 첫 화면의 그림이다 — lazy 면 LCP 가 스크롤 판정을 기다린다.
+      imageLoading="eager"
     />
   );
 }
@@ -252,8 +254,8 @@ function HeroEditorial() {
 
 export function LandingView() {
   return (
-    <main className="min-h-dvh bg-[#0B0B0C] text-white">
-      <MarketingNav tone="dark" />
+    <main className="hc-stage-dark min-h-dvh bg-[#0B0B0C] text-white">
+      <MarketingNav cta="primary" />
 
       <HeroEditorial />
 

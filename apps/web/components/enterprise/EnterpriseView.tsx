@@ -44,7 +44,7 @@ const COMPARISON = [
 
 export function EnterpriseView() {
   return (
-    <div className="hc-page-landing min-h-dvh text-[color:var(--hc-text)]">
+    <div className="hc-stage-dark hc-page-landing min-h-dvh text-[color:var(--hc-text)]">
       <MarketingNav />
 
       <main className="mx-auto flex w-full max-w-[1160px] flex-col gap-20 px-5 pb-24 pt-10 sm:px-8 lg:gap-28 lg:pt-16">

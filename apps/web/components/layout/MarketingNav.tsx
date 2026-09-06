@@ -10,8 +10,7 @@ import { nativeSetColorScheme } from "@/lib/nativeBridge";
 
 // 공개(마케팅) 페이지 공통 상단 네비 — 랜딩/요금제/FAQ가 각자 다른 헤더를 갖고 있어
 // 높이·링크·CTA가 제각각이던 것을 하나로 통일한다.
-// tone="dark"는 테마와 무관하게 딥다크로 고정된 무대(랜딩 히어로) 위에서 쓴다.
-const GREEN = "#1ED760";
+// 마케팅 무대는 사용자 테마와 무관하게 딥다크 고정이다(globals.css .hc-stage-dark). 여기도 늘 그 위에 선다.
 
 const NAV_LINKS = [
   { href: "/features", label: "기능" },
@@ -23,10 +22,14 @@ const NAV_LINKS = [
 export const MARKETING_NAV_HEIGHT = 72;
 
 export function MarketingNav({
-  tone = "auto",
+  cta = "quiet",
   width = "max-w-[1160px]",
 }: {
-  tone?: "auto" | "dark";
+  /**
+   * 우측 CTA 의 무게. 본문에 초록 CTA 가 없는 화면(랜딩·기능 — 히어로 버튼이 흰색)만 "primary".
+   * 요금제·행사·FAQ·약관은 본문이 초록을 갖고 있어 "quiet"(중립 알약). 한 화면에 초록 CTA 는 하나다.
+   */
+  cta?: "primary" | "quiet";
   /** 페이지 본문 컨테이너와 좌변을 맞추기 위한 폭. 요금제는 AppNav(max-w-5xl)와 같은 폭을 쓴다. */
   width?: string;
 }) {
@@ -42,15 +45,12 @@ export function MarketingNav({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const dark = tone === "dark";
-
   /*
-    딥다크 고정 무대는 사용자 테마와 무관하게 어둡다. 셸의 상태바 글자색·무대색과 브라우저의
-    theme-color 는 `data-theme` 만 보고 정해지므로, 라이트 사용자가 랜딩을 열면 어두운 무대 위에
-    검은 상태바 글자가 놓였다. 이 무대에 있는 동안만 '다크' 라고 알리고 떠날 때 되돌린다.
+    마케팅 무대는 사용자 테마와 무관하게 어둡다. 셸의 상태바 글자색·무대색과 브라우저의
+    theme-color 는 `data-theme` 만 보고 정해지므로, 라이트 사용자가 이 무대를 열면 어두운 무대 위에
+    검은 상태바 글자가 놓였다. 무대에 있는 동안만 '다크' 라고 알리고 떠날 때 실제 테마로 되돌린다.
   */
   useEffect(() => {
-    if (!dark) return;
     nativeSetColorScheme("dark");
     syncThemeColorMeta("dark");
     return () => {
@@ -58,7 +58,7 @@ export function MarketingNav({
       nativeSetColorScheme(actual);
       syncThemeColorMeta(actual);
     };
-  }, [dark]);
+  }, []);
 
   // hover 색은 부분일치 매핑에 걸리지 않는 arbitrary 값으로 쓴다(예전 globals.css 의
   // `[class*="hover:bg-white"]` 규칙이 라이트 테마에서 흰 알약+흰 글자를 만들었다 — 규칙은 걷어냈다).
@@ -67,33 +67,21 @@ export function MarketingNav({
   // 좁은 화면에서는 링크 넷이 브랜드와 한 줄에 들어가야 하므로 가로 패딩을 줄인다.
   const linkBase =
     "inline-flex rounded-full px-2.5 py-2 text-[13px] font-semibold transition sm:px-4";
-  const linkTone = dark
-    ? "text-white hover:bg-[rgba(255,255,255,0.07)]"
-    : "text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]";
+  const linkTone = "text-white hover:bg-[rgba(255,255,255,0.07)]";
 
   return (
     <header
       className="sticky top-0 z-40 transition-[background-color,border-color] duration-300"
       style={{
-        background: scrolled
-          ? dark
-            ? "rgba(11,11,12,.82)"
-            : "var(--hc-surface-soft)"
-          : "transparent",
+        background: scrolled ? "rgba(11,11,12,.82)" : "transparent",
         backdropFilter: scrolled ? "saturate(1.2) blur(14px)" : "none",
-        borderBottom: `1px solid ${
-          scrolled
-            ? dark
-              ? "rgba(255,255,255,.1)"
-              : "var(--hc-border)"
-            : "transparent"
-        }`,
+        borderBottom: `1px solid ${scrolled ? "rgba(255,255,255,.1)" : "transparent"}`,
       }}
     >
       <div
         className={`mx-auto flex h-[72px] w-full items-center justify-between px-7 ${width}`}
       >
-        <BrandMark href="/" tone={dark ? "light" : undefined} />
+        <BrandMark href="/" tone="light" />
 
         <div className="flex items-center gap-2.5">
           {/*
@@ -115,7 +103,7 @@ export function MarketingNav({
                   href={link.href}
                   aria-current={active ? "page" : undefined}
                   className={`${linkBase} ${linkTone} ${
-                    active ? "" : dark ? "opacity-80" : "opacity-70"
+                    active ? "" : "opacity-80"
                   }`}
                 >
                   {link.label}
@@ -127,9 +115,8 @@ export function MarketingNav({
             우측 상단 CTA: 지금 시작하기 → /login(로그인 우선). 가입·비회원 체험은
             로그인 페이지에서.
 
-            테마를 따르는 화면(요금제·행사·FAQ·약관)은 본문에 자기 초록 CTA 가 있으므로 여기는
-            중립 알약이다. 딥다크 고정 무대(랜딩·기능)는 히어로 CTA 가 흰색이라 여기가 초록을
-            갖는다 — 어느 쪽이든 한 화면에 초록 CTA 는 하나다.
+            본문에 초록 CTA 가 있는 화면(요금제·행사·FAQ·약관)은 quiet(중립 알약), 히어로 CTA 가
+            흰색인 랜딩·기능만 primary — 어느 쪽이든 한 화면에 초록 CTA 는 하나다.
 
             모바일에서는 숨긴다. 히어로 바로 아래에 CTA 두 개가 이미 있어 첫 화면에 같은
             행동이 세 번 놓였고(그중 둘은 목적지가 /login 으로 같다), 초록도 브랜드·이 버튼·
@@ -139,11 +126,10 @@ export function MarketingNav({
           <Link
             href="/login"
             className={
-              dark
-                ? "hidden items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold sm:inline-flex"
+              cta === "primary"
+                ? "hc-button-primary hidden items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold sm:inline-flex"
                 : "hc-button-secondary hidden items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-bold sm:inline-flex"
             }
-            style={dark ? { background: GREEN, color: "#06140A" } : undefined}
           >
             지금 시작하기 <ArrowUpRight className="h-4 w-4" />
           </Link>

@@ -141,7 +141,7 @@ function AxisVisual({ index }: { index: number }) {
           <div key={row.plan}>
             <div className="mb-2.5 flex items-baseline justify-between">
               <span
-                className="font-mono text-[11px] tracking-[2px]"
+                className="text-[12px] font-semibold"
                 style={{
                   color: row.dim ? "rgba(255,255,255,.5)" : GREEN,
                 }}
@@ -172,8 +172,8 @@ function AxisVisual({ index }: { index: number }) {
 
 export function FeaturesView() {
   return (
-    <main className="min-h-dvh bg-[#0B0B0C] text-white">
-      <MarketingNav tone="dark" />
+    <main className="hc-stage-dark min-h-dvh bg-[#0B0B0C] text-white">
+      <MarketingNav cta="primary" />
 
       {/* 페이지 헤드 — 랜딩 히어로보다 한 단계 낮은 타입 스케일 */}
       <section className="mx-auto max-w-[1160px] px-7 pb-14 pt-12 sm:pt-16">
@@ -226,7 +226,7 @@ export function FeaturesView() {
                     <dl className="mt-8 flex flex-col gap-3 border-t border-white/[0.08] pt-6">
                       {axis.facts.map(([k, v]) => (
                         <div key={k} className="flex items-baseline gap-5">
-                          <dt className="w-[56px] shrink-0 font-mono text-[11px] tracking-[1.2px] text-white/75">
+                          <dt className="w-[56px] shrink-0 text-[12px] font-semibold text-white/75">
                             {k}
                           </dt>
                           <dd className="text-[14px] text-white/70">{v}</dd>

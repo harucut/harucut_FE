@@ -7,6 +7,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { PAYMENTS_ENABLED } from "@/constants/company";
 import {
   ENTERPRISE_TEASER,
@@ -74,8 +75,9 @@ function PlanCard({
       </span>
 
       <div className="mb-0.5 mt-2.5 flex items-baseline gap-1.5">
+        {/* 이름이 이미 '무료' 인 카드에 가격까지 '무료' 라고 쓰면 같은 말을 두 번 한다. 숫자 자리에는 숫자. */}
         <span className="text-[28px] font-extrabold leading-none tracking-[-0.6px] text-[color:var(--hc-text)]">
-          {plan.price}
+          {plan.price === "무료" ? "₩0" : plan.price}
         </span>
         <span className="text-[13px] text-[color:var(--hc-muted)]">{plan.sub}</span>
       </div>
@@ -138,18 +140,18 @@ function PlanCard({
           가는 게 맞지만, 가격 옆에 그 문구가 있으면 "베이직을 공짜로 준다"로 읽힌다.
           살 수 없는 동안에는 버튼을 두지 않고 상태만 말한다 — 로그인 여부와 상관없이 같다.
         */
-        <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
+        <p className="mt-5 flex h-[50px] items-center justify-center text-[14px] font-semibold text-[color:var(--hc-muted)]">
           결제 준비 중
-        </span>
+        </p>
       ) : authed ? (
         /*
           이미 계정이 있는 사람에게는 "무료로 시작하기"가 할 말이 아니다. 게다가 결제가
           닫혀 있어 플랜을 바꿀 수도 없다 — 마이페이지로 보내 봐야 거기 있는 요금제 동작은
           이 화면으로 되돌아오는 링크뿐이라 왕복만 한다. 상태만 말한다.
         */
-        <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
+        <p className="mt-5 flex h-[50px] items-center justify-center text-[14px] font-semibold text-[color:var(--hc-muted)]">
           결제 준비 중
-        </span>
+        </p>
       ) : (
         <Link
           href="/signup"
@@ -196,7 +198,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
   return (
     <main
       className={`hc-page-app min-h-dvh text-[color:var(--hc-text)] ${
-        authed ? "pb-[90px] lg:pb-0" : "pb-10"
+        authed ? "pb-[90px] lg:pb-0" : "hc-stage-dark pb-10"
       }`}
     >
       {authed ? <AppNav /> : <MarketingNav width="max-w-5xl" />}
@@ -204,10 +206,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
         <header className="pt-1 lg:pt-0">
-          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
-            PRICING · 요금제
-          </span>
-          <h1 className="mt-3 text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">
+          <h1 className="text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">
             {PRICING_HEADLINE}
           </h1>
           <p className="mt-3 max-w-[480px] text-[14px] leading-[1.5] text-[color:var(--hc-muted)]">
@@ -340,12 +339,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               먼저 무료로 찍어보고, 저장·보관이 필요해지면 그때 플랜을 올리면
               돼요.
             </p>
-            <Link
-              href="/login"
-              className="hc-button-primary mt-1 flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold"
-            >
-              시작하기
-            </Link>
+            {/* 이 절은 비회원 촬영 이야기다. 위 카드의 '무료로 시작하기'(가입)와 의도가 다르므로 문구도 다르다. */}
+            <GuestTrialStartButton className="hc-button-primary mt-1 inline-flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold" />
           </section>
         )}
       </div>
