@@ -10,7 +10,7 @@
   A. FE 프록시 라우트 → 백엔드에 그 경로/메서드가 실제로 있는가        (없으면 실패)
   B. FE 프록시 라우트를 부르는 곳이 있는가                              (없으면 경고)
   C. 백엔드 에러코드 ↔ FE 문구 표가 1:1 인가                            (누락은 실패)
-  D. FE 가 부르는 엔드포인트의 필수 요청 필드 목록                       (참고 출력, 검사 아님)
+  D. FE 가 **실제로 보내는 본문**에 서버 필수 필드가 다 있는가          (빠지면 실패)
 
 쓰는 법
   docs/local-backend.md 대로 백엔드를 띄운 뒤:
@@ -82,7 +82,10 @@ def collect_fe_routes() -> list[tuple[str, str, str]]:
             continue
         file = os.path.join(dirpath, "route.ts")
         src = open(file, encoding="utf-8").read()
-        route = dirpath.replace(os.path.join(ROOT, "apps/web/app"), "")
+        # Windows 에서는 os.walk 가 역슬래시를 준다. 이 문자열은 뒤에서 소스 코드의
+        # "/api/client/..." 와 **문자 그대로** 비교되므로 항상 POSIX 로 맞춘다.
+        # (안 맞추면 B 검사가 전부 "부르는 곳이 없다" 로 오답을 낸다.)
+        route = dirpath.replace(os.path.join(ROOT, "apps/web/app"), "").replace(os.sep, "/")
         for m in re.finditer(
             r"export\s+(?:async\s+)?function\s+(" + "|".join(METHODS) + r")\s*\(", src
         ):
@@ -147,7 +150,7 @@ def fe_error_codes() -> set[str]:
 
 
 def has_caller(route: str) -> bool:
-    literal = route.split("[")[0].rstrip("/")
+    literal = route.replace(os.sep, "/").split("[")[0].rstrip("/")
     if not literal:
         return True
     res = subprocess.run(
@@ -156,9 +159,245 @@ def has_caller(route: str) -> bool:
         capture_output=True, text=True,
     )
     for line in res.stdout.splitlines():
-        if "/app/api/" not in line:
+        # grep 이 돌려주는 경로도 플랫폼에 따라 구분자가 다르다.
+        if "/app/api/" not in line.replace(os.sep, "/"):
             return True
     return False
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# D. 필수 요청 필드 대조
+#
+# 예전에는 스웨거의 required 목록만 찍고 "대조는 사람이 한다" 로 뒀다. 사람이 하는 대조는
+# 결국 안 한다 — presign 의 `fileSize` 와 compose 의 `sourceKeys` 가 실제로 그렇게 새어
+# 나갔다. 여기서는 기계가 한다.
+#
+# 방법: 프론트가 부르는 프록시 경로 -> (A 검사가 만든 매핑) 백엔드 경로 -> 스웨거 required.
+# 그다음 프론트 소스에서 그 경로로 보내는 **본문 객체의 최상위 키**를 뽑아 비교한다.
+# 본문이 객체 리터럴이 아니거나(변수로 넘김) 전개 연산자가 있으면 키를 셀 수 없다 —
+# 그건 "확인 못 함" 으로 남겨 사람이 보게 한다. 조용히 통과시키지 않는다.
+# ──────────────────────────────────────────────────────────────────────────
+
+# `clientApi.post<ApiEnvelope<Foo>>(` 처럼 제네릭이 **중첩**된다. `<[^>]*>` 는 첫 `>` 에서
+# 끊겨 이런 호출을 통째로 놓친다 — 그러면 그 경로는 "못 찾음" 이 되어 조용히 넘어간다.
+CALL_RE = re.compile(
+    r"""clientApi\.(post|put|patch)\s*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(\s*"""
+    r"""(?:`([^`]*)`|"([^"]*)"|'([^']*)')""",
+    re.S,
+)
+
+
+def _balanced(src: str, start: int):
+    depth = 0
+    for i in range(start, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[start:i + 1]
+    return None
+
+
+def _top_level_keys(obj: str):
+    """객체 리터럴의 최상위 키. 중첩 안쪽은 무시한다."""
+    keys = set()
+    depth = 0
+    buf = []
+    for c in obj:
+        if c in "{[(":
+            depth += 1
+            if depth == 1:
+                continue
+        elif c in "}])":
+            depth -= 1
+            if depth == 0:
+                continue
+        if depth == 1:
+            buf.append(c)
+    inner = "".join(buf)
+    depth = 0
+    part = []
+    parts = []
+    for c in inner:
+        if c in "{[(":
+            depth += 1
+        elif c in "}])":
+            depth -= 1
+        if c == "," and depth == 0:
+            parts.append("".join(part))
+            part = []
+        else:
+            part.append(c)
+    parts.append("".join(part))
+    for raw_part in parts:
+        t = raw_part.strip()
+        if not t:
+            continue
+        if t.startswith("..."):
+            keys.add("...spread")
+            continue
+        m = re.match(r"""^["']?([A-Za-z_][A-Za-z0-9_]*)["']?\s*(?::|$)""", t)
+        if m:
+            keys.add(m.group(1))
+    return keys
+
+
+def collect_fe_payloads():
+    """(메서드, 프록시경로) -> 최상위 키 집합. 못 읽으면 None."""
+    out = {}
+    for d in CALLER_DIRS:
+        base = os.path.join(ROOT, d)
+        for dirpath, _dirs, files in os.walk(base):
+            norm_dir = dirpath.replace(os.sep, "/")
+            if "/node_modules" in norm_dir or "/.next" in norm_dir:
+                continue
+            for f in files:
+                if not f.endswith((".ts", ".tsx")) or ".test." in f:
+                    continue
+                src = open(os.path.join(dirpath, f), encoding="utf-8", errors="ignore").read()
+                for m in CALL_RE.finditer(src):
+                    method = m.group(1).upper()
+                    path = (m.group(2) or m.group(3) or m.group(4) or "").split("?")[0]
+                    if not path.startswith("/api/"):
+                        continue
+                    path = re.sub(r"\$\{[^}]*\}", "{}", path).rstrip("/")
+                    key = (method, path)
+                    rest = src[m.end():]
+                    comma = rest.find(",")
+                    close = rest.find(")")
+                    if comma == -1 or (close != -1 and close < comma):
+                        out[key] = set()          # 본문 없이 보낸다
+                        continue
+                    after = rest[comma + 1:]
+                    if after.lstrip().startswith("{"):
+                        obj = _balanced(after, after.index("{"))
+                        out[key] = _top_level_keys(obj) if obj else None
+                        continue
+                    ident = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,)]", after)
+                    if ident:
+                        out[key] = _keys_from_identifier(src, ident.group(1))
+                    else:
+                        out[key] = None
+    return out
+
+
+def _type_body(src: str, name: str):
+    """`type Name = { ... }` 또는 `interface Name { ... }` 의 본문."""
+    m = re.search(r"(?:type\s+" + re.escape(name) + r"\s*=\s*|interface\s+" + re.escape(name) + r"\s*)\{", src)
+    if not m:
+        return None
+    return _balanced(src, src.index("{", m.end() - 1))
+
+
+def _required_keys_of_type(body: str):
+    """타입 본문의 **필수** 최상위 키(`?` 가 붙은 건 뺀다)."""
+    keys = set()
+    depth = 0
+    line = []
+    lines = []
+    for c in body[1:-1]:
+        if c in "{[(":
+            depth += 1
+        elif c in "}])":
+            depth -= 1
+        if c in ";\n" and depth == 0:
+            lines.append("".join(line))
+            line = []
+        else:
+            line.append(c)
+    lines.append("".join(line))
+    for raw_line in lines:
+        t = raw_line.strip()
+        if not t or t.startswith("//") or t.startswith("*") or t.startswith("/*"):
+            continue
+        m = re.match(r"^(?:readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)(\??)\s*:", t)
+        if m and not m.group(2):
+            keys.add(m.group(1))
+    return keys
+
+
+def _keys_from_identifier(src: str, ident: str):
+    """식별자로 넘긴 본문의 키를 찾는다. 못 찾으면 None(사람이 본다)."""
+    # (a) 같은 파일의 지역 변수: const ident = { ... }
+    m = re.search(r"\bconst\s+" + re.escape(ident) + r"\s*(?::[^=]+)?=\s*\{", src)
+    if m:
+        obj = _balanced(src, src.index("{", m.end() - 1))
+        if obj:
+            return _top_level_keys(obj)
+    # (b) 함수 파라미터의 타입 주석: (ident: SomeType) / (ident: { ... })
+    m = re.search(re.escape(ident) + r"\s*:\s*\{", src)
+    if m:
+        obj = _balanced(src, src.index("{", m.end() - 1))
+        if obj:
+            return _required_keys_of_type(obj)
+    m = re.search(re.escape(ident) + r"\s*:\s*([A-Za-z_][A-Za-z0-9_]*)", src)
+    if m:
+        name = m.group(1)
+        body = _type_body(src, name)
+        if body:
+            return _required_keys_of_type(body)
+        # 타입이 다른 파일에 있을 수 있다(api-types.ts 등). 저장소에서 한 번 더 찾는다.
+        for d in CALLER_DIRS:
+            for dirpath, _dirs, files in os.walk(os.path.join(ROOT, d)):
+                nd = dirpath.replace(os.sep, "/")
+                if "/node_modules" in nd or "/.next" in nd:
+                    continue
+                for f in files:
+                    if not f.endswith((".ts", ".tsx")):
+                        continue
+                    other = open(os.path.join(dirpath, f), encoding="utf-8", errors="ignore").read()
+                    body = _type_body(other, name)
+                    if body:
+                        return _required_keys_of_type(body)
+    return None
+
+
+def required_by_endpoint(spec, backend):
+    schemas = spec.get("components", {}).get("schemas", {})
+    out = {}
+    for (method, path), op in backend.items():
+        body = op.get("requestBody")
+        if not body:
+            continue
+        for _ct, v in body.get("content", {}).items():
+            sch = v.get("schema", {})
+            if "$ref" in sch:
+                sch = schemas.get(sch["$ref"].split("/")[-1], {})
+            req = sch.get("required", [])
+            if req:
+                out[(method, path)] = req
+    return out
+
+
+def check_required_fields(spec, backend, fe_routes, backend_norm):
+    need = required_by_endpoint(spec, backend)
+    payloads = collect_fe_payloads()
+    fails, unknown = [], []
+    for method, target, route in fe_routes:
+        real = backend_norm.get((method, normalize(target)))
+        if not real:
+            continue
+        want = need.get((method, real))
+        if not want:
+            continue
+        # 라우트 폴더는 `[frameId]`, 호출부는 `${frameId}` -> `{}` 다. 같은 표기로 맞춘다.
+        key = (method, re.sub(r"\[[^\]]*\]", "{}", route.rstrip("/")))
+        label = f"{method:<6} {route} -> {real}"
+        if key not in payloads:
+            unknown.append(f"{label}  필수 {want} · 프론트에서 이 경로를 부르는 곳을 못 찾음")
+            continue
+        sent = payloads[key]
+        if sent is None:
+            unknown.append(f"{label}  필수 {want} · 본문의 타입을 따라가지 못함")
+            continue
+        if "...spread" in sent:
+            unknown.append(f"{label}  필수 {want} · 전개 연산자라 키를 못 셈")
+            continue
+        missing = [k for k in want if k not in sent]
+        if missing:
+            fails.append(f"{label}  빠진 필수 필드 {missing} (보내는 것: {sorted(sent)})")
+    return fails, unknown
 
 
 def main() -> int:
@@ -229,7 +468,22 @@ def main() -> int:
     # 소스 주석·문서에만 적어 뒀는데, 그것들은 기본 `pnpm check:contract` 를 돌린 사람의
     # 화면에 하나도 나오지 않는다. 그래서 필수 필드를 빠뜨린 채로도 화면에는 "계약 일치 ✓"
     # 만 남았다. 한계는 판정이 나오는 그 화면에 적혀 있어야 읽힌다.
-    print("D. 필수 요청 필드 — 검사하지 않는다(스웨거 목록만 뽑고, 대조는 사람이 한다)")
+    print("D. 필수 요청 필드 대조")
+    d_fails, d_unknown = check_required_fields(spec, backend, fe_routes, backend_norm)
+    if d_fails:
+        for f in d_fails:
+            problems.append(f"D: {f}")
+        print(f"   빠진 필수 필드 {len(d_fails)}건")
+        for f in d_fails:
+            print(f"   ✗ {f}")
+    else:
+        print("   빠진 필수 필드 없음")
+    for u in d_unknown:
+        warnings.append(f"D: {u}")
+    if d_unknown:
+        print(f"   본문을 못 읽은 곳 {len(d_unknown)}건 — 사람이 확인한다")
+        for u in d_unknown:
+            print(f"   ! {u}")
     if args.show_required:
         schemas = spec.get("components", {}).get("schemas", {})
         for method, path in sorted(called):
@@ -244,8 +498,8 @@ def main() -> int:
                 req = s.get("required", [])
                 if req:
                     print(f"   {method:<6} {path:<46} {req}")
-    else:
-        print("   목록은 --show-required 로 본다")
+    elif not d_unknown and not d_fails:
+        print("   (스웨거 required 목록 전체는 --show-required)")
     print()
 
     print("=" * 72)
@@ -260,9 +514,9 @@ def main() -> int:
     # 판정 문구는 검사한 범위만큼만 말한다. 그냥 "계약 일치 ✓" 라고 쓰면
     # 본 적 없는 필수 요청 필드까지 맞춘 것처럼 읽힌다.
     if not problems and not warnings:
-        print("A·B·C 일치 ✓ (필수 요청 필드는 검사 대상 아님 — 손으로 대조한다)")
+        print("A·B·C·D 일치 ✓")
     elif not problems:
-        print("A·B·C 치명적 불일치 없음 ✓ (경고만 · 필수 요청 필드는 검사 대상 아님)")
+        print("A·B·C·D 치명적 불일치 없음 ✓ (경고만)")
     return 1 if problems else 0
 
 

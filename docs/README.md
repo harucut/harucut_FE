@@ -55,6 +55,11 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료�
 스크립트가 검사 범위를 넘겨 말하지 않는지는 `python3 scripts/check_backend_contract_test.py`
 로 본다 — 백엔드도 도커도 없이 돈다.
 
+계약 대조는 A·B·C·D 네 가지다. D 는 **FE 가 실제로 보내는 본문**과 스웨거의 required 를
+기계가 맞춰 본다 — 예전에는 목록만 찍고 "대조는 사람이 한다" 였는데, 사람이 하는 대조는 결국
+안 해서 `fileSize`·`sourceKeys` 가 그렇게 새어 나갔다. 본문을 변수로 넘기면 그 변수의 타입까지
+따라간다. 못 따라가면 조용히 통과시키지 않고 "확인 못 함" 으로 남긴다.
+
 전체 검증은 `pnpm verify:standard`. 맨 앞에 `pnpm install --frozen-lockfile` 락파일 검사가
 붙고 그다음이 lint:web·**check:classes:web**·**typecheck:shared**·test:web·build:web·
 lint:mobile·typecheck:mobile 이다 — 목록의 진실은 `scripts/verify_workspace.py` 의 `GROUPS`
