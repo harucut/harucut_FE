@@ -73,6 +73,18 @@ function getDialogSaveButton(container: HTMLElement) {
   return button;
 }
 
+function getButtonByText(container: HTMLElement, text: string) {
+  const button = Array.from(container.querySelectorAll("button")).find(
+    (node) => node.textContent?.trim() === text,
+  );
+
+  if (!button) {
+    throw new Error(`button not found: ${text}`);
+  }
+
+  return button;
+}
+
 function confirmSave(container: HTMLElement) {
   fireEvent.click(getPrimarySaveButton(container));
   fireEvent.click(getDialogSaveButton(container));
@@ -130,9 +142,26 @@ jest.mock("@/lib/presignedUploadApi", () => ({
   getImageUrlByKey: jest.fn().mockResolvedValue(null),
   SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",
   UNSUPPORTED_UPLOAD_MESSAGE: "PNG·JPG·WEBP·GIF만 올릴 수 있어요.",
+  UPLOAD_TOO_LARGE_MESSAGE: "10MB 이하 이미지만 올릴 수 있어요.",
+  EMPTY_UPLOAD_MESSAGE: "빈 파일은 올릴 수 없어요.",
+  MIN_UPLOAD_BYTES: 1,
+  MAX_UPLOAD_BYTES: 10 * 1024 * 1024,
+  // 저장 catch 가 `instanceof` 로 가르므로 목에도 진짜 클래스가 있어야 한다.
+  // 문구 비교로 바꾸면 문구가 바뀔 때 이 검사가 조용히 무의미해진다.
+  UploadValidationError: class UploadValidationError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "UploadValidationError";
+    }
+  },
   isSupportedUploadFile: (file: File) =>
     ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
+
+// 컴포넌트가 보는 것과 **같은** 클래스여야 instanceof 가 맞는다.
+const { UploadValidationError } = jest.requireMock(
+  "@/lib/presignedUploadApi",
+) as { UploadValidationError: new (message: string) => Error };
 
 jest.mock("@/lib/canvas/renderThemePreview", () => ({
   renderThemePreviewPng: (...args: unknown[]) => mockRenderPreview(...args),
@@ -450,6 +479,80 @@ describe("ThemeEditorPage save flow", () => {
     await waitFor(() => {
       expect(container.textContent).toContain(
         "지금 요금제로는 프레임을 저장할 수 없어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
+      );
+    });
+  });
+
+  /*
+    ── 회귀: 올리기 전에 우리가 걸러낸 사유는 그대로 보여 준다 ──
+
+    저장 한 번에 배경·사진·스티커·글자 층·미리보기가 줄줄이 올라간다.
+    `UploadValidationError` 에는 status·code 가 없어 코드 매핑에 넘기면 폴백만 남고,
+    무엇이 왜 막혔는지가 사라진다("저장에 실패했어요."). 사용자는 파일을 바꿔야
+    한다는 것을 알 수 없다.
+  */
+  it("업로드 사전검증에 걸리면 그 사유를 그대로 보여 준다", async () => {
+    editorStoreState.finalizeAssetsForSave = jest
+      .fn()
+      .mockRejectedValue(
+        new UploadValidationError("10MB 이하 이미지만 올릴 수 있어요."),
+      );
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    confirmSave(container);
+
+    await waitFor(() => {
+      expect(container.textContent).toContain(
+        "10MB 이하 이미지만 올릴 수 있어요.",
+      );
+    });
+    expect(mockCreateFrame).not.toHaveBeenCalled();
+  });
+
+  /*
+    ── 회귀(반대쪽): S3·네트워크의 영문 원문은 화면에 내보내지 않는다 ──
+
+    S3 PUT 은 fetch 를 직접 부르므로 `Error("S3 upload failed: 403")` 도
+    ApiRequestError 가 아니다. "우리 예외가 아니면 로컬" 로 가르면 이 영문이
+    그대로 화면에 나간다.
+  */
+  it("S3 업로드 실패의 영문 메시지는 폴백으로 가린다", async () => {
+    mockUploadPresigned.mockRejectedValueOnce(
+      new Error("S3 upload failed: 403"),
+    );
+
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+
+    confirmSave(container);
+
+    await waitFor(() => {
+      expect(container.textContent).toContain("저장에 실패했어요.");
+    });
+    expect(container.textContent).not.toContain("S3 upload failed");
+  });
+
+  /*
+    ── 회귀: 삭제 실패도 서버가 준 사유를 말한다 ──
+
+    이 경로가 내는 코드(GEN-031·GEN-021·SUBS-002)는 기다린다고 풀리지 않는다.
+    "잠시 후 다시 시도해 주세요" 로 고정해 두면 같은 실패를 반복하게 된다.
+  */
+  it("삭제가 거절되면 서버 코드에 맞는 사유를 보여 준다", async () => {
+    mockRemoteFrameId = 7;
+    mockDeleteFrame.mockRejectedValueOnce({
+      status: 404,
+      data: { code: "GEN-031", status: 404, message: "Frame not found." },
+    });
+
+    const view = await renderLoadedEditor();
+
+    fireEvent.click(getButtonByText(view.container, "삭제"));
+    fireEvent.click(getButtonByText(view.container, "지우기"));
+
+    await waitFor(() => {
+      expect(view.container.textContent).toContain(
+        "요청한 정보를 찾을 수 없어요.",
       );
     });
   });

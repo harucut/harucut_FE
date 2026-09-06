@@ -38,7 +38,11 @@ ERROR_MAP_FILES = [
     "packages/shared/src/plan-errors.ts",
 ]
 # 서버 코드가 아니라 클라이언트가 만들어 쓰는 코드(api-error-messages.ts 참고).
-CLIENT_ONLY_CODES = {"CLIENT-001"}
+# 서버가 아니라 **프론트가 스스로 만드는** 코드. C 대조에서 "서버에 없다" 로 세면 안 된다.
+#   CLIENT-001 재발급 자체가 불가능한 상태(clientApi)
+#   CLIENT-002 NEXT_PUBLIC_BASE_URL 이 없거나 잘못됨(프록시가 백엔드 주소를 못 만든다)
+#   CLIENT-003 백엔드에 닿지 못함(fetch 자체가 던졌다 — 서버는 아무 코드도 못 준다)
+CLIENT_ONLY_CODES = {"CLIENT-001", "CLIENT-002", "CLIENT-003"}
 CALLER_DIRS = [
     "apps/web/lib", "apps/web/app", "apps/web/components",
     "apps/web/hooks", "apps/web/tests", "packages",

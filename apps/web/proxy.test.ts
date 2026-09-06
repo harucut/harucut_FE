@@ -4,7 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
-import { proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
 
 const ORIGIN = "https://harucut.test";
 
@@ -109,5 +109,52 @@ describe("proxy 비인증 분기", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
+  });
+});
+
+/*
+  게스트 → 회원 전환은 **로그인이 끝나는 자리에서만** 한다.
+
+  프록시는 쿠키가 있는지만 볼 수 있어서 죽은 토큰과 살아 있는 세션을 구별하지 못한다.
+  예전에는 보호 경로에서 인증 쿠키만 보고 체험 쿠키를 지웠는데, 그러면 죽은 쿠키가 남은
+  사람이 "가입 없이 찍어보기"로 방금 심은 쿠키를 다음 요청에서 도로 잃었다.
+*/
+describe("proxy 회원 전환", () => {
+  const STALE_AUTH = "accessToken=stale-session";
+
+  test("인증 쿠키가 남아 있어도 비회원 체험 쿠키를 지우지 않는다", async () => {
+    for (const path of ["/shoot", "/shoot/capture"]) {
+      const response = await proxy(
+        request(path, `${STALE_AUTH}; ${GUEST_TRIAL_COOKIE}=1`),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("set-cookie")).toBeNull();
+    }
+  });
+
+  test("소셜 로그인 콜백에서는 체험 쿠키를 걷는다", async () => {
+    const response = await proxy(
+      request("/oauth2/callback", `${STALE_AUTH}; ${GUEST_TRIAL_COOKIE}=1`),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    // 만료 시각을 과거로 준 Set-Cookie 가 나가야 브라우저 쿠키통에서 사라진다.
+    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("");
+  });
+
+  test("콜백에 빈손으로 돌아왔으면 체험을 그대로 둔다", async () => {
+    // 인가에 실패해 인증 쿠키 없이 돌아온 사람. 체험까지 뺏지 않는다.
+    const response = await proxy(guestRequest("/oauth2/callback"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("콜백 경로가 matcher 에 들어 있다", () => {
+    // 여기 빠지면 프록시가 콜백에서 아예 돌지 않아 위 두 케이스가 실제로는 일어나지 않는다.
+    expect(config.matcher).toContain("/oauth2/callback");
   });
 });

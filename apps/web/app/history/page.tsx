@@ -47,6 +47,16 @@ import type { UserMedia } from "@/lib/api-types";
 
 type ViewMode = "grid" | "calendar";
 
+/**
+ * 화면 맨 위 한 줄짜리 알림. 성공만이 아니라 실패도 여기로 말한다.
+ *
+ * 예전에는 다운로드·공유·삭제 실패를 `alert()` 로 알렸다. 브라우저 모달은 이 디자인의
+ * 것이 아닌 데다, 확인을 누르기 전까지 방금 바뀐 화면을 가린다 — 마이페이지가 같은
+ * 이유로 걷어낸 방식이다(app/mypage/page.tsx). 성공(초록)과 실패를 같은 색으로 그리지
+ * 않으려고 종류를 함께 들고 다닌다.
+ */
+type Notice = { kind: "ok" | "error"; text: string };
+
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_KO = [
   "1월",
@@ -158,7 +168,7 @@ export default function HistoryPage() {
   const [items, setItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Notice | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
   // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
@@ -219,8 +229,10 @@ export default function HistoryPage() {
     };
   }, [reloadKey]);
 
+  // 성공만 잠깐 떴다 사라진다. 실패는 남긴다 — 사용자가 무엇을 해야 하는지 읽을 시간이
+  // 필요하고, 대개 다시 시도해야 한다(마이페이지와 같은 규칙).
   useEffect(() => {
-    if (!feedback) return undefined;
+    if (feedback?.kind !== "ok") return undefined;
 
     const timeoutId = window.setTimeout(() => {
       setFeedback(null);
@@ -282,14 +294,20 @@ export default function HistoryPage() {
       );
     } catch (downloadError) {
       console.error(downloadError);
-      alert(
-        // 결과 화면과 같은 이유로 네이티브 안내를 먼저 본다(lib/nativeBridge.ts).
-        getNativeSaveErrorMessage(downloadError) ??
+      setFeedback({
+        kind: "error",
+        // 네이티브 안내를 먼저 본다 — 사진첩 권한이 막힌 실패는 재시도로 풀리지 않아
+        // 폴백 문구("잠시 후 다시 시도해 주세요")가 거짓말이 된다(lib/nativeBridge.ts).
+        // 문구는 결과 화면과 한 벌로 맞춘다(app/shoot/result/page.tsx) — 같은 실패를
+        // 두 화면이 다르게 말하지 않는다.
+        text: `이미지를 다운로드하지 못했어요. ${
+          getNativeSaveErrorMessage(downloadError) ??
           getUserFacingApiErrorMessage(
             downloadError,
-            "다운로드를 준비하지 못했어요.",
-          ),
-      );
+            "잠시 후 다시 시도해 주세요.",
+          )
+        }`,
+      });
     } finally {
       setDownloadingId(null);
     }
@@ -311,18 +329,22 @@ export default function HistoryPage() {
       });
 
       if (result === "copied") {
-        setFeedback("공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.");
+        setFeedback({
+          kind: "ok",
+          text: "공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.",
+        });
       } else if (result === "shared") {
-        setFeedback("공유 창을 열었어요.");
+        setFeedback({ kind: "ok", text: "공유 창을 열었어요." });
       }
     } catch (shareError) {
       console.error(shareError);
-      alert(
-        getUserFacingApiErrorMessage(
+      setFeedback({
+        kind: "error",
+        text: getUserFacingApiErrorMessage(
           shareError,
           "공유 링크를 준비하지 못했어요.",
         ),
-      );
+      });
     } finally {
       setSharingId(null);
     }
@@ -356,7 +378,7 @@ export default function HistoryPage() {
         ),
       );
       setRenameTarget(null);
-      setFeedback("이름을 바꿨어요.");
+      setFeedback({ kind: "ok", text: "이름을 바꿨어요." });
     } catch (error_) {
       console.error(error_);
       // 다이얼로그를 연 채로 사유를 보여 준다 — 뒤편 안내는 가려서 보이지 않는다.
@@ -385,7 +407,7 @@ export default function HistoryPage() {
         current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
       );
       setDeleteTarget(null);
-      setFeedback("사진을 지웠어요.");
+      setFeedback({ kind: "ok", text: "사진을 지웠어요." });
     } catch (error_) {
       console.error(error_);
       const { status } = getApiErrorDetails(error_);
@@ -394,10 +416,18 @@ export default function HistoryPage() {
           current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
         );
         setDeleteTarget(null);
-        setFeedback("이미 지워진 사진이에요.");
+        setFeedback({ kind: "ok", text: "이미 지워진 사진이에요." });
         return;
       }
-      alert(getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."));
+      // 확인 창을 닫고 배너로 말한다. 다이얼로그 안에 남기는 편이 낫지만 ConfirmDialog
+      // 에는 실패를 그릴 자리가 없고(SingleFieldDialog 의 `error` 같은 것), 연 채로
+      // 배너를 띄우면 그 배너가 다이얼로그에 가려 아무것도 보이지 않는다. 이름 바꾸기와
+      // 달리 여기서는 잃을 입력값도 없다.
+      setDeleteTarget(null);
+      setFeedback({
+        kind: "error",
+        text: getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."),
+      });
     } finally {
       setDeletingId(null);
     }
@@ -444,8 +474,15 @@ export default function HistoryPage() {
         </header>
 
         {feedback ? (
-          <div role="status" className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
-            {feedback}
+          <div
+            role="status"
+            className={
+              feedback.kind === "ok"
+                ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
+                : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
+            }
+          >
+            {feedback.text}
           </div>
         ) : null}
 

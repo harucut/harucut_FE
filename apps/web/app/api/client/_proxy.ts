@@ -43,6 +43,23 @@ type RequestLike = Pick<Request, "headers" | "url">;
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
+/**
+ * 백엔드까지 가지 못했을 때 프록시가 스스로 만들어 내보내는 에러 봉투.
+ *
+ * 여기 쓰는 code 는 서버 ErrorCode 가 아니라 **클라이언트 코드**라서 `CLIENT-` 접두사를 쓴다.
+ * 서버 네임스페이스(`GEN-` 등)를 빌려 쓰면 계약 검사기(scripts/check_backend_contract.py)의
+ * 서버 enum 대조에 걸리지도 않으면서 서버 코드인 척하게 된다.
+ *
+ * 짝이 되는 사용자 문구는 `packages/shared/src/api-error-messages.ts` 의
+ * 「클라이언트 자체 코드」 블록에 있다. 표에 없는 코드를 내면 `getUserFacingApiErrorMessage`
+ * 가 화면별 폴백을 그대로 돌려주고, 로그인 화면이라면 백엔드가 죽은 것을
+ * "이메일 또는 비밀번호가 올바르지 않아요" 라고 말한다. 코드를 바꿀 때는 표도 같이 고친다.
+ *
+ * 상수를 import 하지 않고 문자열로 두는 이유: 이 트리의 route 34개가 전부
+ * `runtime = "edge"` 라 `@harucut/shared` 배럴을 끌어오면 edge 번들에 shared 가 통째로 딸려 온다.
+ *
+ * 영문 `message` 는 그대로 둔다 — 화면에는 안 나가고(apiError.ts 가 버린다) 로그가 읽는 값이다.
+ */
 function buildProxyErrorResult(
   status: number,
   code: string,
@@ -78,7 +95,7 @@ export async function forward(
   if (!upstreamUrl) {
     return buildProxyErrorResult(
       500,
-      "GEN-500",
+      "CLIENT-002",
       "NEXT_PUBLIC_BASE_URL is not set or invalid.",
     );
   }
@@ -108,7 +125,7 @@ export async function forward(
   } catch {
     return buildProxyErrorResult(
       502,
-      "GEN-502",
+      "CLIENT-003",
       "Failed to reach backend server.",
     );
   }

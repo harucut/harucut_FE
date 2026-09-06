@@ -16,8 +16,9 @@
 /* eslint-disable @next/next/no-location-assign-relative-destination */
 
 import { useEffect, useRef, useState } from "react";
-import { clientApi } from "@/lib/clientApi";
+import { ApiRequestError, clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, UserStatus } from "@/lib/api-types";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { reactivateAccount } from "@/lib/auth/authApi";
 import { resolveRedirectTarget } from "@/lib/redirect";
 import { startSocialLogin } from "@/lib/authLogin";
@@ -34,6 +35,8 @@ type AuthStatusResponse = {
   status?: unknown;
   accountStatus?: unknown;
 };
+
+const CHECKING_MESSAGE = "소셜 로그인 상태를 확인하는 중이에요.";
 
 const USER_STATUS_VALUES = new Set<UserStatus>([
   "ACTIVE",
@@ -57,9 +60,31 @@ function readUserStatus(data: AuthStatusResponse) {
   return null;
 }
 
+/**
+ * 방금 받은 세션을 지워도 되는 실패인지.
+ *
+ * 상태 조회는 쿠키가 유효하면 200, 아니면 401 둘뿐이다(GET /api/auth/status).
+ * 즉 401 은 서버가 이 자격증명을 거부한 것이고, 그 밖의 실패(네트워크 끊김·5xx·
+ * 재발급이 일시적으로 안 돼 던지는 CLIENT-001=503)는 세션이 멀쩡한데 답만 못 받은
+ * 것일 수 있다. 후자에서 로그아웃시키면 "일시 장애를 세션 만료로 단정하지 않는다"는
+ * `lib/clientApi.ts` 의 규칙을 이 화면에서만 뒤집는 셈이 된다.
+ * 403 은 지금 계약엔 없지만, 인가 거부가 오면 그것도 자격증명 거부로 본다.
+ */
+function isCredentialFailure(error: unknown) {
+  return (
+    error instanceof ApiRequestError &&
+    (error.status === 401 || error.status === 403)
+  );
+}
+
 export default function OAuthCallbackPage() {
-  const [message, setMessage] = useState("소셜 로그인 상태를 확인하는 중이에요.");
+  const [message, setMessage] = useState(CHECKING_MESSAGE);
+  const [canRetry, setCanRetry] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const isHandlingRef = useRef(false);
+  // 돌아갈 곳은 세션 저장소에서 **한 번만** 꺼낼 수 있다(consume 이 읽으면서 지운다).
+  // 다시 시도가 그 값을 잃으면 원래 가려던 화면 대신 늘 기본 경로로 떨어진다.
+  const redirectTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isHandlingRef.current) return;
@@ -68,7 +93,10 @@ export default function OAuthCallbackPage() {
     let cancelled = false;
 
     async function completeSocialLogin() {
-      const redirectTarget = resolveRedirectTarget(consumeSocialLoginRedirect());
+      const redirectTarget =
+        redirectTargetRef.current ??
+        resolveRedirectTarget(consumeSocialLoginRedirect());
+      redirectTargetRef.current = redirectTarget;
 
       try {
         const response = await clientApi.get<ApiEnvelope<AuthStatusResponse>>(
@@ -137,11 +165,28 @@ export default function OAuthCallbackPage() {
         }
       } catch (error) {
         console.error(error);
-        await clientApi.delete("/api/client/logout").catch(() => undefined);
-        alert("소셜 로그인 상태를 확인하지 못했어요.");
-        if (!cancelled) {
-          window.location.href = "/login";
+        if (cancelled) return;
+
+        if (isCredentialFailure(error)) {
+          // 서버가 이 자격증명을 거부했다 — 이때만 쿠키를 정리하고 다시 로그인시킨다.
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          clearSocialLoginProvider();
+          alert("로그인하지 못했어요. 다시 로그인해 주세요.");
+          if (!cancelled) {
+            window.location.href = "/login";
+          }
+          return;
         }
+
+        // 여기까지 온 실패는 방금 받은 세션이 멀쩡할 수 있다. 지우지 않고 사유를 말한 뒤
+        // 다시 시도할 길을 준다 — 그냥 두면 화면은 계속 "확인하는 중"이라고 거짓말한다.
+        setMessage(
+          getUserFacingApiErrorMessage(
+            error,
+            "연결이 불안정해요. 잠시 후 다시 시도해 주세요.",
+          ),
+        );
+        setCanRetry(true);
       }
     }
 
@@ -151,13 +196,26 @@ export default function OAuthCallbackPage() {
       cancelled = true;
       isHandlingRef.current = false;
     };
-  }, []);
+  }, [retryKey]);
 
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <h1 className="text-base font-semibold">로그인 처리 중</h1>
-        <p className="text-sm text-zinc-400">{message}</p>
+        <p aria-live="polite" className="text-sm text-zinc-400">{message}</p>
+        {canRetry ? (
+          <button
+            type="button"
+            onClick={() => {
+              setCanRetry(false);
+              setMessage(CHECKING_MESSAGE);
+              setRetryKey((prev) => prev + 1);
+            }}
+            className="hc-button-secondary self-start rounded-full border px-5 py-2 text-[13px] font-semibold"
+          >
+            다시 시도
+          </button>
+        ) : null}
       </div>
     </main>
   );

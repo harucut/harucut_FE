@@ -11,6 +11,13 @@ import { prepareStillCapture, takeStillBitmap } from "@/lib/canvas/stillCapture"
 
 // 촬영 총 장수
 const MAX_SHOTS = 8;
+/**
+ * 같은 컷을 다시 거는 최대 횟수. 이걸 넘기면 촬영을 멈추고 사람에게 알린다.
+ *
+ * 무한히 다시 걸지 않는 이유 — 실패는 셔터음과 진동을 이미 낸 뒤라, 그대로 두면
+ * 아무 설명 없이 간격마다 소리만 나는 화면이 된다.
+ */
+const MAX_CAPTURE_RETRIES = 2;
 // 선택 가능한 타이머 간격(초)
 export const TIMER_OPTIONS = [3, 5, 8] as const;
 export type TimerSeconds = (typeof TIMER_OPTIONS)[number];
@@ -77,6 +84,13 @@ export function useCaptureFlow() {
    * 시작·언마운트 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
    */
   const shootGenerationRef = useRef(0);
+  /**
+   * 이 컷을 만드는 데 연달아 실패한 횟수. 한 장이라도 담기면 0 으로 돌아간다.
+   *
+   * 실패는 대개 일시적이라(메모리가 모자라 인코딩이 빈손으로 끝난다) 몇 번은 다시 걸어
+   * 보되, MAX_CAPTURE_RETRIES 를 넘기면 멈추고 알린다.
+   */
+  const captureFailuresRef = useRef(0);
 
   const canFlipCamera =
     typeof navigator !== "undefined" &&
@@ -394,7 +408,16 @@ export function useCaptureFlow() {
     lastFinishedShotRef.current = shotCount;
 
     const generation = shootGenerationRef.current;
-    const photoDataUrl = await capturePhotoToDataUrl();
+
+    // await 를 감싼다. 캡처가 던지면(닫힌 비트맵에 그리기 등) 아래 선점 되돌리기를 통째로
+    // 건너뛰어 맨 위 가드가 영원히 막힌다 — 자동은 물론 셔터 버튼까지 죽는다.
+    // void 로 부르는 자리라 그 거절은 아무 데도 드러나지 않는다.
+    let photoDataUrl: string | null = null;
+    try {
+      photoDataUrl = await capturePhotoToDataUrl();
+    } catch (err) {
+      console.error(err);
+    }
 
     // 인코딩 중에 화면을 떠났으면 결과를 버린다. 선점도 되돌리지 않는다 — 떠난 화면이다.
     if (shootGenerationRef.current !== generation) return;
@@ -402,9 +425,31 @@ export function useCaptureFlow() {
     if (!photoDataUrl) {
       // 인코딩이 실패했으면 이 컷은 아직 안 찍힌 것이다. 선점을 되돌려 다시 시도할 수 있게 한다.
       lastFinishedShotRef.current = shotCount - 1;
+      captureFailuresRef.current += 1;
+
+      if (captureFailuresRef.current > MAX_CAPTURE_RETRIES) {
+        captureFailuresRef.current = 0;
+        isShootingRef.current = false;
+        setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
+        setNotice({
+          actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+          eyebrow: "CAPTURE",
+          icon: "camera",
+          message:
+            "사진을 저장하지 못해 촬영을 멈췄어요. 다른 앱을 닫은 뒤 다시 시작해 주세요.",
+          title: "촬영을 이어가지 못했어요",
+        });
+        return;
+      }
+
+      // **타이머를 다시 건다.** 되돌리기만 하면 바뀌는 상태가 없어서 카운트다운 effect 가
+      // 다시 돌지 않는다(그 effect 는 countdown 이 1 이하면 값을 내리지 않는다).
+      // 화면은 "1" 에서 멎고 게이지도 그대로라, 사람은 무엇이 잘못됐는지 알 수 없다.
+      setShooting((s) => ({ ...s, countdown: timerSeconds, cycle: s.cycle + 1 }));
       return;
     }
 
+    captureFailuresRef.current = 0;
     addShotPhoto(photoDataUrl);
 
     const next = shotCount + 1;
@@ -419,7 +464,7 @@ export function useCaptureFlow() {
     isShootingRef.current = false;
     setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
     router.push("/shoot/select");
-  }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, router]);
+  }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, setNotice, router]);
 
   // 전체 자동 촬영 시작
   const startShooting = useCallback(() => {
@@ -440,6 +485,8 @@ export function useCaptureFlow() {
     resetShots();
     setShotCount(0);
     lastFinishedShotRef.current = -1;
+    // 지난 촬영에서 실패한 기록은 새 촬영에 들고 오지 않는다.
+    captureFailuresRef.current = 0;
     isShootingRef.current = true;
     shootGenerationRef.current += 1;
 

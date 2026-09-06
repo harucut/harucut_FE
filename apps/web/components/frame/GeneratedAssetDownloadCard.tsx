@@ -2,6 +2,11 @@
 
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 
+// 서버가 받는 파일명은 최대 255자다(2026-09-07 로컬 /v3/api-docs 의 DisplayNameUpdateRequest).
+// 넘겨 보내면 400 이 오는데 사유가 영문이라 안내가 「잠시 후 다시 시도해 주세요」로 뭉개진다 —
+// 기다려도 풀리지 않는 실패다. 그래서 왕복하기 전에 입력창에서 막는다.
+const DISPLAY_NAME_MAX_LENGTH = 255;
+
 type GeneratedAssetDownloadCardProps = {
   title: string;
   description: string;
@@ -55,6 +60,7 @@ export function GeneratedAssetDownloadCard({
               id="fourcut-file-name"
               value={draftName}
               onChange={(e) => onChangeName(e.target.value)}
+              maxLength={DISPLAY_NAME_MAX_LENGTH}
               className="hc-input h-11 min-w-0 flex-1 rounded-xl border px-3 text-[13px]"
               placeholder={asset.displayName}
               autoComplete="off"

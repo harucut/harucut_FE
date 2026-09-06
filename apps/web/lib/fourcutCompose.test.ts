@@ -13,9 +13,11 @@
  */
 import {
   composeFourcutOnServer,
+  describeComposeFailure,
   resolveComposeFrame,
   SystemFrameMissingError,
 } from "@/lib/fourcutCompose";
+import { ComposeFailedError } from "@/lib/composeApi";
 
 const mockListAllFrames = jest.fn();
 const mockGetFrame = jest.fn();
@@ -36,6 +38,9 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 }));
 
 jest.mock("@/lib/composeApi", () => ({
+  // 에러 클래스는 진짜를 쓴다 — `instanceof` 로 분기하는 쪽을 가짜로 두면
+  // 분기가 항상 빗나간다.
+  ...jest.requireActual("@/lib/composeApi"),
   requestCompose: (...args: unknown[]) => mockRequestCompose(...args),
   waitForCompose: (...args: unknown[]) => mockWaitForCompose(...args),
   newIdempotencyKey: () => "web-fixed-key",
@@ -568,5 +573,44 @@ describe("composeFourcutOnServer — 올리기", () => {
 
     expect(mockUpload).not.toHaveBeenCalled();
     expect(mockCutout).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 서버 합성 실패 사유를 화면에 올리지 않는다.
+ *
+ * `failureReason` 은 합성 Lambda 의 실패 페이로드를 옮긴 값이다
+ * (스웨거: "사용자에게 그대로 보여줄 문구는 아니다"). 한국어가 섞여 있어도
+ * 앞에 예외 클래스명이 붙으므로 언어를 따지지 않고 전부 버린다.
+ */
+describe("describeComposeFailure", () => {
+  const FALLBACK = "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.";
+
+  it.each([
+    ["S3 원문", "NoSuchKeyException: The specified key does not exist. (Service: S3, Status Code: 404)"],
+    ["재시도 소진", "RetriesExhausted"],
+    ["한국어가 섞인 예외", "java.lang.IllegalArgumentException: 원본 사진 수가 슬롯 수와 다르다"],
+    ["사유 없음", null],
+  ])("%s 은 화면에 올리지 않고 우리 문구로 때운다", (_label, reason) => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(describeComposeFailure(new ComposeFailedError(reason))).toEqual({
+      message: FALLBACK,
+      retryable: false,
+    });
+
+    error.mockRestore();
+  });
+
+  it("사유는 버리되 콘솔에는 남긴다 — 원인 추적을 잃지 않게", () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    describeComposeFailure(new ComposeFailedError("RetriesExhausted"));
+
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("RetriesExhausted"),
+    );
+
+    error.mockRestore();
   });
 });

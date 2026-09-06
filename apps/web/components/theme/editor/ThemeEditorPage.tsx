@@ -20,9 +20,14 @@ import {
   updateFrame,
 } from "@/lib/remoteFrameApi";
 import {
+  EMPTY_UPLOAD_MESSAGE,
+  MAX_UPLOAD_BYTES,
+  MIN_UPLOAD_BYTES,
   PRESIGNED_UPLOAD_TYPES,
   SUPPORTED_IMAGE_ACCEPT,
   UNSUPPORTED_UPLOAD_MESSAGE,
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadValidationError,
   getImageUrlByKey,
   isSupportedUploadFile,
   uploadToS3WithPresigned,
@@ -463,8 +468,22 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       router.push("/theme");
     } catch (error) {
       console.error(error);
+      /*
+        올리기 전에 우리가 걸러낸 것(형식·용량·빈 파일)만 자기 문구를 살린다.
+        저장 한 번에 배경·사진·스티커·글자 층·미리보기가 줄줄이 올라가는데,
+        그중 무엇이 왜 막혔는지는 이 문구에만 있다 — 코드 매핑으로 넘기면
+        `UploadValidationError` 에는 status·code 가 없어 폴백만 남는다.
+
+        "ApiRequestError 가 아니면 로컬 오류" 로 가르면 안 된다 — S3 PUT 은 fetch 를
+        직접 부르므로 오프라인의 `TypeError("Failed to fetch")` 와 비정상 응답의
+        `Error("S3 upload failed: 403")` 도 ApiRequestError 가 아니다. 그것들까지
+        로컬로 오인하면 영문 원문이 화면에 나간다. 우리가 던진 것만 타입으로 가른다
+        (app/mypage/page.tsx 의 프로필 이미지 업로드도 같은 규칙이다).
+      */
       setSaveDialogError(
-        getUserFacingApiErrorMessage(error, "저장에 실패했어요."),
+        error instanceof UploadValidationError
+          ? error.message
+          : getUserFacingApiErrorMessage(error, "저장에 실패했어요."),
       );
     } finally {
       setIsSaving(false);
@@ -490,7 +509,16 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     } catch (error) {
       console.error(error);
       setIsDeleteConfirmOpen(false);
-      setActionError("프레임을 지우지 못했어요. 잠시 후 다시 시도해 주세요.");
+      // 이 경로가 내는 코드는 기다린다고 풀리지 않는다 — 없는 프레임(GEN-031),
+      // 시스템 프레임이라 소유자가 아님(GEN-021, remoteFrameApi.ts 참고),
+      // 보관 기간 초과(SUBS-002). 아래 폴백은 네트워크 오류처럼 정말 다시 시도해
+      // 볼 만한 갈래에만 남는다.
+      setActionError(
+        getUserFacingApiErrorMessage(
+          error,
+          "프레임을 지우지 못했어요. 잠시 후 다시 시도해 주세요.",
+        ),
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -623,10 +651,20 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       e.target.value = "";
                       if (!file) return;
 
-                      // heic/avif 같은 형식은 저장 단계에서야 실패한다.
-                      // 편집을 다 끝낸 뒤 막히지 않도록 고른 즉시 걸러낸다.
+                      // heic/avif 같은 형식도, 서버 한도(1~10MB)를 넘는 크기도
+                      // 저장 단계에서야 실패한다. 편집을 다 끝낸 뒤 막히지 않도록
+                      // 고른 즉시 같은 규칙으로 걸러낸다. 규칙의 주인은
+                      // uploadToS3WithPresigned 이고 여기는 사유를 먼저 말하는 층이다.
                       if (!isSupportedUploadFile(file)) {
                         setBackgroundError(UNSUPPORTED_UPLOAD_MESSAGE);
+                        return;
+                      }
+                      if (file.size < MIN_UPLOAD_BYTES) {
+                        setBackgroundError(EMPTY_UPLOAD_MESSAGE);
+                        return;
+                      }
+                      if (file.size > MAX_UPLOAD_BYTES) {
+                        setBackgroundError(UPLOAD_TOO_LARGE_MESSAGE);
                         return;
                       }
 
@@ -651,8 +689,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 </p>
               ) : null}
               <p className="text-[12px] leading-5 text-(--hc-muted)">
-                배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF만 올릴 수
-                있어요.
+                배경 이미지는 사진 칸 뒤에 깔려요. 10MB 이하 PNG·JPG·WEBP·GIF만
+                올릴 수 있어요.
               </p>
             </section>
           </div>
