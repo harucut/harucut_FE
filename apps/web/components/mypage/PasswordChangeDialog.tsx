@@ -97,7 +97,7 @@ export function PasswordChangeDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="닫기"
@@ -109,7 +109,7 @@ export function PasswordChangeDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="password-change-title"
-        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-(--hc-card-shadow)"
       >
         <h2 id="password-change-title" className="text-[18px] font-extrabold">
           비밀번호 바꾸기
@@ -168,7 +168,7 @@ export function PasswordChangeDialog({
           {error ? (
             <p
               role="alert"
-              className="text-[12px] font-medium text-[color:var(--hc-danger)]"
+              className="text-[12px] font-medium text-(--hc-danger)"
             >
               {error}
             </p>

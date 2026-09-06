@@ -26,10 +26,6 @@
         "NSCameraUsageDescription": "네컷 사진을 찍을 때 카메라를 사용해요."
       }
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [

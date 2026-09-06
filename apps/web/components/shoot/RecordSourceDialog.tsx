@@ -25,7 +25,7 @@ export function RecordSourceDialog({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="닫기"
@@ -37,7 +37,7 @@ export function RecordSourceDialog({ open, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="record-source-title"
-        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-(--hc-card-shadow)"
       >
         {/* 부제는 두지 않는다 — 아래 두 카드가 이미 각자 무엇인지 말한다. */}
         <h2 id="record-source-title" className="text-[18px] font-extrabold">
@@ -48,10 +48,10 @@ export function RecordSourceDialog({ open, onClose }: Props) {
           <Link
             href="/shoot"
             onClick={onClose}
-            className="flex items-center gap-3.5 rounded-2xl bg-[color:var(--hc-primary)] p-4 text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]"
+            className="flex items-center gap-3.5 rounded-2xl bg-(--hc-primary) p-4 text-(--hc-primary-contrast) shadow-(--hc-button-shadow)"
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#06140A]">
-              <Camera className="h-[22px] w-[22px] text-[color:var(--hc-primary-strong)]" />
+              <Camera className="h-5.5 w-5.5 text-(--hc-primary-strong)" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-extrabold">촬영하기</span>
@@ -65,18 +65,18 @@ export function RecordSourceDialog({ open, onClose }: Props) {
           <Link
             href="/shoot?source=upload"
             onClick={onClose}
-            className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 transition hover:border-[color:var(--hc-border-strong)]"
+            className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 transition hover:border-(--hc-border-strong)"
           >
             <span className="hc-accent-chip grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border">
-              <ImagePlus className="h-[22px] w-[22px]" />
+              <ImagePlus className="h-5.5 w-5.5" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-extrabold">사진 불러오기</span>
-              <span className="mt-0.5 block text-[12px] text-[color:var(--hc-muted)]">
+              <span className="mt-0.5 block text-[12px] text-(--hc-muted)">
                 갤러리에서 골라 네 컷 만들기
               </span>
             </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-[color:var(--hc-muted)]" />
+            <ChevronRight className="h-5 w-5 shrink-0 text-(--hc-muted)" />
           </Link>
         </div>
       </div>

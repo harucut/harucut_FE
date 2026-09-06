@@ -16,14 +16,14 @@ type Props = {
    */
   backLabel?: string;
   rightSlot?: ReactNode;
-  rightHref?: string;
-  rightLabel?: string;
   /**
    * 오른쪽 위 요소 **아래**에 붙는 것.
    *
    * 제목 옆에 끼우면 제목의 일부처럼 읽힌다. 부가 정보는 제목이 아니라 오른쪽 열에 쌓는다.
    */
   rightBelow?: ReactNode;
+  /** 뒤로가기를 누를 때 함께 할 일(세션 정리 등). 이동 자체는 Link 가 한다. */
+  onBackClick?: () => void;
 };
 
 /**
@@ -49,52 +49,43 @@ export function PageHeader({
   backHref = "",
   backLabel,
   rightSlot,
-  rightHref,
-  rightLabel,
   rightBelow,
+  onBackClick,
 }: Props) {
   return (
     <>
-      <header className="relative flex min-h-[36px] items-center justify-center">
+      {/* 좌우 버튼은 44px 정원이다 — 터치 규칙이 button 만 넓히고 a 는 넓히지 않아 36×44 타원이 됐다. */}
+      <header className="relative flex min-h-11 items-center justify-center">
         {backHref ? (
           <Link
             href={backHref}
             aria-label={backLabel || "뒤로"}
             title={backLabel || "뒤로"}
-            className="hc-button-icon absolute left-0 top-0 grid h-9 w-9 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)]"
+            onClick={onBackClick}
+            className="hc-button-icon absolute left-0 top-0 grid h-11 w-11 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text)"
           >
-            <ChevronLeft className="h-[18px] w-[18px]" />
+            <ChevronLeft className="h-5 w-5" />
           </Link>
         ) : null}
 
         {title ? (
           // 좌우 버튼 자리를 비켜 간다. 제목이 길면 자르지 않고 줄바꿈한다 —
           // 화면 이름이 잘리면 여기가 어디인지 알 수 없다.
-          <h1 className="max-w-[calc(100%-6rem)] text-center text-lg font-semibold tracking-tight">
+          <h1 className="max-w-[calc(100%-7rem)] text-center text-lg font-semibold tracking-tight">
             {title}
           </h1>
         ) : null}
 
         <div className="absolute right-0 top-0 flex flex-col items-end gap-1.5">
           {rightSlot ? (
-            rightHref ? (
-              <Link
-                href={rightHref}
-                aria-label={rightLabel}
-                className="hc-button-icon flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
-              >
-                {rightSlot}
-              </Link>
-            ) : (
-              <div className="flex items-center justify-center">{rightSlot}</div>
-            )
+            <div className="flex items-center justify-center">{rightSlot}</div>
           ) : null}
           {rightBelow}
         </div>
       </header>
 
       {description ? (
-        <p className="text-center text-xs text-zinc-500">{description}</p>
+        <p className="text-center text-[12px] leading-[1.6] text-(--hc-muted)">{description}</p>
       ) : null}
     </>
   );

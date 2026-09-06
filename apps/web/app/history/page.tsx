@@ -27,7 +27,7 @@ import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
-import { shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import {
   getUserMediaPreviewUrl,
   getUserMediaTitle,
@@ -46,6 +46,16 @@ import { getMyUserInfo } from "@/lib/userApi";
 import type { UserMedia } from "@/lib/api-types";
 
 type ViewMode = "grid" | "calendar";
+
+/**
+ * 화면 맨 위 한 줄짜리 알림. 성공만이 아니라 실패도 여기로 말한다.
+ *
+ * 예전에는 다운로드·공유·삭제 실패를 `alert()` 로 알렸다. 브라우저 모달은 이 디자인의
+ * 것이 아닌 데다, 확인을 누르기 전까지 방금 바뀐 화면을 가린다 — 마이페이지가 같은
+ * 이유로 걷어낸 방식이다(app/mypage/page.tsx). 성공(초록)과 실패를 같은 색으로 그리지
+ * 않으려고 종류를 함께 들고 다닌다.
+ */
+type Notice = { kind: "ok" | "error"; text: string };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_KO = [
@@ -132,7 +142,7 @@ function MediaThumb({
 
   const shellClassName = bare
     ? "relative grid h-full w-full place-items-center overflow-hidden"
-    : "hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]";
+    : "hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)";
 
   return (
     <div className={shellClassName}>
@@ -144,7 +154,7 @@ function MediaThumb({
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
       ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-[color:var(--hc-muted)]">
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-(--hc-muted)">
           미리보기를 준비하는 중이에요.
         </div>
       )}
@@ -158,7 +168,7 @@ export default function HistoryPage() {
   const [items, setItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Notice | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
   // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
@@ -219,8 +229,10 @@ export default function HistoryPage() {
     };
   }, [reloadKey]);
 
+  // 성공만 잠깐 떴다 사라진다. 실패는 남긴다 — 사용자가 무엇을 해야 하는지 읽을 시간이
+  // 필요하고, 대개 다시 시도해야 한다(마이페이지와 같은 규칙).
   useEffect(() => {
-    if (!feedback) return undefined;
+    if (feedback?.kind !== "ok") return undefined;
 
     const timeoutId = window.setTimeout(() => {
       setFeedback(null);
@@ -282,14 +294,20 @@ export default function HistoryPage() {
       );
     } catch (downloadError) {
       console.error(downloadError);
-      alert(
-        // 결과 화면과 같은 이유로 네이티브 안내를 먼저 본다(lib/nativeBridge.ts).
-        getNativeSaveErrorMessage(downloadError) ??
+      setFeedback({
+        kind: "error",
+        // 네이티브 안내를 먼저 본다 — 사진첩 권한이 막힌 실패는 재시도로 풀리지 않아
+        // 폴백 문구("잠시 후 다시 시도해 주세요")가 거짓말이 된다(lib/nativeBridge.ts).
+        // 문구는 결과 화면과 한 벌로 맞춘다(app/shoot/result/page.tsx) — 같은 실패를
+        // 두 화면이 다르게 말하지 않는다.
+        text: `이미지를 다운로드하지 못했어요. ${
+          getNativeSaveErrorMessage(downloadError) ??
           getUserFacingApiErrorMessage(
             downloadError,
-            "다운로드를 준비하지 못했어요.",
-          ),
-      );
+            "잠시 후 다시 시도해 주세요.",
+          )
+        }`,
+      });
     } finally {
       setDownloadingId(null);
     }
@@ -311,18 +329,27 @@ export default function HistoryPage() {
       });
 
       if (result === "copied") {
-        setFeedback("공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.");
+        setFeedback({
+          kind: "ok",
+          text: "공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.",
+        });
       } else if (result === "shared") {
-        setFeedback("공유 창을 열었어요.");
+        setFeedback({ kind: "ok", text: "공유 창을 열었어요." });
       }
     } catch (shareError) {
       console.error(shareError);
-      alert(
-        getUserFacingApiErrorMessage(
-          shareError,
-          "공유 링크를 준비하지 못했어요.",
-        ),
-      );
+      setFeedback({
+        kind: "error",
+        // 링크를 못 만든 것과 만들어 놓고 복사만 거부당한 것을 한 문구로 묶지 않는다 — 사용자가
+        // 할 일이 다르다. 앞은 잠시 뒤 다시 누르면 되지만, 뒤는 복사를 허용하기 전에는 몇 번을
+        // 눌러도 같은 자리에서 막힌다(lib/share.ts 의 CopyFailedError).
+        text: isCopyFailedError(shareError)
+          ? "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."
+          : getUserFacingApiErrorMessage(
+              shareError,
+              "공유 링크를 준비하지 못했어요.",
+            ),
+      });
     } finally {
       setSharingId(null);
     }
@@ -356,7 +383,7 @@ export default function HistoryPage() {
         ),
       );
       setRenameTarget(null);
-      setFeedback("이름을 바꿨어요.");
+      setFeedback({ kind: "ok", text: "이름을 바꿨어요." });
     } catch (error_) {
       console.error(error_);
       // 다이얼로그를 연 채로 사유를 보여 준다 — 뒤편 안내는 가려서 보이지 않는다.
@@ -385,7 +412,7 @@ export default function HistoryPage() {
         current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
       );
       setDeleteTarget(null);
-      setFeedback("사진을 지웠어요.");
+      setFeedback({ kind: "ok", text: "사진을 지웠어요." });
     } catch (error_) {
       console.error(error_);
       const { status } = getApiErrorDetails(error_);
@@ -394,17 +421,25 @@ export default function HistoryPage() {
           current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
         );
         setDeleteTarget(null);
-        setFeedback("이미 지워진 사진이에요.");
+        setFeedback({ kind: "ok", text: "이미 지워진 사진이에요." });
         return;
       }
-      alert(getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."));
+      // 확인 창을 닫고 배너로 말한다. 다이얼로그 안에 남기는 편이 낫지만 ConfirmDialog
+      // 에는 실패를 그릴 자리가 없고(SingleFieldDialog 의 `error` 같은 것), 연 채로
+      // 배너를 띄우면 그 배너가 다이얼로그에 가려 아무것도 보이지 않는다. 이름 바꾸기와
+      // 달리 여기서는 잃을 입력값도 없다.
+      setDeleteTarget(null);
+      setFeedback({
+        kind: "error",
+        text: getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."),
+      });
     } finally {
       setDeletingId(null);
     }
   };
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
@@ -429,13 +464,13 @@ export default function HistoryPage() {
                   key={id}
                   type="button"
                   onClick={() => setView(id)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-bold transition ${
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
                     view === id
                       ? "bg-white text-[#0B0B0C]"
-                      : "text-[color:var(--hc-muted)]"
+                      : "text-(--hc-muted)"
                   }`}
                 >
-                  <Icon className="h-[15px] w-[15px]" />
+                  <Icon className="h-3.75 w-3.75" />
                   {label}
                 </button>
               ))}
@@ -444,8 +479,15 @@ export default function HistoryPage() {
         </header>
 
         {feedback ? (
-          <div role="status" className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
-            {feedback}
+          <div
+            role="status"
+            className={
+              feedback.kind === "ok"
+                ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
+                : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
+            }
+          >
+            {feedback.text}
           </div>
         ) : null}
 
@@ -454,14 +496,14 @@ export default function HistoryPage() {
             {Array.from({ length: 4 }, (_, index) => (
               <div
                 key={index}
-                className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+                className="aspect-3/4 animate-pulse rounded-[18px] bg-(--hc-surface-muted)"
               />
             ))}
           </div>
         ) : error ? (
           // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p role="alert" className="text-[13px] text-[color:var(--hc-muted)]">{error}</p>
+            <p role="alert" className="text-[13px] text-(--hc-muted)">{error}</p>
             <button
               type="button"
               onClick={() => setReloadKey((prev) => prev + 1)}
@@ -479,12 +521,12 @@ export default function HistoryPage() {
           />
         ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <ImageIcon className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-            <p className="text-[13px] text-[color:var(--hc-muted)]">
+            <ImageIcon className="h-7 w-7 text-(--hc-muted-soft)" />
+            <p className="text-[13px] text-(--hc-muted)">
               저장한 기록이 아직 없어요.
             </p>
             {planTier && planTier !== "PRO" ? (
-              <p className="text-[12px] text-[color:var(--hc-muted)]">
+              <p className="text-[12px] text-(--hc-muted)">
                 {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
                 지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
                 <Link href="/pricing" className="underline">
@@ -510,7 +552,7 @@ export default function HistoryPage() {
                   <h2 className="text-[19px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[13px] text-[color:var(--hc-muted)]">
+                  <span className="text-[13px] text-(--hc-muted)">
                     {group.items.length}컷
                   </span>
                 </div>
@@ -524,7 +566,7 @@ export default function HistoryPage() {
                         key={item.mediaId}
                         // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
                         id={`media-${item.mediaId}`}
-                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-[color:var(--hc-primary)]"
+                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-(--hc-primary)"
                       >
                         <MediaThumb item={item} />
 
@@ -543,12 +585,12 @@ export default function HistoryPage() {
                               type="button"
                               onClick={() => handleStartRename(item)}
                               aria-label={`이름 바꾸기: ${title}`}
-                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--hc-muted)] transition hover:bg-[color:var(--hc-surface-highlight)] hover:text-[color:var(--hc-text)]"
+                              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-(--hc-muted) transition hover:bg-(--hc-surface-highlight) hover:text-(--hc-text)"
                             >
                               <PencilLine className="h-3.5 w-3.5" />
                             </button>
                           </div>
-                          <p className="text-[11px] text-[color:var(--hc-muted)]">
+                          <p className="text-[11px] text-(--hc-muted)">
                             {parseServerDateTime(item.createdAt)
                               ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
@@ -563,7 +605,7 @@ export default function HistoryPage() {
                             type="button"
                             onClick={() => void handleDownload(item)}
                             disabled={downloadingId === item.mediaId}
-                            className="hc-button-primary flex flex-1 items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
                           >
                             <Download className="h-3.5 w-3.5" />
                             <span>
@@ -574,7 +616,7 @@ export default function HistoryPage() {
                             type="button"
                             onClick={() => void handleShare(item)}
                             disabled={sharingId === item.mediaId}
-                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
                           >
                             <Share2 className="h-3.5 w-3.5" />
                             <span>
@@ -588,7 +630,7 @@ export default function HistoryPage() {
                             onClick={() => setDeleteTarget(item)}
                             disabled={deletingId === item.mediaId}
                             aria-label={`삭제: ${title}`}
-                            className="hc-button-secondary grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full border text-[color:var(--hc-muted)] transition hover:text-[color:var(--hc-text)] disabled:opacity-50"
+                            className="hc-button-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text) disabled:opacity-50"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -651,8 +693,8 @@ function CalendarView({
   if (!activeMonth) {
     return (
       <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-        <CalendarDays className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-        <p className="text-[13px] text-[color:var(--hc-muted)]">
+        <CalendarDays className="h-7 w-7 text-(--hc-muted-soft)" />
+        <p className="text-[13px] text-(--hc-muted)">
           달력으로 볼 기록이 아직 없어요.
         </p>
       </div>
@@ -695,7 +737,7 @@ function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <b className="min-w-[120px] text-center text-[20px] tracking-tight">
+          <b className="min-w-30 text-center text-[20px] tracking-tight">
             {year}년 {month}월
           </b>
           <button
@@ -708,7 +750,7 @@ function CalendarView({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="text-[13px] text-[color:var(--hc-muted)]">
+        <span className="text-[13px] text-(--hc-muted)">
           이번 달 {monthItems.length}컷
         </span>
       </div>
@@ -737,7 +779,7 @@ function CalendarView({
           return (
             <div
               key={index}
-              className={`relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl border p-1.5 ${
+              className={`relative flex aspect-3/4 flex-col overflow-hidden rounded-xl border p-1.5 ${
                 day ? "hc-surface-card" : "border-transparent"
               }`}
             >
@@ -757,7 +799,7 @@ function CalendarView({
                 <div className="relative mt-1 flex flex-1 items-center justify-center">
                   <MediaThumb item={list[0]} bare />
                   {list.length > 1 ? (
-                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                    <span className="absolute right-0 top-0 rounded-full bg-(--hc-primary) px-1.5 text-[11px] font-extrabold text-(--hc-primary-contrast)">
                       +{list.length - 1}
                     </span>
                   ) : null}

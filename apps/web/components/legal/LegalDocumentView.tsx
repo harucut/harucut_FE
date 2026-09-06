@@ -15,35 +15,36 @@ export function LegalDocumentView({
   extra?: ReactNode;
 }) {
   return (
-    <main className="hc-page-app min-h-dvh pb-16 text-[color:var(--hc-text)]">
+    <main className="hc-stage-dark hc-page-app min-h-dvh pb-16 text-(--hc-text)">
       <MarketingNav />
 
       {/* 컨테이너는 nav·푸터와 같은 1160으로 좌변을 맞추고,
           본문 컬럼만 안쪽에서 폭을 제한해 가독성을 지킨다. */}
-      <div className="mx-auto w-full max-w-[1160px] px-7 py-10 lg:py-14">
-        <div className="flex max-w-[820px] flex-col gap-6">
+      <div className="mx-auto w-full max-w-290 px-7 py-10 lg:py-14">
+        {/* 읽는 글이라 폭을 묶는다. 820px 에서는 한 줄이 70자를 넘어 눈이 줄을 잃었다. */}
+        <div className="flex max-w-170 flex-col gap-6">
           <header className="flex flex-col gap-2">
             <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[30px]">
               {document.title}
             </h1>
-            <p className="text-[12px] text-[color:var(--hc-muted)]">
+            <p className="text-[12px] text-(--hc-muted)">
               시행일 {document.effectiveDate}
             </p>
-            <p className="text-[14px] leading-[1.7] text-[color:var(--hc-muted)]">
+            <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
               {document.intro}
             </p>
           </header>
 
-          <div className="flex flex-col gap-5 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-5">
+          <div className="flex flex-col gap-5 rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-5">
             {document.sections.map((section) => (
               <section key={section.heading} className="flex flex-col gap-2">
-                <h2 className="text-sm font-semibold text-[color:var(--hc-text)]">
+                <h2 className="text-[15px] font-bold text-(--hc-text)">
                   {section.heading}
                 </h2>
                 {section.paragraphs?.map((paragraph) => (
                   <p
                     key={paragraph}
-                    className="text-[13px] leading-6 text-[color:var(--hc-muted)]"
+                    className="text-[13px] leading-6 text-(--hc-muted)"
                   >
                     {paragraph}
                   </p>
@@ -53,7 +54,7 @@ export function LegalDocumentView({
                     {section.bullets.map((bullet) => (
                       <li
                         key={bullet}
-                        className="text-[13px] leading-6 text-[color:var(--hc-muted)]"
+                        className="text-[13px] leading-6 text-(--hc-muted)"
                       >
                         {bullet}
                       </li>

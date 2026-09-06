@@ -38,7 +38,7 @@ import { isNotNull } from "@/lib/guards";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
 import { getNativeSaveErrorMessage, nativeNotify } from "@/lib/nativeBridge";
-import { shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
@@ -452,8 +452,19 @@ export default function ShootResultPage() {
     };
   }, []);
 
-  // 비회원 결과물은 메모리 blob이라 새로고침·이탈 한 번에 사라진다. 최소한 경고를 띄운다.
-  useUnsavedWorkGuard(guestMode && Boolean(imageResult));
+  /*
+    촬영본은 메모리에만 있다(lib/shootSessionStore.ts 는 비영속). 새로고침 한 번에 원본
+    4장이 사라지고 화면은 /shoot 으로 튕긴다 — 회원도 마찬가지다.
+
+    - 회원: 보관함에 결과가 남는 순간(imageResult)이 안전선이다. 그 전(생성 중·합성 실패)
+      에는 경고한다. 실패 화면에서 새로고침하는 것이 가장 흔한 손실 경로다.
+    - 비회원: 결과물도 메모리 blob 이라 만들어진 뒤에도 계속 경고한다.
+
+    회원이 합성을 접수시킨 뒤(서버는 계속 그려 보관함에 남긴다) 탭을 닫으면 확인창이 한 번
+    헛뜬다. 접수 여부를 화면이 알 수 있는 상태값이 없고, 같은 흐름의 앞 세 단계가 이미
+    shots.length > 0 만 보므로(app/shoot/capture·select·upload) 그쪽에 맞춘다.
+  */
+  useUnsavedWorkGuard(shots.length > 0 && (guestMode || !imageResult));
 
   if (!frameId || !layout) return null;
 
@@ -511,7 +522,10 @@ export default function ShootResultPage() {
    * 비동기 핸들러 안이라 `await` 로 끝난다.
    */
   const storeGuestHandoff = async () => {
-    if (!frameId) return false;
+    // 4장이 다 차기 전에는 보관하지 않는다. 보관물은 한 벌이라 못 쓰는 것이 앞서 남긴
+    // 온전한 한 벌을 덮어쓰고, 읽는 쪽은 그것을 버리면서 지운다(lib/pendingGuestSave.ts
+    // 의 hasFourSources) — 인계가 통째로 사라진다.
+    if (!frameId || imageSources.length !== 4) return false;
 
     return setPendingGuestSave(
       {
@@ -576,13 +590,21 @@ export default function ShootResultPage() {
     }
   };
 
-  // 비회원이 로그인으로 이동할 때 결과물을 보관한다. OAuth는 전체 페이지 리다이렉트라
-  // 메모리 blob URL로는 전부 유실되므로, 로그인 전에 IndexedDB로 옮겨 둔다.
+  /*
+    비회원이 로그인으로 이동할 때 **원본 4장과 만드는 방법**을 보관한다. OAuth 는 전체 페이지
+    리다이렉트라 메모리 세션이 통째로 사라지므로, 로그인 전에 IndexedDB 로 옮겨 둔다.
+
+    **완성본(`imageResult`)을 기다리지 않는다** — 보관하는 것은 완성본이 아니라 재료라,
+    아직 만드는 중이어도 합성이 실패한 뒤여도 그대로 만들어진다. 예전에는 완성본이 없으면
+    보관을 통째로 건너뛰고 로그인으로 보냈는데, 그래서 결과를 기다리다 누른 사람과 실패
+    화면에서 누른 사람만 로그인 뒤에 이어받을 것이 하나도 없었다.
+  */
   const handleGuestLogin = async () => {
-    if (!imageResult) {
-      router.push(GUEST_LOGIN_HANDOFF_PATH);
-      return;
-    }
+    // 보관에 실패했을 때 무엇을 하라고 할지. 아직 완성본이 없으면 "내려받으라"고 할 수 없다 —
+    // 가리킬 다운로드 카드가 화면에 없다(imageResult 일 때만 그린다).
+    const retryHint = imageResult
+      ? "먼저 이미지를 내려받아 주세요."
+      : "결과가 다 만들어진 뒤에 다시 눌러 주세요.";
 
     setIsHandingOffToLogin(true);
     try {
@@ -590,7 +612,9 @@ export default function ShootResultPage() {
       if (!stored) {
         showStatusNotice(
           "결과를 보관하지 못했어요",
-          "결과가 너무 커서 잠시 보관하지 못했어요. 먼저 이미지를 내려받아 주세요.",
+          // 원인을 단정하지 않는다. 용량만이 아니라 사생활 보호 모드·저장소 차단도
+          // 여기로 온다(lib/pendingGuestSave.ts).
+          `이 브라우저에 사진을 잠시 담아 두지 못했어요. ${retryHint}`,
         );
         return;
       }
@@ -598,7 +622,7 @@ export default function ShootResultPage() {
       console.error(error);
       showStatusNotice(
         "결과를 보관하지 못했어요",
-        "로그인 중에 결과가 사라질 수 있어요. 먼저 이미지를 내려받아 주세요.",
+        `로그인하는 사이에 사진이 사라질 수 있어요. ${retryHint}`,
       );
       return;
     } finally {
@@ -606,6 +630,29 @@ export default function ShootResultPage() {
     }
 
     router.push(GUEST_LOGIN_HANDOFF_PATH);
+  };
+
+  // 업로드로 왔으면 업로드 쪽 프레임 고르기로 돌아간다. 그냥 /shoot 으로 보내면
+  // 다음이 카메라라, 갤러리로 만들던 사람이 촬영 화면에 떨어진다.
+  // `keepShots=1` — 찍은 사진을 두고 프레임만 다시 고른다(app/shoot/page.tsx).
+  const reselectFrameHref = fromUpload
+    ? "/shoot?source=upload&keepShots=1"
+    : "/shoot?keepShots=1";
+
+  /*
+    **사진은 두고 프레임만 바꾼다.**
+
+    예전에는 이 링크가 `/shoot` 로 보냈고, 그 화면은 들어오자마자 세션을 통째로 `reset()`
+    했다 — 프레임만 바뀌는 것이 아니라 찍은 8장과 고른 4장이 함께 사라졌다. 이 자리의 안내는
+    "다른 프레임을 골라 주세요"(lib/fourcutCompose.ts)라 사진은 그대로라는 뜻으로 읽히는데
+    실제로는 사진이 먼저 없어졌고, /shoot/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
+
+    지금은 `keepShots=1` 로 보낸다. 사진을 그대로 들고 프레임 화면에 서고, 고른 프레임의 슬롯
+    비율이 같으면 곧장 고르는 화면으로 간다. 비율이 다르면(세로 4컷 → 네모 4컷) 그 사진을
+    쓸 수 없으므로 그때 비우고 촬영으로 보낸다 — 판단은 /shoot 이 한다.
+  */
+  const handleReselectFrame = () => {
+    router.push(reselectFrameHref);
   };
 
   const handleShareImage = async () => {
@@ -633,6 +680,16 @@ export default function ShootResultPage() {
       }
     } catch (error) {
       console.error(error);
+      // 링크는 이미 만들어졌고 복사만 거부당한 경우다(lib/share.ts 의 CopyFailedError).
+      // "링크를 준비하지 못했어요 / 잠시 후 다시" 로 말하면 원인도 틀리고, 사용자는
+      // 기다렸다 다시 눌러 같은 자리에서 또 막힌다 — 해야 할 일이 다르므로 갈라 안내한다.
+      if (isCopyFailedError(error)) {
+        showStatusNotice(
+          "링크를 복사하지 못했어요",
+          "링크는 만들었지만 브라우저가 복사를 막았어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요.",
+        );
+        return;
+      }
       showStatusNotice(
         "이미지 링크를 준비하지 못했어요",
         getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
@@ -643,50 +700,36 @@ export default function ShootResultPage() {
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text) lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <PageHeader
           title={fromUpload ? "네컷 결과" : "촬영 결과"}
           description={
             guestMode
-              ? "비회원 체험 결과 이미지를 내려받고, 이어서 로그인해 기능을 확장해 보세요."
-              : "완성된 하루컷 결과를 저장하거나 링크로 공유해 보세요."
+              ? "이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요."
+              : "완성된 네 컷을 저장하거나 링크로 공유해 보세요."
           }
         />
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
-        <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-[color:var(--hc-text)]">
-                {isPreparing ? "결과 준비 중" : "결과 준비 완료"}
-              </p>
-              <p className="mt-1 text-[11px] text-[color:var(--hc-muted)]">
-                {isPreparing
-                  ? guestMode
-                    ? "완성되면 이미지를 바로 다운로드할 수 있어요."
-                    : "완성되면 바로 다운로드하거나 공유할 수 있어요."
-                  : guestMode
-                    ? "지금은 이미지 저장까지 해볼 수 있고, 기록 보관부터는 로그인 후 이용할 수 있어요."
-                    : "마음에 드는 결과를 저장하거나 링크로 공유해 보세요."}
-              </p>
-            </div>
-            <span className="rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--hc-primary-strong)]">
-              {guestMode ? "이미지 다운로드" : "이미지"}
-            </span>
-          </div>
-        </section>
-
+        {/*
+          준비 중일 때만 상태 카드를 둔다. 예전에는 다 된 뒤에도 "결과 준비 완료 / 마음에 드는 결과를
+          저장하거나…" 카드가 헤더 설명과 같은 말을 한 번 더 했고, 옆의 '이미지' 초록 칩은 아무
+          정보가 없었다. 완성되면 그림과 다운로드 카드가 곧 상태다.
+        */}
         {isPreparing ? (
-          <section className="rounded-[28px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 shadow-[0_18px_40px_rgba(30,215,96,0.08)]">
-            <div className="space-y-2 text-[11px]">
-              <div className="flex items-center justify-between rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
-                <span className="text-[color:var(--hc-text)]">이미지 준비</span>
-                <span className="text-[color:var(--hc-muted)]">
-                  {imageState === "processing" ? "생성 중..." : "대기 중"}
-                </span>
-              </div>
+          <section
+            role="status"
+            aria-live="polite"
+            className="rounded-[28px] border border-(--hc-border) bg-(--hc-surface) p-4"
+          >
+            <p className="text-sm font-semibold text-(--hc-text)">결과 준비 중</p>
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-(--hc-border) bg-(--hc-surface-strong) px-3.5 py-2.5 text-[12px]">
+              <span className="text-(--hc-text)">이미지</span>
+              <span className="text-(--hc-muted)">
+                {imageState === "processing" ? "생성 중…" : "대기 중"}
+              </span>
             </div>
           </section>
         ) : null}
@@ -718,7 +761,7 @@ export default function ShootResultPage() {
               style={{
                 aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
               }}
-              className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] object-contain"
+              className="w-full rounded-lg border border-(--hc-border) bg-(--hc-surface-strong) object-contain"
               onError={() => setIsResultImageBroken(true)}
             />
           ) : (
@@ -732,7 +775,7 @@ export default function ShootResultPage() {
           )}
         </section>
 
-        {imageError ? <p className="text-[11px] text-[color:var(--hc-danger)]">{imageError}</p> : null}
+        {imageError ? <p className="text-[11px] text-(--hc-danger)">{imageError}</p> : null}
 
         {imageState === "error" && isImageErrorRetryable ? (
           <button
@@ -759,14 +802,14 @@ export default function ShootResultPage() {
         ) : null}
 
         {imageState === "error" && !isImageErrorRetryable ? (
-          <Link
-            // 업로드로 왔으면 업로드 쪽 프레임 고르기로 돌아간다. 그냥 /shoot 으로 보내면
-            // 다음이 카메라라, 갤러리로 만들던 사람이 촬영 화면에 떨어진다.
-            href={fromUpload ? "/shoot?source=upload" : "/shoot"}
+          // 링크가 아니라 버튼이다 — 누르면 이동이 아니라 확인이 먼저다(위 주석 참고).
+          <button
+            type="button"
+            onClick={handleReselectFrame}
             className="hc-button-secondary inline-flex w-fit rounded-full border px-4 py-2 text-xs font-semibold transition"
           >
             프레임 다시 고르기
-          </Link>
+          </button>
         ) : null}
 
         {imageResult ? (
@@ -793,44 +836,41 @@ export default function ShootResultPage() {
         {guestMode && imageResult ? (
           <section className="hc-surface-hero rounded-[28px] border p-4">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-[color:var(--hc-text)]">
+              <p className="text-sm font-semibold text-(--hc-text)">
                 비회원 체험 결과 안내
               </p>
               {/* 목록은 @harucut/shared 한 벌에서 읽는다 — 모달·FAQ 와 같은 값을 말해야 한다. */}
-              <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
+              <p className="text-[12px] leading-6 text-(--hc-muted)">
                 지금은 {withJosa(GUEST_ALLOWED_ITEMS, "을/를")} 해볼 수 있어요.{" "}
                 {withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.
               </p>
-              <p className="text-[12px] leading-6 text-[color:var(--hc-muted)]">
+              <p className="text-[12px] leading-6 text-(--hc-muted)">
                 체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
                 &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
               </p>
             </div>
 
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleDownloadImage}
-                disabled={isDownloadingImage}
-                className="hc-button-primary rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-40"
-              >
-                {isDownloadingImage ? "이미지 저장 중..." : "이미지 다운로드"}
-              </button>
-              {/* 버튼을 감춰 버리면 체험하는 사람이 "가입하면 뭐가 더 되는지"를 못 본다.
-                  그래서 회원 기능도 자리를 남기고 같은 방식으로 안내한다. */}
+            {/*
+              다운로드 버튼은 위 카드에 하나면 된다 — 같은 화면에 같은 버튼이 둘이었다.
+              회원 기능은 감추지 않고 자리를 남긴다(가입하면 무엇이 더 되는지 보여야 한다).
+              다만 문장을 버튼 모양에 담지 않는다 — 잠긴 기능임을 말하는 조용한 줄이다.
+            */}
+            <div className="mt-4 flex flex-col divide-y divide-(--hc-border) rounded-2xl border border-(--hc-border)">
               <button
                 type="button"
                 onClick={showGuestRestrictedNotice}
-                className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
+                className="flex min-h-11 items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-highlight)"
               >
-                기록 보관은 로그인 후에 이용할 수 있어요
+                <span>기록 보관</span>
+                <span className="text-[12px] font-medium text-(--hc-muted)">로그인 후</span>
               </button>
               <button
                 type="button"
                 onClick={showGuestShareNotice}
-                className="hc-button-secondary rounded-full border px-4 py-3 text-sm font-semibold transition"
+                className="flex min-h-11 items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-highlight)"
               >
-                링크 공유는 로그인 후에 이용할 수 있어요
+                <span>링크 공유</span>
+                <span className="text-[12px] font-medium text-(--hc-muted)">로그인 후</span>
               </button>
             </div>
           </section>
@@ -845,7 +885,7 @@ export default function ShootResultPage() {
                   : "/shoot/capture"
                 : "/shoot/select"
             }
-            className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
+            className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition"
           >
             {guestMode && !fromUpload ? "다시 촬영하기" : "사진 다시 고르기"}
           </Link>
@@ -854,14 +894,14 @@ export default function ShootResultPage() {
               type="button"
               onClick={handleGuestLogin}
               disabled={isHandingOffToLogin}
-              className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition disabled:opacity-40"
+              className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition disabled:opacity-40"
             >
-              {isHandingOffToLogin ? "결과 보관 중..." : "로그인하고 저장하기"}
+              {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 저장하기"}
             </button>
           ) : (
             <Link
               href="/home"
-              className="hc-button-secondary flex-1 rounded-full border px-4 py-2 text-center text-xs font-semibold transition"
+              className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition"
             >
               홈으로 가기
             </Link>

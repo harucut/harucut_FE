@@ -2,8 +2,9 @@ import { expect, test } from "@playwright/test";
 
 test("landing primary CTA routes unauthenticated users to login", async ({ page }) => {
   await page.goto("/");
-  // 로그인 우선: 우측 상단 primary CTA '지금 시작하기'가 /login으로 간다.
-  await page.getByRole("link", { name: "지금 시작하기" }).click();
+  // 로그인 우선. 히어로의 "로그인"은 두 화면 폭 모두에 있고, 헤더의 "지금 시작하기"는
+  // 넓은 화면에만 있다(home.spec.ts 가 그 경계를 검사한다). 둘 다 /login 으로 간다.
+  await page.getByRole("link", { name: "로그인" }).click();
 
   await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
 });

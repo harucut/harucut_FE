@@ -71,7 +71,6 @@ type NativeResult = {
   ok: boolean;
   reason?: string;
   code?: BridgeFailureCode;
-  value?: string;
 };
 
 /**
@@ -247,7 +246,7 @@ export async function nativeSaveImageBlob(blob: Blob, filename: string) {
     });
   });
 
-  post({ type: "save-begin", id, filename, mime: blob.type || "image/png", total: chunks.length });
+  post({ type: "save-begin", id, filename, total: chunks.length });
   chunks.forEach((data, index) => post({ type: "save-chunk", id, index, data }));
   post({ type: "save-end", id });
 

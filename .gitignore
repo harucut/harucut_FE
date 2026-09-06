@@ -22,7 +22,6 @@ apps/mobile/dist/
 apps/mobile/.vscode/
 
 .swc/
-.storybook/
 agent.log
 agent.log.md
 
@@ -66,3 +65,6 @@ apps/web/.impeccable-shots/
 # 조사용 임시 스크립트·측정 결과. 접두사 zz- 로 만들고, 커밋에 딸려가지 않게 막는다
 # (실제로 axe 스캔 결과 zz-out.json 이 한 번 develop 까지 올라갔다).
 zz-*
+
+# Tailwind 정규형 검사기가 잠깐 쓰는 폴더(스크립트가 지우지만, 중단되면 남는다)
+apps/web/.canonical-check/

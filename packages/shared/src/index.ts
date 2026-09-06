@@ -5,15 +5,12 @@ export {
   ENTERPRISE_FACTS,
   PLAN_FACTS,
   PLAN_NAMES,
-  SITE_ORIGIN,
-  siteUrl,
   toPlanId,
   type PlanFacts,
   type PlanFeature,
   type PlanId,
 } from './plans';
 export {
-  LEGAL_DOCUMENTS,
   PRIVACY_POLICY,
   TERMS_OF_SERVICE,
   type LegalDocument,
@@ -22,6 +19,7 @@ export {
 export { PLAN_ERROR_MESSAGES, getPlanErrorMessage } from './plan-errors';
 export {
   API_ERROR_MESSAGES,
+  CLIENT_NETWORK_UNREACHABLE_CODE,
   CLIENT_REISSUE_UNAVAILABLE_CODE,
   getApiErrorMessageByCode,
 } from './api-error-messages';
@@ -48,7 +46,6 @@ export {
 export {
   SOCIAL_BRAND_COLORS,
   SOCIAL_LABELS,
-  SOCIAL_MARK_GAP,
   SOCIAL_MARK_GEOMETRY,
   SOCIAL_MARK_SIZE,
   SOCIAL_PROVIDER_ORDER,

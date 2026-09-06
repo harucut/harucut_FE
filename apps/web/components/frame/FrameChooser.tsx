@@ -27,7 +27,6 @@ type Props = {
 
   /** 비회원처럼 저장한 프레임을 볼 수 없는 경우. */
   hideSavedFrames?: boolean;
-  savedFramesDescription?: string;
   /** 저장한 프레임에 붙는 부가 동작(예: 꾸미기의 "수정하기"). */
   savedFrameAction?: { label: string; onAction: (frame: RemoteFrame) => void };
 
@@ -66,7 +65,6 @@ export function FrameChooser({
   confirmDisabled,
   onConfirm,
   hideSavedFrames,
-  savedFramesDescription,
   savedFrameAction,
   missingRemoteFrameNotice,
   children,
@@ -152,7 +150,7 @@ export function FrameChooser({
       {remoteFrameLookupPending ? (
         <p
           role="status"
-          className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]"
+          className="text-[12px] leading-[1.6] text-(--hc-muted)"
         >
           링크에 담긴 프레임을 불러오는 중이에요.
         </p>
@@ -174,7 +172,6 @@ export function FrameChooser({
       {hideSavedFrames ? null : (
         <SavedFramesSection
           title="저장한 프레임"
-          description={savedFramesDescription}
           emptyText="저장한 프레임이 없어요."
           selectedFrameId={selectedFrameId}
           frames={frames}
@@ -188,8 +185,6 @@ export function FrameChooser({
           onRefresh={onRefresh}
           onAction={savedFrameAction?.onAction}
           actionLabel={savedFrameAction?.label}
-          selectedStatusText="선택됨"
-          idleStatusText="클릭해서 선택"
         />
       )}
     </>

@@ -146,17 +146,32 @@ function extractUploadedMediaInfo(value: unknown): UploadedMediaInfo | null {
   return extractUploadedMediaInfo(record.data);
 }
 
+/**
+ * 올린 파일의 조회용 URL 을 해석한다. 실패하면 `fallbackUrl` 로 떨어진다.
+ *
+ * 이 함수가 불리는 시점에 S3 PUT 은 이미 끝났고 `key` 도 손에 있다. 조회는 **화면에 그릴
+ * 주소**를 얻으려는 것뿐이다 — 결과는 `themeEditorStore` 의 `renderUrl` 로만 가고
+ * `frameApi` 가 저장 요청에서 그 필드를 빼기 때문에 서버에는 닿지 않는다. 그래서 401·5xx·
+ * 네트워크로 조회가 실패해도 **성공한 업로드를 취소하면 안 된다** — 예전에는 여기서 던져서
+ * 파일은 S3 에 올라간 채 저장만 죽었고, 사용자는 처음부터 다시 올려야 했다.
+ *
+ * 같은 엔드포인트를 부르는 형제 `getImageUrlByKey` 와 규칙을 맞춘다(그쪽도 실패를 삼킨다).
+ */
 async function requestUploadedMediaInfo(
   key: string,
   fallbackUrl: string,
 ): Promise<UploadedMediaInfo> {
-  const res = await clientApi.get<ApiEnvelope<unknown>>(
-    `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
-  );
+  try {
+    const res = await clientApi.get<ApiEnvelope<unknown>>(
+      `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
+    );
 
-  const mediaInfo = extractUploadedMediaInfo(res.data.data);
-  if (mediaInfo) {
-    return mediaInfo;
+    const mediaInfo = extractUploadedMediaInfo(res.data.data);
+    if (mediaInfo) {
+      return mediaInfo;
+    }
+  } catch {
+    // 응답 모양이 낯설 때와 같은 자리로 — 아래 폴백으로 떨어진다.
   }
 
   return { objectUrl: fallbackUrl };
@@ -317,7 +332,8 @@ export async function uploadToS3WithPresigned(opts: {
     return { key, objectUrl: fallbackObjectUrl, downloadUrl: undefined };
   }
 
-  // 업로드 가능한 형식은 전부 이미지라 항상 다운로드 URL을 해석한다.
+  // 업로드 가능한 형식은 전부 이미지라 항상 다운로드 URL을 해석해 본다.
+  // 해석에 실패해도 던지지 않는다 — 폴백 주소로 떨어지고 key 는 그대로 돌려준다.
   const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);
   return {
     key,

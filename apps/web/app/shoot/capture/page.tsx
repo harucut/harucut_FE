@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
-import { RefreshCw, Timer } from "lucide-react";
+import { useMemo, useSyncExternalStore } from "react";
+import { SwitchCamera, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { isNativeShell } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { useDarkStage } from "@/hooks/useDarkStage";
 import { useStageFit } from "@/hooks/useStageFit";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
+
+const subscribeNever = () => () => undefined;
 
 export default function CapturePage() {
   const {
@@ -18,7 +22,6 @@ export default function CapturePage() {
     isCameraReady,
     isCheckingCameraPermission,
     isShooting,
-    cancelShooting,
     countdown,
     shotCount,
     timerSeconds,
@@ -35,6 +38,11 @@ export default function CapturePage() {
 
   const { frameId, shots, eventName } = useShootSession();
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
+  // 앱 셸 안인지는 클라이언트에서만 알 수 있다. 서버 스냅샷은 false 로 두어 하이드레이션이 어긋나지 않게 한다.
+  const inShell = useSyncExternalStore(subscribeNever, isNativeShell, () => false);
+
+  // 뷰파인더는 테마와 무관하게 검다(DESIGN.md 「테마 정책」의 예외 하나). 상태바도 그동안 다크.
+  useDarkStage();
 
   // 찍은 컷이 있는데 아직 저장 전이면, 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(shots.length > 0);
@@ -86,8 +94,14 @@ export default function CapturePage() {
       촬영 화면은 스크롤하지 않는다. 프리뷰와 셔터가 한 화면에 같이 보여야 하는데,
       390×844 폰에서 셔터가 화면 아래 186px 지점에 있었다(실측). 자기 얼굴을 보면서
       셔터를 누를 수가 없었다. 높이를 뷰포트에 묶고 남는 공간을 프리뷰가 가져간다.
+
+      화면 전체가 뷰파인더다. 예전에는 테두리·패딩이 있는 회색 카드 안에 프리뷰가 떴고,
+      세로 4컷은 슬롯이 가로라 카드의 위아래 절반이 "빈 카드"로 읽혔다. 카드를 걷어내고
+      검은 면 하나로 두면 남는 공간이 카메라의 어두운 면이 된다 — 카메라 앱이 그렇다.
+      테마와 무관하게 어둡다(hc-stage-dark): 밝은 면 위의 프리뷰는 액자처럼 보이고,
+      셔터와 게이지가 사진보다 밝아진다.
     */
-    <main className="hc-page-app flex h-dvh flex-col overflow-hidden px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-[color:var(--hc-text)]">
+    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-[#0B0B0C] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-white">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
@@ -104,208 +118,222 @@ export default function CapturePage() {
 
         {eventName ? <EventBanner eventName={eventName} /> : null}
 
-        <section className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-3">
-          {/*
-            "N / 8장 촬영됨" 칩은 걷어냈다. 시작 전에는 언제나 0/8 이라 알려 줄 것이 없고,
-            촬영 중에는 카운트다운 바로 아래에 같은 숫자가 뜬다.
-          */}
+        {/*
+          8컷 게이지. 몇 장을 찍는지·몇 장 찍었는지가 늘 보인다(DESIGN.md 「필름의 리듬」).
+          찍은 칸은 초록 면, 지금 찍는 칸은 초록 테두리. 숫자 라벨은 두지 않는다 — 칸이 곧 숫자다.
+          게이지의 초록은 DESIGN.md 가 '진행 게이지' 용도로 허용한 것이라 한 화면 한 초록 규칙과
+          부딪히지 않는다.
+        */}
+        <div
+          role="img"
+          aria-label={`${MAX_SHOTS}컷 중 ${shotCount}컷 촬영됨`}
+          className="flex shrink-0 items-center justify-center gap-1.5"
+        >
+          {Array.from({ length: MAX_SHOTS }, (_, index) => {
+            const done = index < shotCount;
+            const current = isShooting && index === shotCount;
+            return (
+              <span
+                key={index}
+                className={`h-7.5 w-5.5 rounded-[5px] border-[1.5px] transition-colors ${
+                  done
+                    ? "border-(--hc-primary) bg-(--hc-primary)"
+                    : current
+                      ? "border-(--hc-primary) bg-transparent shadow-[0_0_0_3px_rgba(30,215,96,0.22)]"
+                      : "border-[rgba(255,255,255,0.28)] bg-[rgba(255,255,255,0.04)]"
+                }`}
+              />
+            );
+          })}
+        </div>
 
-          {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
-          <div
-            ref={stageRef}
-            className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center"
-          >
-            <canvas ref={canvasRef} className="hidden" />
+        {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
+        <div
+          ref={stageRef}
+          className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center"
+        >
+          <canvas ref={canvasRef} className="hidden" />
 
-            {layout && currentSlot ? (
-              <div
-                className="relative overflow-hidden rounded-xl bg-black shadow-[var(--hc-card-shadow)]"
-                /*
-                  실측한 컨테이너에 슬롯 비율을 그대로 넣은 크기다. 여기 보이는 사각형이
-                  곧 저장되는 사각형이다.
+          {layout && currentSlot ? (
+            <div
+              className="relative overflow-hidden rounded-xl bg-black shadow-[0_18px_40px_rgba(0,0,0,0.5)]"
+              /*
+                실측한 컨테이너에 슬롯 비율을 그대로 넣은 크기다. 여기 보이는 사각형이
+                곧 저장되는 사각형이다.
 
-                  첫 페인트(측정 전)에는 aspectRatio 로만 잡아 둔다. 가로를 기준으로 두므로
-                  이 순간에도 비율은 맞고, 세로가 넘칠 수 있는 구간만 측정 후 줄어든다.
-                */
-                style={
-                  stageReady
-                    ? { width: viewW, height: viewH }
-                    : {
-                        width: "100%",
-                        aspectRatio: `${currentSlot.width} / ${currentSlot.height}`,
-                      }
-                }
-              >
-                {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다.
-                    전면(user) 카메라만 좌우반전(셀피 감각), 후면은 그대로. */}
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`absolute inset-0 h-full w-full object-cover ${
-                    cameraFacingMode === "user" ? "scale-x-[-1]" : ""
-                  }`}
-                />
+                첫 페인트(측정 전)에는 aspectRatio 로만 잡아 둔다. 가로를 기준으로 두므로
+                이 순간에도 비율은 맞고, 세로가 넘칠 수 있는 구간만 측정 후 줄어든다.
+              */
+              style={
+                stageReady
+                  ? { width: viewW, height: viewH }
+                  : {
+                      width: "100%",
+                      aspectRatio: `${currentSlot.width} / ${currentSlot.height}`,
+                    }
+              }
+            >
+              {/* 라이브 카메라 — 촬영 결과물과 같은 center-crop(object-cover)으로 슬롯 비율을 채운다.
+                  전면(user) 카메라만 좌우반전(셀피 감각), 후면은 그대로. */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`absolute inset-0 h-full w-full object-cover ${
+                  cameraFacingMode === "user" ? "scale-x-[-1]" : ""
+                }`}
+              />
 
-                {/*
-                  카메라가 아직 안 켜졌을 때 검은 사각형만 보였다. 무슨 일이 일어나는지,
-                  다음에 무엇이 필요한지 무대 안에서 말한다.
-                */}
-                {!isCameraReady ? (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/80 px-6 text-center">
+              {/*
+                프리뷰 위에 얹는 것은 둘뿐이다 — 카메라가 꺼져 있을 때의 안내와 카운트다운.
+                타이머 칩과 시작 버튼은 얼굴 위가 아니라 아래 띠에 있다. 카메라를 켜면 프리뷰는
+                프리뷰만 보여 준다.
+              */}
+              {!isCameraReady ? (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 px-6 text-center">
+                  <p className="text-[13px] font-semibold leading-[1.6] text-white">
                     {isCheckingCameraPermission ? (
-                      <p className="text-[13px] font-semibold text-white">
-                        카메라를 준비하고 있어요…
-                      </p>
+                      "카메라를 준비하고 있어요…"
                     ) : (
                       <>
-                        <p className="text-[13px] font-semibold leading-[1.6] text-white">
-                          카메라를 켜면 여기에 화면이 보여요.
-                          <br />
-                          <span className="font-normal text-white/70">
-                            브라우저가 카메라 사용을 물어보면 허용해 주세요.
-                          </span>
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void startCamera()}
-                          className="hc-button-primary inline-flex h-10 items-center rounded-full px-5 text-[13px] font-bold"
-                        >
-                          카메라 켜기
-                        </button>
+                        카메라를 켜면 여기에 화면이 보여요.
+                        <br />
+                        <span className="font-normal text-white/70">
+                          {inShell
+                            ? "앱이 카메라 사용을 물어보면 허용해 주세요."
+                            : "브라우저가 카메라 사용을 물어보면 허용해 주세요."}
+                        </span>
                       </>
                     )}
-                  </div>
-                ) : null}
+                  </p>
+                </div>
+              ) : null}
 
-                {isShooting && countdown !== null ? (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-black/35">
-                    <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white text-2xl font-semibold text-white">
-                      {countdown}
-                    </span>
-                    <span className="rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
-                      {shotCount}/{MAX_SHOTS}
-                    </span>
-                  </div>
-                ) : null}
+              {/*
+                찍힌 순간의 플래시. 카운트다운은 여기 없다 — 아래 띠에 있다(그 자리 주석 참고).
+                컷마다 새로 재생하려고 shotCount 로 키를 준다.
+              */}
+              {shotCount > 0 ? (
+                <span
+                  key={shotCount}
+                  aria-hidden
+                  className="hc-capture-flash pointer-events-none absolute inset-0 z-20 bg-white"
+                />
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex h-full w-full items-center justify-center rounded-xl border border-(--hc-border) bg-black text-[11px] text-zinc-400">
+              프레임을 먼저 선택해 주세요
+            </div>
+          )}
+        </div>
 
-                {/*
-                  촬영 관련 컨트롤은 **무대 한가운데**에 얹는다 — 바로 위 "카메라 켜기"가
-                  섰던 그 자리다. 켜고 → 찍는, 이어지는 한 동작이라 같은 자리·같은 알약
-                  모양이어야 한다.
+        {/*
+          간격을 **고르던 자리에서 그 간격을 센다.** 시작 전에는 3·5·8초 칩, 촬영 중에는 남은 초.
 
-                  시작하면 사라진다. 둘 다 "시작하기 전에 정하는 것"이라, 시작한 뒤에는
-                  화면에 남을 이유가 없다 — 그때부터 이 화면이 할 일은 카메라를 보여 주는
-                  것뿐이다.
+          카운트다운이 프리뷰 밖에 있는 이유:
+            - 얼굴을 가리지 않는다. 예전 링(96px)은 세로 4컷 프리뷰 높이의 38% 를 덮었다.
+            - 대비가 보장된다. 무대 배경(#0B0B0C) 위라 뒤에 뭐가 찍히든 흰 글자가 읽힌다.
+              얼굴 위에 있을 때는 밝은 하늘 앞에서 1.4:1 까지 떨어졌고, 그걸 가리려고 화면을
+              30% 어둡게 덮어야 했다 — 그 스크림도 같이 사라졌다.
+            - 초록이 하나로 돌아온다. 진행 초록은 위 8컷 게이지가 혼자 갖는다.
+          높이를 72px 로 고정해 두 상태가 같은 자리를 쓴다 — 시작해도 아래 띠가 움직이지 않는다.
+        */}
+        <div className="flex h-18 shrink-0 items-center justify-center gap-2">
+          {isShooting ? (
+            // key 로 매 초 애니메이션을 새로 재생한다 — 링의 연속 스윕을 대신하는 메트로놈.
+            <span
+              key={countdown ?? 0}
+              className="hc-count-tick text-[56px] font-extrabold leading-none tabular-nums text-white"
+            >
+              {countdown}
+            </span>
+          ) : (
+            TIMER_OPTIONS.map((seconds) => {
+              const active = timerSeconds === seconds;
+              return (
+                <button
+                  key={seconds}
+                  type="button"
+                  onClick={() => setTimerSeconds(seconds)}
+                  aria-pressed={active}
+                  className={`inline-flex h-11 items-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition ${
+                    active
+                      ? "bg-white text-[#0B0B0C]"
+                      : "bg-transparent text-white ring-1 ring-[rgba(255,255,255,0.3)]"
+                  }`}
+                >
+                  <Timer className="h-3.5 w-3.5" />
+                  {seconds}s
+                </button>
+              );
+            })
+          )}
+        </div>
 
-                  영상 위에 얹히므로 칩·버튼에 각자 불투명 배경을 줘서 뒤에 무엇이 오든
-                  읽히게 한다.
-                */}
-                {isCameraReady && !isShooting ? (
-                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 px-3">
-                    <div className="flex items-center justify-center gap-2">
-                      {TIMER_OPTIONS.map((seconds) => {
-                        const active = timerSeconds === seconds;
-                        return (
-                          <button
-                            key={seconds}
-                            type="button"
-                            onClick={() => setTimerSeconds(seconds)}
-                            aria-pressed={active}
-                            className={`inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition ${
-                              active
-                                ? "bg-white text-[#0B0B0C]"
-                                : "bg-black/55 text-white ring-1 ring-white/30"
-                            }`}
-                          >
-                            <Timer className="h-3.5 w-3.5" />
-                            {seconds}s
-                          </button>
-                        );
-                      })}
-                    </div>
+        {/*
+          보조기술에는 매초가 아니라 **컷마다 한 번** 알린다. 매초 읽으면 TTS 지연 때문에
+          3초 간격에서 "일" 이 셔터 뒤에 읽힌다 — 도움이 아니라 방해다.
+        */}
+        <p aria-live="polite" className="sr-only">
+          {isShooting ? `${shotCount + 1}번째 컷, ${timerSeconds}초 뒤 촬영` : ""}
+        </p>
 
-                    <button
-                      type="button"
-                      onClick={startShooting}
-                      className="hc-button-primary inline-flex h-12 items-center rounded-full px-7 text-[15px] font-extrabold"
-                    >
-                      촬영 시작
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex h-full w-full items-center justify-center rounded-xl border border-[color:var(--hc-border)] bg-black text-[11px] text-zinc-400">
-                프레임을 먼저 선택해 주세요
-              </div>
-            )}
-          </div>
+        {/*
+          아래 띠. 가운데 자리 하나가 **카메라 켜기 → 촬영 시작 → 셔터**로 바뀐다. 켜고 → 시작하고
+          → 찍는 이어지는 한 동작이라 같은 자리여야 한다(apple-design 공간 일관성). 예전에는
+          시작 알약이 프리뷰 한가운데 서고 셔터는 아래에서 회색으로 죽어 있어, 시작 동작이
+          두 자리에서 경쟁했다.
 
-          {/*
-            무대 아래 셔터. 촬영 중에는 이것이 "기다리지 않고 지금 한 컷"이 된다(#404).
-            무대 안의 알약은 시작 전용이라 촬영이 시작되면 회색이 되므로, 촬영 중에 실제로
-            누르는 버튼은 여기다.
+          촬영 중 셔터는 "기다리지 않고 지금 한 컷"이다(#404). 중단 버튼은 두지 않는다 —
+          헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인 인코딩을 정리한다),
+          전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
+        */}
+        <div className="relative flex h-22 shrink-0 items-center justify-center [@media(max-height:700px)]:h-18">
+          {canFlipCamera ? (
+            <button
+              type="button"
+              onClick={() => void switchCamera()}
+              disabled={isShooting}
+              aria-label="카메라 전환"
+              title="카메라 전환"
+              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <SwitchCamera className="h-5 w-5" />
+            </button>
+          ) : null}
 
-            전환 버튼은 absolute 로 빼서, 셔터가 그 유무와 무관하게 항상 정중앙에 온다.
-          */}
-          <div className="relative flex items-center justify-center">
-            {canFlipCamera ? (
-              <button
-                type="button"
-                onClick={() => void switchCamera()}
-                disabled={isShooting}
-                className="absolute left-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center gap-1.5 rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                전환
-              </button>
-            ) : null}
-
+          {isShooting ? (
             <button
               type="button"
               onClick={handleShootNow}
-              // 이 버튼이 하는 일은 "기다리지 않고 지금 한 컷"이라, 촬영이 돌고 있을 때만
-              // 할 수 있는 일이다. 시작 전에는 눌러도 할 일이 없으므로 회색으로 둔다 —
-              // 시작은 무대 한가운데 알약이 맡는다.
-              disabled={!isCameraReady || !isShooting}
-              // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다(시작은 무대 안 알약이 맡는다).
-              // 화면에서 글자가 빠져도 보조기술에는 남아야 한다.
+              // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다. 화면에서 글자가 빠져도 보조기술에는 남는다.
               aria-label="바로 촬영"
-              className="flex flex-col items-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
+              // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
+              className="grid h-18 w-18 place-items-center rounded-full border-4 border-white transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >
-              <span className="grid h-[72px] w-[72px] place-items-center rounded-full border-4 border-[color:var(--hc-text)] [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[60px]">
-                <span className="h-[54px] w-[54px] rounded-full bg-[color:var(--hc-primary)] [@media(max-height:700px)]:h-[44px] [@media(max-height:700px)]:w-[44px]" />
-              </span>
-              {/*
-                글자는 두지 않는다. 시작은 무대 한가운데 알약이 맡고, 이 동그라미는
-                촬영이 돌 때만 살아나는 셔터라 설명이 없어도 무엇인지 안다.
-                이름은 aria-label 로 남아 보조기술에는 계속 읽힌다.
-              */}
+              <span className="h-13.5 w-13.5 rounded-full bg-(--hc-primary) [@media(max-height:700px)]:h-11 [@media(max-height:700px)]:w-11" />
             </button>
-
-            {/*
-              중단.
-
-              8초 간격 8장이면 1분 가까이 간다. 그동안 이 화면에서 촬영만 멈추고 처음으로
-              돌아갈 방법이 없었다 — 끝까지 기다리거나 셔터를 여덟 번 누르거나, 화면을
-              통째로 떠나는 수밖에 없었다.
-
-              무대는 그대로 비워 둔다. 촬영 중에 이미 쓰는 무대 **아래** 줄에, 왼쪽 전환
-              버튼과 대칭으로 둔다. 촬영이 돌 때만 나타나므로 시작 화면은 예전 그대로다.
-            */}
-            {isShooting ? (
-              <button
-                type="button"
-                onClick={cancelShooting}
-                className="absolute right-0 top-1/2 inline-flex h-10 -translate-y-1/2 items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-3.5 text-[11px] text-[color:var(--hc-text)] hover:bg-[color:var(--hc-surface-highlight)]"
-              >
-                중단
-              </button>
-            ) : null}
-          </div>
-        </section>
+          ) : isCameraReady ? (
+            <button
+              type="button"
+              onClick={startShooting}
+              className="hc-button-primary inline-flex h-12 items-center rounded-full px-8 text-[15px] font-extrabold"
+            >
+              촬영 시작
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void startCamera()}
+              disabled={isCheckingCameraPermission}
+              className="hc-button-primary inline-flex h-12 items-center rounded-full px-8 text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              카메라 켜기
+            </button>
+          )}
+        </div>
       </div>
     </main>
   );

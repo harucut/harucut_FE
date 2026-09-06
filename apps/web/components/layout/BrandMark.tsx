@@ -4,10 +4,7 @@ import Link from "next/link";
 
 type BrandMarkProps = {
   href: string;
-  label?: string;
-  compact?: boolean;
-  className?: string;
-  tone?: "dark" | "light";
+  tone?: "light";
 };
 
 // STUDIO 로고 — 딥다크 라운드 + 그린 4컷 그라데이션 스트립(A안).
@@ -41,26 +38,22 @@ function FourCutMark({ size = 30 }: { size?: number }) {
 
 export function BrandMark({
   href,
-  label = "하루컷",
-  compact = false,
-  className = "",
   tone,
 }: BrandMarkProps) {
-  // tone=light/dark는 고정 배경(예: 다크 랜딩) 위에서 테마와 무관하게 글자색을 강제한다.
-  const labelColor =
-    tone === "light" ? "#FFFFFF" : tone === "dark" ? "#0B0B0C" : "var(--hc-text)";
+  // tone="light" 는 테마와 무관하게 어두운 무대(마케팅·로그인) 위에 설 때만 쓴다.
+  const labelColor = tone === "light" ? "#FFFFFF" : "var(--hc-text)";
   return (
     <Link
       href={href}
       aria-label="Harucut home"
-      className={`inline-flex items-center gap-2.5 transition-opacity hover:opacity-90 ${className}`.trim()}
+      className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-90"
     >
-      <FourCutMark size={compact ? 26 : 30} />
+      <FourCutMark size={30} />
       <span
         className="text-lg font-extrabold tracking-tight"
         style={{ color: labelColor }}
       >
-        {label}
+        하루컷
       </span>
     </Link>
   );

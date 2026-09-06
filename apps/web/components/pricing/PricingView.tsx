@@ -7,6 +7,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { PAYMENTS_ENABLED } from "@/constants/company";
 import {
   ENTERPRISE_TEASER,
@@ -51,14 +52,14 @@ function PlanCard({
     <div
       className={`relative flex flex-col rounded-[20px] border p-6 ${
         current
-          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] shadow-[var(--hc-button-shadow)] ring-2 ring-[color:var(--hc-primary)]"
+          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow) ring-2 ring-(--hc-primary)"
           : hot
-            ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] shadow-[var(--hc-button-shadow)]"
+            ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow)"
             : "hc-surface-card"
       }`}
     >
       {badge ? (
-        <span className="absolute right-4 top-4 rounded-full bg-[color:var(--hc-primary)] px-2.5 py-1 text-[11px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+        <span className="absolute right-4 top-4 rounded-full bg-(--hc-primary) px-2.5 py-1 text-[11px] font-extrabold text-(--hc-primary-contrast)">
           {badge}
         </span>
       ) : null}
@@ -66,53 +67,54 @@ function PlanCard({
       <span
         className={`text-[15px] font-extrabold tracking-[0.3px] ${
           hot || current
-            ? "text-[color:var(--hc-primary-strong)]"
-            : "text-[color:var(--hc-text)]"
+            ? "text-(--hc-primary-strong)"
+            : "text-(--hc-text)"
         }`}
       >
         {plan.name}
       </span>
 
       <div className="mb-0.5 mt-2.5 flex items-baseline gap-1.5">
-        <span className="text-[28px] font-extrabold leading-none tracking-[-0.6px] text-[color:var(--hc-text)]">
-          {plan.price}
+        {/* 이름이 이미 '무료' 인 카드에 가격까지 '무료' 라고 쓰면 같은 말을 두 번 한다. 숫자 자리에는 숫자. */}
+        <span className="text-[28px] font-extrabold leading-none tracking-[-0.6px] text-(--hc-text)">
+          {plan.price === "무료" ? "₩0" : plan.price}
         </span>
-        <span className="text-[13px] text-[color:var(--hc-muted)]">{plan.sub}</span>
+        <span className="text-[13px] text-(--hc-muted)">{plan.sub}</span>
       </div>
 
-      <div className="my-4 h-px w-full bg-[color:var(--hc-border)]" />
+      <div className="my-4 h-px w-full bg-(--hc-border)" />
 
-      <ul className="flex flex-col gap-[11px]">
+      <ul className="flex flex-col gap-2.75">
         {plan.feats.map(([label, on, note]) => (
           <li
             key={label}
             className="flex items-start gap-2.5"
           >
             <span
-              className={`mt-px grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full ${
+              className={`mt-px grid h-4.5 w-4.5 shrink-0 place-items-center rounded-full ${
                 on
-                  ? "bg-[color:var(--hc-accent-soft-bg)]"
-                  : "border-[1.5px] border-[color:var(--hc-border-strong)]"
+                  ? "bg-(--hc-accent-soft-bg)"
+                  : "border-[1.5px] border-(--hc-border-strong)"
               }`}
             >
               {on ? (
-                <Check className="h-3 w-3 text-[color:var(--hc-primary-strong)]" strokeWidth={3} />
+                <Check className="h-3 w-3 text-(--hc-primary-strong)" strokeWidth={3} />
               ) : (
-                <X className="h-[11px] w-[11px] text-[color:var(--hc-muted)]" />
+                <X className="h-2.75 w-2.75 text-(--hc-muted)" />
               )}
             </span>
             {/* 미지원 항목은 opacity로 흐리지 않는다 — 대비가 2.58까지 떨어져 읽기 어려웠다.
                 X 아이콘과 muted 색으로 구분하고 명도 대비는 지킨다. */}
             <span
               className={`text-[13px] leading-[1.4] ${
-                on ? "text-[color:var(--hc-text)]" : "text-[color:var(--hc-muted)]"
+                on ? "text-(--hc-text)" : "text-(--hc-muted)"
               }`}
             >
               {label}
               {note ? (
                 <b
                   className={`font-bold ${
-                    on ? "text-[color:var(--hc-text)]" : "text-[color:var(--hc-muted)]"
+                    on ? "text-(--hc-text)" : "text-(--hc-muted)"
                   }`}
                 >
                   {" · "}
@@ -129,7 +131,7 @@ function PlanCard({
         지금 실제로 할 수 있는 것은 비회원이 무료로 가입하는 것 하나뿐이다.
       */}
       {current ? (
-        <span className="mt-5 flex h-[50px] w-full items-center justify-center rounded-full border border-[color:var(--hc-primary)] text-[15px] font-extrabold text-[color:var(--hc-primary-strong)]">
+        <span className="mt-5 flex h-12.5 w-full items-center justify-center rounded-full border border-(--hc-primary) text-[15px] font-extrabold text-(--hc-primary-strong)">
           현재 이용 중
         </span>
       ) : !isPurchasable ? (
@@ -138,25 +140,25 @@ function PlanCard({
           가는 게 맞지만, 가격 옆에 그 문구가 있으면 "베이직을 공짜로 준다"로 읽힌다.
           살 수 없는 동안에는 버튼을 두지 않고 상태만 말한다 — 로그인 여부와 상관없이 같다.
         */
-        <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
+        <p className="mt-5 flex h-12.5 items-center justify-center text-[14px] font-semibold text-(--hc-muted)">
           결제 준비 중
-        </span>
+        </p>
       ) : authed ? (
         /*
           이미 계정이 있는 사람에게는 "무료로 시작하기"가 할 말이 아니다. 게다가 결제가
           닫혀 있어 플랜을 바꿀 수도 없다 — 마이페이지로 보내 봐야 거기 있는 요금제 동작은
           이 화면으로 되돌아오는 링크뿐이라 왕복만 한다. 상태만 말한다.
         */
-        <span className="hc-surface-well mt-5 flex h-[50px] w-full items-center justify-center rounded-full border text-[15px] font-bold text-[color:var(--hc-muted)]">
+        <p className="mt-5 flex h-12.5 items-center justify-center text-[14px] font-semibold text-(--hc-muted)">
           결제 준비 중
-        </span>
+        </p>
       ) : (
         <Link
           href="/signup"
-          className={`mt-5 flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
+          className={`mt-5 flex h-12.5 w-full items-center justify-center rounded-full text-[15px] font-extrabold transition ${
             hot
               ? "hc-button-primary"
-              : "hc-surface-well border text-[color:var(--hc-text)] hover:border-[color:var(--hc-border-strong)]"
+              : "hc-surface-well border text-(--hc-text) hover:border-(--hc-border-strong)"
           }`}
         >
           {plan.id === "basic" ? "무료로 시작하기" : `${plan.name} 시작하기`}
@@ -195,8 +197,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
 
   return (
     <main
-      className={`hc-page-app min-h-dvh text-[color:var(--hc-text)] ${
-        authed ? "pb-[90px] lg:pb-0" : "pb-10"
+      className={`hc-page-app min-h-dvh text-(--hc-text) ${
+        authed ? "pb-22.5 lg:pb-0" : "hc-stage-dark pb-10"
       }`}
     >
       {authed ? <AppNav /> : <MarketingNav width="max-w-5xl" />}
@@ -204,13 +206,10 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-7 py-6 sm:py-8 lg:gap-14 lg:py-10">
         {/* 헤더 */}
         <header className="pt-1 lg:pt-0">
-          <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
-            PRICING · 요금제
-          </span>
-          <h1 className="mt-3 text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">
+          <h1 className="text-[24px] font-extrabold leading-tight tracking-[-0.6px] sm:text-[28px] lg:text-[32px]">
             {PRICING_HEADLINE}
           </h1>
-          <p className="mt-3 max-w-[480px] text-[14px] leading-[1.5] text-[color:var(--hc-muted)]">
+          <p className="mt-3 max-w-120 text-[14px] leading-normal text-(--hc-muted)">
             {authed ? PRICING_SUBTITLE_AUTHED : PRICING_SUBTITLE}
           </p>
         </header>
@@ -233,8 +232,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           보인다. 카드를 되살리는 대신 한 줄로 말해 준다.
         */}
         {currentPlanId === "pro" ? (
-          <p className="-mt-6 text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
-            지금 <b className="font-bold text-[color:var(--hc-text)]">프로</b> 를 이용
+          <p className="-mt-6 text-[13px] leading-[1.6] text-(--hc-muted)">
+            지금 <b className="font-bold text-(--hc-text)">프로</b> 를 이용
             중이에요. 새로 가입할 수는 없는 플랜이지만, 쓰던 혜택(커스텀 프레임 무제한·보관
             기간 무제한)은 그대로예요.
           </p>
@@ -246,23 +245,23 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           B2B 상품이 화면에서 가장 약하게 그려져 있었다. 개인 요금제가 결제 대기인 지금
           이게 실제로 파는 물건이므로, 그에 맞는 무게로 보여준다.
         */}
-        <section className="flex flex-col gap-4 rounded-[20px] border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] p-6 sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex flex-col gap-4 rounded-[20px] border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[16px] font-extrabold tracking-[0.3px] text-[color:var(--hc-text)]">
+              <span className="text-[16px] font-extrabold tracking-[0.3px] text-(--hc-text)">
                 {ENTERPRISE_TEASER.name}
               </span>
               {/* 배경은 --hc-primary. -accent-soft-text(#0b6b30) 위에 -primary-contrast 를
                   올리면 라이트에서 2.84:1 로 떨어진다(실측). */}
-              <span className="rounded-full bg-[color:var(--hc-primary)] px-2 py-0.5 text-[11px] font-bold text-[color:var(--hc-primary-contrast)]">
+              <span className="rounded-full bg-(--hc-primary) px-2 py-0.5 text-[11px] font-bold text-(--hc-primary-contrast)">
                 {ENTERPRISE_TEASER.badge}
               </span>
               {/* 다른 카드가 모두 가격을 보여주므로 여기도 값이 어떻게 정해지는지 밝힌다. */}
-              <span className="text-[12px] font-semibold text-[color:var(--hc-accent-soft-text)]">
+              <span className="text-[12px] font-semibold text-(--hc-accent-soft-text)">
                 {ENTERPRISE_TEASER.price}
               </span>
             </div>
-            <p className="max-w-[520px] text-[13px] leading-[1.7] text-[color:var(--hc-text)]">
+            <p className="max-w-130 text-[13px] leading-[1.7] text-(--hc-text)">
               {ENTERPRISE_TEASER.desc}
             </p>
           </div>
@@ -282,7 +281,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             전체 스펙 비교
           </h2>
           <PlanComparisonTable currentPlanId={currentPlanId} />
-          <p className="text-[11px] leading-[1.6] text-[color:var(--hc-muted)]">
+          <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
             가격은 부가세 포함이에요. {PRICING_BILLING_PENDING}
             <br />
             {PRICING_DOWNGRADE_NOTE}
@@ -300,7 +299,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               return (
                 <div
                   key={item.q}
-                  className="border-t border-[color:var(--hc-border)]"
+                  className="border-t border-(--hc-border)"
                 >
                   <button
                     type="button"
@@ -308,44 +307,40 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
                     aria-expanded={on}
                     className="flex w-full items-center justify-between gap-4 py-4 text-left"
                   >
-                    <span className="text-[15px] font-bold tracking-tight text-[color:var(--hc-text)]">
+                    <span className="text-[15px] font-bold tracking-tight text-(--hc-text)">
                       {item.q}
                     </span>
                     <span
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[color:var(--hc-border-strong)] text-[color:var(--hc-muted)] transition-transform"
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-(--hc-border-strong) text-(--hc-muted) transition-transform"
                       style={{ transform: on ? "rotate(45deg)" : "none" }}
                     >
                       +
                     </span>
                   </button>
                   {on ? (
-                    <p className="mb-4 max-w-[680px] text-[14px] leading-[1.65] text-[color:var(--hc-muted)]">
+                    <p className="mb-4 max-w-170 text-[14px] leading-[1.65] text-(--hc-muted)">
                       {item.a}
                     </p>
                   ) : null}
                 </div>
               );
             })}
-            <div className="border-t border-[color:var(--hc-border)]" />
+            <div className="border-t border-(--hc-border)" />
           </div>
         </section>
 
         {/* 하단 CTA — 가입 유도라서 로그인 상태에서는 통째로 감춘다. */}
         {authed ? null : (
-          <section className="flex flex-col items-center gap-4 rounded-[20px] border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] px-6 py-10 text-center">
+          <section className="flex flex-col items-center gap-4 rounded-[20px] border border-(--hc-border) bg-(--hc-surface) px-6 py-10 text-center">
             <h2 className="text-[22px] font-extrabold tracking-tight lg:text-[24px]">
               비회원도 촬영은 무료예요
             </h2>
-            <p className="max-w-[420px] text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
+            <p className="max-w-105 text-[14px] leading-[1.6] text-(--hc-muted)">
               먼저 무료로 찍어보고, 저장·보관이 필요해지면 그때 플랜을 올리면
               돼요.
             </p>
-            <Link
-              href="/login"
-              className="hc-button-primary mt-1 flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold"
-            >
-              시작하기
-            </Link>
+            {/* 이 절은 비회원 촬영 이야기다. 위 카드의 '무료로 시작하기'(가입)와 의도가 다르므로 문구도 다르다. */}
+            <GuestTrialStartButton className="hc-button-primary mt-1 inline-flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold" />
           </section>
         )}
       </div>

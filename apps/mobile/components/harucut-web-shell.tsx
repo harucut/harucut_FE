@@ -104,6 +104,13 @@ function isOAuthHistoryUrl(url: string) {
  */
 type WebViewHandle = WebView<object>;
 
+/**
+ * 웹 무대의 바탕색. 정본은 apps/web/app/globals.css 의 `--background`(라이트 #fafaf7 · 다크
+ * #0b0b0c)다. 셸이 비워 두는 안전영역·로딩 화면·러버밴드 뒤가 이 색으로 칠해지므로 웹과
+ * 같아야 한다 — 다르면 상태바 아래에 띠가 생긴다.
+ */
+const STAGE_COLORS = { dark: '#0B0B0C', light: '#FAFAF7' } as const;
+
 export function HarucutWebShell() {
   const webViewRef = useRef<WebViewHandle>(null);
   const insets = useSafeAreaInsets();
@@ -369,8 +376,34 @@ export function HarucutWebShell() {
     );
   }
 
+  const stage = STAGE_COLORS[scheme];
+
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        {
+          /*
+            안전영역은 셸이 비운다.
+
+            웹은 `env(safe-area-inset-*)` 로 스스로 비킬 수 있어야 하는데 WebView 안에서는
+            그 값이 믿을 만하지 않다 — 안드로이드 WebView 는 edge-to-edge 로 상태바·내비바
+            뒤까지 그리면서도 그 높이를 env 에 주지 않고(크로미움 140 미만은 0), iOS 는
+            react-native-webview 의 기본값 `contentInsetAdjustmentBehavior=never` 라 스크롤뷰가
+            상태바를 비키지 않는다. 그래서 웹의 모든 화면 상단(뒤로가기·제목·네비)이
+            상태바 아래로 들어갔다.
+
+            위는 양쪽 다 셸이 비운다. 아래는 안드로이드만 — iOS 는 WKWebView 가 홈 인디케이터
+            높이를 env(safe-area-inset-bottom) 으로 제대로 주고 웹(탭바 등)이 이미 그 값을 쓴다.
+            셸이 또 비우면 두 번 비게 된다.
+
+            셸이 비운 만큼 WebView 가 상태바 뒤로 나가지 않으므로 iOS 의 env top 은 0 이 된다.
+          */
+          paddingTop: insets.top,
+          paddingBottom: Platform.OS === 'android' ? insets.bottom : 0,
+          backgroundColor: stage,
+        },
+      ]}>
       {/* 웹이 알려 준 테마로 상태바 글자색을 맞춘다(위 scheme 주석 참고). */}
       <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
       <WebView
@@ -546,11 +579,12 @@ export function HarucutWebShell() {
         // 셸에는 주소창이 없어 새로고침할 방법이 없었다. 아래로 당기면 다시 받는다.
         pullToRefreshEnabled
         source={{ uri: webViewSession.uri }}
-        style={styles.webview}
+        style={[styles.webview, { backgroundColor: stage }]}
       />
       {isLoading ? (
-        <View style={styles.loading} pointerEvents="none">
-          <ActivityIndicator color="#1ED760" size="large" />
+        <View style={[styles.loading, { backgroundColor: stage }]} pointerEvents="none">
+          {/* 라이트 무대에서 #1ED760 은 2.6:1 이라 잘 안 보인다. 웹의 라이트 초록과 같은 값. */}
+          <ActivityIndicator color={scheme === 'light' ? '#16B454' : '#1ED760'} size="large" />
         </View>
       ) : null}
     </View>

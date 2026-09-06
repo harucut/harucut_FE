@@ -14,6 +14,7 @@
 | 화면 이동 흐름 | [route-flows.md](./route-flows.md) |
 | 로그인·리다이렉트·게스트 체험 | [auth-routing.md](./auth-routing.md) |
 | 앱 QA 수동 확인 | [mobile-qa-checklist.md](./mobile-qa-checklist.md) |
+| 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
 | 지난 계획 — **실행 기준 아님** | [archive/](./archive/) (각 문서 머리에 왜 보관인지 적혀 있다) |
 
@@ -54,9 +55,24 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료�
 스크립트가 검사 범위를 넘겨 말하지 않는지는 `python3 scripts/check_backend_contract_test.py`
 로 본다 — 백엔드도 도커도 없이 돈다.
 
+계약 대조는 A·B·C·D 네 가지다. D 는 **FE 가 실제로 보내는 본문**과 스웨거의 required 를
+기계가 맞춰 본다 — 예전에는 목록만 찍고 "대조는 사람이 한다" 였는데, 사람이 하는 대조는 결국
+안 해서 `fileSize`·`sourceKeys` 가 그렇게 새어 나갔다. 본문을 변수로 넘기면 그 변수의 타입까지
+따라간다. 못 따라가면 조용히 통과시키지 않고 "확인 못 함" 으로 남긴다.
+
 전체 검증은 `pnpm verify:standard`. 맨 앞에 `pnpm install --frozen-lockfile` 락파일 검사가
-붙고 그다음이 lint:web·test:web·build:web·lint:mobile·typecheck:mobile 이다 — 목록의
-진실은 `scripts/verify_workspace.py` 의 `GROUPS` 딕셔너리다. macOS 에서도 그냥 돈다.
+붙고 그다음이 lint:web·**check:classes:web**·**typecheck:shared**·test:web·build:web·
+lint:mobile·typecheck:mobile 이다 — 목록의 진실은 `scripts/verify_workspace.py` 의 `GROUPS`
+딕셔너리다. macOS 에서도 그냥 돈다.
+
+새로 붙은 둘은 이렇다.
+
+- `check:classes:web` — Tailwind 임의값 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을 막는다
+  (`apps/web/scripts/check-canonical-classes.mjs`). 표를 들고 있지 않고 후보를 실제로 컴파일해
+  값으로 비교하므로 Tailwind 가 올라가도 따라간다. 규칙과 예외는 `apps/web/DESIGN.md`
+  「클래스 표기 — 정규형을 쓴다」.
+- `typecheck:shared` — 루트 `tsconfig.json` 으로 `packages/*/src` 를 검사한다. 이게 없던 동안
+  `packages/shared` 의 `*.test.ts` 두 개는 **jest 는 도는데 타입은 아무도 안 보는** 상태였다.
 
 E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 검증이 조용히 통과한다.
 규칙과 강제 장치는 [auth-routing.md](./auth-routing.md#dev_auth_bypass-로컬-전용) 에 있다.
@@ -168,7 +184,7 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 | 의심했던 것 | 실제 | 근거 |
 |---|---|---|
 | 안드로이드 카메라 런타임 권한을 아무도 요청 안 한다 | **`react-native-webview` 가 직접 요청한다** | `RNCWebChromeClient.onPermissionRequest` 가 `RESOURCE_VIDEO_CAPTURE` → `Manifest.permission.CAMERA` 로 옮겨 `requestPermissions` 호출 |
-| 세이프에어리어(노치)를 셸이 안 잡는다 | **웹이 잡는다** | `viewportFit: "cover"` + 화면들이 `env(safe-area-inset-*)` 사용 |
+| 세이프에어리어(노치)를 셸이 안 잡는다 | **반은 맞았다 → 2026-09-06 셸이 잡게 고쳤다** | 웹은 `env(safe-area-inset-bottom)` 만 5곳에서 쓰고 **top 은 0곳**이었다. 안드로이드 WebView 는 상태바 높이를 env 에 주지 않고 iOS 는 RN-webview 기본값이 `never` 라 모든 화면 상단이 상태바 아래로 들어갔다. 지금은 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비운다 — [`docs/mobile-shell.md`](mobile-shell.md) 표 「안전영역」 |
 | 안드로이드 13+ `POST_NOTIFICATIONS` 가 빠졌다 | **라이브러리가 넣는다** | `expo-notifications` 의 `android/src/main/AndroidManifest.xml` 에 선언 → Gradle 머지 |
 
 ## 촬영 화질 — 두 가지를 고쳤다

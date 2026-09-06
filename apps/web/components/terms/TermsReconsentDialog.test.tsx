@@ -176,7 +176,7 @@ describe("TermsReconsentDialog", () => {
     submit.focus();
     fireEvent.click(submit);
 
-    expect(submit).toHaveTextContent("저장 중...");
+    expect(submit).toHaveTextContent("저장 중…");
     expect(submit).not.toBeDisabled();
     expect(document.activeElement).toBe(submit);
 
@@ -274,7 +274,7 @@ describe("TermsReconsentDialog", () => {
     logout.focus();
     fireEvent.click(logout);
 
-    expect(logout).toHaveTextContent("로그아웃 중...");
+    expect(logout).toHaveTextContent("로그아웃 중…");
     expect(logout).not.toBeDisabled();
     expect(document.activeElement).toBe(logout);
 

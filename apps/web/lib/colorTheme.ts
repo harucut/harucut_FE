@@ -45,12 +45,38 @@ function resolveEffectiveColorTheme(
   return preference === "system" ? getSystemColorTheme() : preference;
 }
 
+/** 무대 바탕색. 정본은 globals.css 의 `--background` — 여기와 셸(STAGE_COLORS)이 같은 값을 든다. */
+const THEME_COLOR_BY_THEME: Record<ColorTheme, string> = {
+  light: "#fafaf7",
+  dark: "#0b0b0c",
+};
+
+/**
+ * `<meta name="theme-color">` 를 지금 테마에 맞춘다.
+ *
+ * layout.tsx 는 시스템 선호 기준으로 두 개(media 분기)를 심어 두는데, 저장된 선호가 시스템과
+ * 다르면 브라우저 주소창·탭바 색이 화면과 어긋난다. 둘 다 같은 값으로 덮어써서 어느 쪽이
+ * 골라져도 화면과 같게 한다.
+ */
+export function syncThemeColorMeta(theme: ColorTheme) {
+  if (typeof document === "undefined") return;
+  document
+    .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
+    .forEach((meta) => meta.setAttribute("content", THEME_COLOR_BY_THEME[theme]));
+}
+
+/** 저장된 선호를 지금 시스템 상태로 풀어 낸 실제 테마. */
+export function getEffectiveColorTheme(): ColorTheme {
+  return resolveEffectiveColorTheme(readStoredColorThemePreference());
+}
+
 function applyColorTheme(theme: ColorTheme) {
   if (typeof document === "undefined") return;
 
   const root = document.documentElement;
   root.setAttribute(COLOR_THEME_ATTRIBUTE, theme);
   root.style.colorScheme = theme;
+  syncThemeColorMeta(theme);
 
   // 앱 셸 안이면 네이티브 상태바도 같이 맞춘다. 여기가 테마가 실제로 바뀌는 유일한
   // 지점이라(선호값 변경·시스템 변경·다른 탭 동기화가 전부 여기로 모인다) 한 번만 걸면 된다.
@@ -103,6 +129,10 @@ try {
       : "light";
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.style.colorScheme = theme;
+  var metas = document.querySelectorAll('meta[name="theme-color"]');
+  for (var i = 0; i < metas.length; i += 1) {
+    metas[i].setAttribute("content", theme === "dark" ? "#0b0b0c" : "#fafaf7");
+  }
 } catch (error) {
   document.documentElement.setAttribute("data-theme", "light");
   document.documentElement.style.colorScheme = "light";

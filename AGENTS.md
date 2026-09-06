@@ -14,8 +14,8 @@
   라우트는 1개다. 마지막 파일은 **어느 오리진이 브리지를 부를 수 있는지**를 쥔다 —
   브리지의 문이라 목록에서 빠뜨리면 보안 경계 변경을 놓친다.
 - **그래서 "모바일 화면을 고쳐라"의 정답은 거의 항상 `apps/web` 이다.**
-- 네이티브가 맡는 것은 여섯 가지다: 사진첩 저장 · 공유 시트 · 햅틱 · **알림** ·
-  **상태바 색** · 하드웨어 뒤로가기. **이 목록의 소유자는
+- 네이티브가 맡는 것은 일곱 가지다: 사진첩 저장 · 공유 시트 · 햅틱 · **알림** ·
+  **상태바 색** · **안전영역** · 하드웨어 뒤로가기. **이 목록의 소유자는
   [`docs/mobile-shell.md`](docs/mobile-shell.md) 「네이티브가 맡는 것과 그 이유」 표다** —
   ADR-0003 「경계선」은 2026-08-18 에 이렇게 정했다는 기록이고, 그 뒤로 목록이 달라졌다.
   `harucut://` 딥링크는 **아직 구현되지 않았다**(`app.json` 에 scheme 만 있고 들어오는
@@ -33,12 +33,16 @@
 - `apps/mobile`: Expo 웹뷰 셸(위 참조). 소스 5개 파일.
 - `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared`.
   **목록을 문서에 복사하지 않는다** — `packages/shared/src/index.ts` 의 재수출이 곧 진실이다
-  (현재 13개 모듈).
+  (현재 14개 모듈). 자기 `package.json` 에 의존성이 없다 — 툴체인을 `apps/web` 것에서 빌려 쓴다.
+  타입 검사는 루트 `tsconfig.json`(`pnpm typecheck:shared`), 테스트는 `apps/web` 의 jest 가
+  `roots` 로 끌어다 돌린다.
 - `docs/`: 진입점은 [`docs/README.md`](docs/README.md).
 - `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
-  `check_backend_contract_test.py` 셋이다. 나머지 둘은 검증이 아니다 —
-  `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지),
-  `gen-social-marks.mjs`(소셜 마크 에셋 생성기).
+  `check_backend_contract_test.py` 셋이다. 나머지 하나는 검증이 아니다 —
+  `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지).
+  웹 전용 검사 하나가 더 있다 — `apps/web/scripts/check-canonical-classes.mjs`
+  (`pnpm check:classes:web`). 임의값 Tailwind 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을
+  막는다. 추측이 아니라 후보를 실제로 컴파일해 값으로 비교한다.
 
 ## 규칙의 소유자
 
@@ -81,14 +85,16 @@ git config core.hooksPath .githooks
 ```
 
 켜도 `.githooks/pre-commit`·`pre-push` 가 막는 것은 보호 브랜치(`main|develop|develop_loop`)
-위의 commit/push 뿐이다 — **브랜치 이름은 검사하지 않는다.** pre-commit 의 에러 문구가 아직
-`issue/<number>-<slug>` 를 말하지만 문구일 뿐 강제되는 규칙이 아니다.
+위의 commit/push 뿐이다 — **브랜치 이름은 검사하지 않는다.** pre-commit 의 에러 문구는
+`<type>/<slug>` 브랜치로 옮기라고 안내하지만, 안내일 뿐 강제되는 규칙이 아니다.
 
 ## 검증
 
-- 통합: `pnpm verify:standard` — 락파일 검사 → `lint:web` → `test:web` → `build:web` →
-  `lint:mobile` → `typecheck:mobile`. 실제 목록은 `scripts/verify_workspace.py` 의 `GROUPS`.
-- 개별: `pnpm lint:web`, `pnpm test:web`, `pnpm build:web`, `pnpm lint:mobile`, `pnpm typecheck:mobile`
+- 통합: `pnpm verify:standard` — 락파일 검사 → `lint:web` → `check:classes:web` → `typecheck:shared`
+  → `test:web` → `build:web` → `lint:mobile` → `typecheck:mobile`.
+  실제 목록은 `scripts/verify_workspace.py` 의 `GROUPS`.
+- 개별: `pnpm lint:web`, `pnpm check:classes:web`, `pnpm typecheck:shared`, `pnpm test:web`,
+  `pnpm build:web`, `pnpm lint:mobile`, `pnpm typecheck:mobile`
 - e2e: `pnpm test:e2e:web`
 - 앱 수동 확인: [`docs/mobile-qa-checklist.md`](docs/mobile-qa-checklist.md)
 

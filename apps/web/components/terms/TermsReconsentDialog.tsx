@@ -214,7 +214,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
    * 이동하고, 실패는 저장 실패와 같은 자리에 남겨 그대로 다시 누르게 한다.
    *
    * 백엔드는 토큰이 없거나 엉터리여도 200 + 쿠키 만료를 준다(실측 2026-09-02). 즉 여기서
-   * 잡히는 실패는 대개 요청이 백엔드에 닿지 못한 쪽(GEN-502)이고, 그때 쿠키는 그대로다.
+   * 잡히는 실패는 대개 요청이 백엔드에 닿지 못한 쪽이고, 그때 쿠키는 그대로다. 그 갈래는 서버
+   * 코드가 아니라 프록시가 스스로 내는 `CLIENT-003`(502) 이다 — `app/api/client/_proxy.ts`.
    *
    * 401 만 예외로 이동시킨다. 서버가 이 토큰을 모른다는 뜻이라 세션 검사도 같은 답을 준다
    * (`/api/auth/status` 401 → `authenticated: false`) — 되돌려 보내지지 않는다. 여기서
@@ -242,11 +243,14 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
       }
     }
     // 이동을 시작하면 잠금을 풀지 않는다. 떠나는 동안 한 번 더 눌리지 않게 한다.
+    // 클라이언트 전환이 아니라 문서를 새로 받는다 — 로그아웃 직후라 쿠키가 바뀌었고,
+    // 스토어에 남은 세션 캐시와 RSC 캐시를 통째로 버려야 한다(app/oauth2/callback 주석 참고).
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/login";
   };
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-130 flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
       {/*
         목록은 서버 약관 수만큼 늘어나고 전문을 펼치면 더 늘어난다. 패널이 뷰포트를 넘으면
         제출·로그아웃 버튼이 화면 밖으로 잘리는데, 이 다이얼로그는 닫을 수도 없다.
@@ -258,7 +262,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="terms-reconsent-title"
-        className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-(--hc-card-shadow)"
       >
         <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
           <FileText className="h-5 w-5" />
@@ -266,7 +270,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         <h2 id="terms-reconsent-title" className="mt-4 text-[18px] font-extrabold">
           {revised ? "약관이 개정되었어요" : "약관 동의가 필요해요"}
         </h2>
-        <p className="mt-1.5 text-[13px] leading-6 text-[color:var(--hc-muted)]">
+        <p className="mt-1.5 text-[13px] leading-6 text-(--hc-muted)">
           {revised
             ? "계속 이용하시려면 개정된 약관에 다시 동의해 주세요."
             : "서비스를 이용하려면 아래 약관에 동의해 주세요."}
@@ -295,13 +299,13 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       }));
                       setTouched((current) => ({ ...current, [item.code]: true }));
                     }}
-                    className="h-4 w-4 accent-[color:var(--hc-primary)]"
+                    className="h-4 w-4 accent-(--hc-primary)"
                   />
                   <span>
                     <span
                       className={
                         item.required
-                          ? "text-[color:var(--hc-primary-strong)]"
+                          ? "text-(--hc-primary-strong)"
                           : "text-zinc-500"
                       }
                     >
@@ -322,7 +326,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                 </label>
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
-                  <p className="ml-6 text-[11px] text-[color:var(--hc-muted)]">
+                  <p className="ml-6 text-[11px] text-(--hc-muted)">
                     {contentState === "loading"
                       ? "약관 본문을 불러오는 중이에요."
                       : "약관 본문을 불러오지 못했어요."}
@@ -349,7 +353,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
           <button
             type="button"
             onClick={reloadContent}
-            className="mt-3 text-[12px] text-[color:var(--hc-muted)] underline underline-offset-4"
+            className="mt-3 text-[12px] text-(--hc-muted) underline underline-offset-4"
           >
             약관 본문 다시 불러오기
           </button>
@@ -357,7 +361,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
 
         {/* 저장 실패는 알려야 한다 — 다이얼로그 안에 있는 스크린리더 사용자에게도. */}
         {error ? (
-          <p role="alert" className="mt-3 text-[12px] text-[color:var(--hc-danger)]">
+          <p role="alert" className="mt-3 text-[12px] text-(--hc-danger)">
             {error}
           </p>
         ) : null}
@@ -377,7 +381,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             aria-disabled={!canSubmit || isSubmitting || isLoggingOut}
             className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
-            {isSubmitting ? "저장 중..." : "동의하고 계속하기"}
+            {isSubmitting ? "저장 중…" : "동의하고 계속하기"}
           </button>
           {/* 실패하면 이 자리에 남아 안내를 읽어야 한다. 제출 버튼과 같은 이유로 disabled 를
               쓰지 않는다 — 누른 순간 포커스가 body 로 떨어지면 안내를 놓친다. */}
@@ -385,9 +389,9 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             type="button"
             onClick={handleLogout}
             aria-disabled={isSubmitting || isLoggingOut}
-            className="h-10 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
+            className="h-10 text-[13px] text-(--hc-muted) underline underline-offset-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
-            {isLoggingOut ? "로그아웃 중..." : "동의하지 않고 로그아웃"}
+            {isLoggingOut ? "로그아웃 중…" : "동의하지 않고 로그아웃"}
           </button>
         </div>
       </div>

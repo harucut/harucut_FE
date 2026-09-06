@@ -44,7 +44,8 @@ const nextConfig: NextConfig = {
       },
       {
         // 소셜 로고 PNG 세 개가 여기 있었다. 이제 인라인 SVG 라 공개 파일이 아니다.
-        source: "/:file(hero-image.webp|hero-image.png|og-image.png|shutter.mp3)",
+        // hero-image.webp(450×600)도 빠졌다 — 데모 컷을 2배 원본(.png)에서 굽는다.
+        source: "/:file(hero-image.png|og-image.png|shutter.mp3)",
         headers: [
           {
             key: "Cache-Control",

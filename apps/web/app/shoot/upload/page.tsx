@@ -111,7 +111,7 @@ export default function ShootUploadPage() {
   const enough = shots.length >= minPhotos;
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)] lg:px-8 lg:py-10">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text) lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-3xl">
         <PageHeader
           title="사진 불러오기"
@@ -138,19 +138,19 @@ export default function ShootUploadPage() {
           disabled={isImporting}
           className="hc-button-secondary flex h-12 items-center justify-center gap-2 rounded-2xl border text-[14px] font-semibold disabled:opacity-50"
         >
-          <ImagePlus className="h-[18px] w-[18px]" />
-          {isImporting ? "불러오는 중..." : "사진 고르기"}
+          <ImagePlus className="h-4.5 w-4.5" />
+          {isImporting ? "불러오는 중…" : "사진 고르기"}
         </button>
 
         {notice ? (
           // 제외 안내는 오류가 아니라 알림이다 — 위험색(빨강)을 쓰지 않는다.
-          <p role="status" className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+          <p role="status" className="text-[12px] leading-[1.6] text-(--hc-muted)">
             {notice}
           </p>
         ) : null}
 
         {shots.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-[color:var(--hc-border)] px-4 py-10 text-center text-[13px] leading-[1.7] text-[color:var(--hc-muted)]">
+          <p className="rounded-2xl border border-dashed border-(--hc-border) px-4 py-10 text-center text-[13px] leading-[1.7] text-(--hc-muted)">
             아직 고른 사진이 없어요.
             <br />
             여러 장을 한 번에 고르고, 다음 단계에서 {minPhotos}장을 정할 수 있어요.
@@ -161,7 +161,7 @@ export default function ShootUploadPage() {
               {shots.map((src, index) => (
                 <div
                   key={`${index}-${src.slice(-24)}`}
-                  className="relative aspect-square overflow-hidden rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)]"
+                  className="relative aspect-square overflow-hidden rounded-xl border border-(--hc-border) bg-(--hc-surface)"
                 >
                   {/* 사진은 data URL 이라 next/image 로 최적화할 것이 없다. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -170,19 +170,23 @@ export default function ShootUploadPage() {
                     alt={`불러온 사진 ${index + 1}`}
                     className="h-full w-full object-cover"
                   />
+                  {/* 보이는 원은 24px, 눌리는 면은 44px. 터치 규칙(min-height 44)이 폭 24 버튼을
+                      세로 타원으로 늘리던 것을 막는다. */}
                   <button
                     type="button"
                     onClick={() => removeShotPhoto(index)}
                     aria-label={`불러온 사진 ${index + 1} 빼기`}
-                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white"
+                    className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-full"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white">
+                      <X className="h-3.5 w-3.5" />
+                    </span>
                   </button>
                 </div>
               ))}
             </div>
 
-            <p className="text-[12px] text-[color:var(--hc-muted)]">
+            <p className="text-[12px] text-(--hc-muted)">
               {shots.length}장 골랐어요.
               {enough ? "" : ` ${minPhotos - shots.length}장 더 필요해요.`}
             </p>

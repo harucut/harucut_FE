@@ -13,6 +13,11 @@ type FrameOutputOptionsPanelProps = {
   outputFilter: FourcutFilterId;
   onOutputFilterChange: (filter: FourcutFilterId) => void;
   hasCustomFrame: boolean;
+  /**
+   * 꾸민 프레임인데 그 내용을 못 읽은 상태. 잠금 여부는 그대로지만 **이유가 다르다** —
+   * 프레임이 배경을 정해 뒀다는 안내를 못 읽은 경우에까지 띄우면 사실이 아닌 말이 된다.
+   */
+  themeUnavailable?: boolean;
 };
 
 export function FrameOutputOptionsPanel({
@@ -21,9 +26,11 @@ export function FrameOutputOptionsPanel({
   outputFilter,
   onOutputFilterChange,
   hasCustomFrame,
+  themeUnavailable = false,
 }: FrameOutputOptionsPanelProps) {
   // 회원도 색을 고를 수 있다 — 서버 합성이 `ComposeRequest.backgroundColor` 를 받는다.
   // 잠기는 것은 꾸민 프레임뿐이다. 그 배경은 프레임에 저장돼 있고 이미지일 수도 있다.
+  // 프레임 내용을 못 읽었을 때도 잠긴다 — 서버는 그래도 저장된 배경을 쓰기 때문이다.
   const backgroundLocked = hasCustomFrame;
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -35,7 +42,9 @@ export function FrameOutputOptionsPanel({
 
           {backgroundLocked ? (
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] text-zinc-400">
-              꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요.
+              {themeUnavailable
+                ? "프레임 내용을 확인하지 못했어요. 배경 색상은 프레임에 저장된 색으로 저장돼요."
+                : "꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요."}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -46,9 +55,9 @@ export function FrameOutputOptionsPanel({
                     type="button"
                     onClick={() => onBorderColorChange(color.value)}
                     className={[
-                      "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[11px]",
+                      "inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[12px]",
                       borderColor === color.value
-                        ? "border-[color:var(--hc-primary)] text-[color:var(--hc-primary-strong)]"
+                        ? "border-(--hc-primary) text-(--hc-primary-strong)"
                         : "border-zinc-700 text-zinc-300",
                     ].join(" ")}
                   >
@@ -64,15 +73,22 @@ export function FrameOutputOptionsPanel({
               <div className="flex items-center gap-2">
                 <input
                   type="color"
+                  aria-label="배경색 고르기"
                   value={normalizeHexColor(borderColor)}
                   onChange={(e) => onBorderColorChange(e.target.value)}
-                  className="hc-input h-9 w-12 rounded-lg border"
+                  className="hc-input h-11 w-12 shrink-0 rounded-lg border"
                 />
                 <input
+                  aria-label="배경색 HEX 코드"
                   value={borderColor}
                   onChange={(e) => onBorderColorChange(normalizeHexColor(e.target.value))}
-                  className="hc-input h-9 flex-1 rounded-lg border px-3 text-[11px]"
+                  className="hc-input h-11 min-w-0 flex-1 rounded-lg border px-3 font-mono text-[13px] tracking-[0.06em]"
                   placeholder="#23262d"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  maxLength={7}
                 />
               </div>
             </div>
@@ -82,7 +98,7 @@ export function FrameOutputOptionsPanel({
         <div className="flex flex-col gap-2">
           <div>
             <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
-            <p className="mt-1 text-[11px] text-zinc-500">
+            <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
               고른 보정 필터는 미리보기와 최종 이미지에 똑같이 적용돼요.
             </p>
           </div>
@@ -94,16 +110,16 @@ export function FrameOutputOptionsPanel({
                 type="button"
                 onClick={() => onOutputFilterChange(filter.id)}
                 className={[
-                  "rounded-2xl border px-3 py-2 text-left transition-colors",
+                  "min-h-11 rounded-2xl border px-3 py-2.5 text-left transition-colors",
                   outputFilter === filter.id
-                    ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)]"
+                    ? "border-(--hc-primary) bg-(--hc-accent-soft-bg)"
                     : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
                 ].join(" ")}
               >
-                <span className="block text-[11px] font-semibold text-zinc-100">
+                <span className="block text-[12px] font-semibold text-zinc-100">
                   {filter.label}
                 </span>
-                <span className="mt-1 block text-[11px] text-zinc-400">
+                <span className="mt-1 block text-[12px] text-zinc-400">
                   {filter.description}
                 </span>
               </button>

@@ -43,7 +43,7 @@ function PipeRow({
 
 export function MarketingFooter({
   tone = "auto",
-  width = "max-w-[1160px]",
+  width = "max-w-290",
 }: {
   tone?: "auto" | "dark";
   /** 페이지 본문 컨테이너와 좌변을 맞추기 위한 폭. */
@@ -52,18 +52,18 @@ export function MarketingFooter({
   const dark = tone === "dark";
 
   const shell = dark
-    ? "border-t border-white/[0.1] bg-[#161617]"
-    : "border-t border-[color:var(--hc-border)] bg-[color:var(--hc-surface-soft)]";
-  const headText = dark ? "text-white/85" : "text-[color:var(--hc-text)]";
+    ? "border-t border-white/10 bg-[#161617]"
+    : "border-t border-(--hc-border) bg-(--hc-surface-soft)";
+  const headText = dark ? "text-white/85" : "text-(--hc-text)";
   // 법정 표시 텍스트도 본문과 같은 대비 등급을 쓴다.
   // 이전 값(다크 #6F6F73 / 라이트 --hc-muted-soft)은 12px 일반 텍스트에서
   // 각각 약 3.6:1, 약 2.9:1로 WCAG AA(4.5:1) 미달이었다 —
   // 같은 푸터 안에 통과 줄과 미달 줄이 섞이지 않도록 bodyText로 통일한다.
-  const bodyText = dark ? "text-[#8A8A8E]" : "text-[color:var(--hc-muted)]";
+  const bodyText = dark ? "text-[#8A8A8E]" : "text-(--hc-muted)";
   const linkText = dark
     ? "text-[#B3B3B3] hover:text-white"
-    : "text-[color:var(--hc-muted)] hover:text-[color:var(--hc-text)]";
-  const rule = dark ? "border-white/[0.1]" : "border-[color:var(--hc-border)]";
+    : "text-(--hc-muted) hover:text-(--hc-text)";
+  const rule = dark ? "border-white/10" : "border-(--hc-border)";
 
   return (
     <footer className={shell}>
@@ -143,7 +143,7 @@ export function MarketingFooter({
                 href={item.href}
                 // "기능"처럼 두 글자짜리 라벨은 22px 밖에 안 돼 손가락으로 겨냥이 안 됐다.
                 // 밑줄 위치를 지키면서 최소 폭만 확보한다.
-                className="min-w-[44px] justify-center text-center underline underline-offset-4 transition"
+                className="min-w-11 justify-center text-center underline underline-offset-4 transition"
               >
                 {item.label}
               </Link>

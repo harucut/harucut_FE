@@ -22,6 +22,17 @@
  */
 export const CLIENT_REISSUE_UNAVAILABLE_CODE = 'CLIENT-001';
 
+/**
+ * 브라우저가 우리 Next 서버에조차 닿지 못한 경우에 쓴다(진짜 오프라인 · DNS 실패 ·
+ * Next 가 죽음). 이때 fetch 는 응답 없이 TypeError 로 죽어 서버 봉투도 code 도 없으므로
+ * 클라이언트(`apps/web/lib/clientApi.ts`)가 이 코드를 붙인다.
+ *
+ * 아래 CLIENT-003 과 구간이 다르다 — 그쪽은 요청이 Next 까지는 닿은 뒤 백엔드에서 막힌 것이라
+ * 사용자 회선은 이미 살아 있음이 증명된 상태다. 이쪽은 그 한 칸 앞에서 끊긴 것이라 회선 자체를
+ * 의심해야 한다. 그래서 '연결을 확인' 은 이 문구에만 들어간다.
+ */
+export const CLIENT_NETWORK_UNREACHABLE_CODE = 'CLIENT-004';
+
 /*
   여기 넣지 않는 것 — **네이티브 브리지 실패 코드**(`photo-permission-blocked` 등).
 
@@ -40,6 +51,25 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   // ── 클라이언트 자체 코드 ──
   [CLIENT_REISSUE_UNAVAILABLE_CODE]:
     '일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.',
+
+  // 아래 둘은 프록시(apps/web/app/api/client/_proxy.ts)가 스스로 만들어 내보내는 코드다.
+  // 그쪽은 route 34개가 전부 runtime = "edge" 라 이 패키지를 import 하지 못한다(배럴을 끌어오면
+  // edge 번들에 shared 가 통째로 딸려 온다). 그래서 짝은 상수가 아니라 문자열로만 맞춰 둔다 —
+  // 코드 이름을 바꾸면 그 파일도 같은 커밋에서 고친다.
+  //
+  // NEXT_PUBLIC_BASE_URL 이 없거나 무효해서 upstream URL 을 만들지 못한 경우(500).
+  // 사용자가 아니라 배포 설정의 문제라 "다시 시도" 말고는 할 수 있는 것이 없다.
+  'CLIENT-002': '서버 설정에 문제가 있어요. 잠시 후 다시 시도해 주세요.',
+  // Next 서버가 백엔드에 닿지 못한 경우(502). 문구에 '네트워크를 확인' 을 넣지 않는다 —
+  // 요청이 Next 까지 도착한 뒤에만 생기는 코드라 사용자 회선은 이미 살아 있음이 증명된 상태고,
+  // 회선이 끊겼다면 브라우저의 fetch 가 먼저 던져 이 코드 자체가 만들어지지 않는다
+  // (그 구간은 바로 아래 CLIENT-004 다).
+  'CLIENT-003': '서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.',
+
+  // 위 둘과 달리 이건 프록시가 아니라 브라우저 쪽 clientApi 가 만든다 — 요청이 Next 까지
+  // 가지도 못한 구간이라 프록시 코드는 실행될 기회조차 없다.
+  [CLIENT_NETWORK_UNREACHABLE_CODE]:
+    '연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.',
 
   // ── 공통 ──
   'GEN-001': '요청이 올바르지 않아요.',

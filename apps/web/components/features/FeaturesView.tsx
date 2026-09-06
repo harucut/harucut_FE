@@ -72,12 +72,12 @@ function AxisVisual({ index }: { index: number }) {
         ].map((row, i) => (
           <div
             key={row.t}
-            className="flex items-center gap-5 rounded-[10px] border border-white/[0.08] bg-[#0E0E0F] px-6 py-6"
+            className="flex items-center gap-5 rounded-[10px] border border-white/8 bg-[#0E0E0F] px-6 py-6"
             style={{ borderColor: i ? undefined : "rgba(30,215,96,.28)" }}
           >
             <span
               aria-hidden
-              className="h-[34px] w-[3px] shrink-0 rounded-full"
+              className="h-8.5 w-0.75 shrink-0 rounded-full"
               style={{
                 background: i ? "rgba(255,255,255,.14)" : GREEN,
               }}
@@ -98,13 +98,13 @@ function AxisVisual({ index }: { index: number }) {
     // 커스텀 프레임 — 실제 에디터 출력(ThemeExportJson)을 제품 렌더러로 그린다.
     return (
       <div className="flex flex-col items-center gap-7">
-        <div className="h-[300px] drop-shadow-2xl sm:h-[360px]">
+        <div className="h-75 drop-shadow-2xl sm:h-90">
           <FramePreview
             frameId="grid-4"
             images={DEMO_IMAGES}
             theme={DEMO_DECORATED_THEME}
             borderColor="#141416"
-            className="!h-full !w-auto"
+            className="h-full! w-auto!"
           />
         </div>
         {/* 스티커 실물 — 붙이기 전 상태 그대로 흩뿌려 놓는다. */}
@@ -135,13 +135,13 @@ function AxisVisual({ index }: { index: number }) {
   ];
 
   return (
-    <div className="w-full rounded-[10px] border border-white/[0.08] bg-[#0E0E0F] px-7 py-8">
+    <div className="w-full rounded-[10px] border border-white/8 bg-[#0E0E0F] px-7 py-8">
       <div className="flex flex-col gap-6">
         {rows.map((row) => (
           <div key={row.plan}>
             <div className="mb-2.5 flex items-baseline justify-between">
               <span
-                className="font-mono text-[11px] tracking-[2px]"
+                className="text-[12px] font-semibold"
                 style={{
                   color: row.dim ? "rgba(255,255,255,.5)" : GREEN,
                 }}
@@ -154,7 +154,7 @@ function AxisVisual({ index }: { index: number }) {
                 {row.span}
               </span>
             </div>
-            <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/[0.07]">
+            <div className="h-0.75 w-full overflow-hidden rounded-full bg-white/7">
               <div
                 className="h-full rounded-full"
                 style={{
@@ -172,11 +172,11 @@ function AxisVisual({ index }: { index: number }) {
 
 export function FeaturesView() {
   return (
-    <div className="min-h-dvh bg-[#0B0B0C] text-white">
-      <MarketingNav tone="dark" />
+    <main className="hc-stage-dark min-h-dvh bg-[#0B0B0C] text-white">
+      <MarketingNav cta="primary" />
 
       {/* 페이지 헤드 — 랜딩 히어로보다 한 단계 낮은 타입 스케일 */}
-      <section className="mx-auto max-w-[1160px] px-7 pb-14 pt-12 sm:pt-16">
+      <section className="mx-auto max-w-290 px-7 pb-14 pt-12 sm:pt-16">
         <Reveal>
           <h1 className="text-[40px] font-black leading-[1.16] tracking-[-1.8px] sm:text-[56px] sm:tracking-[-2.6px]">
             하루컷은
@@ -187,13 +187,13 @@ export function FeaturesView() {
       </section>
 
       {/* 세 축 — 좌우 번갈아 배치. 카드 그리드 대신 점선 구분의 에디토리얼 레이아웃 */}
-      <section className="border-t border-white/[0.1]">
+      <section className="border-t border-white/10">
         {AXES.map((axis, i) => (
           <div
             key={axis.n}
-            className={i ? "border-t border-dashed border-white/[0.12]" : ""}
+            className={i ? "border-t border-dashed border-white/12" : ""}
           >
-            <div className="mx-auto max-w-[1160px] px-7 py-[72px]">
+            <div className="mx-auto max-w-290 px-7 py-18">
               <Reveal>
                 <div
                   className={`grid items-center gap-12 lg:grid-cols-2 lg:gap-20 ${
@@ -208,25 +208,25 @@ export function FeaturesView() {
                       {axis.n}
                     </span>
 
-                    <h2 className="text-[30px] font-extrabold leading-[1.25] tracking-[-.8px] sm:text-[34px]">
+                    <h2 className="text-[30px] font-extrabold leading-tight tracking-[-.8px] sm:text-[34px]">
                       {axis.title}
                     </h2>
-                    <p className="mt-5 max-w-[460px] text-[15px] leading-[1.75] text-white/75">
+                    <p className="mt-5 max-w-115 text-[15px] leading-[1.75] text-white/75">
                       {axis.body}
                     </p>
 
                     {/* 부스와의 대비 — 취소선 대신 죽은 색으로 눌러 놓는다 */}
-                    <p className="mt-6 max-w-[460px] border-l border-white/[0.1] pl-4 text-[13px] leading-[1.65] text-white/70">
+                    <p className="mt-6 max-w-115 border-l border-white/10 pl-4 text-[13px] leading-[1.65] text-white/70">
                       <span className="mr-2 font-bold text-white/85">
                         부스는
                       </span>
                       {axis.booth}
                     </p>
 
-                    <dl className="mt-8 flex flex-col gap-3 border-t border-white/[0.08] pt-6">
+                    <dl className="mt-8 flex flex-col gap-3 border-t border-white/8 pt-6">
                       {axis.facts.map(([k, v]) => (
                         <div key={k} className="flex items-baseline gap-5">
-                          <dt className="w-[56px] shrink-0 font-mono text-[11px] tracking-[1.2px] text-white/75">
+                          <dt className="w-14 shrink-0 text-[12px] font-semibold text-white/75">
                             {k}
                           </dt>
                           <dd className="text-[14px] text-white/70">{v}</dd>
@@ -246,9 +246,9 @@ export function FeaturesView() {
       </section>
 
       {/* 요금제로 잇기 */}
-      <section className="border-y border-white/[0.1] bg-black">
+      <section className="border-y border-white/10 bg-black">
         <TapeStrip />
-        <div className="mx-auto flex max-w-[1160px] flex-wrap items-center justify-between gap-6 px-7 py-14">
+        <div className="mx-auto flex max-w-290 flex-wrap items-center justify-between gap-6 px-7 py-14">
           <div>
             <h2 className="text-[24px] font-extrabold tracking-[-.7px]">
               어디까지 무료인지 먼저 볼까요?
@@ -262,14 +262,14 @@ export function FeaturesView() {
             href="/pricing"
             className="hc-button-secondary inline-flex h-12 shrink-0 items-center gap-2 rounded-full border px-7 text-[15px] font-semibold"
           >
-            요금제 보기 <ArrowRight className="h-[17px] w-[17px]" />
+            요금제 보기 <ArrowRight className="h-4.25 w-4.25" />
           </Link>
         </div>
         <TapeStrip />
       </section>
 
       {/* CTA — 랜딩과 같은 그린 블록 */}
-      <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-14">
+      <section className="mx-auto max-w-290 px-7 pb-22.5 pt-14">
         <div
           className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-10 py-9"
           style={{ background: GREEN }}
@@ -284,12 +284,12 @@ export function FeaturesView() {
             href="/login"
             className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold"
           >
-            시작하기 <ArrowRight className="h-[19px] w-[19px]" />
+            시작하기 <ArrowRight className="h-4.75 w-4.75" />
           </Link>
         </div>
       </section>
 
       <MarketingFooter tone="dark" />
-    </div>
+    </main>
   );
 }

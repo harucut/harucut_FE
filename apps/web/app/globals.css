@@ -7,7 +7,7 @@
   --background: #fafaf7;
   --foreground: #14140f;
   --hc-primary: #16b454;
-  /* 라이트에서 초록 "글자"는 전부 이 값을 쓴다. --hc-primary(#16b454)는 흰 배경 2.4:1이라 글자로 못 쓴다.
+  /* 라이트에서 초록 "글자"는 전부 이 값을 쓴다. --hc-primary(#16b454)는 흰 배경 2.7:1이라 글자로 못 쓴다.
      accent-soft 배경(#dbebdf) 위에서도 4.5:1을 넘도록 #0e7e39(4.18)에서 한 단계 더 내렸다. */
   --hc-primary-strong: #0b6b30;
   /* 위험/오류. zinc 별칭과 달리 red-* 는 테마 재매핑이 없어서, 라이트에서 그대로 쓰면
@@ -31,7 +31,6 @@
   --hc-surface-soft: rgba(255, 255, 255, 0.82);
   --hc-surface-highlight: #ffffff;
   --hc-surface-muted: #f1f1ee;
-  --hc-surface-muted-hover: #e8e8e4;
   --hc-surface-inset: linear-gradient(180deg, #f1f1ee 0%, #fafaf7 100%);
   --hc-input-bg: #e8e8e4;
   --hc-input-border: rgba(20, 20, 15, 0.16);
@@ -41,14 +40,9 @@
   --hc-accent-soft-bg: rgba(22, 180, 84, 0.1);
   --hc-accent-soft-border: rgba(22, 180, 84, 0.16);
   --hc-accent-soft-text: #0b6b30;
-  --hc-brand-badge-bg: #ffffff;
-  --hc-brand-badge-text: #0b6b30;
-  --hc-brand-badge-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
-  --hc-brand-overline: #5c5c57;
   --hc-soft-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
   --hc-shadow: rgba(20, 20, 15, 0.14);
   --hc-card-shadow: 0 18px 40px rgba(20, 20, 15, 0.1);
-  --hc-card-shadow-xl: 0 20px 60px rgba(20, 20, 15, 0.12);
   --hc-card-shadow-hero: 0 30px 80px rgba(20, 20, 15, 0.16);
   --hc-button-shadow: 0 16px 36px rgba(22, 180, 84, 0.24);
   --hc-button-shadow-hover: 0 20px 44px rgba(14, 126, 57, 0.2);
@@ -56,14 +50,11 @@
   --hc-neutral-button-hover: #f1f1ee;
   --hc-neutral-button-text: #14140f;
   --hc-neutral-button-shadow: 0 12px 32px rgba(20, 20, 15, 0.08);
-  --hc-hero-button-bg: #16b454;
-  --hc-hero-button-hover: #129a47;
-  --hc-hero-button-text: #06140a;
-  --hc-hero-gradient-end: #3dd17f;
-  --hc-theme-toggle-bg: #ffffff;
+  --hc-ink-button-bg: #14140f;
+  --hc-ink-button-hover: #2b2b25;
+  --hc-ink-button-text: #fafaf7;
   --hc-theme-toggle-active-bg: rgba(22, 180, 84, 0.12);
   --hc-theme-toggle-active-text: #0e7e39;
-  --hc-theme-toggle-shadow: 0 18px 48px rgba(20, 20, 15, 0.18);
   /* 소셜 로그인 — 각 사 공식 규격값이라 우리가 고르는 색이 아니다. 근거는 socialMarks.tsx 주석 참고.
      구글 Light: Fill #FFFFFF / Stroke #747775 1px inside / Font #1F1F1F
      카카오: 컨테이너 #FEE500 / 레이블 #000000 85% ("위의 색상 규정에 벗어난 색상을 적용해서는 안 됩니다")
@@ -82,20 +73,10 @@
   --hc-page-gradient-app:
     radial-gradient(circle at top, rgba(30, 215, 96, 0.1), transparent 28%),
     linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
-  --hc-page-gradient-showcase:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.12), transparent 24%),
-    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
   --hc-page-gradient-landing:
     radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
     radial-gradient(circle at 88% 18%, rgba(22, 180, 84, 0.1), transparent 18%),
     linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
-  --hc-page-overlay-landing:
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.28),
-      transparent 42%,
-      rgba(22, 180, 84, 0.08) 100%
-    );
   --hc-scrollbar-thumb: rgba(22, 180, 84, 0.42);
   --hc-scrollbar-thumb-hover: rgba(22, 180, 84, 0.64);
   --hc-zinc-950: #f1f1ee;
@@ -111,17 +92,17 @@
   --hc-zinc-200: #36362f;
   --hc-zinc-100: #232320;
   --hc-zinc-50: #14140f;
-  --hc-emerald-100: #d7f5e3;
-  --hc-emerald-200: #a8e9c4;
-  --hc-emerald-300: #5fd592;
-  --hc-emerald-400: #2bc76f;
-  --hc-emerald-500: #16b454;
-  --hc-lime-100: #d7f5e3;
-  --hc-lime-200: #a8e9c4;
 }
 
-/* STUDIO 디자인 — 다크: 딥다크 무대(#0B0B0C) + 비비드 그린(#1ED760). */
-html[data-theme="dark"] {
+/* STUDIO 디자인 — 다크: 딥다크 무대(#0B0B0C) + 비비드 그린(#1ED760).
+
+   `.hc-stage-dark` 는 사용자 테마와 무관하게 딥다크로 고정되는 **공개 마케팅 무대**다 —
+   랜딩·기능·행사·요금제·FAQ·약관·개인정보의 비로그인 화면. 예전에는 랜딩·기능만 하드코딩으로
+   어둡고 나머지는 사용자 테마를 따라서, 라이트 사용자가 기능 → 요금제로 가면 화면이 어둠에서
+   밝음으로 뒤집혔다. 무대는 하나다. 로그인 뒤 앱 화면(AppNav)은 그대로 사용자 테마를 따른다.
+   토큰을 이 서브트리에만 다크로 풀어 두면 그 안의 hc-* 클래스가 전부 다크 값을 받는다. */
+html[data-theme="dark"],
+.hc-stage-dark {
   color-scheme: dark;
   --background: #0b0b0c;
   --foreground: #ffffff;
@@ -145,7 +126,6 @@ html[data-theme="dark"] {
   --hc-surface-soft: #161617;
   --hc-surface-highlight: #232325;
   --hc-surface-muted: rgba(0, 0, 0, 0.3);
-  --hc-surface-muted-hover: rgba(0, 0, 0, 0.45);
   --hc-surface-inset: #000000;
   --hc-input-bg: #232325;
   --hc-input-border: rgba(255, 255, 255, 0.12);
@@ -155,14 +135,9 @@ html[data-theme="dark"] {
   --hc-accent-soft-bg: rgba(30, 215, 96, 0.16);
   --hc-accent-soft-border: rgba(30, 215, 96, 0.3);
   --hc-accent-soft-text: #7beaa6;
-  --hc-brand-badge-bg: rgba(255, 255, 255, 0.06);
-  --hc-brand-badge-text: #56dd86;
-  --hc-brand-badge-shadow: none;
-  --hc-brand-overline: #6f6f73;
   --hc-soft-shadow: none;
   --hc-shadow: rgba(0, 0, 0, 0.6);
   --hc-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
-  --hc-card-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
   --hc-card-shadow-hero: 0 24px 80px rgba(0, 0, 0, 0.7);
   --hc-button-shadow: 0 10px 28px -12px rgba(30, 215, 96, 0.5);
   --hc-button-shadow-hover: 0 14px 32px -12px rgba(30, 215, 96, 0.6);
@@ -170,14 +145,11 @@ html[data-theme="dark"] {
   --hc-neutral-button-hover: #f1f1ee;
   --hc-neutral-button-text: #0b0b0c;
   --hc-neutral-button-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
-  --hc-hero-button-bg: #1ed760;
-  --hc-hero-button-hover: #1fe267;
-  --hc-hero-button-text: #06140a;
-  --hc-hero-gradient-end: #56dd86;
-  --hc-theme-toggle-bg: #161617;
+  --hc-ink-button-bg: #ffffff;
+  --hc-ink-button-hover: #f1f1ee;
+  --hc-ink-button-text: #0b0b0c;
   --hc-theme-toggle-active-bg: rgba(30, 215, 96, 0.16);
   --hc-theme-toggle-active-text: #7beaa6;
-  --hc-theme-toggle-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
   /* 구글만 공식 Dark 렌디션(Fill #131314 / Stroke #8E918F / Font #E3E3E3)이 있어 테마를 따른다.
      카카오는 테마별 변형 자체가 없다 — #FEE500 고정이고 다른 색은 금지다.
      네이버는 다크 렌디션 #05AC4F 가 있지만 흰 글자 대비가 2.99:1 로 비텍스트 3:1 문턱에도 못 미친다.
@@ -194,13 +166,9 @@ html[data-theme="dark"] {
   --hc-frame-picker-preview-outer: #e7ecf2;
   --hc-frame-picker-preview-inner: #171c24;
   --hc-page-gradient-app: #0b0b0c;
-  --hc-page-gradient-showcase:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
-    linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
   --hc-page-gradient-landing:
     radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
     linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
-  --hc-page-overlay-landing: transparent;
   --hc-scrollbar-thumb: rgba(111, 111, 115, 0.5);
   --hc-scrollbar-thumb-hover: rgba(30, 215, 96, 0.6);
   --hc-zinc-950: #0b0b0c;
@@ -214,18 +182,9 @@ html[data-theme="dark"] {
   --hc-zinc-200: #e4e4e4;
   --hc-zinc-100: #f4f4f4;
   --hc-zinc-50: #fafafa;
-  --hc-emerald-100: #c9f7da;
-  --hc-emerald-200: #7beaa6;
-  --hc-emerald-300: #56dd86;
-  --hc-emerald-400: #2fd06b;
-  --hc-emerald-500: #1ed760;
-  --hc-lime-100: #c9f7da;
-  --hc-lime-200: #7beaa6;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   /* 전역 폰트는 Pretendard 단일. (Geist 기본값 제거 — layout.tsx에서 웹폰트 로드) */
   --font-sans:
     "Pretendard Variable", Pretendard, SUIT, -apple-system, BlinkMacSystemFont,
@@ -244,13 +203,6 @@ html[data-theme="dark"] {
   --color-zinc-200: var(--hc-zinc-200);
   --color-zinc-100: var(--hc-zinc-100);
   --color-zinc-50: var(--hc-zinc-50);
-  --color-emerald-100: var(--hc-emerald-100);
-  --color-emerald-200: var(--hc-emerald-200);
-  --color-emerald-300: var(--hc-emerald-300);
-  --color-emerald-400: var(--hc-emerald-400);
-  --color-emerald-500: var(--hc-emerald-500);
-  --color-lime-100: var(--hc-lime-100);
-  --color-lime-200: var(--hc-lime-200);
 }
 
 body {
@@ -278,45 +230,13 @@ body {
   color: var(--hc-text);
 }
 
-[class*="border-white/10"] {
-  border-color: var(--hc-border) !important;
-}
-
-[class*="border-white/20"] {
-  border-color: var(--hc-border-strong) !important;
-}
-
-[class*="bg-white/[0.03]"],
-[class*="bg-white/[0.04]"],
-[class*="bg-white/[0.05]"],
-[class*="bg-white/5"] {
-  background-color: var(--hc-surface) !important;
-}
-
-[class*="bg-white/[0.06]"],
-[class*="bg-white/[0.08]"],
-[class*="bg-white/10"],
-[class*="bg-white/80"],
-[class*="bg-white/85"] {
-  background-color: var(--hc-surface-highlight) !important;
-}
-
-[class*="bg-black/20"],
-[class*="bg-black/25"],
-[class*="bg-black/30"] {
-  background-color: var(--hc-surface-muted) !important;
-}
-
-[class*="hover:bg-white/[0.08]"]:hover,
-[class*="hover:bg-white/5"]:hover,
-[class*="hover:bg-white"]:hover {
-  background-color: var(--hc-surface-highlight) !important;
-}
-
-[class*="hover:bg-black/30"]:hover,
-[class*="hover:bg-black/80"]:hover {
-  background-color: var(--hc-surface-muted-hover) !important;
-}
+/*
+  예전에 여기 있던 `[class*="bg-white/…"]` 부분일치 !important 매핑은 걷어냈다.
+  부분 문자열 매칭이라 `hover:`·`sm:` 변형까지 상시로 덮어써서 라이트 테마에서 흰 알약 위에
+  흰 글자가 생겼다(로그인 버튼, 랜딩 네비 hover). 남아 있던 실사용 두 곳(FramePicker,
+  GeneratedAssetDownloadCard)은 토큰 클래스로 바꿨다 — 반투명 흰색이 필요하면
+  `bg-[rgba(255,255,255,0.07)]` 처럼 매핑에 걸리지 않는 값으로 직접 쓴다.
+*/
 
 /*
   줄바꿈 품질 기본값. @layer base 안에 둬야 한다 — 레이어 없이 선언하면 Tailwind 유틸리티
@@ -325,6 +245,26 @@ body {
   truncate 를 준 요소가 잘리지 않고 여러 줄로 감겼다.
 */
 @layer base {
+  /*
+    터치 기본값. 안드로이드 WebView 는 누르는 순간 회색 탭 하이라이트를 번쩍이고, iOS 는
+    더블탭 줌을 기다리느라 탭 확정이 늦다. 하이라이트는 지우고, 눌림 피드백은 아래
+    .hc-button-* 의 :active 가 대신 맡는다(apple-design: 피드백은 pointer-down 에).
+  */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  label,
+  summary {
+    touch-action: manipulation;
+  }
+
   /*
     입력 요소는 기본 고유 폭이 20글자쯤 된다(실측 213px). flex/grid 안에서는 그 값이
     최소 폭으로 작용해 w-full 을 줘도 줄어들지 않고, 좁은 화면에서 컨테이너를 밀어
@@ -350,8 +290,16 @@ body {
       min-height: 44px;
     }
 
-    button[class*="h-8"][class*="w-8"],
-    button[class*="h-9"][class*="w-9"] {
+    /*
+      부분일치(*=)가 아니라 **정확일치(~=)** 다. 클래스는 공백으로 나뉜 토큰이라 ~= 가 맞고,
+      *= 는 h-8 이 h-8.5·h-82.5 에도, w-11 이 min-w-11 에도 걸린다(간격 스케일을 쓰기
+      시작하면 그런 이름이 실제로 생긴다).
+    */
+    button[class~="h-8"][class~="w-8"],
+    button[class~="h-9"][class~="w-9"],
+    a[class~="h-8"][class~="w-8"],
+    a[class~="h-9"][class~="w-9"],
+    a[class~="h-11"][class~="w-11"] {
       min-width: 44px;
     }
 
@@ -396,18 +344,9 @@ body {
   color: var(--hc-text);
 }
 
-.hc-page-showcase {
-  background: var(--hc-page-gradient-showcase);
-  color: var(--hc-text);
-}
-
 .hc-page-landing {
   background: var(--hc-page-gradient-landing);
   color: var(--hc-text);
-}
-
-.hc-page-landing-overlay {
-  background: var(--hc-page-overlay-landing);
 }
 
 .hc-accent-chip {
@@ -422,37 +361,15 @@ body {
   box-shadow: var(--hc-card-shadow);
 }
 
-.hc-surface-card-xl {
-  background: var(--hc-surface);
-  border-color: var(--hc-border);
-  box-shadow: var(--hc-card-shadow-xl);
-}
-
 .hc-surface-hero {
   background: var(--hc-surface-highlight);
   border-color: var(--hc-border);
   box-shadow: var(--hc-card-shadow-hero);
 }
 
-.hc-surface-soft {
-  background: var(--hc-surface-soft);
-  border-color: var(--hc-border);
-  box-shadow: var(--hc-soft-shadow);
-}
-
 .hc-surface-well {
   background: var(--hc-surface-muted);
   border-color: var(--hc-border);
-}
-
-.hc-surface-well-hover:hover {
-  background: var(--hc-surface-muted-hover);
-  border-color: var(--hc-border-strong);
-}
-
-.hc-surface-inset {
-  background: var(--hc-surface-inset);
-  border-color: var(--hc-border-subtle);
 }
 
 .hc-button-primary {
@@ -471,22 +388,6 @@ body {
   box-shadow: var(--hc-button-shadow-hover);
 }
 
-.hc-button-hero {
-  background: var(--hc-hero-button-bg);
-  color: var(--hc-hero-button-text);
-  box-shadow: var(--hc-button-shadow);
-  transition:
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
-}
-
-.hc-button-hero:hover {
-  background: var(--hc-hero-button-hover);
-  box-shadow: var(--hc-button-shadow-hover);
-}
-
 .hc-button-neutral {
   background: var(--hc-neutral-button-bg);
   color: var(--hc-neutral-button-text);
@@ -500,6 +401,27 @@ body {
 
 .hc-button-neutral:hover {
   background: var(--hc-neutral-button-hover);
+}
+
+/*
+  잉크 버튼 — 초록을 쓸 수 없는 자리의 주 CTA. 로그인·회원가입은 바로 아래 네이버 버튼이
+  브랜드 초록(#03A94D, 가이드가 색을 못박는다)이라, 우리 초록(#16B454)을 나란히 두면 라이트에서
+  같은 버튼 둘로 읽혔다. 라이트에서는 잉크(#14140F), 다크에서는 흰색 — 그 테마에서 가장 강한 무채색.
+*/
+.hc-button-ink {
+  background: var(--hc-ink-button-bg);
+  color: var(--hc-ink-button-text);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.hc-button-ink:hover {
+  background: var(--hc-ink-button-hover);
+}
+
+.hc-button-ink:active {
+  filter: brightness(0.92);
 }
 
 .hc-button-secondary {
@@ -584,6 +506,21 @@ body {
   border-color: var(--hc-border-strong);
 }
 
+/*
+  눌림 피드백. 탭 하이라이트를 지웠으므로(@layer base) 손가락이 닿은 순간 버튼이 스스로
+  반응해야 한다. DESIGN.md 대로 위치는 움직이지 않고 밝기·면만 바꾼다.
+*/
+.hc-button-primary:active,
+.hc-button-neutral:active {
+  filter: brightness(0.92);
+}
+
+.hc-button-secondary:active,
+.hc-button-icon:active {
+  background: var(--hc-surface-highlight);
+  border-color: var(--hc-border-strong);
+}
+
 .hc-input {
   background: var(--hc-input-bg);
   border-color: var(--hc-input-border);
@@ -609,7 +546,8 @@ body {
   color: var(--hc-muted-soft);
 }
 
-.hc-input:focus {
+.hc-input:focus,
+.hc-input:focus-within {
   border-color: var(--hc-primary);
   outline: none;
   box-shadow: 0 0 0 1px var(--hc-primary);
@@ -626,8 +564,11 @@ body {
   color: var(--hc-primary-strong);
 }
 
+/* hover 에 --hc-primary 를 쓰면 라이트에서 2.6:1 로 떨어진다(글자 초록은 -strong 하나). 색 대신 밑줄로 반응한다. */
 .hc-link-accent:hover {
-  color: var(--hc-primary);
+  color: var(--hc-primary-strong);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .custom-scroll::-webkit-scrollbar {
@@ -672,6 +613,27 @@ body {
 }
 
 /*
+  첫 화면(히어로)용 즉시 재생판. IntersectionObserver 를 기다리는 .hc-reveal 은 하이드레이션
+  전까지 opacity 0 이라 LCP 요소(헤드라인)가 JS 가 돌기 전에는 그려지지 않았다. 이쪽은 CSS
+  애니메이션이라 첫 페인트에서 바로 시작한다. 스태거는 --hc-reveal-delay.
+*/
+@keyframes hc-reveal-now {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hc-reveal-now {
+  animation: hc-reveal-now 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--hc-reveal-delay, 0ms);
+}
+
+/*
   헤드라인 강조어. 예전에는 그라디언트를 글자에 클립했는데 두 가지가 걸렸다 —
   강조는 굵기와 색으로 충분한데 장식이 하나 더 얹혀 있었고, 글자색이 transparent 라
   접근성 검사기가 대비를 계산하지 못해 검사에서 통째로 빠졌다. 단색으로 바꾼다.
@@ -713,6 +675,49 @@ body {
   animation: hc-film-progress var(--hc-film-dwell, 2600ms) linear forwards;
 }
 
+/*
+  촬영 카운트다운 — 숫자가 바뀔 때 한 번 톡 안착한다.
+
+  얼굴 위의 진행 링을 걷어내면서 "시간이 흐른다"를 무엇이 말할지가 비었다. 링의 연속 스윕은
+  1초를 잇지만 3px 헤어라인이라 팔 길이 밖에서 사실상 안 보였고, reduced-motion 에서는 아예
+  꺼졌다. 대신 숫자 자체를 메트로놈으로 쓴다 — 큰 면적이라 멀리서도, 곁눈으로도 보인다.
+*/
+@keyframes hc-count-tick {
+  from {
+    opacity: 0.7;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hc-count-tick {
+  animation: hc-count-tick 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+  찍힌 순간의 무채색 플래시.
+
+  소리는 행사장 소음에 묻히고, 폰을 거치대에 올리면 햅틱은 아무에게도 안 간다. 남는 것이
+  게이지 한 칸뿐이라 "지금 찍혔다"가 약하다. 전면 플래시는 카메라의 오래된 관습이고
+  초록을 쓰지 않는다. **기본 opacity 는 0** 이라 모션을 끈 기기에서 흰 화면이 남지 않는다.
+*/
+@keyframes hc-capture-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.hc-capture-flash {
+  opacity: 0;
+  animation: hc-capture-flash 220ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hc-reveal {
     opacity: 1;
@@ -721,7 +726,11 @@ body {
   }
 
   .hc-film-strip,
-  .hc-film-progress {
+  .hc-film-progress,
+  .hc-reveal-now,
+  .hc-count-tick,
+  .hc-capture-flash,
+  .animate-pulse {
     animation: none;
   }
 

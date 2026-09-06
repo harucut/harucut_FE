@@ -22,7 +22,7 @@ function NoticeIcon({ icon }: { icon?: "camera" | "check" | "lock" | "sparkles" 
   }, [icon]);
 
   return (
-    <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border shadow-[var(--hc-card-shadow)]">
+    <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border shadow-(--hc-card-shadow)">
       <Icon className="h-5 w-5" />
     </span>
   );
@@ -84,7 +84,7 @@ export function GuestTrialOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="알림 닫기"
@@ -97,12 +97,12 @@ export function GuestTrialOverlay() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="guest-notice-title"
-        className="hc-surface-hero relative w-full max-w-[460px] rounded-[32px] border p-5 backdrop-blur-xl sm:p-6"
+        className="hc-surface-hero relative w-full max-w-115 rounded-4xl border p-5 backdrop-blur-xl sm:p-6"
       >
         <button
           type="button"
           onClick={clearNotice}
-          className="hc-button-icon absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border text-[color:var(--hc-muted)] transition"
+          className="hc-button-icon absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border text-(--hc-muted) transition"
         >
           <X className="h-4 w-4" />
         </button>
@@ -118,11 +118,11 @@ export function GuestTrialOverlay() {
           <div className="space-y-2">
             <h2
               id="guest-notice-title"
-              className="text-[22px] font-semibold tracking-tight text-[color:var(--hc-text)]"
+              className="text-[22px] font-semibold tracking-tight text-(--hc-text)"
             >
               {notice.title}
             </h2>
-            <p className="text-[13px] leading-6 text-[color:var(--hc-muted)]">
+            <p className="text-[13px] leading-6 text-(--hc-muted)">
               {notice.message}
             </p>
           </div>

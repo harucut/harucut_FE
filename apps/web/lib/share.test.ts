@@ -1,16 +1,20 @@
 /**
  * 공유 결과 판정.
  *
- * 이 파일이 지키는 계약은 하나다 — **네이티브 공유 실패를 사용자 취소로 삼키지 않는다.**
- * 호출부(app/history/page.tsx, app/shoot/result/page.tsx)는 `cancelled` 에 아무 안내도
- * 띄우지 않고 catch 에서만 문구를 낸다. 그래서 실패를 `cancelled` 로 돌려주면 공유 버튼이
- * 눌러도 아무 일 없는 것처럼 끝난다.
+ * 이 파일이 지키는 계약은 둘이다.
  *
- * 구분 기준은 `reason` 이다 — 사용자가 시트를 닫은 dismissedAction 에는 없고
- * (apps/mobile/lib/native-bridge.ts 의 shareLink), `Share.share()` 예외와 브리지
- * 타임아웃(lib/nativeBridge.ts 의 request)에는 붙는다.
+ * 1. **네이티브 공유 실패를 사용자 취소로 삼키지 않는다.** 호출부(app/history/page.tsx,
+ *    app/shoot/result/page.tsx)는 `cancelled` 에 아무 안내도 띄우지 않고 catch 에서만 문구를
+ *    낸다. 그래서 실패를 `cancelled` 로 돌려주면 공유 버튼이 눌러도 아무 일 없는 것처럼 끝난다.
+ *    구분 기준은 `reason` 이다 — 사용자가 시트를 닫은 dismissedAction 에는 없고
+ *    (apps/mobile/lib/native-bridge.ts 의 shareLink), `Share.share()` 예외와 브리지
+ *    타임아웃(lib/nativeBridge.ts 의 request)에는 붙는다.
+ *
+ * 2. **클립보드가 거부해도 폴백을 끝까지 써 본다.** 공유 직전 presign 왕복 때문에 사용자
+ *    제스처가 풀려 writeText 가 거절되는 일이 흔하다. execCommand 까지 실패했을 때만
+ *    `CopyFailedError` 를 던져, 호출부가 "링크 준비 실패" 와 갈라 말할 수 있게 한다.
  */
-import { shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 
 type Posted = { type: string; id?: string; [key: string]: unknown };
 
@@ -36,10 +40,17 @@ function replyToShare(posted: Posted[], result: { ok: boolean; reason?: string }
 }
 
 /** 클립보드 폴백이 탔는지 보려고 심는다. jsdom 에는 navigator.clipboard 가 없다. */
-function stubClipboard() {
-  const writeText = jest.fn(async () => undefined);
+function stubClipboard(impl: () => Promise<void> = async () => undefined) {
+  const writeText = jest.fn(impl);
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   return writeText;
+}
+
+/** execCommand 폴백을 재려면 직접 심어야 한다. jsdom 은 이 API 를 구현하지 않는다. */
+function stubExecCommand(succeeds: boolean) {
+  const execCommand = jest.fn(() => succeeds);
+  Object.defineProperty(document, "execCommand", { value: execCommand, configurable: true });
+  return execCommand;
 }
 
 function stubWebShare(impl: () => Promise<void>) {
@@ -52,6 +63,7 @@ afterEach(() => {
   delete window.__harucutNativeResolve__;
   Reflect.deleteProperty(navigator, "clipboard");
   Reflect.deleteProperty(navigator, "share");
+  Reflect.deleteProperty(document, "execCommand");
 });
 
 describe("앱 셸 안", () => {
@@ -145,5 +157,33 @@ describe("브라우저", () => {
 
     await expect(shareOrCopyLink(LINK)).resolves.toBe("copied");
     expect(clipboard).toHaveBeenCalledWith(LINK.url);
+  });
+
+  it("클립보드가 거부하면 폴백으로 복사한다 — presign 왕복 뒤 제스처가 풀린 경우", async () => {
+    const clipboard = stubClipboard(async () => {
+      throw new DOMException("write denied", "NotAllowedError");
+    });
+    const execCommand = stubExecCommand(true);
+
+    await expect(shareOrCopyLink(LINK)).resolves.toBe("copied");
+    expect(clipboard).toHaveBeenCalledWith(LINK.url);
+    expect(execCommand).toHaveBeenCalledWith("copy");
+  });
+
+  it("폴백까지 막히면 CopyFailedError 다 — 링크 준비 실패와 갈라야 한다", async () => {
+    stubClipboard(async () => {
+      throw new DOMException("write denied", "NotAllowedError");
+    });
+    const execCommand = stubExecCommand(false);
+
+    const thrown = await shareOrCopyLink(LINK).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(execCommand).toHaveBeenCalledWith("copy");
+    expect(isCopyFailedError(thrown)).toBe(true);
+    // 실패해도 폴백이 심은 textarea 는 걷어낸다.
+    expect(document.querySelector("textarea")).toBeNull();
   });
 });

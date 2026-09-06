@@ -174,6 +174,81 @@ describe("presigned upload flow", () => {
   });
 
   /*
+    조회가 실패해도 업로드는 이미 끝난 뒤다. 여기서 던지면 파일은 S3 에 올라간 채
+    저장만 죽어서 사용자는 처음부터 다시 올려야 한다. 저장에 필요한 값은 key 하나뿐이고
+    (프레임 저장은 source 에 key 를 싣는다) 해석한 URL 은 렌더 전용이다.
+  */
+  it("조회가 실패해도 업로드한 key 를 돌려준다", async () => {
+    const key = "temp/users/u/components/resolve-fail.png";
+
+    mockPost.mockResolvedValueOnce({
+      data: {
+        code: "GEN-000",
+        status: 200,
+        message: null,
+        data: {
+          key,
+          uploadUrl: "https://example.com/upload/resolve-fail.png?sig=1",
+          contentType: "image/png",
+          expiresIn: "PT24H",
+        },
+      },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    // 401·5xx·네트워크 — clientApi 가 던지는 경우 전부를 대표한다.
+    mockGet.mockRejectedValueOnce(new Error("Request failed with status code 500"));
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const result = await uploadToS3WithPresigned({
+      file: new File(["x"], "resolve-fail.png", { type: "image/png" }),
+      type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      key,
+      // 서명 쿼리를 뗀 업로드 주소가 폴백이다.
+      objectUrl: "https://example.com/upload/resolve-fail.png",
+      downloadUrl: undefined,
+    });
+  });
+
+  // key 만 필요한 업로드는 조회 왕복 자체를 하지 않는다(합성 원본은 4장이면 4번이었다).
+  it("skipUrlResolve 면 presigned-img 를 부르지 않는다", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        code: "GEN-000",
+        status: 200,
+        message: null,
+        data: {
+          key: "temp/users/u/fourcut/source-1.png",
+          uploadUrl: "https://example.com/upload/source-1.png?sig=1",
+          contentType: "image/png",
+          expiresIn: "PT24H",
+        },
+      },
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+    });
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const result = await uploadToS3WithPresigned({
+      file: new File(["x"], "source-1.png", { type: "image/png" }),
+      type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
+      skipUrlResolve: true,
+    });
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(result.key).toBe("temp/users/u/fourcut/source-1.png");
+  });
+
+  /*
     fileSize 는 위아래가 다 막혀 있다 — `@Positive @Max(10485760)` 이라 0 은 400 GEN-003 이다
     (실측: `{"field":"fileSize","message":"파일 크기는 0보다 커야 합니다."}`).
     스웨거 JSON 의 `minimum: 0` 만 보고 하한이 없다고 읽으면 안 된다.
