@@ -377,7 +377,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             aria-disabled={!canSubmit || isSubmitting || isLoggingOut}
             className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
-            {isSubmitting ? "저장 중..." : "동의하고 계속하기"}
+            {isSubmitting ? "저장 중…" : "동의하고 계속하기"}
           </button>
           {/* 실패하면 이 자리에 남아 안내를 읽어야 한다. 제출 버튼과 같은 이유로 disabled 를
               쓰지 않는다 — 누른 순간 포커스가 body 로 떨어지면 안내를 놓친다. */}
@@ -387,7 +387,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             aria-disabled={isSubmitting || isLoggingOut}
             className="h-10 text-[13px] text-[color:var(--hc-muted)] underline underline-offset-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
           >
-            {isLoggingOut ? "로그아웃 중..." : "동의하지 않고 로그아웃"}
+            {isLoggingOut ? "로그아웃 중…" : "동의하지 않고 로그아웃"}
           </button>
         </div>
       </div>

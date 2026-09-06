@@ -40,7 +40,7 @@ export function FramePreview({
   const previewFilter = getFourcutFilterCssValue(outputFilter);
 
   const outer = [
-    "rounded-lg border bg-zinc-900/80 p-2 transition-all",
+    "rounded-lg border bg-zinc-900/80 p-2",
     full,
     className,
   ].join(" ");

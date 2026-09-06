@@ -76,7 +76,7 @@ export function FramePicker({
           type="button"
           disabled={confirmDisabled}
           onClick={onConfirm}
-          className="hc-button-primary w-full rounded-full px-5 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:py-2.5 md:text-xs"
+          className="hc-button-primary inline-flex h-12 w-full items-center justify-center rounded-full px-5 text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:min-w-[200px] md:px-6"
         >
           {confirmLabel}
         </button>
@@ -107,7 +107,7 @@ function FramePickerCard({
       onClick={onClick}
       aria-pressed={selected}
       className={[
-        "group relative overflow-hidden rounded-[28px] border p-3 text-left transition-all",
+        "group relative overflow-hidden rounded-[28px] border p-3 text-left transition-[border-color,background-color,box-shadow] duration-200",
         mode === "grid"
           ? "w-full"
           : "w-[min(78vw,320px)] shrink-0 snap-center sm:w-[320px]",
@@ -133,7 +133,7 @@ function FramePickerCard({
       <div className="relative flex flex-col gap-3">
         <div
           className={[
-            "relative flex items-center justify-center rounded-2xl border border-white/10 bg-black/20",
+            "relative flex items-center justify-center rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-muted)]",
             mode === "grid" ? "min-h-[220px] p-3" : "min-h-[220px] p-4",
           ].join(" ")}
         >
@@ -166,7 +166,7 @@ function FramePickerCard({
                 "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
                 selected
                   ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
-                  : "border-white/10 bg-black/20 text-zinc-400",
+                  : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-muted)] text-zinc-400",
               ].join(" ")}
           >
             {selected ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}

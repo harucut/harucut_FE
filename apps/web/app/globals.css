@@ -278,45 +278,13 @@ body {
   color: var(--hc-text);
 }
 
-[class*="border-white/10"] {
-  border-color: var(--hc-border) !important;
-}
-
-[class*="border-white/20"] {
-  border-color: var(--hc-border-strong) !important;
-}
-
-[class*="bg-white/[0.03]"],
-[class*="bg-white/[0.04]"],
-[class*="bg-white/[0.05]"],
-[class*="bg-white/5"] {
-  background-color: var(--hc-surface) !important;
-}
-
-[class*="bg-white/[0.06]"],
-[class*="bg-white/[0.08]"],
-[class*="bg-white/10"],
-[class*="bg-white/80"],
-[class*="bg-white/85"] {
-  background-color: var(--hc-surface-highlight) !important;
-}
-
-[class*="bg-black/20"],
-[class*="bg-black/25"],
-[class*="bg-black/30"] {
-  background-color: var(--hc-surface-muted) !important;
-}
-
-[class*="hover:bg-white/[0.08]"]:hover,
-[class*="hover:bg-white/5"]:hover,
-[class*="hover:bg-white"]:hover {
-  background-color: var(--hc-surface-highlight) !important;
-}
-
-[class*="hover:bg-black/30"]:hover,
-[class*="hover:bg-black/80"]:hover {
-  background-color: var(--hc-surface-muted-hover) !important;
-}
+/*
+  예전에 여기 있던 `[class*="bg-white/…"]` 부분일치 !important 매핑은 걷어냈다.
+  부분 문자열 매칭이라 `hover:`·`sm:` 변형까지 상시로 덮어써서 라이트 테마에서 흰 알약 위에
+  흰 글자가 생겼다(로그인 버튼, 랜딩 네비 hover). 남아 있던 실사용 두 곳(FramePicker,
+  GeneratedAssetDownloadCard)은 토큰 클래스로 바꿨다 — 반투명 흰색이 필요하면
+  `bg-[rgba(255,255,255,0.07)]` 처럼 매핑에 걸리지 않는 값으로 직접 쓴다.
+*/
 
 /*
   줄바꿈 품질 기본값. @layer base 안에 둬야 한다 — 레이어 없이 선언하면 Tailwind 유틸리티
@@ -325,6 +293,26 @@ body {
   truncate 를 준 요소가 잘리지 않고 여러 줄로 감겼다.
 */
 @layer base {
+  /*
+    터치 기본값. 안드로이드 WebView 는 누르는 순간 회색 탭 하이라이트를 번쩍이고, iOS 는
+    더블탭 줌을 기다리느라 탭 확정이 늦다. 하이라이트는 지우고, 눌림 피드백은 아래
+    .hc-button-* 의 :active 가 대신 맡는다(apple-design: 피드백은 pointer-down 에).
+  */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  label,
+  summary {
+    touch-action: manipulation;
+  }
+
   /*
     입력 요소는 기본 고유 폭이 20글자쯤 된다(실측 213px). flex/grid 안에서는 그 값이
     최소 폭으로 작용해 w-full 을 줘도 줄어들지 않고, 좁은 화면에서 컨테이너를 밀어
@@ -351,7 +339,11 @@ body {
     }
 
     button[class*="h-8"][class*="w-8"],
-    button[class*="h-9"][class*="w-9"] {
+    button[class*="h-9"][class*="w-9"],
+    button[class*="h-[30px]"][class*="w-[30px]"],
+    a[class*="h-8"][class*="w-8"],
+    a[class*="h-9"][class*="w-9"],
+    a[class*="h-11"][class*="w-11"] {
       min-width: 44px;
     }
 
@@ -584,6 +576,22 @@ body {
   border-color: var(--hc-border-strong);
 }
 
+/*
+  눌림 피드백. 탭 하이라이트를 지웠으므로(@layer base) 손가락이 닿은 순간 버튼이 스스로
+  반응해야 한다. DESIGN.md 대로 위치는 움직이지 않고 밝기·면만 바꾼다.
+*/
+.hc-button-primary:active,
+.hc-button-hero:active,
+.hc-button-neutral:active {
+  filter: brightness(0.92);
+}
+
+.hc-button-secondary:active,
+.hc-button-icon:active {
+  background: var(--hc-surface-highlight);
+  border-color: var(--hc-border-strong);
+}
+
 .hc-input {
   background: var(--hc-input-bg);
   border-color: var(--hc-input-border);
@@ -609,7 +617,8 @@ body {
   color: var(--hc-muted-soft);
 }
 
-.hc-input:focus {
+.hc-input:focus,
+.hc-input:focus-within {
   border-color: var(--hc-primary);
   outline: none;
   box-shadow: 0 0 0 1px var(--hc-primary);
@@ -626,8 +635,11 @@ body {
   color: var(--hc-primary-strong);
 }
 
+/* hover 에 --hc-primary 를 쓰면 라이트에서 2.6:1 로 떨어진다(글자 초록은 -strong 하나). 색 대신 밑줄로 반응한다. */
 .hc-link-accent:hover {
-  color: var(--hc-primary);
+  color: var(--hc-primary-strong);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .custom-scroll::-webkit-scrollbar {
@@ -721,7 +733,8 @@ body {
   }
 
   .hc-film-strip,
-  .hc-film-progress {
+  .hc-film-progress,
+  .animate-pulse {
     animation: none;
   }
 
