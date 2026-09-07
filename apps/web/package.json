@@ -26,7 +26,7 @@
     "@imgly/background-removal": "1.7.0",
     "@mediapipe/tasks-vision": "1.0.1",
     "konva": "^10.3.0",
-    "lucide-react": "^1.18.0",
+    "lucide-react": "^1.40.0",
     "next": "16.2.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
