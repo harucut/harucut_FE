@@ -92,9 +92,19 @@ async function canImportPhoto(file: File): Promise<boolean> {
 
   // 앞 12 바이트면 브랜드까지 읽힌다. 파일 전체를 메모리에 올리지 않는다.
   // MIME 이 비어 오는 경우(안드로이드 파일 선택기의 HEIC)가 여기로 온다.
-  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  try {
+    const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
 
-  return looksLikeHeif(head);
+    return looksLikeHeif(head);
+  } catch {
+    /*
+      바이트를 못 읽는 파일(아직 안 내려받은 클라우드 보관물)이 여기서 던지면
+      `Promise.all` 이 통째로 거절돼 같이 고른 사진까지 전부 잃는다. 통과시켜
+      아래 `decodeImageFile` 이 그 한 장만 「읽지 못했어요」로 세게 한다.
+      여기서 false 를 주면 「지원하지 않는 형식」으로 세어져 문구가 거짓이 된다.
+    */
+    return true;
+  }
 }
 
 function toScaledDataUrl(image: {

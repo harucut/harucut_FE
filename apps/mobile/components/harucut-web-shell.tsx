@@ -22,6 +22,7 @@ import {
   isWebOrigin,
 } from '@/constants/shell';
 import {
+  BRIDGE_VERSION,
   beginTransfer,
   cancelTransfers,
   ensureAndroidChannel,
@@ -45,9 +46,13 @@ const WEB_ORIGIN = getWebOrigin();
  *
  * 웹은 이 값으로 "앱 안인가"를 판단한다(apps/web/lib/nativeBridge.ts). onLoad 뒤에 심으면
  * 첫 렌더가 이미 브라우저 분기로 지나간 뒤라 늦다 — 그래서 BeforeContentLoaded 로 넣는다.
+ *
+ * `version` 은 **이 셸이 어떤 메시지를 아는가**를 웹에 알린다. 옛 앱 바이너리가 최신 웹을
+ * 열 수 있어, 이 값 없이는 웹이 답 없는 메시지를 보내고 타임아웃까지 기다린다
+ * (lib/native-bridge.ts 의 BRIDGE_VERSION).
  */
 const INJECT_BEFORE_LOAD = `
-  window.__HARUCUT_NATIVE__ = { version: 1, platform: ${JSON.stringify(SHELL_PLATFORM)} };
+  window.__HARUCUT_NATIVE__ = { version: ${BRIDGE_VERSION}, platform: ${JSON.stringify(SHELL_PLATFORM)} };
   true;
 `;
 

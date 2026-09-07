@@ -35,9 +35,16 @@ type UploadedMediaInfo = {
 export const SUPPORTED_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif";
 
-// 지원하지 않는 형식(avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
+/**
+ * 지원하지 않는 형식(avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
+ *
+ * **서버가 저장하는 형식이 아니라 사용자가 고를 수 있는 형식**을 적는다 — HEIC 가 들어 있는
+ * 이유는 위 `SUPPORTED_IMAGE_ACCEPT` 와 같다. 빼 두면 되는 일을 안 된다고 안내하게 되고,
+ * 여러 장을 한 번에 고른 자리에서는 HEIC 가 방금 올라간 뒤에 「HEIC 는 안 된다」는 경고가
+ * 같이 뜬다(`lib/photoImport.ts`, `AssetPanel`).
+ */
 export const UNSUPPORTED_UPLOAD_MESSAGE =
-  "PNG·JPG·WEBP·GIF만 올릴 수 있어요.";
+  "PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요.";
 
 export const PRESIGNED_UPLOAD_TYPES = {
   FRAME: "FRAME",
@@ -191,6 +198,8 @@ export async function getImageUrlByKey(key: string): Promise<string | null> {
 }
 
 // 사용자 화면에 그대로 노출돼도 되도록 한국어 문구로 만든다(디버깅용 원본 형식은 뒤에 덧붙임).
+// 문구가 HEIC 를 허용한다고 말해도 아래 표는 그대로 둔다 — 사용자 파일은 `toUploadableFile`
+// 을 거쳐 JPEG 가 된 뒤에 오므로, 이 게이트가 사용자에게 HEIC 를 거절할 일은 없다.
 function createUnsupportedTypeError(file: File) {
   return new UploadValidationError(
     `${UNSUPPORTED_UPLOAD_MESSAGE} (${file.type || file.name})`,

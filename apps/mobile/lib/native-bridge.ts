@@ -18,6 +18,23 @@ import { PermissionsAndroid, Platform, Share } from 'react-native';
  *    알릴 방법은 네이티브뿐이다.
  */
 
+/**
+ * 브리지 프로토콜 판 수. 셸이 콘텐츠 로드 전에 `__HARUCUT_NATIVE__.version` 으로 심는다
+ * (components/harucut-web-shell.tsx).
+ *
+ * **웹은 자기보다 오래된 앱 바이너리 위에서도 돈다** — 스토어 업데이트를 미룬 사용자는 옛
+ * 셸로 최신 웹을 연다. 그 셸에는 새 메시지를 받을 분기가 없어 답이 영영 오지 않고, 답을
+ * 기다리는 웹은 타임아웃(60~120초)까지 버튼이 묶인다.
+ *
+ * 그래서 **웹이 답을 기다리는 메시지를 새로 넣을 때 이 값을 올린다.** 웹은 이 숫자로 "이 셸이
+ * 그 메시지를 아는가"를 가르고, 모르면 아예 보내지 않는다
+ * (apps/web/lib/nativeBridge.ts 의 CAMERA_PERMISSION_SHELL_VERSION).
+ *
+ * - 1 — 저장·공유·햅틱·알림·테마
+ * - 2 — `camera-permission` 추가
+ */
+export const BRIDGE_VERSION = 2;
+
 export type BridgeMessage =
   | { type: 'save-url'; id: string; url: string; filename: string }
   | { type: 'notify-permission'; id: string }

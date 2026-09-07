@@ -24,6 +24,7 @@
 
 import {
   isSupportedUploadFile,
+  MAX_UPLOAD_BYTES,
   UNSUPPORTED_UPLOAD_MESSAGE,
   UploadValidationError,
 } from "@/lib/presignedUploadApi";
@@ -133,7 +134,17 @@ async function loadLibheif(): Promise<HeifDecoderModule> {
     (mod) => (mod.default ?? mod) as unknown as HeifDecoderModule,
   );
 
-  return libheifPromise;
+  try {
+    return await libheifPromise;
+  } catch (error) {
+    /*
+      **성공한 로드만 남긴다.** 오프라인이나 청크 오류로 한 번 실패한 거절을 캐시에 두면
+      연결이 돌아와 다시 골라도 같은 거절을 그대로 되쓴다 — 새로고침 전까지 이 기기의
+      HEIC 변환이 통째로 막힌다(`decodeImageFile` 이 이 오류를 null 로 삼켜 보이지도 않는다).
+    */
+    libheifPromise = null;
+    throw error;
+  }
 }
 
 /** 시험용. 모듈을 한 번만 받는 캐시를 비운다. */
@@ -189,18 +200,23 @@ async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
  * 2번의 조건을 「MIME 이 image/heic 인가」로 걸지 않는 이유는 위 `looksLikeHeif` 주석에 있다.
  * 바이트를 읽으려면 앞 12 바이트만 있으면 되므로 `slice` 로 잘라 읽는다 — 파일 전체를
  * 메모리에 올리지 않는다.
+ *
+ * **머리를 읽는 것까지 오류 경계 안에 둔다.** 아이클라우드에 있어 아직 안 내려받은 사진은
+ * 고를 수는 있어도 `arrayBuffer()` 가 거절한다. 그 예외가 밖으로 나가면 호출부
+ * (`importPhotoFiles`)가 한 장이 아니라 **같이 고른 사진 전부**를 잃는다.
  */
 export async function decodeImageFile(file: File): Promise<DecodedImage | null> {
   const native = await decodeWithBrowser(file);
   if (native) return native;
 
-  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  if (!looksLikeHeif(head)) return null;
-
   try {
+    const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (!looksLikeHeif(head)) return null;
+
     return await decodeWithLibheif(file);
   } catch {
-    // 못 받았거나(오프라인) 깨진 파일이다. 호출부가 「읽지 못했다」로 세어 알린다.
+    // 못 읽었거나(클라우드 보관물) 못 받았거나(오프라인) 깨진 파일이다. 호출부가
+    // 「읽지 못했다」로 그 한 장만 세어 알린다.
     return null;
   }
 }
@@ -234,6 +250,33 @@ const CONVERTED_QUALITY = 0.92;
 const CONVERTED_EXTENSION = "jpg";
 
 /**
+ * 줄일 때 계산값보다 한 번 더 당기는 여윳값.
+ *
+ * 축소율은 「JPEG 크기가 화소 수에 비례한다」로 잡는데, 결이 고운 사진은 그만큼 안 줄어든다.
+ * 아슬아슬하게 맞추면 그런 사진에서 한 번 더 굽게 된다.
+ */
+const SHRINK_MARGIN = 0.9;
+
+/** 푼 그림을 배율만큼 줄여 JPEG 로 굽는다. 캔버스를 못 얻으면 null. */
+async function encodeAsJpeg(
+  decoded: DecodedImage,
+  scale: number,
+): Promise<Blob | null> {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(decoded.width * scale));
+  canvas.height = Math.max(1, Math.round(decoded.height * scale));
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, CONVERTED_MIME, CONVERTED_QUALITY);
+  });
+}
+
+/**
  * 백엔드에 **그대로 올릴 수 있는 파일**로 만든다. 이미 올릴 수 있으면 손대지 않는다.
  *
  * 왜 여기서 바꾸나: 프레임 자산·배경·프로필 사진은 촬영 경로와 달리 고른 파일을 **원본
@@ -244,9 +287,13 @@ const CONVERTED_EXTENSION = "jpg";
  * 같은 종류라(`UploadValidationError`) 화면이 이미 한국어로 보여 준다 — 새 문구를 만들면
  * 「지원하지 않는 형식」을 말하는 자리가 두 곳이 된다.
  *
- * 크기는 **안 줄인다.** 형식만 바꾼다. 줄이는 규칙을 아는 곳은 촬영 경로
- * (`lib/photoImport.ts` 의 `MAX_EDGE`)이고, 그 규칙은 네컷 슬롯 크기에서 나온다 —
- * 프로필 사진이나 스티커에 갖다 쓸 값이 아니다.
+ * 화소는 **한도를 넘을 때만** 줄인다. 24MP·48MP 아이폰 사진은 원본 화소 그대로 구우면
+ * 압축된 원본이 작았더라도 결과가 `MAX_UPLOAD_BYTES`(10MiB)를 넘긴다 — 그러면 변환까지
+ * 해 놓고 `uploadToS3WithPresigned` 가 발급 전에 거절해서, 정작 지원하려던 고해상도
+ * 사진만 마지막 단계에서 계속 실패한다.
+ *
+ * 줄이는 기준은 그 하나뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_EDGE`)은
+ * 네컷 슬롯 크기에서 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
  */
 export async function toUploadableFile(file: File): Promise<File> {
   if (canUploadAsIs(file)) return file;
@@ -254,18 +301,18 @@ export async function toUploadableFile(file: File): Promise<File> {
   const decoded = await decodeImageFile(file);
   if (!decoded) throw createUnsupportedUploadError(file);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = decoded.width;
-  canvas.height = decoded.height;
+  let scale = 1;
+  let blob = await encodeAsJpeg(decoded, scale);
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw createUnsupportedUploadError(file);
-
-  ctx.drawImage(decoded.source, 0, 0);
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, CONVERTED_MIME, CONVERTED_QUALITY);
-  });
+  /*
+    면적이 한 변의 제곱이라 넘긴 배수의 제곱근만큼 변을 줄이면 대개 한 번에 들어온다.
+    JPEG 크기는 그림 내용을 타므로 한 번에 안 들어오는 사진이 있어 되풀이하는데, 배율이
+    매번 최소 10%(`SHRINK_MARGIN`)씩 작아지므로 멈춘다.
+  */
+  while (blob && blob.size > MAX_UPLOAD_BYTES) {
+    scale *= Math.sqrt(MAX_UPLOAD_BYTES / blob.size) * SHRINK_MARGIN;
+    blob = await encodeAsJpeg(decoded, scale);
+  }
   if (!blob) throw createUnsupportedUploadError(file);
 
   const dot = file.name.lastIndexOf(".");

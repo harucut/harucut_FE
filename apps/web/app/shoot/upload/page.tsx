@@ -145,7 +145,8 @@ export default function ShootUploadPage() {
               갤러리만 보게 된다(apps/web/lib/nativeBridge.ts 의 주석 참고).
 
               **결과를 보지 않는다.** 거절해도 갤러리는 그대로 열리므로 하려던 일은
-              계속할 수 있다. 앱이 아니거나 iOS 면 아무 일도 일어나지 않는다.
+              계속할 수 있다. 앱이 아니거나, 이 메시지를 모르는 옛 셸이면 기다리지 않고
+              곧바로 돌아온다 — 기다리면 선택기가 2분간 안 열린다(nativeBridge 의 판 수 확인).
             */
             await nativeEnsureCameraPermission();
             fileInputRef.current?.click();

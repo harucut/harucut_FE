@@ -113,10 +113,20 @@ function PhotoTab() {
           */
           const picked = Array.from(input.files);
           setIsUploading(true);
-          const converted = await Promise.allSettled(picked.map(toUploadableFile));
-          const supported = converted.flatMap((entry) =>
-            entry.status === "fulfilled" ? [entry.value] : [],
-          );
+
+          /*
+            **한 장씩** 바꾼다. `toUploadableFile` 은 파일마다 원본 해상도 RGBA 버퍼와
+            캔버스를 쥐고 있어서 12MP 사진 한 장이 48MB 다 — 한꺼번에 풀면 몇 장만으로도
+            모바일 웹뷰가 렌더러째 죽는다. `multiple` 선택기라 정상적으로 들어오는 입력이다.
+          */
+          const supported: File[] = [];
+          for (const file of picked) {
+            try {
+              supported.push(await toUploadableFile(file));
+            } catch {
+              // 못 바꾼 것은 아래에서 개수로만 센다.
+            }
+          }
           const skipped = picked.length - supported.length;
 
           if (skipped > 0) {

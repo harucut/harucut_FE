@@ -190,6 +190,23 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
   useUnsavedWorkGuard(hasUnsavedCanvasChanges || hasUnsavedSaveDialogInput);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  /**
+   * 배경 선택 회차 번호.
+   *
+   * HEIC 변환은 비동기라, 느린 사진을 고른 뒤 다른 이미지를 고르거나 배경을 제거하면
+   * 먼저 시작한 변환이 나중에 끝나면서 최신 선택을 덮는다. 고르기·제거 때마다 번호를
+   * 올리고, 변환 전후로 번호가 같을 때만 반영한다.
+   */
+  const backgroundGenerationRef = useRef(0);
+
+  /*
+    색을 고르는 것도 배경을 바꾸는 동작이다 — `setBackgroundColor` 는 배경 이미지를 해제한다.
+    번호를 안 올리면 변환 중이던 사진이 나중에 끝나 사용자가 고른 색을 도로 덮는다.
+  */
+  const pickBackgroundColor = (value: string) => {
+    backgroundGenerationRef.current += 1;
+    setBackgroundColor(value);
+  };
   const hasRemoteLoadFailure = Boolean(remoteFrameId && loadError);
 
   useEffect(() => {
@@ -559,7 +576,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                     <button
                       key={color.id}
                       type="button"
-                      onClick={() => setBackgroundColor(color.value)}
+                      onClick={() => pickBackgroundColor(color.value)}
                       aria-pressed={selected}
                       className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[11px] ${
                         selected
@@ -582,13 +599,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   type="color"
                   aria-label="배경색 직접 고르기"
                   value={`#${backgroundColor}`}
-                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  onChange={(e) => pickBackgroundColor(e.target.value)}
                   className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
                 />
                 <input
                   aria-label="배경색 코드"
                   value={backgroundColor}
-                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  onChange={(e) => pickBackgroundColor(e.target.value)}
                   className="h-9 flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-xs text-[color:var(--hc-text)]"
                   placeholder="ffffff"
                 />
@@ -606,6 +623,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       // 안 그러면 같은 파일을 다시 골라도 change 가 안 온다.
                       e.target.value = "";
                       if (!file) return;
+                      backgroundGenerationRef.current += 1;
+                      const generation = backgroundGenerationRef.current;
 
                       /*
                         고른 **즉시** 백엔드가 받는 형식으로 바꾼다.
@@ -617,9 +636,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       */
                       try {
                         const uploadable = await toUploadableFile(file);
+                        // 변환 중에 다른 배경을 고르거나 제거했으면 늦게 온 결과는 버린다.
+                        if (backgroundGenerationRef.current !== generation) return;
                         setBackgroundError(null);
                         setBackgroundImage(uploadable);
                       } catch (error) {
+                        // 오류도 마찬가지다 — 이미 바뀐 배경 위에 지난 실패를 띄우지 않는다.
+                        if (backgroundGenerationRef.current !== generation) return;
                         setBackgroundError(
                           error instanceof UploadValidationError
                             ? error.message
@@ -632,7 +655,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 {background.type === "IMAGE" ? (
                   <button
                     type="button"
-                    onClick={clearBackgroundImage}
+                    onClick={() => {
+                      backgroundGenerationRef.current += 1;
+                      clearBackgroundImage();
+                    }}
                     className="h-9 rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-muted)] hover:border-[color:var(--hc-primary)]"
                   >
                     이미지 제거
@@ -645,7 +671,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 </p>
               ) : null}
               <p className="text-[11px] leading-4 text-[color:var(--hc-muted)]">
-                배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF만 올릴 수
+                배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF·HEIC만 올릴 수
                 있어요.
               </p>
             </section>
