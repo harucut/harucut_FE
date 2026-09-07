@@ -147,7 +147,7 @@ function extractUploadedMediaInfo(value: unknown): UploadedMediaInfo | null {
 }
 
 /**
- * 올린 파일의 조회용 URL 을 해석한다. 실패하면 `fallbackUrl` 로 떨어진다.
+ * 올린 파일의 조회용 URL 을 해석한다. 실패하면 `null`.
  *
  * 이 함수가 불리는 시점에 S3 PUT 은 이미 끝났고 `key` 도 손에 있다. 조회는 **화면에 그릴
  * 주소**를 얻으려는 것뿐이다 — 결과는 `themeEditorStore` 의 `renderUrl` 로만 가고
@@ -155,26 +155,26 @@ function extractUploadedMediaInfo(value: unknown): UploadedMediaInfo | null {
  * 네트워크로 조회가 실패해도 **성공한 업로드를 취소하면 안 된다** — 예전에는 여기서 던져서
  * 파일은 S3 에 올라간 채 저장만 죽었고, 사용자는 처음부터 다시 올려야 했다.
  *
+ * 그렇다고 서명 쿼리만 뗀 업로드 주소로 떨어져서도 안 된다. 서명이 있어야 읽히는 버킷에서는
+ * 그 주소가 열리지 않는데, `renderUrl` 에 실리면 `renderThemePreviewPng` 이 이미지 로드
+ * 실패를 삼켜서 **사진·스티커가 빠진 썸네일**이 그대로 구워져 저장된다. 실패는 실패로
+ * 돌려주고, 그릴 주소는 호출부가 쥔 이번 세션의 로컬 src 에 맡긴다.
+ *
  * 같은 엔드포인트를 부르는 형제 `getImageUrlByKey` 와 규칙을 맞춘다(그쪽도 실패를 삼킨다).
  */
 async function requestUploadedMediaInfo(
   key: string,
-  fallbackUrl: string,
-): Promise<UploadedMediaInfo> {
+): Promise<UploadedMediaInfo | null> {
   try {
     const res = await clientApi.get<ApiEnvelope<unknown>>(
       `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
     );
 
-    const mediaInfo = extractUploadedMediaInfo(res.data.data);
-    if (mediaInfo) {
-      return mediaInfo;
-    }
+    return extractUploadedMediaInfo(res.data.data);
   } catch {
-    // 응답 모양이 낯설 때와 같은 자리로 — 아래 폴백으로 떨어진다.
+    // 응답 모양이 낯설 때와 같은 자리로 — 그릴 주소가 없다는 뜻이다.
+    return null;
   }
-
-  return { objectUrl: fallbackUrl };
 }
 
 // 저장된 S3 key를 화면/합성용 다운로드 URL로 해석한다. 실패 시 null(호출부에서 색 폴백).
@@ -274,6 +274,13 @@ async function requestPresignedUpload(body: PresignedUploadRequest) {
   );
 }
 
+/**
+ * presign 발급 → S3 PUT → (선택) 조회용 URL 해석까지 한 번에.
+ *
+ * `objectUrl` 은 **조회에 성공했을 때만** 채워진다. 비어 있으면 그릴 주소가 없다는 뜻이므로
+ * 호출부는 자기가 쥔 로컬 src(blob URL·정적 경로)로 그린다 — 저장에 필요한 값은 `key` 뿐이라
+ * 서버에 올라간 사본은 그대로 살아 있다.
+ */
 export async function uploadToS3WithPresigned(opts: {
   file: File;
   type: PresignedUploadType;
@@ -326,18 +333,16 @@ export async function uploadToS3WithPresigned(opts: {
     throw new Error(`S3 upload failed: ${uploadRes.status}`);
   }
 
-  const fallbackObjectUrl = uploadUrl.split("?")[0] ?? uploadUrl;
-
   if (opts.skipUrlResolve) {
-    return { key, objectUrl: fallbackObjectUrl, downloadUrl: undefined };
+    return { key, objectUrl: undefined, downloadUrl: undefined };
   }
 
   // 업로드 가능한 형식은 전부 이미지라 항상 다운로드 URL을 해석해 본다.
-  // 해석에 실패해도 던지지 않는다 — 폴백 주소로 떨어지고 key 는 그대로 돌려준다.
-  const uploadedMediaInfo = await requestUploadedMediaInfo(key, fallbackObjectUrl);
+  // 해석에 실패해도 던지지 않는다 — URL 자리만 비우고 key 는 그대로 돌려준다.
+  const uploadedMediaInfo = await requestUploadedMediaInfo(key);
   return {
     key,
-    objectUrl: uploadedMediaInfo.objectUrl,
-    downloadUrl: uploadedMediaInfo.downloadUrl,
+    objectUrl: uploadedMediaInfo?.objectUrl,
+    downloadUrl: uploadedMediaInfo?.downloadUrl,
   };
 }

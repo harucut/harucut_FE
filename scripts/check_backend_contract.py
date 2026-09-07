@@ -411,7 +411,7 @@ def main() -> int:
     ap.add_argument(
         "--show-required",
         action="store_true",
-        help="D. 필수 요청 필드를 출력한다(검사가 아니라 참고용 목록이다)",
+        help="스웨거의 required 목록을 출력한다(D 검사는 이 플래그와 무관하게 항상 돈다)",
     )
     args = ap.parse_args()
 
@@ -464,15 +464,14 @@ def main() -> int:
     print(f"   서버 {len(server)} · FE {len(fe_server)}(+클라 {len(CLIENT_ONLY_CODES)}) "
           f"· 누락 {len(missing)} · 죽음 {len(dead)}\n")
 
-    # ⚠️ D 는 **검사가 아니다.** 스웨거가 필수라고 적은 필드를 보여 줄 뿐,
-    # 프론트가 실제로 그 값을 싣는지는 보지 않는다(요청 본문은 프록시가 아니라
-    # apps/web/lib 에서 동적으로 만들어져 정적으로 읽기 어렵다). 빠뜨린 필드가 있어도
-    # 여기서는 안 걸린다 — 대조는 사람이 한다.
+    # D 는 FE 가 보내는 요청 본문의 최상위 키를 스웨거의 required 와 맞춰 본다.
+    # 빠진 필드는 problems 로 쌓여 종료코드 1 이 된다 — 사람이 따로 대조하지 않아도 걸린다.
+    # 본문을 정적으로 못 읽는 곳만 조용히 통과시키지 않고 "확인 못 함" 경고로 남긴다.
     #
-    # 이 한 줄은 --show-required 없이도 **항상** 찍는다. 예전에는 이 한계를 독스트링·--help·
-    # 소스 주석·문서에만 적어 뒀는데, 그것들은 기본 `pnpm check:contract` 를 돌린 사람의
-    # 화면에 하나도 나오지 않는다. 그래서 필수 필드를 빠뜨린 채로도 화면에는 "계약 일치 ✓"
-    # 만 남았다. 한계는 판정이 나오는 그 화면에 적혀 있어야 읽힌다.
+    # 이 절은 --show-required 없이도 **항상** 찍는다. 예전에는 D 가 검사가 아니라 참고
+    # 출력이었고 그 한계를 독스트링·--help·문서에만 적어 뒀는데, 그것들은 기본
+    # `pnpm check:contract` 를 돌린 사람의 화면에 하나도 나오지 않는다. 그래서 필수 필드를
+    # 빠뜨린 채로도 화면에는 "계약 일치 ✓" 만 남았다. 판정은 그 화면에 적혀 있어야 읽힌다.
     print("D. 필수 요청 필드 대조")
     d_fails, d_unknown = check_required_fields(spec, backend, fe_routes, backend_norm)
     if d_fails:

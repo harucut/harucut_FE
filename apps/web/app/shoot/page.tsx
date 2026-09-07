@@ -12,7 +12,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
 
 /**
- * 두 프레임이 **같은 사진을 쓸 수 있는가**.
+ * 두 프레임이 **같은 촬영본을 쓸 수 있는가**.
  *
  * 촬영본은 찍을 때 그 프레임의 슬롯 비율로 잘려 저장된다. 비율이 크게 다르면 다시 잘라야
  * 하는데, 그러면 사용자가 프리뷰에서 본 것과 다른 그림이 된다(얼굴이 잘린다).
@@ -99,16 +99,22 @@ function ShootPageContent() {
             setSource(source);
 
             /*
-              사진을 들고 왔다면 다시 찍을 필요가 없다 — 새 프레임의 슬롯 비율이 같으면
-              고르는 화면으로 바로 보낸다. 비율이 다르면 그 사진을 쓸 수 없으므로
-              (슬롯 비율로 잘려 저장돼 있다) 비우고 촬영으로 보낸다.
+              사진을 들고 왔다면 다시 구할 필요가 없다 — 고르는 화면으로 바로 보낸다.
+
+              비율을 따지는 것은 촬영본뿐이다. 갤러리 사진은 원본 비율 그대로 담기고
+              (`lib/photoImport.ts`) 자르기는 미리보기·합성이 **새 프레임** 기준으로 하므로,
+              여기서 비우면 사용자가 고른 사진만 헛되이 잃는다.
             */
             const { shots, shotsFrameId, resetShots } = useShootSession.getState();
-            if (shots.length > 0 && shotsFrameId) {
-              if (slotRatioMatches(shotsFrameId, frameId)) {
+            if (shots.length > 0) {
+              const reusable =
+                source === "upload" ||
+                (shotsFrameId != null && slotRatioMatches(shotsFrameId, frameId));
+              if (reusable) {
                 router.push("/shoot/select");
                 return;
               }
+              // 슬롯 비율로 잘려 저장된 촬영본은 새 프레임에 못 쓴다. 비우고 다시 찍게 한다.
               resetShots();
             }
 

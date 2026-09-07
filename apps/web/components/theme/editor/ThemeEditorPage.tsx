@@ -627,7 +627,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   onChange={(e) => setBackgroundColor(e.target.value)}
                   className="hc-input h-11 w-12 shrink-0 rounded-lg border"
                 />
-                {/* 값은 '#' 없이 저장된다. 코드 입력이라는 것이 보이게 접두를 화면에만 붙인다. */}
+                {/* 스토어의 normalizeHexColor 가 '#' 를 떼고 6자리로만 저장한다 —
+                    프리셋을 누르든 저장본을 불러오든 손으로 치든 결과는 같다.
+                    그래서 '#' 는 화면에만 붙이고 입력값에는 넣지 않는다. 넣으면 '##' 로 겹친다. */}
                 <div className="hc-input flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border px-3">
                   <span aria-hidden className="font-mono text-[13px] text-(--hc-muted)">
                     #
@@ -642,7 +644,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck={false}
-                    maxLength={7}
+                    maxLength={6}
                   />
                 </div>
               </div>
