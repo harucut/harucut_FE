@@ -11,6 +11,7 @@ import {
   NativeSaveError,
   nativeHaptic,
   nativeNotify,
+  nativeEnsureCameraPermission,
   nativeRequestNotificationPermission,
   nativeSaveImageBlob,
   nativeSaveImageUrl,
@@ -20,9 +21,17 @@ import {
 
 type Posted = { type: string; id?: string; [key: string]: unknown };
 
-function enterShell() {
+/**
+ * 지금 셸이 심는 판 수(apps/mobile/lib/native-bridge.ts 의 `BRIDGE_VERSION`).
+ *
+ * 옛 앱 바이너리로 최신 웹을 여는 경우는 낮은 값을 넘겨 흉내 낸다 — 웹은 이 숫자로 보낼
+ * 메시지를 가른다.
+ */
+const SHELL_VERSION = 2;
+
+function enterShell(version = SHELL_VERSION) {
   const posted: Posted[] = [];
-  window.__HARUCUT_NATIVE__ = { version: 1, platform: "android" };
+  window.__HARUCUT_NATIVE__ = { version, platform: "android" };
   window.ReactNativeWebView = {
     postMessage: (raw: string) => {
       posted.push(JSON.parse(raw) as Posted);
@@ -285,6 +294,59 @@ describe("알림", () => {
 
     replyTo(posted, "notify-local", { ok: true });
     await expect(promise).resolves.toEqual({ ok: true });
+  });
+});
+
+/*
+  ── 카메라 권한 ──
+
+  웹 권한이 아니라 **안드로이드 앱 권한**이라 웹이 직접 못 받는다. 셸이 `CAMERA` 를
+  매니페스트에 선언해 두었는데 런타임 권한이 없으면, WebView 가 파일 선택기에서
+  「사진 찍기」 항목을 통째로 뺀다(RNCWebViewModuleImpl.java 의 needsCameraPermission).
+*/
+describe("카메라 권한", () => {
+  afterEach(leaveShell);
+
+  it("브라우저에서는 아무것도 묻지 않는다", async () => {
+    leaveShell();
+    await expect(nativeEnsureCameraPermission()).resolves.toBeNull();
+  });
+
+  /*
+    옛 앱 바이너리가 최신 웹을 띄우는 경우.
+
+    그 셸의 onMessage 에는 `camera-permission` 분기가 없어 **아무 답도 오지 않는다.** 보내고
+    기다리면 「사진 고르기」가 120초 타임아웃까지 멈추고, 선택기는 사용자 제스처가 끝난 뒤에
+    열린다. 업데이트를 미룬 사용자에게는 예전처럼 「사진 찍기」 항목만 빠지면 된다.
+  */
+  it("이 메시지를 모르는 옛 셸에는 보내지 않는다", async () => {
+    const posted = enterShell(SHELL_VERSION - 1);
+    await expect(nativeEnsureCameraPermission()).resolves.toBeNull();
+    expect(posted).toHaveLength(0);
+  });
+
+  it("셸 안에서는 요청을 넘기고 답을 기다린다", async () => {
+    const posted = enterShell();
+    const promise = nativeEnsureCameraPermission();
+
+    await waitFor(() => posted.some((item) => item.type === "camera-permission"));
+    replyTo(posted, "camera-permission", { ok: true });
+
+    await expect(promise).resolves.toEqual({ ok: true });
+  });
+
+  /*
+    거절해도 **호출부는 계속 간다.** 갤러리는 그대로 열리므로, 실패를 던지면 사용자가
+    하려던 일까지 못 하게 된다.
+  */
+  it("거절당해도 던지지 않고 결과로 돌려준다", async () => {
+    const posted = enterShell();
+    const promise = nativeEnsureCameraPermission();
+
+    await waitFor(() => posted.some((item) => item.type === "camera-permission"));
+    replyTo(posted, "camera-permission", { ok: false });
+
+    await expect(promise).resolves.toEqual({ ok: false });
   });
 });
 

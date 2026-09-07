@@ -33,6 +33,15 @@
 const CHUNK_SIZE = 510 * 1024;
 
 type NativeShellInfo = {
+  /**
+   * 이 셸이 아는 브리지 판 수.
+   *
+   * **웹은 자기보다 오래된 앱 바이너리 위에서도 돈다** — 업데이트를 미룬 사용자는 옛 셸로
+   * 최신 웹을 연다. 그 셸에는 새 메시지를 받을 분기가 없어 답이 오지 않고, 답을 기다리는
+   * 쪽은 타임아웃까지 묶인다. 그래서 답을 기다리는 새 메시지는 **보내기 전에 이 값을 본다.**
+   *
+   * 값의 소유자는 `apps/mobile/lib/native-bridge.ts` 의 `BRIDGE_VERSION` 이다.
+   */
   version: number;
   platform: "android" | "ios";
 };
@@ -284,6 +293,38 @@ export function nativeHaptic(style: "light" | "medium" | "heavy" = "medium") {
 export async function nativeRequestNotificationPermission() {
   if (!isNativeShell()) return null;
   return request({ type: "notify-permission" }, { timeoutMs: 120_000 });
+}
+
+/** `camera-permission` 을 처리하는 셸의 최소 판 수(native-bridge.ts 의 BRIDGE_VERSION). */
+const CAMERA_PERMISSION_SHELL_VERSION = 2;
+
+/**
+ * 파일 선택기를 열기 **전에** 카메라 권한을 받아 둔다.
+ *
+ * 왜 필요한가: 안드로이드 셸은 `android.permission.CAMERA` 를 선언해 두었다(촬영 화면의
+ * `getUserMedia` 가 요구한다). react-native-webview 는 「선언돼 있는데 아직 안 받았다」이면
+ * 파일 선택기에서 **「사진 찍기」 항목을 통째로 뺀다.** 그래서 촬영 화면을 한 번도 안 쓴
+ * 사용자는 갤러리만 보게 된다.
+ *
+ * **답을 기다리되 실패해도 그냥 진행한다.** 거절해도 갤러리는 그대로 열리므로, 여기서
+ * 막으면 사용자가 하려던 일까지 못 하게 된다. 앱이 아니거나 iOS 면 아무 일도 안 한다.
+ *
+ * 판 수를 먼저 본다. 이 메시지를 모르는 옛 셸은 `camera-permission` 을 받고도 **아무 답도
+ * 하지 않아**(switch 에 분기가 없다) 아래 약속이 120초 타임아웃까지 안 끝난다 — 업데이트를
+ * 미룬 사용자는 「사진 고르기」가 2분간 멈추고, 선택기는 사용자 제스처가 끝난 뒤에 열린다.
+ * 그 셸에서는 보내지 않는다. 「사진 찍기」 항목은 예전처럼 빠지지만 사진은 그대로 고른다.
+ */
+export async function nativeEnsureCameraPermission() {
+  const shell = getNativeShell();
+  // 판 수를 안 실은 셸도 이 메시지를 모르는 셸이다. `undefined < 2` 는 false 라
+  // 그냥 비교하면 게이트가 열린 채로 통과한다 — 형을 먼저 본다.
+  if (
+    !shell ||
+    typeof shell.version !== "number" ||
+    shell.version < CAMERA_PERMISSION_SHELL_VERSION
+  )
+    return null;
+  return request({ type: "camera-permission" }, { timeoutMs: 120_000 });
 }
 
 /**

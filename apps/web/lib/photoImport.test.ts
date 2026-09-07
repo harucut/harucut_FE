@@ -80,11 +80,19 @@ function photoFile(name: string, width: number, height: number) {
 }
 
 /**
- * 지원하지 않는 형식 한 장. 크기를 등록하지 않으므로, 혹시 걸러지지 않고 디코딩까지 가면
- * "읽지 못함"으로 드러난다.
+ * **열어 봐야 아는** 실패 한 장. MIME 은 이미지라 사전 필터를 통과하지만, 크기를 등록하지
+ * 않아 디코딩에서 실패한다 — 깨진 사진이나 우리가 못 푸는 형식이 이 모양이다.
+ *
+ * (예전에는 `image/heic` 이면 사전 필터에서 잘렸다. 지금은 HEIC 를 JPEG 로 바꿔 주므로
+ * 「형식」만으로는 못 자르고, 열어 봐야 안다.)
  */
-function unsupportedFile(name: string) {
+function undecodableFile(name: string) {
   return new File(["stub"], name, { type: "image/heic" });
+}
+
+/** 열어 볼 것도 없이 걸러지는 파일. 사진이 아니다. */
+function nonImageFile(name: string) {
+  return new File(["stub"], name, { type: "video/mp4" });
 }
 
 describe("importPhotoFiles 해상도 상한", () => {
@@ -131,18 +139,19 @@ describe("importPhotoFiles 해상도 상한", () => {
 });
 
 /**
- * 개수 상한은 **쓸 수 있는 사진에만** 건다.
+ * 개수 상한은 **성공한 장수**로 센다.
  *
  * 화면(`app/shoot/upload/page.tsx`)이 먼저 자르던 시절, 앨범에서 28장을 골랐는데 앞 24장이
- * heic 면 상한이 그 24장만 통과시키고 뒤의 쓸 수 있는 4장을 잘라 버려 결과가 0장이었다.
- * 형식을 아는 곳이 거른 **뒤에** 자르면 그런 일이 없고, 자르는 자리는 여전히 디코딩 앞이다.
+ * 못 쓰는 파일이면 상한이 그 24장만 통과시키고 뒤의 쓸 수 있는 4장을 잘라 버려 결과가
+ * 0장이었다. 지금은 자르는 기준이 「앞에서 24장」이 아니라 「성공 24장」이라, 앞에 실패가
+ * 몰려 있어도 뒤가 살아남는다.
  */
 describe("importPhotoFiles 개수 상한", () => {
-  it("지원하지 않는 형식이 앞에 몰려 있어도 쓸 수 있는 사진이 살아남는다", async () => {
+  it("못 읽는 파일이 앞에 몰려 있어도 쓸 수 있는 사진이 살아남는다", async () => {
     const limit = 24;
     const files = [
       ...Array.from({ length: limit }, (_, index) =>
-        unsupportedFile(`heic-${index}.heic`),
+        undecodableFile(`broken-${index}.heic`),
       ),
       ...Array.from({ length: 4 }, (_, index) =>
         photoFile(`ok-${index}.jpg`, 1200, 900),
@@ -151,13 +160,31 @@ describe("importPhotoFiles 개수 상한", () => {
 
     const result = await importPhotoFiles(files, { limit });
 
-    // 상한(24)을 형식 거르기보다 먼저 걸면 여기가 0장이 된다.
+    // 상한을 성공이 아니라 순서로 걸면 여기가 0장이 된다.
     expect(result.dataUrls).toHaveLength(4);
     expect(result.overLimitCount).toBe(0);
-    expect(result.notice).toMatch(/24장은 지원하지 않는 형식/);
-    // 걸러진 것은 디코딩조차 하지 않는다("읽지 못함"으로 새지 않는다).
+    // 열어 봐야 알았던 실패다 — 형식만으로는 못 걸렀다.
+    expect(result.notice).toMatch(/24장은 읽지 못해 제외했어요/);
     expect(baked).toHaveLength(4);
+  });
+
+  /*
+    반대쪽: 사진이 아닌 것은 **열어 보지도 않고** 거른다. 그래야 문구가
+    「지원하지 않는 형식」으로 정확히 뜨고, 디코딩 비용도 안 든다.
+  */
+  it("사진이 아닌 파일은 열어 보지 않고 형식으로 거른다", async () => {
+    const files = [
+      nonImageFile("clip.mp4"),
+      photoFile("ok.jpg", 1200, 900),
+    ];
+
+    const result = await importPhotoFiles(files);
+
+    expect(result.dataUrls).toHaveLength(1);
+    expect(result.notice).toMatch(/1장은 지원하지 않는 형식/);
     expect(result.notice).not.toMatch(/읽지 못해/);
+    // 디코딩까지 갔다면 여기가 2가 된다.
+    expect(baked).toHaveLength(1);
   });
 
   it("지원 형식이 상한을 넘으면 넘은 만큼만 남기고 개수를 돌려준다", async () => {
