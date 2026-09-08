@@ -99,6 +99,45 @@ test("같은 화면에서 만료가 여러 번 와도 한 번만 묻는다", () 
   expect(mockSetNotice).toHaveBeenCalledTimes(1);
 });
 
+test("안내를 닫고 떠났다가 같은 화면으로 돌아오면 다시 안내한다", () => {
+  // 억제는 한 화면에 쏟아지는 연속 401 을 위한 것이지 그 경로를 영구히 조용하게 만드는 것이 아니다.
+  // 브리지는 루트 레이아웃에 있어 이동해도 언마운트되지 않으므로, 표식이 경로에 남으면
+  // 돌아온 화면에서는 다시 만료돼도 로그인 안내를 열 길이 없다.
+  const { rerender } = render(<SessionExpiryBridge />);
+  expire();
+  expect(mockSetNotice).toHaveBeenCalledTimes(1);
+
+  // 요청이 없는 공개 화면으로 이동 — 여기서는 만료가 오지 않는다.
+  mockPathname = "/";
+  window.history.replaceState({}, "", "/");
+  rerender(<SessionExpiryBridge />);
+
+  // 같은 보호 경로로 복귀.
+  mockPathname = "/shoot/result";
+  window.history.replaceState({}, "", "/shoot/result");
+  rerender(<SessionExpiryBridge />);
+  expire();
+
+  expect(mockSetNotice).toHaveBeenCalledTimes(2);
+  expect(lastNotice().title).toBe("로그인이 풀렸어요");
+});
+
+test("안내를 닫은 뒤 다른 상태가 바뀌어도 같은 화면에서는 다시 묻지 않는다", () => {
+  // 표식을 지우는 기준은 pathname 뿐이다. 등록 effect 의 다른 의존성(accessMode)이 바뀔 때도
+  // 지워지면 화면 하나에서 안내가 두 번 뜨는 원래 문제로 돌아간다.
+  const { rerender } = render(<SessionExpiryBridge />);
+  expire();
+  expect(mockSetNotice).toHaveBeenCalledTimes(1);
+
+  mockAccessMode = "guest";
+  rerender(<SessionExpiryBridge />);
+  mockAccessMode = "member";
+  rerender(<SessionExpiryBridge />);
+  expire();
+
+  expect(mockSetNotice).toHaveBeenCalledTimes(1);
+});
+
 test("게스트 체험 중에는 아무것도 하지 않는다", () => {
   mockAccessMode = "guest";
   render(<SessionExpiryBridge />);

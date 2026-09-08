@@ -32,13 +32,31 @@ export function SessionExpiryBridge() {
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const setNotice = useGuestTrialStore((state) => state.setNotice);
   /*
-    이 화면에서 이미 안내했는가.
+    이번 방문에서 이미 안내했는가.
 
     만료는 실패한 요청마다 한 번씩 온다(`lib/clientApi.ts`). 화면 하나가 여러 요청을 나란히
     보내면 안내도 그만큼 오는데, 막지 않으면 사용자가 닫은 안내가 곧바로 다시 뜬다.
     이동으로 화면이 사라지던 예전에는 드러나지 않던 문제다.
+
+    억제하는 범위는 **한 번의 방문**이다. 표식을 경로에 묶어 두면 안내를 닫고 떠났다가 같은
+    화면으로 돌아왔을 때 표식이 그대로 남는다 — 이 브리지는 루트 레이아웃에 있어 이동으로
+    언마운트되지 않으므로, 그 경로에서는 다시 401 을 받아도 영영 아무 말도 못 하게 된다.
   */
-  const noticedPathRef = useRef<string | null>(null);
+  const noticedInVisitRef = useRef(false);
+
+  /*
+    방문이 끝나면 표식을 지운다.
+
+    의존성은 `pathname` 하나다. 아래 등록 effect(`[accessMode, pathname, setNotice]`) 안에서
+    지우면 accessMode·setNotice 가 바뀔 때도 같이 지워져, 한 화면에서 닫은 안내가 되살아나는
+    원래 문제로 돌아간다. 그것 하나가 이 effect 를 따로 두는 이유다.
+
+    (선언 순서는 읽는 순서를 맞춘 것일 뿐 판정에 걸리지 않는다. 핸들러는 fetch 가 끝난 뒤
+    비동기로만 불리므로 React 의 effect 플러시 사이에 끼어들 수 없다.)
+  */
+  useEffect(() => {
+    noticedInVisitRef.current = false;
+  }, [pathname]);
 
   useEffect(() => {
     // 로컬 개발 우회 중에는 백엔드가 401을 줘도 로그인으로 유도하지 않는다.
@@ -47,8 +65,8 @@ export function SessionExpiryBridge() {
     registerSessionExpiredHandler(() => {
       if (accessMode === "guest") return;
       if (!isProtectedPath(pathname)) return;
-      if (noticedPathRef.current === pathname) return;
-      noticedPathRef.current = pathname;
+      if (noticedInVisitRef.current) return;
+      noticedInVisitRef.current = true;
 
       const redirectTo = `${pathname}${window.location.search}`;
       setNotice({
