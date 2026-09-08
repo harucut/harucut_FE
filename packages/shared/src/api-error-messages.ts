@@ -82,7 +82,7 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'GEN-021': '권한이 없어요.',
   'GEN-031': '요청한 정보를 찾을 수 없어요.',
   'GEN-041': '지원하지 않는 요청이에요.',
-  'GEN-051': 'PNG·JPG·WEBP·GIF만 올릴 수 있어요.',
+  'GEN-051': 'PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요.',
   'GEN-091': '서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
 
 

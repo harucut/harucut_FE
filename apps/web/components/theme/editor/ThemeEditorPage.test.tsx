@@ -148,8 +148,9 @@ jest.mock("@/lib/presignedUploadApi", () => ({
   },
   uploadToS3WithPresigned: (...args: unknown[]) => mockUploadPresigned(...args),
   getImageUrlByKey: jest.fn().mockResolvedValue(null),
-  SUPPORTED_IMAGE_ACCEPT: "image/png,image/jpeg,image/webp,image/gif",
-  UNSUPPORTED_UPLOAD_MESSAGE: "PNG·JPG·WEBP·GIF만 올릴 수 있어요.",
+  SUPPORTED_IMAGE_ACCEPT:
+    "image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif",
+  UNSUPPORTED_UPLOAD_MESSAGE: "PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요.",
   UPLOAD_TOO_LARGE_MESSAGE: "10MB 이하 이미지만 올릴 수 있어요.",
   EMPTY_UPLOAD_MESSAGE: "빈 파일은 올릴 수 없어요.",
   MIN_UPLOAD_BYTES: 1,

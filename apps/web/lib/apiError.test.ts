@@ -126,7 +126,7 @@ describe("apiError helpers", () => {
       "저장에 실패했어요.",
     );
 
-    expect(message).toBe("PNG·JPG·WEBP·GIF만 올릴 수 있어요.");
+    expect(message).toBe("PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요.");
   });
 
   it("never surfaces an unmapped English server message", () => {

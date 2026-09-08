@@ -11,7 +11,7 @@
 | `lib/native-bridge.ts` | 웹이 보내는 요청 처리(사진첩 저장·공유·햅틱·알림) |
 | `constants/shell.ts` | 웹/백엔드 오리진, 셸 UA 토큰, OAuth 판정 |
 
-네이티브가 맡는 일곱 가지와 그 이유는 [`docs/mobile-shell.md`](../../docs/mobile-shell.md) 에 있다.
+네이티브가 맡는 여덟 가지와 그 이유는 [`docs/mobile-shell.md`](../../docs/mobile-shell.md) 에 있다.
 **"모바일 화면을 고쳐라"의 정답은 거의 항상 `apps/web`** 이다.
 
 ## 실행

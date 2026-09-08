@@ -12,8 +12,8 @@ import {
   SUPPORTED_IMAGE_ACCEPT,
   UNSUPPORTED_UPLOAD_MESSAGE,
   UPLOAD_TOO_LARGE_MESSAGE,
-  isSupportedUploadFile,
 } from "@/lib/presignedUploadApi";
+import { toUploadableFile } from "@/lib/imageDecode";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((state) => state.tab);
@@ -107,31 +107,53 @@ function PhotoTab() {
           const input = event.currentTarget;
           if (!input.files) return;
 
-          // 형식도 크기도 올리기 전에 걸러 사유를 먼저 알려준다.
-          // 여기서 통과시켜도 서버 한도(1~10485760 바이트)를 벗어난 파일은 저장할 때
-          // presign 발급이 400 으로 막힌다 — 편집을 다 끝낸 뒤에 알게 되는 자리다.
-          // 순서는 배경 이미지 입력(ThemeEditorPage)과 같은 형식 → 하한 → 상한으로 맞춘다.
-          // 규칙의 주인은 uploadToS3WithPresigned 이고 여기는 사유를 먼저 말하는 층이다.
+          /*
+            거르기 전에 **바꿔 본다.**
+
+            아이폰 기본 설정이 만드는 HEIC 는 백엔드가 안 받지만 여기서 JPEG 로 구우면
+            된다(`lib/imageDecode.ts`). 예전처럼 걸러 내기만 하면 아이폰에서 고른 사진이
+            통째로 「지원하지 않는 형식」이 된다.
+
+            바꿔도 안 되는 것, 서버 한도(1~10485760 바이트)를 벗어나는 것만 사유별로 세어
+            제외한다. 여기서 통과시키면 저장할 때 presign 발급이 400 으로 막힌다 — 편집을
+            다 끝낸 뒤에 알게 되는 자리다. 순서는 배경 이미지 입력(ThemeEditorPage)과 같은
+            형식 → 하한 → 상한이고, 규칙의 주인은 uploadToS3WithPresigned 다.
+          */
           const picked = Array.from(input.files);
+          setIsUploading(true);
+
+          /*
+            **한 장씩** 바꾼다. `toUploadableFile` 은 파일마다 원본 해상도 RGBA 버퍼와
+            캔버스를 쥐고 있어서 12MP 사진 한 장이 48MB 다 — 한꺼번에 풀면 몇 장만으로도
+            모바일 웹뷰가 렌더러째 죽는다. `multiple` 선택기라 정상적으로 들어오는 입력이다.
+          */
           const supported: File[] = [];
           let unsupportedCount = 0;
           let emptyCount = 0;
           let tooLargeCount = 0;
 
           for (const file of picked) {
-            if (!isSupportedUploadFile(file)) {
+            let uploadable: File;
+            try {
+              uploadable = await toUploadableFile(file);
+            } catch {
+              // 바꿔도 못 올리는 형식이다. 사유 문구는 변환기가 던지는 예외가 든 것과
+              // 같은 상수라 여기서 다시 만들지 않는다.
               unsupportedCount += 1;
               continue;
             }
-            if (file.size < MIN_UPLOAD_BYTES) {
+
+            // 크기는 **바꾼 뒤**에 잰다. 변환기가 한도를 넘는 사진은 줄여서 주므로,
+            // 먼저 재면 정작 살릴 수 있는 고화소 사진을 여기서 잘라 버린다.
+            if (uploadable.size < MIN_UPLOAD_BYTES) {
               emptyCount += 1;
               continue;
             }
-            if (file.size > MAX_UPLOAD_BYTES) {
+            if (uploadable.size > MAX_UPLOAD_BYTES) {
               tooLargeCount += 1;
               continue;
             }
-            supported.push(file);
+            supported.push(uploadable);
           }
 
           // 사유별로 센다. 한 줄로 뭉치면 어느 파일을 바꿔서 다시 고르면 되는지 알 수 없다.
@@ -147,11 +169,11 @@ function PhotoTab() {
           setNotice(notices.join(" ") || null);
 
           if (supported.length === 0) {
+            setIsUploading(false);
             input.value = "";
             return;
           }
 
-          setIsUploading(true);
           const result = await addAssets(supported);
           if (result.failed > 0) {
             // 제외 사유도 같이 남긴다. 업로드 실패로 덮어 버리면 방금 사라진 파일이

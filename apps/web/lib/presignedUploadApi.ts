@@ -19,12 +19,32 @@ type UploadedMediaInfo = {
   downloadUrl?: string;
 };
 
+/**
+ * 파일 선택기에 넘기는 `accept`. **서버가 받는 형식보다 넓다.**
+ *
+ * HEIC/HEIF 가 여기 들어 있는 이유: 서버는 안 받지만 **우리가 JPEG 로 바꿔서 보낸다**
+ * (`lib/imageDecode.ts` 의 `toUploadableFile`). 빼 두면 아이폰 사진이 선택기에서 흐리게
+ * 나와, 변환기를 붙여 놔도 파일이 거기까지 오지 못한다.
+ *
+ * 확장자와 MIME 을 **둘 다** 적는다. 안드로이드 파일 선택기는 HEIC 에
+ * `application/octet-stream` 이나 빈 문자열을 주는 경우가 있어 MIME 만으로는 못 걸린다.
+ *
+ * 「서버가 받는 형식」의 소유자는 이 파일의 `EXTENSION_TO_CONTENT_TYPE` 표다 — 그 표에
+ * HEIC 를 넣으면 안 된다. 서버는 정말로 안 받는다(415 GEN-051).
+ */
 export const SUPPORTED_IMAGE_ACCEPT =
-  "image/png,image/jpeg,image/webp,image/gif";
+  "image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif";
 
-// 지원하지 않는 형식(heic/avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
+/**
+ * 지원하지 않는 형식(avif/bmp/svg 등)을 고른 사용자에게 보여줄 공통 안내.
+ *
+ * **서버가 저장하는 형식이 아니라 사용자가 고를 수 있는 형식**을 적는다 — HEIC 가 들어 있는
+ * 이유는 위 `SUPPORTED_IMAGE_ACCEPT` 와 같다. 빼 두면 되는 일을 안 된다고 안내하게 되고,
+ * 여러 장을 한 번에 고른 자리에서는 HEIC 가 방금 올라간 뒤에 「HEIC 는 안 된다」는 경고가
+ * 같이 뜬다(`lib/photoImport.ts`, `AssetPanel`).
+ */
 export const UNSUPPORTED_UPLOAD_MESSAGE =
-  "PNG·JPG·WEBP·GIF만 올릴 수 있어요.";
+  "PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요.";
 
 export const PRESIGNED_UPLOAD_TYPES = {
   FRAME: "FRAME",
@@ -193,6 +213,8 @@ export async function getImageUrlByKey(key: string): Promise<string | null> {
 }
 
 // 사용자 화면에 그대로 노출돼도 되도록 한국어 문구로 만든다(디버깅용 원본 형식은 뒤에 덧붙임).
+// 문구가 HEIC 를 허용한다고 말해도 아래 표는 그대로 둔다 — 사용자 파일은 `toUploadableFile`
+// 을 거쳐 JPEG 가 된 뒤에 오므로, 이 게이트가 사용자에게 HEIC 를 거절할 일은 없다.
 function createUnsupportedTypeError(file: File) {
   return new UploadValidationError(
     `${UNSUPPORTED_UPLOAD_MESSAGE} (${file.type || file.name})`,

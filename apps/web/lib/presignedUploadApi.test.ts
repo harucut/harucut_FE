@@ -60,7 +60,7 @@ describe("presigned upload flow", () => {
     const heic = new File(["x"], "iphone.heic", { type: "image/heic" });
 
     expect(() => resolveUploadContentType(heic)).toThrow(
-      /PNG·JPG·WEBP·GIF만 올릴 수 있어요/,
+      /PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요/,
     );
     expect(isSupportedUploadFile(heic)).toBe(false);
     expect(

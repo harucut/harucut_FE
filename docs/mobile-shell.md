@@ -16,6 +16,26 @@
 그래서 `web` 스크립트와 `app.json` 의 web 블록, web 전용 의존성(`react-native-web`·`react-dom`)을
 두지 않는다. 웹을 보고 싶으면 그냥 웹을 연다 — 그게 이 앱이 띄우는 것과 같은 화면이다.
 
+## 브리지 판 수 — 옛 앱이 최신 웹을 연다
+
+셸은 콘텐츠 로드 전에 `window.__HARUCUT_NATIVE__ = { version, platform }` 을 심는다. 웹은 이
+값으로 "앱 안인가"와 **"이 셸이 무엇을 아는가"** 를 함께 본다.
+
+웹은 배포하면 즉시 모두에게 가지만 앱은 스토어 업데이트를 거친다 — 업데이트를 미룬 사용자는
+**옛 셸로 최신 웹을 연다.** 그 셸의 `onMessage` switch 에는 새 메시지 분기가 없어 `default`
+로 조용히 지나가고, 답을 기다리던 웹은 타임아웃(60~120초)까지 버튼이 묶인다.
+
+그래서 **웹이 답을 기다리는 메시지를 새로 넣을 때 `BRIDGE_VERSION` 을 올린다**
+(`apps/mobile/lib/native-bridge.ts`). 웹은 보내기 전에 그 숫자를 보고, 모르는 셸이면 보내지
+않고 곧바로 진행한다.
+
+| 판 수 | 더해진 것 | 웹이 보는 곳 |
+|---|---|---|
+| 1 | 사진첩 저장 · 공유 · 햅틱 · 알림 · 상태바 색 | 없음 — 셸이면 그대로 보낸다 |
+| 2 | `camera-permission` | `nativeEnsureCameraPermission` 의 `CAMERA_PERMISSION_SHELL_VERSION` |
+
+답을 기다리지 않는 메시지(`haptic`·`theme`)는 옛 셸이 흘려도 잃을 것이 없어 판 수를 보지 않는다.
+
 ## 네이티브가 맡는 것과 그 이유
 
 | 기능 | 왜 웹이 못 하나 |
@@ -26,6 +46,7 @@
 | **알림** | WebView 안에는 Notification API 가 없다. iOS WKWebView 는 미지원, 안드로이드는 권한 UI 가 없어 조용히 거절된다 |
 | **상태바 색** | 웹은 상태바를 못 만진다. 웹이 자기 테마를 알려 주면 셸이 맞춘다 |
 | **안전영역** | WebView 안에서는 `env(safe-area-inset-*)` 가 믿을 만하지 않다 — 안드로이드 WebView 는 edge-to-edge 로 상태바·내비바 뒤까지 그리면서 그 높이를 env 에 주지 않고, iOS 는 react-native-webview 기본값(`contentInsetAdjustmentBehavior=never`)이라 스크롤뷰가 상태바를 비키지 않는다. 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비우고 무대색(`STAGE_COLORS`)으로 칠한다. iOS 하단 홈 인디케이터만 웹의 `env(safe-area-inset-bottom)` 이 맡는다 |
+| **카메라 권한(안드로이드)** | 웹 권한이 아니라 앱 권한이다. 셸이 `CAMERA` 를 선언해 두었는데 런타임 권한이 없으면 WebView 가 파일 선택기에서 「사진 찍기」를 통째로 뺀다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
 
 ## 셸이 WebView 를 부리는 길 — `ref`
@@ -278,10 +299,29 @@ Playwright 로 두 엔진에서 실제로 호출해 확인했다(2026-08-28):
 셸에 이미 필요한 설정이 들어 있다: `allowsInlineMediaPlayback`,
 `mediaPlaybackRequiresUserAction={false}`, `mediaCapturePermissionGrantType`.
 
-**남은 한 가지** — `app.json` 이 `android.permission.CAMERA` 를 선언하는데,
-사용자가 아직 카메라를 허용하지 않은 상태에서는 `<input type="file">` 의 chooser 에서
-"카메라로 찍기" 항목이 빠진다(`RNCWebViewModuleImpl.needsCameraPermission()`).
-갤러리 선택은 정상이다. 촬영을 한 번 하고 나면 사라지는 증상이라 급하지 않다.
+~~**남은 한 가지**~~ (2026-09-02 해결) — `app.json` 이 `android.permission.CAMERA` 를
+선언하는데, 사용자가 아직 카메라를 허용하지 않은 상태에서는 `<input type="file">` 의
+chooser 에서 "카메라로 찍기" 항목이 빠졌다(`RNCWebViewModuleImpl.java:216` 의
+`if (!needsCameraPermission())` — 그 조건이 참이면 카메라 인텐트를 `EXTRA_INITIAL_INTENTS`
+에 아예 안 넣는다). 촬영 화면을 한 번도 안 쓴 사용자에게만 보이던 증상이다.
+
+지금은 **웹이 선택기를 열기 전에 셸에 권한을 부탁한다** — `camera-permission` 브리지
+메시지(`apps/web/lib/nativeBridge.ts` `nativeEnsureCameraPermission` ↔
+`apps/mobile/lib/native-bridge.ts` `ensureCameraPermission`), 호출부는
+`apps/web/app/shoot/upload/page.tsx` 의 「사진 고르기」 버튼이다. `notify-permission` 과
+같은 모양이다 — 시점은 웹이 고르고 권한은 셸이 받는다.
+
+**거절해도 그대로 진행한다.** 갤러리는 열리므로 사용자가 하려던 일은 계속할 수 있다.
+iOS 는 이 개념이 없어 아무 일도 안 하고 성공으로 답한다(웹이 플랫폼을 몰라도 되게).
+
+**이 메시지를 모르는 옛 셸에는 보내지 않는다.** 판 수가 2 미만이면 웹은 곧바로 선택기를
+연다(위 「브리지 판 수」). 보내고 기다리면 답이 오지 않아 「사진 고르기」가 120초 멈추고,
+선택기는 사용자 제스처가 끝난 뒤에야 열린다 — 업데이트를 미룬 사용자는 잃는 것이
+「사진 찍기」 항목 하나여야지, 사진 고르기 자체가 아니다.
+
+⚠️ **실기기로 확인하지 못했다.** `apps/mobile` 에는 테스트 러너가 없고, chooser 항목이
+돌아오는 것은 실기기에서만 보인다. 지금 확인된 것은 브리지 프로토콜 왕복
+(`apps/web/lib/nativeBridge.test.ts`)과 라이브러리 소스의 분기 조건까지다.
 
 ## 소셜 로그인 — 지금 구조로는 구글이 언제 막혀도 이상하지 않다
 
@@ -324,15 +364,13 @@ URL 에 토큰도, 교환용 코드도 없다.
 ## 백엔드에 요청할 것
 
 **정본은 [`docs/app-shell-backend-requests.md`](./app-shell-backend-requests.md) 다.**
-여기 옮겨 적지 않는다 — 두 곳에 적으면 한쪽만 갱신돼 어긋난다.
+목록도 개수도 여기 옮겨 적지 않는다 — 두 곳에 적으면 한쪽만 갱신돼 어긋난다.
+(바로 이 자리가 「여기 옮겨 적지 않는다」고 해 놓고 세 항목을 그대로 베껴 두고 있었다.
+그 사이 정본은 일곱 항목이 됐다.)
 
-세 가지가 걸려 있다.
-
-1. **OAuth 세션을 앱으로 넘기는 일회용 코드** — 구글이 임베디드 WebView 를 금지한다.
-   외부 브라우저로 열면 정책은 지켜지지만 **쿠키가 브라우저 쿠키통에 남아** 앱은
-   여전히 로그아웃 상태다. 백엔드 도움 없이는 프론트에서 못 푼다.
-2. **비회원·행사 참가자용 합성 경로** — 지금 합성은 전부 인증 경로 아래다.
-3. **푸시 기기 토큰 등록** — 없어서 이번엔 로컬 알림만 넣었다.
+**셸 때문에 생긴 것**만 짚어 둔다 — 그 셋이 이 문서의 관심사다: §1 OAuth 일회용 코드,
+§2 비회원 합성 경로, §3 푸시 기기 토큰 등록. 나머지(§4~§7)와 각 항목이 오늘도 막혀
+있는지는 정본의 맨 아래 표에서 본다.
 
 ### 구글 차단은 지금 재현되지 않는다 — 그래서 더 위험하다
 
@@ -346,10 +384,17 @@ URL 에 토큰도, 교환용 코드도 없다.
 
 ## 디자인/에셋으로 필요한 것
 
-- **안드로이드 알림 아이콘** — 흰색 실루엣 + 투명 배경 PNG.
-  안드로이드는 알림 아이콘을 실루엣으로만 그린다. 지금 `icon.png`(풀컬러)를 그대로 주면
-  상태바에 **흰 사각형**만 뜬다. 그래서 `app.json` 의 `expo-notifications` 플러그인에
-  `icon` 을 일부러 비워 뒀다. 에셋이 나오면 넣는다.
+지금은 없다. 아래는 **해결된 기록**이다.
+
+- ~~**안드로이드 알림 아이콘**~~ (2026-09-02 해결). 안드로이드는 상태바 아이콘을 그릴 때
+  **알파 채널만** 본다 — 색은 버리고 실루엣을 `app.json` 의 `color`(`#1ED760`)로 칠한다.
+  그래서 풀컬러 `icon.png` 를 주면 바깥 라운드 사각형이 불투명이라 **초록 사각형 하나**만
+  뜬다. 디자인을 기다리는 대신 **웹 로고에서 실루엣을 구워** 쓴다:
+  `node scripts/gen-notification-icon.mjs` → `apps/mobile/assets/images/notification-icon.png`
+  (96×96, 몸통을 버리고 네 칸만 흰색). 좌표의 소유자는
+  `packages/shared/src/brand-mark.ts` 이고 웹 헤더의 `BrandMark` 도 같은 값을 읽는다 —
+  마크를 고치려면 shared 를 고치고 스크립트를 다시 돌린다.
+  결과 검사: 알파가 **네 개의 띠**로 끊겨 있어야 한다(불투명 18%). 한 덩어리면 사각형이다.
 
 ## 이번에 고친 것
 
