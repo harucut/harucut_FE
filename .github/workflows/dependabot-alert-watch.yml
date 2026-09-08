@@ -32,7 +32,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          gh api "/repos/$REPO/dependabot/alerts?state=open&per_page=100" > alerts.json
+          # --paginate 가 없으면 첫 100건만 온다. 경보가 그보다 많으면 뒷장에 있는 조치 가능
+          # 경보를 못 보고 「없음」으로 잘못 보고한다. -q '.[]' 로 페이지마다 원소를 흘려보낸 뒤
+          # jq -s 로 다시 한 배열로 모은다.
+          gh api --paginate -q '.[]' "/repos/$REPO/dependabot/alerts?state=open&per_page=100" | jq -s '.' > alerts.json
 
           # 패치가 나와 있는 것만 고칠 수 있다. first_patched_version 이 없으면 제외한다.
           jq -r '
