@@ -36,8 +36,15 @@ type Props = {
  * 뒤로가기는 어느 화면에서나 같은 동작이므로 같은 모양이어야 한다. 원형 테두리 안의
  * 화살표 하나로 통일하고 제목을 가운데로 보낸다.
  *
- * 좌우를 절대 배치로 둔 이유 — 그래야 **제목이 양쪽 내용 길이와 무관하게 정확히 가운데**
- * 온다. flex 로 세 칸을 나누면 오른쪽에 무엇이 붙느냐에 따라 제목이 좌우로 흔들린다.
+ * 세 칸 그리드로 나눈 이유 — 양쪽 칸이 제 몫(`1fr`)을 넘지 않는 한 제목은 **정확히 가운데**
+ * 온다. 예전에는 좌우를 절대 배치로 띄우고 제목 폭만 `100%-7rem` 으로 깎았는데, 그 7rem 은
+ * 오른쪽에 무엇이 붙든 같은 값이라, 한쪽이 56px 을 넘는 순간 제목을 파고들었다(편집기의
+ * `삭제`+`수정 저장` 152px 이 320px 에서 제목과 48px 겹쳤다).
+ *
+ * 대신 제 몫을 넘으면 제목이 그만큼 **밀리고**, 그래도 모자라면 줄바꿈한다. 좌우 칸의 하한을
+ * `max-content` 로 잡은 이유가 그것이다 — 하한이 없으면 320px 에서 `수정 저장`이 두 줄로
+ * 찌그러진다. 양보하는 쪽은 줄바꿈이 허용된 제목이어야 한다. 겹치면 제목을 못 읽지만,
+ * 밀리는 것은 덜 예쁠 뿐이다.
  *
  * 로고는 여기 두지 않는다. 이 헤더를 쓰는 곳은 촬영·꾸미기 같은 **전체화면 흐름**이고
  * 로고는 홈과 랜딩이 맡는다. 회원은 뒤로가기를 따라 홈까지 이어지고, 결과 화면에는
@@ -55,28 +62,29 @@ export function PageHeader({
   return (
     <>
       {/* 좌우 버튼은 44px 정원이다 — 터치 규칙이 button 만 넓히고 a 는 넓히지 않아 36×44 타원이 됐다. */}
-      <header className="relative flex min-h-11 items-center justify-center">
+      {/* 칸을 못박는 이유 — 뒤로가기가 없는 화면(결과)에서도 제목은 가운데 칸에 남아야 한다. */}
+      <header className="grid min-h-11 grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)] items-center gap-3">
         {backHref ? (
           <Link
             href={backHref}
             aria-label={backLabel || "뒤로"}
             title={backLabel || "뒤로"}
             onClick={onBackClick}
-            className="hc-button-icon absolute left-0 top-0 grid h-11 w-11 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text)"
+            className="hc-button-icon col-start-1 grid h-11 w-11 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text)"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
         ) : null}
 
         {title ? (
-          // 좌우 버튼 자리를 비켜 간다. 제목이 길면 자르지 않고 줄바꿈한다 —
+          // 가운데 칸이 좌우가 쓰고 남긴 폭을 갖는다. 제목이 길면 자르지 않고 줄바꿈한다 —
           // 화면 이름이 잘리면 여기가 어디인지 알 수 없다.
-          <h1 className="max-w-[calc(100%-7rem)] text-center text-lg font-semibold tracking-tight">
+          <h1 className="col-start-2 text-center text-lg font-semibold tracking-tight">
             {title}
           </h1>
         ) : null}
 
-        <div className="absolute right-0 top-0 flex flex-col items-end gap-1.5">
+        <div className="col-start-3 flex flex-col items-end gap-1.5">
           {rightSlot ? (
             <div className="flex items-center justify-center">{rightSlot}</div>
           ) : null}

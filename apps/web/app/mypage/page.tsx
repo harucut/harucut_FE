@@ -841,16 +841,32 @@ export default function MyPage() {
           마이페이지
         </h1>
 
+        {/*
+            결과는 **지금 보고 있는 자리**에 붙여 둔다.
+
+            알림이 h1 바로 아래라, 긴 스크롤 맨 아래의 로그아웃·회원 탈퇴가 실패하면 결과가
+            화면 밖 위에 그려졌다 — 실측으로 배너 top 이 390×844 에서 -109px(요금제를 펼치면
+            -370px), 1280×900 에서 -1,060px 이었다. 탈퇴는 confirm 창까지 닫히므로 누른
+            자리에는 아무 변화도 남지 않는다. 맨 위로 끌어올리지는 않는다 — 스크롤을
+            빼앗으면 다시 누를 버튼을 놓친다. 기록 화면과 같은 처리다.
+
+            띠에 무대색을 까는 것은 배너 바탕이 8~16% 알파라(globals.css 의 --hc-*-soft-bg)
+            아래로 흐르는 카드가 글자에 비쳐서다. 앱 네비와 같다. 네비(69px)가 뜨는 lg 에서는
+            그 아래로 내린다 — z-20 이라 겹치는 1px 은 네비가 덮는다.
+            배너가 갖고 있던 mt-3 는 띠의 mt-1 + pt-2 로 나눠 갖고 pb-2 는 -mb-2 로 되돌려,
+            붙기 전 자리를 예전 그대로 둔다. */}
         {notice ? (
-          <div
-            role="status"
-            className={
-              notice.kind === "ok"
-                ? "hc-feedback mt-3 rounded-2xl border px-4 py-3 text-[12px]"
-                : "mt-3 rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
-            }
-          >
-            {notice.text}
+          <div className="sticky top-0 z-20 -mx-4 mt-1 -mb-2 bg-(--hc-surface-soft) px-4 py-2 backdrop-blur-md lg:top-17">
+            <div
+              role="status"
+              className={
+                notice.kind === "ok"
+                  ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
+                  : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
+              }
+            >
+              {notice.text}
+            </div>
           </div>
         ) : null}
 

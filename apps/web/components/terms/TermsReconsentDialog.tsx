@@ -281,7 +281,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             const href = contentHref(item.code);
             return (
               <div key={item.code} className="flex flex-col gap-1">
-                <label className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-[13px]">
+                <label className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
                   <input
                     type="checkbox"
                     checked={checked[item.code] ?? false}
@@ -306,7 +306,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       className={
                         item.required
                           ? "text-(--hc-primary-strong)"
-                          : "text-zinc-500"
+                          : "text-(--hc-muted)"
                       }
                     >
                       {item.required ? "[필수]" : "[선택]"}
@@ -318,7 +318,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       href={href}
                       target="_blank"
                       rel="noreferrer"
-                      className="ml-auto shrink-0 text-[11px] text-zinc-500 underline underline-offset-4"
+                      className="ml-auto shrink-0 text-[11px] text-(--hc-muted) underline underline-offset-4"
                     >
                       보기
                     </Link>
@@ -335,10 +335,10 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                 {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
                 {!href && contentByCode[item.code] ? (
                   <details className="ml-6">
-                    <summary className="cursor-pointer text-[11px] text-zinc-500 underline underline-offset-4">
+                    <summary className="cursor-pointer text-[11px] text-(--hc-muted) underline underline-offset-4">
                       전문 보기
                     </summary>
-                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-2 text-[11px] leading-5 text-zinc-400">
+                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-(--hc-surface-muted) p-2 text-[11px] leading-5 text-(--hc-muted)">
                       {contentByCode[item.code]}
                     </p>
                   </details>
