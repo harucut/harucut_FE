@@ -7,7 +7,7 @@
  *
  * 그래서 「달라졌다/같다」 양쪽을 다 지킨다.
  */
-import { buildFrameContentKey } from "@/lib/shootSessionStore";
+import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 function component(
@@ -129,5 +129,65 @@ describe("buildFrameContentKey", () => {
     };
 
     expect(buildFrameContentKey(dark)).not.toBe(buildFrameContentKey(green));
+  });
+});
+
+/*
+  합성이 되돌릴 수 없는 이유로 실패하면 결과 화면이 "프레임 다시 고르기" 를 안내한다.
+  그 길이 예전에는 `/shoot` 의 reset() 을 지나며 **찍은 8장을 통째로 지웠다** — 문구는
+  사진은 두고 프레임만 바꾼다는 뜻으로 읽히는데 실제로는 사진이 먼저 사라졌고,
+  /shoot/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
+*/
+describe("프레임만 다시 고르기", () => {
+  const initial = useShootSession.getState();
+
+  afterEach(() => {
+    useShootSession.setState(initial, true);
+  });
+
+  it("촬영본과 그것을 찍은 프레임·출처·행사는 남기고 나머지를 되돌린다", () => {
+    const store = useShootSession.getState();
+    store.setSource("upload");
+    store.setEventName("여름 팬미팅");
+    store.setFrameId("classic-4");
+    store.addShotPhotos(["data:image/jpeg;base64,a", "data:image/jpeg;base64,b"]);
+    store.toggleSelect(0);
+    store.setBorderColor("#1ED760");
+
+    useShootSession.getState().resetFrameSelection();
+
+    const next = useShootSession.getState();
+    expect(next.shots).toHaveLength(2);
+    expect(next.shotsFrameId).toBe("classic-4");
+    expect(next.source).toBe("upload");
+    expect(next.eventName).toBe("여름 팬미팅");
+    // 프레임 선택은 처음으로 — 이 화면에 다시 고르러 왔으므로.
+    expect(next.frameId).toBeNull();
+    expect(next.selectedIndexes.every((slot) => slot === null)).toBe(true);
+    expect(next.imageResult).toBeNull();
+  });
+
+  it("촬영본을 담을 때 어느 프레임으로 찍었는지 함께 남긴다", () => {
+    const store = useShootSession.getState();
+    store.setFrameId("grid-4");
+    store.addShotPhoto("data:image/jpeg;base64,a");
+
+    expect(useShootSession.getState().shotsFrameId).toBe("grid-4");
+
+    // 프레임을 바꿔도 **이미 찍힌 사진의 출처**는 바뀌지 않는다. 그 비율로 잘려 있기 때문이다.
+    useShootSession.getState().setFrameId("classic-4");
+    useShootSession.getState().addShotPhoto("data:image/jpeg;base64,b");
+    expect(useShootSession.getState().shotsFrameId).toBe("grid-4");
+  });
+
+  it("촬영본을 비우면 출처 프레임도 함께 비운다", () => {
+    const store = useShootSession.getState();
+    store.setFrameId("classic-4");
+    store.addShotPhoto("data:image/jpeg;base64,a");
+
+    useShootSession.getState().resetShots();
+
+    expect(useShootSession.getState().shots).toHaveLength(0);
+    expect(useShootSession.getState().shotsFrameId).toBeNull();
   });
 });

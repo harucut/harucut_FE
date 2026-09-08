@@ -54,7 +54,7 @@ export function SingleFieldDialog({
   const fieldId = "single-field-dialog-input";
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="닫기"
@@ -66,7 +66,7 @@ export function SingleFieldDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="single-field-dialog-title"
-        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-[var(--hc-card-shadow)]"
+        className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-(--hc-card-shadow)"
       >
         <h2 id="single-field-dialog-title" className="text-[18px] font-extrabold">
           {title}
@@ -82,7 +82,7 @@ export function SingleFieldDialog({
         >
           <label
             htmlFor={fieldId}
-            className="block text-[12px] font-medium text-[color:var(--hc-muted)]"
+            className="block text-[12px] font-medium text-(--hc-muted)"
           >
             {label}
           </label>
@@ -104,7 +104,7 @@ export function SingleFieldDialog({
           {error ? (
             <p
               role="alert"
-              className="mt-2 text-[12px] font-medium text-[color:var(--hc-danger)]"
+              className="mt-2 text-[12px] font-medium text-(--hc-danger)"
             >
               {error}
             </p>

@@ -1,6 +1,9 @@
 "use client";
 
-import { CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
+import {
+  CLIENT_NETWORK_UNREACHABLE_CODE,
+  CLIENT_REISSUE_UNAVAILABLE_CODE,
+} from "@harucut/shared";
 
 type ApiEnvelopeLike = {
   code?: string;
@@ -150,6 +153,19 @@ async function reissueAccessToken(): Promise<ReissueResult> {
   }
 }
 
+/**
+ * 취소된 요청인지. AbortController.abort() 로 끊긴 fetch 는 name 이 "AbortError" 인
+ * DOMException 을 던진다. 그 클래스는 환경마다 달라서(브라우저 · jsdom · node) instanceof 로
+ * 보면 한 곳에서만 맞는다 — name 으로 본다.
+ */
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
 async function request<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
@@ -163,15 +179,34 @@ async function request<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  const doFetch = () =>
-    fetch(path, {
-      method,
-      headers,
-      body: hasBody ? JSON.stringify(body) : undefined,
-      credentials: "include",
-      cache: options.cache,
-      signal: options.signal,
-    });
+  // fetch 가 응답 없이 던지는 구간 — 진짜 오프라인, DNS 실패, Next 서버 자체가 죽음.
+  // 응답이 없으니 봉투도 code 도 없고, 그대로 두면 TypeError 가 화면까지 올라간다.
+  // 호출부는 ApiRequestError 만 읽으므로 원인을 못 알아보고 화면별 폴백 문구만 띄우게 된다.
+  // 프록시가 붙이는 CLIENT-003(Next→백엔드 불통)의 한 칸 앞이라 여기서 코드를 붙여
+  // 같은 문법의 오류로 만든다(문구는 packages/shared/src/api-error-messages.ts).
+  const doFetch = async () => {
+    try {
+      return await fetch(path, {
+        method,
+        headers,
+        body: hasBody ? JSON.stringify(body) : undefined,
+        credentials: "include",
+        cache: options.cache,
+        signal: options.signal,
+      });
+    } catch (error) {
+      // 취소는 실패가 아니다. 코드를 붙이면 사용자가 스스로 끊은 요청이 오류 문구로 바뀌고,
+      // name 으로 취소를 가려내던 호출부도 같이 깨진다. 그대로 던진다.
+      if (isAbortError(error)) throw error;
+
+      // status 를 만들지 않는다 — 응답이 없었으므로 HTTP 상태가 존재하지 않는다.
+      // 없는 상태를 지어내면 상태로 갈래를 타는 호출부가 오지 않은 응답을 본 것처럼 군다.
+      throw new ApiRequestError({
+        code: CLIENT_NETWORK_UNREACHABLE_CODE,
+        apiMessage: null,
+      });
+    }
+  };
 
   let res = await doFetch();
 
@@ -179,8 +214,9 @@ async function request<T>(
   // 재발급까지 실패하면(여전히 401) 세션이 끊긴 것으로 보고 등록된 만료 핸들러를 호출한다.
   if (res.status === 401 && !SESSION_REFRESH_EXEMPT_PATHS.has(path)) {
     const reissue = await reissueAccessToken();
-    // 재발급 성공 시에만 재시도한다. 재시도 fetch의 오류(취소·네트워크)는 그대로 전파해
-    // 유효 세션을 만료로 오인하지 않는다. 재발급 실패면 최초 401 응답을 유지한다.
+    // 재발급 성공 시에만 재시도한다. 재시도 fetch 가 실패하면 그 오류를 그대로 올려
+    // 유효 세션을 만료로 오인하지 않는다(취소면 AbortError, 회선이 끊겼으면 CLIENT-004).
+    // 재발급 실패면 최초 401 응답을 유지한다.
     if (reissue === "ok") {
       res = await doFetch();
     }

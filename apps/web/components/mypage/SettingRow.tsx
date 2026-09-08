@@ -34,13 +34,13 @@ export function SettingRow({ label, value, inlineAction, action, hint }: Props) 
   return (
     <div className="flex items-center gap-3 py-3.5">
       <div className="min-w-0 flex-1">
-        <div className="text-[12px] text-[color:var(--hc-muted)]">{label}</div>
+        <div className="text-[12px] text-(--hc-muted)">{label}</div>
         <div className="mt-0.5 flex items-center gap-0.5">
           <div className="min-w-0 truncate text-[15px] font-bold">{value}</div>
           {inlineAction}
         </div>
         {hint ? (
-          <div className="mt-1 text-[12px] text-[color:var(--hc-muted)]">{hint}</div>
+          <div className="mt-1 text-[12px] text-(--hc-muted)">{hint}</div>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

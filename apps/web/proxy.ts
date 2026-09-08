@@ -7,6 +7,9 @@ import {
 } from "@/lib/guestTrialShared";
 import { isGuestAllowedPath, isProtectedPath } from "@/lib/protectedPaths";
 
+/** 소셜 로그인 콜백 경로. 아래 matcher 와 같은 값을 쓴다. */
+const SOCIAL_LOGIN_CALLBACK = "/oauth2/callback";
+
 function hasAuthCookie(req: NextRequest) {
   return Boolean(
     req.cookies.get("accessToken")?.value ||
@@ -14,8 +17,48 @@ function hasAuthCookie(req: NextRequest) {
   );
 }
 
+/**
+ * 아직 살아 있는 access 토큰을 들고 왔는가.
+ *
+ * 쿠키가 있는지만 보면 만료된 토큰도 로그인으로 읽힌다(아래 보호 경로 주석). access 는
+ * JWT 라 `exp` 를 미들웨어에서 그 자리에서 읽을 수 있고, 백엔드는 access 를 어디에도
+ * 저장하지 않고 exp 까지 그대로 받아 준다 — 회수할 수 있는 것은 refresh 뿐이다
+ * (docs/backend-contract.md 「토큰」). 그래서 exp 가 남아 있다는 것이 "지금 회원"이라는 뜻이다.
+ * refresh 는 다른 기기에서 로그인하면 서버가 지우므로 만료 전에도 죽어 있을 수 있어 보지 않는다.
+ *
+ * 서명은 검증하지 않는다 — 여기서 정하는 것은 인가가 아니라 체험 쿠키를 걷을지뿐이라,
+ * 토큰을 위조해서 얻는 것은 자기 체험 쿠키를 잃는 손해밖에 없다.
+ */
+function hasLiveAccessToken(req: NextRequest) {
+  const payload = req.cookies.get("accessToken")?.value.split(".")[1];
+  if (!payload) return false;
+
+  try {
+    // JWT 는 base64url 이라 표준 base64 문자로 바꿔서 읽는다.
+    const claims = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { exp?: unknown };
+
+    return typeof claims.exp === "number" && claims.exp * 1000 > Date.now();
+  } catch {
+    // 우리가 아는 모양이 아니면 로그인했다고 볼 근거가 없다.
+    return false;
+  }
+}
+
 function hasGuestTrialCookie(req: NextRequest) {
   return req.cookies.get(GUEST_TRIAL_COOKIE)?.value === "1";
+}
+
+/**
+ * 소셜 로그인 콜백에 도착했는가.
+ *
+ * 백엔드는 소셜 인가를 마치면 인증 쿠키를 심은 뒤 이 주소로 돌려보낸다
+ * (docs/mobile-shell.md 「소셜 로그인 — 지금 흐름」). 즉 여기가 방문자가
+ * "지금부터 회원"이 되는 자리다.
+ */
+function isSocialLoginCallback(pathname: string) {
+  return pathname === SOCIAL_LOGIN_CALLBACK;
 }
 
 /**
@@ -56,16 +99,45 @@ export async function proxy(req: NextRequest) {
   const redirectTarget = `${pathname}${req.nextUrl.search}`;
   const guestMode = hasGuestTrialCookie(req);
 
+  /*
+    체험 쿠키는 **로그인이 끝나는 자리에서** 걷는다.
+
+    콜백 페이지는 성공하면 `window.location.href` 로 문서를 새로 받아 zustand 에 남은
+    게스트 상태를 비우지만(app/oauth2/callback/page.tsx 머리말), 쿠키는 문서를 새로 받아도
+    살아남는다. 그대로 두면 체험하다 가입한 사람이 로그인을 마친 뒤에도 계속 비회원으로
+    읽혀(lib/guestTrialStore.ts 의 hydrateGuestMode) 자기 프레임과 기록을 못 본다.
+    이메일 로그인은 같은 일을 app/login/page.tsx 의 exitGuestMode() 가 한다.
+
+    **살아 있는 access 토큰**이 함께 있을 때만 걷는다. 쿠키가 있는지만 보면, 인가에 실패해
+    돌아왔거나 기록으로 이 주소를 다시 연 사람도 예전에 받아 둔 죽은 토큰 때문에 체험을
+    잃는다 — 그 방문자는 곧이어 콜백 페이지가 상태 조회에서 401 을 받아 로그인 화면으로
+    밀려나므로, 로그인도 체험도 없는 채로 남는다.
+  */
+  if (isSocialLoginCallback(pathname)) {
+    const response = NextResponse.next();
+    if (guestMode && hasLiveAccessToken(req)) {
+      response.cookies.delete(GUEST_TRIAL_COOKIE);
+    }
+    return response;
+  }
+
   if (!isProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
+  /*
+    인증 쿠키가 있으면 통과시킨다. **여기서 게스트 쿠키를 지우지는 않는다.**
+
+    이 판정은 쿠키가 있는지만 본다 — 서버가 이미 버린 죽은 토큰도 로그인으로 읽힌다
+    (다른 기기에서 로그인하면 이 기기 refresh 가 죽는다: docs/backend-contract.md).
+    그 상태에서 지우면, 죽은 쿠키를 든 방문자가 "가입 없이 찍어보기"로 방금 심은 게스트
+    쿠키를 바로 다음 요청에서 우리가 도로 지운다. 그 화면은 메모리 값으로 버티지만
+    새로고침 한 번이면 hydrateGuestMode 가 쿠키를 못 찾아 회원으로 되돌아가고,
+    촬영 화면이 인증 API 로 401 을 받아 "로그인이 풀렸어요"로 끝난다 — 몇 번을 눌러도
+    체험이 시작되지 않는다.
+  */
   if (hasAuthCookie(req)) {
-    const response = NextResponse.next();
-    if (guestMode) {
-      response.cookies.delete(GUEST_TRIAL_COOKIE);
-    }
-    return response;
+    return NextResponse.next();
   }
 
   if (guestMode) {
@@ -100,5 +172,9 @@ export const config = {
     "/history/:path*",
     "/theme/:path*",
     "/mypage",
+    // 보호 경로는 아니지만 로그인이 끝나는 자리라, 게스트 쿠키를 걷으러 들어간다.
+    // matcher 는 Next 가 빌드 때 읽으므로 문자열을 그대로 적는다 —
+    // 위 SOCIAL_LOGIN_CALLBACK 과 같은 값이어야 한다(proxy.test.ts 가 확인한다).
+    "/oauth2/callback",
   ],
 };

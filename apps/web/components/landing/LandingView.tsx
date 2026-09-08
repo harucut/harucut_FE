@@ -45,6 +45,8 @@ function ShowcaseFrame({
       images={HERO_IMAGES}
       borderColor="#0B0B0C"
       className={className}
+      // 첫 화면의 그림이다 — lazy 면 LCP 가 스크롤 판정을 기다린다.
+      imageLoading="eager"
     />
   );
 }
@@ -98,10 +100,10 @@ function HowFilm() {
   }, [reduced]);
 
   return (
-    <div className="overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0E0E0F]">
+    <div className="overflow-hidden rounded-[10px] border border-white/8 bg-[#0E0E0F]">
       <TapeStrip
         running={!reduced && !settled}
-        className="border-b border-white/[0.06]"
+        className="border-b border-white/6"
       />
 
       <div className="grid md:grid-cols-3" onMouseLeave={() => setHovered(null)}>
@@ -113,14 +115,14 @@ function HowFilm() {
             <div
               key={s.n}
               onMouseEnter={() => setHovered(i)}
-              className="relative px-[30px] pb-[38px] pt-[34px] transition-colors duration-500"
+              className="relative px-7.5 pb-9.5 pt-8.5 transition-colors duration-500"
               style={{
                 borderLeft: i ? "1px dashed rgba(255,255,255,.12)" : "none",
                 background: on ? "rgba(255,255,255,.022)" : "transparent",
               }}
             >
               <span
-                className="mb-[18px] block font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px] transition-colors duration-500"
+                className="mb-4.5 block font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px] transition-colors duration-500"
                 // 비활성 단계도 읽을 수 있어야 한다 — .16은 대비 1.57로 WCAG AA(큰 글자 3:1) 미달이었다.
                 style={{ color: on ? GREEN : "rgba(255,255,255,.42)" }}
               >
@@ -145,7 +147,7 @@ function HowFilm() {
               {/* 노출 게이지 — 이 칸에 머무는 동안 그린이 차오른다 */}
               <span
                 aria-hidden
-                className="absolute bottom-0 left-0 h-[2px] w-full"
+                className="absolute bottom-0 left-0 h-0.5 w-full"
                 style={{ background: "rgba(255,255,255,.06)" }}
               />
               {!reduced && !settled && i === active ? (
@@ -153,7 +155,7 @@ function HowFilm() {
                   aria-hidden
                   // key로 매 전환마다 리마운트해 애니메이션을 처음부터 재생시킨다.
                   key={active}
-                  className="hc-film-progress absolute bottom-0 left-0 h-[2px] w-full"
+                  className="hc-film-progress absolute bottom-0 left-0 h-0.5 w-full"
                   style={{
                     background: GREEN,
                     ["--hc-film-dwell" as string]: `${STEP_DWELL_MS}ms`,
@@ -167,7 +169,7 @@ function HowFilm() {
 
       <TapeStrip
         running={!reduced && !settled}
-        className="border-t border-white/[0.06]"
+        className="border-t border-white/6"
       />
     </div>
   );
@@ -177,17 +179,18 @@ function HowFilm() {
 // 그린 글로우 + 하단에 흩뿌린 폴라로이드 콜라주(편집 디자인 느낌, 템플릿 탈피).
 function HeroEditorial() {
   return (
-    <section className="relative mx-auto flex min-h-[calc(100svh-72px)] max-w-[1160px] flex-col items-center justify-center overflow-hidden px-7 pb-16 pt-10 text-center">
+    <section className="relative mx-auto flex min-h-[calc(100svh-72px)] max-w-290 flex-col items-center justify-center overflow-hidden px-7 pb-16 pt-10 text-center">
       {/* 배경 그린 글로우 */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[22%] h-[440px] w-[640px] -translate-x-1/2 rounded-full opacity-20 blur-[100px]"
+        className="pointer-events-none absolute left-1/2 top-[22%] h-110 w-160 -translate-x-1/2 rounded-full opacity-20 blur-[100px]"
         style={{ background: GREEN }}
       />
 
       {/* 헤드라인 — Pretendard Black, 초대형(type-first) */}
       <Reveal
         as="span"
+        immediate
         className="relative block text-[46px] font-black leading-[1.24] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:leading-[1.18] lg:tracking-[-4px]"
       >
         <h1>
@@ -198,10 +201,11 @@ function HeroEditorial() {
       </Reveal>
       <Reveal
         as="span"
+        immediate
         delay={120}
-        className="relative mb-9 mt-6 block max-w-[440px] text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
+        className="relative mb-9 mt-6 block max-w-110 text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
-        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
+        <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
       </Reveal>
 
       {/*
@@ -209,7 +213,7 @@ function HeroEditorial() {
         헤더 CTA 를 눌러 /login 까지 가야 비회원 체험 버튼을 만났다. 첫 화면에서 바로 연다.
         헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
       */}
-      <Reveal delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
+      <Reveal immediate delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
         {/* 문구는 넘기지 않는다 — 기본값이 곧 로그인 화면·앱과 같은 한 문구다.
             예전에는 여기만 "가입 없이 찍어보기"였는데, 이 체험은 찍기만이 아니라
             이미지 저장까지 되므로 실제보다 작게 말하는 문구이기도 했다. */}
@@ -218,32 +222,33 @@ function HeroEditorial() {
           href="/login"
           className="inline-flex items-center gap-1 rounded-full px-4 py-3 text-[14px] font-semibold text-white/80 underline underline-offset-4 transition hover:text-white"
         >
-          로그인하고 시작하기 <ArrowRight className="h-4 w-4" />
+          로그인 <ArrowRight className="h-4 w-4" />
         </Link>
       </Reveal>
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
       <Reveal
+        immediate
         delay={220}
         className="relative mt-12 flex w-full items-end justify-center sm:mt-14"
       >
         <div
-          className="-mr-8 h-[150px] drop-shadow-2xl sm:-mr-10 sm:h-[196px] lg:h-[232px]"
+          className="-mr-8 h-37.5 drop-shadow-2xl sm:-mr-10 sm:h-49 lg:h-58"
           style={{ transform: "rotate(-12deg) translateY(10px)", zIndex: 1 }}
         >
-          <ShowcaseFrame id="classic-4" className="!h-full !w-auto" />
+          <ShowcaseFrame id="classic-4" className="h-full! w-auto!" />
         </div>
         <div
-          className="h-[188px] drop-shadow-2xl sm:h-[244px] lg:h-[290px]"
+          className="h-47 drop-shadow-2xl sm:h-61 lg:h-72.5"
           style={{ transform: "rotate(3deg)", zIndex: 3 }}
         >
-          <ShowcaseFrame id="grid-4" className="!h-full !w-auto" />
+          <ShowcaseFrame id="grid-4" className="h-full! w-auto!" />
         </div>
         <div
-          className="-ml-8 h-[150px] drop-shadow-2xl sm:-ml-10 sm:h-[196px] lg:h-[232px]"
+          className="-ml-8 h-37.5 drop-shadow-2xl sm:-ml-10 sm:h-49 lg:h-58"
           style={{ transform: "rotate(12deg) translateY(10px)", zIndex: 2 }}
         >
-          <ShowcaseFrame id="polaroid-4" className="!h-full !w-auto" />
+          <ShowcaseFrame id="polaroid-4" className="h-full! w-auto!" />
         </div>
       </Reveal>
     </section>
@@ -252,14 +257,14 @@ function HeroEditorial() {
 
 export function LandingView() {
   return (
-    <div className="min-h-dvh bg-[#0B0B0C] text-white">
-      <MarketingNav tone="dark" />
+    <main className="hc-stage-dark min-h-dvh bg-[#0B0B0C] text-white">
+      <MarketingNav cta="primary" />
 
       <HeroEditorial />
 
       {/* HOW */}
-      <section id="how" className="border-y border-white/[0.1] bg-black">
-        <div className="mx-auto max-w-[1160px] px-7 py-[76px]">
+      <section id="how" className="border-y border-white/10 bg-black">
+        <div className="mx-auto max-w-290 px-7 py-19">
           <Reveal className="mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
               찍고, 꾸미고, 남기고.
@@ -273,7 +278,7 @@ export function LandingView() {
 
       {/* CUSTOM FRAME — 프레임 종류(부스도 다 있는 것) 대신, 부스와 겹치지 않는
           유일한 축이자 요금제 1행인 "커스텀 프레임"을 랜딩 주인공으로 세운다. */}
-      <section id="custom" className="mx-auto max-w-[1160px] px-7 py-20">
+      <section id="custom" className="mx-auto max-w-290 px-7 py-20">
         <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
           <Reveal>
             <h2 className="text-[38px] font-extrabold leading-[1.14] tracking-[-1.2px]">
@@ -281,7 +286,7 @@ export function LandingView() {
               <br />
               <span className="hc-accent-word">만드는 거예요.</span>
             </h2>
-            <p className="mt-6 max-w-[420px] text-[15px] leading-[1.75] text-white/60">
+            <p className="mt-6 max-w-105 text-[15px] leading-[1.75] text-white/60">
               부스에선 정해진 프레임에 사진이 박힙니다. 하루컷은 그 위에 스티커를
               붙이고, 글씨를 얹고, 배경을 깎아내요. 같은 네 컷을 찍어도 남는 건
               전부 달라집니다.
@@ -305,13 +310,13 @@ export function LandingView() {
                   frameId="grid-4"
                   images={HERO_IMAGES}
                   borderColor="#141416"
-                  className="!h-full !w-auto"
+                  className="h-full! w-auto!"
                 />
               </div>
 
               <div
                 aria-hidden
-                className="h-[1px] w-6 shrink-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,.28)_0_4px,transparent_4px_8px)] sm:w-9"
+                className="h-0.25 w-6 shrink-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,.28)_0_4px,transparent_4px_8px)] sm:w-9"
               />
 
               <div className="h-[clamp(156px,41vw,320px)] drop-shadow-2xl">
@@ -320,7 +325,7 @@ export function LandingView() {
                   images={HERO_IMAGES}
                   theme={DEMO_DECORATED_THEME}
                   borderColor="#141416"
-                  className="!h-full !w-auto"
+                  className="h-full! w-auto!"
                 />
               </div>
             </div>
@@ -333,9 +338,9 @@ export function LandingView() {
         랜딩이 개인 사용자 이야기만 하고 있어서, 행사 주최자가 들어와도 자기 이야기를
         찾을 자리가 없었다. 제품이 파는 두 축 중 하나가 화면에 아예 없던 셈이다.
       */}
-      <section id="event" className="border-y border-white/[0.1] bg-black">
-        <div className="mx-auto flex max-w-[1160px] flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex max-w-[560px] flex-col gap-4">
+      <section id="event" className="border-y border-white/10 bg-black">
+        <div className="mx-auto flex max-w-290 flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex max-w-140 flex-col gap-4">
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-[11px] font-extrabold tracking-[1px] text-white/70">
               FOR EVENTS
             </span>
@@ -358,7 +363,7 @@ export function LandingView() {
       </section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-[1160px] px-7 pb-[90px] pt-5">
+      <section className="mx-auto max-w-290 px-7 pb-22.5 pt-5">
         <div
           // 모바일에서 좌우 40px 패딩이 제목에 254px 밖에 안 남겨, 30px 글자가 억지로
           // 두 줄로 접혔다(그 바람에 "네 컷"이 갈라졌다). 좁은 화면에선 패딩과 글자를 함께 줄인다.
@@ -375,12 +380,12 @@ export function LandingView() {
             href="/login"
             className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold"
           >
-            시작하기 <ArrowRight className="h-[19px] w-[19px]" />
+            시작하기 <ArrowRight className="h-4.75 w-4.75" />
           </Link>
         </div>
       </section>
 
       <MarketingFooter tone="dark" />
-    </div>
+    </main>
   );
 }

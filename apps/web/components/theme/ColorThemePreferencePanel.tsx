@@ -70,9 +70,9 @@ export function ColorThemePreferencePanel() {
   };
 
   return (
-    <section className="rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4">
+    <section className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--hc-primary-strong)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-(--hc-primary-strong)">
           Display
         </p>
         <h2 className="mt-2 text-sm font-semibold">화면 모드</h2>
@@ -102,14 +102,14 @@ export function ColorThemePreferencePanel() {
               }}
             >
               <span className="flex min-w-0 items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-muted)]">
-                  <Icon className="h-4 w-4 text-[color:var(--hc-primary-strong)]" />
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-(--hc-border) bg-(--hc-surface-muted)">
+                  <Icon className="h-4 w-4 text-(--hc-primary-strong)" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[12px] font-semibold">
                     {meta.label}
                   </span>
-                  <span className="mt-0.5 block text-[11px] leading-4 text-[color:var(--hc-muted)]">
+                  <span className="mt-0.5 block text-[11px] leading-4 text-(--hc-muted)">
                     {meta.description}
                   </span>
                 </span>

@@ -14,7 +14,7 @@
  *
  * 좌표는 `packages/shared/src/brand-mark.ts` 한 곳에서 읽는다. 웹 헤더의 `BrandMark` 도
  * 같은 값을 쓰므로 마크를 고치려면 shared 를 고치고 이걸 다시 돌린다
- * (`scripts/gen-social-marks.mjs` 와 같은 규칙이다).
+ * (`apps/web/scripts/generate-stickers.mjs` 와 같이, 생성물은 커밋해 두고 필요할 때만 다시 만든다).
  *
  * 렌더러로 Playwright 를 쓰는 이유도 같다 — 이미 apps/web 의 devDependency 라 의존성이
  * 늘지 않고, 웹에서 보이는 것과 같은 래스터라이저를 쓴다.

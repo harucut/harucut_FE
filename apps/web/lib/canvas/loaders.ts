@@ -1,10 +1,8 @@
-type LoadImageOptions = { crossOrigin?: "" | "anonymous" | "use-credentials" };
-
-/** 이미지 로드 (CORS 옵션 포함) */
-export function loadImage(src: string, opts: LoadImageOptions = {}) {
+/** 이미지 로드 (crossOrigin 은 anonymous 고정) */
+export function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = opts.crossOrigin ?? "anonymous";
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("image load error"));
     img.src = src;

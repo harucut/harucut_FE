@@ -14,6 +14,7 @@
 | 화면 이동 흐름 | [route-flows.md](./route-flows.md) |
 | 로그인·리다이렉트·게스트 체험 | [auth-routing.md](./auth-routing.md) |
 | 앱 QA 수동 확인 | [mobile-qa-checklist.md](./mobile-qa-checklist.md) |
+| 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
 | 지난 계획 — **실행 기준 아님** | [archive/](./archive/) (각 문서 머리에 왜 보관인지 적혀 있다) |
 
@@ -32,7 +33,7 @@
 ```bash
 # 로컬 백엔드를 띄운 뒤 (docs/local-backend.md)
 pnpm check:contract                                          # 요약
-python3 scripts/check_backend_contract.py --show-required    # 필수 요청 필드까지
+python3 scripts/check_backend_contract.py --show-required    # 스웨거 required 목록까지
 ```
 
 인자를 넘길 때 **`--` 를 끼우지 않는다.** pnpm 10 은 `--` 를 스크립트에 그대로 넘기고
@@ -40,12 +41,16 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료�
 `pnpm check:contract --show-required` 도 되지만, 인자 있는 실행은 위처럼 스크립트를
 직접 부르는 편이 함정이 없다.
 
-보는 것은 셋뿐이다(A·B·C): ① 프론트 프록시가 부르는 경로가 백엔드에 있나 ② 아무도 안
-부르는 프록시가 있나 ③ 에러코드 표가 서버와 1:1 인가. 그래서 통과 문구도 `A·B·C 일치 ✓`
-라고만 나온다. **필수 요청 필드는 검사하지 않는다** — `--show-required` 는 스웨거가 필수라고
-적은 필드를 보여 줄 뿐이고, 프론트가 실제로 싣는지는 사람이 대조한다(요청 본문이 프록시가
-아니라 `apps/web/lib` 에서 만들어져 정적으로 읽기 어렵다). **필수 필드를 빠뜨려도 종료코드는
-0 이다** — 여기서 초록불이 떴다고 계약 전부가 맞았다는 뜻은 아니다.
+보는 것은 넷이다(A·B·C·D): ① 프론트 프록시가 부르는 경로가 백엔드에 있나 ② 아무도 안
+부르는 프록시가 있나 ③ 에러코드 표가 서버와 1:1 인가 ④ **FE 가 실제로 보내는 본문**에
+스웨거의 required 가 다 있나. 그래서 통과 문구도 `A·B·C·D 일치 ✓` 다.
+
+**D 는 참고 출력이 아니라 검사다 — 필수 필드가 빠지면 종료코드 1 로 끊는다.** 예전에는
+목록만 찍고 "대조는 사람이 한다" 였는데, 사람이 하는 대조는 결국 안 해서
+`fileSize`·`sourceKeys` 가 그렇게 새어 나갔다. 본문을 변수로 넘기면 그 변수의 타입까지
+따라간다. 못 따라가면 조용히 통과시키지 않고 "확인 못 함" 경고로 남긴다.
+`--show-required` 는 검사가 아니라 참고 목록이다 — 스웨거가 필수라고 적은 필드를 찍을 뿐이고,
+붙이든 안 붙이든 D 검사 자체는 같이 돈다.
 
 에러코드는 **컨테이너 안 jar 의 `ErrorCode` enum** 에서 직접 뽑는다 — 스웨거 응답 예시만
 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로 잘못 짚는다. 스웨거에 적힌
@@ -55,8 +60,18 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료�
 로 본다 — 백엔드도 도커도 없이 돈다.
 
 전체 검증은 `pnpm verify:standard`. 맨 앞에 `pnpm install --frozen-lockfile` 락파일 검사가
-붙고 그다음이 lint:web·test:web·build:web·lint:mobile·typecheck:mobile 이다 — 목록의
-진실은 `scripts/verify_workspace.py` 의 `GROUPS` 딕셔너리다. macOS 에서도 그냥 돈다.
+붙고 그다음이 lint:web·**check:classes:web**·**typecheck:shared**·test:web·build:web·
+lint:mobile·typecheck:mobile 이다 — 목록의 진실은 `scripts/verify_workspace.py` 의 `GROUPS`
+딕셔너리다. macOS 에서도 그냥 돈다.
+
+새로 붙은 둘은 이렇다.
+
+- `check:classes:web` — Tailwind 임의값 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을 막는다
+  (`apps/web/scripts/check-canonical-classes.mjs`). 표를 들고 있지 않고 후보를 실제로 컴파일해
+  값으로 비교하므로 Tailwind 가 올라가도 따라간다. 규칙과 예외는 `apps/web/DESIGN.md`
+  「클래스 표기 — 정규형을 쓴다」.
+- `typecheck:shared` — 루트 `tsconfig.json` 으로 `packages/*/src` 를 검사한다. 이게 없던 동안
+  `packages/shared` 의 `*.test.ts` 두 개는 **jest 는 도는데 타입은 아무도 안 보는** 상태였다.
 
 E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 검증이 조용히 통과한다.
 규칙과 강제 장치는 [auth-routing.md](./auth-routing.md#dev_auth_bypass-로컬-전용) 에 있다.
@@ -72,12 +87,12 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 | 프론트 프록시 37개 핸들러 → 백엔드 경로 | **37/37 존재** |
 | 호출되지 않는 프록시 라우트 | 없음 |
 | 에러코드 (jar 52개) ↔ 프론트 문구표 | **누락 0 · 죽은 항목 0** |
-| 필수 요청 필드 | 2026-09-01 손 대조 · 09-02 재확인. 어긋남 다섯 건은 **전부 프론트를 고쳐 맞췄다** — 남은 것 없음 |
+| FE 가 보내는 본문 ↔ 스웨거 required | **빠진 필수 필드 없음** (2026-09-01 손 대조에서 나온 다섯 건은 전부 프론트를 고쳐 맞췄고, 지금은 D 가 기계로 본다) |
 
-표의 앞 세 줄은 `pnpm check:contract` 한 번이면 다시 나오는 값이다 — 숫자가 의심되면 여기를
-읽지 말고 돌린다. 마지막 줄은 스크립트가 검사하지 않는 부분이라 사람이 대조해야 하고,
-**엔드포인트 개수를 여기 적어 두면 그 자체가 낡는다** — `--show-required` 출력이 목록이다
-(8-28 에 15개였던 것이 9-01 에 16개가 됐다). 다섯 건이 무엇이었고 어떻게 고쳤는지는
+네 줄 전부 `pnpm check:contract` 한 번이면 다시 나오는 값이다 — 숫자가 의심되면 여기를
+읽지 말고 돌린다. 다만 **엔드포인트 개수를 여기 적어 두면 그 자체가 낡는다** —
+`--show-required` 출력이 목록이다(8-28 에 15개였던 것이 9-01 에 16개가 됐다). 다섯 건이
+무엇이었고 어떻게 고쳤는지는
 [backend-contract.md 「이번에 고친 어긋남」](backend-contract.md) 5~9 번에 있다.
 
 ## 비회원(게스트) 구조 — 서버에는 게스트가 없다
@@ -168,7 +183,7 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 | 의심했던 것 | 실제 | 근거 |
 |---|---|---|
 | 안드로이드 카메라 런타임 권한을 아무도 요청 안 한다 | **`react-native-webview` 가 직접 요청한다** | `RNCWebChromeClient.onPermissionRequest` 가 `RESOURCE_VIDEO_CAPTURE` → `Manifest.permission.CAMERA` 로 옮겨 `requestPermissions` 호출 |
-| 세이프에어리어(노치)를 셸이 안 잡는다 | **웹이 잡는다** | `viewportFit: "cover"` + 화면들이 `env(safe-area-inset-*)` 사용 |
+| 세이프에어리어(노치)를 셸이 안 잡는다 | **반은 맞았다 → 2026-09-06 셸이 잡게 고쳤다** | 웹은 `env(safe-area-inset-bottom)` 만 5곳에서 쓰고 **top 은 0곳**이었다. 안드로이드 WebView 는 상태바 높이를 env 에 주지 않고 iOS 는 RN-webview 기본값이 `never` 라 모든 화면 상단이 상태바 아래로 들어갔다. 지금은 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비운다 — [`docs/mobile-shell.md`](mobile-shell.md) 표 「안전영역」 |
 | 안드로이드 13+ `POST_NOTIFICATIONS` 가 빠졌다 | **라이브러리가 넣는다** | `expo-notifications` 의 `android/src/main/AndroidManifest.xml` 에 선언 → Gradle 머지 |
 
 ## 촬영 화질 — 두 가지를 고쳤다

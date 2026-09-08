@@ -146,6 +146,14 @@ type ShootSessionState = {
   source: ShootSource;
   // 촬영본은 data URL 문자열 배열이다. 갤러리에서 불러온 사진도 같은 형태로 맞춰 담는다.
   shots: string[];
+  /**
+   * 지금 들고 있는 촬영본이 **어느 프레임으로** 찍혔는지.
+   *
+   * 촬영본은 그 프레임의 슬롯 비율로 잘려 저장된다(useCaptureFlow 의 capturePhotoToDataUrl).
+   * 그래서 프레임만 바꿔 다시 쓰려면 새 프레임의 슬롯 비율이 같은지 봐야 한다 —
+   * 세로 4컷(가로 1.42)으로 찍은 사진을 네모 4컷(세로 0.71)에 넣으면 얼굴이 잘려 나간다.
+   */
+  shotsFrameId: FrameId | null;
   selectedIndexes: SelectionSlot[];
   borderColor: string;
   outputFilter: FourcutFilterId;
@@ -177,6 +185,15 @@ type ShootSessionState = {
   addShotPhotos: (photoDataUrls: string[]) => void;
   removeShotPhoto: (index: number) => void;
   resetShots: () => void;
+  /**
+   * **촬영본은 두고** 프레임 선택만 처음으로 돌린다.
+   *
+   * 합성이 되돌릴 수 없는 이유로 실패했을 때 결과 화면이 "프레임 다시 고르기" 를 안내하는데,
+   * 예전에는 그 길이 `/shoot` 의 마운트 effect 가 부르는 `reset()` 을 지나며 찍은 8장을
+   * 통째로 지웠다. 안내 문구는 사진은 두고 프레임만 바꾼다는 뜻으로 읽히는데 실제로는
+   * 사진이 먼저 사라졌다. 다시 찍는 것 말고는 우회로도 없었다.
+   */
+  resetFrameSelection: () => void;
   reset: () => void;
 };
 
@@ -186,6 +203,7 @@ const initialState: Pick<
   | "remoteFrameId"
   | "source"
   | "shots"
+  | "shotsFrameId"
   | "selectedIndexes"
   | "borderColor"
   | "outputFilter"
@@ -197,6 +215,7 @@ const initialState: Pick<
   remoteFrameId: null,
   source: "camera",
   shots: [],
+  shotsFrameId: null,
   selectedIndexes: createEmptySlots(),
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
   outputFilter: DEFAULT_FOURCUT_FILTER,
@@ -315,15 +334,18 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       imageResult: null,
     }),
 
+  // 담을 때 어느 프레임으로 찍었는지 함께 남긴다(shotsFrameId 주석 참고).
   addShotPhoto: (photoDataUrl) =>
     set((state) => ({
       shots: [...state.shots, photoDataUrl],
+      shotsFrameId: state.shotsFrameId ?? state.frameId,
       imageResult: null,
     })),
 
   addShotPhotos: (photoDataUrls) =>
     set((state) => ({
       shots: [...state.shots, ...photoDataUrls],
+      shotsFrameId: state.shotsFrameId ?? state.frameId,
       imageResult: null,
     })),
 
@@ -339,8 +361,19 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   resetShots: () =>
     set(() => ({
       shots: [],
+      shotsFrameId: null,
       selectedIndexes: createEmptySlots(),
       imageResult: null,
+    })),
+
+  resetFrameSelection: () =>
+    set((state) => ({
+      ...initialState,
+      // 지키는 것: 찍은 사진과 그 사진이 어느 프레임으로 찍혔는지, 그리고 맥락(출처·행사).
+      shots: state.shots,
+      shotsFrameId: state.shotsFrameId,
+      source: state.source,
+      eventName: state.eventName,
     })),
 
   reset: () => set(() => initialState),

@@ -27,37 +27,39 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
     pathname === href || pathname.startsWith(`${href}/`);
 
   const shootButtonClass =
-    "-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]";
+    "-mt-7 grid h-13.5 w-13.5 place-items-center rounded-full text-(--hc-primary-contrast) shadow-(--hc-button-shadow) transition active:brightness-90";
 
   return (
     <>
     <nav
       aria-label="주요 메뉴"
-      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-18.5 items-center justify-around border-t border-(--hc-border) bg-(--hc-card) pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
     >
       <Link
         href="/home"
         aria-label="홈"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/home") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/home")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <Home className="h-[23px] w-[23px]" />
+        <Home className="h-5.75 w-5.75" />
         <span className="text-[11px] font-medium">홈</span>
       </Link>
 
       <Link
         href="/history"
         aria-label="기록"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/history") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/history")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <LayoutGrid className="h-[23px] w-[23px]" />
+        <LayoutGrid className="h-5.75 w-5.75" />
         <span className="text-[11px] font-medium">기록</span>
       </Link>
 
@@ -69,7 +71,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
-          <Camera className="h-[26px] w-[26px]" />
+          <Camera className="h-6.5 w-6.5" />
         </button>
       ) : (
         <button
@@ -79,33 +81,35 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
-          <Camera className="h-[26px] w-[26px]" />
+          <Camera className="h-6.5 w-6.5" />
         </button>
       )}
 
       <Link
         href="/theme"
         aria-label="프레임"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/theme") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/theme")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <Film className="h-[23px] w-[23px]" />
+        <Film className="h-5.75 w-5.75" />
         <span className="text-[11px] font-medium">프레임</span>
       </Link>
 
       <Link
         href="/mypage"
         aria-label="MY"
-        className={`flex min-h-[48px] w-14 flex-col items-center justify-center gap-0.5 ${
+        aria-current={isActive("/mypage") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/mypage")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <User className="h-[23px] w-[23px]" />
+        <User className="h-5.75 w-5.75" />
         <span className="text-[11px] font-medium">MY</span>
       </Link>
     </nav>

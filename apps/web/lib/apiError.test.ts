@@ -147,9 +147,11 @@ describe("apiError helpers", () => {
     expect(message).toBe("저장에 실패했어요.");
   });
 
-  it("falls back when the API message is blank", () => {
+  // 코드는 문구표(packages/shared/src/api-error-messages.ts)에도 서버 ErrorCode enum 에도 없는
+  // 것을 일부러 쓴다 — 표에 있는 코드면 매핑 문구가 먼저 이겨서 폴백까지 오지도 않는다.
+  it("falls back when an unmapped code arrives with a blank message", () => {
     const message = getUserFacingApiErrorMessage(
-      { status: 500, data: { code: "GEN-500", status: 500, message: "   " } },
+      { status: 500, data: { code: "XYZ-999", status: 500, message: "   " } },
       "저장에 실패했어요.",
     );
 

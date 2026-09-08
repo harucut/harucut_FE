@@ -41,7 +41,7 @@ export type BridgeMessage =
   | { type: 'camera-permission'; id: string }
   | { type: 'notify-local'; id: string; title: string; body?: string; secondsFromNow?: number }
   | { type: 'theme'; scheme: 'light' | 'dark' }
-  | { type: 'save-begin'; id: string; filename: string; mime: string; total: number }
+  | { type: 'save-begin'; id: string; filename: string; total: number }
   | { type: 'save-chunk'; id: string; index: number; data: string }
   | { type: 'save-end'; id: string }
   | { type: 'share'; id: string; title?: string; message?: string; url: string }
@@ -69,7 +69,6 @@ export type BridgeResult = {
   ok: boolean;
   reason?: string;
   code?: BridgeFailureCode;
-  value?: string;
 };
 
 /** 조각을 모으는 중인 저장 요청 하나. */

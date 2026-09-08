@@ -8,7 +8,7 @@
  *  3. **게스트 쿠키가 없다는 것만으로 로그인했다고 보고** 서버 합성을 불렀다(401 거짓 실패)
  *  4. **확인 없이** 계정에 저장해, 공용 기기에서 앞사람 네컷이 뒷사람 기록으로 넘어갔다
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
@@ -20,9 +20,11 @@ const mockEnsureComposeKey = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
 
 let mockSearch = new URLSearchParams();
+// 저장이 끝나기 전에 사용자가 화면을 옮기는 시나리오가 있어서 주소를 고정할 수 없다.
+let mockPathname = "/home";
 
 jest.mock("next/navigation", () => ({
-  usePathname: () => "/home",
+  usePathname: () => mockPathname,
   useRouter: () => ({ replace: mockReplace }),
   useSearchParams: () => mockSearch,
 }));
@@ -73,10 +75,37 @@ function pressNoticeAction(label: string) {
   fireEvent.click(screen.getByRole("button", { name: label }));
 }
 
+/**
+ * 서버 합성을 **내가 끝낼 때까지** 붙잡아 둔다.
+ *
+ * 실제로는 원본 업로드와 합성 폴링에 1분이 넘게 걸린다. 그 사이 화면에 무엇이 보이는지,
+ * 그동안 화면을 옮기면 어떻게 되는지가 여기서 확인하려는 것이라 자동 resolve 로는 안 된다.
+ */
+function holdSave() {
+  let finish = () => {};
+  mockSaveFourcutToServer.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = () => resolve();
+      }),
+  );
+  return () => finish();
+}
+
+/** 대기 중인 보관물 조회·세션 조회가 끝날 때까지 흘려보낸다. */
+async function flushAsync() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   document.cookie = "harucut_guest_trial=; max-age=0";
   mockSearch = new URLSearchParams();
+  // 주소 정리는 **부를 때의** window.location 을 본다. 목만 세우면 실제 주소와 어긋난다.
+  mockPathname = "/home";
+  window.history.replaceState({}, "", "/home");
   // hydrated 는 false 에서 시작한다 — 실제 앱과 같다. 컴포넌트가 마운트되며 쿠키를 읽는다.
   useGuestTrialStore.setState({
     accessMode: "member",
@@ -165,6 +194,120 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
   });
 
+  /*
+    누르고 나서 최대 1분이 넘게 아무 표시도 없던 자리다. GuestTrialOverlay 는 콜백이 붙은
+    버튼을 누르면 안내를 먼저 닫으므로, 진행 중 안내를 **누른 그 자리에서 동기적으로**
+    갈아 끼우지 않으면 화면이 빈 채로 남는다.
+  */
+  it("저장하는 동안 옮기고 있다고 알린다", async () => {
+    const finishSave = holdSave();
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    // 누른 직후 — 모달이 닫혔다 열리는 것이 아니라 그 자리에서 바뀐다.
+    expect(useGuestTrialStore.getState().notice?.title).toBe(
+      "기록에 옮기고 있어요",
+    );
+    expect(screen.getByText("기록에 옮기고 있어요")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    finishSave();
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 저장됐어요",
+      );
+    });
+  });
+
+  /*
+    회귀 — 저장이 끝나는 순간 보던 화면에서 끌어내지 않는다.
+
+    stripResumeParam 이 effect 가 잡아 둔 pathname 으로 replace 하던 시절에는, 저장을
+    맡겨 두고 기록 화면으로 옮긴 사람이 수십 초 뒤 /home 으로 끌려갔다. replace 라
+    뒤로 가기로 돌아오지도 못한다.
+  */
+  it("저장 중 화면을 옮기면 옮긴 주소를 그대로 둔다", async () => {
+    window.history.replaceState({}, "", "/home?resumeSave=1");
+    mockSearch = new URLSearchParams("resumeSave=1");
+    const finishSave = holdSave();
+
+    const view = render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 저장을 맡겨 두고 기록 화면으로 옮겼다.
+    mockPathname = "/history";
+    mockSearch = new URLSearchParams();
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+    await flushAsync();
+
+    finishSave();
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 저장됐어요",
+      );
+    });
+    // 옮겨 간 주소에는 정리할 파라미터가 없다. /home 으로 되돌리지 않는다.
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — 저장이 도는 동안 확인 안내가 되살아나지 않는다.
+
+    화면을 한 번 옮기면 cleanup 이 "이미 물어봤다"를 그대로 두지만, 두 번째 정리에서는
+    그 실행이 물어본 적이 없어 되돌린다. 그러면 다음 화면에서 확인 안내가 다시 떠
+    진행 중 안내를 덮고, 눌리는 순간 같은 인계가 한 번 더 접수된다.
+  */
+  it("저장 중에는 화면을 두 번 옮겨도 확인 안내가 되살아나지 않는다", async () => {
+    const finishSave = holdSave();
+
+    const view = render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    for (const next of ["/history", "/home"]) {
+      mockPathname = next;
+      window.history.replaceState({}, "", next);
+      view.rerender(<GuestTrialBridge />);
+      await flushAsync();
+    }
+
+    expect(useGuestTrialStore.getState().notice?.title).toBe(
+      "기록에 옮기고 있어요",
+    );
+
+    finishSave();
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 저장됐어요",
+      );
+    });
+    expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+  });
+
   it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {
     render(<GuestTrialBridge />);
 
@@ -197,6 +340,7 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
   it("보관물이 없으면 resumeSave 파라미터만 걷어낸다", async () => {
     mockGetPending.mockResolvedValue(null);
     mockSearch = new URLSearchParams("resumeSave=1");
+    window.history.replaceState({}, "", "/home?resumeSave=1");
 
     render(<GuestTrialBridge />);
 

@@ -90,7 +90,7 @@ describe("SavedFramesSection", () => {
   it("불러오는 중에는 실패도 없음도 말하지 않는다", () => {
     renderSection({ isLoading: true, error: null, frames: [] });
 
-    expect(screen.getByText("불러오는 중...")).toBeInTheDocument();
+    expect(screen.getByText("불러오는 중…")).toBeInTheDocument();
     expect(screen.queryByText(EMPTY)).not.toBeInTheDocument();
   });
 

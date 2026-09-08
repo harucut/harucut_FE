@@ -6,6 +6,12 @@ import { AccountRecoveryBridge } from "@/components/auth/AccountRecoveryBridge";
 import { TermsConsentBridge } from "@/components/terms/TermsConsentBridge";
 import { ColorThemeScript } from "@/components/theme/ColorThemeScript";
 import { ColorThemeSync } from "@/components/theme/ColorThemeSync";
+/*
+  Pretendard 는 같은 오리진에서 낸다. 예전에는 jsdelivr <link> 였는데 앱 첫 실행(캐시 없음)에서
+  서드파티 DNS·TLS 왕복 뒤 시스템 서체 → Pretendard 스왑이 보였고, CDN 이 막히면 서체가 영구
+  폴백됐다. dynamic-subset CSS 를 번들에 넣으면 Next 가 참조된 woff2 조각만 /_next/static 으로 옮긴다.
+*/
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { ExternalBrowserGate } from "./ExternalBrowserGate";
 
@@ -34,7 +40,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B0B0C",
+  // 시스템 선호 기준 초깃값. 저장된 선호가 다르면 lib/colorTheme.ts 가 첫 페인트 전에 덮어쓴다.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0c" },
+  ],
   // standalone(홈 화면 설치)로 뜨면 노치·홈 인디케이터 영역까지 화면이 된다.
   // cover 를 켜야 env(safe-area-inset-*) 가 실제 값을 갖는다.
   viewportFit: "cover",
@@ -47,17 +57,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" suppressHydrationWarning>
-      <head>
-        {/*
-          Pretendard 웹폰트를 직접 로드해 방문자 OS에 설치 여부와 무관하게
-          어디서나 동일하게 렌더되도록 한다(dynamic-subset = 필요한 글리프만 로드).
-        */}
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css"
-        />
-      </head>
       <body>
         <ColorThemeScript />
         <ColorThemeSync />

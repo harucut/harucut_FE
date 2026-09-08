@@ -12,15 +12,11 @@ function getOpacity(styleJson: EditorComponent["styleJson"]): number {
   return Number.isFinite(opacity as number) ? (opacity as number) : 1;
 }
 
-// TEXT/IMAGE 타입별로 opacity 갱신
+// styleJson의 나머지 속성은 두고 opacity 만 갱신
 function setOpacity(
   c: EditorComponent,
   opacity: number,
 ): EditorComponent["styleJson"] {
-  if (c.type === "TEXT") {
-    const s = c.styleJson as TextStyleJson;
-    return { ...s, opacity };
-  }
   const base = (c.styleJson ?? {}) as OpacityStyle;
   return { ...base, opacity };
 }
@@ -40,8 +36,8 @@ export function InspectorPanel() {
     return (
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
         <p className="text-sm font-semibold">속성</p>
-        <p className="mt-2 text-[11px] text-zinc-400">
-          캔버스에서 요소를 선택해세요.
+        <p className="mt-2 text-[12px] text-zinc-400">
+          캔버스에서 요소를 선택하세요.
         </p>
       </section>
     );
@@ -53,7 +49,7 @@ export function InspectorPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">속성</p>
-        <span className="text-[11px] text-zinc-500">{active.type}</span>
+        <span className="text-[11px] text-(--hc-muted)">{active.type}</span>
       </div>
 
       {/* 공통 */}
@@ -138,7 +134,7 @@ function TextInspector({
             value={c.source}
             onChange={(e) => onChange({ source: e.target.value })}
             aria-describedby={isBlank ? blankHintId : undefined}
-            className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+            className="w-full rounded-lg border border-(--hc-border) bg-(--hc-surface-strong) px-3 py-2 text-xs text-(--hc-text)"
           />
         </Row>
         {isBlank ? (
@@ -156,7 +152,7 @@ function TextInspector({
               styleJson: { ...style, fontFamily: e.target.value },
             })
           }
-          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          className="w-full rounded-lg border border-(--hc-border) bg-(--hc-surface-strong) px-3 py-2 text-xs text-(--hc-text)"
         />
       </Row>
 
@@ -188,7 +184,7 @@ function TextInspector({
               styleJson: { ...style, color: e.target.value },
             })
           }
-          className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
+          className="h-9 w-12 rounded-lg border border-(--hc-border) bg-(--hc-surface-strong)"
         />
         <select
           value={style.textAlign ?? "center"}
@@ -198,7 +194,7 @@ function TextInspector({
               v === "left" || v === "center" || v === "right" ? v : "center";
             onChange({ styleJson: { ...style, textAlign: align } });
           }}
-          className="flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          className="flex-1 rounded-lg border border-(--hc-border) bg-(--hc-surface-strong) px-3 py-2 text-xs text-(--hc-text)"
         >
           <option value="left">왼쪽</option>
           <option value="center">가운데</option>
@@ -221,7 +217,7 @@ function Row({
 }) {
   return (
     <label className="flex items-center gap-3">
-      <span className="w-14 text-[11px] text-zinc-400">{label}</span>
+      <span className="w-14 text-[12px] text-zinc-400">{label}</span>
       <div className="flex flex-1 items-center gap-2">{children}</div>
     </label>
   );
@@ -229,9 +225,9 @@ function Row({
 
 function SmallStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2">
-      <p className="text-[11px] text-zinc-500">{label}</p>
-      <p className="text-xs text-zinc-200">{value}</p>
+    <div className="rounded-xl border border-(--hc-border) bg-(--hc-surface-strong) px-3 py-2">
+      <p className="text-[11px] text-(--hc-muted)">{label}</p>
+      <p className="font-mono text-xs tabular-nums text-zinc-200">{value}</p>
     </div>
   );
 }

@@ -120,12 +120,10 @@ const FREEZE_ANIMATIONS_CSS = `
 const FLATTEN_PAGE_GRADIENT_CSS = `
   :root {
     --hc-page-gradient-app: #f1f1ee !important;
-    --hc-page-gradient-showcase: #f1f1ee !important;
     --hc-page-gradient-landing: #f1f1ee !important;
   }
   html[data-theme="dark"] {
     --hc-page-gradient-app: #161617 !important;
-    --hc-page-gradient-showcase: #161617 !important;
     --hc-page-gradient-landing: #161617 !important;
   }
 `;

@@ -152,7 +152,7 @@ export function TermsConsentPanel() {
 
   if (consents === null) {
     return (
-      <p className="text-[13px] leading-6 text-[color:var(--hc-muted)]">
+      <p className="text-[13px] leading-6 text-(--hc-muted)">
         약관 동의 정보를 불러오는 중이에요.
       </p>
     );
@@ -161,7 +161,7 @@ export function TermsConsentPanel() {
   return (
     <div className="flex flex-col gap-4">
       {consents.length === 0 ? (
-        <p className="text-[13px] leading-6 text-[color:var(--hc-muted)]">
+        <p className="text-[13px] leading-6 text-(--hc-muted)">
           {error ?? "표시할 약관이 없어요."}
         </p>
       ) : (
@@ -184,13 +184,13 @@ export function TermsConsentPanel() {
                       (isUnreadable(item.code) && !agreed)
                     }
                     onChange={(e) => void toggle(item, e.target.checked)}
-                    className="h-4 w-4 accent-[color:var(--hc-primary)] disabled:opacity-50"
+                    className="h-4 w-4 accent-(--hc-primary) disabled:opacity-50"
                   />
                   <span>
                     <span
                       className={
                         item.required
-                          ? "text-[color:var(--hc-primary-strong)]"
+                          ? "text-(--hc-primary-strong)"
                           : "text-zinc-500"
                       }
                     >
@@ -198,7 +198,7 @@ export function TermsConsentPanel() {
                     </span>{" "}
                     {item.title}
                     {item.status === "NEEDS_RECONSENT" ? (
-                      <span className="ml-1 text-[11px] text-[color:var(--hc-danger)]">
+                      <span className="ml-1 text-[11px] text-(--hc-danger)">
                         개정됨 · 재동의 필요
                       </span>
                     ) : null}
@@ -216,7 +216,7 @@ export function TermsConsentPanel() {
                 </div>
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
-                  <p className="ml-6 text-[11px] text-[color:var(--hc-muted)]">
+                  <p className="ml-6 text-[11px] text-(--hc-muted)">
                     {contentState === "loading"
                       ? "약관 본문을 불러오는 중이에요."
                       : "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."}
@@ -240,14 +240,14 @@ export function TermsConsentPanel() {
       )}
 
       {error && consents.length > 0 ? (
-        <p className="text-[12px] text-[color:var(--hc-danger)]">{error}</p>
+        <p className="text-[12px] text-(--hc-danger)">{error}</p>
       ) : null}
 
-      <p className="text-[12px] leading-5 text-[color:var(--hc-muted)]">
+      <p className="text-[12px] leading-5 text-(--hc-muted)">
         필수 약관은 서비스 이용에 반드시 필요해 철회할 수 없어요. 동의를 거두시려면
         아래 회원 탈퇴를 이용해 주세요.
       </p>
-      <p className="text-[13px] leading-5 text-[color:var(--hc-muted)]">
+      <p className="text-[13px] leading-5 text-(--hc-muted)">
         푸시·주간 리마인더 알림은 순차적으로 추가될 예정이에요.
       </p>
     </div>

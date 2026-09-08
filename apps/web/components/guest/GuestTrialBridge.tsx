@@ -73,6 +73,14 @@ export function GuestTrialBridge() {
   // 24시간을 산다. 비회원이 결과만 내려받고 기기를 넘기면, 그 뒤 아무나 로그인하는
   // 순간 앞사람 얼굴이 뒷사람 보관함에 자동으로 들어간다(공용 기기·가족 공용 태블릿).
   const handoffPromptedRef = useRef(false);
+  /*
+    저장이 도는 중인가.
+
+    저장은 원본 4장을 다시 올리고 서버 합성을 기다리므로 1분이 넘기도 한다. 그 사이 화면을
+    두 번 옮기면 아래 cleanup 이 `handoffPromptedRef` 를 되돌려 확인 안내가 되살아났다 —
+    진행 중 안내를 덮고, 같은 인계가 한 번 더 접수돼 원본 4장이 S3 에 또 남는다.
+  */
+  const handoffSavingRef = useRef(false);
   useEffect(() => {
     /*
       **쿠키를 읽기 전에는 판단하지 않는다.**
@@ -82,12 +90,20 @@ export function GuestTrialBridge() {
     */
     if (!hydrated || accessMode !== "member") return;
 
+    /*
+      주소 정리는 **부를 때의 주소**를 본다.
+
+      이 함수는 확인 안내의 버튼에 실려 저장이 끝난 뒤(수십 초)에야 불린다. effect 가 잡아 둔
+      pathname·searchParams 로 replace 하면, 그 사이 기록 화면으로 옮겨 간 사람이 저장이
+      끝나는 순간 /home 으로 끌려간다 — replace 라 뒤로 가기로 돌아오지도 못한다.
+    */
     const stripResumeParam = () => {
-      if (!searchParams.get("resumeSave")) return;
-      const nextParams = new URLSearchParams(searchParams.toString());
+      const nextParams = new URLSearchParams(window.location.search);
+      if (!nextParams.get("resumeSave")) return;
       nextParams.delete("resumeSave");
+      const livePath = window.location.pathname;
       const nextSearch = nextParams.toString();
-      router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname);
+      router.replace(nextSearch ? `${livePath}?${nextSearch}` : livePath);
     };
 
     let cancelled = false;
@@ -95,6 +111,25 @@ export function GuestTrialBridge() {
     let prompted = false;
 
     const runPendingSave = async (entry: PendingGuestSave) => {
+      /*
+        누른 즉시 "옮기는 중"이라고 말한다.
+
+        이 일은 원본 4장을 다시 올리고 서버 합성이 끝날 때까지 기다린다 — 길면 1분이 넘는다
+        (lib/composeApi.ts 의 폴링 상한은 의도된 값이라 줄이지 않는다). 그런데
+        GuestTrialOverlay 는 콜백이 붙은 버튼을 누르면 안내를 **먼저 닫고** 콜백을 부르므로,
+        그동안 화면에는 아무 표시도 없었다 — 눌렀는데 아무 일도 안 난 것처럼 보인다.
+        첫 await 앞에서 동기적으로 걸어야 닫기와 같은 렌더에 묶여 모달이 깜빡이지 않는다.
+      */
+      handoffSavingRef.current = true;
+      setNotice({
+        actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+        eyebrow: "SAVING",
+        icon: "sparkles",
+        message:
+          "비회원 때 만든 네컷을 기록으로 옮기고 있어요. 사진을 다시 올려 서버가 그리는 중이라 조금 걸릴 수 있어요 — 이 안내를 닫아도 계속 진행돼요.",
+        title: "기록에 옮기고 있어요",
+      });
+
       /*
         멱등키는 **보관물에 심어 두고 다시 쓴다.**
 
@@ -172,6 +207,8 @@ export function GuestTrialBridge() {
             : `${failure.message} 비회원 때 만든 결과는 기록에 옮기지 못했어요.`,
           title: "저장을 완료하지 못했어요",
         });
+      } finally {
+        handoffSavingRef.current = false;
       }
     };
 
@@ -186,7 +223,8 @@ export function GuestTrialBridge() {
       }
 
       // 한 번 물었으면 같은 탭에서 다시 걸지 않는다(성공·실패 모두 아래에서 정리한다).
-      if (handoffPromptedRef.current) return;
+      // 저장이 도는 중이면 더더욱 걸지 않는다 — 진행 중 안내를 덮고 같은 인계를 또 접수한다.
+      if (handoffPromptedRef.current || handoffSavingRef.current) return;
       handoffPromptedRef.current = true;
 
       // 쿠키가 아니라 서버에 묻는다. 로그아웃한 방문자에게 남의 결과물을 저장할지
@@ -223,7 +261,8 @@ export function GuestTrialBridge() {
       cancelled = true;
       // 물어보지도 못하고 끊겼으면 "이미 물어봤다"로 남기지 않는다. 로그인 확인이
       // 끝나기 전에 화면을 옮기면 이 자리에서 보관물이 영영 방치된다.
-      if (!prompted) handoffPromptedRef.current = false;
+      // 저장이 도는 중이면 되돌리지 않는다 — 되돌리면 다음 화면에서 확인 안내가 되살아난다.
+      if (!prompted && !handoffSavingRef.current) handoffPromptedRef.current = false;
     };
   }, [accessMode, hydrated, pathname, router, searchParams, setNotice]);
 

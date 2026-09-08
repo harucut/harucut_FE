@@ -99,7 +99,7 @@ const SOURCE_QUALITY = 0.92;
 const CUTOUT_INTERMEDIATE_QUALITY = 1;
 
 export class SystemFrameMissingError extends Error {
-  constructor(readonly frameId: FrameId) {
+  constructor() {
     super("이 프레임으로는 아직 저장할 수 없어요.");
     this.name = "SystemFrameMissingError";
   }
@@ -296,10 +296,10 @@ export async function resolveComposeFrame(
     return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame) };
   }
 
-  if (!frameId) throw new SystemFrameMissingError("classic-4");
+  if (!frameId) throw new SystemFrameMissingError();
 
   const system = await findSystemFrame(frameId);
-  if (!system) throw new SystemFrameMissingError(frameId);
+  if (!system) throw new SystemFrameMissingError();
 
   // 시스템 프레임도 같은 필드를 달고 온다. 목록으로 이미 받았으니 더 물을 것이 없다.
   return { frameId: system.frameId, cellCutouts: readCellCutouts(system) };
@@ -340,10 +340,26 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
   }
 
   if (error instanceof ComposeFailedError) {
+    /*
+      `failureReason` 은 사용자에게 보여줄 문구가 아니다 — 스웨거가 그 필드 설명에
+      박아 둔다: "사용자에게 그대로 보여줄 문구는 아니다"(2026-09-07 /v3/api-docs 실측).
+      값은 합성 Lambda 의 실패 기록을 그대로 옮긴 것이라
+      `errorType + ": " + errorMessage` 꼴이고, errorMessage 가 없으면 재시도 소진
+      조건 문자열("RetriesExhausted") 자체다. 서버는 255자로 자르기만 할 뿐
+      언어도 내용도 가리지 않는다(`failure_reason varchar(255)`).
+
+      한글이 섞였는지 보는 관문으로도 못 거른다(apiError.ts 의 GEN-003 data[] 필터).
+      예외 메시지가 한국어여도 앞에 클래스명이 붙어 나오기 때문이다
+      ("java.lang.IllegalArgumentException: 원본 사진 수가 슬롯 수와 다르다").
+      그래서 언어를 따지지 않고 통째로 버린다 — 일반 Error 의 message 를 버리는
+      apiError.ts 의 getServerMessage 와 같은 규칙이다. 원인 추적은 콘솔에만 남긴다.
+    */
+    if (error.reason?.trim() && process.env.NODE_ENV !== "production") {
+      console.error(`[compose] 서버 합성 실패: ${error.reason}`);
+    }
+
     return {
-      message:
-        error.reason?.trim() ||
-        "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",
+      message: "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",
       retryable: false,
     };
   }

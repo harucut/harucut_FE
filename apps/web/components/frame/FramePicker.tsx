@@ -7,7 +7,7 @@ import { FramePreview } from "@/components/frame/FramePreview";
 type FramePickerLayoutMode = "carousel" | "grid";
 
 const FRAME_PICKER_PREVIEW_VIEWPORT =
-  "flex h-[176px] w-[132px] items-center justify-center";
+  "flex h-44 w-33 items-center justify-center";
 const PREVIEW_BORDER_COLOR = "var(--hc-frame-picker-preview-outer)";
 const PREVIEW_SLOT_COLOR = "var(--hc-frame-picker-preview-inner)";
 
@@ -43,7 +43,7 @@ export function FramePicker({
 
         <div className="md:hidden">
           <div
-            className="overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            className="overflow-x-auto pb-2 scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             style={{
               paddingInlineStart:
                 "max(0.75rem, calc((100% - min(78vw, 20rem)) / 2))",
@@ -76,7 +76,7 @@ export function FramePicker({
           type="button"
           disabled={confirmDisabled}
           onClick={onConfirm}
-          className="hc-button-primary w-full rounded-full px-5 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:py-2.5 md:text-xs"
+          className="hc-button-primary inline-flex h-12 w-full items-center justify-center rounded-full px-5 text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:min-w-50 md:px-6"
         >
           {confirmLabel}
         </button>
@@ -107,12 +107,12 @@ function FramePickerCard({
       onClick={onClick}
       aria-pressed={selected}
       className={[
-        "group relative overflow-hidden rounded-[28px] border p-3 text-left transition-all",
+        "group relative overflow-hidden rounded-[28px] border p-3 text-left transition-[border-color,background-color,box-shadow] duration-200",
         mode === "grid"
           ? "w-full"
-          : "w-[min(78vw,320px)] shrink-0 snap-center sm:w-[320px]",
+          : "w-[min(78vw,320px)] shrink-0 snap-center sm:w-80",
         selected
-          ? "border-[color:var(--hc-primary)] bg-zinc-900 shadow-[0_0_0_1px_var(--hc-accent-soft-border)]"
+          ? "border-(--hc-primary) bg-zinc-900 shadow-[0_0_0_1px_var(--hc-accent-soft-border)]"
           : "border-zinc-800 bg-zinc-900/70 hover:border-zinc-600 hover:bg-zinc-900",
       ].join(" ")}
     >
@@ -133,8 +133,8 @@ function FramePickerCard({
       <div className="relative flex flex-col gap-3">
         <div
           className={[
-            "relative flex items-center justify-center rounded-2xl border border-white/10 bg-black/20",
-            mode === "grid" ? "min-h-[220px] p-3" : "min-h-[220px] p-4",
+            "relative flex items-center justify-center rounded-2xl border border-(--hc-border) bg-(--hc-surface-muted)",
+            mode === "grid" ? "min-h-55 p-3" : "min-h-55 p-4",
           ].join(" ")}
         >
           {/* 추천 표시. 한 장에만 붙어야 "이걸 고르면 무난하다"로 읽힌다 —
@@ -165,8 +165,8 @@ function FramePickerCard({
               className={[
                 "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
                 selected
-                  ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
-                  : "border-white/10 bg-black/20 text-zinc-400",
+                  ? "border-(--hc-primary) bg-(--hc-primary) text-(--hc-primary-contrast)"
+                  : "border-(--hc-border) bg-(--hc-surface-muted) text-zinc-400",
               ].join(" ")}
           >
             {selected ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}

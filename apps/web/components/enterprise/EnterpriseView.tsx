@@ -44,13 +44,13 @@ const COMPARISON = [
 
 export function EnterpriseView() {
   return (
-    <div className="hc-page-landing min-h-dvh text-[color:var(--hc-text)]">
+    <div className="hc-stage-dark hc-page-landing min-h-dvh text-(--hc-text)">
       <MarketingNav />
 
-      <main className="mx-auto flex w-full max-w-[1160px] flex-col gap-20 px-5 pb-24 pt-10 sm:px-8 lg:gap-28 lg:pt-16">
+      <main className="mx-auto flex w-full max-w-290 flex-col gap-20 px-5 pb-24 pt-10 sm:px-8 lg:gap-28 lg:pt-16">
         {/* 히어로 */}
         <Reveal as="section" className="flex flex-col gap-6">
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] px-3.5 py-1.5 text-[12px] font-extrabold text-[color:var(--hc-accent-soft-text)]">
+          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) px-3.5 py-1.5 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
             <QrCode aria-hidden className="h-3.5 w-3.5" />
             행사·팬미팅용
           </span>
@@ -62,7 +62,7 @@ export function EnterpriseView() {
           <h1 className="max-w-[15ch] text-[clamp(2.125rem,5vw,3.625rem)] font-extrabold leading-[1.14] tracking-[-1px]">
             부스 대신 QR 한 장으로 네 컷을 찍어요
           </h1>
-          <p className="max-w-[52ch] text-[16px] leading-[1.75] text-[color:var(--hc-muted)] lg:text-[18px]">
+          <p className="max-w-[52ch] text-[16px] leading-[1.75] text-(--hc-muted) lg:text-[18px]">
             행사 전용 촬영 QR을 만들어 드려요. 참가자는 앱을 받지도, 가입하지도 않고
             행사 이름이 뜬 화면에서 자기 휴대폰으로 찍어 그 자리에서 가져갑니다.
           </p>
@@ -94,23 +94,23 @@ export function EnterpriseView() {
                 className="hc-surface-card flex flex-col gap-2.5 rounded-[20px] border p-6"
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] font-bold text-[color:var(--hc-primary-strong)]">
+                  <span className="font-mono text-[12px] font-bold text-(--hc-primary-strong)">
                     {String(index + 1).padStart(2, "0")}
                   </span>
-                  <span className="rounded-full border border-[color:var(--hc-border)] px-2 py-0.5 text-[11px] font-bold text-[color:var(--hc-muted)]">
+                  <span className="rounded-full border border-(--hc-border) px-2 py-0.5 text-[11px] font-bold text-(--hc-muted)">
                     {step.who}
                   </span>
                 </div>
                 <h3 className="text-[16px] font-extrabold tracking-tight">
                   {step.title}
                 </h3>
-                <p className="text-[14px] leading-[1.7] text-[color:var(--hc-muted)]">
+                <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
                   {step.body}
                 </p>
                 {"note" in step && step.note ? (
                   // opacity 로 흐리면 대비가 같이 죽는다(흰 카드 위 4.13:1 로 AA 미달이었다).
                   // 위계는 크기로만 낮추고 색은 토큰 그대로 쓴다.
-                  <p className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+                  <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
                     {step.note}
                   </p>
                 ) : null}
@@ -135,15 +135,15 @@ export function EnterpriseView() {
             {COMPARISON.map(([label, ours, theirs]) => (
               <li
                 key={label}
-                className="hc-surface-card rounded-[16px] border p-4"
+                className="hc-surface-card rounded-2xl border p-4"
               >
-                <p className="font-mono text-[11px] tracking-[1.2px] text-[color:var(--hc-muted)]">
+                <p className="font-mono text-[11px] tracking-[1.2px] text-(--hc-muted)">
                   {label}
                 </p>
                 <p className="mt-2 text-[14px] font-semibold leading-[1.6]">
                   하루컷 · {ours}
                 </p>
-                <p className="mt-1 text-[13px] leading-[1.6] text-[color:var(--hc-muted)]">
+                <p className="mt-1 text-[13px] leading-[1.6] text-(--hc-muted)">
                   부스 대여 · {theirs}
                 </p>
               </li>
@@ -159,35 +159,35 @@ export function EnterpriseView() {
             tabIndex={0}
             role="region"
             aria-label="하루컷과 부스 대여 비교표"
-            className="hidden overflow-x-auto rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--hc-primary)] sm:block"
+            className="hidden overflow-x-auto rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--hc-primary) sm:block"
           >
-            <table className="w-full min-w-[560px] border-collapse text-left">
+            <table className="w-full min-w-140 border-collapse text-left">
               <caption className="sr-only">
                 하루컷 행사 프레임과 촬영 부스 대여 비교
               </caption>
               <thead>
-                <tr className="border-b border-[color:var(--hc-border)]">
-                  <th scope="col" className="w-[110px] py-3 pr-4 text-[12px] font-bold text-[color:var(--hc-muted)]">
+                <tr className="border-b border-(--hc-border)">
+                  <th scope="col" className="w-27.5 py-3 pr-4 text-[12px] font-bold text-(--hc-muted)">
                     항목
                   </th>
                   <th scope="col" className="py-3 pr-4 text-[13px] font-extrabold">
                     하루컷
                   </th>
-                  <th scope="col" className="py-3 text-[13px] font-bold text-[color:var(--hc-muted)]">
+                  <th scope="col" className="py-3 text-[13px] font-bold text-(--hc-muted)">
                     부스 대여
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {COMPARISON.map(([label, ours, theirs]) => (
-                  <tr key={label} className="border-b border-[color:var(--hc-border)]">
-                    <th scope="row" className="py-3.5 pr-4 align-top text-[12px] font-bold text-[color:var(--hc-muted)]">
+                  <tr key={label} className="border-b border-(--hc-border)">
+                    <th scope="row" className="py-3.5 pr-4 align-top text-[12px] font-bold text-(--hc-muted)">
                       {label}
                     </th>
                     <td className="py-3.5 pr-4 align-top text-[14px] leading-[1.6] font-semibold">
                       {ours}
                     </td>
-                    <td className="py-3.5 align-top text-[14px] leading-[1.6] text-[color:var(--hc-muted)]">
+                    <td className="py-3.5 align-top text-[14px] leading-[1.6] text-(--hc-muted)">
                       {theirs}
                     </td>
                   </tr>
@@ -202,11 +202,11 @@ export function EnterpriseView() {
           <h2 className="text-[18px] font-extrabold tracking-tight">
             지금은 사람이 직접 세팅해 드려요
           </h2>
-          <p className="max-w-[62ch] text-[14px] leading-[1.8] text-[color:var(--hc-muted)]">
+          <p className="max-w-[62ch] text-[14px] leading-[1.8] text-(--hc-muted)">
             셀프 서비스 관리자 화면은 아직 준비 중이에요. 지금은 문의를 주시면 저희가 행사
             프레임과 QR을 직접 만들어 전달해 드립니다. 그래서 행사 규모와 일정에 맞춰
             조율할 수 있고, 대신 준비 기간이 필요해요 —{" "}
-            <b className="font-bold text-[color:var(--hc-text)]">
+            <b className="font-bold text-(--hc-text)">
               행사 2주 전까지
             </b>{" "}
             문의해 주시면 여유 있게 준비할 수 있어요.
@@ -216,8 +216,8 @@ export function EnterpriseView() {
             비회원이 읽을 수 있는 공개 조회가 서버에 생겨야 전달할 수 있다.
             팔기 전에 알려야 하는 조건이라 문의 절 바로 위에 둔다.
           */}
-          <p className="max-w-[62ch] text-[13px] leading-[1.8] text-[color:var(--hc-muted)]">
-            <b className="font-bold text-[color:var(--hc-text)]">
+          <p className="max-w-[62ch] text-[13px] leading-[1.8] text-(--hc-muted)">
+            <b className="font-bold text-(--hc-text)">
               지금 QR로 전달되는 범위
             </b>
             는 행사 이름과 컷 구성이에요. 참가자 화면에 행사 이름이 뜨고, 행사에 맞춘 컷
@@ -225,7 +225,7 @@ export function EnterpriseView() {
             바로 띄우는 건 준비 중이라, 그게 꼭 필요한 행사라면 문의하실 때 말씀해 주세요 —
             일정에 맞출 수 있는지 먼저 알려 드릴게요.
           </p>
-          <p className="max-w-[62ch] text-[13px] leading-[1.8] text-[color:var(--hc-muted)]">
+          <p className="max-w-[62ch] text-[13px] leading-[1.8] text-(--hc-muted)">
             비용은 행사 규모·기간에 따라 달라서 정찰가를 붙이지 않았어요. 아래 내용을 주시면
             견적을 함께 보내 드립니다.
           </p>
@@ -238,7 +238,7 @@ export function EnterpriseView() {
             <h2 className="text-[24px] font-extrabold tracking-tight lg:text-[30px]">
               도입 문의
             </h2>
-            <p className="text-[14px] leading-[1.7] text-[color:var(--hc-muted)]">
+            <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
               아래를 채우면 메일 본문이 그대로 만들어져요. {COMPANY.hours} 안에
               답장드립니다.
             </p>

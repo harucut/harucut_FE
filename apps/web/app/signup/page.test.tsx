@@ -105,7 +105,6 @@ beforeEach(() => {
       },
     ],
     fromServer: true,
-    loading: false,
   };
   mockSignupWithEmail.mockResolvedValue(undefined);
 });

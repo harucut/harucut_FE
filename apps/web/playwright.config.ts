@@ -54,6 +54,13 @@ export default defineConfig({
     timeout: USE_DEV_SERVER ? 120_000 : 300_000,
     env: {
       // 개발 서버(.next)와 산출물을 나눠 두 인스턴스가 공존하게 한다.
+      //
+      // 곁들여 tsconfig.json 의 exclude 에 `.next/dev/types` 와 `.next-e2e/dev/types` 가
+      // 들어 있다. dev 서버가 그 안의 validator.ts 를 계속 다시 쓰는데, tsconfig 는 두
+      // 디렉터리의 생성 타입을 모두 include 해서 e2e 빌드의 타입 검사가 **다른 서버가
+      // 쓰는 중인 파일**을 읽었다. 실제로 반쯤 쓰인 파일을 읽고
+      // `Cannot find name 'onse'`(Promise<Response | void> 가 잘린 것)로 빌드가 죽었다.
+      // 라우트 타입은 `.next/types`·`.next-e2e/types` 가 그대로 담당한다.
       NEXT_DIST_DIR: ".next-e2e",
       // 로컬 .env.local 에 개발용 로그인 우회가 켜져 있어도 e2e 서버에서는 끈다.
       // 켜진 채로 돌면 인증 가드 테스트가 통째로 무의미해진다.

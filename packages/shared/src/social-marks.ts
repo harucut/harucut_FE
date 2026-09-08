@@ -4,6 +4,7 @@
  * 왜 shared 로 올렸나: 예전에는 웹과 앱이 같은 PNG 를 각자 다른 크기로 그리고 있었다.
  * 로고는 웹 18/20/22px, 앱 20/26/30px. 네이버 버튼색은 웹 #007A3D, 앱 #03C75A — 같은 제품의
  * 같은 버튼이 플랫폼마다 다른 크기, 다른 색이었다. 값을 한 곳에서 읽게 만든다.
+ * (그 뒤 ADR-0003 으로 앱이 웹을 그대로 띄우게 되어, 지금 이 값을 그리는 곳은 웹 하나다.)
  *
  * 여기 있는 것은 **각 사의 규격**이지 우리 취향이 아니다. 바꾸려면 각 사 가이드를 먼저 볼 것.
  *  - 카카오 https://developers.kakao.com/docs/ko/kakaologin/design-guide
@@ -35,9 +36,6 @@ export const SOCIAL_MARK_SIZE: Record<SocialProvider, number> = {
   kakao: 18,
   naver: 16,
 };
-
-/** 마크와 라벨 사이 간격. 네이버 "가운데 정렬 시 로고와 레이블의 간격은 8px을 유지해 주세요". */
-export const SOCIAL_MARK_GAP = 8;
 
 export type MarkPath = { d: string; fill: string };
 
@@ -99,7 +97,7 @@ export const SOCIAL_MARK_GEOMETRY: Record<SocialProvider, MarkGeometry> = {
 /**
  * 버튼 색 — 전부 각 사 지정값이다.
  *
- * 카카오: 컨테이너 #FEE500 / 심볼 #000000 / 레이블 #000000 85%. "위의 색상 규정에 벗어난
+ * 카카오: 컨테이너 #FEE500 / 레이블 #000000 85%. "위의 색상 규정에 벗어난
  *   색상을 적용해서는 안 됩니다." 테마별 변형이 아예 없어 라이트·다크가 같다.
  * 네이버: 2025년 하반기 개정색 #03A94D. 예전 #03C75A 도, 우리가 쓰던 #007A3D 도 아니다.
  *   다크 렌디션 #05AC4F 가 따로 있지만 흰 글자 대비가 2.99:1 로 비텍스트 3:1 문턱에도 못 미쳐
@@ -109,16 +107,16 @@ export const SOCIAL_MARK_GEOMETRY: Record<SocialProvider, MarkGeometry> = {
  */
 export const SOCIAL_BRAND_COLORS = {
   kakao: {
-    light: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', mark: '#000000', line: null },
-    dark: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', mark: '#000000', line: null },
+    light: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', line: null },
+    dark: { bg: '#FEE500', label: 'rgba(0, 0, 0, 0.85)', line: null },
   },
   naver: {
-    light: { bg: '#03A94D', label: '#FFFFFF', mark: '#FFFFFF', line: null },
-    dark: { bg: '#03A94D', label: '#FFFFFF', mark: '#FFFFFF', line: null },
+    light: { bg: '#03A94D', label: '#FFFFFF', line: null },
+    dark: { bg: '#03A94D', label: '#FFFFFF', line: null },
   },
   google: {
-    light: { bg: '#FFFFFF', label: '#1F1F1F', mark: null, line: '#747775' },
-    dark: { bg: '#131314', label: '#E3E3E3', mark: null, line: '#8E918F' },
+    light: { bg: '#FFFFFF', label: '#1F1F1F', line: '#747775' },
+    dark: { bg: '#131314', label: '#E3E3E3', line: '#8E918F' },
   },
 } as const;
 
@@ -139,7 +137,14 @@ export const SOCIAL_LABELS: Record<SocialProvider, string> = {
   google: 'Google 로그인',
 };
 
-/** 마크 기하를 SVG 문자열로. 앱용 PNG 를 뽑는 scripts/gen-social-marks.mjs 가 쓴다. */
+/**
+ * 마크 기하를 SVG 문자열로.
+ *
+ * 화면에 그리는 쪽은 이 함수를 쓰지 않는다 — 웹은 SOCIAL_MARK_GEOMETRY 로 직접 <path> 를
+ * 그린다(apps/web/components/auth/socialMarks.tsx). 여기 남은 이유는 규격 테스트다:
+ * socialLogin.test.ts 가 이 문자열로 "구글 G 를 단색으로 칠하지 않는다" 같은 각 사 금지
+ * 조항을 검사한다.
+ */
 export function socialMarkToSvg(provider: SocialProvider, fill?: string): string {
   const { viewBox, paths } = SOCIAL_MARK_GEOMETRY[provider];
   const body = paths

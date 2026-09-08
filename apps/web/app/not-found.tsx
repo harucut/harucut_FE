@@ -6,14 +6,14 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <main className="hc-page-app flex min-h-dvh items-center justify-center px-6 py-16">
-      <div className="w-full max-w-[420px] text-center">
-        <p className="font-mono text-[11px] tracking-[1.2px] text-[color:var(--hc-muted)]">
+      <div className="w-full max-w-105 text-center">
+        <p className="font-mono text-[11px] tracking-[1.2px] text-(--hc-muted)">
           404
         </p>
-        <h1 className="mt-3 text-[24px] font-extrabold tracking-[-0.6px] text-[color:var(--hc-text)]">
+        <h1 className="mt-3 text-[24px] font-extrabold tracking-[-0.6px] text-(--hc-text)">
           없는 페이지예요
         </h1>
-        <p className="mt-3 text-[15px] leading-[1.75] text-[color:var(--hc-muted)]">
+        <p className="mt-3 text-[15px] leading-[1.75] text-(--hc-muted)">
           주소가 바뀌었거나 지워진 화면일 수 있어요.
         </p>
 
@@ -26,7 +26,7 @@ export default function NotFound() {
           </Link>
           <Link
             href="/shoot"
-            className="w-full rounded-full border border-[color:var(--hc-border)] px-5 py-3 text-[16px] font-semibold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)] sm:w-auto"
+            className="w-full rounded-full border border-(--hc-border) px-5 py-3 text-[16px] font-semibold text-(--hc-text) transition hover:border-(--hc-border-strong) sm:w-auto"
           >
             촬영하러 가기
           </Link>

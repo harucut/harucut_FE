@@ -169,7 +169,7 @@ describe("FrameChooser 원격 프레임 조회 중 진행", () => {
     });
   });
 
-  // 화면이 스스로 막아 둔 것(예: /theme 의 "불러오는 중...")은 그대로 살아 있어야 한다.
+  // 화면이 스스로 막아 둔 것(예: /theme 의 "불러오는 중…")은 그대로 살아 있어야 한다.
   it("바깥이 넘긴 비활성은 그대로 둔다", () => {
     const { confirm } = renderChooser({ confirmDisabled: true });
 

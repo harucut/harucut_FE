@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { nativeHaptic } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { centerCrop, cropPhotoToPreviewThenSlot } from "@/lib/canvas/captureCrop";
@@ -10,6 +11,13 @@ import { prepareStillCapture, takeStillBitmap } from "@/lib/canvas/stillCapture"
 
 // 촬영 총 장수
 const MAX_SHOTS = 8;
+/**
+ * 같은 컷을 다시 거는 최대 횟수. 이걸 넘기면 촬영을 멈추고 사람에게 알린다.
+ *
+ * 무한히 다시 걸지 않는 이유 — 실패는 셔터음과 진동을 이미 낸 뒤라, 그대로 두면
+ * 아무 설명 없이 간격마다 소리만 나는 화면이 된다.
+ */
+const MAX_CAPTURE_RETRIES = 2;
 // 선택 가능한 타이머 간격(초)
 export const TIMER_OPTIONS = [3, 5, 8] as const;
 export type TimerSeconds = (typeof TIMER_OPTIONS)[number];
@@ -17,6 +25,15 @@ export type TimerSeconds = (typeof TIMER_OPTIONS)[number];
 type ShootingState = {
   isShooting: boolean;
   countdown: number | null;
+  /**
+   * 촬영 회차. 한 컷이 끝날 때마다 올라간다.
+   *
+   * 카운트다운 타이머를 **반드시** 처음부터 다시 돌리려고 둔다. 셔터로 직접 찍은 사람은
+   * 세던 초를 버리고 다음 컷을 준비할 시간을 온전히 받아야 하는데, `countdown` 값만 보면
+   * 그게 안 된다 — 카운트가 이미 최대값일 때(간격의 첫 1초 안에) 누르면 값이 그대로라
+   * effect 가 다시 돌지 않고, 이미 흐르던 1초가 이어져 첫 칸이 짧아진다.
+   */
+  cycle: number;
 };
 
 type CameraFacingMode = "user" | "environment";
@@ -32,11 +49,12 @@ export function useCaptureFlow() {
   const [shooting, setShooting] = useState<ShootingState>({
     isShooting: false,
     countdown: null,
+    cycle: 0,
   });
   const [shotCount, setShotCount] = useState(0);
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
-  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 비활성으로 남는다).
+  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 사라진다).
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -57,19 +75,23 @@ export function useCaptureFlow() {
   // shooting.isShooting의 동기 미러. 상태는 비동기라, 첫 셔터 더블탭처럼 리렌더 이전의
   // stale 클로저가 세션을 두 번 시작/리셋해 첫 장을 날리는 것을 막는 가드로 쓴다.
   const isShootingRef = useRef(false);
-  // 진행 중인 카운트다운 타이머. 촬영 취소에서 즉시 정리하려고 따로 들고 있는다.
-  const countdownTimerRef = useRef<number | null>(null);
   /**
    * 촬영 회차 번호.
    *
-   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 사용자가 촬영 취소를 누르면
-   * 세션이 비워진 뒤에 결과가 돌아온다. 그대로 두면 취소한 사진이 다시 담기고, 마지막 컷을
-   * 인코딩하던 중이었다면 /shoot/select 로 넘어가 취소 자체가 무효가 됐다.
-   * 시작·취소 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
+   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 화면을 떠나면(헤더의 뒤로 가기)
+   * 언마운트 뒤에 결과가 돌아온다. 그대로 두면 떠난 세션에 사진이 얹히고, 마지막 컷을
+   * 인코딩하던 중이었다면 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다.
+   * 시작·언마운트 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
    */
   const shootGenerationRef = useRef(0);
+  /**
+   * 이 컷을 만드는 데 연달아 실패한 횟수. 한 장이라도 담기면 0 으로 돌아간다.
+   *
+   * 실패는 대개 일시적이라(메모리가 모자라 인코딩이 빈손으로 끝난다) 몇 번은 다시 걸어
+   * 보되, MAX_CAPTURE_RETRIES 를 넘기면 멈추고 알린다.
+   */
+  const captureFailuresRef = useRef(0);
 
-  const remainingShots = Math.max(0, MAX_SHOTS - shotCount);
   const canFlipCamera =
     typeof navigator !== "undefined" &&
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -249,13 +271,11 @@ export function useCaptureFlow() {
     };
   }, [frameId, isCameraReady, startCamera]);
 
-  // 언마운트 시 정리
+  // 언마운트 시 정리. 촬영을 멈추는 길은 이것 하나다 — 화면에 중단 버튼은 없고 헤더의 뒤로 가기가
+  // 그 역할이라, 스트림을 닫고 진행 중인 인코딩의 결과를 무효로 만든다(shootGenerationRef 주석).
   useEffect(() => {
     return () => {
       stopStream();
-      // 인코딩이 도는 중에 헤더의 뒤로 가기나 브랜드 링크로 화면을 떠나면 취소를 거치지
-      // 않는다. 그대로 두면 결과가 돌아와 전역 세션에 사진이 얹히고, 마지막 컷이었다면
-      // 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다. 취소와 같게 무효로 만든다.
       shootGenerationRef.current += 1;
     };
   }, [stopStream]);
@@ -287,6 +307,8 @@ export function useCaptureFlow() {
     // 셔터음은 그림을 만들기 전에 낸다 — 누른 순간과 소리가 붙어 있어야 한다.
     // 스틸 촬영은 수백 ms 가 걸릴 수 있어서 이 순서가 더 중요해졌다.
     playShutterSound();
+    // 소리와 같은 프레임에 진동(apple-design: 시각·소리·촉각은 한 순간에). 셸 밖에서는 아무 일도 없다.
+    nativeHaptic("medium");
 
     /*
       가능하면 **사진 파이프라인**으로 찍는다(ImageCapture.takePhoto).
@@ -386,32 +408,63 @@ export function useCaptureFlow() {
     lastFinishedShotRef.current = shotCount;
 
     const generation = shootGenerationRef.current;
-    const photoDataUrl = await capturePhotoToDataUrl();
 
-    // 인코딩 중에 취소됐으면 결과를 버린다. 선점도 되돌리지 않는다 — 취소가 이미 초기화했다.
+    // await 를 감싼다. 캡처가 던지면(닫힌 비트맵에 그리기 등) 아래 선점 되돌리기를 통째로
+    // 건너뛰어 맨 위 가드가 영원히 막힌다 — 자동은 물론 셔터 버튼까지 죽는다.
+    // void 로 부르는 자리라 그 거절은 아무 데도 드러나지 않는다.
+    let photoDataUrl: string | null = null;
+    try {
+      photoDataUrl = await capturePhotoToDataUrl();
+    } catch (err) {
+      console.error(err);
+    }
+
+    // 인코딩 중에 화면을 떠났으면 결과를 버린다. 선점도 되돌리지 않는다 — 떠난 화면이다.
     if (shootGenerationRef.current !== generation) return;
 
     if (!photoDataUrl) {
       // 인코딩이 실패했으면 이 컷은 아직 안 찍힌 것이다. 선점을 되돌려 다시 시도할 수 있게 한다.
       lastFinishedShotRef.current = shotCount - 1;
+      captureFailuresRef.current += 1;
+
+      if (captureFailuresRef.current > MAX_CAPTURE_RETRIES) {
+        captureFailuresRef.current = 0;
+        isShootingRef.current = false;
+        setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
+        setNotice({
+          actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+          eyebrow: "CAPTURE",
+          icon: "camera",
+          message:
+            "사진을 저장하지 못해 촬영을 멈췄어요. 다른 앱을 닫은 뒤 다시 시작해 주세요.",
+          title: "촬영을 이어가지 못했어요",
+        });
+        return;
+      }
+
+      // **타이머를 다시 건다.** 되돌리기만 하면 바뀌는 상태가 없어서 카운트다운 effect 가
+      // 다시 돌지 않는다(그 effect 는 countdown 이 1 이하면 값을 내리지 않는다).
+      // 화면은 "1" 에서 멎고 게이지도 그대로라, 사람은 무엇이 잘못됐는지 알 수 없다.
+      setShooting((s) => ({ ...s, countdown: timerSeconds, cycle: s.cycle + 1 }));
       return;
     }
 
+    captureFailuresRef.current = 0;
     addShotPhoto(photoDataUrl);
 
     const next = shotCount + 1;
     setShotCount(next);
 
     if (next < MAX_SHOTS) {
-      // 다음 컷까지 선택한 간격으로 자동 카운트다운.
-      setShooting((s) => ({ ...s, countdown: timerSeconds }));
+      // 다음 컷까지 선택한 간격으로 자동 카운트다운. cycle 을 올려 타이머를 처음부터 다시 돌린다.
+      setShooting((s) => ({ ...s, countdown: timerSeconds, cycle: s.cycle + 1 }));
       return;
     }
 
     isShootingRef.current = false;
-    setShooting({ isShooting: false, countdown: null });
+    setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
     router.push("/shoot/select");
-  }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, router]);
+  }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, setNotice, router]);
 
   // 전체 자동 촬영 시작
   const startShooting = useCallback(() => {
@@ -432,11 +485,13 @@ export function useCaptureFlow() {
     resetShots();
     setShotCount(0);
     lastFinishedShotRef.current = -1;
+    // 지난 촬영에서 실패한 기록은 새 촬영에 들고 오지 않는다.
+    captureFailuresRef.current = 0;
     isShootingRef.current = true;
     shootGenerationRef.current += 1;
 
     // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
-    setShooting({ isShooting: true, countdown: timerSeconds });
+    setShooting((s) => ({ isShooting: true, countdown: timerSeconds, cycle: s.cycle + 1 }));
   }, [isCameraReady, resetShots, setNotice, timerSeconds]);
 
   // 카운트다운 타이머
@@ -445,7 +500,6 @@ export function useCaptureFlow() {
     if (shooting.countdown === null) return;
 
     const timer = window.setTimeout(() => {
-      countdownTimerRef.current = null;
       // 이 effect는 isShooting/countdown 변경마다 재실행되므로 closure 값이 최신
       if (shooting.countdown !== null && shooting.countdown <= 1) {
         void finishSingleShot();
@@ -458,35 +512,14 @@ export function useCaptureFlow() {
       });
     }, 1000);
 
-    countdownTimerRef.current = timer;
-
-    return () => {
-      window.clearTimeout(timer);
-      if (countdownTimerRef.current === timer) countdownTimerRef.current = null;
-    };
-  }, [shooting.isShooting, shooting.countdown, finishSingleShot]);
+    return () => window.clearTimeout(timer);
+    // cycle 이 의존성에 있어야 촬영 직후 **같은 초로 되돌아가는 경우에도** 1초가 새로 시작한다.
+  }, [shooting.isShooting, shooting.countdown, shooting.cycle, finishSingleShot]);
 
   const handleShootNow = useCallback(() => {
     if (!shooting.isShooting || !isCameraReady) return;
     void finishSingleShot();
   }, [shooting.isShooting, isCameraReady, finishSingleShot]);
-
-  // 촬영 취소: 진행 중인 카운트다운을 즉시 끊고 세션을 시작 전 상태로 되돌린다.
-  // 8초 간격이면 8장을 다 찍는 데 1분 가까이 걸려, 중단 수단이 없으면 되돌릴 방법이 없다.
-  const cancelShooting = useCallback(() => {
-    if (countdownTimerRef.current !== null) {
-      window.clearTimeout(countdownTimerRef.current);
-      countdownTimerRef.current = null;
-    }
-
-    isShootingRef.current = false;
-    lastFinishedShotRef.current = -1;
-    // 진행 중인 인코딩의 결과를 무효로 만든다.
-    shootGenerationRef.current += 1;
-    setShooting({ isShooting: false, countdown: null });
-    resetShots();
-    setShotCount(0);
-  }, [resetShots]);
 
   const switchCamera = useCallback(async () => {
     if (!canFlipCamera) return;
@@ -505,7 +538,6 @@ export function useCaptureFlow() {
     isShooting: shooting.isShooting,
     countdown: shooting.countdown,
     shotCount,
-    remainingShots,
     cameraFacingMode,
     canFlipCamera,
 
@@ -515,7 +547,6 @@ export function useCaptureFlow() {
     startCamera,
     startShooting,
     handleShootNow,
-    cancelShooting,
     switchCamera,
 
     MAX_SHOTS,

@@ -50,7 +50,6 @@ export type ActiveTermsState = {
   items: ConsentChoice[];
   /** true 면 서버 장부에 기록할 수 있는 코드다. false 면 화면용 대체 목록이다. */
   fromServer: boolean;
-  loading: boolean;
 };
 
 /**
@@ -63,7 +62,6 @@ export function useActiveTerms(): ActiveTermsState {
   const [state, setState] = useState<ActiveTermsState>({
     items: FALLBACK_TERMS,
     fromServer: false,
-    loading: true,
   });
 
   useEffect(() => {
@@ -83,7 +81,7 @@ export function useActiveTerms(): ActiveTermsState {
                 "관리자 API(POST /api/admin/terms)로 약관을 등록해야 기록이 시작됩니다.",
             );
           }
-          setState({ items: FALLBACK_TERMS, fromServer: false, loading: false });
+          setState({ items: FALLBACK_TERMS, fromServer: false });
           return;
         }
 
@@ -99,11 +97,10 @@ export function useActiveTerms(): ActiveTermsState {
             };
           }),
           fromServer: true,
-          loading: false,
         });
       } catch {
         if (!cancelled) {
-          setState({ items: FALLBACK_TERMS, fromServer: false, loading: false });
+          setState({ items: FALLBACK_TERMS, fromServer: false });
         }
       }
     })();

@@ -11,8 +11,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
  * 이제 화면은 웹 한 벌이고, 앱은 웹이 못 하는 것만 맡는다(사진첩 저장·공유·햅틱·뒤로가기·딥링크).
  * 경계는 components/harucut-web-shell.tsx 와 lib/native-bridge.ts 에 있다.
  *
- * expo-router 는 라우팅이 아니라 **딥링크 등록** 때문에 남긴다 — harucut:// 는 소셜 로그인
- * 복귀 경로이고, 앱 스킴이 사라지면 그 길이 끊긴다. 라우트는 index 하나뿐이다.
+ * expo-router 는 라우트가 하나뿐이라 라우팅 때문에 쓰는 것이 아니다. 엔트리(expo-router/entry)와
+ * app.json 의 scheme 등록을 그대로 쓰려고 남긴다. `harucut://` 는 **아직 받는 코드가 없다** —
+ * 소셜 로그인은 WebView 안에서 시작해 WebView 안에서 끝나고(constants/shell.ts 의 OAuth 판정),
+ * 앱은 Linking 으로 밖으로 내보내기만 한다. 딥링크를 실제로 쓰게 되면 여기에 핸들러가 붙는다.
  */
 export default function RootLayout() {
   return (

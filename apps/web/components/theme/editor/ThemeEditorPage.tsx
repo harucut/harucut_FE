@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
@@ -10,7 +9,8 @@ import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
-import { BrandMark } from "@/components/layout/BrandMark";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
 import { resolveThemeAssetUrls } from "@/lib/frameAssets";
 import {
@@ -20,9 +20,13 @@ import {
   updateFrame,
 } from "@/lib/remoteFrameApi";
 import {
+  EMPTY_UPLOAD_MESSAGE,
+  MAX_UPLOAD_BYTES,
+  MIN_UPLOAD_BYTES,
   PRESIGNED_UPLOAD_TYPES,
   SUPPORTED_IMAGE_ACCEPT,
   UNSUPPORTED_UPLOAD_MESSAGE,
+  UPLOAD_TOO_LARGE_MESSAGE,
   UploadValidationError,
   getImageUrlByKey,
   uploadToS3WithPresigned,
@@ -95,6 +99,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
   const { remoteFrameId } = useThemeSession();
+  // 저장 다이얼로그에서 알려 준다. 예전에는 저장을 누른 순간 window.alert 로 끼어들었다.
+  const hiddenLayerCount = editorComponents.filter((c) => c.hidden).length;
 
   // 편집 중 판정은 "콘텐츠가 있는지"가 아니라 "기준 상태에서 바뀌었는지"로 한다.
   // 콘텐츠 유무로 보면 컴포넌트나 이미지 배경이 있는 저장 프레임을 열기만 해도
@@ -141,6 +147,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   // 원격 프레임은 불러온 값으로 채우고, 새 프레임은 기본값에서 시작한다.
   const [title, setTitle] = useState(remoteFrameId ? "" : DEFAULT_FRAME_TITLE);
   const [description, setDescription] = useState(
@@ -389,12 +397,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       return;
     }
 
-    const state = useThemeEditorStore.getState();
-    const hiddenCount = state.components.filter((c) => c.hidden).length;
-    if (hiddenCount > 0) {
-      alert("숨겨진 레이어가 있어요.");
-    }
-
     const nextTitle = draftTitle.trim() || "테마 프레임";
     const nextDescription =
       draftDescription.trim() ||
@@ -410,9 +412,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         editorState.background.type === "IMAGE" &&
         !editorState.background.key
       ) {
+        // key 만 받아 둔다. 배경은 이미 고른 파일의 로컬 주소로 그려져 있고
+        // `setBackgroundImageKey` 도 url 을 건드리지 않으니, 업로드가 덤으로 해 주는
+        // 조회용 URL 해석(왕복 1회)은 버려진다 — 건너뛴다.
         const { key } = await uploadToS3WithPresigned({
           file: editorState.pendingBackgroundFile,
           type: PRESIGNED_UPLOAD_TYPES.FRAME,
+          skipUrlResolve: true,
         });
         useThemeEditorStore.getState().setBackgroundImageKey(key);
       }
@@ -434,9 +440,12 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         `theme-preview-${Date.now()}.png`,
         { type: "image/png" },
       );
+      // 미리보기 PNG 는 저장 요청에 previewKey 로만 실린다 — 올린 뒤 이 화면에서
+      // 다시 그리지 않으므로 조회용 URL 해석(왕복 1회)을 건너뛴다.
       const { key: previewKey } = await uploadToS3WithPresigned({
         file: previewFile,
         type: PRESIGNED_UPLOAD_TYPES.FRAME,
+        skipUrlResolve: true,
       });
 
       const body = toCreateFrameRequest(themeJson, {
@@ -483,75 +492,115 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       router.push("/theme");
     } catch (error) {
       console.error(error);
+      /*
+        올리기 전에 우리가 걸러낸 것(형식·용량·빈 파일)만 자기 문구를 살린다.
+        저장 한 번에 배경·사진·스티커·글자 층·미리보기가 줄줄이 올라가는데,
+        그중 무엇이 왜 막혔는지는 이 문구에만 있다 — 코드 매핑으로 넘기면
+        `UploadValidationError` 에는 status·code 가 없어 폴백만 남는다.
+
+        "ApiRequestError 가 아니면 로컬 오류" 로 가르면 안 된다 — S3 PUT 은 fetch 를
+        직접 부르므로 오프라인의 `TypeError("Failed to fetch")` 와 비정상 응답의
+        `Error("S3 upload failed: 403")` 도 ApiRequestError 가 아니다. 그것들까지
+        로컬로 오인하면 영문 원문이 화면에 나간다. 우리가 던진 것만 타입으로 가른다
+        (app/mypage/page.tsx 의 프로필 이미지 업로드도 같은 규칙이다).
+      */
       setSaveDialogError(
-        getUserFacingApiErrorMessage(error, "저장에 실패했어요."),
+        error instanceof UploadValidationError
+          ? error.message
+          : getUserFacingApiErrorMessage(error, "저장에 실패했어요."),
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const onDelete = async () => {
+  // 되돌릴 수 없는 삭제는 window.confirm 대신 ConfirmDialog 로 묻는다 — 브라우저 창은 모바일
+  // 사파리에서 탭을 멈추고 진행 상태를 그릴 수 없다(components/ui/ConfirmDialog.tsx).
+  const onDelete = () => {
     if (!remoteFrameId || isDeleting) return;
+    setActionError(null);
+    setIsDeleteConfirmOpen(true);
+  };
 
-    const ok = confirm("이 프레임을 삭제할까요?");
-    if (!ok) return;
+  const performDelete = async () => {
+    if (!remoteFrameId || isDeleting) return;
 
     setIsDeleting(true);
     try {
       await deleteFrame(remoteFrameId);
+      setIsDeleteConfirmOpen(false);
       router.push("/theme");
     } catch (error) {
       console.error(error);
-      alert("삭제에 실패했어요.");
+      setIsDeleteConfirmOpen(false);
+      // 이 경로가 내는 코드는 기다린다고 풀리지 않는다 — 없는 프레임(GEN-031),
+      // 시스템 프레임이라 소유자가 아님(GEN-021, remoteFrameApi.ts 참고),
+      // 보관 기간 초과(SUBS-002). 아래 폴백은 네트워크 오류처럼 정말 다시 시도해
+      // 볼 만한 갈래에만 남는다.
+      setActionError(
+        getUserFacingApiErrorMessage(
+          error,
+          "프레임을 지우지 못했어요. 잠시 후 다시 시도해 주세요.",
+        ),
+      );
     } finally {
       setIsDeleting(false);
     }
   };
 
   return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-[color:var(--hc-text)]">
+    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4 lg:gap-6">
-        <header className="flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            <BrandMark href="/home" compact className="opacity-80" />
-            {loadError ? (
-              <p role="alert" className="mt-1 text-[11px] text-[color:var(--hc-danger)]">{loadError}</p>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {remoteFrameId ? (
+        {/*
+          다른 흐름 화면과 같은 PageHeader — [<] 제목 [저장]. 예전에는 로고 + 밑줄 링크(16px 높이) +
+          초록 알약이었고 화면 제목(h1)이 없어서 여기가 어디인지 헤더가 말하지 않았다.
+          모바일에서는 저장이 캔버스 두 화면 위에 있어 헤더를 붙여 둔다(lg 이상은 한 화면에 다 들어온다).
+        */}
+        <div className="sticky top-0 z-20 -mx-4 -mt-6 bg-(--hc-surface-soft) px-4 pb-2 pt-6 backdrop-blur-md lg:static lg:mx-0 lg:mt-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+          <PageHeader
+            backHref="/theme"
+            backLabel="프레임 목록으로"
+            title={remoteFrameId ? "프레임 수정" : "프레임 꾸미기"}
+            onBackClick={() => {
+              useThemeEditorStore.getState().reset();
+              clearEditorDraft();
+            }}
+            rightSlot={
               <button
                 type="button"
-                onClick={onDelete}
-                disabled={isDeleting || isSaving}
-                className="rounded-full border border-[color:var(--hc-danger-border)] px-4 py-2 text-xs font-semibold text-[color:var(--hc-danger)] hover:bg-[color:var(--hc-danger-soft-bg)] disabled:opacity-50"
+                onClick={openSaveDialog}
+                disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
+                className="hc-button-primary inline-flex h-11 items-center rounded-full px-5 text-[13px] font-extrabold disabled:opacity-50"
               >
-                {isDeleting ? "삭제 중..." : "삭제"}
+                {isSaving ? "저장 중…" : remoteFrameId ? "수정 저장" : "저장"}
               </button>
-            ) : null}
-            <Link
-              href="/theme"
-              className="text-xs text-zinc-400 underline underline-offset-4"
-              onClick={() => {
-                useThemeEditorStore.getState().reset();
-                clearEditorDraft();
-                router.push("/theme");
-              }}
-            >
-              프레임 목록으로 돌아가기
-            </Link>
+            }
+          />
+        </div>
+        {/*
+          삭제는 헤더에 같이 두지 않는다. PageHeader 는 제목을 절대 배치로 가운데 두고 좌우로
+          7rem(112px)만 비우는데 `삭제`+`수정 저장`은 152px 이라, 320~414px 에서 가운데 제목과
+          겹쳤다(320px 에서 48px). 저장만 남기면 가장 좁은 320px 에서도 16px 이 뜬다.
+          한 줄 내려서 고정 바 밖에 두는 이유 — 되돌릴 수 없는 동작이라 캔버스 위에 붙박이로
+          띄워 둘 것이 아니고, 고정 바가 76px 그대로라 좁은 화면에서 캔버스도 안 뺏긴다.
+        */}
+        {remoteFrameId ? (
+          <div className="flex justify-end">
             <button
               type="button"
-              onClick={openSaveDialog}
-              disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
-              className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
+              onClick={onDelete}
+              disabled={isDeleting || isSaving}
+              className="inline-flex h-11 items-center rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger) hover:bg-(--hc-danger-soft-bg) disabled:opacity-50"
             >
-              {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
+              {isDeleting ? "삭제 중…" : "삭제"}
             </button>
           </div>
-        </header>
+        ) : null}
+        {loadError || actionError ? (
+          <p role="alert" className="text-[12px] text-(--hc-danger)">
+            {loadError ?? actionError}
+          </p>
+        ) : null}
 
         {isLoadingFrame ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
@@ -578,15 +627,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       type="button"
                       onClick={() => pickBackgroundColor(color.value)}
                       aria-pressed={selected}
-                      className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[11px] ${
+                      className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[12px] ${
                         selected
-                          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary-strong)]"
-                          : "border-[color:var(--hc-border)] text-[color:var(--hc-muted)]"
+                          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+                          : "border-(--hc-border) text-(--hc-muted)"
                       }`}
                     >
                       <span
                         aria-hidden
-                        className="block h-6 w-full rounded border border-[color:var(--hc-border-subtle)]"
+                        className="block h-6 w-full rounded border border-(--hc-border-subtle)"
                         style={{ backgroundColor: `#${color.value}` }}
                       />
                       {color.label}
@@ -600,18 +649,31 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                   aria-label="배경색 직접 고르기"
                   value={`#${backgroundColor}`}
                   onChange={(e) => pickBackgroundColor(e.target.value)}
-                  className="h-9 w-12 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]"
+                  className="hc-input h-11 w-12 shrink-0 rounded-lg border"
                 />
-                <input
-                  aria-label="배경색 코드"
-                  value={backgroundColor}
-                  onChange={(e) => pickBackgroundColor(e.target.value)}
-                  className="h-9 flex-1 rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-xs text-[color:var(--hc-text)]"
-                  placeholder="ffffff"
-                />
+                {/* 스토어의 normalizeHexColor 가 '#' 를 떼고 6자리로만 저장한다 —
+                    프리셋을 누르든 저장본을 불러오든 손으로 치든 결과는 같다.
+                    그래서 '#' 는 화면에만 붙이고 입력값에는 넣지 않는다. 넣으면 '##' 로 겹친다. */}
+                <div className="hc-input flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border px-3">
+                  <span aria-hidden className="font-mono text-[13px] text-(--hc-muted)">
+                    #
+                  </span>
+                  <input
+                    aria-label="배경색 코드"
+                    value={backgroundColor}
+                    onChange={(e) => pickBackgroundColor(e.target.value)}
+                    className="min-w-0 flex-1 bg-transparent font-mono text-[13px] tracking-[0.06em] text-(--hc-text) outline-none"
+                    placeholder="ffffff"
+                    inputMode="text"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    maxLength={6}
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-text)] hover:border-[color:var(--hc-primary)]">
+                <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-text) hover:border-(--hc-primary)">
                   {background.type === "IMAGE" ? "배경 이미지 변경" : "배경 이미지"}
                   <input
                     type="file"
@@ -627,7 +689,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       const generation = backgroundGenerationRef.current;
 
                       /*
-                        고른 **즉시** 백엔드가 받는 형식으로 바꾼다.
+                        고른 **즉시** 백엔드가 받는 형식과 크기로 맞춘다.
 
                         저장 단계에서야 막으면 편집을 다 끝낸 뒤에 막힌다. 그렇다고 거르기만
                         하면 아이폰 사진(HEIC)으로는 배경을 아예 못 넣는다. 여기서 바꿔 두면
@@ -638,6 +700,23 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                         const uploadable = await toUploadableFile(file);
                         // 변환 중에 다른 배경을 고르거나 제거했으면 늦게 온 결과는 버린다.
                         if (backgroundGenerationRef.current !== generation) return;
+
+                        /*
+                          크기는 **바꾼 뒤에** 잰다. 서버 한도(1~10MB)를 넘는 크기도 저장
+                          단계에서야 실패하니 고른 즉시 같은 규칙으로 걸러내되,
+                          `toUploadableFile` 이 한도를 넘는 사진은 줄여서 돌려주므로 원본을
+                          먼저 재면 줄이면 들어올 고화소 사진까지 막는다. 규칙의 주인은
+                          uploadToS3WithPresigned 이고 여기는 사유를 먼저 말하는 층이다.
+                        */
+                        if (uploadable.size < MIN_UPLOAD_BYTES) {
+                          setBackgroundError(EMPTY_UPLOAD_MESSAGE);
+                          return;
+                        }
+                        if (uploadable.size > MAX_UPLOAD_BYTES) {
+                          setBackgroundError(UPLOAD_TOO_LARGE_MESSAGE);
+                          return;
+                        }
+
                         setBackgroundError(null);
                         setBackgroundImage(uploadable);
                       } catch (error) {
@@ -659,20 +738,20 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                       backgroundGenerationRef.current += 1;
                       clearBackgroundImage();
                     }}
-                    className="h-9 rounded-lg border border-[color:var(--hc-border)] px-3 text-[11px] font-semibold text-[color:var(--hc-muted)] hover:border-[color:var(--hc-primary)]"
+                    className="h-11 rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-muted) hover:border-(--hc-primary)"
                   >
                     이미지 제거
                   </button>
                 ) : null}
               </div>
               {backgroundError ? (
-                <p className="text-[11px] leading-4 text-[color:var(--hc-danger)]">
+                <p className="text-[11px] leading-4 text-(--hc-danger)">
                   {backgroundError}
                 </p>
               ) : null}
-              <p className="text-[11px] leading-4 text-[color:var(--hc-muted)]">
-                배경 이미지는 사진 칸 뒤에 깔려요. PNG·JPG·WEBP·GIF·HEIC만 올릴 수
-                있어요.
+              <p className="text-[12px] leading-5 text-(--hc-muted)">
+                배경 이미지는 사진 칸 뒤에 깔려요. 10MB 이하 PNG·JPG·WEBP·GIF·HEIC만
+                올릴 수 있어요.
               </p>
             </section>
           </div>
@@ -681,13 +760,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">미리보기</p>
-                <p className="text-[11px] text-zinc-500">
+                <p className="text-[12px] text-(--hc-muted)">
                   스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.
                 </p>
               </div>
 
               {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
-              <div className="flex min-h-[330px] items-center justify-center">
+              <div className="flex min-h-82.5 items-center justify-center">
                 <CanvasStage />
               </div>
             </section>
@@ -707,6 +786,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         </div>
       </div>
 
+      {isDeleteConfirmOpen && remoteFrameId ? (
+        <ConfirmDialog
+          title="이 프레임을 지울까요?"
+          description="지운 프레임은 되돌릴 수 없어요."
+          confirmLabel="지우기"
+          runningLabel="지우는 중…"
+          running={isDeleting}
+          destructive
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={() => void performDelete()}
+        />
+      ) : null}
+
       {isSaveDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-5 sm:items-center">
           <div
@@ -723,36 +815,41 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               >
                 {remoteFrameId ? "저장한 프레임 수정" : "프레임 저장"}
               </h2>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              <p className="mt-1 text-[13px] leading-5 text-(--hc-muted)">
                 저장할 프레임 이름과 설명을 입력해 주세요.
               </p>
+              {hiddenLayerCount > 0 ? (
+                <p className="mt-2 text-[12px] leading-5 text-(--hc-muted)">
+                  숨긴 레이어가 {hiddenLayerCount}개 있어요.
+                </p>
+              ) : null}
             </div>
 
             <div className="mt-4 grid gap-3">
-              <label className="grid gap-1.5 text-[11px] font-semibold text-zinc-300">
+              <label className="grid gap-1.5 text-[12px] font-semibold text-zinc-300">
                 프레임 이름
                 <input
                   value={draftTitle}
                   onChange={(e) => setDraftTitle(e.target.value)}
-                  className="h-10 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 text-sm font-normal text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+                  className="hc-input h-11 rounded-xl border px-3 text-sm font-normal"
                   disabled={isSaving}
                   maxLength={40}
                   placeholder="프레임 이름을 입력해 주세요"
                 />
               </label>
-              <label className="grid gap-1.5 text-[11px] font-semibold text-zinc-300">
+              <label className="grid gap-1.5 text-[12px] font-semibold text-zinc-300">
                 프레임 설명
                 <textarea
                   value={draftDescription}
                   onChange={(e) => setDraftDescription(e.target.value)}
-                  className="min-h-24 rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-sm font-normal text-[color:var(--hc-text)] outline-none focus:border-[color:var(--hc-primary)]"
+                  className="hc-input min-h-24 rounded-xl border px-3 py-2 text-sm font-normal"
                   disabled={isSaving}
                   maxLength={160}
                   placeholder="프레임 설명을 입력해 주세요"
                 />
               </label>
               {saveDialogError ? (
-                <p className="text-[11px] leading-5 text-[color:var(--hc-danger)]">
+                <p className="text-[11px] leading-5 text-(--hc-danger)">
                   {saveDialogError}
                 </p>
               ) : null}
@@ -777,7 +874,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 disabled={isSaving}
                 className="hc-button-primary rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50"
               >
-                {isSaving ? "저장 중..." : remoteFrameId ? "수정 저장" : "저장"}
+                {isSaving ? "저장 중…" : remoteFrameId ? "수정 저장" : "저장"}
               </button>
             </div>
           </div>

@@ -54,7 +54,7 @@ export function NativeNotificationSetting() {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[13px] font-bold">알림</p>
-      <p className="text-[12px] leading-[1.6] text-[color:var(--hc-muted)]">
+      <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
         네컷 합성은 최대 1분 넘게 걸려요. 앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때
         알려드려요.
       </p>
@@ -67,7 +67,7 @@ export function NativeNotificationSetting() {
         {busy ? "여는 중" : "알림 켜기"}
       </button>
       {notice ? (
-        <p className="text-[12px] font-medium text-[color:var(--hc-muted)]">{notice}</p>
+        <p className="text-[12px] font-medium text-(--hc-muted)">{notice}</p>
       ) : null}
     </div>
   );

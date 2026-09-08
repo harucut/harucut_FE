@@ -5,6 +5,8 @@ import { newIdempotencyKey } from "@/lib/composeApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { NativeSaveError } from "@/lib/nativeBridge";
+// 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 로 펼쳐 둔 것을 가져온다.
+import { CopyFailedError } from "@/lib/share";
 // 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 을 펼쳐 두었다.
 import { buildFrameContentKey } from "@/lib/shootSessionStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
@@ -91,12 +93,26 @@ jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
 }));
 
+// 공유 버튼은 `onShare` 가 있을 때만 그린다 — 진짜 카드와 같다
+// (components/frame/GeneratedAssetDownloadCard.tsx). 비회원은 이 값을 넘기지 않으므로,
+// 항상 그려 두면 게스트에게 공유가 열린 것처럼 보이는 회귀를 놀친다.
 jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
-  GeneratedAssetDownloadCard: ({ onDownload }: { onDownload: () => void }) => (
+  GeneratedAssetDownloadCard: ({
+    onDownload,
+    onShare,
+  }: {
+    onDownload: () => void;
+    onShare?: () => void;
+  }) => (
     <div data-testid="generated-asset-card">
       <button type="button" onClick={onDownload}>
         이미지 다운로드
       </button>
+      {onShare ? (
+        <button type="button" onClick={onShare}>
+          공유 링크 만들기
+        </button>
+      ) : null}
     </div>
   ),
 }));
@@ -200,8 +216,13 @@ jest.mock("@/lib/userMediaApi", () => ({
   getMediaDownloadUrl: (...args: unknown[]) => mockGetMediaDownloadUrl(...args),
 }));
 
+const mockShareOrCopyLink = jest.fn();
+
+// 공유 동작만 목으로 갈아 끼우고 실패 판정(isCopyFailedError)은 진짜를 쓴다 — 판정까지
+// 목으로 덮으면 아래 회귀 테스트가 자기 목만 확인하게 된다.
 jest.mock("@/lib/share", () => ({
-  shareOrCopyLink: jest.fn(),
+  ...jest.requireActual("@/lib/share"),
+  shareOrCopyLink: (...args: unknown[]) => mockShareOrCopyLink(...args),
 }));
 
 const mockNativeNotify = jest.fn();
@@ -454,9 +475,18 @@ describe("ShootResultPage", () => {
     expect(
       screen.queryByRole("button", { name: "다시 준비하기" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "프레임 다시 고르기" }),
-    ).toBeInTheDocument();
+
+    /*
+      **사진을 두고** 프레임 화면으로 간다. 예전에는 `/shoot` 이 세션을 통째로 reset() 해서
+      찍은 8장까지 지웠고(app/shoot/page.tsx), 화면 문구("다른 프레임을 골라 주세요")는
+      사진이 남는다고 읽혀서 어긋났다. 이제 `keepShots=1` 로 보내고, 사진을 쓸 수 있는지
+      (슬롯 비율이 같은지)는 /shoot 이 판단한다 — 그래서 여기서는 경고할 것이 없다.
+    */
+    fireEvent.click(screen.getByRole("button", { name: "프레임 다시 고르기" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/shoot?keepShots=1");
+    // 잃는 것이 없으므로 확인 안내도 뜨지 않는다.
+    expect(useGuestTrialStore.getState().notice).toBeNull();
   });
 
   it("게스트가 로그인으로 이동하면 결과물을 보관하고 resumeSave 경로로 넘긴다", async () => {
@@ -519,6 +549,97 @@ describe("ShootResultPage", () => {
       );
     });
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  /*
+    보관하는 것은 완성본이 아니라 **원본 4장과 만드는 방법**이다(lib/pendingGuestSave.ts).
+    그래서 완성본이 아직 없어도 만들어진다 — 예전에는 완성본이 없으면 보관을 건너뛰고
+    로그인으로 보내서, 결과를 기다리다 누른 사람은 로그인 뒤에 이어받을 것이 없었다.
+  */
+  it("게스트가 합성이 끝나기 전에 눌러도 원본 4장을 보관한다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+    // 아직 그리는 중인 순간을 붙잡아 둔다.
+    mockComposeFramePng.mockReturnValue(new Promise(() => {}));
+
+    render(<ShootResultPage />);
+
+    const loginButton = await screen.findByRole("button", {
+      name: "로그인하고 저장하기",
+    });
+    expect(mockUseShootSession.getState().imageResult).toBeNull();
+
+    fireEvent.click(loginButton);
+
+    await waitFor(() => {
+      expect(mockSetPendingGuestSave).toHaveBeenCalledTimes(1);
+    });
+    expect(mockSetPendingGuestSave.mock.calls[0][0]).toMatchObject({
+      sources: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
+      frameId: "classic-4",
+      backgroundColor: "#111827",
+    });
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(
+        "/login?redirectTo=%2Fhome%3FresumeSave%3D1",
+      );
+    });
+  });
+
+  // 합성이 실패해도 재료는 그대로다. 여기서 보관을 건너뛰면 실패 화면에서 로그인한
+  // 사람만 사진을 통째로 잃는다.
+  it("게스트 합성이 실패한 뒤에 눌러도 원본 4장을 보관한다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+    mockComposeFramePng.mockRejectedValue(new Error("compose failed"));
+
+    render(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("이미지를 준비하지 못했어요. 다시 시도해 주세요."),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "로그인하고 저장하기" }),
+    );
+
+    await waitFor(() => {
+      expect(mockSetPendingGuestSave).toHaveBeenCalledTimes(1);
+    });
+    expect(mockSetPendingGuestSave.mock.calls[0][0]).toMatchObject({
+      sources: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
+    });
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(
+        "/login?redirectTo=%2Fhome%3FresumeSave%3D1",
+      );
+    });
+  });
+
+  /*
+    촬영본은 메모리에만 있다. 결과가 보관함에 남기 전에 새로고침하면 회원도 원본을
+    통째로 잃는데, 예전에는 비회원에게만 경고가 걸려 있었다.
+  */
+  it("회원도 결과가 보관함에 남기 전에는 이탈을 경고한다", async () => {
+    mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
+
+    render(<ShootResultPage />);
+    await screen.findByText("결과 준비 중");
+
+    const pending = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(pending);
+    expect(pending.defaultPrevented).toBe(true);
+  });
+
+  it("회원 결과가 보관함에 남은 뒤에는 이탈을 막지 않는다", async () => {
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    const settled = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(settled);
+    expect(settled.defaultPrevented).toBe(false);
   });
 
   // 이 케이스는 원래 업로드 결과 화면 테스트에만 있었다. 그 화면을 지우면서 함께 사라지면
@@ -608,6 +729,56 @@ describe("ShootResultPage", () => {
       "잠시 후 다시 시도해 주세요.",
     );
     expect(mockDownloadFromUrl).toHaveBeenCalled();
+  });
+
+  /*
+    공유 실패는 두 갈래고, 사용자가 할 일이 다르다.
+
+    링크를 못 만든 것은 잠시 뒤 다시 누르면 되지만, 링크는 만들어 놓고 브라우저가 복사를
+    막은 것은(lib/share.ts 의 CopyFailedError) 복사를 허용하기 전에는 몇 번을 눌러도 같은
+    자리에서 막힌다. 하나로 묶으면 그 사람은 기다렸다 다시 누르는 헛수고를 반복한다.
+  */
+  it("복사만 막힌 실패는 링크가 만들어졌다고 말한다", async () => {
+    mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/download.png");
+    mockShareOrCopyLink.mockRejectedValue(new CopyFailedError());
+
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "공유 링크 만들기" }));
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "링크를 복사하지 못했어요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toBe(
+      "링크는 만들었지만 브라우저가 복사를 막았어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요.",
+    );
+  });
+
+  it("링크 주소를 못 받은 실패는 준비 실패로 말한다", async () => {
+    mockGetMediaDownloadUrl.mockRejectedValue(new Error("presign failed"));
+
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "공유 링크 만들기" }));
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "이미지 링크를 준비하지 못했어요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toBe(
+      "잠시 후 다시 시도해 주세요.",
+    );
+    // 주소를 못 받았으면 공유까지 가지도 않는다 — 복사 안내가 뜨면 그것이 거짓말이다.
+    expect(mockShareOrCopyLink).not.toHaveBeenCalled();
   });
 
   /*

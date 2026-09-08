@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
-"""check_backend_contract.py 의 판정 문구가 검사 범위를 넘겨 말하지 않는지 본다.
+"""check_backend_contract.py 가 **검사한 것만** 말하고, D 가 실제로 잡는지 본다.
 
-왜 있나 — 이 스크립트는 필수 요청 필드를 **검사하지 않는다**. 그런데 그 한계가 독스트링·
---help·소스 주석·문서에만 적혀 있던 동안, 기본 `pnpm check:contract` 를 돌린 화면에는
-"계약 일치 ✓" 한 줄만 남았다. 필수 필드를 빠뜨린 채로도 통과처럼 읽혔다.
-그래서 여기서 보는 것은 **판정이 나오는 화면에 한계가 같이 찍히는가** 하나다.
+왜 있나 — 이 스크립트는 한동안 필수 요청 필드를 **검사하지 않았다.** 그 한계가 독스트링·
+--help·소스 주석·문서에만 적혀 있던 동안, 기본 실행 화면에는 "계약 일치 ✓" 한 줄만 남았다.
+필수 필드를 빠뜨린 채로도 통과처럼 읽혔다. 그래서 원래 이 파일이 본 것은 **판정 화면에
+한계가 같이 찍히는가** 하나였다.
+
+지금은 D 가 진짜 검사다(FE 가 보내는 본문 ↔ 스웨거 required). 그래서 보는 것이 바뀌었다:
+  1. 필수 필드가 빠지면 **실패**로 잡는가 — 검사기가 실패를 못 잡으면 없는 것과 같다.
+  2. 다 보내면 통과하는가.
+  3. 본문을 읽지 못한 경우를 **조용히 통과시키지 않고** 경고로 남기는가.
+  4. 판정 문구가 검사 범위(A·B·C·D)를 정확히 말하는가.
+  5. 한 경로를 여러 곳에서 부를 때 **호출부를 전부** 대조하는가 — 하나만 보면 순회 순서에
+     따라 누락이 가려진다.
+  6. 그 '전부' 를 **수집기가** 실제로 쌓는가 — 5 는 수집기를 목으로 갈아 끼우므로
+     덮어쓰기가 되돌아와도 못 잡는다.
 
 레포에 pytest 가 없고 scripts/ 에도 테스트 하네스가 없어서, 표준 라이브러리만 쓰고
 직접 돌리는 형태로 둔다:
 
     python3 scripts/check_backend_contract_test.py
 
-백엔드도 도커도 필요 없다 — 스펙·에러코드·라우트 수집을 전부 가짜로 갈아 끼운다.
+백엔드도 도커도 필요 없다 — 스펙·에러코드·라우트·본문 수집을 전부 가짜로 갈아 끼운다.
 """
 from __future__ import annotations
 
@@ -20,6 +30,7 @@ import importlib.util
 import io
 import os
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TARGET = os.path.join(HERE, "check_backend_contract.py")
@@ -28,41 +39,62 @@ _spec = importlib.util.spec_from_file_location("check_backend_contract", TARGET)
 cbc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cbc)
 
+# run() 이 cbc.collect_fe_payloads 를 목으로 갈아 끼우므로, 진짜 수집기를 여기서 붙잡아 둔다.
+REAL_COLLECT_FE_PAYLOADS = cbc.collect_fe_payloads
+
 COMPOSE = "/api/auth/user/media/compose"
-FAKE_SPEC = {
-    "paths": {
-        COMPOSE: {
-            "post": {
-                "responses": {"200": {"description": "ok"}},
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/ComposeRequest"}
+FE_ROUTE = "/api/client/user/media/compose"
+
+
+def spec_with(required: list[str]) -> dict:
+    return {
+        "paths": {
+            COMPOSE: {
+                "post": {
+                    "responses": {"200": {"description": "ok"}},
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/ComposeRequest"}
+                            }
                         }
-                    }
-                },
+                    },
+                }
             }
-        }
-    },
-    "components": {
-        "schemas": {
-            "ComposeRequest": {
-                "type": "object",
-                # 프론트가 이 중 하나를 안 실어도 스크립트는 못 잡는다 — 그게 이 검사의 한계다.
-                "required": ["frameId", "sourceKeys", "layers"],
-            }
-        }
-    },
-}
+        },
+        "components": {
+            "schemas": {"ComposeRequest": {"type": "object", "required": required}}
+        },
+    }
 
 
-def run(argv: list[str], spec: dict = FAKE_SPEC, called: bool = True) -> tuple[int, str]:
-    """실제 main() 을 돌리되 백엔드·도커·파일 스캔은 전부 가짜로 채운다."""
+FAKE_SPEC = spec_with(["frameId", "sourceKeys"])
+
+
+SITE = "apps/web/lib/composeApi.ts:42"
+
+
+def run(
+    argv: list[str],
+    spec: dict = FAKE_SPEC,
+    called: bool = True,
+    payload: set[str] | None = frozenset({"frameId", "sourceKeys", "idempotencyKey"}),
+    sites: list[tuple[str, set[str] | None]] | None = None,
+) -> tuple[int, str]:
+    """실제 main() 을 돌리되 백엔드·도커·파일 스캔은 전부 가짜로 채운다.
+
+    payload=None 이면 "본문을 못 읽었다" 를 흉내 낸다.
+    sites 를 주면 같은 경로를 여러 곳에서 부르는 상황을 그대로 넣는다.
+    """
+    call_sites = sites if sites is not None else [
+        (SITE, set(payload) if payload is not None else None)
+    ]
     cbc.problems.clear()
     cbc.warnings.clear()
     cbc.fetch_spec = lambda _base_url: spec
-    cbc.collect_fe_routes = lambda: [("POST", COMPOSE, "/api/client/user/media/compose")]
+    cbc.collect_fe_routes = lambda: [("POST", COMPOSE, FE_ROUTE)]
     cbc.has_caller = lambda _route: called
+    cbc.collect_fe_payloads = lambda: {("POST", FE_ROUTE): call_sites}
     # C 를 깨끗하게 통과시켜 A·B·C 가 전부 OK 인 상태를 만든다.
     cbc.jar_error_codes = lambda: {"GEN-001"}
     cbc.fe_error_codes = lambda: {"GEN-001"} | cbc.CLIENT_ONLY_CODES
@@ -78,21 +110,82 @@ def last_line(out: str) -> str:
     return [l for l in out.splitlines() if l.strip()][-1]
 
 
-def test_default_run_prints_the_limit_without_show_required() -> None:
-    """--show-required 없이 돌려도 D 의 한계가 화면에 찍힌다."""
+def test_missing_required_field_fails() -> None:
+    """서버가 요구하는데 FE 가 안 보내면 **실패**다. 이 검사의 존재 이유다."""
+    code, out = run([], spec=spec_with(["frameId", "sourceKeys", "layers"]))
+    assert code == 1, out
+    assert "빠진 필수 필드" in out and "layers" in out, out
+
+
+def test_every_call_site_of_one_endpoint_is_checked() -> None:
+    """같은 경로를 두 곳에서 부르면 **둘 다** 본다.
+
+    본문을 경로마다 하나만 들고 있으면 나중에 순회한 것이 앞을 덮는다. 그러면 순서에 따라
+    누락이 통째로 가려지거나(빠뜨린 쪽이 먼저) 멀쩡한 호출부가 대신 걸린다.
+    그래서 두 순서 모두에서 빠뜨린 쪽만 이름이 찍혀야 한다.
+    """
+    ok = ("apps/web/lib/composeApi.ts:42", {"frameId", "sourceKeys"})
+    missing = ("apps/web/app/shoot/result/page.tsx:310", {"frameId"})
+    for order in ([ok, missing], [missing, ok]):
+        code, out = run([], sites=list(order))
+        assert code == 1, out
+        assert "sourceKeys" in out, out
+        assert missing[0] in out, out          # 어느 호출부인지 출력만 보고 안다
+        assert ok[0] not in out, out           # 멀쩡한 쪽을 같이 걸지 않는다
+
+
+def test_collector_keeps_every_call_site_of_one_endpoint() -> None:
+    """수집기가 키마다 본문을 **전부** 쌓는가.
+
+    바로 위 테스트는 `collect_fe_payloads` 를 목으로 갈아 끼우므로 소비자 쪽 루프만
+    고정한다. 수집기가 `out[key] = ...` 로 덮어쓰기로 되돌아가도 그 테스트는 녹색이다.
+    그래서 여기서는 진짜 수집기를 임시 트리에 돌린다 — 가려진 누락이 이 검사가 있는 이유다.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        lib = os.path.join(tmp, "apps", "web", "lib")
+        os.makedirs(lib)
+        # 같은 경로를 두 곳에서 부르고, 한쪽만 sourceKeys 를 뺀다.
+        with open(os.path.join(lib, "a_full.ts"), "w", encoding="utf-8") as fh:
+            fh.write('clientApi.post("%s", { frameId, sourceKeys });\n' % FE_ROUTE)
+        with open(os.path.join(lib, "b_missing.ts"), "w", encoding="utf-8") as fh:
+            fh.write('clientApi.post("%s", { frameId });\n' % FE_ROUTE)
+
+        original_root = cbc.ROOT
+        cbc.ROOT = tmp
+        try:
+            payloads = REAL_COLLECT_FE_PAYLOADS()
+        finally:
+            cbc.ROOT = original_root
+
+    sites = payloads[("POST", FE_ROUTE)]
+    assert len(sites) == 2, sites
+    by_file = {site.split(":")[0]: keys for site, keys in sites}
+    assert by_file["apps/web/lib/a_full.ts"] == {"frameId", "sourceKeys"}, by_file
+    assert by_file["apps/web/lib/b_missing.ts"] == {"frameId"}, by_file
+    # 줄 번호가 붙어야 출력만 보고 찾아갈 수 있다.
+    assert all(site.endswith(":1") for site, _ in sites), sites
+
+def test_all_fields_present_passes() -> None:
+    """다 보내면 통과한다 — 아무거나 실패시키는 검사가 아니다."""
     code, out = run([])
     assert code == 0, out
-    assert "D. 필수 요청 필드" in out, out
-    assert "검사하지 않는다" in out, out
+    assert "빠진 필수 필드 없음" in out, out
 
 
-def test_verdict_does_not_claim_more_than_it_checked() -> None:
-    """통과 문구가 A·B·C 범위를 밝힌다. 맨 마지막 줄이 곧 사람이 읽는 판정이다."""
+def test_unreadable_body_is_not_silently_passed() -> None:
+    """본문을 못 읽으면 조용히 통과시키지 않고 경고로 남긴다."""
+    code, out = run([], payload=None)
+    assert code == 0, out
+    assert "본문의 타입을 따라가지 못함" in out, out
+    assert "경고" in out, out
+
+
+def test_verdict_names_what_it_checked() -> None:
+    """맨 마지막 줄이 사람이 읽는 판정이다. 검사 범위를 정확히 말해야 한다."""
     _code, out = run([])
     tail = last_line(out)
     assert tail != "계약 일치 ✓", tail
-    assert tail.startswith("A·B·C 일치 ✓"), tail
-    assert "필수 요청 필드는 검사 대상 아님" in tail, tail
+    assert tail.startswith("A·B·C·D 일치 ✓"), tail
 
 
 def test_warning_verdict_is_scoped_too() -> None:
@@ -100,27 +193,24 @@ def test_warning_verdict_is_scoped_too() -> None:
     code, out = run([], called=False)
     tail = last_line(out)
     assert code == 0, out
-    assert tail.startswith("A·B·C 치명적 불일치 없음 ✓"), tail
-    assert "필수 요청 필드는 검사 대상 아님" in tail, tail
+    assert tail.startswith("A·B·C·D 치명적 불일치 없음 ✓"), tail
 
 
 def test_show_required_still_prints_the_list() -> None:
-    """참고 목록 자체는 그대로 나온다 — 한계를 적었다고 목록을 없앤 게 아니다."""
-    _code, out = run(["--show-required"])
-    assert "frameId" in out and "sourceKeys" in out and "layers" in out, out
+    """참고 목록 자체는 그대로 나온다 — 검사로 바꿨다고 목록을 없앤 게 아니다."""
+    _code, out = run(["--show-required"], spec=spec_with(["frameId", "sourceKeys"]))
+    assert "frameId" in out and "sourceKeys" in out, out
 
 
 def test_missing_backend_path_still_fails() -> None:
-    """D 안내를 붙였다고 A 실패 판정이 무뎌지지 않는다."""
+    """D 를 붙였다고 A 실패 판정이 무뎌지지 않는다."""
     code, out = run([], spec={"paths": {}, "components": {"schemas": {}}})
     assert code == 1, out
     assert "가 백엔드에 없다" in out, out
-    assert "D. 필수 요청 필드" in out, out  # 실패한 실행에도 한계는 찍힌다
 
 
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
         t()
-        print(f"  ✓ {t.__name__}")
     print(f"{len(tests)}개 통과")

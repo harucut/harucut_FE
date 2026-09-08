@@ -8,8 +8,10 @@ import { QrCode } from "lucide-react";
  */
 export function EventBanner({ eventName }: { eventName: string }) {
   return (
-    <p className="flex items-center gap-2 rounded-2xl border border-[color:var(--hc-accent-soft-border)] bg-[color:var(--hc-accent-soft-bg)] px-3.5 py-2.5 text-[12px] font-semibold leading-[1.5] text-[color:var(--hc-accent-soft-text)]">
-      <QrCode aria-hidden className="h-4 w-4 shrink-0" />
+    // 초록 칩이 아니다. 촬영 흐름에는 선택 보더·체크·CTA 가 이미 초록이라 배너까지 초록이면
+    // 첫 화면에 초록이 넷이었다. 맥락 표시는 중립 면 위에 굵은 이름으로 충분하다.
+    <p className="flex items-center gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-surface) px-3.5 py-2.5 text-[12px] font-semibold leading-normal text-(--hc-text)">
+      <QrCode aria-hidden className="h-4 w-4 shrink-0 text-(--hc-muted)" />
       <span className="min-w-0">
         <b className="font-extrabold">{eventName}</b> 프레임으로 찍고 있어요
       </span>

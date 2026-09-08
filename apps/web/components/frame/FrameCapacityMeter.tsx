@@ -92,21 +92,21 @@ export function FrameCapacityMeter({
   const dots = buildGaugeDots(used, limit);
 
   return (
-    <section className="rounded-2xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface)] p-4 lg:p-5">
+    <section className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4 lg:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[color:var(--hc-accent-soft-bg)] px-3 text-[12px] font-extrabold text-[color:var(--hc-accent-soft-text)]">
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-(--hc-accent-soft-bg) px-3 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
             <Sparkles className="h-3.5 w-3.5" />
             {name}
           </span>
           <div className="min-w-0">
-            <p className="text-[15px] font-extrabold text-[color:var(--hc-text)] lg:text-base">
+            <p className="text-[15px] font-extrabold text-(--hc-text) lg:text-base">
               보관 {used}{" "}
-              <span className="font-semibold text-[color:var(--hc-muted)]">
+              <span className="font-semibold text-(--hc-muted)">
                 / {unlimited ? "무제한" : `${limit}개`}
               </span>
             </p>
-            <p className="mt-0.5 text-[11px] text-[color:var(--hc-muted)]">
+            <p className="mt-0.5 text-[11px] text-(--hc-muted)">
               {unlimited
                 ? "무제한으로 저장할 수 있어요"
                 : noCapacity
@@ -136,7 +136,7 @@ export function FrameCapacityMeter({
           <GaugeDot key={i} state={state} />
         ))}
         {unlimited || noCapacity ? null : (
-          <span className="ml-1 text-[11px] text-[color:var(--hc-muted)]">
+          <span className="ml-1 text-[11px] text-(--hc-muted)">
             {limit}개 이후는 상위 요금제
           </span>
         )}
@@ -149,16 +149,16 @@ function GaugeDot({ state }: { state: GaugeDotState }) {
   const className = [
     "inline-grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border-[1.5px]",
     state === "filled"
-      ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-primary)]"
+      ? "border-(--hc-primary) bg-(--hc-primary)"
       : state === "empty"
-        ? "border-[color:var(--hc-border-strong)] bg-transparent"
-        : "border-[color:var(--hc-border-subtle)] bg-transparent",
+        ? "border-(--hc-border-strong) bg-transparent"
+        : "border-(--hc-border-subtle) bg-transparent",
   ].join(" ");
 
   return (
     <span className={className} aria-hidden>
       {state === "locked" ? (
-        <Lock className="h-2 w-2 text-[color:var(--hc-muted-soft)]" />
+        <Lock className="h-2 w-2 text-(--hc-muted-soft)" />
       ) : null}
     </span>
   );
