@@ -47,11 +47,12 @@ export function MarketingNav({
 
   // hover 색은 부분일치 매핑에 걸리지 않는 arbitrary 값으로 쓴다(예전 globals.css 의
   // `[class*="hover:bg-white"]` 규칙이 라이트 테마에서 흰 알약+흰 글자를 만들었다 — 규칙은 걷어냈다).
-  // 데스크톱은 브랜드 줄에, 모바일은 그 아래 줄에 놓는다. 예전에는 모바일에서 그냥 숨겨서
+  // 링크는 폭과 무관하게 브랜드와 같은 줄에 둔다. 예전에는 모바일에서 그냥 숨겨서
   // 기능·요금제·FAQ 로 가는 길이 아예 없었다(햄버거도 없었다).
   // 좁은 화면에서는 링크 넷이 브랜드와 한 줄에 들어가야 하므로 가로 패딩을 줄인다.
+  // shrink-0 이 있어야 스크롤 상자 안에서 알약이 찌그러지지 않고 밀려난다.
   const linkBase =
-    "inline-flex rounded-full px-2.5 py-2 text-[13px] font-semibold transition sm:px-4";
+    "inline-flex shrink-0 rounded-full px-2 py-2 text-[13px] font-semibold transition sm:px-4";
   const linkTone = "text-white hover:bg-[rgba(255,255,255,0.07)]";
 
   return (
@@ -66,19 +67,32 @@ export function MarketingNav({
       <div
         className={`mx-auto flex h-18 w-full items-center justify-between px-7 ${width}`}
       >
-        <BrandMark href="/" tone="light" />
+        {/* 브랜드는 줄지 않는다 — 줄면 "하루컷"이 두 줄로 접혀 헤더가 다시 높아진다. */}
+        <div className="flex shrink-0">
+          <BrandMark href="/" tone="light" />
+        </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           {/*
             모바일에서도 링크를 브랜드와 같은 줄에 둔다.
 
             예전에는 자리가 없어 아래 줄로 뺐는데, 그 바람에 헤더가 113px 이 돼 첫 화면의
-            13% 를 내비가 먹었다. 자리를 만든 건 아래 CTA 를 숨긴 것이다 — 360px 기준
-            브랜드 77 + 링크 211 = 288px 로 사용 가능 폭 304px 에 들어간다(CTA 를 넣으면 412px).
+            13% 를 내비가 먹었다. 자리를 만든 건 아래 CTA 를 숨긴 것이다 — 320px 기준
+            브랜드 78 + 링크 179 = 257px 로 사용 가능 폭 264px(320 에서 px-7 양쪽 56 을 뺀 값)에
+            들어간다(CTA 를 넣으면 391px). 360px 이면 47px 이 남는다.
+
+            여유가 7px 뿐이라 내비 자체에 가로 스크롤을 둔다 — 313px 아래나 링크 이름이
+            길어지는 날에는 줄을 늘리지 않고 흘려보낸다. 스크롤바는 숨긴다(헤더 안의 막대는
+            지저분하다).
+
+            `py-1 px-1 -mx-1` 은 초점 링 자리다. overflow 상자는 넘치든 말든 패딩 상자에서
+            그리기를 자르고, outline 은 스크롤 영역에도 안 들어가 스크롤로도 못 되살린다.
+            초점 링이 테두리 밖 3px 에 그려지므로 네 변 모두 자리를 준다 — 가로는 `-mx-1` 로
+            같은 값을 도로 빼서 레이아웃 폭은 안 먹는다(안 그러면 320px 여유 7px 을 넘긴다).
           */}
           <nav
             aria-label="사이트 메뉴"
-            className="flex items-center gap-1 sm:gap-2.5"
+            className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 py-1 scrollbar-none sm:gap-2.5 [&::-webkit-scrollbar]:hidden"
           >
             {NAV_LINKS.map((link) => {
               const active = pathname === link.href;
