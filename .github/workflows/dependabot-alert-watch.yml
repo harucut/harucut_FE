@@ -1,0 +1,70 @@
+name: dependabot-alert-watch
+
+# 조치할 수 있는 Dependabot 경보가 쌓이는 것을 알려 준다.
+#
+# 왜 필요한가 — 이 저장소의 경보는 대부분 **전이 의존성**이다. Dependabot 은 직접 의존성만
+# PR 로 올릴 수 있어서, 전이 취약점에는 자동 수정 PR 이 아예 오지 않는다(경보·security updates
+# 는 둘 다 켜져 있는데도 그렇다). pnpm 에서 그것을 고치는 지렛대는 루트 package.json 의
+# `pnpm.overrides` 하나뿐이고, 그건 사람이 손으로 올려야 한다.
+#
+# 그래서 한동안 24건이 조용히 쌓여 있었다. `dependency-review` 잡이 `pnpm audit` 을 돌리기는
+# 하지만 `continue-on-error` 라 실패를 보고만 하고, 그마저 `run-ci` 라벨이 붙을 때만 돈다.
+#
+# 이 잡은 **PR 을 막지 않는다.** 주 1회 돌면서, 「고칠 수 있는데 안 고쳐진」 경보가 있으면
+# 실패해서 눈에 띄게 한다. 패치가 아직 없는 권고(예: image-size ≤2.0.2)는 손쓸 수가 없으므로
+# 세지 않는다 — 그것까지 세면 영영 빨간불이라 신호가 죽는다.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 조치 가능한 경보를 센다
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "/repos/$REPO/dependabot/alerts?state=open&per_page=100" > alerts.json
+
+          # 패치가 나와 있는 것만 고칠 수 있다. first_patched_version 이 없으면 제외한다.
+          jq -r '
+            [ .[]
+              | select(.security_vulnerability.first_patched_version != null)
+              | { pkg:  .security_vulnerability.package.name,
+                  sev:  .security_vulnerability.severity,
+                  need: .security_vulnerability.first_patched_version.identifier }
+            ] | unique_by(.pkg + .need)
+          ' alerts.json > actionable.json
+
+          UNFIXABLE=$(jq '[ .[] | select(.security_vulnerability.first_patched_version == null) ] | length' alerts.json)
+          COUNT=$(jq 'length' actionable.json)
+
+          {
+            echo "## Dependabot 경보"
+            echo ""
+            echo "- 고칠 수 있는 것: **${COUNT}**"
+            echo "- 패치가 아직 없는 것: ${UNFIXABLE} (셈에서 뺀다)"
+            echo ""
+            if [ "$COUNT" -gt 0 ]; then
+              echo "| 패키지 | 심각도 | 필요 버전 |"
+              echo "|---|---|---|"
+              jq -r '.[] | "| \(.pkg) | \(.sev) | \(.need) |"' actionable.json
+              echo ""
+              echo "전이 의존성이면 루트 \`package.json\` 의 \`pnpm.overrides\` 에 범위를 올린다."
+            else
+              echo "고칠 수 있는 경보 없음."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "조치 가능한 경보 ${COUNT}건 — 위 요약을 본다." >&2
+            exit 1
+          fi
