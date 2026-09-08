@@ -566,29 +566,36 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               clearEditorDraft();
             }}
             rightSlot={
-              <div className="flex items-center gap-2">
-                {remoteFrameId ? (
-                  <button
-                    type="button"
-                    onClick={onDelete}
-                    disabled={isDeleting || isSaving}
-                    className="inline-flex h-11 items-center rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger) hover:bg-(--hc-danger-soft-bg) disabled:opacity-50"
-                  >
-                    {isDeleting ? "삭제 중…" : "삭제"}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={openSaveDialog}
-                  disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
-                  className="hc-button-primary inline-flex h-11 items-center rounded-full px-5 text-[13px] font-extrabold disabled:opacity-50"
-                >
-                  {isSaving ? "저장 중…" : remoteFrameId ? "수정 저장" : "저장"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={openSaveDialog}
+                disabled={isSaving || isLoadingFrame || hasRemoteLoadFailure}
+                className="hc-button-primary inline-flex h-11 items-center rounded-full px-5 text-[13px] font-extrabold disabled:opacity-50"
+              >
+                {isSaving ? "저장 중…" : remoteFrameId ? "수정 저장" : "저장"}
+              </button>
             }
           />
         </div>
+        {/*
+          삭제는 헤더에 같이 두지 않는다. PageHeader 는 제목을 절대 배치로 가운데 두고 좌우로
+          7rem(112px)만 비우는데 `삭제`+`수정 저장`은 152px 이라, 320~414px 에서 가운데 제목과
+          겹쳤다(320px 에서 48px). 저장만 남기면 가장 좁은 320px 에서도 16px 이 뜬다.
+          한 줄 내려서 고정 바 밖에 두는 이유 — 되돌릴 수 없는 동작이라 캔버스 위에 붙박이로
+          띄워 둘 것이 아니고, 고정 바가 76px 그대로라 좁은 화면에서 캔버스도 안 뺏긴다.
+        */}
+        {remoteFrameId ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isDeleting || isSaving}
+              className="inline-flex h-11 items-center rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger) hover:bg-(--hc-danger-soft-bg) disabled:opacity-50"
+            >
+              {isDeleting ? "삭제 중…" : "삭제"}
+            </button>
+          </div>
+        ) : null}
         {loadError || actionError ? (
           <p role="alert" className="text-[12px] text-(--hc-danger)">
             {loadError ?? actionError}

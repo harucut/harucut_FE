@@ -478,16 +478,31 @@ export default function HistoryPage() {
           </div>
         </header>
 
+        {/*
+            결과는 **지금 보고 있는 자리**에 붙여 둔다.
+
+            배너가 목록보다 위에 있어서, 아래쪽 카드에서 저장·공유·삭제를 누르면 결과가 화면
+            밖에 그려졌다 — 390×844 실측으로 맨 아래 카드의 삭제가 실패했을 때 배너 top 이
+            -3,917px 이었다. 삭제가 실패하면 확인 창까지 닫히므로(handleDelete) 그 자리에서는
+            아무 변화도 보이지 않는다. 맨 위로 끌어올리지는 않는다 — 스크롤을 빼앗으면
+            다시 시도할 카드를 놓친다.
+
+            띠에 무대색을 까는 것은 배너 바탕이 8~16% 알파라(globals.css 의 --hc-*-soft-bg)
+            아래로 흐르는 사진이 글자에 비쳐서다. 앱 네비와 같은 처리다. 네비(69px)가 뜨는
+            lg 에서는 그 아래로 내린다 — z-20 이라 겹치는 1px 은 네비가 덮는다.
+            바깥 여백은 안쪽 padding 으로 되돌려, 붙기 전 자리를 예전 그대로 둔다. */}
         {feedback ? (
-          <div
-            role="status"
-            className={
-              feedback.kind === "ok"
-                ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
-                : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
-            }
-          >
-            {feedback.text}
+          <div className="sticky top-0 z-20 -mx-4 -my-2 bg-(--hc-surface-soft) px-4 py-2 backdrop-blur-md lg:top-17">
+            <div
+              role="status"
+              className={
+                feedback.kind === "ok"
+                  ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
+                  : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
+              }
+            >
+              {feedback.text}
+            </div>
           </div>
         ) : null}
 
