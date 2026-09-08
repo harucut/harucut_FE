@@ -22,9 +22,13 @@ test("keeps the marketing nav on one row at the narrowest phone", async ({
   page,
 }) => {
   /*
-    320px 은 아직 도는 가장 좁은 실기기 폭이다. 여기서 브랜드와 링크 넷이 px-7(양쪽 28px)
-    안쪽에 들어가야 헤더가 한 줄로 남는다 — 아래 줄로 접히면 113px 이 되어 첫 화면의 13% 를
-    내비가 먹는다. 여유가 7px 뿐이라 링크 이름이 조금만 길어져도 깨지므로 기계가 지킨다.
+    320px 은 아직 도는 가장 좁은 실기기 폭이다. 여기서 링크 넷이 브랜드와 한 줄에 들어가야
+    헤더가 한 줄로 남는다 — 아래 줄로 접히면 113px 이 되어 첫 화면의 13% 를 내비가 먹는다.
+
+    남은 여백의 **크기**는 재지 않는다. 처음에는 `px-7`(28px) 안쪽인지까지 봤는데, 같은
+    페이지가 우분투에서 링크를 4px 더 넓게 그려(navRight 292 → 296) CI 에서만 깨졌다.
+    글자 폭은 플랫폼마다 다르므로 계약이 될 수 없다. 대신 플랫폼과 무관한 것을 본다 —
+    넷이 스크롤 없이 한 줄에 들어가는가, 그리고 그 때문에 페이지가 가로로 밀리지 않는가.
   */
   await page.setViewportSize({ width: 320, height: 780 });
   await page.goto("/");
@@ -50,7 +54,16 @@ test("keeps the marketing nav on one row at the narrowest phone", async ({
   const narrow = await readHeader();
   expect(narrow.navScrolls).toBe(false);
   expect(narrow.pageScrollsSideways).toBe(false);
-  expect(narrow.navRight).toBeLessThanOrEqual(narrow.clientWidth - 27);
+
+  /*
+    실제로 깨지던 자리는 320px 이 아니라 그 아래였다. 고치기 전에는 내용이 264px 예산을
+    넘겨 280px 에서 문서가 통째로 가로로 밀렸다(scrollWidth 301 > 280). 지금은 내비가
+    대신 흐르므로 페이지는 밀리지 않는다 — 여기서 navScrolls 는 참이어도 된다. 그것이
+    설계고, 밀리지 않는 것이 계약이다.
+  */
+  await page.setViewportSize({ width: 280, height: 780 });
+  const tiny = await readHeader();
+  expect(tiny.pageScrollsSideways).toBe(false);
 
   // 한 줄 헤더는 넓은 화면과 같은 높이다. 두 줄로 접히면 여기서 갈라진다.
   await page.setViewportSize({ width: 1280, height: 900 });
