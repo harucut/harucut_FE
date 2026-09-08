@@ -178,9 +178,14 @@ def has_caller(route: str) -> bool:
 # 나갔다. 여기서는 기계가 한다.
 #
 # 방법: 프론트가 부르는 프록시 경로 -> (A 검사가 만든 매핑) 백엔드 경로 -> 스웨거 required.
-# 그다음 프론트 소스에서 그 경로로 보내는 **본문 객체의 최상위 키**를 호출부마다 뽑아 비교한다.
+# 그다음 프론트 소스에서 그 경로로 보내는 **본문의 최상위 키**를 호출부마다 뽑아 비교한다.
 # 본문이 객체 리터럴이 아니거나(변수로 넘김) 전개 연산자가 있으면 키를 셀 수 없다 —
 # 그건 "확인 못 함" 으로 남겨 사람이 보게 한다. 조용히 통과시키지 않는다.
+#
+# 본문이 **최상위 배열**인 경로도 있다(`POST /api/auth/terms/consents` 의 `[{code, agreed}]`).
+# 그때 필수 필드는 `schema.required` 가 아니라 `items` 가 가리키는 항목 스키마에 있고, FE 도
+# 객체가 아니라 목록을 보낸다. 그래서 양쪽 다 **항목 기준**으로 맞춰 본다 — 항목 필수 필드를
+# 배열의 최상위 키와 비교하면 비교 자체가 틀린다.
 # ──────────────────────────────────────────────────────────────────────────
 
 # `clientApi.post<ApiEnvelope<Foo>>(` 처럼 제네릭이 **중첩**된다. `<[^>]*>` 는 첫 `>` 에서
@@ -250,6 +255,9 @@ def _top_level_keys(obj: str):
 
 def collect_fe_payloads():
     """(메서드, 프록시경로) -> [(호출부, 최상위 키 집합), ...]. 못 읽은 본문은 키가 None.
+
+    본문이 최상위 배열이면 키 집합에 `...array` 표식이 함께 들어가고 나머지 키는 **항목**의
+    것이다(`...spread` 와 같은 방식). 소비자는 이 표식으로 스웨거의 본문 모양과 짝을 맞춘다.
 
     한 경로를 부르는 곳이 하나라는 보장이 없다 — 화면이 라이브러리를 거치지 않고 같은
     경로를 직접 부르면 키가 겹친다. 키 하나에 본문 하나만 담으면 나중에 순회한 것이 앞을
@@ -330,26 +338,44 @@ def _required_keys_of_type(body: str):
     return keys
 
 
-def _keys_from_identifier(src: str, ident: str):
-    """식별자로 넘긴 본문의 키를 찾는다. 못 찾으면 None(사람이 본다)."""
+def _keys_from_identifier(src: str, ident: str, seen: frozenset[str] = frozenset()):
+    """식별자로 넘긴 본문의 키를 찾는다. 못 찾으면 None(사람이 본다).
+
+    배열이면 결과에 `...array` 를 얹고 나머지는 **항목**의 키다.
+    `seen` 은 별칭을 따라가다 도는 것을 막는다.
+    """
+    if ident in seen:
+        return None
+    seen = seen | {ident}
     # (a) 같은 파일의 지역 변수: const ident = { ... }
     m = re.search(r"\bconst\s+" + re.escape(ident) + r"\s*(?::[^=]+)?=\s*\{", src)
     if m:
         obj = _balanced(src, src.index("{", m.end() - 1))
         if obj:
             return _top_level_keys(obj)
-    # (b) 함수 파라미터의 타입 주석: (ident: SomeType) / (ident: { ... })
+    # (a') 걸러 만든 배열: const ident = other.filter(...)
+    # `.filter` 는 항목 타입을 바꾸지 않으므로 원본을 따라가면 항목 키를 알 수 있다.
+    # (`.map` 은 항목 모양을 바꾸니 따라가지 않는다 — 틀린 키로 통과시키느니 모르는 게 낫다.)
+    m = re.search(
+        r"\bconst\s+" + re.escape(ident)
+        + r"\s*(?::[^=]+)?=\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.filter\s*\(",
+        src,
+    )
+    if m:
+        return _keys_from_identifier(src, m.group(1), seen)
+    # (b) 함수 파라미터의 타입 주석: (ident: SomeType) / (ident: SomeType[]) / (ident: { ... })
     m = re.search(re.escape(ident) + r"\s*:\s*\{", src)
     if m:
         obj = _balanced(src, src.index("{", m.end() - 1))
         if obj:
             return _required_keys_of_type(obj)
-    m = re.search(re.escape(ident) + r"\s*:\s*([A-Za-z_][A-Za-z0-9_]*)", src)
+    m = re.search(re.escape(ident) + r"\s*:\s*([A-Za-z_][A-Za-z0-9_]*)(\s*\[\s*\])?", src)
     if m:
         name = m.group(1)
+        mark = {"...array"} if m.group(2) else set()
         body = _type_body(src, name)
         if body:
-            return _required_keys_of_type(body)
+            return _required_keys_of_type(body) | mark
         # 타입이 다른 파일에 있을 수 있다(api-types.ts 등). 저장소에서 한 번 더 찾는다.
         for d in CALLER_DIRS:
             for dirpath, _dirs, files in os.walk(os.path.join(ROOT, d)):
@@ -362,11 +388,24 @@ def _keys_from_identifier(src: str, ident: str):
                     other = open(os.path.join(dirpath, f), encoding="utf-8", errors="ignore").read()
                     body = _type_body(other, name)
                     if body:
-                        return _required_keys_of_type(body)
+                        return _required_keys_of_type(body) | mark
     return None
 
 
+def _deref(schemas, sch):
+    """`$ref` 를 한 번 따라간다. `$ref` 가 아니면 그대로."""
+    if "$ref" in sch:
+        return schemas.get(sch["$ref"].split("/")[-1], {})
+    return sch
+
+
 def required_by_endpoint(spec, backend):
+    """(메서드, 경로) -> (필수 필드, 본문 모양). 모양은 "object" 또는 "array".
+
+    최상위가 배열인 본문은 필수 필드가 `schema.required` 가 아니라 `items`(자체가 `$ref`
+    일 수 있다)가 가리키는 **항목 스키마**에 있다. 거기까지 따라가지 않으면 그런 경로는
+    필수 필드가 없는 것으로 보여 D 에서 통째로 빠지고, 항목 필드를 빠뜨려도 통과한다.
+    """
     schemas = spec.get("components", {}).get("schemas", {})
     out = {}
     for (method, path), op in backend.items():
@@ -374,12 +413,14 @@ def required_by_endpoint(spec, backend):
         if not body:
             continue
         for _ct, v in body.get("content", {}).items():
-            sch = v.get("schema", {})
-            if "$ref" in sch:
-                sch = schemas.get(sch["$ref"].split("/")[-1], {})
+            sch = _deref(schemas, v.get("schema", {}))
+            kind = "object"
+            if sch.get("type") == "array" or "items" in sch:
+                sch = _deref(schemas, sch.get("items") or {})
+                kind = "array"
             req = sch.get("required", [])
             if req:
-                out[(method, path)] = req
+                out[(method, path)] = (req, kind)
     return out
 
 
@@ -391,27 +432,40 @@ def check_required_fields(spec, backend, fe_routes, backend_norm):
         real = backend_norm.get((method, normalize(target)))
         if not real:
             continue
-        want = need.get((method, real))
-        if not want:
+        entry = need.get((method, real))
+        if not entry:
             continue
+        want, kind = entry
         # 라우트 폴더는 `[frameId]`, 호출부는 `${frameId}` -> `{}` 다. 같은 표기로 맞춘다.
         key = (method, re.sub(r"\[[^\]]*\]", "{}", route.rstrip("/")))
         label = f"{method:<6} {route} -> {real}"
+        need_label = "항목 필수" if kind == "array" else "필수"
         if key not in payloads:
-            unknown.append(f"{label}  필수 {want} · 프론트에서 이 경로를 부르는 곳을 못 찾음")
+            unknown.append(f"{label}  {need_label} {want} · 프론트에서 이 경로를 부르는 곳을 못 찾음")
             continue
         # 같은 경로라도 호출부마다 본문이 다르다. 하나만 보면 나머지가 안 걸린다.
         for site, sent in payloads[key]:
             if sent is None:
-                unknown.append(f"{label}  필수 {want} · {site} 본문의 타입을 따라가지 못함")
+                unknown.append(f"{label}  {need_label} {want} · {site} 본문의 타입을 따라가지 못함")
                 continue
             if "...spread" in sent:
-                unknown.append(f"{label}  필수 {want} · {site} 전개 연산자라 키를 못 셈")
+                unknown.append(f"{label}  {need_label} {want} · {site} 전개 연산자라 키를 못 셈")
                 continue
-            missing = [k for k in want if k not in sent]
+            # 배열 본문의 항목 필수 필드를 배열의 최상위 키와 맞대면 비교 자체가 틀린다.
+            # 모양이 다르면 통과도 실패도 시키지 않고 사람에게 넘긴다.
+            sent_kind = "array" if "...array" in sent else "object"
+            if sent_kind != kind:
+                unknown.append(
+                    f"{label}  {need_label} {want} · {site} 본문 모양이 다르다"
+                    f"(스웨거 {kind} · FE 에서 읽은 것 {sent_kind})"
+                )
+                continue
+            sent_keys = sent - {"...array"}
+            missing = [k for k in want if k not in sent_keys]
             if missing:
+                miss_label = "항목에 빠진 필수 필드" if kind == "array" else "빠진 필수 필드"
                 fails.append(
-                    f"{label}  {site} 빠진 필수 필드 {missing} (보내는 것: {sorted(sent)})"
+                    f"{label}  {site} {miss_label} {missing} (보내는 것: {sorted(sent_keys)})"
                 )
     return fails, unknown
 
@@ -500,19 +554,15 @@ def main() -> int:
         for u in d_unknown:
             print(f"   ! {u}")
     if args.show_required:
-        schemas = spec.get("components", {}).get("schemas", {})
+        # 스키마를 여기서 다시 풀지 않는다. D 가 쓰는 것과 갈라지면 목록과 판정이 어긋난다
+        # — 배열 본문을 D 만 항목까지 따라가고 이 목록은 못 따라가던 것이 그런 경우였다.
+        need = required_by_endpoint(spec, backend)
         for method, path in sorted(called):
-            op = backend[(method, path)]
-            body = op.get("requestBody")
-            if not body:
+            entry = need.get((method, path))
+            if not entry:
                 continue
-            for _ct, v in body["content"].items():
-                s = v["schema"]
-                if "$ref" in s:
-                    s = schemas.get(s["$ref"].split("/")[-1], {})
-                req = s.get("required", [])
-                if req:
-                    print(f"   {method:<6} {path:<46} {req}")
+            req, kind = entry
+            print(f"   {method:<6} {path:<46} {'[항목] ' if kind == 'array' else ''}{req}")
     elif not d_unknown and not d_fails:
         print("   (스웨거 required 목록 전체는 --show-required)")
     print()

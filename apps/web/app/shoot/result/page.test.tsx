@@ -947,13 +947,46 @@ describe("ShootResultPage", () => {
   });
 
   /*
-    ── 회귀: 진행 중 취소돼도 "처리 중"에 멈추지 않는다 ──
+    ── 회귀: 합성 도중에 테마가 도착해도 원본은 한 번만 올라간다 ──
 
-    합성 키는 비동기 작업을 시작하기 **전에** 찍힌다. 도중에 의존성이 바뀌면 그 실행은
-    버려지는데, 다시 도는 effect 가 같은 키를 보고 "이미 했다"며 돌아가면 아무도 결과를
-    만들지 않아 화면이 영원히 처리 중에 남는다.
+    `saveFourcutToServer` 한 번 = **원본 4장이 S3 로 한 번 올라간다**
+    (lib/fourcutCompose.ts 의 uploadSources). 멱등키가 덮는 것은 그 뒤의 합성 접수뿐이라,
+    같은 키로 한 번 더 부르면 서버가 합성을 재생해도 새로 올라간 4장은 아무도 안 쓰는 채
+    버킷에 남는다(S3 는 로컬에서도 실제 AWS 다).
+
+    합성 키는 비동기 작업을 시작하기 **전에** 찍히고, 도중에 의존성이 바뀌면 cleanup 이
+    그 키를 비운다. 그래서 꾸민 프레임의 테마가 이 합성 도중에 도착하면 다시 도는 effect 가
+    "아직 안 했다"고 보게 되는데, 그때 새로 시작하는 대신 진행 중인 실행을 이어받아야 한다.
   */
-  it("진행 중이던 합성이 끊겨도 결과를 만들어 낸다", async () => {
+  it("합성 도중에 테마가 도착해도 원본을 다시 올리지 않는다", async () => {
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+
+    // 아직 올리는 중인 순간을 붙잡아 둔다.
+    mockSaveFourcutToServer.mockImplementation(() => new Promise(() => {}));
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      mockThemeData = DECORATED_THEME;
+    });
+    view.rerender(<ShootResultPage />);
+    // effect 는 rerender 안에서 이미 돌지만, 남은 마이크로태스크까지 흘려보내고 센다.
+    await act(async () => {});
+
+    expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    ── 회귀(반대쪽): 이어받되 "처리 중"에 멈추지 않는다 ──
+
+    위 결함을 "다시 안 돈다"로만 막으면 반대쪽으로 넘어간다. 첫 실행의 결과는 cleanup 이
+    세운 `cancelled` 때문에 화면에 반영되지 않으므로, 이어받은 실행이 그 결과를 받아
+    화면에 세워야 한다. 아무도 안 받으면 합성은 멀쩡히 끝났는데 화면만 영원히 처리 중이다.
+  */
+  it("진행 중이던 합성을 이어받아 결과를 만들어 낸다", async () => {
     mockUseShootSession.setState({ remoteFrameId: 7 });
 
     let release: ((value: unknown) => void) | null = null;
@@ -968,17 +1001,13 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
+    expect(screen.getByText("결과 준비 중")).toBeInTheDocument();
 
-    // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다 → 그 실행은 버려진다.
+    // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다.
     act(() => {
       mockThemeData = DECORATED_THEME;
     });
     view.rerender(<ShootResultPage />);
-
-    // 버려진 실행이 키를 물고 있으면 두 번째 실행이 그냥 돌아가 버린다.
-    await waitFor(() => {
-      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
-    });
 
     // 붙잡아 둔 합성을 풀어 준다. act 로 감싸야 그 뒤의 상태 변경까지 테스트가 기다린다.
     await act(async () => {
@@ -990,6 +1019,11 @@ describe("ShootResultPage", () => {
       });
     });
 
+    expect(await screen.findByAltText("완성된 네컷 결과")).toHaveAttribute(
+      "src",
+      "https://example.com/a.png",
+    );
+    expect(screen.queryByText("결과 준비 중")).not.toBeInTheDocument();
   });
 
   /*

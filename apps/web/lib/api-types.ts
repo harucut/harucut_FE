@@ -31,6 +31,16 @@ export type UserInfo = {
   profileUrl: string | null;
   // 서버 Provider enum 5종. 구글/애플 로그인도 실제로 내려온다.
   loginPlatform?: "GOOGLE" | "KAKAO" | "NAVER" | "APPLE" | "HARUCUT" | null;
+  /**
+   * 오늘 아는 등급일 뿐이다 — 서버는 새 등급이나 쿠폰 등급을 줄 수 있고, 그때 이 유니온은
+   * 거짓말이 된다. 그래서 마이페이지는 모르는 값을 무료로 메우지 않는다
+   * (app/mypage/page.tsx 의 planDisplayName). 그 분기는 타입상 도달 불가로 보여도
+   * 죽은 코드가 아니다 — 걷어내지 않는다.
+   *
+   * 타입을 넓히지 않은 것은 의도다. `string` 으로 열면 app/theme/page.tsx 의
+   * `useState<"BASIC" | "PLUS" | "PRO" | null>` 부터 줄줄이 번진다. 등급을 문자열로
+   * 다루기로 정하면 그때 한 번에 옮긴다.
+   */
   planTier?: "BASIC" | "PLUS" | "PRO" | null;
   monthlyPrice?: number | null;
 };

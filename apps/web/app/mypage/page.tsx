@@ -362,8 +362,21 @@ export default function MyPage() {
 
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
 
-  // 서버 등급(BASIC/PLUS/PRO) 대신 사람이 읽는 이름(무료/베이직/프로)으로 보여준다.
-  const planDisplayName = getPlanDisplayName(user?.planTier) ?? "무료";
+  /*
+    서버 등급(BASIC/PLUS/PRO) 대신 사람이 읽는 이름(무료/베이직/프로)으로 보여준다.
+
+    **"무료"는 BASIC 을 확인했을 때만 쓴다.** `getPlanDisplayName` 은 모르는 등급에 일부러
+    null 을 주는데(packages/shared/src/plans.ts), 그 자리를 "무료"로 메우면 새 등급이나
+    쿠폰으로 받은 유료 등급이 곧바로 무료로 표시된다 — 이 화면에서 가장 눈에 띄는 한 줄이
+    사용자에게 거짓을 말하는 셈이다.
+
+    모르는 값이라고 다 같지 않아 둘로 가른다. 서버가 등급을 주긴 했는데 이름을 우리가
+    모르면 받은 값을 그대로 적고(아래 쿠폰 안내 `handleRedeemCoupon` 과 같은 처리),
+    등급 자체가 안 왔으면 확인이 안 됐다고 말한다. 앞은 "무엇인지는 서버가 안다"이고
+    뒤는 "아무도 모른다"라 사용자가 할 일이 다르다.
+  */
+  const planDisplayName =
+    getPlanDisplayName(user?.planTier) ?? user?.planTier ?? "요금제 확인 필요";
   const planPriceSuffix = user?.monthlyPrice
     ? ` · 월 ${user.monthlyPrice.toLocaleString("ko-KR")}원`
     : "";

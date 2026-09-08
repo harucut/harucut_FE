@@ -15,6 +15,9 @@
      따라 누락이 가려진다.
   6. 그 '전부' 를 **수집기가** 실제로 쌓는가 — 5 는 수집기를 목으로 갈아 끼우므로
      덮어쓰기가 되돌아와도 못 잡는다.
+  7. 본문이 **최상위 배열**인 경로(`POST /api/auth/terms/consents`)도 검사에 드는가 —
+     필수 필드가 `items` 의 항목 스키마에 있어서, 거기까지 안 따라가면 그 경로만
+     통째로 빠진 채 "A·B·C·D 일치" 가 찍힌다.
 
 레포에 pytest 가 없고 scripts/ 에도 테스트 하네스가 없어서, 표준 라이브러리만 쓰고
 직접 돌리는 형태로 둔다:
@@ -66,6 +69,21 @@ def spec_with(required: list[str]) -> dict:
             "schemas": {"ComposeRequest": {"type": "object", "required": required}}
         },
     }
+
+
+def array_spec_with(required: list[str]) -> dict:
+    """최상위가 **배열**인 요청 본문. `POST /api/auth/terms/consents` 가 이 모양이다.
+
+    필수 필드가 `schema.required` 가 아니라 `items` 가 가리키는 항목 스키마에 있다.
+    하네스의 경로 이름은 그대로 두고 **본문 모양만** 그 엔드포인트와 같게 만든다.
+    """
+    spec = spec_with([])
+    spec["paths"][COMPOSE]["post"]["requestBody"]["content"]["application/json"]["schema"] = {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/ComposeRequest"},
+    }
+    spec["components"]["schemas"]["ComposeRequest"] = {"type": "object", "required": required}
+    return spec
 
 
 FAKE_SPEC = spec_with(["frameId", "sourceKeys"])
@@ -164,6 +182,89 @@ def test_collector_keeps_every_call_site_of_one_endpoint() -> None:
     assert by_file["apps/web/lib/b_missing.ts"] == {"frameId"}, by_file
     # 줄 번호가 붙어야 출력만 보고 찾아갈 수 있다.
     assert all(site.endswith(":1") for site, _ in sites), sites
+
+
+def test_array_body_item_required_field_is_checked() -> None:
+    """최상위가 배열인 본문도 **항목**의 필수 필드로 검사한다.
+
+    `schema.required` 만 보면 이런 경로는 필수 필드가 없는 것으로 읽혀 D 에서 통째로
+    빠진다 — 항목 필드를 빠뜨려도 종료코드 0 에 "A·B·C·D 일치 ✓" 가 찍혔다.
+    """
+    code, out = run(
+        [],
+        spec=array_spec_with(["code", "agreed"]),
+        sites=[(SITE, {"code", "...array"})],
+    )
+    assert code == 1, out
+    assert "빠진 필수 필드" in out and "agreed" in out, out
+    # 표식은 대조용이지 FE 가 보내는 필드가 아니다. 출력에 새어 나오면 안 된다.
+    assert "...array" not in out, out
+
+
+def test_array_body_with_all_item_fields_passes() -> None:
+    """항목 필드를 다 보내면 통과한다 — 배열이라고 무조건 걸리는 검사가 아니다."""
+    code, out = run(
+        [],
+        spec=array_spec_with(["code", "agreed"]),
+        sites=[(SITE, {"code", "agreed", "...array"})],
+    )
+    assert code == 0, out
+    assert "빠진 필수 필드 없음" in out, out
+
+
+def test_array_schema_against_object_body_is_not_silently_passed() -> None:
+    """스웨거는 배열인데 FE 에서 읽은 본문이 객체면 **비교 자체가 틀린다.**
+
+    항목 필수 필드를 배열의 최상위 키와 맞대는 대신 사람에게 넘긴다. 통과도 실패도 아니다.
+    """
+    code, out = run(
+        [],
+        spec=array_spec_with(["code", "agreed"]),
+        sites=[(SITE, {"code", "agreed"})],
+    )
+    assert code == 0, out
+    assert "본문 모양이 다르다" in out, out
+    assert "경고" in out, out
+
+
+def test_collector_reads_item_keys_of_an_array_body() -> None:
+    """수집기가 배열 본문의 **항목** 키를 읽는가.
+
+    위 세 개는 `collect_fe_payloads` 를 목으로 갈아 끼우므로 소비자 쪽만 고정한다.
+    실제 `submitTermsConsents` 는 `TermsAgreementItem[]` 를 걸러 만든 변수를 넘긴다 —
+    수집기가 거기까지 못 따라가면 소비자가 아무리 옳아도 "타입을 따라가지 못함" 만 남는다.
+    """
+    route = "/api/client/auth/terms/consents"
+    with tempfile.TemporaryDirectory() as tmp:
+        lib = os.path.join(tmp, "apps", "web", "lib")
+        os.makedirs(lib)
+        with open(os.path.join(lib, "termsApi.ts"), "w", encoding="utf-8") as fh:
+            fh.write(
+                "export type TermsAgreementItem = {\n"
+                "  code: string;\n"
+                "  agreed: boolean;\n"
+                "};\n"
+                "\n"
+                "export async function submitTermsConsents(\n"
+                "  items: TermsAgreementItem[],\n"
+                "): Promise<void> {\n"
+                "  const payload = items.filter((item) => item.code.length > 0);\n"
+                '  await clientApi.post("%s", payload);\n'
+                "}\n" % route
+            )
+
+        original_root = cbc.ROOT
+        cbc.ROOT = tmp
+        try:
+            payloads = REAL_COLLECT_FE_PAYLOADS()
+        finally:
+            cbc.ROOT = original_root
+
+    sites = payloads[("POST", route)]
+    assert len(sites) == 1, sites
+    _site, keys = sites[0]
+    assert keys == {"code", "agreed", "...array"}, keys
+
 
 def test_all_fields_present_passes() -> None:
     """다 보내면 통과한다 — 아무거나 실패시키는 검사가 아니다."""

@@ -51,16 +51,21 @@ function ShootPageContent() {
   // 길이를 잘라 두고(제목 한 줄), 앞뒤 공백은 버린다.
   const queriedEventName =
     (searchParams.get("event") ?? "").trim().slice(0, 40) || null;
-  // 화면에는 세션에 자리잡은 값을 쓴다(쿼리 없이 돌아온 경우까지 덮는다).
+  // 화면에는 세션에 자리잡은 값을 쓴다 — 아래 effect 가 쿼리와 이어 가기 여부로 정한 값이다.
   const eventName = useShootSession((state) => state.eventName);
   const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
   useEffect(() => {
-    // 촬영 화면에서 "프레임 다시 선택"으로 돌아오면 주소에 행사 쿼리가 없다. 그때 세션을
-    // 비우고 이름까지 null 로 덮으면, 행사 참가자가 컷 구성을 한 번 바꿔보려다 행사 맥락을
-    // 통째로 잃는다. 쿼리가 없으면 이미 자리잡은 행사 이름을 그대로 이어 쓴다.
-    const carried = useShootSession.getState().eventName;
+    /*
+      행사 이름을 물려받는 것은 **이어 가는 진입뿐이다.** 결과 화면이 "다른 프레임으로" 로
+      돌려보내는 길에는 행사 쿼리가 없으므로(`keepShots=1` 만 붙는다) 거기서는 이어 쓴다.
+      촬영 화면의 "프레임 다시 선택"은 주소에 `event=` 를 실어 보내므로 쿼리로 살아 온다.
+
+      반대로 쿼리도 `keepShots` 도 없는 진입은 **새 촬영**이다. 여기서 이어 쓰면 행사 QR 로
+      한 번 찍은 브라우저가 그 뒤의 일반 촬영·결과 화면까지 지난 행사 배너를 달고 다닌다.
+    */
+    const carried = keepShots ? useShootSession.getState().eventName : null;
     if (keepShots) resetFrameSelection();
     else reset();
     setEventName(queriedEventName ?? carried);
