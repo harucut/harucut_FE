@@ -17,6 +17,35 @@ function hasAuthCookie(req: NextRequest) {
   );
 }
 
+/**
+ * 아직 살아 있는 access 토큰을 들고 왔는가.
+ *
+ * 쿠키가 있는지만 보면 만료된 토큰도 로그인으로 읽힌다(아래 보호 경로 주석). access 는
+ * JWT 라 `exp` 를 미들웨어에서 그 자리에서 읽을 수 있고, 백엔드는 access 를 어디에도
+ * 저장하지 않고 exp 까지 그대로 받아 준다 — 회수할 수 있는 것은 refresh 뿐이다
+ * (docs/backend-contract.md 「토큰」). 그래서 exp 가 남아 있다는 것이 "지금 회원"이라는 뜻이다.
+ * refresh 는 다른 기기에서 로그인하면 서버가 지우므로 만료 전에도 죽어 있을 수 있어 보지 않는다.
+ *
+ * 서명은 검증하지 않는다 — 여기서 정하는 것은 인가가 아니라 체험 쿠키를 걷을지뿐이라,
+ * 토큰을 위조해서 얻는 것은 자기 체험 쿠키를 잃는 손해밖에 없다.
+ */
+function hasLiveAccessToken(req: NextRequest) {
+  const payload = req.cookies.get("accessToken")?.value.split(".")[1];
+  if (!payload) return false;
+
+  try {
+    // JWT 는 base64url 이라 표준 base64 문자로 바꿔서 읽는다.
+    const claims = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { exp?: unknown };
+
+    return typeof claims.exp === "number" && claims.exp * 1000 > Date.now();
+  } catch {
+    // 우리가 아는 모양이 아니면 로그인했다고 볼 근거가 없다.
+    return false;
+  }
+}
+
 function hasGuestTrialCookie(req: NextRequest) {
   return req.cookies.get(GUEST_TRIAL_COOKIE)?.value === "1";
 }
@@ -79,12 +108,14 @@ export async function proxy(req: NextRequest) {
     읽혀(lib/guestTrialStore.ts 의 hydrateGuestMode) 자기 프레임과 기록을 못 본다.
     이메일 로그인은 같은 일을 app/login/page.tsx 의 exitGuestMode() 가 한다.
 
-    인증 쿠키가 함께 있을 때만 걷는다 — 인가에 실패해 빈손으로 돌아온 사람에게서
-    체험까지 뺏을 이유는 없다.
+    **살아 있는 access 토큰**이 함께 있을 때만 걷는다. 쿠키가 있는지만 보면, 인가에 실패해
+    돌아왔거나 기록으로 이 주소를 다시 연 사람도 예전에 받아 둔 죽은 토큰 때문에 체험을
+    잃는다 — 그 방문자는 곧이어 콜백 페이지가 상태 조회에서 401 을 받아 로그인 화면으로
+    밀려나므로, 로그인도 체험도 없는 채로 남는다.
   */
   if (isSocialLoginCallback(pathname)) {
     const response = NextResponse.next();
-    if (guestMode && hasAuthCookie(req)) {
+    if (guestMode && hasLiveAccessToken(req)) {
       response.cookies.delete(GUEST_TRIAL_COOKIE);
     }
     return response;

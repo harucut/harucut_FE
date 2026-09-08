@@ -178,7 +178,7 @@ def has_caller(route: str) -> bool:
 # 나갔다. 여기서는 기계가 한다.
 #
 # 방법: 프론트가 부르는 프록시 경로 -> (A 검사가 만든 매핑) 백엔드 경로 -> 스웨거 required.
-# 그다음 프론트 소스에서 그 경로로 보내는 **본문 객체의 최상위 키**를 뽑아 비교한다.
+# 그다음 프론트 소스에서 그 경로로 보내는 **본문 객체의 최상위 키**를 호출부마다 뽑아 비교한다.
 # 본문이 객체 리터럴이 아니거나(변수로 넘김) 전개 연산자가 있으면 키를 셀 수 없다 —
 # 그건 "확인 못 함" 으로 남겨 사람이 보게 한다. 조용히 통과시키지 않는다.
 # ──────────────────────────────────────────────────────────────────────────
@@ -249,8 +249,14 @@ def _top_level_keys(obj: str):
 
 
 def collect_fe_payloads():
-    """(메서드, 프록시경로) -> 최상위 키 집합. 못 읽으면 None."""
-    out = {}
+    """(메서드, 프록시경로) -> [(호출부, 최상위 키 집합), ...]. 못 읽은 본문은 키가 None.
+
+    한 경로를 부르는 곳이 하나라는 보장이 없다 — 화면이 라이브러리를 거치지 않고 같은
+    경로를 직접 부르면 키가 겹친다. 키 하나에 본문 하나만 담으면 나중에 순회한 것이 앞을
+    덮어, 필드를 빠뜨린 호출부가 os.walk 순서에 따라 가려지거나 멀쩡한 쪽이 대신 걸린다.
+    그래서 전부 모아 각각 대조한다. 호출부는 `파일:줄` 로 남겨 출력만 보고 찾아가게 한다.
+    """
+    out: dict[tuple[str, str], list[tuple[str, set[str] | None]]] = {}
     for d in CALLER_DIRS:
         base = os.path.join(ROOT, d)
         for dirpath, _dirs, files in os.walk(base):
@@ -260,30 +266,32 @@ def collect_fe_payloads():
             for f in files:
                 if not f.endswith((".ts", ".tsx")) or ".test." in f:
                     continue
-                src = open(os.path.join(dirpath, f), encoding="utf-8", errors="ignore").read()
+                file = os.path.join(dirpath, f)
+                src = open(file, encoding="utf-8", errors="ignore").read()
+                rel = os.path.relpath(file, ROOT).replace(os.sep, "/")
                 for m in CALL_RE.finditer(src):
                     method = m.group(1).upper()
                     path = (m.group(2) or m.group(3) or m.group(4) or "").split("?")[0]
                     if not path.startswith("/api/"):
                         continue
                     path = re.sub(r"\$\{[^}]*\}", "{}", path).rstrip("/")
-                    key = (method, path)
+                    # 백슬래시는 3.11 이하 f-string 안에서 못 쓴다. 줄 수는 밖에서 센다.
+                    line_no = src.count("\n", 0, m.start()) + 1
+                    site = f"{rel}:{line_no}"
                     rest = src[m.end():]
                     comma = rest.find(",")
                     close = rest.find(")")
                     if comma == -1 or (close != -1 and close < comma):
-                        out[key] = set()          # 본문 없이 보낸다
-                        continue
-                    after = rest[comma + 1:]
-                    if after.lstrip().startswith("{"):
-                        obj = _balanced(after, after.index("{"))
-                        out[key] = _top_level_keys(obj) if obj else None
-                        continue
-                    ident = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,)]", after)
-                    if ident:
-                        out[key] = _keys_from_identifier(src, ident.group(1))
+                        keys = set()              # 본문 없이 보낸다
                     else:
-                        out[key] = None
+                        after = rest[comma + 1:]
+                        if after.lstrip().startswith("{"):
+                            obj = _balanced(after, after.index("{"))
+                            keys = _top_level_keys(obj) if obj else None
+                        else:
+                            ident = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,)]", after)
+                            keys = _keys_from_identifier(src, ident.group(1)) if ident else None
+                    out.setdefault((method, path), []).append((site, keys))
     return out
 
 
@@ -392,16 +400,19 @@ def check_required_fields(spec, backend, fe_routes, backend_norm):
         if key not in payloads:
             unknown.append(f"{label}  필수 {want} · 프론트에서 이 경로를 부르는 곳을 못 찾음")
             continue
-        sent = payloads[key]
-        if sent is None:
-            unknown.append(f"{label}  필수 {want} · 본문의 타입을 따라가지 못함")
-            continue
-        if "...spread" in sent:
-            unknown.append(f"{label}  필수 {want} · 전개 연산자라 키를 못 셈")
-            continue
-        missing = [k for k in want if k not in sent]
-        if missing:
-            fails.append(f"{label}  빠진 필수 필드 {missing} (보내는 것: {sorted(sent)})")
+        # 같은 경로라도 호출부마다 본문이 다르다. 하나만 보면 나머지가 안 걸린다.
+        for site, sent in payloads[key]:
+            if sent is None:
+                unknown.append(f"{label}  필수 {want} · {site} 본문의 타입을 따라가지 못함")
+                continue
+            if "...spread" in sent:
+                unknown.append(f"{label}  필수 {want} · {site} 전개 연산자라 키를 못 셈")
+                continue
+            missing = [k for k in want if k not in sent]
+            if missing:
+                fails.append(
+                    f"{label}  {site} 빠진 필수 필드 {missing} (보내는 것: {sorted(sent)})"
+                )
     return fails, unknown
 
 

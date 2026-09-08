@@ -63,12 +63,40 @@ const BANG_RE = /(?<![\w$.])!([a-z][a-z0-9:./-]*(?:\[[^\]\s"`]+\])?)(?=[\s"'`]|$
  * **문자열 리터럴 안만 본다.** 예전에는 줄 전체를 훑어서 `if (!cancelled)` 의 부정 연산자가
  * `!cancelled` 클래스로 잡혔다(컴파일 단계에서 걸러지긴 하지만 목록이 지저분해진다).
  * 클래스는 언제나 따옴표나 백틱 안에 있다.
+ *
+ * **줄이 아니라 파일 전체를 넘긴다.** `className="` 을 여러 줄로 나눠 쓰는 곳이 있어서
+ * (`AssetPanel.tsx` 등) 줄 단위로 자르면 여는 따옴표와 닫는 따옴표가 다른 줄에 놓여
+ * 그 안의 클래스가 통째로 안 잡혔다 — 검사 범위가 작성 형식에 따라 달라졌다.
+ * 각 리터럴의 시작 오프셋을 함께 돌려주는 이유는 줄 번호 때문이다.
  */
-function stringChunks(line) {
+function stringChunks(text) {
   const out = [];
   const re = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|`([^`\\]*(?:\\.[^`\\]*)*)`/g;
-  for (const m of line.matchAll(re)) out.push(m[1] ?? m[2] ?? m[3] ?? "");
+  for (let m; (m = re.exec(text)); ) {
+    const body = m[1] ?? m[2] ?? m[3] ?? "";
+    // 줄을 넘어도 되는 것은 백틱과 JSX 속성뿐이다 — JS 따옴표 문자열은 원래 줄을 못 넘는다.
+    // 넘겼다면 정규식 안의 `"`(`/[\\/:*?"<>|]/`) 처럼 짝 없는 따옴표를 엉뚱한 것과 묶은 것이라,
+    // 그대로 두면 native-bridge.ts 에서 코드 199줄이 한 청크가 되어 `!transfer` 가 클래스로 잡힌다.
+    if (m[3] === undefined && body.includes("\n") && text[m.index - 1] !== "=") {
+      re.lastIndex = m.index + 1; // 잘못 삼킨 구간을 다시 훑는다
+      continue;
+    }
+    // 캡처는 따옴표 사이를 그대로 떠 온 것이라 오프셋이 1:1 이다. 여는 따옴표 다음 칸이 시작.
+    out.push({ body, at: m.index + 1 });
+  }
   return out;
+}
+
+/** 오프셋 -> 1-기준 줄 번호. 여러 줄 리터럴에서도 클래스가 실제로 있는 줄을 가리키게 한다. */
+function lineAt(starts, offset) {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo + 1;
 }
 
 /** class -> [{file, line}] */
@@ -80,15 +108,17 @@ function note(cls, f, i) {
 }
 for (const f of files) {
   const text = readFileSync(join(ROOT, f), "utf8");
-  text.split("\n").forEach((line, idx) => {
-    const i = idx + 1;
-    for (const chunk of stringChunks(line)) {
-      for (const m of chunk.matchAll(VALUE_RE)) note(`${m[1]}-[${m[2]}]`, f, i);
-      for (const m of chunk.matchAll(PROP_RE)) note(`[${m[1]}:${m[2]}]`, f, i);
-      for (const m of chunk.matchAll(ALPHA_RE)) note(`${m[1]}/[${m[2]}]`, f, i);
-      for (const m of chunk.matchAll(BANG_RE)) note(`!${m[1]}`, f, i);
-    }
-  });
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") starts.push(i + 1);
+  for (const { body, at } of stringChunks(text)) {
+    const scan = (re, name) => {
+      for (const m of body.matchAll(re)) note(name(m), f, lineAt(starts, at + m.index));
+    };
+    scan(VALUE_RE, (m) => `${m[1]}-[${m[2]}]`);
+    scan(PROP_RE, (m) => `[${m[1]}:${m[2]}]`);
+    scan(ALPHA_RE, (m) => `${m[1]}/[${m[2]}]`);
+    scan(BANG_RE, (m) => `!${m[1]}`);
+  }
 }
 
 // ── 2. 각 클래스의 정규형 후보를 만든다 ──────────────────────────────────
