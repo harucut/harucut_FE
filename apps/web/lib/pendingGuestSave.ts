@@ -383,30 +383,63 @@ async function writeRecord(entry: PendingGuestSave): Promise<boolean> {
  * **읽기 자체가 실패한 경우는 다르다.** 그때는 IndexedDB 쪽만 비우고 예전 localStorage
  * 보관물은 남긴다 — 못 읽은 것과 못 쓰는 것은 다르고, 그 한 벌이 마지막 인계일 수 있다.
  */
-export async function getPendingGuestSave(
+/**
+ * 보관물 읽기의 **세 가지 결말**.
+ *
+ * `null` 하나로 뭉치면 안 되는 자리가 있다. 조건부 삭제(`clearHandoffIfUnchanged`)가 그
+ * 자리다 — 저장소를 못 연 것을 「이미 없다」로 읽으면, 확인한 적 없는 새 한 벌을 그대로
+ * 지운다. 원본 4장은 거기에만 있어서 되돌릴 수 없다.
+ */
+export type PendingGuestSaveRead =
+  | { status: "found"; entry: PendingGuestSave }
+  /** 확실히 없다 — 기한이 지났거나 애초에 없었다. */
+  | { status: "empty" }
+  /** 있는지 없는지 **알 수 없다** — 저장소를 못 열었거나 읽다 깨졌다. */
+  | { status: "unreadable" };
+
+/**
+ * 보관물을 읽고 **결말까지** 돌려준다. 「없다」와 「모르겠다」를 구별해야 하는 곳에서 쓴다.
+ *
+ * 서버 렌더 중(`window` 없음)은 저장소 자체가 없는 환경이라 `unreadable` 이다 —
+ * 「없다」로 답하면 그 판단으로 무언가를 지우게 된다.
+ */
+export async function readPendingGuestSave(
   now: number = Date.now(),
-): Promise<PendingGuestSave | null> {
-  if (typeof window === "undefined") return null;
+): Promise<PendingGuestSaveRead> {
+  if (typeof window === "undefined") return { status: "unreadable" };
   try {
     const record = await withStore<StoredRecord | undefined>(
       "readonly",
       (store) => store.get(RECORD_KEY),
     );
-    // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다(그쪽도 없으면 null).
-    if (!record) return readLegacyEntry(now);
+    // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다(그쪽도 없으면 없는 것이다).
+    if (!record) {
+      const legacy = readLegacyEntry(now);
+      return legacy ? { status: "found", entry: legacy } : { status: "empty" };
+    }
 
     const meta = normalizeMeta(record, now);
     if (!meta || !hasFourSources(record.sources, isUsableBlob)) {
       await clearPendingGuestSave();
-      return null;
+      return { status: "empty" };
     }
 
-    return { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) };
+    return {
+      status: "found",
+      entry: { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) },
+    };
   } catch {
     // 읽기가 깨진 것뿐이다. 여기서 예전 보관물까지 지우면 **읽어 보지도 않은** 인계를 버린다.
     await clearStoredRecord();
-    return null;
+    return { status: "unreadable" };
   }
+}
+
+export async function getPendingGuestSave(
+  now: number = Date.now(),
+): Promise<PendingGuestSave | null> {
+  const read = await readPendingGuestSave(now);
+  return read.status === "found" ? read.entry : null;
 }
 
 function isUsableBlob(source: unknown) {

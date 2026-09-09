@@ -1287,6 +1287,59 @@ describe("ShootResultPage", () => {
     expect(mockNativeNotify).not.toHaveBeenCalled();
   });
 
+  /*
+    ── 회귀: 아직 돌고 있는 화면 때문에 알림을 **버리지** 않는다 ──
+
+    나갔다 들어와 같은 멱등키로 둘이 도는 동안 앞 요청이 성공하면, 그 순간 새 화면은 떠
+    있지만 아직 "처리 중"이라 사용자는 아무것도 못 봤다. 마운트만 보고 알림을 버리면,
+    뒤이어 그 화면의 요청이 시간 초과로 죽고 사용자가 떠났을 때 서버에는 완성본이 있는데도
+    알림이 끝내 오지 않는다. 버리지 말고 **미뤘다가**, 기다리던 실행이 다 떨어지면 알린다.
+  */
+  it("떠 있는 화면이 실패하고 떠나면 앞 요청의 완성을 그때 알린다", async () => {
+    const finishers: Array<{
+      resolve: (asset: GeneratedFourcutAsset) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve, reject) => {
+          finishers.push({ resolve, reject });
+        }),
+    );
+
+    const first = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    first.unmount();
+
+    // 다시 들어온다 — 같은 멱등키로 한 번 더 접수하고, 아직 "처리 중"이다.
+    const second = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    // 앞 요청이 성공한다. 이 화면은 아직 아무것도 못 보여 줬으므로 알림을 미룬다.
+    await act(async () => {
+      finishers[0].resolve({
+        mediaId: 7,
+        objectUrl: "https://example.com/image",
+        downloadUrl: "https://example.com/image",
+        displayName: "harucut_20260101_000000",
+      });
+    });
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+
+    // 이 화면의 요청은 시간 초과로 죽고, 사용자는 떠난다.
+    await act(async () => {
+      finishers[1].reject(new Error("timeout"));
+    });
+
+    // 고치기 전에는 여기가 영원히 0건이었다 — 서버에는 완성본이 있는데도.
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+    second.unmount();
+  });
+
   it("버리고 새로 시작한 합성이 끝나도 앞 합성은 알리지 않는다", async () => {
     mockUseShootSession.setState({ remoteFrameId: 7 });
     mockThemeData = DECORATED_THEME;

@@ -13,7 +13,9 @@ import {
   clearPendingGuestSave,
   ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
+  readPendingGuestSave,
   type PendingGuestSave,
+  type PendingGuestSaveComposeKey,
 } from "@/lib/pendingGuestSave";
 
 /**
@@ -43,6 +45,22 @@ async function isSignedIn() {
     return false;
   }
 }
+
+/**
+ * 다시 시도를 권할 때 붙이는 **중복 경고**. 멱등키를 못 남긴 기기에서만 붙는다.
+ *
+ * 「다시 하면 이어서 저장해요」는 보관물에 남은 멱등키가 있을 때만 참이다. 그 키를 못
+ * 남긴 기기(IndexedDB 를 못 열거나 트랜잭션이 깨진 곳)에서는 다음 시도가 새 키로 접수돼
+ * 서버가 앞 작업을 재생하지 못한다 — 첫 합성이 이미 접수된 뒤였다면 같은 네컷이 두 벌
+ * 남는다. 다시 시도를 막지는 않되, 무엇이 달라지는지는 먼저 말한다.
+ *
+ * 붙는 자리가 둘이다(401 로 멈춘 자리 · 다시 해 볼 만한 실패). 문구를 두 곳에 적으면
+ * 한쪽만 고쳐진다.
+ */
+const DUPLICATE_RISK_SUFFIX = (composeKey: PendingGuestSaveComposeKey) =>
+  composeKey.persisted
+    ? ""
+    : " 다만 이 기기에는 진행 표시를 남기지 못해, 같은 네컷이 두 벌 저장될 수 있어요.";
 
 /**
  * 확인 안내를 띄울 때 읽은 **그 보관물**인가.
@@ -77,6 +95,12 @@ function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
  * 없어진 뒤라면 지우는 김에 예전 localStorage 보관물까지 걷어내고 true 로 끝낸다 —
  * 사용자가 원한 상태가 이미 됐다는 뜻이다.
  *
+ * **못 읽었으면 지우지 않는다.** 저장소를 못 열거나 읽다 깨지면 레코드가 멀쩡히 있어도
+ * 조회는 빈손으로 돌아온다. 그것을 「이미 없다」로 읽으면, 합성이 도는 사이 다른 탭이
+ * 새로 찍어 둔 한 벌을 — 사용자가 확인한 적 없는 것을 — 그대로 지운다. 두 번째 열기만
+ * 성공하면 원본 4장이 사라지고, 이 함수가 막으려던 사고가 바로 그 자리에서 난다.
+ * 그래서 `readPendingGuestSave` 의 「없다」와 「모르겠다」를 갈라 본다.
+ *
  * **원자적이지 않다.** IndexedDB 에 조건부 삭제는 없어서 되읽기와 삭제 사이는 여전히
  * 열려 있다 — 안내를 띄운 순간부터 벌어져 있던 창을 두 줄 사이로 줄이는 것뿐이다
  * (lib/pendingTermsConsent.ts 의 `clearPendingTermsConsentIfUnchanged` 와 같은 한계).
@@ -84,8 +108,10 @@ function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
 async function clearHandoffIfUnchanged(
   promptedEntry: PendingGuestSave,
 ): Promise<boolean> {
-  const current = await getPendingGuestSave();
-  if (current && !isSameHandoff(current, promptedEntry)) return false;
+  const read = await readPendingGuestSave();
+  if (read.status === "unreadable") return false;
+  if (read.status === "found" && !isSameHandoff(read.entry, promptedEntry))
+    return false;
   await clearPendingGuestSave();
   return true;
 }
@@ -283,7 +309,13 @@ export function GuestTrialBridge() {
         });
         // 올린 그 한 벌만 지운다. 합성이 도는 1분 사이에 다른 탭이 새로 찍어 갈아 끼웠으면
         // 그것은 아직 아무도 묻지 않은 인계다 — 여기서 지우면 소리 없이 사라진다.
-        await clearHandoffIfUnchanged(entry);
+        //
+        // 못 지웠으면 **다시 물어야 한다.** 남아 있는 한 벌은 우리가 방금 올린 것이 아니라
+        // 새로 들어온 인계인데, "이미 물어봤다" 표식을 그대로 두면 다음 회차가 통째로
+        // 건너뛴다 — 새로고침하거나 앱을 다시 열기 전까지 그 한 벌을 옮길 수 없다.
+        if (!(await clearHandoffIfUnchanged(entry))) {
+          handoffPromptedRef.current = false;
+        }
         stripResumeParam();
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -304,8 +336,11 @@ export function GuestTrialBridge() {
             actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
             eyebrow: "NOTICE",
             icon: "lock",
-            message:
-              "로그인이 풀려서 아직 옮기지 못했어요. 보관해 둔 결과는 그대로 있으니 다시 로그인하면 이어서 저장할게요.",
+            // 이쪽도 「다시 하면 이어서」를 약속한다. 키를 못 남긴 기기에서는 그 약속이
+            // 중복 한 벌을 뜻하므로(아래 재시도 자리와 같은 이유) 여기서도 갈라 말한다 —
+            // 서버 합성이 끝난 뒤 이름·URL 조회에서 401 이 날 수 있어서, 다음 로그인의
+            // 재시도가 새 키로 같은 네컷을 한 벌 더 만든다.
+            message: `로그인이 풀려서 아직 옮기지 못했어요. 보관해 둔 결과는 그대로 있으니 다시 로그인하면 이어서 저장할게요.${DUPLICATE_RISK_SUFFIX(composeKey)}`,
             title: "로그인하면 이어서 저장할게요",
           });
           return;
@@ -318,7 +353,10 @@ export function GuestTrialBridge() {
         const failure = describeComposeFailure(error);
         if (!failure.retryable) {
           // 버리는 것도 **내가 올린 그 한 벌일 때만**이다(위 성공 자리와 같은 이유).
-          await clearHandoffIfUnchanged(entry);
+          // 못 지웠으면 남은 한 벌을 다음 회차에 다시 묻는다.
+          if (!(await clearHandoffIfUnchanged(entry))) {
+            handoffPromptedRef.current = false;
+          }
           stripResumeParam();
         }
 
@@ -327,11 +365,7 @@ export function GuestTrialBridge() {
           eyebrow: "NOTICE",
           icon: "lock",
           message: failure.retryable
-            ? composeKey.persisted === false
-              ? // 키를 못 남긴 기기다. 그냥 "다시 시도해요"라고 하면 두 벌이 남는 것을
-                // 약속하는 셈이라, 무엇이 달라지는지 먼저 말한다.
-                `${failure.message} 이 화면을 새로고침하면 다시 시도할 수 있지만, 이 기기에는 진행 표시를 남기지 못해 같은 네컷이 두 벌 저장될 수 있어요.`
-              : `${failure.message} 이 화면을 새로고침하면 다시 시도해요.`
+            ? `${failure.message} 이 화면을 새로고침하면 다시 시도해요.${DUPLICATE_RISK_SUFFIX(composeKey)}`
             : `${failure.message} 비회원 때 만든 결과는 기록에 옮기지 못했어요.`,
           title: "저장을 완료하지 못했어요",
         });

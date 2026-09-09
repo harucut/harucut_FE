@@ -17,6 +17,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 const mockReplace = jest.fn();
 const mockSaveFourcutToServer = jest.fn();
 const mockGetPending = jest.fn();
+const mockReadPending = jest.fn();
 const mockClearPending = jest.fn();
 const mockEnsureComposeKey = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
@@ -37,6 +38,7 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 
 jest.mock("@/lib/pendingGuestSave", () => ({
   getPendingGuestSave: (...args: unknown[]) => mockGetPending(...args),
+  readPendingGuestSave: (...args: unknown[]) => mockReadPending(...args),
   clearPendingGuestSave: (...args: unknown[]) => mockClearPending(...args),
   ensurePendingGuestSaveComposeKey: (...args: unknown[]) =>
     mockEnsureComposeKey(...args),
@@ -117,6 +119,12 @@ beforeEach(() => {
   // 보관소는 IndexedDB 라 **전부 비동기**다(lib/pendingGuestSave.ts). 목도 그렇게 둔다 —
   // 동기 목으로 두면 호출부가 await 를 빠뜨려도 테스트가 초록불이다.
   mockGetPending.mockResolvedValue(PENDING);
+  // 조건부 삭제는 「없다」와 「모르겠다」를 가려 본다. 기본은 조회와 같은 답을 준다 —
+  // 「모르겠다」는 그것을 시험하는 테스트가 직접 세운다.
+  mockReadPending.mockImplementation(async () => {
+    const entry = await mockGetPending();
+    return entry ? { status: "found", entry } : { status: "empty" };
+  });
   storedComposeKey = null;
   mintedKeyCount = 0;
   // 보관에 성공한 기기다. 실패한 기기는 `persisted: false` 로 따로 흉내 낸다 —
@@ -473,6 +481,89 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     expect(mockClearPending).not.toHaveBeenCalled();
   });
 
+  /*
+    회귀 — 못 지운 새 한 벌은 **다음 회차에 다시 묻는다.**
+
+    합성이 도는 1분 사이에 다른 탭이 새로 찍으면 보관물이 갈아 끼워진다. 그 한 벌은 지키는
+    것이 맞지만, "이미 물어봤다" 표식을 그대로 두면 다음 회차가 통째로 건너뛴다 — 새로고침
+    하거나 앱을 다시 열기 전까지 그 한 벌을 계정에 옮길 방법이 없다.
+  */
+  it("저장 뒤 못 지운 새 보관물은 다음 회차에 다시 묻는다", async () => {
+    const NEWER = {
+      ...PENDING,
+      displayName: "방금 찍은 네컷",
+      savedAt: PENDING.savedAt + 1000,
+    };
+    const release = holdSave();
+
+    const view = render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await flushAsync();
+
+    // 합성이 도는 사이 다른 탭이 새로 찍었다.
+    mockGetPending.mockResolvedValue(NEWER);
+    await act(async () => {
+      release();
+    });
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe("기록에 저장됐어요");
+    });
+    // 새 한 벌은 지키고 —
+    expect(mockClearPending).not.toHaveBeenCalled();
+
+    // — 화면을 옮기면 그것을 다시 묻는다.
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "비회원 때 만든 네컷이 남아 있어요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toContain(
+      "방금 찍은 네컷",
+    );
+  });
+
+  /*
+    회귀 — **못 읽은 것을 「없다」로 읽지 않는다.**
+
+    저장소를 못 열거나 읽다 깨지면 레코드가 멀쩡히 있어도 조회는 빈손으로 돌아온다. 그것을
+    「이미 사라졌다」로 보고 지우면, 합성이 도는 사이 다른 탭이 새로 찍어 둔 한 벌 —
+    사용자가 확인한 적 없는 것 — 이 통째로 사라진다. 원본 4장은 거기에만 있다.
+  */
+  it("보관물을 읽지 못했으면 지우지 않는다", async () => {
+    const release = holdSave();
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await flushAsync();
+
+    // 올리는 사이 저장소가 막혔다 — 있는지 없는지 알 수 없다.
+    mockReadPending.mockResolvedValue({ status: "unreadable" });
+    await act(async () => {
+      release();
+    });
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe("기록에 저장됐어요");
+    });
+    // 고치기 전에는 여기서 확인한 적 없는 한 벌까지 지웠다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
   it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {
     render(<GuestTrialBridge />);
 
@@ -686,6 +777,43 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     올리는 사이에 세션이 끊긴 것은 "저장 실패"가 아니다. 그렇게 안내하면 사용자는
     멀쩡한 결과물을 잃은 줄 알고, 보관물은 남아 있어 안내만 하루 동안 반복된다.
   */
+  /*
+    회귀 — 401 로 멈춘 자리에도 **중복 경고**를 붙인다.
+
+    서버 합성이 끝난 뒤 이름·URL 조회에서 401 이 날 수 있다. 그때 「다시 로그인하면 이어서
+    저장할게요」라고만 하면, 멱등키를 못 남긴 기기에서는 다음 로그인의 재시도가 새 키로
+    접수돼 같은 네컷이 두 벌 남는다 — 아래 재시도 안내와 정확히 같은 상황이다.
+  */
+  it("멱등키를 못 남긴 기기의 401 안내에도 중복 가능성을 알린다", async () => {
+    mockEnsureComposeKey.mockImplementation(async () => ({
+      key: "web-guest-ephemeral",
+      persisted: false,
+      entry: PENDING,
+    }));
+    mockSaveFourcutToServer.mockRejectedValueOnce(
+      Object.assign(new Error("unauthorized"), { status: 401 }),
+    );
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "로그인하면 이어서 저장할게요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toContain(
+      "두 벌 저장될 수 있어요",
+    );
+    // 보관물은 그대로 둔다 — 다시 로그인하면 이어 가야 한다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
   it("올리는 도중 401 이면 실패가 아니라 로그인 안내를 띄운다", async () => {
     mockSaveFourcutToServer.mockRejectedValueOnce({ status: 401 });
 
