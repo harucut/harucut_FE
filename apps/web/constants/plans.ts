@@ -44,8 +44,9 @@ export const toPlanId = toPlanIdShared;
 
 // 서버 등급을 사람이 읽는 이름(무료/베이직/프로)으로 바꾼다. 모르는 값이면 null.
 //
-// PLANS 에서 찾지 않는다 — PRO 는 가격표에 카드가 없어서 못 찾고, 그러면 마이페이지가
-// PRO 사용자에게 "무료"라고 말한다(호출부의 ?? "무료" 폴백에 걸린다).
+// PLANS 에서 찾지 않는다 — PRO 는 가격표에 카드가 없어서 못 찾는다. 그때 호출부가 null 을
+// "무료"로 메우면 PRO 사용자에게 무료라고 말하게 된다. 마이페이지는 그래서 null 을 무료로
+// 메우지 않고 받은 등급을 그대로 적는다(app/mypage/page.tsx 의 planDisplayName).
 export function getPlanDisplayName(tier: string | null | undefined): string | null {
   const id = toPlanId(tier);
   return id ? PLAN_NAMES[id] : null;

@@ -26,6 +26,7 @@ import {
   buildDownloadFilename,
   sanitizeDisplayName,
   FOURCUT_OUTPUT_EXTENSION,
+  type GeneratedFourcutAsset,
 } from "@/lib/fourcutOutput";
 import { describeComposeFailure } from "@/lib/fourcutCompose";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
@@ -105,6 +106,14 @@ export default function ShootResultPage() {
   const debugImageUrlRef = useRef<string | null>(null);
   const guestImageUrlRef = useRef<string | null>(null);
   const imageGenerationKeyRef = useRef<string | null>(null);
+  /*
+    진행 중인 **서버 합성**. 같은 실행 키로 effect 가 다시 돌면 새로 시작하지 않고 이걸 이어받는다.
+    왜 이어받아야 하는지는 아래 호출부 주석에 적어 뒀다.
+  */
+  const pendingServerComposeRef = useRef<{
+    key: string;
+    run: Promise<GeneratedFourcutAsset>;
+  } | null>(null);
 
   const showStatusNotice = (title: string, message: string) => {
     setNotice({
@@ -355,16 +364,37 @@ export default function ShootResultPage() {
         */
         const idempotencyKey = ensureComposeIdempotencyKey(generationKey, themeData);
 
-        const asset = await saveFourcutToServer({
-          sources: imageSources.map((source) => source.src),
-          layout: currentLayout,
-          outputFilter,
-          frameId: frameId as FrameId,
-          remoteFrameId,
-          displayName,
-          idempotencyKey,
-          backgroundColor: effectiveBorderColor,
-        });
+        /*
+          **같은 실행 키의 합성은 하나뿐이다 — 돌고 있으면 이어받는다.**
+
+          아래 cleanup 이 실행 키를 비우므로, 꾸민 프레임의 테마가 이 합성 도중에 도착하면
+          다시 도는 effect 가 "아직 안 했다"고 보고 여기까지 온다. 그때 한 번 더 부르면
+          멱등키가 같아도 **원본 4장이 새 S3 키로 다시 올라간다** — 멱등키가 덮는 것은 그
+          뒤의 합성 접수뿐이라(lib/fourcutCompose.ts 의 uploadSources 는 그 앞이다), 서버가
+          합성을 재생해도 새로 올라간 4장은 아무도 안 쓰는 채 버킷에 남는다. 프론트에는
+          지울 방법도 없다.
+
+          이어받아도 결과는 같다 — 이 요청은 `themeData` 를 보지 않는다(꾸민 프레임의 배경과
+          누끼는 서버가 `remoteFrameId` 로 읽고, 보낸 색은 버린다). 내용이 진짜 달라졌다면
+          위에서 멱등키가 새로 잡히고, 그러면 이 키도 달라져 새 실행이 시작된다.
+        */
+        const pending = pendingServerComposeRef.current;
+        const run =
+          pending?.key === imageGenerationKey
+            ? pending.run
+            : saveFourcutToServer({
+                sources: imageSources.map((source) => source.src),
+                layout: currentLayout,
+                outputFilter,
+                frameId: frameId as FrameId,
+                remoteFrameId,
+                displayName,
+                idempotencyKey,
+                backgroundColor: effectiveBorderColor,
+              });
+        pendingServerComposeRef.current = { key: imageGenerationKey, run };
+
+        const asset = await run;
 
         if (!cancelled) {
           settled = true;
@@ -421,6 +451,10 @@ export default function ShootResultPage() {
         (꾸민 프레임의 테마가 늦게 도착하는 경우가 그렇다) 이 cleanup 이 결과를 버리는데,
         다시 도는 effect 는 같은 키를 보고 "이미 했다"며 그냥 돌아간다.
         아무도 결과를 만들지 않아 화면이 영원히 "처리 중"에 남는다.
+
+        비우는 것은 **effect 를 다시 돌리기 위해서지 합성을 다시 시키기 위해서가 아니다.**
+        진행 중인 서버 합성은 위 `pendingServerComposeRef` 가 붙잡고 있어서, 다시 도는
+        실행이 그것을 이어받아 결과를 받아 간다 — 원본이 두 번 올라가지 않는다.
       */
       if (!settled && imageGenerationKeyRef.current === imageGenerationKey) {
         imageGenerationKeyRef.current = null;
