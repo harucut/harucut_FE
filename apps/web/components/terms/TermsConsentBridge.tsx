@@ -78,7 +78,8 @@ export function TermsConsentBridge() {
       try {
         accountEmail = (await getMyUserInfo()).email;
       } catch {
-        // 내 정보 조회가 흔들린 것뿐이면 보관물을 버릴 이유가 없다. 이번 회차만 건너뛴다.
+        // 내 정보 조회가 흔들린 것뿐이면 보관물을 버릴 이유가 없다. 이번 회차만 건너뛴다
+        // (남은 보관물은 아래 재동의 화면을 통과하면 그때 지운다).
       }
 
       if (accountEmail && !isSameConsentAccount(accountEmail, stashed.email)) {
@@ -135,7 +136,21 @@ export function TermsConsentBridge() {
   return (
     <TermsReconsentDialog
       consents={all}
-      onDone={() => setPending(null)}
+      onDone={() => {
+        /*
+          여기까지 왔다는 건 사용자가 이 화면에서 직접 고른 값이 서버에 저장됐다는 뜻이다
+          (`onDone` 은 저장에 성공했을 때만 불린다). 그런데 위에서 내 정보 조회가 흔들려
+          계정을 대조하지 못했으면 가입 때 보관물이 그대로 남아 있다 — 그대로 두면 다음
+          새로고침에 그것이 다시 제출되어 **방금 고른 선택 약관 값이 가입 때 값으로
+          되돌아간다.** 동의 이력은 수정·삭제되지 않아 되돌릴 방법이 없고, 필수 동의는
+          같은 줄이 하나 더 남는다.
+
+          약관 조회가 실패한 회차에는 이 화면 자체가 뜨지 않으므로, 아직 보내야 하는
+          보관물을 여기서 버리는 일은 없다.
+        */
+        clearPendingTermsConsent();
+        setPending(null);
+      }}
       contentHref={termsContentHref}
     />
   );

@@ -62,6 +62,24 @@ export default function ShootUploadPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
+  /**
+   * 사진 가져오기 회차 번호.
+   *
+   * HEIC 변환과 여러 장 디코딩이 도는 동안 뒤로가기로 이 화면을 떠나도 Promise 는 그대로
+   * 끝나고, 그 결과가 담기는 곳은 이 화면의 상태가 아니라 **전역 촬영 세션**이다.
+   * `/shoot` 의 초기화가 먼저 끝났으면 지난 선택이 새 세션에 되살아나고, 사용자가 다시
+   * 불러오기를 시작했으면 새로 고른 사진과 섞인다. 시작할 때 번호를 올려 두고 끝난 뒤
+   * 번호가 그대로일 때만 반영한다 — 언마운트에서도 올리므로 떠난 뒤의 결과는 버려진다.
+   */
+  const importGenerationRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      importGenerationRef.current += 1;
+    },
+    [],
+  );
+
   // 불러온 사진이 있는데 아직 저장 전이면 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(shots.length > 0);
 
@@ -87,6 +105,8 @@ export default function ShootUploadPage() {
       return;
     }
 
+    importGenerationRef.current += 1;
+    const generation = importGenerationRef.current;
     setIsImporting(true);
     try {
       /*
@@ -98,6 +118,8 @@ export default function ShootUploadPage() {
       */
       const { dataUrls, notice: importNotice, overLimitCount } =
         await importPhotoFiles(files, { limit: room });
+      // 변환 중에 화면을 떠났으면 늦게 온 결과는 버린다(위 회차 번호 주석).
+      if (importGenerationRef.current !== generation) return;
       if (dataUrls.length > 0) addShotPhotos(dataUrls);
       setNotice(
         [overLimitCount > 0 ? overLimitNotice(overLimitCount) : null, importNotice]
@@ -105,7 +127,8 @@ export default function ShootUploadPage() {
           .join(" ") || null,
       );
     } finally {
-      setIsImporting(false);
+      // 지난 회차가 뒤늦게 끝나며 진행 중 표시를 꺼 버리지 않게 한다.
+      if (importGenerationRef.current === generation) setIsImporting(false);
     }
   };
 

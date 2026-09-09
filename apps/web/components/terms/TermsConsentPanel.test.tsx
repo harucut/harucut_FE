@@ -1,8 +1,9 @@
 /**
  * 마이페이지 동의 설정. 여기 체크박스는 누르는 즉시 서버 장부에 기록된다.
  *
- * 그래서 "읽을 수단이 있는가"를 못 박는다 — 관리자가 tos·privacy·marketing 밖의 코드로
- * 약관을 추가하면 정적 링크가 없어, 본문을 못 받은 사이에는 제목만 보고 한 동의가 남는다.
+ * 그래서 "읽을 수단이 있는가"를 못 박는다 — 읽을 수단은 서버가 준 본문뿐이다.
+ * 번들 정적 화면(`/terms`·`/privacy`)은 지금 동의받는 버전임을 증명하지 못해 대역에서
+ * 빠졌으므로, 코드가 무엇이든 본문을 못 받은 사이에는 제목만 보고 한 동의가 남는다.
  */
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
@@ -22,7 +23,7 @@ jest.mock("@/lib/termsApi", () => {
   };
 });
 
-/** 관리자가 추가한 코드. `termsContentHref` 가 모르므로 정적 링크가 없다. */
+/** 관리자가 추가한 선택 약관. 읽을 수단은 서버 본문뿐이다(`termsContentHref` 는 항상 null). */
 const refundPolicy: MyTermsConsent = {
   code: "refund-policy",
   title: "환불 정책 동의",
@@ -121,8 +122,14 @@ describe("TermsConsentPanel", () => {
     );
   });
 
-  // 우리 약관 화면이 있는 코드는 본문 조회와 무관하게 읽을 수 있다.
-  it("정적 링크가 있는 약관은 본문 조회 실패와 무관하다", async () => {
+  /**
+   * `marketing` 은 `/privacy` 로 열리던 코드다. 그 대역을 걷어낸 자리를 못 박는다.
+   *
+   * 번들 정적 화면에는 서버의 `version`·`latestVersion` 을 잇는 표시가 없다. 관리자가
+   * 개정하면 사용자는 **옛 글을 읽고 새 버전에 동의**하게 되므로, 같은 버전임이 증명될
+   * 때까지 대역은 성립하지 않는다 — 읽을 수단은 서버 본문 하나뿐이다.
+   */
+  it("정적 화면이 있던 약관도 본문을 못 받으면 동의를 받지 않는다", async () => {
     mockFetchMine.mockResolvedValue([
       {
         code: "marketing",
@@ -137,12 +144,19 @@ describe("TermsConsentPanel", () => {
     render(<TermsConsentPanel />);
 
     const checkbox = await screen.findByRole("checkbox");
-    await waitFor(() => expect(mockFetchActive).toHaveBeenCalled());
-    expect(checkbox).toBeEnabled();
-    expect(screen.getByRole("link", { name: "보기" })).toHaveAttribute(
-      "href",
-      "/privacy",
-    );
+    // 본문을 못 읽는 상황이 맞는지 먼저 못 박는다.
+    expect(
+      await screen.findByText(
+        "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(checkbox).toBeDisabled();
+    // 옛 글로 새 버전을 읽게 하던 출구가 사라졌다.
+    expect(screen.queryByRole("link", { name: "보기" })).toBeNull();
+
+    fireEvent.click(checkbox);
+    expect(mockSubmit).not.toHaveBeenCalled();
   });
 
   /**

@@ -5,11 +5,13 @@
  * 반대로 아무 계정에나 보내도 증상이 없다 — 남의 장부가 조용히 더럽혀진다.
  * 둘 다 테스트로 못 박는다.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsConsentBridge } from "@/components/terms/TermsConsentBridge";
+import type { ActiveTerms } from "@/lib/termsApi";
 
 const mockSubmit = jest.fn();
 const mockFetchMine = jest.fn();
+const mockFetchActive = jest.fn();
 const mockGetPending = jest.fn();
 const mockClearPending = jest.fn();
 const mockGetMyUserInfo = jest.fn();
@@ -27,6 +29,9 @@ jest.mock("@/lib/termsApi", () => {
   return {
     ...actual,
     fetchMyTermsConsents: (...args: unknown[]) => mockFetchMine(...args),
+    // 재동의 화면은 서버 본문으로만 읽힌다(정적 대역 없음). 이걸 안 막으면 실제 조회가
+    // 나가 실패하고, 체크박스가 잠겨 화면을 통과시킬 수 없다.
+    fetchActiveTerms: (...args: unknown[]) => mockFetchActive(...args),
     submitTermsConsents: (...args: unknown[]) => mockSubmit(...args),
   };
 });
@@ -46,6 +51,24 @@ jest.mock("@/lib/userApi", () => ({
   getMyUserInfo: (...args: unknown[]) => mockGetMyUserInfo(...args),
 }));
 
+/** 재동의 화면이 그 자리에 펼치는 서버 본문. 이게 없으면 어떤 칸도 체크할 수 없다. */
+const ACTIVE_TERMS: ActiveTerms[] = [
+  {
+    code: "tos",
+    title: "서비스 이용약관",
+    required: true,
+    version: 1,
+    content: "제1조 이용약관 본문입니다.",
+  },
+  {
+    code: "marketing",
+    title: "마케팅 수신 동의",
+    required: false,
+    version: 1,
+    content: "마케팅 수신 동의 본문입니다.",
+  },
+];
+
 function setSession(authenticated: boolean) {
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
@@ -59,6 +82,7 @@ beforeEach(() => {
   setSession(true);
   mockGetPending.mockReturnValue(null);
   mockFetchMine.mockResolvedValue([]);
+  mockFetchActive.mockResolvedValue(ACTIVE_TERMS);
   mockSubmit.mockResolvedValue(undefined);
   mockGetMyUserInfo.mockResolvedValue({ email: SIGNUP_EMAIL });
 });
@@ -163,6 +187,52 @@ describe("TermsConsentBridge", () => {
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("약관이 개정되었어요")).toBeInTheDocument();
+  });
+
+  /*
+    보관물이 남은 채로 재동의 화면을 통과하는 갈래. 여기서 안 지우면 다음 새로고침에
+    예전 보관물이 다시 제출되어, 방금 이 화면에서 고른 선택 약관 값이 가입 때 값으로
+    되돌아간다 — 동의 이력은 수정·삭제되지 않는다.
+  */
+  it("재동의 화면을 통과하면 남아 있던 보관물을 지운다", async () => {
+    mockGetPending.mockReturnValue({
+      items: [
+        { code: "tos", agreed: true },
+        { code: "marketing", agreed: true },
+      ],
+      email: SIGNUP_EMAIL,
+    });
+    // 계정 대조를 못 해 보관물이 그대로 남는 갈래(위 "내 정보 조회가 실패하면" 참고).
+    mockGetMyUserInfo.mockRejectedValueOnce(new Error("network"));
+    mockFetchMine.mockResolvedValue([
+      {
+        code: "tos",
+        title: "서비스 이용약관",
+        required: true,
+        status: "NOT_AGREED",
+        latestVersion: 1,
+      },
+      {
+        code: "marketing",
+        title: "마케팅 수신 동의",
+        required: false,
+        status: "NOT_AGREED",
+        latestVersion: 1,
+      },
+    ]);
+
+    render(<TermsConsentBridge />);
+
+    await screen.findByRole("dialog");
+    expect(mockClearPending).not.toHaveBeenCalled();
+
+    const tosBox = screen.getByRole("checkbox", { name: /서비스 이용약관/ });
+    // 본문이 도착하기 전에는 잠겨 있다 — 잠긴 칸을 눌러도 화면을 통과할 수 없다.
+    await waitFor(() => expect(tosBox).toBeEnabled());
+    fireEvent.click(tosBox);
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속하기" }));
+
+    await waitFor(() => expect(mockClearPending).toHaveBeenCalled());
   });
 
   it("선택 약관만 비어 있으면 붙잡지 않는다", async () => {

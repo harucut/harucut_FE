@@ -577,6 +577,79 @@ describe("composeFourcutOnServer — 올리기", () => {
 });
 
 /**
+ * 「다시 준비하기」는 **같은 멱등키로** 다시 온다(app/shoot/result/page.tsx).
+ *
+ * 멱등키가 덮는 것은 합성 접수부터라, 그 앞의 원본 4장은 재시도마다 새 S3 키로 또 올라갔다.
+ * 서버는 기존 작업을 재생하며 그 key 를 쳐다보지도 않으니 4장은 그대로 고아가 된다 —
+ * 지울 엔드포인트가 없고, 로컬 개발에서도 버킷은 진짜 AWS 다.
+ */
+describe("composeFourcutOnServer — 같은 멱등키면 원본을 다시 올리지 않는다", () => {
+  // 올려 둔 원본은 모듈 전역에 **한 벌** 남는다. 케이스마다 다른 멱등키를 써서 실행 순서에
+  // 기대지 않는다 — 키를 돌려 쓰면 앞 케이스가 남긴 것이 뒤 케이스의 답을 바꾼다.
+  const composeWith = (idempotencyKey: string) =>
+    composeFourcutOnServer({
+      sources: SOURCES,
+      layout,
+      outputFilter: "NONE",
+      frameId: "classic-4",
+      remoteFrameId: null,
+      idempotencyKey,
+    });
+
+  beforeEach(() => {
+    mockListAllFrames.mockResolvedValue([
+      { frameId: 6, frameType: "CLASSIC", isSystem: true },
+    ]);
+  });
+
+  it("재시도는 이미 올려 둔 key 로 접수만 다시 간다", async () => {
+    await composeWith("retry-same");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    await composeWith("retry-same");
+
+    // 두 번째 실행은 굽지도(loadImage) 올리지도(upload) 않는다.
+    expect(mockLoadImage).toHaveBeenCalledTimes(4);
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    // 접수는 다시 간다 — 실패한 것이 그 뒤 단계일 수 있다(폴링 시간 초과 등).
+    expect(mockRequestCompose).toHaveBeenCalledTimes(2);
+    const [first, second] = mockRequestCompose.mock.calls.map(([body]) => body);
+    expect(second.sourceKeys).toEqual(first.sourceKeys);
+  });
+
+  // 프레임·테마·레이아웃·필터·색·원본 중 하나라도 바뀌면 `ensureComposeIdempotencyKey` 가
+  // 새 키를 만든다(lib/shootSessionStore.ts). 그건 재시도가 아니라 새 그림이라 다시 올린다.
+  it("멱등키가 새로 잡히면 원본을 다시 올려 새로 합성한다", async () => {
+    await composeWith("input-changed-before");
+    await composeWith("input-changed-after");
+
+    expect(mockUpload).toHaveBeenCalledTimes(8);
+    expect(mockRequestCompose).toHaveBeenLastCalledWith(
+      expect.objectContaining({ idempotencyKey: "input-changed-after" }),
+    );
+  });
+
+  // 절반만 올라간 key 를 기억하면, 다음 재시도가 모자란 원본으로 합성을 접수한다.
+  it("올리다 실패한 원본은 기억하지 않는다", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    mockUpload.mockRejectedValueOnce(new Error("S3 upload failed: 500"));
+
+    await expect(composeWith("retry-after-failure")).rejects.toThrow(
+      "S3 upload failed: 500",
+    );
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    await expect(composeWith("retry-after-failure")).resolves.toEqual({
+      mediaId: 42,
+    });
+    expect(mockUpload).toHaveBeenCalledTimes(8);
+
+    warn.mockRestore();
+  });
+});
+
+/**
  * 서버 합성 실패 사유를 화면에 올리지 않는다.
  *
  * `failureReason` 은 합성 Lambda 의 실패 페이로드를 옮긴 값이다

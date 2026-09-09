@@ -11,8 +11,9 @@ import type { ApiEnvelope } from "@/lib/api-types";
  * 약관을 하나 더 만들거나 코드를 다르게 지은 순간 조용히 어긋난다 — 화면엔 체크박스가
  * 보이는데 서버엔 그 코드가 없어 `TERMS-001` 로 튕긴다.
  *
- * 그래서 화면은 `fetchActiveTerms()` 가 준 목록으로 그린다. 아래 `TERMS_CONTENT_HREF`
- * 는 "이 코드는 우리 약관 페이지로 보내면 된다"는 힌트일 뿐, 목록의 출처가 아니다.
+ * 그래서 화면은 `fetchActiveTerms()` 가 준 목록으로 그린다. **본문도 같다** — 동의를
+ * 받는 자리에 보여 주는 글은 언제나 서버가 준 `content` 다. 아래 `TERMS_CONTENT_HREF`
+ * 가 비어 있는 이유가 그것이다.
  *
  * 실측 근거는 docs/backend-contract.md "약관 동의" 절.
  */
@@ -45,14 +46,25 @@ export type TermsAgreementItem = {
   agreed: boolean;
 };
 
-/** 우리 약관 화면이 있는 코드. 없으면 서버가 준 본문을 그 자리에서 펼쳐 보여 준다. */
-const TERMS_CONTENT_HREF: Record<string, string> = {
-  tos: "/terms",
-  terms: "/terms",
-  privacy: "/privacy",
-  marketing: "/privacy",
-};
+/**
+ * 정적 약관 화면이 **서버 본문을 대신할 수 있는 코드**. 지금은 하나도 없다.
+ *
+ * 서버가 주는 `content` 는 `latestVersion` 의 글이고, `/terms`·`/privacy` 가 그리는
+ * 글은 번들에 굳어 있다(`packages/shared/src/legal.ts`). 둘을 잇는 버전 표시가 어디에도
+ * 없어 **같은 버전임을 증명할 수 없다.** 관리자가 `POST /api/admin/terms/{id}/versions`
+ * 로 개정해도 번들은 그대로라, 대역을 두면 사용자는 **옛 글을 읽고 새 버전에 동의한다.**
+ * 읽은 글과 동의한 버전이 갈린 기록은 증빙이 아니다.
+ *
+ * 그래서 대역이 성립하는 조건은 하나뿐이다 — **그 화면이 지금 동의받는 버전임이
+ * 증명될 때.** 증명할 수단이 생기기 전까지 이 표는 비워 둔다. 비어 있으면 세 동의
+ * 화면(가입·재동의·설정)이 전부 서버 본문을 그 자리에 펼친다.
+ *
+ * 정적 화면 자체는 그대로 있다 — 푸터, 가입 화면의 소셜 안내, 서버에 약관이 하나도
+ * 없을 때 쓰는 `useActiveTerms` 의 대체 목록. 없앤 것은 **동의받는 자리의 대역**뿐이다.
+ */
+const TERMS_CONTENT_HREF: Record<string, string> = {};
 
+/** 대역이 있으면 그 주소, 없으면 null — null 이면 호출부가 서버 본문을 보여 준다. */
 export function termsContentHref(code: string): string | null {
   return TERMS_CONTENT_HREF[code] ?? null;
 }

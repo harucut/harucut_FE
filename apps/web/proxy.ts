@@ -26,7 +26,7 @@ function hasAuthCookie(req: NextRequest) {
  * (docs/backend-contract.md 「토큰」). 그래서 exp 가 남아 있다는 것이 "지금 회원"이라는 뜻이다.
  * refresh 는 다른 기기에서 로그인하면 서버가 지우므로 만료 전에도 죽어 있을 수 있어 보지 않는다.
  *
- * 서명은 검증하지 않는다 — 여기서 정하는 것은 인가가 아니라 체험 쿠키를 걷을지뿐이라,
+ * 서명은 검증하지 않는다 — 여기서 정하는 것은 인가가 아니라 체험 쿠키를 걷을지·심을지뿐이라,
  * 토큰을 위조해서 얻는 것은 자기 체험 쿠키를 잃는 손해밖에 없다.
  */
 function hasLiveAccessToken(req: NextRequest) {
@@ -44,6 +44,23 @@ function hasLiveAccessToken(req: NextRequest) {
     // 우리가 아는 모양이 아니면 로그인했다고 볼 근거가 없다.
     return false;
   }
+}
+
+/**
+ * 되살릴 수 있는 회원 세션의 흔적이 남아 있는가.
+ *
+ * access 가 죽었어도 refresh 가 남아 있으면 클라이언트가 401 을 받고 재발급으로 살려낸다
+ * (lib/clientApi.ts). 그 refresh 를 서버가 이미 회수했는지는 여기서 알 방법이 없으므로
+ * **회원일 수 있다는 쪽으로 읽는다** — 아래 행사 QR 분기가 심는 체험 쿠키는 7일을 살아서,
+ * 잘못 심으면 그동안 회원이 자기 저장 프레임과 기록을 못 본다(accessMode 는 이 쿠키만 본다).
+ *
+ * 위 콜백 분기가 refresh 를 무시하는 것과 방향이 반대다. 의심스러울 때 하지 않는 쪽이
+ * 서로 다를 뿐이다 — 거기서는 **지우는 것**이, 여기서는 **심는 것**이 방문자에게 손해다.
+ */
+function hasRecoverableSession(req: NextRequest) {
+  return (
+    hasLiveAccessToken(req) || Boolean(req.cookies.get("refreshToken")?.value)
+  );
 }
 
 function hasGuestTrialCookie(req: NextRequest) {
@@ -64,9 +81,11 @@ function isSocialLoginCallback(pathname: string) {
 /**
  * 행사장 QR 진입인지 본다.
  *
- * QR을 찍은 참가자는 쿠키가 하나도 없는 새 브라우저로 `/shoot?frame=...&event=...` 에
+ * QR을 찍은 참가자는 대개 쿠키가 하나도 없는 새 브라우저로 `/shoot?frame=...&event=...` 에
  * 도착한다. 이 검사가 없으면 프록시가 먼저 /login 으로 돌려보내서, "가입 없이 바로 찍는다"는
  * 행사 흐름이 정작 행사장에서만 동작하지 않는다.
+ *
+ * "대개"인 이유는 아래 호출부에 적혀 있다 — 예전에 로그인했던 브라우저로도 찍는다.
  *
  * 촬영 진입점(`/shoot`)에만 적용한다 — QR이 가리키는 주소가 거기이고, 하위 단계는
  * 이 진입에서 심긴 쿠키로 이어진다.
@@ -126,6 +145,30 @@ export async function proxy(req: NextRequest) {
   }
 
   /*
+    행사 QR은 "가입 없이 체험하기"를 누른 것과 같은 자격이다 — 랜딩 버튼으로 누구나 얻을 수
+    있는 것과 같은 권한이므로 새로 여는 문이 아니다. 대신 행사 참가자는 그 버튼을 누를
+    기회 자체가 없으므로 여기서 대신 시작시킨다.
+
+    **인증 쿠키 판정보다 먼저 본다.** QR을 찍는 사람이 늘 빈 브라우저를 들고 오지는 않는다.
+    예전에 로그인했던 브라우저에 죽은 쿠키가 남아 있으면 아래 통과가 먼저 걸려 체험 쿠키를
+    심지 못했고, 그 방문자는 회원으로 읽히면서 인증 API 로는 401 을 받아 — 가입 없이
+    찍는다는 행사 흐름이 정확히 행사장에서 막혔다.
+
+    되살릴 세션이 보이면(hasRecoverableSession) 심지 않는다. 회원이 QR로 들어온 것뿐일 수
+    있고, 그 사람을 체험 쿠키로 덮는 쪽이 더 큰 손해다.
+  */
+  if (
+    isEventEntry(pathname, req.nextUrl.searchParams) &&
+    !guestMode &&
+    !hasRecoverableSession(req)
+  ) {
+    return startGuestTrial(
+      NextResponse.next(),
+      req.nextUrl.protocol === "https:",
+    );
+  }
+
+  /*
     인증 쿠키가 있으면 통과시킨다. **여기서 게스트 쿠키를 지우지는 않는다.**
 
     이 판정은 쿠키가 있는지만 본다 — 서버가 이미 버린 죽은 토큰도 로그인으로 읽힌다
@@ -135,6 +178,9 @@ export async function proxy(req: NextRequest) {
     새로고침 한 번이면 hydrateGuestMode 가 쿠키를 못 찾아 회원으로 되돌아가고,
     촬영 화면이 인증 API 로 401 을 받아 "로그인이 풀렸어요"로 끝난다 — 몇 번을 눌러도
     체험이 시작되지 않는다.
+
+    죽은 토큰이 여기서 로그인으로 읽힌다는 것이 위 행사 QR 예외를 이 판정보다 앞에 둔
+    이유이기도 하다. 순서를 되돌리지 않는다.
   */
   if (hasAuthCookie(req)) {
     return NextResponse.next();
@@ -148,16 +194,6 @@ export async function proxy(req: NextRequest) {
     const shootUrl = new URL("/shoot", req.url);
     shootUrl.searchParams.set("guestNotice", "restricted");
     return NextResponse.redirect(shootUrl);
-  }
-
-  // 행사 QR은 "가입 없이 체험하기"를 누른 것과 같은 자격이다 — 랜딩 버튼으로 누구나 얻을 수
-  // 있는 것과 같은 권한이므로 새로 여는 문이 아니다. 대신 행사 참가자는 그 버튼을 누를
-  // 기회 자체가 없으므로 여기서 대신 시작시킨다.
-  if (isEventEntry(pathname, req.nextUrl.searchParams)) {
-    return startGuestTrial(
-      NextResponse.next(),
-      req.nextUrl.protocol === "https:",
-    );
   }
 
   const loginUrl = new URL("/login", req.url);

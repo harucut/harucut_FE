@@ -13,7 +13,7 @@
  * 상한 숫자는 여기 박지 않는다 — 칸 수의 소유자는 `FRAME_LAYOUTS` 다. 단언은 "고른 것보다
  * 적게 받는다"와 "그래도 고를 만큼은 남긴다"라는 성질만 못 박는다.
  */
-import { fireEvent, render, waitFor, screen } from "@testing-library/react";
+import { act, fireEvent, render, waitFor, screen } from "@testing-library/react";
 import ShootUploadPage from "@/app/shoot/upload/page";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
@@ -57,10 +57,10 @@ function photoFiles(count: number) {
 
 function renderPage(shots: string[] = []) {
   sessionState.shots = shots;
-  const { container } = render(<ShootUploadPage />);
+  const { container, unmount } = render(<ShootUploadPage />);
   const input = container.querySelector<HTMLInputElement>('input[type="file"]');
   if (!input) throw new Error("파일 입력이 없다");
-  return { input };
+  return { input, unmount };
 }
 
 beforeEach(() => {
@@ -207,6 +207,47 @@ describe("사진 불러오기 개수 상한", () => {
     expect(
       await screen.findByText(new RegExp("8장은 제외했어요")),
     ).toBeInTheDocument();
+  });
+
+  /*
+    변환이 끝나기 전에 화면을 떠난 경우.
+
+    `addShotPhotos` 가 건드리는 것은 이 화면의 상태가 아니라 **전역 촬영 세션**이라,
+    언마운트만으로는 아무것도 막히지 않는다. `/shoot` 의 초기화가 먼저 끝난 뒤 늦게 온
+    결과가 담기면 지난 선택이 새 세션에 되살아난다.
+  */
+  it("변환 중 화면을 떠나면 늦게 끝난 결과를 세션에 담지 않는다", async () => {
+    let finishImport!: (result: {
+      dataUrls: string[];
+      notice: string | null;
+      overLimitCount: number;
+    }) => void;
+    mockImportPhotoFiles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishImport = resolve;
+        }),
+    );
+    const { input, unmount } = renderPage([]);
+
+    fireEvent.change(input, { target: { files: photoFiles(SLOT_COUNT) } });
+    await waitFor(() => expect(mockImportPhotoFiles).toHaveBeenCalledTimes(1));
+
+    // 하드웨어 뒤로가기로 화면을 떠난다. 변환은 그대로 진행된다.
+    unmount();
+
+    await act(async () => {
+      finishImport({
+        dataUrls: Array.from(
+          { length: SLOT_COUNT },
+          (_, index) => `data:image/jpeg;base64,late-${index}`,
+        ),
+        notice: null,
+        overLimitCount: 0,
+      });
+    });
+
+    expect(mockAddShotPhotos).not.toHaveBeenCalled();
   });
 
   // 형식 때문에 걸러진 안내와 상한 안내가 서로를 지우면 안 된다.
