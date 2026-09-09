@@ -413,7 +413,7 @@ function isUsableBlob(source: unknown) {
   return source instanceof Blob && source.size > 0;
 }
 
-/** 멱등키와 **그 키가 살아남는지**. 둘을 같이 주지 않으면 호출부가 구별할 길이 없다. */
+/** 멱등키와 **그 키가 살아남는지**, 그리고 **어느 한 벌에 붙었는지**. */
 export type PendingGuestSaveComposeKey = {
   /** 이번 인계에 실어 보낼 멱등키. */
   key: string;
@@ -422,6 +422,15 @@ export type PendingGuestSaveComposeKey = {
    * 키를 못 찾아 새 키로 접수한다.
    */
   persisted: boolean;
+  /**
+   * **이 키가 붙은 그 보관물.** 올려 보낼 원본도 여기서 꺼내야 한다.
+   *
+   * 호출부가 따로 읽어 둔 항목을 쓰면 안 된다. 이 함수는 저장소를 스스로 한 번 읽는데,
+   * 그 사이 다른 탭이 새로 찍어 보관물을 갈아 끼웠으면 키는 **새 한 벌**에 붙는다. 그때
+   * 호출부가 예전 항목의 원본을 이 키로 올리면, 나중에 새 한 벌을 인계할 때 같은 키가
+   * 다시 나와 서버가 예전 작업을 재생한다 — 새로 찍은 네컷 대신 예전 것이 저장된다.
+   */
+  entry: PendingGuestSave;
 };
 
 /**
@@ -451,15 +460,18 @@ export async function ensurePendingGuestSaveComposeKey(
   if (!entry) return null;
   // 보관물에서 읽어 온 키다 — 그 자리에 남아 있다는 것이 이미 확인된 셈이다.
   if (entry.composeIdempotencyKey)
-    return { key: entry.composeIdempotencyKey, persisted: true };
+    return { key: entry.composeIdempotencyKey, persisted: true, entry };
 
   const key = newIdempotencyKey();
+  // 키를 붙인 그 한 벌을 그대로 돌려준다. 호출부가 「검증한 항목」과 대조할 대상도,
+  // 실제로 올릴 원본도 이것이어야 한다 — 위 `entry` 주석을 본다.
+  const keyed = { ...entry, composeIdempotencyKey: key };
   try {
-    const persisted = await writeRecord({ ...entry, composeIdempotencyKey: key });
-    return { key, persisted };
+    const persisted = await writeRecord(keyed);
+    return { key, persisted, entry: keyed };
   } catch {
     // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위 false 와 같으므로 한 갈래로 모은다.
-    return { key, persisted: false };
+    return { key, persisted: false, entry: keyed };
   }
 }
 

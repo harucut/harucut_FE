@@ -203,7 +203,7 @@ export function GuestTrialBridge() {
       });
 
       /*
-        **누른 시점에 보관물을 다시 읽는다.**
+        **누른 시점에 보관물을 다시 읽는다 — 멱등키를 붙이는 그 읽기 하나로.**
 
         이 안내는 사용자가 누를 때까지 열려 있다 — 기한(24시간)이 코앞일 때 띄워 두고 한참
         뒤에 누를 수 있고, 그 사이 다른 탭에서 새로 찍으면 보관물이 통째로 갈아 끼워진다.
@@ -212,15 +212,20 @@ export function GuestTrialBridge() {
         기록에 들어간다** — 공용 기기에서 앞사람 것이 넘어가지 않게 한 TTL 이 여기서
         우회된다. 그래서 없거나 처음 확인한 것과 다르면 인계를 접는다.
 
-        **원자적이지 않다.** IndexedDB 에 조건부 읽기는 없어서 되읽기와 아래 업로드 사이는
+        **읽기를 둘로 나누지 않는다.** 예전에는 여기서 한 번 읽어 대조하고
+        `ensurePendingGuestSaveComposeKey()` 가 또 한 번 읽었는데, 그 사이에 보관물이
+        갈아 끼워지면 키는 **새 한 벌**에 붙고 요청에는 **예전 한 벌**의 원본이 실렸다.
+        조건부 삭제가 새 한 벌을 지키므로 그 한 벌은 살아남고, 나중에 그것을 인계할 때
+        같은 키가 다시 나와 서버가 예전 작업을 재생한다 — 새로 찍은 네컷 대신 예전 것이
+        저장된다. 그래서 읽기·대조·올릴 원본을 전부 그 한 번의 읽기에 묶는다.
+
+        **원자적이지 않다.** IndexedDB 에 조건부 읽기는 없어서 이 읽기와 아래 업로드 사이는
         여전히 열려 있다. 하는 일은 안내를 띄운 순간부터 벌어져 있던 창을 그 두 줄 사이로
         줄이는 것뿐이다(lib/pendingTermsConsent.ts 의 `clearPendingTermsConsentIfUnchanged`
         와 같은 이유·같은 한계).
-
-        올리는 것도 되읽은 쪽이다. 지금 디스크에 있는 한 벌이 곧 사용자가 확인한 그것이다.
       */
-      const entry = await getPendingGuestSave();
-      if (!entry || !isSameHandoff(entry, promptedEntry)) {
+      const composeKey = await ensurePendingGuestSaveComposeKey();
+      if (!composeKey || !isSameHandoff(composeKey.entry, promptedEntry)) {
         handoffSavingRef.current = false;
         // 물어본 것을 접었으니 "이미 물어봤다"도 되돌린다. 새 한 벌이 들어와 있으면
         // 다음 회차에 그것으로 다시 묻는다 — 갈아 끼운 쪽은 남의 것이 아니라 다음 인계다.
@@ -231,13 +236,17 @@ export function GuestTrialBridge() {
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
           eyebrow: "NOTICE",
           icon: "lock",
-          message: entry
+          message: composeKey
             ? "확인하는 사이 이 기기의 보관물이 다른 네컷으로 바뀌었어요. 물어본 것과 다른 사진을 계정에 저장하지 않으려고 여기서 멈췄어요."
             : "확인하는 사이 이 기기의 보관물이 사라졌어요. 비회원 보관물은 24시간만 남아 있어요 — 기록에는 아무것도 옮기지 않았어요.",
           title: "기록에 옮기지 않았어요",
         });
         return;
       }
+
+      // 키가 붙은 **그 한 벌**을 올린다. 이 함수가 읽어 온 것이라 대조를 통과한 것과
+      // 같은 항목이다(위 주석).
+      const entry = composeKey.entry;
 
       /*
         멱등키는 **보관물에 심어 두고 다시 쓴다.**
@@ -251,15 +260,13 @@ export function GuestTrialBridge() {
         재시도는 원본 4장을 S3 에 다시 올린다. 그 키들은 서버가 쳐다보지도 않고 예전 작업을
         재생하므로, 남는 원본 정리는 백엔드 몫이다(lib/fourcutCompose.ts 주석 참고).
 
-        여기까지 왔으면 방금 되읽어 확인한 한 벌이 있다. 그 사이에마저 사라졌으면 null 인데,
-        그때는 예전처럼 새 키로 간다 — 재생할 앞선 작업도 없다.
+        보관물이 사라졌으면 위에서 이미 접었다 — 여기까지 오면 키는 항상 있다.
 
-        키를 **못 남기는** 경우도 있다(IndexedDB 를 못 열거나 트랜잭션이 깨진 기기).
+        키를 **못 남기는** 경우는 있다(IndexedDB 를 못 열거나 트랜잭션이 깨진 기기).
         그때도 이번 합성은 그대로 되지만 새로고침 뒤에는 그 키를 찾을 수 없어, 다시 시도가
         같은 네컷을 한 벌 더 만든다. 그래서 `persisted` 를 아래 실패 안내에서 갈라 쓴다.
       */
-      const composeKey = await ensurePendingGuestSaveComposeKey();
-      const idempotencyKey = composeKey?.key;
+      const idempotencyKey = composeKey.key;
 
       try {
         await saveFourcutToServer({
@@ -320,7 +327,7 @@ export function GuestTrialBridge() {
           eyebrow: "NOTICE",
           icon: "lock",
           message: failure.retryable
-            ? composeKey?.persisted === false
+            ? composeKey.persisted === false
               ? // 키를 못 남긴 기기다. 그냥 "다시 시도해요"라고 하면 두 벌이 남는 것을
                 // 약속하는 셈이라, 무엇이 달라지는지 먼저 말한다.
                 `${failure.message} 이 화면을 새로고침하면 다시 시도할 수 있지만, 이 기기에는 진행 표시를 남기지 못해 같은 네컷이 두 벌 저장될 수 있어요.`

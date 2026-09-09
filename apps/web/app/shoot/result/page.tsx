@@ -82,9 +82,16 @@ let mountedResultPages = 0;
  * 멱등키로 한 번 더 접수한다. 마지막 것 하나만, 한 번만 알린다: 앞선 것까지 알리면 알림이
  * 두 번 뜨고, 사진·색·프레임을 바꿔 새 합성이 시작된 경우에는 **사용자가 버린 합성**까지
  * "완성됐어요"가 된다.
+ *
+ * **같은 작업인지는 멱등키로 본다 — Promise 객체로 보지 않는다.** `pendingServerComposeRef`
+ * 는 컴포넌트 ref 라 화면을 나갔다 들어오면 비어 있고, 그때 같은 멱등키로 접수해도 Promise
+ * 는 새것이다. 객체로 대조하면 그 순간 앞 실행이 「최신이 아니다」로 밀려, 재진입 요청이
+ * 네트워크 오류로 실패하고 **앞 요청만 성공한** 경우에 아무도 알리지 않는다. 멱등키는 같은
+ * 작업이면 같고(위 ensureComposeIdempotencyKey), 사진·색·프레임이 바뀌면 달라진다 —
+ * 「버린 합성은 알리지 않는다」도 그대로 지켜진다.
  */
 let latestServerCompose: {
-  run: Promise<GeneratedFourcutAsset>;
+  idempotencyKey: string;
   notified: boolean;
 } | null = null;
 
@@ -105,14 +112,29 @@ let latestServerCompose: {
  * 미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소 메시지가
  * 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
  */
-function notifyServerComposeDone(run: Promise<GeneratedFourcutAsset>) {
+function notifyServerComposeDone(idempotencyKey: string) {
   if (mountedResultPages > 0 && document.visibilityState === "visible") return;
-  if (latestServerCompose?.run !== run || latestServerCompose.notified) return;
+  if (
+    latestServerCompose?.idempotencyKey !== idempotencyKey ||
+    latestServerCompose.notified
+  )
+    return;
 
   latestServerCompose.notified = true;
   void nativeNotify({
     title: "네컷이 완성됐어요",
-    body: "눌러서 보러 가기",
+    /*
+      **눌러서 갈 곳을 약속하지 않는다.**
+
+      본문은 「눌러서 보러 가기」였는데, 눌러도 가지지 않는다 — 셸에 알림 응답 리스너가
+      없고(`apps/mobile/app/_layout.tsx`: "딥링크를 실제로 쓰게 되면 여기에 핸들러가
+      붙는다"), 브리지에도 앱이 웹에 경로를 넘길 메시지가 없다. 탭하면 앱이 앞으로 올 뿐
+      보고 있던 화면 그대로다. 그래서 실제로 되는 것만 적는다.
+
+      탭 이동을 붙이려면 셸의 알림 응답 처리와 브리지 양쪽(웹↔앱)이 같이 필요하다 —
+      docs/mobile-shell.md 「알림을 눌렀을 때」에 무엇이 없는지 적어 뒀다.
+    */
+    body: "기록 화면에서 볼 수 있어요",
   });
 }
 
@@ -463,8 +485,9 @@ export default function ShootResultPage() {
               });
         pendingServerComposeRef.current = { key: imageGenerationKey, run };
         // 이 탭이 기다리는 합성이 바뀌었으면 알림 대상도 그것으로 옮긴다(위 latestServerCompose).
-        if (latestServerCompose?.run !== run) {
-          latestServerCompose = { run, notified: false };
+        // 같은 멱등키면 그대로 둔다 — 재진입해 새 Promise 로 접수해도 같은 작업이다.
+        if (latestServerCompose?.idempotencyKey !== idempotencyKey) {
+          latestServerCompose = { idempotencyKey, notified: false };
         }
 
         const asset = await run;
@@ -481,7 +504,7 @@ export default function ShootResultPage() {
           가기'로 옮겨 간 사람 — 마이페이지가 알려 주겠다고 안내한 바로 그 사람 — 만 알림을
           못 받는다. 누구에게 알릴지는 notifyServerComposeDone 이 판정한다(위).
         */
-        notifyServerComposeDone(run);
+        notifyServerComposeDone(idempotencyKey);
       } catch (error) {
         console.error(error);
         if (cancelled) return;

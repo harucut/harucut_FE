@@ -121,12 +121,22 @@ beforeEach(() => {
   mintedKeyCount = 0;
   // 보관에 성공한 기기다. 실패한 기기는 `persisted: false` 로 따로 흉내 낸다 —
   // 아래 「키를 못 남긴 기기」 테스트를 본다.
+  //
+  // 실물처럼 **저장소를 스스로 한 번 읽어** 그 한 벌에 키를 붙이고 그것을 돌려준다.
+  // 미리 잡아 둔 상수를 돌려주면, 이 함수가 읽는 사이에 보관물이 갈아 끼워지는 경우를
+  // 테스트가 볼 수 없다 — 그 경우가 바로 아래 「다른 한 벌에 붙은 키」 회귀다.
   mockEnsureComposeKey.mockImplementation(async () => {
+    const entry = await mockGetPending();
+    if (!entry) return null;
     if (!storedComposeKey) {
       mintedKeyCount += 1;
       storedComposeKey = `web-guest-${mintedKeyCount}`;
     }
-    return { key: storedComposeKey, persisted: true };
+    return {
+      key: storedComposeKey,
+      persisted: true,
+      entry: { ...entry, composeIdempotencyKey: storedComposeKey },
+    };
   });
   mockClearPending.mockImplementation(async () => {
     storedComposeKey = null;
@@ -420,6 +430,49 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     );
   });
 
+  /*
+    회귀 — **멱등키가 붙은 한 벌과 올리는 한 벌이 갈리면 안 된다.**
+
+    대조와 키 발급이 저장소를 따로따로 읽던 때의 구멍이다. 대조는 A 를 보고 통과했는데
+    그 직후 다른 탭이 B 로 갈아 끼우면, 키 K 는 B 에 붙고 요청에는 A 의 원본이 실렸다.
+    조건부 삭제가 B 를 지켜 주므로 B 는 남고, 나중에 B 를 인계할 때 K 가 다시 나와 서버가
+    A 작업을 재생한다 — 방금 찍은 B 대신 A 가 기록에 저장된다.
+
+    그래서 올릴 한 벌은 **키를 붙인 그 읽기에서** 나와야 하고, 그것이 물어본 것과 다르면
+    접어야 한다. 여기서는 키 발급이 갈아 끼워진 뒤를 읽은 상황을 그대로 흉내 낸다.
+  */
+  it("멱등키가 다른 한 벌에 붙었으면 올리지 않는다", async () => {
+    const NEWER = {
+      ...PENDING,
+      displayName: "방금 찍은 네컷",
+      savedAt: PENDING.savedAt + 1000,
+    };
+    // 안내는 A 로 띄운다. 키 발급이 읽을 때는 이미 B 로 갈아 끼워져 있다.
+    mockEnsureComposeKey.mockImplementation(async () => ({
+      key: "web-guest-B",
+      persisted: true,
+      entry: { ...NEWER, composeIdempotencyKey: "web-guest-B" },
+    }));
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 옮기지 않았어요",
+      );
+    });
+    // 고치기 전에는 여기서 A 의 원본이 B 의 키로 올라갔다.
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    // B 는 아직 아무도 묻지 않은 인계다 — 지우지 않는다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
   it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {
     render(<GuestTrialBridge />);
 
@@ -555,6 +608,7 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     mockEnsureComposeKey.mockImplementation(async () => ({
       key: "web-guest-ephemeral",
       persisted: false,
+      entry: PENDING,
     }));
     mockSaveFourcutToServer.mockRejectedValueOnce(new Error("timeout"));
     mockDescribeComposeFailure.mockReturnValue({

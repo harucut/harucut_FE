@@ -246,7 +246,15 @@ function stubVisibility(state: "hidden" | "visible") {
 describe("ShootResultPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockIdempotencyKeySeq = 0;
+    /*
+      **멱등키 카운터는 되감지 않는다.**
+
+      완성 알림은 "이 탭이 마지막으로 기다리는 합성"을 멱등키로 기억한다(page.tsx 의
+      `latestServerCompose`) — 모듈 상태라 이 파일의 테스트 전체가 공유한다. 카운터를
+      매번 0 으로 되감으면 서로 다른 테스트가 `web-key-1` 을 나눠 쓰게 되고, 앞 테스트가
+      "이미 알렸다"고 표시해 둔 키를 뒷 테스트가 물려받아 알림이 조용히 사라진다.
+      실제 앱에서 키는 한 번 쓰면 끝이므로, 여기서도 그렇게 둔다.
+    */
     stubVisibility("visible");
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
@@ -318,7 +326,7 @@ describe("ShootResultPage", () => {
     ]);
     expect(call.layout.slots).toHaveLength(4);
     // 재시도가 같은 작업을 가리키도록 멱등키를 함께 보낸다.
-    expect(call.idempotencyKey).toBe("web-key-1");
+    expect(call.idempotencyKey).toMatch(/^web-key-\d+$/);
   });
 
   it("비회원은 브라우저가 그린 그림이 결과물이라 고른 순서 그대로 합성한다", async () => {
@@ -895,9 +903,8 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
-    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ idempotencyKey: "web-key-1" }),
-    );
+    const firstKey = mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey;
+    expect(firstKey).toMatch(/^web-key-\d+$/);
 
     // 사용자가 편집기에서 배경을 고치고 돌아왔다 → 같은 id, 다른 내용.
     act(() => {
@@ -909,8 +916,8 @@ describe("ShootResultPage", () => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
     });
     // 키가 같으면 서버는 수정 전 작업을 그대로 재생한다.
-    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ idempotencyKey: "web-key-2" }),
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).not.toBe(
+      firstKey,
     );
   });
 
@@ -1068,7 +1075,7 @@ describe("ShootResultPage", () => {
     });
     expect(mockNativeNotify).toHaveBeenCalledWith({
       title: "네컷이 완성됐어요",
-      body: "눌러서 보러 가기",
+      body: "기록 화면에서 볼 수 있어요",
     });
   });
 
@@ -1121,7 +1128,7 @@ describe("ShootResultPage", () => {
     expect(mockNativeNotify).toHaveBeenCalledTimes(1);
     expect(mockNativeNotify).toHaveBeenCalledWith({
       title: "네컷이 완성됐어요",
-      body: "눌러서 보러 가기",
+      body: "기록 화면에서 볼 수 있어요",
     });
     expect(mockUseShootSession.getState().imageResult).toBeNull();
   });
@@ -1169,6 +1176,62 @@ describe("ShootResultPage", () => {
       });
     });
 
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    ── 회귀: 나갔다 들어오면 앞 요청의 알림이 사라졌다 ──
+
+    "지금 기다리는 합성"을 Promise 객체로 기억하던 때의 구멍이다. `pendingServerComposeRef`
+    는 컴포넌트 ref 라 화면을 나갔다 들어오면 비어 있고, 그때 **같은 멱등키로** 다시 접수해도
+    Promise 는 새것이다. 객체로 대조하면 그 순간 앞 실행이 「최신이 아니다」로 밀린다.
+
+    그래서 재진입 요청이 네트워크 오류로 죽고 **앞 요청만 성공한** 경우 — 서버에는 결과가
+    남았는데 — 아무도 알리지 않았다. 같은 작업인지는 멱등키로 봐야 한다.
+  */
+  it("나갔다 들어와 다시 접수한 뒤 앞 요청이 성공해도 알린다", async () => {
+    const finishers: Array<{
+      resolve: (asset: GeneratedFourcutAsset) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve, reject) => {
+          finishers.push({ resolve, reject });
+        }),
+    );
+
+    const first = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    // '사진 다시 고르기' 등으로 화면을 떠난다. 서버는 계속 그린다.
+    first.unmount();
+
+    // 다시 들어온다 — 세션이 키를 들고 있어 **같은 멱등키**로 한 번 더 접수한다.
+    const second = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).toBe(
+      mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
+    );
+    second.unmount();
+
+    // 재진입 요청은 네트워크로 죽고, 앞 요청은 살아서 결과를 준다.
+    await act(async () => {
+      finishers[1].reject(new Error("network"));
+    });
+    await act(async () => {
+      finishers[0].resolve({
+        mediaId: 7,
+        objectUrl: "https://example.com/image",
+        downloadUrl: "https://example.com/image",
+        displayName: "harucut_20260101_000000",
+      });
+    });
+
+    // 고치기 전에는 여기가 0건이었다.
     expect(mockNativeNotify).toHaveBeenCalledTimes(1);
   });
 

@@ -447,6 +447,38 @@ describe("pendingGuestSave", () => {
     expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(old?.key);
   });
 
+  /*
+    키와 **그 키가 붙은 한 벌**을 같이 준다.
+
+    이 함수는 저장소를 스스로 한 번 읽는다. 호출부가 그 전에 따로 읽어 둔 항목을 올리면,
+    두 읽기 사이에 보관물이 갈아 끼워졌을 때 키는 새 한 벌에 붙고 요청에는 예전 한 벌이
+    실린다 — 나중에 새 한 벌을 인계할 때 같은 키가 다시 나와 서버가 예전 작업을 재생한다.
+    그래서 「무엇에 붙였는지」를 돌려주고, 올릴 원본도 거기서 꺼내게 한다.
+  */
+  it("키를 붙인 그 보관물을 함께 돌려준다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+
+    const minted = await ensurePendingGuestSaveComposeKey(NOW);
+
+    expect(minted?.entry.composeIdempotencyKey).toBe(minted?.key);
+    expect(minted?.entry).toMatchObject({ ...ENTRY, savedAt: NOW });
+    // 되읽어도 같은 한 벌이다 — 돌려준 것이 실제로 디스크에 있는 그것이다.
+    expect(minted?.entry.savedAt).toBe((await getPendingGuestSave(NOW))?.savedAt);
+  });
+
+  // 못 남긴 길에서도 「무엇에 붙였는지」는 알려 준다. 그 한 벌이 이번에 올릴 것이다.
+  it("보관에 실패해도 키를 붙인 한 벌은 같이 돌려준다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    store.rejectWrites = true;
+
+    const minted = await ensurePendingGuestSaveComposeKey(NOW);
+
+    expect(minted?.persisted).toBe(false);
+    expect(minted?.entry.composeIdempotencyKey).toBe(minted?.key);
+    expect(minted?.entry.sources).toHaveLength(4);
+    store.rejectWrites = false;
+  });
+
   it("보관물이 없으면 키를 만들지 않는다", async () => {
     expect(await ensurePendingGuestSaveComposeKey(NOW)).toBeNull();
   });
