@@ -429,8 +429,17 @@ export async function readPendingGuestSave(
       entry: { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) },
     };
   } catch {
-    // 읽기가 깨진 것뿐이다. 여기서 예전 보관물까지 지우면 **읽어 보지도 않은** 인계를 버린다.
-    await clearStoredRecord();
+    /*
+      **아무것도 지우지 않는다.**
+
+      읽기가 깨졌다는 것은 레코드가 망가졌다는 증거가 아니다. 트랜잭션이 잠깐 중단되거나
+      Blob 변환이 실패해도 여기로 온다 — 그때 지우면 사용자가 계정으로 옮기려던 원본 4장의
+      **유일한 보관본**이 사라진다. 다음 열기가 성공해도 되살릴 방법이 없고,
+      `clearHandoffIfUnchanged` 가 지켜 볼 기회조차 없다.
+
+      정말로 못 쓰는 레코드(메타가 깨졌거나 원본이 4장이 아닌 것)는 위에서 이미 확인하고
+      지운다. 그쪽은 읽기가 **성공한** 뒤의 판단이라 근거가 있다.
+    */
     return { status: "unreadable" };
   }
 }

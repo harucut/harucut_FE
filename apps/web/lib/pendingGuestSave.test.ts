@@ -17,6 +17,7 @@ import {
   ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
   PENDING_GUEST_SAVE_TTL_MS,
+  readPendingGuestSave,
   setPendingGuestSave,
 } from "@/lib/pendingGuestSave";
 
@@ -604,6 +605,28 @@ describe("pendingGuestSave", () => {
     expect(window.localStorage.getItem(LEGACY_KEY_V2)).not.toBeNull();
 
     // 읽기가 돌아오면 그 한 벌이 그대로 인계된다.
+    store.rejectReads = false;
+    expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
+  });
+
+  /*
+    회귀 — 읽기가 실패해도 **IndexedDB 의 한 벌을 지우지 않는다.**
+
+    읽기가 깨졌다는 것은 레코드가 망가졌다는 증거가 아니다. 트랜잭션이 잠깐 중단되거나
+    Blob 변환이 실패해도 그 자리로 온다. 거기서 지우면 사용자가 계정으로 옮기려던 원본
+    4장의 **유일한 보관본**이 사라지고, 다음 열기가 성공해도 되살릴 수 없다 —
+    조건부 삭제(`clearHandoffIfUnchanged`)가 지켜 볼 기회조차 없다.
+  */
+  it("읽기가 실패해도 보관물을 지우지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    store.rejectReads = true;
+
+    // 「없다」가 아니라 「모르겠다」로 답한다.
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    // 고치기 전에는 여기서 이미 사라졌다.
+    expect(storedRecord()).not.toBeNull();
+
+    // 읽기가 돌아오면 그 한 벌이 그대로 있다.
     store.rejectReads = false;
     expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
   });

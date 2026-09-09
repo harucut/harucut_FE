@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { useModalDialog } from "@/hooks/useModalDialog";
 
@@ -69,7 +69,22 @@ export function PasswordChangeDialog({
   onClose,
   onSubmit,
 }: Props) {
-  const dialogRef = useModalDialog(true, onClose);
+  /*
+    **바꾸는 중에는 닫히지 않는다.**
+
+    닫는 길이 셋이다 — 배경 누르기 · 취소 버튼 · Escape(useModalDialog). PATCH 가 도는 중에
+    그중 하나라도 열려 있으면, 응답이 느린 사이 닫은 사용자에게는 취소한 것처럼 보이지만
+    요청은 계속 간다. 성공하면 **본인도 모르는 사이에 비밀번호가 바뀌고**, 실패하면 그
+    사유가 이미 닫힌 다이얼로그의 `error` 로 들어가 아무에게도 안 보인다.
+
+    요청 자체를 취소할 수 없으므로(fetch 를 끊어도 서버는 이미 처리한다) 할 수 있는 일은
+    결과를 볼 자리를 지키는 것이다. 셋을 한 함수로 모아 여기서 막는다.
+  */
+  const requestClose = useCallback(() => {
+    if (saving) return;
+    onClose();
+  }, [onClose, saving]);
+  const dialogRef = useModalDialog(true, requestClose);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -101,7 +116,8 @@ export function PasswordChangeDialog({
       <button
         type="button"
         aria-label="닫기"
-        onClick={onClose}
+        onClick={requestClose}
+        disabled={saving}
         className="absolute inset-0"
       />
       <div
@@ -177,8 +193,9 @@ export function PasswordChangeDialog({
           <div className="mt-1 flex gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold"
+              onClick={requestClose}
+              disabled={saving}
+              className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold disabled:opacity-50"
             >
               취소
             </button>
