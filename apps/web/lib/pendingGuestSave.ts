@@ -383,35 +383,88 @@ async function writeRecord(entry: PendingGuestSave): Promise<boolean> {
  * **읽기 자체가 실패한 경우는 다르다.** 그때는 IndexedDB 쪽만 비우고 예전 localStorage
  * 보관물은 남긴다 — 못 읽은 것과 못 쓰는 것은 다르고, 그 한 벌이 마지막 인계일 수 있다.
  */
-export async function getPendingGuestSave(
+/**
+ * 보관물 읽기의 **세 가지 결말**.
+ *
+ * `null` 하나로 뭉치면 안 되는 자리가 있다. 조건부 삭제(`clearHandoffIfUnchanged`)가 그
+ * 자리다 — 저장소를 못 연 것을 「이미 없다」로 읽으면, 확인한 적 없는 새 한 벌을 그대로
+ * 지운다. 원본 4장은 거기에만 있어서 되돌릴 수 없다.
+ */
+export type PendingGuestSaveRead =
+  | { status: "found"; entry: PendingGuestSave }
+  /** 확실히 없다 — 기한이 지났거나 애초에 없었다. */
+  | { status: "empty" }
+  /** 있는지 없는지 **알 수 없다** — 저장소를 못 열었거나 읽다 깨졌다. */
+  | { status: "unreadable" };
+
+/**
+ * 보관물을 읽고 **결말까지** 돌려준다. 「없다」와 「모르겠다」를 구별해야 하는 곳에서 쓴다.
+ *
+ * 서버 렌더 중(`window` 없음)은 저장소 자체가 없는 환경이라 `unreadable` 이다 —
+ * 「없다」로 답하면 그 판단으로 무언가를 지우게 된다.
+ */
+export async function readPendingGuestSave(
   now: number = Date.now(),
-): Promise<PendingGuestSave | null> {
-  if (typeof window === "undefined") return null;
+): Promise<PendingGuestSaveRead> {
+  if (typeof window === "undefined") return { status: "unreadable" };
   try {
     const record = await withStore<StoredRecord | undefined>(
       "readonly",
       (store) => store.get(RECORD_KEY),
     );
-    // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다(그쪽도 없으면 null).
-    if (!record) return readLegacyEntry(now);
+    // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다(그쪽도 없으면 없는 것이다).
+    if (!record) {
+      const legacy = readLegacyEntry(now);
+      return legacy ? { status: "found", entry: legacy } : { status: "empty" };
+    }
 
     const meta = normalizeMeta(record, now);
     if (!meta || !hasFourSources(record.sources, isUsableBlob)) {
       await clearPendingGuestSave();
-      return null;
+      return { status: "empty" };
     }
 
-    return { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) };
+    return {
+      status: "found",
+      entry: { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) },
+    };
   } catch {
     // 읽기가 깨진 것뿐이다. 여기서 예전 보관물까지 지우면 **읽어 보지도 않은** 인계를 버린다.
     await clearStoredRecord();
-    return null;
+    return { status: "unreadable" };
   }
+}
+
+export async function getPendingGuestSave(
+  now: number = Date.now(),
+): Promise<PendingGuestSave | null> {
+  const read = await readPendingGuestSave(now);
+  return read.status === "found" ? read.entry : null;
 }
 
 function isUsableBlob(source: unknown) {
   return source instanceof Blob && source.size > 0;
 }
+
+/** 멱등키와 **그 키가 살아남는지**, 그리고 **어느 한 벌에 붙었는지**. */
+export type PendingGuestSaveComposeKey = {
+  /** 이번 인계에 실어 보낼 멱등키. */
+  key: string;
+  /**
+   * 보관물에 남았는가. false 면 이 페이지에서만 사는 키다 — 새로고침 재시도는 보관물에서
+   * 키를 못 찾아 새 키로 접수한다.
+   */
+  persisted: boolean;
+  /**
+   * **이 키가 붙은 그 보관물.** 올려 보낼 원본도 여기서 꺼내야 한다.
+   *
+   * 호출부가 따로 읽어 둔 항목을 쓰면 안 된다. 이 함수는 저장소를 스스로 한 번 읽는데,
+   * 그 사이 다른 탭이 새로 찍어 보관물을 갈아 끼웠으면 키는 **새 한 벌**에 붙는다. 그때
+   * 호출부가 예전 항목의 원본을 이 키로 올리면, 나중에 새 한 벌을 인계할 때 같은 키가
+   * 다시 나와 서버가 예전 작업을 재생한다 — 새로 찍은 네컷 대신 예전 것이 저장된다.
+   */
+  entry: PendingGuestSave;
+};
 
 /**
  * 이 보관물의 합성 멱등키를 돌려준다. 아직 없으면 그 자리에서 만들어 함께 보관한다.
@@ -424,22 +477,35 @@ function isUsableBlob(source: unknown) {
  * 전체 페이지 리다이렉트와 새로고침을 건너뛰므로 메모리로는 부족해 보관물에 함께 심는다.
  *
  * 되쓰기는 `setPendingGuestSave` 와 달리 **먼저 지우지 않는다.** 지운 뒤 쓰기가 막히면
- * 원본 4장까지 통째로 잃는다 — 키 한 줄 못 남기는 것보다 훨씬 나쁘다. 못 남겼으면
- * 이번 시도에만 쓰고 끝난다(예전 동작 그대로).
+ * 원본 4장까지 통째로 잃는다 — 키 한 줄 못 남기는 것보다 훨씬 나쁘다.
+ *
+ * **못 남겼으면 못 남겼다고 말한다.** 키 자체는 그대로 돌려준다 — 이번 합성은 키가 없어도
+ * 돌고, 여기서 거절하면 될 저장까지 막는다. 대신 `persisted: false` 로 넘긴다. 저장소를
+ * 못 열거나(`writeRecord` 가 false) 트랜잭션이 중단되면(예외) 그 키는 새로고침을 못 넘기고,
+ * 첫 합성이 이미 서버에 접수된 뒤였다면 재시도가 **다른 키로 같은 네컷을 한 벌 더** 만든다.
+ * 그 사실을 삼키면 호출부는 성공한 줄 알고 "새로고침하면 다시 시도해요"라고 안내하면서
+ * 중복을 예약하게 된다.
  */
 export async function ensurePendingGuestSaveComposeKey(
   now: number = Date.now(),
-): Promise<string | null> {
+): Promise<PendingGuestSaveComposeKey | null> {
   const entry = await getPendingGuestSave(now);
   if (!entry) return null;
-  if (entry.composeIdempotencyKey) return entry.composeIdempotencyKey;
+  // 보관물에서 읽어 온 키다 — 그 자리에 남아 있다는 것이 이미 확인된 셈이다.
+  if (entry.composeIdempotencyKey)
+    return { key: entry.composeIdempotencyKey, persisted: true, entry };
 
-  const composeIdempotencyKey = newIdempotencyKey();
+  const key = newIdempotencyKey();
+  // 키를 붙인 그 한 벌을 그대로 돌려준다. 호출부가 「검증한 항목」과 대조할 대상도,
+  // 실제로 올릴 원본도 이것이어야 한다 — 위 `entry` 주석을 본다.
+  const keyed = { ...entry, composeIdempotencyKey: key };
   try {
-    await writeRecord({ ...entry, composeIdempotencyKey });
-  } catch {}
-
-  return composeIdempotencyKey;
+    const persisted = await writeRecord(keyed);
+    return { key, persisted, entry: keyed };
+  } catch {
+    // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위 false 와 같으므로 한 갈래로 모은다.
+    return { key, persisted: false, entry: keyed };
+  }
 }
 
 export async function clearPendingGuestSave(): Promise<void> {

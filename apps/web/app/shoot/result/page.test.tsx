@@ -246,7 +246,15 @@ function stubVisibility(state: "hidden" | "visible") {
 describe("ShootResultPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockIdempotencyKeySeq = 0;
+    /*
+      **멱등키 카운터는 되감지 않는다.**
+
+      완성 알림은 "이 탭이 마지막으로 기다리는 합성"을 멱등키로 기억한다(page.tsx 의
+      `latestServerCompose`) — 모듈 상태라 이 파일의 테스트 전체가 공유한다. 카운터를
+      매번 0 으로 되감으면 서로 다른 테스트가 `web-key-1` 을 나눠 쓰게 되고, 앞 테스트가
+      "이미 알렸다"고 표시해 둔 키를 뒷 테스트가 물려받아 알림이 조용히 사라진다.
+      실제 앱에서 키는 한 번 쓰면 끝이므로, 여기서도 그렇게 둔다.
+    */
     stubVisibility("visible");
     mockCreateObjectURL.mockReturnValue("blob:generated-image");
     URL.createObjectURL = mockCreateObjectURL;
@@ -318,7 +326,7 @@ describe("ShootResultPage", () => {
     ]);
     expect(call.layout.slots).toHaveLength(4);
     // 재시도가 같은 작업을 가리키도록 멱등키를 함께 보낸다.
-    expect(call.idempotencyKey).toBe("web-key-1");
+    expect(call.idempotencyKey).toMatch(/^web-key-\d+$/);
   });
 
   it("비회원은 브라우저가 그린 그림이 결과물이라 고른 순서 그대로 합성한다", async () => {
@@ -895,9 +903,8 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
-    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ idempotencyKey: "web-key-1" }),
-    );
+    const firstKey = mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey;
+    expect(firstKey).toMatch(/^web-key-\d+$/);
 
     // 사용자가 편집기에서 배경을 고치고 돌아왔다 → 같은 id, 다른 내용.
     act(() => {
@@ -909,8 +916,8 @@ describe("ShootResultPage", () => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
     });
     // 키가 같으면 서버는 수정 전 작업을 그대로 재생한다.
-    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ idempotencyKey: "web-key-2" }),
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).not.toBe(
+      firstKey,
     );
   });
 
@@ -1024,6 +1031,9 @@ describe("ShootResultPage", () => {
       "https://example.com/a.png",
     );
     expect(screen.queryByText("결과 준비 중")).not.toBeInTheDocument();
+    // 이어받히며 끊긴 첫 실행도 완료를 기다리고 있었다. 그 실행이 `cancelled` 를 "떠났다"로
+    // 읽고 알리면, 결과를 보고 있는 사람에게 "완성됐어요" 가 뜬다.
+    expect(mockNativeNotify).not.toHaveBeenCalled();
   });
 
   /*
@@ -1049,11 +1059,13 @@ describe("ShootResultPage", () => {
   /*
     ── 지금 알림이 실제로 덮는 범위 ──
 
-    이 알림은 합성 응답을 받은 **뒤에** 도는 로컬 알림이라, 앱을 완전히 벗어나 OS 가
-    WebView 의 JS 를 멈춘 경우는 덮지 못한다(그건 서버 푸시가 필요하다 —
-    docs/app-shell-backend-requests.md 3번). 실제 계약이 무엇인지 못으로 박아 둔다.
+    덮는 것은 둘이다 — 문서만 hidden 이고 JS 는 아직 도는 때(이 테스트)와, 셸 안에서 다른
+    화면으로 옮겨 간 때(아래 「결과 화면을 떠난 뒤에」). 이 알림은 합성 응답을 받은 **뒤에**
+    도는 로컬 알림이라, 앱을 완전히 벗어나 OS 가 WebView 의 JS 를 멈춘 경우는 여전히 덮지
+    못한다(그건 서버 푸시가 필요하다 — docs/app-shell-backend-requests.md 3번).
+    실제 계약이 무엇인지 못으로 박아 둔다.
   */
-  it("문서가 가려져 있을 때만 완성 알림을 띄운다", async () => {
+  it("문서가 가려져 있으면 완성 알림을 띄운다", async () => {
     stubVisibility("hidden");
 
     render(<ShootResultPage />);
@@ -1063,7 +1075,7 @@ describe("ShootResultPage", () => {
     });
     expect(mockNativeNotify).toHaveBeenCalledWith({
       title: "네컷이 완성됐어요",
-      body: "눌러서 보러 가기",
+      body: "기록 화면에서 볼 수 있어요",
     });
   });
 
@@ -1074,6 +1086,304 @@ describe("ShootResultPage", () => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
     expect(mockNativeNotify).not.toHaveBeenCalled();
+  });
+
+  /*
+    ── 회귀: 화면을 떠나도 완성 알림은 간다 ──
+
+    마이페이지는 「앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때 알려드려요」라고 안내한다
+    (components/mobile/NativeNotificationSetting.tsx). 그런데 결과를 기다리다 '홈으로 가기'로
+    옮겨 가면 effect cleanup 이 `cancelled` 를 세운다 — 알림까지 그 조건 안에 두면 **약속한
+    바로 그 사람만** 알림을 못 받았다. 문서는 계속 보이는 상태라 가시성 조건으로도 안 걸린다.
+
+    같이 못으로 박는 것: `cancelled` 의 본래 일은 그대로다. 떠난 화면의 결과를 세션에 남기면
+    다른 사진으로 다시 들어온 사람이 앞 그림을 보게 된다.
+  */
+  it("결과 화면을 떠난 뒤에 합성이 끝나도 완성 알림을 보낸다", async () => {
+    let finishCompose: (asset: GeneratedFourcutAsset) => void = () => {};
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve) => {
+          finishCompose = resolve;
+        }),
+    );
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // '홈으로 가기'. 서버 합성은 이 시점에도 계속 돌고 있다.
+    view.unmount();
+
+    await act(async () => {
+      finishCompose({
+        mediaId: 7,
+        objectUrl: "https://example.com/image",
+        downloadUrl: "https://example.com/image",
+        displayName: "harucut_20260101_000000",
+      });
+    });
+
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+    expect(mockNativeNotify).toHaveBeenCalledWith({
+      title: "네컷이 완성됐어요",
+      body: "기록 화면에서 볼 수 있어요",
+    });
+    expect(mockUseShootSession.getState().imageResult).toBeNull();
+  });
+
+  /*
+    ── 회귀(반대쪽): 알림을 두 번 보내지 않는다 ──
+
+    알림을 `cancelled` 밖으로 꺼내면 **한 합성의 완료를 기다리는 실행이 여럿**이라는 사실이
+    그대로 드러난다. 늦게 도착한 테마로 다시 돈 실행은 진행 중이던 약속을 그대로 이어받고
+    (아래 첫 테스트), 프레임을 고치면 앞 합성을 붙잡아 둔 채 새 멱등키로 다시 접수한다(둘째).
+    전부 알리면 "완성됐어요"가 두 번 뜨고, 사용자가 버린 합성까지 완성됐다고 알리게 된다.
+  */
+  it("이어받은 실행이 있어도 완성 알림은 한 번이다", async () => {
+    // 꾸민 프레임은 테마가 늦게 도착해 effect 가 다시 돌고, 새 실행이 진행 중이던 합성을
+    // 그대로 이어받는다(위 「합성 도중에 테마가 도착해도」). 한 합성을 기다리는 실행이 둘이다.
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+
+    let finishCompose: (asset: GeneratedFourcutAsset) => void = () => {};
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve) => {
+          finishCompose = resolve;
+        }),
+    );
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      mockThemeData = DECORATED_THEME;
+    });
+    view.rerender(<ShootResultPage />);
+    await act(async () => {});
+    expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    await act(async () => {
+      finishCompose({
+        mediaId: 7,
+        objectUrl: "https://example.com/image",
+        downloadUrl: "https://example.com/image",
+        displayName: "harucut_20260101_000000",
+      });
+    });
+
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    ── 회귀: 나갔다 들어오면 앞 요청의 알림이 사라졌다 ──
+
+    "지금 기다리는 합성"을 Promise 객체로 기억하던 때의 구멍이다. `pendingServerComposeRef`
+    는 컴포넌트 ref 라 화면을 나갔다 들어오면 비어 있고, 그때 **같은 멱등키로** 다시 접수해도
+    Promise 는 새것이다. 객체로 대조하면 그 순간 앞 실행이 「최신이 아니다」로 밀린다.
+
+    그래서 재진입 요청이 네트워크 오류로 죽고 **앞 요청만 성공한** 경우 — 서버에는 결과가
+    남았는데 — 아무도 알리지 않았다. 같은 작업인지는 멱등키로 봐야 한다.
+  */
+  it("나갔다 들어와 다시 접수한 뒤 앞 요청이 성공해도 알린다", async () => {
+    const finishers: Array<{
+      resolve: (asset: GeneratedFourcutAsset) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve, reject) => {
+          finishers.push({ resolve, reject });
+        }),
+    );
+
+    const first = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    // '사진 다시 고르기' 등으로 화면을 떠난다. 서버는 계속 그린다.
+    first.unmount();
+
+    // 다시 들어온다 — 세션이 키를 들고 있어 **같은 멱등키**로 한 번 더 접수한다.
+    const second = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).toBe(
+      mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
+    );
+    second.unmount();
+
+    // 재진입 요청은 네트워크로 죽고, 앞 요청은 살아서 결과를 준다.
+    await act(async () => {
+      finishers[1].reject(new Error("network"));
+    });
+    await act(async () => {
+      finishers[0].resolve({
+        mediaId: 7,
+        objectUrl: "https://example.com/image",
+        downloadUrl: "https://example.com/image",
+        displayName: "harucut_20260101_000000",
+      });
+    });
+
+    // 고치기 전에는 여기가 0건이었다.
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    ── 회귀(반대쪽): 이미 본 결과를 뒤늦게 알리지 않는다 ──
+
+    같은 멱등키를 기다리는 실행이 둘일 때, 빠른 쪽이 화면에 결과를 그리면 사용자는 이미
+    봤다. 그런데 그 순간은 화면이 보이는 중이라 알림 판정이 「알릴 필요 없음」으로 그냥
+    돌아가고 "알렸다" 표시가 안 남았다. 그 뒤 화면을 떠나고 느린 쪽이 끝나면 조건이 전부
+    맞아떨어져 **이미 본 네컷**에 "완성됐어요"가 뜬다.
+  */
+  it("화면에서 결과를 본 뒤에는 느린 요청이 끝나도 알리지 않는다", async () => {
+    const finishers: Array<(asset: GeneratedFourcutAsset) => void> = [];
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve) => {
+          finishers.push(resolve);
+        }),
+    );
+    const asset = {
+      mediaId: 7,
+      objectUrl: "https://example.com/image",
+      downloadUrl: "https://example.com/image",
+      displayName: "harucut_20260101_000000",
+    };
+
+    const first = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    first.unmount();
+
+    // 다시 들어와 같은 멱등키로 한 번 더 접수한다.
+    const second = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    // 재진입 요청이 먼저 끝난다 — 화면을 보고 있으므로 결과가 그대로 보인다.
+    await act(async () => {
+      finishers[1](asset);
+    });
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+    expect(mockUseShootSession.getState().imageResult).toEqual(asset);
+
+    // 결과를 보고 화면을 떠난 뒤, 처음의 느린 요청이 끝난다.
+    second.unmount();
+    await act(async () => {
+      finishers[0](asset);
+    });
+
+    // 고치기 전에는 여기서 이미 본 네컷에 "완성됐어요"가 떴다.
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+  });
+
+  /*
+    ── 회귀: 아직 돌고 있는 화면 때문에 알림을 **버리지** 않는다 ──
+
+    나갔다 들어와 같은 멱등키로 둘이 도는 동안 앞 요청이 성공하면, 그 순간 새 화면은 떠
+    있지만 아직 "처리 중"이라 사용자는 아무것도 못 봤다. 마운트만 보고 알림을 버리면,
+    뒤이어 그 화면의 요청이 시간 초과로 죽고 사용자가 떠났을 때 서버에는 완성본이 있는데도
+    알림이 끝내 오지 않는다. 버리지 말고 **미뤘다가**, 기다리던 실행이 다 떨어지면 알린다.
+  */
+  it("떠 있는 화면이 실패하고 떠나면 앞 요청의 완성을 그때 알린다", async () => {
+    const finishers: Array<{
+      resolve: (asset: GeneratedFourcutAsset) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve, reject) => {
+          finishers.push({ resolve, reject });
+        }),
+    );
+
+    const first = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    first.unmount();
+
+    // 다시 들어온다 — 같은 멱등키로 한 번 더 접수하고, 아직 "처리 중"이다.
+    const second = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    // 앞 요청이 성공한다. 이 화면은 아직 아무것도 못 보여 줬으므로 알림을 미룬다.
+    await act(async () => {
+      finishers[0].resolve({
+        mediaId: 7,
+        objectUrl: "https://example.com/image",
+        downloadUrl: "https://example.com/image",
+        displayName: "harucut_20260101_000000",
+      });
+    });
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+
+    // 이 화면의 요청은 시간 초과로 죽고, 사용자는 떠난다.
+    await act(async () => {
+      finishers[1].reject(new Error("timeout"));
+    });
+
+    // 고치기 전에는 여기가 영원히 0건이었다 — 서버에는 완성본이 있는데도.
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
+    second.unmount();
+  });
+
+  it("버리고 새로 시작한 합성이 끝나도 앞 합성은 알리지 않는다", async () => {
+    mockUseShootSession.setState({ remoteFrameId: 7 });
+    mockThemeData = DECORATED_THEME;
+
+    const finishers: Array<(asset: GeneratedFourcutAsset) => void> = [];
+    const finish = (index: number) =>
+      act(async () => {
+        finishers[index]({
+          mediaId: 7,
+          objectUrl: "https://example.com/image",
+          downloadUrl: "https://example.com/image",
+          displayName: "harucut_20260101_000000",
+        });
+      });
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve) => {
+          finishers.push(resolve);
+        }),
+    );
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 사용자가 편집기에서 배경을 고치고 돌아왔다 → 새 멱등키로 다시 접수한다
+    // (위 「프레임 내용을 고치면」). 앞 합성은 수정 전 그림이라 사용자가 버린 것이다.
+    act(() => {
+      mockThemeData = EDITED_THEME;
+    });
+    view.rerender(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    view.unmount();
+
+    await finish(0);
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+
+    // 지금 기다리는 합성이 끝나면 그때 알린다.
+    await finish(1);
+    expect(mockNativeNotify).toHaveBeenCalledTimes(1);
   });
 });
 

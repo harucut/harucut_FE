@@ -21,6 +21,7 @@ import HistoryPage from "@/app/history/page";
 import { CopyFailedError } from "@/lib/share";
 
 const mockListMyMedia = jest.fn();
+const mockGetMyUserInfo = jest.fn();
 const mockDeleteMedia = jest.fn();
 const mockGetMediaDownloadUrl = jest.fn();
 const mockGetImageUrlByKey = jest.fn();
@@ -39,7 +40,7 @@ jest.mock("@/lib/userMediaApi", () => ({
 }));
 
 jest.mock("@/lib/userApi", () => ({
-  getMyUserInfo: jest.fn(async () => ({ planTier: "BASIC" })),
+  getMyUserInfo: () => mockGetMyUserInfo(),
 }));
 
 jest.mock("@/lib/presignedUploadApi", () => ({
@@ -76,6 +77,20 @@ async function renderHistory() {
   return screen.getByRole("button", { name: "삭제: 바다에서" });
 }
 
+/**
+ * 기록이 하나도 없는 상태로 그린다 — 보관 기간 안내는 이 자리에서만 나온다.
+ *
+ * 등급 조회는 목록 조회가 끝난 뒤에 이어서 돈다. 프라미스를 한 번만 흘려보내면 등급이
+ * 아직 null 이라 어떤 등급을 넣어도 안내가 안 뜬 것처럼 보인다.
+ */
+async function renderEmptyHistory() {
+  mockListMyMedia.mockResolvedValue([]);
+  render(<HistoryPage />);
+  await act(async () => {});
+  await act(async () => {});
+  return screen.getByText("저장한 기록이 아직 없어요.");
+}
+
 /** 삭제 버튼 → 확인 창 → "지우기" 까지. */
 async function confirmDelete() {
   const deleteButton = await renderHistory();
@@ -90,6 +105,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   mockListMyMedia.mockResolvedValue([ITEM]);
+  mockGetMyUserInfo.mockResolvedValue({ planTier: "BASIC" });
   mockGetImageUrlByKey.mockResolvedValue("https://cdn.example.com/media/7.png");
   mockGetMediaDownloadUrl.mockResolvedValue(
     "https://cdn.example.com/media/7.png?download=1",
@@ -194,5 +210,48 @@ describe("기록 화면의 공유 실패 안내", () => {
     ).toBeInTheDocument();
     // 주소를 못 받았으면 공유까지 가지도 않는다 — 복사 안내가 뜨면 그것이 거짓말이다.
     expect(mockShareOrCopyLink).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  기록이 없을 때의 보관 기간 안내.
+
+  이 문구는 **사용자 등급을 확인했을 때만** 할 수 있는 말이다. 서버가 등급을 안 줬거나
+  우리가 모르는 등급(쿠폰으로 나가는 것·나중에 붙는 것)을 BASIC 으로 떨어뜨려 놓고
+  "최근 3일 기록만 보여요" 라고 적으면, 정작 3개월·무제한인 사람에게 자기 기록이 이미
+  사라졌다고 말하게 된다. 마이페이지가 등급 이름에 거는 규칙과 같다
+  (app/mypage/page.test.tsx) — 확인된 등급만 말하고, 모르면 아무 말도 하지 않는다.
+*/
+describe("기록이 없을 때의 보관 기간 안내", () => {
+  it("확인된 등급이면 그 등급의 보관 기간을 안내한다", async () => {
+    mockGetMyUserInfo.mockResolvedValue({ planTier: "PLUS" });
+
+    await renderEmptyHistory();
+
+    expect(screen.getByText(/최근 3개월 기록만 보여요/)).toBeInTheDocument();
+  });
+
+  it("등급이 오지 않으면 기간을 안내하지 않는다", async () => {
+    mockGetMyUserInfo.mockResolvedValue({});
+
+    await renderEmptyHistory();
+
+    expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
+  });
+
+  it("우리가 모르는 등급이면 기간을 안내하지 않는다", async () => {
+    mockGetMyUserInfo.mockResolvedValue({ planTier: "ENTERPRISE" });
+
+    await renderEmptyHistory();
+
+    expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
+  });
+
+  it("등급 조회가 실패해도 목록은 그대로 그리고 기간만 뺀다", async () => {
+    mockGetMyUserInfo.mockRejectedValue(new Error("boom"));
+
+    await renderEmptyHistory();
+
+    expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
   });
 });

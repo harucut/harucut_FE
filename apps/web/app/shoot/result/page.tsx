@@ -56,6 +56,138 @@ const GUEST_LOGIN_HANDOFF_PATH = buildPathWithRedirect(
 
 type ProcessingState = "idle" | "processing" | "done" | "error";
 
+/*
+  ── 완성 알림은 이 화면의 수명 밖에 있다 ──
+
+  마이페이지는 「앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때 알려드려요」라고 안내한다
+  (components/mobile/NativeNotificationSetting.tsx). 그 사람은 결과 화면을 떠난 사람이라,
+  판정에 필요한 값을 컴포넌트가 들고 있으면 안 된다 — 마운트와 함께 사라진다. 그래서
+  아래 둘은 모듈에 둔다.
+*/
+
+/**
+ * 이 탭이 **마지막으로 기다리는** 서버 합성과, 그 완료를 이미 알렸는지.
+ *
+ * 한 합성의 완료를 기다리는 실행이 여럿일 수 있다 — 늦게 도착한 테마로 effect 가 다시 돌면
+ * 새 실행이 같은 약속을 이어받고(pendingServerComposeRef), 화면을 나갔다 들어오면 같은
+ * 멱등키로 한 번 더 접수한다. 마지막 것 하나만, 한 번만 알린다: 앞선 것까지 알리면 알림이
+ * 두 번 뜨고, 사진·색·프레임을 바꿔 새 합성이 시작된 경우에는 **사용자가 버린 합성**까지
+ * "완성됐어요"가 된다.
+ *
+ * **같은 작업인지는 멱등키로 본다 — Promise 객체로 보지 않는다.** `pendingServerComposeRef`
+ * 는 컴포넌트 ref 라 화면을 나갔다 들어오면 비어 있고, 그때 같은 멱등키로 접수해도 Promise
+ * 는 새것이다. 객체로 대조하면 그 순간 앞 실행이 「최신이 아니다」로 밀려, 재진입 요청이
+ * 네트워크 오류로 실패하고 **앞 요청만 성공한** 경우에 아무도 알리지 않는다. 멱등키는 같은
+ * 작업이면 같고(위 ensureComposeIdempotencyKey), 사진·색·프레임이 바뀌면 달라진다 —
+ * 「버린 합성은 알리지 않는다」도 그대로 지켜진다.
+ */
+let latestServerCompose: {
+  idempotencyKey: string;
+  /** 알렸거나, 화면에 보여 줬다. 둘 다 「이 합성으로 할 일이 끝났다」는 뜻이다. */
+  notified: boolean;
+  /** 서버가 결과를 줬는가. 알림은 이것이 참일 때만 뜬다. */
+  completed: boolean;
+  /**
+   * 이 합성을 아직 기다리고 있는 실행의 수.
+   *
+   * 하나라도 남아 있으면 **그쪽이 결과를 화면에 보여 줄지도 모른다** — 그때 알리면 보고
+   * 있는 사람에게 알림이 뜬다. 그래서 기다리는 동안은 미룬다. 마지막 실행까지 끝났는데도
+   * 아무도 보여 주지 않았으면(전부 떠났거나 실패했으면) 그때 알린다.
+   */
+  waiting: number;
+} | null = null;
+
+/**
+ * 서버 합성이 끝났다고 알린다 — **아무도 결과를 못 본 채 기다리는 실행이 다 떨어졌을 때만.**
+ *
+ * 판정을 「결과 화면이 떠 있는가」로 두지 않는다. 떠 있어도 아직 돌고 있는 중이면 사용자는
+ * 아무것도 못 봤다. 그때 마운트만 보고 알림을 **버리면**, 뒤이어 그 실행이 시간 초과로
+ * 죽고 사용자가 떠났을 때 서버에 완성본이 있는데도 알림은 끝내 오지 않는다. 그래서 버리지
+ * 않고 **미룬다** — 기다리는 실행이 남아 있으면 그냥 돌아가고, 그 실행이 끝나거나 끊길 때
+ * 이 함수를 다시 부른다(`waiting`).
+ *
+ * 반대로 그 실행이 결과를 그렸으면 `markServerComposeSeen` 이 「봤다」로 닫아 둔다.
+ *
+ * 덮는 것은 둘이다. ① 앱 셸 안에서 다른 화면으로 옮겨 간 때 ② 문서만 hidden 이고 JS 는
+ * 아직 도는 때(안드로이드 WebView 가 대표적이다).
+ *
+ * ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가 WebView 의
+ * 자바스크립트를 멈춰서 폴링도 이 함수도 돌지 않고, 돌아왔을 때는 이미 visible 이다.
+ * 브라우저 탭도 아니다 — 셸 밖에서는 nativeNotify 가 그 자리에서 null 을 돌려주고 아무 일도
+ * 하지 않는다(lib/nativeBridge.ts 의 isNativeShell 검사).
+ *
+ * 앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가 필요하고,
+ * docs/app-shell-backend-requests.md 3번에 적어 뒀다.
+ *
+ * 미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소 메시지가
+ * 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
+ */
+/** 이 합성을 기다리기 시작했다고 알린다. 끝나거나 끊길 때 반드시 짝을 맞춘다. */
+function beginWaitingForCompose(idempotencyKey: string) {
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.waiting += 1;
+}
+
+/**
+ * 더는 이 합성을 기다리지 않는다 — 결과를 받았거나, 실패했거나, 화면이 끊겼다.
+ *
+ * 짝이 다 떨어지면 그 자리에서 알림 판정을 한 번 더 돌린다. 「기다리는 동안 미뤄 둔」
+ * 알림이 풀리는 자리가 바로 여기다.
+ */
+function endWaitingForCompose(idempotencyKey: string) {
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.waiting -= 1;
+  notifyServerComposeDone(idempotencyKey);
+}
+
+/**
+ * 이 합성은 **결과를 눈으로 본 것으로** 친다. 나중에 끝나는 같은 작업은 알리지 않는다.
+ *
+ * 같은 멱등키를 기다리는 실행이 둘일 수 있다(나갔다 들어오면 새 인스턴스가 같은 키로 한 번
+ * 더 접수한다). 그중 빠른 쪽이 **화면에 결과를 그렸다면** 사용자는 이미 봤다. 그런데 그때는
+ * 화면이 보이는 중이라 `notifyServerComposeDone` 이 「알릴 필요 없음」으로 그냥 돌아가고,
+ * `notified` 는 false 로 남는다. 그 뒤 사용자가 화면을 떠나고 느린 쪽이 끝나면 조건이 전부
+ * 맞아떨어져 **이미 본 결과에 대한 완성 알림**이 뒤늦게 뜬다.
+ *
+ * 그래서 「알렸다」와 「보여 줬다」를 같은 자리에 기록한다. 둘 다 이 합성에 대해 사용자에게
+ * 할 일이 끝났다는 뜻이다.
+ *
+ * 부르는 자리는 **결과를 실제로 그린 실행 하나뿐**이다(`cancelled` 가 아닌 쪽). 떠난 화면
+ * 뒤에서 조용히 끝난 실행은 아무것도 보여 주지 않았으므로 여기 오지 않는다 — 그것까지
+ * 여기서 접으면 「화면을 떠난 사람에게 알린다」가 통째로 죽는다.
+ *
+ * 그리고 **문서가 가려져 있으면 그린 것도 본 것이 아니다.** 그 경우는 알림이 제 몫을 하는
+ * 자리라 여기서 접지 않는다(안드로이드 WebView 가 대표적이다 — 아래 notifyServerComposeDone).
+ */
+function markServerComposeSeen(idempotencyKey: string) {
+  if (document.visibilityState !== "visible") return;
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.notified = true;
+}
+
+function notifyServerComposeDone(idempotencyKey: string) {
+  const compose = latestServerCompose;
+  if (compose?.idempotencyKey !== idempotencyKey) return;
+  if (compose.notified || !compose.completed || compose.waiting > 0) return;
+
+  compose.notified = true;
+  void nativeNotify({
+    title: "네컷이 완성됐어요",
+    /*
+      **눌러서 갈 곳을 약속하지 않는다.**
+
+      본문은 「눌러서 보러 가기」였는데, 눌러도 가지지 않는다 — 셸에 알림 응답 리스너가
+      없고(`apps/mobile/app/_layout.tsx`: "딥링크를 실제로 쓰게 되면 여기에 핸들러가
+      붙는다"), 브리지에도 앱이 웹에 경로를 넘길 메시지가 없다. 탭하면 앱이 앞으로 올 뿐
+      보고 있던 화면 그대로다. 그래서 실제로 되는 것만 적는다.
+
+      탭 이동을 붙이려면 셸의 알림 응답 처리와 브리지 양쪽(웹↔앱)이 같이 필요하다 —
+      docs/mobile-shell.md 「알림을 눌렀을 때」에 무엇이 없는지 적어 뒀다.
+    */
+    body: "기록 화면에서 볼 수 있어요",
+  });
+}
+
 export default function ShootResultPage() {
   const router = useRouter();
   const {
@@ -265,6 +397,19 @@ export default function ShootResultPage() {
     let cancelled = false;
     /** 이 실행이 결과(성공이든 실패든)를 남겼는가. 아래 cleanup 이 쓴다. */
     let settled = false;
+    /**
+     * 이 실행이 기다린다고 등록해 둔 멱등키. 아직 안 풀었으면 값이 있다.
+     *
+     * 끝나는 길이 셋이라(성공 · 실패 · 화면이 끊김) 한 번만 풀리도록 여기서 잠근다 —
+     * 두 번 풀면 셈이 음수가 되어 다른 실행의 알림이 먼저 나간다.
+     */
+    let waitingForComposeKey: string | null = null;
+    const releaseComposeWait = () => {
+      if (waitingForComposeKey === null) return;
+      const key = waitingForComposeKey;
+      waitingForComposeKey = null;
+      endWaitingForCompose(key);
+    };
     const currentLayout = layout;
 
     /*
@@ -393,40 +538,49 @@ export default function ShootResultPage() {
                 backgroundColor: effectiveBorderColor,
               });
         pendingServerComposeRef.current = { key: imageGenerationKey, run };
+        // 이 탭이 기다리는 합성이 바뀌었으면 알림 대상도 그것으로 옮긴다(위 latestServerCompose).
+        // 같은 멱등키면 그대로 둔다 — 재진입해 새 Promise 로 접수해도 같은 작업이다.
+        if (latestServerCompose?.idempotencyKey !== idempotencyKey) {
+          latestServerCompose = {
+            idempotencyKey,
+            notified: false,
+            completed: false,
+            waiting: 0,
+          };
+        }
+        // 이 실행이 결과를 기다린다. cleanup 이 먼저 끊어도 짝이 맞도록 표시를 남긴다.
+        beginWaitingForCompose(idempotencyKey);
+        waitingForComposeKey = idempotencyKey;
 
         const asset = await run;
+        if (latestServerCompose?.idempotencyKey === idempotencyKey) {
+          latestServerCompose.completed = true;
+        }
 
         if (!cancelled) {
           settled = true;
           setImageResult(asset);
           setImageState("done");
-          /*
-            화면이 가려져 있을 때만 알린다. 보고 있으면 결과가 그냥 보인다.
-
-            ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가
-            WebView 의 자바스크립트를 멈춰서 폴링도 이 줄도 돌지 않고, 돌아왔을 때는 이미
-            visible 이라 조건이 거짓이 된다.
-
-            여기서 덮이는 것은 **앱 셸 안인데 문서만 hidden 이고 JS 는 아직 도는 때**다
-            (안드로이드 WebView 가 대표적이다). 브라우저 탭은 아니다 — 셸 밖에서는
-            nativeNotify 가 그 자리에서 null 을 돌려주고 아무 일도 하지 않는다
-            (lib/nativeBridge.ts 의 isNativeShell 검사).
-
-            앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가
-            필요하고, docs/app-shell-backend-requests.md 3번에 적어 뒀다.
-
-            미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소
-            메시지가 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
-          */
-          if (document.visibilityState === "hidden") {
-            void nativeNotify({
-              title: "네컷이 완성됐어요",
-              body: "눌러서 보러 가기",
-            });
-          }
+          // 사용자에게 결과를 보여 줬다. 같은 작업을 기다리던 느린 실행이 나중에 끝나도
+          // 다시 알리지 않는다(위 markServerComposeSeen).
+          markServerComposeSeen(idempotencyKey);
         }
+
+        /*
+          알림은 **`cancelled` 밖에 둔다.** `cancelled` 는 "떠난 화면에 상태를 쓰지 않는다"는
+          뜻이지 "약속한 알림을 접는다"는 뜻이 아니다. 안에 두면 결과를 기다리다 '홈으로
+          가기'로 옮겨 간 사람 — 마이페이지가 알려 주겠다고 안내한 바로 그 사람 — 만 알림을
+          못 받는다. 누구에게 알릴지는 notifyServerComposeDone 이 판정한다(위).
+        */
+        // 이 실행은 결과를 받았다. 짝을 풀고 — 이미 끊겨서 풀린 뒤였다면 그냥 —
+        // 알림 판정을 돌린다. 판정 자체는 여러 번 불러도 한 번만 알린다.
+        releaseComposeWait();
+        notifyServerComposeDone(idempotencyKey);
       } catch (error) {
         console.error(error);
+        // 이 실행은 더 기다리지 않는다. 같은 합성을 기다리던 마지막 실행이었다면, 여기서
+        // 미뤄 둔 알림이 풀린다 — 앞 요청은 성공했는데 이 재시도만 죽은 경우가 그렇다.
+        releaseComposeWait();
         if (cancelled) return;
 
         // 실패 사유를 버리지 않는다. 프레임을 바꾸면 되는 실패인지, 기다리면 되는 실패인지
@@ -443,6 +597,9 @@ export default function ShootResultPage() {
 
     return () => {
       cancelled = true;
+      // 결과를 기다리던 중에 끊겼다. 짝을 여기서 맞춘다 — 안 맞추면 이 합성은 영원히
+      // "누가 기다리는 중"으로 남아 알림이 나가지 않는다.
+      releaseComposeWait();
 
       /*
         끝맺지 못하고 끊겼으면 이 키를 "처리했다"고 남겨 두면 안 된다.

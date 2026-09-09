@@ -2,11 +2,13 @@
  * 비회원 결과 이관의 **후반부** — 로그인 뒤 보관물을 꺼내 서버 합성을 돌리는 쪽.
  *
  * 이쪽은 그동안 테스트가 하나도 없었다. 앞쪽(보관하기)만 덮여 있어서, 꺼내는 조건이나
- * 실패 처리가 잘못돼도 아무도 몰랐다 — 실제로 네 가지가 틀려 있었다.
+ * 실패 처리가 잘못돼도 아무도 몰랐다 — 실제로 다섯 가지가 틀려 있었다.
  *  1. `?resumeSave=1` 주소를 타야만 돌아서, 다른 경로로 로그인하면 영영 저장되지 않았다
  *  2. 영구 실패에도 "새로고침하면 다시 시도해요"라 안내해 무한 재업로드가 됐다
  *  3. **게스트 쿠키가 없다는 것만으로 로그인했다고 보고** 서버 합성을 불렀다(401 거짓 실패)
  *  4. **확인 없이** 계정에 저장해, 공용 기기에서 앞사람 네컷이 뒷사람 기록으로 넘어갔다
+ *  5. 물어볼 때 읽은 보관물로 **끝까지 갔다** — 확인 안내를 열어 둔 사이 기한(24시간)이
+ *     지나거나 다른 탭이 갈아 끼워도 그대로 올리고, 그대로 지웠다(4번의 TTL 우회)
  */
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GuestTrialBridge } from "@/components/guest/GuestTrialBridge";
@@ -15,6 +17,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 const mockReplace = jest.fn();
 const mockSaveFourcutToServer = jest.fn();
 const mockGetPending = jest.fn();
+const mockReadPending = jest.fn();
 const mockClearPending = jest.fn();
 const mockEnsureComposeKey = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
@@ -35,6 +38,7 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 
 jest.mock("@/lib/pendingGuestSave", () => ({
   getPendingGuestSave: (...args: unknown[]) => mockGetPending(...args),
+  readPendingGuestSave: (...args: unknown[]) => mockReadPending(...args),
   clearPendingGuestSave: (...args: unknown[]) => mockClearPending(...args),
   ensurePendingGuestSaveComposeKey: (...args: unknown[]) =>
     mockEnsureComposeKey(...args),
@@ -115,14 +119,32 @@ beforeEach(() => {
   // 보관소는 IndexedDB 라 **전부 비동기**다(lib/pendingGuestSave.ts). 목도 그렇게 둔다 —
   // 동기 목으로 두면 호출부가 await 를 빠뜨려도 테스트가 초록불이다.
   mockGetPending.mockResolvedValue(PENDING);
+  // 조건부 삭제는 「없다」와 「모르겠다」를 가려 본다. 기본은 조회와 같은 답을 준다 —
+  // 「모르겠다」는 그것을 시험하는 테스트가 직접 세운다.
+  mockReadPending.mockImplementation(async () => {
+    const entry = await mockGetPending();
+    return entry ? { status: "found", entry } : { status: "empty" };
+  });
   storedComposeKey = null;
   mintedKeyCount = 0;
+  // 보관에 성공한 기기다. 실패한 기기는 `persisted: false` 로 따로 흉내 낸다 —
+  // 아래 「키를 못 남긴 기기」 테스트를 본다.
+  //
+  // 실물처럼 **저장소를 스스로 한 번 읽어** 그 한 벌에 키를 붙이고 그것을 돌려준다.
+  // 미리 잡아 둔 상수를 돌려주면, 이 함수가 읽는 사이에 보관물이 갈아 끼워지는 경우를
+  // 테스트가 볼 수 없다 — 그 경우가 바로 아래 「다른 한 벌에 붙은 키」 회귀다.
   mockEnsureComposeKey.mockImplementation(async () => {
+    const entry = await mockGetPending();
+    if (!entry) return null;
     if (!storedComposeKey) {
       mintedKeyCount += 1;
       storedComposeKey = `web-guest-${mintedKeyCount}`;
     }
-    return storedComposeKey;
+    return {
+      key: storedComposeKey,
+      persisted: true,
+      entry: { ...entry, composeIdempotencyKey: storedComposeKey },
+    };
   });
   mockClearPending.mockImplementation(async () => {
     storedComposeKey = null;
@@ -228,6 +250,41 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
   });
 
   /*
+    회귀 — 올린 그 한 벌만 지운다.
+
+    합성은 1분이 넘기도 한다. 그 사이 다른 탭에서 새로 찍으면 보관물이 갈아 끼워지는데,
+    끝난 뒤 무조건 지우면 아직 아무도 묻지 않은 인계가 소리 없이 사라진다.
+  */
+  it("저장이 끝났을 때 보관물이 갈아 끼워져 있으면 지우지 않는다", async () => {
+    const finishSave = holdSave();
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 합성을 기다리는 사이 다른 탭이 새로 찍었다.
+    mockGetPending.mockResolvedValue({
+      ...PENDING,
+      savedAt: PENDING.savedAt + 1000,
+    });
+    finishSave();
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 저장됐어요",
+      );
+    });
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  /*
     회귀 — 저장이 끝나는 순간 보던 화면에서 끌어내지 않는다.
 
     stripResumeParam 이 effect 가 잡아 둔 pathname 으로 replace 하던 시절에는, 저장을
@@ -308,6 +365,205 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
   });
 
+  /*
+    회귀 — 확인 안내를 열어 둔 사이 기한이 지난 보관물을 올리지 않는다.
+
+    안내는 사용자가 누를 때까지 열려 있다. 기한(24시간)이 코앞일 때 띄웠다면 누르는 시점에는
+    보관물이 이미 사라져 있고(`getPendingGuestSave` 가 읽으면서 지운다), 그런데도 안내를
+    띄울 때 캡처해 둔 항목으로 합성을 계속하면 하루 기한을 넘긴 사진이 계정 기록에 들어간다 —
+    공용 기기에서 앞사람 것이 넘어가지 않게 한 TTL 이 바로 이 자리에서 우회된다.
+  */
+  it("누를 때 보관물이 사라졌으면 올리지 않고 알린다", async () => {
+    mockGetPending.mockResolvedValueOnce(PENDING).mockResolvedValue(null);
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 옮기지 않았어요",
+      );
+    });
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — 물어본 것과 다른 보관물이면 인계를 접는다.
+
+    보관물은 한 벌이라, 안내를 열어 둔 사이 다른 탭에서 새로 찍으면 통째로 갈아 끼워진다.
+    캡처해 둔 항목으로 계속하면 사용자가 확인한 적 없는 네컷을 저장하게 된다. 새로 들어온
+    한 벌은 남의 것이 아니라 다음 인계 후보라 지우지 않고, 다시 물어본다.
+  */
+  it("누를 때 다른 네컷으로 바뀌어 있으면 접고 그 새 보관물을 다시 묻는다", async () => {
+    const NEWER = {
+      ...PENDING,
+      displayName: "방금 찍은 네컷",
+      savedAt: PENDING.savedAt + 1000,
+    };
+    mockGetPending.mockResolvedValueOnce(PENDING).mockResolvedValue(NEWER);
+
+    const view = render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 옮기지 않았어요",
+      );
+    });
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(mockClearPending).not.toHaveBeenCalled();
+
+    // 화면을 옮기면 새로 들어온 그 한 벌을 다시 묻는다 — 접었으니 "이미 물어봤다"도 접는다.
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "비회원 때 만든 네컷이 남아 있어요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toContain(
+      "방금 찍은 네컷",
+    );
+  });
+
+  /*
+    회귀 — **멱등키가 붙은 한 벌과 올리는 한 벌이 갈리면 안 된다.**
+
+    대조와 키 발급이 저장소를 따로따로 읽던 때의 구멍이다. 대조는 A 를 보고 통과했는데
+    그 직후 다른 탭이 B 로 갈아 끼우면, 키 K 는 B 에 붙고 요청에는 A 의 원본이 실렸다.
+    조건부 삭제가 B 를 지켜 주므로 B 는 남고, 나중에 B 를 인계할 때 K 가 다시 나와 서버가
+    A 작업을 재생한다 — 방금 찍은 B 대신 A 가 기록에 저장된다.
+
+    그래서 올릴 한 벌은 **키를 붙인 그 읽기에서** 나와야 하고, 그것이 물어본 것과 다르면
+    접어야 한다. 여기서는 키 발급이 갈아 끼워진 뒤를 읽은 상황을 그대로 흉내 낸다.
+  */
+  it("멱등키가 다른 한 벌에 붙었으면 올리지 않는다", async () => {
+    const NEWER = {
+      ...PENDING,
+      displayName: "방금 찍은 네컷",
+      savedAt: PENDING.savedAt + 1000,
+    };
+    // 안내는 A 로 띄운다. 키 발급이 읽을 때는 이미 B 로 갈아 끼워져 있다.
+    mockEnsureComposeKey.mockImplementation(async () => ({
+      key: "web-guest-B",
+      persisted: true,
+      entry: { ...NEWER, composeIdempotencyKey: "web-guest-B" },
+    }));
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "기록에 옮기지 않았어요",
+      );
+    });
+    // 고치기 전에는 여기서 A 의 원본이 B 의 키로 올라갔다.
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    // B 는 아직 아무도 묻지 않은 인계다 — 지우지 않는다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — 못 지운 새 한 벌은 **다음 회차에 다시 묻는다.**
+
+    합성이 도는 1분 사이에 다른 탭이 새로 찍으면 보관물이 갈아 끼워진다. 그 한 벌은 지키는
+    것이 맞지만, "이미 물어봤다" 표식을 그대로 두면 다음 회차가 통째로 건너뛴다 — 새로고침
+    하거나 앱을 다시 열기 전까지 그 한 벌을 계정에 옮길 방법이 없다.
+  */
+  it("저장 뒤 못 지운 새 보관물은 다음 회차에 다시 묻는다", async () => {
+    const NEWER = {
+      ...PENDING,
+      displayName: "방금 찍은 네컷",
+      savedAt: PENDING.savedAt + 1000,
+    };
+    const release = holdSave();
+
+    const view = render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await flushAsync();
+
+    // 합성이 도는 사이 다른 탭이 새로 찍었다.
+    mockGetPending.mockResolvedValue(NEWER);
+    await act(async () => {
+      release();
+    });
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe("기록에 저장됐어요");
+    });
+    // 새 한 벌은 지키고 —
+    expect(mockClearPending).not.toHaveBeenCalled();
+
+    // — 화면을 옮기면 그것을 다시 묻는다.
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "비회원 때 만든 네컷이 남아 있어요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toContain(
+      "방금 찍은 네컷",
+    );
+  });
+
+  /*
+    회귀 — **못 읽은 것을 「없다」로 읽지 않는다.**
+
+    저장소를 못 열거나 읽다 깨지면 레코드가 멀쩡히 있어도 조회는 빈손으로 돌아온다. 그것을
+    「이미 사라졌다」로 보고 지우면, 합성이 도는 사이 다른 탭이 새로 찍어 둔 한 벌 —
+    사용자가 확인한 적 없는 것 — 이 통째로 사라진다. 원본 4장은 거기에만 있다.
+  */
+  it("보관물을 읽지 못했으면 지우지 않는다", async () => {
+    const release = holdSave();
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+    await flushAsync();
+
+    // 올리는 사이 저장소가 막혔다 — 있는지 없는지 알 수 없다.
+    mockReadPending.mockResolvedValue({ status: "unreadable" });
+    await act(async () => {
+      release();
+    });
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe("기록에 저장됐어요");
+    });
+    // 고치기 전에는 여기서 확인한 적 없는 한 벌까지 지웠다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
   it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {
     render(<GuestTrialBridge />);
 
@@ -318,9 +574,40 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
     pressNoticeAction("버리기");
 
-    expect(mockClearPending).toHaveBeenCalledTimes(1);
+    // 지우기 전에 보관물을 되읽으므로 한 박자 뒤에 지워진다.
+    await waitFor(() => {
+      expect(mockClearPending).toHaveBeenCalledTimes(1);
+    });
     expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
     expect(useGuestTrialStore.getState().notice).toBeNull();
+  });
+
+  /*
+    회귀 — 버리기도 **확인한 그 한 벌만** 지운다.
+
+    저장 쪽과 같은 창이다. 안내를 열어 둔 사이 다른 탭에서 새로 찍으면 보관물이 갈아
+    끼워지는데, 그대로 지우면 아직 아무도 묻지 않은 인계가 사라진다 — 원본 4장은 이
+    보관물에만 있어 되돌릴 방법이 없다.
+  */
+  it("버리기를 눌렀을 때 다른 네컷으로 바뀌어 있으면 지우지 않는다", async () => {
+    mockGetPending
+      .mockResolvedValueOnce(PENDING)
+      .mockResolvedValue({ ...PENDING, savedAt: PENDING.savedAt + 1000 });
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "버리기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("버리기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "버리지 않았어요",
+      );
+    });
+    expect(mockClearPending).not.toHaveBeenCalled();
   });
 
   it("비회원 상태에서는 아무것도 하지 않는다", async () => {
@@ -401,6 +688,46 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
   });
 
   /*
+    회귀 — 멱등키를 **못 남긴** 기기에는 다른 안내를 준다.
+
+    IndexedDB 를 못 열거나 트랜잭션이 깨지면 키는 이번 합성에만 쓰이고 사라진다. 그 상태로
+    "새로고침하면 다시 시도해요"라고만 하면, 시키는 대로 한 사람에게 같은 네컷이 두 벌
+    남는다 — 서버가 재생할 키가 없어 처음부터 다시 그리기 때문이다. 재시도를 막지는 않되,
+    무엇이 달라지는지는 먼저 말해야 한다.
+  */
+  it("멱등키를 못 남긴 기기에는 중복 저장 가능성을 알린다", async () => {
+    mockEnsureComposeKey.mockImplementation(async () => ({
+      key: "web-guest-ephemeral",
+      persisted: false,
+      entry: PENDING,
+    }));
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("timeout"));
+    mockDescribeComposeFailure.mockReturnValue({
+      message: "합성이 예상보다 오래 걸려요.",
+      retryable: true,
+    });
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "저장을 완료하지 못했어요",
+      );
+    });
+    // 보관물은 그대로 둔다 — 재시도 자체는 여전히 할 수 있어야 한다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().notice?.message).toContain(
+      "두 벌 저장될 수 있어요",
+    );
+  });
+
+  /*
     회귀 — 재시도가 같은 네컷을 한 벌 더 만들지 않는다.
 
     서버 합성이 **성공한 뒤에도** 이 인계는 실패할 수 있다(폴링 시간 초과, 이름 바꾸기 뒤의
@@ -450,6 +777,43 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     올리는 사이에 세션이 끊긴 것은 "저장 실패"가 아니다. 그렇게 안내하면 사용자는
     멀쩡한 결과물을 잃은 줄 알고, 보관물은 남아 있어 안내만 하루 동안 반복된다.
   */
+  /*
+    회귀 — 401 로 멈춘 자리에도 **중복 경고**를 붙인다.
+
+    서버 합성이 끝난 뒤 이름·URL 조회에서 401 이 날 수 있다. 그때 「다시 로그인하면 이어서
+    저장할게요」라고만 하면, 멱등키를 못 남긴 기기에서는 다음 로그인의 재시도가 새 키로
+    접수돼 같은 네컷이 두 벌 남는다 — 아래 재시도 안내와 정확히 같은 상황이다.
+  */
+  it("멱등키를 못 남긴 기기의 401 안내에도 중복 가능성을 알린다", async () => {
+    mockEnsureComposeKey.mockImplementation(async () => ({
+      key: "web-guest-ephemeral",
+      persisted: false,
+      entry: PENDING,
+    }));
+    mockSaveFourcutToServer.mockRejectedValueOnce(
+      Object.assign(new Error("unauthorized"), { status: 401 }),
+    );
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().notice?.title).toBe(
+        "로그인하면 이어서 저장할게요",
+      );
+    });
+    expect(useGuestTrialStore.getState().notice?.message).toContain(
+      "두 벌 저장될 수 있어요",
+    );
+    // 보관물은 그대로 둔다 — 다시 로그인하면 이어 가야 한다.
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
   it("올리는 도중 401 이면 실패가 아니라 로그인 안내를 띄운다", async () => {
     mockSaveFourcutToServer.mockRejectedValueOnce({ status: 401 });
 

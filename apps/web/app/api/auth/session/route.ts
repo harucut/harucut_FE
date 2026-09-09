@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
 import { forward } from "@/app/api/client/_proxy";
 import { adaptSetCookiesForRequest } from "@/lib/server/setCookies";
+import { isUnusableUserStatus, readUserStatus } from "@/lib/authUserStatus";
 
 export const runtime = "edge";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
-
-function readUserStatus(body: string) {
-  try {
-    const parsed = JSON.parse(body) as { data?: { userStatus?: unknown } };
-    const status = parsed?.data?.userStatus;
-    return typeof status === "string" ? status : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(req: Request) {
   // 세션 인증 여부는 프론트에서 쿠키 존재를 직접 판단하지 않고 백엔드(/api/auth/status)에
@@ -38,11 +29,10 @@ export async function GET(req: Request) {
   // 여기서 기본값을 "미인증"으로 두면 응답 형태가 조금만 바뀌어도 멀쩡한 사용자가 전부
   // 로그인 화면으로 쫓겨나기 때문이다.
   // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
+  // 목록과 「못 읽었으면 믿는다」 규칙의 소유자는 lib/authUserStatus.ts 다 —
+  // `/api/auth/status` 를 직접 부르는 쪽(lib/usePublicShootCta.ts)도 같은 것을 쓴다.
   const userStatus = upstream.ok ? readUserStatus(upstream.body) : null;
-  const unusable =
-    userStatus === "DELETED_REQUESTED" ||
-    userStatus === "DELETED" ||
-    userStatus === "BLOCKED";
+  const unusable = isUnusableUserStatus(userStatus);
 
   const res = NextResponse.json({
     authenticated: upstream.ok && !unusable,
