@@ -359,4 +359,84 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     );
     expect(mockUpload).not.toHaveBeenCalled();
   });
+
+  /*
+    ── 회귀: 숨긴 층은 올리지 않는다 ──
+
+    `exportJson()` 은 `hidden` 인 컴포넌트를 저장 요청에서 뺀다. 그런데 자산 정리는 그
+    판정을 안 해서, 숨긴 스티커도 저장할 때마다 S3 로 올라갔다. 올라간 key 는 요청에
+    실리지 않으니 아무도 안 쓰는 고아 객체로 남고, 프론트에는 지울 방법이 없다.
+
+    더 나쁜 것은 실패 쪽이다 — 숨긴 스티커 하나를 못 받아 오면 이 단계에서 예외가 나서,
+    그 스티커가 저장 대상이 **아닌데도** 프레임 저장 전체가 막힌다.
+  */
+  describe("숨긴 층과 자산 정리", () => {
+    /** 캔버스에 스티커 한 장을 올린 상태. `hidden` 은 부르는 쪽이 정한다. */
+    function placeSticker(hidden: boolean): EditorComponent {
+      return {
+        id: "sticker-1",
+        type: "STICKER",
+        source: "/stickers/heart.png",
+        x: 10,
+        y: 10,
+        width: 100,
+        height: 100,
+        scale: 1,
+        rotation: 0,
+        zIndex: 1,
+        styleJson: {},
+        locked: false,
+        hidden,
+      };
+    }
+
+    it("숨긴 스티커는 S3 에 올리지 않는다", async () => {
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as unknown as typeof fetch;
+      useThemeEditorStore.getState().setFrameId("classic-4");
+      useThemeEditorStore.setState({ components: [placeSticker(true)] });
+
+      await useThemeEditorStore.getState().finalizeAssetsForSave();
+
+      // 고치기 전에는 여기서 정적 경로를 받아다 그대로 올렸다.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockUpload).not.toHaveBeenCalled();
+    });
+
+    /*
+      반대쪽 못 — 보이는 스티커는 그대로 올린다. 위 테스트만 있으면 "전부 안 올린다"로
+      고쳐도 통과한다.
+    */
+    it("보이는 스티커는 그대로 올린다", async () => {
+      global.fetch = (jest.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob(["png"], { type: "image/png" }),
+      })) as unknown) as typeof fetch;
+      useThemeEditorStore.getState().setFrameId("classic-4");
+      useThemeEditorStore.setState({ components: [placeSticker(false)] });
+
+      await useThemeEditorStore.getState().finalizeAssetsForSave();
+
+      expect(mockUpload).toHaveBeenCalledTimes(1);
+    });
+
+    /*
+      숨긴 스티커를 **못 받아 와도** 저장이 막히지 않는다. 예전에는 이 fetch 하나가
+      던지면서, 저장 대상이 아닌 층 때문에 프레임 저장 전체가 실패했다.
+    */
+    it("숨긴 스티커를 못 받아 와도 저장이 막히지 않는다", async () => {
+      global.fetch = (jest.fn(async () => ({
+        ok: false,
+        status: 404,
+      })) as unknown) as typeof fetch;
+      useThemeEditorStore.getState().setFrameId("classic-4");
+      useThemeEditorStore.setState({
+        components: [placeSticker(true)],
+      });
+
+      await expect(
+        useThemeEditorStore.getState().finalizeAssetsForSave(),
+      ).resolves.not.toThrow();
+    });
+  });
 });

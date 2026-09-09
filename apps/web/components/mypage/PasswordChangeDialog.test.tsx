@@ -109,4 +109,53 @@ describe("PasswordChangeDialog", () => {
       newPassword: "비밀번호12345678",
     });
   });
+
+  /*
+    ── 회귀: 바꾸는 중에는 닫히지 않는다 ──
+
+    닫는 길이 셋이다 — 배경 · 취소 버튼 · Escape. PATCH 가 도는 사이 그중 하나로 닫히면
+    화면은 취소한 것처럼 사라지지만 요청은 계속 간다. 성공하면 본인도 모르는 사이에
+    비밀번호가 바뀌고, 실패하면 그 사유가 이미 닫힌 다이얼로그에 들어가 아무에게도
+    안 보인다. 요청을 되돌릴 수는 없으니, 결과를 볼 자리라도 지킨다.
+  */
+  it("바꾸는 중에는 배경·취소·Escape 어느 쪽으로도 닫히지 않는다", () => {
+    const onClose = jest.fn();
+    render(
+      <PasswordChangeDialog
+        saving
+        error={null}
+        onClose={onClose}
+        onSubmit={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    fireEvent.click(screen.getByRole("button", { name: "취소" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).not.toHaveBeenCalled();
+    // 눌러도 소용없는 버튼을 눌러 보게 두지 않는다.
+    expect(screen.getByRole("button", { name: "취소" })).toBeDisabled();
+  });
+
+  it("바꾸는 중이 아니면 세 길 모두 그대로 닫힌다", () => {
+    const onClose = jest.fn();
+    render(
+      <PasswordChangeDialog
+        saving={false}
+        error={null}
+        onClose={onClose}
+        onSubmit={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "취소" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(3);
+  });
 });

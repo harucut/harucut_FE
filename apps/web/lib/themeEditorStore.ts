@@ -556,8 +556,20 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         return entry;
       };
 
-      // 1) 캔버스에 실제로 올라간 로컬 사진 (편집 중에는 임시 업로드를 하지 않는다)
-      const { components, assets } = get();
+      /*
+        **숨긴 층은 손대지 않는다.**
+
+        `exportJson()` 은 `hidden` 인 컴포넌트를 저장 요청에서 빼는데(아래), 여기서는 그
+        판정을 안 해서 숨긴 스티커·글자도 매번 S3 로 올라갔다. 올라간 key 는 요청에 실리지
+        않으니 **아무도 안 쓰는 고아 객체**로 남고, 프론트에는 지울 방법이 없다. 더 나쁜
+        것은 실패 쪽이다 — 숨긴 스티커 하나를 못 받아 오면 여기서 예외가 나서, 그 스티커가
+        저장 대상이 아닌데도 **프레임 저장 전체가 막힌다.**
+
+        그래서 내보내기에 실제로 실리는 것만 고른다. 기준을 한 곳에 두어 둘이 갈라지지
+        않게 한다.
+      */
+      const { components: allComponents, assets } = get();
+      const components = allComponents.filter((c) => !c.hidden);
       const usedPhotoSrcs = new Set(
         components.filter((c) => c.type === "PHOTO").map((c) => c.source),
       );
@@ -573,7 +585,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       const stickerSrcs = Array.from(
         new Set(
           get()
-            .components.filter((c) => c.type === "STICKER" && needsUpload(c.source))
+            .components.filter(
+              (c) => !c.hidden && c.type === "STICKER" && needsUpload(c.source),
+            )
             .map((c) => c.source),
         ),
       );
@@ -593,6 +607,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       //    스타일이나 내용을 고쳤는데 옛 key 를 재사용하면 결과물만 조용히 어긋난다.
       const textKeys = new Map<string, string>();
       for (const component of get().components) {
+        // 숨긴 글자는 굽지도 올리지도 않는다 — 위 스티커와 같은 이유다.
+        if (component.hidden) continue;
         if (component.type !== "TEXT") continue;
         if (!component.source.trim()) continue;
 
