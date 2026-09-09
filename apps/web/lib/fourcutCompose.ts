@@ -444,6 +444,8 @@ async function submitCompose(
  * 삭제 API 가 열리면 여기 모아 둔 `uploadedKeys` 를 그대로 넘기면 된다.
  *
  * 실패는 감싸지 않고 그대로 던진다 — `describeComposeFailure` 가 에러 코드로 분기한다.
+ * 던지면 아래 `lastUploadedSources` 에도 아무것도 남지 않는다 — 절반만 올라간 key 를
+ * 기억했다가 재시도가 그것으로 합성을 접수하면 안 된다.
  */
 async function uploadSources(files: File[]): Promise<string[]> {
   const results = await Promise.allSettled(
@@ -480,15 +482,65 @@ async function uploadSources(files: File[]): Promise<string[]> {
 }
 
 /**
+ * 마지막으로 **올리기에 성공한** 원본 4장을, 그때 쓴 멱등키에 묶어 둔다.
+ *
+ * 재시도(결과 화면의 「다시 준비하기」)는 같은 멱등키로 다시 온다. 그런데 멱등키가 덮는
+ * 것은 합성 접수부터라, 예전에는 그 앞의 원본 4장이 재시도마다 **새 S3 키로 또** 올라갔다.
+ * 서버는 기존 작업을 재생하느라 새 key 를 쳐다보지도 않으므로 그 4장은 아무도 안 쓴 채
+ * 남는다 — 로컬 개발에서도 버킷은 진짜 AWS 라(도커 안에 S3 대역이 없다) 재시도 한 번이
+ * 실제 고아 객체 4개다. 프론트에는 지울 엔드포인트도 없다.
+ *
+ * **한 벌만 들고 있는다.** 한 세션이 동시에 만드는 네컷은 하나다(결과 화면의 합성 effect
+ * 하나, 게스트 인계도 한 번에 하나). 프레임·테마·레이아웃·필터·색·원본 중 하나라도 바뀌면
+ * `ensureComposeIdempotencyKey` 가 새 키를 만들어(`lib/shootSessionStore.ts`) 여기서
+ * 빗나가고, 그 자리를 새 값이 덮는다 — 그래서 항목이 쌓이지 않는다.
+ *
+ * 합성이 성공한 뒤에도 비우지 않는다. 성공하면 서버가 원본을 지우므로 여기 남은 key 는
+ * 이미 없는 객체를 가리키지만, 같은 키로 다시 접수하면 서버는 끝난 작업을 재생할 뿐 key 를
+ * 보지 않는다. 비워 두면 그 재접수가 아무도 안 쓸 4장을 새로 만든다.
+ */
+let lastUploadedSources: {
+  idempotencyKey: string;
+  sourceKeys: string[];
+} | null = null;
+
+/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없으면 null(= 새로 올린다). */
+function reusableSourceKeys(idempotencyKey: string | undefined): string[] | null {
+  if (!idempotencyKey) return null;
+
+  return lastUploadedSources?.idempotencyKey === idempotencyKey
+    ? lastUploadedSources.sourceKeys
+    : null;
+}
+
+/**
+ * 올리기가 **성공한 뒤에만** 부른다.
+ *
+ * 호출부가 키를 안 준 합성은 기억하지 않는다. 그 키는 `composeFourcutOnServer` 안에서
+ * 방금 만든 난수라 다시 맞을 일이 없고(= 재시도가 아니다), 기억해 봐야 진짜 재시도가 쓸
+ * 한 자리를 죽은 키로 덮을 뿐이다.
+ */
+function rememberUploadedSources(
+  idempotencyKey: string | undefined,
+  sourceKeys: string[],
+) {
+  if (!idempotencyKey) return;
+
+  lastUploadedSources = { idempotencyKey, sourceKeys };
+}
+
+/**
  * 원본 4장을 올리고 서버 합성을 기다린다.
  *
  * `sources` 는 사용자가 고른 순서 그대로여야 한다 — 서버가 그 순서로 슬롯에 넣는다.
  * 합성에 성공하면 서버가 올린 원본 4장을 지운다(보관함에는 결과만 남는다).
  *
  * 뒤집으면 **합성이 실패하면 이미 올라간 원본은 그대로 남는다.** 프론트에는 지울 방법이
- * 없어서, 여기서는 "쓸 일 없는 원본을 덜 만드는 것"까지만 한다 — 프레임을 먼저 확정하고,
- * **누끼까지 포함해** 4장을 다 구운 뒤에 올린다. 접수 이후(`submitCompose`·`waitForCompose`)
- * 실패로 남는 원본 정리는 백엔드 몫이다(`docs/app-shell-backend-requests.md` 4번).
+ * 없어서, 여기서는 "쓸 일 없는 원본을 덜 만드는 것"까지 셋을 한다 — 프레임을 먼저
+ * 확정하고, **누끼까지 포함해** 4장을 다 구운 뒤에 올리고, **같은 멱등키로 다시 오면
+ * 이미 올려 둔 key 를 그대로 쓴다**(`lastUploadedSources`). 접수
+ * 이후(`submitCompose`·`waitForCompose`) 실패로 남는 원본 정리는 백엔드 몫이다
+ * (`docs/app-shell-backend-requests.md` 4번).
  */
 export async function composeFourcutOnServer(args: {
   sources: string[];
@@ -497,8 +549,9 @@ export async function composeFourcutOnServer(args: {
   frameId: FrameId | null;
   remoteFrameId: number | null;
   /**
-   * 재시도에 같은 값을 다시 넘기면 서버가 기존 작업을 그대로 돌려준다.
-   * 생략하면 매번 새로 만든다(= 새 합성).
+   * 재시도에 같은 값을 다시 넘기면 서버가 기존 작업을 그대로 돌려주고, **원본도 다시
+   * 올리지 않는다**(`lastUploadedSources`).
+   * 생략하면 매번 새로 만든다(= 새 합성이라 원본도 새로 올라간다).
    */
   idempotencyKey?: string;
   /**
@@ -523,34 +576,42 @@ export async function composeFourcutOnServer(args: {
     args.remoteFrameId,
   );
 
-  // 굽기와 올리기를 **나눈다**. 슬롯마다 "굽기 → 올리기"를 이어 붙여 4개를 동시에 돌리면,
-  // 세 번째 굽기가 실패해도 나머지 세 장은 이미 S3 로 나간 뒤라 쓰이지 않을 원본만 남는다.
-  // 굽기는 브라우저 안에서 끝나 실패해도 남는 게 없다 — 다 구운 다음에 올린다.
-  //
-  // 누끼도 그래서 **굽기 쪽**이다. 올리는 중간에 누끼를 뜨면 한 장이 어긋나는 순간
-  // 절반만 올라간 상태가 된다.
-  const prepared = await bakePersonCutouts(sources, cellCutouts);
+  // 같은 멱등키로 다시 온 재시도면 굽기도 올리기도 건너뛴다. 다시 올려 봐야 서버는 기존
+  // 작업을 재생하느라 새 key 를 쓰지 않고, 버킷에 고아만 넷 더 생긴다.
+  let sourceKeys = reusableSourceKeys(args.idempotencyKey);
 
-  let files: File[];
-  try {
-    files = await Promise.all(
-      prepared.sources.map(async (src, index) => {
-        const blob = await renderSourceForSlot(
-          src,
-          layout.slots[index],
-          outputFilter,
-        );
-        return new File([blob], `source-${index + 1}.jpg`, {
-          type: SOURCE_MIME,
-        });
-      }),
-    );
-  } finally {
-    // 누끼 blob 은 여기까지만 쓴다. 성공이든 실패든 되돌려 준다.
-    prepared.release();
+  if (!sourceKeys) {
+    // 굽기와 올리기를 **나눈다**. 슬롯마다 "굽기 → 올리기"를 이어 붙여 4개를 동시에 돌리면,
+    // 세 번째 굽기가 실패해도 나머지 세 장은 이미 S3 로 나간 뒤라 쓰이지 않을 원본만 남는다.
+    // 굽기는 브라우저 안에서 끝나 실패해도 남는 게 없다 — 다 구운 다음에 올린다.
+    //
+    // 누끼도 그래서 **굽기 쪽**이다. 올리는 중간에 누끼를 뜨면 한 장이 어긋나는 순간
+    // 절반만 올라간 상태가 된다.
+    const prepared = await bakePersonCutouts(sources, cellCutouts);
+
+    let files: File[];
+    try {
+      files = await Promise.all(
+        prepared.sources.map(async (src, index) => {
+          const blob = await renderSourceForSlot(
+            src,
+            layout.slots[index],
+            outputFilter,
+          );
+          return new File([blob], `source-${index + 1}.jpg`, {
+            type: SOURCE_MIME,
+          });
+        }),
+      );
+    } finally {
+      // 누끼 blob 은 여기까지만 쓴다. 성공이든 실패든 되돌려 준다.
+      prepared.release();
+    }
+
+    // 던지면 아무것도 기억하지 않는다 — 실패한 올리기를 캐시하지 않으려고 이 순서다.
+    sourceKeys = await uploadSources(files);
+    rememberUploadedSources(args.idempotencyKey, sourceKeys);
   }
-
-  const sourceKeys = await uploadSources(files);
 
   // 꾸민 프레임은 저장된 배경을 그대로 쓴다. 그 배경이 이미지면 색을 보내는 순간 400 이라,
   // "내 프레임인가"를 기준으로 보낼지 말지를 가른다.

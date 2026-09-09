@@ -83,11 +83,26 @@ describe("pendingRequiredConsents", () => {
   });
 });
 
+/**
+ * 정적 약관 화면은 서버 본문의 **대역이 아니다.**
+ *
+ * 여기가 주소를 돌려주는 순간 동의 화면 셋이 전부 서버가 준 `content` 를 버리고
+ * (가입·재동의·설정 모두 `href` 가 있으면 본문을 안 그린다) 번들에 굳은 글을 대신
+ * 보여 준다. 관리자가 개정하면 그 글은 옛 버전이라, 사용자는 **읽은 글과 다른 버전에
+ * 동의**하게 된다 — 동의 이력은 수정·삭제되지 않는다.
+ *
+ * 대역이 성립하려면 그 화면이 지금 동의받는 버전임을 증명할 수 있어야 하는데, 번들과
+ * 서버 버전을 잇는 표시가 없다. 그래서 어떤 코드에도 주소를 주지 않는다.
+ */
 describe("termsContentHref", () => {
-  it("우리 화면이 있는 코드만 주소를 준다", () => {
-    expect(termsContentHref("tos")).toBe("/terms");
-    expect(termsContentHref("privacy")).toBe("/privacy");
-    // 관리자가 새로 만든 약관은 우리 화면이 없다 — 서버 본문을 그 자리에서 보여 줘야 한다.
+  it("정적 화면이 있는 코드에도 대역을 주지 않는다", () => {
+    // 예전에 `/terms`·`/privacy` 로 보내던 넷. 여기가 다시 열리면 회귀다.
+    for (const code of ["tos", "terms", "privacy", "marketing"]) {
+      expect(termsContentHref(code)).toBeNull();
+    }
+  });
+
+  it("관리자가 새로 만든 약관도 마찬가지다", () => {
     expect(termsContentHref("refund-policy")).toBeNull();
   });
 });

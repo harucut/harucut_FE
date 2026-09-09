@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
 import { isProtectedPath } from "@/lib/protectedPaths";
 import {
-  clearPendingTermsConsent,
+  clearPendingTermsConsentIfUnchanged,
   getPendingTermsConsent,
   isSameConsentAccount,
+  type PendingTermsConsent,
 } from "@/lib/pendingTermsConsent";
 import { getMyUserInfo } from "@/lib/userApi";
 import {
@@ -45,6 +46,9 @@ export function TermsConsentBridge() {
   // 동의를 **두 번** 보내게 되는데, 동의 이력은 법적 증빙용이라 수정·삭제되지 않는다 —
   // 같은 동의가 두 줄로 남는다.
   const runningRef = useRef(false);
+  // 이번 회차에 **내가 읽은** 보관물. 재동의 화면을 통과했을 때 지울 대상을 이것으로
+  // 못 박는다 — 아래 `onDone` 주석 참고.
+  const stashedRef = useRef<PendingTermsConsent | null>(null);
 
   const runCheck = useCallback(async () => {
     // 로그인했는지는 쿠키가 아니라 서버에 묻는다(만료된 쿠키가 남아 있을 수 있다).
@@ -69,6 +73,7 @@ export function TermsConsentBridge() {
     checkedRef.current = true;
 
     const stashed = getPendingTermsConsent();
+    stashedRef.current = stashed;
     if (stashed) {
       // 보관물은 **가입한 그 계정** 것이다. "로그인했다"만 보고 보내면, 한 기기에서
       // 가입하고 다른 계정으로 로그인한 순간 고른 적 없는 사람의 장부에 붙는다.
@@ -78,16 +83,29 @@ export function TermsConsentBridge() {
       try {
         accountEmail = (await getMyUserInfo()).email;
       } catch {
-        // 내 정보 조회가 흔들린 것뿐이면 보관물을 버릴 이유가 없다. 이번 회차만 건너뛴다.
+        // 내 정보 조회가 흔들린 것뿐이면 보관물을 버릴 이유가 없다. 이번 회차만 건너뛴다
+        // (남은 보관물은 아래 재동의 화면을 통과하면 그때 지운다).
       }
+
+      /*
+        여기서 지울 때도 **읽어 둔 그 보관물일 때만** 지운다. 위 `getMyUserInfo` 와 아래
+        `submitTermsConsents` 는 네트워크 왕복이라, 그 사이에 다른 탭에서 가입이 끝나면
+        같은 origin 의 키가 새 계정 동의로 바뀌어 있을 수 있다. 무조건 지우면 그 사람의
+        아직 제출되지 않은 법적 동의가 사라진다.
+        지운 뒤 `stashedRef` 를 비워 「stashedRef 는 아직 안 지운 보관물」을 참으로 둔다.
+      */
+      const dropStashed = () => {
+        clearPendingTermsConsentIfUnchanged(stashed);
+        stashedRef.current = null;
+      };
 
       if (accountEmail && !isSameConsentAccount(accountEmail, stashed.email)) {
         // 주인이 아닌 계정이다. 남겨 둬도 주인이 이 기기로 돌아온다는 보장이 없다.
-        clearPendingTermsConsent();
+        dropStashed();
       } else if (accountEmail) {
         try {
           await submitTermsConsents(stashed.items);
-          clearPendingTermsConsent();
+          dropStashed();
         } catch (error) {
           // 다시 보내도 결과가 같은 실패면 버린다. 안 그러면 로그인할 때마다 같은 요청이
           // 나가고 매번 같은 이유로 실패한다. 남겨 두는 건 네트워크·인증 문제일 때뿐이다.
@@ -98,7 +116,7 @@ export function TermsConsentBridge() {
             code === "GEN-002" ||
             code === "GEN-006"
           ) {
-            clearPendingTermsConsent();
+            dropStashed();
           }
         }
       }
@@ -135,7 +153,29 @@ export function TermsConsentBridge() {
   return (
     <TermsReconsentDialog
       consents={all}
-      onDone={() => setPending(null)}
+      onDone={() => {
+        /*
+          여기까지 왔다는 건 사용자가 이 화면에서 직접 고른 값이 서버에 저장됐다는 뜻이다
+          (`onDone` 은 저장에 성공했을 때만 불린다). 그런데 위에서 내 정보 조회가 흔들려
+          계정을 대조하지 못했으면 가입 때 보관물이 그대로 남아 있다 — 그대로 두면 다음
+          새로고침에 그것이 다시 제출되어 **방금 고른 선택 약관 값이 가입 때 값으로
+          되돌아간다.** 동의 이력은 수정·삭제되지 않아 되돌릴 방법이 없고, 필수 동의는
+          같은 줄이 하나 더 남는다.
+
+          약관 조회가 실패한 회차에는 이 화면 자체가 뜨지 않으므로, 아직 보내야 하는
+          보관물을 여기서 버리는 일은 없다.
+
+          다만 지우는 것은 **내가 위에서 읽은 그 보관물일 때만**이다. 보관 키는 같은
+          origin 의 모든 탭이 함께 쓰는데, 이 화면은 사용자가 약관을 읽는 동안 몇 분씩
+          열려 있다. 그 사이 다른 탭에서 새 가입이 끝나면 키에는 **그 사람의 아직 제출되지
+          않은 동의**가 들어와 있고, 그대로 지우면 고른 적 있는 동의가 소리 없이 사라진다.
+          localStorage 에 조건부 삭제는 없으니 이건 원자적이지 않다 — 창을 좁힐 뿐이다.
+        */
+        if (stashedRef.current) {
+          clearPendingTermsConsentIfUnchanged(stashedRef.current);
+        }
+        setPending(null);
+      }}
       contentHref={termsContentHref}
     />
   );

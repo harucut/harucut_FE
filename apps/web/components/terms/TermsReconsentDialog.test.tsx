@@ -8,7 +8,11 @@
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsReconsentDialog } from "@/components/terms/TermsReconsentDialog";
-import { termsContentHref, type MyTermsConsent } from "@/lib/termsApi";
+import {
+  termsContentHref,
+  type ActiveTerms,
+  type MyTermsConsent,
+} from "@/lib/termsApi";
 
 const mockFetchActive = jest.fn();
 const mockSubmit = jest.fn();
@@ -51,7 +55,9 @@ afterAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFetchActive.mockResolvedValue([]);
+  // 정적 대역이 사라져 **모든** 약관이 서버 본문으로만 읽힌다. 기본값이 빈 배열이면
+  // 필수 약관까지 읽을 수 없어 체크박스가 전부 잠기고, 어떤 테스트도 화면을 굴리지 못한다.
+  mockFetchActive.mockResolvedValue([tosActive]);
   mockSubmit.mockResolvedValue(undefined);
   mockDelete.mockResolvedValue({ data: null, ok: true, status: 200 });
 });
@@ -74,7 +80,7 @@ function apiError(status: number) {
   return Object.assign(new Error(`logout failed: ${status}`), { status });
 }
 
-/** 관리자가 추가한 코드. `termsContentHref` 가 모르므로 정적 링크가 없다. */
+/** **필수** 약관. 기본 mock 은 이 코드의 본문을 주지 않아, 이것 하나로 제출이 통째로 막힌다. */
 const refundPolicy: MyTermsConsent = {
   code: "refund-policy",
   title: "환불 정책 동의",
@@ -92,7 +98,19 @@ const tos: MyTermsConsent = {
   latestVersion: 2,
 };
 
-/** 정적 링크가 없는 **선택** 약관. 동의할 필요가 없는데도 제출을 막던 자리다. */
+/**
+ * 위 `tos` 의 서버 본문. 동의를 받는 자리에 펼쳐지는 글은 이제 이것뿐이다 —
+ * 번들 정적 화면은 지금 동의받는 버전임을 증명하지 못해 대역에서 빠졌다.
+ */
+const tosActive: ActiveTerms = {
+  code: "tos",
+  title: "서비스 이용약관",
+  required: true,
+  version: 2,
+  content: "제1조 개정된 이용약관 본문입니다.",
+};
+
+/** 본문을 못 받은 **선택** 약관. 동의할 필요가 없는데도 제출을 막던 자리다. */
 const newsletter: MyTermsConsent = {
   code: "newsletter-policy",
   title: "뉴스레터 수신 동의",
@@ -112,7 +130,7 @@ function renderDialog(consents: MyTermsConsent[]) {
 }
 
 describe("TermsReconsentDialog", () => {
-  it("정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다", async () => {
+  it("약관 본문은 서버가 준 전문을 그 자리에서 펼친다", async () => {
     mockFetchActive.mockResolvedValue([
       {
         code: "refund-policy",
@@ -130,6 +148,22 @@ describe("TermsReconsentDialog", () => {
       screen.getByText("환불은 결제일로부터 7일 이내에 가능합니다."),
     ).toBeInTheDocument();
     expect(screen.getByRole("checkbox")).toBeEnabled();
+  });
+
+  /**
+   * 이 화면이 뜨는 가장 흔한 이유가 **개정**이다(`NEEDS_RECONSENT`).
+   *
+   * 번들 정적 화면(`/terms`)은 개정돼도 그대로라, 대역을 두면 사용자는 옛 글을 읽고
+   * 새 버전에 동의한다. 그래서 `tos` 처럼 예전에 대역이 있던 코드도 이제 링크가 아니라
+   * 서버 본문으로 읽힌다 — 대역을 되살리면 여기서 걸린다.
+   */
+  it("개정된 필수 약관에도 정적 화면으로 나가는 출구를 두지 않는다", async () => {
+    renderDialog([tos]);
+
+    expect(
+      await screen.findByText("제1조 개정된 이용약관 본문입니다."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "보기" })).toBeNull();
   });
 
   it("본문을 못 받으면 동의를 받지 않고, 다시 시도로 푼다", async () => {
@@ -170,6 +204,8 @@ describe("TermsReconsentDialog", () => {
     renderDialog([tos]);
 
     const checkbox = await screen.findByRole("checkbox");
+    // 첫 페인트에는 본문이 아직 없어 잠겨 있다. 잠긴 칸은 클릭이 먹지 않는다.
+    await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
     const submit = screen.getByRole("button", { name: "동의하고 계속하기" });
@@ -191,6 +227,8 @@ describe("TermsReconsentDialog", () => {
     renderDialog([tos]);
 
     const checkbox = await screen.findByRole("checkbox");
+    // 본문이 오기 전에는 잠겨 있고, 잠긴 칸은 포커스 트랩이 건너뛴다.
+    await waitFor(() => expect(checkbox).toBeEnabled());
     (document.activeElement as HTMLElement).blur();
     expect(document.activeElement).toBe(document.body);
 
@@ -302,12 +340,11 @@ describe("TermsReconsentDialog", () => {
   /**
    * 닫을 수 없는 화면에서 **동의할 필요도 없는 항목**이 출구를 막으면 안 된다.
    *
-   * 정적 링크가 없는 선택 약관이 섞여 있고 본문 조회가 실패하면, 읽을 수 있는 필수 약관에
-   * 전부 동의해도 제출이 영영 잠겼다. 남는 길은 로그아웃뿐이었다.
+   * 본문이 오지 않은 선택 약관이 섞여 있으면, 읽을 수 있는 필수 약관에 전부 동의해도
+   * 제출이 영영 잠겼다. 남는 길은 로그아웃뿐이었다.
    */
   it("읽을 수 없는 선택 약관은 필수 재동의를 막지 않는다", async () => {
-    mockFetchActive.mockRejectedValueOnce(new Error("network"));
-
+    // 서버 본문에 `tos` 만 있다 — 필수는 읽히고 선택은 읽히지 않는 갈림길이다.
     renderDialog([tos, newsletter]);
 
     // 본문을 못 읽는 상황이 맞는지 먼저 못 박는다.
@@ -335,8 +372,6 @@ describe("TermsReconsentDialog", () => {
    * 체크박스는 비활성이라 사용자는 되돌릴 수도 없다. 동의는 법적 기록이다.
    */
   it("읽을 수 없는 선택 약관의 재동의 대기 상태를 철회로 보내지 않는다", async () => {
-    mockFetchActive.mockRejectedValueOnce(new Error("network"));
-
     renderDialog([
       tos,
       {
@@ -366,8 +401,6 @@ describe("TermsReconsentDialog", () => {
    * 읽지 못한 최신 버전에 대한 동의로 갱신된다 — 페이로드에서 빼고 서버 값을 그대로 둔다.
    */
   it("읽을 수 없는 선택 약관의 기존 동의는 다시 보내지 않는다", async () => {
-    mockFetchActive.mockRejectedValueOnce(new Error("network"));
-
     renderDialog([tos, { ...newsletter, status: "AGREED", agreedVersion: 1 }]);
 
     const newsBox = await screen.findByRole("checkbox", { name: /뉴스레터/ });
@@ -384,8 +417,6 @@ describe("TermsReconsentDialog", () => {
   // 설정 패널과 같은 규칙이다 — 막는 것은 주는 방향뿐이다. 이미 준 동의를 거두는 길은
   // 본문과 무관하게 열려 있어야 한다(정보통신망법 §50).
   it("읽을 수 없어도 이미 한 선택 동의는 거둘 수 있다", async () => {
-    mockFetchActive.mockRejectedValueOnce(new Error("network"));
-
     renderDialog([tos, { ...newsletter, status: "AGREED", agreedVersion: 1 }]);
 
     const newsBox = await screen.findByRole("checkbox", { name: /뉴스레터/ });
