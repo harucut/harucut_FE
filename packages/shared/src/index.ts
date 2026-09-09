@@ -68,3 +68,8 @@ export {
   isSameOrigin,
   originOf,
 } from './shell-origin';
+export {
+  NATIVE_FILENAME_MAX_BYTES,
+  clampFilenameBytes,
+  safeNativeFilename,
+} from './native-filename';

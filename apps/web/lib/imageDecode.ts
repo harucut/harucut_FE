@@ -22,6 +22,7 @@
  * 실기기 WKWebView 는 같은 엔진이지만 하드웨어 디코더를 쓰므로 더 빠를 것으로 본다.
  */
 
+import { fitCanvasScale } from "@/lib/canvas/canvasBudget";
 import {
   isSupportedUploadFile,
   MAX_UPLOAD_BYTES,
@@ -152,6 +153,69 @@ export function resetLibheifCacheForTest(): void {
   libheifPromise = null;
 }
 
+/**
+ * RGBA 버퍼를 목적지 크기로 줄여 담는다. **중간에 캔버스를 쓰지 않는다.**
+ *
+ * 왜 `drawImage` 가 아닌가: drawImage 로 줄이려면 원본을 먼저 「그릴 수 있는 것」으로
+ * 만들어야 하는데(원본 크기 캔버스나 ImageBitmap), 원본 크기 캔버스를 잡는 것이 바로
+ * 여기서 피하려는 일이다. `createImageBitmap` 은 캔버스를 안 거치지만 거기에 같은 상한이
+ * 있는지 우리가 **모른다** — 확인 못 한 것에 기대느니 화소를 직접 평균낸다.
+ *
+ * 상자 평균이다. 최근접(한 픽셀만 골라 쓰기)보다 느리지만 사진을 크게 줄일 때 모아레가
+ * 덜하다. 원본 화소를 한 번씩만 읽으므로 비용은 원본 크기에 비례한다 — 48MP 면 4천8백만
+ * 번이라 폰에서 눈에 띄는 시간이 걸린다(재 본 적은 없다). 그래도 예산을 넘는 사진에서만
+ * 도는 길이고, 대안이 「조용히 빈 그림」이다.
+ *
+ * 알파를 미리 곱하지 않고 평균한다 — 반투명 경계가 있으면 색이 조금 섞인다. 여기 오는
+ * 것은 아이폰 사진(HEIC)이라 알파가 없어 그대로 뒀다.
+ */
+function shrinkPixels(source: ImageData, target: ImageData): ImageData {
+  const { width: sourceWidth, height: sourceHeight, data: src } = source;
+  const { width: targetWidth, height: targetHeight, data: dst } = target;
+
+  for (let ty = 0; ty < targetHeight; ty += 1) {
+    const yStart = Math.floor((ty * sourceHeight) / targetHeight);
+    // 목적지 한 칸에 원본이 한 줄도 안 걸리는 일이 없게 최소 한 줄은 읽는다.
+    const yEnd = Math.max(
+      yStart + 1,
+      Math.floor(((ty + 1) * sourceHeight) / targetHeight),
+    );
+
+    for (let tx = 0; tx < targetWidth; tx += 1) {
+      const xStart = Math.floor((tx * sourceWidth) / targetWidth);
+      const xEnd = Math.max(
+        xStart + 1,
+        Math.floor(((tx + 1) * sourceWidth) / targetWidth),
+      );
+
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+
+      for (let y = yStart; y < yEnd; y += 1) {
+        const rowStart = y * sourceWidth;
+        for (let x = xStart; x < xEnd; x += 1) {
+          const i = (rowStart + x) * 4;
+          r += src[i];
+          g += src[i + 1];
+          b += src[i + 2];
+          a += src[i + 3];
+        }
+      }
+
+      const count = (yEnd - yStart) * (xEnd - xStart);
+      const out = (ty * targetWidth + tx) * 4;
+      dst[out] = r / count;
+      dst[out + 1] = g / count;
+      dst[out + 2] = b / count;
+      dst[out + 3] = a / count;
+    }
+  }
+
+  return target;
+}
+
 async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
   const libheif = await loadLibheif();
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -165,29 +229,61 @@ async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
   const height = image.get_height();
   if (!width || !height) return null;
 
+  /*
+    ── 푸는 캔버스도 예산 안에서 잡는다 ──
+
+    무엇이 잘못됐었나: 여기서는 `canvas.width = 원본폭` 으로 원본 화소 그대로 캔버스를
+    잡았다. 굽는 쪽(`encodeAsJpeg`)만 예산에 맞추면, 진짜 상한이 예산과 원본 사이에 있는
+    기기에서 **푸는 캔버스만 상한을 넘는다.** 그런 캔버스는 putImageData 가 오류 없이
+    아무것도 안 그리는 것으로 알려져 있고(`canvasBudget.ts` 「가정」), 그러면 그 빈
+    캔버스를 예산 안 크기로 다시 구워 **빈 그림이 조용히 올라간다.**
+
+    굽는 쪽만 고쳤을 때가 더 나빴다: 그 전에는 두 캔버스가 같이 커서 인코딩도 같이
+    실패했고, 사용자는 「지원하지 않는 형식」이라는 **거절**을 봤다. 보이던 실패를 조용한
+    데이터 손실로 바꾸는 쪽이라 여기서 닫는다.
+  */
+  const scale = fitCanvasScale(width, height);
+  const targetWidth = Math.max(1, Math.floor(width * scale));
+  const targetHeight = Math.max(1, Math.floor(height * scale));
+
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  const imageData = ctx.createImageData(width, height);
+  /*
+    libheif 는 **원본 크기 RGBA 버퍼에만** 채워 준다 — 줄여 달라고 할 수가 없다. 버퍼는
+    캔버스가 아니라 그냥 메모리라 캔버스 예산과는 무관하다. 대신 원본 화소 × 4바이트를
+    쓰므로 고화소 사진에서는 그 자체로 무겁다(48MP 면 190MB 대). 예전과 같은 비용이고,
+    이 자리에서 줄일 방법은 없다.
+  */
+  const decoded = ctx.createImageData(width, height);
   await new Promise<void>((resolve, reject) => {
     /*
       `display` 는 RGBA 를 우리가 준 버퍼에 채우고 콜백을 부른다. 실패하면 콜백 인자가
       비어 온다 — 여기서 던지지 않고 reject 로 넘긴다. wasm 프레임을 가로질러 던지면
       스택이 끊겨 어디서 죽었는지 알 수 없다(personCutout.ts 에 같은 주석이 있다).
     */
-    image.display({ data: imageData.data, width, height }, (result) => {
+    image.display({ data: decoded.data, width, height }, (result) => {
       if (result) resolve();
       else reject(new Error("libheif display failed"));
     });
   });
 
-  ctx.putImageData(imageData, 0, 0);
+  // 예산 안에 드는 사진은 예전 그대로 — 버퍼를 그대로 얹는다(복사도 평균도 없다).
+  ctx.putImageData(
+    scale === 1
+      ? decoded
+      : shrinkPixels(decoded, ctx.createImageData(targetWidth, targetHeight)),
+    0,
+    0,
+  );
 
-  return { source: canvas, width, height };
+  // 캔버스가 줄어들었으면 **줄어든 크기**를 알린다. 호출부(`encodeAsJpeg`·photoImport)가
+  // 이 숫자로 다시 배율을 잡으므로, 원본 크기를 주면 없는 화소를 늘려 그리게 된다.
+  return { source: canvas, width: targetWidth, height: targetHeight };
 }
 
 /**
@@ -263,8 +359,15 @@ async function encodeAsJpeg(
   scale: number,
 ): Promise<Blob | null> {
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(decoded.width * scale));
-  canvas.height = Math.max(1, Math.round(decoded.height * scale));
+  /*
+    올림이 아니라 **내림**이다. 예산에 딱 맞춘 배율은 올림 한 번에 도로 예산을 넘는다 —
+    맞춘 결과가 예산 바로 아래라 한 줄만 붙어도 넘어간다. `composeFrame.ts` 도 같은
+    이유로 내림한다. 얼마나 넘는지는 예산 값을 따라 움직이므로 여기 적지 않는다(못은
+    아래 `imageDecode.test.ts` 「예산에 맞출 때 올림으로…」가 박고 있다).
+    배율이 1일 때는 정수 × 1 이라 내려도 원본 화소 그대로다.
+  */
+  canvas.width = Math.max(1, Math.floor(decoded.width * scale));
+  canvas.height = Math.max(1, Math.floor(decoded.height * scale));
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
@@ -287,13 +390,18 @@ async function encodeAsJpeg(
  * 같은 종류라(`UploadValidationError`) 화면이 이미 한국어로 보여 준다 — 새 문구를 만들면
  * 「지원하지 않는 형식」을 말하는 자리가 두 곳이 된다.
  *
- * 화소는 **한도를 넘을 때만** 줄인다. 24MP·48MP 아이폰 사진은 원본 화소 그대로 구우면
- * 압축된 원본이 작았더라도 결과가 `MAX_UPLOAD_BYTES`(10MiB)를 넘긴다 — 그러면 변환까지
- * 해 놓고 `uploadToS3WithPresigned` 가 발급 전에 거절해서, 정작 지원하려던 고해상도
- * 사진만 마지막 단계에서 계속 실패한다.
+ * 화소를 줄이는 기준은 **둘**이고, 둘 다 「넘을 때만」이다.
  *
- * 줄이는 기준은 그 하나뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_EDGE`)은
- * 네컷 슬롯 크기에서 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
+ *  1. **캔버스 예산**(`lib/canvas/canvasBudget.ts`) — 첫 굽기부터 `fitCanvasScale` 로
+ *     맞춘다(왜인지는 본문 주석). HEIC 를 wasm 으로 푸는 길에서는 `decodeWithLibheif` 가
+ *     **푸는 캔버스에도** 같은 배율을 걸어 두므로, 여기 오는 그림은 이미 예산 안이다.
+ *  2. **올릴 수 있는 크기** — 그러고도 `MAX_UPLOAD_BYTES`(10MiB)를 넘으면 되풀이해 줄인다.
+ *     24MP·48MP 아이폰 사진은 압축된 원본이 작았더라도 다시 구우면 넘길 수 있다 — 그러면
+ *     변환까지 해 놓고 `uploadToS3WithPresigned` 가 발급 전에 거절해서, 정작 지원하려던
+ *     고해상도 사진만 마지막 단계에서 계속 실패한다.
+ *
+ * 그 둘뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_EDGE`)은 네컷 슬롯 크기에서
+ * 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
  */
 export async function toUploadableFile(file: File): Promise<File> {
   if (canUploadAsIs(file)) return file;
@@ -301,7 +409,35 @@ export async function toUploadableFile(file: File): Promise<File> {
   const decoded = await decodeImageFile(file);
   if (!decoded) throw createUnsupportedUploadError(file);
 
-  let scale = 1;
+  /*
+    ── 첫 굽기부터 캔버스 예산에 맞춘다 ──
+
+    무엇이 잘못됐었나: 예전에는 크기를 줄일 필요가 있는지 알기도 전에 `scale = 1`, 곧
+    **원본 화소 그대로** 캔버스를 잡았다.
+
+    무엇이 그것을 문제로 보게 했나 — 여기서부터는 **가정**이다. iOS 는 캔버스가 상한을
+    넘으면 오류를 주지 않고 조용히 빈 그림을 그리거나 `toBlob` 이 null 을 준다고
+    **전해진다**(근거와 그 근거의 한계는 `lib/canvas/canvasBudget.ts` 「가정」에 있다.
+    실기기로 확인한 적이 없고, 데스크톱 WebKit 에서는 24MP 가 멀쩡히 그려졌다).
+    그 이야기가 맞다면 이렇게 된다: 아래 크기 기반 축소 루프는 `blob` 이 null 이라 한 번도
+    못 돌고, 밑에서 「지원하지 않는 형식」으로 거절된다. WebKit 이 HEIC 를 **스스로
+    읽는데도** 고화소 아이폰 사진만 골라 실패하는 모양이 된다 — 프로필 사진과 프레임
+    배경으로 가장 흔히 고르는 것이 하필 그 사진이라, 가정이 맞을 때 치를 값이 크다.
+    (사용자가 실제로 그렇게 실패했다는 보고를 우리가 확인한 것은 아니다.)
+
+    숫자를 여기서 새로 정하지 않는다. 예산의 소유자는 `lib/canvas/canvasBudget.ts` 하나고,
+    합성(`composeFrame`)도 같은 것을 본다. 숫자를 두 곳에 두면 한쪽만 고쳐지는데, 그때
+    갈라지는 쪽이 하필 이 조용한 실패 경로다.
+
+    화질을 필요 이상으로 깎지 않는다: 예산 안에 드는 사진은 배율이 정확히 1이라 예전과
+    똑같이 원본 화소로 굽는다. 넘는 사진도 예산에 맞춘 크기가 프로필(원형 수백 px)이나
+    프레임 배경(2400px 대)이 요구하는 것보다는 여전히 크다.
+
+    남는 한계: 어떤 기기의 진짜 상한이 예산보다 낮으면 첫 `toBlob` 이 여전히 null 이고,
+    우리는 더 줄여 다시 굽지 않고 거절한다. 상한을 재는 방법이 「그려 보고 실패하는지
+    본다」뿐이라 비용이 커서, 실기기에서 그런 사례를 만나기 전에는 붙이지 않는다.
+  */
+  let scale = fitCanvasScale(decoded.width, decoded.height);
   let blob = await encodeAsJpeg(decoded, scale);
 
   /*

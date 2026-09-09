@@ -1,3 +1,4 @@
+import { safeNativeFilename } from '@harucut/shared';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
@@ -149,10 +150,20 @@ export function cancelTransfers() {
   void sweepStaleTempDirs();
 }
 
+/**
+ * 사용자 표시 이름이 그대로 파일명이 된다 — 금지 문자를 걷어내고 **길이도 줄인다.**
+ *
+ * 예전에는 금지 문자만 바꿨다. 그런데 웹이 넘기는 이름은 서버 상한(UTF-16 255자)까지 길 수
+ * 있고 거기에 `.png` 가 붙어, 한글 최대 이름이면 경로 구성요소가 769바이트가 됐다 —
+ * ext4·F2FS·APFS 의 255 한도를 넘어 `downloadAsync()`·`writeAsStringAsync()` 가 그대로
+ * 실패했다. **서버는 받아 준 이름인데 앱에서만 저장이 안 되는** 실패다.
+ *
+ * 판정 규칙은 `@harucut/shared` 에 있다 — 모바일에는 테스트 러너가 없어서, 자르는 규칙
+ * (확장자 보존·UTF-8 중간 자르기 금지·서로게이트 페어 보호)은 웹 쪽 jest 로 지킨다
+ * (constants/shell.ts 의 오리진 판정과 같은 방식). 여기서는 폴백 이름만 붙여 준다.
+ */
 function safeFilename(name: string) {
-  // 사용자 표시 이름이 그대로 파일명이 된다 — 경로 구분자와 금지 문자를 걷어낸다.
-  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim();
-  return cleaned.length > 0 ? cleaned : `harucut-${Date.now()}.png`;
+  return safeNativeFilename(name, `harucut-${Date.now()}.png`);
 }
 
 /**
@@ -199,7 +210,9 @@ async function ensurePermission(): Promise<BridgeResult> {
  * 겹치면 downloadAsync 가 서로의 파일을 덮어쓰고 먼저 끝난 쪽의 finally 가 아직 저장 중인
  * 파일을 지운다 — 한쪽이 실패하거나 **남의 사진이 사진첩에 들어간다.**
  *
- * 사진첩에 남는 이름은 표시 이름 그대로여야 하므로(safeFilename) 파일명이 아니라 폴더를 가른다.
+ * 그렇다고 파일명 쪽에 요청마다 다른 꼬리를 붙일 수는 없다. 사진첩에 남는 이름은 사용자가
+ * 정한 표시 이름이어야 하고, `safeFilename` 은 그 이름을 씻고 **255바이트를 넘으면 자를 뿐**
+ * 구분자를 더하지 않는다. 그래서 파일명이 아니라 폴더를 가른다.
  * 웹이 준 요청 id 를 쓰지 않는 이유는 그것도 경로가 되기 때문이다 — 표시 이름과 똑같이
  * 씻어야 한다. 앱은 한 프로세스라 여기서 만든 값이면 충돌하지 않는다.
  */

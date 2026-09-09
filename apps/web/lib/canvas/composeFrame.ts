@@ -1,3 +1,4 @@
+import { fitCanvasScale } from "@/lib/canvas/canvasBudget";
 import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { drawTextComponent } from "@/lib/canvas/textLayer";
@@ -24,34 +25,6 @@ export type FrameSource = { src: string };
 type SlotDrawable = { el: HTMLImageElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
-
-/**
- * 한 캔버스가 가질 수 있는 픽셀 수의 안전선.
- *
- * 확인된 것 — 이 상한은 우리 레이아웃 두 개를 겨냥해 일부러 잡은 값이다.
- * 가로 4컷 6000×4000 과 세로형 4000×6000 이 **24MP** 로, 여기서만 축소가 걸린다
- * (클래식 2000×6000 은 12MP 라 그대로 나간다). 넘으면 비율을 지킨 채 줄인다 —
- * 24MP → 16MP 는 한 변으로 0.82 배라 6000×4000 이 4898×3265 가 된다.
- * 인화·보관에는 여전히 충분한 해상도다.
- *
- * 가정 — 왜 하필 16MP 인가는 아직 증명되지 않았다. iOS Safari 가 캔버스 넓이
- * 2^24(16,777,216)px 를 넘으면 오류 없이 빈 캔버스를 그리거나 toBlob 이 null 을
- * 준다는 이야기를 근거로, 거기에 딱 붙이지 않고 조금 아래에 둔 것이다.
- * **실기기로 확인한 적이 없다.** 2026-09-01 데스크톱 WebKit 에서는 24MP 캔버스가
- * 멀쩡히 그려지고 인코딩됐다 — 데스크톱에서는 재현되지 않는다는 것까지만 안다.
- *
- * 그래도 상한을 걷지 않는 이유는 비용이 비대칭이라서다. 가정이 맞는데 걷으면
- * 완성 단계가 빈 이미지로 끝나고, 가정이 틀린 채 두면 해상도 0.82 배를 잃을 뿐이다.
- * 값을 올리거나 내리려면 진짜 아이폰에서 재현/반증부터 해야 한다.
- */
-const MAX_CANVAS_PIXELS = 16_000_000;
-
-/** 넓이 상한에 맞춘 축소 배율. 상한 안이면 1. */
-export function fitCanvasScale(width: number, height: number) {
-  const pixels = width * height;
-  if (pixels <= MAX_CANVAS_PIXELS) return 1;
-  return Math.sqrt(MAX_CANVAS_PIXELS / pixels);
-}
 
 function ensureCtx(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
@@ -301,11 +274,13 @@ export async function composeFramePng(opts: {
   }
 
   const canvas = opts.canvas ?? document.createElement("canvas");
-  // 캔버스 넓이 상한(MAX_CANVAS_PIXELS — 왜 그 값인지는 거기 적어 뒀다)을 넘지 않게 줄인다.
-  // 그리는 좌표는 레이아웃 원본 크기 그대로 두고 컨텍스트에 배율만 걸어,
-  // 그리는 쪽 코드는 상한을 몰라도 되게 한다.
+  // 캔버스 예산(`lib/canvas/canvasBudget.ts` — 왜 그 값인지, 무엇이 확인 안 됐는지가
+  // 거기 적혀 있다)을 넘지 않게 줄인다. 그리는 좌표는 레이아웃 원본 크기 그대로 두고
+  // 컨텍스트에 배율만 걸어, 그리는 쪽 코드는 예산을 몰라도 되게 한다.
   const outputScale = fitCanvasScale(layout.totalWidth, layout.totalHeight);
-  // 올림하면 상한을 다시 넘긴다 — 6000×4000 은 4899×3266 = 16,000,134 로 134px 초과다.
+  // 올림하면 예산에 맞춘 배율이 도로 예산을 넘는다(맞춘 뒤 화소 수가 예산 바로 아래라
+  // 한 줄만 더 붙어도 넘어간다). 숫자는 예산 값을 따라 움직이므로 여기 적지 않는다 —
+  // 못은 `canvasBudget.test.ts` 와 `imageDecode.test.ts` 가 박고 있다.
   canvas.width = Math.floor(layout.totalWidth * outputScale);
   canvas.height = Math.floor(layout.totalHeight * outputScale);
 

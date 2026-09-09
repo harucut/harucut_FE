@@ -13,7 +13,7 @@ import {
   clearPendingGuestSave,
   ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
-  readPendingGuestSave,
+  readPendingGuestSaveForClear,
   type PendingGuestSave,
   type PendingGuestSaveComposeKey,
 } from "@/lib/pendingGuestSave";
@@ -99,7 +99,10 @@ function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
  * 조회는 빈손으로 돌아온다. 그것을 「이미 없다」로 읽으면, 합성이 도는 사이 다른 탭이
  * 새로 찍어 둔 한 벌을 — 사용자가 확인한 적 없는 것을 — 그대로 지운다. 두 번째 열기만
  * 성공하면 원본 4장이 사라지고, 이 함수가 막으려던 사고가 바로 그 자리에서 난다.
- * 그래서 `readPendingGuestSave` 의 「없다」와 「모르겠다」를 갈라 본다.
+ * 그래서 삭제를 물을 때는 `readPendingGuestSaveForClear` 를 부른다 — 저장소를 못 연 채
+ * 읽은 예전 localStorage 한 벌까지 「모르겠다」로 접어 주는 쪽이다. 인계를 꺼낼 때 쓰는
+ * `readPendingGuestSave` 는 그 한 벌을 `found`(`opened: false`)로 주는데, 그 답을 삭제
+ * 근거로 쓰면 IndexedDB 를 한 번도 못 읽은 채 지우게 된다.
  *
  * **원자적이지 않다.** IndexedDB 에 조건부 삭제는 없어서 되읽기와 삭제 사이는 여전히
  * 열려 있다 — 안내를 띄운 순간부터 벌어져 있던 창을 두 줄 사이로 줄이는 것뿐이다
@@ -108,7 +111,7 @@ function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
 async function clearHandoffIfUnchanged(
   promptedEntry: PendingGuestSave,
 ): Promise<boolean> {
-  const read = await readPendingGuestSave();
+  const read = await readPendingGuestSaveForClear();
   if (read.status === "unreadable") return false;
   if (read.status === "found" && !isSameHandoff(read.entry, promptedEntry))
     return false;

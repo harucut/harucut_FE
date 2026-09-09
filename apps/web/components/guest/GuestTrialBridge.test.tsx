@@ -18,6 +18,7 @@ const mockReplace = jest.fn();
 const mockSaveFourcutToServer = jest.fn();
 const mockGetPending = jest.fn();
 const mockReadPending = jest.fn();
+const mockReadForHandoff = jest.fn();
 const mockClearPending = jest.fn();
 const mockEnsureComposeKey = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
@@ -38,7 +39,10 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 
 jest.mock("@/lib/pendingGuestSave", () => ({
   getPendingGuestSave: (...args: unknown[]) => mockGetPending(...args),
-  readPendingGuestSave: (...args: unknown[]) => mockReadPending(...args),
+  // 두 읽기를 **다른 목으로** 나눠 둔다. 삭제 경로가 실수로 인계용 읽기를 부르면
+  // (그쪽은 저장소를 못 연 채 읽은 예전 한 벌도 `found` 로 준다) 아래 회귀가 잡는다.
+  readPendingGuestSave: (...args: unknown[]) => mockReadForHandoff(...args),
+  readPendingGuestSaveForClear: (...args: unknown[]) => mockReadPending(...args),
   clearPendingGuestSave: (...args: unknown[]) => mockClearPending(...args),
   ensurePendingGuestSaveComposeKey: (...args: unknown[]) =>
     mockEnsureComposeKey(...args),
@@ -121,9 +125,13 @@ beforeEach(() => {
   mockGetPending.mockResolvedValue(PENDING);
   // 조건부 삭제는 「없다」와 「모르겠다」를 가려 본다. 기본은 조회와 같은 답을 준다 —
   // 「모르겠다」는 그것을 시험하는 테스트가 직접 세운다.
+  // 인계용 읽기는 삭제 경로에서 쓰이면 안 된다 — 불리면 그 자체가 실패 신호다.
+  mockReadForHandoff.mockImplementation(async () => {
+    throw new Error("삭제 경로가 인계용 읽기를 불렀다");
+  });
   mockReadPending.mockImplementation(async () => {
     const entry = await mockGetPending();
-    return entry ? { status: "found", entry } : { status: "empty" };
+    return entry ? { status: "found", entry, opened: true } : { status: "empty" };
   });
   storedComposeKey = null;
   mintedKeyCount = 0;
@@ -562,6 +570,29 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
     // 고치기 전에는 여기서 확인한 적 없는 한 벌까지 지웠다.
     expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — 조건부 삭제는 **삭제 전용 읽기**를 쓴다.
+
+    인계용 읽기(`readPendingGuestSave`)는 저장소를 못 연 채 읽은 예전 localStorage 한 벌도
+    `found` 로 준다 — 그 답을 삭제 근거로 쓰면 IndexedDB 를 한 번도 못 읽은 채 지우게 되고,
+    다른 탭이 방금 찍어 둔 원본 4장이 사라진다. 삭제를 물을 때 부르는 것은 그 경우를
+    「모르겠다」로 접어 주는 `readPendingGuestSaveForClear` 하나여야 한다.
+  */
+  it("보관물을 지울 때는 삭제 전용 읽기를 쓴다", async () => {
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "버리기" })).toBeInTheDocument();
+    });
+    pressNoticeAction("버리기");
+
+    await waitFor(() => {
+      expect(mockClearPending).toHaveBeenCalled();
+    });
+    expect(mockReadPending).toHaveBeenCalled();
+    // 인계용 읽기를 불렀다면 위 목이 던져 여기까지 오지 못한다. 명시적으로도 못 박는다.
+    expect(mockReadForHandoff).not.toHaveBeenCalled();
   });
 
   it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {

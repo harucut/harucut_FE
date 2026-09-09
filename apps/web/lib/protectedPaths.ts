@@ -57,15 +57,25 @@ function toRoutePath(pathname: string) {
     .join("/");
 }
 
+/**
+ * 게스트 화면이 들어가면 안 되는 **회원 전용** 경로인가.
+ *
+ * `isGuestAllowedPath` 안에서만 쓰던 판정을 따로 내보낸다. 프록시가 이 둘을 다르게 다뤄야
+ * 하기 때문이다 — 일반 보호 경로는 인증 쿠키가 있으면 통과시키지만(백엔드가 집행한다),
+ * 여기는 **인증 쿠키가 있어도** 막는다. 게스트로 그려 주고 있는 화면이 비회원 범위
+ * (약관 제8조 · `@harucut/shared` 의 GUEST_ALLOWED_ITEMS)를 넘는 것을 막는 자리라,
+ * 쿠키가 있는지보다 화면이 무엇으로 그려지고 있는지가 기준이다.
+ */
+export function isGuestMemberOnlyPath(pathname: string) {
+  const routePath = toRoutePath(pathname);
+  return GUEST_MEMBER_ONLY_PREFIXES.some((prefix) => hasPrefix(routePath, prefix));
+}
+
 /** 비회원 체험 쿠키만 가진 사람에게 열어 줄 경로인가. */
 export function isGuestAllowedPath(pathname: string) {
   // 허용·차단 둘 다 정규화한 주소로 본다. 한쪽만 보면 주소 모양에 따라 판정이 갈린다.
   const routePath = toRoutePath(pathname);
 
-  if (
-    GUEST_MEMBER_ONLY_PREFIXES.some((prefix) => hasPrefix(routePath, prefix))
-  ) {
-    return false;
-  }
+  if (isGuestMemberOnlyPath(pathname)) return false;
   return GUEST_ALLOWED_PREFIXES.some((prefix) => hasPrefix(routePath, prefix));
 }

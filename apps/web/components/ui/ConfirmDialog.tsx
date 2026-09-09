@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 
 type Props = {
@@ -38,14 +39,49 @@ export function ConfirmDialog({
   onClose,
   onConfirm,
 }: Props) {
-  const dialogRef = useModalDialog(true, onClose);
+  /*
+    **실행 중에는 닫히지 않는다.**
+
+    닫는 길이 셋이다 — 배경 누르기 · 취소 버튼 · Escape(useModalDialog). 예전에는
+    `running` 이 **버튼 두 개의 disabled 만** 껐고, 배경 버튼과 Escape 는 `onClose` 를
+    그대로 불렀다. 이 다이얼로그가 묻는 것은 전부 되돌릴 수 없는 DELETE 라, 느린 요청이
+    도는 사이 그 둘 중 하나로 닫히면 화면에서는 취소한 것처럼 보이지만 요청은 계속 간다.
+    사용자는 그 자리에서 이름 바꾸기나 **다른** 항목 삭제를 시작하고(기록), 저장을 누르기도
+    하는데(테마 편집기 — 저장 버튼은 `isSaving` 만 보고 `isDeleting` 은 안 본다,
+    ThemeEditorPage.tsx:572), 뒤늦게 도착한 응답이 목록에서 항목을 지우거나 `/theme` 로
+    화면을 옮겨 버린다. 실패해도 그 사유는 이미 닫힌 다이얼로그 밖에서 뜬다.
+
+    **같은 항목 재삭제는 여기 이유가 아니다** — 두 호출부가 이미 막는다(history/page.tsx 의
+    `disabled={deletingId === item.mediaId}`, ThemeEditorPage.tsx:593 의
+    `disabled={isDeleting || isSaving}`). 한때 여기 적혀 있었는데 코드와 어긋난 말이었다.
+
+    요청 자체를 취소할 수는 없으므로(fetch 를 끊어도 서버는 이미 처리한다) 할 수 있는
+    일은 결과를 볼 자리를 지키는 것이다. 셋을 한 함수로 모아 여기서 막는다 —
+    `PasswordChangeDialog` 를 같은 이유로 먼저 고쳤고 모양을 맞춰 둔다.
+
+    가드는 `running` 일 때만이다. 무조건 막으면 되돌릴 수 없는 삭제 앞에서 빠져나갈
+    길이 없어져 더 나쁘다.
+  */
+  const requestClose = useCallback(() => {
+    if (running) return;
+    onClose();
+  }, [onClose, running]);
+  const dialogRef = useModalDialog(true, requestClose);
 
   return (
     <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+      {/*
+        배경에는 `disabled` 를 걸지 않는다 — 눌림은 `requestClose` 가 막고, 결과는 같다.
+        실행 중에 화면에서 누를 수 있는 것을 하나도 남기지 않는 데 굳이 한몫할 이유가 없다.
+
+        다만 이것만으로는 모달 트랩이 살아나지 않는다. `useModalDialog` 의 `focusables()` 는
+        `dialogRef` 가 붙은 **아래 카드 안쪽만** 훑는데(useModalDialog.ts), 이 배경 버튼은
+        그 밖에 있다. 트랩을 붙잡는 것은 아래 취소 버튼의 aria-disabled 쪽이다.
+      */}
       <button
         type="button"
         aria-label="닫기"
-        onClick={onClose}
+        onClick={requestClose}
         className="absolute inset-0"
       />
       <div
@@ -70,11 +106,29 @@ export function ConfirmDialog({
         ) : null}
 
         <div className="mt-5 flex gap-2">
+          {/*
+            disabled 가 아니라 aria-disabled 다 — `TermsReconsentDialog` 와 같은 이유에,
+            여기서는 트랩까지 걸려 있다.
+
+            취소와 확인을 **둘 다** disabled 로 두면 `useModalDialog` 의 `focusables()` 가
+            빈 배열이 되고, Tab 은 `items.length === 0` 가지에서 통째로 삼켜진다. 확인을
+            누른 순간 브라우저가 body 로 내려놓은 포커스를 되끌어오는 코드는 훅에 이미
+            있는데(`!container.contains(active)` 가지), 빈 배열이면 거기까지 닿지 못한다.
+            그래서 하나는 포커스 가능한 채로 남긴다.
+
+            `PasswordChangeDialog` 가 취소까지 disabled 로 두고도 트랩이 사는 이유는
+            AuthField 의 "비밀번호 보기" 토글이 saving 과 무관하게 살아 있어서다 — 우연이지
+            설계가 아니다. 여기에는 그런 컨트롤이 없다.
+
+            눌림은 `requestClose` 가 막는다. 실행 버튼은 disabled 를 그대로 둔다 — 되돌릴 수
+            없는 DELETE 가 두 번 나가지 않는다는 브라우저 차원의 보장이 포커스 자리보다
+            무겁고, 포커스는 다음 Tab 에 이 취소 버튼으로 돌아온다.
+          */}
           <button
             type="button"
-            onClick={onClose}
-            disabled={running}
-            className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold disabled:opacity-50"
+            onClick={requestClose}
+            aria-disabled={running}
+            className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           >
             취소
           </button>
