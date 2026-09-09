@@ -2,38 +2,43 @@
 
 import { useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { clientApi } from "@/lib/clientApi";
+import { isUnusableUserStatus, readUserStatus } from "@/lib/authUserStatus";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 /**
  * 공개 화면의 촬영 CTA 를 누른 사람이 **이미 회원인가**.
  *
- * 인증 쿠키(accessToken/refreshToken)는 httpOnly 라 클라이언트가 직접 읽지 못한다. 그래서
- * 서버에 한 번 물어보는 것이 유일한 길인데, **묻는 곳은 `/api/auth/status` 가 아니라
- * `/api/auth/session` 이다.**
+ * 인증 쿠키(accessToken/refreshToken)는 httpOnly 라 클라이언트가 직접 읽지 못한다. 서버에
+ * 물어보는 것이 유일한 길인데, 여기서 두 가지를 같이 챙겨야 한다.
  *
- * 둘의 차이가 여기서 중요하다. `/api/auth/status` 는 탈퇴요청(DELETED_REQUESTED)·탈퇴
- * (DELETED)·차단(BLOCKED) 계정에도 200 을 준다 — 복구 안내로 갈 수 있게 서버가 일부러
- * 열어 둔 예외다(docs/backend-contract.md 「탈퇴 요청 → 복구 생애주기」). 그 200 을 곧
- * 「회원」으로 읽으면 그 사람을 `/shoot` 으로 보내는데, 정작 일반 API 는 전부 403(GEN-021)
- * 이라 촬영도 저장도 안 되고 체험으로 돌아올 길도 없다. 이 버튼이 로그인 화면에도 붙어
- * 있어서 특히 그렇다. `/api/auth/session` 은 그 셋을 명시적으로 걸러 `authenticated: false`
- * 를 주므로(app/api/auth/session/route.ts), 그 판정을 그대로 쓴다 — 앱을 못 쓰는 계정은
- * 비회원과 같은 길, 즉 게스트 체험 안내로 간다.
+ * ① **만료된 액세스 토큰은 재발급한다.** 그래서 생 `fetch` 가 아니라 `clientApi` 로 부른다.
+ * 액세스 JWT 만 만료되고 refresh 쿠키가 멀쩡한 회원은 흔한데(백엔드는 refresh 를 access 로
+ * 받아 주지 않는다 — docs/backend-contract.md), 생 `fetch` 는 그 401 을 그대로 받아 「비회원」
+ * 이 된다. 그러면 이 사람에게 체험 안내가 뜨고, 확인 한 번에 7일짜리 게스트 쿠키가 심겨
+ * 회원 촬영을 잃는다 — 이 훅이 막으려던 바로 그 사고다. `clientApi` 는 401 에서 한 번
+ * 재발급하고 원 요청을 다시 보낸다(lib/clientApi.ts).
  *
- * 조회가 실패하면(네트워크·5xx) 비회원으로 본다. 여기서 회원으로 치면 게스트 안내가
- * 사라져 비회원이 촬영 자체를 못 하게 된다 — 반대 방향의 실패가 더 나쁘다.
+ * ② **200 이라고 앱을 쓸 수 있는 것은 아니다.** `/api/auth/status` 는 탈퇴요청·탈퇴·차단
+ * 계정에도 200 을 준다(복구 진입로를 열어 둔 예외다). 그 200 을 회원으로 읽으면 그 사람을
+ * `/shoot` 으로 보내는데, 일반 API 는 전부 403(GEN-021)이라 촬영도 저장도 안 되고 체험으로
+ * 돌아올 길도 없다 — 이 버튼이 로그인 화면에도 붙어 있어 특히 그렇다. 그래서 본문의
+ * `userStatus` 를 함께 본다. 판정의 소유자는 `lib/authUserStatus.ts` 이고
+ * `/api/auth/session` 라우트도 같은 것을 쓴다.
+ *
+ * `/api/auth/session` 을 부르지 않는 이유가 여기 있다 — 그쪽은 판정을 대신 해 주지만
+ * 언제나 200 이라 `clientApi` 의 401 재발급이 걸리지 않는다.
+ *
+ * 조회가 실패하면(네트워크·5xx·재발급까지 실패한 401) 비회원으로 본다. 여기서 회원으로
+ * 치면 게스트 안내가 사라져 진짜 비회원이 촬영 자체를 못 하게 된다 — 반대 방향의 실패가
+ * 더 나쁘다.
  */
 async function isUsableMember() {
   try {
-    const res = await fetch("/api/auth/session", {
-      method: "GET",
-      credentials: "include",
+    const res = await clientApi.get<unknown>("/api/auth/status", {
       cache: "no-store",
     });
-    if (!res.ok) return false;
-    return Boolean(
-      ((await res.json()) as { authenticated?: boolean }).authenticated,
-    );
+    return !isUnusableUserStatus(readUserStatus(res.data));
   } catch {
     return false;
   }

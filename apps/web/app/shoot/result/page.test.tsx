@@ -1235,6 +1235,58 @@ describe("ShootResultPage", () => {
     expect(mockNativeNotify).toHaveBeenCalledTimes(1);
   });
 
+  /*
+    ── 회귀(반대쪽): 이미 본 결과를 뒤늦게 알리지 않는다 ──
+
+    같은 멱등키를 기다리는 실행이 둘일 때, 빠른 쪽이 화면에 결과를 그리면 사용자는 이미
+    봤다. 그런데 그 순간은 화면이 보이는 중이라 알림 판정이 「알릴 필요 없음」으로 그냥
+    돌아가고 "알렸다" 표시가 안 남았다. 그 뒤 화면을 떠나고 느린 쪽이 끝나면 조건이 전부
+    맞아떨어져 **이미 본 네컷**에 "완성됐어요"가 뜬다.
+  */
+  it("화면에서 결과를 본 뒤에는 느린 요청이 끝나도 알리지 않는다", async () => {
+    const finishers: Array<(asset: GeneratedFourcutAsset) => void> = [];
+    mockSaveFourcutToServer.mockImplementation(
+      () =>
+        new Promise<GeneratedFourcutAsset>((resolve) => {
+          finishers.push(resolve);
+        }),
+    );
+    const asset = {
+      mediaId: 7,
+      objectUrl: "https://example.com/image",
+      downloadUrl: "https://example.com/image",
+      displayName: "harucut_20260101_000000",
+    };
+
+    const first = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+    first.unmount();
+
+    // 다시 들어와 같은 멱등키로 한 번 더 접수한다.
+    const second = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+
+    // 재진입 요청이 먼저 끝난다 — 화면을 보고 있으므로 결과가 그대로 보인다.
+    await act(async () => {
+      finishers[1](asset);
+    });
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+    expect(mockUseShootSession.getState().imageResult).toEqual(asset);
+
+    // 결과를 보고 화면을 떠난 뒤, 처음의 느린 요청이 끝난다.
+    second.unmount();
+    await act(async () => {
+      finishers[0](asset);
+    });
+
+    // 고치기 전에는 여기서 이미 본 네컷에 "완성됐어요"가 떴다.
+    expect(mockNativeNotify).not.toHaveBeenCalled();
+  });
+
   it("버리고 새로 시작한 합성이 끝나도 앞 합성은 알리지 않는다", async () => {
     mockUseShootSession.setState({ remoteFrameId: 7 });
     mockThemeData = DECORATED_THEME;

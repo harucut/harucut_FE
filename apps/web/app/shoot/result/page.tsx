@@ -112,6 +112,31 @@ let latestServerCompose: {
  * 미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소 메시지가
  * 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
  */
+/**
+ * 이 합성은 **결과를 눈으로 본 것으로** 친다. 나중에 끝나는 같은 작업은 알리지 않는다.
+ *
+ * 같은 멱등키를 기다리는 실행이 둘일 수 있다(나갔다 들어오면 새 인스턴스가 같은 키로 한 번
+ * 더 접수한다). 그중 빠른 쪽이 **화면에 결과를 그렸다면** 사용자는 이미 봤다. 그런데 그때는
+ * 화면이 보이는 중이라 `notifyServerComposeDone` 이 「알릴 필요 없음」으로 그냥 돌아가고,
+ * `notified` 는 false 로 남는다. 그 뒤 사용자가 화면을 떠나고 느린 쪽이 끝나면 조건이 전부
+ * 맞아떨어져 **이미 본 결과에 대한 완성 알림**이 뒤늦게 뜬다.
+ *
+ * 그래서 「알렸다」와 「보여 줬다」를 같은 자리에 기록한다. 둘 다 이 합성에 대해 사용자에게
+ * 할 일이 끝났다는 뜻이다.
+ *
+ * 부르는 자리는 **결과를 실제로 그린 실행 하나뿐**이다(`cancelled` 가 아닌 쪽). 떠난 화면
+ * 뒤에서 조용히 끝난 실행은 아무것도 보여 주지 않았으므로 여기 오지 않는다 — 그것까지
+ * 여기서 접으면 「화면을 떠난 사람에게 알린다」가 통째로 죽는다.
+ *
+ * 그리고 **문서가 가려져 있으면 그린 것도 본 것이 아니다.** 그 경우는 알림이 제 몫을 하는
+ * 자리라 여기서 접지 않는다(안드로이드 WebView 가 대표적이다 — 아래 notifyServerComposeDone).
+ */
+function markServerComposeSeen(idempotencyKey: string) {
+  if (document.visibilityState !== "visible") return;
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.notified = true;
+}
+
 function notifyServerComposeDone(idempotencyKey: string) {
   if (mountedResultPages > 0 && document.visibilityState === "visible") return;
   if (
@@ -496,6 +521,9 @@ export default function ShootResultPage() {
           settled = true;
           setImageResult(asset);
           setImageState("done");
+          // 사용자에게 결과를 보여 줬다. 같은 작업을 기다리던 느린 실행이 나중에 끝나도
+          // 다시 알리지 않는다(위 markServerComposeSeen).
+          markServerComposeSeen(idempotencyKey);
         }
 
         /*
