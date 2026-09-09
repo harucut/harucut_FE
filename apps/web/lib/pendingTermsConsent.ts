@@ -138,3 +138,56 @@ export function clearPendingTermsConsent(): void {
     window.localStorage.removeItem(KEY);
   } catch {}
 }
+
+/**
+ * 같은 보관물인가 — **계정과 고른 값이 모두 같을 때만** 그렇다.
+ *
+ * 다른 탭이 새로 쓴 값은 거의 언제나 다른 계정 것이다(같은 이메일로 두 번 가입할 수 없다).
+ * 그래도 항목까지 보는 이유는, 계정만 보면 "같은 계정의 다른 선택"을 내 것으로 오인하기
+ * 때문이다. 순서까지 그대로여야 같은 것으로 본다 — 우리가 쓰는 쪽은 늘 같은 순서로 담는다.
+ */
+function isSameArchive(
+  stored: StoredConsent,
+  expected: PendingTermsConsent,
+): boolean {
+  if (!stored || typeof stored !== "object") return false;
+  if (typeof stored.email !== "string") return false;
+  if (!isSameConsentAccount(stored.email, expected.email)) return false;
+  if (!Array.isArray(stored.items)) return false;
+  if (stored.items.length !== expected.items.length) return false;
+  return stored.items.every((item, index) => {
+    const mine = expected.items[index];
+    return (
+      Boolean(item) && item.code === mine?.code && item.agreed === mine?.agreed
+    );
+  });
+}
+
+/**
+ * **처음 읽었던 그 보관물일 때만** 지운다. 지웠으면 true.
+ *
+ * 이 키는 같은 origin 의 모든 탭이 함께 쓴다. 어떤 화면이 보관물을 읽고 한참 뒤에 지우는
+ * 동안 다른 탭에서 새 가입이 끝나면, 그 사이 여기 값은 **다른 사람의 아직 제출되지 않은
+ * 동의**로 바뀌어 있다. 그걸 무조건 지우면 그 사람이 고른 법적 동의가 소리 없이 사라지고,
+ * 동의 이력은 나중에 만들어 넣을 수 없다.
+ *
+ * **원자적이지 않다.** localStorage 에는 조건부 삭제가 없어서 읽기와 삭제 사이는 여전히
+ * 열려 있다. 이 함수가 하는 일은 그 창을 **화면이 열려 있는 내내에서 바로 아래 두 줄
+ * 사이로 줄이는 것**뿐이다 — 그 틈에 다른 탭이 쓰면 그 값은 여전히 지워진다.
+ */
+export function clearPendingTermsConsentIfUnchanged(
+  expected: PendingTermsConsent,
+): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(KEY);
+    if (!raw) return false;
+    if (!isSameArchive(JSON.parse(raw) as StoredConsent, expected)) return false;
+    window.localStorage.removeItem(KEY);
+    return true;
+  } catch {
+    // 읽지도 못하는 값이면 내 것인지 알 수 없다. 모르면 손대지 않는다 —
+    // 모양이 깨진 보관물은 다음 회차에 `getPendingTermsConsent` 가 버린다.
+    return false;
+  }
+}

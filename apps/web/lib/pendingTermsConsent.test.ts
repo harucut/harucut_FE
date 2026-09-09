@@ -7,6 +7,7 @@
  */
 import {
   clearPendingTermsConsent,
+  clearPendingTermsConsentIfUnchanged,
   getPendingTermsConsent,
   isSameConsentAccount,
   PENDING_TERMS_CONSENT_TTL_MS,
@@ -115,6 +116,54 @@ describe("pendingTermsConsent", () => {
     setPendingTermsConsent(ITEMS, EMAIL, NOW);
     clearPendingTermsConsent();
     expect(getPendingTermsConsent(NOW)).toBeNull();
+  });
+});
+
+/*
+  보관 키는 같은 origin 의 모든 탭이 함께 쓴다. 읽어 둔 뒤 한참 있다가 지우는 쪽
+  (`TermsConsentBridge` 의 재동의 화면)이 그 사이 들어온 **다른 사람의 아직 제출되지 않은
+  동의**를 지우지 않게 한다. 동의 이력은 나중에 만들어 넣을 수 없다.
+*/
+describe("clearPendingTermsConsentIfUnchanged", () => {
+  it("읽었던 그대로면 지운다", () => {
+    setPendingTermsConsent(ITEMS, EMAIL, NOW);
+    const mine = getPendingTermsConsent(NOW)!;
+
+    expect(clearPendingTermsConsentIfUnchanged(mine)).toBe(true);
+    expect(getPendingTermsConsent(NOW)).toBeNull();
+  });
+
+  it("다른 탭이 새 계정 것으로 바꿔 넣었으면 지우지 않는다", () => {
+    setPendingTermsConsent(ITEMS, EMAIL, NOW);
+    const mine = getPendingTermsConsent(NOW)!;
+    setPendingTermsConsent(ITEMS, "newcomer@example.com", NOW);
+
+    expect(clearPendingTermsConsentIfUnchanged(mine)).toBe(false);
+    expect(getPendingTermsConsent(NOW)).toEqual({
+      items: ITEMS,
+      email: "newcomer@example.com",
+    });
+  });
+
+  // 계정만 보면 "같은 계정의 다른 선택"을 내 것으로 오인한다.
+  it("고른 값이 달라졌으면 지우지 않는다", () => {
+    setPendingTermsConsent(ITEMS, EMAIL, NOW);
+    const mine = getPendingTermsConsent(NOW)!;
+    setPendingTermsConsent([{ code: "tos", agreed: true }], EMAIL, NOW);
+
+    expect(clearPendingTermsConsentIfUnchanged(mine)).toBe(false);
+    expect(getPendingTermsConsent(NOW)).not.toBeNull();
+  });
+
+  // 못 읽는 값은 내 것인지 알 수 없다. 모르면 손대지 않는다.
+  it("모양이 깨진 값은 손대지 않는다", () => {
+    const mine = { items: ITEMS, email: EMAIL };
+    window.localStorage.setItem("harucut:pending-terms-consent:v1", "{");
+
+    expect(clearPendingTermsConsentIfUnchanged(mine)).toBe(false);
+    expect(
+      window.localStorage.getItem("harucut:pending-terms-consent:v1"),
+    ).toBe("{");
   });
 });
 

@@ -79,36 +79,49 @@ matcher에는 보호 라우트가 아닌 `/oauth2/callback`도 들어 있습니�
 1. **소셜 로그인 콜백(`/oauth2/callback`)이면 통과** — 보호 경로 판정보다 먼저 본다.
    여기서만 게스트 쿠키를 걷고, 그것도 **살아 있는 access 토큰이 함께 있을 때만** 걷는다(아래 절 참고)
 2. 보호 경로가 아니면 그대로 통과
-3. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 있으면 통과 —
-   **게스트 쿠키는 건드리지 않는다**(아래 절 참고)
-4. 게스트 쿠키만 있으면 `isGuestAllowedPath(pathname)`로 가른다
+3. **행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** — 응답에 게스트 쿠키를 심는다.
+   **인증 쿠키 판정(4)보다 먼저 본다**(아래 절 참고). 다만 둘 중 하나라도 걸리면 심지 않고
+   4로 내려간다 — 이미 게스트 쿠키가 있거나, `hasRecoverableSession`(살아 있는 access
+   **또는** `refreshToken` 쿠키)이 보일 때
+4. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 **있기만 하면** 통과 —
+   유효성은 보지 않고, **게스트 쿠키도 건드리지 않는다**(아래 절 참고)
+5. 게스트 쿠키만 있으면 `isGuestAllowedPath(pathname)`로 가른다
    ([`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts) — 상수 둘도 여기 있다)
    - `GUEST_MEMBER_ONLY_PREFIXES`(`/shoot/upload`)에 걸리면 **먼저 막는다**
    - 남은 것 중 `GUEST_ALLOWED_PREFIXES`(`/shoot`)로 시작하면 통과 —
      비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
-5. **쿠키가 하나도 없어도 행사 QR 진입(`/shoot` + `event` 쿼리)이면 통과** —
-   응답에 게스트 쿠키를 심어 준다(아래 절 참고)
 6. 그 외에는 `/login?redirectTo=...`
 
+3과 4의 순서가 이 흐름의 전부입니다. 4가 먼저였을 때는 예전에 로그인했던 브라우저에 남은
+**죽은 access 쿠키**가 3을 가려서, 행사 참가자가 회원으로 읽힌 채 인증 API에서는 401을
+받았습니다. 되돌리지 마세요.
+
 ```text
-/oauth2/callback + 살아 있는 access O + 게스트 O -> 통과 (게스트 쿠키 삭제)
-/oauth2/callback + 살아 있는 access X            -> 통과 (게스트 쿠키 그대로)
-인증 쿠키 O (그 밖의 보호 경로)                 -> 통과 (게스트 쿠키 그대로)
-게스트 쿠키 O + /shoot/upload                   -> /shoot?guestNotice=restricted   ← 회원 전용
-게스트 쿠키 O + 그 밖의 /shoot/*                -> 통과
-게스트 쿠키 O + 그 외 보호 경로                 -> /shoot?guestNotice=restricted
-쿠키 없음 + /shoot?...&event=...                -> 통과 (게스트 쿠키를 심는다)
-쿠키 없음                                       -> /login?redirectTo=<원래 경로와 쿼리>
+/oauth2/callback + 살아 있는 access O + 게스트 O   -> 통과 (게스트 쿠키 삭제)
+/oauth2/callback + 살아 있는 access X              -> 통과 (게스트 쿠키 그대로)
+/shoot?...&event=... + 쿠키 없음                   -> 통과 (게스트 쿠키를 심는다)
+/shoot?...&event=... + 죽은 access 만              -> 통과 (게스트 쿠키를 심는다)  ← 3이 4보다 먼저
+/shoot?...&event=... + 살아 있는 access 또는 refresh -> 통과 (심지 않는다 — 회원일 수 있다)
+/shoot?...&event=... + 게스트 쿠키 O               -> 통과 (이미 체험 중, 다시 심지 않는다)
+인증 쿠키 O (그 밖의 보호 경로)                    -> 통과 (게스트 쿠키 그대로)
+게스트 쿠키 O + /shoot/upload                      -> /shoot?guestNotice=restricted  ← 회원 전용
+게스트 쿠키 O + 그 밖의 /shoot/*                   -> 통과
+게스트 쿠키 O + 그 외 보호 경로                    -> /shoot?guestNotice=restricted
+쿠키 없음                                          -> /login?redirectTo=<원래 경로와 쿼리>
 ```
+
+"죽은 access"는 `exp`가 지났거나 JWT 모양이 아닌 `accessToken` 쿠키를 말합니다
+(`hasLiveAccessToken`). `refreshToken`이 함께 있으면 죽지 않은 것으로 봅니다 — 아래
+「행사 QR 진입」 절.
 
 ### 게스트 쿠키는 소셜 콜백에서만 걷는다
 
 예전에는 **보호 경로에서 인증 쿠키만 보이면** 게스트 쿠키를 지웠습니다. 지금은 그러지
 않습니다 — 지우는 자리는 소셜 로그인 콜백 하나뿐입니다.
 
-프록시가 볼 수 있는 것은 쿠키가 **있는지**뿐입니다. 값이 유효한지는 백엔드에 물어야 알 수
-있고 미들웨어는 묻지 않으므로, 만료됐거나 서버가 이미 회수한 토큰도 "로그인"으로 읽습니다.
+통과 판정(위 4)이 보는 것은 쿠키가 **있는지**뿐입니다. 서버가 이미 회수했는지는 백엔드에
+물어야 알 수 있고 미들웨어는 묻지 않으므로, 죽은 토큰도 거기서는 "로그인"으로 읽힙니다.
 그 상태에서 지우면, 죽은 쿠키를 든 방문자가 "가입 없이 찍어보기"로 방금 심은 게스트 쿠키를
 **다음 요청에서 도로 잃습니다.** 그 화면은 메모리 값으로 버티지만, 새로고침 한 번이면
 `hydrateGuestMode`([`guestTrialStore.ts`](../apps/web/lib/guestTrialStore.ts))가 쿠키를 못
@@ -173,24 +186,43 @@ App Router는 한 라우트를 사람이 치는 주소로만 부르지 않는다
 이 규칙을 다시 구현하려는 사람에게: 정규화 자체를 고정하는 테스트는 **아직 없다**.
 `routeContracts.test.ts`가 잡는 것은 `/shoot/upload`와 `/shoot/uploads` 경계까지다.
 
-### 행사 QR 진입 (쿠키 없는 통과)
+### 행사 QR 진입 (인증 쿠키 판정보다 먼저)
 
-행사장에서 QR을 찍은 참가자는 **쿠키가 하나도 없는 새 브라우저**로 도착합니다.
+행사장에서 QR을 찍은 참가자는 **대개** 쿠키가 하나도 없는 새 브라우저로 도착합니다.
 이 예외가 없으면 미들웨어가 `/login`으로 먼저 돌려보내서, "가입 없이 바로 찍는다"는
 행사 흐름이 정작 행사장에서만 동작하지 않습니다.
 
-- 판정 조건: 경로가 정확히 `/shoot`이고 `event` 쿼리
-  (`EVENT_ENTRY_QUERY`, [`apps/web/lib/guestTrialShared.ts`](../apps/web/lib/guestTrialShared.ts))에
-  공백이 아닌 값이 있을 것. 하위 단계(`/shoot/capture` 등)는 여기서 심긴 쿠키로 이어집니다.
+"대개"가 이 분기를 위 4보다 **앞에** 둔 이유입니다. 예전에 이 브라우저로 로그인했던
+사람도 QR을 찍습니다. 4가 먼저면 만료됐거나 모양이 깨진 `accessToken` 쿠키만 남아 있어도
+거기서 통과해 버려 체험 쿠키를 심을 자리가 없었고, 그 방문자는 화면에서는 회원인데
+인증 API에서는 401을 받았습니다.
+
+- 판정 조건 셋을 **모두** 만족할 때만 심습니다.
+  1. 경로가 정확히 `/shoot`이고 `event` 쿼리
+     (`EVENT_ENTRY_QUERY`, [`apps/web/lib/guestTrialShared.ts`](../apps/web/lib/guestTrialShared.ts))에
+     공백이 아닌 값이 있을 것. 하위 단계(`/shoot/capture` 등)는 여기서 심긴 쿠키로 이어집니다.
+  2. 게스트 쿠키가 아직 없을 것(있으면 이미 체험 중이라 다시 심을 이유가 없습니다).
+  3. `hasRecoverableSession`이 거짓일 것 — **살아 있는 access(`exp` 기준)도, `refreshToken`
+     쿠키도 없을 것.** refresh는 살아 있는지 확인할 방법이 없어 **회원일 수 있다는 쪽으로**
+     읽습니다. 여기서 심는 체험 쿠키는 7일을 살고, 그동안 `accessMode`가 이 쿠키만 보므로
+     회원에게 잘못 심으면 자기 프레임과 기록을 그 7일간 못 봅니다.
+- 그래서 **죽은 access 쿠키만 든 방문자는 이제 게스트가 됩니다.** 예전 문서가 "쿠키가
+  하나도 없어야 한다"고 적었던 자리입니다.
+- 콜백 분기(위)와 방향이 반대인 것은 의도한 것입니다. 거기서는 의심스러우면 **지우지**
+  않고, 여기서는 의심스러우면 **심지** 않습니다 — 방문자가 손해를 보는 쪽이 서로 다릅니다.
 - 통과할 때 응답에 `harucut_guest_trial=1`을 심습니다. 속성(`path`, `max-age`,
   `SameSite`, https에서 `Secure`)은 클라이언트가 심는 것과 같은 값이어야 하므로
   `GUEST_TRIAL_COOKIE_MAX_AGE`를 공유합니다.
 - **권한 관점**: 랜딩의 "가입 없이 찍어보기" 버튼을 누르면 누구나 얻는 것과 같은 자격입니다.
   즉 새로 여는 문이 아니라, 그 버튼을 누를 기회가 없는 사람에게 같은 문을 열어 주는 것입니다.
-- 회귀 테스트: `apps/web/tests/e2e/guards.spec.ts`의
-  "lets an event QR visitor shoot without signing up".
+- 회귀 고정: [`apps/web/proxy.test.ts`](../apps/web/proxy.test.ts)의 「proxy 행사 QR 진입」 —
+  "쿠키가 하나도 없으면 체험 쿠키를 심어 통과시킨다", "형식이 깨진/만료된 access 쿠키만
+  남아 있어도 체험 쿠키를 심는다", "살아 있는 access·refresh 쿠키를 든 방문자는 게스트로
+  만들지 않는다", "이미 체험 중이면 쿠키를 다시 심지 않는다", 그리고
+  `apps/web/tests/e2e/guards.spec.ts`의 "lets an event QR visitor shoot without signing up".
 
-이 예외를 지우면 행사(B2B) 흐름이 통째로 죽습니다. 인증 분기를 정리할 때 함께 확인해 주세요.
+이 예외를 지우거나 4 뒤로 되돌리면 행사(B2B) 흐름이 통째로 죽습니다.
+인증 분기를 정리할 때 함께 확인해 주세요.
 
 관련 파일:
 
