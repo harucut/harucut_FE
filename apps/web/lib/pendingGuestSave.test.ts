@@ -412,10 +412,11 @@ describe("pendingGuestSave", () => {
     await setPendingGuestSave(ENTRY, NOW);
 
     const first = await ensurePendingGuestSaveComposeKey(NOW);
-    expect(typeof first).toBe("string");
+    expect(typeof first?.key).toBe("string");
+    expect(first?.persisted).toBe(true);
     // 보관물에 남았으므로 새로고침 뒤(= 다시 읽어도) 같은 값이다.
-    expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBe(first);
-    expect(await ensurePendingGuestSaveComposeKey(NOW)).toBe(first);
+    expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBe(first?.key);
+    expect(await ensurePendingGuestSaveComposeKey(NOW)).toEqual(first);
   });
 
   it("키를 심어도 나머지 보관 내용은 그대로다", async () => {
@@ -443,7 +444,7 @@ describe("pendingGuestSave", () => {
     );
 
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBeUndefined();
-    expect(await ensurePendingGuestSaveComposeKey(NOW)).not.toBe(old);
+    expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(old?.key);
   });
 
   it("보관물이 없으면 키를 만들지 않는다", async () => {
@@ -458,21 +459,47 @@ describe("pendingGuestSave", () => {
 
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBeUndefined();
 
-    const fresh = (await ensurePendingGuestSaveComposeKey(NOW)) ?? "";
+    const fresh = (await ensurePendingGuestSaveComposeKey(NOW))?.key ?? "";
     expect(fresh.length).toBeGreaterThan(0);
     expect(fresh.length).toBeLessThanOrEqual(64);
   });
 
-  // 되쓰기가 막혀도 이번 시도는 키를 들고 간다. 못 남기는 것과 못 쓰는 것은 다르다.
-  it("키를 못 남겨도 보관물은 지키고 키는 돌려준다", async () => {
+  /*
+    되쓰기가 막혀도 이번 시도는 키를 들고 간다 — 여기서 거절하면 될 저장까지 막는다.
+    다만 **못 남겼다는 사실을 같이 준다.** 성공처럼 답하면 호출부는 "새로고침하면 다시
+    시도해요"라고 안내하면서, 그 재시도가 다른 키로 접수돼 같은 네컷을 한 벌 더 만드는
+    것을 모른다. 트랜잭션 중단은 `writeRecord` 가 **던지는** 쪽이다.
+  */
+  it("트랜잭션이 중단되면 키는 주되 못 남겼다고 답한다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectWrites = true;
 
-    expect(typeof (await ensurePendingGuestSaveComposeKey(NOW))).toBe("string");
+    const result = await ensurePendingGuestSaveComposeKey(NOW);
+    expect(typeof result?.key).toBe("string");
+    expect(result?.persisted).toBe(false);
 
     store.rejectWrites = false;
     // 원본 4장은 그대로 있다 — 키 한 줄 때문에 인계를 통째로 잃지 않는다.
     expect((await getPendingGuestSave(NOW))?.sources).toHaveLength(4);
+    // 그리고 실제로 안 남았다 — 다음 시도는 다른 키로 간다. 이것이 `persisted: false` 다.
+    expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(result?.key);
+  });
+
+  /*
+    예전 localStorage 보관물을 읽은 사람은 **IndexedDB 를 못 여는 자리**에 있을 수 있다.
+    그 길에서 `writeRecord` 는 던지지 않고 조용히 false 로 끝난다 — 던지는 쪽만 보고 있으면
+    이 경로가 그대로 "성공"이 된다.
+  */
+  it("저장소를 열지 못하면 키는 주되 못 남겼다고 답한다", async () => {
+    window.localStorage.setItem(
+      LEGACY_KEY_V2,
+      JSON.stringify({ ...ENTRY, savedAt: NOW }),
+    );
+    store.openFails = true;
+
+    const result = await ensurePendingGuestSaveComposeKey(NOW);
+    expect(typeof result?.key).toBe("string");
+    expect(result?.persisted).toBe(false);
   });
 
   /*

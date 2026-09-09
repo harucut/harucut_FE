@@ -56,6 +56,66 @@ const GUEST_LOGIN_HANDOFF_PATH = buildPathWithRedirect(
 
 type ProcessingState = "idle" | "processing" | "done" | "error";
 
+/*
+  ── 완성 알림은 이 화면의 수명 밖에 있다 ──
+
+  마이페이지는 「앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때 알려드려요」라고 안내한다
+  (components/mobile/NativeNotificationSetting.tsx). 그 사람은 결과 화면을 떠난 사람이라,
+  판정에 필요한 값을 컴포넌트가 들고 있으면 안 된다 — 마운트와 함께 사라진다. 그래서
+  아래 둘은 모듈에 둔다.
+*/
+
+/**
+ * 결과 화면이 지금 떠 있는 수.
+ *
+ * "결과가 눈앞에 있는가"는 어느 한 인스턴스의 마운트 여부로는 알 수 없다. 화면을 나갔다
+ * 들어오면 앞 실행의 약속(cancelled)은 그대로 살아 있는데 결과는 새 인스턴스가 보여 주고
+ * 있다 — 그때 앞 실행이 "안 보고 있다"고 판단해 알리면 보고 있는 사람에게 알림이 뜬다.
+ */
+let mountedResultPages = 0;
+
+/**
+ * 이 탭이 **마지막으로 기다리는** 서버 합성과, 그 완료를 이미 알렸는지.
+ *
+ * 한 합성의 완료를 기다리는 실행이 여럿일 수 있다 — 늦게 도착한 테마로 effect 가 다시 돌면
+ * 새 실행이 같은 약속을 이어받고(pendingServerComposeRef), 화면을 나갔다 들어오면 같은
+ * 멱등키로 한 번 더 접수한다. 마지막 것 하나만, 한 번만 알린다: 앞선 것까지 알리면 알림이
+ * 두 번 뜨고, 사진·색·프레임을 바꿔 새 합성이 시작된 경우에는 **사용자가 버린 합성**까지
+ * "완성됐어요"가 된다.
+ */
+let latestServerCompose: {
+  run: Promise<GeneratedFourcutAsset>;
+  notified: boolean;
+} | null = null;
+
+/**
+ * 서버 합성이 끝났다고 알린다. **결과가 눈앞에 없을 때만** 알린다 — 보고 있으면 그냥 보인다.
+ *
+ * 덮는 것은 둘이다. ① 앱 셸 안에서 다른 화면으로 옮겨 간 때(결과 화면이 마운트돼 있지 않다)
+ * ② 문서만 hidden 이고 JS 는 아직 도는 때(안드로이드 WebView 가 대표적이다).
+ *
+ * ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가 WebView 의
+ * 자바스크립트를 멈춰서 폴링도 이 함수도 돌지 않고, 돌아왔을 때는 이미 visible 이다.
+ * 브라우저 탭도 아니다 — 셸 밖에서는 nativeNotify 가 그 자리에서 null 을 돌려주고 아무 일도
+ * 하지 않는다(lib/nativeBridge.ts 의 isNativeShell 검사).
+ *
+ * 앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가 필요하고,
+ * docs/app-shell-backend-requests.md 3번에 적어 뒀다.
+ *
+ * 미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소 메시지가
+ * 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
+ */
+function notifyServerComposeDone(run: Promise<GeneratedFourcutAsset>) {
+  if (mountedResultPages > 0 && document.visibilityState === "visible") return;
+  if (latestServerCompose?.run !== run || latestServerCompose.notified) return;
+
+  latestServerCompose.notified = true;
+  void nativeNotify({
+    title: "네컷이 완성됐어요",
+    body: "눌러서 보러 가기",
+  });
+}
+
 export default function ShootResultPage() {
   const router = useRouter();
   const {
@@ -248,6 +308,15 @@ export default function ShootResultPage() {
     ? null
     : imageResult?.objectUrl ?? null;
 
+  // 완성 알림이 "결과가 눈앞에 있는가"를 인스턴스 너머로 볼 수 있게 마운트를 센다
+  // (위 mountedResultPages). 아래 합성 effect 보다 먼저 세워 둔다.
+  useEffect(() => {
+    mountedResultPages += 1;
+    return () => {
+      mountedResultPages -= 1;
+    };
+  }, []);
+
   useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
 
@@ -393,6 +462,10 @@ export default function ShootResultPage() {
                 backgroundColor: effectiveBorderColor,
               });
         pendingServerComposeRef.current = { key: imageGenerationKey, run };
+        // 이 탭이 기다리는 합성이 바뀌었으면 알림 대상도 그것으로 옮긴다(위 latestServerCompose).
+        if (latestServerCompose?.run !== run) {
+          latestServerCompose = { run, notified: false };
+        }
 
         const asset = await run;
 
@@ -400,31 +473,15 @@ export default function ShootResultPage() {
           settled = true;
           setImageResult(asset);
           setImageState("done");
-          /*
-            화면이 가려져 있을 때만 알린다. 보고 있으면 결과가 그냥 보인다.
-
-            ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가
-            WebView 의 자바스크립트를 멈춰서 폴링도 이 줄도 돌지 않고, 돌아왔을 때는 이미
-            visible 이라 조건이 거짓이 된다.
-
-            여기서 덮이는 것은 **앱 셸 안인데 문서만 hidden 이고 JS 는 아직 도는 때**다
-            (안드로이드 WebView 가 대표적이다). 브라우저 탭은 아니다 — 셸 밖에서는
-            nativeNotify 가 그 자리에서 null 을 돌려주고 아무 일도 하지 않는다
-            (lib/nativeBridge.ts 의 isNativeShell 검사).
-
-            앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가
-            필요하고, docs/app-shell-backend-requests.md 3번에 적어 뒀다.
-
-            미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소
-            메시지가 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
-          */
-          if (document.visibilityState === "hidden") {
-            void nativeNotify({
-              title: "네컷이 완성됐어요",
-              body: "눌러서 보러 가기",
-            });
-          }
         }
+
+        /*
+          알림은 **`cancelled` 밖에 둔다.** `cancelled` 는 "떠난 화면에 상태를 쓰지 않는다"는
+          뜻이지 "약속한 알림을 접는다"는 뜻이 아니다. 안에 두면 결과를 기다리다 '홈으로
+          가기'로 옮겨 간 사람 — 마이페이지가 알려 주겠다고 안내한 바로 그 사람 — 만 알림을
+          못 받는다. 누구에게 알릴지는 notifyServerComposeDone 이 판정한다(위).
+        */
+        notifyServerComposeDone(run);
       } catch (error) {
         console.error(error);
         if (cancelled) return;
