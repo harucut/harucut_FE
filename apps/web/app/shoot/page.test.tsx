@@ -14,11 +14,11 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mockQuery),
 }));
 
-const mockIsUsableMember = jest.fn();
+const mockResolveMembership = jest.fn();
 
 // 회원 여부 판정만 갈아 끼운다 — 스토어와 쿠키는 실제 구현을 그대로 태운다.
 jest.mock("@/lib/authSession", () => ({
-  isUsableMember: (...args: unknown[]) => mockIsUsableMember(...args),
+  resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
 }));
 
 jest.mock("@/hooks/useMyFrames", () => ({
@@ -174,7 +174,7 @@ describe("행사 QR 진입의 게스트 전환", () => {
 
   it("회원이 아닌 것이 확인되면 체험을 시작한다", async () => {
     mockQuery = "frame=classic-4&event=hongdae-2026";
-    mockIsUsableMember.mockResolvedValue(false);
+    mockResolveMembership.mockResolvedValue("guest");
 
     render(<ShootPage />);
 
@@ -189,7 +189,26 @@ describe("행사 QR 진입의 게스트 전환", () => {
   */
   it("회원으로 확인되면 아무것도 심지 않는다", async () => {
     mockQuery = "frame=classic-4&event=hongdae-2026";
-    mockIsUsableMember.mockResolvedValue(true);
+    mockResolveMembership.mockResolvedValue("member");
+
+    render(<ShootPage />);
+
+    await act(async () => {});
+    expect(useGuestTrialStore.getState().accessMode).toBe("member");
+    expect(document.cookie).not.toContain(`${GUEST_TRIAL_COOKIE}=1`);
+  });
+
+  /*
+    회귀 — **못 물어본 것은 비회원이 아니다.**
+
+    `/api/auth/status` 가 잠깐 5xx 이거나 재발급 서버만 못 답하면 판정이 `unknown` 으로 온다.
+    그때 게스트로 전환하면 멀쩡한 회원이 7일 동안 기록과 저장 프레임을 잃는다 — 서버가
+    잠깐 못 답했다는 이유로 그렇게 되면 안 된다. 그 사람은 회원 화면 그대로 남고, 서버가
+    돌아오면 다음 진입에서 판정된다.
+  */
+  it("판정할 수 없으면 게스트로 전환하지 않는다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockResolveMembership.mockResolvedValue("unknown");
 
     render(<ShootPage />);
 
@@ -201,12 +220,12 @@ describe("행사 QR 진입의 게스트 전환", () => {
   // 행사 진입이 아니면 묻지도 않는다 — 촬영 화면을 열 때마다 인증 왕복이 붙으면 안 된다.
   it("행사 진입이 아니면 회원 여부를 묻지 않는다", async () => {
     mockQuery = "frame=classic-4";
-    mockIsUsableMember.mockResolvedValue(false);
+    mockResolveMembership.mockResolvedValue("guest");
 
     render(<ShootPage />);
 
     await act(async () => {});
-    expect(mockIsUsableMember).not.toHaveBeenCalled();
+    expect(mockResolveMembership).not.toHaveBeenCalled();
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
 
@@ -218,6 +237,6 @@ describe("행사 QR 진입의 게스트 전환", () => {
     render(<ShootPage />);
 
     await act(async () => {});
-    expect(mockIsUsableMember).not.toHaveBeenCalled();
+    expect(mockResolveMembership).not.toHaveBeenCalled();
   });
 });

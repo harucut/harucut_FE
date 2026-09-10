@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { isUsableMember } from "@/lib/authSession";
+import { resolveMembership } from "@/lib/authSession";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 /**
@@ -27,7 +27,13 @@ export function usePublicShootCta() {
     pendingRef.current = true;
 
     try {
-      if (await isUsableMember()) {
+      /*
+        여기서는 `unknown` 을 비회원 쪽으로 접는다. 행사 진입과 갈리는 이유는 **다음에
+        일어나는 일이 다르기 때문**이다 — 거기서는 이 판정이 곧바로 7일짜리 쿠키를 심지만,
+        여기서는 체험 **안내**가 뜰 뿐이고 쿠키는 사용자가 확인을 누를 때 심긴다.
+        서버가 잠깐 못 답했다고 비회원이 촬영 자체를 못 하게 되는 쪽이 더 나쁘다.
+      */
+      if ((await resolveMembership()) === "member") {
         /*
           **회원이면 남아 있는 게스트 쿠키를 여기서 걷어낸다.**
 

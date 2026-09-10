@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FrameChooser } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
-import { isUsableMember } from "@/lib/authSession";
+import { resolveMembership } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
@@ -108,9 +108,13 @@ function ShootPageContent() {
 
     let cancelled = false;
     void (async () => {
-      // 회원이면 아무것도 하지 않는다 — 쿠키를 덮어쓰지 않는다.
-      if (await isUsableMember()) return;
-      if (!cancelled) enterGuestMode();
+      const membership = await resolveMembership();
+      // **확정된 비회원일 때만** 전환한다. 회원이면 쿠키를 덮지 않고, 못 물어본 경우
+      // (`unknown` — 5xx·회선 끊김·재발급 서버 장애)도 그대로 둔다. 잠깐 못 물어봤다는
+      // 이유로 7일짜리 쿠키를 심으면 멀쩡한 회원이 그동안 기록과 저장 프레임을 잃는다.
+      // 그때 이 사람은 회원 화면 그대로 남고, 서버가 돌아오면 다음 진입에서 판정된다.
+      if (cancelled || membership !== "guest") return;
+      enterGuestMode();
     })();
 
     return () => {

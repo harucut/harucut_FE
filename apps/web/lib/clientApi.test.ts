@@ -193,4 +193,50 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
 
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
+
+  /*
+    회귀 — **호출부의 종료 상한이 재발급 왕복까지 닿는다.**
+
+    이 fetch 는 한때 signal 없이 돌았다. 그래서 삭제 API 처럼 상한을 건 호출부가 401 을
+    받은 뒤 재발급이 응답 없이 멈추면 상한이 먹지 않고 요청 전체가 영영 안 끝났다 —
+    그 사이 확인 다이얼로그는 취소·배경·Escape 가 전부 막힌 감옥이 된다
+    (components/ui/ConfirmDialog.tsx, lib/userMediaApi.ts 의 DELETE_DEADLINE_MS).
+  */
+  it("재발급이 멈춰도 호출부의 상한으로 끊긴다", async () => {
+    const controller = new AbortController();
+
+    global.fetch = jest.fn(
+      (input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          if (urlOf(input) !== "/api/client/reissue") {
+            resolve(new Response("{}", { status: 401 }));
+            return;
+          }
+          /*
+            재발급은 답도 실패도 주지 않는다 — signal 이 닿아야만 끝난다.
+            진짜 `fetch` 처럼 **이미 끊긴 signal 도** 그 자리에서 거절한다. 리스너만 달면
+            끊긴 뒤에 부른 경우를 못 잡아, 여기서 영영 안 끝난다.
+          */
+          const abort = () => {
+            const error = new Error("Aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init?.signal?.aborted) {
+            abort();
+            return;
+          }
+          init?.signal?.addEventListener("abort", abort);
+        }),
+    ) as unknown as typeof fetch;
+
+    const pending = clientApi.get("/api/client/user-info", {
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    // 끊겼으므로 재발급은 실패로 접히고, 원요청의 401 이 그대로 올라온다.
+    // 고치기 전에는 이 약속이 영영 안 끝났다.
+    await expect(pending).rejects.toBeDefined();
+  });
 });

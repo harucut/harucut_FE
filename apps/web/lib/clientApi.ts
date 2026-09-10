@@ -139,12 +139,25 @@ async function checkDeletionRequested() {
 }
 
 // 쿠키 기반 액세스 토큰 재발급. 자체 401 재시도는 하지 않는다(exempt).
-async function reissueAccessToken(): Promise<ReissueResult> {
+async function reissueAccessToken(
+  signal?: AbortSignal,
+): Promise<ReissueResult> {
   try {
+    /*
+      **원요청의 상한을 여기까지 들고 온다.**
+
+      예전에는 이 fetch 가 signal 없이 돌았다. 그래서 호출부가 종료 상한을 걸어도(삭제 API 의
+      DELETE_DEADLINE_MS 가 그렇다) 401 뒤의 이 왕복이 응답 없이 멈추면 상한이 먹지 않고
+      요청 전체가 영영 안 끝났다 — 확인 다이얼로그가 그 사이 감옥이 된다.
+
+      끊기면 아래 catch 가 `unavailable` 로 접는다. 그러면 원요청의 401 이 그대로 올라가
+      호출부가 실패를 처리하고, 상한을 건 쪽이 자기 오류로 바꿔 말한다.
+    */
     const res = await fetch("/api/client/reissue", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
+      signal,
     });
     if (res.ok) return "ok";
     return res.status === 401 || res.status === 403 ? "expired" : "unavailable";
@@ -213,7 +226,7 @@ async function request<T>(
   // 액세스 토큰 만료(401)면 쿠키 기반으로 1회 재발급 후 원요청을 재시도한다.
   // 재발급까지 실패하면(여전히 401) 세션이 끊긴 것으로 보고 등록된 만료 핸들러를 호출한다.
   if (res.status === 401 && !SESSION_REFRESH_EXEMPT_PATHS.has(path)) {
-    const reissue = await reissueAccessToken();
+    const reissue = await reissueAccessToken(options.signal);
     // 재발급 성공 시에만 재시도한다. 재시도 fetch 가 실패하면 그 오류를 그대로 올려
     // 유효 세션을 만료로 오인하지 않는다(취소면 AbortError, 회선이 끊겼으면 CLIENT-004).
     // 재발급 실패면 최초 401 응답을 유지한다.

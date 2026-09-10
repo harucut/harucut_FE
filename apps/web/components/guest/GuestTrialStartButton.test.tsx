@@ -230,4 +230,38 @@ describe("GuestTrialStartButton", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(hasGuestCookie()).toBe(false);
   });
+
+  /*
+    회귀 — **판정할 수 없을 때 이 버튼은 체험 안내로 간다.**
+
+    행사 진입(app/shoot/page.tsx)과 갈리는 자리다. 거기서는 `unknown` 에 아무것도 하지
+    않는다 — 그 판정이 곧바로 7일짜리 쿠키를 심기 때문이다. 여기서는 안내가 뜰 뿐이고
+    쿠키는 사용자가 확인을 누를 때 심기므로, 서버가 잠깐 못 답했다고 비회원이 촬영 자체를
+    못 하게 되는 쪽을 막는다.
+  */
+  it("상태 조회가 실패하면 체험 안내로 간다", async () => {
+    // 5xx. clientApi 는 이것을 예외로 던지고, 판정은 unknown 이 된다.
+    routeFetch({
+      status: [
+        {
+          ok: false,
+          status: 503,
+          headers: new Headers(),
+          text: async () => JSON.stringify({ code: "GEN-999" }),
+        },
+      ],
+    });
+
+    render(
+      <>
+        <GuestTrialStartButton />
+        <GuestTrialOverlay />
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: GUEST_TRIAL_CTA_LABEL }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 });
