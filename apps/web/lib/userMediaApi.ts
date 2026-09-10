@@ -133,9 +133,11 @@ export class MediaDeleteTimeoutError extends Error {
  *  - **서버는 이미 지웠는데 응답만 못 받은 경우를 구별할 수 없다.** 끊긴 쪽에서는 요청이
  *    어디까지 갔는지 알 방법이 없다. 그래서 호출부 문구는 "지우지 못했어요"가 아니라
  *    "결과를 확인하지 못했어요"여야 한다.
- *  - **401 재발급 왕복에는 이 signal 이 닿지 않는다.** clientApi 의 `reissueAccessToken`
- *    은 자기 fetch 를 signal 없이 부르므로, 하필 그 왕복이 멈추면 상한이 안 먹는다.
- *    막으려면 clientApi 를 고쳐야 한다 — 이번에는 손대지 않았다.
+ *  - **401 재발급 왕복에도 상한이 닿는다.** `clientApi` 가 이 signal 을 재발급을 기다리는
+ *    쪽에 걸어(`Promise.race`), 끊기면 「재발급 못 했다」로 접고 원요청의 401 을 올린다.
+ *    재발급 왕복 자체에도 같은 30초 상한이 있어(`REISSUE_DEADLINE_MS`) 아무도 안 기다리게
+ *    된 뒤에도 매달려 있지 않는다. 한때 그 signal 이 안 닿아 다이얼로그가 갇혔는데,
+ *    지금은 두 자리 다 닫혀 있다 — 되돌리지 않는다.
  */
 export async function deleteMedia(mediaId: number) {
   const controller = new AbortController();

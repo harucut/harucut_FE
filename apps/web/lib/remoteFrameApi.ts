@@ -77,8 +77,11 @@ export class FrameDeleteTimeoutError extends Error {
  * 프레임 삭제.
  *
  * 상한을 걸어도 남는 구멍은 사진 삭제와 같다 — 끊긴 쪽에서는 서버가 이미 지웠는지 알 수
- * 없고(그래서 화면은 "지우지 못했어요"가 아니라 "결과를 확인하지 못했어요"라고 말한다),
- * 401 재발급 왕복은 clientApi 가 signal 없이 부르므로 하필 거기서 멈추면 상한이 안 먹는다.
+ * 없다(그래서 화면은 "지우지 못했어요"가 아니라 "결과를 확인하지 못했어요"라고 말한다).
+ *
+ * 401 재발급 왕복에는 **상한이 닿는다.** `clientApi` 가 이 signal 을 재발급을 기다리는 쪽에
+ * 걸고, 재발급 왕복 자체에도 같은 30초 상한이 있다(`REISSUE_DEADLINE_MS`). 한때 안 닿아
+ * 다이얼로그가 갇혔는데 지금은 닫혀 있다 — 되돌리지 않는다.
  */
 export async function deleteFrame(frameId: number) {
   const controller = new AbortController();
