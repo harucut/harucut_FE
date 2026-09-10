@@ -863,6 +863,39 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
   });
 
   /*
+    회귀 — **체험을 시작하면 감시를 놓는다.**
+
+    `unknown` 으로 감시가 켜진 뒤 체험을 시작하면 판정 effect 는 곧장 돌아 나온다. 그때도
+    리스너가 남으면 아무것도 판정하지 않으면서 신호마다 손잡이만 올려, 앱이 열린 내내
+    헛렌더가 붙는다.
+  */
+  it("체험을 시작하면 복구 신호를 그만 듣는다", async () => {
+    const listen = jest.spyOn(document, "addEventListener");
+    const unlisten = jest.spyOn(document, "removeEventListener");
+    const attached = () =>
+      listen.mock.calls.filter(([type]) => type === "visibilitychange").length -
+      unlisten.mock.calls.filter(([type]) => type === "visibilitychange").length;
+
+    try {
+      setSession("unknown");
+
+      render(<GuestTrialBridge />);
+      await flushAsync();
+      expect(attached()).toBe(1);
+
+      // 같은 화면에서 체험을 시작한다 — 이제 회원 판정 대상이 아니다.
+      await act(async () => {
+        useGuestTrialStore.getState().enterGuestMode();
+      });
+
+      expect(attached()).toBe(0);
+    } finally {
+      listen.mockRestore();
+      unlisten.mockRestore();
+    }
+  });
+
+  /*
     회귀 — **보관물이 사라졌으면 그만 듣는다.**
 
     `unknown` 으로 감시가 켜진 뒤, 다른 탭에서 저장·폐기했거나 TTL 로 정리돼 보관물이

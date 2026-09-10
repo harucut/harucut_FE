@@ -549,6 +549,13 @@ export function GuestTrialBridge() {
   */
   useEffect(() => {
     if (!membershipWatch) return;
+    /*
+      **회원 판정 대상일 때만 듣는다.** 위 판정 effect 와 같은 조건이다 — `unknown` 으로
+      감시가 켜진 뒤 체험을 시작하면(`enterGuestMode()`) 그 effect 는 여기서 곧장 돌아
+      나오는데, 이 리스너만 남으면 아무것도 판정하지 않으면서 신호마다 손잡이를 올려
+      앱이 열린 내내 헛렌더가 붙는다.
+    */
+    if (!hydrated || accessMode !== "member") return;
 
     const retry = () => {
       if (document.visibilityState === "hidden") return;
@@ -570,7 +577,7 @@ export function GuestTrialBridge() {
       window.removeEventListener("online", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [membershipWatch]);
+  }, [accessMode, hydrated, membershipWatch]);
 
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.
