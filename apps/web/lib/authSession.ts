@@ -48,10 +48,31 @@ export type Membership =
  * `/api/auth/session` 을 부르지 않는 이유가 여기 있다 — 그쪽은 판정을 대신 해 주지만
  * 언제나 200 이라 `clientApi` 의 401 재발급이 걸리지 않는다.
  */
+/**
+ * 이 조회의 **종료 상한.**
+ *
+ * 답이 안 오면 이 함수가 끝나지 않고, 그것을 기다리는 화면은 잠긴 채로 남는다 — 업로드
+ * 화면이 그렇다(회원으로 확인될 때까지 조작을 막는다). 상한이 없으면 「다시 확인」 안내조차
+ * 뜨지 않는다. 그 안내는 `unknown` 이 **돌아와야** 뜨기 때문이다.
+ *
+ * 숫자는 **실측이 아니다.** 이 저장소가 같은 성격의 문제(안 끝나면 사용자가 갇힌다)에 이미
+ * 걸어 둔 상한과 맞췄다 — `lib/clientApi.ts` 의 `REISSUE_DEADLINE_MS`,
+ * `lib/userMediaApi.ts` 의 `DELETE_DEADLINE_MS`, `lib/themeEditorStore.ts` 의
+ * `ASSET_QUEUE_WAIT_LIMIT_MS` 가 모두 30초다. 갈라지면 근거가 사라지니 함께 본다.
+ *
+ * 상한에 걸리면 `clientApi` 가 AbortError 를 그대로 올리고, 아래 `catch` 가 그것을
+ * `unknown` 으로 접는다 — 「회원이 아니다」가 아니라 「못 물어봤다」다.
+ */
+const STATUS_DEADLINE_MS = 30_000;
+
 export async function resolveMembership(): Promise<Membership> {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), STATUS_DEADLINE_MS);
+
   try {
     const res = await clientApi.get<unknown>("/api/auth/status", {
       cache: "no-store",
+      signal: controller.signal,
     });
     return isUnusableUserStatus(readUserStatus(res.data)) ? "guest" : "member";
   } catch (error) {
@@ -68,7 +89,10 @@ export async function resolveMembership(): Promise<Membership> {
       return "unknown";
     }
 
-    // 나머지(5xx, 형태가 낯선 오류)도 확정할 근거가 없다. 모르는 것은 모른다고 답한다.
+    // 나머지(5xx, 상한에 걸린 AbortError, 형태가 낯선 오류)도 확정할 근거가 없다.
+    // 모르는 것은 모른다고 답한다.
     return "unknown";
+  } finally {
+    clearTimeout(deadline);
   }
 }

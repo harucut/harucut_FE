@@ -116,4 +116,35 @@ describe("resolveMembership", () => {
 
     await expect(resolveMembership()).resolves.toBe("unknown");
   });
+
+  /*
+    회귀 — **답이 안 와도 끝난다.**
+
+    상한이 없으면 이 함수가 영영 안 끝나고, 그것을 기다리는 화면은 잠긴 채로 남는다
+    (업로드 화면). 「다시 확인」 안내도 못 뜬다 — 그 안내는 `unknown` 이 돌아와야 뜬다.
+  */
+  it("상태 조회가 멈추면 상한에 걸려 판정할 수 없다고 답한다", async () => {
+    jest.useFakeTimers();
+    try {
+      global.fetch = jest.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            const abort = () => {
+              const error = new Error("Aborted");
+              error.name = "AbortError";
+              reject(error);
+            };
+            if (init?.signal?.aborted) abort();
+            else init?.signal?.addEventListener("abort", abort);
+          }),
+      ) as unknown as typeof fetch;
+
+      const pending = resolveMembership();
+      await jest.advanceTimersByTimeAsync(31_000);
+
+      await expect(pending).resolves.toBe("unknown");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

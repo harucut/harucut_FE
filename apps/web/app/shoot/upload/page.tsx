@@ -117,6 +117,7 @@ export default function ShootUploadPage() {
   const guestHydrated = useGuestTrialStore((state) => state.hydrated);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
+  const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
   /** 서버가 「회원」이라고 답했는가. 이 화면의 조작은 그 뒤에 열린다. */
   const [memberConfirmed, setMemberConfirmed] = useState(false);
   /**
@@ -133,12 +134,27 @@ export default function ShootUploadPage() {
   useEffect(() => {
     if (!guestHydrated) return;
 
+    /*
+      **화면을 떠나면 이동은 접는다 — 전역 정리는 접지 않는다.**
+
+      판정은 왕복 하나만큼 걸리고, 그 사이 사용자는 뒤로가기나 헤더 링크로 떠날 수 있다.
+      그때 늦게 온 `guest` 로 `router.replace` 를 돌리면 **사용자가 옮겨 간 화면을** 촬영
+      화면으로 덮어쓴다. 회원 전용 조작은 판정 전까지 잠겨 있으니, 떠난 뒤에까지 이동을
+      끌고 갈 이유가 없다.
+
+      반대로 쿠키를 걷고 심는 것(`exitGuestMode`·`enterGuestMode`)은 이 화면의 상태가
+      아니라 **전역 상태**라 그대로 둔다 — 접으면 다음 화면이 거짓 상태로 돌아간다
+      (app/shoot/page.tsx 의 행사 전환과 같은 판단이다).
+    */
+    let cancelled = false;
+
     void (async () => {
       const membership = await resolveMembership();
 
       if (membership === "member") {
-        // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다. 그리고 조작을 연다.
+        // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다(전역이라 떠났어도 한다).
         if (accessMode === "guest") exitGuestMode();
+        if (cancelled) return;
         setCheckFailed(false);
         setMemberConfirmed(true);
         return;
@@ -146,6 +162,7 @@ export default function ShootUploadPage() {
       // 못 물어봤으면(`unknown`) 내보내지 않는다 — 서버가 잠깐 흔들렸다고 회원을 쫓아내지
       // 않는다. 잠금은 그대로 두되, 왜 잠겼는지 말하고 다시 해 볼 길을 준다.
       if (membership !== "guest") {
+        if (cancelled) return;
         setCheckFailed(true);
         return;
       }
@@ -153,6 +170,20 @@ export default function ShootUploadPage() {
       // 확정된 게스트다. 진행 중이던 변환도 버린다 — 되돌리는 사이에 끝나면 그 사진이
       // 세션에 남아 게스트 허용 경로(고르기·결과)에서 그대로 쓰인다.
       importGenerationRef.current += 1;
+
+      /*
+        **화면 상태를 사실에 맞춘다.** 서버가 「쓸 수 있는 세션이 없다」고 확인해 줬는데
+        `accessMode` 를 `member` 로 두면 앱이 거짓말을 한다 — 프록시는 남은 죽은 쿠키로
+        계속 통과시키고, 화면은 회원처럼 그리다가 결과 단계의 인증 API 에서 다시 막힌다.
+        행사 진입이 아닌 방문자에게는 그 막다른 길을 벗어날 손잡이도 없다.
+
+        여기서 심는 것은 랜딩의 "가입 없이 찍어보기"가 주는 것과 **같은 자격**이고, 곧
+        이어지는 안내(`guestNotice=restricted`)가 그 범위와 「로그인하기」를 함께 보여 준다.
+        세션이 잠깐 흔들린 것뿐이면 그 버튼으로 돌아오면 되고, 돌아온 뒤 이 화면을 다시
+        열면 위 `member` 갈래가 이 쿠키를 걷는다.
+      */
+      if (accessMode !== "guest") enterGuestMode();
+      if (cancelled) return;
 
       /*
         **되돌릴 때 행사 이름과 고른 프레임을 들려 보낸다.**
@@ -167,8 +198,13 @@ export default function ShootUploadPage() {
       if (eventName) params.set("event", eventName);
       router.replace(`/shoot?${params.toString()}`);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     accessMode,
+    enterGuestMode,
     eventName,
     exitGuestMode,
     frameId,

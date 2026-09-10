@@ -16,6 +16,7 @@
 import { act, fireEvent, render, waitFor, screen } from "@testing-library/react";
 import ShootUploadPage from "@/app/shoot/upload/page";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 /** 이 세션이 고른 프레임(`classic-4`)의 칸 수. 화면이 최소 장수와 상한을 뽑는 곳과 같다. */
@@ -89,6 +90,7 @@ beforeEach(() => {
   });
   // 평범한 경우는 회원이다. 게스트 갈래는 아래 describe 가 따로 세운다.
   mockResolveMembership.mockResolvedValue("member");
+  document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
   sessionState.frameId = "classic-4";
   sessionState.eventName = null;
   sessionState.shots = [];
@@ -484,6 +486,55 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
 
     // 고치기 전에는 여기서 세션에 담겨, 고르기·결과가 그대로 이어졌다.
     expect(mockAddShotPhotos).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — **확정된 비회원은 실제로 게스트가 된다.**
+
+    행사 쿼리 없이 이 화면을 연 사람의 쿠키가 만료·회수됐으면, 되돌리기만 해서는 `accessMode`
+    가 `member` 로 남는다. 프록시는 남은 죽은 쿠키로 계속 통과시키고, 화면은 회원처럼
+    그리다가 결과 단계의 인증 API 에서 막힌다 — 벗어날 손잡이가 없는 막다른 길이다.
+  */
+  it("게스트로 확인되면 체험 상태로 바꾸고 되돌린다", async () => {
+    mockResolveMembership.mockResolvedValue("guest");
+
+    render(<ShootUploadPage />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalled();
+    });
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+    expect(document.cookie).toContain(`${GUEST_TRIAL_COOKIE}=1`);
+  });
+
+  /*
+    회귀 — **떠난 뒤에는 이동을 접는다.**
+
+    판정을 기다리는 사이 뒤로가기나 헤더 링크로 떠날 수 있다. 그때 늦게 온 `guest` 로
+    이동을 돌리면 사용자가 옮겨 간 화면을 촬영 화면으로 덮어쓴다. 회원 전용 조작은
+    판정 전까지 잠겨 있으니 떠난 뒤에까지 이동을 끌고 갈 이유가 없다.
+
+    반대로 쿠키 전환은 전역이라 접지 않는다 — 접으면 다음 화면이 거짓 상태로 돌아간다.
+  */
+  it("판정 중에 떠나면 늦은 이동은 하지 않는다", async () => {
+    let answer!: (value: string) => void;
+    mockResolveMembership.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    const { unmount } = render(<ShootUploadPage />);
+    unmount();
+
+    await act(async () => {
+      answer("guest");
+    });
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    // 전역 상태는 사실에 맞춰 둔다.
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
   });
 
   // 반대쪽 못 — 회원으로 확인되면 잠금이 풀린다. 없으면 「늘 잠근다」로 고쳐도 통과한다.
