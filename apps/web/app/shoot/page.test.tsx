@@ -199,6 +199,37 @@ describe("행사 QR 진입의 게스트 전환", () => {
   });
 
   /*
+    회귀 — **판정 중에 화면을 떠나도 전환은 끝까지 간다.**
+
+    판정은 왕복 하나만큼 걸리고, 그 사이 사용자는 기본 프레임으로 「확인」을 눌러 다음
+    화면으로 갈 수 있다. 한때 cleanup 의 `cancelled` 가 그때 전환을 버렸는데, 그러면 죽은
+    인증 쿠키를 든 행사 참가자가 게스트 자격 없이 촬영을 계속하다 인증 API 에서 막힌다 —
+    다음 경로도 남은 쿠키로 프록시를 통과하므로 아무도 그것을 잡지 못한다.
+  */
+  it("판정 중에 화면을 떠나도 체험 전환은 끝까지 간다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    let answer: (value: string) => void = () => {};
+    mockResolveMembership.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    const view = render(<ShootPage />);
+    // 아직 답이 오기 전에 확인을 눌러 다음 화면으로 간다.
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+    view.unmount();
+
+    await act(async () => {
+      answer("guest");
+    });
+
+    // 고치기 전에는 여기서 member 인 채 남아, 다음 화면이 게스트 자격 없이 돌았다.
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+  });
+
+  /*
     회귀 — **못 물어본 것은 비회원이 아니다.**
 
     `/api/auth/status` 가 잠깐 5xx 이거나 재발급 서버만 못 답하면 판정이 `unknown` 으로 온다.

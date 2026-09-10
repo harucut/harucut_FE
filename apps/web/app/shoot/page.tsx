@@ -99,6 +99,21 @@ function ShootPageContent() {
     **이미 게스트면 묻지 않는다** — 쿠키가 없어 프록시가 심어 준 경우이고, 답은 정해져 있다.
     행사 진입이 아닐 때도 묻지 않는다. 여기서 일반 진입까지 물으면 촬영 화면을 열 때마다
     인증 왕복이 하나 붙는다.
+
+    **화면을 떠나도 전환은 끝까지 간다 — cleanup 으로 접지 않는다.**
+
+    판정은 왕복 하나만큼 걸리는데, 그 사이 사용자는 기본 프레임으로 「확인」을 눌러
+    `/shoot/capture` 로 갈 수 있다. 한때 여기 `cancelled` 플래그를 두고 떠나면 전환을
+    버렸는데, 그러면 죽은 인증 쿠키를 든 행사 참가자가 **게스트 자격 없이** 촬영을 계속하다
+    인증 API 에서 막혔다 — 다음 경로도 남은 쿠키를 근거로 프록시를 통과하므로 아무도
+    그것을 잡지 못한다.
+
+    `enterGuestMode()` 는 이 화면의 상태가 아니라 **쿠키와 전역 스토어**를 고친다. cleanup 이
+    막아야 하는 것은 「떠난 화면에 상태를 쓰는 것」이지 「약속한 전환을 접는 것」이 아니다.
+    (`app/shoot/result/page.tsx` 의 완성 알림도 같은 이유로 `cancelled` 밖에 있다.)
+
+    확인 버튼을 판정이 끝날 때까지 막는 길도 있었지만 고르지 않았다 — 「가입 없이 바로
+    찍는다」가 이 흐름의 전부인데, 그 첫 동작을 인증 왕복 뒤로 미루게 된다.
   */
   const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
   const hydrated = useGuestTrialStore((state) => state.hydrated);
@@ -106,20 +121,15 @@ function ShootPageContent() {
   useEffect(() => {
     if (!queriedEventName || !hydrated || accessMode === "guest") return;
 
-    let cancelled = false;
     void (async () => {
       const membership = await resolveMembership();
       // **확정된 비회원일 때만** 전환한다. 회원이면 쿠키를 덮지 않고, 못 물어본 경우
       // (`unknown` — 5xx·회선 끊김·재발급 서버 장애)도 그대로 둔다. 잠깐 못 물어봤다는
       // 이유로 7일짜리 쿠키를 심으면 멀쩡한 회원이 그동안 기록과 저장 프레임을 잃는다.
       // 그때 이 사람은 회원 화면 그대로 남고, 서버가 돌아오면 다음 진입에서 판정된다.
-      if (cancelled || membership !== "guest") return;
+      if (membership !== "guest") return;
       enterGuestMode();
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [accessMode, enterGuestMode, hydrated, queriedEventName]);
 
   return (
