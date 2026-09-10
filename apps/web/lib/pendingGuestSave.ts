@@ -457,8 +457,27 @@ export async function readPendingGuestSave(
     const record = read.value;
     const meta = normalizeMeta(record, now);
     if (!meta || !hasFourSources(record.sources, isUsableBlob)) {
-      await clearPendingGuestSave();
-      return { status: "empty" };
+      /*
+        **못 쓰는 한 벌도 조건부로 지운다.**
+
+        위 읽기는 `readonly` 로 끝났고, 여기까지 오는 사이가 열려 있다. 그 틈에 다른 탭이
+        새 네컷을 같은 자리에 저장하면 무조건 삭제는 **그 새 한 벌**을 지운다 — 사용자가
+        확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
+
+        지문은 `savedAt` 하나면 된다 — 저장은 그때의 시각을 함께 심으므로(`setPendingGuestSave`)
+        다른 탭이 갈아 끼웠으면 반드시 달라진다. 기한이 지났거나 프레임을 모르는 한 벌은
+        `savedAt` 이 성치 않을 수 있지만 그래도 맞다: 그대로 남아 있으면 `deleteRecordIfMatches`
+        가 **지문을 볼 것도 없이** 걷고, 갈아 끼워졌으면 지문이 어긋나 손을 뗀다.
+      */
+      const cleared = await clearPendingGuestSaveIfUnchanged(
+        (current) => current.savedAt === record.savedAt,
+        now,
+      );
+      // 갈아 끼워져 있었다 — 내가 읽은 것은 이미 지난 소식이다. 「없다」로 답하면 그 판단으로
+      // 무언가를 지우게 되므로, 모른다고 답하고 다음 읽기에 맡긴다.
+      return cleared === "changed"
+        ? { status: "unreadable" }
+        : { status: "empty" };
     }
 
     return {
@@ -579,6 +598,91 @@ function deleteRecordIfMatches(
   });
 }
 
+/**
+ * 이 함수가 돌려주는 것은 **그 자리에 실제로 있는 키와 그 키가 붙은 레코드**다.
+ *
+ * 읽어 둔 항목이 아니다. 그 사이 다른 탭이 새로 찍어 갈아 끼웠으면 키는 새 한 벌에 붙고,
+ * 올려 보낼 원본도 그쪽이어야 한다 — 예전 항목의 원본을 이 키로 올리면 나중에 새 한 벌을
+ * 인계할 때 같은 키가 다시 나와 서버가 예전 작업을 재생한다.
+ */
+type ComposeKeyAttach =
+  /** 쓸 수 있는 레코드가 없다 — 붙일 자리가 없다. */
+  | { status: "absent" }
+  | {
+      status: "attached";
+      record: StoredRecord;
+      meta: PendingGuestSaveMeta;
+      key: string;
+    };
+
+/**
+ * **키 확인과 부착을 한 트랜잭션 안에서 한다.** 쓸 수 있는 레코드가 없으면 `absent`.
+ *
+ * 나눠서 하면 그 사이가 열린다. 같은 브라우저의 두 탭이 거의 동시에 인계를 확정하면 양쪽
+ * 모두 「키 없음」을 읽고 서로 다른 키를 만든 뒤 각자 쓴다. 레코드에는 뒤에 쓴 것만 남지만
+ * **두 탭은 각자의 키로 합성을 접수한** 뒤다 — 멱등키가 있으나 마나 같은 네컷이 기록에 두
+ * 벌 남는다. 읽기가 Blob 넷을 data URL 로 되돌리느라 짧지도 않아서 창이 넓다.
+ *
+ * 그래서 **이미 붙은 키가 있으면 그 키를 돌려준다.** 늦게 온 탭도 먼저 붙은 키를 쓴다.
+ * 덮어쓰면 앞 탭이 이미 그 키로 접수한 작업과 갈라진다.
+ *
+ * IndexedDB 트랜잭션은 같은 store 에 대해 직렬화되므로, 여기서 읽은 값과 쓰는 값 사이에는
+ * 다른 쓰기가 끼어들지 못한다(`deleteRecordIfMatches` 와 같은 이유).
+ */
+function attachComposeKeyIfAbsent(
+  db: IDBDatabase,
+  key: string,
+  now: number,
+): Promise<ComposeKeyAttach> {
+  return new Promise((resolve, reject) => {
+    let outcome: ComposeKeyAttach = { status: "absent" };
+    let transaction: IDBTransaction;
+
+    try {
+      transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const read = store.get(RECORD_KEY);
+
+      read.onsuccess = () => {
+        const record = read.result as StoredRecord | undefined;
+        if (!record) return;
+
+        const meta = normalizeMeta(record, now);
+        // 못 쓰는 한 벌에는 키를 붙이지 않는다 — 읽기 경로가 그것을 걷어 간다.
+        if (!meta || !hasFourSources(record.sources, isUsableBlob)) return;
+
+        const existing = meta.composeIdempotencyKey;
+        if (existing) {
+          // **먼저 붙은 키가 임자다.** 늦게 온 쪽이 덮으면 두 탭이 서로 다른 키로 접수한다.
+          outcome = { status: "attached", record, meta, key: existing };
+          return;
+        }
+
+        const keyed = {
+          ...record,
+          composeIdempotencyKey: key,
+        } satisfies StoredRecord;
+        outcome = {
+          status: "attached",
+          record: keyed,
+          meta: { ...meta, composeIdempotencyKey: key },
+          key,
+        };
+        store.put(keyed, RECORD_KEY);
+      };
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    transaction.oncomplete = () => resolve(outcome);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction aborted"));
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction failed"));
+  });
+}
+
 export async function clearPendingGuestSaveIfUnchanged(
   isSame: (entry: PendingGuestSaveMeta) => boolean,
   now: number = Date.now(),
@@ -668,9 +772,12 @@ export type PendingGuestSaveComposeKey = {
  * 되쓰기는 `setPendingGuestSave` 와 달리 **먼저 지우지 않는다.** 지운 뒤 쓰기가 막히면
  * 원본 4장까지 통째로 잃는다 — 키 한 줄 못 남기는 것보다 훨씬 나쁘다.
  *
+ * **확인과 부착은 한 트랜잭션이다**(`attachComposeKeyIfAbsent`). 나눠서 하면 두 탭이 서로
+ * 다른 키로 같은 네컷을 접수한다. 먼저 붙은 키가 있으면 그 키를 그대로 쓴다.
+ *
  * **못 남겼으면 못 남겼다고 말한다.** 키 자체는 그대로 돌려준다 — 이번 합성은 키가 없어도
  * 돌고, 여기서 거절하면 될 저장까지 막는다. 대신 `persisted: false` 로 넘긴다. 저장소를
- * 못 열거나(`writeRecord` 가 false) 트랜잭션이 중단되면(예외) 그 키는 새로고침을 못 넘기고,
+ * 못 열거나 트랜잭션이 중단되면(예외) 그 키는 새로고침을 못 넘기고,
  * 첫 합성이 이미 서버에 접수된 뒤였다면 재시도가 **다른 키로 같은 네컷을 한 벌 더** 만든다.
  * 그 사실을 삼키면 호출부는 성공한 줄 알고 "새로고침하면 다시 시도해요"라고 안내하면서
  * 중복을 예약하게 된다.
@@ -685,15 +792,43 @@ export async function ensurePendingGuestSaveComposeKey(
     return { key: entry.composeIdempotencyKey, persisted: true, entry };
 
   const key = newIdempotencyKey();
-  // 키를 붙인 그 한 벌을 그대로 돌려준다. 호출부가 「검증한 항목」과 대조할 대상도,
-  // 실제로 올릴 원본도 이것이어야 한다 — 위 `entry` 주석을 본다.
-  const keyed = { ...entry, composeIdempotencyKey: key };
+  /**
+   * **저장소에 못 남긴 키.** 키 자체는 그대로 돌려준다 — 이번 합성은 키가 없어도 돌고,
+   * 여기서 거절하면 될 저장까지 막는다. 대신 `persisted: false` 로 그 사실을 넘긴다.
+   */
+  const unpersisted = (): PendingGuestSaveComposeKey => ({
+    key,
+    persisted: false,
+    // 키를 붙인 그 한 벌을 그대로 돌려준다 — 위 `entry` 주석을 본다.
+    entry: { ...entry, composeIdempotencyKey: key },
+  });
+
+  const db = await openDatabase();
+  if (!db) return unpersisted();
   try {
-    const persisted = await writeRecord(keyed);
-    return { key, persisted, entry: keyed };
+    const settled = await attachComposeKeyIfAbsent(db, key, now);
+    // IndexedDB 에 쓸 수 있는 레코드가 없다 — 예전 localStorage 한 벌이었다. 거기에는
+    // 트랜잭션이 없어 키를 안전하게 못 남긴다.
+    if (settled.status === "absent") return unpersisted();
+
+    /*
+      돌려주는 키는 **내가 만든 것이 아닐 수 있다.** 다른 탭이 먼저 붙였으면 그 키다.
+      원본도 그 레코드에서 다시 꺼낸다 — 위에서 읽어 둔 `entry` 는 그 사이 갈아 끼워졌을
+      수 있고, 그 원본을 이 키로 올리면 서버가 엉뚱한 한 벌을 남긴다.
+    */
+    return {
+      key: settled.key,
+      persisted: true,
+      entry: {
+        ...settled.meta,
+        sources: await Promise.all(settled.record.sources.map(blobToDataUrl)),
+      },
+    };
   } catch {
-    // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위 false 와 같으므로 한 갈래로 모은다.
-    return { key, persisted: false, entry: keyed };
+    // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위와 같으므로 한 갈래로 모은다.
+    return unpersisted();
+  } finally {
+    db.close();
   }
 }
 

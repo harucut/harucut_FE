@@ -110,6 +110,14 @@ const store = {
   nullTransactionError: false,
   /** 요청은 받아 놓고 아무것도 안 남긴다 — 되읽어 확인이 없으면 못 잡는 실패. */
   swallowWrites: false,
+  /**
+   * **읽은 직후 다른 탭이 끼어드는 순간.**
+   *
+   * `get` 이 결과를 집은 **뒤** 한 번 불린다. 진짜 브라우저에서 다른 탭의 쓰기가 끼어드는
+   * 자리가 여기다 — 읽기 트랜잭션이 끝나고 다음 트랜잭션이 열리기 전. 플래그로는 그
+   * 순간을 못 만든다.
+   */
+  afterRead: null as (() => void) | null,
   openCount: 0,
   closeCount: 0,
   /**
@@ -131,6 +139,7 @@ function resetStore() {
   store.openCount = 0;
   store.closeCount = 0;
   store.openBlocksThenSucceeds = false;
+  store.afterRead = null;
 }
 
 /**
@@ -156,7 +165,12 @@ function makeObjectStore(
       if (writable) store.data.set(key, value);
       return track({ result: undefined });
     },
-    get: (key) => track({ result: store.data.get(key) }),
+    get: (key) => {
+      const request = track({ result: store.data.get(key) });
+      // 결과를 집은 뒤에 부른다 — 이미 읽은 값은 그대로 두고, 저장소만 갈아 끼우게 한다.
+      store.afterRead?.();
+      return request;
+    },
     count: (key) => track({ result: store.data.has(key) ? 1 : 0 }),
     delete: (key) => {
       if (mode === "readwrite" && !store.rejectWrites) store.data.delete(key);
@@ -263,6 +277,16 @@ function removeIndexedDB() {
 }
 
 /** 저장소에 실제로 들어간 한 벌. 없으면 null. */
+/** 스텁이 담아 둔 Blob 을 모듈이 돌려주는 모양(data URL)으로 되돌린다. */
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("blob read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function storedRecord() {
   return (store.data.get(RECORD_KEY) as
     | { sources: Blob[]; frameId: string; composeIdempotencyKey?: string }
@@ -475,6 +499,55 @@ describe("pendingGuestSave", () => {
     // 보관물에 남았으므로 새로고침 뒤(= 다시 읽어도) 같은 값이다.
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBe(first?.key);
     expect(await ensurePendingGuestSaveComposeKey(NOW)).toEqual(first);
+  });
+
+  /*
+    회귀 — **두 탭이 거의 동시에 확정해도 키는 하나다.**
+
+    나눠서 읽고 쓰면 그 사이가 열린다. 양쪽 모두 「키 없음」을 읽고 서로 다른 키를 만든 뒤
+    각자 쓰면, 레코드에는 뒤에 쓴 것만 남지만 **두 탭은 이미 각자의 키로 합성을 접수한**
+    뒤다 — 멱등키가 있으나 마나 같은 네컷이 기록에 두 벌 남는다.
+  */
+  it("두 탭이 동시에 물어도 같은 멱등키를 준다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+
+    const [left, right] = await Promise.all([
+      ensurePendingGuestSaveComposeKey(NOW),
+      ensurePendingGuestSaveComposeKey(NOW),
+    ]);
+
+    expect(typeof left?.key).toBe("string");
+    expect(right?.key).toBe(left?.key);
+    // 보관물에 남은 것도 그 하나여야 한다 — 늦게 온 쪽이 덮으면 앞 탭이 접수한 키와 갈라진다.
+    expect(storedRecord()?.composeIdempotencyKey).toBe(left?.key);
+  });
+
+  /*
+    회귀 — **키는 「그 자리에 있는 한 벌」에 붙고, 돌려주는 원본도 그 한 벌이다.**
+
+    키를 붙이는 사이 다른 탭이 새로 찍어 갈아 끼웠으면 키는 새 한 벌에 붙는다. 그때 예전
+    항목의 원본을 이 키로 올리면, 나중에 새 한 벌을 인계할 때 같은 키가 다시 나와 서버가
+    예전 작업을 재생한다 — 새로 찍은 네컷 대신 예전 것이 기록에 남는다.
+  */
+  it("붙이는 사이 갈아 끼워졌으면 그 새 한 벌의 원본을 돌려준다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const old = storedRecord();
+    const swappedBlobs = [new Blob(["EFGH"]), new Blob(["IJKL"]), new Blob(["MNOP"]), new Blob(["QRST"])];
+
+    // 키를 붙이러 가기 **직전**에 다른 탭이 새로 찍어 갈아 끼운다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, { ...(old as object), sources: swappedBlobs, savedAt: NOW + 1 });
+    };
+
+    const settled = await ensurePendingGuestSaveComposeKey(NOW);
+
+    // 키는 새 한 벌에 붙었다 — 돌려주는 원본도 그쪽이어야 한다.
+    expect(settled?.key).toBe(storedRecord()?.composeIdempotencyKey);
+    expect(settled?.entry.sources).toEqual(
+      await Promise.all(swappedBlobs.map(readBlobAsDataUrl)),
+    );
+    expect(settled?.entry.savedAt).toBe(NOW + 1);
   });
 
   it("키를 심어도 나머지 보관 내용은 그대로다", async () => {
@@ -901,6 +974,34 @@ describe("pendingGuestSave", () => {
 
     expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
     expect(storedRecord()).toBeNull();
+  });
+
+  /*
+    회귀 — **못 쓰는 한 벌을 걷다가 남의 새 한 벌을 지우지 않는다.**
+
+    읽기는 `readonly` 로 끝나고, 걷어 내기까지의 사이가 열려 있다. 그 틈에 다른 탭이 새
+    네컷을 같은 자리에 저장하면 무조건 삭제는 **그 새 한 벌**을 지운다 — 사용자가 확인한
+    적 없는 것이고, 원본 4장은 거기에만 있다.
+  */
+  it("걷어 내는 사이 다른 탭이 새로 저장했으면 그것은 두고 온다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const broken = storedRecord();
+    if (broken) broken.frameId = "not-a-frame";
+
+    // 읽기가 못 쓰는 한 벌을 집은 **직후**, 다른 탭이 성한 새 한 벌로 갈아 끼운다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(broken as object),
+        frameId: ENTRY.frameId,
+        savedAt: NOW + 1,
+      });
+    };
+
+    // 내가 읽은 것은 이미 지난 소식이다 — 「없다」로 답하면 그 판단으로 무언가를 지운다.
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    // 새 한 벌은 그대로 남아 있어야 한다.
+    expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
   });
 
   it("열렸는데 원본이 4장이 아닌 레코드도 「없다」로 답하고 지운다", async () => {
