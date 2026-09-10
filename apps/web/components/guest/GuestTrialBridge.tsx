@@ -21,6 +21,14 @@ import {
 import { resolveMembership } from "@/lib/authSession";
 
 /**
+ * 신호 없이 서버만 나은 경우를 메우려고 한 번 재는 시간.
+ *
+ * `resolveMembership()` 이 한 번 묻는 데 쓰는 상한과 같은 숫자다(lib/authSession.ts).
+ * 새로 지어낸 간격이 아니라 「한 번 묻는 데 최대로 걸리는 만큼」이다.
+ */
+const MEMBERSHIP_TIMED_RETRY_MS = 30_000;
+
+/**
  * 다시 시도를 권할 때 붙이는 **중복 경고**. 멱등키를 못 남긴 기기에서만 붙는다.
  *
  * 「다시 하면 이어서 저장해요」는 보관물에 남은 멱등키가 있을 때만 참이다. 그 키를 못
@@ -129,12 +137,34 @@ export function GuestTrialBridge() {
    * 오갈 때마다 인증 왕복이 붙는다.
    */
   const [membershipWatch, setMembershipWatch] = useState(false);
-  /** 판정이 지금 도는 중인가. 신호가 왔을 때 「기록만 할지 바로 다시 돌릴지」를 가른다. */
-  const membershipInFlightRef = useRef(false);
+  /** 회차마다 하나씩 올라가는 번호. 늦게 끝난 앞 회차가 뒤 회차의 상태를 지우지 않게 한다. */
+  const membershipRoundRef = useRef(0);
+  /**
+   * 지금 도는 회차의 번호. `0` 이면 아무 판정도 안 돈다.
+   *
+   * 참·거짓이 아닌 **번호**인 이유: 화면이 바뀌면 앞 회차(A)는 취소 표시만 되고 요청 자체는
+   * 계속 돈다. 뒤이어 시작한 B 가 도는 중에 A 가 끝나면서 이 자리를 「안 돈다」로 만들면,
+   * 다음 신호가 B 와 겹치는 세 번째 왕복을 연다. 자기 번호일 때만 내린다.
+   */
+  const membershipInFlightRef = useRef(0);
   /** 판정이 도는 사이에 복구 신호가 왔는가. `unknown` 으로 끝나면 그 자리에서 한 번 더 돈다. */
   const recoverySignalRef = useRef(false);
   /** 판정을 다시 돌리는 손잡이. 아래 effect 의 의존성이라 값이 바뀌면 한 회차가 더 돈다. */
   const [membershipRetryToken, setMembershipRetryToken] = useState(0);
+  /**
+   * 시간을 재서 한 번 더 묻기로 걸어 둔 타이머. `0` 이면 재는 것이 없다.
+   *
+   * 브라우저 신호(`online`·`visibilitychange`)로는 못 잡는 실패가 하나 있다 — **서버만
+   * 아팠던 경우**다. 5xx 나 상한에 걸린 요청도 `unknown` 으로 끝나는데, 그 서버가 나아도
+   * 브라우저는 아무것도 알려 주지 않는다. 온라인인 채로 같은 화면에 머무르면 신호가
+   * 영영 오지 않아 저장 안내가 사라진 채로 남는다.
+   *
+   * 상태가 아니라 ref 인 이유: 상태로 켜고 끄면 한 회차의 「접는다」와 다음 「건다」가 같은
+   * 렌더로 묶여 서로를 지운다 — 접은 줄 알았던 앞 타이머가 그대로 살아 터진다.
+   */
+  const membershipTimerRef = useRef(0);
+  /** 시간을 잰 되묻기를 이미 썼는가. **한 번뿐이다** — 아래에 그 이유를 적는다. */
+  const membershipTimerUsedRef = useRef(false);
   /*
     저장이 도는 중인가.
 
@@ -362,19 +392,29 @@ export function GuestTrialBridge() {
       }
     };
 
-    void (async () => {
+    /*
+      한 회차를 돌리고 **신호를 계속 들을지**를 돌려준다.
+
+      `true` 는 「아직 못 물어봤다」 하나뿐이다. 답을 받았든(회원·비회원) 물어볼 일이
+      없었든(보관물이 사라졌든 이미 물었든) 전부 `false` 다 — 그래도 듣고 있으면 탭을
+      오갈 때마다 IndexedDB 를 다시 읽고 판정을 다시 건다.
+
+      끄는 자리를 갈래마다 두지 않고 이 함수의 **반환값 하나**로 모은 이유다. 갈래마다
+      두면 하나가 죽어도 아무도 모른다.
+    */
+    const runRound = async (): Promise<boolean> => {
       // 보관물 조회는 비동기다 — IndexedDB 에 담기 때문이다(lib/pendingGuestSave.ts).
       // 읽는 동안 화면을 옮겼으면 여기서 끝낸다.
       const pending = await getPendingGuestSave();
-      if (cancelled) return;
+      if (cancelled) return false;
       if (!pending) {
         stripResumeParam();
-        return;
+        return false;
       }
 
       // 한 번 물었으면 같은 탭에서 다시 걸지 않는다(성공·실패 모두 아래에서 정리한다).
       // 저장이 도는 중이면 더더욱 걸지 않는다 — 진행 중 안내를 덮고 같은 인계를 또 접수한다.
-      if (handoffPromptedRef.current || handoffSavingRef.current) return;
+      if (handoffPromptedRef.current || handoffSavingRef.current) return false;
       handoffPromptedRef.current = true;
 
       /*
@@ -401,34 +441,51 @@ export function GuestTrialBridge() {
         표식을 여기서 따로 되돌리지는 않는다: 그 회차가 시작될 때 cleanup 이 먼저 돌아
         이미 되돌린다. 두 자리에서 같은 일을 하면 어느 쪽이 살아 있는지 알 수 없게 된다.
       */
-      // 판정이 도는 동안에도 복구 신호를 듣는다(위 `membershipWatch`).
-      membershipInFlightRef.current = true;
+      // 판정이 도는 동안에도 복구 신호를 듣는다(아래 `membershipWatch`).
+      const roundId = (membershipRoundRef.current += 1);
+      membershipInFlightRef.current = roundId;
       recoverySignalRef.current = false;
       setMembershipWatch(true);
 
       const membership = await resolveMembership();
-      membershipInFlightRef.current = false;
-      if (cancelled) return;
-
-      /*
-        **계속 들을지는 답 하나로 갈린다** — 못 물어봤을 때만 듣는다.
-
-        회원이든 비회원이든 답이 정해졌으면 더 물을 것이 없다. 그래도 듣고 있으면 앞 회차의
-        리스너가 남아, 답이 정해진 사람에게 탭을 오갈 때마다 왕복이 붙는다. 끄는 자리를
-        갈래마다 두지 않고 여기 하나로 두는 이유다 — 갈래마다 두면 하나가 죽어도 모른다.
-      */
-      setMembershipWatch(membership === "unknown");
+      // **내 번호일 때만 내린다.** 화면이 바뀌어 다음 회차가 이미 돌고 있으면 그 회차의
+      // 것이다 — 여기서 지우면 다음 신호가 겹치는 왕복을 연다.
+      if (membershipInFlightRef.current === roundId) {
+        membershipInFlightRef.current = 0;
+      }
+      if (cancelled) return false;
 
       if (membership !== "member") {
-        if (membership === "unknown" && recoverySignalRef.current) {
-          /*
-            도는 사이에 신호가 왔으면 그 신호는 이 답보다 새 소식이다 — 바로 한 번 더 묻는다.
-            기록은 여기서 되돌리지 않는다: 이 bump 가 여는 다음 회차의 시작이 먼저 지운다.
-            두 자리에서 같은 기록을 지우면 어느 쪽이 살아 있는지 알 수 없게 된다.
-          */
-          setMembershipRetryToken((token) => token + 1);
+        if (membership === "unknown") {
+          if (recoverySignalRef.current) {
+            /*
+              도는 사이에 신호가 왔으면 그 신호는 이 답보다 새 소식이다 — 바로 한 번 더 묻는다.
+              기록은 여기서 되돌리지 않는다: 이 bump 가 여는 다음 회차의 시작이 먼저 지운다.
+              두 자리에서 같은 기록을 지우면 어느 쪽이 살아 있는지 알 수 없게 된다.
+            */
+            setMembershipRetryToken((token) => token + 1);
+          } else if (!membershipTimerUsedRef.current) {
+            /*
+              **신호가 오지 않는 실패 하나를 위해, 딱 한 번 시간을 잰다.**
+
+              브라우저는 「서버가 나았다」를 알려 주지 않는다. 회선도 탭도 그대로인 채
+              서버만 아팠다 낫는 경우, 위 두 신호는 끝내 오지 않는다.
+
+              **되풀이하지 않는 이유.** 간격도 횟수도 근거 없는 숫자가 되고, 장애가 길어지면
+              같은 장애에 요청만 쌓인다. 재는 30초는 `resolveMembership()` 이 한 번 묻는 데
+              쓰는 상한과 같은 숫자다 — 한 번 묻는 데 최대로 걸리는 만큼 기다렸다 한 번 더
+              묻는다. 그래도 못 잡은 장애는 화면을 옮기거나 신호가 올 때 잡힌다.
+
+              걸어 둔 타이머는 아래 cleanup 이 접는다 — 신호가 먼저 와서 한 회차가 이미
+              돌았는데 타이머까지 터지면 같은 것을 묻는 왕복이 하나 더 붙는다.
+            */
+            membershipTimerUsedRef.current = true;
+            membershipTimerRef.current = window.setTimeout(() => {
+              setMembershipRetryToken((token) => token + 1);
+            }, MEMBERSHIP_TIMED_RETRY_MS);
+          }
         }
-        return;
+        return membership === "unknown";
       }
 
       prompted = true;
@@ -451,10 +508,20 @@ export function GuestTrialBridge() {
         message: `이 기기에 비회원으로 만든 "${pending.displayName}"${josa(pending.displayName, "이/가")} 남아 있어요. 지금 로그인한 계정 기록에 저장할까요? 내가 만든 것이 아니면 버려 주세요.`,
         title: "비회원 때 만든 네컷이 남아 있어요",
       });
+      return false;
+    };
+
+    void (async () => {
+      const keepWatching = await runRound();
+      // 화면이 바뀌었으면 이 회차의 판단으로 다음 회차의 상태를 덮지 않는다.
+      if (cancelled) return;
+      setMembershipWatch(keepWatching);
     })();
 
     return () => {
       cancelled = true;
+      // 이 회차가 걸어 둔 시간 재기를 접는다. 다음 회차가 그 일을 대신한다.
+      window.clearTimeout(membershipTimerRef.current);
       // 물어보지도 못하고 끊겼으면 "이미 물어봤다"로 남기지 않는다. 로그인 확인이
       // 끝나기 전에 화면을 옮기면 이 자리에서 보관물이 영영 방치된다.
       // 저장이 도는 중이면 되돌리지 않는다 — 되돌리면 다음 화면에서 확인 안내가 되살아난다.
@@ -489,7 +556,7 @@ export function GuestTrialBridge() {
         판정이 **도는 중**이면 지금 다시 돌리지 않는다 — 같은 질문을 둘로 만들 뿐이다.
         기록만 해 두고, 그 판정이 `unknown` 으로 끝나면 그때 한 번 더 돈다.
       */
-      if (membershipInFlightRef.current) {
+      if (membershipInFlightRef.current !== 0) {
         recoverySignalRef.current = true;
         return;
       }
@@ -504,6 +571,7 @@ export function GuestTrialBridge() {
       document.removeEventListener("visibilitychange", retry);
     };
   }, [membershipWatch]);
+
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.
   // 공유/저장 안내는 URL이 아니라 화면에서 직접 스토어 액션을 부른다(shoot/result 등).

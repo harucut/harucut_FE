@@ -764,6 +764,176 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
   });
 
   /*
+    회귀 — **신호가 오지 않아도 한 번은 시간을 재서 다시 묻는다.**
+
+    서버만 아팠다 낫는 경우 `online` 도 `visibilitychange` 도 오지 않는다. 온라인인 채로
+    같은 화면에 머무르면 신호가 영영 없어, 저장 안내가 사라진 채로 남는다.
+  */
+  it("신호가 없어도 한 번은 시간을 재서 다시 묻는다", async () => {
+    jest.useFakeTimers();
+    try {
+      setSession("unknown");
+
+      render(<GuestTrialBridge />);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(mockResolveMembership).toHaveBeenCalledTimes(1);
+
+      // 아무 신호도 없다. 그래도 서버는 나았다.
+      setSession("member");
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(30_000);
+      });
+
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  /*
+    회귀 — **신호가 먼저 오면 재던 시간은 접는다.**
+
+    시간을 재는 것은 신호가 안 올 때를 메우려는 것이다. 신호가 먼저 와서 한 회차가 이미
+    돌았는데 타이머까지 터지면, 같은 것을 묻는 왕복이 하나 더 붙는다.
+  */
+  it("신호로 다시 물었으면 재던 시간은 접는다", async () => {
+    jest.useFakeTimers();
+    try {
+      setSession("unknown");
+
+      render(<GuestTrialBridge />);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(mockResolveMembership).toHaveBeenCalledTimes(1);
+
+      // 30초가 되기 전에 회선이 돌아온다 — 그 신호로 한 회차가 돈다.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(10_000);
+        window.dispatchEvent(new Event("online"));
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+
+      // 처음 재던 30초가 지나도 그 타이머는 터지지 않아야 한다.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60_000);
+      });
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  /*
+    회귀 — **시간을 잰 되묻기는 한 번뿐이다.**
+
+    낫지 않는 장애에 간격을 두고 되풀이하면 같은 장애에 요청만 쌓인다. 한 번으로 못 잡은
+    것은 화면을 옮기거나 신호가 올 때 잡는다.
+  */
+  it("시간을 잰 되묻기는 되풀이하지 않는다", async () => {
+    jest.useFakeTimers();
+    try {
+      setSession("unknown");
+
+      render(<GuestTrialBridge />);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      // 30초 뒤 한 번 더 묻는다. 그것도 「모르겠다」다.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(30_000);
+      });
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+
+      // 그 뒤로는 아무리 기다려도 스스로 다시 묻지 않는다.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(300_000);
+      });
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  /*
+    회귀 — **보관물이 사라졌으면 그만 듣는다.**
+
+    `unknown` 으로 감시가 켜진 뒤, 다른 탭에서 저장·폐기했거나 TTL 로 정리돼 보관물이
+    없어질 수 있다. 그때도 계속 듣고 있으면 탭을 오갈 때마다 IndexedDB 를 다시 읽는다 —
+    물어볼 것이 없어진 뒤에도 앱이 열려 있는 내내 그렇다.
+  */
+  it("보관물이 사라지면 신호를 그만 듣는다", async () => {
+    setSession("unknown");
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+    expect(mockGetPending).toHaveBeenCalledTimes(1);
+
+    // 그 사이 보관물이 없어졌다. 신호가 오면 한 회차는 돌지만, 읽어 보니 남은 것이 없다.
+    mockGetPending.mockResolvedValue(null);
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flushAsync();
+    expect(mockGetPending).toHaveBeenCalledTimes(2);
+
+    // 여기서 멈춰야 한다 — 더 읽을 것이 없다.
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await flushAsync();
+    expect(mockGetPending).toHaveBeenCalledTimes(2);
+  });
+
+  /*
+    회귀 — **늦게 끝난 앞 회차가 뒤 회차의 「도는 중」을 지우지 않는다.**
+
+    화면이 바뀌면 앞 회차는 취소 표시만 되고 요청 자체는 제 상한까지 계속 돈다. 그것이
+    끝나면서 「도는 중」을 통째로 내리면, 다음 신호가 아직 도는 회차와 겹치는 세 번째
+    왕복을 연다 — 30초짜리 인증 요청이 둘씩 겹친다.
+  */
+  it("늦게 끝난 앞 회차가 뒤 회차의 판정을 겹치게 하지 않는다", async () => {
+    const answers: Array<(value: string) => void> = [];
+    mockResolveMembership.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        }),
+    );
+
+    const view = render(<GuestTrialBridge />);
+    await flushAsync();
+    expect(mockResolveMembership).toHaveBeenCalledTimes(1);
+
+    // 답을 기다리는 사이에 화면을 옮긴다 — 앞 회차는 취소되고 뒤 회차가 시작된다.
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+    await flushAsync();
+    expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+
+    // 이제 **앞** 회차가 뒤늦게 끝난다. 뒤 회차는 아직 돌고 있다.
+    await act(async () => {
+      answers[0]("unknown");
+    });
+
+    // 이 신호는 도는 중인 뒤 회차에 기록만 돼야 한다 — 세 번째 왕복을 열면 안 된다.
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await flushAsync();
+    expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+  });
+
+  /*
     회귀 — **신호 하나는 되묻기 한 번이다.**
 
     도는 사이에 온 신호는 기록해 뒀다가 그 회차 끝에 쓴다. 쓰고 나서 지우지 않으면
