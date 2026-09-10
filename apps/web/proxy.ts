@@ -5,7 +5,35 @@ import {
   GUEST_TRIAL_COOKIE,
   GUEST_TRIAL_COOKIE_MAX_AGE,
 } from "@/lib/guestTrialShared";
-import { isGuestAllowedPath, isProtectedPath } from "@/lib/protectedPaths";
+import {
+  isGuestAllowedPath,
+  isGuestMemberOnlyPath,
+  isProtectedPath,
+} from "@/lib/protectedPaths";
+
+/**
+ * 게스트를 촬영 화면으로 되돌릴 주소. **행사 상태를 들고 간다.**
+ *
+ * `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다
+ * (app/shoot/page.tsx). 그래서 고정된 `/shoot?guestNotice=restricted` 로 보내면 행사
+ * 배너와 QR 이 지정한 프레임이 그대로 사라진다 — 막는 것은 회원 전용 경로 하나지 행사
+ * 진입 전체가 아니다.
+ *
+ * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 그래서 프레임 선택
+ * 화면이 갤러리 불러오기로 보낼 때 `frame`·`event` 를 주소에 싣는다(그 화면 주석 참고) —
+ * 이 함수가 그것을 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
+ */
+function restrictedShootUrl(req: NextRequest) {
+  const url = new URL("/shoot", req.url);
+  url.searchParams.set("guestNotice", "restricted");
+
+  for (const key of ["frame", EVENT_ENTRY_QUERY]) {
+    const value = req.nextUrl.searchParams.get(key)?.trim();
+    if (value) url.searchParams.set(key, value);
+  }
+
+  return url;
+}
 
 /** 소셜 로그인 콜백 경로. 아래 matcher 와 같은 값을 쓴다. */
 const SOCIAL_LOGIN_CALLBACK = "/oauth2/callback";
@@ -26,8 +54,11 @@ function hasAuthCookie(req: NextRequest) {
  * (docs/backend-contract.md 「토큰」). 그래서 exp 가 남아 있다는 것이 "지금 회원"이라는 뜻이다.
  * refresh 는 다른 기기에서 로그인하면 서버가 지우므로 만료 전에도 죽어 있을 수 있어 보지 않는다.
  *
- * 서명은 검증하지 않는다 — 여기서 정하는 것은 인가가 아니라 체험 쿠키를 걷을지·심을지뿐이라,
- * 토큰을 위조해서 얻는 것은 자기 체험 쿠키를 잃는 손해밖에 없다.
+ * 서명은 검증하지 않는다 — 검증할 키가 미들웨어에 없고, 여기서 정하는 것은 인가가 아니라
+ * 체험 쿠키를 걷을지·심을지와 게스트 차단을 적용할지뿐이다. 위조한 exp 로 게스트 차단을
+ * 넘을 수는 있지만, 그건 게스트 쿠키를 손으로 지우기만 해도 아래 hasAuthCookie() 가
+ * (값을 보지 않으므로) 통과시키던 것이라 이 판정이 새로 여는 문이 아니다.
+ * 실제 집행은 백엔드가 한다 — 백엔드에 비회원 개념이 없어 인증 API 가 401 이다.
  */
 function hasLiveAccessToken(req: NextRequest) {
   const payload = req.cookies.get("accessToken")?.value.split(".")[1];
@@ -44,23 +75,6 @@ function hasLiveAccessToken(req: NextRequest) {
     // 우리가 아는 모양이 아니면 로그인했다고 볼 근거가 없다.
     return false;
   }
-}
-
-/**
- * 되살릴 수 있는 회원 세션의 흔적이 남아 있는가.
- *
- * access 가 죽었어도 refresh 가 남아 있으면 클라이언트가 401 을 받고 재발급으로 살려낸다
- * (lib/clientApi.ts). 그 refresh 를 서버가 이미 회수했는지는 여기서 알 방법이 없으므로
- * **회원일 수 있다는 쪽으로 읽는다** — 아래 행사 QR 분기가 심는 체험 쿠키는 7일을 살아서,
- * 잘못 심으면 그동안 회원이 자기 저장 프레임과 기록을 못 본다(accessMode 는 이 쿠키만 본다).
- *
- * 위 콜백 분기가 refresh 를 무시하는 것과 방향이 반대다. 의심스러울 때 하지 않는 쪽이
- * 서로 다를 뿐이다 — 거기서는 **지우는 것**이, 여기서는 **심는 것**이 방문자에게 손해다.
- */
-function hasRecoverableSession(req: NextRequest) {
-  return (
-    hasLiveAccessToken(req) || Boolean(req.cookies.get("refreshToken")?.value)
-  );
 }
 
 function hasGuestTrialCookie(req: NextRequest) {
@@ -89,6 +103,10 @@ function isSocialLoginCallback(pathname: string) {
  *
  * 촬영 진입점(`/shoot`)에만 적용한다 — QR이 가리키는 주소가 거기이고, 하위 단계는
  * 이 진입에서 심긴 쿠키로 이어진다.
+ *
+ * **이 주소는 QR 전용이 아니다.** 촬영 화면의 "프레임 다시 선택"이 돌아가는 곳이
+ * 같은 `/shoot?frame=…&event=…` 이라(app/shoot/capture/page.tsx 의 `backToFrameHref`),
+ * 행사 촬영 도중에도 같은 판정이 다시 돈다. 아래 호출부의 「남는 한계」가 그 이야기다.
  */
 function isEventEntry(pathname: string, params: URLSearchParams) {
   return pathname === "/shoot" && Boolean(params.get(EVENT_ENTRY_QUERY)?.trim());
@@ -154,13 +172,46 @@ export async function proxy(req: NextRequest) {
     심지 못했고, 그 방문자는 회원으로 읽히면서 인증 API 로는 401 을 받아 — 가입 없이
     찍는다는 행사 흐름이 정확히 행사장에서 막혔다.
 
-    되살릴 세션이 보이면(hasRecoverableSession) 심지 않는다. 회원이 QR로 들어온 것뿐일 수
-    있고, 그 사람을 체험 쿠키로 덮는 쪽이 더 큰 손해다.
+    **막는 것은 인증 쿠키가 하나라도 있는 것이다 — 쿠키가 아예 없을 때만 심는다.**
+
+    한때 이 자리에서 「살아 있는 access」만 보고 비켜섰다. 서버가 회수한 refresh 는 쿠키만
+    봐서는 살아 있는 것과 구별되지 않으니, 회수된 쿠키를 든 행사 참가자를 회원으로 읽어
+    막아 버리지 말자는 뜻이었다. 그런데 그 판정은 **반대쪽을 더 크게 깼다** — access 만
+    자연 만료되고 refresh 는 멀쩡한 회원(흔하다)이 이 주소를 열면 7일짜리 체험 쿠키를 받고,
+    `clientApi` 가 재발급에 성공한 뒤에도 `guestTrialStore` 는 그 쿠키만 보고 게스트로
+    복원해 기록·커스텀 프레임을 잃는다. 진입 시점만의 이야기도 아니다 — 같은 주소가 촬영
+    화면의 "프레임 다시 선택" 목적지라(app/shoot/capture/page.tsx 의 `backToFrameHref`)
+    행사 촬영 도중에도 같은 판정이 다시 돈다.
+
+    **되살아날지 말지는 미들웨어가 점칠 일이 아니다.** 확실히 가리려면 재발급을 실제로
+    해 봐야 하는데, 만료된 access 로는 `/api/auth/status` 가 401 이라(백엔드는 refresh 를
+    access 로 받지 않는다 — docs/backend-contract.md 「토큰」의 AUTH-011 표) reissue 를
+    불러야 한다. 그것은 **토큰을 회전시키는 쓰기 요청**이고, 프록시는 RSC 프리페치를 포함한
+    모든 요청에 붙어 있어 한 번의 진입이 여러 번 회전시킬 수 있으며, 미들웨어가 돌려받은
+    새 쿠키를 응답에 실어 주지 못한 회전은 그대로 버려진다. 그 버려진 회전이 멀쩡한 세션을
+    실제로 끊는지는 **확인하지 않았다 — 추측이다**(계약 문서에 있는 것은 "이전 refresh 가
+    `REFRESH_GRACE:<jwt>` 로 남는다" 한 줄뿐이고, 유예의 개수·수명은 적혀 있지 않다).
+    확인된 것만 놓고 봐도 모든 진입에 검증 안 된 쓰기를 거는 쪽의 위험이 더 크다.
+
+    그래서 **판정을 할 수 있는 쪽으로 넘긴다.** 쿠키가 하나라도 있으면 여기서는 아무것도
+    심지 않고 아래 hasAuthCookie() 로 통과시키고, 화면이 `lib/authSession.ts` 의
+    `isUsableMember()` 로 — 재발급을 포함해 — 물어본 뒤 **정말 회원이 아닐 때만** 게스트로
+    전환한다(app/shoot/page.tsx). 클라이언트는 답을 받아 쿠키를 실을 수 있고 회전도 한 번뿐이다.
+
+    쿠키가 아예 없는 방문자는 물어볼 것도 없다 — 그 자리에서 심어야 `/shoot` 이 로그인으로
+    튕기지 않는다. 그것이 이 분기가 원래 뚫으려던 길이고, 여기 남는 것은 그 하나다.
+
+    행사 QR 은 "가입 없이 체험하기"를 누른 것과 같은 자격이라, 새로 여는 문은 아니다.
+
+    **남는 한계.** 화면 쪽 전환은 조회 한 번을 기다린다 — 그 사이(수백 ms)에는 회원 화면이
+    잠깐 보인다. 그리고 조회가 `unknown` 으로 떨어지면 전환하지 않으므로, 서버가 흔들리는
+    동안 **진짜 비회원**은 회원 화면을 보다가 인증 API 에서 막힌다. 서버가 돌아오면 다음
+    진입에서 판정된다 — 멀쩡한 회원을 7일 동안 게스트로 두는 쪽보다 낫다고 봤다.
   */
   if (
     isEventEntry(pathname, req.nextUrl.searchParams) &&
     !guestMode &&
-    !hasRecoverableSession(req)
+    !hasAuthCookie(req)
   ) {
     return startGuestTrial(
       NextResponse.next(),
@@ -169,18 +220,59 @@ export async function proxy(req: NextRequest) {
   }
 
   /*
-    인증 쿠키가 있으면 통과시킨다. **여기서 게스트 쿠키를 지우지는 않는다.**
+    **지금 로그인해 있는 것이 확인된 사람은 여기서 통과한다.** exp 가 남은 access 는
+    미들웨어가 그 자리에서 확인할 수 있는 유일한 "회원" 근거다(위 hasLiveAccessToken).
+    아래 게스트 판정보다 앞에 둬서, 체험 쿠키가 남아 있어도 회원 경로를 막지 않는다.
+    체험 쿠키가 함께 있어도 **걷지는 않는다** — 걷는 자리는 소셜 콜백 하나뿐이다(위).
+    화면은 그 쿠키를 보고 게스트로 그리지만, 그 사람은 실제로 회원이라 인증 API 가 답한다.
+  */
+  if (hasLiveAccessToken(req)) {
+    return NextResponse.next();
+  }
+
+  /*
+    **게스트로 그려 주는 화면은 회원 전용 촬영 경로에 못 들어간다 — 인증 쿠키가 있어도.**
+
+    구멍이었다. 예전에는 아래 hasAuthCookie() 가 먼저였고, 그 판정은 쿠키가 **있는지만**
+    보므로 「게스트 쿠키 + refreshToken 쿠키」를 함께 든 방문자가 `/shoot/upload`
+    (GUEST_MEMBER_ONLY_PREFIXES)를 그냥 지나갔다 — 게스트 차단에 닿지도 못했다. 위 행사 QR
+    분기가 refresh 를 더 이상 회원 근거로 보지 않게 되면서 행사 방문자 상당수가 정확히 그
+    조합이 된다(예전에 로그인해 둔 브라우저 + 방금 심은 체험 쿠키). 화면은 이미 게스트다 —
+    accessMode 는 이 쿠키만 보고(guestTrialStore 의 hydrateGuestMode), `/shoot/upload`
+    화면에는 그것을 다시 보는 검사가 없다. 프록시가 유일한 집행 지점이었고 뚫려 있었다.
+    비회원 범위는 약관 제8조와 `@harucut/shared` 의 GUEST_ALLOWED_ITEMS 가 "사진 촬영과
+    이미지 저장"으로 못박는다.
+
+    **막는 자리를 이 경로들로만 좁힌다.** 한때 게스트 판정 전체를 hasAuthCookie 앞으로
+    옮겼는데, 그러면 access 만 만료된 회원이 행사 주소를 열어 체험 쿠키를 받은 뒤 `/home`·
+    `/mypage`·`/history` 까지 통째로 막혔다 — 예전에는 지나가던 사람이고, 여기서 막을
+    이유도 없다(그 경로들은 백엔드가 집행한다). 구멍은 `/shoot/upload` 하나였으므로 거기만
+    닫는다.
+
+    죽은 access 쿠키(형식이 깨졌거나 exp 가 지난)와 체험 쿠키를 함께 든 사람도 같은 구멍
+    이었고, 같이 닫힌다.
+
+    **이 판정은 인가가 아니다.** 브라우저에서 체험 쿠키를 지우면 아래 통과에 걸린다 —
+    쿠키 값을 보지 않기 때문이다. 여기서 막는 것은 "우리가 게스트로 그려 주고 있는 화면이
+    회원 전용 경로로 넘어가는 것"까지고, 실제 집행은 백엔드가 한다.
+  */
+  if (guestMode && isGuestMemberOnlyPath(pathname)) {
+    return NextResponse.redirect(restrictedShootUrl(req));
+  }
+
+  /*
+    여기까지 온 사람은 인증 쿠키가 **있기만 하면** 통과시킨다.
 
     이 판정은 쿠키가 있는지만 본다 — 서버가 이미 버린 죽은 토큰도 로그인으로 읽힌다
     (다른 기기에서 로그인하면 이 기기 refresh 가 죽는다: docs/backend-contract.md).
-    그 상태에서 지우면, 죽은 쿠키를 든 방문자가 "가입 없이 찍어보기"로 방금 심은 게스트
-    쿠키를 바로 다음 요청에서 우리가 도로 지운다. 그 화면은 메모리 값으로 버티지만
-    새로고침 한 번이면 hydrateGuestMode 가 쿠키를 못 찾아 회원으로 되돌아가고,
-    촬영 화면이 인증 API 로 401 을 받아 "로그인이 풀렸어요"로 끝난다 — 몇 번을 눌러도
-    체험이 시작되지 않는다.
+    죽은 쿠키를 든 사람을 여기서 로그인으로 보내지 않는 이유는, 그 판정을 미들웨어가
+    확신할 수 없어서다(위 「세션 유효성을 백엔드에 묻지 않는다」). 회원이었던 사람을
+    로그인으로 튕기는 대신, 화면이 인증 API 응답을 보고 처리하게 둔다.
 
-    죽은 토큰이 여기서 로그인으로 읽힌다는 것이 위 행사 QR 예외를 이 판정보다 앞에 둔
-    이유이기도 하다. 순서를 되돌리지 않는다.
+    죽은 토큰이 여기서 로그인으로 읽힌다는 것이, 위 행사 QR 예외와 회원 전용 경로 차단을
+    둘 다 이 판정보다 앞에 둔 이유다. 순서를 되돌리지 않는다.
+
+    **여기서 게스트 쿠키를 지우지는 않는다** — 걷는 자리는 소셜 콜백 하나뿐이다(위).
   */
   if (hasAuthCookie(req)) {
     return NextResponse.next();
@@ -191,9 +283,7 @@ export async function proxy(req: NextRequest) {
       return NextResponse.next();
     }
 
-    const shootUrl = new URL("/shoot", req.url);
-    shootUrl.searchParams.set("guestNotice", "restricted");
-    return NextResponse.redirect(shootUrl);
+    return NextResponse.redirect(restrictedShootUrl(req));
   }
 
   const loginUrl = new URL("/login", req.url);

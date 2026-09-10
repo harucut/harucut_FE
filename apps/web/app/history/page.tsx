@@ -58,6 +58,21 @@ type ViewMode = "grid" | "calendar";
  */
 type Notice = { kind: "ok" | "error"; text: string };
 
+/**
+ * 상한을 넘겨 클라이언트가 끊은 삭제인가(lib/userMediaApi.ts 의 `MediaDeleteTimeoutError`).
+ *
+ * 클래스가 아니라 `name` 으로 본다 — 이 화면의 테스트는 `@/lib/userMediaApi` 를 통째로
+ * 목으로 갈아 끼우고, 그러면 import 한 클래스가 undefined 가 되어 `instanceof` 가 터진다.
+ * clientApi 가 AbortError 를 name 으로 가려내는 것과 같은 방식이다.
+ */
+function isDeleteTimeoutError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "MediaDeleteTimeoutError"
+  );
+}
+
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_KO = [
   "1월",
@@ -443,6 +458,23 @@ export default function HistoryPage() {
       setFeedback({ kind: "ok", text: "사진을 지웠어요." });
     } catch (error_) {
       console.error(error_);
+      /*
+        상한을 넘겨 클라이언트가 끊은 삭제(userMediaApi.ts 의 DELETE_DEADLINE_MS).
+
+        "지우지 못했어요"라고 하지 않는다 — 끊긴 쪽에서는 요청이 서버까지 갔는지 알 수
+        없어서, 실제로는 지워졌을 수 있다. 그렇게 말해 두면 다음 새로고침에서 사라진
+        사진을 본 사용자가 화면을 못 믿게 된다. 같은 이유로 목록에서도 빼지 않는다 —
+        반대 방향의 같은 거짓말이다. 확인할 자리(새로고침)만 알려 준다.
+      */
+      if (isDeleteTimeoutError(error_)) {
+        setDeleteTarget(null);
+        setFeedback({
+          kind: "error",
+          text: "응답이 없어 삭제 결과를 확인하지 못했어요. 잠시 후 목록을 새로고침해 확인해 주세요.",
+        });
+        return;
+      }
+
       const { status } = getApiErrorDetails(error_);
       if (status === 404) {
         setItems((current) =>

@@ -211,15 +211,28 @@ function runTransaction<T>(
   });
 }
 
+/**
+ * 트랜잭션 한 번의 결말. **「저장소를 못 열었다」와 「열었는데 값이 없다」를 섞지 않는다.**
+ *
+ * 예전에는 `T | null` 이었다. 못 연 것도 null 이고, 열어서 조회했는데 그 자리에 아무것도
+ * 없는 것도 (`store.get` 이 주는 `undefined` 와 함께) 거짓값이라, 읽기 쪽의 `if (!record)`
+ * 하나가 둘을 같은 갈래로 흘려보냈다 — 못 연 것이 「확실히 없다」가 됐고, 그 결론은
+ * 조건부 삭제(`clearHandoffIfUnchanged`)에서 **삭제 허가**로 쓰였다. 열기 실패는 예외가
+ * 아니라서 `readPendingGuestSave` 의 `catch` 가 잡아 주지도 못했다.
+ *
+ * 그래서 `null` 을 없애고 타입으로 갈라 둔다. 호출부는 둘 중 무엇인지 **고를 수밖에 없다.**
+ */
+type StoreResult<T> = { opened: true; value: T } | { opened: false };
+
 /** 연 것은 반드시 닫는다 — 열어 둔 채로 두면 다음 버전 올리기가 막힌다. */
 async function withStore<T>(
   mode: IDBTransactionMode,
   run: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T | null> {
+): Promise<StoreResult<T>> {
   const db = await openDatabase();
-  if (!db) return null;
+  if (!db) return { opened: false };
   try {
-    return await runTransaction(db, mode, run);
+    return { opened: true, value: await runTransaction(db, mode, run) };
   } finally {
     db.close();
   }
@@ -377,13 +390,6 @@ async function writeRecord(entry: PendingGuestSave): Promise<boolean> {
 }
 
 /**
- * 꺼낸다. 쓸 수 없는 보관물(모양이 깨졌거나, 기한이 지났거나, 모르는 프레임)은
- * 그 자리에서 지우고 null 을 준다 — 남겨 두면 로그인할 때마다 같은 실패를 반복한다.
- *
- * **읽기 자체가 실패한 경우는 다르다.** 그때는 IndexedDB 쪽만 비우고 예전 localStorage
- * 보관물은 남긴다 — 못 읽은 것과 못 쓰는 것은 다르고, 그 한 벌이 마지막 인계일 수 있다.
- */
-/**
  * 보관물 읽기의 **세 가지 결말**.
  *
  * `null` 하나로 뭉치면 안 되는 자리가 있다. 조건부 삭제(`clearHandoffIfUnchanged`)가 그
@@ -391,33 +397,64 @@ async function writeRecord(entry: PendingGuestSave): Promise<boolean> {
  * 지운다. 원본 4장은 거기에만 있어서 되돌릴 수 없다.
  */
 export type PendingGuestSaveRead =
-  | { status: "found"; entry: PendingGuestSave }
+  | {
+      status: "found";
+      entry: PendingGuestSave;
+      /**
+       * 이 답이 **IndexedDB 를 실제로 열어 확인한** 결과인가.
+       *
+       * false 면 저장소를 못 연 채 예전 localStorage 한 벌만 읽은 것이다. 인계에는 그대로
+       * 쓴다 — 그 한 벌이 사용자에게 남은 마지막 인계일 수 있다. 다만 IndexedDB 에 무엇이
+       * 있는지는 **확인한 적이 없다.** 「지워도 되는가」에 이 답을 쓰면 못 연 사이 다른 탭이
+       * 갈아 끼운 한 벌을 확인 없이 지운다. 그 질문은 `clearPendingGuestSaveIfUnchanged` 가 대신 판단한다.
+       */
+      opened: boolean;
+    }
   /** 확실히 없다 — 기한이 지났거나 애초에 없었다. */
   | { status: "empty" }
   /** 있는지 없는지 **알 수 없다** — 저장소를 못 열었거나 읽다 깨졌다. */
   | { status: "unreadable" };
 
 /**
- * 보관물을 읽고 **결말까지** 돌려준다. 「없다」와 「모르겠다」를 구별해야 하는 곳에서 쓴다.
+ * **인계를 꺼내는 읽기.** 쓸 수 있는 한 벌이면 무엇이든 준다.
+ *
+ * 쓸 수 없는 보관물(모양이 깨졌거나, 기한이 지났거나, 모르는 프레임)은 그 자리에서 지우고
+ * `empty` 를 준다 — 남겨 두면 로그인할 때마다 같은 실패를 반복한다. 읽기 자체가 실패한
+ * 자리는 아무것도 지우지 않는다(아래 `catch` 를 본다).
  *
  * 서버 렌더 중(`window` 없음)은 저장소 자체가 없는 환경이라 `unreadable` 이다 —
  * 「없다」로 답하면 그 판단으로 무언가를 지우게 된다.
+ *
+ * **이 답을 삭제 근거로 쓰지 않는다.** 저장소를 못 열어도 예전 localStorage 한 벌을 읽어
+ * `found` 로 답하기 때문이다(`opened: false`). 지워도 되는지는 `clearPendingGuestSaveIfUnchanged`
+ * 에 묻는다.
  */
 export async function readPendingGuestSave(
   now: number = Date.now(),
 ): Promise<PendingGuestSaveRead> {
   if (typeof window === "undefined") return { status: "unreadable" };
   try {
-    const record = await withStore<StoredRecord | undefined>(
+    const read = await withStore<StoredRecord | undefined>(
       "readonly",
       (store) => store.get(RECORD_KEY),
     );
-    // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다(그쪽도 없으면 없는 것이다).
-    if (!record) {
+
+    // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다.
+    //
+    // **저장소를 못 연 자리에서도 본다.** 그 한 벌은 localStorage 에 있어서 IndexedDB 와
+    // 상관없이 읽히고, 여기서 곧바로 손을 떼면 읽을 수 있는 인계를 버리는 것이 된다.
+    if (!read.opened || !read.value) {
       const legacy = readLegacyEntry(now);
-      return legacy ? { status: "found", entry: legacy } : { status: "empty" };
+      // `opened` 를 그대로 실어 보낸다. 못 연 채 읽은 한 벌은 인계에는 쓰지만 삭제 근거로는
+      // 못 쓴다 — 그 구분을 여기서 잃으면 호출부가 되찾을 방법이 없다.
+      if (legacy) return { status: "found", entry: legacy, opened: read.opened };
+      // **여기가 갈리는 자리다.** 열려서 「비었다」를 본 것만 `empty` 다. 못 연 것은
+      // 있는지 없는지 확인한 적이 없으므로 `unreadable` — 조건부 삭제가 이 답을 보고
+      // 손을 떼야, 다른 탭이 방금 갈아 끼운 한 벌이 살아남는다.
+      return read.opened ? { status: "empty" } : { status: "unreadable" };
     }
 
+    const record = read.value;
     const meta = normalizeMeta(record, now);
     if (!meta || !hasFourSources(record.sources, isUsableBlob)) {
       await clearPendingGuestSave();
@@ -427,6 +464,8 @@ export async function readPendingGuestSave(
     return {
       status: "found",
       entry: { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) },
+      // 여기까지 왔다는 것은 저장소를 열고 그 자리를 직접 본 것이다.
+      opened: true,
     };
   } catch {
     /*
@@ -441,6 +480,147 @@ export async function readPendingGuestSave(
       지운다. 그쪽은 읽기가 **성공한** 뒤의 판단이라 근거가 있다.
     */
     return { status: "unreadable" };
+  }
+}
+
+/**
+ * **「지워도 되는가」의 판단을 이 파일이 맡는다.** 호출부는 지문만 준다.
+ *
+ * 인계를 꺼내는 읽기(`readPendingGuestSave`)는 저장소를 못 열어도 예전 localStorage 한 벌을
+ * 읽어 `found`(`opened: false`)로 답한다 — 읽을 수 있는 인계를 우리 사정으로 버리지 않기
+ * 위해서다. 그런데 그 답을 **삭제 허가**로 그대로 쓰면 IndexedDB 를 한 번도 못 읽은 자리에서
+ * 삭제가 진행돼, 그 사이 다른 탭이 갈아 끼운 — 확인한 적 없는 — 한 벌이 사라진다.
+ * 원본 4장은 거기에만 있다.
+ *
+ * 한때 이 판단을 「삭제 전용 읽기」로 갈라 두고 못 연 것을 전부 `unreadable` 로 접었는데,
+ * 그러면 반대쪽이 깨졌다 — IndexedDB 를 영영 못 여는 자리(사생활 보호 모드)에서 사용자가
+ * 「버리기」를 골라도 예전 한 벌이 남아 다음 화면 이동에서 같은 확인이 다시 뜨고, 계정
+ * 저장에 성공한 뒤에도 남아 다시 「저장하기」를 고르면 같은 네컷이 서버에 한 벌 더 생겼다.
+ *
+ * 그래서 접지 않고 **지울 것만 정확히 지운다.** 갈래가 셋이다.
+ *
+ * ① **열어서 확인한 한 벌** — 지문이 맞으면 통째로 지운다(IndexedDB + 예전 localStorage).
+ *
+ * ② **못 연 채 읽은 예전 localStorage 한 벌** — 지문이 맞으면 **그 키만** 지운다.
+ * IndexedDB 레코드는 건드리지 않는다. 한 번도 못 읽은 것이라 안에 무엇이 들었는지 모르고,
+ * 다른 탭이 방금 찍어 둔 원본 4장일 수 있다.
+ *
+ * ③ **아무것도 못 읽었다** — 손을 뗀다.
+ *
+ * **IndexedDB 쪽은 원자적이다.** 대조와 삭제가 한 `readwrite` 트랜잭션 안에서 돌아
+ * (`deleteRecordIfMatches`) 그 사이에 다른 탭의 쓰기가 끼어들지 못한다. 나눠서 하던 때는
+ * 읽기가 Blob 넷을 data URL 로 되돌리는 동안 창이 열려 있었고, 그 사이 다른 탭이 저장한
+ * 새 한 벌을 지웠다.
+ *
+ * **예전 localStorage 한 벌은 그렇지 않다.** 거기에는 트랜잭션이 없다 — 읽고 지우는 두 줄
+ * 사이가 열려 있고, 그것이 이 함수에 남은 유일한 창이다
+ * (lib/pendingTermsConsent.ts 의 `clearPendingTermsConsentIfUnchanged` 와 같은 한계).
+ */
+export type PendingGuestSaveClearResult =
+  /** 확인한 그 한 벌을 지웠다(또는 이미 없었다). */
+  | "cleared"
+  /** 다른 한 벌로 갈아 끼워져 있었다 — 아무것도 지우지 않았다. */
+  | "changed"
+  /** 있는지 없는지 모른다 — 아무것도 지우지 않았다. */
+  | "unreadable";
+
+/** 원본 4장을 뺀 보관물. 지문 대조에 필요한 것은 여기까지다. */
+export type PendingGuestSaveMeta = Omit<PendingGuestSave, "sources">;
+
+/**
+ * **대조와 삭제를 한 트랜잭션 안에서 한다.** 레코드가 없으면 `absent`.
+ *
+ * 나눠서 하면 그 사이가 열린다. 읽기는 Blob 넷을 data URL 로 되돌리느라 짧지 않은데,
+ * 그 사이 다른 탭이 새 네컷을 같은 자리에 저장하면 뒤이은 무조건 삭제가 **그 새 한 벌**을
+ * 지운다 — 사용자가 확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
+ *
+ * IndexedDB 트랜잭션은 같은 store 에 대해 직렬화되므로, 여기서 읽은 값과 지우는 값 사이에는
+ * 다른 쓰기가 끼어들지 못한다. 이 파일에서 「원자적이지 않다」가 사라지는 유일한 자리다.
+ */
+function deleteRecordIfMatches(
+  db: IDBDatabase,
+  isSame: (entry: PendingGuestSaveMeta) => boolean,
+  now: number,
+): Promise<"cleared" | "changed" | "absent"> {
+  return new Promise((resolve, reject) => {
+    let outcome: "cleared" | "changed" | "absent" = "absent";
+    let transaction: IDBTransaction;
+
+    try {
+      transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const read = store.get(RECORD_KEY);
+
+      read.onsuccess = () => {
+        const record = read.result as StoredRecord | undefined;
+        if (!record) return;
+
+        const meta = normalizeMeta(record, now);
+        // 못 쓰는 레코드(기한이 지났거나 프레임을 모르는 것)는 지문을 볼 것도 없이 걷는다 —
+        // 읽기 경로도 그것을 그 자리에서 지운다.
+        if (meta && !isSame(meta)) {
+          outcome = "changed";
+          return;
+        }
+
+        outcome = "cleared";
+        store.delete(RECORD_KEY);
+      };
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    transaction.oncomplete = () => resolve(outcome);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction aborted"));
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction failed"));
+  });
+}
+
+export async function clearPendingGuestSaveIfUnchanged(
+  isSame: (entry: PendingGuestSaveMeta) => boolean,
+  now: number = Date.now(),
+): Promise<PendingGuestSaveClearResult> {
+  if (typeof window === "undefined") return "unreadable";
+
+  /**
+   * 예전 localStorage 한 벌을 본다.
+   *
+   * `whenMissing` 을 부르는 쪽이 정한다 — **그쪽도 없을 때의 뜻이 자리마다 다르기**
+   * 때문이다. 저장소를 못 연 자리에서는 「모르겠다」이고(IndexedDB 에 무엇이 들었는지 못
+   * 봤다), 열어서 레코드가 없는 것을 확인한 자리에서는 「이미 없다」다 — 그것은 사용자가
+   * 원한 상태이므로 삭제 성공으로 답해야 한다. 한때 둘을 `unreadable` 하나로 뭉쳐,
+   * 다른 탭이 먼저 지운 뒤의 두 번째 탭이 "보관물이 다른 네컷으로 바뀌어 그대로 뒀어요"
+   * 라는 사실과 다른 안내를 받았다.
+   */
+  const clearLegacyIfUnchanged = (
+    whenMissing: PendingGuestSaveClearResult,
+  ): PendingGuestSaveClearResult => {
+    const legacy = readLegacyEntry(now);
+    if (!legacy) return whenMissing;
+    if (!isSame(legacy)) return "changed";
+    clearLegacyEntries();
+    return "cleared";
+  };
+
+  const db = await openDatabase();
+  if (!db) return clearLegacyIfUnchanged("unreadable");
+
+  try {
+    const outcome = await deleteRecordIfMatches(db, isSame, now);
+    // 레코드가 없으면 예전 보관물이 이번 인계였을 수 있다. 그쪽도 없으면 **이미 없는**
+    // 것이 확인된 셈이라 성공으로 끝낸다(멱등하다).
+    if (outcome === "absent") return clearLegacyIfUnchanged("cleared");
+    // 지웠으면 예전 키도 같이 걷는다(setPendingGuestSave 와 같은 규칙).
+    if (outcome === "cleared") clearLegacyEntries();
+    return outcome;
+  } catch {
+    // 읽다 깨졌다. 아무것도 지우지 않는다 — 읽기 경로와 같은 판단이다.
+    return "unreadable";
+  } finally {
+    db.close();
   }
 }
 
@@ -523,7 +703,18 @@ export async function clearPendingGuestSave(): Promise<void> {
   await clearStoredRecord();
 }
 
-/** IndexedDB 의 한 벌만 지운다. 예전 localStorage 보관물은 건드리지 않는다. */
+/**
+ * IndexedDB 의 한 벌만 지운다. 예전 localStorage 보관물은 건드리지 않는다.
+ *
+ * 지우기 쪽은 `opened` 를 보지 않는다 — 못 열었든 트랜잭션이 중단됐든 결과는 「못 지웠다」
+ * 하나이고, 이 함수의 호출부(`clearPendingGuestSave`)는 애초에 성공 여부를 묻지 않는다.
+ *
+ * **남는 한계다.** 못 지운 것을 지웠다고 답하는 셈이라, 호출부는 「버렸어요」라고 안내한 뒤
+ * 다음 로그인에서 같은 보관물을 다시 만난다. 읽기 쪽과 방향이 반대라 위험이 다르다 —
+ * 여기서 틀리면 안 지워진 것이 남을 뿐이고, 읽기 쪽에서 틀리면 원본 4장이 사라진다.
+ * 삭제 성공을 위로 올리려면 `clearPendingGuestSave` 의 반환형과 그 호출부를 같이 바꿔야
+ * 해서, 이 수정에서는 손대지 않았다.
+ */
 async function clearStoredRecord(): Promise<void> {
   try {
     await withStore("readwrite", (store) => store.delete(RECORD_KEY));

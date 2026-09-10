@@ -18,6 +18,7 @@ import {
   getPendingGuestSave,
   PENDING_GUEST_SAVE_TTL_MS,
   readPendingGuestSave,
+  clearPendingGuestSaveIfUnchanged,
   setPendingGuestSave,
 } from "@/lib/pendingGuestSave";
 
@@ -57,7 +58,7 @@ const ENTRY = {
  * jsdom 용 IndexedDB 스텁 — 이 모듈이 실제로 쓰는 것만 흉내 낸다.
  * ------------------------------------------------------------------------- */
 
-type FakeRequest = { result: unknown };
+type FakeRequest = { result: unknown; onsuccess?: (() => void) | null };
 
 type FakeObjectStore = {
   put: (value: unknown, key: string) => FakeRequest;
@@ -85,8 +86,16 @@ type FakeOpenRequest = {
 const store = {
   data: new Map<string, unknown>(),
   hasObjectStore: false,
-  /** 열기 자체가 실패한다(사생활 보호 모드 등). */
+  /** 열기 자체가 실패한다(사생활 보호 모드 등). 켜 두는 동안 **모든** 열기가 실패한다. */
   openFails: false,
+  /**
+   * 앞에서부터 이 횟수만큼의 열기만 실패시킨다. `openFails` 로는 못 만드는 자리다.
+   *
+   * 사고의 조건이 「첫 열기만 실패」이기 때문이다 — 확인 읽기는 저장소를 못 열고, 그 답을
+   * 삭제 허가로 쓴 **뒤이은 삭제는 열려서 실제로 지운다.** 통째로 끄고 켜는 플래그로는
+   * 그 순간을 흉내 낼 수 없어, 위험한 회귀가 초록불로 지나갔다.
+   */
+  failNextOpens: 0,
   /** 트랜잭션이 중단된다 — 용량 초과가 드러나는 자리. */
   rejectWrites: false,
   /** 읽기 트랜잭션이 중단된다 — 못 **쓰는** 것이 아니라 못 **읽는** 자리. */
@@ -114,6 +123,7 @@ function resetStore() {
   store.data = new Map();
   store.hasObjectStore = false;
   store.openFails = false;
+  store.failNextOpens = 0;
   store.rejectWrites = false;
   store.rejectReads = false;
   store.nullTransactionError = false;
@@ -123,29 +133,46 @@ function resetStore() {
   store.openBlocksThenSucceeds = false;
 }
 
-function makeObjectStore(mode: IDBTransactionMode): FakeObjectStore {
+/**
+ * 트랜잭션 하나가 만든 요청들. **`onsuccess` 를 실제로 쏘기 위해 모은다.**
+ *
+ * 진짜 IndexedDB 는 요청마다 `onsuccess` 를 부르고, 그 안에서 같은 트랜잭션에 다음 요청을
+ * 이어 붙일 수 있다 — 대조하고 나서 지우는 조건부 삭제가 그 모양이다
+ * (`deleteRecordIfMatches`). 예전 스텁은 `result` 만 채우고 `onsuccess` 를 안 불러서,
+ * 그 자리에 이어 붙는 코드를 흉내 내지 못했다.
+ */
+function makeObjectStore(
+  mode: IDBTransactionMode,
+  requests: FakeRequest[],
+): FakeObjectStore {
   const writable = mode === "readwrite" && !store.rejectWrites && !store.swallowWrites;
+  const track = <T>(request: FakeRequest & { result: T }) => {
+    requests.push(request);
+    return request;
+  };
+
   return {
     put: (value, key) => {
       if (writable) store.data.set(key, value);
-      return { result: undefined };
+      return track({ result: undefined });
     },
-    get: (key) => ({ result: store.data.get(key) }),
-    count: (key) => ({ result: store.data.has(key) ? 1 : 0 }),
+    get: (key) => track({ result: store.data.get(key) }),
+    count: (key) => track({ result: store.data.has(key) ? 1 : 0 }),
     delete: (key) => {
       if (mode === "readwrite" && !store.rejectWrites) store.data.delete(key);
-      return { result: undefined };
+      return track({ result: undefined });
     },
   };
 }
 
 function makeTransaction(mode: IDBTransactionMode): FakeTransaction {
+  const requests: FakeRequest[] = [];
   const transaction: FakeTransaction = {
     error: null,
     oncomplete: null,
     onabort: null,
     onerror: null,
-    objectStore: () => makeObjectStore(mode),
+    objectStore: () => makeObjectStore(mode, requests),
   };
   // 핸들러는 이 함수가 끝난 뒤에 붙는다 — 실제 IndexedDB 처럼 다음 틱에 알린다.
   queueMicrotask(() => {
@@ -163,6 +190,13 @@ function makeTransaction(mode: IDBTransactionMode): FakeTransaction {
       transaction.error = new Error("QuotaExceededError");
       transaction.onabort?.();
       return;
+    }
+    /*
+      완료를 알리기 **전에** 요청마다 `onsuccess` 를 쏜다. 그 안에서 같은 트랜잭션에 새
+      요청이 붙을 수 있으므로(조건부 삭제가 그렇다) 목록을 자라는 대로 훑는다.
+    */
+    for (let i = 0; i < requests.length; i += 1) {
+      requests[i].onsuccess?.();
     }
     transaction.oncomplete?.();
   });
@@ -184,6 +218,10 @@ function installFakeIndexedDB() {
   const factory = {
     open: (): FakeOpenRequest => {
       store.openCount += 1;
+      // 몇 번째 열기인지는 부를 때 정해진다 — 마이크로태스크로 미루면 여러 열기가 겹칠 때
+      // 어느 쪽이 실패하는지가 흔들린다.
+      const failsThisTime = store.openFails || store.failNextOpens > 0;
+      if (store.failNextOpens > 0) store.failNextOpens -= 1;
       const request: FakeOpenRequest = {
         result: null,
         onupgradeneeded: null,
@@ -192,7 +230,7 @@ function installFakeIndexedDB() {
         onblocked: null,
       };
       queueMicrotask(() => {
-        if (store.openFails) {
+        if (failsThisTime) {
           request.onerror?.();
           return;
         }
@@ -227,8 +265,27 @@ function removeIndexedDB() {
 /** 저장소에 실제로 들어간 한 벌. 없으면 null. */
 function storedRecord() {
   return (store.data.get(RECORD_KEY) as
-    | { sources: Blob[]; composeIdempotencyKey?: string }
+    | { sources: Blob[]; frameId: string; composeIdempotencyKey?: string }
     | undefined) ?? null;
+}
+
+/**
+ * 호출부(components/guest/GuestTrialBridge.tsx 의 `clearHandoffIfUnchanged`)의 판단 규칙을
+ * 그대로 옮긴 것. 그 파일은 이 테스트의 소유가 아니라 **규칙만 베꼈다** — 여기서 지키려는
+ * 것은 「읽기가 그 규칙에 무엇을 먹이는가」다.
+ *
+ * 지문 대조는 `savedAt` 하나로 줄였다. 실제 `isSameHandoff` 는 표시 이름·프레임까지 보지만,
+ * 이 자리에서 갈리는 것은 「사용자에게 물어본 그 한 벌인가」 하나다.
+ */
+async function clearIfUnchangedLikeBridge(
+  promptedSavedAt: number,
+  now: number,
+): Promise<boolean> {
+  const result = await clearPendingGuestSaveIfUnchanged(
+    (entry) => entry.savedAt === promptedSavedAt,
+    now,
+  );
+  return result === "cleared";
 }
 
 beforeEach(() => {
@@ -629,6 +686,259 @@ describe("pendingGuestSave", () => {
     // 읽기가 돌아오면 그 한 벌이 그대로 있다.
     store.rejectReads = false;
     expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
+  });
+
+  /*
+    회귀 — **저장소를 못 연 것**도 「모르겠다」다.
+
+    앞 라운드에서 막은 것은 읽다가 깨진 길(`catch`)이었다. 그런데 열기 실패는 그 `catch` 를
+    거치지 않는다 — `withStore()` 가 예외 대신 조용히 null 을 주고, 그 null 이 「그 자리에
+    아무것도 없다」와 한 갈래로 흘러 `empty` 가 됐다.
+
+    `empty` 는 그냥 답이 아니라 **삭제 허가**다(components/guest/GuestTrialBridge.tsx 의
+    `clearHandoffIfUnchanged`). 즉 사생활 보호 모드나 다른 탭의 버전 잠금으로 한 번 못 연
+    것이, 확인한 적 없는 현재 한 벌을 지워도 된다는 결론이 됐다. 원본 4장은 거기에만 있다.
+  */
+  it("저장소를 열지 못하면 「없다」가 아니라 「모르겠다」로 답한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    store.openFails = true;
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+
+    // 열기가 돌아오면 그 한 벌이 그대로 있다 — 못 연 사이에 잃은 것이 없다.
+    store.openFails = false;
+    expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
+  });
+
+  /*
+    같은 지적을 **사고 모양 그대로** 박아 둔다.
+
+    리뷰가 짚은 것은 "두 번째 DB 열기만 성공하면"이다 — 확인 읽기는 저장소를 못 열고,
+    뒤이은 삭제는 열려서 실제로 지운다. `openFails` 는 통째로 켜고 끄는 플래그라 그 순간을
+    못 만들어서, 첫 열기만 실패시키는 `failNextOpens` 로 흉내 낸다.
+
+    분기 없이 호출부 규칙을 **끝까지 돌린다.** 앞 회차의 이 테스트는 `if (read.status !==
+    "unreadable")` 안쪽이 한 번도 실행되지 않는 죽은 분기였다 — 남은 단언은 방금 쓴 레코드라
+    무엇을 고쳐도 참이었다.
+  */
+  it("열기 실패를 삭제 허가로 넘기지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    // 확인 읽기만 못 연다. 뒤이은 삭제 열기는 성공한다 — 이것이 사고의 조건이다.
+    store.failNextOpens = 1;
+
+    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(false);
+
+    expect(storedRecord()).not.toBeNull();
+    expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
+  });
+
+  /*
+    같은 사고의 **다른 입구** — 그리고 그 입구를 막는 방식.
+
+    저장소를 못 연 자리에서도 예전 localStorage 한 벌은 읽히고, 그때 읽기는 `found` 로
+    답한다(그래야 읽을 수 있는 인계를 안 버린다). 그 답을 그대로 삭제 허가로 쓰면
+    IndexedDB 를 한 번도 못 읽은 채 삭제가 진행돼, 그 사이 다른 탭이 갈아 끼운 한 벌이
+    사라진다.
+
+    한때 이 갈래를 통째로 「모르겠다」로 접었는데 그러면 반대쪽이 깨졌다 — 사용자가
+    「버리기」를 골라도 예전 한 벌이 남아 다음 화면 이동에서 같은 확인이 다시 뜨고,
+    저장에 성공한 뒤에도 남아 다시 저장하면 같은 네컷이 서버에 한 벌 더 생긴다.
+
+    그래서 **지울 것만 지운다** — 확인한 예전 키는 걷고, 못 읽은 IndexedDB 레코드는 그대로 둔다.
+  */
+  it("열기 실패 뒤에 읽은 예전 보관물은 그 키만 지운다", async () => {
+    // 다른 탭이 방금 갈아 끼운 한 벌. 사용자는 이것을 본 적이 없다.
+    await setPendingGuestSave(ENTRY, NOW + 1_000);
+    // 사용자에게 물어본 것은 예전 localStorage 한 벌이었다 — 지문(savedAt)이 다르다.
+    window.localStorage.setItem(
+      LEGACY_KEY_V2,
+      JSON.stringify({ ...ENTRY, savedAt: NOW }),
+    );
+    store.failNextOpens = 1;
+
+    // 확인한 그 한 벌이므로 「지웠다」로 끝난다.
+    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
+
+    // 지운 것은 예전 키뿐이다.
+    expect(window.localStorage.getItem(LEGACY_KEY_V2)).toBeNull();
+    // 못 읽은 IndexedDB 레코드는 그대로다 — 여기 원본 4장이 들어 있다.
+    expect(storedRecord()).not.toBeNull();
+    expect((await getPendingGuestSave(NOW))?.savedAt).toBe(NOW + 1_000);
+  });
+
+  /*
+    반대쪽 못 — 지문이 다르면 못 연 자리에서도 아무것도 지우지 않는다.
+    「못 열었으면 예전 키를 걷는다」로 뭉개면 사용자가 확인한 적 없는 한 벌이 사라진다.
+  */
+  it("열기 실패 뒤에 읽은 예전 보관물도 지문이 다르면 지우지 않는다", async () => {
+    window.localStorage.setItem(
+      LEGACY_KEY_V2,
+      JSON.stringify({ ...ENTRY, savedAt: NOW }),
+    );
+    store.failNextOpens = 1;
+
+    // 물어본 것은 다른 시각의 한 벌이었다.
+    expect(await clearIfUnchangedLikeBridge(NOW + 5_000, NOW)).toBe(false);
+    expect(window.localStorage.getItem(LEGACY_KEY_V2)).not.toBeNull();
+  });
+
+  /*
+    회귀 — **대조와 삭제 사이에 다른 탭이 끼어들지 못한다.**
+
+    나눠서 하던 때는 읽기가 Blob 넷을 data URL 로 되돌리는 동안 창이 열려 있었고, 그 사이
+    다른 탭이 새 네컷을 같은 자리에 저장하면 뒤이은 무조건 삭제가 **그 새 한 벌**을 지웠다 —
+    사용자가 확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
+
+    지금은 한 `readwrite` 트랜잭션 안에서 대조하고 지운다. 그 사이에 쓰기가 들어오는 것을
+    흉내 내려고, 트랜잭션이 대조하는 순간(`get` 의 `onsuccess`)에 레코드를 갈아 끼운다.
+  */
+  /*
+    회귀 — **이미 사라진 보관물은 「지웠다」로 끝낸다.**
+
+    두 탭이 같은 인계 안내를 받아 첫 탭이 먼저 지우면, 두 번째 탭은 열어서 「없다」를
+    확인한다. 그것은 사용자가 원한 상태이므로 성공이다. 한때 「저장소를 못 열었다」와
+    한 값으로 뭉쳐 `unreadable` 을 줬고, 호출부가 그것을 실패로 접어 "보관물이 다른
+    네컷으로 바뀌어 그대로 뒀어요"라는 **사실과 다른 안내**를 띄웠다.
+  */
+  it("열어서 아무것도 없으면 이미 지운 것으로 끝낸다", async () => {
+    // 저장소는 열리고, 레코드도 예전 키도 없다.
+    const result = await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.savedAt === NOW,
+      NOW,
+    );
+
+    expect(result).toBe("cleared");
+  });
+
+  // 반대쪽 못 — **못 열었으면** 여전히 「모르겠다」다. 그 자리에서 성공이라고 답하면
+  // 호출부가 안 지운 것을 지웠다고 안내한다.
+  it("못 열었고 예전 보관물도 없으면 모르겠다로 답한다", async () => {
+    store.openFails = true;
+
+    const result = await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.savedAt === NOW,
+      NOW,
+    );
+
+    expect(result).toBe("unreadable");
+  });
+
+  it("대조와 삭제가 한 트랜잭션 안에서 끝난다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    store.openCount = 0;
+
+    const result = await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.savedAt === NOW,
+      NOW,
+    );
+
+    expect(result).toBe("cleared");
+    expect(storedRecord()).toBeNull();
+    /*
+      **한 번만 연다.** 나눠서 하던 때는 읽기가 한 번, 삭제가 한 번 열어 그 사이가 창이었다.
+      실제 IndexedDB 는 같은 store 의 트랜잭션을 직렬화하므로, 한 트랜잭션 안에 들어오면
+      그 창이 사라진다 — 여는 횟수가 그것을 재는 가장 곧은 자다.
+    */
+    expect(store.openCount).toBe(1);
+  });
+
+  /*
+    반대쪽 못 — 「모르겠다」로 다 접으면 조건부 삭제를 통째로 꺼 버린 것과 같다.
+    저장소를 열고 그 한 벌을 직접 본 뒤 지문이 맞으면 지워야 한다.
+  */
+  it("열어서 확인한 한 벌은 지문이 맞으면 지운다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+
+    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
+    expect(storedRecord()).toBeNull();
+  });
+
+  // 그리고 지문이 다르면 — 그 사이 새로 찍은 한 벌이면 — 열렸어도 손을 뗀다.
+  it("열어서 확인했어도 지문이 다르면 지우지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+
+    expect(await clearIfUnchangedLikeBridge(NOW - 1, NOW)).toBe(false);
+    expect(storedRecord()).not.toBeNull();
+  });
+
+  /*
+    회귀 — **못 연 김에 지우지 않는다.**
+
+    「첫 열기만 실패」가 조건이다. 읽기가 못 연 자리에서 무엇이든 지우면, 뒤이은 열기는
+    성공하므로 그 삭제가 실제로 먹는다 — 확인한 적 없는 한 벌이 사라진다.
+    `openFails` 로는 이 순간을 못 만들어(삭제 쪽 열기도 같이 막힌다) 회귀가 그냥 통과했다.
+  */
+  it("첫 열기만 실패해도 보관물은 그대로 남는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    store.failNextOpens = 1;
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+
+    expect(storedRecord()).not.toBeNull();
+    expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
+  });
+
+  /*
+    반대쪽 못 — 「모르겠다」로 다 뭉개면 이 수정은 조건부 삭제를 통째로 꺼 버린 것과 같다.
+    정말로 열렸고 정말로 아무것도 없을 때는 `empty` 여야 한다.
+  */
+  it("열리고 아무것도 없으면 「없다」로 답한다", async () => {
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
+  });
+
+  /*
+    같은 갈림의 나머지 두 자리 — **열어서 직접 보고 못 쓴다고 판단한 레코드**다.
+
+    여기서 `unreadable` 로 답하면 조건부 삭제가 영영 손을 떼서, 못 쓰는 한 벌이 IndexedDB 에
+    남아 로그인할 때마다 같은 실패를 되풀이한다. 열고 확인한 판단이라 근거가 있으므로
+    「없다」가 맞다 — 그래서 그 자리에서 지운다.
+  */
+  it("열렸는데 메타가 깨진 레코드는 「없다」로 답하고 지운다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    expect(record?.sources).toHaveLength(4);
+    if (record) record.frameId = "not-a-frame";
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
+    expect(storedRecord()).toBeNull();
+  });
+
+  it("열렸는데 원본이 4장이 아닌 레코드도 「없다」로 답하고 지운다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    expect(record?.sources).toHaveLength(4);
+    if (record) record.sources = record.sources.slice(0, 3);
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
+    expect(storedRecord()).toBeNull();
+  });
+
+  /*
+    반대쪽 못 — 열기 실패에서 곧바로 손을 떼면 안 된다.
+
+    IndexedDB 를 못 여는 자리에도 예전 localStorage 보관물을 들고 온 사람이 있다. 그 한 벌은
+    저장소를 못 열어도 읽히므로, 「모르겠다」로 접으면 읽을 수 있는 인계를 버리는 것이다.
+  */
+  it("저장소를 열지 못해도 예전 localStorage 보관물은 읽어 준다", async () => {
+    window.localStorage.setItem(
+      LEGACY_KEY_V2,
+      JSON.stringify({ ...ENTRY, savedAt: NOW }),
+    );
+    store.openFails = true;
+
+    const read = await readPendingGuestSave(NOW);
+    expect(read.status).toBe("found");
+    expect(read.status === "found" && read.entry.sources).toEqual(SOURCES);
+
+    // 다만 **확인한 답은 아니다.** IndexedDB 는 못 열었으므로 그 표시를 같이 싣는다.
+    expect(read).toMatchObject({ status: "found", opened: false });
+    /*
+      그리고 지울 때는 **그 키만** 걷는다. 통째로 지우면 못 읽은 IndexedDB 레코드까지
+      사라지고, 접어 버리면 사용자가 「버리기」를 골라도 이 한 벌이 남아 다음 화면
+      이동에서 같은 확인이 다시 뜬다.
+    */
+    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
+    expect(window.localStorage.getItem(LEGACY_KEY_V2)).toBeNull();
   });
 
   it("보관하면 예전 localStorage 키를 같이 걷어낸다", async () => {

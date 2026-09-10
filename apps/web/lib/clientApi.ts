@@ -138,19 +138,93 @@ async function checkDeletionRequested() {
   }
 }
 
+/**
+ * 공유 재발급의 **자체 종료 상한.**
+ *
+ * 호출부의 상한과 별개로 필요하다. 재발급을 탭에 하나로 묶어 놓았으므로(아래
+ * `pendingReissue`), 상한 없는 호출부가 먼저 붙은 채 왕복이 멈추면 기다리는 쪽이 영영
+ * 정리되지 않고 **회선이 돌아온 뒤의 모든 401 이 그 멈춘 약속만 기다린다** — 새로고침
+ * 전까지 인증 API 가 통째로 선다. `resolveMembership()` 과 `useMyFrames()` 가 정확히
+ * 그 「상한 없는 호출부」다.
+ *
+ * 숫자는 **실측이 아니다.** 재발급 응답 시간을 재 보지 않았고, 이 저장소가 같은 성격의
+ * 문제(안 끝나면 사용자가 갇힌다)에 이미 걸어 둔 상한과 맞췄다 —
+ * `lib/userMediaApi.ts` 의 `DELETE_DEADLINE_MS`, `lib/themeEditorStore.ts` 의
+ * `ASSET_QUEUE_WAIT_LIMIT_MS` 가 둘 다 30초다. 셋이 갈라지면 근거가 사라지니 함께 본다.
+ */
+const REISSUE_DEADLINE_MS = 30_000;
+
 // 쿠키 기반 액세스 토큰 재발급. 자체 401 재시도는 하지 않는다(exempt).
-async function reissueAccessToken(): Promise<ReissueResult> {
+async function requestReissue(): Promise<ReissueResult> {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), REISSUE_DEADLINE_MS);
+
   try {
     const res = await fetch("/api/client/reissue", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     });
     if (res.ok) return "ok";
     return res.status === 401 || res.status === 403 ? "expired" : "unavailable";
   } catch {
+    // 상한에 걸린 것도, 회선이 끊긴 것도 여기다. 둘 다 「재발급 못 했다」로 접는다 —
+    // 세션이 끊겼다고 단정하지 않는다(그 판정은 서버가 401·403 으로 준 때뿐이다).
     return "unavailable";
+  } finally {
+    clearTimeout(deadline);
   }
+}
+
+/**
+ * 지금 도는 재발급. **탭에 하나뿐이다.**
+ *
+ * 왜 하나여야 하는가 — `reissue` 는 **refresh 를 회전시킨다.** 같은 쿠키로 둘이 동시에
+ * 부르면 서버가 둘 다 받아 회전 응답 순서에 따라 한쪽이 무효가 되고, 그쪽 호출부는 멀쩡한
+ * 세션을 끊긴 것으로 읽는다. 실제로 나던 자리: 행사 주소로 들어온 회원에게 프레임 조회
+ * (`useMyFrames`)와 회원 판정(`resolveMembership`)이 나란히 시작되고, access 가 만료돼
+ * 있으면 둘 다 401 을 받아 재발급이 두 번 나갔다. 판정 쪽이 진 경우 회원이 `guest` 로
+ * 읽혀 7일짜리 체험 쿠키가 심겼다.
+ */
+let pendingReissue: Promise<ReissueResult> | null = null;
+
+/** 이 signal 이 끊기면 「재발급 못 했다」로 답한다 — 기다리기를 그만두는 자리다. */
+function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve("unavailable");
+      return;
+    }
+    signal.addEventListener("abort", () => resolve("unavailable"), {
+      once: true,
+    });
+  });
+}
+
+/**
+ * 재발급을 부른다 — 이미 도는 것이 있으면 **그것을 기다린다.**
+ *
+ * 왕복 자체에는 호출부의 signal 을 걸지 않는다. 먼저 온 호출부가 자기 상한으로 끊으면
+ * 뒤에 붙은 호출부의 재발급까지 함께 죽기 때문이다. 대신 **기다리는 쪽**에 signal 을 건다 —
+ * 끊긴 호출부는 `unavailable` 을 받아 자기 실패로 넘어가고(그러면 `resolveMembership` 은
+ * `guest` 가 아니라 `unknown` 으로 답한다), 왕복은 남은 호출부를 위해 계속 간다.
+ *
+ * **슬롯은 왕복이 실제로 끝날 때까지 쥔다.** 한때 「기다리는 쪽이 다 떠나면 놓는다」로
+ * 두었는데, 그러면 호출부의 상한(30초)이 왕복의 상한(같은 30초)보다 조금이라도 먼저 끊길
+ * 때 슬롯이 먼저 비고 **아직 도는 왕복과 새 왕복이 나란히** 돌았다 — 같은 refresh 쿠키로
+ * 회전 두 개, 곧 이 단일화가 막으려던 그 경쟁이다. 멈춘 왕복이 탭을 영영 막는 문제는
+ * 이제 왕복 자체의 상한(`REISSUE_DEADLINE_MS`)이 맡는다.
+ */
+function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
+  if (!pendingReissue) {
+    pendingReissue = requestReissue().finally(() => {
+      pendingReissue = null;
+    });
+  }
+
+  const shared = pendingReissue;
+  return signal ? Promise.race([shared, abortedAsUnavailable(signal)]) : shared;
 }
 
 /**
@@ -213,7 +287,7 @@ async function request<T>(
   // 액세스 토큰 만료(401)면 쿠키 기반으로 1회 재발급 후 원요청을 재시도한다.
   // 재발급까지 실패하면(여전히 401) 세션이 끊긴 것으로 보고 등록된 만료 핸들러를 호출한다.
   if (res.status === 401 && !SESSION_REFRESH_EXEMPT_PATHS.has(path)) {
-    const reissue = await reissueAccessToken();
+    const reissue = await reissueAccessToken(options.signal);
     // 재발급 성공 시에만 재시도한다. 재시도 fetch 가 실패하면 그 오류를 그대로 올려
     // 유효 세션을 만료로 오인하지 않는다(취소면 AbortError, 회선이 끊겼으면 CLIENT-004).
     // 재발급 실패면 최초 401 응답을 유지한다.

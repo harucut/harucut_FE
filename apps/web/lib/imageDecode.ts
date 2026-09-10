@@ -22,6 +22,7 @@
  * 실기기 WKWebView 는 같은 엔진이지만 하드웨어 디코더를 쓰므로 더 빠를 것으로 본다.
  */
 
+import { fitCanvasScale, MAX_TILE_PIXELS } from "@/lib/canvas/canvasBudget";
 import {
   isSupportedUploadFile,
   MAX_UPLOAD_BYTES,
@@ -152,6 +153,126 @@ export function resetLibheifCacheForTest(): void {
   libheifPromise = null;
 }
 
+/**
+ * 목적지 경계 `dest` 가 가리키는 원본 경계. 타일을 자를 때 양쪽 좌표계를 잇는다.
+ *
+ * 마지막 경계는 **손으로 못 박는다.** 지금 식(`dest × sourceTotal / destTotal`)은 정수
+ * 곱이 2^53 안이라 끝에서 정확히 `sourceTotal` 로 떨어지지만, 그 정확함은 곱하고 나서
+ * 나누는 **순서**에 기대는 것이다. 배율을 먼저 구해 곱하는 식으로 바꾸면 마지막 줄이
+ * 내림 한 번에 잘려 나가는데, 잘려도 아무 데서도 오류가 안 나고 사진 가장자리 한 줄만
+ * 조용히 사라진다 — 그 종류의 손실을 여기서 막는다.
+ */
+function sourceEdge(dest: number, destTotal: number, sourceTotal: number) {
+  if (dest >= destTotal) return sourceTotal;
+  return Math.floor((dest * sourceTotal) / destTotal);
+}
+
+/**
+ * 원본 RGBA 버퍼를 목적지 컨텍스트에 **줄여 그린다.** 줄이는 일은 브라우저가 한다.
+ *
+ * 무엇이 잘못됐었나: 직전 라운드에 여기 있던 `shrinkPixels` 는 원본 화소를 JS 로 한 번씩
+ * 훑어 상자 평균을 냈다. 48MP 사진이면 4,800만 번의 중첩 반복이 메인 스레드에서 통째로
+ * 돌고, 그동안 원본 버퍼와 목적지 버퍼를 **같이** 들고 있었다(8064×6048 이면 186MB +
+ * 61MB). 이 기계의 데스크톱 Node 로 그 루프만 따로 재니 0.55초였다 — 이 길이 필요한 곳은
+ * 폰 Chromium 이라 거기서는 더 느리다(실기기로는 재지 못했다).
+ *
+ * 어떻게 바꿨나: 원본을 **타일로 잘라** 한 장씩만 임시 캔버스에 얹고(`putImageData` 의
+ * dirty rect 로 그 영역만 복사시킨다) 목적지에는 `drawImage` 로 줄여 그린다. JS 쪽 반복은
+ * 화소 수가 아니라 **타일 수**가 되고(8064×6048 이면 63장, 파노라마 25344×2048 이면 78장.
+ * 이 계산만 따로 돌려 세어 봤다), 추가로 드는 메모리는 타일 한 장(`MAX_TILE_PIXELS` ×
+ * 4바이트, 위 두 경우 모두 999×999 로 4MB 아래)뿐이다 — 목적지 크기 RGBA 버퍼를 JS 로
+ * 또 만들지 않는다.
+ *
+ * **원본 버퍼(48MP 면 186MB)는 이 함수가 못 줄인다.** libheif 가 원본 크기로만 채워 주기
+ * 때문이다(아래 `decodeWithLibheif` 주석). 최대 메모리의 그 절반은 여기서 안 닫힌다.
+ *
+ * 왜 가로 띠가 아니라 타일인가: 원본 폭 전체를 띠로 잡으면 아이폰 48MP 의 띠가 8064px 라
+ * **변 상한(6000)을 넘는다.** 임시 캔버스도 캔버스라 상한을 넘으면 putImageData 가 조용히
+ * 아무것도 안 그리고, 그러면 빈 그림이 그대로 올라간다 — 이 파일이 직전 라운드에 닫은 바로
+ * 그 사고를 임시 캔버스로 다시 여는 셈이다. 그래서 폭도 예산으로 자른다.
+ *
+ * 화질이 **바뀐다**: 상자 평균 → 브라우저 보간이다. 타일 경계는 목적지 정수 화소에 맞춰
+ * 자르므로 겹치거나 벌어지지는 않지만, 경계에서 필터가 이웃 타일을 못 보므로 그 한 줄이
+ * 전역 축소와 다를 수 있다. **눈으로 확인하지 못했다** — jsdom 에 진짜 캔버스가 없어 이
+ * 저장소의 시험으로는 볼 수 없는 종류다. 알파도 브라우저가 미리 곱한 값으로 섞는다(예전
+ * 평균은 안 곱했다). 여기 오는 것은 알파 없는 아이폰 사진이라 그대로 뒀다.
+ */
+function drawShrunkOnto(
+  ctx: CanvasRenderingContext2D,
+  source: ImageData,
+  targetWidth: number,
+  targetHeight: number,
+): boolean {
+  const { width: sourceWidth, height: sourceHeight } = source;
+
+  // 목적지 한 칸이 원본 몇 칸인가. 여기 오는 배율은 1보다 작으므로 둘 다 1 이상이다.
+  const stepX = sourceWidth / targetWidth;
+  const stepY = sourceHeight / targetHeight;
+
+  /*
+    타일 크기는 **목적지 칸 수**로 잡는다 — 그래야 타일의 목적지 사각형이 정수로 떨어져
+    경계가 겹치지도 벌어지지도 않는다. 배율이 가로세로 같으므로(`fitCanvasScale`) 이렇게
+    잡은 원본 타일은 대체로 정사각형이고, 한 변이 √MAX_TILE_PIXELS(1000px 대)라 변
+    상한에도 한참 못 미친다.
+
+    남는 구석: 축소가 1000배를 넘으면(원본 한 변이 목적지의 1000배) 블록이 1칸이 되면서
+    타일 하나가 예산을 넘을 수 있다. 그런 사진은 한 변이 수백만 px 이라 실물에 없다.
+  */
+  const block = Math.max(
+    1,
+    Math.floor(Math.sqrt(MAX_TILE_PIXELS / (stepX * stepY))),
+  );
+  const blockWidth = Math.min(targetWidth, block);
+  const blockHeight = Math.min(targetHeight, block);
+
+  const tile = document.createElement("canvas");
+  const tileCtx = tile.getContext("2d");
+  if (!tileCtx) return false;
+
+  // 줄여 그리는 길이라 보간을 켠다. 끄면 최근접이 되어 모아레가 그대로 남는다.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  for (let top = 0; top < targetHeight; top += blockHeight) {
+    const bottom = Math.min(targetHeight, top + blockHeight);
+    const sourceTop = sourceEdge(top, targetHeight, sourceHeight);
+    const sourceBottom = sourceEdge(bottom, targetHeight, sourceHeight);
+
+    for (let left = 0; left < targetWidth; left += blockWidth) {
+      const right = Math.min(targetWidth, left + blockWidth);
+      const sourceLeft = sourceEdge(left, targetWidth, sourceWidth);
+      const sourceRight = sourceEdge(right, targetWidth, sourceWidth);
+
+      /*
+        크기를 매번 다시 준다. 마지막 줄·마지막 칸은 타일이 작고, 크기를 바꾸면 캔버스가
+        비워지므로 앞 타일의 화소가 남지 않는다. 임시 캔버스는 하나만 쓴다 — 타일마다
+        새로 만들면 만든 만큼 GC 를 기다리게 된다.
+      */
+      tile.width = sourceRight - sourceLeft;
+      tile.height = sourceBottom - sourceTop;
+
+      /*
+        원본 버퍼 전체를 넘기되 **읽을 영역만 지정한다.** dirty rect 는 버퍼 좌표계라,
+        놓을 자리를 (-sourceLeft, -sourceTop) 으로 밀어야 타일 좌상단이 (0,0) 이 된다.
+        이렇게 하면 타일용 버퍼를 JS 로 따로 만들어 복사하지 않아도 된다.
+      */
+      tileCtx.putImageData(
+        source,
+        -sourceLeft,
+        -sourceTop,
+        sourceLeft,
+        sourceTop,
+        tile.width,
+        tile.height,
+      );
+
+      ctx.drawImage(tile, left, top, right - left, bottom - top);
+    }
+  }
+
+  return true;
+}
+
 async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
   const libheif = await loadLibheif();
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -165,29 +286,57 @@ async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
   const height = image.get_height();
   if (!width || !height) return null;
 
+  /*
+    ── 푸는 캔버스도 예산 안에서 잡는다 ──
+
+    무엇이 잘못됐었나: 여기서는 `canvas.width = 원본폭` 으로 원본 화소 그대로 캔버스를
+    잡았다. 굽는 쪽(`encodeAsJpeg`)만 예산에 맞추면, 진짜 상한이 예산과 원본 사이에 있는
+    기기에서 **푸는 캔버스만 상한을 넘는다.** 그런 캔버스는 putImageData 가 오류 없이
+    아무것도 안 그리는 것으로 알려져 있고(`canvasBudget.ts` 「가정」), 그러면 그 빈
+    캔버스를 예산 안 크기로 다시 구워 **빈 그림이 조용히 올라간다.**
+
+    굽는 쪽만 고쳤을 때가 더 나빴다: 그 전에는 두 캔버스가 같이 커서 인코딩도 같이
+    실패했고, 사용자는 「지원하지 않는 형식」이라는 **거절**을 봤다. 보이던 실패를 조용한
+    데이터 손실로 바꾸는 쪽이라 여기서 닫는다.
+  */
+  const scale = fitCanvasScale(width, height);
+  const targetWidth = Math.max(1, Math.floor(width * scale));
+  const targetHeight = Math.max(1, Math.floor(height * scale));
+
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  const imageData = ctx.createImageData(width, height);
+  /*
+    libheif 는 **원본 크기 RGBA 버퍼에만** 채워 준다 — 줄여 달라고 할 수가 없다. 버퍼는
+    캔버스가 아니라 그냥 메모리라 캔버스 예산과는 무관하다. 대신 원본 화소 × 4바이트를
+    쓰므로 고화소 사진에서는 그 자체로 무겁다(48MP 면 190MB 대). 예전과 같은 비용이고,
+    이 자리에서 줄일 방법은 없다.
+  */
+  const decoded = ctx.createImageData(width, height);
   await new Promise<void>((resolve, reject) => {
     /*
       `display` 는 RGBA 를 우리가 준 버퍼에 채우고 콜백을 부른다. 실패하면 콜백 인자가
       비어 온다 — 여기서 던지지 않고 reject 로 넘긴다. wasm 프레임을 가로질러 던지면
       스택이 끊겨 어디서 죽었는지 알 수 없다(personCutout.ts 에 같은 주석이 있다).
     */
-    image.display({ data: imageData.data, width, height }, (result) => {
+    image.display({ data: decoded.data, width, height }, (result) => {
       if (result) resolve();
       else reject(new Error("libheif display failed"));
     });
   });
 
-  ctx.putImageData(imageData, 0, 0);
+  // 예산 안에 드는 사진은 예전 그대로 — 버퍼를 그대로 얹는다(자르지도 줄이지도 않는다).
+  if (scale === 1) ctx.putImageData(decoded, 0, 0);
+  // 넘는 사진만 타일로 잘라 줄여 그린다. 임시 캔버스를 못 얻으면 그릴 방법이 없다.
+  else if (!drawShrunkOnto(ctx, decoded, targetWidth, targetHeight)) return null;
 
-  return { source: canvas, width, height };
+  // 캔버스가 줄어들었으면 **줄어든 크기**를 알린다. 호출부(`encodeAsJpeg`·photoImport)가
+  // 이 숫자로 다시 배율을 잡으므로, 원본 크기를 주면 없는 화소를 늘려 그리게 된다.
+  return { source: canvas, width: targetWidth, height: targetHeight };
 }
 
 /**
@@ -263,8 +412,15 @@ async function encodeAsJpeg(
   scale: number,
 ): Promise<Blob | null> {
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(decoded.width * scale));
-  canvas.height = Math.max(1, Math.round(decoded.height * scale));
+  /*
+    올림이 아니라 **내림**이다. 예산에 딱 맞춘 배율은 올림 한 번에 도로 예산을 넘는다 —
+    맞춘 결과가 예산 바로 아래라 한 줄만 붙어도 넘어간다. `composeFrame.ts` 도 같은
+    이유로 내림한다. 얼마나 넘는지는 예산 값을 따라 움직이므로 여기 적지 않는다(못은
+    아래 `imageDecode.test.ts` 「예산에 맞출 때 올림으로…」가 박고 있다).
+    배율이 1일 때는 정수 × 1 이라 내려도 원본 화소 그대로다.
+  */
+  canvas.width = Math.max(1, Math.floor(decoded.width * scale));
+  canvas.height = Math.max(1, Math.floor(decoded.height * scale));
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
@@ -287,13 +443,18 @@ async function encodeAsJpeg(
  * 같은 종류라(`UploadValidationError`) 화면이 이미 한국어로 보여 준다 — 새 문구를 만들면
  * 「지원하지 않는 형식」을 말하는 자리가 두 곳이 된다.
  *
- * 화소는 **한도를 넘을 때만** 줄인다. 24MP·48MP 아이폰 사진은 원본 화소 그대로 구우면
- * 압축된 원본이 작았더라도 결과가 `MAX_UPLOAD_BYTES`(10MiB)를 넘긴다 — 그러면 변환까지
- * 해 놓고 `uploadToS3WithPresigned` 가 발급 전에 거절해서, 정작 지원하려던 고해상도
- * 사진만 마지막 단계에서 계속 실패한다.
+ * 화소를 줄이는 기준은 **둘**이고, 둘 다 「넘을 때만」이다.
  *
- * 줄이는 기준은 그 하나뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_EDGE`)은
- * 네컷 슬롯 크기에서 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
+ *  1. **캔버스 예산**(`lib/canvas/canvasBudget.ts`) — 첫 굽기부터 `fitCanvasScale` 로
+ *     맞춘다(왜인지는 본문 주석). HEIC 를 wasm 으로 푸는 길에서는 `decodeWithLibheif` 가
+ *     **푸는 캔버스에도** 같은 배율을 걸어 두므로, 여기 오는 그림은 이미 예산 안이다.
+ *  2. **올릴 수 있는 크기** — 그러고도 `MAX_UPLOAD_BYTES`(10MiB)를 넘으면 되풀이해 줄인다.
+ *     24MP·48MP 아이폰 사진은 압축된 원본이 작았더라도 다시 구우면 넘길 수 있다 — 그러면
+ *     변환까지 해 놓고 `uploadToS3WithPresigned` 가 발급 전에 거절해서, 정작 지원하려던
+ *     고해상도 사진만 마지막 단계에서 계속 실패한다.
+ *
+ * 그 둘뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_EDGE`)은 네컷 슬롯 크기에서
+ * 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
  */
 export async function toUploadableFile(file: File): Promise<File> {
   if (canUploadAsIs(file)) return file;
@@ -301,7 +462,35 @@ export async function toUploadableFile(file: File): Promise<File> {
   const decoded = await decodeImageFile(file);
   if (!decoded) throw createUnsupportedUploadError(file);
 
-  let scale = 1;
+  /*
+    ── 첫 굽기부터 캔버스 예산에 맞춘다 ──
+
+    무엇이 잘못됐었나: 예전에는 크기를 줄일 필요가 있는지 알기도 전에 `scale = 1`, 곧
+    **원본 화소 그대로** 캔버스를 잡았다.
+
+    무엇이 그것을 문제로 보게 했나 — 여기서부터는 **가정**이다. iOS 는 캔버스가 상한을
+    넘으면 오류를 주지 않고 조용히 빈 그림을 그리거나 `toBlob` 이 null 을 준다고
+    **전해진다**(근거와 그 근거의 한계는 `lib/canvas/canvasBudget.ts` 「가정」에 있다.
+    실기기로 확인한 적이 없고, 데스크톱 WebKit 에서는 24MP 가 멀쩡히 그려졌다).
+    그 이야기가 맞다면 이렇게 된다: 아래 크기 기반 축소 루프는 `blob` 이 null 이라 한 번도
+    못 돌고, 밑에서 「지원하지 않는 형식」으로 거절된다. WebKit 이 HEIC 를 **스스로
+    읽는데도** 고화소 아이폰 사진만 골라 실패하는 모양이 된다 — 프로필 사진과 프레임
+    배경으로 가장 흔히 고르는 것이 하필 그 사진이라, 가정이 맞을 때 치를 값이 크다.
+    (사용자가 실제로 그렇게 실패했다는 보고를 우리가 확인한 것은 아니다.)
+
+    숫자를 여기서 새로 정하지 않는다. 예산의 소유자는 `lib/canvas/canvasBudget.ts` 하나고,
+    합성(`composeFrame`)도 같은 것을 본다. 숫자를 두 곳에 두면 한쪽만 고쳐지는데, 그때
+    갈라지는 쪽이 하필 이 조용한 실패 경로다.
+
+    화질을 필요 이상으로 깎지 않는다: 예산 안에 드는 사진은 배율이 정확히 1이라 예전과
+    똑같이 원본 화소로 굽는다. 넘는 사진도 예산에 맞춘 크기가 프로필(원형 수백 px)이나
+    프레임 배경(2400px 대)이 요구하는 것보다는 여전히 크다.
+
+    남는 한계: 어떤 기기의 진짜 상한이 예산보다 낮으면 첫 `toBlob` 이 여전히 null 이고,
+    우리는 더 줄여 다시 굽지 않고 거절한다. 상한을 재는 방법이 「그려 보고 실패하는지
+    본다」뿐이라 비용이 커서, 실기기에서 그런 사례를 만나기 전에는 붙이지 않는다.
+  */
+  let scale = fitCanvasScale(decoded.width, decoded.height);
   let blob = await encodeAsJpeg(decoded, scale);
 
   /*

@@ -27,7 +27,13 @@ describe("deleteMedia", () => {
 
     await deleteMedia(42);
 
-    expect(mockDelete).toHaveBeenCalledWith("/api/client/user/media/42");
+    // 종료 상한(AbortSignal)을 함께 넘긴다 — 응답 없이 멈추면 확인 다이얼로그가 감옥이
+    // 된다(lib/userMediaApi.ts 의 DELETE_DEADLINE_MS). signal 이 빠지면 fetch 를 끊을 길이
+    // 없으므로 여기서도 못을 박는다.
+    expect(mockDelete).toHaveBeenCalledWith(
+      "/api/client/user/media/42",
+      expect.objectContaining({ signal: expect.anything() }),
+    );
   });
 
   it("본문이 없는 200 이어도 성공이다 — 삭제는 돌려줄 값이 없다", async () => {

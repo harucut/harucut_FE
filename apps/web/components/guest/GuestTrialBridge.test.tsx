@@ -17,7 +17,8 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 const mockReplace = jest.fn();
 const mockSaveFourcutToServer = jest.fn();
 const mockGetPending = jest.fn();
-const mockReadPending = jest.fn();
+const mockClearIfUnchanged = jest.fn();
+const mockReadForHandoff = jest.fn();
 const mockClearPending = jest.fn();
 const mockEnsureComposeKey = jest.fn();
 const mockDescribeComposeFailure = jest.fn();
@@ -38,7 +39,10 @@ jest.mock("@/lib/fourcutProcessing", () => ({
 
 jest.mock("@/lib/pendingGuestSave", () => ({
   getPendingGuestSave: (...args: unknown[]) => mockGetPending(...args),
-  readPendingGuestSave: (...args: unknown[]) => mockReadPending(...args),
+  // 삭제 판단은 보관소가 한다. 브리지는 지문만 넘기고 셋 중 하나를 받는다.
+  clearPendingGuestSaveIfUnchanged: (...args: unknown[]) =>
+    mockClearIfUnchanged(...args),
+  readPendingGuestSave: (...args: unknown[]) => mockReadForHandoff(...args),
   clearPendingGuestSave: (...args: unknown[]) => mockClearPending(...args),
   ensurePendingGuestSaveComposeKey: (...args: unknown[]) =>
     mockEnsureComposeKey(...args),
@@ -121,9 +125,16 @@ beforeEach(() => {
   mockGetPending.mockResolvedValue(PENDING);
   // 조건부 삭제는 「없다」와 「모르겠다」를 가려 본다. 기본은 조회와 같은 답을 준다 —
   // 「모르겠다」는 그것을 시험하는 테스트가 직접 세운다.
-  mockReadPending.mockImplementation(async () => {
+  // 인계용 읽기는 삭제 경로에서 쓰이면 안 된다 — 불리면 그 자체가 실패 신호다.
+  mockReadForHandoff.mockImplementation(async () => {
+    throw new Error("삭제 경로가 인계용 읽기를 불렀다");
+  });
+  // 보관소가 지문을 대조해 셋 중 하나로 답한다. 실제 구현과 같은 규칙으로 흉내 낸다.
+  mockClearIfUnchanged.mockImplementation(async (isSame: (e: unknown) => boolean) => {
     const entry = await mockGetPending();
-    return entry ? { status: "found", entry } : { status: "empty" };
+    if (entry && !isSame(entry)) return "changed";
+    await mockClearPending();
+    return "cleared";
   });
   storedComposeKey = null;
   mintedKeyCount = 0;
@@ -552,7 +563,7 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     await flushAsync();
 
     // 올리는 사이 저장소가 막혔다 — 있는지 없는지 알 수 없다.
-    mockReadPending.mockResolvedValue({ status: "unreadable" });
+    mockClearIfUnchanged.mockResolvedValue("unreadable");
     await act(async () => {
       release();
     });
@@ -562,6 +573,29 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
     // 고치기 전에는 여기서 확인한 적 없는 한 벌까지 지웠다.
     expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — 조건부 삭제는 **삭제 전용 읽기**를 쓴다.
+
+    인계용 읽기(`readPendingGuestSave`)는 저장소를 못 연 채 읽은 예전 localStorage 한 벌도
+    `found` 로 준다 — 그 답을 삭제 근거로 쓰면 IndexedDB 를 한 번도 못 읽은 채 지우게 되고,
+    다른 탭이 방금 찍어 둔 원본 4장이 사라진다. 그 판단은 보관소의
+    `clearPendingGuestSaveIfUnchanged` 안에 있고, 브리지는 지문만 넘긴다.
+  */
+  it("보관물을 지울 때는 보관소의 조건부 삭제에 맡긴다", async () => {
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "버리기" })).toBeInTheDocument();
+    });
+    pressNoticeAction("버리기");
+
+    await waitFor(() => {
+      expect(mockClearPending).toHaveBeenCalled();
+    });
+    expect(mockClearIfUnchanged).toHaveBeenCalled();
+    // 인계용 읽기를 불렀다면 위 목이 던져 여기까지 오지 못한다. 명시적으로도 못 박는다.
+    expect(mockReadForHandoff).not.toHaveBeenCalled();
   });
 
   it("버리기를 고르면 보관물만 지우고 서버는 부르지 않는다", async () => {

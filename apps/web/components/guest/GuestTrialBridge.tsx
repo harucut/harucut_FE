@@ -13,8 +13,9 @@ import {
   clearPendingGuestSave,
   ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
-  readPendingGuestSave,
+  clearPendingGuestSaveIfUnchanged,
   type PendingGuestSave,
+  type PendingGuestSaveMeta,
   type PendingGuestSaveComposeKey,
 } from "@/lib/pendingGuestSave";
 
@@ -73,7 +74,10 @@ const DUPLICATE_RISK_SUFFIX = (composeKey: PendingGuestSaveComposeKey) =>
  * 달라진다), **원본 4장**은 수 MB 문자열이라 대조 비용만 들 뿐 같은 밀리초에 갈아 끼운
  * 다른 한 벌이 아닌 한 새로 걸리는 것이 없다.
  */
-function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
+function isSameHandoff(
+  a: PendingGuestSaveMeta,
+  b: PendingGuestSaveMeta,
+): boolean {
   return (
     a.savedAt === b.savedAt &&
     a.displayName === b.displayName &&
@@ -92,28 +96,21 @@ function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
  * 갈아 끼워진다. 그때 무조건 지우면 **사용자가 버리겠다고 한 적 없는 새 한 벌**이 사라진다 —
  * 원본 4장은 여기에만 있어서 되돌릴 방법이 없다.
  *
- * 없어진 뒤라면 지우는 김에 예전 localStorage 보관물까지 걷어내고 true 로 끝낸다 —
- * 사용자가 원한 상태가 이미 됐다는 뜻이다.
+ * **판단은 보관소가 한다.** 저장소를 못 연 채 읽은 예전 localStorage 한 벌을 어떻게 다룰지
+ * (그 키만 지우고 IndexedDB 는 건드리지 않는다)까지 `clearPendingGuestSaveIfUnchanged` 안에
+ * 있다 — 여기서 다시 판단하면 지우는 세 자리 중 한 곳이 언젠가 틀린다. 우리가 주는 것은
+ * 지문뿐이고, 받는 것은 「지웠다/바뀌었다/모르겠다」 셋이다.
  *
- * **못 읽었으면 지우지 않는다.** 저장소를 못 열거나 읽다 깨지면 레코드가 멀쩡히 있어도
- * 조회는 빈손으로 돌아온다. 그것을 「이미 없다」로 읽으면, 합성이 도는 사이 다른 탭이
- * 새로 찍어 둔 한 벌을 — 사용자가 확인한 적 없는 것을 — 그대로 지운다. 두 번째 열기만
- * 성공하면 원본 4장이 사라지고, 이 함수가 막으려던 사고가 바로 그 자리에서 난다.
- * 그래서 `readPendingGuestSave` 의 「없다」와 「모르겠다」를 갈라 본다.
- *
- * **원자적이지 않다.** IndexedDB 에 조건부 삭제는 없어서 되읽기와 삭제 사이는 여전히
- * 열려 있다 — 안내를 띄운 순간부터 벌어져 있던 창을 두 줄 사이로 줄이는 것뿐이다
- * (lib/pendingTermsConsent.ts 의 `clearPendingTermsConsentIfUnchanged` 와 같은 한계).
+ * 「바뀌었다」와 「모르겠다」를 여기서는 둘 다 false 로 접는다 — 호출부가 할 일이 같기
+ * 때문이다(안내 표식을 되돌려 다음 회차에 다시 묻는다).
  */
 async function clearHandoffIfUnchanged(
   promptedEntry: PendingGuestSave,
 ): Promise<boolean> {
-  const read = await readPendingGuestSave();
-  if (read.status === "unreadable") return false;
-  if (read.status === "found" && !isSameHandoff(read.entry, promptedEntry))
-    return false;
-  await clearPendingGuestSave();
-  return true;
+  const result = await clearPendingGuestSaveIfUnchanged((entry) =>
+    isSameHandoff(entry, promptedEntry),
+  );
+  return result === "cleared";
 }
 
 export function GuestTrialBridge() {
