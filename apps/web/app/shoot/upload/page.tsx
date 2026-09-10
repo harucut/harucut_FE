@@ -111,8 +111,20 @@ export default function ShootUploadPage() {
 
   useEffect(() => {
     if (!guestHydrated || accessMode !== "guest") return;
-    router.replace("/shoot?guestNotice=restricted");
-  }, [accessMode, guestHydrated, router]);
+
+    /*
+      **되돌릴 때 행사 이름과 고른 프레임을 들려 보낸다.**
+
+      `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다.
+      그냥 `/shoot?guestNotice=restricted` 로 보내면 행사 배너와 QR 이 지정한 프레임이 함께
+      사라져, 참가자가 기본 프레임으로 찍게 된다. 막는 것은 회원 전용 경로 하나지 행사
+      진입 전체가 아니다.
+    */
+    const params = new URLSearchParams({ guestNotice: "restricted" });
+    if (frameId) params.set("frame", frameId);
+    if (eventName) params.set("event", eventName);
+    router.replace(`/shoot?${params.toString()}`);
+  }, [accessMode, eventName, frameId, guestHydrated, router]);
 
   const overLimitNotice = (count: number) =>
     `사진은 최대 ${maxPhotos}장까지 담을 수 있어 ${count}장은 제외했어요.`;

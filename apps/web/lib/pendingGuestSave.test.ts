@@ -58,7 +58,7 @@ const ENTRY = {
  * jsdom 용 IndexedDB 스텁 — 이 모듈이 실제로 쓰는 것만 흉내 낸다.
  * ------------------------------------------------------------------------- */
 
-type FakeRequest = { result: unknown };
+type FakeRequest = { result: unknown; onsuccess?: (() => void) | null };
 
 type FakeObjectStore = {
   put: (value: unknown, key: string) => FakeRequest;
@@ -133,29 +133,46 @@ function resetStore() {
   store.openBlocksThenSucceeds = false;
 }
 
-function makeObjectStore(mode: IDBTransactionMode): FakeObjectStore {
+/**
+ * 트랜잭션 하나가 만든 요청들. **`onsuccess` 를 실제로 쏘기 위해 모은다.**
+ *
+ * 진짜 IndexedDB 는 요청마다 `onsuccess` 를 부르고, 그 안에서 같은 트랜잭션에 다음 요청을
+ * 이어 붙일 수 있다 — 대조하고 나서 지우는 조건부 삭제가 그 모양이다
+ * (`deleteRecordIfMatches`). 예전 스텁은 `result` 만 채우고 `onsuccess` 를 안 불러서,
+ * 그 자리에 이어 붙는 코드를 흉내 내지 못했다.
+ */
+function makeObjectStore(
+  mode: IDBTransactionMode,
+  requests: FakeRequest[],
+): FakeObjectStore {
   const writable = mode === "readwrite" && !store.rejectWrites && !store.swallowWrites;
+  const track = <T>(request: FakeRequest & { result: T }) => {
+    requests.push(request);
+    return request;
+  };
+
   return {
     put: (value, key) => {
       if (writable) store.data.set(key, value);
-      return { result: undefined };
+      return track({ result: undefined });
     },
-    get: (key) => ({ result: store.data.get(key) }),
-    count: (key) => ({ result: store.data.has(key) ? 1 : 0 }),
+    get: (key) => track({ result: store.data.get(key) }),
+    count: (key) => track({ result: store.data.has(key) ? 1 : 0 }),
     delete: (key) => {
       if (mode === "readwrite" && !store.rejectWrites) store.data.delete(key);
-      return { result: undefined };
+      return track({ result: undefined });
     },
   };
 }
 
 function makeTransaction(mode: IDBTransactionMode): FakeTransaction {
+  const requests: FakeRequest[] = [];
   const transaction: FakeTransaction = {
     error: null,
     oncomplete: null,
     onabort: null,
     onerror: null,
-    objectStore: () => makeObjectStore(mode),
+    objectStore: () => makeObjectStore(mode, requests),
   };
   // 핸들러는 이 함수가 끝난 뒤에 붙는다 — 실제 IndexedDB 처럼 다음 틱에 알린다.
   queueMicrotask(() => {
@@ -173,6 +190,13 @@ function makeTransaction(mode: IDBTransactionMode): FakeTransaction {
       transaction.error = new Error("QuotaExceededError");
       transaction.onabort?.();
       return;
+    }
+    /*
+      완료를 알리기 **전에** 요청마다 `onsuccess` 를 쏜다. 그 안에서 같은 트랜잭션에 새
+      요청이 붙을 수 있으므로(조건부 삭제가 그렇다) 목록을 자라는 대로 훑는다.
+    */
+    for (let i = 0; i < requests.length; i += 1) {
+      requests[i].onsuccess?.();
     }
     transaction.oncomplete?.();
   });
@@ -756,6 +780,35 @@ describe("pendingGuestSave", () => {
     // 물어본 것은 다른 시각의 한 벌이었다.
     expect(await clearIfUnchangedLikeBridge(NOW + 5_000, NOW)).toBe(false);
     expect(window.localStorage.getItem(LEGACY_KEY_V2)).not.toBeNull();
+  });
+
+  /*
+    회귀 — **대조와 삭제 사이에 다른 탭이 끼어들지 못한다.**
+
+    나눠서 하던 때는 읽기가 Blob 넷을 data URL 로 되돌리는 동안 창이 열려 있었고, 그 사이
+    다른 탭이 새 네컷을 같은 자리에 저장하면 뒤이은 무조건 삭제가 **그 새 한 벌**을 지웠다 —
+    사용자가 확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
+
+    지금은 한 `readwrite` 트랜잭션 안에서 대조하고 지운다. 그 사이에 쓰기가 들어오는 것을
+    흉내 내려고, 트랜잭션이 대조하는 순간(`get` 의 `onsuccess`)에 레코드를 갈아 끼운다.
+  */
+  it("대조와 삭제가 한 트랜잭션 안에서 끝난다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    store.openCount = 0;
+
+    const result = await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.savedAt === NOW,
+      NOW,
+    );
+
+    expect(result).toBe("cleared");
+    expect(storedRecord()).toBeNull();
+    /*
+      **한 번만 연다.** 나눠서 하던 때는 읽기가 한 번, 삭제가 한 번 열어 그 사이가 창이었다.
+      실제 IndexedDB 는 같은 store 의 트랜잭션을 직렬화하므로, 한 트랜잭션 안에 들어오면
+      그 창이 사라진다 — 여는 횟수가 그것을 재는 가장 곧은 자다.
+    */
+    expect(store.openCount).toBe(1);
   });
 
   /*

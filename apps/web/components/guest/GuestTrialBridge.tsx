@@ -15,6 +15,7 @@ import {
   getPendingGuestSave,
   clearPendingGuestSaveIfUnchanged,
   type PendingGuestSave,
+  type PendingGuestSaveMeta,
   type PendingGuestSaveComposeKey,
 } from "@/lib/pendingGuestSave";
 
@@ -73,7 +74,10 @@ const DUPLICATE_RISK_SUFFIX = (composeKey: PendingGuestSaveComposeKey) =>
  * 달라진다), **원본 4장**은 수 MB 문자열이라 대조 비용만 들 뿐 같은 밀리초에 갈아 끼운
  * 다른 한 벌이 아닌 한 새로 걸리는 것이 없다.
  */
-function isSameHandoff(a: PendingGuestSave, b: PendingGuestSave): boolean {
+function isSameHandoff(
+  a: PendingGuestSaveMeta,
+  b: PendingGuestSaveMeta,
+): boolean {
   return (
     a.savedAt === b.savedAt &&
     a.displayName === b.displayName &&

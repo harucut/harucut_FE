@@ -507,8 +507,13 @@ export async function readPendingGuestSave(
  *
  * ③ **아무것도 못 읽었다** — 손을 뗀다.
  *
- * **원자적이지 않다.** IndexedDB 에 조건부 삭제가 없어서 읽기와 삭제 사이는 열려 있다.
- * 창을 두 줄 사이로 줄이는 것까지가 여기서 할 수 있는 일이다
+ * **IndexedDB 쪽은 원자적이다.** 대조와 삭제가 한 `readwrite` 트랜잭션 안에서 돌아
+ * (`deleteRecordIfMatches`) 그 사이에 다른 탭의 쓰기가 끼어들지 못한다. 나눠서 하던 때는
+ * 읽기가 Blob 넷을 data URL 로 되돌리는 동안 창이 열려 있었고, 그 사이 다른 탭이 저장한
+ * 새 한 벌을 지웠다.
+ *
+ * **예전 localStorage 한 벌은 그렇지 않다.** 거기에는 트랜잭션이 없다 — 읽고 지우는 두 줄
+ * 사이가 열려 있고, 그것이 이 함수에 남은 유일한 창이다
  * (lib/pendingTermsConsent.ts 의 `clearPendingTermsConsentIfUnchanged` 와 같은 한계).
  */
 export type PendingGuestSaveClearResult =
@@ -519,22 +524,92 @@ export type PendingGuestSaveClearResult =
   /** 있는지 없는지 모른다 — 아무것도 지우지 않았다. */
   | "unreadable";
 
+/** 원본 4장을 뺀 보관물. 지문 대조에 필요한 것은 여기까지다. */
+export type PendingGuestSaveMeta = Omit<PendingGuestSave, "sources">;
+
+/**
+ * **대조와 삭제를 한 트랜잭션 안에서 한다.** 레코드가 없으면 `absent`.
+ *
+ * 나눠서 하면 그 사이가 열린다. 읽기는 Blob 넷을 data URL 로 되돌리느라 짧지 않은데,
+ * 그 사이 다른 탭이 새 네컷을 같은 자리에 저장하면 뒤이은 무조건 삭제가 **그 새 한 벌**을
+ * 지운다 — 사용자가 확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
+ *
+ * IndexedDB 트랜잭션은 같은 store 에 대해 직렬화되므로, 여기서 읽은 값과 지우는 값 사이에는
+ * 다른 쓰기가 끼어들지 못한다. 이 파일에서 「원자적이지 않다」가 사라지는 유일한 자리다.
+ */
+function deleteRecordIfMatches(
+  db: IDBDatabase,
+  isSame: (entry: PendingGuestSaveMeta) => boolean,
+  now: number,
+): Promise<"cleared" | "changed" | "absent"> {
+  return new Promise((resolve, reject) => {
+    let outcome: "cleared" | "changed" | "absent" = "absent";
+    let transaction: IDBTransaction;
+
+    try {
+      transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const read = store.get(RECORD_KEY);
+
+      read.onsuccess = () => {
+        const record = read.result as StoredRecord | undefined;
+        if (!record) return;
+
+        const meta = normalizeMeta(record, now);
+        // 못 쓰는 레코드(기한이 지났거나 프레임을 모르는 것)는 지문을 볼 것도 없이 걷는다 —
+        // 읽기 경로도 그것을 그 자리에서 지운다.
+        if (meta && !isSame(meta)) {
+          outcome = "changed";
+          return;
+        }
+
+        outcome = "cleared";
+        store.delete(RECORD_KEY);
+      };
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    transaction.oncomplete = () => resolve(outcome);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction aborted"));
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction failed"));
+  });
+}
+
 export async function clearPendingGuestSaveIfUnchanged(
-  isSame: (entry: PendingGuestSave) => boolean,
+  isSame: (entry: PendingGuestSaveMeta) => boolean,
   now: number = Date.now(),
 ): Promise<PendingGuestSaveClearResult> {
-  const read = await readPendingGuestSave(now);
+  if (typeof window === "undefined") return "unreadable";
 
-  if (read.status === "unreadable") return "unreadable";
-  if (read.status === "found" && !isSame(read.entry)) return "changed";
-
-  if (read.status === "found" && !read.opened) {
+  /** 저장소를 못 열었을 때 볼 수 있는 것은 예전 localStorage 한 벌뿐이다. */
+  const clearLegacyIfUnchanged = (): PendingGuestSaveClearResult => {
+    const legacy = readLegacyEntry(now);
+    if (!legacy) return "unreadable";
+    if (!isSame(legacy)) return "changed";
     clearLegacyEntries();
     return "cleared";
-  }
+  };
 
-  await clearPendingGuestSave();
-  return "cleared";
+  const db = await openDatabase();
+  if (!db) return clearLegacyIfUnchanged();
+
+  try {
+    const outcome = await deleteRecordIfMatches(db, isSame, now);
+    // 레코드가 없으면 예전 보관물이 이번 인계였을 수 있다. 그쪽을 본다.
+    if (outcome === "absent") return clearLegacyIfUnchanged();
+    // 지웠으면 예전 키도 같이 걷는다(setPendingGuestSave 와 같은 규칙).
+    if (outcome === "cleared") clearLegacyEntries();
+    return outcome;
+  } catch {
+    // 읽다 깨졌다. 아무것도 지우지 않는다 — 읽기 경로와 같은 판단이다.
+    return "unreadable";
+  } finally {
+    db.close();
+  }
 }
 
 export async function getPendingGuestSave(

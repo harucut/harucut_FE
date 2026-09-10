@@ -73,6 +73,7 @@ beforeEach(() => {
     notice: null,
   });
   sessionState.frameId = "classic-4";
+  sessionState.eventName = null;
   sessionState.shots = [];
   // 진짜 importPhotoFiles 처럼 상한만큼만 변환한 결과를 돌려준다.
   mockImportPhotoFiles.mockImplementation(
@@ -295,7 +296,27 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
 
     render(<ShootUploadPage />);
 
-    expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted");
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/shoot?guestNotice=restricted&frame=classic-4",
+    );
+  });
+
+  /*
+    회귀 — **되돌릴 때 행사 이름과 고른 프레임을 잃지 않는다.**
+
+    `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 새 촬영으로 보고 세션을 비운다. 고정 주소로
+    보내면 행사 배너와 QR 이 지정한 프레임이 함께 사라져, 참가자가 기본 프레임으로 찍게 된다.
+    막는 것은 회원 전용 경로 하나지 행사 진입 전체가 아니다.
+  */
+  it("되돌릴 때 행사 이름과 프레임을 들려 보낸다", () => {
+    sessionState.eventName = "hongdae-2026";
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+
+    render(<ShootUploadPage />);
+
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/shoot?guestNotice=restricted&frame=classic-4&event=hongdae-2026",
+    );
   });
 
   /*
@@ -310,7 +331,9 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
       useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
     });
 
-    expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted");
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/shoot?guestNotice=restricted&frame=classic-4",
+    );
   });
 
   /*
