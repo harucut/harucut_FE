@@ -230,14 +230,26 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
         }),
     ) as unknown as typeof fetch;
 
-    const pending = clientApi.get("/api/client/user-info", {
-      signal: controller.signal,
-    });
-    controller.abort();
+    jest.useFakeTimers();
+    try {
+      const pending = clientApi.get("/api/client/user-info", {
+        signal: controller.signal,
+      });
+      controller.abort();
 
-    // 끊겼으므로 재발급은 실패로 접히고, 원요청의 401 이 그대로 올라온다.
-    // 고치기 전에는 이 약속이 영영 안 끝났다.
-    await expect(pending).rejects.toBeDefined();
+      // 끊겼으므로 재발급은 실패로 접히고, 원요청의 401 이 그대로 올라온다.
+      // 고치기 전에는 이 약속이 영영 안 끝났다.
+      await expect(pending).rejects.toBeDefined();
+
+      /*
+        **공유 슬롯을 비워 두고 나간다.** 호출부는 끊겼지만 왕복은 자기 상한(30초)까지
+        계속 도는데(슬롯은 그때 풀린다 — 그래야 아직 도는 왕복과 새 왕복이 나란히 돌지
+        않는다), 그대로 두면 이 파일의 뒤 테스트들이 그 왕복을 물고 멈춘다.
+      */
+      await jest.advanceTimersByTimeAsync(31_000);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   /*

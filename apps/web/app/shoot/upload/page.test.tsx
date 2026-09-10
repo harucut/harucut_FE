@@ -63,11 +63,19 @@ function photoFiles(count: number) {
   );
 }
 
-function renderPage(shots: string[] = []) {
+/*
+  이 화면은 **회원으로 확인된 뒤에** 조작이 열린다(page.tsx 의 `memberOnlyLocked`).
+  그래서 렌더만 하고 파일을 넣으면 입력이 아직 `disabled` 라 아무 일도 일어나지 않는다.
+  여기서 그 확인을 기다린다 — 각 테스트가 매번 같은 대기를 적지 않도록.
+*/
+async function renderPage(shots: string[] = []) {
   sessionState.shots = shots;
   const { container, unmount } = render(<ShootUploadPage />);
   const input = container.querySelector<HTMLInputElement>('input[type="file"]');
   if (!input) throw new Error("파일 입력이 없다");
+  await waitFor(() => {
+    expect(input).not.toBeDisabled();
+  });
   return { input, unmount };
 }
 
@@ -79,7 +87,8 @@ beforeEach(() => {
     hydrated: true,
     notice: null,
   });
-  mockResolveMembership.mockResolvedValue("guest");
+  // 평범한 경우는 회원이다. 게스트 갈래는 아래 describe 가 따로 세운다.
+  mockResolveMembership.mockResolvedValue("member");
   sessionState.frameId = "classic-4";
   sessionState.eventName = null;
   sessionState.shots = [];
@@ -100,7 +109,7 @@ beforeEach(() => {
 
 describe("사진 불러오기 개수 상한", () => {
   it("너무 많이 골라도 고른 것을 통째로 넘기고 상한은 인자로 준다", async () => {
-    const { input } = renderPage([]);
+    const { input } = await renderPage([]);
 
     fireEvent.change(input, { target: { files: photoFiles(PICKED_TOO_MANY) } });
 
@@ -150,7 +159,7 @@ describe("사진 불러오기 개수 상한", () => {
         };
       },
     );
-    const { input } = renderPage([]);
+    const { input } = await renderPage([]);
 
     // 상한(칸 수의 여섯 배)을 채울 만큼의 heic 뒤에 쓸 수 있는 네 장.
     const files = [
@@ -169,14 +178,14 @@ describe("사진 불러오기 개수 상한", () => {
 
   it("이미 담아 둔 것까지 세어, 꽉 찼으면 변환을 아예 시작하지 않는다", async () => {
     // 한 번 고른 상한만큼 이미 들고 있는 상태를 만든다.
-    const { input } = renderPage([]);
+    const { input } = await renderPage([]);
     fireEvent.change(input, { target: { files: photoFiles(PICKED_TOO_MANY) } });
     await waitFor(() => expect(mockImportPhotoFiles).toHaveBeenCalledTimes(1));
     const cap = (mockImportPhotoFiles.mock.calls[0][1] as { limit: number })
       .limit;
 
     jest.clearAllMocks();
-    const full = renderPage(
+    const full = await renderPage(
       Array.from({ length: cap }, (_, index) => `data:image/jpeg;base64,${index}`),
     );
 
@@ -192,7 +201,7 @@ describe("사진 불러오기 개수 상한", () => {
 
   // 상한은 평범한 사용을 건드리면 안 된다.
   it("네 컷을 채울 만큼만 고르면 한 장도 빠지지 않는다", async () => {
-    const { input } = renderPage([]);
+    const { input } = await renderPage([]);
 
     fireEvent.change(input, { target: { files: photoFiles(SLOT_COUNT) } });
 
@@ -205,14 +214,14 @@ describe("사진 불러오기 개수 상한", () => {
 
   // 남은 자리는 이미 담아 둔 것을 뺀 만큼이다.
   it("이미 담아 둔 것이 있으면 남은 자리만 상한으로 넘긴다", async () => {
-    const { input } = renderPage([]);
+    const { input } = await renderPage([]);
     fireEvent.change(input, { target: { files: photoFiles(PICKED_TOO_MANY) } });
     await waitFor(() => expect(mockImportPhotoFiles).toHaveBeenCalledTimes(1));
     const cap = (mockImportPhotoFiles.mock.calls[0][1] as { limit: number })
       .limit;
 
     jest.clearAllMocks();
-    const held = renderPage(
+    const held = await renderPage(
       Array.from({ length: cap - 2 }, (_, index) => `data:image/jpeg;base64,${index}`),
     );
 
@@ -244,7 +253,7 @@ describe("사진 불러오기 개수 상한", () => {
           finishImport = resolve;
         }),
     );
-    const { input, unmount } = renderPage([]);
+    const { input, unmount } = await renderPage([]);
 
     fireEvent.change(input, { target: { files: photoFiles(SLOT_COUNT) } });
     await waitFor(() => expect(mockImportPhotoFiles).toHaveBeenCalledTimes(1));
@@ -273,7 +282,7 @@ describe("사진 불러오기 개수 상한", () => {
       notice: "2장은 읽지 못해 제외했어요.",
       overLimitCount: 1,
     });
-    const { input } = renderPage([]);
+    const { input } = await renderPage([]);
 
     fireEvent.change(input, { target: { files: photoFiles(PICKED_TOO_MANY) } });
 
@@ -300,6 +309,7 @@ describe("사진 불러오기 개수 상한", () => {
 */
 describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => {
   it("게스트로 확인되면 촬영 화면으로 되돌린다", async () => {
+    mockResolveMembership.mockResolvedValue("guest");
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
 
     render(<ShootUploadPage />);
@@ -319,6 +329,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     막는 것은 회원 전용 경로 하나지 행사 진입 전체가 아니다.
   */
   it("되돌릴 때 행사 이름과 프레임을 들려 보낸다", async () => {
+    mockResolveMembership.mockResolvedValue("guest");
     sessionState.eventName = "hongdae-2026";
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
 
@@ -339,6 +350,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     render(<ShootUploadPage />);
     expect(mockReplace).not.toHaveBeenCalled();
 
+    mockResolveMembership.mockResolvedValue("guest");
     act(() => {
       useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
     });
@@ -388,6 +400,53 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     expect(screen.getByRole("button", { name: "사진 고르기" })).toBeDisabled();
   });
 
+  /*
+    회귀 — **되돌리면 진행 중이던 변환도 버린다.**
+
+    잠그기 전에 시작된 변환이 되돌리는 사이에 끝나면 그 사진이 **전역 촬영 세션**에 담긴다.
+    고르기·결과는 게스트 허용 경로라, 그 뒤로는 아무도 막지 않고 합성까지 간다 —
+    화면을 내보내는 것만으로는 안 막히는 자리다.
+  */
+  it("게스트로 되돌릴 때 진행 중이던 변환 결과는 담지 않는다", async () => {
+    let finishImport!: (result: {
+      dataUrls: string[];
+      notice: string | null;
+      overLimitCount: number;
+    }) => void;
+    mockImportPhotoFiles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishImport = resolve;
+        }),
+    );
+
+    // 회원으로 확인돼 잠금이 풀린 상태에서 변환을 시작한다.
+    const { input } = await renderPage([]);
+    fireEvent.change(input, { target: { files: photoFiles(SLOT_COUNT) } });
+    await waitFor(() => expect(mockImportPhotoFiles).toHaveBeenCalledTimes(1));
+
+    // 그 사이 게스트로 뒤집힌다(행사 화면의 늦은 판정).
+    mockResolveMembership.mockResolvedValue("guest");
+    act(() => {
+      useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    });
+    await waitFor(() => expect(mockReplace).toHaveBeenCalled());
+
+    await act(async () => {
+      finishImport({
+        dataUrls: Array.from(
+          { length: SLOT_COUNT },
+          (_, index) => `data:image/jpeg;base64,late-${index}`,
+        ),
+        notice: null,
+        overLimitCount: 0,
+      });
+    });
+
+    // 고치기 전에는 여기서 세션에 담겨, 고르기·결과가 그대로 이어졌다.
+    expect(mockAddShotPhotos).not.toHaveBeenCalled();
+  });
+
   // 반대쪽 못 — 회원으로 확인되면 잠금이 풀린다. 없으면 「늘 잠근다」로 고쳐도 통과한다.
   it("회원으로 확인되면 잠금이 풀린다", async () => {
     mockResolveMembership.mockResolvedValue("member");
@@ -407,16 +466,43 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     `accessMode` 의 초깃값이 "member" 라 `hydrated` 를 안 보면 진짜 회원이 한 프레임
     동안 튕긴다. 이 못이 없으면 "무조건 되돌린다"로 고쳐도 위 둘이 통과한다.
   */
-  it("회원은 묻지도 않고 그대로 머무른다", async () => {
+  /*
+    회원도 **묻는다.** 기준을 쿠키가 아니라 서버의 답으로 두었기 때문이다 — `accessMode` 의
+    초깃값이 "member" 라 쿠키로 잠그면 잠금이 처음부터 풀려 있고, 행사 진입에서 앞 화면의
+    판정을 기다리는 사람이 그 틈에 사진을 담아 다음 화면으로 넘어갈 수 있다.
+    값은 왕복 하나다(재발급은 clientApi 가 하나로 묶는다).
+  */
+  it("회원으로 확인되면 머무르고 조작이 열린다", async () => {
     render(<ShootUploadPage />);
 
-    await act(async () => {});
-    expect(mockResolveMembership).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "사진 고르기" }),
+      ).not.toBeDisabled();
+    });
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
+  /*
+    회귀 — **확인되기 전에는 잠겨 있다.** 이 못이 없으면 「처음부터 열어 둔다」로 고쳐도
+    나머지가 통과한다. 행사 진입의 죽은 쿠키 사용자가 그 틈을 쓰던 자리다.
+  */
+  it("확인되기 전에는 잠겨 있다", () => {
+    // 답을 붙잡아 둔다 — 판정이 아직 안 끝난 순간이다.
+    mockResolveMembership.mockImplementation(() => new Promise(() => {}));
+    // 다음 단계 버튼은 사진이 모자라도 비활성이라, 잠금만 재려면 채워 둬야 한다.
+    sessionState.shots = ["data:1", "data:2", "data:3", "data:4"];
+
+    render(<ShootUploadPage />);
+
+    expect(screen.getByRole("button", { name: "사진 고르기" })).toBeDisabled();
+    // 사진이 없으면 라벨이 안내 문구다 — 잠금과는 별개로 이미 비활성이라, 잠금만
+    // 재려면 사진을 담아 둔 상태로 봐야 한다(아래 테스트).
+    expect(screen.getByRole("button", { name: "다음 단계로" })).toBeDisabled();
+  });
+
   it("쿠키를 읽기 전에는 묻지도 되돌리지도 않는다", async () => {
-    useGuestTrialStore.setState({ accessMode: "guest", hydrated: false });
+    useGuestTrialStore.setState({ accessMode: "member", hydrated: false });
 
     render(<ShootUploadPage />);
 

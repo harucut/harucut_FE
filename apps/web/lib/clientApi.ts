@@ -189,16 +189,6 @@ async function requestReissue(): Promise<ReissueResult> {
  */
 let pendingReissue: Promise<ReissueResult> | null = null;
 
-/**
- * 그 재발급을 지금 몇이 기다리는가.
- *
- * 세는 이유는 **멈춘 재발급이 탭을 통째로 막지 않게** 하기 위해서다. 하나로 묶어 놓으면
- * 답이 영영 안 오는 왕복 하나가 그 뒤의 모든 재발급을 물고 있게 된다. 기다리던 쪽이 자기
- * 상한으로 다 떠나면 슬롯을 놓아, 다음 호출부는 새로 시작한다. (앞 왕복은 남아 있을 수
- * 있다 — 쿠키 하나를 받는 요청이라 그 비용은 작다고 봤다.)
- */
-let reissueWaiters = 0;
-
 /** 이 signal 이 끊기면 「재발급 못 했다」로 답한다 — 기다리기를 그만두는 자리다. */
 function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
   return new Promise((resolve) => {
@@ -219,35 +209,22 @@ function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
  * 뒤에 붙은 호출부의 재발급까지 함께 죽기 때문이다. 대신 **기다리는 쪽**에 signal 을 건다 —
  * 끊긴 호출부는 `unavailable` 을 받아 자기 실패로 넘어가고(그러면 `resolveMembership` 은
  * `guest` 가 아니라 `unknown` 으로 답한다), 왕복은 남은 호출부를 위해 계속 간다.
+ *
+ * **슬롯은 왕복이 실제로 끝날 때까지 쥔다.** 한때 「기다리는 쪽이 다 떠나면 놓는다」로
+ * 두었는데, 그러면 호출부의 상한(30초)이 왕복의 상한(같은 30초)보다 조금이라도 먼저 끊길
+ * 때 슬롯이 먼저 비고 **아직 도는 왕복과 새 왕복이 나란히** 돌았다 — 같은 refresh 쿠키로
+ * 회전 두 개, 곧 이 단일화가 막으려던 그 경쟁이다. 멈춘 왕복이 탭을 영영 막는 문제는
+ * 이제 왕복 자체의 상한(`REISSUE_DEADLINE_MS`)이 맡는다.
  */
 function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
   if (!pendingReissue) {
-    pendingReissue = requestReissue();
+    pendingReissue = requestReissue().finally(() => {
+      pendingReissue = null;
+    });
   }
 
   const shared = pendingReissue;
-  const settled = () => {
-    reissueWaiters -= 1;
-    // 이 왕복을 기다리는 쪽이 아무도 안 남았으면 슬롯을 놓는다. 끝났으면 정리이고,
-    // 아직 도는 중이면 「멈춘 왕복이 다음 재발급을 막지 않게」 하는 자리다.
-    if (reissueWaiters === 0 && pendingReissue === shared) pendingReissue = null;
-  };
-
-  reissueWaiters += 1;
-  const waited = signal
-    ? Promise.race([shared, abortedAsUnavailable(signal)])
-    : shared;
-
-  return waited.then(
-    (result) => {
-      settled();
-      return result;
-    },
-    (error) => {
-      settled();
-      throw error;
-    },
-  );
+  return signal ? Promise.race([shared, abortedAsUnavailable(signal)]) : shared;
 }
 
 /**

@@ -117,21 +117,28 @@ export default function ShootUploadPage() {
   const guestHydrated = useGuestTrialStore((state) => state.hydrated);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
+  /** 서버가 「회원」이라고 답했는가. 이 화면의 조작은 그 뒤에 열린다. */
+  const [memberConfirmed, setMemberConfirmed] = useState(false);
 
   useEffect(() => {
-    if (!guestHydrated || accessMode !== "guest") return;
+    if (!guestHydrated) return;
 
     void (async () => {
       const membership = await resolveMembership();
 
-      // 낡은 게스트 쿠키를 든 회원이다. 쿠키를 걷고 이 화면에 그대로 둔다.
       if (membership === "member") {
-        exitGuestMode();
+        // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다. 그리고 조작을 연다.
+        if (accessMode === "guest") exitGuestMode();
+        setMemberConfirmed(true);
         return;
       }
-      // 못 물어봤으면(`unknown`) 아무것도 하지 않는다 — 서버가 잠깐 흔들렸다고 회원을
-      // 내보내지 않는다. 다음 진입에서 다시 판정된다.
+      // 못 물어봤으면(`unknown`) 내보내지 않는다 — 서버가 잠깐 흔들렸다고 회원을 쫓아내지
+      // 않는다. 다만 잠금은 그대로 둔다(아래 memberOnlyLocked).
       if (membership !== "guest") return;
+
+      // 확정된 게스트다. 진행 중이던 변환도 버린다 — 되돌리는 사이에 끝나면 그 사진이
+      // 세션에 남아 게스트 허용 경로(고르기·결과)에서 그대로 쓰인다.
+      importGenerationRef.current += 1;
 
       /*
         **되돌릴 때 행사 이름과 고른 프레임을 들려 보낸다.**
@@ -158,18 +165,20 @@ export default function ShootUploadPage() {
   /*
     **회원으로 확인되기 전까지 이 화면의 조작을 잠근다.**
 
-    위 effect 는 `guest` 로 확정됐을 때만 내보내고 `unknown` 이면 손을 뗀다 — 서버가 잠깐
-    흔들렸다고 회원을 쫓아내지 않기 위해서다. 그런데 그것만 두면 **이미 게스트인 사람**이
-    그 틈에 그대로 쓴다: 행사 화면이 게스트로 판정해 쿠키를 심은 뒤 이 화면이 열렸는데
-    여기 조회가 5xx 로 떨어지면, 되돌리지도 않고 막지도 않아 갤러리 불러오기를 끝까지 쓴다
-    (그 뒤 결과 화면은 같은 `accessMode` 를 보고 브라우저에서 합성한다).
+    기준이 쿠키가 아니라 **서버의 답**이다. `accessMode` 로 잠그면 그 초깃값이 "member" 라
+    잠금이 처음부터 풀려 있다 — 행사 진입에서 죽은 쿠키를 든 사람이 앞 화면의 판정을
+    기다리는 동안 여기 오면, 그 틈에 사진을 담아 `/shoot/select` 로 넘어갈 수 있다. 그 뒤
+    뒤늦게 게스트가 되어도 이 화면은 이미 언마운트라 되돌릴 자리가 없고, 고르기·결과는
+    게스트 허용 경로라 합성까지 끝난다.
 
-    그래서 「내보낸다」와 「쓰게 둔다」를 가른다 — 내보내는 것은 확정된 게스트뿐이고,
-    **쓰게 두는 것은 회원으로 확인된 뒤**다. 쿠키가 게스트인 동안은 잠가 둔다.
-    회원으로 확인되면 위 effect 가 `exitGuestMode()` 로 쿠키를 걷어 `accessMode` 가
-    `member` 가 되므로, 이 잠금은 그때 저절로 풀린다.
+    그래서 「내보낸다」와 「쓰게 둔다」를 가른다 — 내보내는 것은 **확정된 게스트**뿐이고,
+    쓰게 두는 것은 **회원으로 확인된 뒤**다. `unknown` 이면 머무르되 잠긴 채로 둔다.
+
+    **값을 치른다.** 회원도 이 화면에 올 때마다 왕복 하나를 기다린 뒤에야 사진을 고를 수
+    있다. 회원 전용 화면에서 회원임을 확인하고 여는 값이라고 봤다 — 그리고 그 왕복은
+    `clientApi` 가 재발급을 하나로 묶어 두어 여러 개로 불어나지 않는다.
   */
-  const memberOnlyLocked = guestHydrated && accessMode === "guest";
+  const memberOnlyLocked = !memberConfirmed;
 
   const overLimitNotice = (count: number) =>
     `사진은 최대 ${maxPhotos}장까지 담을 수 있어 ${count}장은 제외했어요.`;
@@ -319,7 +328,7 @@ export default function ShootUploadPage() {
         <button
           type="button"
           onClick={() => router.push("/shoot/select")}
-          disabled={!enough}
+          disabled={!enough || memberOnlyLocked}
           className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
           {enough ? "다음 단계로" : `사진을 ${minPhotos}장 이상 골라 주세요`}

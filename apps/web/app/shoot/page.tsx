@@ -96,9 +96,14 @@ function ShootPageContent() {
     미들웨어에서 이 판정을 하지 않는 이유(재발급은 토큰을 회전시키는 쓰기이고 프록시는 모든
     요청에 붙는다)는 그 분기 주석에 적어 뒀다.
 
-    **이미 게스트면 묻지 않는다** — 쿠키가 없어 프록시가 심어 준 경우이고, 답은 정해져 있다.
-    행사 진입이 아닐 때도 묻지 않는다. 여기서 일반 진입까지 물으면 촬영 화면을 열 때마다
-    인증 왕복이 하나 붙는다.
+    **이미 게스트여도 묻는다.** 한때 여기서 조기 반환했는데, 그러면 낡은 게스트 쿠키를 든
+    회원이 영영 회복되지 않는다 — 이 판정이 붙기 전 배포에서 체험을 눌러 본 사람이다.
+    프록시는 살아 있는 access 로 그 사람을 통과시키지만, 여기서 묻지 않으면 `exitGuestMode()`
+    가 불릴 자리가 없어 쿠키가 만료(7일)되거나 공개 CTA 를 다시 누를 때까지 저장 프레임이
+    숨고 결과도 브라우저 합성으로 처리된다.
+
+    행사 진입이 아닐 때는 묻지 않는다 — 그때까지 물으면 촬영 화면을 열 때마다 인증 왕복이
+    하나 붙는다. 회복이 필요한 사람에게는 공개 CTA 라는 다른 길이 있다.
 
     **화면을 떠나도 전환은 끝까지 간다 — cleanup 으로 접지 않는다.**
 
@@ -116,21 +121,30 @@ function ShootPageContent() {
     찍는다」가 이 흐름의 전부인데, 그 첫 동작을 인증 왕복 뒤로 미루게 된다.
   */
   const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
   const hydrated = useGuestTrialStore((state) => state.hydrated);
 
   useEffect(() => {
-    if (!queriedEventName || !hydrated || accessMode === "guest") return;
+    if (!queriedEventName || !hydrated) return;
 
     void (async () => {
       const membership = await resolveMembership();
-      // **확정된 비회원일 때만** 전환한다. 회원이면 쿠키를 덮지 않고, 못 물어본 경우
-      // (`unknown` — 5xx·회선 끊김·재발급 서버 장애)도 그대로 둔다. 잠깐 못 물어봤다는
-      // 이유로 7일짜리 쿠키를 심으면 멀쩡한 회원이 그동안 기록과 저장 프레임을 잃는다.
-      // 그때 이 사람은 회원 화면 그대로 남고, 서버가 돌아오면 다음 진입에서 판정된다.
+
+      /*
+        **확정된 답에만 움직인다.** `unknown`(5xx·회선 끊김·재발급 서버 장애)이면 아무것도
+        하지 않는다 — 잠깐 못 물어봤다는 이유로 7일짜리 쿠키를 심으면 멀쩡한 회원이 그동안
+        기록과 저장 프레임을 잃고, 반대로 걷으면 게스트가 회원 화면을 보게 된다.
+        서버가 돌아오면 다음 진입에서 판정된다.
+      */
+      if (membership === "member") {
+        // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다. 아니면 아무 일도 없다.
+        if (accessMode === "guest") exitGuestMode();
+        return;
+      }
       if (membership !== "guest") return;
-      enterGuestMode();
+      if (accessMode !== "guest") enterGuestMode();
     })();
-  }, [accessMode, enterGuestMode, hydrated, queriedEventName]);
+  }, [accessMode, enterGuestMode, exitGuestMode, hydrated, queriedEventName]);
 
   return (
     <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">

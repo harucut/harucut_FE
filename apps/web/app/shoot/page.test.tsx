@@ -312,14 +312,48 @@ describe("행사 QR 진입의 게스트 전환", () => {
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
 
-  // 이미 게스트면 답이 정해져 있다 — 쿠키가 없어 프록시가 심어 준 경우다.
-  it("이미 체험 중이면 다시 묻지 않는다", async () => {
+  /*
+    회귀 — **이미 게스트여도 묻는다.**
+
+    한때 여기서 조기 반환했는데, 그러면 낡은 게스트 쿠키를 든 회원이 영영 회복되지 않는다 —
+    이 판정이 붙기 전 배포에서 체험을 눌러 본 사람이다. 프록시는 살아 있는 access 로 그
+    사람을 통과시키지만, 여기서 묻지 않으면 `exitGuestMode()` 가 불릴 자리가 없어 쿠키가
+    만료(7일)되거나 공개 CTA 를 다시 누를 때까지 저장 프레임이 숨는다.
+  */
+  it("이미 체험 중이어도 회원이면 낡은 쿠키를 걷는다", async () => {
     mockQuery = "frame=classic-4&event=hongdae-2026";
-    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    useGuestTrialStore.getState().enterGuestMode();
+    mockResolveMembership.mockResolvedValue("member");
+
+    render(<ShootPage />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().accessMode).toBe("member");
+    });
+    expect(document.cookie).not.toContain(`${GUEST_TRIAL_COOKIE}=1`);
+  });
+
+  // 반대쪽 못 — 게스트로 확인되면 그대로 둔다. 없으면 「늘 걷는다」로 고쳐도 통과한다.
+  it("이미 체험 중이고 게스트로 확인되면 그대로 둔다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    useGuestTrialStore.getState().enterGuestMode();
+    mockResolveMembership.mockResolvedValue("guest");
 
     render(<ShootPage />);
 
     await act(async () => {});
-    expect(mockResolveMembership).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+  });
+
+  // 판정할 수 없으면 어느 쪽으로도 움직이지 않는다.
+  it("이미 체험 중이고 판정할 수 없으면 그대로 둔다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    useGuestTrialStore.getState().enterGuestMode();
+    mockResolveMembership.mockResolvedValue("unknown");
+
+    render(<ShootPage />);
+
+    await act(async () => {});
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
   });
 });
