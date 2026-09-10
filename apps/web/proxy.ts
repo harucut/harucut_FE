@@ -11,6 +11,30 @@ import {
   isProtectedPath,
 } from "@/lib/protectedPaths";
 
+/**
+ * 게스트를 촬영 화면으로 되돌릴 주소. **행사 상태를 들고 간다.**
+ *
+ * `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다
+ * (app/shoot/page.tsx). 그래서 고정된 `/shoot?guestNotice=restricted` 로 보내면 행사
+ * 배너와 QR 이 지정한 프레임이 그대로 사라진다 — 막는 것은 회원 전용 경로 하나지 행사
+ * 진입 전체가 아니다.
+ *
+ * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 그래서 프레임 선택
+ * 화면이 갤러리 불러오기로 보낼 때 `frame`·`event` 를 주소에 싣는다(그 화면 주석 참고) —
+ * 이 함수가 그것을 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
+ */
+function restrictedShootUrl(req: NextRequest) {
+  const url = new URL("/shoot", req.url);
+  url.searchParams.set("guestNotice", "restricted");
+
+  for (const key of ["frame", EVENT_ENTRY_QUERY]) {
+    const value = req.nextUrl.searchParams.get(key)?.trim();
+    if (value) url.searchParams.set(key, value);
+  }
+
+  return url;
+}
+
 /** 소셜 로그인 콜백 경로. 아래 matcher 와 같은 값을 쓴다. */
 const SOCIAL_LOGIN_CALLBACK = "/oauth2/callback";
 
@@ -233,9 +257,7 @@ export async function proxy(req: NextRequest) {
     회원 전용 경로로 넘어가는 것"까지고, 실제 집행은 백엔드가 한다.
   */
   if (guestMode && isGuestMemberOnlyPath(pathname)) {
-    const shootUrl = new URL("/shoot", req.url);
-    shootUrl.searchParams.set("guestNotice", "restricted");
-    return NextResponse.redirect(shootUrl);
+    return NextResponse.redirect(restrictedShootUrl(req));
   }
 
   /*
@@ -261,9 +283,7 @@ export async function proxy(req: NextRequest) {
       return NextResponse.next();
     }
 
-    const shootUrl = new URL("/shoot", req.url);
-    shootUrl.searchParams.set("guestNotice", "restricted");
-    return NextResponse.redirect(shootUrl);
+    return NextResponse.redirect(restrictedShootUrl(req));
   }
 
   const loginUrl = new URL("/login", req.url);

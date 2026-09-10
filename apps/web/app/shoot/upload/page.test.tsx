@@ -370,8 +370,13 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  // 못 물어봤으면 아무것도 하지 않는다 — 서버가 잠깐 흔들렸다고 회원을 내보내지 않는다.
-  it("판정할 수 없으면 내보내지 않는다", async () => {
+  /*
+    못 물어봤으면 내보내지는 않는다 — 서버가 잠깐 흔들렸다고 회원을 쫓아내지 않는다.
+    **다만 쓰게 두지도 않는다.** 그것만 두면 이미 게스트인 사람이 그 틈에 갤러리
+    불러오기를 끝까지 쓴다(그 뒤 결과 화면은 같은 `accessMode` 를 보고 브라우저에서
+    합성한다). 내보내는 것은 확정된 게스트뿐이고, 쓰게 두는 것은 회원으로 확인된 뒤다.
+  */
+  it("판정할 수 없으면 내보내지도, 쓰게 두지도 않는다", async () => {
     mockResolveMembership.mockResolvedValue("unknown");
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
 
@@ -380,6 +385,21 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     await act(async () => {});
     expect(mockReplace).not.toHaveBeenCalled();
     expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+    expect(screen.getByRole("button", { name: "사진 고르기" })).toBeDisabled();
+  });
+
+  // 반대쪽 못 — 회원으로 확인되면 잠금이 풀린다. 없으면 「늘 잠근다」로 고쳐도 통과한다.
+  it("회원으로 확인되면 잠금이 풀린다", async () => {
+    mockResolveMembership.mockResolvedValue("member");
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+
+    render(<ShootUploadPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "사진 고르기" }),
+      ).not.toBeDisabled();
+    });
   });
 
   /*

@@ -174,7 +174,24 @@ function ShootPageContent() {
               resetShots();
             }
 
-            router.push(source === "upload" ? "/shoot/upload" : "/shoot/capture");
+            /*
+              **갤러리 불러오기로 갈 때는 행사·프레임을 주소에 실어 보낸다.**
+
+              그 경로는 회원 전용이라 게스트 쿠키가 이미 있으면 **화면이 마운트되기 전에**
+              프록시가 막는다. 프록시는 세션을 못 보므로, 되돌릴 주소에 넣을 것이 요청에
+              실려 있지 않으면 행사 배너와 QR 이 지정한 프레임이 그대로 사라진다
+              (`/shoot` 은 쿼리 없는 진입을 새 촬영으로 보고 세션을 비운다).
+
+              업로드 화면 자체는 이 쿼리를 읽지 않는다 — 세션에서 같은 값을 꺼낸다.
+              여기 싣는 이유는 **프록시가 되돌릴 때 잃지 않기 위해서**다.
+            */
+            if (source === "upload") {
+              const next = new URLSearchParams({ frame: frameId });
+              if (eventName) next.set("event", eventName);
+              router.push(`/shoot/upload?${next.toString()}`);
+              return;
+            }
+            router.push("/shoot/capture");
           }}
           missingRemoteFrameNotice={
             <p

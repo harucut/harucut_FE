@@ -155,6 +155,22 @@ export default function ShootUploadPage() {
     router,
   ]);
 
+  /*
+    **회원으로 확인되기 전까지 이 화면의 조작을 잠근다.**
+
+    위 effect 는 `guest` 로 확정됐을 때만 내보내고 `unknown` 이면 손을 뗀다 — 서버가 잠깐
+    흔들렸다고 회원을 쫓아내지 않기 위해서다. 그런데 그것만 두면 **이미 게스트인 사람**이
+    그 틈에 그대로 쓴다: 행사 화면이 게스트로 판정해 쿠키를 심은 뒤 이 화면이 열렸는데
+    여기 조회가 5xx 로 떨어지면, 되돌리지도 않고 막지도 않아 갤러리 불러오기를 끝까지 쓴다
+    (그 뒤 결과 화면은 같은 `accessMode` 를 보고 브라우저에서 합성한다).
+
+    그래서 「내보낸다」와 「쓰게 둔다」를 가른다 — 내보내는 것은 확정된 게스트뿐이고,
+    **쓰게 두는 것은 회원으로 확인된 뒤**다. 쿠키가 게스트인 동안은 잠가 둔다.
+    회원으로 확인되면 위 effect 가 `exitGuestMode()` 로 쿠키를 걷어 `accessMode` 가
+    `member` 가 되므로, 이 잠금은 그때 저절로 풀린다.
+  */
+  const memberOnlyLocked = guestHydrated && accessMode === "guest";
+
   const overLimitNotice = (count: number) =>
     `사진은 최대 ${maxPhotos}장까지 담을 수 있어 ${count}장은 제외했어요.`;
 
@@ -220,6 +236,7 @@ export default function ShootUploadPage() {
           accept={SUPPORTED_IMAGE_ACCEPT}
           multiple
           onChange={handleChangeFiles}
+          disabled={memberOnlyLocked}
           className="hidden"
         />
 
@@ -241,7 +258,7 @@ export default function ShootUploadPage() {
             await nativeEnsureCameraPermission();
             fileInputRef.current?.click();
           }}
-          disabled={isImporting}
+          disabled={isImporting || memberOnlyLocked}
           className="hc-button-secondary flex h-12 items-center justify-center gap-2 rounded-2xl border text-[14px] font-semibold disabled:opacity-50"
         >
           <ImagePlus className="h-4.5 w-4.5" />

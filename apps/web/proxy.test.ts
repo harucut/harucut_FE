@@ -427,6 +427,40 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     다만 인증 쿠키가 **아예 없는** 체험 쿠키 단독은 예전 그대로 막힌다 — 위 완화가
     게스트 차단 자체를 끄지 않았다는 못이다.
   */
+  /*
+    회귀 — **되돌릴 때 행사 상태를 잃지 않는다.**
+
+    게스트 쿠키가 이미 있으면 이 차단은 **화면이 마운트되기 전에** 걸린다. 그래서 업로드
+    화면에 넣은 보존 로직이 아예 돌지 않는다 — 프록시가 고정 주소로 보내면 `/shoot` 이
+    쿼리 없는 진입을 새 촬영으로 보고 세션을 비워, 행사 배너와 QR 이 지정한 프레임이
+    사라진다. 막는 것은 회원 전용 경로 하나지 행사 진입 전체가 아니다.
+
+    미들웨어는 세션을 못 보므로 요청에 실려 온 것만 옮긴다 — 프레임 선택 화면이 그것을
+    싣는다(app/shoot/page.tsx).
+  */
+  test("회원 전용 경로를 막을 때 행사·프레임 쿼리를 들려 보낸다", async () => {
+    const response = await proxy(
+      request(
+        "/shoot/upload?frame=classic-4&event=hongdae-2026",
+        `${GUEST_TRIAL_COOKIE}=1`,
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      `${GUEST_RESTRICTED}&frame=classic-4&event=hongdae-2026`,
+    );
+  });
+
+  // 실려 오지 않았으면 옮길 것도 없다 — 예전 주소 모양이 그대로 동작한다.
+  test("실려 온 것이 없으면 예전 주소 그대로 되돌린다", async () => {
+    const response = await proxy(
+      request("/shoot/upload", `${GUEST_TRIAL_COOKIE}=1`),
+    );
+
+    expect(response.headers.get("location")).toBe(GUEST_RESTRICTED);
+  });
+
   test("체험 쿠키만 있으면 촬영 밖 보호 경로는 그대로 막는다", async () => {
     const response = await proxy(request("/history", `${GUEST_TRIAL_COOKIE}=1`));
 

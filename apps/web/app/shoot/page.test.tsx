@@ -143,6 +143,58 @@ describe("행사 이름", () => {
 });
 
 /*
+  ── 갤러리 불러오기로 보낼 때는 행사 상태를 주소에 싣는다 ──
+
+  그 경로는 회원 전용이라 게스트 쿠키가 이미 있으면 **화면이 마운트되기 전에** 프록시가
+  막는다. 프록시는 세션을 못 보므로, 되돌릴 주소에 넣을 것이 요청에 실려 있지 않으면
+  행사 배너와 QR 이 지정한 프레임이 그대로 사라진다 — `/shoot` 은 쿼리 없는 진입을
+  새 촬영으로 보고 세션을 비운다.
+
+  업로드 화면 자체는 이 쿼리를 읽지 않는다(세션에서 같은 값을 꺼낸다). 싣는 이유는
+  **프록시가 되돌릴 때 잃지 않기 위해서**다.
+*/
+describe("갤러리 불러오기로 보내는 주소", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useShootSession.setState({ shots: [], shotsFrameId: null });
+  });
+
+  it("행사 진입이면 프레임과 행사 이름을 실어 보낸다", () => {
+    mockQuery = "source=upload&event=hongdae-2026";
+    mockChosenFrameId = "grid-4";
+
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/shoot/upload?frame=grid-4&event=hongdae-2026",
+    );
+  });
+
+  // 행사가 아니어도 프레임은 싣는다 — 되돌아갈 때 고른 프레임을 잃지 않는다.
+  it("행사가 아니면 프레임만 실어 보낸다", () => {
+    mockQuery = "source=upload";
+    mockChosenFrameId = "classic-4";
+
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4");
+  });
+
+  // 반대쪽 못 — 촬영 경로는 예전 주소 그대로다(프록시가 막는 경로가 아니다).
+  it("촬영으로 갈 때는 주소를 건드리지 않는다", () => {
+    mockQuery = "event=hongdae-2026";
+    mockChosenFrameId = "grid-4";
+
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/shoot/capture");
+  });
+});
+
+/*
   ── 행사 QR 진입: 게스트 전환은 **여기서** 판정한다 ──
 
   프록시는 쿠키가 아예 없는 방문자에게만 체험 쿠키를 심는다. 쿠키가 남아 있는 브라우저는
