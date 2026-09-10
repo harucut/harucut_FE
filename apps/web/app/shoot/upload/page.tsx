@@ -10,6 +10,7 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import { importPhotoFiles } from "@/lib/photoImport";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 
 /**
@@ -87,6 +88,31 @@ export default function ShootUploadPage() {
     // 프레임 없이 바로 들어오면 어느 판형으로 만들지 알 수 없다.
     if (!frameId) router.replace("/shoot?source=upload");
   }, [frameId, router]);
+
+  /*
+    **갤러리 불러오기는 회원만 쓴다 — 화면에서도 집행한다.**
+
+    한동안 이 판정의 유일한 집행 지점이 프록시였다(`GUEST_MEMBER_ONLY_PREFIXES`). 그런데
+    프록시는 **요청이 올 때** 한 번 보고, 그 판정의 근거인 게스트 쿠키는 나중에 심길 수 있다.
+    행사 진입이 그렇다 — 인증 쿠키가 남은 브라우저는 프록시를 그대로 지나가고, 회원이
+    아니라는 판정은 화면이 인증 왕복 뒤에 내린다(app/shoot/page.tsx). 그 사이에
+    `/shoot?source=upload&event=...` 에서 「확인」을 누르면 이 화면이 **먼저** 열리고,
+    뒤늦게 게스트가 되어도 이미 들어와 있어 아무도 되돌리지 않았다.
+
+    그래서 여기서도 본다. 비회원 범위는 약관 제8조와 `@harucut/shared` 의
+    `GUEST_ALLOWED_ITEMS` 가 "사진 촬영과 이미지 저장"으로 못박는다 — 갤러리 불러오기는
+    거기 없다. 프록시와 같은 주소로 보내 안내 문구도 한 벌로 맞춘다.
+
+    **쿠키를 읽기 전에는 움직이지 않는다.** `accessMode` 의 초깃값이 "member" 라
+    `hydrated` 를 안 보면 진짜 회원이 한 프레임 동안 튕긴다.
+  */
+  const guestHydrated = useGuestTrialStore((state) => state.hydrated);
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
+
+  useEffect(() => {
+    if (!guestHydrated || accessMode !== "guest") return;
+    router.replace("/shoot?guestNotice=restricted");
+  }, [accessMode, guestHydrated, router]);
 
   const overLimitNotice = (count: number) =>
     `사진은 최대 ${maxPhotos}장까지 담을 수 있어 ${count}장은 제외했어요.`;

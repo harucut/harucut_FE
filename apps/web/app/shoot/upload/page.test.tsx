@@ -16,6 +16,7 @@
 import { act, fireEvent, render, waitFor, screen } from "@testing-library/react";
 import ShootUploadPage from "@/app/shoot/upload/page";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 /** 이 세션이 고른 프레임(`classic-4`)의 칸 수. 화면이 최소 장수와 상한을 뽑는 곳과 같다. */
 const SLOT_COUNT = FRAME_LAYOUTS["classic-4"].slots.length;
@@ -65,6 +66,12 @@ function renderPage(shots: string[] = []) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // 쿠키를 읽은 회원 상태에서 시작한다 — 아래 게스트 테스트만 이것을 바꾼다.
+  useGuestTrialStore.setState({
+    accessMode: "member",
+    hydrated: true,
+    notice: null,
+  });
   sessionState.frameId = "classic-4";
   sessionState.shots = [];
   // 진짜 importPhotoFiles 처럼 상한만큼만 변환한 결과를 돌려준다.
@@ -267,5 +274,61 @@ describe("사진 불러오기 개수 상한", () => {
     expect(
       screen.getByText(/2장은 읽지 못해 제외했어요/),
     ).toBeInTheDocument();
+  });
+});
+
+/*
+  ── 갤러리 불러오기는 회원만 쓴다 ──
+
+  한동안 이 판정의 유일한 집행 지점이 프록시였다(`GUEST_MEMBER_ONLY_PREFIXES`). 그런데
+  프록시는 **요청이 올 때** 한 번 보고, 그 판정의 근거인 게스트 쿠키는 나중에 심길 수 있다 —
+  행사 진입이 그렇다(app/shoot/page.tsx 가 인증 왕복 뒤에 판정한다). 그 사이에
+  `/shoot?source=upload&event=...` 에서 확인을 누르면 이 화면이 먼저 열리고, 뒤늦게
+  게스트가 되어도 이미 들어와 있어 아무도 되돌리지 않았다.
+
+  비회원 범위는 약관 제8조와 `@harucut/shared` 의 `GUEST_ALLOWED_ITEMS` 가 "사진 촬영과
+  이미지 저장"으로 못박는다 — 갤러리 불러오기는 거기 없다.
+*/
+describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => {
+  it("게스트로 확인되면 촬영 화면으로 되돌린다", () => {
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+
+    render(<ShootUploadPage />);
+
+    expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted");
+  });
+
+  /*
+    이 화면이 열린 **뒤에** 게스트가 되는 경우가 이번에 잡힌 자리다 — 행사 진입의 판정이
+    인증 왕복 뒤에 끝난다. 마운트 시점만 보면 그 순간을 놓친다.
+  */
+  it("들어온 뒤에 게스트가 되어도 되돌린다", () => {
+    render(<ShootUploadPage />);
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    act(() => {
+      useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted");
+  });
+
+  /*
+    반대쪽 못 둘. 회원은 그대로 쓰고, **쿠키를 읽기 전에는 움직이지 않는다** —
+    `accessMode` 의 초깃값이 "member" 라 `hydrated` 를 안 보면 진짜 회원이 한 프레임
+    동안 튕긴다. 이 못이 없으면 "무조건 되돌린다"로 고쳐도 위 둘이 통과한다.
+  */
+  it("회원은 그대로 머무른다", () => {
+    render(<ShootUploadPage />);
+
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("쿠키를 읽기 전에는 되돌리지 않는다", () => {
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: false });
+
+    render(<ShootUploadPage />);
+
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });
