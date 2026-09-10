@@ -638,6 +638,75 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     });
   });
 
+  /*
+    회귀 — **같은 화면에 머물러도 회선이 돌아오면 다시 묻는다.**
+
+    cleanup 이 표식을 되돌리기는 하지만 그것은 **effect 가 다시 돌 때**(주소가 바뀌거나
+    언마운트될 때)뿐이다. 화면을 옮기지 않고 그대로 있으면 서버가 회복돼도 아무 일도
+    일어나지 않아, 보관된 네컷의 저장 안내가 이 화면에서는 영영 안 뜬다.
+  */
+  it("판정에 실패해도 회선이 돌아오면 같은 화면에서 다시 묻는다", async () => {
+    setSession("unknown");
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+    expect(screen.queryByRole("button", { name: "이 계정에 저장하기" })).toBeNull();
+
+    // 서버가 돌아왔다. 화면을 옮기지 않는다 — 브라우저가 회선 복구를 알려 준다.
+    setSession("member");
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // 탭으로 돌아오는 것도 같은 신호다 — 백그라운드에서 회선이 돌아온 경우를 덮는다.
+  it("판정에 실패해도 탭으로 돌아오면 다시 묻는다", async () => {
+    setSession("unknown");
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+
+    setSession("member");
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  /*
+    반대쪽 못 — **이미 물어본 화면에서는 그 신호에 다시 묻지 않는다.** 늘 듣게 두면 탭을
+    오갈 때마다 판정이 다시 돌아 헛왕복이 붙는다.
+  */
+  it("이미 물어본 화면에서는 탭을 오가도 다시 묻지 않는다", async () => {
+    setSession("member");
+
+    render(<GuestTrialBridge />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+    const asked = mockResolveMembership.mock.calls.length;
+
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("online"));
+    });
+
+    expect(mockResolveMembership.mock.calls.length).toBe(asked);
+  });
+
   // 반대쪽 못 — 확정된 비회원에게는 묻지 않고, 다시 묻지도 않는다.
   it("확정된 비회원에게는 묻지 않는다", async () => {
     setSession("guest");
@@ -651,6 +720,28 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     await flushAsync();
 
     expect(screen.queryByRole("button", { name: "이 계정에 저장하기" })).toBeNull();
+  });
+
+  /*
+    반대쪽 못 — **확정된 비회원에게는 재시도 신호도 듣지 않는다.**
+
+    신호를 늘 듣게 두면 탭을 오갈 때마다 판정이 다시 돌아, 답이 이미 정해진 사람에게
+    인증 왕복이 계속 붙는다. 듣는 것은 `unknown` 으로 끝난 회차가 있을 때뿐이어야 한다.
+  */
+  it("확정된 비회원에게는 탭을 오가도 다시 묻지 않는다", async () => {
+    setSession("guest");
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+    const asked = mockResolveMembership.mock.calls.length;
+
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await flushAsync();
+
+    expect(mockResolveMembership.mock.calls.length).toBe(asked);
   });
 
   it("보관물을 지울 때는 보관소의 조건부 삭제에 맡긴다", async () => {

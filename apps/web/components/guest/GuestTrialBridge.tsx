@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { josa } from "@harucut/shared";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GuestTrialOverlay } from "@/components/guest/GuestTrialOverlay";
 import { getApiErrorDetails } from "@/lib/apiError";
 import { describeComposeFailure } from "@/lib/fourcutCompose";
@@ -117,6 +117,15 @@ export function GuestTrialBridge() {
   // 물어본 것과 실제로 올리는 것이 갈리지 않게, **누른 시점에 보관물을 다시 읽는다**
   // (아래 runPendingSave) — 안내를 열어 둔 사이 기한이 지나거나 갈아 끼워질 수 있다.
   const handoffPromptedRef = useRef(false);
+  /**
+   * 회원 판정을 **못 한 채로** 끝난 회차가 있는가(`unknown`).
+   *
+   * 켜져 있는 동안만 아래 재시도 신호를 듣는다. 늘 듣게 두면 탭을 오갈 때마다 판정이
+   * 다시 돌아, 이미 물어본 화면에서 헛왕복이 붙는다.
+   */
+  const [membershipUnknown, setMembershipUnknown] = useState(false);
+  /** 판정을 다시 돌리는 손잡이. 아래 effect 의 의존성이라 값이 바뀌면 한 회차가 더 돈다. */
+  const [membershipRetryToken, setMembershipRetryToken] = useState(0);
   /*
     저장이 도는 중인가.
 
@@ -373,14 +382,24 @@ export function GuestTrialBridge() {
         묶이고, 아래에서 `handoffPromptedRef` 를 이미 세워 둔 탓에 같은 화면에서는 다시
         묻지도 않는다 — 다른 API 가 곧 토큰을 되살려도 새로고침 전까지 그대로다.
 
-        **못 물어봤으면(`unknown`) 다음 회차에 다시 묻는다.** 서버가 잠깐 흔들린 것뿐인데
-        「이미 물어봤다」로 남으면 이번 화면에서 인계가 통째로 사라진다. 여기서 따로 표식을
-        되돌리지는 않는다 — 아래 cleanup 이 「묻지 못하고 끝난 회차」의 표식을 이미 되돌린다
-        (`if (!prompted && !handoffSavingRef.current)`). 두 자리에서 같은 일을 하면 어느 쪽이
-        살아 있는지 아무도 모르게 된다.
+        **못 물어봤으면(`unknown`) 다시 물을 길을 열어 둔다.** 서버가 잠깐 흔들린 것뿐인데
+        「이미 물어봤다」로 남으면 이번 화면에서 인계가 통째로 사라진다.
+
+        아래 cleanup 이 「묻지 못하고 끝난 회차」의 표식을 되돌리지만, 그것은 **effect 가 다시
+        돌 때**(주소가 바뀌거나 언마운트될 때)만 실행된다. 같은 화면에 머무르면 서버가
+        회복돼도 아무 일도 일어나지 않는다. 그래서 여기서 **다시 물어볼 신호를 켠다**
+        (아래 `membershipUnknown`) — 회선이 돌아오거나 탭으로 돌아올 때 한 회차가 더 돈다.
+        표식을 여기서 따로 되돌리지는 않는다: 그 회차가 시작될 때 cleanup 이 먼저 돌아
+        이미 되돌린다. 두 자리에서 같은 일을 하면 어느 쪽이 살아 있는지 알 수 없게 된다.
       */
       const membership = await resolveMembership();
-      if (cancelled || membership !== "member") return;
+      if (cancelled) return;
+      if (membership !== "member") {
+        // 확정된 비회원에게는 물을 것이 없다. 못 물어본 경우만 다시 열어 둔다.
+        if (membership === "unknown") setMembershipUnknown(true);
+        return;
+      }
+      setMembershipUnknown(false);
 
       prompted = true;
       setNotice({
@@ -411,7 +430,42 @@ export function GuestTrialBridge() {
       // 저장이 도는 중이면 되돌리지 않는다 — 되돌리면 다음 화면에서 확인 안내가 되살아난다.
       if (!prompted && !handoffSavingRef.current) handoffPromptedRef.current = false;
     };
-  }, [accessMode, hydrated, pathname, router, searchParams, setNotice]);
+  }, [
+    accessMode,
+    hydrated,
+    membershipRetryToken,
+    pathname,
+    router,
+    searchParams,
+    setNotice,
+  ]);
+
+  /*
+    **판정을 못 한 회차가 있으면, 상황이 달라졌다는 신호에 다시 묻는다.**
+
+    시간을 재서 되풀이하지 않는다 — 간격도 횟수도 지어낸 숫자가 되고, 같은 장애에 요청만
+    쌓인다. 대신 브라우저가 알려 주는 두 신호만 듣는다: 회선이 돌아왔을 때(`online`)와
+    이 탭으로 돌아왔을 때(`visibilitychange`). 둘 다 「아까와 달라졌을 수 있다」는 뜻이다.
+
+    듣는 것은 `unknown` 으로 끝난 회차가 있을 때뿐이다. 늘 듣게 두면 탭을 오갈 때마다
+    판정이 다시 돌아 이미 물어본 화면에 헛왕복이 붙는다.
+  */
+  useEffect(() => {
+    if (!membershipUnknown) return;
+
+    const retry = () => {
+      if (document.visibilityState === "hidden") return;
+      setMembershipUnknown(false);
+      setMembershipRetryToken((token) => token + 1);
+    };
+
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [membershipUnknown]);
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.
   // 공유/저장 안내는 URL이 아니라 화면에서 직접 스토어 액션을 부른다(shoot/result 등).
