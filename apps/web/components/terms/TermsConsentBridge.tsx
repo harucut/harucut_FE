@@ -149,7 +149,20 @@ export function TermsConsentBridge() {
     })();
   }, [pathname, runCheck]);
 
-  if (!pending || pending.length === 0) return null;
+  /*
+    **보호 화면에서만 막는다 — 결과를 버리지는 않는다.**
+
+    검사는 보호 경로에서만 시작하지만, 회원 판정과 약관 조회에 왕복이 둘 붙어 그 사이
+    사용자가 `/terms`·`/privacy` 같은 공개 화면으로 옮겨 갈 수 있다. 이 브리지는 루트
+    레이아웃에 계속 마운트돼 있으므로, 늦게 온 결과로 모달을 띄우면 **약관 본문을 읽으러 간
+    사람을 그 자리에서 막는다** — 이 파일이 세운 「읽을 수 있게 두고 보호 화면에서만 막는다」가
+    정확히 뒤집힌다.
+
+    그렇다고 그 회차의 결과를 버리지는 않는다. 버리면 `checkedRef` 가 이미 서 있어 다시
+    묻지 않으므로, 검사 도중 공개 화면을 한 번 들르는 것만으로 필수 재동의를 영영 피할 수
+    있다. 상태에는 남기고 **그리는 것만** 경로로 가른다 — 보호 화면으로 돌아오면 그때 뜬다.
+  */
+  if (!pending || pending.length === 0 || !isProtectedPath(pathname)) return null;
 
   return (
     <TermsReconsentDialog

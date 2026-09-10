@@ -1,7 +1,8 @@
 /**
  * 갤러리에서 고른 사진에 **상한이 있는지**, 그리고 그 상한을 **누가 거는지** 본다.
  *
- * 고른 파일은 한 장씩 최대 2400px JPEG data URL 로 디코딩·재인코딩된 뒤 세션과 DOM 에
+ * 고른 파일은 한 장씩 **화소 예산(5.76MP)까지 줄인** JPEG data URL 로 디코딩·재인코딩된 뒤
+ * 세션과 DOM 에
  * 그대로 남는다. 앨범에서 수백 장을 고르면 다음 단계가 쓰는 것은 네 컷뿐인데 모바일
  * 웹뷰가 수백 MB 를 잡고 멈춘다. 그래서 **변환에 넘기기 전에** 자르고, 몇 장을 뺐는지
  * 말해 주어야 한다.
@@ -599,5 +600,78 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     await act(async () => {});
     expect(mockResolveMembership).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+});
+
+/*
+  ── 권한 왕복 뒤의 파일 선택기 ──
+
+  파일 선택기는 브라우저의 **일시적 사용자 활성화**가 살아 있을 때만 열린다. 안드로이드 셸에서
+  카메라 권한 안내를 오래 보고 돌아오면 그 유효 시간이 끝나 있어, `await` 뒤의 `click()` 은
+  오류도 없이 아무 일도 하지 않는다 — 사용자는 눌렀는데 아무 반응이 없는 것으로 본다.
+*/
+describe("권한 왕복 뒤의 파일 선택기", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "userActivation");
+
+  function setActivation(isActive: boolean | null) {
+    if (isActive === null) {
+      // 이 API 가 없는 브라우저.
+      Object.defineProperty(navigator, "userActivation", {
+        value: undefined,
+        configurable: true,
+      });
+      return;
+    }
+    Object.defineProperty(navigator, "userActivation", {
+      value: { isActive },
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, "userActivation", original);
+    else
+      Object.defineProperty(navigator, "userActivation", {
+        value: undefined,
+        configurable: true,
+      });
+  });
+
+  it("활성화가 끝났으면 열지 않고 다시 누르라고 말한다", async () => {
+    setActivation(false);
+    const { input } = await renderPage([]);
+    const click = jest.spyOn(input, "click");
+
+    fireEvent.click(screen.getByRole("button", { name: "사진 고르기" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/한 번 더 눌러 주세요/)).toBeInTheDocument();
+    });
+    // 고치기 전에는 여기서 조용히 아무 일도 일어나지 않았다.
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  // 반대쪽 못 — 활성화가 살아 있으면 그대로 연다. 없으면 「늘 안 연다」로 고쳐도 통과한다.
+  it("활성화가 살아 있으면 그대로 연다", async () => {
+    setActivation(true);
+    const { input } = await renderPage([]);
+    const click = jest.spyOn(input, "click");
+
+    fireEvent.click(screen.getByRole("button", { name: "사진 고르기" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(screen.queryByText(/한 번 더 눌러 주세요/)).toBeNull();
+  });
+
+  // 이 API 가 없는 브라우저에서는 예전처럼 연다 — 그쪽은 권한 왕복 자체가 없다.
+  it("활성화를 알 수 없는 브라우저에서는 그대로 연다", async () => {
+    setActivation(null);
+    const { input } = await renderPage([]);
+    const click = jest.spyOn(input, "click");
+
+    fireEvent.click(screen.getByRole("button", { name: "사진 고르기" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
   });
 });

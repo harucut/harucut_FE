@@ -7,18 +7,39 @@
  * 원본에 있던 화소를 버린 채 확대한 그림만 남는다. 실제로 상한이 2000px 이던 시절
  * wide-4(2400×1700)·grid-4·polaroid-4(1700×2400)에서 1.2배 확대가 났다.
  *
- * 그래서 아래 단언은 "긴 변이 모든 슬롯의 가장 긴 변 이상"을 못 박는다 — 상한을 다시
- * 낮추거나 더 큰 슬롯이 생기면 여기서 깨진다.
+ * **긴 변만 재는 것으로는 부족했다.** 상한이 「긴 변 2400」이던 시절, 슬롯과 **방향이 다른**
+ * 사진에서는 짧은 변이 먼저 말라붙었다 — 16:9 가로 사진이 2400×1350 이 되어 세로 슬롯
+ * (1700×2400)에서 1.78배, 가로 슬롯인 wide-4(2400×1700)에서도 1.26배 확대됐다. 그래서
+ * 아래 단언은 **두 변을 다** 재고, 같이 지키는 것이 메모리 쪽 상한(한 장의 화소 수)이다.
  */
+import { MAX_CANVAS_EDGE } from "@/lib/canvas/canvasBudget";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { importPhotoFiles } from "@/lib/photoImport";
 
+const ALL_SLOTS = Object.values(FRAME_LAYOUTS).flatMap((layout) => layout.slots);
+
 /** 모든 프레임의 슬롯 중 가장 긴 변. 지금은 2400px(wide-4 가로, grid-4·polaroid-4 세로). */
 const LONGEST_SLOT_EDGE = Math.max(
-  ...Object.values(FRAME_LAYOUTS).flatMap((layout) =>
-    layout.slots.map((slot) => Math.max(slot.width, slot.height)),
-  ),
+  ...ALL_SLOTS.map((slot) => Math.max(slot.width, slot.height)),
 );
+
+/**
+ * 한 장이 들 수 있는 화소 수 — 제품 코드의 `MAX_PIXELS` 와 **같은 유도**다.
+ *
+ * 「가장 넓은 슬롯의 가로 × 가장 긴 슬롯의 세로」, 곧 모든 슬롯을 한 번에 덮는 가장 작은
+ * 직사각형이다. 두 값 모두 슬롯의 한 변이라 **어떤 레이아웃에서도** 가장 긴 변의 제곱
+ * (예전 규칙이 정사각형 원본에서 만들던 최대 화소) 이하다 — 그래서 이 상한은 메모리
+ * 방어를 넓히지 않는다.
+ */
+const PIXEL_BUDGET =
+  Math.max(...ALL_SLOTS.map((slot) => slot.width)) *
+  Math.max(...ALL_SLOTS.map((slot) => slot.height));
+
+/** 예전 규칙(긴 변만 상한). 「새 규칙이 예전보다 작게 깎지 않는다」를 재는 데 쓴다. */
+function legacySize(width: number, height: number) {
+  const scale = Math.min(1, LONGEST_SLOT_EDGE / Math.max(width, height));
+  return Math.round(width * scale) * Math.round(height * scale);
+}
 
 /** `drawCover` 와 같은 계산. 1 을 넘으면 그 슬롯에서 확대가 일어난다는 뜻. */
 function coverScale(
@@ -133,8 +154,129 @@ describe("importPhotoFiles 해상도 상한", () => {
   it("상한을 넘는 원본은 비율을 지키며 줄인다", async () => {
     await importPhotoFiles([photoFile("d.jpg", 4000, 3000)]);
 
-    // 4:3 을 유지한 채 긴 변만 2400 으로.
-    expect(baked).toEqual([{ width: 2400, height: 1800 }]);
+    /*
+      4:3 을 유지한 채 **넓이**를 예산(2400×2400)까지 줄인다 — 긴 변을 2400 으로 자르던
+      시절의 2400×1800(4.32MP)이 아니다. 반올림 오차만큼 예산에 못 미친다.
+    */
+    expect(baked).toEqual([{ width: 2771, height: 2078 }]);
+    expect(2771 / 2078).toBeCloseTo(4 / 3, 2);
+  });
+});
+
+/**
+ * **방향이 다른 슬롯**에서 짧은 변이 말라붙지 않는지.
+ *
+ * 재현(2026-09-10, 아래 수치는 이 스텁으로 잰 것이다): 긴 변만 2400 으로 자르면 16:9 가로
+ * 사진이 2400×1350 이 되고, 합성이 이를 세로 슬롯 1700×2400 에 `cover` 로 넣으며 **1.78배**
+ * 확대했다. 가로 슬롯인 wide-4(2400×1700)에서도 1.26배 확대됐다 — 사진이 슬롯보다 납작해서다.
+ *
+ * 지금은 넓이로 상한을 걸어 같은 예산을 **짧은 변 쪽에** 쓴다. 비율을 그대로 두므로(자르지
+ * 않는다 — `lib/photoImport.ts` 파일 주석) 확대율이 r 에서 √r 로 떨어진다.
+ * 세로 슬롯 × 가로 사진의 확대는 **완전히 없어지지 않는다.** 그 한계는 제품 코드
+ * `MAX_PIXELS` 주석에 이유·숫자와 함께 적혀 있고, 여기서는 √r 선을 못 박는다.
+ */
+describe("importPhotoFiles 방향이 다른 슬롯", () => {
+  /** 16:9 가로. 폰 카메라가 흔히 내놓는 가장 납작한 비율이다. */
+  const WIDE_SOURCE = { width: 4608, height: 2592 };
+  const WIDE_RATIO = WIDE_SOURCE.width / WIDE_SOURCE.height;
+
+  it("가로 16:9 원본이 가로 슬롯에서 더는 확대되지 않는다", async () => {
+    await importPhotoFiles([photoFile("wide.jpg", WIDE_SOURCE.width, WIDE_SOURCE.height)]);
+
+    const [{ width, height }] = baked;
+    // 예전 규칙의 2400×1350 은 wide-4 에서 1.26배였다.
+    for (const frameId of ["wide-4", "classic-4"] as const) {
+      for (const slot of FRAME_LAYOUTS[frameId].slots) {
+        expect(coverScale(slot, width, height)).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("가로 16:9 원본의 세로 슬롯 확대가 비율에서 그 제곱근까지 준다", async () => {
+    await importPhotoFiles([photoFile("wide.jpg", WIDE_SOURCE.width, WIDE_SOURCE.height)]);
+
+    const [{ width, height }] = baked;
+    for (const frameId of ["grid-4", "polaroid-4"] as const) {
+      for (const slot of FRAME_LAYOUTS[frameId].slots) {
+        const scale = coverScale(slot, width, height);
+        // 예전에는 r(=1.78)배였다. 지금은 √r(=1.33)배 — 반올림 여유 0.1%.
+        expect(scale).toBeLessThanOrEqual(Math.sqrt(WIDE_RATIO) * 1.001);
+        // 그래도 남는 확대가 있다. 「없다」고 적지 않으려고 같이 못 박는다.
+        expect(scale).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it("세로 9:16 원본도 같은 규칙을 반대 방향으로 받는다", async () => {
+    await importPhotoFiles([photoFile("tall.jpg", WIDE_SOURCE.height, WIDE_SOURCE.width)]);
+
+    const [{ width, height }] = baked;
+    // 세로 사진 × 세로 슬롯: 확대 없음.
+    for (const frameId of ["grid-4", "polaroid-4"] as const) {
+      for (const slot of FRAME_LAYOUTS[frameId].slots) {
+        expect(coverScale(slot, width, height)).toBeLessThanOrEqual(1);
+      }
+    }
+    // 세로 사진 × 가로 슬롯: √r 까지만.
+    for (const slot of FRAME_LAYOUTS["wide-4"].slots) {
+      expect(coverScale(slot, width, height)).toBeLessThanOrEqual(
+        Math.sqrt(WIDE_RATIO) * 1.001,
+      );
+    }
+  });
+});
+
+/**
+ * 반대쪽 못 — **메모리 방어**.
+ *
+ * 화질만 보고 상한을 걷으면(또는 「짧은 변을 2400 으로 붙든다」로 바꾸면) 16:9 한 장이
+ * 10.2MP 가 된다. 이 화면은 한 번에 칸 수 × 6 = 24장까지 담으므로(`PHOTOS_PER_SLOT`)
+ * 그 차이가 그대로 세션·DOM 에 쌓인다. 아래 셋이 그 선을 지킨다.
+ */
+describe("importPhotoFiles 화소 예산", () => {
+  const SOURCES: [string, number, number][] = [
+    ["16:9", 4608, 2592],
+    ["4:3", 4032, 3024],
+    ["3:2", 6000, 4000],
+    ["1:1", 3024, 3024],
+    ["9:16", 2592, 4608],
+    ["파노라마", 25344, 2048],
+  ];
+
+  it("어떤 비율이든 한 장의 화소가 예산을 넘지 않는다", async () => {
+    for (const [name, width, height] of SOURCES) {
+      await importPhotoFiles([photoFile(`${name}.jpg`, width, height)]);
+    }
+
+    expect(baked).toHaveLength(SOURCES.length);
+    for (const { width, height } of baked) {
+      // 반올림이 예산을 아주 조금 넘길 수 있다(변마다 최대 0.5px).
+      expect(width * height).toBeLessThanOrEqual(PIXEL_BUDGET * 1.001);
+    }
+  });
+
+  it("어떤 비율이든 예전 규칙보다 작게 깎지 않는다", async () => {
+    for (const [name, width, height] of SOURCES) {
+      await importPhotoFiles([photoFile(`${name}.jpg`, width, height)]);
+    }
+
+    baked.forEach((size, index) => {
+      const [, width, height] = SOURCES[index];
+      expect(size.width * size.height).toBeGreaterThanOrEqual(
+        legacySize(width, height),
+      );
+    });
+  });
+
+  /*
+    넓이만 재면 파노라마가 예산을 통과하면서 한 변이 1만 px 을 넘는 캔버스를 만든다.
+    그 선의 주인은 `lib/canvas/canvasBudget.ts` 하나다 — 여기에 숫자를 다시 박지 않는다.
+  */
+  it("파노라마도 캔버스 한 변 상한 안에 남는다", async () => {
+    await importPhotoFiles([photoFile("pano.jpg", 25344, 2048)]);
+
+    const [{ width, height }] = baked;
+    expect(Math.max(width, height)).toBeLessThanOrEqual(MAX_CANVAS_EDGE);
   });
 });
 
