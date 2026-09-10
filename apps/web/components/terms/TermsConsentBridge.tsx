@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { resolveMembership } from "@/lib/authSession";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
 import { isProtectedPath } from "@/lib/protectedPaths";
 import {
@@ -51,22 +52,22 @@ export function TermsConsentBridge() {
   const stashedRef = useRef<PendingTermsConsent | null>(null);
 
   const runCheck = useCallback(async () => {
-    // 로그인했는지는 쿠키가 아니라 서버에 묻는다(만료된 쿠키가 남아 있을 수 있다).
-    let authenticated = false;
-    try {
-      const res = await fetch("/api/auth/session", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      authenticated = Boolean(
-        ((await res.json()) as { authenticated?: boolean }).authenticated,
-      );
-    } catch {
-      return;
-    }
-    if (!authenticated) return;
+    /*
+      로그인했는지는 쿠키가 아니라 서버에 묻는다(만료된 쿠키가 남아 있을 수 있다).
+
+      묻는 것은 `resolveMembership()` 이다 — 생 `/api/auth/session` 이 아니다. 그 라우트는
+      만료된 access 를 **재발급해 주지 않고** 백엔드의 401 을 `authenticated: false` 로
+      감싸므로, access 만 만료되고 refresh 는 멀쩡한 회원이 비회원으로 읽힌다. 그러면 아래
+      필수 약관 재동의 검사가 통째로 건너뛰어진다. **이 effect 는 주소가 바뀔 때만 다시
+      돈다** — 같은 화면의 다른 API 가 곧 `clientApi` 로 토큰을 되살려도 다음 SPA 이동까지
+      재동의를 못 받는다. 서버가 강제하지 않는 검사라 여기서 놓치면 그대로 지나간다.
+
+      회원이 아니면(확정된 비회원이든 못 물어본 `unknown` 이든) 그냥 돌아간다. 아래 한 번만
+      도는 표식(`checkedRef`)은 **회원으로 확인된 뒤에 세우므로** 이 회차는 그것을 쓰지
+      않는다 — 다음 회차에 다시 묻는다.
+    */
+    const membership = await resolveMembership();
+    if (membership !== "member") return;
 
     // 여기서부터는 한 번만 돈다. 아래 조회가 실패해도 다시 시도하지 않는다 —
     // 화면을 옮길 때마다 같은 요청을 반복하는 편이 더 나쁘다.

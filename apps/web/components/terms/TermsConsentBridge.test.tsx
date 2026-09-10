@@ -50,6 +50,12 @@ jest.mock("@/lib/pendingTermsConsent", () => {
   };
 });
 
+const mockResolveMembership = jest.fn();
+
+jest.mock("@/lib/authSession", () => ({
+  resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
+}));
+
 jest.mock("@/lib/userApi", () => ({
   getMyUserInfo: (...args: unknown[]) => mockGetMyUserInfo(...args),
 }));
@@ -81,18 +87,22 @@ const ACTIVE_TERMS: ActiveTerms[] = [
   },
 ];
 
-function setSession(authenticated: boolean) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ authenticated }),
-  }) as unknown as typeof fetch;
+/**
+ * 로그인 여부는 **`resolveMembership()`** 이 정한다.
+ *
+ * 생 `/api/auth/session` 이 아닌 이유: 그 라우트는 만료된 access 를 재발급해 주지 않고
+ * 백엔드의 401 을 `authenticated: false` 로 감싼다. 그러면 refresh 가 멀쩡한 회원이
+ * 비회원으로 읽혀 필수 약관 재동의를 통째로 건너뛴다.
+ */
+function setSession(membership: "member" | "guest" | "unknown") {
+  mockResolveMembership.mockResolvedValue(membership);
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
   mockPathname = "/home";
-  setSession(true);
+  setSession("member");
   mockGetPending.mockReturnValue(null);
   mockClearPending.mockImplementation((expected: unknown) =>
     realPending.clearPendingTermsConsentIfUnchanged(
@@ -352,7 +362,7 @@ describe("TermsConsentBridge", () => {
   });
 
   it("로그인하지 않았으면 아무것도 하지 않는다", async () => {
-    setSession(false);
+    setSession("guest");
     mockGetPending.mockReturnValue({
       items: [{ code: "tos", agreed: true }],
       email: SIGNUP_EMAIL,
@@ -361,6 +371,33 @@ describe("TermsConsentBridge", () => {
     render(<TermsConsentBridge />);
 
     await waitFor(() => expect(mockSubmit).not.toHaveBeenCalled());
+    expect(mockFetchMine).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — **access 만 만료된 회원에게도 재동의를 묻는다.**
+
+    생 `/api/auth/session` 은 만료된 access 를 재발급해 주지 않고 `authenticated: false` 로
+    감싼다. 그것을 근거로 삼으면 refresh 가 멀쩡한 회원이 비회원으로 읽혀 필수 약관 재동의가
+    통째로 건너뛰어진다 — 이 effect 는 주소가 바뀔 때만 다시 도므로, 같은 화면의 다른 API 가
+    곧 토큰을 되살려도 다음 SPA 이동까지 못 받는다. 서버가 강제하지 않는 검사라 그대로 지나간다.
+  */
+  it("재발급을 거쳐 회원으로 확인되면 검사를 진행한다", async () => {
+    setSession("member");
+
+    render(<TermsConsentBridge />);
+
+    // 회원으로 확인돼야 내 동의 조회까지 간다 — 여기가 재동의 판정의 입구다.
+    await waitFor(() => expect(mockFetchMine).toHaveBeenCalled());
+  });
+
+  // 반대쪽 못 — 못 물어봤으면 진행하지 않는다. 서버가 흔들렸다고 재동의를 강요하지 않는다.
+  it("판정할 수 없으면 검사를 진행하지 않는다", async () => {
+    setSession("unknown");
+
+    render(<TermsConsentBridge />);
+
+    await waitFor(() => expect(mockResolveMembership).toHaveBeenCalled());
     expect(mockFetchMine).not.toHaveBeenCalled();
   });
 });

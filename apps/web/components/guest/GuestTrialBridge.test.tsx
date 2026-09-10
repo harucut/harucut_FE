@@ -48,6 +48,12 @@ jest.mock("@/lib/pendingGuestSave", () => ({
     mockEnsureComposeKey(...args),
 }));
 
+const mockResolveMembership = jest.fn();
+
+jest.mock("@/lib/authSession", () => ({
+  resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
+}));
+
 jest.mock("@/lib/fourcutCompose", () => ({
   describeComposeFailure: (...args: unknown[]) =>
     mockDescribeComposeFailure(...args),
@@ -70,12 +76,15 @@ const PENDING = {
 let storedComposeKey: string | null = null;
 let mintedKeyCount = 0;
 
-/** 로그인 여부는 쿠키가 아니라 `/api/auth/session` 응답이 정한다. */
-function setSession(authenticated: boolean) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ authenticated }),
-  }) as unknown as typeof fetch;
+/**
+ * 로그인 여부는 쿠키가 아니라 **`resolveMembership()`** 이 정한다.
+ *
+ * 생 `/api/auth/session` 이 아닌 이유: 그 라우트는 만료된 access 를 재발급해 주지 않고
+ * `authenticated: false` 로 감싸므로, access 만 만료되고 refresh 는 멀쩡한 회원이
+ * 비회원으로 읽힌다. `resolveMembership` 은 `clientApi` 를 거쳐 재발급까지 해 본다.
+ */
+function setSession(membership: "member" | "guest" | "unknown") {
+  mockResolveMembership.mockResolvedValue(membership);
 }
 
 /** 확인 안내에서 버튼 하나를 누른다. */
@@ -160,7 +169,7 @@ beforeEach(() => {
   mockClearPending.mockImplementation(async () => {
     storedComposeKey = null;
   });
-  setSession(true);
+  setSession("member");
   mockSaveFourcutToServer.mockResolvedValue({
     mediaId: 1,
     objectUrl: "https://example.com/a.png",
@@ -583,6 +592,67 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     다른 탭이 방금 찍어 둔 원본 4장이 사라진다. 그 판단은 보관소의
     `clearPendingGuestSaveIfUnchanged` 안에 있고, 브리지는 지문만 넘긴다.
   */
+  /*
+    회귀 — **access 만 만료된 회원에게도 묻는다.**
+
+    생 `/api/auth/session` 은 만료된 access 를 재발급해 주지 않고 `authenticated: false` 로
+    감싼다. 그것을 근거로 삼으면 refresh 가 멀쩡한 회원이 비회원으로 읽혀 인계가 묶이고,
+    `handoffPromptedRef` 가 이미 서 있어 같은 화면에서는 다시 묻지도 않는다 — 다른 API 가
+    곧 토큰을 되살려도 새로고침 전까지 그대로다. `resolveMembership` 은 재발급까지 해 본다.
+  */
+  it("재발급을 거쳐 회원으로 확인되면 저장할지 묻는다", async () => {
+    setSession("member");
+
+    render(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  /*
+    회귀 — **못 물어봤으면 「이미 물어봤다」를 되돌린다.**
+
+    서버가 잠깐 흔들린 것뿐인데 표식을 남기면 이번 화면에서 인계가 통째로 사라진다.
+    다음 회차(화면 이동)에 다시 물어야 한다.
+  */
+  it("판정할 수 없으면 다음 회차에 다시 묻는다", async () => {
+    setSession("unknown");
+
+    const view = render(<GuestTrialBridge />);
+    await flushAsync();
+    expect(screen.queryByRole("button", { name: "이 계정에 저장하기" })).toBeNull();
+
+    // 서버가 돌아왔다. 화면을 옮기면 다시 묻는다.
+    setSession("member");
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // 반대쪽 못 — 확정된 비회원에게는 묻지 않고, 다시 묻지도 않는다.
+  it("확정된 비회원에게는 묻지 않는다", async () => {
+    setSession("guest");
+
+    const view = render(<GuestTrialBridge />);
+    await flushAsync();
+
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+    await flushAsync();
+
+    expect(screen.queryByRole("button", { name: "이 계정에 저장하기" })).toBeNull();
+  });
+
   it("보관물을 지울 때는 보관소의 조건부 삭제에 맡긴다", async () => {
     render(<GuestTrialBridge />);
     await waitFor(() => {
@@ -901,7 +971,7 @@ describe("게스트 쿠키가 남아 있을 때", () => {
 */
 describe("게스트 쿠키도 없고 로그인도 아닐 때", () => {
   it("보관물이 있어도 묻지도 올리지도 않는다", async () => {
-    setSession(false);
+    setSession("guest");
 
     render(<GuestTrialBridge />);
 

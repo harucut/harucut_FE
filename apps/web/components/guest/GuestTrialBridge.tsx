@@ -18,34 +18,7 @@ import {
   type PendingGuestSaveMeta,
   type PendingGuestSaveComposeKey,
 } from "@/lib/pendingGuestSave";
-
-/**
- * 로그인했는지 서버에 묻는다.
- *
- * **게스트 쿠키가 없다는 것은 "로그인했다"가 아니다.** accessMode 는 프론트가 심는
- * `harucut_guest_trial` 쿠키 하나만 보므로(lib/guestTrialStore.ts), 로그아웃한 방문자도
- * 세션이 끊긴 방문자도 전부 "member" 로 읽힌다. 그 값으로 인증 전용 서버 합성을 부르면
- * 401 이 나고, 화면에는 "저장을 완료하지 못했어요" 라는 거짓 실패가 뜬다. 보관물은
- * 남으므로 하루 동안 페이지를 열 때마다 같은 안내가 반복된다.
- *
- * 세션 유효성은 백엔드에 위임한다는 규칙이 이미 있다(app/api/auth/session/route.ts).
- * 조회에 실패하면 아무것도 하지 않는다 — 보관물은 그대로 남고 다음 기회에 다시 묻는다.
- */
-async function isSignedIn() {
-  try {
-    const res = await fetch("/api/auth/session", {
-      method: "GET",
-      credentials: "include",
-      cache: "no-store",
-    });
-    if (!res.ok) return false;
-    return Boolean(
-      ((await res.json()) as { authenticated?: boolean }).authenticated,
-    );
-  } catch {
-    return false;
-  }
-}
+import { resolveMembership } from "@/lib/authSession";
 
 /**
  * 다시 시도를 권할 때 붙이는 **중복 경고**. 멱등키를 못 남긴 기기에서만 붙는다.
@@ -386,10 +359,28 @@ export function GuestTrialBridge() {
       if (handoffPromptedRef.current || handoffSavingRef.current) return;
       handoffPromptedRef.current = true;
 
-      // 쿠키가 아니라 서버에 묻는다. 로그아웃한 방문자에게 남의 결과물을 저장할지
-      // 물어봐서는 안 되고, 물어본들 401 로 끝난다.
-      const signedIn = await isSignedIn();
-      if (cancelled || !signedIn) return;
+      /*
+        쿠키가 아니라 서버에 묻는다. 로그아웃한 방문자에게 남의 결과물을 저장할지
+        물어봐서는 안 되고, 물어본들 401 로 끝난다.
+
+        **게스트 쿠키가 없다는 것은 "로그인했다"가 아니다.** accessMode 는 프론트가 심는
+        `harucut_guest_trial` 쿠키 하나만 보므로(lib/guestTrialStore.ts), 로그아웃한 방문자도
+        세션이 끊긴 방문자도 전부 "member" 로 읽힌다.
+
+        묻는 것은 `resolveMembership()` 이다 — 생 `/api/auth/session` 이 아니다. 그 라우트는
+        만료된 access 를 **재발급해 주지 않고** `authenticated: false` 로 감싸므로,
+        access 만 만료되고 refresh 는 멀쩡한 회원이 비회원으로 읽힌다. 그러면 이 인계가
+        묶이고, 아래에서 `handoffPromptedRef` 를 이미 세워 둔 탓에 같은 화면에서는 다시
+        묻지도 않는다 — 다른 API 가 곧 토큰을 되살려도 새로고침 전까지 그대로다.
+
+        **못 물어봤으면(`unknown`) 다음 회차에 다시 묻는다.** 서버가 잠깐 흔들린 것뿐인데
+        「이미 물어봤다」로 남으면 이번 화면에서 인계가 통째로 사라진다. 여기서 따로 표식을
+        되돌리지는 않는다 — 아래 cleanup 이 「묻지 못하고 끝난 회차」의 표식을 이미 되돌린다
+        (`if (!prompted && !handoffSavingRef.current)`). 두 자리에서 같은 일을 하면 어느 쪽이
+        살아 있는지 아무도 모르게 된다.
+      */
+      const membership = await resolveMembership();
+      if (cancelled || membership !== "member") return;
 
       prompted = true;
       setNotice({
