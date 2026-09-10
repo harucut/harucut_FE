@@ -464,15 +464,16 @@ export async function readPendingGuestSave(
         새 네컷을 같은 자리에 저장하면 무조건 삭제는 **그 새 한 벌**을 지운다 — 사용자가
         확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
 
-        지문은 `savedAt` 하나면 된다 — 저장은 그때의 시각을 함께 심으므로(`setPendingGuestSave`)
-        다른 탭이 갈아 끼웠으면 반드시 달라진다. 기한이 지났거나 프레임을 모르는 한 벌은
-        `savedAt` 이 성치 않을 수 있지만 그래도 맞다: 그대로 남아 있으면 `deleteRecordIfMatches`
-        가 **지문을 볼 것도 없이** 걷고, 갈아 끼워졌으면 지문이 어긋나 손을 뗀다.
+        지문으로 「늘 다르다」를 넘긴다. 시각 같은 값을 지문에 쓰지 않는 이유가 있다 —
+        `savedAt` 은 `Date.now()` 그대로라 같은 밀리초에 시작한 다른 탭의 저장과 겹칠 수
+        있고, 그러면 성한 새 한 벌을 내가 읽은 것으로 착각해 지운다.
+
+        대신 **「지금도 못 쓰는가」를 트랜잭션 안에서 다시 본다.** `deleteRecordIfMatches` 는
+        못 쓰는 레코드를 지문 없이 걷고 쓸 수 있는 레코드만 지문에 물어보므로, 이 한 줄이
+        곧 「지금도 못 쓰는 한 벌이면 지운다」가 된다 — 갈아 끼워졌으면 무엇이 들어왔든
+        손을 뗀다.
       */
-      const cleared = await clearPendingGuestSaveIfUnchanged(
-        (current) => current.savedAt === record.savedAt,
-        now,
-      );
+      const cleared = await clearPendingGuestSaveIfUnchanged(() => false, now);
       // 갈아 끼워져 있었다 — 내가 읽은 것은 이미 지난 소식이다. 「없다」로 답하면 그 판단으로
       // 무언가를 지우게 되므로, 모른다고 답하고 다음 읽기에 맡긴다.
       return cleared === "changed"
@@ -574,10 +575,15 @@ function deleteRecordIfMatches(
         const record = read.result as StoredRecord | undefined;
         if (!record) return;
 
+        /*
+          **못 쓰는 레코드는 지문을 볼 것도 없이 걷는다** — 읽기 경로도 그것을 그 자리에서
+          지운다. 「못 쓴다」의 뜻은 읽기 경로와 **같아야 한다**: 기한이 지났거나 프레임을
+          모르는 것뿐 아니라 원본이 네 장이 아닌 것도 그렇다. 한쪽만 알면 읽기는 「없다」로
+          답하는데 삭제는 「바뀌었다」로 손을 떼, 못 쓰는 한 벌이 영영 남는다.
+        */
         const meta = normalizeMeta(record, now);
-        // 못 쓰는 레코드(기한이 지났거나 프레임을 모르는 것)는 지문을 볼 것도 없이 걷는다 —
-        // 읽기 경로도 그것을 그 자리에서 지운다.
-        if (meta && !isSame(meta)) {
+        const usable = meta && hasFourSources(record.sources, isUsableBlob);
+        if (usable && !isSame(meta)) {
           outcome = "changed";
           return;
         }
@@ -806,27 +812,39 @@ export async function ensurePendingGuestSaveComposeKey(
   const db = await openDatabase();
   if (!db) return unpersisted();
   try {
-    const settled = await attachComposeKeyIfAbsent(db, key, now);
+    let settled: ComposeKeyAttach;
+    try {
+      settled = await attachComposeKeyIfAbsent(db, key, now);
+    } catch {
+      // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위와 같으므로 한 갈래로 모은다.
+      return unpersisted();
+    }
     // IndexedDB 에 쓸 수 있는 레코드가 없다 — 예전 localStorage 한 벌이었다. 거기에는
     // 트랜잭션이 없어 키를 안전하게 못 남긴다.
     if (settled.status === "absent") return unpersisted();
 
     /*
+      **여기서부터는 이미 커밋됐다.** 아래 변환이 실패해도 「못 남겼다」로 물러서지 않는다.
+
+      물러서면 두 가지를 한꺼번에 틀린다. 남은 키를 안 남았다고 말하고, 위에서 읽어 둔
+      **예전 원본**을 그 키에 실어 보낸다 — 키는 그 사이 갈아 끼워진 새 한 벌에 붙었을 수
+      있고, 그러면 나중에 새 한 벌을 인계할 때 같은 키가 다시 나와 서버가 예전 작업을
+      재생한다. 원본을 못 되돌렸으면 **이번 회차는 접는다.** 키는 보관물에 남았으므로
+      다음 회차가 같은 키로 이어 간다(호출부는 "안 옮겼다"고 안내하고 다시 묻는다).
+    */
+    let sources: string[];
+    try {
+      sources = await Promise.all(settled.record.sources.map(blobToDataUrl));
+    } catch {
+      return null;
+    }
+
+    /*
       돌려주는 키는 **내가 만든 것이 아닐 수 있다.** 다른 탭이 먼저 붙였으면 그 키다.
-      원본도 그 레코드에서 다시 꺼낸다 — 위에서 읽어 둔 `entry` 는 그 사이 갈아 끼워졌을
+      원본도 그 레코드에서 꺼낸 것이다 — 위에서 읽어 둔 `entry` 는 그 사이 갈아 끼워졌을
       수 있고, 그 원본을 이 키로 올리면 서버가 엉뚱한 한 벌을 남긴다.
     */
-    return {
-      key: settled.key,
-      persisted: true,
-      entry: {
-        ...settled.meta,
-        sources: await Promise.all(settled.record.sources.map(blobToDataUrl)),
-      },
-    };
-  } catch {
-    // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위와 같으므로 한 갈래로 모은다.
-    return unpersisted();
+    return { key: settled.key, persisted: true, entry: { ...settled.meta, sources } };
   } finally {
     db.close();
   }

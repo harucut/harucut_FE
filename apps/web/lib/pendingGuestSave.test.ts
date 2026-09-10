@@ -277,6 +277,35 @@ function removeIndexedDB() {
 }
 
 /** 저장소에 실제로 들어간 한 벌. 없으면 null. */
+/**
+ * **고른 Blob 만 못 읽게 한다.**
+ *
+ * 트랜잭션이 커밋된 **뒤**에 원본 되돌리기가 실패하는 자리를 만들려면, 어느 한 벌을 읽을
+ * 때 실패할지 고를 수 있어야 한다. 통째로 끄면 그보다 앞선 읽기부터 무너져 다른 이유로
+ * 초록불이 된다.
+ */
+async function withUnreadableBlobs<T>(
+  doomed: Blob[],
+  run: () => Promise<T>,
+): Promise<T> {
+  const Real = window.FileReader;
+  class Patched extends Real {
+    readAsDataURL(blob: Blob) {
+      if (doomed.includes(blob)) {
+        queueMicrotask(() => this.onerror?.(new ProgressEvent("error")));
+        return;
+      }
+      super.readAsDataURL(blob);
+    }
+  }
+  window.FileReader = Patched as unknown as typeof FileReader;
+  try {
+    return await run();
+  } finally {
+    window.FileReader = Real;
+  }
+}
+
 /** 스텁이 담아 둔 Blob 을 모듈이 돌려주는 모양(data URL)으로 되돌린다. */
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -548,6 +577,45 @@ describe("pendingGuestSave", () => {
       await Promise.all(swappedBlobs.map(readBlobAsDataUrl)),
     );
     expect(settled?.entry.savedAt).toBe(NOW + 1);
+  });
+
+  /*
+    회귀 — **키를 붙인 뒤 원본을 못 되돌려도 예전 항목으로 물러서지 않는다.**
+
+    트랜잭션은 이미 커밋됐다. 거기서 「못 남겼다」로 물러서면 두 가지를 한꺼번에 틀린다 —
+    남은 키를 안 남았다고 말하고, 읽어 둔 **예전 원본**을 그 키에 실어 보낸다. 키는 그
+    사이 갈아 끼워진 새 한 벌에 붙었을 수 있어, 나중에 그 한 벌을 인계할 때 같은 키가 다시
+    나와 서버가 예전 작업을 재생한다.
+  */
+  it("키를 붙인 뒤 원본을 못 되돌리면 예전 항목으로 물러서지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const old = storedRecord();
+    const swapped = [
+      new Blob(["EFGH"]),
+      new Blob(["IJKL"]),
+      new Blob(["MNOP"]),
+      new Blob(["QRST"]),
+    ];
+
+    // 첫 읽기 직후 다른 탭이 갈아 끼운다. 키는 이 새 한 벌에 붙는다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(old as object),
+        sources: swapped,
+        savedAt: NOW + 1,
+      });
+    };
+
+    // 커밋 뒤, 그 새 한 벌의 원본을 되돌리다 실패한다.
+    const settled = await withUnreadableBlobs(swapped, () =>
+      ensurePendingGuestSaveComposeKey(NOW),
+    );
+
+    // 이번 회차는 접는다 — 예전 원본을 이 키에 실어 보내지 않는다.
+    expect(settled).toBeNull();
+    // 키는 보관물에 남았다. 다음 회차가 같은 키로 이어 간다.
+    expect(typeof storedRecord()?.composeIdempotencyKey).toBe("string");
   });
 
   it("키를 심어도 나머지 보관 내용은 그대로다", async () => {
@@ -1001,6 +1069,32 @@ describe("pendingGuestSave", () => {
     // 내가 읽은 것은 이미 지난 소식이다 — 「없다」로 답하면 그 판단으로 무언가를 지운다.
     expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
     // 새 한 벌은 그대로 남아 있어야 한다.
+    expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
+  });
+
+  /*
+    회귀 — **같은 밀리초에 저장된 새 한 벌도 남의 것이다.**
+
+    시각을 지문으로 쓰면 여기서 무너진다. `savedAt` 은 `Date.now()` 그대로라, 깨진 한 벌을
+    읽은 직후 다른 탭의 저장이 같은 밀리초에 시작하면 두 레코드의 지문이 같아진다 —
+    성한 새 한 벌을 내가 읽은 것으로 착각해 지운다.
+  */
+  it("같은 시각에 저장된 새 한 벌도 지우지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const broken = storedRecord();
+    if (broken) broken.frameId = "not-a-frame";
+
+    // 갈아 끼우되 **시각은 그대로** 둔다 — 같은 밀리초에 저장된 모양이다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(broken as object),
+        frameId: ENTRY.frameId,
+        savedAt: NOW,
+      });
+    };
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
     expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
   });
 
