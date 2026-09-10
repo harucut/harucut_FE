@@ -305,4 +305,63 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
 
     expect(reissueCalls).toBe(2);
   });
+
+  /*
+    회귀 — **멈춘 재발급이 탭을 영원히 막지 않는다.**
+
+    재발급을 하나로 묶었으므로, 상한 없는 호출부(`resolveMembership`·`useMyFrames`)가 먼저
+    붙은 채 왕복이 멈추면 기다리는 쪽이 정리되지 않는다. 그러면 회선이 돌아온 뒤의 모든
+    401 이 그 멈춘 약속만 기다려 새로고침 전까지 인증 API 가 통째로 선다.
+    공유 재발급 자체에 종료 상한이 있어야 풀린다.
+  */
+  it("멈춘 재발급은 상한에 걸려 다음 요청을 막지 않는다", async () => {
+    jest.useFakeTimers();
+    try {
+      let reissueCalls = 0;
+      let stall = true;
+      // 액세스가 만료된 상태. 재발급이 성공하면 풀린다.
+      let needsAuth = true;
+      global.fetch = jest.fn(
+        (input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            if (urlOf(input) !== "/api/client/reissue") {
+              resolve(new Response("{}", { status: needsAuth ? 401 : 200 }));
+              return;
+            }
+            reissueCalls += 1;
+            if (!stall) {
+              needsAuth = false;
+              resolve(new Response("{}", { status: 200 }));
+              return;
+            }
+            // 답도 실패도 주지 않는다 — 자체 상한만이 이것을 끝낼 수 있다.
+            const abort = () => {
+              const error = new Error("Aborted");
+              error.name = "AbortError";
+              reject(error);
+            };
+            if (init?.signal?.aborted) abort();
+            else init?.signal?.addEventListener("abort", abort);
+          }),
+      ) as unknown as typeof fetch;
+
+      // 상한 없는 호출부가 먼저 붙는다.
+      const stuck = clientApi.get("/api/auth/status").catch(() => "failed");
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(31_000);
+      await expect(stuck).resolves.toBe("failed");
+      expect(reissueCalls).toBe(1);
+
+      // 회선이 돌아온 뒤의 401 은 **새 재발급**을 보낸다.
+      stall = false;
+      needsAuth = true;
+      await expect(
+        clientApi.get("/api/client/user-info"),
+      ).resolves.toMatchObject({ ok: true });
+      // 고치기 전에는 여기가 1 이었다 — 멈춘 약속을 그대로 물고 있었다.
+      expect(reissueCalls).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

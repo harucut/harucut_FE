@@ -10,6 +10,7 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import { importPhotoFiles } from "@/lib/photoImport";
+import { resolveMembership } from "@/lib/authSession";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 
@@ -99,32 +100,60 @@ export default function ShootUploadPage() {
     `/shoot?source=upload&event=...` 에서 「확인」을 누르면 이 화면이 **먼저** 열리고,
     뒤늦게 게스트가 되어도 이미 들어와 있어 아무도 되돌리지 않았다.
 
-    그래서 여기서도 본다. 비회원 범위는 약관 제8조와 `@harucut/shared` 의
-    `GUEST_ALLOWED_ITEMS` 가 "사진 촬영과 이미지 저장"으로 못박는다 — 갤러리 불러오기는
-    거기 없다. 프록시와 같은 주소로 보내 안내 문구도 한 벌로 맞춘다.
+    **다만 쿠키만 보고 내보내지는 않는다.** 게스트 쿠키는 남아 있는데 세션은 멀쩡한 회원이
+    있다 — 이 판정이 붙기 전 배포에서 체험을 한 번 눌러 본 사람이다. 프록시는 그 사람을
+    살아 있는 access 로 통과시키는데, 여기서 쿠키만 보고 되돌리면 쿠키가 만료(7일)되거나
+    다시 로그인하기 전까지 회원 전용 기능을 잃는다. 그래서 `resolveMembership()` 으로
+    한 번 물어보고 **확정된 게스트만** 내보낸다. 회원으로 확인되면 낡은 쿠키를 그 자리에서
+    걷는다(`usePublicShootCta` 와 같은 처리다).
 
-    **쿠키를 읽기 전에는 움직이지 않는다.** `accessMode` 의 초깃값이 "member" 라
-    `hydrated` 를 안 보면 진짜 회원이 한 프레임 동안 튕긴다.
+    왕복 하나를 기다리는 비용은 실제로는 거의 안 든다 — 요청 시점에 이미 게스트인 사람은
+    프록시가 이 화면을 열어 주지도 않는다. 여기 오는 것은 「들어온 뒤에 게스트가 되는」
+    경우와 위의 낡은 쿠키 회원뿐이다.
+
+    **쿠키를 읽기 전에는 묻지 않는다.** `accessMode` 의 초깃값이 "member" 라 `hydrated` 를
+    안 보면 진짜 회원이 한 프레임 동안 헛왕복을 한다.
   */
   const guestHydrated = useGuestTrialStore((state) => state.hydrated);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
 
   useEffect(() => {
     if (!guestHydrated || accessMode !== "guest") return;
 
-    /*
-      **되돌릴 때 행사 이름과 고른 프레임을 들려 보낸다.**
+    void (async () => {
+      const membership = await resolveMembership();
 
-      `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다.
-      그냥 `/shoot?guestNotice=restricted` 로 보내면 행사 배너와 QR 이 지정한 프레임이 함께
-      사라져, 참가자가 기본 프레임으로 찍게 된다. 막는 것은 회원 전용 경로 하나지 행사
-      진입 전체가 아니다.
-    */
-    const params = new URLSearchParams({ guestNotice: "restricted" });
-    if (frameId) params.set("frame", frameId);
-    if (eventName) params.set("event", eventName);
-    router.replace(`/shoot?${params.toString()}`);
-  }, [accessMode, eventName, frameId, guestHydrated, router]);
+      // 낡은 게스트 쿠키를 든 회원이다. 쿠키를 걷고 이 화면에 그대로 둔다.
+      if (membership === "member") {
+        exitGuestMode();
+        return;
+      }
+      // 못 물어봤으면(`unknown`) 아무것도 하지 않는다 — 서버가 잠깐 흔들렸다고 회원을
+      // 내보내지 않는다. 다음 진입에서 다시 판정된다.
+      if (membership !== "guest") return;
+
+      /*
+        **되돌릴 때 행사 이름과 고른 프레임을 들려 보낸다.**
+
+        `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다.
+        그냥 `/shoot?guestNotice=restricted` 로 보내면 행사 배너와 QR 이 지정한 프레임이 함께
+        사라져, 참가자가 기본 프레임으로 찍게 된다. 막는 것은 회원 전용 경로 하나지 행사
+        진입 전체가 아니다.
+      */
+      const params = new URLSearchParams({ guestNotice: "restricted" });
+      if (frameId) params.set("frame", frameId);
+      if (eventName) params.set("event", eventName);
+      router.replace(`/shoot?${params.toString()}`);
+    })();
+  }, [
+    accessMode,
+    eventName,
+    exitGuestMode,
+    frameId,
+    guestHydrated,
+    router,
+  ]);
 
   const overLimitNotice = (count: number) =>
     `사진은 최대 ${maxPhotos}장까지 담을 수 있어 ${count}장은 제외했어요.`;

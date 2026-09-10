@@ -138,18 +138,42 @@ async function checkDeletionRequested() {
   }
 }
 
+/**
+ * 공유 재발급의 **자체 종료 상한.**
+ *
+ * 호출부의 상한과 별개로 필요하다. 재발급을 탭에 하나로 묶어 놓았으므로(아래
+ * `pendingReissue`), 상한 없는 호출부가 먼저 붙은 채 왕복이 멈추면 기다리는 쪽이 영영
+ * 정리되지 않고 **회선이 돌아온 뒤의 모든 401 이 그 멈춘 약속만 기다린다** — 새로고침
+ * 전까지 인증 API 가 통째로 선다. `resolveMembership()` 과 `useMyFrames()` 가 정확히
+ * 그 「상한 없는 호출부」다.
+ *
+ * 숫자는 **실측이 아니다.** 재발급 응답 시간을 재 보지 않았고, 이 저장소가 같은 성격의
+ * 문제(안 끝나면 사용자가 갇힌다)에 이미 걸어 둔 상한과 맞췄다 —
+ * `lib/userMediaApi.ts` 의 `DELETE_DEADLINE_MS`, `lib/themeEditorStore.ts` 의
+ * `ASSET_QUEUE_WAIT_LIMIT_MS` 가 둘 다 30초다. 셋이 갈라지면 근거가 사라지니 함께 본다.
+ */
+const REISSUE_DEADLINE_MS = 30_000;
+
 // 쿠키 기반 액세스 토큰 재발급. 자체 401 재시도는 하지 않는다(exempt).
 async function requestReissue(): Promise<ReissueResult> {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), REISSUE_DEADLINE_MS);
+
   try {
     const res = await fetch("/api/client/reissue", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     });
     if (res.ok) return "ok";
     return res.status === 401 || res.status === 403 ? "expired" : "unavailable";
   } catch {
+    // 상한에 걸린 것도, 회선이 끊긴 것도 여기다. 둘 다 「재발급 못 했다」로 접는다 —
+    // 세션이 끊겼다고 단정하지 않는다(그 판정은 서버가 401·403 으로 준 때뿐이다).
     return "unavailable";
+  } finally {
+    clearTimeout(deadline);
   }
 }
 

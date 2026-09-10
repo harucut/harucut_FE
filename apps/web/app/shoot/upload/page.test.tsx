@@ -45,6 +45,13 @@ jest.mock("@/lib/shootSessionStore", () => ({
     selector ? selector(sessionState) : sessionState,
 }));
 
+const mockResolveMembership = jest.fn();
+
+// 회원 여부 판정만 갈아 끼운다 — 스토어와 쿠키는 실제 구현을 그대로 태운다.
+jest.mock("@/lib/authSession", () => ({
+  resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
+}));
+
 jest.mock("@/lib/photoImport", () => ({
   importPhotoFiles: (...args: unknown[]) => mockImportPhotoFiles(...args),
 }));
@@ -72,6 +79,7 @@ beforeEach(() => {
     hydrated: true,
     notice: null,
   });
+  mockResolveMembership.mockResolvedValue("guest");
   sessionState.frameId = "classic-4";
   sessionState.eventName = null;
   sessionState.shots = [];
@@ -291,14 +299,16 @@ describe("사진 불러오기 개수 상한", () => {
   이미지 저장"으로 못박는다 — 갤러리 불러오기는 거기 없다.
 */
 describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => {
-  it("게스트로 확인되면 촬영 화면으로 되돌린다", () => {
+  it("게스트로 확인되면 촬영 화면으로 되돌린다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
 
     render(<ShootUploadPage />);
 
-    expect(mockReplace).toHaveBeenCalledWith(
-      "/shoot?guestNotice=restricted&frame=classic-4",
-    );
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/shoot?guestNotice=restricted&frame=classic-4",
+      );
+    });
   });
 
   /*
@@ -308,22 +318,24 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     보내면 행사 배너와 QR 이 지정한 프레임이 함께 사라져, 참가자가 기본 프레임으로 찍게 된다.
     막는 것은 회원 전용 경로 하나지 행사 진입 전체가 아니다.
   */
-  it("되돌릴 때 행사 이름과 프레임을 들려 보낸다", () => {
+  it("되돌릴 때 행사 이름과 프레임을 들려 보낸다", async () => {
     sessionState.eventName = "hongdae-2026";
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
 
     render(<ShootUploadPage />);
 
-    expect(mockReplace).toHaveBeenCalledWith(
-      "/shoot?guestNotice=restricted&frame=classic-4&event=hongdae-2026",
-    );
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/shoot?guestNotice=restricted&frame=classic-4&event=hongdae-2026",
+      );
+    });
   });
 
   /*
     이 화면이 열린 **뒤에** 게스트가 되는 경우가 이번에 잡힌 자리다 — 행사 진입의 판정이
     인증 왕복 뒤에 끝난다. 마운트 시점만 보면 그 순간을 놓친다.
   */
-  it("들어온 뒤에 게스트가 되어도 되돌린다", () => {
+  it("들어온 뒤에 게스트가 되어도 되돌린다", async () => {
     render(<ShootUploadPage />);
     expect(mockReplace).not.toHaveBeenCalled();
 
@@ -331,9 +343,43 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
       useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
     });
 
-    expect(mockReplace).toHaveBeenCalledWith(
-      "/shoot?guestNotice=restricted&frame=classic-4",
-    );
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/shoot?guestNotice=restricted&frame=classic-4",
+      );
+    });
+  });
+
+  /*
+    회귀 — **낡은 게스트 쿠키를 든 회원은 내보내지 않는다.**
+
+    이 판정이 붙기 전 배포에서 체험을 한 번 눌러 본 사람에게는 게스트 쿠키가 남아 있는데
+    세션은 멀쩡하다. 프록시는 그 사람을 살아 있는 access 로 통과시키는데, 여기서 쿠키만
+    보고 되돌리면 쿠키가 만료(7일)되거나 다시 로그인하기 전까지 회원 전용 기능을 잃는다.
+    쿠키는 그 자리에서 걷는다.
+  */
+  it("낡은 쿠키를 든 회원은 쿠키만 걷고 머무른다", async () => {
+    mockResolveMembership.mockResolvedValue("member");
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+
+    render(<ShootUploadPage />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().accessMode).toBe("member");
+    });
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  // 못 물어봤으면 아무것도 하지 않는다 — 서버가 잠깐 흔들렸다고 회원을 내보내지 않는다.
+  it("판정할 수 없으면 내보내지 않는다", async () => {
+    mockResolveMembership.mockResolvedValue("unknown");
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+
+    render(<ShootUploadPage />);
+
+    await act(async () => {});
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
   });
 
   /*
@@ -341,17 +387,21 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     `accessMode` 의 초깃값이 "member" 라 `hydrated` 를 안 보면 진짜 회원이 한 프레임
     동안 튕긴다. 이 못이 없으면 "무조건 되돌린다"로 고쳐도 위 둘이 통과한다.
   */
-  it("회원은 그대로 머무른다", () => {
+  it("회원은 묻지도 않고 그대로 머무른다", async () => {
     render(<ShootUploadPage />);
 
+    await act(async () => {});
+    expect(mockResolveMembership).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it("쿠키를 읽기 전에는 되돌리지 않는다", () => {
+  it("쿠키를 읽기 전에는 묻지도 되돌리지도 않는다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: false });
 
     render(<ShootUploadPage />);
 
+    await act(async () => {});
+    expect(mockResolveMembership).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });
