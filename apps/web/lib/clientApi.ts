@@ -139,31 +139,91 @@ async function checkDeletionRequested() {
 }
 
 // 쿠키 기반 액세스 토큰 재발급. 자체 401 재시도는 하지 않는다(exempt).
-async function reissueAccessToken(
-  signal?: AbortSignal,
-): Promise<ReissueResult> {
+async function requestReissue(): Promise<ReissueResult> {
   try {
-    /*
-      **원요청의 상한을 여기까지 들고 온다.**
-
-      예전에는 이 fetch 가 signal 없이 돌았다. 그래서 호출부가 종료 상한을 걸어도(삭제 API 의
-      DELETE_DEADLINE_MS 가 그렇다) 401 뒤의 이 왕복이 응답 없이 멈추면 상한이 먹지 않고
-      요청 전체가 영영 안 끝났다 — 확인 다이얼로그가 그 사이 감옥이 된다.
-
-      끊기면 아래 catch 가 `unavailable` 로 접는다. 그러면 원요청의 401 이 그대로 올라가
-      호출부가 실패를 처리하고, 상한을 건 쪽이 자기 오류로 바꿔 말한다.
-    */
     const res = await fetch("/api/client/reissue", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
-      signal,
     });
     if (res.ok) return "ok";
     return res.status === 401 || res.status === 403 ? "expired" : "unavailable";
   } catch {
     return "unavailable";
   }
+}
+
+/**
+ * 지금 도는 재발급. **탭에 하나뿐이다.**
+ *
+ * 왜 하나여야 하는가 — `reissue` 는 **refresh 를 회전시킨다.** 같은 쿠키로 둘이 동시에
+ * 부르면 서버가 둘 다 받아 회전 응답 순서에 따라 한쪽이 무효가 되고, 그쪽 호출부는 멀쩡한
+ * 세션을 끊긴 것으로 읽는다. 실제로 나던 자리: 행사 주소로 들어온 회원에게 프레임 조회
+ * (`useMyFrames`)와 회원 판정(`resolveMembership`)이 나란히 시작되고, access 가 만료돼
+ * 있으면 둘 다 401 을 받아 재발급이 두 번 나갔다. 판정 쪽이 진 경우 회원이 `guest` 로
+ * 읽혀 7일짜리 체험 쿠키가 심겼다.
+ */
+let pendingReissue: Promise<ReissueResult> | null = null;
+
+/**
+ * 그 재발급을 지금 몇이 기다리는가.
+ *
+ * 세는 이유는 **멈춘 재발급이 탭을 통째로 막지 않게** 하기 위해서다. 하나로 묶어 놓으면
+ * 답이 영영 안 오는 왕복 하나가 그 뒤의 모든 재발급을 물고 있게 된다. 기다리던 쪽이 자기
+ * 상한으로 다 떠나면 슬롯을 놓아, 다음 호출부는 새로 시작한다. (앞 왕복은 남아 있을 수
+ * 있다 — 쿠키 하나를 받는 요청이라 그 비용은 작다고 봤다.)
+ */
+let reissueWaiters = 0;
+
+/** 이 signal 이 끊기면 「재발급 못 했다」로 답한다 — 기다리기를 그만두는 자리다. */
+function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve("unavailable");
+      return;
+    }
+    signal.addEventListener("abort", () => resolve("unavailable"), {
+      once: true,
+    });
+  });
+}
+
+/**
+ * 재발급을 부른다 — 이미 도는 것이 있으면 **그것을 기다린다.**
+ *
+ * 왕복 자체에는 호출부의 signal 을 걸지 않는다. 먼저 온 호출부가 자기 상한으로 끊으면
+ * 뒤에 붙은 호출부의 재발급까지 함께 죽기 때문이다. 대신 **기다리는 쪽**에 signal 을 건다 —
+ * 끊긴 호출부는 `unavailable` 을 받아 자기 실패로 넘어가고(그러면 `resolveMembership` 은
+ * `guest` 가 아니라 `unknown` 으로 답한다), 왕복은 남은 호출부를 위해 계속 간다.
+ */
+function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
+  if (!pendingReissue) {
+    pendingReissue = requestReissue();
+  }
+
+  const shared = pendingReissue;
+  const settled = () => {
+    reissueWaiters -= 1;
+    // 이 왕복을 기다리는 쪽이 아무도 안 남았으면 슬롯을 놓는다. 끝났으면 정리이고,
+    // 아직 도는 중이면 「멈춘 왕복이 다음 재발급을 막지 않게」 하는 자리다.
+    if (reissueWaiters === 0 && pendingReissue === shared) pendingReissue = null;
+  };
+
+  reissueWaiters += 1;
+  const waited = signal
+    ? Promise.race([shared, abortedAsUnavailable(signal)])
+    : shared;
+
+  return waited.then(
+    (result) => {
+      settled();
+      return result;
+    },
+    (error) => {
+      settled();
+      throw error;
+    },
+  );
 }
 
 /**
