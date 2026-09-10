@@ -585,22 +585,34 @@ export async function clearPendingGuestSaveIfUnchanged(
 ): Promise<PendingGuestSaveClearResult> {
   if (typeof window === "undefined") return "unreadable";
 
-  /** 저장소를 못 열었을 때 볼 수 있는 것은 예전 localStorage 한 벌뿐이다. */
-  const clearLegacyIfUnchanged = (): PendingGuestSaveClearResult => {
+  /**
+   * 예전 localStorage 한 벌을 본다.
+   *
+   * `whenMissing` 을 부르는 쪽이 정한다 — **그쪽도 없을 때의 뜻이 자리마다 다르기**
+   * 때문이다. 저장소를 못 연 자리에서는 「모르겠다」이고(IndexedDB 에 무엇이 들었는지 못
+   * 봤다), 열어서 레코드가 없는 것을 확인한 자리에서는 「이미 없다」다 — 그것은 사용자가
+   * 원한 상태이므로 삭제 성공으로 답해야 한다. 한때 둘을 `unreadable` 하나로 뭉쳐,
+   * 다른 탭이 먼저 지운 뒤의 두 번째 탭이 "보관물이 다른 네컷으로 바뀌어 그대로 뒀어요"
+   * 라는 사실과 다른 안내를 받았다.
+   */
+  const clearLegacyIfUnchanged = (
+    whenMissing: PendingGuestSaveClearResult,
+  ): PendingGuestSaveClearResult => {
     const legacy = readLegacyEntry(now);
-    if (!legacy) return "unreadable";
+    if (!legacy) return whenMissing;
     if (!isSame(legacy)) return "changed";
     clearLegacyEntries();
     return "cleared";
   };
 
   const db = await openDatabase();
-  if (!db) return clearLegacyIfUnchanged();
+  if (!db) return clearLegacyIfUnchanged("unreadable");
 
   try {
     const outcome = await deleteRecordIfMatches(db, isSame, now);
-    // 레코드가 없으면 예전 보관물이 이번 인계였을 수 있다. 그쪽을 본다.
-    if (outcome === "absent") return clearLegacyIfUnchanged();
+    // 레코드가 없으면 예전 보관물이 이번 인계였을 수 있다. 그쪽도 없으면 **이미 없는**
+    // 것이 확인된 셈이라 성공으로 끝낸다(멱등하다).
+    if (outcome === "absent") return clearLegacyIfUnchanged("cleared");
     // 지웠으면 예전 키도 같이 걷는다(setPendingGuestSave 와 같은 규칙).
     if (outcome === "cleared") clearLegacyEntries();
     return outcome;

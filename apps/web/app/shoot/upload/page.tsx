@@ -119,6 +119,16 @@ export default function ShootUploadPage() {
   const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
   /** 서버가 「회원」이라고 답했는가. 이 화면의 조작은 그 뒤에 열린다. */
   const [memberConfirmed, setMemberConfirmed] = useState(false);
+  /**
+   * 확인을 **못 했는가**(`unknown`). 잠긴 채로 두되, 왜 잠겼는지 말하고 다시 해 볼 길을 준다.
+   *
+   * 이것이 없으면 서버가 잠깐 흔들린 것만으로 멀쩡한 회원이 화면을 새로 열기 전까지
+   * 아무것도 못 한다 — 안내조차 없이. 자동으로 되풀이하지는 않는다(같은 장애에 요청만
+   * 쌓는다). 누를 때 다시 확인한다.
+   */
+  const [checkFailed, setCheckFailed] = useState(false);
+  /** 「다시 확인」이 아래 effect 를 다시 돌리는 손잡이. */
+  const [recheckToken, setRecheckToken] = useState(0);
 
   useEffect(() => {
     if (!guestHydrated) return;
@@ -129,12 +139,16 @@ export default function ShootUploadPage() {
       if (membership === "member") {
         // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다. 그리고 조작을 연다.
         if (accessMode === "guest") exitGuestMode();
+        setCheckFailed(false);
         setMemberConfirmed(true);
         return;
       }
       // 못 물어봤으면(`unknown`) 내보내지 않는다 — 서버가 잠깐 흔들렸다고 회원을 쫓아내지
-      // 않는다. 다만 잠금은 그대로 둔다(아래 memberOnlyLocked).
-      if (membership !== "guest") return;
+      // 않는다. 잠금은 그대로 두되, 왜 잠겼는지 말하고 다시 해 볼 길을 준다.
+      if (membership !== "guest") {
+        setCheckFailed(true);
+        return;
+      }
 
       // 확정된 게스트다. 진행 중이던 변환도 버린다 — 되돌리는 사이에 끝나면 그 사진이
       // 세션에 남아 게스트 허용 경로(고르기·결과)에서 그대로 쓰인다.
@@ -159,6 +173,7 @@ export default function ShootUploadPage() {
     exitGuestMode,
     frameId,
     guestHydrated,
+    recheckToken,
     router,
   ]);
 
@@ -273,6 +288,28 @@ export default function ShootUploadPage() {
           <ImagePlus className="h-4.5 w-4.5" />
           {isImporting ? "불러오는 중…" : "사진 고르기"}
         </button>
+
+        {checkFailed && !memberConfirmed ? (
+          <div
+            role="status"
+            className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-3 text-[12px] leading-[1.6] text-(--hc-danger)"
+          >
+            <p>
+              회원인지 확인하지 못했어요. 갤러리 불러오기는 회원만 쓸 수 있어서 잠시
+              잠가 뒀어요.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setCheckFailed(false);
+                setRecheckToken((token) => token + 1);
+              }}
+              className="hc-button-secondary self-start rounded-full border px-3.5 py-1.5 text-[12px] font-semibold"
+            >
+              다시 확인
+            </button>
+          </div>
+        ) : null}
 
         {notice ? (
           // 제외 안내는 오류가 아니라 알림이다 — 위험색(빨강)을 쓰지 않는다.

@@ -792,6 +792,37 @@ describe("pendingGuestSave", () => {
     지금은 한 `readwrite` 트랜잭션 안에서 대조하고 지운다. 그 사이에 쓰기가 들어오는 것을
     흉내 내려고, 트랜잭션이 대조하는 순간(`get` 의 `onsuccess`)에 레코드를 갈아 끼운다.
   */
+  /*
+    회귀 — **이미 사라진 보관물은 「지웠다」로 끝낸다.**
+
+    두 탭이 같은 인계 안내를 받아 첫 탭이 먼저 지우면, 두 번째 탭은 열어서 「없다」를
+    확인한다. 그것은 사용자가 원한 상태이므로 성공이다. 한때 「저장소를 못 열었다」와
+    한 값으로 뭉쳐 `unreadable` 을 줬고, 호출부가 그것을 실패로 접어 "보관물이 다른
+    네컷으로 바뀌어 그대로 뒀어요"라는 **사실과 다른 안내**를 띄웠다.
+  */
+  it("열어서 아무것도 없으면 이미 지운 것으로 끝낸다", async () => {
+    // 저장소는 열리고, 레코드도 예전 키도 없다.
+    const result = await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.savedAt === NOW,
+      NOW,
+    );
+
+    expect(result).toBe("cleared");
+  });
+
+  // 반대쪽 못 — **못 열었으면** 여전히 「모르겠다」다. 그 자리에서 성공이라고 답하면
+  // 호출부가 안 지운 것을 지웠다고 안내한다.
+  it("못 열었고 예전 보관물도 없으면 모르겠다로 답한다", async () => {
+    store.openFails = true;
+
+    const result = await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.savedAt === NOW,
+      NOW,
+    );
+
+    expect(result).toBe("unreadable");
+  });
+
   it("대조와 삭제가 한 트랜잭션 안에서 끝난다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.openCount = 0;

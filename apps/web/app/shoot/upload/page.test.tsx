@@ -401,6 +401,45 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
   });
 
   /*
+    회귀 — **잠긴 이유를 말하고 다시 해 볼 길을 준다.**
+
+    `unknown` 에서 잠그기만 하면, 서버가 잠깐 흔들린 것만으로 멀쩡한 회원이 화면을 새로
+    열기 전까지 아무것도 못 한다 — 안내조차 없이. effect 의 의존성도 안 바뀌므로 저절로
+    다시 묻지도 않는다.
+  */
+  it("판정하지 못하면 이유를 말하고 다시 확인할 수 있다", async () => {
+    mockResolveMembership.mockResolvedValue("unknown");
+
+    render(<ShootUploadPage />);
+
+    const retry = await screen.findByRole("button", { name: "다시 확인" });
+    expect(screen.getByText(/회원인지 확인하지 못했어요/)).toBeInTheDocument();
+
+    // 서버가 돌아왔다. 다시 확인하면 잠금이 풀린다.
+    mockResolveMembership.mockResolvedValue("member");
+    fireEvent.click(retry);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "사진 고르기" }),
+      ).not.toBeDisabled();
+    });
+    expect(screen.queryByRole("button", { name: "다시 확인" })).toBeNull();
+  });
+
+  // 반대쪽 못 — 회원으로 확인된 평범한 경우에는 그 안내가 뜨지 않는다.
+  it("회원으로 확인되면 안내가 뜨지 않는다", async () => {
+    render(<ShootUploadPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "사진 고르기" }),
+      ).not.toBeDisabled();
+    });
+    expect(screen.queryByText(/회원인지 확인하지 못했어요/)).toBeNull();
+  });
+
+  /*
     회귀 — **되돌리면 진행 중이던 변환도 버린다.**
 
     잠그기 전에 시작된 변환이 되돌리는 사이에 끝나면 그 사진이 **전역 촬영 세션**에 담긴다.
