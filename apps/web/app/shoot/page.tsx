@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FrameChooser } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
+import { isUsableMember } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
@@ -80,6 +81,42 @@ function ShootPageContent() {
     setSource,
     source,
   ]);
+
+  /*
+    **행사 QR 로 들어왔는데 회원이 아니면, 여기서 체험을 시작한다.**
+
+    프록시는 쿠키가 **아예 없을 때만** 체험 쿠키를 심는다(apps/web/proxy.ts 의 행사 분기).
+    쿠키가 남아 있는 브라우저 — 행사장에 흔한, 예전에 로그인해 둔 그 브라우저 — 는 그대로
+    통과해 여기까지 온다. 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다. 서버가 회수한
+    refresh 도 쿠키만 보면 멀쩡한 것과 똑같이 생겼기 때문이다.
+
+    판정할 수 있는 것은 여기다. `isUsableMember()` 는 `clientApi` 로 물어보므로 **401 이면
+    재발급을 한 번 하고 다시 시도한다** — access 만 자연 만료된 회원은 그 자리에서 되살아나
+    회원으로 남고, 정말 끊긴 세션만 false 로 떨어진다. 그때 비로소 체험을 시작한다.
+    미들웨어에서 이 판정을 하지 않는 이유(재발급은 토큰을 회전시키는 쓰기이고 프록시는 모든
+    요청에 붙는다)는 그 분기 주석에 적어 뒀다.
+
+    **이미 게스트면 묻지 않는다** — 쿠키가 없어 프록시가 심어 준 경우이고, 답은 정해져 있다.
+    행사 진입이 아닐 때도 묻지 않는다. 여기서 일반 진입까지 물으면 촬영 화면을 열 때마다
+    인증 왕복이 하나 붙는다.
+  */
+  const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
+
+  useEffect(() => {
+    if (!queriedEventName || !hydrated || accessMode === "guest") return;
+
+    let cancelled = false;
+    void (async () => {
+      // 회원이면 아무것도 하지 않는다 — 쿠키를 덮어쓰지 않는다.
+      if (await isUsableMember()) return;
+      if (!cancelled) enterGuestMode();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessMode, enterGuestMode, hydrated, queriedEventName]);
 
   return (
     <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">

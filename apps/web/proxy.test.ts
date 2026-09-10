@@ -209,16 +209,13 @@ describe("proxy 회원 전환", () => {
 });
 
 /*
-  행사 QR 진입은 **죽은 인증 쿠키에 가리지 않는다.**
+  행사 QR 진입에서 미들웨어가 하는 일은 **하나뿐이다** — 쿠키가 아예 없는 방문자에게
+  체험 쿠키를 심어 `/shoot` 이 로그인으로 튕기지 않게 하는 것.
 
-  QR 을 찍는 사람이 늘 빈 브라우저를 들고 오지는 않는다. 예전에 로그인했던 브라우저에
-  형식이 깨진 인증 쿠키가 남아 있으면, 쿠키가 있다는 것만 보고 통과시키던 판정이
-  체험 쿠키를 심을 기회를 먹었다. 그 방문자는 회원으로 읽히지만 인증 API 는 401 이라
-  "가입 없이 찍는다"는 행사 흐름이 통째로 막힌다.
-
-  반대쪽도 같이 고정한다. **지금 로그인해 있다는 것이 확인되면**(살아 있는 access) 심지
-  않는다 — 회원을 7일짜리 체험 쿠키로 덮어쓰는 쪽이 더 큰 손해다. 확인의 기준이 쿠키의
-  존재가 아니라 access 의 exp 인 이유는 proxy.ts 의 그 분기 주석에 있다.
+  쿠키가 남아 있는 브라우저(행사장에 흔하다)는 그냥 통과시킨다. 그 쿠키가 살아 있는지는
+  여기서 알 수 없고 — 재발급은 토큰을 회전시키는 쓰기라 모든 요청에 붙는 프록시가 할 일이
+  아니다 — 화면이 `isUsableMember()` 로 물어본 뒤 정말 회원이 아닐 때만 전환한다.
+  그 판정과 이유는 proxy.ts 의 분기 주석과 app/shoot/page.tsx 에 있다.
 */
 describe("proxy 행사 QR 진입", () => {
   const EVENT_ENTRY = "/shoot?frame=classic&event=hongdae-2026";
@@ -231,62 +228,50 @@ describe("proxy 행사 QR 진입", () => {
     expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
   });
 
-  // 회귀. 아래가 없으면 행사 참가자가 로그인 화면으로 밀린다.
+  /*
+    회귀 — **인증 쿠키가 하나라도 있으면 여기서는 심지 않는다.**
+
+    한때 「살아 있는 access 만 아니면 심는다」로 두었다. 회수된 refresh 를 든 행사 참가자를
+    회원으로 오해해 막지 말자는 뜻이었는데, 반대쪽을 더 크게 깼다 — access 만 자연 만료되고
+    refresh 는 멀쩡한 회원(흔하다)이 QR 을 찍으면 7일짜리 체험 쿠키를 받았고, `clientApi` 가
+    재발급에 성공한 뒤에도 `guestTrialStore` 는 그 쿠키만 보고 게스트로 복원해 기록·커스텀
+    프레임을 잃었다.
+
+    쿠키가 살아 있는지는 미들웨어가 알 수 없다(재발급은 토큰을 회전시키는 쓰기이고 프록시는
+    모든 요청에 붙는다 — proxy.ts 의 그 분기 주석). 그래서 **판정을 화면으로 넘긴다.**
+    쿠키가 있으면 그냥 통과시키고, `app/shoot/page.tsx` 가 `isUsableMember()` 로 —
+    재발급을 포함해 — 물어본 뒤 정말 회원이 아닐 때만 체험을 시작한다.
+  */
   test.each([
     ["형식이 깨진 access 쿠키", STALE_AUTH],
     ["만료된 access 쿠키", accessToken(-3600)],
     ["페이로드가 base64 가 아닌 access 쿠키", BROKEN_BASE64_AUTH],
     ["페이로드가 JSON 이 아닌 access 쿠키", BROKEN_JSON_AUTH],
-  ])("%s 만 남아 있어도 체험 쿠키를 심는다", async (_label, cookie) => {
-    const response = await proxy(request(EVENT_ENTRY, cookie));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
-  });
-
-  /*
-    회귀. **회수된 refresh 쿠키에 가려 행사 체험이 다시 막혔다.**
-
-    다른 기기에서 재로그인하면 서버가 이 기기의 refresh 를 회수하는데(Redis 의
-    REFRESH_TOKEN 키가 갈린다 — docs/backend-contract.md 「토큰」), 브라우저에는 쿠키가
-    그대로 남아 살아 있는 것과 구별되지 않는다. 예전 판정은 그 쿠키가 있다는 것만으로
-    체험 전환을 눌러, 그 방문자는 게스트 쿠키 없이 hasAuthCookie() 로 통과해 회원 화면을
-    받았다 — 인증 API 는 전부 401 이라 "가입 없이 바로 촬영"이 행사장에서 다시 멈췄다.
-    되살릴 수 있는지 없는지를 쿠키로 점치지 않고, **살아 있는 access 만** 근거로 본다.
-  */
-  test.each([
     ["회수된 refresh 쿠키만", "refreshToken=revoked-elsewhere"],
     [
       "만료된 access 와 회수된 refresh",
       `${accessToken(-3600)}; refreshToken=revoked-elsewhere`,
     ],
-    [
-      "형식이 깨진 access 와 회수된 refresh",
-      `${STALE_AUTH}; refreshToken=revoked-elsewhere`,
-    ],
-  ])("%s 를 들고 와도 체험 쿠키를 심는다", async (_label, cookie) => {
-    const response = await proxy(request(EVENT_ENTRY, cookie));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
-  });
-
-  /*
-    반대쪽 못. 지금 로그인해 있는 것이 확인된 사람은 QR 로 들어와도 게스트로 덮지 않는다.
-    이 못이 없으면 "행사 진입이면 무조건 심는다"로 고쳐도 위 회귀 테스트가 통과한다 —
-    그러면 회원이 7일 동안 자기 저장 프레임과 기록을 잃는다(accessMode 는 이 쿠키만 본다).
-  */
-  test.each([
     ["살아 있는 access 토큰", accessToken(3600)],
     ["살아 있는 access 와 refresh", `${accessToken(3600)}; refreshToken=live`],
-  ])("%s 를 든 방문자는 게스트로 만들지 않는다", async (_label, cookie) => {
+  ])("%s 를 들고 오면 심지 않고 통과시킨다", async (_label, cookie) => {
     const response = await proxy(request(EVENT_ENTRY, cookie));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  /*
+    반대쪽 못. 쿠키가 **아예 없는** 방문자에게는 여기서 심어야 한다 — 물어볼 곳이 없고,
+    안 심으면 `/shoot` 이 보호 경로라 로그인으로 튕겨 행사 흐름이 그 자리에서 끊긴다.
+    이 못이 없으면 「행사 분기를 통째로 없앤다」로 고쳐도 위 테스트가 전부 통과한다.
+  */
+  test("쿠키가 없는 방문자에게는 심어서 로그인으로 튕기지 않는다", async () => {
+    const response = await proxy(request(EVENT_ENTRY));
+
+    expect(response.status).toBe(200);
+    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
   });
 
   test("행사 QR 이 아닌 보호 경로는 죽은 쿠키로도 그대로 통과한다", async () => {

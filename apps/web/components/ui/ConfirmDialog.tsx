@@ -47,12 +47,11 @@ export function ConfirmDialog({
     그대로 불렀다. 이 다이얼로그가 묻는 것은 전부 되돌릴 수 없는 DELETE 라, 느린 요청이
     도는 사이 그 둘 중 하나로 닫히면 화면에서는 취소한 것처럼 보이지만 요청은 계속 간다.
     사용자는 그 자리에서 이름 바꾸기나 **다른** 항목 삭제를 시작하고(기록), 저장을 누르기도
-    하는데(테마 편집기 — 저장 버튼은 `isSaving` 만 보고 `isDeleting` 은 안 본다,
-    ThemeEditorPage.tsx:572), 뒤늦게 도착한 응답이 목록에서 항목을 지우거나 `/theme` 로
+    하는데(테마 편집기 — 저장 버튼은 `isSaving` 만 보고 `isDeleting` 은 안 본다), 뒤늦게 도착한 응답이 목록에서 항목을 지우거나 `/theme` 로
     화면을 옮겨 버린다. 실패해도 그 사유는 이미 닫힌 다이얼로그 밖에서 뜬다.
 
     **같은 항목 재삭제는 여기 이유가 아니다** — 두 호출부가 이미 막는다(history/page.tsx 의
-    `disabled={deletingId === item.mediaId}`, ThemeEditorPage.tsx:593 의
+    `disabled={deletingId === item.mediaId}`, ThemeEditorPage.tsx 의
     `disabled={isDeleting || isSaving}`). 한때 여기 적혀 있었는데 코드와 어긋난 말이었다.
 
     요청 자체를 취소할 수는 없으므로(fetch 를 끊어도 서버는 이미 처리한다) 할 수 있는
@@ -61,6 +60,15 @@ export function ConfirmDialog({
 
     가드는 `running` 일 때만이다. 무조건 막으면 되돌릴 수 없는 삭제 앞에서 빠져나갈
     길이 없어져 더 나쁘다.
+
+    **그래서 `running` 은 반드시 끝나야 한다 — 상한을 거는 자리는 여기가 아니라 호출부다.**
+    한때 두 삭제 요청 어디에도 종료 상한이 없었다(fetch 는 스스로 끝나지 않고 clientApi 에도
+    기본 타임아웃이 없다). 회선이 응답 없이 멈추면 `running` 이 안 내려와 이 가드가
+    영구화됐고, 취소·배경·Escape 가 전부 무동작이 되어 포커스가 죽은 취소 버튼에 갇혔다 —
+    새로고침 말고는 앱을 쓸 수 없다. 지금은 두 API 가 30초 상한을 걸고 끊기면 호출부가
+    `running` 을 내리며 사유를 보여 준다(lib/userMediaApi.ts · lib/remoteFrameApi.ts).
+    새 호출부를 붙일 때도 조건은 같다. 끝나지 않을 수 있는 `running` 을 넘기면 이
+    다이얼로그는 감옥이 된다.
   */
   const requestClose = useCallback(() => {
     if (running) return;

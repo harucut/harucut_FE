@@ -12,6 +12,7 @@ import {
   fitCanvasScale,
   MAX_CANVAS_EDGE,
   MAX_CANVAS_PIXELS,
+  MAX_TILE_PIXELS,
 } from "@/lib/canvas/canvasBudget";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 
@@ -58,6 +59,33 @@ describe("캔버스 예산", () => {
 
   it("우리가 그려 본 적 없는 크기까지 열어 주지는 않는다", () => {
     expect(MAX_CANVAS_EDGE).toBeLessThanOrEqual(LAYOUT_LONGEST_EDGE);
+  });
+});
+
+/**
+ * 타일 예산의 못. 이 값은 기기에서 온 것이 아니라 **우리가 정한 작업 크기**라, 기준도
+ * 바깥 숫자가 아니라 **캔버스 예산과의 관계**로 잡는다. 양쪽을 다 걸어야 한다 —
+ * 한쪽만 있으면 「타일을 안 나누는 것」이나 「화소 하나짜리 타일」이 그대로 통과한다.
+ */
+describe("타일 예산", () => {
+  /*
+    타일도 캔버스다. 이 값이 목적지 캔버스만큼 크면 나눠 그리는 뜻이 없다 — 지적이
+    말한 최대 메모리가 그대로 남는다. 1/4 은 「눈에 띄게 작다」의 선으로 고른 값이고,
+    지금 값(100만)은 예산의 1/16 이라 한참 아래다.
+  */
+  it("타일 하나가 목적지 캔버스만 해지지 않는다", () => {
+    expect(MAX_TILE_PIXELS).toBeLessThanOrEqual(MAX_CANVAS_PIXELS / 4);
+  });
+
+  /*
+    타일은 원본 좌표계에서 대체로 정사각형이다(`fitCanvasScale` 이 가로세로 같은 배율을
+    주므로). 그 한 변이 변 상한을 넘으면 타일 자체가 조용히 비는데, 그건 이 수정이 막으려던
+    바로 그 사고다.
+  */
+  it("타일 한 변이 변 상한을 넘지 않는다", () => {
+    expect(Math.ceil(Math.sqrt(MAX_TILE_PIXELS))).toBeLessThanOrEqual(
+      MAX_CANVAS_EDGE,
+    );
   });
 });
 

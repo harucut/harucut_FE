@@ -406,7 +406,7 @@ export type PendingGuestSaveRead =
        * false 면 저장소를 못 연 채 예전 localStorage 한 벌만 읽은 것이다. 인계에는 그대로
        * 쓴다 — 그 한 벌이 사용자에게 남은 마지막 인계일 수 있다. 다만 IndexedDB 에 무엇이
        * 있는지는 **확인한 적이 없다.** 「지워도 되는가」에 이 답을 쓰면 못 연 사이 다른 탭이
-       * 갈아 끼운 한 벌을 확인 없이 지운다. 그 질문은 `readPendingGuestSaveForClear` 로 묻는다.
+       * 갈아 끼운 한 벌을 확인 없이 지운다. 그 질문은 `clearPendingGuestSaveIfUnchanged` 가 대신 판단한다.
        */
       opened: boolean;
     }
@@ -426,7 +426,7 @@ export type PendingGuestSaveRead =
  * 「없다」로 답하면 그 판단으로 무언가를 지우게 된다.
  *
  * **이 답을 삭제 근거로 쓰지 않는다.** 저장소를 못 열어도 예전 localStorage 한 벌을 읽어
- * `found` 로 답하기 때문이다(`opened: false`). 지워도 되는지는 `readPendingGuestSaveForClear`
+ * `found` 로 답하기 때문이다(`opened: false`). 지워도 되는지는 `clearPendingGuestSaveIfUnchanged`
  * 에 묻는다.
  */
 export async function readPendingGuestSave(
@@ -484,31 +484,57 @@ export async function readPendingGuestSave(
 }
 
 /**
- * **「지워도 되는가」를 묻는 읽기.** 확인한 것만 근거로 삼는다.
+ * **「지워도 되는가」의 판단을 이 파일이 맡는다.** 호출부는 지문만 준다.
  *
- * 인계를 꺼내는 읽기와 목적이 다르다. 그쪽은 저장소를 못 열어도 예전 localStorage 한 벌을
- * 읽어 `found` 로 답한다 — 읽을 수 있는 인계를 우리 사정으로 버리지 않기 위해서다. 그런데
- * 조건부 삭제(components/guest/GuestTrialBridge.tsx 의 `clearHandoffIfUnchanged`)는
- * `found` + 지문 일치를 **삭제 허가**로 쓴다. 그 답을 그대로 넘기면 IndexedDB 를 한 번도 못
- * 읽은 자리에서 삭제가 진행돼, 그 사이 다른 탭이 갈아 끼운 — 확인한 적 없는 — 한 벌이
- * 사라진다. 원본 4장은 거기에만 있다.
+ * 인계를 꺼내는 읽기(`readPendingGuestSave`)는 저장소를 못 열어도 예전 localStorage 한 벌을
+ * 읽어 `found`(`opened: false`)로 답한다 — 읽을 수 있는 인계를 우리 사정으로 버리지 않기
+ * 위해서다. 그런데 그 답을 **삭제 허가**로 그대로 쓰면 IndexedDB 를 한 번도 못 읽은 자리에서
+ * 삭제가 진행돼, 그 사이 다른 탭이 갈아 끼운 — 확인한 적 없는 — 한 벌이 사라진다.
+ * 원본 4장은 거기에만 있다.
  *
- * 그래서 여기서는 **못 연 것을 전부 `unreadable` 로 접는다.** 모르면 손을 떼는 쪽이 답이다.
- * 두 읽기를 갈라 둔 이유가 이것이라, 삭제를 물을 때는 반드시 이쪽을 부른다.
+ * 한때 이 판단을 「삭제 전용 읽기」로 갈라 두고 못 연 것을 전부 `unreadable` 로 접었는데,
+ * 그러면 반대쪽이 깨졌다 — IndexedDB 를 영영 못 여는 자리(사생활 보호 모드)에서 사용자가
+ * 「버리기」를 골라도 예전 한 벌이 남아 다음 화면 이동에서 같은 확인이 다시 뜨고, 계정
+ * 저장에 성공한 뒤에도 남아 다시 「저장하기」를 고르면 같은 네컷이 서버에 한 벌 더 생겼다.
  *
- * **남는 한계다.** IndexedDB 를 영영 못 여는 자리(사생활 보호 모드)에서는 예전 localStorage
- * 한 벌을 읽어 인계는 되지만 지우지는 못한다. 사용자가 「버리기」를 골라도 남고, 호출부의
- * 안내문("다른 네컷으로 바뀌었어요")은 이 자리에서는 사실과 다르다 — 바뀐 것이 아니라
- * 확인을 못 한 것이다. 영원히 남지는 않는다: 기한(24시간)이 지나면 `readLegacyEntry` 가
- * 읽는 김에 걷어낸다. 안 지워진 것이 남는 쪽과 확인 안 한 원본 4장이 사라지는 쪽 중,
- * 되돌릴 수 있는 쪽을 골랐다.
+ * 그래서 접지 않고 **지울 것만 정확히 지운다.** 갈래가 셋이다.
+ *
+ * ① **열어서 확인한 한 벌** — 지문이 맞으면 통째로 지운다(IndexedDB + 예전 localStorage).
+ *
+ * ② **못 연 채 읽은 예전 localStorage 한 벌** — 지문이 맞으면 **그 키만** 지운다.
+ * IndexedDB 레코드는 건드리지 않는다. 한 번도 못 읽은 것이라 안에 무엇이 들었는지 모르고,
+ * 다른 탭이 방금 찍어 둔 원본 4장일 수 있다.
+ *
+ * ③ **아무것도 못 읽었다** — 손을 뗀다.
+ *
+ * **원자적이지 않다.** IndexedDB 에 조건부 삭제가 없어서 읽기와 삭제 사이는 열려 있다.
+ * 창을 두 줄 사이로 줄이는 것까지가 여기서 할 수 있는 일이다
+ * (lib/pendingTermsConsent.ts 의 `clearPendingTermsConsentIfUnchanged` 와 같은 한계).
  */
-export async function readPendingGuestSaveForClear(
+export type PendingGuestSaveClearResult =
+  /** 확인한 그 한 벌을 지웠다(또는 이미 없었다). */
+  | "cleared"
+  /** 다른 한 벌로 갈아 끼워져 있었다 — 아무것도 지우지 않았다. */
+  | "changed"
+  /** 있는지 없는지 모른다 — 아무것도 지우지 않았다. */
+  | "unreadable";
+
+export async function clearPendingGuestSaveIfUnchanged(
+  isSame: (entry: PendingGuestSave) => boolean,
   now: number = Date.now(),
-): Promise<PendingGuestSaveRead> {
+): Promise<PendingGuestSaveClearResult> {
   const read = await readPendingGuestSave(now);
-  if (read.status === "found" && !read.opened) return { status: "unreadable" };
-  return read;
+
+  if (read.status === "unreadable") return "unreadable";
+  if (read.status === "found" && !isSame(read.entry)) return "changed";
+
+  if (read.status === "found" && !read.opened) {
+    clearLegacyEntries();
+    return "cleared";
+  }
+
+  await clearPendingGuestSave();
+  return "cleared";
 }
 
 export async function getPendingGuestSave(

@@ -18,7 +18,7 @@ import {
   getPendingGuestSave,
   PENDING_GUEST_SAVE_TTL_MS,
   readPendingGuestSave,
-  readPendingGuestSaveForClear,
+  clearPendingGuestSaveIfUnchanged,
   setPendingGuestSave,
 } from "@/lib/pendingGuestSave";
 
@@ -257,11 +257,11 @@ async function clearIfUnchangedLikeBridge(
   promptedSavedAt: number,
   now: number,
 ): Promise<boolean> {
-  const read = await readPendingGuestSaveForClear(now);
-  if (read.status === "unreadable") return false;
-  if (read.status === "found" && read.entry.savedAt !== promptedSavedAt) return false;
-  await clearPendingGuestSave();
-  return true;
+  const result = await clearPendingGuestSaveIfUnchanged(
+    (entry) => entry.savedAt === promptedSavedAt,
+    now,
+  );
+  return result === "cleared";
 }
 
 beforeEach(() => {
@@ -709,15 +709,20 @@ describe("pendingGuestSave", () => {
   });
 
   /*
-    같은 사고의 **다른 입구** — 이번 라운드에 잡은 것.
+    같은 사고의 **다른 입구** — 그리고 그 입구를 막는 방식.
 
     저장소를 못 연 자리에서도 예전 localStorage 한 벌은 읽히고, 그때 읽기는 `found` 로
-    답한다(그래야 읽을 수 있는 인계를 안 버린다). 그런데 호출부는 `found` + 지문 일치를
-    **삭제 허가**로 쓴다. 그래서 `empty` 를 막아 놔도 사고가 `found` 를 경유해 그대로 났다 —
+    답한다(그래야 읽을 수 있는 인계를 안 버린다). 그 답을 그대로 삭제 허가로 쓰면
     IndexedDB 를 한 번도 못 읽은 채 삭제가 진행돼, 그 사이 다른 탭이 갈아 끼운 한 벌이
     사라진다.
+
+    한때 이 갈래를 통째로 「모르겠다」로 접었는데 그러면 반대쪽이 깨졌다 — 사용자가
+    「버리기」를 골라도 예전 한 벌이 남아 다음 화면 이동에서 같은 확인이 다시 뜨고,
+    저장에 성공한 뒤에도 남아 다시 저장하면 같은 네컷이 서버에 한 벌 더 생긴다.
+
+    그래서 **지울 것만 지운다** — 확인한 예전 키는 걷고, 못 읽은 IndexedDB 레코드는 그대로 둔다.
   */
-  it("열기 실패 뒤에 읽은 예전 보관물도 삭제 허가가 아니다", async () => {
+  it("열기 실패 뒤에 읽은 예전 보관물은 그 키만 지운다", async () => {
     // 다른 탭이 방금 갈아 끼운 한 벌. 사용자는 이것을 본 적이 없다.
     await setPendingGuestSave(ENTRY, NOW + 1_000);
     // 사용자에게 물어본 것은 예전 localStorage 한 벌이었다 — 지문(savedAt)이 다르다.
@@ -727,11 +732,30 @@ describe("pendingGuestSave", () => {
     );
     store.failNextOpens = 1;
 
-    // 지문은 예전 한 벌과 일치한다. 그래도 지우면 안 된다 — IndexedDB 는 못 봤다.
-    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(false);
+    // 확인한 그 한 벌이므로 「지웠다」로 끝난다.
+    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
 
+    // 지운 것은 예전 키뿐이다.
+    expect(window.localStorage.getItem(LEGACY_KEY_V2)).toBeNull();
+    // 못 읽은 IndexedDB 레코드는 그대로다 — 여기 원본 4장이 들어 있다.
     expect(storedRecord()).not.toBeNull();
-    expect((await getPendingGuestSave(NOW))?.sources).toEqual(SOURCES);
+    expect((await getPendingGuestSave(NOW))?.savedAt).toBe(NOW + 1_000);
+  });
+
+  /*
+    반대쪽 못 — 지문이 다르면 못 연 자리에서도 아무것도 지우지 않는다.
+    「못 열었으면 예전 키를 걷는다」로 뭉개면 사용자가 확인한 적 없는 한 벌이 사라진다.
+  */
+  it("열기 실패 뒤에 읽은 예전 보관물도 지문이 다르면 지우지 않는다", async () => {
+    window.localStorage.setItem(
+      LEGACY_KEY_V2,
+      JSON.stringify({ ...ENTRY, savedAt: NOW }),
+    );
+    store.failNextOpens = 1;
+
+    // 물어본 것은 다른 시각의 한 벌이었다.
+    expect(await clearIfUnchangedLikeBridge(NOW + 5_000, NOW)).toBe(false);
+    expect(window.localStorage.getItem(LEGACY_KEY_V2)).not.toBeNull();
   });
 
   /*
@@ -824,8 +848,13 @@ describe("pendingGuestSave", () => {
 
     // 다만 **확인한 답은 아니다.** IndexedDB 는 못 열었으므로 그 표시를 같이 싣는다.
     expect(read).toMatchObject({ status: "found", opened: false });
-    // 그래서 삭제를 묻는 읽기는 이것을 「모르겠다」로 접는다.
-    expect(await readPendingGuestSaveForClear(NOW)).toEqual({ status: "unreadable" });
+    /*
+      그리고 지울 때는 **그 키만** 걷는다. 통째로 지우면 못 읽은 IndexedDB 레코드까지
+      사라지고, 접어 버리면 사용자가 「버리기」를 골라도 이 한 벌이 남아 다음 화면
+      이동에서 같은 확인이 다시 뜬다.
+    */
+    expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
+    expect(window.localStorage.getItem(LEGACY_KEY_V2)).toBeNull();
   });
 
   it("보관하면 예전 localStorage 키를 같이 걷어낸다", async () => {

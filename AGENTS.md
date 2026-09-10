@@ -32,8 +32,9 @@
 - `apps/web`: Next.js App Router 웹 앱. 화면은 전부 여기 있다.
 - `apps/mobile`: Expo 웹뷰 셸(위 참조). 소스 5개 파일.
 - `packages/shared`: 웹·앱 공용 모듈 `@harucut/shared`.
-  **목록을 문서에 복사하지 않는다** — `packages/shared/src/index.ts` 의 재수출이 곧 진실이다
-  (현재 14개 모듈). 자기 `package.json` 에 의존성이 없다 — 툴체인을 `apps/web` 것에서 빌려 쓴다.
+  **목록도 개수도 문서에 복사하지 않는다** — `packages/shared/src/index.ts` 의 재수출이 곧
+  진실이다. 한때 여기 개수를 적어 뒀는데, 모듈이 하나 늘 때마다 조용히 틀려서 뺐다.
+  자기 `package.json` 에 의존성이 없다 — 툴체인을 `apps/web` 것에서 빌려 쓴다.
   타입 검사는 루트 `tsconfig.json`(`pnpm typecheck:shared`), 테스트는 `apps/web` 의 jest 가
   `roots` 로 끌어다 돌린다.
 - `docs/`: 진입점은 [`docs/README.md`](docs/README.md).

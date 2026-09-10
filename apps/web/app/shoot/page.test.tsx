@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ShootPage from "@/app/shoot/page";
+import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
 
@@ -10,6 +12,13 @@ let mockChosenFrameId: FrameId = "grid-4";
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
   useSearchParams: () => new URLSearchParams(mockQuery),
+}));
+
+const mockIsUsableMember = jest.fn();
+
+// 회원 여부 판정만 갈아 끼운다 — 스토어와 쿠키는 실제 구현을 그대로 태운다.
+jest.mock("@/lib/authSession", () => ({
+  isUsableMember: (...args: unknown[]) => mockIsUsableMember(...args),
 }));
 
 jest.mock("@/hooks/useMyFrames", () => ({
@@ -130,5 +139,85 @@ describe("행사 이름", () => {
 
     expect(useShootSession.getState().eventName).toBeNull();
     expect(screen.queryByText(EVENT_NAME)).not.toBeInTheDocument();
+  });
+});
+
+/*
+  ── 행사 QR 진입: 게스트 전환은 **여기서** 판정한다 ──
+
+  프록시는 쿠키가 아예 없는 방문자에게만 체험 쿠키를 심는다. 쿠키가 남아 있는 브라우저는
+  그냥 통과해 이 화면까지 오고, 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다.
+  한때 미들웨어가 「살아 있는 access 가 아니면 심는다」로 점쳤는데, access 만 자연 만료되고
+  refresh 는 멀쩡한 회원(흔하다)이 7일짜리 체험 쿠키를 받아 기록·커스텀 프레임을 잃었다.
+
+  `isUsableMember()` 는 `clientApi` 로 물어 401 이면 재발급까지 해 본다. 그러니 여기서
+  **정말 회원이 아닌 것이 확인된 뒤에만** 체험을 시작한다.
+*/
+describe("행사 QR 진입의 게스트 전환", () => {
+  function resetGuest() {
+    document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    useGuestTrialStore.setState({
+      accessMode: "member",
+      hydrated: true,
+      notice: null,
+    });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetGuest();
+  });
+
+  afterEach(() => {
+    resetGuest();
+  });
+
+  it("회원이 아닌 것이 확인되면 체험을 시작한다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockIsUsableMember.mockResolvedValue(false);
+
+    render(<ShootPage />);
+
+    await waitFor(() => {
+      expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+    });
+  });
+
+  /*
+    반대쪽 못 — **회원이면 덮지 않는다.** 이 못이 없으면 "행사 진입이면 무조건 게스트"로
+    고쳐도 위 테스트가 통과하고, 그러면 미들웨어에서 옮겨 온 그 결함이 화면 쪽에서 되살아난다.
+  */
+  it("회원으로 확인되면 아무것도 심지 않는다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockIsUsableMember.mockResolvedValue(true);
+
+    render(<ShootPage />);
+
+    await act(async () => {});
+    expect(useGuestTrialStore.getState().accessMode).toBe("member");
+    expect(document.cookie).not.toContain(`${GUEST_TRIAL_COOKIE}=1`);
+  });
+
+  // 행사 진입이 아니면 묻지도 않는다 — 촬영 화면을 열 때마다 인증 왕복이 붙으면 안 된다.
+  it("행사 진입이 아니면 회원 여부를 묻지 않는다", async () => {
+    mockQuery = "frame=classic-4";
+    mockIsUsableMember.mockResolvedValue(false);
+
+    render(<ShootPage />);
+
+    await act(async () => {});
+    expect(mockIsUsableMember).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().accessMode).toBe("member");
+  });
+
+  // 이미 게스트면 답이 정해져 있다 — 쿠키가 없어 프록시가 심어 준 경우다.
+  it("이미 체험 중이면 다시 묻지 않는다", async () => {
+    mockQuery = "frame=classic-4&event=hongdae-2026";
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+
+    render(<ShootPage />);
+
+    await act(async () => {});
+    expect(mockIsUsableMember).not.toHaveBeenCalled();
   });
 });

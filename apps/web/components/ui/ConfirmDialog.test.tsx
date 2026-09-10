@@ -158,13 +158,40 @@ describe("ConfirmDialog", () => {
   });
 
   /*
+    ── 회귀: 가드는 임시여야 한다 ──
+
+    위 가드는 `running` 이 **언젠가 내려온다**는 것을 전제로 걸려 있다. 그 전제가 깨지면
+    (예전에는 두 삭제 요청에 종료 상한이 없어 회선이 멈추면 영영 안 내려왔다) 취소·배경·
+    Escape 가 전부 영구 무동작이 되고, 사용자는 새로고침 말고 나갈 길이 없다. 상한 자체는
+    호출 API 가 쥐고 있지만(lib/userMediaApi.ts · lib/remoteFrameApi.ts), 그 상한이 지나
+    `running` 이 내려왔을 때 이 다이얼로그가 **다시 열어 주는지**는 여기서 지킨다 —
+    가드를 한 번 걸린 뒤 계속 붙잡는 모양으로 바꾸면(ref 로 래치, 언마운트 전까지 유지)
+    위의 세 케이스는 전부 통과한 채 갇힘만 되살아난다.
+  */
+  it("실행이 끝나 running 이 내려오면 배경·취소·Escape 가 다시 닫는다", () => {
+    const { onClose, setRunning } = renderDialog({ running: false });
+
+    setRunning(true);
+    fireEvent.click(cancelButton());
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 상한에 걸렸든 응답이 왔든, 호출부가 running 을 내린 뒤의 화면이다.
+    setRunning(false);
+
+    fireEvent.click(cancelButton());
+    fireEvent.click(backdropButton());
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(3);
+  });
+
+  /*
     실행 중에도 다이얼로그 안에 포커스 가능한 컨트롤이 **최소 하나** 남아야 한다.
 
     한때 배경·취소·확인이 전부 disabled 라 `useModalDialog` 의 `focusables()` 가 빈 배열이
     됐다. 그러면 Tab 은 `items.length === 0` 가지에서 통째로 삼켜지고, 확인을 누른 순간
-    body 로 떨어진 포커스를 되끌어오는 코드까지 닿지 못한다. `running` 에는 상한이 없어서
-    (deleteMedia·deleteFrame 이 signal 을 안 넘기고 clientApi 에 기본 타임아웃이 없다)
-    요청이 안 끝나면 키보드 사용자는 아무 데도 못 간다.
+    body 로 떨어진 포커스를 되끌어오는 코드까지 닿지 못한다. 요청이 30초 상한에 걸릴 때까지는
+    (lib/userMediaApi.ts · lib/remoteFrameApi.ts) 그동안 키보드 사용자가 갈 곳이 없어진다.
 
     `useModalDialog(true, …)` 를 `useModalDialog(!running, …)` 로 바꾸는 변이도 여기서
     죽는다 — 훅이 닫힌 것으로 알면 keydown 리스너 자체가 사라져 Tab 이 그냥 흘러간다.

@@ -47,6 +47,56 @@ export async function updateFrame(frameId: number, body: CreateFrameRequest) {
   return requireData(res.data, "수정된 프레임");
 }
 
+/**
+ * 프레임 삭제의 종료 상한. **숫자와 근거의 소유자는 `lib/userMediaApi.ts` 의
+ * `DELETE_DEADLINE_MS` 주석이다** — 같은 값을 두 파일이 각자 들고 있다.
+ *
+ * 한곳으로 모을 자리는 `clientApi` 인데 거기 기본값으로 올리면 성격이 제각각인 모든
+ * 요청의 상한을 숫자 하나로 정하게 된다. 사용자가 갇히는 자리는 확인 다이얼로그가 막고
+ * 있는 되돌릴 수 없는 DELETE 둘뿐이라 거기에만 건다. **한쪽만 바꾸지 않는다.**
+ */
+const DELETE_DEADLINE_MS = 30_000;
+
+/**
+ * 상한을 넘겨 **우리가** 끊은 삭제. 사용자가 끊은 것(AbortError)과 구별하려고 이름을
+ * 새로 붙인다 — clientApi 는 취소를 실패로 바꾸지 않고 그대로 올린다(isAbortError).
+ *
+ * 호출부는 `instanceof` 가 아니라 **`name`** 으로 본다. 이 모듈을 통째로 목으로 갈아
+ * 끼우는 테스트에서는 import 한 클래스가 undefined 가 되어 instanceof 자체가 터진다
+ * (ThemeEditorPage.test.tsx 가 그렇다). **이름을 바꾸면 호출부도 같은 커밋에서 고친다** —
+ * components/theme/editor/ThemeEditorPage.tsx.
+ */
+export class FrameDeleteTimeoutError extends Error {
+  constructor() {
+    super("프레임 삭제가 상한 시간 안에 끝나지 않았다");
+    this.name = "FrameDeleteTimeoutError";
+  }
+}
+
+/**
+ * 프레임 삭제.
+ *
+ * 상한을 걸어도 남는 구멍은 사진 삭제와 같다 — 끊긴 쪽에서는 서버가 이미 지웠는지 알 수
+ * 없고(그래서 화면은 "지우지 못했어요"가 아니라 "결과를 확인하지 못했어요"라고 말한다),
+ * 401 재발급 왕복은 clientApi 가 signal 없이 부르므로 하필 거기서 멈추면 상한이 안 먹는다.
+ */
 export async function deleteFrame(frameId: number) {
-  await clientApi.delete<ApiEnvelope<null>>(`/api/client/user/frame/${frameId}`);
+  const controller = new AbortController();
+  let deadlineHit = false;
+  const timer = setTimeout(() => {
+    deadlineHit = true;
+    controller.abort();
+  }, DELETE_DEADLINE_MS);
+
+  try {
+    await clientApi.delete<ApiEnvelope<null>>(
+      `/api/client/user/frame/${frameId}`,
+      { signal: controller.signal },
+    );
+  } catch (error) {
+    if (deadlineHit) throw new FrameDeleteTimeoutError();
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }

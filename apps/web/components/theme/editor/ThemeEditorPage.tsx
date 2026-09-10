@@ -533,6 +533,20 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     } catch (error) {
       console.error(error);
       setIsDeleteConfirmOpen(false);
+      /*
+        상한을 넘겨 클라이언트가 끊은 경우(lib/remoteFrameApi.ts 의 DELETE_DEADLINE_MS).
+        끊긴 쪽에서는 서버가 이미 지웠는지 알 수 없으니 "지우지 못했어요"라고 하지 않는다 —
+        실제로 지워졌다면 다음에 목록을 연 사용자가 없는 프레임을 보게 된다. 여기서는
+        `/theme` 로 옮기지도 않는다(성공 경로만 옮긴다). 이름은 클래스가 아니라 name 으로
+        본다 — 이 화면의 테스트가 remoteFrameApi 를 통째로 목으로 갈아 끼운다.
+      */
+      const errorName = (error as { name?: unknown } | null)?.name;
+      if (errorName === "FrameDeleteTimeoutError") {
+        setActionError(
+          "응답이 없어 삭제 결과를 확인하지 못했어요. 잠시 후 프레임 목록에서 확인해 주세요.",
+        );
+        return;
+      }
       // 이 경로가 내는 코드는 기다린다고 풀리지 않는다 — 없는 프레임(GEN-031),
       // 시스템 프레임이라 소유자가 아님(GEN-021, remoteFrameApi.ts 참고),
       // 보관 기간 초과(SUBS-002). 아래 폴백은 네트워크 오류처럼 정말 다시 시도해

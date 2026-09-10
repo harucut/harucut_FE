@@ -22,7 +22,7 @@
  * 실기기 WKWebView 는 같은 엔진이지만 하드웨어 디코더를 쓰므로 더 빠를 것으로 본다.
  */
 
-import { fitCanvasScale } from "@/lib/canvas/canvasBudget";
+import { fitCanvasScale, MAX_TILE_PIXELS } from "@/lib/canvas/canvasBudget";
 import {
   isSupportedUploadFile,
   MAX_UPLOAD_BYTES,
@@ -154,66 +154,123 @@ export function resetLibheifCacheForTest(): void {
 }
 
 /**
- * RGBA 버퍼를 목적지 크기로 줄여 담는다. **중간에 캔버스를 쓰지 않는다.**
+ * 목적지 경계 `dest` 가 가리키는 원본 경계. 타일을 자를 때 양쪽 좌표계를 잇는다.
  *
- * 왜 `drawImage` 가 아닌가: drawImage 로 줄이려면 원본을 먼저 「그릴 수 있는 것」으로
- * 만들어야 하는데(원본 크기 캔버스나 ImageBitmap), 원본 크기 캔버스를 잡는 것이 바로
- * 여기서 피하려는 일이다. `createImageBitmap` 은 캔버스를 안 거치지만 거기에 같은 상한이
- * 있는지 우리가 **모른다** — 확인 못 한 것에 기대느니 화소를 직접 평균낸다.
- *
- * 상자 평균이다. 최근접(한 픽셀만 골라 쓰기)보다 느리지만 사진을 크게 줄일 때 모아레가
- * 덜하다. 원본 화소를 한 번씩만 읽으므로 비용은 원본 크기에 비례한다 — 48MP 면 4천8백만
- * 번이라 폰에서 눈에 띄는 시간이 걸린다(재 본 적은 없다). 그래도 예산을 넘는 사진에서만
- * 도는 길이고, 대안이 「조용히 빈 그림」이다.
- *
- * 알파를 미리 곱하지 않고 평균한다 — 반투명 경계가 있으면 색이 조금 섞인다. 여기 오는
- * 것은 아이폰 사진(HEIC)이라 알파가 없어 그대로 뒀다.
+ * 마지막 경계는 **손으로 못 박는다.** 지금 식(`dest × sourceTotal / destTotal`)은 정수
+ * 곱이 2^53 안이라 끝에서 정확히 `sourceTotal` 로 떨어지지만, 그 정확함은 곱하고 나서
+ * 나누는 **순서**에 기대는 것이다. 배율을 먼저 구해 곱하는 식으로 바꾸면 마지막 줄이
+ * 내림 한 번에 잘려 나가는데, 잘려도 아무 데서도 오류가 안 나고 사진 가장자리 한 줄만
+ * 조용히 사라진다 — 그 종류의 손실을 여기서 막는다.
  */
-function shrinkPixels(source: ImageData, target: ImageData): ImageData {
-  const { width: sourceWidth, height: sourceHeight, data: src } = source;
-  const { width: targetWidth, height: targetHeight, data: dst } = target;
+function sourceEdge(dest: number, destTotal: number, sourceTotal: number) {
+  if (dest >= destTotal) return sourceTotal;
+  return Math.floor((dest * sourceTotal) / destTotal);
+}
 
-  for (let ty = 0; ty < targetHeight; ty += 1) {
-    const yStart = Math.floor((ty * sourceHeight) / targetHeight);
-    // 목적지 한 칸에 원본이 한 줄도 안 걸리는 일이 없게 최소 한 줄은 읽는다.
-    const yEnd = Math.max(
-      yStart + 1,
-      Math.floor(((ty + 1) * sourceHeight) / targetHeight),
-    );
+/**
+ * 원본 RGBA 버퍼를 목적지 컨텍스트에 **줄여 그린다.** 줄이는 일은 브라우저가 한다.
+ *
+ * 무엇이 잘못됐었나: 직전 라운드에 여기 있던 `shrinkPixels` 는 원본 화소를 JS 로 한 번씩
+ * 훑어 상자 평균을 냈다. 48MP 사진이면 4,800만 번의 중첩 반복이 메인 스레드에서 통째로
+ * 돌고, 그동안 원본 버퍼와 목적지 버퍼를 **같이** 들고 있었다(8064×6048 이면 186MB +
+ * 61MB). 이 기계의 데스크톱 Node 로 그 루프만 따로 재니 0.55초였다 — 이 길이 필요한 곳은
+ * 폰 Chromium 이라 거기서는 더 느리다(실기기로는 재지 못했다).
+ *
+ * 어떻게 바꿨나: 원본을 **타일로 잘라** 한 장씩만 임시 캔버스에 얹고(`putImageData` 의
+ * dirty rect 로 그 영역만 복사시킨다) 목적지에는 `drawImage` 로 줄여 그린다. JS 쪽 반복은
+ * 화소 수가 아니라 **타일 수**가 되고(8064×6048 이면 63장, 파노라마 25344×2048 이면 78장.
+ * 이 계산만 따로 돌려 세어 봤다), 추가로 드는 메모리는 타일 한 장(`MAX_TILE_PIXELS` ×
+ * 4바이트, 위 두 경우 모두 999×999 로 4MB 아래)뿐이다 — 목적지 크기 RGBA 버퍼를 JS 로
+ * 또 만들지 않는다.
+ *
+ * **원본 버퍼(48MP 면 186MB)는 이 함수가 못 줄인다.** libheif 가 원본 크기로만 채워 주기
+ * 때문이다(아래 `decodeWithLibheif` 주석). 최대 메모리의 그 절반은 여기서 안 닫힌다.
+ *
+ * 왜 가로 띠가 아니라 타일인가: 원본 폭 전체를 띠로 잡으면 아이폰 48MP 의 띠가 8064px 라
+ * **변 상한(6000)을 넘는다.** 임시 캔버스도 캔버스라 상한을 넘으면 putImageData 가 조용히
+ * 아무것도 안 그리고, 그러면 빈 그림이 그대로 올라간다 — 이 파일이 직전 라운드에 닫은 바로
+ * 그 사고를 임시 캔버스로 다시 여는 셈이다. 그래서 폭도 예산으로 자른다.
+ *
+ * 화질이 **바뀐다**: 상자 평균 → 브라우저 보간이다. 타일 경계는 목적지 정수 화소에 맞춰
+ * 자르므로 겹치거나 벌어지지는 않지만, 경계에서 필터가 이웃 타일을 못 보므로 그 한 줄이
+ * 전역 축소와 다를 수 있다. **눈으로 확인하지 못했다** — jsdom 에 진짜 캔버스가 없어 이
+ * 저장소의 시험으로는 볼 수 없는 종류다. 알파도 브라우저가 미리 곱한 값으로 섞는다(예전
+ * 평균은 안 곱했다). 여기 오는 것은 알파 없는 아이폰 사진이라 그대로 뒀다.
+ */
+function drawShrunkOnto(
+  ctx: CanvasRenderingContext2D,
+  source: ImageData,
+  targetWidth: number,
+  targetHeight: number,
+): boolean {
+  const { width: sourceWidth, height: sourceHeight } = source;
 
-    for (let tx = 0; tx < targetWidth; tx += 1) {
-      const xStart = Math.floor((tx * sourceWidth) / targetWidth);
-      const xEnd = Math.max(
-        xStart + 1,
-        Math.floor(((tx + 1) * sourceWidth) / targetWidth),
+  // 목적지 한 칸이 원본 몇 칸인가. 여기 오는 배율은 1보다 작으므로 둘 다 1 이상이다.
+  const stepX = sourceWidth / targetWidth;
+  const stepY = sourceHeight / targetHeight;
+
+  /*
+    타일 크기는 **목적지 칸 수**로 잡는다 — 그래야 타일의 목적지 사각형이 정수로 떨어져
+    경계가 겹치지도 벌어지지도 않는다. 배율이 가로세로 같으므로(`fitCanvasScale`) 이렇게
+    잡은 원본 타일은 대체로 정사각형이고, 한 변이 √MAX_TILE_PIXELS(1000px 대)라 변
+    상한에도 한참 못 미친다.
+
+    남는 구석: 축소가 1000배를 넘으면(원본 한 변이 목적지의 1000배) 블록이 1칸이 되면서
+    타일 하나가 예산을 넘을 수 있다. 그런 사진은 한 변이 수백만 px 이라 실물에 없다.
+  */
+  const block = Math.max(
+    1,
+    Math.floor(Math.sqrt(MAX_TILE_PIXELS / (stepX * stepY))),
+  );
+  const blockWidth = Math.min(targetWidth, block);
+  const blockHeight = Math.min(targetHeight, block);
+
+  const tile = document.createElement("canvas");
+  const tileCtx = tile.getContext("2d");
+  if (!tileCtx) return false;
+
+  // 줄여 그리는 길이라 보간을 켠다. 끄면 최근접이 되어 모아레가 그대로 남는다.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  for (let top = 0; top < targetHeight; top += blockHeight) {
+    const bottom = Math.min(targetHeight, top + blockHeight);
+    const sourceTop = sourceEdge(top, targetHeight, sourceHeight);
+    const sourceBottom = sourceEdge(bottom, targetHeight, sourceHeight);
+
+    for (let left = 0; left < targetWidth; left += blockWidth) {
+      const right = Math.min(targetWidth, left + blockWidth);
+      const sourceLeft = sourceEdge(left, targetWidth, sourceWidth);
+      const sourceRight = sourceEdge(right, targetWidth, sourceWidth);
+
+      /*
+        크기를 매번 다시 준다. 마지막 줄·마지막 칸은 타일이 작고, 크기를 바꾸면 캔버스가
+        비워지므로 앞 타일의 화소가 남지 않는다. 임시 캔버스는 하나만 쓴다 — 타일마다
+        새로 만들면 만든 만큼 GC 를 기다리게 된다.
+      */
+      tile.width = sourceRight - sourceLeft;
+      tile.height = sourceBottom - sourceTop;
+
+      /*
+        원본 버퍼 전체를 넘기되 **읽을 영역만 지정한다.** dirty rect 는 버퍼 좌표계라,
+        놓을 자리를 (-sourceLeft, -sourceTop) 으로 밀어야 타일 좌상단이 (0,0) 이 된다.
+        이렇게 하면 타일용 버퍼를 JS 로 따로 만들어 복사하지 않아도 된다.
+      */
+      tileCtx.putImageData(
+        source,
+        -sourceLeft,
+        -sourceTop,
+        sourceLeft,
+        sourceTop,
+        tile.width,
+        tile.height,
       );
 
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      let a = 0;
-
-      for (let y = yStart; y < yEnd; y += 1) {
-        const rowStart = y * sourceWidth;
-        for (let x = xStart; x < xEnd; x += 1) {
-          const i = (rowStart + x) * 4;
-          r += src[i];
-          g += src[i + 1];
-          b += src[i + 2];
-          a += src[i + 3];
-        }
-      }
-
-      const count = (yEnd - yStart) * (xEnd - xStart);
-      const out = (ty * targetWidth + tx) * 4;
-      dst[out] = r / count;
-      dst[out + 1] = g / count;
-      dst[out + 2] = b / count;
-      dst[out + 3] = a / count;
+      ctx.drawImage(tile, left, top, right - left, bottom - top);
     }
   }
 
-  return target;
+  return true;
 }
 
 async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
@@ -272,14 +329,10 @@ async function decodeWithLibheif(file: File): Promise<DecodedImage | null> {
     });
   });
 
-  // 예산 안에 드는 사진은 예전 그대로 — 버퍼를 그대로 얹는다(복사도 평균도 없다).
-  ctx.putImageData(
-    scale === 1
-      ? decoded
-      : shrinkPixels(decoded, ctx.createImageData(targetWidth, targetHeight)),
-    0,
-    0,
-  );
+  // 예산 안에 드는 사진은 예전 그대로 — 버퍼를 그대로 얹는다(자르지도 줄이지도 않는다).
+  if (scale === 1) ctx.putImageData(decoded, 0, 0);
+  // 넘는 사진만 타일로 잘라 줄여 그린다. 임시 캔버스를 못 얻으면 그릴 방법이 없다.
+  else if (!drawShrunkOnto(ctx, decoded, targetWidth, targetHeight)) return null;
 
   // 캔버스가 줄어들었으면 **줄어든 크기**를 알린다. 호출부(`encodeAsJpeg`·photoImport)가
   // 이 숫자로 다시 배율을 잡으므로, 원본 크기를 주면 없는 화소를 늘려 그리게 된다.
