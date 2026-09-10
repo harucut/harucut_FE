@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCallback } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 
 type Props = {
@@ -46,7 +47,26 @@ export function SingleFieldDialog({
   onClose,
   onSubmit,
 }: Props) {
-  const dialogRef = useModalDialog(true, onClose);
+  /*
+    **저장 중에는 닫히지 않는다.**
+
+    닫는 길이 셋이다 — 배경 누르기 · 취소 버튼 · Escape(useModalDialog). `PATCH` 가 도는 중에
+    그중 하나로 닫히면 화면은 취소한 것처럼 보이지만 요청은 계속 간다. 성공하면 사용자가
+    **보지 못한 채 값이 바뀌고**(닉네임·기록 이름), 실패하면 그 사유가 이미 닫힌 다이얼로그의
+    상태로만 남아 아무에게도 안 보인다.
+
+    요청 자체는 되돌릴 수 없으니 할 수 있는 일은 결과를 볼 자리를 지키는 것이다. 셋을
+    한 함수로 모아 여기서 막는다 — `PasswordChangeDialog`·`ConfirmDialog` 와 같은 모양이다.
+
+    배경 버튼에는 `disabled` 를 붙이지 않는다. 붙이면 저장 중에 눌릴 수 있는 컨트롤이 하나도
+    남지 않아 `useModalDialog` 의 포커스 트랩이 죽는다(`ConfirmDialog` 에서 같은 이유로 뺐다).
+    입력이 `disabled` 라 여기서는 더 그렇다.
+  */
+  const requestClose = useCallback(() => {
+    if (saving) return;
+    onClose();
+  }, [onClose, saving]);
+  const dialogRef = useModalDialog(true, requestClose);
   const [value, setValue] = useState(initialValue);
 
   const trimmed = value.trim();
@@ -58,7 +78,7 @@ export function SingleFieldDialog({
       <button
         type="button"
         aria-label="닫기"
-        onClick={onClose}
+        onClick={requestClose}
         className="absolute inset-0"
       />
       <div
@@ -113,8 +133,9 @@ export function SingleFieldDialog({
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold"
+              onClick={requestClose}
+              disabled={saving}
+              className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold disabled:opacity-50"
             >
               취소
             </button>

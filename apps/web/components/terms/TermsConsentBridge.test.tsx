@@ -5,7 +5,7 @@
  * 반대로 아무 계정에나 보내도 증상이 없다 — 남의 장부가 조용히 더럽혀진다.
  * 둘 다 테스트로 못 박는다.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsConsentBridge } from "@/components/terms/TermsConsentBridge";
 import type { ActiveTerms } from "@/lib/termsApi";
 
@@ -399,5 +399,81 @@ describe("TermsConsentBridge", () => {
 
     await waitFor(() => expect(mockResolveMembership).toHaveBeenCalled());
     expect(mockFetchMine).not.toHaveBeenCalled();
+  });
+
+  /*
+    회귀 — **공개 화면으로 옮겨 간 사이에 온 결과로 막지 않는다.**
+
+    검사는 보호 경로에서만 시작하지만 왕복이 둘 붙는다(회원 판정 · 약관 조회). 그 사이
+    사용자가 `/terms` 로 옮겨 가면, 늦게 온 결과가 **약관 본문을 읽으러 간 사람을 그 자리에서
+    막는다** — 이 파일이 세운 「읽을 수 있게 두고 보호 화면에서만 막는다」가 뒤집힌다.
+  */
+  /** 필수 약관이 개정돼 재동의가 필요한 상태. 위 「붙잡는다」 테스트와 같은 모양이다. */
+  const NEEDS_RECONSENT = [
+    {
+      code: "tos",
+      title: "서비스 이용약관",
+      required: true,
+      status: "NEEDS_RECONSENT",
+      agreedVersion: 1,
+      latestVersion: 2,
+    },
+  ];
+
+  it("검사 중에 공개 화면으로 옮겨 가면 그 화면에서는 막지 않는다", async () => {
+    mockPathname = "/home";
+    let answer!: (value: unknown) => void;
+    mockFetchMine.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    const view = render(<TermsConsentBridge />);
+    await waitFor(() => expect(mockFetchMine).toHaveBeenCalled());
+
+    // 조회가 도는 사이 약관 본문을 읽으러 간다.
+    mockPathname = "/terms";
+    view.rerender(<TermsConsentBridge />);
+
+    await act(async () => {
+      answer(NEEDS_RECONSENT);
+    });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  /*
+    반대쪽 못 — **결과를 버리지는 않는다.** 버리면 `checkedRef` 가 이미 서 있어 다시 묻지
+    않으므로, 공개 화면을 한 번 들르는 것만으로 필수 재동의를 영영 피할 수 있다.
+    보호 화면으로 돌아오면 그때 뜬다.
+  */
+  it("보호 화면으로 돌아오면 그때 재동의를 띄운다", async () => {
+    mockPathname = "/home";
+    let answer!: (value: unknown) => void;
+    mockFetchMine.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    const view = render(<TermsConsentBridge />);
+    await waitFor(() => expect(mockFetchMine).toHaveBeenCalled());
+
+    mockPathname = "/terms";
+    view.rerender(<TermsConsentBridge />);
+    await act(async () => {
+      answer(NEEDS_RECONSENT);
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    mockPathname = "/home";
+    view.rerender(<TermsConsentBridge />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
   });
 });

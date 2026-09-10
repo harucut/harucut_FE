@@ -453,7 +453,8 @@ async function encodeAsJpeg(
  *     변환까지 해 놓고 `uploadToS3WithPresigned` 가 발급 전에 거절해서, 정작 지원하려던
  *     고해상도 사진만 마지막 단계에서 계속 실패한다.
  *
- * 그 둘뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_EDGE`)은 네컷 슬롯 크기에서
+ * 그 둘뿐이다. 촬영 경로의 상한(`lib/photoImport.ts` 의 `MAX_PIXELS` — 긴 변이 아니라
+ * 넓이로 건다)은 네컷 슬롯 크기에서
  * 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
  */
 export async function toUploadableFile(file: File): Promise<File> {

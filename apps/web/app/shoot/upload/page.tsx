@@ -25,7 +25,8 @@ const FALLBACK_SLOT_COUNT = Math.max(
 /**
  * 담아 둘 수 있는 최대 장수 = 칸 수 × 이 배수.
  *
- * 앨범에서 수백 장을 고르면 그 전부가 최대 2400px JPEG data URL 로 디코딩·재인코딩된 뒤
+ * 앨범에서 수백 장을 고르면 그 전부가 **화소 예산(5.76MP)까지 줄인** JPEG data URL 로
+ * 디코딩·재인코딩된 뒤
  * 세션과 DOM 에 남는다. 다음 단계에서 쓰는 것은 칸 수만큼뿐인데 모바일 웹뷰에서는 이
  * 흐름만으로 수백 MB 를 잡아 화면이 멈춘다. 고르고 남을 만큼은 받고 그 위는 변환 전에 자른다.
  */
@@ -316,6 +317,31 @@ export default function ShootUploadPage() {
               곧바로 돌아온다 — 기다리면 선택기가 2분간 안 열린다(nativeBridge 의 판 수 확인).
             */
             await nativeEnsureCameraPermission();
+
+            /*
+              **권한 안내를 보고 온 뒤에는 이 클릭으로 선택기를 못 연다.**
+
+              파일 선택기는 브라우저의 **일시적 사용자 활성화**(transient user activation)가
+              살아 있을 때만 열린다. 권한 안내를 오래 보고 돌아오면 그 유효 시간이 끝나 있어,
+              위 `await` 뒤의 `click()` 은 **오류도 없이 아무 일도 하지 않는다** — 사용자는
+              「사진 고르기」를 눌렀는데 아무 반응이 없는 것으로 본다.
+
+              남은 시간을 숫자로 재지 않는다. 브라우저가 그 답을 갖고 있으므로
+              (`navigator.userActivation.isActive`) 그것을 그대로 묻는다. 없는 브라우저에서는
+              예전처럼 그냥 연다 — 그쪽은 권한 왕복 자체가 없어(셸이 아니다) 활성화가 살아 있다.
+            */
+            const activation = (
+              navigator as Navigator & {
+                userActivation?: { isActive: boolean };
+              }
+            ).userActivation;
+            if (activation && !activation.isActive) {
+              setNotice(
+                "카메라 권한을 확인했어요. ‘사진 고르기’를 한 번 더 눌러 주세요.",
+              );
+              return;
+            }
+
             fileInputRef.current?.click();
           }}
           disabled={isImporting || memberOnlyLocked}
