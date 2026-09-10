@@ -26,10 +26,13 @@ const mockDescribeComposeFailure = jest.fn();
 let mockSearch = new URLSearchParams();
 // 저장이 끝나기 전에 사용자가 화면을 옮기는 시나리오가 있어서 주소를 고정할 수 없다.
 let mockPathname = "/home";
+// 진짜 `useRouter()` 는 렌더마다 같은 객체를 준다. 여기서 새로 만들면 라우터를 의존성으로
+// 둔 effect 가 매 렌더 다시 돌아, 신호 없이도 판정이 되풀이되는 가짜 통과가 생긴다.
+const mockRouter = { replace: (...args: unknown[]) => mockReplace(...args) };
 
 jest.mock("next/navigation", () => ({
   usePathname: () => mockPathname,
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => mockRouter,
   useSearchParams: () => mockSearch,
 }));
 
@@ -720,6 +723,148 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     await flushAsync();
 
     expect(screen.queryByRole("button", { name: "이 계정에 저장하기" })).toBeNull();
+  });
+
+  /*
+    회귀 — **판정이 도는 사이에 온 복구 신호를 놓치지 않는다.**
+
+    판정은 최대 30초까지 걸린다(`STATUS_DEADLINE_MS`). 그 사이에 회선이 돌아오거나 탭으로
+    돌아오는 일이 실제로 일어나는데, 신호를 `unknown` **이 온 뒤에야** 듣기 시작하면 그
+    신호는 이미 지나간 뒤다. 사용자가 같은 화면에 머무르면 더 올 신호도 없어, 이 수정이
+    막으려던 「저장 안내가 영영 안 뜸」이 그대로 재현된다.
+  */
+  it("판정이 도는 사이에 온 복구 신호로도 다시 묻는다", async () => {
+    let answer!: (value: string) => void;
+    mockResolveMembership.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+
+    // 판정이 도는 중에 회선이 돌아온다. 아직 답은 안 왔다.
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    // 그 뒤 도착한 답이 「모르겠다」다 — 신호는 이미 지나갔지만 기록해 뒀어야 한다.
+    setSession("member");
+    await act(async () => {
+      answer("unknown");
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "이 계정에 저장하기" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  /*
+    회귀 — **신호 하나는 되묻기 한 번이다.**
+
+    도는 사이에 온 신호는 기록해 뒀다가 그 회차 끝에 쓴다. 쓰고 나서 지우지 않으면
+    다음 회차도 같은 기록을 보고 또 되묻는다 — 신호는 한 번인데 왕복이 끝없이 이어진다.
+    기록을 지우는 자리는 회차의 시작 하나뿐이므로, 그 자리가 살아 있는지 여기서 잰다.
+  */
+  it("도는 사이에 온 신호 하나로 되묻기는 한 번만 늘어난다", async () => {
+    let answer!: (value: string) => void;
+    mockResolveMembership.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    // 기록해 둔 신호로 한 회차가 더 돈다. 그 회차도 「모르겠다」다.
+    setSession("unknown");
+    await act(async () => {
+      answer("unknown");
+    });
+    await waitFor(() => {
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+    });
+
+    // 신호는 더 오지 않았다 — 여기서 멈춰야 한다.
+    await flushAsync();
+    await flushAsync();
+    expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+  });
+
+  /*
+    회귀 — **신호가 몰아쳐도 왕복은 한 번에 하나만 돈다.**
+
+    회선이 오르내리면 `online` 은 연달아 온다. 그때마다 새 회차를 시작하면 앞 회차의 요청은
+    버려지지 않고 제 30초를 다 쓴다 — 장애 중인 서버에 요청만 쌓인다. 도는 중에 온 신호는
+    기록만 하고, 그 회차가 끝난 뒤에 한 번만 쓴다.
+  */
+  it("복구 신호가 몰아쳐도 판정은 한 번에 하나만 돈다", async () => {
+    let answer!: (value: string) => void;
+    mockResolveMembership.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    render(<GuestTrialBridge />);
+    await flushAsync();
+    expect(mockResolveMembership).toHaveBeenCalledTimes(1);
+
+    // 답을 기다리는 사이에 신호가 세 번 온다.
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new Event("online"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(mockResolveMembership).toHaveBeenCalledTimes(1);
+
+    // 답이 「모르겠다」로 끝나면 그제야 한 회차가 더 돈다 — 세 번이 아니라 한 번이다.
+    setSession("member");
+    await act(async () => {
+      answer("unknown");
+    });
+    await waitFor(() => {
+      expect(mockResolveMembership).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  /*
+    회귀 — **첫 회차가 `unknown` 이어도 뒤에 `guest` 로 확정되면 신호를 그만 듣는다.**
+
+    안 끄면 앞 회차의 리스너가 남아, 답이 정해진 사람에게 탭을 오갈 때마다 왕복이 붙는다.
+  */
+  it("unknown 뒤에 게스트로 확정되면 신호를 그만 듣는다", async () => {
+    setSession("unknown");
+
+    const view = render(<GuestTrialBridge />);
+    await flushAsync();
+
+    // 화면을 옮기면 한 회차가 더 돌고, 이번에는 확정된 비회원이다.
+    setSession("guest");
+    mockPathname = "/history";
+    window.history.replaceState({}, "", "/history");
+    view.rerender(<GuestTrialBridge />);
+    await flushAsync();
+
+    const asked = mockResolveMembership.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flushAsync();
+
+    expect(mockResolveMembership.mock.calls.length).toBe(asked);
   });
 
   /*

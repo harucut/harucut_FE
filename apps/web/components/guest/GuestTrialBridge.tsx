@@ -118,12 +118,21 @@ export function GuestTrialBridge() {
   // (아래 runPendingSave) — 안내를 열어 둔 사이 기한이 지나거나 갈아 끼워질 수 있다.
   const handoffPromptedRef = useRef(false);
   /**
-   * 회원 판정을 **못 한 채로** 끝난 회차가 있는가(`unknown`).
+   * 회원 판정의 결말을 **아직 못 받았는가.** 이 값이 켜져 있는 동안만 재시도 신호를 듣는다.
    *
-   * 켜져 있는 동안만 아래 재시도 신호를 듣는다. 늘 듣게 두면 탭을 오갈 때마다 판정이
-   * 다시 돌아, 이미 물어본 화면에서 헛왕복이 붙는다.
+   * 켜지는 때가 둘이다 — 판정이 **도는 중**이거나, `unknown` 으로 끝나 다시 물어야 할 때다.
+   * 도는 중에도 켜 두는 이유는, 판정이 최대 30초까지 걸려서 그 사이에 회선이 돌아오거나
+   * 탭으로 돌아오는 일이 실제로 일어나기 때문이다. 그 신호를 못 들으면 뒤이어 도착한
+   * `unknown` 뒤에는 아무 신호도 남지 않아, 같은 화면에서 영영 다시 묻지 않는다.
+   *
+   * 답을 받으면(`member`·`guest`) 끈다. 늘 듣게 두면 답이 이미 정해진 사람에게도 탭을
+   * 오갈 때마다 인증 왕복이 붙는다.
    */
-  const [membershipUnknown, setMembershipUnknown] = useState(false);
+  const [membershipWatch, setMembershipWatch] = useState(false);
+  /** 판정이 지금 도는 중인가. 신호가 왔을 때 「기록만 할지 바로 다시 돌릴지」를 가른다. */
+  const membershipInFlightRef = useRef(false);
+  /** 판정이 도는 사이에 복구 신호가 왔는가. `unknown` 으로 끝나면 그 자리에서 한 번 더 돈다. */
+  const recoverySignalRef = useRef(false);
   /** 판정을 다시 돌리는 손잡이. 아래 effect 의 의존성이라 값이 바뀌면 한 회차가 더 돈다. */
   const [membershipRetryToken, setMembershipRetryToken] = useState(0);
   /*
@@ -388,18 +397,39 @@ export function GuestTrialBridge() {
         아래 cleanup 이 「묻지 못하고 끝난 회차」의 표식을 되돌리지만, 그것은 **effect 가 다시
         돌 때**(주소가 바뀌거나 언마운트될 때)만 실행된다. 같은 화면에 머무르면 서버가
         회복돼도 아무 일도 일어나지 않는다. 그래서 여기서 **다시 물어볼 신호를 켠다**
-        (아래 `membershipUnknown`) — 회선이 돌아오거나 탭으로 돌아올 때 한 회차가 더 돈다.
+        (아래 `membershipWatch`) — 회선이 돌아오거나 탭으로 돌아올 때 한 회차가 더 돈다.
         표식을 여기서 따로 되돌리지는 않는다: 그 회차가 시작될 때 cleanup 이 먼저 돌아
         이미 되돌린다. 두 자리에서 같은 일을 하면 어느 쪽이 살아 있는지 알 수 없게 된다.
       */
+      // 판정이 도는 동안에도 복구 신호를 듣는다(위 `membershipWatch`).
+      membershipInFlightRef.current = true;
+      recoverySignalRef.current = false;
+      setMembershipWatch(true);
+
       const membership = await resolveMembership();
+      membershipInFlightRef.current = false;
       if (cancelled) return;
+
+      /*
+        **계속 들을지는 답 하나로 갈린다** — 못 물어봤을 때만 듣는다.
+
+        회원이든 비회원이든 답이 정해졌으면 더 물을 것이 없다. 그래도 듣고 있으면 앞 회차의
+        리스너가 남아, 답이 정해진 사람에게 탭을 오갈 때마다 왕복이 붙는다. 끄는 자리를
+        갈래마다 두지 않고 여기 하나로 두는 이유다 — 갈래마다 두면 하나가 죽어도 모른다.
+      */
+      setMembershipWatch(membership === "unknown");
+
       if (membership !== "member") {
-        // 확정된 비회원에게는 물을 것이 없다. 못 물어본 경우만 다시 열어 둔다.
-        if (membership === "unknown") setMembershipUnknown(true);
+        if (membership === "unknown" && recoverySignalRef.current) {
+          /*
+            도는 사이에 신호가 왔으면 그 신호는 이 답보다 새 소식이다 — 바로 한 번 더 묻는다.
+            기록은 여기서 되돌리지 않는다: 이 bump 가 여는 다음 회차의 시작이 먼저 지운다.
+            두 자리에서 같은 기록을 지우면 어느 쪽이 살아 있는지 알 수 없게 된다.
+          */
+          setMembershipRetryToken((token) => token + 1);
+        }
         return;
       }
-      setMembershipUnknown(false);
 
       prompted = true;
       setNotice({
@@ -441,21 +471,29 @@ export function GuestTrialBridge() {
   ]);
 
   /*
-    **판정을 못 한 회차가 있으면, 상황이 달라졌다는 신호에 다시 묻는다.**
+    **판정의 결말을 못 받은 동안, 상황이 달라졌다는 신호에 다시 묻는다.**
 
     시간을 재서 되풀이하지 않는다 — 간격도 횟수도 지어낸 숫자가 되고, 같은 장애에 요청만
     쌓인다. 대신 브라우저가 알려 주는 두 신호만 듣는다: 회선이 돌아왔을 때(`online`)와
     이 탭으로 돌아왔을 때(`visibilitychange`). 둘 다 「아까와 달라졌을 수 있다」는 뜻이다.
 
-    듣는 것은 `unknown` 으로 끝난 회차가 있을 때뿐이다. 늘 듣게 두면 탭을 오갈 때마다
-    판정이 다시 돌아 이미 물어본 화면에 헛왕복이 붙는다.
+    듣는 것은 **판정이 도는 중이거나 `unknown` 으로 끝났을 때**뿐이다(위 `membershipWatch`).
+    늘 듣게 두면 탭을 오갈 때마다 판정이 다시 돌아 이미 답을 받은 화면에 헛왕복이 붙는다.
   */
   useEffect(() => {
-    if (!membershipUnknown) return;
+    if (!membershipWatch) return;
 
     const retry = () => {
       if (document.visibilityState === "hidden") return;
-      setMembershipUnknown(false);
+      /*
+        판정이 **도는 중**이면 지금 다시 돌리지 않는다 — 같은 질문을 둘로 만들 뿐이다.
+        기록만 해 두고, 그 판정이 `unknown` 으로 끝나면 그때 한 번 더 돈다.
+      */
+      if (membershipInFlightRef.current) {
+        recoverySignalRef.current = true;
+        return;
+      }
+      // 감시를 여기서 끄지 않는다 — 끌지 말지는 이 회차의 답이 정한다(위 판정 직후 한 자리).
       setMembershipRetryToken((token) => token + 1);
     };
 
@@ -465,7 +503,7 @@ export function GuestTrialBridge() {
       window.removeEventListener("online", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [membershipUnknown]);
+  }, [membershipWatch]);
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.
   // 공유/저장 안내는 URL이 아니라 화면에서 직접 스토어 액션을 부른다(shoot/result 등).
