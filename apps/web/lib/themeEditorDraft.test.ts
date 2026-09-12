@@ -120,4 +120,59 @@ describe("saveEditorDraft 의 dataURL 캐시", () => {
     // 여기서 캐시를 비우면 디바운스마다 사진을 전부 다시 인코딩한다.
     expect(fetchCountFor("blob:big")).toBe(1);
   });
+  it("늦게 끝난 변환이 최신 초안을 덮지 않는다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    let finish!: (value: { blob: () => Promise<Blob> }) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const older = saveEditorDraft(saveInput(["blob:slow"]));
+    await saveEditorDraft({
+      ...saveInput(["data:image/png;base64,bmV3"]),
+      now: 1_700_000_002_000,
+    });
+    finish({ blob: async () => new Blob(["old"], { type: "image/png" }) });
+    await older;
+    expect(loadEditorDraft()?.components[0].source).toBe("data:image/png;base64,bmV3");
+  });
+
+  it("삭제 중이던 변환은 초안과 캐시를 되살리지 않는다", async () => {
+    const { saveEditorDraft, clearEditorDraft } = await loadModule();
+    let finish!: (value: { blob: () => Promise<Blob> }) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const saving = saveEditorDraft(saveInput(["blob:slow"]));
+    clearEditorDraft();
+    finish({ blob: async () => new Blob(["old"], { type: "image/png" }) });
+    await saving;
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
+    await saveEditorDraft(saveInput(["blob:slow"]));
+    expect(fetchCountFor("blob:slow")).toBe(2);
+  });
+
+  it("늦게 끝난 용량 초과 초안이 최신 초안을 지우지 않는다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    let finish!: (value: { blob: () => Promise<Blob> }) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const older = saveEditorDraft({
+      ...saveInput(["blob:slow"]),
+      backgroundColor: "x".repeat(4_500_001),
+    });
+    await saveEditorDraft(saveInput(["data:image/png;base64,bmV3"]));
+    finish({ blob: async () => new Blob(["old"], { type: "image/png" }) });
+    await older;
+    expect(loadEditorDraft()?.components[0].source).toBe("data:image/png;base64,bmV3");
+  });
 });

@@ -13,12 +13,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
 import { resolveThemeAssetUrls } from "@/lib/frameAssets";
-import {
-  createFrame,
-  deleteFrame,
-  getFrame,
-  updateFrame,
-} from "@/lib/remoteFrameApi";
+import { createFrame, deleteFrame, getFrame, updateFrame } from "@/lib/remoteFrameApi";
 import {
   EMPTY_UPLOAD_MESSAGE,
   MAX_UPLOAD_BYTES,
@@ -33,10 +28,7 @@ import {
 } from "@/lib/presignedUploadApi";
 import { toUploadableFile } from "@/lib/imageDecode";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
-import {
-  buildFrameContentKey,
-  useShootSession,
-} from "@/lib/shootSessionStore";
+import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
@@ -75,7 +67,11 @@ function buildEditorSignature(
     components,
     background:
       background.type === "IMAGE"
-        ? { type: "IMAGE", key: background.key ?? null, opacity: background.opacity ?? null }
+        ? {
+            type: "IMAGE",
+            key: background.key ?? null,
+            opacity: background.opacity ?? null,
+          }
         : { type: "COLOR", value: background.value },
     backgroundColor,
     cellCutouts,
@@ -107,12 +103,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   // 매번 이탈 경고가 떠서, 아무것도 고치지 않은 사용자까지 붙잡는다.
   const editorSignature = useMemo(
     () =>
-      buildEditorSignature(
-        editorComponents,
-        background,
-        backgroundColor,
-        cellCutouts,
-      ),
+      buildEditorSignature(editorComponents, background, backgroundColor, cellCutouts),
     [editorComponents, background, backgroundColor, cellCutouts],
   );
   // 기준은 프레임마다 새로 잡되, 스토어가 이 프레임 상태로 자리잡은 뒤에 잡는다.
@@ -193,8 +184,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   // 저장 다이얼로그에 입력한 이름·설명도 아직 서버에 안 올라간 작업이다.
   // 다이얼로그를 열면 현재 값으로 채워지므로, 그 값에서 달라졌을 때만 편집으로 센다.
   const hasUnsavedSaveDialogInput =
-    isSaveDialogOpen &&
-    (draftTitle !== title || draftDescription !== description);
+    isSaveDialogOpen && (draftTitle !== title || draftDescription !== description);
 
   useUnsavedWorkGuard(hasUnsavedCanvasChanges || hasUnsavedSaveDialogInput);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
@@ -327,11 +317,21 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     }
   }, [frameId, remoteFrameId, hydrateDraft]);
 
+  const stopDraftAutosaveRef = useRef<(() => void) | null>(null);
   // 편집 중 상태를 localStorage에 자동 저장(디바운스). S3 temp 업로드 대신 로컬 보관.
   useEffect(() => {
     if (remoteFrameId) return;
     let timer: number | undefined;
     let idle: number | undefined;
+    let stopped = false;
+    const cancelScheduled = () => {
+      window.clearTimeout(timer);
+      if (idle !== undefined) {
+        if (window.cancelIdleCallback) window.cancelIdleCallback(idle);
+        else window.clearTimeout(idle);
+        idle = undefined;
+      }
+    };
 
     // 저장은 5MB 문자열을 만들고 쓰는 동기 작업이라 메인 스레드를 잡는다. 디바운스가 끝난
     // 순간이 하필 사용자가 스티커를 끌고 있는 순간일 수 있어, 한가한 프레임까지 한 번 더
@@ -339,26 +339,24 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     const whenIdle = (run: () => void) => {
       const ric = (
         window as typeof window & {
-          requestIdleCallback?: (cb: IdleRequestCallback, o?: IdleRequestOptions) => number;
+          requestIdleCallback?: (
+            cb: IdleRequestCallback,
+            o?: IdleRequestOptions,
+          ) => number;
         }
       ).requestIdleCallback;
-      idle = ric
-        ? ric(() => run(), { timeout: 2000 })
-        : window.setTimeout(run, 0);
+      idle = ric ? ric(() => run(), { timeout: 2000 }) : window.setTimeout(run, 0);
     };
 
     const unsubscribe = useThemeEditorStore.subscribe(() => {
-      window.clearTimeout(timer);
+      cancelScheduled();
       timer = window.setTimeout(() => {
         whenIdle(() => {
+          idle = undefined;
+          if (stopped) return;
           const s = useThemeEditorStore.getState();
           if (!s.frameId) return;
-          const isEmptyDefault =
-            s.components.length === 0 && s.background.type === "COLOR";
-          if (isEmptyDefault) {
-            clearEditorDraft();
-            return;
-          }
+          // 레이어가 없어도 배경색·칸별 설정은 편집 내용이다. 함께 보관한다.
           void saveEditorDraft({
             frameId: s.frameId,
             backgroundColor: s.backgroundColor,
@@ -370,17 +368,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         });
       }, 1000);
     });
-    return () => {
-      window.clearTimeout(timer);
-      if (idle !== undefined) {
-        const cic = (
-          window as typeof window & { cancelIdleCallback?: (id: number) => void }
-        ).cancelIdleCallback;
-        if (cic) cic(idle);
-        else window.clearTimeout(idle);
-      }
+    const stop = () => {
+      stopped = true;
+      cancelScheduled();
       unsubscribe();
     };
+    stopDraftAutosaveRef.current = stop;
+    return stop;
   }, [remoteFrameId]);
 
   const openSaveDialog = () => {
@@ -435,11 +429,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       const previewBlob = await renderThemePreviewPng(themeJson);
-      const previewFile = new File(
-        [previewBlob],
-        `theme-preview-${Date.now()}.png`,
-        { type: "image/png" },
-      );
+      const previewFile = new File([previewBlob], `theme-preview-${Date.now()}.png`, {
+        type: "image/png",
+      });
       // 미리보기 PNG 는 저장 요청에 previewKey 로만 실린다 — 올린 뒤 이 화면에서
       // 다시 그리지 않으므로 조회용 URL 해석(왕복 1회)을 건너뛴다.
       const { key: previewKey } = await uploadToS3WithPresigned({
@@ -482,6 +474,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         await createFrame(body);
       }
 
+      stopDraftAutosaveRef.current?.();
       clearEditorDraft();
       // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
       // /theme로 나가는 길에도 경고가 뜬다.
@@ -576,6 +569,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             backLabel="프레임 목록으로"
             title={remoteFrameId ? "프레임 수정" : "프레임 꾸미기"}
             onBackClick={() => {
+              stopDraftAutosaveRef.current?.();
               useThemeEditorStore.getState().reset();
               clearEditorDraft();
             }}
@@ -898,4 +892,3 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     </main>
   );
 }
-

@@ -5,21 +5,14 @@ type HeadersWithSetCookie = Headers & {
 function splitCombinedSetCookie(value: string) {
   const cookies: string[] = [];
   let start = 0;
-  let inExpires = false;
 
   for (let i = 0; i < value.length; i += 1) {
-    const current = value[i];
-    const nextExpires = value.slice(i, i + 8).toLowerCase();
-
-    if (nextExpires === "expires=") {
-      inExpires = true;
-    }
-
-    if (inExpires && current === ";") {
-      inExpires = false;
-    }
-
-    if (current === "," && !inExpires) {
+    // Expires가 마지막 속성이면 세미콜론이 없다. 날짜의 쉼표가 아니라
+    // 다음 cookie-name=이 시작되는 쉼표에서만 나눈다.
+    if (
+      value[i] === "," &&
+      /^\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+\s*=/.test(value.slice(i + 1))
+    ) {
       cookies.push(value.slice(start, i).trim());
       start = i + 1;
     }
@@ -95,9 +88,6 @@ export function adaptSetCookieForRequest(setCookie: string, req: RequestLike) {
   return nextCookie;
 }
 
-export function adaptSetCookiesForRequest(
-  setCookies: string[],
-  req: RequestLike,
-) {
+export function adaptSetCookiesForRequest(setCookies: string[], req: RequestLike) {
   return setCookies.map((cookie) => adaptSetCookieForRequest(cookie, req));
 }

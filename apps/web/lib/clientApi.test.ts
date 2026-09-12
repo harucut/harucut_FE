@@ -102,16 +102,16 @@ describe("clientApi — 탈퇴요청(GEN-021) 감지", () => {
   it("403 이어도 코드가 GEN-021 이 아니면 상태를 조회하지 않는다", async () => {
     const fetchMock = jest.fn(
       async () =>
-        new Response(
-          JSON.stringify({ code: "SUBS-003", status: 403, message: "…" }),
-          { status: 403, headers: { "content-type": "application/json" } },
-        ),
+        new Response(JSON.stringify({ code: "SUBS-003", status: 403, message: "…" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
     );
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject(
-      { code: "SUBS-003" },
-    );
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({
+      code: "SUBS-003",
+    });
     await flushAsync();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -135,12 +135,10 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
       throw new TypeError("Failed to fetch");
     }) as unknown as typeof fetch;
 
-    const error = await clientApi
-      .get("/api/client/user-info")
-      .then(
-        () => null,
-        (caught: unknown) => caught,
-      );
+    const error = await clientApi.get("/api/client/user-info").then(
+      () => null,
+      (caught: unknown) => caught,
+    );
 
     expect(error).toBeInstanceOf(ApiRequestError);
     expect((error as ApiRequestError).code).toBe(CLIENT_NETWORK_UNREACHABLE_CODE);
@@ -153,6 +151,23 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
     expect(getApiErrorMessageByCode(CLIENT_NETWORK_UNREACHABLE_CODE)).toBeTruthy();
   });
 
+  it("응답 본문을 읽다가 연결이 끊겨도 CLIENT-004로 안내한다", async () => {
+    const response = new Response("{}");
+    jest.spyOn(response, "text").mockRejectedValue(new TypeError("terminated"));
+    global.fetch = jest.fn().mockResolvedValue(response);
+    await expect(clientApi.get("/api/client/user-info")).rejects.toMatchObject({
+      code: CLIENT_NETWORK_UNREACHABLE_CODE,
+    });
+  });
+
+  it("응답 본문을 읽던 중 취소되면 AbortError를 보존한다", async () => {
+    const aborted = new DOMException("Aborted", "AbortError");
+    const response = new Response("{}");
+    jest.spyOn(response, "text").mockRejectedValue(aborted);
+    global.fetch = jest.fn().mockResolvedValue(response);
+    await expect(clientApi.get("/api/client/user-info")).rejects.toBe(aborted);
+  });
+
   // 취소는 실패가 아니다. 코드를 붙이면 사용자가 스스로 끊은 요청이 오류 문구로 바뀐다.
   it("취소(AbortError)는 손대지 않고 그대로 던진다", async () => {
     const aborted = new DOMException("Aborted", "AbortError");
@@ -160,12 +175,10 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
       throw aborted;
     }) as unknown as typeof fetch;
 
-    const error = await clientApi
-      .get("/api/client/user-info")
-      .then(
-        () => null,
-        (caught: unknown) => caught,
-      );
+    const error = await clientApi.get("/api/client/user-info").then(
+      () => null,
+      (caught: unknown) => caught,
+    );
 
     expect(error).toBe(aborted);
     expect(error).not.toBeInstanceOf(ApiRequestError);
@@ -237,9 +250,8 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
       });
       controller.abort();
 
-      // 끊겼으므로 재발급은 실패로 접히고, 원요청의 401 이 그대로 올라온다.
-      // 고치기 전에는 이 약속이 영영 안 끝났다.
-      await expect(pending).rejects.toBeDefined();
+      // 사용자의 취소를 세션 장애로 바꾸지 않는다. 공유 재발급 자체는 계속된다.
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
 
       /*
         **공유 슬롯을 비워 두고 나간다.** 호출부는 끊겼지만 왕복은 자기 상한(30초)까지
@@ -367,9 +379,9 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
       // 회선이 돌아온 뒤의 401 은 **새 재발급**을 보낸다.
       stall = false;
       needsAuth = true;
-      await expect(
-        clientApi.get("/api/client/user-info"),
-      ).resolves.toMatchObject({ ok: true });
+      await expect(clientApi.get("/api/client/user-info")).resolves.toMatchObject({
+        ok: true,
+      });
       // 고치기 전에는 여기가 1 이었다 — 멈춘 약속을 그대로 물고 있었다.
       expect(reissueCalls).toBe(2);
     } finally {

@@ -288,6 +288,8 @@ async function request<T>(
   // 재발급까지 실패하면(여전히 401) 세션이 끊긴 것으로 보고 등록된 만료 핸들러를 호출한다.
   if (res.status === 401 && !SESSION_REFRESH_EXEMPT_PATHS.has(path)) {
     const reissue = await reissueAccessToken(options.signal);
+    // 공유 재발급을 기다리다 취소된 호출부에는 취소를 그대로 돌려준다.
+    if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
     // 재발급 성공 시에만 재시도한다. 재시도 fetch 가 실패하면 그 오류를 그대로 올려
     // 유효 세션을 만료로 오인하지 않는다(취소면 AbortError, 회선이 끊겼으면 CLIENT-004).
     // 재발급 실패면 최초 401 응답을 유지한다.
@@ -311,7 +313,17 @@ async function request<T>(
     }
   }
 
-  const text = await res.text();
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (error) {
+    // 헤더 뒤에 연결이 끊겨도 fetch 실패와 같은 안내를 쓴다. 취소는 보존한다.
+    if (isAbortError(error)) throw error;
+    throw new ApiRequestError({
+      code: CLIENT_NETWORK_UNREACHABLE_CODE,
+      apiMessage: null,
+    });
+  }
   let data = null as T;
   if (text) {
     try {

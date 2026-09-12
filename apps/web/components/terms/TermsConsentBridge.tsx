@@ -43,6 +43,11 @@ export function TermsConsentBridge() {
   const [all, setAll] = useState<MyTermsConsent[]>([]);
   // 한 번 확인했으면 화면을 옮겨 다닐 때마다 다시 묻지 않는다.
   const checkedRef = useRef(false);
+  const [retryNeeded, setRetryNeeded] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const autoRetriedRef = useRef(false);
+  // POST는 응답을 못 받아도 서버에 기록됐을 수 있다. 조회 재시도와 분리해 한 번만 보낸다.
+  const handoffAttemptedRef = useRef(false);
   // 세션 조회가 끝나기 전에 화면을 옮기면 이펙트가 한 번 더 돈다. 그대로 두면 보관해 둔
   // 동의를 **두 번** 보내게 되는데, 동의 이력은 법적 증빙용이라 수정·삭제되지 않는다 —
   // 같은 동의가 두 줄로 남는다.
@@ -58,23 +63,18 @@ export function TermsConsentBridge() {
       묻는 것은 `resolveMembership()` 이다 — 생 `/api/auth/session` 이 아니다. 그 라우트는
       만료된 access 를 **재발급해 주지 않고** 백엔드의 401 을 `authenticated: false` 로
       감싸므로, access 만 만료되고 refresh 는 멀쩡한 회원이 비회원으로 읽힌다. 그러면 아래
-      필수 약관 재동의 검사가 통째로 건너뛰어진다. **이 effect 는 주소가 바뀔 때만 다시
-      돈다** — 같은 화면의 다른 API 가 곧 `clientApi` 로 토큰을 되살려도 다음 SPA 이동까지
-      재동의를 못 받는다. 서버가 강제하지 않는 검사라 여기서 놓치면 그대로 지나간다.
+      필수 약관 재동의 검사가 통째로 건너뛰어진다. 재시도 역시 재발급 가능한 판정을 써야
+      같은 회원을 비회원으로 반복 판정하지 않는다.
 
       회원이 아니면(확정된 비회원이든 못 물어본 `unknown` 이든) 그냥 돌아간다. 아래 한 번만
-      도는 표식(`checkedRef`)은 **회원으로 확인된 뒤에 세우므로** 이 회차는 그것을 쓰지
+      도는 표식(`checkedRef`)은 **약관 조회가 성공한 뒤에 세우므로** 이 회차는 그것을 쓰지
       않는다 — 다음 회차에 다시 묻는다.
     */
     const membership = await resolveMembership();
-    if (membership !== "member") return;
+    if (membership !== "member") return membership === "unknown";
 
-    // 여기서부터는 한 번만 돈다. 아래 조회가 실패해도 다시 시도하지 않는다 —
-    // 화면을 옮길 때마다 같은 요청을 반복하는 편이 더 나쁘다.
-    checkedRef.current = true;
-
-    const stashed = getPendingTermsConsent();
-    stashedRef.current = stashed;
+    const stashed = handoffAttemptedRef.current ? null : getPendingTermsConsent();
+    if (!handoffAttemptedRef.current) stashedRef.current = stashed;
     if (stashed) {
       // 보관물은 **가입한 그 계정** 것이다. "로그인했다"만 보고 보내면, 한 기기에서
       // 가입하고 다른 계정으로 로그인한 순간 고른 적 없는 사람의 장부에 붙는다.
@@ -104,6 +104,7 @@ export function TermsConsentBridge() {
         // 주인이 아닌 계정이다. 남겨 둬도 주인이 이 기기로 돌아온다는 보장이 없다.
         dropStashed();
       } else if (accountEmail) {
+        handoffAttemptedRef.current = true;
         try {
           await submitTermsConsents(stashed.items);
           dropStashed();
@@ -126,12 +127,15 @@ export function TermsConsentBridge() {
     try {
       const consents = await fetchMyTermsConsents();
       const required = pendingRequiredConsents(consents);
+      checkedRef.current = true;
       if (required.length > 0) {
         setAll(consents);
         setPending(required);
       }
+      return false;
     } catch {
-      // 조용히 넘어간다.
+      // 앱은 잠그지 않되, 실패를 확인 완료로 기억하지 않는다.
+      return true;
     }
   }, []);
 
@@ -142,12 +146,24 @@ export function TermsConsentBridge() {
     runningRef.current = true;
     void (async () => {
       try {
-        await runCheck();
+        setRetryNeeded(await runCheck());
+      } catch {
+        setRetryNeeded(true);
       } finally {
         runningRef.current = false;
       }
     })();
-  }, [pathname, runCheck]);
+  }, [pathname, retryNonce, runCheck]);
+
+  useEffect(() => {
+    if (!retryNeeded || autoRetriedRef.current || !isProtectedPath(pathname)) return;
+    // 같은 화면에서도 일시 장애를 한 번 복구한다. 계속 실패하면 다음 화면 이동 때 묻는다.
+    const timer = window.setTimeout(() => {
+      autoRetriedRef.current = true;
+      setRetryNonce((nonce) => nonce + 1);
+    }, 30_000);
+    return () => window.clearTimeout(timer);
+  }, [pathname, retryNeeded]);
 
   /*
     **보호 화면에서만 막는다 — 결과를 버리지는 않는다.**
