@@ -6,13 +6,12 @@ import { useEffect, useRef, useState } from "react";
 import { GuestTrialOverlay } from "@/components/guest/GuestTrialOverlay";
 import { getApiErrorDetails } from "@/lib/apiError";
 import { describeComposeFailure } from "@/lib/fourcutCompose";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { useGuestTrialStore, type GuestNoticeAction } from "@/lib/guestTrialStore";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
-  clearPendingGuestSave,
   ensurePendingGuestSaveComposeKey,
-  getPendingGuestSave,
+  readPendingGuestSave,
   clearPendingGuestSaveIfUnchanged,
   type PendingGuestSave,
   type PendingGuestSaveMeta,
@@ -27,6 +26,8 @@ import { resolveMembership } from "@/lib/authSession";
  * 새로 지어낸 간격이 아니라 「한 번 묻는 데 최대로 걸리는 만큼」이다.
  */
 const MEMBERSHIP_TIMED_RETRY_MS = 30_000;
+// 최초 읽기와 수동 재시도 두 번. 실패 횟수만으로 보관물을 자동 삭제하지 않는다.
+const MAX_HANDOFF_READ_ATTEMPTS = 3;
 
 /**
  * 다시 시도를 권할 때 붙이는 **중복 경고**. 멱등키를 못 남긴 기기에서만 붙는다.
@@ -59,6 +60,22 @@ function isSameHandoff(
   a: PendingGuestSaveMeta,
   b: PendingGuestSaveMeta,
 ): boolean {
+  if (a.recordId || b.recordId) {
+    if (!a.recordId || a.recordId !== b.recordId) return false;
+  } else {
+    // ID가 없는 예전 localStorage 보관물은 원본 문자열까지 같아야 한다.
+    // 메타만 있는 스냅샷이나 Blob은 이 경로로 삭제를 허가하지 않는다.
+    if (!("sources" in a) || !("sources" in b)) return false;
+    const left = a.sources;
+    const right = b.sources;
+    if (
+      !Array.isArray(left) ||
+      !Array.isArray(right) ||
+      left.length !== 4 ||
+      right.length !== 4 ||
+      !left.every((source, index) => typeof source === "string" && source === right[index])
+    ) return false;
+  }
   return (
     a.savedAt === b.savedAt &&
     a.displayName === b.displayName &&
@@ -173,6 +190,7 @@ export function GuestTrialBridge() {
     진행 중 안내를 덮고, 같은 인계가 한 번 더 접수돼 원본 4장이 S3 에 또 남는다.
   */
   const handoffSavingRef = useRef(false);
+  const handoffReadFailuresRef = useRef(0);
   useEffect(() => {
     /*
       **쿠키를 읽기 전에는 판단하지 않는다.**
@@ -209,8 +227,14 @@ export function GuestTrialBridge() {
       무조건 지우면 사용자가 버리겠다고 한 적 없는 새 한 벌이 사라지고, 원본 4장은 여기에만
       있어서 되돌릴 수 없다. 그런 경우에는 그대로 두고 다시 물어본다.
     */
-    const discardPendingSave = async (promptedEntry: PendingGuestSave) => {
-      if (await clearHandoffIfUnchanged(promptedEntry)) {
+    const discardPendingSave = async (promptedEntry: PendingGuestSaveMeta) => {
+      if (handoffSavingRef.current) return;
+      handoffSavingRef.current = true;
+      const result = await clearPendingGuestSaveIfUnchanged((entry) =>
+        isSameHandoff(entry, promptedEntry),
+      );
+      handoffSavingRef.current = false;
+      if (result === "cleared") {
         stripResumeParam();
         return;
       }
@@ -220,13 +244,82 @@ export function GuestTrialBridge() {
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
         eyebrow: "NOTICE",
         icon: "lock",
-        message:
-          "확인하는 사이 이 기기의 보관물이 다른 네컷으로 바뀌었어요. 버리겠다고 하신 것과 다른 사진이라 그대로 뒀어요 — 새로 만든 것이라면 다시 물어볼게요.",
+        message: result === "changed"
+          ? "확인하는 사이 이 기기의 보관물이 다른 네컷으로 바뀌었어요. 버리겠다고 하신 것과 다른 사진이라 그대로 뒀어요. 새로 만든 것이라면 다시 물어볼게요."
+          : "이 기기의 보관물을 확인하지 못해 버리지 않았어요. 다른 하루컷 탭을 닫고 이 화면을 새로고침한 뒤 다시 시도해 주세요.",
         title: "버리지 않았어요",
       });
     };
 
-    const runPendingSave = async (promptedEntry: PendingGuestSave) => {
+    const showUnreadableNotice = ({
+      attempt,
+      phase,
+      reason,
+      retry,
+      promptedEntry,
+    }: {
+      attempt: number;
+      phase: "read" | "compose-key";
+      reason: "storage" | "sources" | "changed" | "unknown";
+      retry: () => void;
+      promptedEntry?: PendingGuestSaveMeta;
+    }) => {
+      const exhausted = attempt >= MAX_HANDOFF_READ_ATTEMPTS;
+      // 사진, 표시 이름, 멱등키 등 보관 내용은 로그에 싣지 않는다.
+      console.warn("count_unreadable_hand_off", { phase, reason, attempt });
+      const actions: GuestNoticeAction[] = [];
+      if (!exhausted) {
+        actions.push({ id: "save-guest-handoff", label: "다시 시도", onSelect: retry });
+      }
+      if (promptedEntry) {
+        actions.push({
+          id: "discard-guest-handoff",
+          label: "보관물 버리기",
+          variant: "secondary",
+          onSelect: () => setNotice({
+            actions: [
+              {
+                id: "discard-guest-handoff",
+                label: "버리기",
+                onSelect: () => void discardPendingSave(promptedEntry),
+              },
+              { id: "dismiss", label: "보관물 유지", variant: "secondary" },
+            ],
+            eyebrow: "NOTICE",
+            icon: "lock",
+            message: `"${promptedEntry.displayName}"의 이 기기 보관본을 버리면 기록으로 옮길 수 없고 되돌릴 수도 없어요. 이미 내려받은 사진과 계정 기록은 그대로 남아요.`,
+            title: "이 보관물을 버릴까요?",
+          }),
+        });
+      }
+      actions.push({
+        id: "dismiss",
+        label: promptedEntry ? "보관물 유지" : "닫기",
+        variant: "secondary",
+      });
+      const message = reason === "changed"
+        ? "확인하는 사이 이 기기의 보관물이 다른 네컷으로 바뀌었어요. 새 보관물은 그대로 두었어요."
+        : promptedEntry
+          ? "이 기기에 보관한 사진을 읽지 못했어요. 보관물은 지우지 않았고, 기록에도 옮기지 않았어요."
+          : "이 기기의 사진 보관함을 확인하지 못했어요. 보관물이 있는지 아직 알 수 없어 기록으로 옮기지 않았어요.";
+      setNotice({
+        actions,
+        eyebrow: "NOTICE",
+        icon: "lock",
+        message: `${message} ${exhausted
+          ? "같은 문제가 반복되고 있어요. 다른 하루컷 탭을 닫고 앱이나 브라우저를 다시 열어 주세요. 원본 사진이 있다면 촬영 화면에서 다시 불러올 수도 있어요."
+          : "다시 시도해 주세요. 같은 문제가 반복되면 다른 하루컷 탭을 닫고 앱이나 브라우저를 다시 열어 주세요."}`,
+        title: reason === "changed"
+          ? "보관물이 바뀌었어요"
+          : exhausted ? "사진을 계속 읽지 못하고 있어요" : "사진을 읽지 못했어요",
+      });
+    };
+
+    const runPendingSave = async (
+      promptedEntry: PendingGuestSave,
+      unreadableAttempts = 0,
+    ) => {
+      if (handoffSavingRef.current || unreadableAttempts >= MAX_HANDOFF_READ_ATTEMPTS) return;
       /*
         누른 즉시 "옮기는 중"이라고 말한다.
 
@@ -269,6 +362,19 @@ export function GuestTrialBridge() {
         와 같은 이유·같은 한계).
       */
       const composeKey = await ensurePendingGuestSaveComposeKey();
+      if (composeKey === "unreadable") {
+        handoffSavingRef.current = false;
+        // 확인한 항목을 유지하고 버튼으로 재시도한다. 재시도도 위 읽기와 아래 대조를 거친다.
+        const attempt = unreadableAttempts + 1;
+        showUnreadableNotice({
+          attempt,
+          phase: "compose-key",
+          reason: "unknown",
+          promptedEntry,
+          retry: () => void runPendingSave(promptedEntry, attempt),
+        });
+        return;
+      }
       if (!composeKey || !isSameHandoff(composeKey.entry, promptedEntry)) {
         handoffSavingRef.current = false;
         // 물어본 것을 접었으니 "이미 물어봤다"도 되돌린다. 새 한 벌이 들어와 있으면
@@ -405,9 +511,10 @@ export function GuestTrialBridge() {
     const runRound = async (): Promise<boolean> => {
       // 보관물 조회는 비동기다 — IndexedDB 에 담기 때문이다(lib/pendingGuestSave.ts).
       // 읽는 동안 화면을 옮겼으면 여기서 끝낸다.
-      const pending = await getPendingGuestSave();
+      const read = await readPendingGuestSave();
       if (cancelled) return false;
-      if (!pending) {
+      if (read.status === "empty") {
+        handoffReadFailuresRef.current = 0;
         stripResumeParam();
         return false;
       }
@@ -489,6 +596,22 @@ export function GuestTrialBridge() {
       }
 
       prompted = true;
+      if (read.status === "unreadable") {
+        handoffReadFailuresRef.current += 1;
+        showUnreadableNotice({
+          attempt: handoffReadFailuresRef.current,
+          phase: "read",
+          reason: read.reason ?? "storage",
+          promptedEntry: read.meta,
+          retry: () => {
+            handoffPromptedRef.current = false;
+            setMembershipRetryToken((token) => token + 1);
+          },
+        });
+        return false;
+      }
+      handoffReadFailuresRef.current = 0;
+      const pending = read.entry;
       setNotice({
         actions: [
           {

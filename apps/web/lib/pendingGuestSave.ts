@@ -66,6 +66,9 @@ const LEGACY_KEY_V2 = "harucut:pending-guest-save:v2";
 export const PENDING_GUEST_SAVE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type PendingGuestSave = {
+  // 저장 1회마다 새로 만든다. 같은 시각과 메타로 저장된 다른 원본도 구분한다.
+  // 배포 전 IndexedDB 보관물은 읽을 때 부착하고, legacy 보관물에는 없을 수 있다.
+  recordId?: string;
   /** 고른 순서 그대로의 원본 4장(data URL). 이 순서가 곧 슬롯 순서다. */
   sources: string[];
   frameId: FrameId;
@@ -306,7 +309,12 @@ function normalizeMeta(
       ? parsed.composeIdempotencyKey
       : undefined;
 
-  return { ...parsed, backgroundColor, composeIdempotencyKey };
+  const recordId =
+    typeof parsed.recordId === "string" && parsed.recordId.length > 0
+      ? parsed.recordId
+      : undefined;
+
+  return { ...parsed, recordId, backgroundColor, composeIdempotencyKey };
 }
 
 /** 원본 4장이 온전할 때만 쓸모가 있다. 한 장이라도 비면 합성이 안 된다. */
@@ -358,13 +366,13 @@ function readLegacyEntry(now: number): PendingGuestSave | null {
  * 시작하고, 옛 키를 물려받아 서버가 앞사람 그림을 재생하는 일이 생기지 않는다.
  */
 export async function setPendingGuestSave(
-  entry: Omit<PendingGuestSave, "savedAt" | "composeIdempotencyKey">,
+  entry: Omit<PendingGuestSave, "savedAt" | "composeIdempotencyKey" | "recordId">,
   now: number,
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
     clearLegacyEntries();
-    return await writeRecord({ ...entry, savedAt: now });
+    return await writeRecord({ ...entry, recordId: newIdempotencyKey(), savedAt: now });
   } catch {
     return false;
   }
@@ -413,7 +421,12 @@ export type PendingGuestSaveRead =
   /** 확실히 없다 — 기한이 지났거나 애초에 없었다. */
   | { status: "empty" }
   /** 있는지 없는지 **알 수 없다** — 저장소를 못 열었거나 읽다 깨졌다. */
-  | { status: "unreadable" };
+  | {
+      status: "unreadable";
+      reason?: "sources" | "changed";
+      // 원본 변환만 실패했다면, 확인한 한 벌을 조건부로 버릴 수 있게 메타를 남긴다.
+      meta?: PendingGuestSaveMeta;
+    };
 
 /**
  * **인계를 꺼내는 읽기.** 쓸 수 있는 한 벌이면 무엇이든 준다.
@@ -434,10 +447,35 @@ export async function readPendingGuestSave(
 ): Promise<PendingGuestSaveRead> {
   if (typeof window === "undefined") return { status: "unreadable" };
   try {
-    const read = await withStore<StoredRecord | undefined>(
+    let read = await withStore<StoredRecord | undefined>(
       "readonly",
       (store) => store.get(RECORD_KEY),
     );
+    if (read.opened && read.value) {
+      const meta = normalizeMeta(read.value, now);
+      if (meta && !meta.recordId && hasFourSources(read.value.sources, isUsableBlob)) {
+        // 기존 보관물도 원본 변환 전에 식별자를 확보한다. 읽기와 부착을 나누면 두 탭이
+        // 서로 다른 ID를 받거나 새 보관물에 옛 ID를 덮으므로, 현재 한 벌을 다시 읽고 쓴다.
+        read = await withStore<StoredRecord | undefined>("readwrite", (store) => {
+          const request = store.get(RECORD_KEY) as IDBRequest<StoredRecord | undefined>;
+          request.onsuccess = () => {
+            const record = request.result;
+            if (!record) return;
+            const currentMeta = normalizeMeta(record, now);
+            if (
+              !currentMeta ||
+              currentMeta.recordId ||
+              !hasFourSources(record.sources, isUsableBlob)
+            ) return;
+            record.recordId = newIdempotencyKey();
+            store.put(record, RECORD_KEY);
+          };
+          return request;
+        });
+        // ID를 확정하지 못한 스냅샷을 폐기나 저장의 근거로 넘기지 않는다.
+        if (!read.opened) return { status: "unreadable" };
+      }
+    }
 
     // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다.
     //
@@ -457,13 +495,41 @@ export async function readPendingGuestSave(
     const record = read.value;
     const meta = normalizeMeta(record, now);
     if (!meta || !hasFourSources(record.sources, isUsableBlob)) {
-      await clearPendingGuestSave();
-      return { status: "empty" };
+      /*
+        **못 쓰는 한 벌도 조건부로 지운다.**
+
+        위 읽기는 `readonly` 로 끝났고, 여기까지 오는 사이가 열려 있다. 그 틈에 다른 탭이
+        새 네컷을 같은 자리에 저장하면 무조건 삭제는 **그 새 한 벌**을 지운다 — 사용자가
+        확인한 적 없는 것이고, 원본 4장은 거기에만 있다.
+
+        지문으로 「늘 다르다」를 넘긴다. 시각 같은 값을 지문에 쓰지 않는 이유가 있다 —
+        `savedAt` 은 `Date.now()` 그대로라 같은 밀리초에 시작한 다른 탭의 저장과 겹칠 수
+        있고, 그러면 성한 새 한 벌을 내가 읽은 것으로 착각해 지운다.
+
+        대신 **「지금도 못 쓰는가」를 트랜잭션 안에서 다시 본다.** `deleteRecordIfMatches` 는
+        못 쓰는 레코드를 지문 없이 걷고 쓸 수 있는 레코드만 지문에 물어보므로, 이 한 줄이
+        곧 「지금도 못 쓰는 한 벌이면 지운다」가 된다 — 갈아 끼워졌으면 무엇이 들어왔든
+        손을 뗀다.
+      */
+      const cleared = await clearPendingGuestSaveIfUnchanged(() => false, now);
+      // 갈아 끼워져 있었다 — 내가 읽은 것은 이미 지난 소식이다. 「없다」로 답하면 그 판단으로
+      // 무언가를 지우게 되므로, 모른다고 답하고 다음 읽기에 맡긴다.
+      if (cleared === "cleared") return { status: "empty" };
+      return cleared === "changed"
+        ? { status: "unreadable", reason: "changed" }
+        : { status: "unreadable" };
+    }
+
+    let sources: string[];
+    try {
+      sources = await Promise.all(record.sources.map(blobToDataUrl));
+    } catch {
+      return { status: "unreadable", reason: "sources", meta };
     }
 
     return {
       status: "found",
-      entry: { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) },
+      entry: { ...meta, sources },
       // 여기까지 왔다는 것은 저장소를 열고 그 자리를 직접 본 것이다.
       opened: true,
     };
@@ -555,16 +621,106 @@ function deleteRecordIfMatches(
         const record = read.result as StoredRecord | undefined;
         if (!record) return;
 
+        /*
+          **못 쓰는 레코드는 지문을 볼 것도 없이 걷는다** — 읽기 경로도 그것을 그 자리에서
+          지운다. 「못 쓴다」의 뜻은 읽기 경로와 **같아야 한다**: 기한이 지났거나 프레임을
+          모르는 것뿐 아니라 원본이 네 장이 아닌 것도 그렇다. 한쪽만 알면 읽기는 「없다」로
+          답하는데 삭제는 「바뀌었다」로 손을 떼, 못 쓰는 한 벌이 영영 남는다.
+        */
         const meta = normalizeMeta(record, now);
-        // 못 쓰는 레코드(기한이 지났거나 프레임을 모르는 것)는 지문을 볼 것도 없이 걷는다 —
-        // 읽기 경로도 그것을 그 자리에서 지운다.
-        if (meta && !isSame(meta)) {
+        const usable = meta && hasFourSources(record.sources, isUsableBlob);
+        if (usable && !isSame(meta)) {
           outcome = "changed";
           return;
         }
 
         outcome = "cleared";
         store.delete(RECORD_KEY);
+      };
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    transaction.oncomplete = () => resolve(outcome);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction aborted"));
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("indexeddb transaction failed"));
+  });
+}
+
+/**
+ * 이 함수가 돌려주는 것은 **그 자리에 실제로 있는 키와 그 키가 붙은 레코드**다.
+ *
+ * 읽어 둔 항목이 아니다. 그 사이 다른 탭이 새로 찍어 갈아 끼웠으면 키는 새 한 벌에 붙고,
+ * 올려 보낼 원본도 그쪽이어야 한다 — 예전 항목의 원본을 이 키로 올리면 나중에 새 한 벌을
+ * 인계할 때 같은 키가 다시 나와 서버가 예전 작업을 재생한다.
+ */
+type ComposeKeyAttach =
+  /** 쓸 수 있는 레코드가 없다 — 붙일 자리가 없다. */
+  | { status: "absent" }
+  | {
+      status: "attached";
+      record: StoredRecord;
+      meta: PendingGuestSaveMeta;
+      key: string;
+    };
+
+/**
+ * **키 확인과 부착을 한 트랜잭션 안에서 한다.** 쓸 수 있는 레코드가 없으면 `absent`.
+ *
+ * 나눠서 하면 그 사이가 열린다. 같은 브라우저의 두 탭이 거의 동시에 인계를 확정하면 양쪽
+ * 모두 「키 없음」을 읽고 서로 다른 키를 만든 뒤 각자 쓴다. 레코드에는 뒤에 쓴 것만 남지만
+ * **두 탭은 각자의 키로 합성을 접수한** 뒤다 — 멱등키가 있으나 마나 같은 네컷이 기록에 두
+ * 벌 남는다. 읽기가 Blob 넷을 data URL 로 되돌리느라 짧지도 않아서 창이 넓다.
+ *
+ * 그래서 **이미 붙은 키가 있으면 그 키를 돌려준다.** 늦게 온 탭도 먼저 붙은 키를 쓴다.
+ * 덮어쓰면 앞 탭이 이미 그 키로 접수한 작업과 갈라진다.
+ *
+ * IndexedDB 트랜잭션은 같은 store 에 대해 직렬화되므로, 여기서 읽은 값과 쓰는 값 사이에는
+ * 다른 쓰기가 끼어들지 못한다(`deleteRecordIfMatches` 와 같은 이유).
+ */
+function attachComposeKeyIfAbsent(
+  db: IDBDatabase,
+  key: string,
+  now: number,
+): Promise<ComposeKeyAttach> {
+  return new Promise((resolve, reject) => {
+    let outcome: ComposeKeyAttach = { status: "absent" };
+    let transaction: IDBTransaction;
+
+    try {
+      transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const read = store.get(RECORD_KEY);
+
+      read.onsuccess = () => {
+        const record = read.result as StoredRecord | undefined;
+        if (!record) return;
+
+        const meta = normalizeMeta(record, now);
+        // 못 쓰는 한 벌에는 키를 붙이지 않는다 — 읽기 경로가 그것을 걷어 간다.
+        if (!meta || !hasFourSources(record.sources, isUsableBlob)) return;
+
+        const existing = meta.composeIdempotencyKey;
+        if (existing) {
+          // **먼저 붙은 키가 임자다.** 늦게 온 쪽이 덮으면 두 탭이 서로 다른 키로 접수한다.
+          outcome = { status: "attached", record, meta, key: existing };
+          return;
+        }
+
+        const keyed = {
+          ...record,
+          composeIdempotencyKey: key,
+        } satisfies StoredRecord;
+        outcome = {
+          status: "attached",
+          record: keyed,
+          meta: { ...meta, composeIdempotencyKey: key },
+          key,
+        };
+        store.put(keyed, RECORD_KEY);
       };
     } catch (error) {
       reject(error);
@@ -657,7 +813,7 @@ export type PendingGuestSaveComposeKey = {
 
 /**
  * 이 보관물의 합성 멱등키를 돌려준다. 아직 없으면 그 자리에서 만들어 함께 보관한다.
- * 보관물이 없으면 null — 인계할 것이 없다는 뜻이다.
+ * 보관물이 없으면 null, 읽지 못했으면 "unreadable" — 부재와 읽기 실패를 구분한다.
  *
  * 인계가 끝날 때까지 **같은 키**를 준다. 서버 합성이 성공한 뒤 폴링 시간 초과나 뒤따르는
  * 조회 실패로 인계가 중간에 끊기면 보관물이 남는데, 그때 새 키로 다시 접수하면 같은 네컷이
@@ -668,32 +824,77 @@ export type PendingGuestSaveComposeKey = {
  * 되쓰기는 `setPendingGuestSave` 와 달리 **먼저 지우지 않는다.** 지운 뒤 쓰기가 막히면
  * 원본 4장까지 통째로 잃는다 — 키 한 줄 못 남기는 것보다 훨씬 나쁘다.
  *
+ * **확인과 부착은 한 트랜잭션이다**(`attachComposeKeyIfAbsent`). 나눠서 하면 두 탭이 서로
+ * 다른 키로 같은 네컷을 접수한다. 먼저 붙은 키가 있으면 그 키를 그대로 쓴다.
+ *
  * **못 남겼으면 못 남겼다고 말한다.** 키 자체는 그대로 돌려준다 — 이번 합성은 키가 없어도
  * 돌고, 여기서 거절하면 될 저장까지 막는다. 대신 `persisted: false` 로 넘긴다. 저장소를
- * 못 열거나(`writeRecord` 가 false) 트랜잭션이 중단되면(예외) 그 키는 새로고침을 못 넘기고,
+ * 못 열거나 트랜잭션이 중단되면(예외) 그 키는 새로고침을 못 넘기고,
  * 첫 합성이 이미 서버에 접수된 뒤였다면 재시도가 **다른 키로 같은 네컷을 한 벌 더** 만든다.
  * 그 사실을 삼키면 호출부는 성공한 줄 알고 "새로고침하면 다시 시도해요"라고 안내하면서
  * 중복을 예약하게 된다.
  */
 export async function ensurePendingGuestSaveComposeKey(
   now: number = Date.now(),
-): Promise<PendingGuestSaveComposeKey | null> {
-  const entry = await getPendingGuestSave(now);
-  if (!entry) return null;
+): Promise<PendingGuestSaveComposeKey | "unreadable" | null> {
+  const read = await readPendingGuestSave(now);
+  if (read.status === "unreadable") return "unreadable";
+  if (read.status === "empty") return null;
+  const entry = read.entry;
   // 보관물에서 읽어 온 키다 — 그 자리에 남아 있다는 것이 이미 확인된 셈이다.
   if (entry.composeIdempotencyKey)
     return { key: entry.composeIdempotencyKey, persisted: true, entry };
 
   const key = newIdempotencyKey();
-  // 키를 붙인 그 한 벌을 그대로 돌려준다. 호출부가 「검증한 항목」과 대조할 대상도,
-  // 실제로 올릴 원본도 이것이어야 한다 — 위 `entry` 주석을 본다.
-  const keyed = { ...entry, composeIdempotencyKey: key };
+  /**
+   * **저장소에 못 남긴 키.** 키 자체는 그대로 돌려준다 — 이번 합성은 키가 없어도 돌고,
+   * 여기서 거절하면 될 저장까지 막는다. 대신 `persisted: false` 로 그 사실을 넘긴다.
+   */
+  const unpersisted = (): PendingGuestSaveComposeKey => ({
+    key,
+    persisted: false,
+    // 키를 붙인 그 한 벌을 그대로 돌려준다 — 위 `entry` 주석을 본다.
+    entry: { ...entry, composeIdempotencyKey: key },
+  });
+
+  const db = await openDatabase();
+  if (!db) return unpersisted();
   try {
-    const persisted = await writeRecord(keyed);
-    return { key, persisted, entry: keyed };
-  } catch {
-    // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위 false 와 같으므로 한 갈래로 모은다.
-    return { key, persisted: false, entry: keyed };
+    let settled: ComposeKeyAttach;
+    try {
+      settled = await attachComposeKeyIfAbsent(db, key, now);
+    } catch {
+      // 트랜잭션 중단은 예외로 온다. 못 남은 것은 위와 같으므로 한 갈래로 모은다.
+      return unpersisted();
+    }
+    // IndexedDB 에 쓸 수 있는 레코드가 없다 — 예전 localStorage 한 벌이었다. 거기에는
+    // 트랜잭션이 없어 키를 안전하게 못 남긴다.
+    if (settled.status === "absent") return unpersisted();
+
+    /*
+      **여기서부터는 이미 커밋됐다.** 아래 변환이 실패해도 「못 남겼다」로 물러서지 않는다.
+
+      물러서면 두 가지를 한꺼번에 틀린다. 남은 키를 안 남았다고 말하고, 위에서 읽어 둔
+      **예전 원본**을 그 키에 실어 보낸다 — 키는 그 사이 갈아 끼워진 새 한 벌에 붙었을 수
+      있고, 그러면 나중에 새 한 벌을 인계할 때 같은 키가 다시 나와 서버가 예전 작업을
+      재생한다. 원본을 못 되돌렸으면 **이번 회차는 접는다.** 키는 보관물에 남았으므로
+      다음 회차가 같은 키로 이어 간다(호출부는 읽기 실패를 알리고 재시도 버튼을 제공한다).
+    */
+    let sources: string[];
+    try {
+      sources = await Promise.all(settled.record.sources.map(blobToDataUrl));
+    } catch {
+      return "unreadable";
+    }
+
+    /*
+      돌려주는 키는 **내가 만든 것이 아닐 수 있다.** 다른 탭이 먼저 붙였으면 그 키다.
+      원본도 그 레코드에서 꺼낸 것이다 — 위에서 읽어 둔 `entry` 는 그 사이 갈아 끼워졌을
+      수 있고, 그 원본을 이 키로 올리면 서버가 엉뚱한 한 벌을 남긴다.
+    */
+    return { key: settled.key, persisted: true, entry: { ...settled.meta, sources } };
+  } finally {
+    db.close();
   }
 }
 

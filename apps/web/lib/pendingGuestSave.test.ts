@@ -24,6 +24,12 @@ import {
 
 const NOW = 1_700_000_000_000;
 
+async function ensureReadableComposeKey(now: number) {
+  const result = await ensurePendingGuestSaveComposeKey(now);
+  if (result === "unreadable") throw new Error("보관물을 읽지 못했다");
+  return result;
+}
+
 /** 모듈이 쓰는 저장 위치. 저장된 모양을 직접 들여다볼 때만 쓴다. */
 const STORE_NAME = "entry";
 const RECORD_KEY = "current";
@@ -110,6 +116,14 @@ const store = {
   nullTransactionError: false,
   /** 요청은 받아 놓고 아무것도 안 남긴다 — 되읽어 확인이 없으면 못 잡는 실패. */
   swallowWrites: false,
+  /**
+   * **읽은 직후 다른 탭이 끼어드는 순간.**
+   *
+   * `get` 이 결과를 집은 **뒤** 한 번 불린다. 진짜 브라우저에서 다른 탭의 쓰기가 끼어드는
+   * 자리가 여기다 — 읽기 트랜잭션이 끝나고 다음 트랜잭션이 열리기 전. 플래그로는 그
+   * 순간을 못 만든다.
+   */
+  afterRead: null as (() => void) | null,
   openCount: 0,
   closeCount: 0,
   /**
@@ -131,6 +145,7 @@ function resetStore() {
   store.openCount = 0;
   store.closeCount = 0;
   store.openBlocksThenSucceeds = false;
+  store.afterRead = null;
 }
 
 /**
@@ -156,7 +171,12 @@ function makeObjectStore(
       if (writable) store.data.set(key, value);
       return track({ result: undefined });
     },
-    get: (key) => track({ result: store.data.get(key) }),
+    get: (key) => {
+      const request = track({ result: store.data.get(key) });
+      // 결과를 집은 뒤에 부른다 — 이미 읽은 값은 그대로 두고, 저장소만 갈아 끼우게 한다.
+      store.afterRead?.();
+      return request;
+    },
     count: (key) => track({ result: store.data.has(key) ? 1 : 0 }),
     delete: (key) => {
       if (mode === "readwrite" && !store.rejectWrites) store.data.delete(key);
@@ -263,9 +283,48 @@ function removeIndexedDB() {
 }
 
 /** 저장소에 실제로 들어간 한 벌. 없으면 null. */
+/**
+ * **고른 Blob 만 못 읽게 한다.**
+ *
+ * 트랜잭션이 커밋된 **뒤**에 원본 되돌리기가 실패하는 자리를 만들려면, 어느 한 벌을 읽을
+ * 때 실패할지 고를 수 있어야 한다. 통째로 끄면 그보다 앞선 읽기부터 무너져 다른 이유로
+ * 초록불이 된다.
+ */
+async function withUnreadableBlobs<T>(
+  doomed: Blob[],
+  run: () => Promise<T>,
+): Promise<T> {
+  const Real = window.FileReader;
+  class Patched extends Real {
+    readAsDataURL(blob: Blob) {
+      if (doomed.includes(blob)) {
+        queueMicrotask(() => this.dispatchEvent(new ProgressEvent("error")));
+        return;
+      }
+      super.readAsDataURL(blob);
+    }
+  }
+  window.FileReader = Patched as unknown as typeof FileReader;
+  try {
+    return await run();
+  } finally {
+    window.FileReader = Real;
+  }
+}
+
+/** 스텁이 담아 둔 Blob 을 모듈이 돌려주는 모양(data URL)으로 되돌린다. */
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("blob read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function storedRecord() {
   return (store.data.get(RECORD_KEY) as
-    | { sources: Blob[]; frameId: string; composeIdempotencyKey?: string }
+    | { sources: Blob[]; frameId: string; composeIdempotencyKey?: string; recordId?: string }
     | undefined) ?? null;
 }
 
@@ -296,6 +355,103 @@ beforeEach(() => {
 });
 
 describe("pendingGuestSave", () => {
+  it("같은 밀리초에 같은 메타로 저장해도 쓰기마다 다른 ID를 붙인다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const first = await getPendingGuestSave(NOW);
+    await setPendingGuestSave({
+      ...ENTRY,
+      sources: SOURCES.map((source) => source + "ABCD"),
+    }, NOW);
+    const second = await getPendingGuestSave(NOW);
+
+    expect(first?.recordId).toEqual(expect.any(String));
+    expect(second?.recordId).toEqual(expect.any(String));
+    expect(second?.recordId).not.toBe(first?.recordId);
+    expect(second?.savedAt).toBe(first?.savedAt);
+    expect(second?.displayName).toBe(first?.displayName);
+    expect(await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.recordId === first?.recordId,
+      NOW,
+    )).toBe("changed");
+    expect((await getPendingGuestSave(NOW))?.recordId).toBe(second?.recordId);
+  });
+
+  it("기존 보관물의 ID는 두 탭이 동시에 읽어도 하나이며 멱등키와 기한은 보존한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) {
+      delete record.recordId;
+      record.composeIdempotencyKey = "web-existing-compose-key";
+    }
+
+    const [left, right] = await Promise.all([
+      getPendingGuestSave(NOW),
+      getPendingGuestSave(NOW),
+    ]);
+    expect(left?.recordId).toEqual(expect.any(String));
+    expect(right?.recordId).toBe(left?.recordId);
+    expect(storedRecord()?.recordId).toBe(left?.recordId);
+    expect(left?.composeIdempotencyKey).toBe("web-existing-compose-key");
+    expect(right?.savedAt).toBe(NOW);
+    expect((await getPendingGuestSave(NOW))?.recordId).toBe(left?.recordId);
+  });
+
+  it("기존 보관물에 ID를 붙이는 사이 교체되면 새 보관물의 ID와 원본을 반환한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const previous = storedRecord();
+    if (previous) delete previous.recordId;
+    const swapped = [1, 2, 3, 4].map((n) => new Blob([String(n)]));
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(previous as object),
+        recordId: "replacement-record",
+        sources: swapped,
+      });
+    };
+
+    const read = await getPendingGuestSave(NOW);
+    expect(read?.recordId).toBe("replacement-record");
+    expect(read?.sources).toEqual(await Promise.all(swapped.map(readBlobAsDataUrl)));
+    expect(storedRecord()?.recordId).toBe("replacement-record");
+  });
+
+  it("기존 보관물의 ID 쓰기가 실패하면 삭제 근거를 반환하지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) delete record.recordId;
+    store.rejectWrites = true;
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    expect(storedRecord()).not.toBeNull();
+    expect(storedRecord()?.recordId).toBeUndefined();
+
+    store.rejectWrites = false;
+    expect((await getPendingGuestSave(NOW))?.recordId).toEqual(expect.any(String));
+  });
+
+  it("기존 보관물의 원본 변환이 실패해도 확정된 ID로만 조건부 삭제한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) delete record.recordId;
+    const blobs = record?.sources ?? [];
+
+    await withUnreadableBlobs(blobs, async () => {
+      const read = await readPendingGuestSave(NOW);
+      expect(read).toMatchObject({
+        status: "unreadable",
+        reason: "sources",
+        meta: { recordId: expect.any(String) },
+      });
+      if (read.status !== "unreadable") throw new Error("변환 실패가 재현되지 않았다");
+      expect(await clearPendingGuestSaveIfUnchanged(
+        (entry) => entry.recordId === read.meta?.recordId,
+        NOW,
+      )).toBe("cleared");
+      expect(storedRecord()).toBeNull();
+    });
+  });
+
   it("보관했다가 그대로 돌려준다", async () => {
     expect(await setPendingGuestSave(ENTRY, NOW)).toBe(true);
     expect(await getPendingGuestSave(NOW)).toMatchObject({
@@ -362,7 +518,7 @@ describe("pendingGuestSave", () => {
 
     expect(await setPendingGuestSave(ENTRY, NOW)).toBe(false);
     expect(await getPendingGuestSave(NOW)).toBeNull();
-    expect(await ensurePendingGuestSaveComposeKey(NOW)).toBeNull();
+    expect(await ensurePendingGuestSaveComposeKey(NOW)).toBe("unreadable");
     await expect(clearPendingGuestSave()).resolves.toBeUndefined();
   });
 
@@ -469,12 +625,110 @@ describe("pendingGuestSave", () => {
   it("한 번 심은 멱등키는 보관물이 살아 있는 동안 그대로 쓴다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
 
-    const first = await ensurePendingGuestSaveComposeKey(NOW);
+    const first = await ensureReadableComposeKey(NOW);
     expect(typeof first?.key).toBe("string");
     expect(first?.persisted).toBe(true);
     // 보관물에 남았으므로 새로고침 뒤(= 다시 읽어도) 같은 값이다.
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBe(first?.key);
     expect(await ensurePendingGuestSaveComposeKey(NOW)).toEqual(first);
+  });
+
+  /*
+    회귀 — **두 탭이 거의 동시에 확정해도 키는 하나다.**
+
+    나눠서 읽고 쓰면 그 사이가 열린다. 양쪽 모두 「키 없음」을 읽고 서로 다른 키를 만든 뒤
+    각자 쓰면, 레코드에는 뒤에 쓴 것만 남지만 **두 탭은 이미 각자의 키로 합성을 접수한**
+    뒤다 — 멱등키가 있으나 마나 같은 네컷이 기록에 두 벌 남는다.
+  */
+  it("두 탭이 동시에 물어도 같은 멱등키를 준다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+
+    const [left, right] = await Promise.all([
+      ensureReadableComposeKey(NOW),
+      ensureReadableComposeKey(NOW),
+    ]);
+
+    expect(typeof left?.key).toBe("string");
+    expect(right?.key).toBe(left?.key);
+    // 보관물에 남은 것도 그 하나여야 한다 — 늦게 온 쪽이 덮으면 앞 탭이 접수한 키와 갈라진다.
+    expect(storedRecord()?.composeIdempotencyKey).toBe(left?.key);
+  });
+
+  /*
+    회귀 — **키는 「그 자리에 있는 한 벌」에 붙고, 돌려주는 원본도 그 한 벌이다.**
+
+    키를 붙이는 사이 다른 탭이 새로 찍어 갈아 끼웠으면 키는 새 한 벌에 붙는다. 그때 예전
+    항목의 원본을 이 키로 올리면, 나중에 새 한 벌을 인계할 때 같은 키가 다시 나와 서버가
+    예전 작업을 재생한다 — 새로 찍은 네컷 대신 예전 것이 기록에 남는다.
+  */
+  it("붙이는 사이 갈아 끼워졌으면 그 새 한 벌의 원본을 돌려준다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const old = storedRecord();
+    const swappedBlobs = [new Blob(["EFGH"]), new Blob(["IJKL"]), new Blob(["MNOP"]), new Blob(["QRST"])];
+
+    // 키를 붙이러 가기 **직전**에 다른 탭이 새로 찍어 갈아 끼운다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, { ...(old as object), sources: swappedBlobs, savedAt: NOW + 1 });
+    };
+
+    const settled = await ensureReadableComposeKey(NOW);
+
+    // 키는 새 한 벌에 붙었다 — 돌려주는 원본도 그쪽이어야 한다.
+    expect(settled?.key).toBe(storedRecord()?.composeIdempotencyKey);
+    expect(settled?.entry.sources).toEqual(
+      await Promise.all(swappedBlobs.map(readBlobAsDataUrl)),
+    );
+    expect(settled?.entry.savedAt).toBe(NOW + 1);
+  });
+
+  /*
+    회귀 — **키를 붙인 뒤 원본을 못 되돌려도 예전 항목으로 물러서지 않는다.**
+
+    트랜잭션은 이미 커밋됐다. 거기서 「못 남겼다」로 물러서면 두 가지를 한꺼번에 틀린다 —
+    남은 키를 안 남았다고 말하고, 읽어 둔 **예전 원본**을 그 키에 실어 보낸다. 키는 그
+    사이 갈아 끼워진 새 한 벌에 붙었을 수 있어, 나중에 그 한 벌을 인계할 때 같은 키가 다시
+    나와 서버가 예전 작업을 재생한다.
+  */
+  it("키를 붙인 뒤 원본을 못 되돌리면 예전 항목으로 물러서지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const old = storedRecord();
+    const swapped = [
+      new Blob(["EFGH"]),
+      new Blob(["IJKL"]),
+      new Blob(["MNOP"]),
+      new Blob(["QRST"]),
+    ];
+
+    // 첫 읽기 직후 다른 탭이 갈아 끼운다. 키는 이 새 한 벌에 붙는다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(old as object),
+        sources: swapped,
+        savedAt: NOW + 1,
+      });
+    };
+
+    // 커밋 뒤, 그 새 한 벌의 원본을 되돌리다 실패한다.
+    const settled = await withUnreadableBlobs(swapped, () =>
+      ensurePendingGuestSaveComposeKey(NOW),
+    );
+
+    // 이번 회차는 접는다 — 예전 원본을 이 키에 실어 보내지 않는다.
+    expect(settled).toBe("unreadable");
+    // 키는 보관물에 남았다. 다음 회차가 같은 키로 이어 간다.
+    expect(typeof storedRecord()?.composeIdempotencyKey).toBe("string");
+    const savedKey = storedRecord()?.composeIdempotencyKey;
+    // 같은 실패가 재시도 첫 읽기에서 나도 부재로 바뀌지 않는다.
+    expect(
+      await withUnreadableBlobs(swapped, () => ensurePendingGuestSaveComposeKey(NOW)),
+    ).toBe("unreadable");
+    const retried = await ensureReadableComposeKey(NOW);
+    expect(retried?.key).toBe(savedKey);
+    expect(retried?.entry.sources).toEqual(
+      await Promise.all(swapped.map(readBlobAsDataUrl)),
+    );
   });
 
   it("키를 심어도 나머지 보관 내용은 그대로다", async () => {
@@ -494,7 +748,7 @@ describe("pendingGuestSave", () => {
   */
   it("새로 보관하면 옛 멱등키를 물려받지 않는다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
-    const old = await ensurePendingGuestSaveComposeKey(NOW);
+    const old = await ensureReadableComposeKey(NOW);
 
     await setPendingGuestSave(
       { ...ENTRY, sources: SOURCES.map((src) => `${src}ABCD`) },
@@ -502,7 +756,7 @@ describe("pendingGuestSave", () => {
     );
 
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBeUndefined();
-    expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(old?.key);
+    expect((await ensureReadableComposeKey(NOW))?.key).not.toBe(old?.key);
   });
 
   /*
@@ -516,7 +770,7 @@ describe("pendingGuestSave", () => {
   it("키를 붙인 그 보관물을 함께 돌려준다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
 
-    const minted = await ensurePendingGuestSaveComposeKey(NOW);
+    const minted = await ensureReadableComposeKey(NOW);
 
     expect(minted?.entry.composeIdempotencyKey).toBe(minted?.key);
     expect(minted?.entry).toMatchObject({ ...ENTRY, savedAt: NOW });
@@ -529,7 +783,7 @@ describe("pendingGuestSave", () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectWrites = true;
 
-    const minted = await ensurePendingGuestSaveComposeKey(NOW);
+    const minted = await ensureReadableComposeKey(NOW);
 
     expect(minted?.persisted).toBe(false);
     expect(minted?.entry.composeIdempotencyKey).toBe(minted?.key);
@@ -549,7 +803,7 @@ describe("pendingGuestSave", () => {
 
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBeUndefined();
 
-    const fresh = (await ensurePendingGuestSaveComposeKey(NOW))?.key ?? "";
+    const fresh = (await ensureReadableComposeKey(NOW))?.key ?? "";
     expect(fresh.length).toBeGreaterThan(0);
     expect(fresh.length).toBeLessThanOrEqual(64);
   });
@@ -564,7 +818,7 @@ describe("pendingGuestSave", () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectWrites = true;
 
-    const result = await ensurePendingGuestSaveComposeKey(NOW);
+    const result = await ensureReadableComposeKey(NOW);
     expect(typeof result?.key).toBe("string");
     expect(result?.persisted).toBe(false);
 
@@ -572,7 +826,7 @@ describe("pendingGuestSave", () => {
     // 원본 4장은 그대로 있다 — 키 한 줄 때문에 인계를 통째로 잃지 않는다.
     expect((await getPendingGuestSave(NOW))?.sources).toHaveLength(4);
     // 그리고 실제로 안 남았다 — 다음 시도는 다른 키로 간다. 이것이 `persisted: false` 다.
-    expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(result?.key);
+    expect((await ensureReadableComposeKey(NOW))?.key).not.toBe(result?.key);
   });
 
   /*
@@ -587,7 +841,7 @@ describe("pendingGuestSave", () => {
     );
     store.openFails = true;
 
-    const result = await ensurePendingGuestSaveComposeKey(NOW);
+    const result = await ensureReadableComposeKey(NOW);
     expect(typeof result?.key).toBe("string");
     expect(result?.persisted).toBe(false);
   });
@@ -674,6 +928,45 @@ describe("pendingGuestSave", () => {
     4장의 **유일한 보관본**이 사라지고, 다음 열기가 성공해도 되살릴 수 없다 —
     조건부 삭제(`clearHandoffIfUnchanged`)가 지켜 볼 기회조차 없다.
   */
+  it.each(["open", "transaction"])("손상된 보관물 정리에 실패하면 부재로 답하지 않는다 (%s)", async (failure) => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) record.frameId = "not-a-frame";
+    if (failure === "open") {
+      store.afterRead = () => {
+        store.afterRead = null;
+        store.openFails = true;
+      };
+    } else {
+      store.rejectWrites = true;
+    }
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    expect(storedRecord()).not.toBeNull();
+
+    store.openFails = false;
+    store.rejectWrites = false;
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
+    expect(storedRecord()).toBeNull();
+  });
+
+  it("원본 변환 실패 시 메타를 남기고, 확인한 보관물은 변환 없이 버릴 수 있다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const blobs = storedRecord()?.sources ?? [];
+
+    await withUnreadableBlobs(blobs, async () => {
+      const read = await readPendingGuestSave(NOW);
+      expect(read).toMatchObject({
+        status: "unreadable",
+        reason: "sources",
+        meta: { savedAt: NOW, displayName: ENTRY.displayName },
+      });
+      expect(storedRecord()).not.toBeNull();
+      expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
+      expect(storedRecord()).toBeNull();
+    });
+  });
+
   it("읽기가 실패해도 보관물을 지우지 않는다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectReads = true;
@@ -901,6 +1194,60 @@ describe("pendingGuestSave", () => {
 
     expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
     expect(storedRecord()).toBeNull();
+  });
+
+  /*
+    회귀 — **못 쓰는 한 벌을 걷다가 남의 새 한 벌을 지우지 않는다.**
+
+    읽기는 `readonly` 로 끝나고, 걷어 내기까지의 사이가 열려 있다. 그 틈에 다른 탭이 새
+    네컷을 같은 자리에 저장하면 무조건 삭제는 **그 새 한 벌**을 지운다 — 사용자가 확인한
+    적 없는 것이고, 원본 4장은 거기에만 있다.
+  */
+  it("걷어 내는 사이 다른 탭이 새로 저장했으면 그것은 두고 온다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const broken = storedRecord();
+    if (broken) broken.frameId = "not-a-frame";
+
+    // 읽기가 못 쓰는 한 벌을 집은 **직후**, 다른 탭이 성한 새 한 벌로 갈아 끼운다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(broken as object),
+        frameId: ENTRY.frameId,
+        savedAt: NOW + 1,
+      });
+    };
+
+    // 내가 읽은 것은 이미 지난 소식이다 — 「없다」로 답하면 그 판단으로 무언가를 지운다.
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable", reason: "changed" });
+    // 새 한 벌은 그대로 남아 있어야 한다.
+    expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
+  });
+
+  /*
+    회귀 — **같은 밀리초에 저장된 새 한 벌도 남의 것이다.**
+
+    시각을 지문으로 쓰면 여기서 무너진다. `savedAt` 은 `Date.now()` 그대로라, 깨진 한 벌을
+    읽은 직후 다른 탭의 저장이 같은 밀리초에 시작하면 두 레코드의 지문이 같아진다 —
+    성한 새 한 벌을 내가 읽은 것으로 착각해 지운다.
+  */
+  it("같은 시각에 저장된 새 한 벌도 지우지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const broken = storedRecord();
+    if (broken) broken.frameId = "not-a-frame";
+
+    // 갈아 끼우되 **시각은 그대로** 둔다 — 같은 밀리초에 저장된 모양이다.
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(broken as object),
+        frameId: ENTRY.frameId,
+        savedAt: NOW,
+      });
+    };
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable", reason: "changed" });
+    expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
   });
 
   it("열렸는데 원본이 4장이 아닌 레코드도 「없다」로 답하고 지운다", async () => {
