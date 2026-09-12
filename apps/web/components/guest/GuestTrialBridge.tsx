@@ -60,6 +60,22 @@ function isSameHandoff(
   a: PendingGuestSaveMeta,
   b: PendingGuestSaveMeta,
 ): boolean {
+  if (a.recordId || b.recordId) {
+    if (!a.recordId || a.recordId !== b.recordId) return false;
+  } else {
+    // ID가 없는 예전 localStorage 보관물은 원본 문자열까지 같아야 한다.
+    // 메타만 있는 스냅샷이나 Blob은 이 경로로 삭제를 허가하지 않는다.
+    if (!("sources" in a) || !("sources" in b)) return false;
+    const left = a.sources;
+    const right = b.sources;
+    if (
+      !Array.isArray(left) ||
+      !Array.isArray(right) ||
+      left.length !== 4 ||
+      right.length !== 4 ||
+      !left.every((source, index) => typeof source === "string" && source === right[index])
+    ) return false;
+  }
   return (
     a.savedAt === b.savedAt &&
     a.displayName === b.displayName &&

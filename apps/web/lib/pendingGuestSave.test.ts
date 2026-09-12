@@ -324,7 +324,7 @@ function readBlobAsDataUrl(blob: Blob): Promise<string> {
 
 function storedRecord() {
   return (store.data.get(RECORD_KEY) as
-    | { sources: Blob[]; frameId: string; composeIdempotencyKey?: string }
+    | { sources: Blob[]; frameId: string; composeIdempotencyKey?: string; recordId?: string }
     | undefined) ?? null;
 }
 
@@ -355,6 +355,103 @@ beforeEach(() => {
 });
 
 describe("pendingGuestSave", () => {
+  it("같은 밀리초에 같은 메타로 저장해도 쓰기마다 다른 ID를 붙인다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const first = await getPendingGuestSave(NOW);
+    await setPendingGuestSave({
+      ...ENTRY,
+      sources: SOURCES.map((source) => source + "ABCD"),
+    }, NOW);
+    const second = await getPendingGuestSave(NOW);
+
+    expect(first?.recordId).toEqual(expect.any(String));
+    expect(second?.recordId).toEqual(expect.any(String));
+    expect(second?.recordId).not.toBe(first?.recordId);
+    expect(second?.savedAt).toBe(first?.savedAt);
+    expect(second?.displayName).toBe(first?.displayName);
+    expect(await clearPendingGuestSaveIfUnchanged(
+      (entry) => entry.recordId === first?.recordId,
+      NOW,
+    )).toBe("changed");
+    expect((await getPendingGuestSave(NOW))?.recordId).toBe(second?.recordId);
+  });
+
+  it("기존 보관물의 ID는 두 탭이 동시에 읽어도 하나이며 멱등키와 기한은 보존한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) {
+      delete record.recordId;
+      record.composeIdempotencyKey = "web-existing-compose-key";
+    }
+
+    const [left, right] = await Promise.all([
+      getPendingGuestSave(NOW),
+      getPendingGuestSave(NOW),
+    ]);
+    expect(left?.recordId).toEqual(expect.any(String));
+    expect(right?.recordId).toBe(left?.recordId);
+    expect(storedRecord()?.recordId).toBe(left?.recordId);
+    expect(left?.composeIdempotencyKey).toBe("web-existing-compose-key");
+    expect(right?.savedAt).toBe(NOW);
+    expect((await getPendingGuestSave(NOW))?.recordId).toBe(left?.recordId);
+  });
+
+  it("기존 보관물에 ID를 붙이는 사이 교체되면 새 보관물의 ID와 원본을 반환한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const previous = storedRecord();
+    if (previous) delete previous.recordId;
+    const swapped = [1, 2, 3, 4].map((n) => new Blob([String(n)]));
+    store.afterRead = () => {
+      store.afterRead = null;
+      store.data.set(RECORD_KEY, {
+        ...(previous as object),
+        recordId: "replacement-record",
+        sources: swapped,
+      });
+    };
+
+    const read = await getPendingGuestSave(NOW);
+    expect(read?.recordId).toBe("replacement-record");
+    expect(read?.sources).toEqual(await Promise.all(swapped.map(readBlobAsDataUrl)));
+    expect(storedRecord()?.recordId).toBe("replacement-record");
+  });
+
+  it("기존 보관물의 ID 쓰기가 실패하면 삭제 근거를 반환하지 않는다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) delete record.recordId;
+    store.rejectWrites = true;
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    expect(storedRecord()).not.toBeNull();
+    expect(storedRecord()?.recordId).toBeUndefined();
+
+    store.rejectWrites = false;
+    expect((await getPendingGuestSave(NOW))?.recordId).toEqual(expect.any(String));
+  });
+
+  it("기존 보관물의 원본 변환이 실패해도 확정된 ID로만 조건부 삭제한다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) delete record.recordId;
+    const blobs = record?.sources ?? [];
+
+    await withUnreadableBlobs(blobs, async () => {
+      const read = await readPendingGuestSave(NOW);
+      expect(read).toMatchObject({
+        status: "unreadable",
+        reason: "sources",
+        meta: { recordId: expect.any(String) },
+      });
+      if (read.status !== "unreadable") throw new Error("변환 실패가 재현되지 않았다");
+      expect(await clearPendingGuestSaveIfUnchanged(
+        (entry) => entry.recordId === read.meta?.recordId,
+        NOW,
+      )).toBe("cleared");
+      expect(storedRecord()).toBeNull();
+    });
+  });
+
   it("보관했다가 그대로 돌려준다", async () => {
     expect(await setPendingGuestSave(ENTRY, NOW)).toBe(true);
     expect(await getPendingGuestSave(NOW)).toMatchObject({

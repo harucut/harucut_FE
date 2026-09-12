@@ -63,6 +63,7 @@ jest.mock("@/lib/fourcutCompose", () => ({
 }));
 
 const PENDING = {
+  recordId: "original-record",
   sources: ["a", "b", "c", "d"],
   frameId: "classic-4",
   remoteFrameId: null,
@@ -192,6 +193,77 @@ afterEach(() => {
 });
 
 describe("GuestTrialBridge 비회원 결과 이관", () => {
+  it("변환 실패 폐기에서도 같은 시각과 메타로 교체된 다른 원본은 지우지 않는다", async () => {
+    mockReadForHandoff.mockResolvedValue({
+      status: "unreadable",
+      reason: "sources",
+      meta: {
+        recordId: PENDING.recordId,
+        savedAt: PENDING.savedAt,
+        displayName: PENDING.displayName,
+        frameId: PENDING.frameId,
+        remoteFrameId: PENDING.remoteFrameId,
+        outputFilter: PENDING.outputFilter,
+        backgroundColor: PENDING.backgroundColor,
+      },
+    });
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "보관물 버리기" });
+    pressNoticeAction("보관물 버리기");
+    mockGetPending.mockResolvedValue({
+      ...PENDING,
+      recordId: "replacement-record",
+      sources: ["e", "f", "g", "h"],
+    });
+    pressNoticeAction("버리기");
+    await screen.findByText("버리지 않았어요");
+
+    expect(mockClearPending).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().notice?.message).toContain("다른 네컷으로 바뀌었어요");
+  });
+
+  it.each(["save", "discard"])("일반 인계에서도 동일 메타의 다른 ID를 구분한다 (%s)", async (action) => {
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    mockGetPending.mockResolvedValue({
+      ...PENDING,
+      recordId: "replacement-record",
+      sources: ["e", "f", "g", "h"],
+    });
+    pressNoticeAction(action === "save" ? "이 계정에 저장하기" : "버리기");
+    await screen.findByText(action === "save" ? "기록에 옮기지 않았어요" : "버리지 않았어요");
+    expect(mockClearPending).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("ID가 없는 예전 보관물은 원본까지 대조해 폐기한다 (교체: %s)", async (changed) => {
+    const legacy = { ...PENDING, recordId: undefined };
+    mockGetPending.mockResolvedValue(legacy);
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "버리기" });
+    if (changed) mockGetPending.mockResolvedValue({ ...legacy, sources: ["e", "f", "g", "h"] });
+    pressNoticeAction("버리기");
+    await waitFor(() => expect(mockClearIfUnchanged).toHaveBeenCalledTimes(1));
+    if (changed) {
+      await screen.findByText("버리지 않았어요");
+      expect(mockClearPending).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(mockClearPending).toHaveBeenCalledTimes(1));
+    }
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  it("ID가 없는 예전 보관물도 원본이 같으면 계정에 저장할 수 있다", async () => {
+    mockGetPending.mockResolvedValue({ ...PENDING, recordId: undefined });
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    pressNoticeAction("이 계정에 저장하기");
+    await screen.findByText("기록에 저장됐어요");
+    expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    expect(mockClearPending).toHaveBeenCalledTimes(1);
+  });
+
   /*
     보관물에는 소유자 표식이 없고 24시간을 산다. 확인 없이 자동 저장하면 공용 기기에서
     앞사람이 만든 네컷이 뒷사람 계정 기록으로 넘어간다. 그래서 묻고 나서 올린다.

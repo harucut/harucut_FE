@@ -66,6 +66,9 @@ const LEGACY_KEY_V2 = "harucut:pending-guest-save:v2";
 export const PENDING_GUEST_SAVE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type PendingGuestSave = {
+  // 저장 1회마다 새로 만든다. 같은 시각과 메타로 저장된 다른 원본도 구분한다.
+  // 배포 전 IndexedDB 보관물은 읽을 때 부착하고, legacy 보관물에는 없을 수 있다.
+  recordId?: string;
   /** 고른 순서 그대로의 원본 4장(data URL). 이 순서가 곧 슬롯 순서다. */
   sources: string[];
   frameId: FrameId;
@@ -306,7 +309,12 @@ function normalizeMeta(
       ? parsed.composeIdempotencyKey
       : undefined;
 
-  return { ...parsed, backgroundColor, composeIdempotencyKey };
+  const recordId =
+    typeof parsed.recordId === "string" && parsed.recordId.length > 0
+      ? parsed.recordId
+      : undefined;
+
+  return { ...parsed, recordId, backgroundColor, composeIdempotencyKey };
 }
 
 /** 원본 4장이 온전할 때만 쓸모가 있다. 한 장이라도 비면 합성이 안 된다. */
@@ -358,13 +366,13 @@ function readLegacyEntry(now: number): PendingGuestSave | null {
  * 시작하고, 옛 키를 물려받아 서버가 앞사람 그림을 재생하는 일이 생기지 않는다.
  */
 export async function setPendingGuestSave(
-  entry: Omit<PendingGuestSave, "savedAt" | "composeIdempotencyKey">,
+  entry: Omit<PendingGuestSave, "savedAt" | "composeIdempotencyKey" | "recordId">,
   now: number,
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
     clearLegacyEntries();
-    return await writeRecord({ ...entry, savedAt: now });
+    return await writeRecord({ ...entry, recordId: newIdempotencyKey(), savedAt: now });
   } catch {
     return false;
   }
@@ -439,10 +447,35 @@ export async function readPendingGuestSave(
 ): Promise<PendingGuestSaveRead> {
   if (typeof window === "undefined") return { status: "unreadable" };
   try {
-    const read = await withStore<StoredRecord | undefined>(
+    let read = await withStore<StoredRecord | undefined>(
       "readonly",
       (store) => store.get(RECORD_KEY),
     );
+    if (read.opened && read.value) {
+      const meta = normalizeMeta(read.value, now);
+      if (meta && !meta.recordId && hasFourSources(read.value.sources, isUsableBlob)) {
+        // 기존 보관물도 원본 변환 전에 식별자를 확보한다. 읽기와 부착을 나누면 두 탭이
+        // 서로 다른 ID를 받거나 새 보관물에 옛 ID를 덮으므로, 현재 한 벌을 다시 읽고 쓴다.
+        read = await withStore<StoredRecord | undefined>("readwrite", (store) => {
+          const request = store.get(RECORD_KEY) as IDBRequest<StoredRecord | undefined>;
+          request.onsuccess = () => {
+            const record = request.result;
+            if (!record) return;
+            const currentMeta = normalizeMeta(record, now);
+            if (
+              !currentMeta ||
+              currentMeta.recordId ||
+              !hasFourSources(record.sources, isUsableBlob)
+            ) return;
+            record.recordId = newIdempotencyKey();
+            store.put(record, RECORD_KEY);
+          };
+          return request;
+        });
+        // ID를 확정하지 못한 스냅샷을 폐기나 저장의 근거로 넘기지 않는다.
+        if (!read.opened) return { status: "unreadable" };
+      }
+    }
 
     // IndexedDB 에 없으면 아직 못 옮긴 예전 보관물을 본다.
     //
