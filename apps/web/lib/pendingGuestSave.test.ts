@@ -24,6 +24,12 @@ import {
 
 const NOW = 1_700_000_000_000;
 
+async function ensureReadableComposeKey(now: number) {
+  const result = await ensurePendingGuestSaveComposeKey(now);
+  if (result === "unreadable") throw new Error("보관물을 읽지 못했다");
+  return result;
+}
+
 /** 모듈이 쓰는 저장 위치. 저장된 모양을 직접 들여다볼 때만 쓴다. */
 const STORE_NAME = "entry";
 const RECORD_KEY = "current";
@@ -292,7 +298,7 @@ async function withUnreadableBlobs<T>(
   class Patched extends Real {
     readAsDataURL(blob: Blob) {
       if (doomed.includes(blob)) {
-        queueMicrotask(() => this.onerror?.(new ProgressEvent("error")));
+        queueMicrotask(() => this.dispatchEvent(new ProgressEvent("error")));
         return;
       }
       super.readAsDataURL(blob);
@@ -415,7 +421,7 @@ describe("pendingGuestSave", () => {
 
     expect(await setPendingGuestSave(ENTRY, NOW)).toBe(false);
     expect(await getPendingGuestSave(NOW)).toBeNull();
-    expect(await ensurePendingGuestSaveComposeKey(NOW)).toBeNull();
+    expect(await ensurePendingGuestSaveComposeKey(NOW)).toBe("unreadable");
     await expect(clearPendingGuestSave()).resolves.toBeUndefined();
   });
 
@@ -522,7 +528,7 @@ describe("pendingGuestSave", () => {
   it("한 번 심은 멱등키는 보관물이 살아 있는 동안 그대로 쓴다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
 
-    const first = await ensurePendingGuestSaveComposeKey(NOW);
+    const first = await ensureReadableComposeKey(NOW);
     expect(typeof first?.key).toBe("string");
     expect(first?.persisted).toBe(true);
     // 보관물에 남았으므로 새로고침 뒤(= 다시 읽어도) 같은 값이다.
@@ -541,8 +547,8 @@ describe("pendingGuestSave", () => {
     await setPendingGuestSave(ENTRY, NOW);
 
     const [left, right] = await Promise.all([
-      ensurePendingGuestSaveComposeKey(NOW),
-      ensurePendingGuestSaveComposeKey(NOW),
+      ensureReadableComposeKey(NOW),
+      ensureReadableComposeKey(NOW),
     ]);
 
     expect(typeof left?.key).toBe("string");
@@ -569,7 +575,7 @@ describe("pendingGuestSave", () => {
       store.data.set(RECORD_KEY, { ...(old as object), sources: swappedBlobs, savedAt: NOW + 1 });
     };
 
-    const settled = await ensurePendingGuestSaveComposeKey(NOW);
+    const settled = await ensureReadableComposeKey(NOW);
 
     // 키는 새 한 벌에 붙었다 — 돌려주는 원본도 그쪽이어야 한다.
     expect(settled?.key).toBe(storedRecord()?.composeIdempotencyKey);
@@ -613,9 +619,19 @@ describe("pendingGuestSave", () => {
     );
 
     // 이번 회차는 접는다 — 예전 원본을 이 키에 실어 보내지 않는다.
-    expect(settled).toBeNull();
+    expect(settled).toBe("unreadable");
     // 키는 보관물에 남았다. 다음 회차가 같은 키로 이어 간다.
     expect(typeof storedRecord()?.composeIdempotencyKey).toBe("string");
+    const savedKey = storedRecord()?.composeIdempotencyKey;
+    // 같은 실패가 재시도 첫 읽기에서 나도 부재로 바뀌지 않는다.
+    expect(
+      await withUnreadableBlobs(swapped, () => ensurePendingGuestSaveComposeKey(NOW)),
+    ).toBe("unreadable");
+    const retried = await ensureReadableComposeKey(NOW);
+    expect(retried?.key).toBe(savedKey);
+    expect(retried?.entry.sources).toEqual(
+      await Promise.all(swapped.map(readBlobAsDataUrl)),
+    );
   });
 
   it("키를 심어도 나머지 보관 내용은 그대로다", async () => {
@@ -635,7 +651,7 @@ describe("pendingGuestSave", () => {
   */
   it("새로 보관하면 옛 멱등키를 물려받지 않는다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
-    const old = await ensurePendingGuestSaveComposeKey(NOW);
+    const old = await ensureReadableComposeKey(NOW);
 
     await setPendingGuestSave(
       { ...ENTRY, sources: SOURCES.map((src) => `${src}ABCD`) },
@@ -643,7 +659,7 @@ describe("pendingGuestSave", () => {
     );
 
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBeUndefined();
-    expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(old?.key);
+    expect((await ensureReadableComposeKey(NOW))?.key).not.toBe(old?.key);
   });
 
   /*
@@ -657,7 +673,7 @@ describe("pendingGuestSave", () => {
   it("키를 붙인 그 보관물을 함께 돌려준다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
 
-    const minted = await ensurePendingGuestSaveComposeKey(NOW);
+    const minted = await ensureReadableComposeKey(NOW);
 
     expect(minted?.entry.composeIdempotencyKey).toBe(minted?.key);
     expect(minted?.entry).toMatchObject({ ...ENTRY, savedAt: NOW });
@@ -670,7 +686,7 @@ describe("pendingGuestSave", () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectWrites = true;
 
-    const minted = await ensurePendingGuestSaveComposeKey(NOW);
+    const minted = await ensureReadableComposeKey(NOW);
 
     expect(minted?.persisted).toBe(false);
     expect(minted?.entry.composeIdempotencyKey).toBe(minted?.key);
@@ -690,7 +706,7 @@ describe("pendingGuestSave", () => {
 
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBeUndefined();
 
-    const fresh = (await ensurePendingGuestSaveComposeKey(NOW))?.key ?? "";
+    const fresh = (await ensureReadableComposeKey(NOW))?.key ?? "";
     expect(fresh.length).toBeGreaterThan(0);
     expect(fresh.length).toBeLessThanOrEqual(64);
   });
@@ -705,7 +721,7 @@ describe("pendingGuestSave", () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectWrites = true;
 
-    const result = await ensurePendingGuestSaveComposeKey(NOW);
+    const result = await ensureReadableComposeKey(NOW);
     expect(typeof result?.key).toBe("string");
     expect(result?.persisted).toBe(false);
 
@@ -713,7 +729,7 @@ describe("pendingGuestSave", () => {
     // 원본 4장은 그대로 있다 — 키 한 줄 때문에 인계를 통째로 잃지 않는다.
     expect((await getPendingGuestSave(NOW))?.sources).toHaveLength(4);
     // 그리고 실제로 안 남았다 — 다음 시도는 다른 키로 간다. 이것이 `persisted: false` 다.
-    expect((await ensurePendingGuestSaveComposeKey(NOW))?.key).not.toBe(result?.key);
+    expect((await ensureReadableComposeKey(NOW))?.key).not.toBe(result?.key);
   });
 
   /*
@@ -728,7 +744,7 @@ describe("pendingGuestSave", () => {
     );
     store.openFails = true;
 
-    const result = await ensurePendingGuestSaveComposeKey(NOW);
+    const result = await ensureReadableComposeKey(NOW);
     expect(typeof result?.key).toBe("string");
     expect(result?.persisted).toBe(false);
   });

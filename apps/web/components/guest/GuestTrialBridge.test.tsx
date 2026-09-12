@@ -1204,6 +1204,36 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     );
   });
 
+  it.each([false, true])("사진 읽기 실패 후 같은 화면에서 재시도한다 (보관물 교체: %s)", async (changed) => {
+    mockEnsureComposeKey.mockImplementationOnce(async () => {
+      storedComposeKey = "web-guest-persisted";
+      return "unreadable";
+    });
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await screen.findByRole("button", { name: "다시 시도" });
+    expect(useGuestTrialStore.getState().notice?.message).toContain("보관물은 지우지 않았고");
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+
+    if (changed) mockGetPending.mockResolvedValue({ ...PENDING, savedAt: 1000 });
+    pressNoticeAction("다시 시도");
+    await waitFor(() => expect(mockEnsureComposeKey).toHaveBeenCalledTimes(2));
+    if (changed) {
+      await waitFor(() => expect(useGuestTrialStore.getState().notice?.message).toContain("다른 네컷으로 바뀌었어요"));
+      expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+      expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1));
+      expect(mockSaveFourcutToServer).toHaveBeenCalledWith(expect.objectContaining({
+        idempotencyKey: "web-guest-persisted",
+        sources: PENDING.sources,
+      }));
+    }
+  });
+
   it("다시 해 볼 만한 실패면 보관물을 남기고 재시도를 안내한다", async () => {
     mockSaveFourcutToServer.mockRejectedValueOnce(new Error("timeout"));
     mockDescribeComposeFailure.mockReturnValue({

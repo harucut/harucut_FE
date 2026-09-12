@@ -767,7 +767,7 @@ export type PendingGuestSaveComposeKey = {
 
 /**
  * 이 보관물의 합성 멱등키를 돌려준다. 아직 없으면 그 자리에서 만들어 함께 보관한다.
- * 보관물이 없으면 null — 인계할 것이 없다는 뜻이다.
+ * 보관물이 없으면 null, 읽지 못했으면 "unreadable" — 부재와 읽기 실패를 구분한다.
  *
  * 인계가 끝날 때까지 **같은 키**를 준다. 서버 합성이 성공한 뒤 폴링 시간 초과나 뒤따르는
  * 조회 실패로 인계가 중간에 끊기면 보관물이 남는데, 그때 새 키로 다시 접수하면 같은 네컷이
@@ -790,9 +790,11 @@ export type PendingGuestSaveComposeKey = {
  */
 export async function ensurePendingGuestSaveComposeKey(
   now: number = Date.now(),
-): Promise<PendingGuestSaveComposeKey | null> {
-  const entry = await getPendingGuestSave(now);
-  if (!entry) return null;
+): Promise<PendingGuestSaveComposeKey | "unreadable" | null> {
+  const read = await readPendingGuestSave(now);
+  if (read.status === "unreadable") return "unreadable";
+  if (read.status === "empty") return null;
+  const entry = read.entry;
   // 보관물에서 읽어 온 키다 — 그 자리에 남아 있다는 것이 이미 확인된 셈이다.
   if (entry.composeIdempotencyKey)
     return { key: entry.composeIdempotencyKey, persisted: true, entry };
@@ -830,13 +832,13 @@ export async function ensurePendingGuestSaveComposeKey(
       **예전 원본**을 그 키에 실어 보낸다 — 키는 그 사이 갈아 끼워진 새 한 벌에 붙었을 수
       있고, 그러면 나중에 새 한 벌을 인계할 때 같은 키가 다시 나와 서버가 예전 작업을
       재생한다. 원본을 못 되돌렸으면 **이번 회차는 접는다.** 키는 보관물에 남았으므로
-      다음 회차가 같은 키로 이어 간다(호출부는 "안 옮겼다"고 안내하고 다시 묻는다).
+      다음 회차가 같은 키로 이어 간다(호출부는 읽기 실패를 알리고 재시도 버튼을 제공한다).
     */
     let sources: string[];
     try {
       sources = await Promise.all(settled.record.sources.map(blobToDataUrl));
     } catch {
-      return null;
+      return "unreadable";
     }
 
     /*

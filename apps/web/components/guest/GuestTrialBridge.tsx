@@ -10,7 +10,6 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
-  clearPendingGuestSave,
   ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
   clearPendingGuestSaveIfUnchanged,
@@ -269,6 +268,26 @@ export function GuestTrialBridge() {
         와 같은 이유·같은 한계).
       */
       const composeKey = await ensurePendingGuestSaveComposeKey();
+      if (composeKey === "unreadable") {
+        handoffSavingRef.current = false;
+        // 확인한 항목을 유지하고 버튼으로 재시도한다. 재시도도 위 읽기와 아래 대조를 거친다.
+        setNotice({
+          actions: [
+            {
+              id: "save-guest-handoff",
+              label: "다시 시도",
+              onSelect: () => void runPendingSave(promptedEntry),
+            },
+            { id: "dismiss", label: "닫기", variant: "secondary" },
+          ],
+          eyebrow: "NOTICE",
+          icon: "lock",
+          message:
+            "이 기기에 보관한 사진을 읽지 못했어요. 보관물은 지우지 않았고, 기록에도 옮기지 않았어요. 다시 시도해 주세요.",
+          title: "사진을 읽지 못했어요",
+        });
+        return;
+      }
       if (!composeKey || !isSameHandoff(composeKey.entry, promptedEntry)) {
         handoffSavingRef.current = false;
         // 물어본 것을 접었으니 "이미 물어봤다"도 되돌린다. 새 한 벌이 들어와 있으면
