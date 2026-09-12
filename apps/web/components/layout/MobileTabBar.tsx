@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Camera, Film, Home, LayoutGrid, User } from "lucide-react";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 import { usePublicShootCta } from "@/lib/usePublicShootCta";
 
 type MobileTabBarProps = {
@@ -18,41 +20,47 @@ type MobileTabBarProps = {
 export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
   const { onShootCta } = usePublicShootCta();
+  // 가운데 버튼도 홈 카드와 **같은 것**을 연다. 하나는 고르라고 하고 하나는 바로
+  // 카메라로 가면, 같아 보이는 두 진입로가 다르게 동작한다.
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
   const shootButtonClass =
-    "-mt-7 grid h-[54px] w-[54px] place-items-center rounded-full text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)]";
+    "-mt-7 grid h-13.5 w-13.5 place-items-center rounded-full text-(--hc-primary-contrast) shadow-(--hc-button-shadow) transition active:brightness-90";
 
   return (
+    <>
     <nav
       aria-label="주요 메뉴"
-      className="fixed inset-x-0 bottom-0 z-40 flex h-[74px] items-center justify-around border-t border-[color:var(--hc-border)] bg-[color:var(--hc-card)] pb-2 backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-18.5 items-center justify-around border-t border-(--hc-border) bg-(--hc-card) pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
     >
       <Link
         href="/home"
         aria-label="홈"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        aria-current={isActive("/home") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/home")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <Home className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">홈</span>
+        <Home className="h-5.75 w-5.75" />
+        <span className="text-[11px] font-medium">홈</span>
       </Link>
 
       <Link
         href="/history"
         aria-label="기록"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        aria-current={isActive("/history") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/history")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <LayoutGrid className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">기록</span>
+        <LayoutGrid className="h-5.75 w-5.75" />
+        <span className="text-[11px] font-medium">기록</span>
       </Link>
 
       {publicShoot ? (
@@ -63,44 +71,52 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
-          <Camera className="h-[26px] w-[26px]" />
+          <Camera className="h-6.5 w-6.5" />
         </button>
       ) : (
-        <Link
-          href="/shoot"
-          aria-label="촬영"
+        <button
+          type="button"
+          aria-label="기록 남기기"
+          onClick={() => setSourceDialogOpen(true)}
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
-          <Camera className="h-[26px] w-[26px]" />
-        </Link>
+          <Camera className="h-6.5 w-6.5" />
+        </button>
       )}
 
       <Link
         href="/theme"
         aria-label="프레임"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        aria-current={isActive("/theme") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/theme")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <Film className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">프레임</span>
+        <Film className="h-5.75 w-5.75" />
+        <span className="text-[11px] font-medium">프레임</span>
       </Link>
 
       <Link
         href="/mypage"
         aria-label="MY"
-        className={`flex w-14 flex-col items-center gap-0.5 ${
+        aria-current={isActive("/mypage") ? "page" : undefined}
+        className={`flex min-h-12 w-14 flex-col items-center justify-center gap-0.5 transition active:opacity-60 ${
           isActive("/mypage")
-            ? "text-[color:var(--hc-text)]"
-            : "text-[color:var(--hc-muted)]"
+            ? "text-(--hc-text)"
+            : "text-(--hc-muted)"
         }`}
       >
-        <User className="h-[23px] w-[23px]" />
-        <span className="text-[10.5px] font-medium">MY</span>
+        <User className="h-5.75 w-5.75" />
+        <span className="text-[11px] font-medium">MY</span>
       </Link>
     </nav>
+    <RecordSourceDialog
+      open={sourceDialogOpen}
+      onClose={() => setSourceDialogOpen(false)}
+    />
+    </>
   );
 }

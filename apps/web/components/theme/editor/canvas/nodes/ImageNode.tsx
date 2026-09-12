@@ -4,6 +4,7 @@ import { Group, Image as KonvaImage, Rect } from "@/lib/reactKonva";
 import useImage from "use-image";
 import type { GroupConfig } from "konva/lib/Group";
 import type Konva from "konva";
+import { componentImageSrc } from "@/lib/canvas/componentSource";
 import type { EditorComponent } from "@/lib/types/themeEditor";
 import { useEffect } from "react";
 
@@ -21,8 +22,9 @@ type Props = {
 };
 
 export function ImageNode({ c, common, outline, onAssetReady }: Props) {
-  // 원본 이미지를 비동기로 로드
-  const [img, status] = useImage(c.source, "anonymous");
+  // 원본 이미지를 비동기로 로드.
+  // 저장 뒤 source 는 S3 key 라 그대로는 못 그린다 — 렌더용 주소를 따로 본다.
+  const [img, status] = useImage(componentImageSrc(c), "anonymous");
 
   // 로드 완료 시 Transformer 갱신 트리거
   useEffect(() => {

@@ -1,6 +1,6 @@
 /** @jest-environment node */
 
-import { adaptSetCookieForRequest } from "@/lib/server/setCookies";
+import { adaptSetCookieForRequest, getSetCookieHeaders } from "@/lib/server/setCookies";
 
 function reqAt(url: string) {
   return new Request(url);
@@ -44,5 +44,28 @@ describe("adaptSetCookieForRequest", () => {
     expect(result).toContain("Domain=harucut.com");
     expect(result).toContain("Secure");
     expect(result).toContain("SameSite=None");
+  });
+  it.each([
+    ["accessToken=a; Expires=Wed, 21 Oct 2037 07:28:00 GMT", "refreshToken=b; Path=/"],
+    [
+      "accessToken=a; Expires=Wed, 21 Oct 2037 07:28:00 GMT; HttpOnly",
+      "refreshToken=b; Path=/",
+    ],
+    [
+      "accessToken=a; Expires=Wed, 21 Oct 2037 07:28:00 GMT",
+      "refreshToken=b; Expires=Thu, 22 Oct 2037 07:28:00 GMT",
+    ],
+    ["accessToken=a; Path=/", "refreshToken=b; Path=/"],
+  ])("getSetCookie 없는 환경에서 인증 쿠키를 분리한다: %s", (first, second) => {
+    const headers = new Headers({ "set-cookie": first + ", " + second });
+    Object.defineProperty(headers, "getSetCookie", { value: undefined });
+    expect(getSetCookieHeaders(headers)).toEqual([first, second]);
+  });
+
+  it("단일 쿠키의 Expires 날짜 쉼표는 보존한다", () => {
+    const cookie = "accessToken=a; Expires=Wed, 21 Oct 2037 07:28:00 GMT";
+    const headers = new Headers({ "set-cookie": cookie });
+    Object.defineProperty(headers, "getSetCookie", { value: undefined });
+    expect(getSetCookieHeaders(headers)).toEqual([cookie]);
   });
 });

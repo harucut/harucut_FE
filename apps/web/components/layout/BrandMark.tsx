@@ -1,39 +1,42 @@
 "use client";
 
 import Link from "next/link";
+import {
+  BRAND_MARK_BAR_SHADES,
+  BRAND_MARK_BODY,
+  BRAND_MARK_VIEWBOX,
+  brandMarkBarRect,
+} from "@harucut/shared";
 
 type BrandMarkProps = {
   href: string;
-  label?: string;
-  compact?: boolean;
-  className?: string;
-  tone?: "dark" | "light";
+  tone?: "light";
 };
 
-// STUDIO 로고 — 딥다크 라운드 + 그린 4컷 그라데이션 스트립(A안).
-const MARK_SHADES = ["#7BEAA6", "#4FDD86", "#2FD06B", "#17B551"];
+/*
+  STUDIO 로고 — 딥다크 라운드 + 그린 4컷 스트립.
 
+  좌표와 색은 `@harucut/shared` 가 쥔다. 앱 알림 아이콘도 같은 값에서 굽기 때문이다
+  (`scripts/gen-notification-icon.mjs`) — 여기 숫자를 적어 두면 한쪽만 고쳐져 갈라진다.
+*/
 function FourCutMark({ size = 30 }: { size?: number }) {
-  const width = Math.round(size * 0.74);
+  const width = Math.round(size * (BRAND_MARK_VIEWBOX.width / BRAND_MARK_VIEWBOX.height));
   return (
     <svg
       width={width}
       height={size}
-      viewBox="0 0 24 32"
+      viewBox={`0 0 ${BRAND_MARK_VIEWBOX.width} ${BRAND_MARK_VIEWBOX.height}`}
       aria-hidden
       style={{ display: "block" }}
     >
-      <rect width="24" height="32" rx="6" fill="#0B0B0C" />
-      {MARK_SHADES.map((color, i) => (
-        <rect
-          key={color}
-          x="5"
-          y={4 + i * 6.35}
-          width="14"
-          height="5"
-          rx="1.6"
-          fill={color}
-        />
+      <rect
+        width={BRAND_MARK_VIEWBOX.width}
+        height={BRAND_MARK_VIEWBOX.height}
+        rx={BRAND_MARK_BODY.radius}
+        fill={BRAND_MARK_BODY.fill}
+      />
+      {BRAND_MARK_BAR_SHADES.map((color, index) => (
+        <rect key={color} {...brandMarkBarRect(index)} fill={color} />
       ))}
     </svg>
   );
@@ -41,26 +44,22 @@ function FourCutMark({ size = 30 }: { size?: number }) {
 
 export function BrandMark({
   href,
-  label = "하루컷",
-  compact = false,
-  className = "",
   tone,
 }: BrandMarkProps) {
-  // tone=light/dark는 고정 배경(예: 다크 랜딩) 위에서 테마와 무관하게 글자색을 강제한다.
-  const labelColor =
-    tone === "light" ? "#FFFFFF" : tone === "dark" ? "#0B0B0C" : "var(--hc-text)";
+  // tone="light" 는 테마와 무관하게 어두운 무대(마케팅·로그인) 위에 설 때만 쓴다.
+  const labelColor = tone === "light" ? "#FFFFFF" : "var(--hc-text)";
   return (
     <Link
       href={href}
       aria-label="Harucut home"
-      className={`inline-flex items-center gap-2.5 transition-opacity hover:opacity-90 ${className}`.trim()}
+      className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-90"
     >
-      <FourCutMark size={compact ? 26 : 30} />
+      <FourCutMark size={30} />
       <span
         className="text-lg font-extrabold tracking-tight"
         style={{ color: labelColor }}
       >
-        {label}
+        하루컷
       </span>
     </Link>
   );

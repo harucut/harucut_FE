@@ -14,7 +14,7 @@
       "ajv@<6.14.0": "6.14.0",
       "bn.js@<4.12.3": "4.12.3",
       "bn.js@>=5.0.0 <5.2.3": "5.2.3",
-      "brace-expansion@<1.1.13": "1.1.13",
+      "brace-expansion@<1.1.18": "1.1.18",
       "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
       "cookie@<0.7.0": "0.7.0",
       "flatted@<3.4.2": "3.4.2",
@@ -24,15 +24,22 @@
       "minimatch@>=9.0.0 <9.0.7": "9.0.7",
       "picomatch@<2.3.2": "2.3.2",
       "picomatch@>=4.0.0 <4.0.4": "4.0.4",
-      "postcss@<8.5.10": "8.5.10",
+      "postcss@<8.5.23": "8.5.23",
       "serialize-javascript@<7.0.5": "7.0.5",
       "uuid@<14.0.0": "14.0.0",
-      "brace-expansion@>=5.0.0 <5.0.6": "5.0.6",
+      "brace-expansion@>=5.0.0 <5.0.9": "5.0.9",
       "ws@>=8.0.0 <8.21.0": "8.21.0",
       "form-data@>=4.0.0 <4.0.6": "4.0.6",
       "vite": "8.0.16",
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
-      "@babel/core@>=7.0.0 <7.29.6": "7.29.7"
+      "@babel/core@>=7.0.0 <7.29.6": "7.29.7",
+      "browserslist@<4.28.7": "4.28.7",
+      "decode-uri-component@<0.5.0": "0.5.0",
+      "nanoid@<3.3.18": "3.3.18",
+      "sharp@<0.35.4": "0.35.4",
+      "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
+      "shell-quote@<1.9.0": "1.9.0",
+      "@xmldom/xmldom@<0.8.15": "0.8.15"
     },
     "patchedDependencies": {
       "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"
@@ -46,6 +53,8 @@
     "start": "pnpm start:web",
     "start:web": "cd apps/web && node ./node_modules/next/dist/bin/next start --hostname localhost",
     "lint:web": "pnpm --dir apps/web lint",
+    "check:classes:web": "pnpm --dir apps/web check:classes",
+    "typecheck:shared": "node apps/web/node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test:web": "pnpm --dir apps/web test",
     "test:coverage:web": "pnpm --dir apps/web test:coverage",
     "test:e2e:web": "pnpm --dir apps/web test:e2e",
@@ -62,14 +71,14 @@
     "dev-client:mobile": "pnpm --dir apps/mobile dev-client",
     "android:mobile": "pnpm --dir apps/mobile android",
     "android-dev:mobile": "pnpm --dir apps/mobile android:dev",
-    "web:mobile": "pnpm --dir apps/mobile web",
     "lint:mobile": "pnpm --dir apps/mobile lint",
     "typecheck:mobile": "pnpm --dir apps/mobile typecheck",
-    "verify:web": "python scripts/verify_workspace.py --group web",
-    "verify:mobile": "python scripts/verify_workspace.py --group mobile",
-    "verify:standard": "python scripts/verify_workspace.py --group standard"
+    "check:contract": "python3 scripts/check_backend_contract.py",
+    "verify:web": "python3 scripts/verify_workspace.py --group web",
+    "verify:mobile": "python3 scripts/verify_workspace.py --group mobile",
+    "verify:standard": "python3 scripts/verify_workspace.py --group standard"
   },
   "devDependencies": {
-    "prettier": "^3.8.3"
+    "prettier": "^3.9.6"
   }
 }

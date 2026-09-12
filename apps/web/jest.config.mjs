@@ -4,6 +4,10 @@ const createJestConfig = nextJest({
   dir: "./",
 });
 
+// 날짜 표시 로직은 실행 환경의 시간대에 따라 결과가 달라진다. 개발 머신(KST)에서는
+// 통과하고 CI(UTC)에서는 깨지는 테스트가 생기므로, 제품이 서비스하는 시간대로 고정한다.
+process.env.TZ = "Asia/Seoul";
+
 const config = {
   // React 컴포넌트/DOM 테스트를 위해 브라우저 유사 환경 사용
   testEnvironment: "jest-environment-jsdom",
@@ -15,12 +19,29 @@ const config = {
     "^@/(.*)$": "<rootDir>/$1",
     "^@harucut/shared$": "<rootDir>/../../packages/shared/src/index.ts",
   },
+  // 수집 뿌리. 기본값은 rootDir 하나뿐이라 packages/shared 의 테스트가 통째로 빠졌다 —
+  // moduleNameMapper 로 소스를 끌어다 쓰면서 정작 그 패키지의 테스트는 CI 에서 한 번도
+  // 돌지 않았다. 약관·처리방침 문구처럼 회귀가 실제로 났던 것이 거기 있다.
+  roots: ["<rootDir>", "<rootDir>/../../packages/shared/src"],
   // *.test.ts, *.test.tsx 파일만 테스트 대상으로 수집
   testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
   // 빌드 산출물/외부 패키지는 테스트 대상에서 제외
   testPathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/node_modules/"],
-  // 커버리지 집계 대상 경로
-  collectCoverageFrom: ["lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "!**/*.d.ts"],
+  // 커버리지 집계 대상 경로.
+  // app/**도 포함한다 — 예전엔 lib/·components/만 잡아 페이지와 _hooks(촬영 훅 등)가
+  // 통째로 집계 밖이었고, 그래서 사각지대가 수치로 드러나지 않았다.
+  // 라우트 메타 파일(layout·not-found·sitemap 등)은 로직이 없어 제외한다.
+  collectCoverageFrom: [
+    "app/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "!**/*.d.ts",
+    "!app/**/layout.tsx",
+    "!app/**/loading.tsx",
+    "!app/**/error.tsx",
+    "!app/**/not-found.tsx",
+    "!app/{sitemap,robots,manifest}.ts",
+  ],
 };
 
 export default createJestConfig(config);

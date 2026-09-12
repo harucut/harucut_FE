@@ -1,101 +1,224 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { FrameId } from "@/constants/frames";
-import { FramePicker } from "@/components/frame/FramePicker";
-import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
+import { FrameChooser } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StepProgress } from "@/components/layout/StepProgress";
+import { EventBanner } from "@/components/event/EventBanner";
+import { resolveMembership } from "@/lib/authSession";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
-import { frameIdFromFrameType } from "@/lib/frameApi";
-import { parseFrameIdQuery } from "@/lib/frameCatalog";
 import { useShootSession } from "@/lib/shootSessionStore";
+import type { FrameId } from "@/constants/frames";
+
+/**
+ * 두 프레임이 **같은 촬영본을 쓸 수 있는가**.
+ *
+ * 촬영본은 찍을 때 그 프레임의 슬롯 비율로 잘려 저장된다. 비율이 크게 다르면 다시 잘라야
+ * 하는데, 그러면 사용자가 프리뷰에서 본 것과 다른 그림이 된다(얼굴이 잘린다).
+ * 세로 4컷 1.42 ↔ 가로 4컷 1.41 처럼 사실상 같은 것은 통과시키고, 세로 ↔ 네모(0.71)는 막는다.
+ */
+function slotRatioMatches(a: FrameId, b: FrameId) {
+  const slotA = FRAME_LAYOUTS[a]?.slots[0];
+  const slotB = FRAME_LAYOUTS[b]?.slots[0];
+  if (!slotA || !slotB) return false;
+  const ratioA = slotA.width / slotA.height;
+  const ratioB = slotB.width / slotB.height;
+  return Math.abs(ratioA - ratioB) / Math.max(ratioA, ratioB) <= 0.05;
+}
 
 function ShootPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queriedFrameId = parseFrameIdQuery(searchParams.get("frame"));
-  const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
-  const { setFrameId, setRemoteFrameId, reset } = useShootSession();
+  const {
+    setFrameId,
+    setRemoteFrameId,
+    setSource,
+    setEventName,
+    reset,
+    resetFrameSelection,
+  } = useShootSession();
+  /*
+    `keepShots=1` 로 들어오면 **찍은 사진을 두고** 프레임만 다시 고른다.
+    합성이 되돌릴 수 없는 이유로 실패했을 때 결과 화면이 보내는 길이다 — 예전에는 그 길이
+    아래 reset() 을 지나며 8장을 통째로 지웠다("다른 프레임을 골라 주세요" 라고 안내해 놓고).
+  */
+  const keepShots = searchParams.get("keepShots") === "1";
+  // 촬영으로 갈지 불러오기로 갈지는 **주소가 들고 있다.** 상태가 아니라 "다음 단계가
+  // 무엇인가"라는 라우팅 정보라, 새로고침하거나 링크를 공유해도 그대로여야 한다.
+  const source = searchParams.get("source") === "upload" ? "upload" : "camera";
+  // 행사장 QR 은 `/shoot?frame=...&event=행사이름` 으로 들어온다. 이름은 화면에만 쓰므로
+  // 길이를 잘라 두고(제목 한 줄), 앞뒤 공백은 버린다.
+  const queriedEventName =
+    (searchParams.get("event") ?? "").trim().slice(0, 40) || null;
+  // 화면에는 세션에 자리잡은 값을 쓴다 — 아래 effect 가 쿼리와 이어 가기 여부로 정한 값이다.
+  const eventName = useShootSession((state) => state.eventName);
   const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
 
-  const [manualSelectedFrameId, setManualSelectedFrameId] = useState<FrameId | null>(
-    queriedFrameId ?? null,
-  );
-  const [selectedRemoteFrameId, setSelectedRemoteFrameId] = useState<number | null>(
-    Number.isFinite(queriedRemoteFrameId) && queriedRemoteFrameId > 0
-      ? queriedRemoteFrameId
-      : null,
-  );
+  useEffect(() => {
+    /*
+      행사 이름을 물려받는 것은 **이어 가는 진입뿐이다.** 결과 화면이 "다른 프레임으로" 로
+      돌려보내는 길에는 행사 쿼리가 없으므로(`keepShots=1` 만 붙는다) 거기서는 이어 쓴다.
+      촬영 화면의 "프레임 다시 선택"은 주소에 `event=` 를 실어 보내므로 쿼리로 살아 온다.
+
+      반대로 쿼리도 `keepShots` 도 없는 진입은 **새 촬영**이다. 여기서 이어 쓰면 행사 QR 로
+      한 번 찍은 브라우저가 그 뒤의 일반 촬영·결과 화면까지 지난 행사 배너를 달고 다닌다.
+    */
+    const carried = keepShots ? useShootSession.getState().eventName : null;
+    if (keepShots) resetFrameSelection();
+    else reset();
+    setEventName(queriedEventName ?? carried);
+    // reset 이 출처를 기본값으로 되돌린다. 주소가 진실이므로 다시 심는다.
+    setSource(source);
+  }, [
+    keepShots,
+    queriedEventName,
+    reset,
+    resetFrameSelection,
+    setEventName,
+    setSource,
+    source,
+  ]);
+
+  /*
+    **행사 QR 로 들어왔는데 회원이 아니면, 여기서 체험을 시작한다.**
+
+    프록시는 쿠키가 **아예 없을 때만** 체험 쿠키를 심는다(apps/web/proxy.ts 의 행사 분기).
+    쿠키가 남아 있는 브라우저 — 행사장에 흔한, 예전에 로그인해 둔 그 브라우저 — 는 그대로
+    통과해 여기까지 온다. 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다. 서버가 회수한
+    refresh 도 쿠키만 보면 멀쩡한 것과 똑같이 생겼기 때문이다.
+
+    판정할 수 있는 것은 여기다. `isUsableMember()` 는 `clientApi` 로 물어보므로 **401 이면
+    재발급을 한 번 하고 다시 시도한다** — access 만 자연 만료된 회원은 그 자리에서 되살아나
+    회원으로 남고, 정말 끊긴 세션만 false 로 떨어진다. 그때 비로소 체험을 시작한다.
+    미들웨어에서 이 판정을 하지 않는 이유(재발급은 토큰을 회전시키는 쓰기이고 프록시는 모든
+    요청에 붙는다)는 그 분기 주석에 적어 뒀다.
+
+    **이미 게스트여도 묻는다.** 한때 여기서 조기 반환했는데, 그러면 낡은 게스트 쿠키를 든
+    회원이 영영 회복되지 않는다 — 이 판정이 붙기 전 배포에서 체험을 눌러 본 사람이다.
+    프록시는 살아 있는 access 로 그 사람을 통과시키지만, 여기서 묻지 않으면 `exitGuestMode()`
+    가 불릴 자리가 없어 쿠키가 만료(7일)되거나 공개 CTA 를 다시 누를 때까지 저장 프레임이
+    숨고 결과도 브라우저 합성으로 처리된다.
+
+    행사 진입이 아닐 때는 묻지 않는다 — 그때까지 물으면 촬영 화면을 열 때마다 인증 왕복이
+    하나 붙는다. 회복이 필요한 사람에게는 공개 CTA 라는 다른 길이 있다.
+
+    **화면을 떠나도 전환은 끝까지 간다 — cleanup 으로 접지 않는다.**
+
+    판정은 왕복 하나만큼 걸리는데, 그 사이 사용자는 기본 프레임으로 「확인」을 눌러
+    `/shoot/capture` 로 갈 수 있다. 한때 여기 `cancelled` 플래그를 두고 떠나면 전환을
+    버렸는데, 그러면 죽은 인증 쿠키를 든 행사 참가자가 **게스트 자격 없이** 촬영을 계속하다
+    인증 API 에서 막혔다 — 다음 경로도 남은 쿠키를 근거로 프록시를 통과하므로 아무도
+    그것을 잡지 못한다.
+
+    `enterGuestMode()` 는 이 화면의 상태가 아니라 **쿠키와 전역 스토어**를 고친다. cleanup 이
+    막아야 하는 것은 「떠난 화면에 상태를 쓰는 것」이지 「약속한 전환을 접는 것」이 아니다.
+    (`app/shoot/result/page.tsx` 의 완성 알림도 같은 이유로 `cancelled` 밖에 있다.)
+
+    확인 버튼을 판정이 끝날 때까지 막는 길도 있었지만 고르지 않았다 — 「가입 없이 바로
+    찍는다」가 이 흐름의 전부인데, 그 첫 동작을 인증 왕복 뒤로 미루게 된다.
+  */
+  const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
 
   useEffect(() => {
-    reset();
-  }, [reset]);
+    if (!queriedEventName || !hydrated) return;
 
-  const selectedRemoteFrame = useMemo(
-    () =>
-      selectedRemoteFrameId == null
-        ? null
-        : frames.find((frame) => frame.frameId == selectedRemoteFrameId) ?? null,
-    [frames, selectedRemoteFrameId],
-  );
+    void (async () => {
+      const membership = await resolveMembership();
 
-  const selectedFrameId = selectedRemoteFrame
-    ? frameIdFromFrameType(selectedRemoteFrame.frameType)
-    : manualSelectedFrameId;
-
-  const handleConfirmFrame = () => {
-    if (!selectedFrameId) return;
-
-    setFrameId(selectedFrameId);
-    setRemoteFrameId(selectedRemoteFrameId);
-    router.push("/shoot/capture");
-  };
+      /*
+        **확정된 답에만 움직인다.** `unknown`(5xx·회선 끊김·재발급 서버 장애)이면 아무것도
+        하지 않는다 — 잠깐 못 물어봤다는 이유로 7일짜리 쿠키를 심으면 멀쩡한 회원이 그동안
+        기록과 저장 프레임을 잃고, 반대로 걷으면 게스트가 회원 화면을 보게 된다.
+        서버가 돌아오면 다음 진입에서 판정된다.
+      */
+      if (membership === "member") {
+        // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다. 아니면 아무 일도 없다.
+        if (accessMode === "guest") exitGuestMode();
+        return;
+      }
+      if (membership !== "guest") return;
+      if (accessMode !== "guest") enterGuestMode();
+    })();
+  }, [accessMode, enterGuestMode, exitGuestMode, hydrated, queriedEventName]);
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-[color:var(--hc-text)] sm:px-4 lg:px-8 lg:py-10">
+    <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
-          brandHref={accessMode === "guest" ? "/shoot" : "/home"}
           title="프레임 선택"
-          description="촬영할 4컷 프레임을 골라주세요."
         />
-        <StepProgress current={1} total={4} label="프레임 선택" />
 
-        <FramePicker
-          selectedFrameId={selectedFrameId}
-          onChangeSelected={(nextFrameId) => {
-            setManualSelectedFrameId(nextFrameId);
-            setSelectedRemoteFrameId(null);
+        <FrameChooser
+          frames={frames}
+          isLoading={isLoading}
+          error={error}
+          onRefresh={refresh}
+          confirmLabel={source === "upload" ? "사진 고르러 가기" : "촬영 시작하기"}
+          // 비회원은 프레임 조회 자체가 인증이 필요해 목록을 볼 수 없다.
+          hideSavedFrames={accessMode !== "member"}
+          onConfirm={({ frameId, remoteFrameId }) => {
+            setFrameId(frameId);
+            setRemoteFrameId(remoteFrameId);
+            setSource(source);
+
+            /*
+              사진을 들고 왔다면 다시 구할 필요가 없다 — 고르는 화면으로 바로 보낸다.
+
+              비율을 따지는 것은 촬영본뿐이다. 갤러리 사진은 원본 비율 그대로 담기고
+              (`lib/photoImport.ts`) 자르기는 미리보기·합성이 **새 프레임** 기준으로 하므로,
+              여기서 비우면 사용자가 고른 사진만 헛되이 잃는다.
+            */
+            const { shots, shotsFrameId, resetShots } = useShootSession.getState();
+            if (shots.length > 0) {
+              const reusable =
+                source === "upload" ||
+                (shotsFrameId != null && slotRatioMatches(shotsFrameId, frameId));
+              if (reusable) {
+                router.push("/shoot/select");
+                return;
+              }
+              // 슬롯 비율로 잘려 저장된 촬영본은 새 프레임에 못 쓴다. 비우고 다시 찍게 한다.
+              resetShots();
+            }
+
+            /*
+              **갤러리 불러오기로 갈 때는 행사·프레임을 주소에 실어 보낸다.**
+
+              그 경로는 회원 전용이라 게스트 쿠키가 이미 있으면 **화면이 마운트되기 전에**
+              프록시가 막는다. 프록시는 세션을 못 보므로, 되돌릴 주소에 넣을 것이 요청에
+              실려 있지 않으면 행사 배너와 QR 이 지정한 프레임이 그대로 사라진다
+              (`/shoot` 은 쿼리 없는 진입을 새 촬영으로 보고 세션을 비운다).
+
+              업로드 화면 자체는 이 쿼리를 읽지 않는다 — 세션에서 같은 값을 꺼낸다.
+              여기 싣는 이유는 **프록시가 되돌릴 때 잃지 않기 위해서**다.
+            */
+            if (source === "upload") {
+              const next = new URLSearchParams({ frame: frameId });
+              if (eventName) next.set("event", eventName);
+              router.push(`/shoot/upload?${next.toString()}`);
+              return;
+            }
+            router.push("/shoot/capture");
           }}
-          onConfirm={handleConfirmFrame}
-          confirmDisabled={!selectedFrameId}
-          confirmLabel={selectedFrameId ? "촬영 시작하기" : "촬영할 프레임을 선택해주세요"}
-        />
-
-        {accessMode === "member" ? (
-          <SavedFramesSection
-            title="저장한 프레임"
-            emptyText="저장된 프레임이 없습니다."
-            selectedFrameId={selectedFrameId}
-            frames={frames}
-            isLoading={isLoading}
-            error={error}
-            selectedRemoteFrameId={selectedRemoteFrameId}
-            onSelectRemoteFrame={(frame) => {
-              setManualSelectedFrameId(frameIdFromFrameType(frame.frameType));
-              setSelectedRemoteFrameId(frame.frameId);
-            }}
-            onRefresh={refresh}
-            selectedStatusText="선택됨"
-            idleStatusText="클릭해서 선택"
-          />
-        ) : null}
+          missingRemoteFrameNotice={
+            <p
+              role="status"
+              className="rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-3 text-[12px] leading-[1.6] text-(--hc-danger)"
+            >
+              링크에 담긴 전용 프레임을 불러오지 못했어요. 아래에서 컷 구성을 고르면
+              만드는 것은 그대로 할 수 있어요.
+            </p>
+          }
+        >
+          {eventName ? <EventBanner eventName={eventName} /> : null}
+        </FrameChooser>
       </div>
     </main>
   );

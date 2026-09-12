@@ -9,7 +9,6 @@ import {
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type FrameMedia = {
-  type: "image";
   src: string;
 };
 
@@ -22,6 +21,8 @@ type FramePreviewProps = {
   slotColor?: string;
   theme?: ThemeExportJson | null;
   outputFilter?: FourcutFilterId;
+  /** 첫 화면(히어로)에 보이는 미리보기는 eager. 나머지는 lazy. */
+  imageLoading?: "lazy" | "eager";
 };
 
 export function FramePreview({
@@ -33,6 +34,7 @@ export function FramePreview({
   slotColor,
   theme,
   outputFilter = "NONE",
+  imageLoading = "lazy",
 }: FramePreviewProps) {
   const layout = FRAME_LAYOUTS[frameId];
 
@@ -41,7 +43,7 @@ export function FramePreview({
   const previewFilter = getFourcutFilterCssValue(outputFilter);
 
   const outer = [
-    "rounded-lg border bg-zinc-900/80 p-2 transition-all",
+    "rounded-lg border bg-zinc-900/80 p-2",
     full,
     className,
   ].join(" ");
@@ -87,17 +89,23 @@ export function FramePreview({
 
         const mediaItem: FrameMedia | null =
           media?.[idx] ??
-          (images && images[idx]
-            ? { type: "image", src: images[idx] as string }
-            : null);
+          (images && images[idx] ? { src: images[idx] as string } : null);
 
         if (mediaItem) {
           return (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={idx}
+              loading={imageLoading}
+              decoding="async"
+              // 치수는 슬롯 비율의 힌트다(CLS 방지). 실제 크기는 CSS 가 정한다.
+              width={slot.width}
+              height={slot.height}
               src={mediaItem.src}
-              alt={`frame-slot-${idx + 1}`}
+              // 이 미리보기는 프레임 "구성"을 보여주는 그림이다. 슬롯 하나하나를
+              // "frame-slot-1" 이라고 읽어 주면 스크린리더에는 개발자 문자열만 남는다.
+              alt=""
+              aria-hidden
               className="absolute rounded-md object-cover"
               style={mediaStyle}
             />

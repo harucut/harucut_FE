@@ -12,12 +12,22 @@ export type PlanInfo = {
   nextLimit: number | null;
 };
 
-// 요금제별 커스텀 프레임 보관 한도(가격표 기준). Free 0 · Plus 3 · Pro 무제한.
-// 서버 구독 사용량을 못 받을 때의 폴백 기본값이며, 무제한은 Infinity로 표현한다.
+// 요금제별 커스텀 프레임 보관 한도. 무료(BASIC) 0 · 베이직(PLUS) 3 · 프로(PRO) 무제한.
+// 서버 `frameRetentionLimit` 과 같은 값이며(무제한을 서버는 -1, 여기서는 Infinity 로 쓴다),
+// 구독 사용량 조회를 못 받을 때의 폴백이다.
+// PRO 는 가격표에서 내렸지만 쿠폰으로 받은 사용자가 있어 한도 계산은 그대로 남긴다.
 export const PLAN_FRAME_LIMITS: Record<PlanTier, number> = {
   BASIC: 0,
   PLUS: 3,
   PRO: Number.POSITIVE_INFINITY,
+};
+
+// 요금제별 기록(미디어) 보관 기간. 서버가 이 기간을 넘긴 기록을 목록에서 아예 잘라 내려주므로
+// (PlanTier.historyRetention), 화면에서 "기록이 없다"와 "기간이 지났다"를 구분하려면 이 값이 필요하다.
+export const PLAN_HISTORY_RETENTION_LABELS: Record<PlanTier, string> = {
+  BASIC: "최근 3일",
+  PLUS: "최근 3개월",
+  PRO: "무제한",
 };
 
 const PLAN_ORDER: PlanTier[] = ["BASIC", "PLUS", "PRO"];

@@ -11,9 +11,13 @@
 ## 브랜치 정책
 
 - 시작 브랜치: `develop`
-- 작업 브랜치: `issue/<number>-<slug>`
+- 작업 브랜치: `<type>/<slug>` — 예: `fix/social-login-buttons`, `chore/remove-stray-probe-output`.
+  `<type>` 는 PR 제목과 같은 8종을 쓴다.
 - 검증 브랜치: `develop`
 - 릴리즈 브랜치: `main`
+
+훅은 브랜치 **이름**을 검사하지 않는다. `main`·`develop`·`develop_loop` 에 직접 커밋·푸시하는 것만 막는다.
+그마저도 `git config core.hooksPath .githooks` 를 해야 켜진다 — 기본값에서는 꺼져 있다.
 
 ## 강제 규칙
 
@@ -55,6 +59,10 @@ pnpm build:web
 pnpm lint:mobile
 pnpm typecheck:mobile
 ```
+
+E2E나 인증 흐름을 검증할 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS`를 끄고 실행한다.
+켜져 있으면 보호 라우트 리다이렉트와 401 처리가 모두 꺼져서 인증 시나리오가
+조용히 통과한다. 자세한 내용은 `docs/auth-routing.md`의 `DEV_AUTH_BYPASS` 절 참고.
 
 ## 문서
 

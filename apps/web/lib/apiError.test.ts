@@ -1,3 +1,4 @@
+import { CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 
 describe("apiError helpers", () => {
@@ -5,17 +6,33 @@ describe("apiError helpers", () => {
     const details = getApiErrorDetails({
       status: 403,
       data: {
-        code: "USR-103",
+        code: "SUBS-002",
         status: 403,
-        message: "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
+        message: "Requested history is beyond the plan's retention period.",
       },
     });
 
     expect(details).toEqual({
       status: 403,
-      code: "USR-103",
-      message: "요금제에서 허용한 기록 조회 기간을 초과했습니다.",
+      code: "SUBS-002",
+      message: "Requested history is beyond the plan's retention period.",
     });
+  });
+
+  it("extracts field errors from a 400 validation envelope", () => {
+    const details = getApiErrorDetails({
+      status: 400,
+      data: {
+        code: "GEN-003",
+        status: 400,
+        message: "Validation failed.",
+        data: [{ field: "title", message: "제목은 필수입니다.", rejectedValue: "" }],
+      },
+    });
+
+    expect(details.fieldErrors).toEqual([
+      { field: "title", message: "제목은 필수입니다.", rejectedValue: "" },
+    ]);
   });
 
   it("prioritizes known plan-limit guidance over generic fallback text", () => {
@@ -23,14 +40,134 @@ describe("apiError helpers", () => {
       {
         status: 403,
         data: {
-          code: "USR-102",
+          code: "SUBS-003",
           status: 403,
-          message: "backend raw message",
+          message: "The number of stored frames exceeds the limit for the current plan.",
         },
       },
-      "저장에 실패했습니다.",
+      "저장에 실패했어요.",
     );
 
-    expect(message).toBe("요금제의 월간 프레임 생성 횟수를 초과했습니다.");
+    expect(message).toBe(
+      "지금 요금제로는 프레임을 저장할 수 없어요. 기존 프레임을 지우거나 플랜을 올려 주세요.",
+    );
+  });
+
+  it("shows the server-provided field error for validation failures", () => {
+    const message = getUserFacingApiErrorMessage(
+      {
+        status: 400,
+        data: {
+          code: "GEN-003",
+          status: 400,
+          message: "Validation failed.",
+          data: [{ field: "title", message: "제목은 필수입니다." }],
+        },
+      },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe("제목은 필수입니다.");
+  });
+
+  // 새 백엔드의 GEN-003 data[] 는 한국어와 Bean Validation 기본 영문이 섞여 나온다
+  // (2026-08-20 실측). 영문을 그대로 띄우면 한국어 화면에 영어가 튄다.
+  it("ignores English Bean Validation messages and falls back to the code mapping", () => {
+    const message = getUserFacingApiErrorMessage(
+      {
+        status: 400,
+        data: {
+          code: "GEN-003",
+          status: 400,
+          message: "Validation failed.",
+          data: [
+            { field: "username", message: "must not be blank" },
+            { field: "password", message: "size must be between 8 and 20" },
+          ],
+        },
+      },
+      "가입에 실패했어요.",
+    );
+
+    expect(message).toBe("입력값을 다시 확인해 주세요.");
+  });
+
+  // 섞여 있으면 한국어 쪽을 고른다.
+  it("picks the Korean field error when the list mixes languages", () => {
+    const message = getUserFacingApiErrorMessage(
+      {
+        status: 400,
+        data: {
+          code: "GEN-003",
+          status: 400,
+          message: "Validation failed.",
+          data: [
+            { field: "username", message: "must not be blank" },
+            { field: "fileSize", message: "파일 크기는 필수입니다." },
+          ],
+        },
+      },
+      "업로드에 실패했어요.",
+    );
+
+    expect(message).toBe("파일 크기는 필수입니다.");
+  });
+
+  it("maps known backend codes to Korean copy instead of the English envelope message", () => {
+    const message = getUserFacingApiErrorMessage(
+      {
+        status: 415,
+        data: {
+          code: "GEN-051",
+          status: 415,
+          message: "Unsupported media type.",
+        },
+      },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe("PNG·JPG·WEBP·GIF·HEIC만 올릴 수 있어요.");
+  });
+
+  it("never surfaces an unmapped English server message", () => {
+    const message = getUserFacingApiErrorMessage(
+      { status: 400, apiMessage: "Something went sideways.", code: "XYZ-999" },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe("저장에 실패했어요.");
+  });
+
+  it("hides internal Error messages and falls back to the given text", () => {
+    const message = getUserFacingApiErrorMessage(
+      new Error("Unsupported upload file type: image/heic"),
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe("저장에 실패했어요.");
+  });
+
+  // 코드는 문구표(packages/shared/src/api-error-messages.ts)에도 서버 ErrorCode enum 에도 없는
+  // 것을 일부러 쓴다 — 표에 있는 코드면 매핑 문구가 먼저 이겨서 폴백까지 오지도 않는다.
+  it("falls back when an unmapped code arrives with a blank message", () => {
+    const message = getUserFacingApiErrorMessage(
+      { status: 500, data: { code: "XYZ-999", status: 500, message: "   " } },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe("저장에 실패했어요.");
+  });
+
+  // 재발급 엔드포인트가 5xx·네트워크 오류로 답하지 못한 경우. 최초 401을 그대로 올리면
+  // AUTH-012가 읽혀 "로그인이 만료됐어요"가 뜨고 멀쩡한 세션이 재로그인으로 밀린다.
+  it("shows a retryable message when token reissue was unavailable", () => {
+    const message = getUserFacingApiErrorMessage(
+      { status: 503, code: CLIENT_REISSUE_UNAVAILABLE_CODE },
+      "저장에 실패했어요.",
+    );
+
+    expect(message).toBe(
+      "일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    );
   });
 });

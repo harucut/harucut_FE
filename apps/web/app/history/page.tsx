@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -10,28 +11,67 @@ import {
   LayoutGrid,
   PencilLine,
   Share2,
+  Trash2,
 } from "lucide-react";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
+import { getImageUrlByKey } from "@/lib/presignedUploadApi";
+import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
+import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
-import { shareOrCopyLink } from "@/lib/share";
-import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import {
+  getUserMediaPreviewUrl,
+  getUserMediaTitle,
+} from "@/lib/userMediaPreview";
+import {
+  deleteMedia,
   getMediaDownloadUrl,
   listMyMedia,
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
-import type { UserMedia, UserMediaType } from "@/lib/api-types";
+import {
+  PLAN_HISTORY_RETENTION_LABELS,
+  type PlanTier,
+} from "@/constants/planLimits";
+import { toPlanId, type PlanId } from "@/constants/plans";
+import { getMyUserInfo } from "@/lib/userApi";
+import type { UserMedia } from "@/lib/api-types";
 
-type FilterValue = "ALL" | "PHOTO";
 type ViewMode = "grid" | "calendar";
 
-const FILTER_LABELS: { value: FilterValue; label: string }[] = [
-  { value: "ALL", label: "전체" },
-  { value: "PHOTO", label: "사진" },
-];
+/**
+ * 화면 맨 위 한 줄짜리 알림. 성공만이 아니라 실패도 여기로 말한다.
+ *
+ * 예전에는 다운로드·공유·삭제 실패를 `alert()` 로 알렸다. 브라우저 모달은 이 디자인의
+ * 것이 아닌 데다, 확인을 누르기 전까지 방금 바뀐 화면을 가린다 — 마이페이지가 같은
+ * 이유로 걷어낸 방식이다(app/mypage/page.tsx). 성공(초록)과 실패를 같은 색으로 그리지
+ * 않으려고 종류를 함께 들고 다닌다.
+ */
+type Notice = { kind: "ok" | "error"; text: string };
+
+/**
+ * 상한을 넘겨 클라이언트가 끊은 삭제인가(lib/userMediaApi.ts 의 `MediaDeleteTimeoutError`).
+ *
+ * 클래스가 아니라 `name` 으로 본다 — 이 화면의 테스트는 `@/lib/userMediaApi` 를 통째로
+ * 목으로 갈아 끼우고, 그러면 import 한 클래스가 undefined 가 되어 `instanceof` 가 터진다.
+ * clientApi 가 AbortError 를 name 으로 가려내는 것과 같은 방식이다.
+ */
+function isDeleteTimeoutError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "MediaDeleteTimeoutError"
+  );
+}
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_KO = [
@@ -49,12 +89,33 @@ const MONTH_KO = [
   "12월",
 ];
 
-function getMediaTypeLabel(type: UserMediaType) {
-  return "사진";
+/** 공용 매핑이 확인한 카드 id 를 서버 등급 이름으로 되돌린다 — 보관 기간 표의 키다. */
+const PLAN_TIER_BY_ID: Record<PlanId, PlanTier> = {
+  basic: "BASIC",
+  plus: "PLUS",
+  pro: "PRO",
+};
+
+/**
+ * 서버 등급을 **화면에 쓸 수 있는 등급으로만** 좁힌다. 모르는 값이면 null.
+ *
+ * `resolvePlanInfo` 를 쓰지 않는 이유가 여기 있다 — 그쪽은 모르는 값을 BASIC 으로
+ * 떨어뜨린다. 한도 계산에서는 가장 좁은 등급을 잡는 안전한 폴백이지만, 그 값이 그대로
+ * **사용자에게 하는 말**로 새면 등급을 확인하지도 못한 사람에게 "최근 3일 기록만 보여요"
+ * 라고 단정하게 된다. 쿠폰으로 PRO 를 받았거나 나중에 붙는 등급을 쓰는 사람은 아직 살아
+ * 있는 자기 기록을 사라진 것으로 읽는다.
+ *
+ * 확인 판정은 공용 매핑(`toPlanId` → packages/shared/src/plans.ts)에 맡긴다. 여기서 등급
+ * 목록을 다시 적으면 등급이 늘 때 한쪽만 따라간다. 마이페이지가 등급 이름에 거는 규칙과
+ * 같은 것이다(app/mypage/page.tsx 의 planDisplayName) — 확인된 등급만 말한다.
+ */
+function toKnownPlanTier(tier: string | null | undefined): PlanTier | null {
+  const planId = toPlanId(tier);
+  return planId ? PLAN_TIER_BY_ID[planId] : null;
 }
 
 function getMediaExtension(item: UserMedia) {
-  const candidates = [item.downloadUrl, item.originalFileName, item.s3Key];
+  const candidates = [item.downloadUrl, item.s3Key];
 
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -70,7 +131,7 @@ function getMediaExtension(item: UserMedia) {
 }
 
 function getItemTime(item: UserMedia) {
-  return item.createdAt ? new Date(item.createdAt).getTime() : 0;
+  return serverDateTimeToMillis(item.createdAt);
 }
 
 function sortMedia(items: UserMedia[]) {
@@ -79,8 +140,8 @@ function sortMedia(items: UserMedia[]) {
 
 /** YYYY-MM 키 (createdAt 기준). 날짜 정보가 없으면 null. */
 function monthKey(item: UserMedia) {
-  if (!item.createdAt) return null;
-  const date = new Date(item.createdAt);
+  const date = parseServerDateTime(item.createdAt);
+  if (!date) return null;
   if (Number.isNaN(date.getTime())) return null;
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -113,57 +174,59 @@ function groupByMonth(items: UserMedia[]) {
 
 function MediaThumb({
   item,
-  previewItems,
   bare = false,
 }: {
   item: UserMedia;
-  previewItems: UserMedia[];
   bare?: boolean;
 }) {
-  const preview = getUserMediaPreview(item, previewItems);
+  const previewUrl = getUserMediaPreviewUrl(item);
 
   const shellClassName = bare
     ? "relative grid h-full w-full place-items-center overflow-hidden"
-    : "hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]";
+    : "hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)";
 
   return (
     <div className={shellClassName}>
-      {preview.url ? (
+      {previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={preview.url}
+          src={previewUrl}
           alt={getUserMediaTitle(item)}
           className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
         />
       ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[10px] text-[color:var(--hc-muted-soft)]">
+        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-(--hc-muted)">
           미리보기를 준비하는 중이에요.
         </div>
       )}
-      {!bare ? (
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
-          <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-          사진
-        </span>
-      ) : null}
     </div>
   );
 }
 
 export default function HistoryPage() {
-  const [filter, setFilter] = useState<FilterValue>("ALL");
   const [view, setView] = useState<ViewMode>("grid");
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [items, setItems] = useState<UserMedia[]>([]);
-  const [previewItems, setPreviewItems] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Notice | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [draftName, setDraftName] = useState("");
+  // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
+  // 대상 자체를 들고 있어야 다이얼로그가 지금 이름을 초깃값으로 받을 수 있다.
+  const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [savingNameId, setSavingNameId] = useState<number | null>(null);
+  // 삭제는 되돌릴 수 없다. 한 번 더 묻는 대상(카드)을 들고 있는다.
+  const [deleteTarget, setDeleteTarget] = useState<UserMedia | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  // 서버가 요금제 보관 기간을 넘긴 기록을 목록에서 잘라 내려주므로, "없음"과 "기간 만료"를
+  // 구분해 안내하려면 요금제를 알아야 한다. **확인된 등급이 아니면 null 이다** — 조회 실패도,
+  // 등급이 안 온 것도, 우리가 모르는 등급도 여기서는 같은 "모른다"이고 그때는 기간 안내를
+  // 통째로 생략한다(toKnownPlanTier).
+  const [planTier, setPlanTier] = useState<PlanTier | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,21 +236,24 @@ export default function HistoryPage() {
       setError(null);
 
       try {
-        // 선택한 타입을 백엔드에 전달해 페이지네이션 너머의 항목까지 해당 타입으로
-        // 받아온다(클라이언트 필터는 첫 페이지만 걸러 누락이 생긴다).
-        const media = await listMyMedia(filter === "ALL" ? undefined : filter);
-        // 전체 미리보기·통계는 ALL 응답 기준으로 유지한다. 필터부터 먼저 로드돼도
-        // 미리보기가 비지 않도록, ALL이 아니면 전체를 함께 받아온다(실패 시 현 응답 대체).
-        const nextPreviewItems =
-          filter === "ALL" ? media : await listMyMedia().catch(() => media);
+        // 미디어는 사진 전용이라 타입 구분 없이 전체를 한 번만 받아온다.
+        const media = await listMyMedia();
 
         if (!cancelled) {
           setItems(sortMedia(media));
-          setPreviewItems(sortMedia(nextPreviewItems));
+        }
+
+        // 보관 기간 안내용. 실패해도 목록 자체는 이미 받았으므로 조용히 넘어간다.
+        try {
+          const user = await getMyUserInfo();
+          if (!cancelled) setPlanTier(toKnownPlanTier(user.planTier));
+        } catch {
+          if (!cancelled) setPlanTier(null);
         }
       } catch (loadError) {
         console.error(loadError);
         if (!cancelled) {
+          setItems([]);
           setError(
             getUserFacingApiErrorMessage(loadError, "기록을 불러오지 못했어요."),
           );
@@ -204,10 +270,12 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter]);
+  }, [reloadKey]);
 
+  // 성공만 잠깐 떴다 사라진다. 실패는 남긴다 — 사용자가 무엇을 해야 하는지 읽을 시간이
+  // 필요하고, 대개 다시 시도해야 한다(마이페이지와 같은 규칙).
   useEffect(() => {
-    if (!feedback) return undefined;
+    if (feedback?.kind !== "ok") return undefined;
 
     const timeoutId = window.setTimeout(() => {
       setFeedback(null);
@@ -218,39 +286,40 @@ export default function HistoryPage() {
     };
   }, [feedback]);
 
-  const filteredItems = useMemo(() => {
-    if (filter === "ALL") return items;
-    return items.filter((item) => item.mediaType === filter);
-  }, [items, filter]);
+  /**
+   * 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+   *
+   * SPA 이동이라 첫 렌더는 아직 불러오는 중이고 `media-<id>` 요소가 없다. 브라우저·Next 의
+   * 해시 스크롤은 그 시점에 한 번 시도하고 끝나서, 목록이 그려진 뒤에는 아무 일도 일어나지
+   * 않는다. 결국 어느 카드를 눌러도 목록 맨 위였다. 목록이 채워진 뒤에 직접 찾아 옮긴다.
+   */
+  const scrolledToHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || items.length === 0) return;
 
-  const groups = useMemo(
-    () => groupByMonth(filteredItems),
-    [filteredItems],
-  );
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith("#media-")) return;
+    // 같은 해시로 두 번 옮기지 않는다(목록이 갱신될 때마다 화면이 튀지 않게).
+    if (scrolledToHashRef.current === hash) return;
 
-  const stats = useMemo(() => {
-    return {
-      // 전체 합계는 필터와 무관하게 ALL 응답 기준 previewItems로 센다.
-      total: previewItems.length,
-    };
-  }, [previewItems]);
+    const target = document.getElementById(hash.slice(1));
+    if (!target) return;
 
-  const emptyText = useMemo(() => {
-    if (filter === "PHOTO") return "저장한 사진 기록이 아직 없어요.";
-    return "저장한 기록이 아직 없어요.";
-  }, [filter]);
+    scrolledToHashRef.current = hash;
+    target.scrollIntoView({ block: "center" });
+  }, [loading, items, view]);
+
+  const groups = useMemo(() => groupByMonth(items), [items]);
 
   // 달력용: 날짜가 있는 월만 모아 정렬한다.
-  // 달력에는 필터 칩이 보이지 않으므로, 그리드 필터와 무관하게 전체(previewItems)
-  // 기준으로 월을 모아 다른 타입/월이 조용히 누락되지 않게 한다.
   const calendarMonths = useMemo(() => {
     const keys = new Set<string>();
-    for (const item of previewItems) {
+    for (const item of items) {
       const key = monthKey(item);
       if (key) keys.add(key);
     }
     return [...keys].sort((a, b) => (a < b ? 1 : -1));
-  }, [previewItems]);
+  }, [items]);
 
   const activeMonth = useMemo(() => {
     if (monthCursor && calendarMonths.includes(monthCursor)) return monthCursor;
@@ -268,12 +337,20 @@ export default function HistoryPage() {
       );
     } catch (downloadError) {
       console.error(downloadError);
-      alert(
-        getUserFacingApiErrorMessage(
-          downloadError,
-          "다운로드를 준비하지 못했어요.",
-        ),
-      );
+      setFeedback({
+        kind: "error",
+        // 네이티브 안내를 먼저 본다 — 사진첩 권한이 막힌 실패는 재시도로 풀리지 않아
+        // 폴백 문구("잠시 후 다시 시도해 주세요")가 거짓말이 된다(lib/nativeBridge.ts).
+        // 문구는 결과 화면과 한 벌로 맞춘다(app/shoot/result/page.tsx) — 같은 실패를
+        // 두 화면이 다르게 말하지 않는다.
+        text: `이미지를 다운로드하지 못했어요. ${
+          getNativeSaveErrorMessage(downloadError) ??
+          getUserFacingApiErrorMessage(
+            downloadError,
+            "잠시 후 다시 시도해 주세요.",
+          )
+        }`,
+      });
     } finally {
       setDownloadingId(null);
     }
@@ -283,105 +360,159 @@ export default function HistoryPage() {
     setSharingId(item.mediaId);
 
     try {
-      const url = await getMediaDownloadUrl(item.mediaId);
+      // 다운로드 URL은 Content-Disposition: attachment가 박혀 있어 링크를 받은 사람에게
+      // 이미지가 바로 보이지 않는다. 공유에는 인라인 조회 URL을 쓴다(둘 다 24시간 유효).
+      const url =
+        (await getImageUrlByKey(item.s3Key)) ??
+        (await getMediaDownloadUrl(item.mediaId));
       const result = await shareOrCopyLink({
         title: `${getUserMediaTitle(item)} | 하루컷`,
-        text: `${getMediaTypeLabel(item.mediaType)} 공유 링크`,
+        text: "사진 공유 링크",
         url,
       });
 
       if (result === "copied") {
-        setFeedback("공유 링크를 복사했어요.");
+        setFeedback({
+          kind: "ok",
+          text: "공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.",
+        });
       } else if (result === "shared") {
-        setFeedback("공유 창을 열었어요.");
+        setFeedback({ kind: "ok", text: "공유 창을 열었어요." });
       }
     } catch (shareError) {
       console.error(shareError);
-      alert(
-        getUserFacingApiErrorMessage(
-          shareError,
-          "공유 링크를 준비하지 못했어요.",
-        ),
-      );
+      setFeedback({
+        kind: "error",
+        // 링크를 못 만든 것과 만들어 놓고 복사만 거부당한 것을 한 문구로 묶지 않는다 — 사용자가
+        // 할 일이 다르다. 앞은 잠시 뒤 다시 누르면 되지만, 뒤는 복사를 허용하기 전에는 몇 번을
+        // 눌러도 같은 자리에서 막힌다(lib/share.ts 의 CopyFailedError).
+        text: isCopyFailedError(shareError)
+          ? "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."
+          : getUserFacingApiErrorMessage(
+              shareError,
+              "공유 링크를 준비하지 못했어요.",
+            ),
+      });
     } finally {
       setSharingId(null);
     }
   };
 
   const handleStartRename = (item: UserMedia) => {
-    setEditingId(item.mediaId);
-    setDraftName(getUserMediaTitle(item));
+    setRenameTarget(item);
+    setRenameError(null);
   };
 
-  const handleSaveName = async (item: UserMedia) => {
-    const nextName = draftName.trim();
-    if (!nextName) {
-      setFeedback("파일 이름은 비워둘 수 없어요.");
-      return;
-    }
+  // 다이얼로그가 마운트될 때마다 포커스를 잡으므로, 닫기 함수는 값이 바뀌지 않아야 한다.
+  // 인라인 화살표로 넘기면 페이지가 다시 그려질 때마다 포커스가 첫 컨트롤로 튄다.
+  const handleCloseRename = useCallback(() => {
+    setRenameTarget(null);
+    setRenameError(null);
+  }, []);
 
+  const handleSaveName = async (item: UserMedia, nextName: string) => {
     setSavingNameId(item.mediaId);
+    setRenameError(null);
 
     try {
       const updated = await updateMediaDisplayName(item.mediaId, nextName);
-      const resolvedName =
-        updated.displayName?.trim() || updated.displayname?.trim() || nextName;
+      const resolvedName = updated.displayName?.trim() || nextName;
 
-      const applyName = (current: UserMedia[]) =>
+      setItems((current) =>
         current.map((currentItem) =>
           currentItem.mediaId === item.mediaId
             ? { ...currentItem, displayName: resolvedName }
             : currentItem,
-        );
-
-      setItems(applyName);
-      setPreviewItems(applyName);
-      setEditingId(null);
-      setDraftName("");
-      setFeedback("파일 이름을 수정했어요.");
-    } catch (renameError) {
-      console.error(renameError);
-      setFeedback("파일 이름을 수정하지 못했어요.");
+        ),
+      );
+      setRenameTarget(null);
+      setFeedback({ kind: "ok", text: "이름을 바꿨어요." });
+    } catch (error_) {
+      console.error(error_);
+      // 다이얼로그를 연 채로 사유를 보여 준다 — 뒤편 안내는 가려서 보이지 않는다.
+      setRenameError(
+        getUserFacingApiErrorMessage(error_, "이름을 바꾸지 못했어요."),
+      );
     } finally {
       setSavingNameId(null);
     }
   };
 
+  /**
+   * 사진 삭제.
+   *
+   * 서버가 지운 뒤 목록에서도 뺀다. 다시 불러오지 않고 손으로 빼는 이유는, 전체 재조회가
+   * 페이지를 순회하는 비싼 호출이라(listMyMedia) 한 장 지우자고 치를 값이 아니어서다.
+   *
+   * 404 를 실패로 보여 주지 않는다 — 이미 없는 사진을 지우려 한 것이고, 사용자가 원한
+   * 상태(목록에 없음)는 이미 이뤄졌다. 화면에서만 빼면 된다.
+   */
+  const handleDelete = async (item: UserMedia) => {
+    setDeletingId(item.mediaId);
+    try {
+      await deleteMedia(item.mediaId);
+      setItems((current) =>
+        current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
+      );
+      setDeleteTarget(null);
+      setFeedback({ kind: "ok", text: "사진을 지웠어요." });
+    } catch (error_) {
+      console.error(error_);
+      /*
+        상한을 넘겨 클라이언트가 끊은 삭제(userMediaApi.ts 의 DELETE_DEADLINE_MS).
+
+        "지우지 못했어요"라고 하지 않는다 — 끊긴 쪽에서는 요청이 서버까지 갔는지 알 수
+        없어서, 실제로는 지워졌을 수 있다. 그렇게 말해 두면 다음 새로고침에서 사라진
+        사진을 본 사용자가 화면을 못 믿게 된다. 같은 이유로 목록에서도 빼지 않는다 —
+        반대 방향의 같은 거짓말이다. 확인할 자리(새로고침)만 알려 준다.
+      */
+      if (isDeleteTimeoutError(error_)) {
+        setDeleteTarget(null);
+        setFeedback({
+          kind: "error",
+          text: "응답이 없어 삭제 결과를 확인하지 못했어요. 잠시 후 목록을 새로고침해 확인해 주세요.",
+        });
+        return;
+      }
+
+      const { status } = getApiErrorDetails(error_);
+      if (status === 404) {
+        setItems((current) =>
+          current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
+        );
+        setDeleteTarget(null);
+        setFeedback({ kind: "ok", text: "이미 지워진 사진이에요." });
+        return;
+      }
+      // 확인 창을 닫고 배너로 말한다. 다이얼로그 안에 남기는 편이 낫지만 ConfirmDialog
+      // 에는 실패를 그릴 자리가 없고(SingleFieldDialog 의 `error` 같은 것), 연 채로
+      // 배너를 띄우면 그 배너가 다이얼로그에 가려 아무것도 보이지 않는다. 이름 바꾸기와
+      // 달리 여기서는 잃을 입력값도 없다.
+      setDeleteTarget(null);
+      setFeedback({
+        kind: "error",
+        text: getUserFacingApiErrorMessage(error_, "사진을 지우지 못했어요."),
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:gap-6 lg:py-8">
-        {/* 헤더 + 필터 + 뷰 토글 */}
+        {/* 헤더 + 뷰 토글 */}
         <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between lg:pt-3">
-          <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
-              기록
-            </h1>
-            <p className="mt-2 text-[13.5px] text-[color:var(--hc-muted)]">
-              남긴 하루컷 {loading ? "…" : stats.total}개 · 언제든 다시 내려받을 수
-              있어요
-            </p>
-          </div>
+          {/* 부제는 두지 않는다 — 개수는 달마다 붙은 「N컷」이 이미 말하고, 보관 기간은
+              정작 필요한 자리(기록이 없을 때)에서 따로 안내한다. 늘 떠 있으면 자기
+              사진을 보러 온 화면 맨 위에서 요금제부터 읽게 된다. */}
+          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+            기록
+          </h1>
 
           <div className="flex flex-wrap items-center gap-2">
-            {view === "grid"
-              ? FILTER_LABELS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFilter(option.value)}
-                    className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
-                      filter === option.value
-                        ? "bg-[color:var(--hc-primary)] text-[color:var(--hc-primary-contrast)]"
-                        : "hc-button-secondary border text-[color:var(--hc-muted)]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))
-              : null}
-
             <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
               {(
                 [
@@ -393,13 +524,13 @@ export default function HistoryPage() {
                   key={id}
                   type="button"
                   onClick={() => setView(id)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-bold transition ${
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
                     view === id
                       ? "bg-white text-[#0B0B0C]"
-                      : "text-[color:var(--hc-muted)]"
+                      : "text-(--hc-muted)"
                   }`}
                 >
-                  <Icon className="h-[15px] w-[15px]" />
+                  <Icon className="h-3.75 w-3.75" />
                   {label}
                 </button>
               ))}
@@ -407,16 +538,32 @@ export default function HistoryPage() {
           </div>
         </header>
 
-        {feedback ? (
-          <div className="hc-feedback rounded-2xl border px-4 py-3 text-[12px]">
-            {feedback}
-          </div>
-        ) : null}
+        {/*
+            결과는 **지금 보고 있는 자리**에 붙여 둔다.
 
-        {error ? (
-          <p className="text-[12px] text-[color:var(--hc-primary-strong)]">
-            {error}
-          </p>
+            배너가 목록보다 위에 있어서, 아래쪽 카드에서 저장·공유·삭제를 누르면 결과가 화면
+            밖에 그려졌다 — 390×844 실측으로 맨 아래 카드의 삭제가 실패했을 때 배너 top 이
+            -3,917px 이었다. 삭제가 실패하면 확인 창까지 닫히므로(handleDelete) 그 자리에서는
+            아무 변화도 보이지 않는다. 맨 위로 끌어올리지는 않는다 — 스크롤을 빼앗으면
+            다시 시도할 카드를 놓친다.
+
+            띠에 무대색을 까는 것은 배너 바탕이 8~16% 알파라(globals.css 의 --hc-*-soft-bg)
+            아래로 흐르는 사진이 글자에 비쳐서다. 앱 네비와 같은 처리다. 네비(69px)가 뜨는
+            lg 에서는 그 아래로 내린다 — z-20 이라 겹치는 1px 은 네비가 덮는다.
+            바깥 여백은 안쪽 padding 으로 되돌려, 붙기 전 자리를 예전 그대로 둔다. */}
+        {feedback ? (
+          <div className="sticky top-0 z-20 -mx-4 -my-2 bg-(--hc-surface-soft) px-4 py-2 backdrop-blur-md lg:top-17">
+            <div
+              role="status"
+              className={
+                feedback.kind === "ok"
+                  ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
+                  : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
+              }
+            >
+              {feedback.text}
+            </div>
+          </div>
         ) : null}
 
         {loading ? (
@@ -424,22 +571,53 @@ export default function HistoryPage() {
             {Array.from({ length: 4 }, (_, index) => (
               <div
                 key={index}
-                className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+                className="aspect-3/4 animate-pulse rounded-[18px] bg-(--hc-surface-muted)"
               />
             ))}
           </div>
+        ) : error ? (
+          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
+          <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
+            <p role="alert" className="text-[13px] text-(--hc-muted)">{error}</p>
+            <button
+              type="button"
+              onClick={() => setReloadKey((prev) => prev + 1)}
+              className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
+            >
+              다시 시도
+            </button>
+          </div>
         ) : view === "calendar" ? (
           <CalendarView
-            items={previewItems}
-            previewItems={previewItems}
+            items={items}
             months={calendarMonths}
             activeMonth={activeMonth}
             onChangeMonth={setMonthCursor}
           />
-        ) : filteredItems.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <ImageIcon className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-            <p className="text-[13px] text-[color:var(--hc-muted)]">{emptyText}</p>
+            <ImageIcon className="h-7 w-7 text-(--hc-muted-soft)" />
+            <p className="text-[13px] text-(--hc-muted)">
+              저장한 기록이 아직 없어요.
+            </p>
+            {planTier && planTier !== "PRO" ? (
+              <p className="text-[12px] text-(--hc-muted)">
+                {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
+                지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
+                <Link href="/pricing" className="underline">
+                  요금제 보기
+                </Link>
+              </p>
+            ) : null}
+            {/* 홈의 큰 카드와 같은 것을 연다 — 같은 뜻의 버튼이 화면마다 다르게
+                동작하면 안 된다(여기만 카메라로 직행했다). */}
+            <button
+              type="button"
+              onClick={() => setSourceDialogOpen(true)}
+              className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
+            >
+              기록 남기기
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-8">
@@ -449,44 +627,47 @@ export default function HistoryPage() {
                   <h2 className="text-[19px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+                  <span className="text-[13px] text-(--hc-muted)">
                     {group.items.length}컷
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
                   {group.items.map((item) => {
-                    const isEditing = editingId === item.mediaId;
+                    const title = getUserMediaTitle(item);
 
                     return (
-                      <article key={item.mediaId} className="group flex flex-col gap-2.5">
-                        <MediaThumb item={item} previewItems={previewItems} />
+                      <article
+                        key={item.mediaId}
+                        // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+                        id={`media-${item.mediaId}`}
+                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-(--hc-primary)"
+                      >
+                        <MediaThumb item={item} />
 
                         <div className="flex flex-col gap-1">
-                          {isEditing ? (
-                            <div className="flex gap-2">
-                              <input
-                                value={draftName}
-                                onChange={(e) => setDraftName(e.target.value)}
-                                className="hc-input h-9 flex-1 rounded-xl border px-3 text-[12px]"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void handleSaveName(item)}
-                                disabled={savingNameId === item.mediaId}
-                                className="hc-button-neutral rounded-full px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
-                              >
-                                {savingNameId === item.mediaId ? "저장 중" : "저장"}
-                              </button>
-                            </div>
-                          ) : (
-                            <p className="truncate text-[14px] font-bold tracking-tight">
-                              {getUserMediaTitle(item)}
+                          {/* 이름 옆 연필이 곧 "고치기"다 — 아래 줄에는 이 기록으로 할
+                              일(저장·공유)만 남기고, 이름은 제 자리에서 손댄다.
+
+                              연필은 카드 오른쪽 끝이 아니라 이름 바로 옆에 붙인다. 끝에
+                              두면 이름이 짧을수록 멀어져 무엇을 고치는 표시인지 흐려진다.
+                              이름이 길면 잘리면서 자연히 끝으로 간다. */}
+                          <div className="flex items-center gap-0.5">
+                            <p className="min-w-0 truncate text-[14px] font-bold tracking-tight">
+                              {title}
                             </p>
-                          )}
-                          <p className="text-[11.5px] text-[color:var(--hc-muted-soft)]">
-                            {item.createdAt
-                              ? new Date(item.createdAt).toLocaleDateString(
+                            <button
+                              type="button"
+                              onClick={() => handleStartRename(item)}
+                              aria-label={`이름 바꾸기: ${title}`}
+                              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-(--hc-muted) transition hover:bg-(--hc-surface-highlight) hover:text-(--hc-text)"
+                            >
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-(--hc-muted)">
+                            {parseServerDateTime(item.createdAt)
+                              ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
                                   "ko-KR",
                                   { month: "long", day: "numeric" },
                                 )
@@ -494,12 +675,12 @@ export default function HistoryPage() {
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex gap-1.5">
                           <button
                             type="button"
                             onClick={() => void handleDownload(item)}
                             disabled={downloadingId === item.mediaId}
-                            className="hc-button-primary flex flex-1 items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
                           >
                             <Download className="h-3.5 w-3.5" />
                             <span>
@@ -510,24 +691,23 @@ export default function HistoryPage() {
                             type="button"
                             onClick={() => void handleShare(item)}
                             disabled={sharingId === item.mediaId}
-                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
                           >
                             <Share2 className="h-3.5 w-3.5" />
                             <span>
                               {sharingId === item.mediaId ? "준비 중" : "공유"}
                             </span>
                           </button>
+                          {/* 삭제는 되돌릴 수 없어서 저장·공유와 같은 무게로 두지 않는다.
+                              글자 없이 아이콘만, 색도 한 단 낮춰 실수로 누르지 않게 한다. */}
                           <button
                             type="button"
-                            onClick={() =>
-                              isEditing
-                                ? setEditingId(null)
-                                : handleStartRename(item)
-                            }
-                            className="hc-button-secondary flex items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold"
+                            onClick={() => setDeleteTarget(item)}
+                            disabled={deletingId === item.mediaId}
+                            aria-label={`삭제: ${title}`}
+                            className="hc-button-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text) disabled:opacity-50"
                           >
-                            <PencilLine className="h-3.5 w-3.5" />
-                            <span>{isEditing ? "취소" : "이름"}</span>
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </article>
@@ -540,19 +720,47 @@ export default function HistoryPage() {
         )}
       </div>
       <MobileTabBar />
+      <RecordSourceDialog
+        open={sourceDialogOpen}
+        onClose={() => setSourceDialogOpen(false)}
+      />
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="이 사진을 지울까요?"
+          description={`"${getUserMediaTitle(deleteTarget)}" 를 지워요. 지운 사진은 되돌릴 수 없어요.`}
+          confirmLabel="지우기"
+          runningLabel="지우는 중"
+          running={deletingId === deleteTarget.mediaId}
+          destructive
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => void handleDelete(deleteTarget)}
+        />
+      ) : null}
+
+      {renameTarget ? (
+        <SingleFieldDialog
+          key={renameTarget.mediaId}
+          title="이름 바꾸기"
+          label="기록 이름"
+          placeholder="예: 바다에서"
+          initialValue={getUserMediaTitle(renameTarget)}
+          saving={savingNameId === renameTarget.mediaId}
+          error={renameError}
+          onClose={handleCloseRename}
+          onSubmit={(nextName) => void handleSaveName(renameTarget, nextName)}
+        />
+      ) : null}
     </main>
   );
 }
 
 function CalendarView({
   items,
-  previewItems,
   months,
   activeMonth,
   onChangeMonth,
 }: {
   items: UserMedia[];
-  previewItems: UserMedia[];
   months: string[];
   activeMonth: string | null;
   onChangeMonth: (key: string) => void;
@@ -560,8 +768,8 @@ function CalendarView({
   if (!activeMonth) {
     return (
       <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-        <CalendarDays className="h-7 w-7 text-[color:var(--hc-muted-soft)]" />
-        <p className="text-[13px] text-[color:var(--hc-muted)]">
+        <CalendarDays className="h-7 w-7 text-(--hc-muted-soft)" />
+        <p className="text-[13px] text-(--hc-muted)">
           달력으로 볼 기록이 아직 없어요.
         </p>
       </div>
@@ -573,8 +781,9 @@ function CalendarView({
 
   const byDay = new Map<number, UserMedia[]>();
   for (const item of monthItems) {
-    if (!item.createdAt) continue;
-    const day = new Date(item.createdAt).getDate();
+    const created = parseServerDateTime(item.createdAt);
+    if (!created) continue;
+    const day = created.getDate();
     const bucket = byDay.get(day);
     if (bucket) bucket.push(item);
     else byDay.set(day, [item]);
@@ -603,7 +812,7 @@ function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <b className="min-w-[120px] text-center text-[20px] tracking-tight">
+          <b className="min-w-30 text-center text-[20px] tracking-tight">
             {year}년 {month}월
           </b>
           <button
@@ -616,7 +825,7 @@ function CalendarView({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="text-[12.5px] text-[color:var(--hc-muted-soft)]">
+        <span className="text-[13px] text-(--hc-muted)">
           이번 달 {monthItems.length}컷
         </span>
       </div>
@@ -645,7 +854,7 @@ function CalendarView({
           return (
             <div
               key={index}
-              className={`relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl border p-1.5 ${
+              className={`relative flex aspect-3/4 flex-col overflow-hidden rounded-xl border p-1.5 ${
                 day ? "hc-surface-card" : "border-transparent"
               }`}
             >
@@ -663,9 +872,9 @@ function CalendarView({
               ) : null}
               {list ? (
                 <div className="relative mt-1 flex flex-1 items-center justify-center">
-                  <MediaThumb item={list[0]} previewItems={previewItems} bare />
+                  <MediaThumb item={list[0]} bare />
                   {list.length > 1 ? (
-                    <span className="absolute right-0 top-0 rounded-full bg-[color:var(--hc-primary)] px-1.5 text-[9px] font-extrabold text-[color:var(--hc-primary-contrast)]">
+                    <span className="absolute right-0 top-0 rounded-full bg-(--hc-primary) px-1.5 text-[11px] font-extrabold text-(--hc-primary-contrast)">
                       +{list.length - 1}
                     </span>
                   ) : null}

@@ -7,10 +7,10 @@ const meta = {
   args: {
     frameId: "classic-4",
     media: [
-      { type: "image", src: "https://picsum.photos/600/900?random=1" },
-      { type: "image", src: "https://picsum.photos/600/900?random=2" },
-      { type: "image", src: "https://picsum.photos/600/900?random=3" },
-      { type: "image", src: "https://picsum.photos/600/900?random=4" },
+      { src: "https://picsum.photos/600/900?random=1" },
+      { src: "https://picsum.photos/600/900?random=2" },
+      { src: "https://picsum.photos/600/900?random=3" },
+      { src: "https://picsum.photos/600/900?random=4" },
     ],
   },
   parameters: {

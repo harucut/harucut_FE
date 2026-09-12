@@ -1,97 +1,66 @@
-// 하루컷 요금제 — 웹 요금제 페이지(PricingView)·앱(pricing-screen)이 공유하는 단일 소스.
-// 값 변경 시 이 파일과 mobile/screens/pricing-screen.tsx를 함께 맞춘다.
-// (Free 무료 / Plus ₩3,900 / Pro ₩9,900, 7행 피처. Enterprise는 추후 출시 예정.)
+// 하루컷 요금제 — 화면에 쓰는 형태.
+//
+// **사실(가격·피처 표·Enterprise 안내)은 여기 있지 않다.** packages/shared/src/plans.ts 가
+// 단일 소스이고, 웹과 앱이 그걸 함께 읽는다. 예전에는 두 곳이 같은 표를 각자 하드코딩하고
+// "값 변경 시 함께 맞춘다"는 주석만 달아 뒀는데, 그 약속이 지켜지지 않아 웹에서 걷어낸
+// 거짓 표시가 앱에 그대로 남았다. 사람이 지키는 규칙 대신 한 곳에서 읽게 했다.
+//
+// 여기서 더하는 것은 화면용 문구뿐이다(카드 CTA 라벨 등).
+import {
+  ENTERPRISE_FACTS,
+  PLAN_FACTS,
+  PLAN_NAMES,
+  toPlanId as toPlanIdShared,
+  type PlanFacts,
+  type PlanFeature as SharedPlanFeature,
+  type PlanId as SharedPlanId,
+} from "@harucut/shared";
 
-export type PlanId = "basic" | "plus" | "pro";
+export type PlanId = SharedPlanId;
+export type PlanFeature = SharedPlanFeature;
 
-// [라벨, 제공 여부, (선택) 부가 설명]
-// note가 있으면 비교표/카드에서 체크/X 대신 그 텍스트를 보여준다(개수·기간·"미정" 등).
-export type PlanFeature = [label: string, included: boolean, note?: string];
-
-export type Plan = {
-  id: PlanId;
-  name: string;
-  price: string;
-  // 가격 옆 보조 텍스트(예: "/ 월", "가입 시 제공").
-  sub: string;
+export type Plan = PlanFacts & {
+  /** 카드 버튼에 쓰는 라벨. 결제가 닫혀 있으면 PricingView 가 상태 표시로 갈아친다. */
   cta: string;
-  // 7행 피처 매트릭스(모든 플랜 동일한 행 순서/라벨).
-  feats: PlanFeature[];
-  // Plus = 인기 강조.
-  hot?: boolean;
   badge?: string;
 };
 
-// 7행 피처 라벨(순서 고정):
-// 커스텀 프레임 / 워터마크 해제 / 사진 보관 기간 / 보정 / 광고 제거 / AI (추후) / 동영상 (추후)
-// 워터마크는 전 플랜 기본 포함. Free는 제거 불가, Plus·Pro는 해제 가능(기본값은 항상 포함).
-export const PLANS: Plan[] = [
-  {
-    id: "basic",
-    name: "Free",
-    price: "무료",
-    sub: "가입 시 제공",
-    cta: "무료로 시작하기",
-    feats: [
-      ["커스텀 프레임", false],
-      ["워터마크 해제", false, "기본 포함 (고정)"],
-      ["사진 보관 기간", true, "3일"],
-      ["보정", false],
-      ["광고 제거", false, "보정·다운로드 시 노출"],
-      ["AI (추후)", false],
-      ["동영상 (추후)", false],
-    ],
-  },
-  {
-    id: "plus",
-    name: "Plus",
-    price: "₩3,900",
-    sub: "/ 월",
-    cta: "Plus 시작하기",
-    hot: true,
-    badge: "인기",
-    feats: [
-      ["커스텀 프레임", true, "3개"],
-      ["워터마크 해제", true, "선택 (기본 포함)"],
-      ["사진 보관 기간", true, "3달"],
-      ["보정", true],
-      ["광고 제거", true],
-      ["AI (추후)", false],
-      ["동영상 (추후)", false, "미정"],
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "₩9,900",
-    sub: "/ 월",
-    cta: "Pro 시작하기",
-    feats: [
-      ["커스텀 프레임", true, "무제한"],
-      ["워터마크 해제", true, "선택 (기본 포함)"],
-      ["사진 보관 기간", true, "무제한"],
-      ["보정", true],
-      ["광고 제거", true],
-      ["AI (추후)", true],
-      ["동영상 (추후)", false, "미정"],
-    ],
-  },
-];
+const CTA_BY_ID: Record<PlanId, string> = {
+  basic: "무료로 시작하기",
+  plus: "베이직 시작하기",
+  // 가격표에 카드가 없어 실제로 쓰이지 않지만, PlanId 를 모두 채워 둬야
+  // 나중에 PRO 카드를 되살릴 때 라벨이 빠진 채로 나가지 않는다.
+  pro: "프로 시작하기",
+};
 
-// Enterprise — 추후 출시 예정. 팬미팅·행사처럼 공간을 미리 만들어 두면, 비회원도 QR로
-// 입장해 그 자리에서 누구나 네 컷을 찍을 수 있는 행사용 플랜.
-export const ENTERPRISE_TEASER = {
-  name: "Enterprise",
-  badge: "추후",
-  price: "준비 중",
-  desc: "팬미팅·행사용 플랜이에요. 공간을 미리 만들어 두면 비회원도 QR로 입장해 그 자리에서 누구나 네 컷을 찍을 수 있어요.",
-  cta: "도입 문의",
-} as const;
+export const PLANS: Plan[] = PLAN_FACTS.map((plan) => ({
+  ...plan,
+  cta: CTA_BY_ID[plan.id],
+}));
 
-// 요금제 페이지 헤더 카피.
+export const ENTERPRISE_TEASER = ENTERPRISE_FACTS;
+
+export const toPlanId = toPlanIdShared;
+
+// 서버 등급을 사람이 읽는 이름(무료/베이직/프로)으로 바꾼다. 모르는 값이면 null.
+//
+// PLANS 에서 찾지 않는다 — PRO 는 가격표에 카드가 없어서 못 찾는다. 그때 호출부가 null 을
+// "무료"로 메우면 PRO 사용자에게 무료라고 말하게 된다. 마이페이지는 그래서 null 을 무료로
+// 메우지 않고 받은 등급을 그대로 적는다(app/mypage/page.tsx 의 planDisplayName).
+export function getPlanDisplayName(tier: string | null | undefined): string | null {
+  const id = toPlanId(tier);
+  return id ? PLAN_NAMES[id] : null;
+}
+
+// 요금제 페이지 헤더 카피. 로그인 후에는 "비회원" 안내가 의미 없어 문장을 바꾼다.
 export const PRICING_HEADLINE = "나에게 맞는 플랜";
+// 보정은 플랜과 무관하게 모두 되므로(서버에 등급 개념이 없다) 문구에서 뺀다.
 export const PRICING_SUBTITLE =
-  "비회원도 촬영은 무료예요. 커스텀 프레임·보정·보관 기간은 플랜에 따라 달라요.";
+  "비회원도 촬영은 무료예요. 커스텀 프레임과 보관 기간이 플랜에 따라 달라요.";
+export const PRICING_SUBTITLE_AUTHED =
+  "커스텀 프레임과 보관 기간이 플랜에 따라 달라요. 결제 기능은 준비 중이에요.";
+// 결제 미오픈 안내 — 요금제 카드 CTA·footnote가 함께 쓴다.
+export const PRICING_BILLING_PENDING = "결제 기능은 준비 중이에요.";
 // 요금제를 내릴 때의 안내(비활성화 정책).
 export const PRICING_DOWNGRADE_NOTE =
   "요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.";

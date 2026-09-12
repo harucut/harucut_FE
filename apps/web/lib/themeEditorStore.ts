@@ -5,6 +5,8 @@ import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { STICKERS } from "@/constants/stickers.generated";
 import { removeImageBackground } from "@/lib/backgroundRemoval";
+import { needsUpload } from "@/lib/canvas/componentSource";
+import { bakeTextLayerPng } from "@/lib/canvas/textLayer";
 import {
   PRESIGNED_UPLOAD_TYPES,
   uploadToS3WithPresigned,
@@ -32,9 +34,7 @@ function normalizeZ(components: EditorComponent[]): EditorComponent[] {
 }
 
 // 이미지 로딩 후 실제 크기 확인
-async function readImageSize(
-  src: string,
-): Promise<{ w: number; h: number } | null> {
+async function readImageSize(src: string): Promise<{ w: number; h: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () =>
@@ -74,6 +74,67 @@ function normalizeHexColor(input: string) {
   return hex.padEnd(6, "0");
 }
 
+/**
+ * 사진 자산을 갈아치우는 작업(누끼·저장 업로드)을 한 줄로 세운다.
+ *
+ * 누끼는 초 단위로 걸리는데 그동안 저장 버튼은 잠기지 않는다 —
+ * `processingAssetId` 는 그 타일의 누끼 버튼만 막는다. 겹치면 이렇게 깨진다.
+ *   1. 누끼 시작 → 2. 저장이 시작 시점의 `src` 로 원본 업로드를 걸어 둠 →
+ *   3. 누끼가 먼저 끝나 자산·레이어가 새 blob 으로 바뀜 →
+ *   4. 업로드 결과는 **옛 src** 로만 되돌려 붙어서 새 blob 레이어를 못 바꾼다
+ * 결국 `exportJson()` 이 blob: 주소를 그대로 실어 보내 저장이 400 으로 죽는다.
+ * 결과 도착 시점의 자산을 다시 보는 것만으로는 이 순서(누끼가 먼저 끝남)를 못 막는다.
+ * 두 작업이 서로를 기다리게 해서 언제나 최신 자산 위에서 돌게 한다.
+ */
+let assetTaskQueue: Promise<void> = Promise.resolve();
+
+/**
+ * 저장이 앞선 누끼를 기다리는 상한.
+ *
+ * 줄을 세우는 것까지는 맞는데 무한정 기다리면 더 나빠진다 — 누끼(`@imgly/background-removal`)
+ * 는 WASM 모델을 받아 CPU 로 돌리는 일이라 멈출 수도 있고, 그러면 저장 프로미스가 영영
+ * 안 끝나서 저장 모달을 닫을 방법이 없다. 원래 막으려던 race 보다 나쁜 상태다.
+ *
+ * 30초: 느린 기기에서 모델 최초 다운로드까지 포함해도 누끼는 대개 10초 안쪽이라
+ * 정상 누끼를 잘라 먹지 않고, 사용자가 "멈췄다"고 느끼기 전에는 풀린다.
+ * 넘기면 그때 자산 그대로 저장을 진행한다 — 누끼 전 원본이 올라가거나 blob 이 남아
+ * 400 이 나는, **다시 누르면 되는 평범한 실패**로 떨어진다.
+ */
+export const ASSET_QUEUE_WAIT_LIMIT_MS = 30_000;
+
+// 대기에만 상한을 건다. 작업 자체는 잘라내지 않는다(중간에 끊으면 자산이 반만 바뀐다).
+function waitForAssetQueue(waitLimitMs?: number): Promise<void> {
+  const queued = assetTaskQueue;
+  if (waitLimitMs === undefined) return queued;
+
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, waitLimitMs);
+    const release = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    queued.then(release, release);
+  });
+}
+
+function runOnAssetQueue<T>(task: () => Promise<T>, waitLimitMs?: number): Promise<T> {
+  const result = waitForAssetQueue(waitLimitMs).then(task);
+  // 앞 작업이 실패해도 줄은 이어져야 한다. 대기용 프로미스에서는 결과를 삼킨다.
+  // 상한을 넘겨 앞질렀을 때도 줄의 끝은 이 작업이 된다 — 멈춘 작업을 뒤에 오는
+  // 모두가 다시 기다리게 두지 않는다.
+  assetTaskQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+// 줄은 모듈 전역이라 편집 세션을 넘어 산다. 멈춘 작업을 그대로 두면 **다른 프레임**의
+// 저장까지 붙잡히므로, 에디터를 리셋할 때 줄도 새로 판다.
+function resetAssetQueue() {
+  assetTaskQueue = Promise.resolve();
+}
+
 type State = {
   frameId: FrameId | null;
   tab: ComponentType;
@@ -104,8 +165,9 @@ type State = {
   setBackgroundImageUrl: (url: string) => void;
   clearBackgroundImage: () => void;
 
+  // 호출부가 지원 형식만 미리 걸러 넘길 수 있어 File[]도 받는다.
   addPhotoAssets: (
-    files: FileList,
+    files: FileList | File[],
   ) => Promise<{ added: number; failed: number }>;
   removePhotoBackground: (assetId: string) => Promise<{
     ok: boolean;
@@ -117,20 +179,24 @@ type State = {
     reason?: "IN_USE" | "NOT_FOUND";
   };
   resetPhotos: () => void;
-  // 저장 시: 캔버스에서 실제 사용 중인 로컬 사진만 S3에 업로드(isTemp:false)하고
-  // 컴포넌트 source를 S3 URL로 치환한다. 미사용 업로드 사진은 올리지 않는다.
-  finalizePhotosForSave: () => Promise<void>;
+  // 저장 시: 캔버스에서 실제 쓰는 사진·스티커를 S3에 올리고 글자 층을 굽는다.
+  // 컴포넌트 source는 S3 key가 되고, 그릴 주소는 renderUrl로 옮긴다.
+  // 안 쓰는 자산은 올리지 않는다. (자세한 이유는 아래 구현부 주석)
+  finalizeAssetsForSave: () => Promise<void>;
 
-  addComponentFromAsset: (
-    type: "PHOTO" | "STICKER",
-    src: string,
-  ) => Promise<void>;
+  addComponentFromAsset: (type: "PHOTO" | "STICKER", src: string) => Promise<void>;
   addText: (options?: { text?: string; fontSize?: number }) => void;
 
   setActive: (id: string | null) => void;
   updateComponent: (id: string, patch: UpdatePatch) => void;
 
   remove: (id: string) => void;
+  // 방금 지운 요소를 되돌린다. 없으면 아무 일도 하지 않는다.
+  restoreRemoved: () => void;
+  canRestoreRemoved: boolean;
+  lastRemoved: EditorComponent | null;
+  /** 삭제 당시의 쌓임 순서(배열 인덱스). 되돌릴 때 그 자리에 다시 넣는다. */
+  lastRemovedIndex: number | null;
   duplicate: (id: string) => void;
 
   reset: () => void;
@@ -156,6 +222,10 @@ type State = {
 function resetEditorState(get: () => State) {
   const state = get();
 
+  // 자산이 통째로 바뀌므로 앞선 누끼·업로드는 여기서 의미가 없다. 줄을 비워
+  // 한 세션 안으로 가둔다(위 resetAssetQueue 주석).
+  resetAssetQueue();
+
   // 업로드 이미지 메모리 정리
   for (const p of state.assets.photos) {
     try {
@@ -171,6 +241,9 @@ function resetEditorState(get: () => State) {
   return {
     tab: "PHOTO" as ComponentType,
     components: [],
+    lastRemoved: null,
+    lastRemovedIndex: null,
+    canRestoreRemoved: false,
     activeId: null,
     cellCutouts: [false, false, false, false],
     assets: {
@@ -195,6 +268,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   components: [],
+  lastRemoved: null,
+  lastRemovedIndex: null,
+  canRestoreRemoved: false,
   activeId: null,
   background: {
     type: "COLOR",
@@ -288,7 +364,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }),
 
   // 업로드한 사진은 S3에 올리지 않고 로컬(blob)로만 보관한다.
-  // 실제 S3 업로드는 저장(onDone) 시 finalizePhotosForSave에서 사용 중인 사진만 처리한다.
+  // 실제 S3 업로드는 저장(onDone) 시 finalizeAssetsForSave에서 사용 중인 자산만 처리한다.
   addPhotoAssets: async (files) => {
     const added: Asset[] = [];
     let failed = 0;
@@ -317,61 +393,89 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     return { added: added.length, failed };
   },
 
-  // 사용 중인 사진은 삭제 불가
-  removePhotoBackground: async (assetId) => {
-    const state = get();
-    const asset = state.assets.photos.find((photo) => photo.id === assetId);
-    if (!asset?.file) {
-      return { ok: false as const, reason: "NOT_FOUND" as const };
-    }
-
-    try {
-      const processedFile = await removeImageBackground(asset.file);
-      const objectUrl = URL.createObjectURL(processedFile);
-      const previousSrc = asset.src;
-
-      set((current) => ({
-        assets: {
-          ...current.assets,
-          photos: current.assets.photos.map((photo) =>
-            photo.id === assetId
-              ? {
-                  ...photo,
-                  src: objectUrl,
-                  name: processedFile.name,
-                  s3Key: undefined,
-                  file: processedFile,
-                }
-              : photo,
-          ),
-        },
-        components: current.components.map((component) =>
-          component.type === "PHOTO" && component.source === previousSrc
-            ? { ...component, source: objectUrl }
-            : component,
-        ),
-      }));
+  // 저장(finalizeAssetsForSave)과 같은 줄에 세운다 — 위 runOnAssetQueue 주석 참고.
+  removePhotoBackground: (assetId) =>
+    runOnAssetQueue(async () => {
+      const state = get();
+      const asset = state.assets.photos.find((photo) => photo.id === assetId);
+      if (!asset?.file) {
+        return { ok: false as const, reason: "NOT_FOUND" as const };
+      }
 
       try {
-        URL.revokeObjectURL(previousSrc);
-      } catch {}
+        const processedFile = await removeImageBackground(asset.file);
+        // 줄을 세워도 누끼가 도는 동안 상태는 움직인다 — 사진 삭제·초안 복원은
+        // 기다리지 않는다. 위에서 찍어 둔 asset 은 그 사이 낡을 수 있으므로
+        // 결과가 도착한 시점의 자산을 다시 본다.
+        const latest = get().assets.photos.find((photo) => photo.id === assetId);
+        if (!latest) return { ok: false as const, reason: "NOT_FOUND" as const };
+        const objectUrl = URL.createObjectURL(processedFile);
+        const previousSrc = latest.src;
+        // 저장을 한 번 시도했다면 이 사진은 이미 올라갔고, 배치된 레이어의 source 는
+        // blob 주소가 아니라 S3 key 다(finalizeAssetsForSave). 그 뒤 미리보기 업로드나
+        // createFrame/updateFrame 이 실패하면 편집 화면은 그 상태로 남는다.
+        // 이때 blob 주소만 견주면 레이어를 못 찾아 누끼 전 원본이 그대로 남고,
+        // 다시 저장해도 옛 key 가 서버로 간다. 올린 key 로도 자산-레이어 연결을 잇는다.
+        const previousKey = latest.s3Key;
+        const replacePhoto = (component: EditorComponent): EditorComponent => {
+          if (component.type !== "PHOTO") return component;
+          const linked =
+            component.source === previousSrc ||
+            (Boolean(previousKey) && component.source === previousKey);
+          // 올려 둔 원본의 renderUrl도 버린다. 되돌리기 스냅샷 역시 같은 자산을 가리킨다.
+          return linked
+            ? { ...component, source: objectUrl, renderUrl: undefined }
+            : component;
+        };
 
-      return { ok: true as const };
-    } catch (error) {
-      console.error(error);
-      return { ok: false as const, reason: "PROCESS_FAILED" as const };
-    }
-  },
+        set((current) => ({
+          assets: {
+            ...current.assets,
+            photos: current.assets.photos.map((photo) =>
+              photo.id === assetId
+                ? {
+                    ...photo,
+                    src: objectUrl,
+                    name: processedFile.name,
+                    s3Key: undefined,
+                    file: processedFile,
+                  }
+                : photo,
+            ),
+          },
+          components: current.components.map(replacePhoto),
+          lastRemoved: current.lastRemoved ? replacePhoto(current.lastRemoved) : null,
+        }));
+
+        try {
+          URL.revokeObjectURL(previousSrc);
+        } catch {}
+
+        return { ok: true as const };
+      } catch (error) {
+        console.error(error);
+        return { ok: false as const, reason: "PROCESS_FAILED" as const };
+      }
+    }),
 
   removePhotoAsset: (assetId) => {
     const state = get();
     const asset = state.assets.photos.find((p) => p.id === assetId);
     if (!asset) return { ok: false as const, reason: "NOT_FOUND" as const };
 
-    const inUse = state.components.some(
-      (c) => c.type === "PHOTO" && c.source === asset.src,
-    );
+    // 저장을 시도한 뒤에는 레이어가 blob 주소 대신 업로드 key를 쓴다.
+    const usesAsset = (c: EditorComponent | null) =>
+      c?.type === "PHOTO" &&
+      (c.source === asset.src || (Boolean(asset.s3Key) && c.source === asset.s3Key));
+    const inUse = state.components.some(usesAsset);
     if (inUse) return { ok: false as const, reason: "IN_USE" as const };
+
+    // 되돌리기용 스냅샷이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
+    // 사진 탭에서 그 원본까지 지우면, 여기서 blob URL 이 해제된다. 그 상태로 되돌리기를
+    // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizeAssetsForSave
+    // 가 원본 파일을 못 찾아 blob: 주소가 그대로 서버로 올라간다 — 깨진 프레임이 된다.
+    // 원본이 사라졌으면 되돌릴 수도 없으므로 스냅샷을 함께 버린다.
+    const snapshotUsesAsset = usesAsset(state.lastRemoved);
 
     try {
       URL.revokeObjectURL(asset.src);
@@ -382,6 +486,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         ...s.assets,
         photos: s.assets.photos.filter((p) => p.id !== assetId),
       },
+      ...(snapshotUsesAsset
+        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
+        : {}),
     }));
 
     return { ok: true as const };
@@ -396,50 +503,141 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }
     set((s) => ({
       assets: { ...s.assets, photos: [] },
+      // 원본을 전부 버렸으므로 사진 레이어 스냅샷도 되살릴 수 없다(위 removePhotoAsset 참고).
+      ...(s.lastRemoved?.type === "PHOTO"
+        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
+        : {}),
     }));
   },
 
-  // 저장 시: 실제 캔버스에 올라간 로컬 사진만 S3에 업로드(isTemp:false)하고
-  // 컴포넌트 source/에셋 src를 S3 URL로 치환한다. 한 번 올린(또는 원격) 사진은 건너뛴다.
-  finalizePhotosForSave: async () => {
-    const { components, assets } = get();
-    const usedSrcs = new Set(
-      components
-        .filter((c) => c.type === "PHOTO")
-        .map((c) => c.source),
-    );
-    const pending = assets.photos.filter(
-      (a) => a.file && !a.s3Key && usedSrcs.has(a.src),
-    );
-    if (pending.length === 0) return;
+  /**
+   * 저장 직전에 **서버가 읽을 수 있는 형태**로 바꾼다.
+   *
+   * 서버는 컴포넌트의 `source` 를 S3 key 로만 읽는다. 아래 셋 중 하나라도 남아 있으면
+   * 그 프레임으로 네컷 합성이 400 GEN-002 로 거부된다(docs/backend-contract.md 실측).
+   *   1. 아직 안 올린 로컬 사진(blob URL)
+   *   2. 기본 스티커의 정적 경로(`/stickers/sticker-001.png`) — 우리 웹서버 자산이라 서버가 못 본다
+   *   3. 글자(TEXT) — 서버는 글자를 그리지 않는다. 구운 PNG 의 key(`renderedKey`)를 같이 보내야 한다
+   *
+   * 예전 이름은 `finalizePhotosForSave` 였고 1번만 했다. 2·3번이 빠져 있어서
+   * **스티커나 글자를 넣은 프레임은 저장은 되는데 촬영 결과가 하나도 안 나왔다.**
+   *
+   * `source` 에는 key 를, 화면에 그릴 주소는 `renderUrl` 에 둔다(배경이 쓰는 것과 같은 방식).
+   * 예전에는 key 를 버리고 서명 URL 을 `source` 에 넣어서, 저장한 프레임이 URL 만료 뒤
+   * 빈칸이 되고 서버 합성도 통과하지 못했다.
+   *
+   * 앞선 누끼를 기다리되 상한을 둔다 — 저장 프로미스는 무슨 일이 있어도 끝나야
+   * 모달이 닫힌다(`ASSET_QUEUE_WAIT_LIMIT_MS`).
+   */
+  finalizeAssetsForSave: () =>
+    runOnAssetQueue(async () => {
+      // 같은 원본을 두 번 올리지 않도록 경로별로 한 번만 올린다.
+      const uploaded = new Map<string, { key: string; url: string }>();
 
-    const srcToRemote = new Map<string, string>();
-    for (const asset of pending) {
-      if (!asset.file) continue;
-      const { objectUrl } = await uploadToS3WithPresigned({
-        file: asset.file,
-        type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-        isTemp: false,
-      });
-      srcToRemote.set(asset.src, objectUrl);
-    }
+      const uploadOnce = async (src: string, file: File) => {
+        const cached = uploaded.get(src);
+        if (cached) return cached;
 
-    set((s) => ({
-      components: s.components.map((c) =>
-        c.type === "PHOTO" && srcToRemote.has(c.source)
-          ? { ...c, source: srcToRemote.get(c.source) as string }
-          : c,
-      ),
-      assets: {
-        ...s.assets,
-        photos: s.assets.photos.map((a) =>
-          srcToRemote.has(a.src)
-            ? { ...a, src: srcToRemote.get(a.src) as string, s3Key: undefined }
-            : a,
+        const { key, objectUrl } = await uploadToS3WithPresigned({
+          file,
+          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+        });
+        const entry = { key, url: objectUrl || src };
+        uploaded.set(src, entry);
+        return entry;
+      };
+
+      /*
+        **숨긴 층은 손대지 않는다.**
+
+        `exportJson()` 은 `hidden` 인 컴포넌트를 저장 요청에서 빼는데(아래), 여기서는 그
+        판정을 안 해서 숨긴 스티커·글자도 매번 S3 로 올라갔다. 올라간 key 는 요청에 실리지
+        않으니 **아무도 안 쓰는 고아 객체**로 남고, 프론트에는 지울 방법이 없다. 더 나쁜
+        것은 실패 쪽이다 — 숨긴 스티커 하나를 못 받아 오면 여기서 예외가 나서, 그 스티커가
+        저장 대상이 아닌데도 **프레임 저장 전체가 막힌다.**
+
+        그래서 내보내기에 실제로 실리는 것만 고른다. 기준을 한 곳에 두어 둘이 갈라지지
+        않게 한다.
+      */
+      const { components: allComponents, assets } = get();
+      const components = allComponents.filter((c) => !c.hidden);
+      const usedPhotoSrcs = new Set(
+        components.filter((c) => c.type === "PHOTO").map((c) => c.source),
+      );
+      for (const asset of assets.photos) {
+        if (!asset.file || !usedPhotoSrcs.has(asset.src)) continue;
+        if (!needsUpload(asset.src)) continue;
+        await uploadOnce(asset.src, asset.file);
+      }
+
+      // 2) 기본 스티커 — 정적 경로를 받아다 그대로 올린다.
+      //    (서버가 기본 세트를 한 번만 올려 두면 이 왕복은 사라진다. 실측상 자산은 공용이어도
+      //     합성이 통과한다 — 본인 소유여야 하는 것은 촬영 원본 4장뿐이다.)
+      const stickerSrcs = Array.from(
+        new Set(
+          get()
+            .components.filter(
+              (c) => !c.hidden && c.type === "STICKER" && needsUpload(c.source),
+            )
+            .map((c) => c.source),
         ),
-      },
-    }));
-  },
+      );
+      for (const src of stickerSrcs) {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error(`스티커를 불러오지 못했어요 (${src})`);
+        const blob = await res.blob();
+        const name = src.split("/").pop() || "sticker.png";
+        await uploadOnce(
+          src,
+          new File([blob], name, { type: blob.type || "image/png" }),
+        );
+      }
+
+      // 3) 글자 — 편집 화면에서 본 픽셀 그대로 구워 올린다.
+      //    응답에는 renderedKey 가 안 실려서(합성 전용) 다시 저장할 때도 매번 새로 굽는다.
+      //    스타일이나 내용을 고쳤는데 옛 key 를 재사용하면 결과물만 조용히 어긋난다.
+      const textKeys = new Map<string, string>();
+      for (const component of get().components) {
+        // 숨긴 글자는 굽지도 올리지도 않는다 — 위 스티커와 같은 이유다.
+        if (component.hidden) continue;
+        if (component.type !== "TEXT") continue;
+        if (!component.source.trim()) continue;
+
+        const blob = await bakeTextLayerPng({
+          source: component.source,
+          width: component.width,
+          height: component.height,
+          styleJson: component.styleJson as Record<string, unknown> | undefined,
+        });
+        const { key } = await uploadToS3WithPresigned({
+          file: new File([blob], `text-${component.id}.png`, { type: "image/png" }),
+          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+        });
+        textKeys.set(component.id, key);
+      }
+
+      if (uploaded.size === 0 && textKeys.size === 0) return;
+
+      set((s) => ({
+        components: s.components.map((c) => {
+          if (c.type === "TEXT") {
+            const renderedKey = textKeys.get(c.id);
+            return renderedKey ? { ...c, renderedKey } : c;
+          }
+
+          const entry = uploaded.get(c.source);
+          return entry ? { ...c, source: entry.key, renderUrl: entry.url } : c;
+        }),
+        assets: {
+          ...s.assets,
+          photos: s.assets.photos.map((a) => {
+            const entry = uploaded.get(a.src);
+            // src 는 화면용이라 그대로 두고, 올린 사실만 s3Key 로 남겨 재업로드를 막는다.
+            return entry ? { ...a, s3Key: entry.key } : a;
+          }),
+        },
+      }));
+    }, ASSET_QUEUE_WAIT_LIMIT_MS),
 
   // 에셋(사진/스티커)을 캔버스 중앙에 추가
   addComponentFromAsset: async (type, src) => {
@@ -573,20 +771,52 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         // PHOTO / STICKER
         const p = patch as ImagePatch;
         const current = (c.styleJson ?? {}) as CommonStyleJson;
-        const nextStyle = p.styleJson
-          ? { ...current, ...p.styleJson }
-          : current;
+        const nextStyle = p.styleJson ? { ...current, ...p.styleJson } : current;
 
         return { ...c, ...p, zIndex: c.zIndex, styleJson: nextStyle };
       }),
     }));
   },
 
+  // 삭제는 되돌릴 수 있어야 한다. 스티커 하나를 놓기까지 든 시간이 클릭 한 번에 사라지면
+  // 사용자는 편집 자체를 조심스러워한다. 직전 삭제 한 건을 들고 있다가 복구한다.
   remove: (id) => {
-    set((s) => ({
-      components: normalizeZ(s.components.filter((c) => c.id !== id)),
-      activeId: s.activeId === id ? null : s.activeId,
-    }));
+    set((s) => {
+      const index = s.components.findIndex((c) => c.id === id);
+      const removed = index === -1 ? null : s.components[index];
+      return {
+        components: normalizeZ(s.components.filter((c) => c.id !== id)),
+        activeId: s.activeId === id ? null : s.activeId,
+        lastRemoved: removed,
+        lastRemovedIndex: removed ? index : null,
+        canRestoreRemoved: Boolean(removed),
+      };
+    });
+  },
+
+  /**
+   * 삭제한 자리로 되돌린다.
+   *
+   * 예전에는 배열 끝에 붙이고 zIndex 를 다시 매겼다. 그래서 중간이나 맨 아래에 있던
+   * 요소를 지웠다 되돌리면 항상 맨 위로 올라왔고, 겹쳐 있던 스티커·사진의 합성 결과가
+   * 삭제 전과 달라졌다. "되돌리기"가 이전 상태로 돌아가지 않는 셈이었다.
+   * 삭제 당시의 자리(배열 인덱스 = 쌓임 순서)를 함께 들고 있다가 그 자리에 끼워 넣는다.
+   */
+  restoreRemoved: () => {
+    const removed = get().lastRemoved;
+    if (!removed) return;
+    set((s) => {
+      const next = [...s.components];
+      const at = Math.min(s.lastRemovedIndex ?? next.length, next.length);
+      next.splice(at, 0, removed);
+      return {
+        components: normalizeZ(next),
+        activeId: removed.id,
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
+      };
+    });
   },
 
   duplicate: (id) => {
@@ -653,8 +883,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components, backgroundColor, background, cellCutouts } =
-      get();
+    const { frameId, components, backgroundColor, background, cellCutouts } = get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
@@ -676,6 +905,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           id: c.id,
           type: c.type,
           source: c.source,
+          // 렌더 전용 주소와 구운 글자 층 key. 전자는 요청에서 걸러지고,
+          // 후자는 TEXT 합성에 반드시 실려야 한다(lib/frameApi.ts).
+          ...(c.renderUrl ? { renderUrl: c.renderUrl } : {}),
+          ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
           x: c.x,
           y: c.y,
           width: c.width,
@@ -704,6 +937,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
+        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
+        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
+        // 끼어들어 그대로 저장된다.
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
+
         cellCutouts: Array.isArray(data.cellCutouts)
           ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
           : [false, false, false, false],
@@ -725,7 +965,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   // localStorage WIP 초안을 에디터 상태로 복원한다. dataURL 사진은 File로 되살려
-  // 저장 시 finalizePhotosForSave가 S3에 올릴 수 있게 한다.
+  // 저장 시 finalizeAssetsForSave가 S3에 올릴 수 있게 한다.
   hydrateDraft: (draft) => {
     set((s) => {
       const photoSrcs = Array.from(
@@ -765,6 +1005,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           })) as EditorComponent[],
         ),
         activeId: null,
+        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
+        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
+        // 끼어들어 그대로 저장된다.
+        lastRemoved: null,
+        lastRemovedIndex: null,
+        canRestoreRemoved: false,
         background: draft.background,
         backgroundColor:
           draft.background.type === "COLOR"

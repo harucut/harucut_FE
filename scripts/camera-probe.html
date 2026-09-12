@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>하루컷 카메라 진단</title>
+<style>
+  body { font: 14px/1.6 -apple-system, system-ui, sans-serif; margin: 16px; background:#0B0B0C; color:#eee; }
+  h1 { font-size: 17px; }
+  button { font-size: 15px; padding: 10px 18px; border-radius: 999px; border: 0; background:#1ED760; color:#06140A; font-weight: 700; }
+  pre { white-space: pre-wrap; word-break: break-all; background:#151517; padding: 12px; border-radius: 10px; }
+  .ok { color:#1ED760 } .no { color:#ff8a80 }
+</style>
+<h1>하루컷 카메라 진단</h1>
+<p>실기기에서 열어 <b>시작</b>을 누른다. 웹 촬영이 이 기기에서 어디까지 되는지 본다.<br>
+   <b>https 또는 localhost 여야 한다</b> — 아니면 카메라 API 자체가 없다.</p>
+<button id="go">시작</button>
+<pre id="out">대기 중…</pre>
+<script>
+const out = document.getElementById('out');
+const lines = [];
+const put = (k, v, ok) => {
+  lines.push(`${ok === undefined ? '' : (ok ? '✅ ' : '❌ ')}${k}: ${v}`);
+  out.textContent = lines.join('\n');
+};
+
+document.getElementById('go').onclick = async () => {
+  lines.length = 0;
+  put('secureContext', String(window.isSecureContext), window.isSecureContext);
+  put('UA', navigator.userAgent);
+
+  if (!navigator.mediaDevices?.getUserMedia) { put('getUserMedia', '없음', false); return; }
+
+  // 후면 카메라를 4K 로 요청한다 — 앱이 실제로 요청하는 것과 같다.
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 } },
+      audio: false,
+    });
+  } catch (e) { put('getUserMedia', e.name + ': ' + e.message, false); return; }
+
+  const track = stream.getVideoTracks()[0];
+  const st = track.getSettings();
+  put('영상 스트림', `${st.width}x${st.height} @${st.frameRate ?? '?'}fps`, true);
+
+  try {
+    const c = track.getCapabilities();
+    put('영상 최대', `${c.width?.max}x${c.height?.max}`);
+    put('zoom', c.zoom ? `${c.zoom.min}~${c.zoom.max}` : '없음', !!c.zoom);
+    put('torch(플래시)', c.torch ? '있음' : '없음', !!c.torch);
+    put('focusMode', c.focusMode ? c.focusMode.join(',') : '없음', !!c.focusMode);
+  } catch (e) { put('getCapabilities', e.name, false); }
+
+  // 렌즈가 몇 개나 보이나 — iOS 는 후면을 하나만 노출하는 것으로 알려져 있다.
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const cams = devs.filter(d => d.kind === 'videoinput');
+    put('보이는 카메라 수', String(cams.length));
+    cams.forEach((d, i) => put(`  카메라 ${i + 1}`, d.label || '(라벨 없음)'));
+  } catch (e) { put('enumerateDevices', e.name, false); }
+
+  // 핵심 — 사진 파이프라인을 쓸 수 있나
+  if (typeof window.ImageCapture !== 'function') {
+    put('ImageCapture', '없음 → 영상 프레임만 쓸 수 있다', false);
+  } else {
+    put('ImageCapture', '있음', true);
+    try {
+      const ic = new ImageCapture(track);
+      try {
+        const pc = await ic.getPhotoCapabilities();
+        put('스틸 최대', `${pc.imageWidth?.max}x${pc.imageHeight?.max}`, true);
+      } catch (e) { put('getPhotoCapabilities', e.name + ': ' + e.message, false); }
+      try {
+        const t0 = performance.now();
+        const blob = await ic.takePhoto();
+        const ms = Math.round(performance.now() - t0);
+        const bmp = await createImageBitmap(blob);
+        put('takePhoto', `${bmp.width}x${bmp.height} (${blob.type}, ${Math.round(blob.size/1024)}KB, ${ms}ms)`, true);
+        const gain = (bmp.width * bmp.height) / ((st.width || 1) * (st.height || 1));
+        put('영상 대비 화소', `${gain.toFixed(2)}배`, gain > 1.05);
+      } catch (e) { put('takePhoto', e.name + ': ' + e.message, false); }
+    } catch (e) { put('new ImageCapture', e.name + ': ' + e.message, false); }
+  }
+
+  stream.getTracks().forEach(t => t.stop());
+  put('—', '끝. 이 화면을 캡처해서 공유하면 된다.');
+};
+</script>

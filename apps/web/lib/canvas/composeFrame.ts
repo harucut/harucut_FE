@@ -1,5 +1,13 @@
+import { fitCanvasScale } from "@/lib/canvas/canvasBudget";
+import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
+import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
+import {
+  NativeSaveError,
+  nativeSaveImageBlob,
+  nativeSaveImageUrl,
+} from "@/lib/nativeBridge";
 import {
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
@@ -12,9 +20,9 @@ export type FrameLayout = {
   slots: Rect[];
 };
 
-export type FrameSource = { type: "image"; src: string };
+export type FrameSource = { src: string };
 
-type SlotDrawable = { kind: "image"; el: HTMLImageElement };
+type SlotDrawable = { el: HTMLImageElement };
 
 type OverlayImageMap = Map<string, HTMLImageElement>;
 
@@ -33,7 +41,22 @@ function toPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
-export function downloadBlob(blob: Blob, filename: string) {
+/**
+ * 결과물을 기기에 저장한다.
+ *
+ * 앱 셸(WebView) 안에서는 `<a download>` 가 아무 일도 하지 않는다 — 안드로이드 WebView 는
+ * download 속성을 무시하고 blob 은 DownloadListener 로도 못 받으며, iOS WKWebView 에는
+ * 저장 UI 자체가 없다. 그래서 셸 안이면 네이티브에 넘겨 사진첩에 저장한다.
+ * 브라우저에서는 예전과 똑같이 링크를 만들어 누른다.
+ */
+export async function downloadBlob(blob: Blob, filename: string) {
+  const native = await nativeSaveImageBlob(blob, filename);
+  if (native) {
+    // 일반 Error 로 바꾸지 않는다 — 사유가 화면까지 못 간다(NativeSaveError 주석 참고).
+    if (!native.ok) throw new NativeSaveError(native);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -66,6 +89,16 @@ function filenameFromUrl(url: string) {
 }
 
 export async function downloadFromUrl(url: string, filename?: string) {
+  const name = filename ?? filenameFromUrl(url);
+
+  // 앱 셸 안이면 주소만 넘긴다 — 네이티브가 직접 내려받아 사진첩에 넣는다.
+  // 웹이 fetch 로 받아 base64 로 쪼개 보내는 것보다 훨씬 싸다.
+  const native = await nativeSaveImageUrl(url, name);
+  if (native) {
+    if (!native.ok) throw new NativeSaveError(native);
+    return;
+  }
+
   try {
     const res = await fetch(url, { method: "GET" });
     if (!res.ok) {
@@ -73,7 +106,7 @@ export async function downloadFromUrl(url: string, filename?: string) {
     }
 
     const blob = await res.blob();
-    downloadBlob(blob, filename ?? filenameFromUrl(url));
+    await downloadBlob(blob, name);
   } catch {
     triggerDownloadLink(url, filename);
   }
@@ -83,7 +116,7 @@ async function loadDrawables(sources: FrameSource[]): Promise<SlotDrawable[]> {
   return Promise.all(
     sources.map(async (source) => {
       const image = await loadImage(source.src);
-      return { kind: "image", el: image } as const;
+      return { el: image };
     }),
   );
 }
@@ -94,7 +127,9 @@ async function loadOverlayImages(theme: ThemeExportJson | null) {
 
   const sources = Array.from(
     new Set(
-      theme.components.filter((component) => component.type !== "TEXT").map((component) => component.source),
+      theme.components
+        .filter((component) => component.type !== "TEXT")
+        .map((component) => componentImageSrc(component)),
     ),
   );
 
@@ -150,94 +185,16 @@ function drawThemeOverlay(
     ctx.translate(-component.width / 2, -component.height / 2);
 
     if (component.type === "TEXT") {
-      const style = component.styleJson ?? {};
-      const fontFamily =
-        typeof style.fontFamily === "string" ? style.fontFamily : "Pretendard";
-      const fontSize =
-        typeof style.fontSize === "number" ? style.fontSize : 128;
-      const fill = typeof style.color === "string" ? style.color : "#ffffff";
-      const align =
-        style.textAlign === "center" || style.textAlign === "right"
-          ? style.textAlign
-          : "left";
-      const lineHeight = Math.max(1, Math.round(fontSize * 1.15));
-      const lines = component.source.split("\n");
-
-      ctx.font = `${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = fill;
-      ctx.textBaseline = "top";
-      ctx.textAlign = align;
-
-      const textX =
-        align === "center"
-          ? component.width / 2
-          : align === "right"
-            ? component.width
-            : 0;
-
-      lines.forEach((line, index) => {
-        ctx.fillText(line, textX, index * lineHeight);
-      });
-
+      drawTextComponent(ctx, component.source, component.width, component.styleJson);
       ctx.restore();
       return;
     }
 
-    const image = overlayImages.get(component.source);
+    const image = overlayImages.get(componentImageSrc(component));
     if (image) {
       ctx.drawImage(image, 0, 0, component.width, component.height);
     }
 
-    ctx.restore();
-  });
-}
-
-function traceRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-// 누끼(셀별 배경 제거) 비네트 — renderThemePreview와 동일하게 사용자 컴포넌트 위에
-// 그려, 에디터/썸네일뿐 아니라 실제 다운로드·공유 출력에서도 효과가 유지되게 한다.
-function drawCellCutouts(
-  ctx: CanvasRenderingContext2D,
-  layout: FrameLayout,
-  theme: ThemeExportJson | null,
-) {
-  const cutouts = theme?.cellCutouts ?? [];
-  layout.slots.forEach((slot, index) => {
-    if (!cutouts[index]) return;
-    const cx = slot.x + slot.width / 2;
-    const cy = slot.y + slot.height / 2;
-    const radius = Math.min(slot.width, slot.height) * 0.62;
-    ctx.save();
-    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.clip();
-    const grad = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(1, "rgba(11,11,12,0.82)");
-    ctx.fillStyle = grad;
-    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#1ED760";
-    traceRoundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 40);
-    ctx.stroke();
     ctx.restore();
   });
 }
@@ -288,7 +245,12 @@ function drawFrameOnce(
   });
 
   drawThemeOverlay(ctx, theme, overlayImages);
-  drawCellCutouts(ctx, layout, theme);
+  // 누끼는 **여기서 그리지 않는다.** 예전에는 `cellCutouts` 가 켜진 칸에 방사형 비네트 +
+  // 초록 링을 얹었는데, 그건 배경 제거가 아니라 이름만 누끼인 시각 효과였다.
+  // 실제 배경 제거는 촬영 사진 픽셀에 미리 구워지고(`lib/canvas/personCutout.ts`),
+  // 합성기는 이미 구워진 사진을 슬롯에 그대로 깐다.
+  // `cellCutouts` 플래그는 남는다 — 어느 칸을 구울지 저장·복원하는 데이터이지
+  // 여기서 그릴 값이 아니다(계약은 docs/backend-contract.md).
 }
 
 export async function composeFramePng(opts: {
@@ -312,10 +274,18 @@ export async function composeFramePng(opts: {
   }
 
   const canvas = opts.canvas ?? document.createElement("canvas");
-  canvas.width = layout.totalWidth;
-  canvas.height = layout.totalHeight;
+  // 캔버스 예산(`lib/canvas/canvasBudget.ts` — 왜 그 값인지, 무엇이 확인 안 됐는지가
+  // 거기 적혀 있다)을 넘지 않게 줄인다. 그리는 좌표는 레이아웃 원본 크기 그대로 두고
+  // 컨텍스트에 배율만 걸어, 그리는 쪽 코드는 예산을 몰라도 되게 한다.
+  const outputScale = fitCanvasScale(layout.totalWidth, layout.totalHeight);
+  // 올림하면 예산에 맞춘 배율이 도로 예산을 넘는다(맞춘 뒤 화소 수가 예산 바로 아래라
+  // 한 줄만 더 붙어도 넘어간다). 숫자는 예산 값을 따라 움직이므로 여기 적지 않는다 —
+  // 못은 `canvasBudget.test.ts` 와 `imageDecode.test.ts` 가 박고 있다.
+  canvas.width = Math.floor(layout.totalWidth * outputScale);
+  canvas.height = Math.floor(layout.totalHeight * outputScale);
 
   const ctx = ensureCtx(canvas);
+  if (outputScale !== 1) ctx.scale(outputScale, outputScale);
   const drawables = await loadDrawables(sources);
   const overlayImages = await loadOverlayImages(theme);
   const backgroundImage = await loadBackgroundImage(theme);

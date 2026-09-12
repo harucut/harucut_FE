@@ -5,7 +5,7 @@ branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
 
 case "$branch" in
   main|develop|develop_loop)
-    echo "ERROR: commits on $branch are forbidden. Use issue/<number>-<slug> branches."
+    echo "ERROR: commits on $branch are forbidden. Work on a <type>/<slug> branch (e.g. fix/social-login-buttons)."
     exit 1
     ;;
 esac

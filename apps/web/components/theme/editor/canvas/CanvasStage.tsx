@@ -11,11 +11,10 @@ import {
 } from "@/lib/reactKonva";
 import Konva from "konva";
 
+import { useStageFit } from "@/hooks/useStageFit";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { EditableNode } from "./EditableNode";
-
-const VIEW_SIZE = 330;
 
 export function CanvasStage() {
   const frameId = useThemeEditorStore((s) => s.frameId);
@@ -33,11 +32,14 @@ export function CanvasStage() {
   const [backgroundImage, setBackgroundImage] =
     useState<HTMLImageElement | null>(null);
 
+  // 배경 URL이 사라지면 렌더 중에 즉시 비운다(effect에서 setState 하면 렌더가 한 번 더 돈다).
+  if (!backgroundImageUrl && backgroundImage) {
+    setBackgroundImage(null);
+  }
+
   useEffect(() => {
-    if (!backgroundImageUrl) {
-      setBackgroundImage(null);
-      return;
-    }
+    if (!backgroundImageUrl) return;
+
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     let active = true;
@@ -67,21 +69,15 @@ export function CanvasStage() {
     [components, activeId],
   );
 
-  // 고정 뷰 크기에 맞춰 캔버스 스케일 계산
-  const { viewW, viewH, scale } = useMemo(() => {
-    if (!layout) return { viewW: VIEW_SIZE, viewH: VIEW_SIZE, scale: 1 };
-
-    const s = Math.min(
-      VIEW_SIZE / layout.totalWidth,
-      VIEW_SIZE / layout.totalHeight,
-    );
-
-    return {
-      viewW: Math.round(layout.totalWidth * s),
-      viewH: Math.round(layout.totalHeight * s),
-      scale: s,
-    };
-  }, [layout]);
+  // 담긴 공간에 맞춰 캔버스 스케일 계산(고정 330px이 아니다)
+  const stageBase = useMemo(
+    () =>
+      layout
+        ? { width: layout.totalWidth, height: layout.totalHeight }
+        : null,
+    [layout],
+  );
+  const { containerRef, viewW, viewH, scale, ready } = useStageFit(stageBase);
 
   // 선택된 노드를 Konva Transformer에 연결
   useLayoutEffect(() => {
@@ -95,12 +91,32 @@ export function CanvasStage() {
       return;
     }
 
-    const node = stage.findOne(`#node-${activeId}`);
-    if (!node) return;
+    // react-konva 19.2.5부터 리컨사일러 커밋이 queueMicrotask로 미뤄질 수 있다(19.2.1까지는 동기).
+    // 그래서 이 시점에 자식이 만든 Konva 노드가 아직 스테이지에 없을 수 있고, 예전처럼 한 번 찾고
+    // 포기하면 선택 핸들이 조용히 안 뜬다. 붙을 때까지 다음 프레임에 다시 시도하되,
+    // 없는 id를 계속 좇지 않도록 시도 횟수를 제한한다.
+    let frame = 0;
+    let attempts = 0;
 
-    tr.nodes([node]);
-    tr.forceUpdate();
-    tr.getLayer()?.batchDraw();
+    const attach = () => {
+      const node = stage.findOne(`#node-${activeId}`);
+      if (!node) {
+        // 약 0.5초(30프레임)까지만 기다린다. 그 뒤엔 예전과 같이 조용히 포기한다.
+        if (attempts++ >= 30) return;
+        frame = requestAnimationFrame(attach);
+        return;
+      }
+
+      tr.nodes([node]);
+      tr.forceUpdate();
+      tr.getLayer()?.batchDraw();
+    };
+
+    attach();
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [activeId, renderKey]);
 
   // zIndex 기준으로 렌더 순서 보장
@@ -114,9 +130,11 @@ export function CanvasStage() {
   const frameW = layout.totalWidth;
   const frameH = layout.totalHeight;
 
+  // touch-none: 스티커를 끌 때 페이지가 같이 스크롤되지 않게. 캔버스 밖을 잡으면 그대로 스크롤된다.
   return (
-    <div className="w-[330px]">
+    <div ref={containerRef} className="w-full touch-none">
       <div className="flex justify-center">
+        {ready ? (
         <Stage
           ref={stageRef}
           width={viewW}
@@ -210,8 +228,23 @@ export function CanvasStage() {
               />
             ))}
 
+            {/*
+              핸들 크기는 스테이지 좌표계다(Konva Transformer 는 부모 스케일을 보정하지 않는다 —
+              lib/shapes/Transformer.js update()). 이 스테이지는 2000×6000 을 폰에서 0.075 배로
+              그리므로 기본값 10 은 화면에서 0.75px 이 돼 손가락은커녕 마우스로도 잡을 수 없었다.
+              화면 픽셀로 24px(터치)·2px 테두리가 되게 스케일로 나눈다.
+            */}
             <Transformer
               ref={trRef}
+              anchorSize={24 / scale}
+              anchorCornerRadius={12 / scale}
+              anchorStroke="#1ED760"
+              anchorStrokeWidth={2 / scale}
+              anchorFill="#06140A"
+              borderStroke="#1ED760"
+              borderStrokeWidth={2 / scale}
+              rotateAnchorOffset={40 / scale}
+              ignoreStroke
               rotateEnabled
               flipEnabled={false}
               enabledAnchors={
@@ -289,76 +322,58 @@ export function CanvasStage() {
                 width={s.width}
                 height={s.height}
                 cornerRadius={40}
-                stroke="rgba(255,255,255,0.18)"
-                strokeWidth={6}
+                stroke="rgba(255,255,255,0.28)"
+                strokeWidth={1.5}
+                strokeScaleEnabled={false}
               />
             ))}
           </Layer>
 
-          {/* 4) 누끼(셀별 배경 제거) 오버레이 + 탭 토글 */}
+          {/* 4) 누끼로 구울 칸 표시 + 탭 토글.
+              **효과 미리보기가 아니다.** 예전에는 켜진 칸에 비네트 + 초록 링을 얹어
+              배경이 지워진 것처럼 보이게 했는데, 그건 배경 제거가 아니라 이름만 누끼인
+              시각 효과라 걷어냈다. 실제 배경 제거는 촬영 사진 픽셀에 구워진다
+              (`lib/canvas/personCutout.ts`) — 이 캔버스에는 촬영 사진이 없어서
+              보여줄 결과 자체가 없다. 그래서 남는 것은 "이 칸이 켜졌다"는 선택 표시뿐이다. */}
           <Layer listening={cutMode}>
-            {layout.slots.slice(0, 4).map((s, i) => {
-              const on = cellCutouts[i];
-              const cx = s.x + s.width / 2;
-              const cy = s.y + s.height / 2;
-              const radius = Math.min(s.width, s.height) * 0.62;
-              return (
-                <Group key={i}>
-                  {on ? (
-                    <>
-                      {/* 가장자리를 어둡게 해 피사체만 남은 듯한 비네트 마스크(MVP 시각 효과) */}
-                      <Rect
-                        x={s.x}
-                        y={s.y}
-                        width={s.width}
-                        height={s.height}
-                        cornerRadius={40}
-                        listening={false}
-                        fillRadialGradientStartPoint={{ x: cx - s.x, y: cy - s.y }}
-                        fillRadialGradientEndPoint={{ x: cx - s.x, y: cy - s.y }}
-                        fillRadialGradientStartRadius={radius * 0.6}
-                        fillRadialGradientEndRadius={radius}
-                        fillRadialGradientColorStops={[
-                          0,
-                          "rgba(0,0,0,0)",
-                          1,
-                          "rgba(11,11,12,0.82)",
-                        ]}
-                      />
-                      <Rect
-                        x={s.x}
-                        y={s.y}
-                        width={s.width}
-                        height={s.height}
-                        cornerRadius={40}
-                        listening={false}
-                        stroke="#1ED760"
-                        strokeWidth={10}
-                      />
-                    </>
-                  ) : null}
-                  {/* 셀 탭으로 누끼 토글 */}
+            {layout.slots.slice(0, 4).map((s, i) => (
+              <Group key={i}>
+                {cellCutouts[i] ? (
                   <Rect
                     x={s.x}
                     y={s.y}
                     width={s.width}
                     height={s.height}
                     cornerRadius={40}
-                    fill="rgba(0,0,0,0.001)"
-                    onMouseDown={(e) => {
-                      e.cancelBubble = true;
-                      toggleCellCutout(i);
-                    }}
-                    onTouchStart={(e) => {
-                      e.cancelBubble = true;
-                      toggleCellCutout(i);
-                    }}
+                    listening={false}
+                    stroke="#1ED760"
+                    strokeWidth={2}
+                    strokeScaleEnabled={false}
+                    dash={[8, 6]}
                   />
-                </Group>
-              );
-            })}
+                ) : null}
+                {/* 셀 탭으로 누끼 토글 */}
+                <Rect
+                  x={s.x}
+                  y={s.y}
+                  width={s.width}
+                  height={s.height}
+                  cornerRadius={40}
+                  fill="rgba(0,0,0,0.001)"
+                  onMouseDown={(e) => {
+                    e.cancelBubble = true;
+                    toggleCellCutout(i);
+                  }}
+                  onTouchStart={(e) => {
+                    e.cancelBubble = true;
+                    toggleCellCutout(i);
+                  }}
+                />
+              </Group>
+            ))}
           </Layer>
         </Stage>
+        ) : null}
       </div>
     </div>
   );

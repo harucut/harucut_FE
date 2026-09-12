@@ -8,9 +8,10 @@ import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
-import { validateEmail, validatePassword } from "@/lib/authValidation";
+import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { clientApi } from "@/lib/clientApi";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import {
@@ -50,14 +51,20 @@ function LoginPageContent() {
     const formData = new FormData(e.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
-    const remember = formData.get("remember") === "true";
 
     const nextErrors: LoginErrors = {};
     const emailError = validateEmail(email);
     if (emailError) nextErrors.email = emailError;
 
-    const passwordError = validatePassword(password);
-    if (passwordError) nextErrors.password = passwordError;
+    /*
+      로그인에는 가입 규칙을 걸지 않는다.
+
+      서버 `LoginRequest.password` 는 `minLength: 1` 뿐이다(실측). 가입용 `validatePassword` 는
+      8~20자에 문자 클래스까지 보는데, 그것을 로그인에 걸면 **맞는 비밀번호인데 틀렸다고 말한다** —
+      다른 클라이언트·시드·관리자가 만든 계정이나 규칙이 완화된 뒤의 계정이 그렇다.
+      비밀번호가 맞는지는 서버가 판정한다. 여기서는 빈 값만 막는다.
+    */
+    if (!password) nextErrors.password = "비밀번호를 입력해 주세요.";
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -66,7 +73,7 @@ function LoginPageContent() {
     }
 
     try {
-      const loginData = await loginWithEmail(email, password, { remember });
+      const loginData = await loginWithEmail(email, password);
 
       if (loginData?.userStatus === "DELETED_REQUESTED") {
         const shouldReactivate = window.confirm(
@@ -91,14 +98,37 @@ function LoginPageContent() {
           });
           return;
         }
+
+        // 복구됐다고 지금 쿠키가 쓸 수 있게 되는 것은 아니다.
+        // 방금 받은 토큰에는 status=DELETED_REQUESTED 가 박혀 있고, reactivate 는 새 쿠키를
+        // 주지 않으면서 서버의 refresh 토큰까지 지운다 — 재발급도 막힌다(AUTH-011).
+        // 그대로 보내면 사용자는 /home 에 도착한 뒤 모든 요청이 403(GEN-021)으로 막힌다.
+        // 자격증명이 아직 이 함수 안에 있으니 조용히 다시 로그인해 ACTIVE 토큰을 받는다.
+        // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
+        try {
+          await loginWithEmail(email, password);
+        } catch (reloginError) {
+          console.error(reloginError);
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          setErrors({
+            common: "탈퇴는 취소됐어요. 다시 로그인해 주세요.",
+          });
+          return;
+        }
       }
 
       exitGuestMode();
       window.location.href = redirectTarget;
     } catch (error) {
       console.error(error);
+      // 실패 원인은 하나가 아니다 — 가입되지 않은 계정(AUTH-020), 이메일 미인증(AUTH-004),
+      // 탈퇴한 계정(AUTH-006), 네트워크 장애까지 전부 "비밀번호가 틀렸다"로 말하면
+      // 사용자는 맞는 비밀번호를 계속 다시 친다. 서버 코드에 맞는 문구를 쓴다.
       setErrors({
-        common: "이메일 또는 비밀번호가 올바르지 않아요.",
+        common: getUserFacingApiErrorMessage(
+          error,
+          "이메일 또는 비밀번호가 올바르지 않아요.",
+        ),
       });
     } finally {
       setIsSubmitting(false);
@@ -107,16 +137,15 @@ function LoginPageContent() {
 
   return (
     <AuthPageShell
-      title="다시 오셨네요"
-      description="하루컷에 로그인하세요."
+      title="로그인"
       footer={
         <>
           <SocialLoginSection mode="login" redirectTo={redirectTo} />
-          <p className="mt-2 text-center text-[14px] text-[color:var(--hc-muted)]">
+          <p className="mt-2 text-center text-[14px] text-(--hc-muted)">
             아직 계정이 없으신가요?{" "}
             <Link
               href={signupHref}
-              className="font-medium text-[color:var(--hc-primary)] underline underline-offset-4"
+              className="inline-flex min-h-11 items-center px-1 font-medium text-(--hc-primary-strong) underline underline-offset-4"
             >
               회원가입
             </Link>
@@ -126,7 +155,7 @@ function LoginPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+          <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
             {errors.common}
           </p>
         ) : null}
@@ -145,37 +174,33 @@ function LoginPageContent() {
           />
         ))}
 
-        <div className="flex items-center justify-between text-[10px] text-zinc-500">
-          <label className="inline-flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              name="remember"
-              value="true"
-              className="h-3.5 w-3.5 rounded border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-primary)] focus:ring-0"
-            />
-            <span>로그인 상태 유지</span>
-          </label>
-
+        {/* 세션 지속 옵션은 백엔드 계약에 없어 '로그인 상태 유지' 체크박스를 두지 않는다. */}
+        <div className="flex items-center justify-end">
           <Link
             href={forgotPasswordHref}
-            className="text-[10px] text-zinc-400 hover:text-zinc-200"
+            // 17px 높이라 손가락으로 눌리지 않았다. 시각 크기는 그대로 두고 누를 면만 넓힌다.
+            className="inline-flex min-h-11 items-center px-1 text-[12px] text-(--hc-muted) underline underline-offset-4 transition hover:text-(--hc-text)"
           >
             비밀번호 찾기
           </Link>
         </div>
 
+        {/* 아래 소셜 버튼과 같은 h-12 알약이다. 예전에는 이쪽만 py-2.5(약 38px)·text-xs 라
+            같은 화면에서 버튼 높이와 글자 크기가 두 종류로 갈렸다.
+            색은 초록이 아니라 잉크다 — 바로 아래 네이버 버튼이 브랜드 초록이라, 라이트에서 우리 초록
+            (#16B454)과 같은 버튼 둘로 읽혔다(globals.css .hc-button-ink). */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className="hc-button-primary rounded-full py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="hc-button-ink inline-flex h-12 items-center justify-center rounded-full text-[15px] font-extrabold disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isSubmitting ? "로그인 중..." : "로그인"}
+          {isSubmitting ? "로그인 중…" : "로그인"}
         </button>
 
-        {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영·꾸미기를 먼저 체험할 수 있게. */}
-        <GuestTrialStartButton className="rounded-full border border-[color:var(--hc-border)] py-2.5 text-center text-xs font-semibold text-[color:var(--hc-text)] transition hover:border-[color:var(--hc-border-strong)]">
-          비회원 체험하기
-        </GuestTrialStartButton>
+        {/* 비회원 체험 — 로그인 바로 아래. 가입 없이 촬영을 먼저 체험할 수 있게.
+            문구는 넘기지 않는다 — 기본값이 곧 랜딩·앱과 같은 @harucut/shared 의 한 문구다. */}
+        {/* 주 CTA(로그인)와 같은 무게의 알약이 다섯 개 서 있었다. 체험은 보조 길이라 글자로 둔다. 누르는 면은 44px. */}
+        <GuestTrialStartButton className="inline-flex min-h-11 items-center justify-center text-[14px] font-semibold text-(--hc-text) underline underline-offset-4 transition hover:text-(--hc-primary-strong)" />
       </form>
     </AuthPageShell>
   );

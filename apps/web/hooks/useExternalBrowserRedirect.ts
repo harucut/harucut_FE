@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import "@/lib/nativeBridge";
+
 /**
  * 인앱 브라우저(카카오/라인/인스타 등)에서 열렸을 때
  * 외부 브라우저로 유도하는 훅
@@ -11,6 +13,12 @@ export function useExternalBrowserRedirect() {
     const url = new URL(href);
 
     if (url.searchParams.get("openExternalBrowser") === "1") {
+      return;
+    }
+
+    // 우리 앱 셸은 인앱 브라우저가 아니다. 이 검사가 없으면 앱이 켜지자마자 자기 화면을
+    // 밖의 크롬으로 내보내고 빈 껍데기만 남는다. UA 토큰은 apps/mobile 셸이 붙인다.
+    if (userAgent.includes("harucutapp") || window.__HARUCUT_NATIVE__) {
       return;
     }
 

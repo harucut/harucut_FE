@@ -1,6 +1,8 @@
 /** @jest-environment node */
 
-import { forward } from "@/app/api/client/_proxy";
+import { getApiErrorMessageByCode } from "@harucut/shared";
+
+import { forward, proxyJson } from "@/app/api/client/_proxy";
 
 describe("client proxy forward", () => {
   const originalFetch = global.fetch;
@@ -28,7 +30,7 @@ describe("client proxy forward", () => {
       setCookies: [],
     });
     expect(JSON.parse(result.body)).toEqual({
-      code: "GEN-500",
+      code: "CLIENT-002",
       status: 500,
       message: "NEXT_PUBLIC_BASE_URL is not set or invalid.",
       data: null,
@@ -58,8 +60,9 @@ describe("client proxy forward", () => {
       stripAuthCookies: true,
     });
 
-    const forwardedCookie = (fetchMock.mock.calls[0][1].headers as Record<string, string>)
-      .cookie;
+    const forwardedCookie = (
+      fetchMock.mock.calls[0][1].headers as Record<string, string>
+    ).cookie;
     // 인증 토큰만 제거되고 게스트 쿠키는 유지되어야 한다
     expect(forwardedCookie).toBe("guestTrial=1");
   });
@@ -84,8 +87,9 @@ describe("client proxy forward", () => {
       forwardBody: false,
     });
 
-    const forwardedCookie = (fetchMock.mock.calls[0][1].headers as Record<string, string>)
-      .cookie;
+    const forwardedCookie = (
+      fetchMock.mock.calls[0][1].headers as Record<string, string>
+    ).cookie;
     expect(forwardedCookie).toBe("accessToken=valid; refreshToken=ok");
   });
 
@@ -109,10 +113,81 @@ describe("client proxy forward", () => {
       setCookies: [],
     });
     expect(JSON.parse(result.body)).toEqual({
-      code: "GEN-502",
+      code: "CLIENT-003",
       status: 502,
       message: "Failed to reach backend server.",
       data: null,
     });
+  });
+
+  // 프록시가 만든 코드가 문구표에 없으면 화면은 원인과 무관한 폴백을 띄운다 — 로그인 화면이라면
+  // 백엔드가 죽은 것을 "이메일 또는 비밀번호가 올바르지 않아요" 라고 말한다. 코드만 바꾸고
+  // packages/shared/src/api-error-messages.ts 를 안 고치는 회귀를 여기서 잡는다.
+  it("only invents codes that the shared message table can translate", async () => {
+    const newRequest = () =>
+      new Request("http://localhost:3000/api/client/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: "test@example.com" }),
+      });
+
+    const misconfigured = await forward(newRequest(), {
+      method: "POST",
+      url: "undefined/api/harucut/login",
+    });
+
+    global.fetch = jest.fn().mockRejectedValue(new Error("connect ECONNREFUSED"));
+    const unreachable = await forward(newRequest(), {
+      method: "POST",
+      url: "https://api.harucut.com/api/harucut/login",
+    });
+
+    for (const result of [misconfigured, unreachable]) {
+      const { code } = JSON.parse(result.body) as { code: string };
+      // 한글이 섞인 문구여야 한다 — null 이면 폴백으로 떨어지고, 영문이면 화면에 영어가 나간다.
+      expect(getApiErrorMessageByCode(code)).toEqual(expect.stringMatching(/[가-힣]/));
+    }
+  });
+  it.each([204, 205, 304])(
+    "본문 없는 %i 응답과 쿠키를 그대로 전달한다",
+    async (status) => {
+      global.fetch = jest.fn().mockResolvedValue(
+        new Response(null, {
+          status,
+          headers: { "set-cookie": "accessToken=renewed; Path=/; HttpOnly" },
+        }),
+      );
+      const response = await proxyJson(
+        new Request("https://harucut.com/api/client/logout"),
+        {
+          method: "DELETE",
+          url: "https://api.harucut.com/api/auth/logout",
+        },
+      );
+      expect(response.status).toBe(status);
+      expect(response.body).toBeNull();
+      expect(response.headers.get("set-cookie")).toContain("accessToken=renewed");
+    },
+  );
+
+  it("본문 수신이 끊겨도 502 오류 봉투와 갱신 쿠키를 반환한다", async () => {
+    const upstream = new Response("partial", {
+      headers: { "set-cookie": "refreshToken=renewed; Path=/; HttpOnly" },
+    });
+    jest.spyOn(upstream, "text").mockRejectedValue(new TypeError("terminated"));
+    global.fetch = jest.fn().mockResolvedValue(upstream);
+    const response = await proxyJson(
+      new Request("https://harucut.com/api/client/reissue"),
+      {
+        method: "POST",
+        url: "https://api.harucut.com/api/auth/reissue",
+        forwardBody: false,
+      },
+    );
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "CLIENT-003",
+      status: 502,
+    });
+    expect(response.headers.get("set-cookie")).toContain("refreshToken=renewed");
   });
 });

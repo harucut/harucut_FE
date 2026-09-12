@@ -2,57 +2,69 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ArrowRight,
-  Camera,
-  ChevronRight,
-  Image as ImageIcon,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { serverDateTimeToMillis } from "@harucut/shared";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
-import { listMyMedia } from "@/lib/userMediaApi";
+import { listRecentMedia } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
-import { getUserMediaPreview, getUserMediaTitle } from "@/lib/userMediaPreview";
+import {
+  getUserMediaDateLabel,
+  getUserMediaPreviewUrl,
+  getUserMediaTitle,
+} from "@/lib/userMediaPreview";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
-import { CoachMarks, type CoachStep } from "@/components/onboarding/CoachMarks";
+import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 
-// 핸드오프 문구에 맞춘 주간 목표 컷 수(임의 상수). 진행 링/남은 컷 계산의 기준.
-const WEEKLY_GOAL = 5;
+/** 홈에 보여 줄 최근 기록 수. 조회도 딱 이만큼만 받는다. */
+const RECENT_LIMIT = 4;
 
-const HOME_COACH_STEPS: CoachStep[] = [
+/**
+ * 홈 카드 한 장의 규격.
+ *
+ * 둘이 서로 다른 패딩·최소높이를 쓰고 있어서 크기가 제각각이었다. 크기 차이는 중요도
+ * 차이로 읽히는데, 이 둘은 나란한 선택지다. 강조는 색이 맡는다.
+ * 화면 크기에 따라 달라지는 것은 여백과 글자 크기뿐이다.
+ */
+const HOME_CARD =
+  "flex min-h-19.5 items-center gap-3.5 rounded-2xl p-4 transition lg:min-h-27 lg:p-5.5";
+
+/** 제목·설명은 여기 한 벌만 둔다. 화면 크기가 문구를 바꾸지 않는다. */
+const HOME_ACTIONS = [
   {
-    selector: '[data-coach="shoot"]',
-    title: "촬영하기",
-    body: "카메라로 8장을 찍고 마음에 드는 4장을 골라 네 컷을 만들어요.",
+    id: "shoot",
+    title: "기록 남기기",
+    description: "찍거나 갖고 있는 사진으로 네 컷을 만들어요",
+    href: null as string | null,
+    primary: true,
   },
   {
-    selector: '[data-coach="upload"]',
-    title: "사진 업로드",
-    body: "이미 찍어둔 사진으로도 바로 네 컷을 만들 수 있어요.",
-  },
-  {
-    selector: '[data-coach="theme"]',
-    title: "꾸미기",
-    body: "프레임 색·배경 이미지·텍스트·스티커로 나만의 프레임을 만들어요.",
+    id: "theme",
+    title: "프레임 꾸미기",
+    description: "만들어두면 촬영할 때 골라 써요",
+    href: "/theme" as string | null,
+    primary: false,
   },
 ];
 
 const WEEKDAY_KO = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
-// 핸드오프와 동일한 "2026.06.12 · 금요일" 표기.
-function formatCurrentDate() {
+/** 오늘이 며칠인지만 담는 로컬 기준 "yyyy-mm-dd" 키. 날짜가 바뀌었는지 비교하는 용도다. */
+function getCurrentDateKey() {
   const now = new Date();
   const yyyy = now.getFullYear();
   const mm = `${now.getMonth() + 1}`.padStart(2, "0");
   const dd = `${now.getDate()}`.padStart(2, "0");
-  return `${yyyy}.${mm}.${dd} · ${WEEKDAY_KO[now.getDay()]}`;
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-// 인사 헤딩용 — "6.27 토요일"(연도·0 패딩 없이). currentDateLabel과 같은 자정 갱신을 공유한다.
-function formatHeadingDate() {
-  const now = new Date();
-  return `${now.getMonth() + 1}.${now.getDate()} ${WEEKDAY_KO[now.getDay()]}`;
+// 인사 헤딩용 — "6.27 토요일"(연도·0 패딩 없이). 날짜 키를 받아 표기만 바꾼다 —
+// 자정 갱신은 useCurrentDateKey 가 맡는다.
+function formatHeadingDate(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return `${month}.${day} ${WEEKDAY_KO[date.getDay()]}`;
 }
 
 function getNextDateRefreshDelay() {
@@ -63,20 +75,25 @@ function getNextDateRefreshDelay() {
   return Math.max(nextMidnight.getTime() - now.getTime(), 1000);
 }
 
-function useCurrentDateLabel() {
-  const [dateLabel, setDateLabel] = useState(formatCurrentDate);
+/**
+ * 날짜가 넘어가면 화면을 다시 그리게 하는 훅. 자정 타이머와 탭 복귀(visibilitychange)
+ * 둘 다 본다 — 탭이 백그라운드에 있는 동안 타이머가 밀려도 돌아온 순간 맞춰진다.
+ * 반환값은 "yyyy-mm-dd" 키라, 같은 날 다시 확인해도 값이 그대로여서 재렌더가 없다.
+ */
+function useCurrentDateKey() {
+  const [dateKey, setDateKey] = useState(getCurrentDateKey);
 
   useEffect(() => {
     let timeoutId: number;
 
     const refresh = () => {
-      setDateLabel(formatCurrentDate());
+      setDateKey(getCurrentDateKey());
       timeoutId = window.setTimeout(refresh, getNextDateRefreshDelay());
     };
 
     const refreshOnVisible = () => {
       if (!document.hidden) {
-        setDateLabel(formatCurrentDate());
+        setDateKey(getCurrentDateKey());
       }
     };
 
@@ -89,104 +106,58 @@ function useCurrentDateLabel() {
     };
   }, []);
 
-  return dateLabel;
+  return dateKey;
 }
 
-// 진행 링(SVG). 핸드오프 app 홈 스탯 카드의 그린 링.
-function ProgressRing({
-  pct,
-  size = 46,
-  stroke = 5,
-}: {
-  pct: number;
-  size?: number;
-  stroke?: number;
-}) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const clamped = Math.max(0, Math.min(1, pct));
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--hc-surface-muted)"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--hc-primary)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c * (1 - clamped)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
-  );
-}
-
-// createdAt이 같은 (자연) 월에 속하면 이번 달 기록으로 센다.
-function countThisMonth(items: UserMedia[]) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  return items.filter((item) => {
-    if (!item.createdAt) return false;
-    const d = new Date(item.createdAt);
-    return !Number.isNaN(d.getTime()) && d.getFullYear() === y && d.getMonth() === m;
-  }).length;
-}
-
-// 월요일 기준 이번 주 시작 이후 만든 기록 수.
-function countThisWeek(items: UserMedia[]) {
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setHours(0, 0, 0, 0);
-  // 0=일..6=토 -> 월요일까지 경과일. setDate는 로컬 캘린더 기준이라 DST 안전.
-  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  const startMs = weekStart.getTime();
-  return items.filter((item) => {
-    if (!item.createdAt) return false;
-    const d = new Date(item.createdAt);
-    return !Number.isNaN(d.getTime()) && d.getTime() >= startMs;
-  }).length;
-}
 
 export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
-  const [previewMedia, setPreviewMedia] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDashboard() {
       setLoading(true);
+      setLoadError(null);
 
       try {
-        const [nextUser, nextMedia] = await Promise.all([
+        // 기록 조회 실패는 빈 상태로 삼키지 않고 에러 상태로 구분한다.
+        const [nextUser, mediaResult] = await Promise.all([
           getMyUserInfo().catch(() => null),
-          listMyMedia().catch(() => []),
+          listRecentMedia(RECENT_LIMIT).then(
+            (media) => ({ ok: true as const, media }),
+            (error: unknown) => ({ ok: false as const, error }),
+          ),
         ]);
 
         if (cancelled) return;
 
-        const sortedMedia = [...nextMedia].sort((a, b) => {
-          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        setUser(nextUser);
+
+        if (!mediaResult.ok) {
+          console.error(mediaResult.error);
+          setRecentMedia([]);
+          setLoadError(
+            getUserFacingApiErrorMessage(
+              mediaResult.error,
+              "기록을 불러오지 못했어요.",
+            ),
+          );
+          return;
+        }
+
+        const sortedMedia = [...mediaResult.media].sort((a, b) => {
+          const aTime = serverDateTimeToMillis(a.createdAt);
+          const bTime = serverDateTimeToMillis(b.createdAt);
           return bTime - aTime;
         });
 
-        setUser(nextUser);
-        setRecentMedia(sortedMedia.slice(0, 4));
-        setPreviewMedia(sortedMedia);
+        setRecentMedia(sortedMedia.slice(0, RECENT_LIMIT));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -199,261 +170,206 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
-  const currentDateLabel = useCurrentDateLabel();
-  // 헤딩 날짜는 currentDateLabel과 같은 자정 갱신에 묶어 재계산(별도 타이머 불필요).
-  const currentHeadingDate = useMemo(() => formatHeadingDate(), [currentDateLabel]);
-
-  // currentDateLabel을 의존성에 포함해 날짜가 바뀌면(주/월 경계) 카운트도 다시 계산되게 한다.
-  const monthCount = useMemo(
-    () => countThisMonth(previewMedia),
-    [previewMedia, currentDateLabel],
+  const currentDateKey = useCurrentDateKey();
+  // 헤딩 날짜는 자정에 갱신되는 날짜 키에서 파생된다(별도 타이머 불필요).
+  const currentHeadingDate = useMemo(
+    () => formatHeadingDate(currentDateKey),
+    [currentDateKey],
   );
-  const weekCount = useMemo(
-    () => countThisWeek(previewMedia),
-    [previewMedia, currentDateLabel],
-  );
-  const remainingToGoal = Math.max(0, WEEKLY_GOAL - weekCount);
-  const ringPct = WEEKLY_GOAL > 0 ? Math.min(1, weekCount / WEEKLY_GOAL) : 0;
-  const progressWidth = `${Math.round(ringPct * 100)}%`;
 
   return (
-    <main className="hc-page-app min-h-dvh pb-[90px] text-[color:var(--hc-text)] lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       <AppNav userInitial={user?.username} />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
         {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
         <header className="pt-1 lg:pt-0">
-          <h1 className="text-[25px] font-extrabold leading-[1.25] tracking-tight lg:text-[34px] lg:leading-[1.15]">
-            <span className="text-[color:var(--hc-primary)]">{currentHeadingDate}</span>의
+          <h1 className="text-[25px] font-bold leading-normal tracking-tight lg:text-[34px] lg:leading-[1.4]">
+            <span className="text-(--hc-primary-strong)">{currentHeadingDate}</span>의
             <br />
             기록을 남겨보세요.
           </h1>
         </header>
 
-        {/* 모바일(&lt;lg) 메인 CTA — 핸드오프 app 홈 그린 카드 */}
-        <Link
-          href="/shoot"
-          data-coach="shoot"
-          className="flex items-center gap-3.5 rounded-[24px] bg-[color:var(--hc-primary)] p-[18px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] lg:hidden"
-        >
-          <span className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-[15px] bg-[#06140A]">
-            <Camera className="h-[26px] w-[26px] text-[color:var(--hc-primary)]" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-extrabold">지금 촬영하기</span>
-            <span className="mt-0.5 block whitespace-nowrap text-[12.5px] font-medium opacity-75">
-              프레임 고르고 8장 찍기
-            </span>
-          </span>
-          <ChevronRight className="h-[22px] w-[22px] shrink-0" />
-        </Link>
+        {/*
+          카드 두 장. **한 벌만 쓴다.**
 
-        {/* 모바일(&lt;lg) 보조 2카드 — 사진 불러오기 / 프레임 보기 */}
-        <section className="grid grid-cols-2 gap-2.5 lg:hidden">
-          <Link
-            href="/upload"
-            data-coach="upload"
-            className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
-          >
-            <ImageIcon className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
-            <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13.5px] font-bold">
-                사진 불러오기
-              </span>
-              <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
-                갤러리에서
-              </span>
-            </span>
-          </Link>
-          <Link
-            href="/theme"
-            data-coach="theme"
-            className="hc-surface-card flex items-center gap-2.5 rounded-2xl border p-3.5"
-          >
-            <Sparkles className="h-[22px] w-[22px] shrink-0 text-[color:var(--hc-primary)]" />
-            <span className="min-w-0">
-              <span className="block whitespace-nowrap text-[13.5px] font-bold">
-                프레임 보기
-              </span>
-              <span className="block whitespace-nowrap text-[11px] text-[color:var(--hc-muted)]">
-                4가지 테마
-              </span>
-            </span>
-          </Link>
-        </section>
+          예전에는 폰용(lg:hidden)과 데스크톱용(hidden lg:grid) 블록이 따로 있어서, 같은
+          카드인데 제목과 설명이 갈렸다("프레임 보기 / 4가지 테마" vs "프레임 꾸미기 /
+          만들어두면 촬영할 때 골라 써요"). 화면 크기가 문구를 바꿀 이유는 없다 —
+          달라져야 하는 것은 배치뿐이라 반응형 클래스로 처리한다.
+        */}
+        <section className="grid gap-3.5 lg:grid-cols-2">
+          {HOME_ACTIONS.map((action) => {
+            const body = (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[16px] font-extrabold lg:text-[19px]">
+                    {action.title}
+                  </span>
+                  <span
+                    className={`mt-0.5 block text-[13px] lg:mt-1 ${
+                      action.primary
+                        ? "font-medium opacity-75"
+                        : "text-(--hc-muted)"
+                    }`}
+                  >
+                    {action.description}
+                  </span>
+                </span>
+                <ArrowRight
+                  className={`h-4.5 w-4.5 shrink-0 transition group-hover:translate-x-0.5 ${
+                    action.primary ? "" : "text-(--hc-muted)"
+                  }`}
+                />
+              </>
+            );
 
-        {/* 데스크톱(lg+) 액션 인덱스 → 촬영 / 업로드 / 꾸미기 (코치마크는 보이는 카드를 비춤) */}
-        <section className="hidden gap-3.5 lg:grid lg:grid-cols-3">
-          <Link
-            href="/shoot"
-            data-coach="shoot"
-            className="group flex min-h-[108px] flex-col justify-between rounded-2xl bg-[color:var(--hc-primary)] p-[22px] text-[color:var(--hc-primary-contrast)] shadow-[var(--hc-button-shadow)] transition hover:shadow-[var(--hc-button-shadow-hover)]"
-          >
-            <span className="font-mono text-[11px] tracking-[0.18em] opacity-60">01</span>
-            <span>
-              <span className="flex items-center justify-between text-[19px] font-extrabold">
-                촬영하기
-                <ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" />
-              </span>
-              <span className="mt-1 block text-[12.5px] font-medium opacity-75">
-                프레임 고르고 8장, 네 컷만 남겨요
-              </span>
-            </span>
-          </Link>
+            /*
+              주 카드는 중립(흰 면·검은 글자)이다. 예전에는 초록이었는데 탭바의 촬영 버튼이 같은
+              다이얼로그를 여는 같은 초록이라 첫 화면에 같은 행동이 두 번 초록으로 놓였다
+              (DESIGN.md 「한 화면 한 초록」). 탭바는 모든 탭에 상주하는 전역 진입로라 초록을 거기
+              남기고, 카드는 크기·굵기·그림자로 무게를 갖는다. 보조 카드는 한 단 낮춘다.
+            */
+            const className = `group ${HOME_CARD} ${
+              action.primary
+                ? "bg-(--hc-neutral-button-bg) text-left text-(--hc-neutral-button-text) shadow-(--hc-neutral-button-shadow) hover:bg-(--hc-neutral-button-hover)"
+                : "hc-surface-well border hover:border-(--hc-border-strong)"
+            }`;
 
-          <Link
-            href="/upload"
-            data-coach="upload"
-            className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
-          >
-            <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
-              02
-            </span>
-            <span>
-              <span className="flex items-center justify-between text-[19px] font-extrabold">
-                업로드하기
-                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
-              </span>
-              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
-                찍어둔 사진으로 만들어요
-              </span>
-            </span>
-          </Link>
-
-          <Link
-            href="/theme"
-            data-coach="theme"
-            className="hc-surface-card group flex min-h-[108px] flex-col justify-between rounded-2xl border p-[22px] transition hover:border-[color:var(--hc-border-strong)]"
-          >
-            <span className="font-mono text-[11px] tracking-[0.18em] text-[color:var(--hc-muted-soft)]">
-              03
-            </span>
-            <span>
-              <span className="flex items-center justify-between text-[19px] font-extrabold">
-                프레임 꾸미기
-                <ArrowRight className="h-[18px] w-[18px] text-[color:var(--hc-muted)] transition group-hover:translate-x-0.5" />
-              </span>
-              <span className="mt-1 block text-[12.5px] text-[color:var(--hc-muted)]">
-                만들어두면 촬영할 때 골라 써요
-              </span>
-            </span>
-          </Link>
-        </section>
-
-        {/* 모바일(&lt;lg) 스탯 카드 — 이번 달 컷 수 + 주간 목표 + 진행 링 */}
-        <section className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 lg:hidden">
-          <span className="font-mono text-[26px] font-semibold leading-none text-[color:var(--hc-primary)]">
-            {monthCount}
-          </span>
-          <p className="flex-1 text-[13px] leading-[1.45] text-[color:var(--hc-muted)]">
-            이번 달 <b className="text-[color:var(--hc-text)]">{monthCount}컷</b>을
-            남겼어요.
-            <br />
-            이번 주 목표까지{" "}
-            <b className="text-[color:var(--hc-primary)]">{remainingToGoal}컷</b> 남았어요!
-          </p>
-          <ProgressRing pct={ringPct} />
-        </section>
-
-        {/* 데스크톱(lg+) 주간 진행 스트립 */}
-        <section className="hc-surface-card hidden items-center gap-5 rounded-2xl border p-[22px] lg:flex">
-          <span className="flex items-baseline gap-2">
-            <span className="font-mono text-[30px] font-semibold leading-none text-[color:var(--hc-primary)]">
-              {monthCount}
-            </span>
-            <span className="text-[14px] text-[color:var(--hc-muted)]">컷 / 이번 달</span>
-          </span>
-          <span className="h-2 min-w-[160px] flex-1 overflow-hidden rounded-full bg-[color:var(--hc-surface-muted)]">
-            <span
-              className="block h-full rounded-full bg-[color:var(--hc-primary)]"
-              style={{ width: progressWidth }}
-            />
-          </span>
-          <span className="text-[13.5px] text-[color:var(--hc-muted)]">
-            이번 주 목표까지{" "}
-            <b className="text-[color:var(--hc-text)]">{remainingToGoal}컷</b>
-          </span>
+            return action.href ? (
+              <Link
+                key={action.id}
+                href={action.href}
+                className={className}
+              >
+                {body}
+              </Link>
+            ) : (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => setSourceDialogOpen(true)}
+                className={`${className} w-full`}
+              >
+                {body}
+              </button>
+            );
+          })}
         </section>
 
         {/* 최근 기록 */}
         <section className="flex flex-col gap-4">
           <div className="flex items-end justify-between">
-            <h2 className="flex items-baseline gap-2 text-[17px] font-extrabold tracking-tight lg:text-[22px]">
+            <h2 className="text-[17px] font-extrabold tracking-tight lg:text-[22px]">
               최근 기록
-              <span className="hidden font-mono text-[13px] font-normal uppercase tracking-[0.18em] text-[color:var(--hc-muted-soft)] lg:inline">
-                Recent
-              </span>
             </h2>
             <Link
               href="/history"
-              className="hc-link-accent flex items-center gap-1 text-[13px] font-semibold"
+              className="hc-link-accent inline-flex min-h-11 items-center gap-1 px-1 text-[13px] font-semibold"
             >
               전체보기
               <ArrowRight className="hidden h-3.5 w-3.5 lg:inline" />
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 gap-3.5 sm:gap-4 md:grid-cols-4">
+          {/*
+            폰에서는 좌우로 넘긴다. 2열로 아래에 쌓으면 최근 기록만으로 한 화면을 다 써서
+            그 아래 내용이 스크롤 밖으로 밀려난다. 화면 밖으로 살짝 걸치게 둬서
+            "옆에 더 있다"는 것이 보이게 한다(-mx-4 로 화면 가장자리까지 흘린다).
+            md 이상은 자리가 넉넉하니 그대로 4열 그리드.
+
+            실패·빈 상태는 넘길 것이 없으므로 스크롤러가 아니라 한 칸을 채우는 카드다.
+          */}
+          <div
+            className={
+              loading || recentMedia.length > 0
+                ? "-mx-4 flex snap-x scroll-px-4 gap-3.5 overflow-x-auto px-4 pb-1 scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0"
+                : "grid grid-cols-1 gap-3.5 sm:gap-4"
+            }
+          >
             {loading ? (
               Array.from({ length: 4 }, (_, index) => (
                 <div
                   key={index}
-                  className="aspect-[3/4] animate-pulse rounded-[18px] bg-[color:var(--hc-surface-muted)]"
+                  className="aspect-3/4 w-[42vw] shrink-0 animate-pulse rounded-[18px] bg-(--hc-surface-muted) sm:w-[30vw] md:w-auto"
                 />
               ))
+            ) : loadError ? (
+              // 실패를 빈 상태로 위장하지 않는다. 문구 + 다시 시도.
+              <div className="hc-surface-well flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center">
+                <p className="text-[13px] text-(--hc-muted)">
+                  {loadError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((prev) => prev + 1)}
+                  className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
+                >
+                  다시 시도
+                </button>
+              </div>
             ) : recentMedia.length > 0 ? (
               recentMedia.map((item) => {
-                const preview = getUserMediaPreview(item, previewMedia);
+                const previewUrl = getUserMediaPreviewUrl(item);
 
                 return (
                   <Link
                     key={item.mediaId}
-                    href="/history"
-                    className="group flex flex-col gap-2"
+                    // 넉 장이 전부 목록 맨 위로만 갔다. 누른 그 기록으로 데려간다.
+                    href={`/history#media-${item.mediaId}`}
+                    className="group flex w-[42vw] shrink-0 snap-start flex-col gap-2 sm:w-[30vw] md:w-auto"
                   >
-                    <div className="hc-surface-well relative grid aspect-[3/4] place-items-center overflow-hidden rounded-[18px] border bg-[color:var(--hc-surface-inset)] p-2.5 transition group-hover:border-[color:var(--hc-border-strong)]">
-                      {preview.url ? (
+                    <div className="hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)">
+                      {previewUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={preview.url}
+                          src={previewUrl}
                           alt={getUserMediaTitle(item)}
                           className="absolute inset-0 h-full w-full object-contain p-3"
                         />
                       ) : (
-                        <div className="h-full w-full bg-[color:var(--hc-surface-muted)]" />
+                        <div className="h-full w-full bg-(--hc-surface-muted)" />
                       )}
-                      <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white backdrop-blur">
-                        <ImageIcon aria-hidden="true" className="h-2.5 w-2.5" />
-                        사진
-                      </span>
                     </div>
-                    <p className="truncate text-[13.5px] font-bold tracking-tight">
+                    <p className="truncate text-[13px] font-bold tracking-tight">
                       {getUserMediaTitle(item)}
                     </p>
+                    {/* 언제 찍은 것인지가 기록에서 가장 먼저 알고 싶은 정보다. */}
+                    {getUserMediaDateLabel(item) ? (
+                      <p className="-mt-1.5 text-[11px] text-(--hc-muted)">
+                        {getUserMediaDateLabel(item)}
+                      </p>
+                    ) : null}
                   </Link>
                 );
               })
             ) : (
-              <div className="hc-surface-well col-span-2 flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center md:col-span-4">
-                <Sparkles className="h-6 w-6 text-[color:var(--hc-primary)]" />
-                <p className="text-[13px] text-[color:var(--hc-muted)]">
+              <div className="hc-surface-well flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center">
+                <p className="text-[13px] text-(--hc-muted)">
                   아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
                 </p>
-                <Link
-                  href="/shoot"
-                  className="hc-button-primary rounded-full px-4 py-2 text-[12px] font-semibold"
+                {/* 위 큰 카드와 같은 것을 연다. 여기만 카메라로 직행하면 같은 뜻의
+                    버튼 둘이 다르게 동작한다. */}
+                <button
+                  type="button"
+                  onClick={() => setSourceDialogOpen(true)}
+                  className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
                 >
-                  촬영 시작
-                </Link>
+                  기록 남기기
+                </button>
               </div>
             )}
           </div>
         </section>
       </div>
       <MobileTabBar />
-      <CoachMarks id="home-v1" steps={HOME_COACH_STEPS} />
+      <RecordSourceDialog
+        open={sourceDialogOpen}
+        onClose={() => setSourceDialogOpen(false)}
+      />
     </main>
   );
 }

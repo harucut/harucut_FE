@@ -1,9 +1,19 @@
 "use client";
 
+import Image from "next/image";
+
 import React, { useRef, useState } from "react";
 import { ImagePlus, Scissors, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
-import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
+import {
+  EMPTY_UPLOAD_MESSAGE,
+  MAX_UPLOAD_BYTES,
+  MIN_UPLOAD_BYTES,
+  SUPPORTED_IMAGE_ACCEPT,
+  UNSUPPORTED_UPLOAD_MESSAGE,
+  UPLOAD_TOO_LARGE_MESSAGE,
+} from "@/lib/presignedUploadApi";
+import { toUploadableFile } from "@/lib/imageDecode";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((state) => state.tab);
@@ -49,8 +59,8 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-[color:var(--hc-primary)] bg-[color:var(--hc-accent-soft-bg)] text-[color:var(--hc-primary)]"
-          : "border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] text-[color:var(--hc-muted)]",
+          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+          : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
       ].join(" ")}
     >
       {children}
@@ -69,13 +79,15 @@ function PhotoTab() {
 
   const [isDraggingTiles, setIsDraggingTiles] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  // 실패·제외 안내는 화면 안에서 말한다. window.alert 는 이 디자인의 것이 아니고 모바일에서 탭을 멈춘다.
+  const [notice, setNotice] = useState<string | null>(null);
   const [processingAssetId, setProcessingAssetId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[11px] leading-5 text-zinc-400">
+        <p className="text-[13px] leading-[1.65] text-zinc-400">
           업로드한 사진은 여러 번 사용할 수 있고, 필요한 사진은 누끼를 딴 버전으로
           바로 바꿔 쓸 수 있어요. 첫 실행은 모델 다운로드 때문에 조금 오래 걸릴 수
           있어요.
@@ -89,20 +101,99 @@ function PhotoTab() {
         multiple
         className="hidden"
         onChange={async (event) => {
-          if (!event.target.files) return;
+          // currentTarget 은 핸들러가 반환되면 null 이 된다. await 뒤에 만지면 TypeError 가 나고,
+          // 그 바람에 아래 value 초기화가 실행되지 않아 같은 파일을 다시 고르면 change 가
+          // 발생하지 않았다(무반응). 시작할 때 요소를 잡아 둔다.
+          const input = event.currentTarget;
+          if (!input.files) return;
 
+          /*
+            거르기 전에 **바꿔 본다.**
+
+            아이폰 기본 설정이 만드는 HEIC 는 백엔드가 안 받지만 여기서 JPEG 로 구우면
+            된다(`lib/imageDecode.ts`). 예전처럼 걸러 내기만 하면 아이폰에서 고른 사진이
+            통째로 「지원하지 않는 형식」이 된다.
+
+            바꿔도 안 되는 것, 서버 한도(1~10485760 바이트)를 벗어나는 것만 사유별로 세어
+            제외한다. 여기서 통과시키면 저장할 때 presign 발급이 400 으로 막힌다 — 편집을
+            다 끝낸 뒤에 알게 되는 자리다. 순서는 배경 이미지 입력(ThemeEditorPage)과 같은
+            형식 → 하한 → 상한이고, 규칙의 주인은 uploadToS3WithPresigned 다.
+          */
+          const picked = Array.from(input.files);
           setIsUploading(true);
-          const result = await addAssets(event.target.files);
+
+          /*
+            **한 장씩** 바꾼다. `toUploadableFile` 은 파일마다 원본 해상도 RGBA 버퍼와
+            캔버스를 쥐고 있어서 12MP 사진 한 장이 48MB 다 — 한꺼번에 풀면 몇 장만으로도
+            모바일 웹뷰가 렌더러째 죽는다. `multiple` 선택기라 정상적으로 들어오는 입력이다.
+          */
+          const supported: File[] = [];
+          let unsupportedCount = 0;
+          let emptyCount = 0;
+          let tooLargeCount = 0;
+
+          for (const file of picked) {
+            let uploadable: File;
+            try {
+              uploadable = await toUploadableFile(file);
+            } catch {
+              // 바꿔도 못 올리는 형식이다. 사유 문구는 변환기가 던지는 예외가 든 것과
+              // 같은 상수라 여기서 다시 만들지 않는다.
+              unsupportedCount += 1;
+              continue;
+            }
+
+            // 크기는 **바꾼 뒤**에 잰다. 변환기가 한도를 넘는 사진은 줄여서 주므로,
+            // 먼저 재면 정작 살릴 수 있는 고화소 사진을 여기서 잘라 버린다.
+            if (uploadable.size < MIN_UPLOAD_BYTES) {
+              emptyCount += 1;
+              continue;
+            }
+            if (uploadable.size > MAX_UPLOAD_BYTES) {
+              tooLargeCount += 1;
+              continue;
+            }
+            supported.push(uploadable);
+          }
+
+          // 사유별로 센다. 한 줄로 뭉치면 어느 파일을 바꿔서 다시 고르면 되는지 알 수 없다.
+          // 문구는 presignedUploadApi 것을 그대로 쓴다 — 규칙이 바뀌면 한 곳만 고치면 된다.
+          const notices = [
+            { count: unsupportedCount, message: UNSUPPORTED_UPLOAD_MESSAGE },
+            { count: emptyCount, message: EMPTY_UPLOAD_MESSAGE },
+            { count: tooLargeCount, message: UPLOAD_TOO_LARGE_MESSAGE },
+          ]
+            .filter((reason) => reason.count > 0)
+            .map((reason) => `${reason.count}개를 제외했어요. ${reason.message}`);
+
+          setNotice(notices.join(" ") || null);
+
+          if (supported.length === 0) {
+            setIsUploading(false);
+            input.value = "";
+            return;
+          }
+
+          const result = await addAssets(supported);
           if (result.failed > 0) {
-            alert(`${result.failed}개의 파일 업로드에 실패했어요.`);
+            // 제외 사유도 같이 남긴다. 업로드 실패로 덮어 버리면 방금 사라진 파일이
+            // 왜 빠졌는지 알 길이 없어진다.
+            notices.push(`${result.failed}개의 파일 업로드에 실패했어요.`);
+            setNotice(notices.join(" "));
           }
           setIsUploading(false);
-          event.currentTarget.value = "";
+          input.value = "";
         }}
       />
 
+      {notice ? (
+        <p role="status" className="text-[12px] leading-5 text-(--hc-danger)">
+          {notice}
+        </p>
+      ) : null}
+
       {photos.length === 0 ? (
-        <div className="rounded-xl border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] p-3 text-[11px] text-[color:var(--hc-muted)]">
+        <div className="rounded-xl border border-(--hc-border) bg-(--hc-surface-strong) p-3 text-[12px] text-(--hc-muted)">
           아직 업로드한 사진이 없어요. 아래 추가 버튼으로 사진을 넣어보세요.
         </div>
       ) : null}
@@ -112,7 +203,7 @@ function PhotoTab() {
           flex gap-2 overflow-x-auto pb-2
           snap-x snap-mandatory
           [-webkit-overflow-scrolling:touch]
-          [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+          scrollbar-none [&::-webkit-scrollbar]:hidden
         "
       >
         <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
@@ -122,16 +213,16 @@ function PhotoTab() {
             disabled={isUploading}
             className="
               group relative
-              aspect-square w-[96px] shrink-0
+              aspect-square w-24 shrink-0
               snap-start overflow-hidden rounded-xl
-              border border-dashed border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)]
-              hover:border-[color:var(--hc-primary)] hover:bg-[color:var(--hc-accent-soft-bg)] disabled:opacity-50
+              border border-dashed border-(--hc-border) bg-(--hc-surface-strong)
+              hover:border-(--hc-primary) hover:bg-(--hc-accent-soft-bg) disabled:opacity-50
             "
             title="사진 업로드"
           >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[color:var(--hc-muted)] group-hover:text-[color:var(--hc-primary)]">
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-(--hc-muted) group-hover:text-(--hc-primary-strong)">
               <ImagePlus size={18} />
-              <span className="text-[10px]">
+              <span className="text-[11px]">
                 {isUploading ? "업로드 중" : "추가"}
               </span>
             </div>
@@ -143,7 +234,7 @@ function PhotoTab() {
             return (
               <div
                 key={photo.id}
-                className="relative aspect-square w-[96px] shrink-0 snap-start overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+                className="relative aspect-square w-24 shrink-0 snap-start overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
               >
                 <button
                   type="button"
@@ -166,7 +257,7 @@ function PhotoTab() {
                 </button>
 
                 {isProcessing ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[10px] font-medium text-white">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[11px] font-medium text-white">
                     누끼를 정리하는 중이에요.
                   </div>
                 ) : null}
@@ -176,16 +267,19 @@ function PhotoTab() {
                     type="button"
                     onClick={async (event) => {
                       event.stopPropagation();
+                      // 지난 안내를 먼저 지운다. 같은 실패가 다시 나면 문구가 그대로라
+                      // 눌린 건지 알 수 없었다 — 비웠다가 결과가 나오면 다시 세운다.
+                      setNotice(null);
                       setProcessingAssetId(photo.id);
                       const result = await removePhotoBackground(photo.id);
                       setProcessingAssetId(null);
 
                       if (!result.ok && result.reason === "PROCESS_FAILED") {
-                        alert("누끼 제거에 실패했어요.");
+                        setNotice("누끼 제거에 실패했어요.");
                       }
                     }}
                     disabled={isProcessing}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[10px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[11px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
                     title="누끼 제거"
                   >
                     <Scissors className="h-3 w-3" />
@@ -198,7 +292,7 @@ function PhotoTab() {
                       event.stopPropagation();
                       const result = removePhotoAsset(photo.id);
                       if (!result.ok && result.reason === "IN_USE") {
-                        alert("프레임에 사용 중인 사진은 삭제할 수 없어요.");
+                        setNotice("프레임에 사용 중인 사진은 삭제할 수 없어요.");
                       }
                     }}
                     className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] p-1.5 text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)]"
@@ -229,7 +323,7 @@ function StickerTab() {
           flex gap-2 overflow-x-auto pb-2
           snap-x snap-mandatory
           [-webkit-overflow-scrolling:touch]
-          [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+          scrollbar-none [&::-webkit-scrollbar]:hidden
         "
       >
         <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
@@ -242,16 +336,23 @@ function StickerTab() {
                 addComponent("STICKER", sticker.src);
               }}
               className="
-                group relative aspect-square w-[72px] shrink-0
+                group relative aspect-square w-18 shrink-0
                 snap-start overflow-hidden rounded-xl
                 border border-zinc-800 bg-zinc-950
               "
               title={sticker.name ?? "sticker"}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              {/*
+                72px 타일에 원본 PNG(최대 2MB, 39장 합계 40MB)를 그대로 내려받고 있었다.
+                next/image 로 바꾸면 같은 파일이 3KB대로 줄고 화면 밖 타일은 늦게 받는다.
+                캔버스에 얹을 때는 원본(sticker.src)을 그대로 쓴다.
+              */}
+              <Image
                 src={sticker.src}
-                alt={sticker.name ?? "sticker"}
+                alt={sticker.name ?? "스티커"}
+                width={72}
+                height={72}
+                sizes="72px"
                 className="h-full w-full object-contain p-2"
                 draggable={false}
               />
@@ -270,17 +371,17 @@ function TextTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+      <label className="flex flex-col gap-1 text-[12px] text-zinc-400">
         <span>텍스트 내용</span>
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder="텍스트를 입력해 주세요"
-          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          className="hc-input h-11 w-full rounded-lg border px-3 text-[13px]"
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+      <label className="flex flex-col gap-1 text-[12px] text-zinc-400">
         <span>폰트 크기</span>
         <input
           type="number"
@@ -288,7 +389,7 @@ function TextTab() {
           max={420}
           value={fontSize}
           onChange={(event) => setFontSize(Number(event.target.value) || 0)}
-          className="w-full rounded-lg border border-[color:var(--hc-border)] bg-[color:var(--hc-surface-strong)] px-3 py-2 text-xs text-[color:var(--hc-text)]"
+          className="hc-input h-11 w-full rounded-lg border px-3 text-[13px] tabular-nums"
         />
       </label>
 
@@ -300,7 +401,7 @@ function TextTab() {
         텍스트 추가
       </button>
 
-      <div className="text-[11px] text-zinc-400">
+      <div className="text-[12px] text-zinc-400">
         추가한 뒤 속성 패널에서 글꼴, 크기, 정렬을 바꿀 수 있어요.
       </div>
     </div>
@@ -377,7 +478,7 @@ export function HorizontalScroller({
         flex gap-2 overflow-x-auto pb-2
         cursor-grab select-none
         snap-x snap-mandatory
-        [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+        scrollbar-none [&::-webkit-scrollbar]:hidden
       "
     >
       {children}

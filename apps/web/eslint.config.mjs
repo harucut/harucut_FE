@@ -9,6 +9,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // e2e 전용 Next 산출물(playwright.config.ts 의 NEXT_DIST_DIR). .next 와 같은 성격이다.
+    ".next-e2e/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
