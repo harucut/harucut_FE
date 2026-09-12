@@ -121,6 +121,7 @@ async function flushAsync() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(console, "warn").mockImplementation(() => {});
   document.cookie = "harucut_guest_trial=; max-age=0";
   mockSearch = new URLSearchParams();
   // 주소 정리는 **부를 때의** window.location 을 본다. 목만 세우면 실제 주소와 어긋난다.
@@ -137,9 +138,10 @@ beforeEach(() => {
   mockGetPending.mockResolvedValue(PENDING);
   // 조건부 삭제는 「없다」와 「모르겠다」를 가려 본다. 기본은 조회와 같은 답을 준다 —
   // 「모르겠다」는 그것을 시험하는 테스트가 직접 세운다.
-  // 인계용 읽기는 삭제 경로에서 쓰이면 안 된다 — 불리면 그 자체가 실패 신호다.
+  // 초기 조회는 상태를 보존한다. 삭제 경로의 독립성은 해당 테스트에서 따로 확인한다.
   mockReadForHandoff.mockImplementation(async () => {
-    throw new Error("삭제 경로가 인계용 읽기를 불렀다");
+    const entry = await mockGetPending();
+    return entry ? { status: "found", entry, opened: true } : { status: "empty" };
   });
   // 보관소가 지문을 대조해 셋 중 하나로 답한다. 실제 구현과 같은 규칙으로 흉내 낸다.
   mockClearIfUnchanged.mockImplementation(async (isSame: (e: unknown) => boolean) => {
@@ -183,6 +185,10 @@ beforeEach(() => {
     message: "이미지를 준비하지 못했어요.",
     retryable: true,
   });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("GuestTrialBridge 비회원 결과 이관", () => {
@@ -1097,6 +1103,10 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "버리기" })).toBeInTheDocument();
     });
+    mockReadForHandoff.mockClear();
+    mockReadForHandoff.mockImplementation(async () => {
+      throw new Error("삭제 경로가 인계용 읽기를 불렀다");
+    });
     pressNoticeAction("버리기");
 
     await waitFor(() => {
@@ -1232,6 +1242,156 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
         sources: PENDING.sources,
       }));
     }
+  });
+
+  it("사진을 세 번 읽지 못하면 재시도를 멈추고 보관 또는 폐기를 안내한다", async () => {
+    mockEnsureComposeKey.mockResolvedValue("unreadable");
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    pressNoticeAction("이 계정에 저장하기");
+
+    for (let attempt = 1; attempt < 3; attempt += 1) {
+      await screen.findByRole("button", { name: "다시 시도" });
+      expect(mockEnsureComposeKey).toHaveBeenCalledTimes(attempt);
+      pressNoticeAction("다시 시도");
+    }
+    await screen.findByText("사진을 계속 읽지 못하고 있어요");
+    expect(mockEnsureComposeKey).toHaveBeenCalledTimes(3);
+    expect(screen.queryByRole("button", { name: "다시 시도" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "보관물 버리기" })).toBeInTheDocument();
+    expect(useGuestTrialStore.getState().notice?.message).toContain("원본 사진이 있다면");
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(jest.mocked(console.warn).mock.calls).toEqual(
+      [1, 2, 3].map((attempt) => [
+        "count_unreadable_hand_off",
+        { phase: "compose-key", reason: "unknown", attempt },
+      ]),
+    );
+
+    pressNoticeAction("보관물 유지");
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(mockEnsureComposeKey).toHaveBeenCalledTimes(3);
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().notice).toBeNull();
+  });
+
+  it.each([false, true])("읽지 못한 보관물 폐기는 재확인하고 교체된 사진은 보존한다 (교체: %s)", async (changed) => {
+    mockEnsureComposeKey.mockResolvedValue("unreadable");
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    pressNoticeAction("이 계정에 저장하기");
+    await screen.findByRole("button", { name: "보관물 버리기" });
+    pressNoticeAction("보관물 버리기");
+    expect(screen.getByText("이 보관물을 버릴까요?")).toBeInTheDocument();
+    expect(useGuestTrialStore.getState().notice?.message).toContain("되돌릴 수도 없어요");
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+
+    if (changed) mockGetPending.mockResolvedValue({ ...PENDING, savedAt: 1000 });
+    pressNoticeAction("버리기");
+    await waitFor(() => expect(mockClearIfUnchanged).toHaveBeenCalledTimes(1));
+    if (changed) {
+      await screen.findByText("버리지 않았어요");
+      expect(useGuestTrialStore.getState().notice?.message).toContain("다른 네컷으로 바뀌었어요");
+      expect(mockClearPending).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(mockClearPending).toHaveBeenCalledTimes(1));
+      expect(useGuestTrialStore.getState().notice).toBeNull();
+    }
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  it("읽지 못한 보관물의 폐기 확인을 취소하면 그대로 둔다", async () => {
+    mockEnsureComposeKey.mockResolvedValue("unreadable");
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    pressNoticeAction("이 계정에 저장하기");
+    await screen.findByRole("button", { name: "보관물 버리기" });
+    pressNoticeAction("보관물 버리기");
+    pressNoticeAction("보관물 유지");
+
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().notice).toBeNull();
+  });
+
+  it("폐기 중 저장소 확인에 실패하면 탭 교체로 오인하지 않는다", async () => {
+    mockClearIfUnchanged.mockResolvedValue("unreadable");
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "버리기" });
+    pressNoticeAction("버리기");
+    await screen.findByText("버리지 않았어요");
+
+    expect(useGuestTrialStore.getState().notice?.message).toContain("보관물을 확인하지 못해");
+    expect(useGuestTrialStore.getState().notice?.message).not.toContain("다른 네컷으로 바뀌었어요");
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  it("초기 조회 실패도 세 번까지만 재시도하고 resumeSave와 보관물을 유지한다", async () => {
+    mockReadForHandoff.mockResolvedValue({ status: "unreadable" });
+    mockSearch = new URLSearchParams("resumeSave=1");
+    window.history.replaceState({}, "", "/home?resumeSave=1");
+    render(<GuestTrialBridge />);
+
+    for (let attempt = 1; attempt < 3; attempt += 1) {
+      await screen.findByRole("button", { name: "다시 시도" });
+      pressNoticeAction("다시 시도");
+    }
+    await screen.findByText("사진을 계속 읽지 못하고 있어요");
+    expect(mockReadForHandoff).toHaveBeenCalledTimes(3);
+    expect(screen.queryByRole("button", { name: "다시 시도" })).not.toBeInTheDocument();
+    // 무엇이 있는지 못 읽었으므로 특정 보관물을 버리도록 안내할 근거도 없다.
+    expect(screen.queryByRole("button", { name: "보관물 버리기" })).not.toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(jest.mocked(console.warn).mock.calls).toEqual(
+      [1, 2, 3].map((attempt) => [
+        "count_unreadable_hand_off",
+        { phase: "read", reason: "storage", attempt },
+      ]),
+    );
+  });
+
+  it.each([undefined, "changed"])("초기 읽기가 복구돼도 저장 여부는 다시 묻는다 (원인: %s)", async (reason) => {
+    mockReadForHandoff.mockResolvedValueOnce({ status: "unreadable", reason });
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "다시 시도" });
+    if (reason === "changed") {
+      expect(useGuestTrialStore.getState().notice?.title).toBe("보관물이 바뀌었어요");
+    }
+    pressNoticeAction("다시 시도");
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+  });
+
+  it("최초 원본 변환부터 실패해도 메타로 확인한 보관물은 버릴 수 있다", async () => {
+    mockReadForHandoff.mockResolvedValue({
+      status: "unreadable",
+      reason: "sources",
+      meta: PENDING,
+    });
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "보관물 버리기" });
+    pressNoticeAction("보관물 버리기");
+    pressNoticeAction("버리기");
+    await waitFor(() => expect(mockClearPending).toHaveBeenCalledTimes(1));
+    expect(mockReadForHandoff).toHaveBeenCalledTimes(1);
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  it.each(["guest", "unknown"] as const)("초기 읽기 실패 안내도 회원 확인 전에는 띄우지 않는다 (%s)", async (membership) => {
+    mockReadForHandoff.mockResolvedValue({ status: "unreadable" });
+    setSession(membership);
+    render(<GuestTrialBridge />);
+    await flushAsync();
+    expect(useGuestTrialStore.getState().notice).toBeNull();
+    expect(mockClearIfUnchanged).not.toHaveBeenCalled();
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
   });
 
   it("다시 해 볼 만한 실패면 보관물을 남기고 재시도를 안내한다", async () => {

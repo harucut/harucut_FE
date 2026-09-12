@@ -831,6 +831,45 @@ describe("pendingGuestSave", () => {
     4장의 **유일한 보관본**이 사라지고, 다음 열기가 성공해도 되살릴 수 없다 —
     조건부 삭제(`clearHandoffIfUnchanged`)가 지켜 볼 기회조차 없다.
   */
+  it.each(["open", "transaction"])("손상된 보관물 정리에 실패하면 부재로 답하지 않는다 (%s)", async (failure) => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const record = storedRecord();
+    if (record) record.frameId = "not-a-frame";
+    if (failure === "open") {
+      store.afterRead = () => {
+        store.afterRead = null;
+        store.openFails = true;
+      };
+    } else {
+      store.rejectWrites = true;
+    }
+
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    expect(storedRecord()).not.toBeNull();
+
+    store.openFails = false;
+    store.rejectWrites = false;
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "empty" });
+    expect(storedRecord()).toBeNull();
+  });
+
+  it("원본 변환 실패 시 메타를 남기고, 확인한 보관물은 변환 없이 버릴 수 있다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const blobs = storedRecord()?.sources ?? [];
+
+    await withUnreadableBlobs(blobs, async () => {
+      const read = await readPendingGuestSave(NOW);
+      expect(read).toMatchObject({
+        status: "unreadable",
+        reason: "sources",
+        meta: { savedAt: NOW, displayName: ENTRY.displayName },
+      });
+      expect(storedRecord()).not.toBeNull();
+      expect(await clearIfUnchangedLikeBridge(NOW, NOW)).toBe(true);
+      expect(storedRecord()).toBeNull();
+    });
+  });
+
   it("읽기가 실패해도 보관물을 지우지 않는다", async () => {
     await setPendingGuestSave(ENTRY, NOW);
     store.rejectReads = true;
@@ -1083,7 +1122,7 @@ describe("pendingGuestSave", () => {
     };
 
     // 내가 읽은 것은 이미 지난 소식이다 — 「없다」로 답하면 그 판단으로 무언가를 지운다.
-    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable", reason: "changed" });
     // 새 한 벌은 그대로 남아 있어야 한다.
     expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
   });
@@ -1110,7 +1149,7 @@ describe("pendingGuestSave", () => {
       });
     };
 
-    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable" });
+    expect(await readPendingGuestSave(NOW)).toEqual({ status: "unreadable", reason: "changed" });
     expect(storedRecord()?.frameId).toBe(ENTRY.frameId);
   });
 

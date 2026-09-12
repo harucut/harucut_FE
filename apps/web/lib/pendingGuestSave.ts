@@ -413,7 +413,12 @@ export type PendingGuestSaveRead =
   /** 확실히 없다 — 기한이 지났거나 애초에 없었다. */
   | { status: "empty" }
   /** 있는지 없는지 **알 수 없다** — 저장소를 못 열었거나 읽다 깨졌다. */
-  | { status: "unreadable" };
+  | {
+      status: "unreadable";
+      reason?: "sources" | "changed";
+      // 원본 변환만 실패했다면, 확인한 한 벌을 조건부로 버릴 수 있게 메타를 남긴다.
+      meta?: PendingGuestSaveMeta;
+    };
 
 /**
  * **인계를 꺼내는 읽기.** 쓸 수 있는 한 벌이면 무엇이든 준다.
@@ -476,14 +481,22 @@ export async function readPendingGuestSave(
       const cleared = await clearPendingGuestSaveIfUnchanged(() => false, now);
       // 갈아 끼워져 있었다 — 내가 읽은 것은 이미 지난 소식이다. 「없다」로 답하면 그 판단으로
       // 무언가를 지우게 되므로, 모른다고 답하고 다음 읽기에 맡긴다.
+      if (cleared === "cleared") return { status: "empty" };
       return cleared === "changed"
-        ? { status: "unreadable" }
-        : { status: "empty" };
+        ? { status: "unreadable", reason: "changed" }
+        : { status: "unreadable" };
+    }
+
+    let sources: string[];
+    try {
+      sources = await Promise.all(record.sources.map(blobToDataUrl));
+    } catch {
+      return { status: "unreadable", reason: "sources", meta };
     }
 
     return {
       status: "found",
-      entry: { ...meta, sources: await Promise.all(record.sources.map(blobToDataUrl)) },
+      entry: { ...meta, sources },
       // 여기까지 왔다는 것은 저장소를 열고 그 자리를 직접 본 것이다.
       opened: true,
     };
