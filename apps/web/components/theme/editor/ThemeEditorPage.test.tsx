@@ -1,5 +1,6 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
+import { clearEditorDraft, loadEditorDraft } from "@/lib/themeEditorDraft";
 
 const mockPush = jest.fn();
 const mockSetFrameId = jest.fn();
@@ -15,6 +16,7 @@ const mockGetFrame = jest.fn();
 const mockUploadPresigned = jest.fn();
 const mockRenderPreview = jest.fn();
 const mockAlert = jest.fn();
+const storeListeners = new Set<() => void>();
 
 let mockRemoteFrameId: number | null = null;
 
@@ -40,9 +42,7 @@ const editorStoreState = {
   hydrateDraft: jest.fn(),
 };
 
-function themeEditorStoreMock(
-  selector: (s: typeof editorStoreState) => unknown,
-) {
+function themeEditorStoreMock(selector: (s: typeof editorStoreState) => unknown) {
   return selector(editorStoreState);
 }
 
@@ -54,7 +54,12 @@ function themeEditorStoreMock(
   themeEditorStoreMock as unknown as {
     subscribe: (listener: () => void) => () => void;
   }
-).subscribe = () => () => {};
+).subscribe = (listener) => {
+  storeListeners.add(listener);
+  return () => {
+    storeListeners.delete(listener);
+  };
+};
 
 function getPrimarySaveButton(container: HTMLElement) {
   const button = Array.from(
@@ -168,9 +173,9 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 }));
 
 // 컴포넌트가 보는 것과 **같은** 클래스여야 instanceof 가 맞는다.
-const { UploadValidationError } = jest.requireMock(
-  "@/lib/presignedUploadApi",
-) as { UploadValidationError: new (message: string) => Error };
+const { UploadValidationError } = jest.requireMock("@/lib/presignedUploadApi") as {
+  UploadValidationError: new (message: string) => Error;
+};
 
 jest.mock("@/lib/canvas/renderThemePreview", () => ({
   renderThemePreviewPng: (...args: unknown[]) => mockRenderPreview(...args),
@@ -182,6 +187,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearEditorDraft();
     window.alert = mockAlert;
     mockRemoteFrameId = null;
     useShootSession.setState({
@@ -194,9 +200,7 @@ describe("ThemeEditorPage save flow", () => {
     editorStoreState.backgroundColor = "111827";
     editorStoreState.pendingBackgroundFile = null;
 
-    editorStoreState.finalizeAssetsForSave = jest
-      .fn()
-      .mockResolvedValue(undefined);
+    editorStoreState.finalizeAssetsForSave = jest.fn().mockResolvedValue(undefined);
     mockExportJson.mockReturnValue({
       frameId: "classic-4",
       background: { type: "COLOR", value: "111827" },
@@ -213,6 +217,64 @@ describe("ThemeEditorPage save flow", () => {
       background: { type: "COLOR", value: "111827" },
       components: [],
     });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("새 편집이 들어오면 예약된 이전 초안 대신 최신 상태만 저장한다", async () => {
+    jest.useFakeTimers();
+    render(<ThemeEditorPage frameId="classic-4" />);
+    storeListeners.forEach((listener) => listener());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    editorStoreState.backgroundColor = "abcdef";
+    storeListeners.forEach((listener) => listener());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(200);
+    });
+    expect(loadEditorDraft()).toBeNull();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(loadEditorDraft()?.backgroundColor).toBe("abcdef");
+  });
+
+  it("저장 성공 후 화면 이동이 늦어도 예약 초안이 되살아나지 않는다", async () => {
+    jest.useFakeTimers();
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    storeListeners.forEach((listener) => listener());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    fireEvent.click(getPrimarySaveButton(container));
+    await act(async () => {
+      fireEvent.click(getDialogSaveButton(container));
+    });
+    expect(mockPush).toHaveBeenCalledWith("/theme");
+    storeListeners.forEach((listener) => listener());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(loadEditorDraft()).toBeNull();
+  });
+
+  it("서버 저장이 실패하면 편집 초안의 자동 저장은 계속된다", async () => {
+    jest.useFakeTimers();
+    mockCreateFrame.mockRejectedValueOnce(new Error("network"));
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.click(getPrimarySaveButton(container));
+    await act(async () => {
+      fireEvent.click(getDialogSaveButton(container));
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+    storeListeners.forEach((listener) => listener());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1200);
+    });
+    expect(loadEditorDraft()).not.toBeNull();
   });
 
   it("adds a local draft when creating a new frame", async () => {
@@ -544,9 +606,7 @@ describe("ThemeEditorPage save flow", () => {
     confirmSave(container);
 
     await waitFor(() => {
-      expect(container.textContent).toContain(
-        "10MB 이하 이미지만 올릴 수 있어요.",
-      );
+      expect(container.textContent).toContain("10MB 이하 이미지만 올릴 수 있어요.");
     });
     expect(mockCreateFrame).not.toHaveBeenCalled();
   });
@@ -559,9 +619,7 @@ describe("ThemeEditorPage save flow", () => {
     그대로 화면에 나간다.
   */
   it("S3 업로드 실패의 영문 메시지는 폴백으로 가린다", async () => {
-    mockUploadPresigned.mockRejectedValueOnce(
-      new Error("S3 upload failed: 403"),
-    );
+    mockUploadPresigned.mockRejectedValueOnce(new Error("S3 upload failed: 403"));
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -592,9 +650,7 @@ describe("ThemeEditorPage save flow", () => {
     fireEvent.click(getButtonByText(view.container, "지우기"));
 
     await waitFor(() => {
-      expect(view.container.textContent).toContain(
-        "요청한 정보를 찾을 수 없어요.",
-      );
+      expect(view.container.textContent).toContain("요청한 정보를 찾을 수 없어요.");
     });
   });
 });

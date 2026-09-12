@@ -115,6 +115,10 @@ beforeEach(() => {
   mockGetMyUserInfo.mockResolvedValue({ email: SIGNUP_EMAIL });
 });
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 /** 가입 때 고른 값. 재동의 화면에서 고를 값과 달라야 "되돌아감"이 보인다. */
 const ARCHIVED_ITEMS = [
   { code: "tos", agreed: true },
@@ -475,5 +479,115 @@ describe("TermsConsentBridge", () => {
     await waitFor(() => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
+  });
+  it("일시적인 조회 실패는 같은 화면에서도 한 번 다시 확인한다", async () => {
+    jest.useFakeTimers();
+    mockFetchMine
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(NEEDS_RECONSENT);
+    render(<TermsConsentBridge />);
+    await act(async () => {});
+    expect(mockFetchMine).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(mockFetchMine).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("회원 판정이 불명확했던 회차도 같은 화면에서 복구한다", async () => {
+    jest.useFakeTimers();
+    mockResolveMembership.mockResolvedValueOnce("unknown").mockResolvedValue("member");
+    render(<TermsConsentBridge />);
+    await act(async () => {});
+    expect(mockFetchMine).not.toHaveBeenCalled();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(mockFetchMine).toHaveBeenCalledTimes(1);
+  });
+
+  it("계속 실패해도 자동 반복은 한 번뿐이고 다음 보호 화면에서 다시 묻는다", async () => {
+    jest.useFakeTimers();
+    mockFetchMine.mockRejectedValue(new Error("network"));
+    const view = render(<TermsConsentBridge />);
+    await act(async () => {});
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(120_000);
+    });
+    expect(mockFetchMine).toHaveBeenCalledTimes(2);
+    mockFetchMine.mockResolvedValue(NEEDS_RECONSENT);
+    mockPathname = "/mypage";
+    view.rerender(<TermsConsentBridge />);
+    await act(async () => {});
+    expect(mockFetchMine).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("조회 재시도가 응답을 잃은 동의 POST를 중복 제출하지 않는다", async () => {
+    jest.useFakeTimers();
+    mockGetPending.mockReturnValue({ items: ARCHIVED_ITEMS, email: SIGNUP_EMAIL });
+    mockSubmit.mockRejectedValueOnce(new Error("response lost"));
+    mockFetchMine
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(NEEDS_RECONSENT);
+    render(<TermsConsentBridge />);
+    await act(async () => {});
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(mockFetchMine).toHaveBeenCalledTimes(2);
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(mockClearPending).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("계정 조회만 실패해 제출하지 못한 가입 동의는 재시도에서 인계한다", async () => {
+    jest.useFakeTimers();
+    mockGetPending.mockReturnValue({ items: ARCHIVED_ITEMS, email: SIGNUP_EMAIL });
+    mockGetMyUserInfo.mockRejectedValueOnce(new Error("network"));
+    mockFetchMine.mockRejectedValueOnce(new Error("network")).mockResolvedValue([]);
+    render(<TermsConsentBridge />);
+    await act(async () => {});
+    expect(mockSubmit).not.toHaveBeenCalled();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(mockSubmit).toHaveBeenCalledWith(ARCHIVED_ITEMS);
+    expect(mockClearPending).toHaveBeenCalledTimes(1);
+  });
+
+  it("공개 화면에서는 재시도를 멈추고 보호 화면에 돌아오면 복구한다", async () => {
+    jest.useFakeTimers();
+    mockFetchMine
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(NEEDS_RECONSENT);
+    const view = render(<TermsConsentBridge />);
+    await act(async () => {});
+    mockPathname = "/terms";
+    view.rerender(<TermsConsentBridge />);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mockFetchMine).toHaveBeenCalledTimes(1);
+    mockPathname = "/home";
+    view.rerender(<TermsConsentBridge />);
+    await act(async () => {});
+    expect(mockFetchMine).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("화면 트리가 사라지면 예약 재시도도 정리한다", async () => {
+    jest.useFakeTimers();
+    mockFetchMine.mockRejectedValue(new Error("network"));
+    const view = render(<TermsConsentBridge />);
+    await act(async () => {});
+    view.unmount();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mockFetchMine).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,7 +27,7 @@ export type RemoteFrameThemeState = {
   reload: () => void;
 };
 
-type LoadState = Omit<RemoteFrameThemeState, "reload">;
+type LoadState = Omit<RemoteFrameThemeState, "reload"> & { key: string };
 
 /**
  * 꾸민 프레임의 내용을 읽어 온다. 성공·실패·진행 중을 **따로** 알려 준다.
@@ -36,7 +36,9 @@ export function useRemoteFrameThemeState(
   remoteFrameId: number | null | undefined,
   expectedFrameId?: FrameId | null,
 ): RemoteFrameThemeState {
+  const loadKey = JSON.stringify([remoteFrameId ?? null, expectedFrameId ?? null]);
   const [state, setState] = useState<LoadState>(() => ({
+    key: loadKey,
     data: null,
     // 프레임을 쓰는 화면이 첫 그림에서 "다 읽었는데 내용이 없다"로 보이면 안 된다.
     // 조회는 effect 에서 시작하므로 그 전에 이미 진행 중인 것으로 둔다.
@@ -52,14 +54,22 @@ export function useRemoteFrameThemeState(
 
   useEffect(() => {
     let cancelled = false;
+    const settle = (next: Omit<LoadState, "key">) => {
+      setState({ ...next, key: loadKey });
+    };
 
     async function loadTheme() {
       if (!remoteFrameId) {
-        setState({ data: null, isLoading: false, error: null });
+        settle({ data: null, isLoading: false, error: null });
         return;
       }
 
-      setState((prev) => ({ ...prev, isLoading: true }));
+      setState((prev) => ({
+        key: loadKey,
+        data: prev.key === loadKey ? prev.data : null,
+        isLoading: true,
+        error: null,
+      }));
 
       try {
         const frame = await getFrame(remoteFrameId);
@@ -67,7 +77,7 @@ export function useRemoteFrameThemeState(
 
         const nextTheme = toThemeExportJson(frame);
         if (expectedFrameId && nextTheme.frameId !== expectedFrameId) {
-          setState({ data: null, isLoading: false, error: null });
+          settle({ data: null, isLoading: false, error: null });
           return;
         }
 
@@ -88,11 +98,11 @@ export function useRemoteFrameThemeState(
         const withAssets = await resolveThemeAssetUrls(nextTheme);
         if (cancelled) return;
 
-        setState({ data: withAssets, isLoading: false, error: null });
+        settle({ data: withAssets, isLoading: false, error: null });
       } catch (error) {
         console.error(error);
         if (!cancelled) {
-          setState({ data: null, isLoading: false, error });
+          settle({ data: null, isLoading: false, error });
         }
       }
     }
@@ -102,9 +112,13 @@ export function useRemoteFrameThemeState(
     return () => {
       cancelled = true;
     };
-  }, [expectedFrameId, reloadNonce, remoteFrameId]);
+  }, [expectedFrameId, loadKey, reloadNonce, remoteFrameId]);
 
-  return { ...state, reload };
+  // effect 이전 렌더에서도 이전 프레임의 내용으로 미리보기·멱등키를 만들지 않는다.
+  if (state.key !== loadKey) {
+    return { data: null, isLoading: Boolean(remoteFrameId), error: null, reload };
+  }
+  return { data: state.data, isLoading: state.isLoading, error: state.error, reload };
 }
 
 /**

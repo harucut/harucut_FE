@@ -34,9 +34,7 @@ function normalizeZ(components: EditorComponent[]): EditorComponent[] {
 }
 
 // 이미지 로딩 후 실제 크기 확인
-async function readImageSize(
-  src: string,
-): Promise<{ w: number; h: number } | null> {
+async function readImageSize(src: string): Promise<{ w: number; h: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () =>
@@ -119,10 +117,7 @@ function waitForAssetQueue(waitLimitMs?: number): Promise<void> {
   });
 }
 
-function runOnAssetQueue<T>(
-  task: () => Promise<T>,
-  waitLimitMs?: number,
-): Promise<T> {
+function runOnAssetQueue<T>(task: () => Promise<T>, waitLimitMs?: number): Promise<T> {
   const result = waitForAssetQueue(waitLimitMs).then(task);
   // 앞 작업이 실패해도 줄은 이어져야 한다. 대기용 프로미스에서는 결과를 삼킨다.
   // 상한을 넘겨 앞질렀을 때도 줄의 끝은 이 작업이 된다 — 멈춘 작업을 뒤에 오는
@@ -189,10 +184,7 @@ type State = {
   // 안 쓰는 자산은 올리지 않는다. (자세한 이유는 아래 구현부 주석)
   finalizeAssetsForSave: () => Promise<void>;
 
-  addComponentFromAsset: (
-    type: "PHOTO" | "STICKER",
-    src: string,
-  ) => Promise<void>;
+  addComponentFromAsset: (type: "PHOTO" | "STICKER", src: string) => Promise<void>;
   addText: (options?: { text?: string; fontSize?: number }) => void;
 
   setActive: (id: string | null) => void;
@@ -401,7 +393,6 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     return { added: added.length, failed };
   },
 
-  // 사용 중인 사진은 삭제 불가
   // 저장(finalizeAssetsForSave)과 같은 줄에 세운다 — 위 runOnAssetQueue 주석 참고.
   removePhotoBackground: (assetId) =>
     runOnAssetQueue(async () => {
@@ -413,12 +404,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
       try {
         const processedFile = await removeImageBackground(asset.file);
-        const objectUrl = URL.createObjectURL(processedFile);
         // 줄을 세워도 누끼가 도는 동안 상태는 움직인다 — 사진 삭제·초안 복원은
         // 기다리지 않는다. 위에서 찍어 둔 asset 은 그 사이 낡을 수 있으므로
         // 결과가 도착한 시점의 자산을 다시 본다.
-        const latest =
-          get().assets.photos.find((photo) => photo.id === assetId) ?? asset;
+        const latest = get().assets.photos.find((photo) => photo.id === assetId);
+        if (!latest) return { ok: false as const, reason: "NOT_FOUND" as const };
+        const objectUrl = URL.createObjectURL(processedFile);
         const previousSrc = latest.src;
         // 저장을 한 번 시도했다면 이 사진은 이미 올라갔고, 배치된 레이어의 source 는
         // blob 주소가 아니라 S3 key 다(finalizeAssetsForSave). 그 뒤 미리보기 업로드나
@@ -426,6 +417,16 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         // 이때 blob 주소만 견주면 레이어를 못 찾아 누끼 전 원본이 그대로 남고,
         // 다시 저장해도 옛 key 가 서버로 간다. 올린 key 로도 자산-레이어 연결을 잇는다.
         const previousKey = latest.s3Key;
+        const replacePhoto = (component: EditorComponent): EditorComponent => {
+          if (component.type !== "PHOTO") return component;
+          const linked =
+            component.source === previousSrc ||
+            (Boolean(previousKey) && component.source === previousKey);
+          // 올려 둔 원본의 renderUrl도 버린다. 되돌리기 스냅샷 역시 같은 자산을 가리킨다.
+          return linked
+            ? { ...component, source: objectUrl, renderUrl: undefined }
+            : component;
+        };
 
         set((current) => ({
           assets: {
@@ -442,18 +443,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
                 : photo,
             ),
           },
-          components: current.components.map((component) => {
-            if (component.type !== "PHOTO") return component;
-
-            const linked =
-              component.source === previousSrc ||
-              (Boolean(previousKey) && component.source === previousKey);
-            if (!linked) return component;
-
-            // renderUrl 은 올려 둔 누끼 전 원본을 가리킨다. 남겨 두면 캔버스와 미리보기
-            // PNG 가 그쪽을 먼저 쓰기 때문에(componentImageSrc) 화면은 그대로다.
-            return { ...component, source: objectUrl, renderUrl: undefined };
-          }),
+          components: current.components.map(replacePhoto),
+          lastRemoved: current.lastRemoved ? replacePhoto(current.lastRemoved) : null,
         }));
 
         try {
@@ -472,9 +463,11 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     const asset = state.assets.photos.find((p) => p.id === assetId);
     if (!asset) return { ok: false as const, reason: "NOT_FOUND" as const };
 
-    const inUse = state.components.some(
-      (c) => c.type === "PHOTO" && c.source === asset.src,
-    );
+    // 저장을 시도한 뒤에는 레이어가 blob 주소 대신 업로드 key를 쓴다.
+    const usesAsset = (c: EditorComponent | null) =>
+      c?.type === "PHOTO" &&
+      (c.source === asset.src || (Boolean(asset.s3Key) && c.source === asset.s3Key));
+    const inUse = state.components.some(usesAsset);
     if (inUse) return { ok: false as const, reason: "IN_USE" as const };
 
     // 되돌리기용 스냅샷이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
@@ -482,9 +475,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizeAssetsForSave
     // 가 원본 파일을 못 찾아 blob: 주소가 그대로 서버로 올라간다 — 깨진 프레임이 된다.
     // 원본이 사라졌으면 되돌릴 수도 없으므로 스냅샷을 함께 버린다.
-    const snapshotUsesAsset =
-      state.lastRemoved?.type === "PHOTO" &&
-      state.lastRemoved.source === asset.src;
+    const snapshotUsesAsset = usesAsset(state.lastRemoved);
 
     try {
       URL.revokeObjectURL(asset.src);
@@ -780,9 +771,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         // PHOTO / STICKER
         const p = patch as ImagePatch;
         const current = (c.styleJson ?? {}) as CommonStyleJson;
-        const nextStyle = p.styleJson
-          ? { ...current, ...p.styleJson }
-          : current;
+        const nextStyle = p.styleJson ? { ...current, ...p.styleJson } : current;
 
         return { ...c, ...p, zIndex: c.zIndex, styleJson: nextStyle };
       }),
@@ -894,8 +883,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components, backgroundColor, background, cellCutouts } =
-      get();
+    const { frameId, components, backgroundColor, background, cellCutouts } = get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);

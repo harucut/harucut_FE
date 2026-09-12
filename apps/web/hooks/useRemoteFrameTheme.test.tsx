@@ -8,6 +8,7 @@
  * 버튼만 있고 아무 일도 일어나지 않는다.
  */
 import { act, renderHook, waitFor } from "@testing-library/react";
+import type { FrameId } from "@/constants/frames";
 import { useRemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
@@ -91,4 +92,77 @@ test("reload 는 실제로 다시 조회하고, 성공하면 앞선 실패를 �
   await waitFor(() => expect(result.current.data).toEqual(theme));
   expect(result.current.error).toBeNull();
   expect(mockGetFrame).toHaveBeenCalledTimes(2);
+});
+
+test("프레임을 바꾼 첫 렌더부터 이전 내용을 노출하지 않는다", async () => {
+  let finish!: (value: ThemeExportJson) => void;
+  mockGetFrame.mockResolvedValueOnce(theme).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const seen: Array<ThemeExportJson | null> = [];
+  const { result, rerender } = renderHook(
+    ({ id }: { id: number | null }) => {
+      const state = useRemoteFrameThemeState(id, "grid-4");
+      seen.push(state.data);
+      return state;
+    },
+    { initialProps: { id: 7 as number | null } },
+  );
+  await waitFor(() => expect(result.current.data).toEqual(theme));
+  seen.length = 0;
+  rerender({ id: 8 });
+  expect(seen.every((data) => data === null)).toBe(true);
+  expect(result.current.isLoading).toBe(true);
+  const next = { ...theme, background: { type: "COLOR" as const, value: "#abcdef" } };
+  await act(async () => finish(next));
+  expect(result.current.data).toEqual(next);
+  seen.length = 0;
+  rerender({ id: null });
+  expect(seen.every((data) => data === null)).toBe(true);
+  expect(result.current.isLoading).toBe(false);
+});
+
+test("같은 원격 id도 판형이 바뀌면 이전 내용을 노출하지 않는다", async () => {
+  mockGetFrame
+    .mockResolvedValueOnce(theme)
+    .mockImplementationOnce(() => new Promise(() => {}));
+  const seen: Array<ThemeExportJson | null> = [];
+  const { result, rerender } = renderHook(
+    ({ expected }: { expected: FrameId }) => {
+      const state = useRemoteFrameThemeState(7, expected);
+      seen.push(state.data);
+      return state;
+    },
+    { initialProps: { expected: "grid-4" as FrameId } },
+  );
+  await waitFor(() => expect(result.current.data).toEqual(theme));
+  seen.length = 0;
+  rerender({ expected: "classic-4" });
+  expect(seen.every((data) => data === null)).toBe(true);
+});
+
+test("이전 프레임의 늦은 응답은 새 프레임을 덮지 않는다", async () => {
+  let finish!: (value: ThemeExportJson) => void;
+  const next = { ...theme, background: { type: "COLOR" as const, value: "#abcdef" } };
+  mockGetFrame
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(next);
+  const { result, rerender } = renderHook(
+    ({ id }) => useRemoteFrameThemeState(id, "grid-4"),
+    {
+      initialProps: { id: 7 },
+    },
+  );
+  rerender({ id: 8 });
+  await waitFor(() => expect(result.current.data).toEqual(next));
+  await act(async () => finish(theme));
+  expect(result.current.data).toEqual(next);
 });

@@ -49,6 +49,8 @@ function cachedBytes() {
 
 /** 직전에 쓴 내용과 같으면 localStorage 쓰기를 건너뛴다(5MB setItem 이 17ms 였다). */
 let lastWrittenJson: string | null = null;
+// 시작 순서가 저장 순서다. 늦게 끝난 변환이 최신 초안이나 삭제를 되돌리면 안 된다.
+let saveRevision = 0;
 
 function isLocalSrc(src: string | undefined): src is string {
   return Boolean(src && (src.startsWith("blob:") || src.startsWith("data:")));
@@ -85,6 +87,7 @@ export async function saveEditorDraft(input: {
   now: number;
 }): Promise<void> {
   if (typeof window === "undefined") return;
+  const revision = ++saveRevision;
 
   try {
     // 같은 blob을 여러 컴포넌트가 공유할 수 있고, 저장은 편집 중 계속 반복된다.
@@ -92,6 +95,7 @@ export async function saveEditorDraft(input: {
       const cached = dataUrlCache.get(src);
       if (cached) return cached;
       const dataUrl = await toDataUrl(src);
+      if (revision !== saveRevision) return dataUrl;
       dataUrlCache.set(src, dataUrl);
       // 오래된 것부터(Map 은 삽입 순) 두 상한 아래로 내려올 때까지 버린다.
       while (
@@ -107,6 +111,7 @@ export async function saveEditorDraft(input: {
 
     const components: EditorComponent[] = [];
     for (const c of input.components) {
+      if (revision !== saveRevision) return;
       if (c.type === "PHOTO" && isLocalSrc(c.source)) {
         components.push({ ...c, source: await resolve(c.source) });
       } else {
@@ -114,11 +119,13 @@ export async function saveEditorDraft(input: {
       }
     }
 
+    if (revision !== saveRevision) return;
     let background = input.background;
     if (background.type === "IMAGE" && isLocalSrc(background.url)) {
       background = { ...background, url: await resolve(background.url) };
     }
 
+    if (revision !== saveRevision) return;
     const draft: EditorDraft = {
       frameId: input.frameId,
       backgroundColor: input.backgroundColor,
@@ -186,6 +193,7 @@ function removeStoredDraft(): void {
  * 남은 항목의 키는 다시 조회되지 않는다. 그대로 두면 세션을 옮겨 다닐수록 쌓인다.
  */
 export function clearEditorDraft(): void {
+  saveRevision += 1;
   if (typeof window === "undefined") return;
   removeStoredDraft();
   dataUrlCache.clear();

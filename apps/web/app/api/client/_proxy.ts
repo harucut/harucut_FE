@@ -101,9 +101,7 @@ export async function forward(
   }
 
   const rawCookie = req.headers.get("cookie") ?? "";
-  const cookie = options.stripAuthCookies
-    ? stripAuthCookies(rawCookie)
-    : rawCookie;
+  const cookie = options.stripAuthCookies ? stripAuthCookies(rawCookie) : rawCookie;
   const shouldForwardBody =
     options.forwardBody ?? (options.method !== "GET" && options.method !== "DELETE");
   const body = shouldForwardBody ? await req.text() : undefined;
@@ -123,16 +121,20 @@ export async function forward(
       cache: "no-store",
     });
   } catch {
-    return buildProxyErrorResult(
-      502,
-      "CLIENT-003",
-      "Failed to reach backend server.",
-    );
+    return buildProxyErrorResult(502, "CLIENT-003", "Failed to reach backend server.");
   }
 
-  const responseBody = await upstream.text();
-  const contentType =
-    upstream.headers.get("content-type") ?? "application/json";
+  let responseBody: string;
+  try {
+    responseBody = await upstream.text();
+  } catch {
+    // 헤더를 받은 뒤 끊긴 연결도 같은 장애다. 이미 갱신된 인증 쿠키는 잃지 않는다.
+    return {
+      ...buildProxyErrorResult(502, "CLIENT-003", "Failed to read backend response."),
+      setCookies: getSetCookieHeaders(upstream.headers),
+    };
+  }
+  const contentType = upstream.headers.get("content-type") ?? "application/json";
 
   return {
     ok: upstream.ok,
@@ -144,7 +146,9 @@ export async function forward(
 }
 
 export function buildResponse(result: ForwardResult, req?: RequestLike) {
-  const res = new NextResponse(result.body, {
+  // 빈 문자열도 body다. 본문이 금지된 상태에서는 null이어야 Response 생성이 성공한다.
+  const body = [204, 205, 304].includes(result.status) ? null : result.body;
+  const res = new NextResponse(body, {
     status: result.status,
     headers: { "Content-Type": result.contentType },
   });

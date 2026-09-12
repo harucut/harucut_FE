@@ -1,7 +1,4 @@
-import {
-  ASSET_QUEUE_WAIT_LIMIT_MS,
-  useThemeEditorStore,
-} from "@/lib/themeEditorStore";
+import { ASSET_QUEUE_WAIT_LIMIT_MS, useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent, ThemeExportJson } from "@/lib/types/themeEditor";
 
 const mockUpload = jest.fn();
@@ -19,8 +16,7 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 
 // 실제 누끼 모델은 무겁고 브라우저 전용이라 테스트에서는 결과 파일만 흉내 낸다.
 jest.mock("@/lib/backgroundRemoval", () => ({
-  removeImageBackground: (...args: unknown[]) =>
-    mockRemoveImageBackground(...args),
+  removeImageBackground: (...args: unknown[]) => mockRemoveImageBackground(...args),
 }));
 
 function makeJson(ids: string[]): ThemeExportJson {
@@ -60,9 +56,9 @@ describe("themeEditorStore 삭제 되돌리기", () => {
 
     useThemeEditorStore.getState().restoreRemoved();
     expect(ids()).toEqual(["a", "b", "c"]);
-    expect(
-      useThemeEditorStore.getState().components.map((c) => c.zIndex),
-    ).toEqual([1, 2, 3]);
+    expect(useThemeEditorStore.getState().components.map((c) => c.zIndex)).toEqual([
+      1, 2, 3,
+    ]);
   });
 
   // 삭제 기록이 프레임을 넘어 살아 있으면, 다른 프레임에서 되돌리기를 눌렀을 때
@@ -120,9 +116,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
   async function placePhoto() {
     const store = useThemeEditorStore.getState();
     store.setFrameId("classic-4");
-    await store.addPhotoAssets([
-      new File(["raw"], "photo.png", { type: "image/png" }),
-    ]);
+    await store.addPhotoAssets([new File(["raw"], "photo.png", { type: "image/png" })]);
 
     const asset = useThemeEditorStore.getState().assets.photos[0];
     useThemeEditorStore.setState({ components: [photoLayer(asset.src)] });
@@ -163,9 +157,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     await useThemeEditorStore.getState().finalizeAssetsForSave();
     expect(layer().source).toBe("uploads/users/me/components/1-photo.png");
 
-    const result = await useThemeEditorStore
-      .getState()
-      .removePhotoBackground(assetId);
+    const result = await useThemeEditorStore.getState().removePhotoBackground(assetId);
     expect(result.ok).toBe(true);
 
     // 레이어가 새 누끼 이미지를 가리켜야 한다.
@@ -180,9 +172,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
         file: expect.objectContaining({ name: "photo-cutout.png" }),
       }),
     );
-    expect(layer().source).toBe(
-      "uploads/users/me/components/2-photo-cutout.png",
-    );
+    expect(layer().source).toBe("uploads/users/me/components/2-photo-cutout.png");
   });
 
   it("누끼가 도는 동안 자산이 바뀌어도 결과 시점의 자산으로 레이어를 잇는다", async () => {
@@ -213,9 +203,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
       return new File(["cut"], "photo-cutout.png", { type: "image/png" });
     });
 
-    const result = await useThemeEditorStore
-      .getState()
-      .removePhotoBackground(assetId);
+    const result = await useThemeEditorStore.getState().removePhotoBackground(assetId);
     expect(result.ok).toBe(true);
 
     expect(layer().source).toBe("blob:photo-cutout.png");
@@ -240,9 +228,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
       return new File(["cut"], "photo-cutout.png", { type: "image/png" });
     });
 
-    const cutting = useThemeEditorStore
-      .getState()
-      .removePhotoBackground(assetId);
+    const cutting = useThemeEditorStore.getState().removePhotoBackground(assetId);
     // 누끼가 도는 중에 저장 버튼을 누른 상황.
     const saving = useThemeEditorStore.getState().finalizeAssetsForSave();
 
@@ -261,9 +247,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
         file: expect.objectContaining({ name: "photo-cutout.png" }),
       }),
     );
-    expect(layer().source).toBe(
-      "uploads/users/me/components/1-photo-cutout.png",
-    );
+    expect(layer().source).toBe("uploads/users/me/components/1-photo-cutout.png");
     // 서버로 나가는 값에 blob: 이 남으면 저장이 400 으로 죽는다.
     expect(
       useThemeEditorStore.getState().exportJson()?.components[0].source,
@@ -282,9 +266,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
 
     // 아무도 resolve 하지 않는 누끼 — 멈춘 상태를 그대로 흉내 낸다.
     // (Once 로 두면 소비되지 않고 다음 테스트로 새어 나간다. 기본 구현은 beforeEach 가 되돌린다.)
-    mockRemoveImageBackground.mockImplementation(
-      () => new Promise<File>(() => {}),
-    );
+    mockRemoveImageBackground.mockImplementation(() => new Promise<File>(() => {}));
     void useThemeEditorStore.getState().removePhotoBackground(assetId);
 
     let settled = false;
@@ -321,9 +303,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
   it("리셋하면 이전 세션의 멈춘 누끼가 다음 저장을 붙잡지 않는다", async () => {
     const assetId = await placePhoto();
 
-    mockRemoveImageBackground.mockImplementation(
-      () => new Promise<File>(() => {}),
-    );
+    mockRemoveImageBackground.mockImplementation(() => new Promise<File>(() => {}));
     void useThemeEditorStore.getState().removePhotoBackground(assetId);
 
     // 누끼가 실제로 시작해 줄을 물고 있어야 "멈춘 작업"을 재현한 것이다.
@@ -348,15 +328,11 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
       ],
     }));
 
-    const result = await useThemeEditorStore
-      .getState()
-      .removePhotoBackground(assetId);
+    const result = await useThemeEditorStore.getState().removePhotoBackground(assetId);
     expect(result.ok).toBe(true);
 
     expect(layer().source).toBe("blob:photo-cutout.png");
-    expect(layer("photo-2").source).toBe(
-      "uploads/users/me/components/other.png",
-    );
+    expect(layer("photo-2").source).toBe("uploads/users/me/components/other.png");
     expect(mockUpload).not.toHaveBeenCalled();
   });
 
@@ -408,10 +384,10 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
       고쳐도 통과한다.
     */
     it("보이는 스티커는 그대로 올린다", async () => {
-      global.fetch = (jest.fn(async () => ({
+      global.fetch = jest.fn(async () => ({
         ok: true,
         blob: async () => new Blob(["png"], { type: "image/png" }),
-      })) as unknown) as typeof fetch;
+      })) as unknown as typeof fetch;
       useThemeEditorStore.getState().setFrameId("classic-4");
       useThemeEditorStore.setState({ components: [placeSticker(false)] });
 
@@ -425,10 +401,10 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
       던지면서, 저장 대상이 아닌 층 때문에 프레임 저장 전체가 실패했다.
     */
     it("숨긴 스티커를 못 받아 와도 저장이 막히지 않는다", async () => {
-      global.fetch = (jest.fn(async () => ({
+      global.fetch = jest.fn(async () => ({
         ok: false,
         status: 404,
-      })) as unknown) as typeof fetch;
+      })) as unknown as typeof fetch;
       useThemeEditorStore.getState().setFrameId("classic-4");
       useThemeEditorStore.setState({
         components: [placeSticker(true)],
@@ -438,5 +414,67 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
         useThemeEditorStore.getState().finalizeAssetsForSave(),
       ).resolves.not.toThrow();
     });
+  });
+  it("업로드 key로 바뀌어도 사용 중인 사진 원본은 삭제하지 않는다", async () => {
+    const assetId = await placePhoto();
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(layer().source).toMatch(/^uploads\//);
+    expect(useThemeEditorStore.getState().removePhotoAsset(assetId)).toEqual({
+      ok: false,
+      reason: "IN_USE",
+    });
+    expect(useThemeEditorStore.getState().assets.photos).toHaveLength(1);
+  });
+
+  it("업로드 key로 연결된 되돌리기 스냅샷도 원본 삭제 때 비운다", async () => {
+    const assetId = await placePhoto();
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    useThemeEditorStore.getState().remove(PHOTO_LAYER_ID);
+    expect(useThemeEditorStore.getState().removePhotoAsset(assetId).ok).toBe(true);
+    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(false);
+    useThemeEditorStore.getState().restoreRemoved();
+    expect(useThemeEditorStore.getState().components).toHaveLength(0);
+  });
+
+  it.each([false, true])(
+    "누끼 완료가 되돌리기 스냅샷도 갱신한다 (업로드: %s)",
+    async (uploaded) => {
+      const assetId = await placePhoto();
+      if (uploaded) await useThemeEditorStore.getState().finalizeAssetsForSave();
+      mockRemoveImageBackground.mockImplementationOnce(async () => {
+        useThemeEditorStore.getState().remove(PHOTO_LAYER_ID);
+        return new File(["cut"], "photo-cutout.png", { type: "image/png" });
+      });
+      await useThemeEditorStore.getState().removePhotoBackground(assetId);
+      useThemeEditorStore.getState().restoreRemoved();
+      expect(layer().source).toBe("blob:photo-cutout.png");
+      expect(layer().renderUrl).toBeUndefined();
+    },
+  );
+
+  it("누끼 중 원본을 삭제하면 완료 뒤 새 blob을 만들지 않는다", async () => {
+    const assetId = await placePhoto();
+    mockRemoveImageBackground.mockImplementationOnce(async () => {
+      useThemeEditorStore.getState().remove(PHOTO_LAYER_ID);
+      useThemeEditorStore.getState().removePhotoAsset(assetId);
+      return new File(["cut"], "photo-cutout.png", { type: "image/png" });
+    });
+    const result = await useThemeEditorStore.getState().removePhotoBackground(assetId);
+    expect(result).toEqual({ ok: false, reason: "NOT_FOUND" });
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(useThemeEditorStore.getState().assets.photos).toHaveLength(0);
+  });
+
+  it("이전 세션의 누끼 완료가 새 세션의 사진을 덮지 않는다", async () => {
+    const assetId = await placePhoto();
+    mockRemoveImageBackground.mockImplementationOnce(async () => {
+      useThemeEditorStore.getState().reset();
+      await placePhoto();
+      return new File(["cut"], "photo-cutout.png", { type: "image/png" });
+    });
+    const result = await useThemeEditorStore.getState().removePhotoBackground(assetId);
+    expect(result).toEqual({ ok: false, reason: "NOT_FOUND" });
+    expect(layer().source).toBe("blob:photo.png");
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
   });
 });
