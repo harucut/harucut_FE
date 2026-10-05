@@ -10,6 +10,7 @@ import { EventBanner } from "@/components/event/EventBanner";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { blobToDataUrl } from "@/lib/canvas/loaders";
 import {
   composeFrameImage,
   downloadBlob,
@@ -441,6 +442,11 @@ export default function ShootResultPage() {
             quality: 0.92,
           });
 
+          // iPhone Safari는 blob 링크의 확인창을 띄워도 다운로드 프로세스가
+          // 바이트를 받지 못할 수 있다. 클릭 전에 파일 자체를 담은 URL을 준비한다.
+          // 미리보기 Blob URL의 수명과 무관하며 서버로 사진을 보내지 않는다.
+          const downloadUrl = await blobToDataUrl(blob);
+
           if (cancelled) return;
 
           const objectUrl = URL.createObjectURL(blob);
@@ -458,7 +464,7 @@ export default function ShootResultPage() {
           setImageResult({
             mediaId: -1,
             objectUrl,
-            downloadUrl: objectUrl,
+            downloadUrl,
             displayName,
             localBlob: blob,
           });
@@ -977,7 +983,7 @@ export default function ShootResultPage() {
             onDownload={handleDownloadImage}
             onShare={guestMode ? undefined : handleShareImage}
             localDownload={guestMode && imageResult.localBlob ? {
-              href: imageResult.objectUrl,
+              href: imageResult.downloadUrl ?? imageResult.objectUrl,
               filename: buildDownloadFilename(imageResult.displayName, imageResult.localBlob.type === "image/jpeg" ? "jpg" : "png"),
             } : undefined}
             isSavingName={isSavingImageName}
