@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking';
 import { canonicalOAuthCallbackUrl } from '@harucut/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -621,7 +621,9 @@ export function HarucutWebShell() {
  */
 function useFocusBackHandler(handler: () => boolean) {
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;

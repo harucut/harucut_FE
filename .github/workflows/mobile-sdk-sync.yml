@@ -46,6 +46,9 @@ jobs:
           JS
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --dir apps/mobile exec expo install --fix --pnpm
+      # 자동 설치된 peer는 SDK 갱신 뒤에도 예전 버전에 남는다. SDK 권장값을 명시한다.
+      - run: pnpm --dir apps/mobile exec expo install react-native-reanimated react-native-worklets @expo/dom-webview react-dom --pnpm
+      - run: pnpm --dir apps/mobile add --save-dev @react-native/metro-config@0.86.3
       - run: pnpm dedupe
       - name: Record resolved package versions on the task branch
         run: |
