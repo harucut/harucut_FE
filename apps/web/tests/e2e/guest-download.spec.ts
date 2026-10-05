@@ -83,7 +83,12 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
   await expect(page.getByText("비회원 체험 결과 안내")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /공유|사진에 저장/ })).toHaveCount(0);
   const href = await link.getAttribute("href");
-  expect(href).toMatch(/^blob:/);
+  expect(href).toMatch(/^data:image\/jpeg;base64,/);
+  const expectedBytes = Buffer.from(href!.split(",")[1], "base64");
+  // 미리보기용 Blob이 해제돼도 다운로드 주소는 파일 바이트를 독립적으로 보유한다.
+  await page.getByRole("img", { name: "완성된 네컷 결과" }).evaluate((image: HTMLImageElement) => {
+    URL.revokeObjectURL(image.src);
+  });
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const completed = page.waitForEvent("download");
@@ -94,6 +99,7 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
     const bytes = await readFile((await download.path())!);
     expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
     expect(bytes.length).toBeGreaterThan(10_000);
+    expect(bytes.equals(expectedBytes)).toBe(true);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await link.getAttribute("href")).toBe(href);
   }
