@@ -48,7 +48,7 @@ export const GUEST_MEMBER_ONLY_ITEMS =
 /** 체험을 시작할지 묻는 모달. 누른 버튼과 확인 버튼이 같은 말을 하도록 라벨을 맞춘다. */
 export const GUEST_TRIAL_NOTICE = {
   title: '가입 없이 체험해볼까요?',
-  message: `${GUEST_ALLOWED_ITEMS}을 바로 해볼 수 있어요. 기록 보관부터는 무료 가입 후 이용할 수 있어요.`,
+  message: `${GUEST_ALLOWED_ITEMS}를 바로 해볼 수 있어요. 기록 보관부터는 무료 가입 후 이용할 수 있어요.`,
   confirmLabel: GUEST_TRIAL_CTA_LABEL,
   loginLabel: '로그인하기',
 } as const;
