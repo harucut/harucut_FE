@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@react-native/metro-config": "0.86.3",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.6.4",
     "@types/react": "~19.2.18",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
