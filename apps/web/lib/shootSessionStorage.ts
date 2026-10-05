@@ -19,7 +19,10 @@ type StoredDraft = Omit<ShootDraft, "shots"> & { shotKeys: string[]; savedAt: nu
 let savedShots = new Map<string, string>();
 
 function encodeDraft(draft: ShootDraft, keys: string[], now: number): StoredDraft {
-  const { shots, composeIdempotency, ...meta } = draft;
+  // Zustand 상태에는 함수도 있다. Pick 타입은 런타임 필드를 제거하지 않으므로
+  // 나머지 전개(...meta)로 쓰면 IndexedDB가 DataCloneError로 전체 저장을 거부한다.
+  const { shots, composeIdempotency, frameId, remoteFrameId, source, shotsFrameId,
+    selectedIndexes, borderColor, outputFilter, eventName } = draft;
   let composition = null;
   if (composeIdempotency) {
     try {
@@ -30,7 +33,8 @@ function encodeDraft(draft: ShootDraft, keys: string[], now: number): StoredDraf
       }
     } catch { /* 이전 입력이 현재 사진을 가리키지 않으면 복원할 멱등키도 없다. */ }
   }
-  return { ...meta, composeIdempotency: composition, shotKeys: keys, savedAt: now };
+  return { frameId, remoteFrameId, source, shotsFrameId, selectedIndexes, borderColor,
+    outputFilter, eventName, composeIdempotency: composition, shotKeys: keys, savedAt: now };
 }
 
 function validMeta(value: unknown, now: number): value is StoredDraft {

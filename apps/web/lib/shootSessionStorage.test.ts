@@ -1,8 +1,14 @@
 import { readShootDraft, writeShootDraft, deleteShootDraft, SHOOT_DRAFT_TTL, type ShootDraft } from "./shootSessionStorage";
 import { useShootSession } from "./shootSessionStore";
+import { serialize } from "node:v8";
 
 const mockData = new Map<string, unknown>();
-const mockPut = jest.fn((value: unknown, key: string) => { mockData.set(key, value); return { result: key }; });
+const mockPut = jest.fn((value: unknown, key: string) => {
+  // IndexedDB와 마찬가지로 메타데이터에 함수가 섞이면 쓰기를 거부한다.
+  if (key === "meta") serialize(value);
+  mockData.set(key, value);
+  return { result: key };
+});
 let mockFail = false;
 // 브라우저 저장 엔진은 기존 pendingGuestSave 테스트가 검사한다. 여기서는 사진·메타의
 // 왕복, 만료, 중복 쓰기 방지와 손상된 저장물 처리를 검증한다.

@@ -18,7 +18,8 @@ permissions:
 
 concurrency:
   group: mobile-qa-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # PR에 웹 커밋이 추가돼도 이미 시작한 네이티브 컴파일은 끝내고 산출물을 남긴다.
+  cancel-in-progress: false
 
 jobs:
   android:
