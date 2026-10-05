@@ -185,7 +185,7 @@ export function FeaturesView() {
         </div>
       </section>
 
-      {/* 세 축 — 좌우 번갈아 배치. 카드 그리드 대신 점선 구분의 에디토리얼 레이아웃 */}
+      {/* 읽는 순서를 유지해 기능 설명과 예시를 같은 열에 둔다. */}
       <section className="border-t border-white/10">
         {AXES.map((axis, i) => (
           <div
@@ -195,14 +195,11 @@ export function FeaturesView() {
             <div className="mx-auto max-w-290 px-7 py-18">
               <div className="min-w-0">
                 <div
-                  className={`grid items-center gap-12 lg:grid-cols-2 lg:gap-20 ${
-                    i % 2 ? "lg:[&>*:first-child]:order-2" : ""
-                  }`}
+                  className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20"
                 >
                   <div>
                     <span
-                      className="mb-5 block font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px]"
-                      style={{ color: GREEN }}
+                      className="mb-5 block font-mono text-sm font-semibold text-white/70"
                     >
                       {axis.n}
                     </span>

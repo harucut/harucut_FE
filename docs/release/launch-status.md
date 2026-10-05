@@ -15,20 +15,24 @@
 - 공통 캔버스·저장소·프록시·시간 제한 헬퍼 재사용, Storybook·사용하지 않는 시각 테스트/디버그 도구 제거.
 - harucut 이름과 vailen 운영 표기, 검색 설명, [스토어 등록 문구](store-listing-ko.md).
 - 모바일 React/RN 렌더러 버전 일치 검사, 공식 릴리스 주소 고정, `/home` 시작, apex OAuth 콜백을 www로 인계.
+- Android 전체 미디어 읽기·위치·마이크·오버레이 권한 제외, OS 백업 비활성화. 최종 APK의 병합된 manifest를 CI에서 검사한다.
 
 ## 검증 범위
 
-웹 Jest, lint, Tailwind 클래스 검사, 공유 타입 검사와 모바일 lint/typecheck/runtime 검사를 수행했다.
-빌드는 로컬 Node 24에서 간헐적으로 V8 SIGSEGV가 발생하므로 원격 CI의 Node 22 결과도 확인한다.
+웹 Jest 90묶음 1,067건, lint, Tailwind 클래스 검사, 공유 타입 검사와 모바일 lint/typecheck/runtime 검사를 통과했다.
+Node 22 CI에서 `verify:standard`와 Next.js 프로덕션 빌드를 통과했다. 로컬 Node 24의 간헐적 V8 SIGSEGV는 CI에서 재현되지 않았다.
 iOS·Android Hermes 릴리스 JS 번들과 Expo 네이티브 프로젝트 생성은 성공했다. **네이티브 서명 바이너리 생성·실기기 검증·스토어 업로드 완료를 뜻하지 않는다.**
 
-이전 세션이 저장한 운영 Swagger 사본의 62개 연산과 FE 프록시 37개를 대조했다. 경로/필수 필드 누락은 없었고, 에러코드 7개는 Swagger 예시에 없어 경고로 남았다. 현재 운영 서버에 다시 접속한 결과는 아니다.
+- [브라우저 CI](https://github.com/harucut/harucut_FE/actions/runs/37272409386): E2E 96건, 접근성 32건 통과. 실제 fake camera 촬영 → IndexedDB 보관 → 문서 재시작 → 촬영 복원을 확인했다. 이 검사에서 발견한 `DataCloneError`도 수정했다. 공개 화면과 편집기의 데스크톱/모바일·라이트/다크 캡처를 검토했다.
+- [운영 계약 CI](https://github.com/harucut/harucut_FE/actions/runs/37272409392): 2026-10-05 실제 `https://api.harucut.com/v3/api-docs`의 62개 연산과 FE 프록시 37개를 읽기 전용으로 대조했다. 경로/필수 필드 누락은 없다. 에러코드 7개는 Swagger 예시에 없어 경고로 남았다.
+- [Android 최초 네이티브 빌드](https://github.com/harucut/harucut_FE/actions/runs/37271794281): QA APK 생성 성공. 후속 권한·백업 설정 변경을 포함한 최종 APK는 해당 HEAD의 CI 결과를 확인한다.
+- 촬영 중 오프라인 전환 → 사진 선택 → JPEG 다운로드까지 확장한 E2E와 iOS unsigned archive 검증도 CI에 추가했다. 이 문서의 위 통과 수치는 최초 복원 검증 실행 기준이며 후속 실행 결과는 PR 검사에서 확인한다.
 
 ## 배포 전 남은 확인
 
 - 이 실행 환경에서는 localhost 리슨·USB ADB·기본 Gradle 캐시 쓰기가 제한되고, 셸의 외부 DNS와 브라우저 제어도 실패했다. 로컬 웹 E2E와 실기기 촬영은 이 상태에서 확인하지 못했다.
 - Android `mobile-qa` CI는 `run-ci` 라벨이 있는 PR에서 APK를 빌드한다. Expo 기본 시험 서명을 쓰므로 Play 배포용이 아니다. 이 APK는 공식 운영 웹을 연다. 새 웹 배포 전에는 변경 전 웹이 보인다.
-- iOS는 CocoaPods의 Hermes 의존성을 내려받지 못해 빌드가 중단됐다. 서명 팀·앱 레코드·프로비저닝을 확인해야 한다.
+- 로컬 iOS는 CocoaPods의 Hermes 다운로드가 차단돼 CI에서 네이티브 빌드를 진행한다. 서명 팀·앱 레코드·프로비저닝은 별도 확인이 필요하다.
 - 일반 웹의 소셜 로그인은 유지한다. 앱 구글 로그인은 시스템 브라우저 인증과 안전한 세션 인계가 준비되지 않아 웹 이용을 안내한다. 카카오/네이버는 실제 운영 계정으로 쿠키 범위·복귀·취소를 확인해야 한다.
 - App Store Connect와 Play Console에서 `com.harucut.app`에 해당하는 앱/팀을 확인하고, 심사용 계정과 개인정보 신고를 실제 데이터 처리와 맞춘다. vailen이라는 표시 이름만으로 판매자 계정이 선택되지는 않는다.
 - 운영 약관 데이터, 이메일 인증 발송, 시스템 기본 프레임 4종, 실제 BASIC 저장 한도는 운영 데이터/계정으로 재확인한다. 기존 세션의 관찰을 현재 사실로 단정하지 않는다.
