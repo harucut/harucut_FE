@@ -27,25 +27,33 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
     ctx.fillRect(0, 0, 640, 480);
     ctx.fillStyle = "#164d71";
     ctx.fillRect(80, 80, 200, 300);
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((value) => resolve(value!), "image/jpeg", 0.92));
+    // 실제 촬영 보관 경로처럼 메모리 바이트로 만든 File을 넣는다(dataUrlToFile).
+    const encoded = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => {
+      if (value) resolve(value);
+      else reject(new Error("fixture canvas encoding failed"));
+    }, "image/jpeg", 0.92));
+    const blob = new File([await encoded.arrayBuffer()], "shot.jpg", { type: "image/jpeg" });
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("harucut-shoot-session", 1);
       request.onupgradeneeded = () => request.result.createObjectStore("session");
       request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      request.onerror = () => reject(new Error(`fixture DB open: ${request.error?.name}: ${request.error?.message}`));
     });
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction("session", "readwrite");
       const store = tx.objectStore("session");
       const shotKeys = [0, 1, 2, 3].map((index) => `photo:test-${index}`);
-      for (const key of shotKeys) store.put({ key, blob }, key);
+      for (const key of shotKeys) {
+        const write = store.put({ key, blob }, key);
+        write.onerror = () => reject(new Error(`fixture photo write: ${write.error?.name}: ${write.error?.message}`));
+      }
       store.put({
         frameId: "classic-4", remoteFrameId: 999, source: "camera", shotsFrameId: "classic-4",
         selectedIndexes: [0, 1, 2, 3], borderColor: "#ffffff", outputFilter: "NONE",
         eventName: null, composeIdempotency: null, shotKeys, savedAt: Date.now(),
       }, "meta");
       tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onabort = () => { db.close(); reject(new Error(`fixture transaction abort: ${tx.error?.name}: ${tx.error?.message}`)); };
     });
   });
 
