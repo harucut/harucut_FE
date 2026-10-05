@@ -3,6 +3,7 @@
 import { useId } from "react";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 import type { FrameLayout } from "@/constants/frameLayouts";
+import { componentImageSrc } from "@/lib/canvas/componentSource";
 
 type ThemeOverlaySvgProps = {
   layout: FrameLayout;
@@ -107,7 +108,7 @@ export function ThemeOverlaySvg({
           return (
             <g key={c.id} transform={transform} opacity={opacity}>
               <image
-                href={c.source}
+                href={componentImageSrc(c)}
                 x={0}
                 y={0}
                 width={c.width}

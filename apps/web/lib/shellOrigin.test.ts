@@ -5,10 +5,29 @@
  * `window.ReactNativeWebView.postMessage` 로 네이티브 브리지(사진 저장·알림 권한·공유)를
  * 부를 수 있다. 그래서 "통과시키면 안 되는 것"을 중심으로 적는다.
  */
-import { isOAuthFlowUrl, isSameOrigin, originOf } from "@harucut/shared";
+import { canonicalOAuthCallbackUrl, resolveShellOrigin, isOAuthFlowUrl, isSameOrigin, originOf } from "@harucut/shared";
 
 const WEB = "https://www.harucut.com";
 const API = "https://api.harucut.com";
+
+describe("릴리스 주소와 운영 소셜 콜백", () => {
+  it.each(["http://localhost:3000", "https://preview.example", "https://www.harucut.com", undefined])("릴리스는 설정 %s에 관계없이 공식 웹을 연다", (value) => {
+    expect(resolveShellOrigin(value, WEB, false)).toBe(WEB);
+  });
+  it("개발 모드에서만 로컬 원점을 쓴다", () => {
+    expect(resolveShellOrigin("http://localhost:3000/", WEB, true)).toBe("http://localhost:3000");
+  });
+  it.each(["javascript:alert(1)", "https://name:secret@www.harucut.com", "http://localhost:3000/shoot", "not a url"])("잘못된 개발 설정 %s는 버린다", (value) => {
+    expect(resolveShellOrigin(value, WEB, true)).toBe(WEB);
+  });
+  it("apex 콜백의 성공·실패 쿼리를 같은 WebView의 www로 옮긴다", () => {
+    expect(canonicalOAuthCallbackUrl("https://harucut.com/oauth2/callback?error=access_denied", WEB)).toBe(`${WEB}/oauth2/callback?error=access_denied`);
+    expect(isSameOrigin("https://harucut.com/oauth2/callback", WEB)).toBe(false);
+  });
+  it.each(["https://harucut.com/home", "https://harucut.com/oauth2/callback/evil", "https://harucut.com.evil.example/oauth2/callback", "https://harucut.com:8443/oauth2/callback", "http://harucut.com/oauth2/callback", "https://name:secret@harucut.com/oauth2/callback"])("콜백 예외를 %s로 넓히지 않는다", (url) => {
+    expect(canonicalOAuthCallbackUrl(url, WEB)).toBeNull();
+  });
+});
 
 describe("originOf", () => {
   it("경로·쿼리를 떼고 오리진만 남긴다", () => {

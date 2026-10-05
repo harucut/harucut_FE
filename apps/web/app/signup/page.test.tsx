@@ -127,6 +127,18 @@ function fillForm() {
 }
 
 describe("SignupPage 약관 동의 보관", () => {
+  it("제출 오류가 생기면 첫 오류 입력칸을 보여 주고 설명을 연결한다", async () => {
+    render(<SignupPage />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "different123" } });
+    fireEvent.click(screen.getByRole("button", { name: "회원가입" }));
+    const input = screen.getByLabelText("비밀번호 확인");
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(document.getElementById(input.getAttribute("aria-describedby")!)).toHaveTextContent("비밀번호가 서로 일치하지 않습니다.");
+    expect(mockSignupWithEmail).not.toHaveBeenCalled();
+  });
+
   it("가입에 성공하면 고른 동의를 가입 이메일과 함께 보관한다", async () => {
     render(<SignupPage />);
     fillForm();

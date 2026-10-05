@@ -8,12 +8,15 @@
 | 알고 싶은 것 | 문서 |
 |---|---|
 | 백엔드가 실제로 뭘 주고받나 (경로·필드·에러코드) | [backend-contract.md](./backend-contract.md) |
+| 배경·스티커를 서버에 등록하는 이름 규칙 | [frame-assets.md](./frame-assets.md) |
 | 로컬 백엔드 띄우기 (도커·Apple Silicon·계정 만들기) | [local-backend.md](./local-backend.md) |
 | 백엔드에 **요청해야 할 것** (전체 목록과 오늘 상태는 그 문서가 쥔다) | [app-shell-backend-requests.md](./app-shell-backend-requests.md) |
 | 앱(iOS·Android) 웹뷰 셸 구조와 촬영 화질 | [mobile-shell.md](./mobile-shell.md) |
 | 화면 이동 흐름 | [route-flows.md](./route-flows.md) |
 | 로그인·리다이렉트·게스트 체험 | [auth-routing.md](./auth-routing.md) |
 | 앱 QA 수동 확인 | [mobile-qa-checklist.md](./mobile-qa-checklist.md) |
+| harucut 앱 이름·설명과 vailen 운영 표기 | [release/store-listing-ko.md](./release/store-listing-ko.md) |
+| 웹·앱 출시 변경과 검증 범위 및 남은 조건 | [release/launch-status.md](./release/launch-status.md) |
 | 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
 | 지난 계획 — **실행 기준 아님** | [archive/](./archive/) (각 문서 머리에 왜 보관인지 적혀 있다) |
@@ -58,6 +61,12 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료�
 에러코드는 **컨테이너 안 jar 의 `ErrorCode` enum** 에서 직접 뽑는다 — 스웨거 응답 예시만
 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로 잘못 짚는다. 스웨거에 적힌
 코드는 jar 의 52개보다 적다(세는 방법에 따라 45~47).
+
+**`--base-url` 이 로컬(`localhost`·`127.0.0.1`)이 아니면 jar 를 읽지 않는다** — 컨테이너는 늘 이
+기계의 것이라, 운영(`--base-url https://api.harucut.com`) 스펙에 대면 두 서버를 섞는다. 그때는
+스웨거 기준으로 낮춰서 C 의 「죽음」이 스웨거에 안 적힌 코드만큼 나온다(2026-10-05 로컬 스펙을
+비로컬로 읽어 7건 — `AUTH-005/006`·`GEN-001/005/011/041/091`). **거짓 경보라 문구표에서 지우지
+않는다.** 누락은 그대로 실패다.
 
 스크립트가 검사 범위를 넘겨 말하지 않는지는 `python3 scripts/check_backend_contract_test.py`
 로 본다 — 백엔드도 도커도 없이 돈다.

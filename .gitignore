@@ -16,7 +16,6 @@ build/
 coverage/
 playwright-report/
 test-results/
-storybook-static/
 apps/mobile/.expo/
 apps/mobile/dist/
 apps/mobile/.vscode/
@@ -54,6 +53,7 @@ next-env.d.ts
 
 # 빌드 산출물
 *.aab
+apps/mobile/dist-release/
 
 # 디자인 핸드오프 소스 (필요한 자산은 각 앱으로 복사; 원본은 로컬 참고용으로만 보관)
 /handoff/

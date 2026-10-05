@@ -15,7 +15,7 @@
  */
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,7 +49,8 @@ const files = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
       (f.endsWith(".ts") || f.endsWith(".tsx")) &&
       !f.includes("/node_modules/") &&
       !f.startsWith(".claude/") &&
-      !f.startsWith(".github/skills/"),
+      !f.startsWith(".github/skills/") &&
+      existsSync(join(ROOT, f)),
   );
 
 const VALUE_RE = /(?<![\w-])([a-z][a-z0-9-]*)-\[([^\]\s"`]+)\]/g;

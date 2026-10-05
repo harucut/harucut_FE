@@ -59,7 +59,7 @@ env 에 주지 않고, iOS 는 react-native-webview 기본값 `contentInsetAdjus
 - **로그인·회원가입 CTA 를 잉크 버튼으로** — 바로 아래 네이버 버튼이 브랜드 초록(가이드가 색을 못박음)이라 라이트에서 우리 초록과
   같은 버튼 둘로 읽혔다. 초록을 쓸 수 없는 자리의 주 CTA 로 `.hc-button-ink`(라이트 잉크·다크 흰색)를 뒀다(DESIGN.md Buttons).
 - **데모 사진 해상도** — `/demo/cut-*.webp` 가 143×206 이라 CSS 143px 슬롯에서도 레티나에서 흐렸다(첫 화면의 그림이 제품에서 가장
-  흐린 것). 2배 원본(hero-image.png 900×1200)에서 같은 좌표로 다시 잘라 286×412 로. FramePreview img 에는 슬롯 비율 힌트.
+  흐린 것). 2배 원본(hero-image.png 900×1200, 지금은 `apps/web/assets-src/`)에서 같은 좌표로 다시 잘라 286×412 로. FramePreview img 에는 슬롯 비율 힌트.
 - **히어로 LCP** — 헤드라인·부제·CTA·콜라주가 IntersectionObserver 를 기다리는 `.hc-reveal` 이라 하이드레이션 전엔 opacity 0 이었다.
   첫 화면은 CSS 애니메이션 판(`Reveal immediate` → `.hc-reveal-now`)으로 첫 페인트에서 바로 재생.
 

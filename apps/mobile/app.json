@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Harucut",
+    "name": "harucut",
     "slug": "harucut-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,6 +10,17 @@
     "newArchEnabled": true,
     "android": {
       "package": "com.harucut.app",
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0B0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
@@ -33,7 +44,8 @@
         {
           "savePhotosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
           "photosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
-          "isAccessMediaLocationEnabled": false
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": []
         }
       ],
       [

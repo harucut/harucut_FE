@@ -80,8 +80,11 @@ describe("프레임을 다시 고를 때 들고 온 사진", () => {
     expect(mockPush).toHaveBeenCalledWith("/shoot/select");
   });
 
-  it("촬영본은 슬롯 비율이 달라지면 비우고 다시 촬영으로 보낸다", () => {
+  it("사진 비율이 바뀌어도 확인 전에는 촬영본을 지우지 않는다", () => {
     renderWithKeptShots("camera");
+    expect(useShootSession.getState().shots).toEqual(SHOTS);
+    expect(mockPush).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "사진 지우고 다시 촬영" }));
     expect(useShootSession.getState().shots).toEqual([]);
     expect(mockPush).toHaveBeenCalledWith("/shoot/capture");
   });
@@ -355,5 +358,27 @@ describe("행사 QR 진입의 게스트 전환", () => {
 
     await act(async () => {});
     expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+  });
+});
+
+describe("기존 촬영 복구", () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    mockQuery = "";
+    useShootSession.getState().reset();
+    useShootSession.setState({ frameId: "classic-4", shotsFrameId: "classic-4", shots: SHOTS });
+  });
+  it("다시 들어오면 사진을 지우지 않고 이어 만들기를 안내한다", () => {
+    render(<ShootPage />);
+    expect(useShootSession.getState().shots).toEqual(SHOTS);
+    fireEvent.click(screen.getByRole("button", { name: "이어서 만들기" }));
+    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+  });
+  it("새 촬영은 삭제를 확인한 뒤에만 사진을 비운다", () => {
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "새로 시작하기" }));
+    expect(useShootSession.getState().shots).toEqual(SHOTS);
+    fireEvent.click(screen.getByRole("button", { name: "사진 지우고 시작" }));
+    expect(useShootSession.getState().shots).toEqual([]);
   });
 });

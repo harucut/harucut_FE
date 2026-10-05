@@ -36,8 +36,11 @@ describe("SingleFieldDialog", () => {
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(onClose).not.toHaveBeenCalled();
-    // 눌러도 소용없는 버튼을 눌러 보게 두지 않는다.
-    expect(screen.getByRole("button", { name: "취소" })).toBeDisabled();
+    // 눌러도 소용없다는 것은 알리되 포커스 자리로는 남긴다 — 입력·저장이 disabled 라
+    // 취소까지 disabled 면 모달의 Tab 트랩이 빈 배열이 된다(ConfirmDialog 와 같다).
+    const cancel = screen.getByRole("button", { name: "취소" });
+    expect(cancel).toHaveAttribute("aria-disabled", "true");
+    expect(cancel).toBeEnabled();
   });
 
   /*
@@ -60,10 +63,8 @@ describe("SingleFieldDialog", () => {
   /*
     회귀 — **배경 버튼은 `disabled` 로 막지 않는다.**
 
-    붙이면 저장 중에 눌릴 수 있는 컨트롤이 하나도 남지 않아 `useModalDialog` 의 포커스
-    트랩이 죽는다(`focusables()` 가 `button:not([disabled])` 로 거른다). `ConfirmDialog`
-    에서 같은 이유로 뺐고, 입력까지 `disabled` 인 이 화면은 더 그렇다.
-    막는 것은 `disabled` 가 아니라 `requestClose` 안의 가드다.
+    막는 것은 `disabled` 가 아니라 `requestClose` 안의 가드다. 트랩과는 무관하다 —
+    `focusables()` 는 카드 안만 훑어 배경은 셈에 안 든다. 트랩은 첫 케이스의 취소 버튼이 붙잡는다.
   */
   it("저장 중에도 배경 버튼 자체는 포커스를 받을 수 있다", () => {
     renderDialog(true);

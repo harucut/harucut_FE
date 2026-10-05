@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { FeaturesView } from "@/components/features/FeaturesView";
 
 export const metadata: Metadata = {
-  title: "기능 | 하루컷",
+  title: "네컷 촬영·배경·스티커 프레임 꾸미기 | harucut 하루컷",
   description:
-    "부스에 가지 않아도 어디서든 네 컷. 스티커·텍스트·누끼로 프레임을 직접 만들고, 찍은 네 컷을 계정에 그대로 보관하세요.",
+    "휴대폰 카메라로 네컷 사진을 찍고 배경·스티커·글자로 나만의 프레임을 만드세요. 결혼식 하객과 여행 중인 연인을 위한 harucut 하루컷의 촬영·꾸미기·저장 기능.",
   alternates: { canonical: "/features" },
 };
 

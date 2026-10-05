@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SwitchCamera, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
@@ -15,6 +17,8 @@ import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 const subscribeNever = () => () => undefined;
 
 export default function CapturePage() {
+  const router = useRouter();
+  const [confirmRestart, setConfirmRestart] = useState(false);
   const {
     videoRef,
     canvasRef,
@@ -28,6 +32,7 @@ export default function CapturePage() {
     setTimerSeconds,
     startCamera,
     startShooting,
+    resumeShooting,
     handleShootNow,
     switchCamera,
     canFlipCamera,
@@ -290,6 +295,16 @@ export default function CapturePage() {
           헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인 인코딩을 정리한다),
           전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
         */}
+        {!isShooting && shots.length > 0 ? (
+          <div className="flex shrink-0 justify-center gap-3">
+            {shots.length >= 4 ? <button type="button" className="hc-button-primary rounded-full px-5 py-3 text-sm" onClick={() => router.push("/shoot/select")}>
+              찍은 사진 고르기
+            </button> : null}
+            {shots.length < MAX_SHOTS && isCameraReady ? <button type="button" className="hc-button-ghost rounded-full border px-5 py-3 text-sm" onClick={resumeShooting}>
+              이어서 찍기
+            </button> : null}
+          </div>
+        ) : null}
         <div className="relative flex h-22 shrink-0 items-center justify-center [@media(max-height:700px)]:h-18">
           {canFlipCamera ? (
             <button
@@ -318,10 +333,10 @@ export default function CapturePage() {
           ) : isCameraReady ? (
             <button
               type="button"
-              onClick={startShooting}
+              onClick={() => shots.length ? setConfirmRestart(true) : startShooting()}
               className="hc-button-primary inline-flex h-12 items-center rounded-full px-8 text-[15px] font-extrabold"
             >
-              촬영 시작
+              {shots.length ? "처음부터 다시 촬영" : "촬영 시작"}
             </button>
           ) : (
             <button
@@ -335,6 +350,9 @@ export default function CapturePage() {
           )}
         </div>
       </div>
+      {confirmRestart ? <ConfirmDialog title="처음부터 다시 찍을까요?" description={`찍어 둔 사진 ${shots.length}장을 지우고 새로 촬영해요.`}
+        confirmLabel="지우고 다시 촬영" running={false} destructive
+        onClose={() => setConfirmRestart(false)} onConfirm={() => { setConfirmRestart(false); startShooting(); }} /> : null}
     </main>
   );
 }

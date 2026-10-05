@@ -31,6 +31,18 @@ const theme: ThemeExportJson = {
 };
 
 describe("ThemeOverlaySvg", () => {
+  it("저장한 스티커는 S3 키 대신 서명된 표시 주소로 그린다", () => {
+    const { container } = render(
+      <ThemeOverlaySvg layout={layout} data={{ ...theme, components: [{
+        ...theme.components[0], type: "STICKER",
+        source: "uploads/users/me/components/heart.png",
+        renderUrl: "https://harucuts3.s3.ap-northeast-2.amazonaws.com/uploads/users/me/components/heart.png?signature=test",
+      }] }} />,
+    );
+    expect(container.querySelector("image")).toHaveAttribute(
+      "href", expect.stringContaining("https://harucuts3.s3.ap-northeast-2.amazonaws.com/"),
+    );
+  });
   // data가 없으면 오버레이 SVG 자체를 렌더하지 않아야 합니다.
   it("does not render when data is null", () => {
     const { container } = render(<ThemeOverlaySvg layout={layout} data={null} />);
@@ -63,4 +75,3 @@ describe("ThemeOverlaySvg", () => {
     expect(screen.getByText("ABC")).toBeInTheDocument();
   });
 });
-

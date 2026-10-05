@@ -1,7 +1,9 @@
 import { safeNativeFilename } from '@harucut/shared';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
-import * as MediaLibrary from 'expo-media-library';
+// SDK 57의 기본 export에 남은 saveToLibraryAsync는 런타임에서 던진다.
+// 저장 전용 권한과 기존 저장 API를 제공하는 공식 legacy 진입점을 사용한다.
+import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Notifications from 'expo-notifications';
 import { PermissionsAndroid, Platform, Share } from 'react-native';
 

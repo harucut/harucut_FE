@@ -1,8 +1,10 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FrameChooser } from "@/components/frame/FrameChooser";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { sanitizeEventName } from "@/lib/eventName";
+import { FrameChooser, type FrameChoice } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EventBanner } from "@/components/event/EventBanner";
 import { resolveMembership } from "@/lib/authSession";
@@ -45,17 +47,21 @@ function ShootPageContent() {
     아래 reset() 을 지나며 8장을 통째로 지웠다("다른 프레임을 골라 주세요" 라고 안내해 놓고).
   */
   const keepShots = searchParams.get("keepShots") === "1";
+  const [resumeAvailable, setResumeAvailable] = useState(() => !keepShots && useShootSession.getState().shots.length > 0);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [pendingFrame, setPendingFrame] = useState<FrameChoice | null>(null);
   // 촬영으로 갈지 불러오기로 갈지는 **주소가 들고 있다.** 상태가 아니라 "다음 단계가
   // 무엇인가"라는 라우팅 정보라, 새로고침하거나 링크를 공유해도 그대로여야 한다.
   const source = searchParams.get("source") === "upload" ? "upload" : "camera";
   // 행사장 QR 은 `/shoot?frame=...&event=행사이름` 으로 들어온다. 이름은 화면에만 쓰므로
   // 길이를 잘라 두고(제목 한 줄), 앞뒤 공백은 버린다.
   const queriedEventName =
-    (searchParams.get("event") ?? "").trim().slice(0, 40) || null;
+    sanitizeEventName(searchParams.get("event"));
   // 화면에는 세션에 자리잡은 값을 쓴다 — 아래 effect 가 쿼리와 이어 가기 여부로 정한 값이다.
   const eventName = useShootSession((state) => state.eventName);
-  const { frames, isLoading, error, refresh } = useMyFrames();
   const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const guestHydrated = useGuestTrialStore((state) => state.hydrated);
+  const { frames, isLoading, error, refresh } = useMyFrames(guestHydrated && accessMode === "member");
 
   useEffect(() => {
     /*
@@ -66,6 +72,7 @@ function ShootPageContent() {
       반대로 쿼리도 `keepShots` 도 없는 진입은 **새 촬영**이다. 여기서 이어 쓰면 행사 QR 로
       한 번 찍은 브라우저가 그 뒤의 일반 촬영·결과 화면까지 지난 행사 배너를 달고 다닌다.
     */
+    if (resumeAvailable) return;
     const carried = keepShots ? useShootSession.getState().eventName : null;
     if (keepShots) resetFrameSelection();
     else reset();
@@ -73,6 +80,7 @@ function ShootPageContent() {
     // reset 이 출처를 기본값으로 되돌린다. 주소가 진실이므로 다시 심는다.
     setSource(source);
   }, [
+    resumeAvailable,
     keepShots,
     queriedEventName,
     reset,
@@ -146,6 +154,52 @@ function ShootPageContent() {
     })();
   }, [accessMode, enterGuestMode, exitGuestMode, hydrated, queriedEventName]);
 
+  const confirmFrame = ({ frameId, remoteFrameId }: FrameChoice, allowReset = false) => {
+    const session = useShootSession.getState();
+    // 갤러리 사진은 원본이고, 촬영본만 이전 슬롯 비율로 이미 잘려 있다.
+    const reusable = source === "upload" ||
+      (session.shotsFrameId != null && slotRatioMatches(session.shotsFrameId, frameId));
+    if (!allowReset && session.shots.length > 0 && !reusable) {
+      setPendingFrame({ frameId, remoteFrameId });
+      return;
+    }
+    setFrameId(frameId);
+    setRemoteFrameId(remoteFrameId);
+    setSource(source);
+    if (session.shots.length > 0 && reusable) {
+      router.push("/shoot/select");
+      return;
+    }
+    if (session.shots.length > 0) session.resetShots();
+    if (source === "upload") {
+      // 인증 프록시가 되돌릴 때도 행사와 프레임을 보존한다.
+      const next = new URLSearchParams({ frame: frameId });
+      if (eventName) next.set("event", eventName);
+      router.push(`/shoot/upload?${next.toString()}`);
+      return;
+    }
+    router.push("/shoot/capture");
+  };
+
+  if (resumeAvailable) {
+    const session = useShootSession.getState();
+    const resumePath = session.frameId
+      ? session.shots.length >= 4 ? "/shoot/select" : session.source === "upload" ? "/shoot/upload" : "/shoot/capture"
+      : "/shoot?keepShots=1";
+    return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">
+      <div className="mx-auto flex max-w-md flex-col gap-4">
+        <PageHeader title="촬영하던 사진이 있어요" backHref="/home" backLabel="홈으로" />
+        <p>{session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.</p>
+        <button type="button" className="hc-pressable min-h-11 rounded-xl bg-(--hc-primary) px-4 py-3 font-semibold text-(--hc-primary-contrast)" onClick={() => {
+          if (session.frameId) router.push(resumePath);
+          else { router.replace(resumePath); setResumeAvailable(false); }
+        }}>이어서 만들기</button>
+        <button type="button" className="hc-pressable min-h-11 rounded-xl border border-(--hc-border) px-4 py-3" onClick={() => setConfirmRestart(true)}>새로 시작하기</button>
+        {confirmRestart && <ConfirmDialog running={false} title="새로 시작할까요?" description={`임시 보관한 사진 ${session.shots.length}장이 이 기기에서 지워져요.`} confirmLabel="사진 지우고 시작" destructive onClose={() => setConfirmRestart(false)} onConfirm={() => { reset(); setConfirmRestart(false); setResumeAvailable(false); }} />}
+      </div>
+    </main>;
+  }
+
   return (
     <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
@@ -163,50 +217,7 @@ function ShootPageContent() {
           confirmLabel={source === "upload" ? "사진 고르러 가기" : "촬영 시작하기"}
           // 비회원은 프레임 조회 자체가 인증이 필요해 목록을 볼 수 없다.
           hideSavedFrames={accessMode !== "member"}
-          onConfirm={({ frameId, remoteFrameId }) => {
-            setFrameId(frameId);
-            setRemoteFrameId(remoteFrameId);
-            setSource(source);
-
-            /*
-              사진을 들고 왔다면 다시 구할 필요가 없다 — 고르는 화면으로 바로 보낸다.
-
-              비율을 따지는 것은 촬영본뿐이다. 갤러리 사진은 원본 비율 그대로 담기고
-              (`lib/photoImport.ts`) 자르기는 미리보기·합성이 **새 프레임** 기준으로 하므로,
-              여기서 비우면 사용자가 고른 사진만 헛되이 잃는다.
-            */
-            const { shots, shotsFrameId, resetShots } = useShootSession.getState();
-            if (shots.length > 0) {
-              const reusable =
-                source === "upload" ||
-                (shotsFrameId != null && slotRatioMatches(shotsFrameId, frameId));
-              if (reusable) {
-                router.push("/shoot/select");
-                return;
-              }
-              // 슬롯 비율로 잘려 저장된 촬영본은 새 프레임에 못 쓴다. 비우고 다시 찍게 한다.
-              resetShots();
-            }
-
-            /*
-              **갤러리 불러오기로 갈 때는 행사·프레임을 주소에 실어 보낸다.**
-
-              그 경로는 회원 전용이라 게스트 쿠키가 이미 있으면 **화면이 마운트되기 전에**
-              프록시가 막는다. 프록시는 세션을 못 보므로, 되돌릴 주소에 넣을 것이 요청에
-              실려 있지 않으면 행사 배너와 QR 이 지정한 프레임이 그대로 사라진다
-              (`/shoot` 은 쿼리 없는 진입을 새 촬영으로 보고 세션을 비운다).
-
-              업로드 화면 자체는 이 쿼리를 읽지 않는다 — 세션에서 같은 값을 꺼낸다.
-              여기 싣는 이유는 **프록시가 되돌릴 때 잃지 않기 위해서**다.
-            */
-            if (source === "upload") {
-              const next = new URLSearchParams({ frame: frameId });
-              if (eventName) next.set("event", eventName);
-              router.push(`/shoot/upload?${next.toString()}`);
-              return;
-            }
-            router.push("/shoot/capture");
-          }}
+          onConfirm={(choice) => confirmFrame(choice)}
           missingRemoteFrameNotice={
             <p
               role="status"
@@ -219,6 +230,13 @@ function ShootPageContent() {
         >
           {eventName ? <EventBanner eventName={eventName} /> : null}
         </FrameChooser>
+        {pendingFrame ? <ConfirmDialog
+          title="새 비율로 다시 촬영할까요?"
+          description="선택한 프레임은 사진 비율이 달라요. 다시 촬영하면 현재 사진이 이 기기에서 지워져요. 사진을 남기려면 취소하고 같은 비율의 프레임을 골라 주세요."
+          confirmLabel="사진 지우고 다시 촬영" destructive running={false}
+          onClose={() => setPendingFrame(null)}
+          onConfirm={() => { const choice = pendingFrame; setPendingFrame(null); confirmFrame(choice, true); }}
+        /> : null}
       </div>
     </main>
   );

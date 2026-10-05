@@ -403,3 +403,15 @@ describe("useModalDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+test("겹친 모달이 모두 닫힐 때만 배경 스크롤을 원래 값으로 복원한다", () => {
+  document.body.style.overflow = "auto";
+  const first = render(<Dialog name="첫 안내" />);
+  const second = render(<Dialog name="둘째 안내" />);
+  expect(document.body.style.overflow).toBe("hidden");
+  first.unmount();
+  expect(document.body.style.overflow).toBe("hidden");
+  second.unmount();
+  expect(document.body.style.overflow).toBe("auto");
+  document.body.style.overflow = "";
+});

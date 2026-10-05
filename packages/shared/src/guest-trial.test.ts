@@ -64,8 +64,8 @@ describe('비회원 회원 전용 목록 — 갤러리 불러오기', () => {
 
 describe('비회원 체험 허용 범위', () => {
   // 허용 쪽이 갤러리를 말하면 "불러오기가 된다"는 약속이 된다. 코드는 막고 있다.
-  it('허용 목록은 촬영과 이미지 저장까지만 말한다', () => {
-    expect(GUEST_ALLOWED_ITEMS).toBe('사진 촬영과 이미지 저장');
+  it('허용 목록은 촬영·이미지 저장·파일 공유를 말한다', () => {
+    expect(GUEST_ALLOWED_ITEMS).toBe('사진 촬영, 이미지 저장과 파일 공유');
     expect(mentionsGallery(GUEST_ALLOWED_ITEMS)).toBe(false);
   });
 

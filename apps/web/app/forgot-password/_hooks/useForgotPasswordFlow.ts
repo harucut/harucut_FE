@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import {
+  getApiErrorDetails,
+  getUserFacingApiErrorMessage,
+} from "@/lib/apiError";
 import { validateEmail, validatePassword } from "@/lib/authValidation";
 import {
   requestPasswordResetCode,
@@ -167,6 +170,16 @@ export function useForgotPasswordFlow() {
       return true;
     } catch (error) {
       console.error(error);
+      // 재설정 토큰이 만료됐거나 이미 쓰였다(AUTH-011). 공통 문구는 「다시 로그인」이라 이 화면에선
+      // 틀린 안내다 — 코드 단계로 되돌려 새 코드를 받게 한다. 이메일은 그대로 둔다.
+      if (getApiErrorDetails(error).code === "AUTH-011") {
+        setResetToken(null);
+        setCode("");
+        setCodeExpiresAt(null);
+        setStep("VERIFY_CODE");
+        setErrors({ code: "인증 시간이 지났어요. 인증 코드를 다시 받아 주세요." });
+        return false;
+      }
       setErrors({
         common: getUserFacingApiErrorMessage(
           error,

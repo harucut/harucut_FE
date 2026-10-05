@@ -1,0 +1,76 @@
+name: mobile-qa
+
+# 스토어 서명 키 없이 만들 수 있는 설치 시험용 APK. Play 업로드용 서명이 아니다.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - apps/mobile/**
+      - packages/shared/**
+      - pnpm-lock.yaml
+      - patches/**
+      - .github/workflows/mobile-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-qa-${{ github.event.pull_request.number || github.ref }}
+  # PR에 웹 커밋이 추가돼도 이미 시작한 네이티브 컴파일은 끝내고 산출물을 남긴다.
+  cancel-in-progress: false
+
+jobs:
+  android:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_NO_DOTENV: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:runtime:mobile
+      - run: pnpm --dir apps/mobile exec expo prebuild --platform android --no-install
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Build installable QA APK
+        working-directory: apps/mobile/android
+        run: ./gradlew --no-daemon :app:assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
+      - name: Check final APK permissions and backup policy
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, xml.etree.ElementTree as ET
+          analyzer = pathlib.Path(os.environ['ANDROID_HOME']) / 'cmdline-tools/latest/bin/apkanalyzer'
+          apk, = pathlib.Path('apps/mobile/android/app/build/outputs/apk/release').glob('*.apk')
+          config = json.loads(pathlib.Path('apps/mobile/app.json').read_text())['expo']['android']
+          permissions = subprocess.check_output([str(analyzer), 'manifest', 'permissions', str(apk)], text=True).splitlines()
+          assert not set(permissions) & set(config['blockedPermissions']), 'Blocked permissions remain in APK'
+          manifest = ET.fromstring(subprocess.check_output([str(analyzer), 'manifest', 'print', str(apk)]))
+          application = manifest.find('application')
+          prefix = '{http://schemas.android.com/apk/res/android}'
+          assert application.get(prefix + 'allowBackup') == 'false', 'Backup must be disabled'
+          assert application.get(prefix + 'debuggable', 'false') == 'false', 'Release APK must not be debuggable'
+          print('APK permissions, backup and debuggable policy verified')
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: harucut-android-qa-${{ github.sha }}
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

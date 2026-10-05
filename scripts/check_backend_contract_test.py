@@ -18,6 +18,8 @@
   7. 본문이 **최상위 배열**인 경로(`POST /api/auth/terms/consents`)도 검사에 드는가 —
      필수 필드가 `items` 의 항목 스키마에 있어서, 거기까지 안 따라가면 그 경로만
      통째로 빠진 채 "A·B·C·D 일치" 가 찍힌다.
+  8. --base-url 이 로컬이 아니면 **로컬 jar 를 대지 않는가** — 컨테이너는 늘 이 기계의
+     것이라, 운영 스펙에 대면 서로 다른 두 서버를 섞어 C 를 판정한다.
 
 레포에 pytest 가 없고 scripts/ 에도 테스트 하네스가 없어서, 표준 라이브러리만 쓰고
 직접 돌리는 형태로 둔다:
@@ -47,6 +49,7 @@ REAL_COLLECT_FE_PAYLOADS = cbc.collect_fe_payloads
 
 COMPOSE = "/api/auth/user/media/compose"
 FE_ROUTE = "/api/client/user/media/compose"
+LOCAL = "http://localhost:8080"
 
 
 def spec_with(required: list[str]) -> dict:
@@ -98,6 +101,7 @@ def run(
     called: bool = True,
     payload: set[str] | None = frozenset({"frameId", "sourceKeys", "idempotencyKey"}),
     sites: list[tuple[str, set[str] | None]] | None = None,
+    jar=lambda: {"GEN-001"},
 ) -> tuple[int, str]:
     """실제 main() 을 돌리되 백엔드·도커·파일 스캔은 전부 가짜로 채운다.
 
@@ -114,10 +118,12 @@ def run(
     cbc.has_caller = lambda _route: called
     cbc.collect_fe_payloads = lambda: {("POST", FE_ROUTE): call_sites}
     # C 를 깨끗하게 통과시켜 A·B·C 가 전부 OK 인 상태를 만든다.
-    cbc.jar_error_codes = lambda: {"GEN-001"}
+    cbc.jar_error_codes = jar
     cbc.fe_error_codes = lambda: {"GEN-001"} | cbc.CLIENT_ONLY_CODES
 
-    sys.argv = ["check_backend_contract.py", *argv]
+    # jar 를 쓸지가 --base-url 에 달렸다. HARUCUT_API 가 운영을 가리키는 셸에서도 같은 결과가
+    # 나오게 로컬로 고정한다 — argparse 는 뒤에 온 값을 쓰므로 argv 로 덮을 수 있다.
+    sys.argv = ["check_backend_contract.py", "--base-url", LOCAL, *argv]
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         code = cbc.main()
@@ -308,6 +314,38 @@ def test_missing_backend_path_still_fails() -> None:
     code, out = run([], spec={"paths": {}, "components": {"schemas": {}}})
     assert code == 1, out
     assert "가 백엔드에 없다" in out, out
+
+
+def test_remote_base_url_never_reads_local_jar() -> None:
+    """운영을 대조할 때 로컬 컨테이너의 jar 를 대지 않는다.
+
+    예전에는 --base-url 과 무관하게 늘 로컬 jar 를 읽었다. 운영 스펙 ↔ 로컬 jar 로 섞이면
+    로컬에만 맞춘 FE 표가 운영 기준 누락을 가린다. 여기서 jar 는 GEN-001 을 줘서 통과시키려
+    들지만, 운영 스웨거가 적은 AUTH-012 가 FE 표에 없으니 누락으로 걸려야 한다.
+    """
+    def jar_must_not_run():
+        raise AssertionError("로컬이 아닌데 jar 를 읽었다")
+
+    spec = spec_with(["frameId", "sourceKeys"])
+    spec["paths"][COMPOSE]["post"]["responses"]["401"] = {"description": "만료 `AUTH-012`"}
+    code, out = run(["--base-url", "https://api.harucut.com"], spec=spec, jar=jar_must_not_run)
+    assert code == 1, out
+    assert "누락 AUTH-012" in out, out
+    assert "로컬이 아니라 jar 를 안 읽고 스웨거 기준으로 대조했다" in out, out
+
+
+def test_loopback_base_url_still_reads_jar() -> None:
+    """127.0.0.1 도 로컬이다 — 지금처럼 jar 기준으로 대조한다."""
+    calls: list[int] = []
+
+    def jar():
+        calls.append(1)
+        return {"GEN-001"}
+
+    code, out = run(["--base-url", "http://127.0.0.1:8080"], jar=jar)
+    assert calls, out
+    assert code == 0, out
+    assert "기준: 실행 중인 jar 의 ErrorCode enum" in out, out
 
 
 if __name__ == "__main__":

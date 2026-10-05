@@ -2,6 +2,7 @@
 
 import {
   CLIENT_NETWORK_UNREACHABLE_CODE,
+  CLIENT_REISSUE_UNAVAILABLE_CODE,
   getApiErrorMessageByCode,
 } from "@harucut/shared";
 
@@ -387,5 +388,63 @@ describe("clientApi — Next 서버에 닿지 못한 경우", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+/*
+  재발급이 실패한 **까닭**을 가른다 — 세션이 끊겼나, 재발급 서버가 잠깐 못 답했나.
+
+  refresh 쿠키가 아예 없으면 재발급은 401 이 아니라 400(GEN-004 "Missing request parameter.")이다
+  (2026-10-05 로컬 백엔드 실측, 운영과 계약 동일). 예전엔 이것을 일시 장애로 읽어서, 쿠키가 다
+  사라진 사람은 로그인 안내 대신 「잠시 후 다시 시도해 주세요」만 끝없이 봤다.
+*/
+describe("clientApi — 재발급 실패의 판정", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    registerSessionExpiredHandler(null);
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  function envelope(status: number, code: string, message: string) {
+    return new Response(JSON.stringify({ code, status, message }), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  /** 원요청은 늘 401(쿠키 없음). 재발급의 답만 바꿔 끼운다. */
+  function respondReissueWith(reissue: () => Response) {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) =>
+      urlOf(input) === "/api/client/reissue"
+        ? reissue()
+        : envelope(401, "AUTH-010", "Authentication failed."),
+    ) as unknown as typeof fetch;
+  }
+
+  it("refresh 쿠키가 없어 재발급이 400 이면 원래 401 을 올리고 만료 핸들러를 부른다", async () => {
+    const onSessionExpired = jest.fn();
+    registerSessionExpiredHandler(onSessionExpired);
+    respondReissueWith(() => envelope(400, "GEN-004", "Missing request parameter."));
+
+    await expect(clientApi.get("/api/client/user-info")).rejects.toMatchObject({
+      status: 401,
+      code: "AUTH-010",
+    });
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
+
+  // 반대쪽 못 — 재발급 서버의 5xx 까지 만료로 접으면 잠깐의 장애가 곧 강제 로그아웃이 된다.
+  it("재발급이 5xx 면 만료가 아니라 재시도 가능한 오류다", async () => {
+    const onSessionExpired = jest.fn();
+    registerSessionExpiredHandler(onSessionExpired);
+    respondReissueWith(() => envelope(503, "GEN-091", "Internal server error."));
+
+    await expect(clientApi.get("/api/client/user-info")).rejects.toMatchObject({
+      status: 503,
+      code: CLIENT_REISSUE_UNAVAILABLE_CODE,
+    });
+    expect(onSessionExpired).not.toHaveBeenCalled();
   });
 });

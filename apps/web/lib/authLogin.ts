@@ -6,7 +6,8 @@ import {
 
 const backendBase = process.env.NEXT_PUBLIC_BASE_URL;
 
-export function socialAuthorizeUrl(provider: SocialProvider) {
+// 함수로 둔다 — 템플릿 문자열을 바로 대입하면 앞이 `${}` 라 lint 가 상대 경로로 오인한다.
+function socialAuthorizeUrl(provider: SocialProvider) {
   return `${backendBase}/oauth2/authorization/${provider}`;
 }
 
@@ -23,15 +24,9 @@ export function startSocialLogin(
   window.location.href = socialAuthorizeUrl(provider);
 }
 
-// 백엔드 Google OAuth 등록 예정. 등록 전에는 콜백이 실패할 수 있음(프런트 버튼 선반영).
-export function loginGoogle(redirectTo?: string | null) {
-  startSocialLogin("google", redirectTo);
-}
-
-export function loginKakao(redirectTo?: string | null) {
-  startSocialLogin("kakao", redirectTo);
-}
-
-export function loginNaver(redirectTo?: string | null) {
-  startSocialLogin("naver", redirectTo);
-}
+/**
+ * 제공자 화면에서 취소했거나 인가가 실패했을 때의 안내.
+ * 콜백(`?error=`)과 그 콜백이 돌려보내는 로그인 화면(`?socialError=1`)이 같은 문구를 쓴다.
+ */
+export const SOCIAL_LOGIN_FAILED_MESSAGE =
+  "로그인을 마치지 못했어요. 다시 시도해 주세요.";

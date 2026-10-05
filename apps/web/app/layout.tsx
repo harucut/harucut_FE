@@ -17,8 +17,12 @@ import { ExternalBrowserGate } from "./ExternalBrowserGate";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.harucut.com"),
-  title: "하루컷",
-  description: "하루의 인생 네컷을 기록하는 사진 서비스",
+  title: "harucut 하루컷 | 네컷 사진 촬영과 프레임 꾸미기",
+  description: "여행 중 연인과, 결혼식에서 친구들과. harucut 하루컷에서 네컷 사진을 촬영하고 배경·스티커·글자로 프레임을 꾸며 저장하세요. vailen이 만드는 온라인 포토부스.",
+  applicationName: "harucut",
+  authors: [{ name: "vailen" }],
+  creator: "vailen",
+  publisher: "vailen",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
@@ -28,13 +32,17 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "하루컷 — 하루를 네 컷으로",
-    description: "찍고, 꾸미고, 기록하는 나만의 인생네컷. 하루컷.",
+    title: "harucut 하루컷 | 함께한 순간을 네 컷으로",
+    description: "여행과 결혼식, 일상의 순간을 네컷 사진으로. 찍고, 프레임을 꾸미고, 저장하는 온라인 포토부스.",
+    siteName: "harucut 하루컷",
+    locale: "ko_KR",
     images: ["/og-image.png"],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
+    title: "harucut 하루컷 | 함께한 순간을 네 컷으로",
+    description: "네컷 사진 촬영부터 배경·스티커로 프레임 꾸미기까지. vailen의 온라인 포토부스.",
     images: ["/og-image.png"],
   },
 };

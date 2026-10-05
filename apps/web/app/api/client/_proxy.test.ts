@@ -2,7 +2,23 @@
 
 import { getApiErrorMessageByCode } from "@harucut/shared";
 
-import { forward, proxyJson } from "@/app/api/client/_proxy";
+import { buildResponse, forward, proxyJson, validateResourceId } from "@/app/api/client/_proxy";
+
+test.each([200, 401, 503])("인증을 포함한 BFF 응답 %s를 캐시하지 않는다", (status) => {
+  const response = buildResponse({ ok: status === 200, status, body: "{}", contentType: "application/json", setCookies: [] });
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+});
+
+test.each(["../2", "1/2", "%2e%2e", "", "-1", "0", "1.5", "NaN", "9223372036854775808"])("부적절한 리소스 ID %s는 서버로 보내지 않는다", async (id) => {
+  const response = validateResourceId(id)!;
+  expect(response.status).toBe(400);
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(await response.json()).toMatchObject({ code: "CLIENT-006" });
+});
+test("유효한 ID는 정밀도 손실 없이 통과한다", () => {
+  expect(validateResourceId("1")).toBeNull();
+  expect(validateResourceId("9223372036854775807")).toBeNull();
+});
 
 describe("client proxy forward", () => {
   const originalFetch = global.fetch;
@@ -141,7 +157,16 @@ describe("client proxy forward", () => {
       url: "https://api.harucut.com/api/harucut/login",
     });
 
-    for (const result of [misconfigured, unreachable]) {
+    const crossSite = await forward(
+      new Request("http://localhost:3000/api/client/auth/login", {
+        method: "POST",
+        headers: { "sec-fetch-site": "cross-site" },
+        body: JSON.stringify({ email: "test@example.com" }),
+      }),
+      { method: "POST", url: "https://api.harucut.com/api/harucut/login" },
+    );
+
+    for (const result of [misconfigured, unreachable, crossSite]) {
       const { code } = JSON.parse(result.body) as { code: string };
       // 한글이 섞인 문구여야 한다 — null 이면 폴백으로 떨어지고, 영문이면 화면에 영어가 나간다.
       expect(getApiErrorMessageByCode(code)).toEqual(expect.stringMatching(/[가-힣]/));
@@ -189,5 +214,127 @@ describe("client proxy forward", () => {
       status: 502,
     });
     expect(response.headers.get("set-cookie")).toContain("refreshToken=renewed");
+  });
+});
+
+// 프록시는 쿠키를 싣고 Content-Type 을 JSON 으로 고쳐 보내서, 남의 사이트의 text/plain 폼도
+// 사전 요청 없이 로그인까지 닿는다(로그인 CSRF). 우리 화면의 요청은 그대로 지나가야 한다.
+describe("client proxy cross-site guard", () => {
+  const originalFetch = global.fetch;
+  const LOGIN = {
+    method: "POST",
+    url: "https://api.harucut.com/api/harucut/login",
+    stripAuthCookies: true,
+  } as const;
+
+  let fetchMock: jest.Mock;
+  beforeEach(() => {
+    fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: "GEN-000" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    global.fetch = fetchMock;
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  const loginRequest = (
+    headers: Record<string, string>,
+    url = "https://harucut.com/api/client/auth/login",
+  ) =>
+    new Request(url, {
+      method: "POST",
+      headers: { "content-type": "text/plain", ...headers },
+      body: '{"email":"attacker@example.com","password":"x"}',
+    });
+
+  it("다른 사이트의 POST 는 백엔드로 보내지 않고 403 CLIENT-005 로 막는다", async () => {
+    const result = await forward(
+      loginRequest({ "sec-fetch-site": "cross-site", origin: "https://evil.example" }),
+      LOGIN,
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: false, status: 403, setCookies: [] });
+    expect(JSON.parse(result.body)).toEqual({
+      code: "CLIENT-005",
+      status: 403,
+      message: "Cross-site request blocked.",
+      data: null,
+    });
+  });
+
+  // 구형 브라우저·https 가 아닌 주소에는 Sec-Fetch-Site 가 없다. "null" 은 샌드박스 iframe 이 보낸다.
+  it.each(["https://evil.example", "null"])(
+    "Sec-Fetch-Site 가 없으면 Origin(%s)이 다를 때 막는다",
+    async (origin) => {
+      const result = await forward(loginRequest({ origin }), LOGIN);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.status).toBe(403);
+    },
+  );
+
+  // 하위 도메인도 남이다 — 우리 화면은 늘 상대 경로로 부르니 same-site 로 올 정당한 요청이 없다.
+  it("Sec-Fetch-Site 가 same-site 여도 막는다", async () => {
+    const result = await forward(
+      loginRequest({ "sec-fetch-site": "same-site", origin: "https://api.harucut.com" }),
+      LOGIN,
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.status).toBe(403);
+    expect(JSON.parse(result.body)).toMatchObject({ code: "CLIENT-005" });
+  });
+
+  it.each(["same-origin", "none"])(
+    "Sec-Fetch-Site 가 %s 면 그대로 보낸다",
+    async (site) => {
+      const result = await forward(
+        loginRequest({ "sec-fetch-site": site, origin: "https://harucut.com" }),
+        LOGIN,
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        method: "POST",
+        body: '{"email":"attacker@example.com","password":"x"}',
+      });
+      expect(result.status).toBe(200);
+    },
+  );
+
+  it("Sec-Fetch-Site 가 없어도 같은 출처의 Origin 이면 보낸다", async () => {
+    await forward(loginRequest({ origin: "https://harucut.com" }), LOGIN);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // 자체 호스팅 Next 의 route 는 req.url 이 Host 와 무관하게 localhost 다. 에뮬레이터가 띄운 개발 웹
+  // (http://10.0.2.2:3000)은 https 가 아니라 Sec-Fetch-Site 도 없다 — req.url 과 맞대면 전부 막힌다.
+  it("Origin 은 req.url 이 아니라 브라우저가 부른 주소(Host)와 맞춘다", async () => {
+    await forward(
+      loginRequest(
+        { origin: "http://10.0.2.2:3000", host: "10.0.2.2:3000" },
+        "http://localhost:3000/api/client/auth/login",
+      ),
+      LOGIN,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("GET 은 다른 사이트에서 와도 보낸다", async () => {
+    await forward(
+      new Request("https://harucut.com/api/client/terms", {
+        headers: { "sec-fetch-site": "cross-site", origin: "https://evil.example" },
+      }),
+      { method: "GET", url: "https://api.harucut.com/api/terms", forwardBody: false },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

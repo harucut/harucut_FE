@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { nativeHaptic } from "@/lib/nativeBridge";
@@ -11,6 +11,8 @@ import { prepareStillCapture, takeStillBitmap } from "@/lib/canvas/stillCapture"
 
 // 촬영 총 장수
 const MAX_SHOTS = 8;
+const subscribeNever = () => () => undefined;
+const isMobileCamera = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 /**
  * 같은 컷을 다시 거는 최대 횟수. 이걸 넘기면 촬영을 멈추고 사람에게 알린다.
  *
@@ -41,7 +43,8 @@ type CameraFacingMode = "user" | "environment";
 export function useCaptureFlow() {
   const router = useRouter();
   const setNotice = useGuestTrialStore((state) => state.setNotice);
-  const { frameId, addShotPhoto, resetShots } = useShootSession();
+  const { frameId, shots, addShotPhoto, resetShots } = useShootSession();
+  const shotCount = shots.length;
 
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isCheckingCameraPermission, setIsCheckingCameraPermission] =
@@ -51,7 +54,6 @@ export function useCaptureFlow() {
     countdown: null,
     cycle: 0,
   });
-  const [shotCount, setShotCount] = useState(0);
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
   // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 사라진다).
@@ -60,6 +62,7 @@ export function useCaptureFlow() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraGenerationRef = useRef(0);
   /**
    * 스틸 촬영기. 이 기기에서 스틸이 영상보다 이득일 때만 채워진다(lib/canvas/stillCapture.ts).
    * null 이면 예전처럼 영상 프레임을 긁는다.
@@ -92,9 +95,7 @@ export function useCaptureFlow() {
    */
   const captureFailuresRef = useRef(0);
 
-  const canFlipCamera =
-    typeof navigator !== "undefined" &&
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const canFlipCamera = useSyncExternalStore(subscribeNever, isMobileCamera, () => false);
 
   const captureSlot = useMemo(() => {
     if (!frameId) return null;
@@ -129,17 +130,14 @@ export function useCaptureFlow() {
     if (!frameId) router.replace("/shoot");
   }, [frameId, router]);
 
-  // 촬영 화면에 들어올 때마다 이전(완료·중단) 세션의 촬영본을 비운다.
-  // 모바일 shoot-screens와 같은 규약: 프레임은 유지하고 shots만 초기화한다.
-  // 이게 없으면 '다시 촬영'으로 돌아왔을 때 배지는 0/8인데 스토어에는 8장이 남아 있고,
-  // '촬영 시작'이 그 8장을 확인 없이 지워 버린다.
-  // shotCount·lastFinishedShotRef는 마운트마다 새로 시작하므로 여기서 건드릴 필요가 없다.
   useEffect(() => {
-    resetShots();
-  }, [resetShots]);
+    router.prefetch("/shoot/select");
+    router.prefetch("/shoot/result");
+  }, [router]);
 
   // 카메라 스트림 종료 및 상태 초기화
   const stopStream = useCallback(() => {
+    cameraGenerationRef.current += 1;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -151,6 +149,8 @@ export function useCaptureFlow() {
 
   // 카메라 권한 요청 및 스트림 시작
   const startCamera = useCallback(async (nextFacingMode?: CameraFacingMode) => {
+    stopStream();
+    const cameraGeneration = cameraGenerationRef.current;
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         setNotice({
@@ -163,8 +163,6 @@ export function useCaptureFlow() {
         });
         return;
       }
-
-      stopStream();
 
       const facingMode = nextFacingMode ?? cameraFacingMode;
 
@@ -199,6 +197,11 @@ export function useCaptureFlow() {
         audio: false,
       });
 
+      if (cameraGeneration !== cameraGenerationRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       /*
@@ -208,10 +211,12 @@ export function useCaptureFlow() {
       */
       const track = stream.getVideoTracks()[0];
       if (track) {
-        stillCaptureRef.current = await prepareStillCapture(
+        const prepared = await prepareStillCapture(
           track,
           captureSlotAspect,
         );
+        if (cameraGeneration !== cameraGenerationRef.current) return;
+        stillCaptureRef.current = prepared;
       }
 
       if (videoRef.current) {
@@ -219,9 +224,12 @@ export function useCaptureFlow() {
         await videoRef.current.play().catch(() => {});
       }
 
+      if (cameraGeneration !== cameraGenerationRef.current) return;
       setIsCameraReady(true);
       setCameraFacingMode(facingMode);
     } catch (err) {
+      if (cameraGeneration !== cameraGenerationRef.current) return;
+      stopStream();
       console.error(err);
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -402,7 +410,7 @@ export function useCaptureFlow() {
   // 1샷 종료 처리(사진 추가 + 다음 카운트/종료)
   // state updater 안에서 호출하지 않는다 — 라우팅 같은 사이드 이펙트가 함께 실행되므로
   const finishSingleShot = useCallback(async () => {
-    // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리.
+  // 카운트다운 타이머와 즉시 촬영 클릭이 같은 샷에 동시에 도달해도 한 번만 처리.
     // 인코딩을 기다리는 동안에도 다른 트리거가 끼어들 수 있으므로 await 전에 선점한다.
     if (lastFinishedShotRef.current >= shotCount) return;
     lastFinishedShotRef.current = shotCount;
@@ -453,7 +461,6 @@ export function useCaptureFlow() {
     addShotPhoto(photoDataUrl);
 
     const next = shotCount + 1;
-    setShotCount(next);
 
     if (next < MAX_SHOTS) {
       // 다음 컷까지 선택한 간격으로 자동 카운트다운. cycle 을 올려 타이머를 처음부터 다시 돌린다.
@@ -467,7 +474,7 @@ export function useCaptureFlow() {
   }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, setNotice, router]);
 
   // 전체 자동 촬영 시작
-  const startShooting = useCallback(() => {
+  const startShooting = useCallback((restart = true) => {
     if (!isCameraReady) {
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -482,9 +489,17 @@ export function useCaptureFlow() {
     // 이미 촬영 중이면 재시작 무시(시작 버튼 더블탭으로 중복 시작되는 것 방지).
     if (isShootingRef.current) return;
 
-    resetShots();
-    setShotCount(0);
-    lastFinishedShotRef.current = -1;
+    if (!restart && shotCount >= MAX_SHOTS) return;
+    if (restart) resetShots();
+    lastFinishedShotRef.current = restart ? -1 : shotCount - 1;
+    router.prefetch("/shoot/select");
+    router.prefetch("/shoot/result");
+    // 사용자 동작 안에서 오디오를 열어 iOS의 자동 재생 제한에 걸리지 않게 한다.
+    const audio = shutterAudioRef.current;
+    if (audio) {
+      audio.muted = true;
+      void audio.play().then(() => { audio.pause(); audio.currentTime = 0; audio.muted = false; }).catch(() => { audio.muted = false; });
+    }
     // 지난 촬영에서 실패한 기록은 새 촬영에 들고 오지 않는다.
     captureFailuresRef.current = 0;
     isShootingRef.current = true;
@@ -492,7 +507,38 @@ export function useCaptureFlow() {
 
     // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
     setShooting((s) => ({ isShooting: true, countdown: timerSeconds, cycle: s.cycle + 1 }));
-  }, [isCameraReady, resetShots, setNotice, timerSeconds]);
+  }, [isCameraReady, resetShots, setNotice, timerSeconds, shotCount, router]);
+
+  // 앱 전환이나 화면 잠금 중에는 새 사진을 찍지 않는다. 이미 찍은 사진은 그대로 둔다.
+  useEffect(() => {
+    const pause = () => {
+      isShootingRef.current = false;
+      shootGenerationRef.current += 1;
+      setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
+      stopStream();
+    };
+    const onVisibility = () => { if (document.visibilityState === "hidden") pause(); };
+    const track = streamRef.current?.getVideoTracks()[0];
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", pause);
+    track?.addEventListener("ended", pause);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", pause);
+      track?.removeEventListener("ended", pause);
+    };
+  }, [isCameraReady, stopStream]);
+
+  useEffect(() => {
+    if (!shooting.isShooting || !navigator.wakeLock || document.visibilityState !== "visible") return;
+    let cancelled = false;
+    let lock: WakeLockSentinel | null = null;
+    void navigator.wakeLock.request("screen").then((value) => {
+      if (cancelled) void value.release();
+      else lock = value;
+    }).catch(() => {});
+    return () => { cancelled = true; void lock?.release(); };
+  }, [shooting.isShooting]);
 
   // 카운트다운 타이머
   useEffect(() => {
@@ -546,6 +592,7 @@ export function useCaptureFlow() {
 
     startCamera,
     startShooting,
+    resumeShooting: () => startShooting(false),
     handleShootNow,
     switchCamera,
 

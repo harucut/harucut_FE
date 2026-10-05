@@ -72,7 +72,7 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
           </p>
           {/* 두 문장은 각각 한 줄로 고정 — max-w로 흘려보내면 어중간한 위치에서 접힌다. */}
           <p className="mt-3.5 whitespace-nowrap text-[15px] leading-[1.6] text-white/60">
-            찍고, 꾸미고, 기록하는 나만의 인생네컷.
+            찍고, 꾸미고, 기록하는 나만의 네컷 사진.
             <br />
             하루컷에 오신 걸 환영해요.
           </p>

@@ -578,6 +578,25 @@ describe("toUploadableFile", () => {
     await expect(toUploadableFile(png)).resolves.toBe(png);
   });
 
+  it("JPEG는 다시 구워 위치 메타데이터가 담긴 원본을 업로드하지 않는다", async () => {
+    stubImageDecoding("succeeds");
+    const { baked } = stubCanvasEncoder(0.4, IOS_CANVAS_PIXEL_LIMIT);
+    const original = new File(["\xff\xd8\xff\xe1Exif\x00\x00GPS"], "travel.jpg", {
+      type: "image/jpeg", lastModified: 1234,
+    });
+    const converted = await toUploadableFile(original);
+    expect(converted).not.toBe(original);
+    expect(baked).toHaveLength(1);
+    expect(converted.type).toBe("image/jpeg");
+    expect(converted.lastModified).toBe(1234);
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(converted);
+    });
+    expect(text).not.toContain("Exif");
+  });
+
   /*
     못 읽는 형식은 **올리기 전에** 던진다. 예외 종류가 `presignedUploadApi` 와 같아야
     화면이 이미 가진 한국어 안내가 그대로 뜬다 — 새 문구를 만들면 같은 말을 하는 자리가

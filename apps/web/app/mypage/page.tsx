@@ -1,5 +1,8 @@
 "use client";
 
+import { clearLocalUserData } from "@/lib/localUserData";
+import { withRequestDeadline } from "@/lib/requestDeadline";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   ChangeEvent,
   ReactElement,
@@ -89,6 +92,7 @@ export default function MyPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
 
   // 비밀번호는 이메일(HARUCUT) 가입 계정에만 있다.
   // 아직 user 를 못 읽었으면 폼도 안내문도 띄우지 않는다 — 소셜 계정에 폼이 잠깐 보였다
@@ -319,7 +323,8 @@ export default function MyPage() {
     setIsSubmitting(true);
 
     try {
-      await clientApi.delete("/api/client/logout");
+      await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/logout", { signal }));
+      await clearLocalUserData();
       router.push("/login");
       router.refresh();
     } catch (error) {
@@ -331,21 +336,18 @@ export default function MyPage() {
   };
 
   const handleExit = async () => {
-    const ok = confirm(
-      "정말 탈퇴하시겠어요?\n탈퇴 신청일부터 30일 내로 다시 로그인하면 계정을 복구할 수 있어요.",
-    );
-    if (!ok) return;
-
     setNotice(null);
     setIsSubmitting(true);
 
     try {
-      await clientApi.delete("/api/client/exit");
+      await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/exit", { signal }));
+      await clearLocalUserData();
       router.push("/login");
       router.refresh();
     } catch (error) {
       console.error(error);
       setNotice({ kind: "error", text: "회원 탈퇴에 실패했어요." });
+      setExitOpen(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -833,7 +835,7 @@ export default function MyPage() {
       </button>
       <button
         type="button"
-        onClick={handleExit}
+        onClick={() => setExitOpen(true)}
         disabled={isSubmitting}
         className="mx-auto mt-1 flex min-h-11 w-fit items-center px-2 text-[13px] text-(--hc-muted) underline underline-offset-3 transition hover:text-(--hc-text) disabled:opacity-50"
       >
@@ -1002,6 +1004,19 @@ export default function MyPage() {
         )}
       </div>
       <MobileTabBar />
+
+      {exitOpen ? (
+        <ConfirmDialog
+          title="회원 탈퇴를 신청할까요?"
+          description="탈퇴 신청일부터 7일 안에 다시 로그인하면 계정을 복구할 수 있어요. 7일이 지나면 사진과 프레임이 모두 삭제돼요."
+          confirmLabel="탈퇴 신청"
+          runningLabel="탈퇴 신청 중…"
+          destructive
+          running={isSubmitting}
+          onClose={() => setExitOpen(false)}
+          onConfirm={() => void handleExit()}
+        />
+      ) : null}
 
       {nicknameOpen ? (
         <SingleFieldDialog
