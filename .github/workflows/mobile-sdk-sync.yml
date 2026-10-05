@@ -42,15 +42,17 @@ jobs:
           const mobile = JSON.parse(fs.readFileSync('apps/mobile/package.json'));
           mobile.dependencies.expo = '~57.0.0';
           fs.writeFileSync('apps/mobile/package.json', JSON.stringify(mobile, null, 2) + '\n');
-          fs.unlinkSync('patches/expo-modules-core@55.0.24.patch');
+          if (fs.existsSync('patches/expo-modules-core@55.0.24.patch')) fs.unlinkSync('patches/expo-modules-core@55.0.24.patch');
           JS
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --dir apps/mobile exec expo install --fix --pnpm
+      - run: pnpm dedupe
       - name: Record resolved package versions on the task branch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json apps/mobile/package.json pnpm-lock.yaml patches/expo-modules-core@55.0.24.patch
+          git add package.json apps/mobile/package.json pnpm-lock.yaml
+          git add -u
           git diff --cached --quiet && exit 0
           git commit -m 'fix(mobile): Expo 57 공식 의존성 조합으로 네이티브 런타임 정렬'
           git push origin HEAD:refs/heads/feat/harucut-web-app-readiness
