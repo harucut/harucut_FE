@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Circle } from "lucide-react";
-import { FRAME_CONFIGS, getFrameConfig, type FrameId } from "@/constants/frames";
+import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
 
 type FramePickerLayoutMode = "carousel" | "grid";
@@ -98,9 +98,6 @@ function FramePickerCard({
   onClick: () => void;
   mode?: FramePickerLayoutMode;
 }) {
-  // 이름·순서·짧은 태그 모두 FRAME_CONFIGS 가 단일 소스다.
-  const config = getFrameConfig(frameId);
-
   return (
     <button
       type="button"
@@ -137,14 +134,6 @@ function FramePickerCard({
             mode === "grid" ? "min-h-55 p-3" : "min-h-55 p-4",
           ].join(" ")}
         >
-          {/* 추천 표시. 한 장에만 붙어야 "이걸 고르면 무난하다"로 읽힌다 —
-              넷 다 칩을 달면 그냥 분류 라벨이 된다(constants/frames.ts 주석). */}
-          {config.recommended ? (
-            <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-0.5 text-[11px] font-bold tracking-[0.08em] text-white">
-              BEST
-            </span>
-          ) : null}
-
           <div className={FRAME_PICKER_PREVIEW_VIEWPORT}>
             <FramePreview
               frameId={frameId}

@@ -500,3 +500,23 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     },
   );
 });
+
+// 공개 CTA에서 백엔드 조회를 하지 않고 새 문서가 정확한 체험 쿠키를 받는다.
+describe("공개 촬영 진입", () => {
+  test("새 방문자는 체험 쿠키를 받고 촬영으로 간다", async () => {
+    const response = await proxy(request("/shoot/start"));
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/shoot`);
+    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+  });
+  test("인증 쿠키가 있는 회원은 체험으로 덮지 않고 세션 확인 경로로 간다", async () => {
+    const response = await proxy(request("/shoot/start", "refreshToken=existing-member"));
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/shoot?checkSession=1`);
+    expect(response.cookies.get(GUEST_TRIAL_COOKIE)).toBeUndefined();
+  });
+  test("체험 쿠키가 있으면 남은 인증 쿠키와 무관하게 로컬 촬영을 유지한다", async () => {
+    const response = await proxy(request("/shoot/start", `${GUEST_TRIAL_COOKIE}=1; ${accessToken(3600)}`));
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/shoot`);
+    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
+  });
+});

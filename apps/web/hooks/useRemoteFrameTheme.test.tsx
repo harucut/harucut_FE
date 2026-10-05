@@ -1,3 +1,4 @@
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 /**
  * 이 훅의 null 은 뜻이 두 가지다 — "꾸민 프레임을 안 쓴다"와 "쓰는데 못 읽었다".
  * 둘을 뭉개면 화면이 배경색 고르기를 열어 주고, 서버 합성은 프레임에 저장된 배경을 쓰면서
@@ -40,6 +41,7 @@ const theme: ThemeExportJson = {
 let consoleError: jest.SpyInstance;
 
 beforeEach(() => {
+  useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
   mockGetFrame.mockReset();
   // 훅이 실패를 console 에도 남긴다. 테스트 출력이 실패처럼 보이지 않게 삼킨다.
   consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
@@ -165,4 +167,13 @@ test("이전 프레임의 늦은 응답은 새 프레임을 덮지 않는다", a
   await waitFor(() => expect(result.current.data).toEqual(next));
   await act(async () => finish(theme));
   expect(result.current.data).toEqual(next);
+});
+
+test.each([false, true])("게스트 프레임은 서버 조회를 하지 않는다 (복원 완료 %s)", async (hydrated) => {
+  useGuestTrialStore.setState({ accessMode: "guest", hydrated });
+  const { result } = renderHook(() => useRemoteFrameThemeState(99, "grid-4"));
+  await act(async () => {});
+  expect(mockGetFrame).not.toHaveBeenCalled();
+  expect(result.current.data).toBeNull();
+  expect(result.current.isLoading).toBe(false);
 });

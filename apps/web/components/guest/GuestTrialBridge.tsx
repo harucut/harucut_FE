@@ -17,6 +17,7 @@ import {
   type PendingGuestSaveMeta,
   type PendingGuestSaveComposeKey,
 } from "@/lib/pendingGuestSave";
+import { isProtectedPath } from "@/lib/protectedPaths";
 import { resolveMembership } from "@/lib/authSession";
 
 /**
@@ -198,7 +199,7 @@ export function GuestTrialBridge() {
       스토어의 초깃값은 "member" 라, 위 hydrateGuestMode() 가 반영되기 전 첫 렌더에서는
       진짜 비회원도 회원으로 읽힌다. 체험 중인 사람에게 계정 저장을 물을 이유가 없다.
     */
-    if (!hydrated || accessMode !== "member") return;
+    if (!hydrated || accessMode !== "member" || !isProtectedPath(pathname)) return;
 
     /*
       주소 정리는 **부를 때의 주소**를 본다.
@@ -678,7 +679,7 @@ export function GuestTrialBridge() {
       나오는데, 이 리스너만 남으면 아무것도 판정하지 않으면서 신호마다 손잡이를 올려
       앱이 열린 내내 헛렌더가 붙는다.
     */
-    if (!hydrated || accessMode !== "member") return;
+    if (!hydrated || accessMode !== "member" || !isProtectedPath(pathname)) return;
 
     const retry = () => {
       if (document.visibilityState === "hidden") return;
@@ -700,7 +701,7 @@ export function GuestTrialBridge() {
       window.removeEventListener("online", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [accessMode, hydrated, membershipWatch]);
+  }, [accessMode, hydrated, membershipWatch, pathname]);
 
 
   // guestNotice 쿼리를 만드는 곳은 proxy.ts의 게스트 리다이렉트 하나뿐이고 값도 "restricted"만 쓴다.

@@ -13,7 +13,7 @@ test("landing page renders the public entry links", async ({ page }) => {
     (같은 행동이 세 번 놓이고 초록이 세 곳에 흩어졌다) 히어로의 두 CTA 가 계약이다.
   */
   await expect(
-    page.getByRole("button", { name: GUEST_TRIAL_CTA_LABEL }),
+    page.getByRole("link", { name: GUEST_TRIAL_CTA_LABEL }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "로그인" })).toBeVisible();
 });

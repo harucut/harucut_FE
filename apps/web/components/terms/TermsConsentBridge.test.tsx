@@ -1,3 +1,4 @@
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 /**
  * 로그인 뒤 동의를 기록하고, 필수 약관이 비어 있으면 붙잡는 쪽.
  *
@@ -99,6 +100,7 @@ function setSession(membership: "member" | "guest" | "unknown") {
 }
 
 beforeEach(() => {
+  useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
   jest.clearAllMocks();
   window.localStorage.clear();
   mockPathname = "/home";
@@ -590,4 +592,14 @@ describe("TermsConsentBridge", () => {
     });
     expect(mockFetchMine).toHaveBeenCalledTimes(1);
   });
+});
+
+test.each([false, true])("비회원 촬영에서는 약관·인증 API를 부르지 않는다 (복원 완료 %s)", async (hydrated) => {
+  mockPathname = "/shoot";
+  useGuestTrialStore.setState({ accessMode: "guest", hydrated });
+  render(<TermsConsentBridge />);
+  await act(async () => {});
+  expect(mockResolveMembership).not.toHaveBeenCalled();
+  expect(mockFetchMine).not.toHaveBeenCalled();
+  expect(mockSubmit).not.toHaveBeenCalled();
 });

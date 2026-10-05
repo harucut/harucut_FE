@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   // 로그인 화면으로 쫓겨나기 때문이다.
   // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
   // 목록과 「못 읽었으면 믿는다」 규칙의 소유자는 lib/authUserStatus.ts 다 —
-  // `/api/auth/status` 를 직접 부르는 쪽(lib/usePublicShootCta.ts)도 같은 것을 쓴다.
+  // `/api/auth/status` 를 직접 부르는 쪽(lib/authSession.ts)도 같은 것을 쓴다.
   const userStatus = upstream.ok ? readUserStatus(upstream.body) : null;
   const unusable = isUnusableUserStatus(userStatus);
 

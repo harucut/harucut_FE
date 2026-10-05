@@ -10,3 +10,6 @@ export const GUEST_TRIAL_COOKIE_MAX_AGE = 604800;
  * 이 값이 붙어 있으면 "가입 없이 체험하기"를 누른 것과 같은 상태로 시작시킨다.
  */
 export const EVENT_ENTRY_QUERY = "event";
+
+/** 공개 CTA. 프론트 프록시가 쿠키만 보고 촬영으로 보내며 백엔드를 부르지 않는다. */
+export const PUBLIC_SHOOT_ENTRY = "/shoot/start";

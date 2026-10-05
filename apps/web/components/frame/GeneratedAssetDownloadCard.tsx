@@ -1,5 +1,6 @@
 "use client";
 
+import { isNativeShell } from "@/lib/nativeBridge";
 import { DISPLAY_NAME_MAX_LENGTH, type GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 
 // 서버가 받는 파일명은 최대 255자다(2026-09-07 로컬 /v3/api-docs 의 DisplayNameUpdateRequest).
@@ -18,7 +19,7 @@ type GeneratedAssetDownloadCardProps = {
   isSavingName: boolean;
   isDownloading: boolean;
   isSharing?: boolean;
-  metaLabel?: string;
+  localDownload?: { href: string; filename: string };
   shareLabel?: string;
 };
 
@@ -34,7 +35,7 @@ export function GeneratedAssetDownloadCard({
   isSavingName,
   isDownloading,
   isSharing = false,
-  metaLabel,
+  localDownload,
   shareLabel = "공유 링크 만들기",
 }: GeneratedAssetDownloadCardProps) {
   return (
@@ -42,11 +43,6 @@ export function GeneratedAssetDownloadCard({
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            {metaLabel ? (
-              <span className="inline-flex rounded-full border border-(--hc-border) bg-(--hc-surface-muted) px-2 py-1 text-[11px] text-(--hc-muted)">
-                {metaLabel}
-              </span>
-            ) : null}
             <h2 className="text-sm font-semibold text-(--hc-text)">{title}</h2>
             <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">{description}</p>
           </div>
@@ -79,14 +75,37 @@ export function GeneratedAssetDownloadCard({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onDownload}
-          disabled={isDownloading}
-          className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold disabled:opacity-40"
-        >
-          {isDownloading ? "다운로드 중…" : "다운로드"}
-        </button>
+        {localDownload ? (
+          <a
+            href={localDownload.href}
+            download={localDownload.filename}
+            aria-disabled={isDownloading || undefined}
+            onClick={(event) => {
+              if (isDownloading) {
+                event.preventDefault();
+                return;
+              }
+              // Safari는 실제 링크의 기본 동작으로 받는다. 클릭 뒤 URL을 폐기하지 않는다.
+              // 앱 셸만 기존 네이티브 저장 브리지를 사용한다.
+              if (isNativeShell()) {
+                event.preventDefault();
+                void onDownload();
+              }
+            }}
+            className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold aria-disabled:opacity-40"
+          >
+            {isDownloading ? "다운로드 중…" : "다운로드"}
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={isDownloading}
+            className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold disabled:opacity-40"
+          >
+            {isDownloading ? "다운로드 중…" : "다운로드"}
+          </button>
+        )}
 
         {onShare ? (
           <button

@@ -5,6 +5,7 @@ import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
 import {
+  isNativeShell,
   NativeSaveError,
   nativeSaveImageBlob,
   nativeSaveImageUrl,
@@ -45,7 +46,7 @@ function ensureCtx(canvas: HTMLCanvasElement) {
  * 브라우저에서는 예전과 똑같이 링크를 만들어 누른다.
  */
 export async function downloadBlob(blob: Blob, filename: string) {
-  const native = await nativeSaveImageBlob(blob, filename);
+  const native = isNativeShell() ? await nativeSaveImageBlob(blob, filename) : null;
   if (native) {
     // 일반 Error 로 바꾸지 않는다 — 사유가 화면까지 못 간다(NativeSaveError 주석 참고).
     if (!native.ok) throw new NativeSaveError(native);
@@ -59,7 +60,9 @@ export async function downloadBlob(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Safari는 다운로드 확인 뒤에 URL을 읽을 수 있다. 즉시 폐기하면 빈 파일/실패가 된다.
+  // 범용 헬퍼는 페이지가 사라질 때 정리하고, 체험 화면은 준비된 링크를 재사용한다.
+  window.addEventListener("pagehide", () => URL.revokeObjectURL(url), { once: true });
 }
 
 function triggerDownloadLink(url: string, filename?: string) {

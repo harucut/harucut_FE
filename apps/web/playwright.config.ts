@@ -72,6 +72,11 @@ export default defineConfig({
 
   projects: [
     {
+      name: "mobile-safari",
+      testMatch: "**/guest-download.spec.ts",
+      use: { ...devices["iPhone 13"], browserName: "webkit" },
+    },
+    {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },

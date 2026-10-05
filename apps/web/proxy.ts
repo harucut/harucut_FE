@@ -4,6 +4,7 @@ import {
   EVENT_ENTRY_QUERY,
   GUEST_TRIAL_COOKIE,
   GUEST_TRIAL_COOKIE_MAX_AGE,
+  PUBLIC_SHOOT_ENTRY,
 } from "@/lib/guestTrialShared";
 import {
   isGuestAllowedPath,
@@ -127,14 +128,24 @@ function startGuestTrial(response: NextResponse, secure: boolean) {
 }
 
 export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const redirectTarget = `${pathname}${req.nextUrl.search}`;
+  const guestMode = hasGuestTrialCookie(req);
+
+  // 공개 CTA는 API 조회 없이 진입한다. 새 문서로 이동해 클라이언트도 쿠키와 같은 상태가 된다.
+  // 인증 쿠키가 있는 회원은 새 체험 쿠키로 덮지 않고, 도착한 화면에서 만료·정지를 확인한다.
+  if (pathname === PUBLIC_SHOOT_ENTRY) {
+    const memberCandidate = !guestMode && hasAuthCookie(req);
+    const target = new URL(memberCandidate ? "/shoot?checkSession=1" : "/shoot", req.url);
+    const response = NextResponse.redirect(target);
+    response.headers.set("Cache-Control", "private, no-store");
+    return memberCandidate ? response : startGuestTrial(response, req.nextUrl.protocol === "https:");
+  }
+
   // 로컬 개발 우회(임시) — 켜져 있으면 보호 경로 판정 자체를 건너뛴다.
   if (DEV_AUTH_BYPASS) {
     return NextResponse.next();
   }
-
-  const { pathname } = req.nextUrl;
-  const redirectTarget = `${pathname}${req.nextUrl.search}`;
-  const guestMode = hasGuestTrialCookie(req);
 
   /*
     체험 쿠키는 **로그인이 끝나는 자리에서** 걷는다.
