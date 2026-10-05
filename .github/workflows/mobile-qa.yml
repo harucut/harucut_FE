@@ -74,3 +74,39 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      # 개인 업로드 키를 CI에 보내지 않는다. AAB는 내려받은 뒤 로컬에서 서명한다.
+      - name: Build unsigned app bundle for local signing
+        working-directory: apps/mobile/android
+        run: |
+          python3 - <<'PY_BUILD'
+          from pathlib import Path
+          path = Path('app/build.gradle')
+          source = path.read_text()
+          offset = source.index('        release {')
+          marker = 'signingConfig signingConfigs.debug'
+          release = source[offset:]
+          assert release.count(marker) == 1, 'Expo release signing template changed'
+          path.write_text(source[:offset] + release.replace(marker, 'signingConfig null', 1))
+          PY_BUILD
+          ./gradlew --no-daemon :app:bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
+      - name: Verify unsigned bundle
+        run: |
+          python3 - <<'PY_BUNDLE'
+          from pathlib import Path
+          from zipfile import ZipFile
+          bundle, = Path('apps/mobile/android/app/build/outputs/bundle/release').glob('*.aab')
+          with ZipFile(bundle) as archive:
+              names = archive.namelist()
+              assert 'base/manifest/AndroidManifest.xml' in names, 'Missing base manifest'
+              assert 'BundleConfig.pb' in names, 'Missing bundle configuration'
+              assert not any(name.upper().startswith('META-INF/') and name.upper().endswith(('.RSA', '.DSA', '.EC', '.SF')) for name in names), 'Bundle must be unsigned'
+          print('Unsigned Android App Bundle verified; upload signing is a separate local step')
+          PY_BUNDLE
+      - uses: actions/upload-artifact@v7
+        with:
+          name: harucut-android-unsigned-bundle-${{ github.sha }}
+          path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
