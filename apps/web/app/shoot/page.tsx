@@ -90,50 +90,13 @@ function ShootPageContent() {
     source,
   ]);
 
-  /*
-    **행사 QR 로 들어왔는데 회원이 아니면, 여기서 체험을 시작한다.**
-
-    프록시는 쿠키가 **아예 없을 때만** 체험 쿠키를 심는다(apps/web/proxy.ts 의 행사 분기).
-    쿠키가 남아 있는 브라우저 — 행사장에 흔한, 예전에 로그인해 둔 그 브라우저 — 는 그대로
-    통과해 여기까지 온다. 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다. 서버가 회수한
-    refresh 도 쿠키만 보면 멀쩡한 것과 똑같이 생겼기 때문이다.
-
-    판정할 수 있는 것은 여기다. `isUsableMember()` 는 `clientApi` 로 물어보므로 **401 이면
-    재발급을 한 번 하고 다시 시도한다** — access 만 자연 만료된 회원은 그 자리에서 되살아나
-    회원으로 남고, 정말 끊긴 세션만 false 로 떨어진다. 그때 비로소 체험을 시작한다.
-    미들웨어에서 이 판정을 하지 않는 이유(재발급은 토큰을 회전시키는 쓰기이고 프록시는 모든
-    요청에 붙는다)는 그 분기 주석에 적어 뒀다.
-
-    **이미 게스트여도 묻는다.** 한때 여기서 조기 반환했는데, 그러면 낡은 게스트 쿠키를 든
-    회원이 영영 회복되지 않는다 — 이 판정이 붙기 전 배포에서 체험을 눌러 본 사람이다.
-    프록시는 살아 있는 access 로 그 사람을 통과시키지만, 여기서 묻지 않으면 `exitGuestMode()`
-    가 불릴 자리가 없어 쿠키가 만료(7일)되거나 공개 CTA 를 다시 누를 때까지 저장 프레임이
-    숨고 결과도 브라우저 합성으로 처리된다.
-
-    행사 진입이 아닐 때는 묻지 않는다 — 그때까지 물으면 촬영 화면을 열 때마다 인증 왕복이
-    하나 붙는다. 회복이 필요한 사람에게는 공개 CTA 라는 다른 길이 있다.
-
-    **화면을 떠나도 전환은 끝까지 간다 — cleanup 으로 접지 않는다.**
-
-    판정은 왕복 하나만큼 걸리는데, 그 사이 사용자는 기본 프레임으로 「확인」을 눌러
-    `/shoot/capture` 로 갈 수 있다. 한때 여기 `cancelled` 플래그를 두고 떠나면 전환을
-    버렸는데, 그러면 죽은 인증 쿠키를 든 행사 참가자가 **게스트 자격 없이** 촬영을 계속하다
-    인증 API 에서 막혔다 — 다음 경로도 남은 쿠키를 근거로 프록시를 통과하므로 아무도
-    그것을 잡지 못한다.
-
-    `enterGuestMode()` 는 이 화면의 상태가 아니라 **쿠키와 전역 스토어**를 고친다. cleanup 이
-    막아야 하는 것은 「떠난 화면에 상태를 쓰는 것」이지 「약속한 전환을 접는 것」이 아니다.
-    (`app/shoot/result/page.tsx` 의 완성 알림도 같은 이유로 `cancelled` 밖에 있다.)
-
-    확인 버튼을 판정이 끝날 때까지 막는 길도 있었지만 고르지 않았다 — 「가입 없이 바로
-    찍는다」가 이 흐름의 전부인데, 그 첫 동작을 인증 왕복 뒤로 미루게 된다.
-  */
+  // 인증 쿠키가 남아 있는 방문자만 확인한다. 이미 체험 중인 방문자는 API를 부르지 않는다.
+  const checkSession = queriedEventName || searchParams.get("checkSession") === "1";
   const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
-  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
   const hydrated = useGuestTrialStore((state) => state.hydrated);
 
   useEffect(() => {
-    if (!queriedEventName || !hydrated) return;
+    if (!checkSession || !hydrated || accessMode === "guest") return;
 
     void (async () => {
       const membership = await resolveMembership();
@@ -144,15 +107,9 @@ function ShootPageContent() {
         기록과 저장 프레임을 잃고, 반대로 걷으면 게스트가 회원 화면을 보게 된다.
         서버가 돌아오면 다음 진입에서 판정된다.
       */
-      if (membership === "member") {
-        // 낡은 게스트 쿠키를 든 회원이면 여기서 걷힌다. 아니면 아무 일도 없다.
-        if (accessMode === "guest") exitGuestMode();
-        return;
-      }
-      if (membership !== "guest") return;
-      if (accessMode !== "guest") enterGuestMode();
+      if (membership === "guest") enterGuestMode();
     })();
-  }, [accessMode, enterGuestMode, exitGuestMode, hydrated, queriedEventName]);
+  }, [accessMode, checkSession, enterGuestMode, hydrated]);
 
   const confirmFrame = ({ frameId, remoteFrameId }: FrameChoice, allowReset = false) => {
     const session = useShootSession.getState();

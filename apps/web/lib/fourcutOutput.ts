@@ -6,7 +6,7 @@ export type GeneratedFourcutAsset = {
   objectUrl: string;
   downloadUrl?: string;
   displayName: string;
-  /** 기기 합성 결과. 공유 제스처 전에 파일 바이트가 준비되어 있어야 한다. */
+  /** 서버를 거치지 않는 기기 합성 결과. */
   localBlob?: Blob;
 };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import type { FrameId } from "@/constants/frames";
 import { toThemeExportJson } from "@/lib/frameApi";
 import { resolveThemeAssetUrls } from "@/lib/frameAssets";
@@ -36,13 +37,17 @@ export function useRemoteFrameThemeState(
   remoteFrameId: number | null | undefined,
   expectedFrameId?: FrameId | null,
 ): RemoteFrameThemeState {
-  const loadKey = JSON.stringify([remoteFrameId ?? null, expectedFrameId ?? null]);
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
+  // 이전 회원 세션의 프레임 ID가 남아 있어도 체험에서는 서버 자산을 읽지 않는다.
+  const loadFrameId = hydrated && accessMode === "member" ? remoteFrameId : null;
+  const loadKey = JSON.stringify([loadFrameId ?? null, expectedFrameId ?? null]);
   const [state, setState] = useState<LoadState>(() => ({
     key: loadKey,
     data: null,
     // 프레임을 쓰는 화면이 첫 그림에서 "다 읽었는데 내용이 없다"로 보이면 안 된다.
     // 조회는 effect 에서 시작하므로 그 전에 이미 진행 중인 것으로 둔다.
-    isLoading: Boolean(remoteFrameId),
+    isLoading: Boolean(loadFrameId),
     error: null,
   }));
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -59,7 +64,7 @@ export function useRemoteFrameThemeState(
     };
 
     async function loadTheme() {
-      if (!remoteFrameId) {
+      if (!loadFrameId) {
         settle({ data: null, isLoading: false, error: null });
         return;
       }
@@ -72,7 +77,7 @@ export function useRemoteFrameThemeState(
       }));
 
       try {
-        const frame = await getFrame(remoteFrameId);
+        const frame = await getFrame(loadFrameId);
         if (cancelled) return;
 
         const nextTheme = toThemeExportJson(frame);
@@ -112,11 +117,11 @@ export function useRemoteFrameThemeState(
     return () => {
       cancelled = true;
     };
-  }, [expectedFrameId, loadKey, reloadNonce, remoteFrameId]);
+  }, [expectedFrameId, loadKey, reloadNonce, loadFrameId]);
 
   // effect 이전 렌더에서도 이전 프레임의 내용으로 미리보기·멱등키를 만들지 않는다.
   if (state.key !== loadKey) {
-    return { data: null, isLoading: Boolean(remoteFrameId), error: null, reload };
+    return { data: null, isLoading: Boolean(loadFrameId), error: null, reload };
   }
   return { data: state.data, isLoading: state.isLoading, error: state.error, reload };
 }

@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  GUEST_ALLOWED_ITEMS,
-  GUEST_MEMBER_ONLY_ITEMS,
-  withJosa,
-} from "@harucut/shared";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -204,11 +199,6 @@ export default function ShootResultPage() {
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const hydrated = useGuestTrialStore((state) => state.hydrated);
   const setNotice = useGuestTrialStore((state) => state.setNotice);
-  const showGuestSavedNotice = useGuestTrialStore((state) => state.showGuestSavedNotice);
-  const showGuestShareNotice = useGuestTrialStore((state) => state.showGuestShareNotice);
-  const showGuestRestrictedNotice = useGuestTrialStore(
-    (state) => state.showGuestRestrictedNotice,
-  );
   const guestMode = accessMode === "guest";
   const [imageState, setImageState] = useState<ProcessingState>(
     imageResult ? "done" : "idle",
@@ -733,12 +723,6 @@ export default function ShootResultPage() {
           blob,
           buildDownloadFilename(imageResult.displayName, blob.type === "image/jpeg" ? "jpg" : "png"),
         );
-        // 로그인으로 이어 가도 다시 만들 수 있도록 **원본 4장과 만드는 방법**을 보관한다.
-        // 완성본이 아니라 재료를 담는 이유는 lib/pendingGuestSave.ts 주석 참고.
-        const stored = await storeGuestHandoff();
-        showGuestSavedNotice(
-          stored ? { loginHref: GUEST_LOGIN_HANDOFF_PATH } : undefined,
-        );
         return;
       }
 
@@ -829,27 +813,7 @@ export default function ShootResultPage() {
   const handleShareImage = async () => {
     if (!imageResult || isSharingImage) return;
 
-    if (guestMode) {
-      const blob = imageResult.localBlob;
-      if (!blob) return;
-      const file = new File([blob], buildDownloadFilename(imageResult.displayName, blob.type === "image/jpeg" ? "jpg" : "png"), { type: blob.type });
-      setIsSharingImage(true);
-      try {
-        if (!navigator.canShare?.({ files: [file] }) || !navigator.share) {
-          showStatusNotice("이미지를 저장한 뒤 공유해 주세요", "이 브라우저는 이미지 파일 공유를 지원하지 않아요. 다운로드한 사진을 사진 앱이나 파일 앱에서 공유할 수 있어요.");
-          return;
-        }
-        // 비동기 다운로드를 먼저 하면 Safari의 사용자 제스처가 소진된다.
-        await navigator.share({ files: [file], title: imageResult.displayName });
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          showStatusNotice("공유하지 못했어요", "이미지를 다운로드한 뒤 사진 앱이나 파일 앱에서 공유해 주세요.");
-        }
-      } finally {
-        setIsSharingImage(false);
-      }
-      return;
-    }
+    if (guestMode) return;
 
     setIsSharingImage(true);
     try {
@@ -1003,64 +967,23 @@ export default function ShootResultPage() {
             title="이미지 다운로드"
             description={
               guestMode
-                ? "이미지 공유에서 사진 저장이나 메시지 전송을 고를 수 있어요. 다운로드 파일은 파일 앱에서 찾을 수 있어요."
+                ? "다운로드한 이미지는 파일 앱의 다운로드 폴더에서 찾을 수 있어요."
                 : "기록으로 저장될 파일 이름을 수정하고 이미지를 내려받을 수 있어요."
             }
             asset={imageResult}
-            metaLabel={guestMode ? "비회원 체험 · 이미지" : "촬영 결과 · 이미지"}
             draftName={imageNameDraft}
             onChangeName={setImageNameDraft}
             onSaveName={handleSaveImageName}
             onDownload={handleDownloadImage}
-            onShare={handleShareImage}
-            shareLabel={guestMode ? "이미지 공유 · 사진에 저장" : "공유 링크 만들기"}
+            onShare={guestMode ? undefined : handleShareImage}
+            localDownload={guestMode && imageResult.localBlob ? {
+              href: imageResult.objectUrl,
+              filename: buildDownloadFilename(imageResult.displayName, imageResult.localBlob.type === "image/jpeg" ? "jpg" : "png"),
+            } : undefined}
             isSavingName={isSavingImageName}
             isDownloading={isDownloadingImage}
             isSharing={isSharingImage}
           />
-        ) : null}
-
-        {guestMode && imageResult ? (
-          <section className="hc-surface-hero rounded-[28px] border p-4">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-(--hc-text)">
-                비회원 체험 결과 안내
-              </p>
-              {/* 목록은 @harucut/shared 한 벌에서 읽는다 — 모달·FAQ 와 같은 값을 말해야 한다. */}
-              <p className="text-[12px] leading-6 text-(--hc-muted)">
-                지금은 {withJosa(GUEST_ALLOWED_ITEMS, "을/를")} 해볼 수 있어요.{" "}
-                {withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.
-              </p>
-              <p className="text-[12px] leading-6 text-(--hc-muted)">
-                체험 사진은 이 기기에 최대 24시간 임시 보관해요. 완성본을 내려받거나
-                &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
-              </p>
-            </div>
-
-            {/*
-              다운로드 버튼은 위 카드에 하나면 된다 — 같은 화면에 같은 버튼이 둘이었다.
-              회원 기능은 감추지 않고 자리를 남긴다(가입하면 무엇이 더 되는지 보여야 한다).
-              다만 문장을 버튼 모양에 담지 않는다 — 잠긴 기능임을 말하는 조용한 줄이다.
-            */}
-            <div className="mt-4 flex flex-col divide-y divide-(--hc-border) rounded-2xl border border-(--hc-border)">
-              <button
-                type="button"
-                onClick={showGuestRestrictedNotice}
-                className="flex min-h-11 items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-highlight)"
-              >
-                <span>기록 보관</span>
-                <span className="text-[12px] font-medium text-(--hc-muted)">로그인 후</span>
-              </button>
-              <button
-                type="button"
-                onClick={showGuestShareNotice}
-                className="flex min-h-11 items-center justify-between gap-3 px-4 text-left text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-highlight)"
-              >
-                <span>링크 공유</span>
-                <span className="text-[12px] font-medium text-(--hc-muted)">로그인 후</span>
-              </button>
-            </div>
-          </section>
         ) : null}
 
         <div className="flex gap-2">

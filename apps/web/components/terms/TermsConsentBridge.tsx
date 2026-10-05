@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { resolveMembership } from "@/lib/authSession";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
 import { isProtectedPath } from "@/lib/protectedPaths";
@@ -39,6 +40,8 @@ import { TermsReconsentDialog } from "@/components/terms/TermsReconsentDialog";
  */
 export function TermsConsentBridge() {
   const pathname = usePathname();
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
   const [pending, setPending] = useState<MyTermsConsent[] | null>(null);
   const [all, setAll] = useState<MyTermsConsent[]>([]);
   // 한 번 확인했으면 화면을 옮겨 다닐 때마다 다시 묻지 않는다.
@@ -140,7 +143,7 @@ export function TermsConsentBridge() {
   }, []);
 
   useEffect(() => {
-    if (DEV_AUTH_BYPASS) return;
+    if (DEV_AUTH_BYPASS || !hydrated || accessMode === "guest") return;
     if (checkedRef.current || runningRef.current) return;
     if (!isProtectedPath(pathname)) return;
     runningRef.current = true;
@@ -153,17 +156,17 @@ export function TermsConsentBridge() {
         runningRef.current = false;
       }
     })();
-  }, [pathname, retryNonce, runCheck]);
+  }, [accessMode, hydrated, pathname, retryNonce, runCheck]);
 
   useEffect(() => {
-    if (!retryNeeded || autoRetriedRef.current || !isProtectedPath(pathname)) return;
+    if (!hydrated || accessMode === "guest" || !retryNeeded || autoRetriedRef.current || !isProtectedPath(pathname)) return;
     // 같은 화면에서도 일시 장애를 한 번 복구한다. 계속 실패하면 다음 화면 이동 때 묻는다.
     const timer = window.setTimeout(() => {
       autoRetriedRef.current = true;
       setRetryNonce((nonce) => nonce + 1);
     }, 30_000);
     return () => window.clearTimeout(timer);
-  }, [pathname, retryNeeded]);
+  }, [accessMode, hydrated, pathname, retryNeeded]);
 
   /*
     **보호 화면에서만 막는다 — 결과를 버리지는 않는다.**
@@ -178,7 +181,7 @@ export function TermsConsentBridge() {
     묻지 않으므로, 검사 도중 공개 화면을 한 번 들르는 것만으로 필수 재동의를 영영 피할 수
     있다. 상태에는 남기고 **그리는 것만** 경로로 가른다 — 보호 화면으로 돌아오면 그때 뜬다.
   */
-  if (!pending || pending.length === 0 || !isProtectedPath(pathname)) return null;
+  if (!hydrated || accessMode === "guest" || !pending || pending.length === 0 || !isProtectedPath(pathname)) return null;
 
   return (
     <TermsReconsentDialog

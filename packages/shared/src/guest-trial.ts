@@ -30,7 +30,7 @@ export const GUEST_TRIAL_CTA_LABEL = '가입 없이 체험하기';
  * 목록을 문장이 아니라 항목으로 두는 이유: 같은 목록이 모달·안내·FAQ 여러 문장에 나오는데,
  * 문장째로 복사해 두면 한쪽만 고쳐진다.
  */
-export const GUEST_ALLOWED_ITEMS = '사진 촬영, 이미지 저장과 파일 공유';
+export const GUEST_ALLOWED_ITEMS = '사진 촬영, 이미지 다운로드';
 
 /**
  * 갤러리에서 사진 불러오기를 맨 앞에 둔다.
@@ -44,11 +44,3 @@ export const GUEST_ALLOWED_ITEMS = '사진 촬영, 이미지 저장과 파일 �
  */
 export const GUEST_MEMBER_ONLY_ITEMS =
   '갤러리에서 사진 불러오기, 링크 공유, 기록 보관, 프레임 만들기';
-
-/** 체험을 시작할지 묻는 모달. 누른 버튼과 확인 버튼이 같은 말을 하도록 라벨을 맞춘다. */
-export const GUEST_TRIAL_NOTICE = {
-  title: '가입 없이 체험해볼까요?',
-  message: `${GUEST_ALLOWED_ITEMS}를 바로 해볼 수 있어요. 기록 보관부터는 무료 가입 후 이용할 수 있어요.`,
-  confirmLabel: GUEST_TRIAL_CTA_LABEL,
-  loginLabel: '로그인하기',
-} as const;

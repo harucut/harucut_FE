@@ -32,7 +32,6 @@ export function GuestTrialOverlay() {
   const router = useRouter();
   const notice = useGuestTrialStore((state) => state.notice);
   const clearNotice = useGuestTrialStore((state) => state.clearNotice);
-  const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
   // 이 컴포넌트는 항상 마운트돼 있고 notice 가 없을 때 null 을 반환한다. 그래서 열림 여부는
   // notice 유무다. 여기에 true 를 넘기면 "열린 시점"이 앱 시작 시점이 돼, 열기 전 포커스를
   // body 로 잡아 버린다(그래서 닫은 뒤 복원이 안 됐다).
@@ -72,10 +71,6 @@ export function GuestTrialOverlay() {
         return;
       case "go-shoot":
         clearNotice();
-        router.push("/shoot");
-        return;
-      case "start-guest-trial":
-        enterGuestMode();
         router.push("/shoot");
         return;
       default:
