@@ -3,13 +3,18 @@ import { readFile } from "node:fs/promises";
 
 test.use({ launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] } });
 
-test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다", async ({ page, baseURL }, testInfo) => {
+test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다", async ({ page }, testInfo) => {
   page.on("dialog", async (dialog) => {
     if (dialog.type() === "beforeunload") await dialog.accept();
     else await dialog.dismiss();
   });
-  await page.context().addCookies([{ name: "harucut_guest_trial", value: "1", url: baseURL! }]);
-  await page.goto("/shoot");
+  const apiRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/") || url.hostname === "api.harucut.com") apiRequests.push(request.url());
+  });
+  await page.goto("/");
+  await page.getByRole("link", { name: "가입 없이 체험하기", exact: true }).first().click();
   await page.getByRole("button", { name: "촬영 시작하기", exact: true }).click();
   await page.getByRole("button", { name: "카메라 켜기", exact: true }).click();
   await page.getByRole("button", { name: "촬영 시작", exact: true }).click();
@@ -56,7 +61,7 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
     await page.getByRole("button", { name: `${index}번 사진 선택`, exact: true }).click();
   }
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  const downloadButton = page.getByRole("button", { name: "다운로드", exact: true });
+  const downloadButton = page.getByRole("link", { name: "다운로드", exact: true });
   await expect(downloadButton).toBeVisible({ timeout: 15_000 });
   const completed = page.waitForEvent("download");
   await downloadButton.click();
@@ -65,4 +70,5 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
   const bytes = await readFile((await download.path())!);
   expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
   expect(bytes.length).toBeGreaterThan(10_000);
+  expect(apiRequests).toEqual([]);
 });

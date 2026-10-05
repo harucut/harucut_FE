@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Camera, Film, Home, LayoutGrid, User } from "lucide-react";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
-import { usePublicShootCta } from "@/lib/usePublicShootCta";
+import { PUBLIC_SHOOT_ENTRY } from "@/lib/guestTrialShared";
 
 type MobileTabBarProps = {
-  // 공개 페이지(/pricing 등)에서 렌더될 때 true. 촬영 탭은 인증 여부를 확인해
-  // 로그인 사용자는 /shoot로 직행, 비회원은 게스트 체험 안내를 띄운다.
+  // 공개 페이지 촬영 탭은 API 없이 체험 진입 경로로 이동한다.
   // (proxy가 비회원을 /login으로 막으므로) authed 페이지에서는 미지정.
   publicShoot?: boolean;
 };
@@ -19,7 +18,6 @@ type MobileTabBarProps = {
 // 데스크톱(≥ lg)에서는 숨기고 기존 웹 네비게이션을 사용한다.
 export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
-  const { onShootCta } = usePublicShootCta();
   // 가운데 버튼도 홈 카드와 **같은 것**을 연다. 하나는 고르라고 하고 하나는 바로
   // 카메라로 가면, 같아 보이는 두 진입로가 다르게 동작한다.
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
@@ -64,15 +62,14 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
       </Link>
 
       {publicShoot ? (
-        <button
-          type="button"
+        <a
+          href={PUBLIC_SHOOT_ENTRY}
           aria-label="촬영"
-          onClick={onShootCta}
           className={shootButtonClass}
           style={{ background: "var(--hc-primary)" }}
         >
           <Camera className="h-6.5 w-6.5" />
-        </button>
+        </a>
       ) : (
         <button
           type="button"

@@ -18,7 +18,6 @@
 import {
   GUEST_ALLOWED_ITEMS,
   GUEST_MEMBER_ONLY_ITEMS,
-  GUEST_TRIAL_NOTICE,
 } from './guest-trial';
 import { TERMS_OF_SERVICE } from './legal';
 
@@ -64,14 +63,12 @@ describe('비회원 회원 전용 목록 — 갤러리 불러오기', () => {
 
 describe('비회원 체험 허용 범위', () => {
   // 허용 쪽이 갤러리를 말하면 "불러오기가 된다"는 약속이 된다. 코드는 막고 있다.
-  it('허용 목록은 촬영·이미지 저장·파일 공유를 말한다', () => {
-    expect(GUEST_ALLOWED_ITEMS).toBe('사진 촬영, 이미지 저장과 파일 공유');
+  it('허용 목록은 촬영·이미지 다운로드를 말한다', () => {
+    expect(GUEST_ALLOWED_ITEMS).toBe('사진 촬영, 이미지 다운로드');
     expect(mentionsGallery(GUEST_ALLOWED_ITEMS)).toBe(false);
   });
 
-  it('체험 시작 안내도 갤러리 불러오기를 약속하지 않는다', () => {
-    expect(mentionsGallery(GUEST_TRIAL_NOTICE.message)).toBe(false);
-  });
+
 });
 
 describe('약관 제8조와 화면 문구', () => {

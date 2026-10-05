@@ -325,24 +325,16 @@ describe("ShootResultPage", () => {
     expect(call.idempotencyKey).toMatch(/^web-key-\d+$/);
   });
 
-  it("체험 결과는 JPEG 파일로 준비하고 클릭 즉시 공유한다", async () => {
+  it("체험 결과는 JPEG 다운로드만 제공하고 공유·체험 결과 안내를 띄우지 않는다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
-    const blob = new Blob(["jpeg"], { type: "image/jpeg" });
-    mockComposeFramePng.mockResolvedValue(blob);
-    const share = jest.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "share", { configurable: true, value: share });
-    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    mockComposeFramePng.mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" }));
     render(<ShootResultPage />);
-    const button = await screen.findByRole("button", { name: "이미지 공유 · 사진에 저장" });
+    await screen.findByRole("button", { name: "이미지 다운로드" });
     expect(mockComposeFramePng.mock.calls[0][0]).toMatchObject({ mimeType: "image/jpeg", quality: 0.92 });
-    fireEvent.click(button);
-    expect(share).toHaveBeenCalledTimes(1); // 비동기 fetch를 기다리지 않는다.
-    const file = share.mock.calls[0][0].files[0];
-    expect(file.type).toBe("image/jpeg");
-    expect(file.name).toMatch(/\.jpg$/);
+    expect(screen.queryByRole("button", { name: /공유|사진에 저장/ })).toBeNull();
+    expect(screen.queryByText("비회원 체험 결과 안내")).toBeNull();
     expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
-    delete (navigator as unknown as { share?: unknown }).share;
-    delete (navigator as unknown as { canShare?: unknown }).canShare;
+    expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
   });
 
   it("비회원은 브라우저가 그린 그림이 결과물이라 고른 순서 그대로 합성한다", async () => {
