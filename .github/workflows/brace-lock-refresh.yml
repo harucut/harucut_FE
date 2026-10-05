@@ -1,0 +1,54 @@
+name: brace-lock-refresh
+on:
+  push:
+    branches: [fix/brace-expansion-resolution]
+    paths: [.github/workflows/brace-lock-refresh.yml]
+permissions:
+  contents: read
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Update only brace-expansion security floors
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('package.json')
+          data = json.loads(p.read_text())
+          overrides = data['pnpm']['overrides']
+          for key in list(overrides):
+              if key.startswith('brace-expansion@'):
+                  del overrides[key]
+          overrides.update({
+              'brace-expansion@<1.1.21': '1.1.21',
+              'brace-expansion@>=2.0.0 <2.1.7': '2.1.7',
+              'brace-expansion@>=3.0.0 <3.0.9': '3.0.9',
+              'brace-expansion@>=4.0.0 <5.0.12': '5.0.12',
+          })
+          p.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+          pnpm install --lockfile-only --ignore-scripts
+      - name: Export reproducible lockfile patch
+        run: |
+          git diff --stat -- package.json pnpm-lock.yaml
+          git diff --binary -- package.json pnpm-lock.yaml > brace-security.patch
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          print('BRACE_PATCH ' + base64.b64encode(Path('brace-security.patch').read_bytes()).decode())
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: brace-security-lock
+          path: brace-security.patch
+          if-no-files-found: error
+          retention-days: 7
