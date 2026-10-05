@@ -90,6 +90,27 @@ describe("resolveMembership", () => {
   });
 
   /*
+    refresh 쿠키가 아예 없으면 재발급은 401 이 아니라 400(GEN-004)이다. 그래도 끊긴 세션이다 —
+    「알 수 없다」로 접으면 쿠키가 다 사라진 사람이 회원도 게스트도 아닌 채 「다시 확인」에 갇힌다.
+  */
+  it("refresh 쿠키가 없어 재발급이 400 이어도 회원이 아니다", async () => {
+    routeFetch({
+      status: [() => new Response("{}", { status: 401 })],
+      reissue: () =>
+        new Response(
+          JSON.stringify({
+            code: "GEN-004",
+            status: 400,
+            message: "Missing request parameter.",
+          }),
+          { status: 400 },
+        ),
+    });
+
+    await expect(resolveMembership()).resolves.toBe("guest");
+  });
+
+  /*
     **여기가 이 파일의 요점이다.** 아래 셋은 「회원이 아니다」가 아니라 「알 수 없다」다.
     이것을 `guest` 로 접으면 서버가 잠깐 흔들린 것만으로 멀쩡한 회원이 뒤집힌다.
   */
@@ -110,7 +131,7 @@ describe("resolveMembership", () => {
   it("재발급 서버만 못 답해도 판정할 수 없다", async () => {
     routeFetch({
       status: [() => new Response("{}", { status: 401 })],
-      // 401·403 이 아닌 실패는 `clientApi` 가 「재시도 가능」으로 바꿔 던진다.
+      // 400·401·403 이 아닌 실패는 `clientApi` 가 「재시도 가능」으로 바꿔 던진다.
       reissue: () => new Response("{}", { status: 500 }),
     });
 

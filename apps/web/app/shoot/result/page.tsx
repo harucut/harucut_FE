@@ -16,7 +16,7 @@ import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
-  composeFramePng,
+  composeFrameImage,
   downloadBlob,
   downloadFromUrl,
   type FrameSource,
@@ -30,23 +30,17 @@ import {
 } from "@/lib/fourcutOutput";
 import { describeComposeFailure } from "@/lib/fourcutCompose";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
-import {
-  registerGeneratedPngDebug,
-  unregisterGeneratedPngDebug,
-} from "@/lib/generatedImageDebug";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
-import { isNotNull } from "@/lib/guards";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
 import { getNativeSaveErrorMessage, nativeNotify } from "@/lib/nativeBridge";
 import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
+import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
-
-const IMAGE_DEBUG_SCOPE = "shoot-result-image";
 
 // 비회원이 로그인으로 넘어갈 때 쓰는 경로. 로그인 후 /home에서 보관해 둔 결과물을 자동 저장한다.
 const GUEST_LOGIN_HANDOFF_PATH = buildPathWithRedirect(
@@ -235,7 +229,6 @@ export default function ShootResultPage() {
   // 완성본 주소가 열리지 않는가(만료된 조회 URL·오프라인). 참이면 미리보기로 되돌아간다.
   const [isResultImageBroken, setIsResultImageBroken] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const debugImageUrlRef = useRef<string | null>(null);
   const guestImageUrlRef = useRef<string | null>(null);
   const imageGenerationKeyRef = useRef<string | null>(null);
   /*
@@ -276,7 +269,7 @@ export default function ShootResultPage() {
     () =>
       selectedShots
         .map((photo) => (photo ? { src: photo } : null))
-        .filter(isNotNull),
+        .filter((source) => source !== null),
     [selectedShots],
   );
 
@@ -447,23 +440,18 @@ export default function ShootResultPage() {
       try {
         if (guestMode) {
           // 비회원은 보관함을 쓸 수 없어서, 브라우저가 그린 그림이 곧 결과물이다.
-          const blob = await composeFramePng({
+          const blob = await composeFrameImage({
             layout: currentLayout,
             borderColor: effectiveBorderColor,
             sources: imageSources,
             outputFilter,
             theme: themeData,
             canvas: canvasRef.current ?? undefined,
+            mimeType: "image/jpeg",
+            quality: 0.92,
           });
 
           if (cancelled) return;
-
-          debugImageUrlRef.current = registerGeneratedPngDebug({
-            scope: IMAGE_DEBUG_SCOPE,
-            blob,
-            filename: `${displayName}.png`,
-            previousUrl: debugImageUrlRef.current,
-          });
 
           const objectUrl = URL.createObjectURL(blob);
           if (cancelled) {
@@ -482,6 +470,7 @@ export default function ShootResultPage() {
             objectUrl,
             downloadUrl: objectUrl,
             displayName,
+            localBlob: blob,
           });
           setImageState("done");
           return;
@@ -490,7 +479,7 @@ export default function ShootResultPage() {
         // 로그인 사용자는 **서버가 그린다.** 화면 미리보기는 아래 <FramePreview> 가
         // DOM 으로 그리므로 여기서 캔버스 합성을 할 이유가 없다.
         //
-        // 예전에는 회원 경로에서도 위 composeFramePng 을 먼저 돌렸는데, 그 결과를 쓰는 곳이
+        // 예전에는 회원 경로에서도 위 composeFrameImage 을 먼저 돌렸는데, 그 결과를 쓰는 곳이
         // 개발자용 디버그 전역 하나뿐이었다. 최대 16MP 캔버스 합성과 PNG 인코딩을 매번
         // 헛돌리며 서버 합성 시작을 그만큼 늦췄고, 더 나쁘게는 그 로컬 합성이 실패하면
         // 멀쩡히 성공했을 서버 저장까지 통째로 취소됐다.
@@ -508,6 +497,8 @@ export default function ShootResultPage() {
           키도 그대로다. 위에서 이미 확정해 둔 값이라 여기서는 읽기만 한다.
         */
         const idempotencyKey = ensureComposeIdempotencyKey(generationKey, themeData);
+        await flushShootSession();
+        if (cancelled) return;
 
         /*
           **같은 실행 키의 합성은 하나뿐이다 — 돌고 있으면 이어받는다.**
@@ -636,13 +627,6 @@ export default function ShootResultPage() {
     themeData,
   ]);
 
-  useEffect(() => {
-    return () => {
-      unregisterGeneratedPngDebug(IMAGE_DEBUG_SCOPE, debugImageUrlRef.current);
-      debugImageUrlRef.current = null;
-    };
-  }, []);
-
   /*
     촬영본은 메모리에만 있다(lib/shootSessionStore.ts 는 비영속). 새로고침 한 번에 원본
     4장이 사라지고 화면은 /shoot 으로 튕긴다 — 회원도 마찬가지다.
@@ -742,16 +726,12 @@ export default function ShootResultPage() {
     setIsDownloadingImage(true);
     try {
       if (guestMode) {
-        const response = await fetch(imageResult.downloadUrl ?? imageResult.objectUrl);
-        if (!response.ok) {
-          throw new Error(`guest download failed: ${response.status}`);
-        }
-
-        const blob = await response.blob();
+        const blob = imageResult.localBlob;
+        if (!blob) throw new Error("체험 결과를 다시 만들어 주세요.");
         // 앱 셸 안에서는 네이티브가 사진첩에 넣는다 — 끝날 때까지 기다려야 실패를 잡는다.
         await downloadBlob(
           blob,
-          buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
+          buildDownloadFilename(imageResult.displayName, blob.type === "image/jpeg" ? "jpg" : "png"),
         );
         // 로그인으로 이어 가도 다시 만들 수 있도록 **원본 4장과 만드는 방법**을 보관한다.
         // 완성본이 아니라 재료를 담는 이유는 lib/pendingGuestSave.ts 주석 참고.
@@ -847,10 +827,27 @@ export default function ShootResultPage() {
   };
 
   const handleShareImage = async () => {
-    if (!imageResult) return;
+    if (!imageResult || isSharingImage) return;
 
     if (guestMode) {
-      showGuestShareNotice();
+      const blob = imageResult.localBlob;
+      if (!blob) return;
+      const file = new File([blob], buildDownloadFilename(imageResult.displayName, blob.type === "image/jpeg" ? "jpg" : "png"), { type: blob.type });
+      setIsSharingImage(true);
+      try {
+        if (!navigator.canShare?.({ files: [file] }) || !navigator.share) {
+          showStatusNotice("이미지를 저장한 뒤 공유해 주세요", "이 브라우저는 이미지 파일 공유를 지원하지 않아요. 다운로드한 사진을 사진 앱이나 파일 앱에서 공유할 수 있어요.");
+          return;
+        }
+        // 비동기 다운로드를 먼저 하면 Safari의 사용자 제스처가 소진된다.
+        await navigator.share({ files: [file], title: imageResult.displayName });
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          showStatusNotice("공유하지 못했어요", "이미지를 다운로드한 뒤 사진 앱이나 파일 앱에서 공유해 주세요.");
+        }
+      } finally {
+        setIsSharingImage(false);
+      }
       return;
     }
 
@@ -973,8 +970,6 @@ export default function ShootResultPage() {
             type="button"
             onClick={() => {
               imageGenerationKeyRef.current = null;
-              unregisterGeneratedPngDebug(IMAGE_DEBUG_SCOPE, debugImageUrlRef.current);
-              debugImageUrlRef.current = null;
               if (guestImageUrlRef.current?.startsWith("blob:")) {
                 URL.revokeObjectURL(guestImageUrlRef.current);
               }
@@ -1008,7 +1003,7 @@ export default function ShootResultPage() {
             title="이미지 다운로드"
             description={
               guestMode
-                ? "파일 이름을 다듬고 체험 결과 이미지를 바로 내려받을 수 있어요."
+                ? "이미지 공유에서 사진 저장이나 메시지 전송을 고를 수 있어요. 다운로드 파일은 파일 앱에서 찾을 수 있어요."
                 : "기록으로 저장될 파일 이름을 수정하고 이미지를 내려받을 수 있어요."
             }
             asset={imageResult}
@@ -1017,7 +1012,8 @@ export default function ShootResultPage() {
             onChangeName={setImageNameDraft}
             onSaveName={handleSaveImageName}
             onDownload={handleDownloadImage}
-            onShare={guestMode ? undefined : handleShareImage}
+            onShare={handleShareImage}
+            shareLabel={guestMode ? "이미지 공유 · 사진에 저장" : "공유 링크 만들기"}
             isSavingName={isSavingImageName}
             isDownloading={isDownloadingImage}
             isSharing={isSharingImage}
@@ -1036,7 +1032,7 @@ export default function ShootResultPage() {
                 {withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.
               </p>
               <p className="text-[12px] leading-6 text-(--hc-muted)">
-                체험 결과는 이 화면을 벗어나면 사라져요. 먼저 이미지를 내려받거나
+                체험 사진은 이 기기에 최대 24시간 임시 보관해요. 완성본을 내려받거나
                 &ldquo;로그인하고 저장하기&rdquo;로 이어 가 주세요.
               </p>
             </div>

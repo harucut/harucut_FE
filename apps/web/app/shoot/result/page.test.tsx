@@ -93,16 +93,16 @@ jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
 }));
 
-// 공유 버튼은 `onShare` 가 있을 때만 그린다 — 진짜 카드와 같다
-// (components/frame/GeneratedAssetDownloadCard.tsx). 비회원은 이 값을 넘기지 않으므로,
-// 항상 그려 두면 게스트에게 공유가 열린 것처럼 보이는 회귀를 놀친다.
+// 카드의 공유 액션을 그대로 연결해 회원 링크와 게스트 파일을 각각 검증한다.
 jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
   GeneratedAssetDownloadCard: ({
     onDownload,
     onShare,
+    shareLabel,
   }: {
     onDownload: () => void;
     onShare?: () => void;
+    shareLabel?: string;
   }) => (
     <div data-testid="generated-asset-card">
       <button type="button" onClick={onDownload}>
@@ -110,7 +110,7 @@ jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
       </button>
       {onShare ? (
         <button type="button" onClick={onShare}>
-          공유 링크 만들기
+          {shareLabel ?? "공유 링크 만들기"}
         </button>
       ) : null}
     </div>
@@ -172,10 +172,6 @@ jest.mock("@/lib/themeBackground", () => ({
   DEFAULT_FRAME_BACKGROUND_COLOR: "#111827",
 }));
 
-jest.mock("@/lib/guards", () => ({
-  isNotNull: (value: unknown) => value != null,
-}));
-
 // 세션 상태만 목으로 갈아 끼우고 **지문 계산은 진짜를 쓴다.** 지문까지 목으로 덮으면
 // "렌더 전용 서명 URL 은 지문에 안 들어간다" 같은 판정이 통째로 사라진다.
 jest.mock("@/lib/shootSessionStore", () => ({
@@ -184,7 +180,7 @@ jest.mock("@/lib/shootSessionStore", () => ({
 }));
 
 jest.mock("@/lib/canvas/composeFrame", () => ({
-  composeFramePng: (...args: unknown[]) => mockComposeFramePng(...args),
+  composeFrameImage: (...args: unknown[]) => mockComposeFramePng(...args),
   downloadBlob: jest.fn(),
   downloadFromUrl: (...args: unknown[]) => mockDownloadFromUrl(...args),
 }));
@@ -329,6 +325,26 @@ describe("ShootResultPage", () => {
     expect(call.idempotencyKey).toMatch(/^web-key-\d+$/);
   });
 
+  it("체험 결과는 JPEG 파일로 준비하고 클릭 즉시 공유한다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+    const blob = new Blob(["jpeg"], { type: "image/jpeg" });
+    mockComposeFramePng.mockResolvedValue(blob);
+    const share = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    render(<ShootResultPage />);
+    const button = await screen.findByRole("button", { name: "이미지 공유 · 사진에 저장" });
+    expect(mockComposeFramePng.mock.calls[0][0]).toMatchObject({ mimeType: "image/jpeg", quality: 0.92 });
+    fireEvent.click(button);
+    expect(share).toHaveBeenCalledTimes(1); // 비동기 fetch를 기다리지 않는다.
+    const file = share.mock.calls[0][0].files[0];
+    expect(file.type).toBe("image/jpeg");
+    expect(file.name).toMatch(/\.jpg$/);
+    expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
+    delete (navigator as unknown as { share?: unknown }).share;
+    delete (navigator as unknown as { canShare?: unknown }).canShare;
+  });
+
   it("비회원은 브라우저가 그린 그림이 결과물이라 고른 순서 그대로 합성한다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
 
@@ -372,6 +388,9 @@ describe("ShootResultPage", () => {
     const output = await screen.findByAltText("완성된 네컷 결과");
     // 비회원 결과물은 이 blob 이 전부다 — 내려받는 것도 화면에 뜨는 것도 같은 그림이어야 한다.
     expect(output).toHaveAttribute("src", "blob:generated-image");
+    // 주소도 하나뿐이다 — 예전에는 개발자용 디버그 전역이 같은 그림에 주소를 하나 더 만들어
+    // window 에 걸어 뒀다.
+    expect(mockCreateObjectURL).toHaveBeenCalledTimes(1);
   });
 
   // 회원 완성본 주소는 만료되는 조회 URL 이고, 비회원 것은 새로고침에 죽는 blob 이다.

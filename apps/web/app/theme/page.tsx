@@ -77,8 +77,8 @@ function ThemePageContent() {
     setRemoteFrameId,
   ]);
 
-  // 보관함이 요금제 한도에 도달했는지. 만들기를 막지는 않고 미리 알리기만 한다.
-  const isAtCapacity = capacity.atCapacity;
+  // 서버가 한도 도달을 확인한 경우만 신규 진입을 막는다. 기존 프레임 수정은 계속 가능하다.
+  const isAtCapacity = usage !== null && capacity.atCapacity;
 
   const handleOpenRemoteFrame = (frame: RemoteFrame) => {
     setFrameId(frameIdFromFrameType(frame.frameType));
@@ -121,12 +121,12 @@ function ThemePageContent() {
           onRefresh={refresh}
           // 라벨은 "불러오는 중…"인데 버튼은 눌렸다. 눌러도 조용히 빠져나가서, 목록이
           // 늦게 오는 날에는 아무 반응 없는 버튼이 됐다. 상태와 라벨을 맞춘다.
-          confirmDisabled={isLoading}
-          confirmLabel={isLoading ? "불러오는 중…" : "새 프레임 만들기"}
+          confirmDisabled={isLoading || isAtCapacity}
+          confirmLabel={isLoading ? "불러오는 중…" : isAtCapacity ? "저장 공간을 확인해 주세요" : "새 프레임 만들기"}
           // 확인은 **언제나 새 프레임**이다. 목록에서 고른 것은 컷 구성만 따라가고,
           // 그 프레임을 이어서 고치는 길은 아래 "수정하기"다.
           onConfirm={({ frameId }) => {
-            if (isLoading) return;
+            if (isLoading || isAtCapacity) return;
             setFrameId(frameId);
             setRemoteFrameId(null);
             router.push("/theme/sticker");

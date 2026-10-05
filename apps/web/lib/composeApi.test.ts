@@ -95,7 +95,7 @@ describe("requestCompose", () => {
       frameId: 2,
       sourceKeys: ["a", "b", "c", "d"],
       idempotencyKey: "web-x",
-    });
+    }, { signal: expect.any(AbortSignal) });
   });
 });
 

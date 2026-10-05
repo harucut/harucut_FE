@@ -16,10 +16,16 @@
   docs/local-backend.md 대로 백엔드를 띄운 뒤:
     python3 scripts/check_backend_contract.py
     python3 scripts/check_backend_contract.py --base-url http://localhost:8080
+  운영 스펙과 맞춰 볼 때(스펙을 읽기만 한다):
+    python3 scripts/check_backend_contract.py --base-url https://api.harucut.com
 
 에러코드는 컨테이너가 떠 있으면 **실행 중인 jar 의 ErrorCode enum** 에서 뽑는다.
 스웨거 응답 예시에만 의존하면 문서화되지 않은 코드(GEN-091 같은 5xx)를 죽은 항목으로
 잘못 짚는다. 컨테이너가 없으면 스웨거 기준으로 낮춰 보고 그 사실을 함께 알린다.
+
+--base-url 이 로컬(localhost·127.0.0.1)이 아니면 jar 를 아예 안 읽는다. 컨테이너는 늘 이
+기계의 것이라, 운영 스펙에 로컬 jar 를 대면 서로 다른 두 서버를 섞어 대조한다. 그때도
+스웨거 기준으로 낮추고 경고로 알린다(종료코드 규칙은 같다).
 """
 from __future__ import annotations
 
@@ -29,6 +35,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,7 +50,9 @@ ERROR_MAP_FILES = [
 #   CLIENT-002 NEXT_PUBLIC_BASE_URL 이 없거나 잘못됨(프록시가 백엔드 주소를 못 만든다)
 #   CLIENT-003 백엔드에 닿지 못함(프록시의 fetch 가 던졌다 — 서버는 아무 코드도 못 준다)
 #   CLIENT-004 Next 서버에조차 닿지 못함(브라우저의 fetch 가 던졌다 — 003 의 한 칸 앞 구간)
-CLIENT_ONLY_CODES = {"CLIENT-001", "CLIENT-002", "CLIENT-003", "CLIENT-004"}
+#   CLIENT-005 다른 사이트가 시킨 상태 변경 요청을 프록시가 막음(백엔드로 보내지 않았다)
+# CLIENT-006: 프록시가 리소스 ID 문법을 거부했다(백엔드 요청 전).
+CLIENT_ONLY_CODES = {"CLIENT-001", "CLIENT-002", "CLIENT-003", "CLIENT-004", "CLIENT-005", "CLIENT-006"}
 CALLER_DIRS = [
     "apps/web/lib", "apps/web/app", "apps/web/components",
     "apps/web/hooks", "apps/web/tests", "packages",
@@ -509,12 +518,16 @@ def main() -> int:
     print(f"   {'없음' if not dead_routes else str(len(dead_routes)) + '개'}\n")
 
     print("C. 에러코드 대조")
-    jar = jar_error_codes()
+    # jar 는 로컬 컨테이너(harucut-app)의 것이다. 운영을 대조하며 읽으면 운영 스펙 ↔ 로컬 jar 로
+    # 서로 다른 서버를 섞는다.
+    local = urllib.parse.urlparse(args.base_url).hostname in {"localhost", "127.0.0.1"}
+    jar = jar_error_codes() if local else None
     if jar is not None:
         server, source = jar, "실행 중인 jar 의 ErrorCode enum"
     else:
-        server, source = spec_error_codes(spec), "스웨거 응답 예시(컨테이너를 못 읽어 낮춘 기준)"
-        warnings.append("C: jar 를 못 읽어 스웨거 기준으로 대조했다 — 죽은 항목 판정이 부정확할 수 있다")
+        why = "jar 를 못 읽어" if local else "로컬이 아니라 jar 를 안 읽고"
+        server, source = spec_error_codes(spec), f"스웨거 응답 예시({why} 낮춘 기준)"
+        warnings.append(f"C: {why} 스웨거 기준으로 대조했다 — 죽은 항목 판정이 부정확할 수 있다")
     fe = fe_error_codes()
     fe_server = fe - CLIENT_ONLY_CODES
     print(f"   기준: {source}")

@@ -1,5 +1,6 @@
 "use client";
 
+import { withRequestDeadline } from "@/lib/requestDeadline";
 import { clientApi } from "@/lib/clientApi";
 import type {
   ApiEnvelope,
@@ -21,10 +22,10 @@ export async function getMyUserInfo() {
 
 /** 구독 사용량(프레임 보관 한도·사용량) 조회 */
 export async function getSubscriptionUsage() {
-  const res = await clientApi.get<ApiEnvelope<SubscriptionUsage>>(
+  const res = await withRequestDeadline(30_000, (signal) => clientApi.get<ApiEnvelope<SubscriptionUsage>>(
     "/api/client/user/subscription/usage",
-    { cache: "no-store" },
-  );
+    { cache: "no-store", signal },
+  ));
 
   return requireData(res.data, "구독 사용량");
 }

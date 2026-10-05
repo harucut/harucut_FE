@@ -1,11 +1,13 @@
 "use client";
 
-// 결과물은 PNG 이미지 한 종류다. 종류·확장자는 고정이라 값으로 들고 다니지 않는다.
+// 서버 결과는 PNG, 기기에서 만든 체험 결과는 JPEG다.
 export type GeneratedFourcutAsset = {
   mediaId: number;
   objectUrl: string;
   downloadUrl?: string;
   displayName: string;
+  /** 기기 합성 결과. 공유 제스처 전에 파일 바이트가 준비되어 있어야 한다. */
+  localBlob?: Blob;
 };
 
 // 결과물 확장자. 파일명·File 생성에 공통으로 쓴다.

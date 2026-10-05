@@ -1,5 +1,6 @@
 "use client";
 
+import { withRequestDeadline } from "@/lib/requestDeadline";
 import type {
   ApiEnvelope,
   PresignedUploadContentType,
@@ -343,13 +344,14 @@ export async function uploadToS3WithPresigned(opts: {
   );
   // presigned PUT 서명에 content-type이 들어있다(X-Amz-SignedHeaders=content-type;host).
   // 헤더를 빼거나 다른 값을 쓰면 S3가 403 SignatureDoesNotMatch로 거절한다.
-  const uploadRes = await fetch(uploadUrl, {
+  const uploadRes = await withRequestDeadline(60_000, (signal) => fetch(uploadUrl, {
+    signal,
     method: "PUT",
     headers: {
       "Content-Type": contentType,
     },
     body: file,
-  });
+  }));
 
   if (!uploadRes.ok) {
     throw new Error(`S3 upload failed: ${uploadRes.status}`);

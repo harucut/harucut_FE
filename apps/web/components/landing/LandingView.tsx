@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
@@ -8,7 +7,6 @@ import { MarketingNav } from "@/components/layout/MarketingNav";
 import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
-import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
@@ -21,7 +19,7 @@ const GREEN = "#1ED760";
 // 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
 const HERO_IMAGES = DEMO_PHOTOS;
 
-// 02는 바로 아래 CUSTOM FRAME 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
+// 02는 바로 아래 나만의 프레임 섹션이 자세히 다루므로 여기선 한 줄만 걸어둔다.
 const STEPS = [
   { n: "01", t: "기록 남기기", d: "카메라로 8장을 찍거나, 갤러리에서 골라요." },
   { n: "02", t: "프레임 꾸미기", d: "프레임 위에 스티커와 글씨를 얹어요." },
@@ -51,169 +49,49 @@ function ShowcaseFrame({
   );
 }
 
-// 한 칸이 머무는 시간(ms). 아래 진행 바 애니메이션과 같은 값을 써야 싱크가 맞는다.
-//
-// 세 칸을 도는 데 걸리는 전체 시간(1500 × 3 = 4.5초)을 5초 아래로 잡는다.
-// WCAG 2.2.2 는 자동으로 시작해 5초를 넘게 움직이는 것에 멈출 수단을 요구한다.
-// 예전에는 무한 반복이라 "자동 넘김 멈추기" 버튼이 필요했는데, 이 모션은 정보를 나르지
-// 않는다 — 세 칸의 글은 항상 다 보이고 강조 색만 옮겨 다닌다. 정보가 없는 장식 때문에
-// 마케팅 화면에 조작 버튼을 두느니, 한 바퀴만 돌고 멈추게 해서 요구 자체를 없앤다.
-const STEP_DWELL_MS = 1500;
-
-// HOW 섹션 — 필름이 한 칸씩 감기듯 01 → 02 → 03이 순서대로 밝아진다.
-// 내용은 항상 전부 보이고 강조만 이동하므로, 모션이 꺼져도 정보 손실이 없다.
+// 읽는 순서는 배치로 전달한다. 정보 없는 자동 강조·진행 바는 두지 않는다.
 function HowFilm() {
-  const [active, setActive] = useState(0);
-  // 한 바퀴를 다 돌았는지. 인터벌 콜백에서만 켠다.
-  const [passDone, setPassDone] = useState(false);
-  // 포인터를 올린 칸. 자동 재생이 끝난 뒤에도 읽고 있는 칸을 짚어 준다.
-  const [hovered, setHovered] = useState<number | null>(null);
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduced(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  // 재생이 끝난 상태. 모션을 끈 사용자에게는 처음부터 완성된 화면을 보여준다.
-  const settled = reduced || passDone;
-
-  useEffect(() => {
-    if (reduced) return;
-
-    const id = window.setInterval(() => {
-      setActive((i) => {
-        const next = i + 1;
-        if (next >= STEPS.length) {
-          window.clearInterval(id);
-          setPassDone(true);
-          return i;
-        }
-        return next;
-      });
-    }, STEP_DWELL_MS);
-
-    return () => window.clearInterval(id);
-  }, [reduced]);
-
   return (
     <div className="overflow-hidden rounded-[10px] border border-white/8 bg-[#0E0E0F]">
-      <TapeStrip
-        running={!reduced && !settled}
-        className="border-b border-white/6"
-      />
-
-      <div className="grid md:grid-cols-3" onMouseLeave={() => setHovered(null)}>
-        {STEPS.map((s, i) => {
-          // 재생이 끝나면 세 칸 모두 '현재'다. 흐린 칸을 남겨 둘 이유가 없다.
-          // 다만 포인터를 올린 칸이 있으면 그 칸만 짚는다.
-          const on = settled ? hovered === null || hovered === i : i === active;
-          return (
-            <div
-              key={s.n}
-              onMouseEnter={() => setHovered(i)}
-              className="relative px-7.5 pb-9.5 pt-8.5 transition-colors duration-500"
-              style={{
-                borderLeft: i ? "1px dashed rgba(255,255,255,.12)" : "none",
-                background: on ? "rgba(255,255,255,.022)" : "transparent",
-              }}
-            >
-              <span
-                className="mb-4.5 block font-mono text-[58px] font-extrabold leading-[.8] tracking-[-3px] transition-colors duration-500"
-                // 비활성 단계도 읽을 수 있어야 한다 — .16은 대비 1.57로 WCAG AA(큰 글자 3:1) 미달이었다.
-                style={{ color: on ? GREEN : "rgba(255,255,255,.42)" }}
-              >
-                {s.n}
-              </span>
-              <h3
-                className="mb-2 text-[22px] font-extrabold tracking-[-.4px] transition-colors duration-500"
-                style={{ color: on ? "#FFFFFF" : "rgba(255,255,255,.62)" }}
-              >
-                {s.t}
-              </h3>
-              <p
-                className="text-[15px] leading-[1.65] transition-colors duration-500"
-                style={{
-                  // .32는 대비 2.84로 본문 기준(4.5:1) 미달이라 .56으로 올렸다.
-                  color: on ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.56)",
-                }}
-              >
-                {s.d}
-              </p>
-
-              {/* 노출 게이지 — 이 칸에 머무는 동안 그린이 차오른다 */}
-              <span
-                aria-hidden
-                className="absolute bottom-0 left-0 h-0.5 w-full"
-                style={{ background: "rgba(255,255,255,.06)" }}
-              />
-              {!reduced && !settled && i === active ? (
-                <span
-                  aria-hidden
-                  // key로 매 전환마다 리마운트해 애니메이션을 처음부터 재생시킨다.
-                  key={active}
-                  className="hc-film-progress absolute bottom-0 left-0 h-0.5 w-full"
-                  style={{
-                    background: GREEN,
-                    ["--hc-film-dwell" as string]: `${STEP_DWELL_MS}ms`,
-                  }}
-                />
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-
-      <TapeStrip
-        running={!reduced && !settled}
-        className="border-t border-white/6"
-      />
+      <TapeStrip className="border-b border-white/6" />
+      <ol className="divide-y divide-white/10 px-7">
+        {STEPS.map((step) => (
+          <li key={step.t} className="grid gap-2 py-6 md:grid-cols-[1fr_2fr] md:gap-8">
+            <h3 className="text-xl font-bold text-white">{step.t}</h3>
+            <p className="text-[15px] leading-[1.65] text-white/70">{step.d}</p>
+          </li>
+        ))}
+      </ol>
+      <TapeStrip className="border-t border-white/6" />
     </div>
   );
 }
 
-// 히어로 — 에디토리얼/타입 우선: 초대형 Pretendard Black 헤드라인 +
-// 그린 글로우 + 하단에 흩뿌린 폴라로이드 콜라주(편집 디자인 느낌, 템플릿 탈피).
 function HeroEditorial() {
   return (
-    <section className="relative mx-auto flex min-h-[calc(100svh-72px)] max-w-290 flex-col items-center justify-center overflow-hidden px-7 pb-16 pt-10 text-center">
-      {/* 배경 그린 글로우 */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[22%] h-110 w-160 -translate-x-1/2 rounded-full opacity-20 blur-[100px]"
-        style={{ background: GREEN }}
-      />
-
+    <section className="relative mx-auto flex max-w-290 flex-col items-center justify-center overflow-hidden px-7 pb-16 pt-10 sm:pt-16 text-center">
       {/* 헤드라인 — Pretendard Black, 초대형(type-first) */}
-      <Reveal
-        as="span"
-        immediate
-        className="relative block text-[46px] font-black leading-[1.24] tracking-[-2.4px] sm:text-[68px] lg:text-[88px] lg:leading-[1.18] lg:tracking-[-4px]"
+      <div
+        className="min-w-0 relative block text-[40px] font-black leading-[1.24] tracking-[-2.4px] sm:text-[60px] lg:text-[76px] lg:leading-[1.18] lg:tracking-[-4px]"
       >
         <h1>
           어디서든,
           <br />
           하루를 <span className="hc-accent-word">촬영해요</span>
         </h1>
-      </Reveal>
-      <Reveal
-        as="span"
-        immediate
-        delay={120}
-        className="relative mb-9 mt-6 block max-w-110 text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
+      </div>
+      <div
+        className="min-w-0 relative mb-9 mt-6 block max-w-110 text-[16px] leading-[1.6] text-[#B3B3B3] sm:text-[18px]"
       >
         <p>부스 앞에 줄 서지 않아도 돼요. 카페에서, 집에서, 지금 바로 네 컷.</p>
-      </Reveal>
+      </div>
 
       {/*
         지금 단계의 목표는 "비회원 체험 -> 가입 전환"인데, 그 입구가 랜딩에 없었다.
         헤더 CTA 를 눌러 /login 까지 가야 비회원 체험 버튼을 만났다. 첫 화면에서 바로 연다.
         헤더 CTA 가 이미 초록이라 여기는 흰 버튼을 쓴다(한 화면 한 초록).
       */}
-      <Reveal immediate delay={180} className="relative flex flex-wrap items-center justify-center gap-3">
+      <div className="min-w-0 relative flex flex-wrap items-center justify-center gap-3">
         {/* 문구는 넘기지 않는다 — 기본값이 곧 로그인 화면·앱과 같은 한 문구다.
             예전에는 여기만 "가입 없이 찍어보기"였는데, 이 체험은 찍기만이 아니라
             이미지 저장까지 되므로 실제보다 작게 말하는 문구이기도 했다. */}
@@ -224,13 +102,11 @@ function HeroEditorial() {
         >
           로그인 <ArrowRight className="h-4 w-4" />
         </Link>
-      </Reveal>
+      </div>
 
       {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
-      <Reveal
-        immediate
-        delay={220}
-        className="relative mt-12 flex w-full items-end justify-center sm:mt-14"
+      <div
+        className="min-w-0 relative mt-12 flex w-full items-end justify-center sm:mt-14"
       >
         <div
           className="-mr-8 h-37.5 drop-shadow-2xl sm:-mr-10 sm:h-49 lg:h-58"
@@ -250,7 +126,7 @@ function HeroEditorial() {
         >
           <ShowcaseFrame id="polaroid-4" className="h-full! w-auto!" />
         </div>
-      </Reveal>
+      </div>
     </section>
   );
 }
@@ -265,22 +141,22 @@ export function LandingView() {
       {/* HOW */}
       <section id="how" className="border-y border-white/10 bg-black">
         <div className="mx-auto max-w-290 px-7 py-19">
-          <Reveal className="mb-10">
+          <div className="min-w-0 mb-10">
             <h2 className="text-[40px] font-extrabold leading-[1.05] tracking-[-1.4px]">
               찍고, 꾸미고, 남기고.
               <br />네 컷이면 끝.
             </h2>
-          </Reveal>
+          </div>
 
           <HowFilm />
         </div>
       </section>
 
-      {/* CUSTOM FRAME — 프레임 종류(부스도 다 있는 것) 대신, 부스와 겹치지 않는
+      {/* 나만의 프레임 — 프레임 종류(부스도 다 있는 것) 대신, 부스와 겹치지 않는
           유일한 축이자 요금제 1행인 "커스텀 프레임"을 랜딩 주인공으로 세운다. */}
       <section id="custom" className="mx-auto max-w-290 px-7 py-20">
         <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
-          <Reveal>
+          <div className="min-w-0">
             <h2 className="text-[38px] font-extrabold leading-[1.14] tracking-[-1.2px]">
               고르는 게 아니라,
               <br />
@@ -298,10 +174,10 @@ export function LandingView() {
             >
               기능 자세히 보기 <ArrowRight className="h-4 w-4" />
             </Link>
-          </Reveal>
+          </div>
 
           {/* 같은 프레임·같은 사진, 프레임 꾸미기만 다르게 — 실제 렌더러로 그린 대비 */}
-          <Reveal delay={140}>
+          <div className="min-w-0">
             {/* 높이로 폭이 정해지는 미리보기 두 장이라, 좁은 화면에서는 높이를 같이 줄여야
                 가로로 넘치지 않는다(320px 에서 21px 넘쳤다). clamp 로 매끄럽게 줄인다. */}
             <div className="flex items-center justify-center gap-3 sm:gap-7">
@@ -329,7 +205,7 @@ export function LandingView() {
                 />
               </div>
             </div>
-          </Reveal>
+          </div>
         </div>
       </section>
 
@@ -342,7 +218,7 @@ export function LandingView() {
         <div className="mx-auto flex max-w-290 flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex max-w-140 flex-col gap-4">
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-[11px] font-extrabold tracking-[1px] text-white/70">
-              FOR EVENTS
+              행사 사진
             </span>
             <h2 className="text-[28px] font-extrabold leading-[1.2] tracking-[-1px] text-white lg:text-[38px]">
               행사에서는 부스 대신 QR 한 장

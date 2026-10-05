@@ -67,6 +67,8 @@ export {
   isOAuthFlowUrl,
   isSameOrigin,
   originOf,
+  resolveShellOrigin,
+  canonicalOAuthCallbackUrl,
 } from './shell-origin';
 export {
   NATIVE_FILENAME_MAX_BYTES,

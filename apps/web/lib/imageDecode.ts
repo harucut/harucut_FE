@@ -25,6 +25,7 @@
 import { fitCanvasScale, MAX_TILE_PIXELS } from "@/lib/canvas/canvasBudget";
 import {
   isSupportedUploadFile,
+  resolveUploadContentType,
   MAX_UPLOAD_BYTES,
   UNSUPPORTED_UPLOAD_MESSAGE,
   UploadValidationError,
@@ -433,7 +434,8 @@ async function encodeAsJpeg(
 }
 
 /**
- * 백엔드에 **그대로 올릴 수 있는 파일**로 만든다. 이미 올릴 수 있으면 손대지 않는다.
+ * 업로드 가능한 파일로 만든다. JPEG는 다시 구워 EXIF/GPS를 제거한다.
+ * PNG·GIF·WEBP는 투명도와 애니메이션을 보존한다.
  *
  * 왜 여기서 바꾸나: 프레임 자산·배경·프로필 사진은 촬영 경로와 달리 고른 파일을 **원본
  * 그대로** S3 로 올린다(캔버스를 거치지 않는다). 그래서 아이폰에서 고른 HEIC 는 서버가
@@ -458,7 +460,7 @@ async function encodeAsJpeg(
  * 나온 값이라 프로필 사진이나 스티커에 갖다 쓸 수 없다.
  */
 export async function toUploadableFile(file: File): Promise<File> {
-  if (canUploadAsIs(file)) return file;
+  if (canUploadAsIs(file) && resolveUploadContentType(file) !== "JPEG") return file;
 
   const decoded = await decodeImageFile(file);
   if (!decoded) throw createUnsupportedUploadError(file);

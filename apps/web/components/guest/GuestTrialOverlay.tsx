@@ -84,10 +84,16 @@ export function GuestTrialOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center hc-modal px-4 py-6 sm:items-center">
+      {/*
+        배경은 바깥을 눌러 닫는 자리일 뿐이다. 이름은 카드 안 X 버튼이 갖는다 — 예전에는 이름이
+        배경에만 있어 X 가 이름 없는 버튼으로 읽혔고(axe button-name), 둘 다 주면 같은 컨트롤이
+        두 번 잡힌다. 키보드는 Escape 와 X 로 닫는다. 트랩(useModalDialog)은 카드 안만 훑어 배경과 무관하다.
+      */}
       <button
         type="button"
-        aria-label="알림 닫기"
+        tabIndex={-1}
+        aria-hidden="true"
         onClick={clearNotice}
         className="absolute inset-0"
       />
@@ -101,6 +107,7 @@ export function GuestTrialOverlay() {
       >
         <button
           type="button"
+          aria-label="알림 닫기"
           onClick={clearNotice}
           className="hc-button-icon absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border text-(--hc-muted) transition"
         >

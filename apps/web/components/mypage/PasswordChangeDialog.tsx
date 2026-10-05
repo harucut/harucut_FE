@@ -112,7 +112,7 @@ export function PasswordChangeDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center hc-modal px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="닫기"

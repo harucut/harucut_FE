@@ -45,7 +45,7 @@ const mockShootSession = {
 };
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn(), prefetch: jest.fn() }),
 }));
 
 jest.mock("@/components/layout/PageHeader", () => ({

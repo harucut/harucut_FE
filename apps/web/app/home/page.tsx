@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowRight } from "lucide-react";
 import { serverDateTimeToMillis } from "@harucut/shared";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -80,33 +80,23 @@ function getNextDateRefreshDelay() {
  * 둘 다 본다 — 탭이 백그라운드에 있는 동안 타이머가 밀려도 돌아온 순간 맞춰진다.
  * 반환값은 "yyyy-mm-dd" 키라, 같은 날 다시 확인해도 값이 그대로여서 재렌더가 없다.
  */
-function useCurrentDateKey() {
-  const [dateKey, setDateKey] = useState(getCurrentDateKey);
-
-  useEffect(() => {
-    let timeoutId: number;
-
-    const refresh = () => {
-      setDateKey(getCurrentDateKey());
-      timeoutId = window.setTimeout(refresh, getNextDateRefreshDelay());
-    };
-
-    const refreshOnVisible = () => {
-      if (!document.hidden) {
-        setDateKey(getCurrentDateKey());
-      }
-    };
-
+function subscribeToDateChange(notify: () => void) {
+  let timeoutId: number;
+  const refresh = () => {
+    notify();
     timeoutId = window.setTimeout(refresh, getNextDateRefreshDelay());
-    document.addEventListener("visibilitychange", refreshOnVisible);
+  };
+  const refreshOnVisible = () => { if (!document.hidden) notify(); };
+  timeoutId = window.setTimeout(refresh, getNextDateRefreshDelay());
+  document.addEventListener("visibilitychange", refreshOnVisible);
+  return () => {
+    window.clearTimeout(timeoutId);
+    document.removeEventListener("visibilitychange", refreshOnVisible);
+  };
+}
 
-    return () => {
-      window.clearTimeout(timeoutId);
-      document.removeEventListener("visibilitychange", refreshOnVisible);
-    };
-  }, []);
-
-  return dateKey;
+function useCurrentDateKey() {
+  return useSyncExternalStore(subscribeToDateChange, getCurrentDateKey, () => null);
 }
 
 
@@ -175,7 +165,7 @@ export default function HomePage() {
   const currentDateKey = useCurrentDateKey();
   // 헤딩 날짜는 자정에 갱신되는 날짜 키에서 파생된다(별도 타이머 불필요).
   const currentHeadingDate = useMemo(
-    () => formatHeadingDate(currentDateKey),
+    () => currentDateKey ? formatHeadingDate(currentDateKey) : "오늘의 하루컷",
     [currentDateKey],
   );
 
@@ -220,7 +210,7 @@ export default function HomePage() {
                   </span>
                 </span>
                 <ArrowRight
-                  className={`h-4.5 w-4.5 shrink-0 transition group-hover:translate-x-0.5 ${
+                  className={`h-4.5 w-4.5 shrink-0 transition ${
                     action.primary ? "" : "text-(--hc-muted)"
                   }`}
                 />

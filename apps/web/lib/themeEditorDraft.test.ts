@@ -51,6 +51,7 @@ async function loadModule(): Promise<DraftModule> {
 }
 
 beforeEach(() => {
+  jest.spyOn(Date, "now").mockReturnValue(1_700_000_002_000);
   window.localStorage.clear();
   bodyBytes = new Map();
   fetchMock = jest.fn(async (src: string) => ({
@@ -58,6 +59,17 @@ beforeEach(() => {
       new Blob(["x".repeat(bodyBytes.get(src) ?? 1_000)], { type: "image/jpeg" }),
   }));
   global.fetch = fetchMock as unknown as typeof fetch;
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+test("하루가 지난 초안과 비정상 시각의 초안을 지운다", async () => {
+  const { saveEditorDraft, loadEditorDraft } = await loadModule();
+  await saveEditorDraft(saveInput(["data:image/png;base64,eA=="]));
+  expect(loadEditorDraft()).not.toBeNull();
+  jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000 + 86_400_001);
+  expect(loadEditorDraft()).toBeNull();
+  expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
 });
 
 describe("saveEditorDraft 의 dataURL 캐시", () => {

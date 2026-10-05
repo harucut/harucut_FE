@@ -11,6 +11,7 @@ import { TextNode } from "./nodes/TextNode";
 
 type Props = {
   c: EditorComponent;
+  bounds: { width: number; height: number };
   isActive: boolean;
   onSelect: () => void;
   onCommit: (patch: {
@@ -32,6 +33,7 @@ function isText(c: EditorComponent): c is TextComponent {
 
 export function EditableNode({
   c,
+  bounds,
   isActive,
   onSelect,
   onCommit,
@@ -77,6 +79,17 @@ export function EditableNode({
     rotation: c.rotation ?? 0,
     opacity,
     draggable: !c.locked,
+    // Konva는 절대 좌표를 넘긴다. 부모의 배율을 역변환해 중심을 프레임 안에 둔다.
+    // 가장자리 장식은 반쯤 걸칠 수 있지만, 다시 잡을 부분은 남는다.
+    dragBoundFunc: function (position) {
+      const transform = this.getParent()?.getAbsoluteTransform();
+      if (!transform) return position;
+      const local = transform.copy().invert().point(position);
+      return transform.point({
+        x: Math.max(0, Math.min(bounds.width, local.x)),
+        y: Math.max(0, Math.min(bounds.height, local.y)),
+      });
+    },
 
     onMouseDown: onSelect,
     onTouchStart: onSelect,

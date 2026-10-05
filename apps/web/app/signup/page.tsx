@@ -66,6 +66,14 @@ function SignupPageContent() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
+    const showErrors = (next: SignupErrors) => {
+      setErrors(next);
+      requestAnimationFrame(() => {
+        if (!form.isConnected) return;
+        form.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"][tabindex]')?.focus();
+      });
+    };
     setIsSubmitting(true);
     setErrors({});
 
@@ -119,7 +127,7 @@ function SignupPageContent() {
     }
 
     if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
+      showErrors(nextErrors);
       setIsSubmitting(false);
       return;
     }
@@ -172,11 +180,11 @@ function SignupPageContent() {
         // 서버는 이 이메일이 인증되지 않았다고 본다. 화면만 "인증 완료"로 남겨 두면
         // 사용자는 같은 버튼을 계속 누르게 된다. 인증 상태를 풀어 다시 받게 한다.
         emailVerification.reset();
-        setErrors({ email: VERIFICATION_EXPIRED_MESSAGE });
+        showErrors({ email: VERIFICATION_EXPIRED_MESSAGE });
       } else if (code === "AUTH-030") {
-        setErrors({ email: message });
+        showErrors({ email: message });
       } else {
-        setErrors({ common: message });
+        showErrors({ common: message });
       }
     } finally {
       setIsSubmitting(false);
@@ -215,36 +223,44 @@ function SignupPageContent() {
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
-          <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
+          <p role="alert" tabIndex={-1} className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
             {errors.common}
           </p>
         ) : null}
 
-        <EmailCodeSection
-          email={email}
-          setEmail={setEmail}
-          // 제출에서 붙인 이메일 오류(AUTH-004·AUTH-030)는 이 폼의 state 라, 사용자가 이메일을
-          // 고치거나 다시 인증해도 저절로 사라지지 않는다. 두 지점에서 직접 걷어낸다.
-          onEmailChange={(next) => {
-            setErrors((prev) => ({ ...prev, common: null, email: null }));
-            emailVerification.handleEmailChange(next);
-          }}
-          code={emailVerification.emailCode}
-          setCode={emailVerification.setEmailCode}
-          isSending={emailVerification.isSendingCode}
-          isVerifying={emailVerification.isVerifyingCode}
-          isVerified={emailVerification.isEmailVerified}
-          codeExpiresAt={emailVerification.codeExpiresAt}
-          verifiedExpiresAt={emailVerification.verifiedExpiresAt}
-          emailError={errors.email ?? emailVerification.emailError}
-          codeError={emailVerification.codeError}
-          onSend={emailVerification.sendCode}
-          onVerify={async (verifyEmail, verifyCode) => {
-            const ok = await emailVerification.verifyCode(verifyEmail, verifyCode);
-            if (ok) setErrors((prev) => ({ ...prev, common: null, email: null }));
-            return ok;
-          }}
-        />
+        {/* 메일이 늦거나 스팸함으로 가면 여기서 멈춘다. 코드를 보낸 뒤에만 다른 길을 일러 둔다. */}
+        <div className="flex flex-col gap-2.5">
+          <EmailCodeSection
+            email={email}
+            setEmail={setEmail}
+            // 제출에서 붙인 이메일 오류(AUTH-004·AUTH-030)는 이 폼의 state 라, 사용자가 이메일을
+            // 고치거나 다시 인증해도 저절로 사라지지 않는다. 두 지점에서 직접 걷어낸다.
+            onEmailChange={(next) => {
+              setErrors((prev) => ({ ...prev, common: null, email: null }));
+              emailVerification.handleEmailChange(next);
+            }}
+            code={emailVerification.emailCode}
+            setCode={emailVerification.setEmailCode}
+            isSending={emailVerification.isSendingCode}
+            isVerifying={emailVerification.isVerifyingCode}
+            isVerified={emailVerification.isEmailVerified}
+            codeExpiresAt={emailVerification.codeExpiresAt}
+            verifiedExpiresAt={emailVerification.verifiedExpiresAt}
+            emailError={errors.email ?? emailVerification.emailError}
+            codeError={emailVerification.codeError}
+            onSend={emailVerification.sendCode}
+            onVerify={async (verifyEmail, verifyCode) => {
+              const ok = await emailVerification.verifyCode(verifyEmail, verifyCode);
+              if (ok) setErrors((prev) => ({ ...prev, common: null, email: null }));
+              return ok;
+            }}
+          />
+          {emailVerification.codeExpiresAt && !emailVerification.isEmailVerified ? (
+            <p className="text-[12px] leading-relaxed text-(--hc-muted)">
+              메일이 오지 않으면 스팸함을 확인해 주세요. 계속 오지 않으면 카카오·네이버로도 시작할 수 있어요.
+            </p>
+          ) : null}
+        </div>
 
         {SIGNUP_BASE_FIELDS.map((field) => (
           <AuthField

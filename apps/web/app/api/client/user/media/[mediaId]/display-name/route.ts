@@ -1,4 +1,4 @@
-import { proxyJson } from "@/app/api/client/_proxy";
+import { proxyJson, validateResourceId } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -12,6 +12,8 @@ type RouteContext = {
 
 export async function PATCH(req: Request, context: RouteContext) {
   const { mediaId } = await context.params;
+  const invalidId = validateResourceId(mediaId);
+  if (invalidId) return invalidId;
 
   return proxyJson(req, {
     method: "PATCH",

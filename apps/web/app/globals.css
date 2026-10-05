@@ -4,6 +4,9 @@
    그 위 글자는 어둡게(#06140A). 본문 텍스트/보조는 AA 통과 값으로 둔다. */
 :root {
   color-scheme: light;
+  --hc-motion-state: 180ms;
+  --hc-motion-ease: ease-out;
+  --hc-pressed-opacity: 0.68;
   --background: #fafaf7;
   --foreground: #14140f;
   --hc-primary: #16b454;
@@ -44,8 +47,8 @@
   --hc-shadow: rgba(20, 20, 15, 0.14);
   --hc-card-shadow: 0 18px 40px rgba(20, 20, 15, 0.1);
   --hc-card-shadow-hero: 0 30px 80px rgba(20, 20, 15, 0.16);
-  --hc-button-shadow: 0 16px 36px rgba(22, 180, 84, 0.24);
-  --hc-button-shadow-hover: 0 20px 44px rgba(14, 126, 57, 0.2);
+  --hc-button-shadow: none;
+  --hc-button-shadow-hover: none;
   --hc-neutral-button-bg: #ffffff;
   --hc-neutral-button-hover: #f1f1ee;
   --hc-neutral-button-text: #14140f;
@@ -70,13 +73,8 @@
   --hc-social-shadow-hover: 0 14px 30px rgba(20, 20, 15, 0.14);
   --hc-frame-picker-preview-outer: #303846;
   --hc-frame-picker-preview-inner: #f4f7fb;
-  --hc-page-gradient-app:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.1), transparent 28%),
-    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
-  --hc-page-gradient-landing:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
-    radial-gradient(circle at 88% 18%, rgba(22, 180, 84, 0.1), transparent 18%),
-    linear-gradient(180deg, #fafaf7 0%, #f1f1ee 100%);
+  --hc-page-gradient-app: #fafaf7;
+  --hc-page-gradient-landing: #fafaf7;
   --hc-scrollbar-thumb: rgba(22, 180, 84, 0.42);
   --hc-scrollbar-thumb-hover: rgba(22, 180, 84, 0.64);
   --hc-zinc-950: #f1f1ee;
@@ -102,7 +100,8 @@
    밝음으로 뒤집혔다. 무대는 하나다. 로그인 뒤 앱 화면(AppNav)은 그대로 사용자 테마를 따른다.
    토큰을 이 서브트리에만 다크로 풀어 두면 그 안의 hc-* 클래스가 전부 다크 값을 받는다. */
 html[data-theme="dark"],
-.hc-stage-dark {
+.hc-stage-dark,
+body:has(.hc-stage-dark) .hc-modal {
   color-scheme: dark;
   --background: #0b0b0c;
   --foreground: #ffffff;
@@ -139,8 +138,8 @@ html[data-theme="dark"],
   --hc-shadow: rgba(0, 0, 0, 0.6);
   --hc-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
   --hc-card-shadow-hero: 0 24px 80px rgba(0, 0, 0, 0.7);
-  --hc-button-shadow: 0 10px 28px -12px rgba(30, 215, 96, 0.5);
-  --hc-button-shadow-hover: 0 14px 32px -12px rgba(30, 215, 96, 0.6);
+  --hc-button-shadow: none;
+  --hc-button-shadow-hover: none;
   --hc-neutral-button-bg: #ffffff;
   --hc-neutral-button-hover: #f1f1ee;
   --hc-neutral-button-text: #0b0b0c;
@@ -166,9 +165,7 @@ html[data-theme="dark"],
   --hc-frame-picker-preview-outer: #e7ecf2;
   --hc-frame-picker-preview-inner: #171c24;
   --hc-page-gradient-app: #0b0b0c;
-  --hc-page-gradient-landing:
-    radial-gradient(circle at top, rgba(30, 215, 96, 0.14), transparent 24%),
-    linear-gradient(180deg, #0b0b0c 0%, #161617 100%);
+  --hc-page-gradient-landing: #0b0b0c;
   --hc-scrollbar-thumb: rgba(111, 111, 115, 0.5);
   --hc-scrollbar-thumb-hover: rgba(30, 215, 96, 0.6);
   --hc-zinc-950: #0b0b0c;
@@ -205,19 +202,10 @@ html[data-theme="dark"],
   --color-zinc-50: var(--hc-zinc-50);
 }
 
+/* 글꼴은 html 에서 물려받는다 — 위 --font-sans 가 Tailwind preflight 의 html 글꼴이다. */
 body {
   background: var(--hc-page-gradient-app);
   color: var(--foreground);
-  font-family:
-    "Pretendard Variable",
-    Pretendard,
-    SUIT,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "Noto Sans KR",
-    Arial,
-    sans-serif;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -315,14 +303,6 @@ body {
     }
   }
 
-  /*
-    등장 래퍼는 flex/grid 아이템으로 자주 쓰인다. min-width: auto 로 두면 안쪽 콘텐츠의
-    최소 폭이 그대로 최소 폭이 돼 좁은 화면에서 넘친다(랜딩이 320px 에서 71px 넘쳤다).
-  */
-  .hc-reveal {
-    min-width: 0;
-  }
-
   h1,
   h2,
   h3 {
@@ -377,10 +357,10 @@ body {
   color: var(--hc-primary-contrast);
   box-shadow: var(--hc-button-shadow);
   transition:
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    background-color var(--hc-motion-state) var(--hc-motion-ease),
+    box-shadow var(--hc-motion-state) var(--hc-motion-ease),
+    border-color var(--hc-motion-state) var(--hc-motion-ease),
+    color var(--hc-motion-state) var(--hc-motion-ease);
 }
 
 .hc-button-primary:hover {
@@ -393,10 +373,10 @@ body {
   color: var(--hc-neutral-button-text);
   box-shadow: var(--hc-neutral-button-shadow);
   transition:
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    background-color var(--hc-motion-state) var(--hc-motion-ease),
+    box-shadow var(--hc-motion-state) var(--hc-motion-ease),
+    border-color var(--hc-motion-state) var(--hc-motion-ease),
+    color var(--hc-motion-state) var(--hc-motion-ease);
 }
 
 .hc-button-neutral:hover {
@@ -412,8 +392,8 @@ body {
   background: var(--hc-ink-button-bg);
   color: var(--hc-ink-button-text);
   transition:
-    background-color 180ms ease,
-    color 180ms ease;
+    background-color var(--hc-motion-state) var(--hc-motion-ease),
+    color var(--hc-motion-state) var(--hc-motion-ease);
 }
 
 .hc-button-ink:hover {
@@ -430,9 +410,9 @@ body {
   color: var(--hc-text);
   box-shadow: var(--hc-soft-shadow);
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    background-color var(--hc-motion-state) var(--hc-motion-ease),
+    border-color var(--hc-motion-state) var(--hc-motion-ease),
+    color var(--hc-motion-state) var(--hc-motion-ease);
 }
 
 .hc-button-secondary:hover {
@@ -446,9 +426,6 @@ body {
  * 세로 구분선, 카카오는 레일 배경이 버튼색과 같아 구분선이 없고, 네이버는 더 진한 초록 레일에
  * 흰 구분선. 같은 줄에 세 종류의 버튼이 서 있었다.
  *
- * 색을 클래스가 아니라 변수로 받는 이유: globals.css 위쪽에 `[class*="bg-white/"]` 같은
- * 부분일치 !important 규칙이 있어서, Tailwind 로 브랜드색을 직접 쓰면 토큰 색으로 덮어써진다.
- *
  * hover 에서 컨테이너 색을 건드리지 않는다. 세 브랜드 모두 지정색 외 사용을 금지하기 때문이고
  * (카카오 "규정 외 색상 금지", 구글 "로고·버튼 색 변경 불가"), DESIGN.md 도 "색과 그림자로만
  * 반응한다"고 적고 있다. 그래서 반응은 그림자 하나로만 만든다. translate 는 쓰지 않는다.
@@ -458,7 +435,7 @@ body {
   box-shadow:
     var(--hc-social-line),
     var(--hc-social-shadow);
-  transition: box-shadow 180ms ease;
+  transition: box-shadow var(--hc-motion-state) var(--hc-motion-ease);
 }
 
 .hc-social-button:hover {
@@ -496,9 +473,9 @@ body {
   color: var(--hc-text);
   box-shadow: var(--hc-soft-shadow);
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    background-color var(--hc-motion-state) var(--hc-motion-ease),
+    border-color var(--hc-motion-state) var(--hc-motion-ease),
+    color var(--hc-motion-state) var(--hc-motion-ease);
 }
 
 .hc-button-icon:hover {
@@ -548,9 +525,9 @@ body {
 
 .hc-input:focus,
 .hc-input:focus-within {
-  border-color: var(--hc-primary);
+  border-color: var(--hc-primary-strong);
   outline: none;
-  box-shadow: 0 0 0 1px var(--hc-primary);
+  box-shadow: 0 0 0 2px var(--hc-primary-strong);
 }
 
 .hc-feedback {
@@ -594,46 +571,6 @@ body {
 }
 
 /*
-  진입 모션 — 랜딩 등에서 뷰포트에 들어올 때 살짝 떠오르며 나타난다(모션 제로 → AI SaaS 톤).
-  .hc-reveal는 초기 숨김 상태, .hc-reveal--in이 붙으면 재생. transition-delay는 인라인 style로 스태거.
-  접근성: prefers-reduced-motion이면 모션 없이 즉시 표시.
-*/
-.hc-reveal {
-  opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
-}
-
-.hc-reveal--in {
-  opacity: 1;
-  transform: none;
-}
-
-/*
-  첫 화면(히어로)용 즉시 재생판. IntersectionObserver 를 기다리는 .hc-reveal 은 하이드레이션
-  전까지 opacity 0 이라 LCP 요소(헤드라인)가 JS 가 돌기 전에는 그려지지 않았다. 이쪽은 CSS
-  애니메이션이라 첫 페인트에서 바로 시작한다. 스태거는 --hc-reveal-delay.
-*/
-@keyframes hc-reveal-now {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.hc-reveal-now {
-  animation: hc-reveal-now 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: var(--hc-reveal-delay, 0ms);
-}
-
-/*
   헤드라인 강조어. 예전에는 그라디언트를 글자에 클립했는데 두 가지가 걸렸다 —
   강조는 굵기와 색으로 충분한데 장식이 하나 더 얹혀 있었고, 글자색이 transparent 라
   접근성 검사기가 대비를 계산하지 못해 검사에서 통째로 빠졌다. 단색으로 바꾼다.
@@ -641,38 +578,6 @@ body {
 */
 .hc-accent-word {
   color: var(--hc-primary);
-}
-
-/*
-  필름 연출 — 랜딩 HOW 섹션. 퍼포레이션 띠가 흘러가고(hc-film-strip),
-  현재 단계 칸 아래에서 그린 바가 차오른다(hc-film-progress).
-  퍼포레이션 패턴 주기가 22px라 그만큼 이동시키면 이음매 없이 반복된다.
-*/
-@keyframes hc-film-advance {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 22px 0;
-  }
-}
-
-.hc-film-strip {
-  animation: hc-film-advance 1.4s linear infinite;
-}
-
-@keyframes hc-film-progress {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-
-.hc-film-progress {
-  transform-origin: left center;
-  animation: hc-film-progress var(--hc-film-dwell, 2600ms) linear forwards;
 }
 
 /*
@@ -719,22 +624,38 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hc-reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-
-  .hc-film-strip,
-  .hc-film-progress,
-  .hc-reveal-now,
   .hc-count-tick,
-  .hc-capture-flash,
   .animate-pulse {
     animation: none;
   }
+  .hc-capture-flash {
+    animation: hc-capture-flash-reduced 160ms ease-out both;
+  }
+}
 
-  .hc-film-progress {
-    transform: none;
+@keyframes hc-capture-flash-reduced {
+  from { opacity: 0.18; }
+  to { opacity: 0; }
+}
+
+/* 누른 순간 피드백. 터치 기기에서도 hover 없이 조작 결과를 알린다. */
+:where(button, a[href], [role="button"]):not(:disabled):not([aria-disabled="true"]):active {
+  opacity: var(--hc-pressed-opacity);
+}
+:where(button, a[href], input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--hc-text);
+  outline-offset: 3px;
+}
+
+.hc-modal {
+  background: rgba(0, 0, 0, 0.5);
+  overscroll-behavior: contain;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hc-modal > [role="dialog"] {
+    transition: opacity var(--hc-motion-state) var(--hc-motion-ease), transform var(--hc-motion-state) var(--hc-motion-ease);
+  }
+  @starting-style {
+    .hc-modal > [role="dialog"] { opacity: 0; transform: translateY(12px); }
   }
 }

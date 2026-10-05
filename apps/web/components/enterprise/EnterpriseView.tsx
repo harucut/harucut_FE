@@ -3,7 +3,6 @@ import { QrCode } from "lucide-react";
 import { EnterpriseInquiryForm } from "@/components/enterprise/EnterpriseInquiryForm";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { Reveal } from "@/components/ui/Reveal";
 import { COMPANY } from "@/constants/company";
 
 // 행사에서 실제로 일어나는 순서. 주최자가 하는 일과 참가자가 하는 일을 갈라서 적는다 —
@@ -49,7 +48,7 @@ export function EnterpriseView() {
 
       <main className="mx-auto flex w-full max-w-290 flex-col gap-20 px-5 pb-24 pt-10 sm:px-8 lg:gap-28 lg:pt-16">
         {/* 히어로 */}
-        <Reveal as="section" className="flex flex-col gap-6">
+        <section className="min-w-0 flex flex-col gap-6">
           <span className="inline-flex w-fit items-center gap-2 rounded-full border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) px-3.5 py-1.5 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
             <QrCode aria-hidden className="h-3.5 w-3.5" />
             행사·팬미팅용
@@ -80,10 +79,10 @@ export function EnterpriseView() {
               먼저 서비스 둘러보기
             </Link>
           </div>
-        </Reveal>
+        </section>
 
         {/* 흐름 */}
-        <Reveal as="section" className="flex flex-col gap-7">
+        <section className="min-w-0 flex flex-col gap-7">
           <h2 className="text-[24px] font-extrabold tracking-tight lg:text-[30px]">
             행사에서는 이렇게 돌아가요
           </h2>
@@ -117,10 +116,10 @@ export function EnterpriseView() {
               </li>
             ))}
           </ol>
-        </Reveal>
+        </section>
 
         {/* 부스와의 비교 */}
-        <Reveal as="section" className="flex flex-col gap-7">
+        <section className="min-w-0 flex flex-col gap-7">
           <h2 className="text-[24px] font-extrabold tracking-tight lg:text-[30px]">
             부스를 빌리는 것과 무엇이 다른가요
           </h2>
@@ -195,10 +194,10 @@ export function EnterpriseView() {
               </tbody>
             </table>
           </div>
-        </Reveal>
+        </section>
 
         {/* 지금 어떻게 진행되는지 — 자동화 전이라는 사실을 숨기지 않는다 */}
-        <Reveal as="section" className="hc-surface-well flex flex-col gap-3 rounded-[20px] border p-6 lg:p-8">
+        <section className="min-w-0 hc-surface-well flex flex-col gap-3 rounded-[20px] border p-6 lg:p-8">
           <h2 className="text-[18px] font-extrabold tracking-tight">
             지금은 사람이 직접 세팅해 드려요
           </h2>
@@ -229,7 +228,7 @@ export function EnterpriseView() {
             비용은 행사 규모·기간에 따라 달라서 정찰가를 붙이지 않았어요. 아래 내용을 주시면
             견적을 함께 보내 드립니다.
           </p>
-        </Reveal>
+        </section>
 
         {/* 문의 */}
         {/* 히어로의 "도입 문의하기"가 여기로 내려온다. */}

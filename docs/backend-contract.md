@@ -135,6 +135,13 @@ COUPON  001 002 003 004 005 006 007 008
 | `CLIENT-001` | 503 | [`apps/web/lib/clientApi.ts`](../apps/web/lib/clientApi.ts) | 401 뒤 액세스 토큰 재발급이 **일시적으로** 실패(5xx·네트워크). 최초 401 을 그대로 올리면 화면이 `AUTH-012`("로그인이 만료됐어요")를 읽어 멀쩡한 세션을 재로그인시킨다 |
 | `CLIENT-002` | 500 | [`apps/web/app/api/client/_proxy.ts`](../apps/web/app/api/client/_proxy.ts) | `NEXT_PUBLIC_BASE_URL` 이 없거나 무효해서 upstream URL 자체를 만들지 못했다. **요청이 나가지도 않았다** |
 | `CLIENT-003` | 502 | 같은 파일 | Next 서버가 백엔드에 닿지 못했다(`fetch` 가 던짐). **백엔드는 이 요청을 본 적이 없다** |
+| `CLIENT-004` | 없음 | [`apps/web/lib/clientApi.ts`](../apps/web/lib/clientApi.ts) | 브라우저가 Next 서버에조차 닿지 못했다(브라우저의 `fetch` 가 던짐). 응답이 없었으니 상태를 지어내지 않는다 |
+| `CLIENT-005` | 403 | [`apps/web/app/api/client/_proxy.ts`](../apps/web/app/api/client/_proxy.ts) | 다른 사이트가 시킨 상태 변경 요청(GET 이 아닌 것)을 막았다. **백엔드로 보내지 않았다.** 프록시가 쿠키를 싣고 본문을 JSON 으로 고쳐 보내서, 막지 않으면 남의 사이트의 `text/plain` 폼이 로그인까지 닿는다(로그인 CSRF) |
+| `CLIENT-006` | 400 | `apps/web/app/api/client/_proxy.ts` | frameId·mediaId·jobId가 양의 64비트 정수가 아니면 백엔드로 보내지 않는다 |
+
+`CLIENT-005` 판정: `Sec-Fetch-Site` 가 `same-origin`·`none` 이 아니면 막는다 — 하위 도메인
+(`same-site`)도 남이다. 그 헤더가 없으면(구형 브라우저, https 가 아닌 LAN 개발 주소) `Origin` 을
+브라우저가 부른 주소와 맞춘다 — `req.url` 은 자체 호스팅 Next 에서 늘 `localhost` 라 쓰지 않는다.
 
 `CLIENT-002`·`CLIENT-003` 은 커밋 `7593408` 전까지 `GEN-500`·`GEN-502` 로 나갔다.
 서버 enum 에 없는 코드라 문구표에 걸리지 않았고, 그래서 화면은 호출부 폴백을 띄웠다 —
@@ -454,6 +461,9 @@ argparse 가 `unrecognized arguments: -- --show-required` 로 거절한다(종�
 에러코드는 **컨테이너 안 jar 의 ErrorCode enum** 에서 직접 뽑아 비교한다.
 스웨거 응답 예시만 보면 문서화되지 않은 코드(`GEN-091` 같은 5xx)를 죽은 항목으로
 잘못 짚기 때문이다 — 실제로 스웨거 기준 45개 vs jar 기준 52개로 갈렸다.
+
+운영을 대조할 때(`--base-url https://api.harucut.com`)의 한계는
+[README 「계약이 어긋났는지 기계로 확인한다」](./README.md#계약이-어긋났는지-기계로-확인한다)가 갖는다.
 
 ## A·B·C — 스크립트가 본 것 (2026-09-01 실행 · 2026-09-02 같은 digest 로 재실행, 결과 동일)
 

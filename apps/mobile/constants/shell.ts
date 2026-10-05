@@ -1,6 +1,7 @@
 import {
   isOAuthFlowUrl as isOAuthFlow,
   isSameOrigin,
+  resolveShellOrigin,
 } from '@harucut/shared';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
@@ -26,12 +27,8 @@ function fromExtra() {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function trimTrailingSlash(value: string) {
-  return value.endsWith('/') ? value.slice(0, -1) : value;
-}
-
 export function getWebOrigin() {
-  return trimTrailingSlash(fromEnv() ?? fromExtra() ?? DEFAULT_WEB_ORIGIN);
+  return resolveShellOrigin(fromEnv() ?? fromExtra(), DEFAULT_WEB_ORIGIN, __DEV__);
 }
 
 /**
@@ -58,7 +55,7 @@ export function getApiOrigin() {
       ? fromExtra.trim()
       : undefined) ??
     DEFAULT_API_ORIGIN;
-  return trimTrailingSlash(value);
+  return resolveShellOrigin(value, DEFAULT_API_ORIGIN, __DEV__);
 }
 
 /**

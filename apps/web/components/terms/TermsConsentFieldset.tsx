@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useId } from "react";
 import type { ConsentChoice } from "@/hooks/useActiveTerms";
 
 type Props = {
@@ -27,6 +28,7 @@ export function TermsConsentFieldset({
   error,
   disabled,
 }: Props) {
+  const errorId = useId();
   return (
     <fieldset className="flex flex-col gap-0 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) px-3 py-1">
       <legend className="sr-only">약관 동의</legend>
@@ -38,11 +40,13 @@ export function TermsConsentFieldset({
             형제로 뺀다 — label 은 체크박스만, 링크는 약관만 연다.
           */}
           <div className="flex min-h-11 items-center gap-2">
-            <label className="flex min-w-0 flex-1 items-center gap-3 py-2 text-[13px] text-zinc-300">
+            <label className="flex min-w-0 flex-1 items-center gap-3 py-2 text-[13px] text-(--hc-text)">
               <input
                 type="checkbox"
                 checked={checked[item.code] ?? false}
                 disabled={disabled}
+                aria-invalid={Boolean(error && item.required && !checked[item.code])}
+                aria-describedby={error ? errorId : undefined}
                 onChange={(e) => onToggle(item.code, e.target.checked)}
                 className="h-5 w-5 shrink-0 accent-(--hc-primary)"
               />
@@ -84,7 +88,7 @@ export function TermsConsentFieldset({
         </div>
       ))}
       {error ? (
-        <p role="alert" className="pb-2 text-[12px] text-(--hc-danger)">{error}</p>
+        <p id={errorId} role="alert" className="pb-2 text-[12px] text-(--hc-danger)">{error}</p>
       ) : null}
     </fieldset>
   );

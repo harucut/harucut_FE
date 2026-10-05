@@ -8,9 +8,6 @@
       "protobufjs"
     ],
     "overrides": {
-      "@react-native/babel-plugin-codegen": "0.85.2",
-      "@react-native/babel-preset": "0.85.2",
-      "@react-native/codegen": "0.85.2",
       "ajv@<6.14.0": "6.14.0",
       "bn.js@<4.12.3": "4.12.3",
       "bn.js@>=5.0.0 <5.2.3": "5.2.3",
@@ -30,7 +27,6 @@
       "brace-expansion@>=5.0.0 <5.0.9": "5.0.9",
       "ws@>=8.0.0 <8.21.0": "8.21.0",
       "form-data@>=4.0.0 <4.0.6": "4.0.6",
-      "vite": "8.0.16",
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
       "@babel/core@>=7.0.0 <7.29.6": "7.29.7",
       "browserslist@<4.28.7": "4.28.7",
@@ -41,9 +37,7 @@
       "shell-quote@<1.9.0": "1.9.0",
       "@xmldom/xmldom@<0.8.15": "0.8.15"
     },
-    "patchedDependencies": {
-      "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"
-    }
+    "patchedDependencies": {}
   },
   "scripts": {
     "dev": "pnpm dev:web",
@@ -60,10 +54,6 @@
     "test:e2e:web": "pnpm --dir apps/web test:e2e",
     "test:e2e:install:web": "pnpm --dir apps/web test:e2e:install",
     "test:a11y:web": "pnpm --dir apps/web test:a11y",
-    "test:visual:web": "pnpm --dir apps/web test:visual",
-    "test:visual:update:web": "pnpm --dir apps/web test:visual:update",
-    "storybook:web": "pnpm --dir apps/web storybook",
-    "build-storybook:web": "pnpm --dir apps/web build-storybook",
     "format": "prettier --check . --ignore-unknown",
     "format:write": "prettier --write . --ignore-unknown",
     "generate:stickers:web": "pnpm --dir apps/web generate:stickers",
@@ -73,6 +63,7 @@
     "android-dev:mobile": "pnpm --dir apps/mobile android:dev",
     "lint:mobile": "pnpm --dir apps/mobile lint",
     "typecheck:mobile": "pnpm --dir apps/mobile typecheck",
+    "check:runtime:mobile": "node scripts/check_mobile_runtime.mjs",
     "check:contract": "python3 scripts/check_backend_contract.py",
     "verify:web": "python3 scripts/verify_workspace.py --group web",
     "verify:mobile": "python3 scripts/verify_workspace.py --group mobile",

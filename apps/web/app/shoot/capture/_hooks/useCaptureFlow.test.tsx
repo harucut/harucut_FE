@@ -27,14 +27,16 @@ const mockSetNotice = jest.fn();
 
 // 훅이 읽는 프레임. 레이아웃마다 슬롯 치수가 달라서 케이스별로 갈아 끼운다.
 let mockFrameId: FrameId = "grid-4";
+let mockShots: string[] = [];
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: mockReplace, push: mockPush }),
+  useRouter: () => ({ replace: mockReplace, push: mockPush, prefetch: jest.fn() }),
 }));
 
 jest.mock("@/lib/shootSessionStore", () => ({
   useShootSession: () => ({
     frameId: mockFrameId,
+    shots: mockShots,
     addShotPhoto: (...args: unknown[]) => mockAddShotPhoto(...args),
     resetShots: () => mockResetShots(),
   }),
@@ -101,6 +103,8 @@ function createFakeVideo(videoWidth: number, videoHeight: number) {
 function installCamera(width: number, height: number) {
   const track = {
     stop: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
     getSettings: () => ({ width, height }),
   };
   const stream = {
@@ -147,10 +151,35 @@ async function captureOneShot(videoWidth: number, videoHeight: number) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFrameId = "grid-4";
+  mockShots = [];
+  mockAddShotPhoto.mockImplementation((photo: string) => { mockShots = [...mockShots, photo]; });
+  mockResetShots.mockImplementation(() => { mockShots = []; });
 });
 
 afterEach(() => {
   Reflect.deleteProperty(navigator, "mediaDevices");
+  Reflect.deleteProperty(document, "visibilityState");
+});
+
+it("촬영 화면에 돌아와도 사진을 지우지 않고 남은 컷부터 이어간다", async () => {
+  mockShots = ["one", "two", "three"];
+  installCamera(1920, 1080);
+  const { result } = renderHook(() => useCaptureFlow());
+  expect(mockResetShots).not.toHaveBeenCalled();
+  expect(result.current.shotCount).toBe(3);
+  const { canvas } = createFakeCanvas();
+  result.current.videoRef.current = createFakeVideo(1920, 1080) as unknown as HTMLVideoElement;
+  result.current.canvasRef.current = canvas as unknown as HTMLCanvasElement;
+  await act(async () => { await result.current.startCamera(); });
+  act(() => { result.current.resumeShooting(); });
+  act(() => { result.current.handleShootNow(); });
+  await waitFor(() => expect(result.current.shotCount).toBe(4));
+  expect(mockShots.slice(0, 3)).toEqual(["one", "two", "three"]);
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+  expect(result.current.isShooting).toBe(false);
+  expect(result.current.shotCount).toBe(4);
+  expect(mockResetShots).not.toHaveBeenCalled();
 });
 
 describe("useCaptureFlow 촬영본 크기", () => {

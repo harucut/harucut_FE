@@ -1,13 +1,18 @@
 "use client";
 
 import { SOCIAL_LABELS, SOCIAL_PROVIDER_ORDER, type SocialProvider } from "@harucut/shared";
-import { loginGoogle, loginKakao, loginNaver } from "@/lib/authLogin";
+import { useSyncExternalStore } from "react";
+import { isNativeShell } from "@/lib/nativeBridge";
+import { startSocialLogin } from "@/lib/authLogin";
 import { GoogleMark, KakaoMark, NaverMark } from "./socialMarks";
 
 type Props = {
   mode?: "login" | "signup";
   redirectTo?: string | null;
 };
+
+const subscribe = () => () => {};
+const serverSnapshot = () => false;
 
 /**
  * 세 버튼은 색만 다르고 나머지는 전부 같다.
@@ -30,6 +35,7 @@ type Props = {
  */
 export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
   const dividerLabel = mode === "signup" ? "간편가입" : "또는";
+  const inShell = useSyncExternalStore(subscribe, isNativeShell, serverSnapshot);
 
   return (
     <section className="flex flex-col gap-3">
@@ -42,12 +48,15 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
       {/* 순서·문구·마크 크기는 모두 shared 에서 온다. 예전에는 웹이 구글부터, 앱이 카카오부터였다. */}
       <div className="flex flex-col gap-2">
         {SOCIAL_PROVIDER_ORDER.map((provider) => {
+          // Google OAuth는 제어 가능한 WebView를 허용하지 않는다.
+          // 시스템 브라우저에서 인증한 세션을 안전하게 인계하기 전까지 앱에서는 제공하지 않는다.
+          if (inShell && provider === "google") return null;
           const Mark = MARK[provider];
           return (
             <button
               key={provider}
               type="button"
-              onClick={() => START_LOGIN[provider](redirectTo)}
+              onClick={() => startSocialLogin(provider, redirectTo)}
               className={[
                 "hc-social-button inline-flex h-12 w-full items-center justify-center rounded-full",
                 // gap-2 = 8px — 네이버 "가운데 정렬 시 로고와 레이블의 간격은 8px"
@@ -61,6 +70,11 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
           );
         })}
       </div>
+      {inShell ? (
+        <p className="text-[12px] leading-relaxed text-(--hc-muted)">
+          앱에서는 카카오·네이버 또는 이메일로 로그인할 수 있어요. 구글 계정은 웹 브라우저에서 이용해 주세요.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -76,9 +90,3 @@ const MARK = {
   kakao: KakaoMark,
   naver: NaverMark,
 } as const;
-
-const START_LOGIN: Record<SocialProvider, (redirectTo?: string | null) => void> = {
-  google: loginGoogle,
-  kakao: loginKakao,
-  naver: loginNaver,
-};

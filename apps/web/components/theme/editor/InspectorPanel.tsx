@@ -96,10 +96,19 @@ export function InspectorPanel() {
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <SmallStat label="x" value={Math.round(active.x)} />
-        <SmallStat label="y" value={Math.round(active.y)} />
-        <SmallStat label="w" value={Math.round(active.width)} />
-        <SmallStat label="h" value={Math.round(active.height)} />
+        {([ ["x", "가로 위치"], ["y", "세로 위치"], ["width", "너비"], ["height", "높이"] ] as const).map(([field, label]) => (
+          <label key={field} className="flex flex-col gap-1 text-xs text-(--hc-muted)">
+            {label}
+            <input type="number" step={10} disabled={active.locked}
+              min={field === "width" || field === "height" ? 1 : undefined}
+              value={Math.round(active[field])}
+              onChange={(e) => {
+                const value = e.currentTarget.valueAsNumber;
+                if (!Number.isFinite(value)) return;
+                update(active.id, { [field]: field === "width" || field === "height" ? Math.max(1, value) : value });
+              }} className="hc-input h-11 rounded-lg px-3 text-sm tabular-nums" />
+          </label>
+        ))}
       </div>
     </section>
   );
@@ -220,14 +229,5 @@ function Row({
       <span className="w-14 text-[12px] text-zinc-400">{label}</span>
       <div className="flex flex-1 items-center gap-2">{children}</div>
     </label>
-  );
-}
-
-function SmallStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-(--hc-border) bg-(--hc-surface-strong) px-3 py-2">
-      <p className="text-[11px] text-(--hc-muted)">{label}</p>
-      <p className="font-mono text-xs tabular-nums text-zinc-200">{value}</p>
-    </div>
   );
 }

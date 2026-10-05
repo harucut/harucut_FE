@@ -38,6 +38,7 @@ export async function GET(req: Request) {
     authenticated: upstream.ok && !unusable,
     userStatus,
   });
+  res.headers.set("Cache-Control", "private, no-store");
   // 백엔드가 토큰을 갱신했다면 set-cookie를 그대로 전달
   for (const cookie of adaptSetCookiesForRequest(upstream.setCookies, req)) {
     res.headers.append("set-cookie", cookie);

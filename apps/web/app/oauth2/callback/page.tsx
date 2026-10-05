@@ -16,12 +16,17 @@
 /* eslint-disable @next/next/no-location-assign-relative-destination */
 
 import { useEffect, useRef, useState } from "react";
+import { COMPANY } from "@harucut/shared";
 import { ApiRequestError, clientApi } from "@/lib/clientApi";
-import type { ApiEnvelope, UserStatus } from "@/lib/api-types";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { reactivateAccount } from "@/lib/auth/authApi";
-import { resolveRedirectTarget } from "@/lib/redirect";
-import { startSocialLogin } from "@/lib/authLogin";
+import { buildPathWithRedirect, resolveRedirectTarget } from "@/lib/redirect";
+import { SOCIAL_LOGIN_FAILED_MESSAGE, startSocialLogin } from "@/lib/authLogin";
+import {
+  RESTRICTED_ACCOUNT_MESSAGE,
+  isUnusableUserStatus,
+  readUserStatus,
+} from "@/lib/authUserStatus";
 import {
   clearSocialLoginProvider,
   consumeSocialLoginRedirect,
@@ -30,35 +35,10 @@ import {
   readSocialLoginProvider,
 } from "@/lib/socialLoginRedirect";
 
-type AuthStatusResponse = {
-  userStatus?: unknown;
-  status?: unknown;
-  accountStatus?: unknown;
-};
-
 const CHECKING_MESSAGE = "소셜 로그인 상태를 확인하는 중이에요.";
 
-const USER_STATUS_VALUES = new Set<UserStatus>([
-  "ACTIVE",
-  "DELETED",
-  "DELETED_REQUESTED",
-  "BLOCKED",
-]);
-
-function readUserStatus(data: AuthStatusResponse) {
-  const candidates = [data.userStatus, data.accountStatus, data.status];
-
-  for (const candidate of candidates) {
-    if (
-      typeof candidate === "string" &&
-      USER_STATUS_VALUES.has(candidate as UserStatus)
-    ) {
-      return candidate as UserStatus;
-    }
-  }
-
-  return null;
-}
+/** 더 진행할 수 없는 끝. 다시 시도 대신 로그인으로 돌아갈 길(막힌 계정이면 문의처까지)만 남긴다. */
+type DeadEnd = { loginHref: string; showSupport: boolean };
 
 /**
  * 방금 받은 세션을 지워도 되는 실패인지.
@@ -81,6 +61,7 @@ export default function OAuthCallbackPage() {
   const [message, setMessage] = useState(CHECKING_MESSAGE);
   const [canRetry, setCanRetry] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [deadEnd, setDeadEnd] = useState<DeadEnd | null>(null);
   const isHandlingRef = useRef(false);
   // 돌아갈 곳은 세션 저장소에서 **한 번만** 꺼낼 수 있다(consume 이 읽으면서 지운다).
   // 다시 시도가 그 값을 잃으면 원래 가려던 화면 대신 늘 기본 경로로 떨어진다.
@@ -98,15 +79,27 @@ export default function OAuthCallbackPage() {
         resolveRedirectTarget(consumeSocialLoginRedirect());
       redirectTargetRef.current = redirectTarget;
 
+      // 제공자 화면에서 취소했거나 인가가 실패했다 — 백엔드는 실패도 이 콜백으로 보내고
+      // `?error=` 만 붙인다. 새로 받은 세션이 없으니 물어볼 것도 지울 것도 없다.
+      // 상태를 물으면 세션 없는 401 이 「일시적인 문제」나 「다시 로그인」으로 둔갑한다.
+      if (new URLSearchParams(window.location.search).has("error")) {
+        clearSocialLoginProvider();
+        setMessage(SOCIAL_LOGIN_FAILED_MESSAGE);
+        setDeadEnd({
+          loginHref: buildPathWithRedirect("/login?socialError=1", redirectTarget),
+          showSupport: false,
+        });
+        return;
+      }
+
       try {
-        const response = await clientApi.get<ApiEnvelope<AuthStatusResponse>>(
-          "/api/auth/status",
-          { cache: "no-store" },
-        );
+        const response = await clientApi.get<unknown>("/api/auth/status", {
+          cache: "no-store",
+        });
 
         if (cancelled) return;
 
-        const userStatus = readUserStatus(response.data.data ?? {});
+        const userStatus = readUserStatus(response.data);
         if (userStatus === "DELETED_REQUESTED") {
           const shouldReactivate = window.confirm(
             "탈퇴 신청한 계정이에요. 재등록을 진행할까요?",
@@ -158,6 +151,17 @@ export default function OAuthCallbackPage() {
           return;
         }
 
+        // 차단·탈퇴 계정 — 상태 조회는 200 이어도 일반 API 는 전부 막힌다.
+        // 들여보내면 아무것도 못 하는 홈에 갇히므로 받은 세션을 지우고 이유와 문의처를 말한다.
+        if (isUnusableUserStatus(userStatus)) {
+          await clientApi.delete("/api/client/logout").catch(() => undefined);
+          clearSocialLoginProvider();
+          if (cancelled) return;
+          setMessage(RESTRICTED_ACCOUNT_MESSAGE);
+          setDeadEnd({ loginHref: "/login", showSupport: true });
+          return;
+        }
+
         clearSocialLoginProvider();
 
         if (!cancelled) {
@@ -201,8 +205,19 @@ export default function OAuthCallbackPage() {
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-        <h1 className="text-base font-semibold">로그인 처리 중</h1>
+        {/* 끝난 자리에서 「처리 중」이면 본문과 반대 말이 되고, 제목으로 훑는 스크린리더에겐 아직 진행 중이다. */}
+        <h1 className="text-base font-semibold">
+          {deadEnd ? "로그인하지 못했어요" : "로그인 처리 중"}
+        </h1>
         <p aria-live="polite" className="text-sm text-zinc-400">{message}</p>
+        {deadEnd?.showSupport ? (
+          <a
+            href={`mailto:${COMPANY.email}`}
+            className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-(--hc-primary-strong) underline underline-offset-4"
+          >
+            {COMPANY.email}
+          </a>
+        ) : null}
         {canRetry ? (
           <button
             type="button"
@@ -215,6 +230,15 @@ export default function OAuthCallbackPage() {
           >
             다시 시도
           </button>
+        ) : null}
+        {/* <Link> 가 아니다 — 머리말의 이유 그대로 문서를 새로 받는다(막힌 계정은 방금 쿠키를 지웠다). */}
+        {deadEnd ? (
+          <a
+            href={deadEnd.loginHref}
+            className="hc-button-secondary inline-flex min-h-11 items-center self-start rounded-full border px-5 text-[13px] font-semibold"
+          >
+            로그인으로 돌아가기
+          </a>
         ) : null}
       </div>
     </main>

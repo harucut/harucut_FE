@@ -4,6 +4,7 @@ import {
   CLIENT_NETWORK_UNREACHABLE_CODE,
   CLIENT_REISSUE_UNAVAILABLE_CODE,
 } from "@harucut/shared";
+import { readUserStatus } from "@/lib/authUserStatus";
 
 type ApiEnvelopeLike = {
   code?: string;
@@ -92,7 +93,7 @@ export function registerSessionExpiredHandler(handler: (() => void) | null) {
 
 /**
  * 재발급 결과. 실패를 한 덩어리로 묶지 않는다.
- * - `expired`: refresh 쿠키까지 만료·무효라 진짜로 세션이 끊긴 경우(401·403)
+ * - `expired`: refresh 쿠키가 없거나(400 GEN-004) 만료·무효라(401·403) 진짜로 세션이 끊긴 경우
  * - `unavailable`: 재발급 엔드포인트가 일시적으로 못 답한 경우(5xx·네트워크 오류)
  *
  * 후자를 세션 만료로 취급하면 잠깐의 장애나 오프라인이 곧바로 로그인 화면 강제 이동이 된다.
@@ -129,8 +130,7 @@ async function checkDeletionRequested() {
     });
     if (!res.ok) return;
 
-    const body = (await res.json()) as { data?: { userStatus?: unknown } };
-    if (body?.data?.userStatus === "DELETED_REQUESTED") {
+    if (readUserStatus(await res.json()) === "DELETED_REQUESTED") {
       onDeletionRequested?.();
     }
   } catch {
@@ -167,10 +167,12 @@ async function requestReissue(): Promise<ReissueResult> {
       signal: controller.signal,
     });
     if (res.ok) return "ok";
-    return res.status === 401 || res.status === 403 ? "expired" : "unavailable";
+    // 400 은 refresh 쿠키 자체가 없을 때다(GEN-004, 서버가 필수 쿠키 누락으로 본다).
+    // 일시 장애로 읽으면 쿠키가 다 사라진 사람에게 「잠시 후 다시」만 끝없이 보인다.
+    return [400, 401, 403].includes(res.status) ? "expired" : "unavailable";
   } catch {
     // 상한에 걸린 것도, 회선이 끊긴 것도 여기다. 둘 다 「재발급 못 했다」로 접는다 —
-    // 세션이 끊겼다고 단정하지 않는다(그 판정은 서버가 401·403 으로 준 때뿐이다).
+    // 세션이 끊겼다고 단정하지 않는다(그 판정은 서버가 400·401·403 으로 준 때뿐이다).
     return "unavailable";
   } finally {
     clearTimeout(deadline);

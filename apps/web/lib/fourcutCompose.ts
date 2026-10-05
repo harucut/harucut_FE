@@ -1,5 +1,6 @@
 "use client";
 
+import { canvasToBlob } from "@/lib/canvas/toBlob";
 import type { FrameId } from "@/constants/frames";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
 import { loadImage } from "@/lib/canvas/loaders";
@@ -19,7 +20,10 @@ import {
   waitForCompose,
 } from "@/lib/composeApi";
 import { frameTypeFromFrameId } from "@/lib/frameApi";
+import { isAssetFrame } from "@/lib/serverAssets";
 import {
+  applyFilterPixels,
+  canvasFilterSupported,
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
 } from "@/lib/frameFilters";
@@ -47,6 +51,8 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
  *
  * 서버는 필터(뽀샤시·밝게·흑백)를 모른다. 그래서 **사용자가 고른 효과를 각 사진 픽셀에
  * 새겨서** 올린다. 서버는 효과가 이미 입혀진 사진을 받아 배치만 한다.
+ * 아이폰(WebKit)에는 `ctx.filter` 가 없어서, 거기서는 그린 뒤 픽셀을 직접 고친다
+ * (`lib/frameFilters.ts` 의 `applyFilterPixels`).
  *
  * ## 누끼도 여기서 굽는다
  *
@@ -125,7 +131,10 @@ async function renderSourceForSlot(
 
   // 캔버스 전체가 슬롯이므로 원점 기준 사각형에 그린다.
   const target: Rect = { x: 0, y: 0, width: canvas.width, height: canvas.height };
-  ctx.filter = getFourcutFilterCanvasValue(outputFilter);
+  // `ctx.filter` 를 무시하는 브라우저(아이폰)면 그린 뒤 픽셀에 굽는다. 안 그러면 미리보기에만
+  // 효과가 있고 올라가는 원본은 손대지 않은 톤이다.
+  const bakeFilter = outputFilter !== "NONE" && !canvasFilterSupported();
+  if (!bakeFilter) ctx.filter = getFourcutFilterCanvasValue(outputFilter);
   drawCover(
     ctx,
     image,
@@ -133,17 +142,9 @@ async function renderSourceForSlot(
     image.naturalHeight || image.height || 1,
     target,
   );
+  if (bakeFilter) applyFilterPixels(ctx, target, outputFilter);
 
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return reject(new Error("source blob create failed"));
-        resolve(blob);
-      },
-      SOURCE_MIME,
-      SOURCE_QUALITY,
-    );
-  });
+  return canvasToBlob(canvas, SOURCE_MIME, SOURCE_QUALITY);
 }
 
 /** 왜 누끼가 안 됐는지 한 줄로. 모델이 아는 실패면 그 사유를, 아니면 메시지를 쓴다. */
@@ -239,7 +240,7 @@ export async function findSystemFrame(
   // (정상적으로는 종류당 하나여야 한다 — 여럿이면 백엔드 쪽 정리가 필요하다)
   return (
     frames
-      .filter((frame) => frame.isSystem && frame.frameType === wanted)
+      .filter((frame) => frame.isSystem && !isAssetFrame(frame) && frame.frameType === wanted)
       .sort((a, b) => a.frameId - b.frameId)[0] ?? null
   );
 }

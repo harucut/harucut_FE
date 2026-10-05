@@ -1,5 +1,7 @@
 "use client";
 
+import { openBlobDatabase, runBlobTransaction } from "@/lib/idbBlobStore";
+
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
 import type { FrameId } from "@/constants/frames";
@@ -42,7 +44,6 @@ import type { FourcutFilterId } from "@/lib/frameFilters";
  * 아니라 **조용한 실패**다.
  */
 const DB_NAME = "harucut-pending-guest-save";
-const DB_VERSION = 1;
 const STORE_NAME = "entry";
 /** 보관물은 항상 한 벌이다 — 새로 찍으면 통째로 갈아 끼운다. */
 const RECORD_KEY = "current";
@@ -125,93 +126,12 @@ const DATA_URL_PATTERN = /^data:([^;,]*)(;base64)?,/;
  * 호출부의 `await` 가 영원히 걸려 "로그인하고 저장하기" 버튼이 돌기만 한다 — 조용한 실패
  * 중에서도 제일 나쁜 쪽이라, 못 쓰는 것으로 보고 닫는다.
  */
-const OPEN_TIMEOUT_MS = 5_000;
-
-/** 저장소를 연다. 못 쓰는 환경이면 예외 대신 null — 호출부가 닫힌 실패로 처리한다. */
-function openDatabase(): Promise<IDBDatabase | null> {
-  if (typeof window === "undefined") return Promise.resolve(null);
-
-  let factory: IDBFactory | null = null;
-  try {
-    factory = window.indexedDB ?? null;
-  } catch {
-    // 저장소를 막아 둔 브라우저는 속성을 읽는 것만으로 던진다.
-    return Promise.resolve(null);
-  }
-  if (!factory) return Promise.resolve(null);
-
-  return new Promise((resolve) => {
-    let settled = false;
-    const settle = (db: IDBDatabase | null) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      resolve(db);
-    };
-    const timer = window.setTimeout(() => settle(null), OPEN_TIMEOUT_MS);
-
-    let request: IDBOpenDBRequest;
-    try {
-      request = factory.open(DB_NAME, DB_VERSION);
-    } catch {
-      settle(null);
-      return;
-    }
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-    request.onsuccess = () => {
-      // 타임아웃(또는 onblocked)으로 이미 끝난 뒤에 열리는 수가 있다 — Safari 에서 흔하다.
-      // 그때 받은 연결은 아무도 안 닫아서, 다음 버전 올림이나 삭제를 계속 막는다.
-      if (settled) {
-        try {
-          request.result.close();
-        } catch {
-          // 이미 닫혔거나 못 닫으면 더 할 일이 없다.
-        }
-        return;
-      }
-      settle(request.result);
-    };
-    request.onerror = () => settle(null);
-    // 다른 탭이 옛 버전을 붙잡고 있으면 열리지 않는다. 기다리지 않고 닫힌 실패로 본다.
-    request.onblocked = () => settle(null);
-  });
+function openDatabase() {
+  return openBlobDatabase(DB_NAME, STORE_NAME);
 }
 
-/**
- * 트랜잭션 하나를 돌리고 요청 결과를 돌려준다.
- *
- * 요청의 `onsuccess` 가 아니라 **트랜잭션의 `oncomplete`** 를 기다린다. 용량 초과처럼
- * 실제로 못 쓴 경우는 요청이 아니라 트랜잭션이 끝날 때 드러나서, 요청만 보고 성공이라고
- * 하면 예전 localStorage 때와 똑같이 "썼다고 말하고 안 남는" 실패가 된다.
- */
-function runTransaction<T>(
-  db: IDBDatabase,
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    let transaction: IDBTransaction;
-    let request: IDBRequest<T>;
-    try {
-      transaction = db.transaction(STORE_NAME, mode);
-      request = run(transaction.objectStore(STORE_NAME));
-    } catch (error) {
-      reject(error);
-      return;
-    }
-
-    transaction.oncomplete = () => resolve(request.result);
-    transaction.onabort = () =>
-      reject(transaction.error ?? new Error("indexeddb transaction aborted"));
-    transaction.onerror = () =>
-      reject(transaction.error ?? new Error("indexeddb transaction failed"));
-  });
+function runTransaction<T>(db: IDBDatabase, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) {
+  return runBlobTransaction(db, STORE_NAME, mode, run);
 }
 
 /**

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type { FrameId } from "@/constants/frames";
 import type { FourcutFilterId } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
@@ -61,6 +62,8 @@ export function FrameSelectPanel({
     [selectedIndexes],
   );
   const canProceed = selectedCount === maxSelect;
+  const slot = frameId ? FRAME_LAYOUTS[frameId].slots[0] : null;
+  const aspectRatio = slot ? slot.width / slot.height : 3 / 4;
   const isFull = selectedCount >= maxSelect;
 
   // 4장을 다 고른 뒤 다섯 번째를 누르면 아무 일도 일어나지 않았다 — 스토어가 조용히 무시한다.
@@ -114,7 +117,7 @@ export function FrameSelectPanel({
               {emptyStateText}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+            <div className={`grid gap-2 ${aspectRatio > 1 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-4"} lg:grid-cols-5`}>
               {baseItems.map((item, index) => {
                 const slotIndex = selectedIndexes.indexOf(index);
                 const isSelected = slotIndex !== -1;
@@ -125,6 +128,7 @@ export function FrameSelectPanel({
                     key={index}
                     type="button"
                     onClick={() => handleToggle(index, isSelected)}
+                    style={{ aspectRatio }}
                     aria-pressed={isSelected}
                     aria-label={
                       isSelected
@@ -134,7 +138,7 @@ export function FrameSelectPanel({
                           : `${index + 1}번 사진 선택`
                     }
                     className={[
-                      "group relative aspect-3/4 overflow-hidden rounded-xl border bg-black text-left transition",
+                      "group relative overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
                         ? "border-(--hc-primary) ring-2 ring-(--hc-accent-soft-border)"
                         : isFull
@@ -183,7 +187,7 @@ export function FrameSelectPanel({
         </p>
 
         {/* 흐름의 주 CTA 는 업로드 화면(h-12 · 15px · 800)과 같은 크기다. 화면마다 달랐다. */}
-        <section className="flex items-center gap-2">
+        <section className="sticky bottom-0 z-10 flex items-center gap-2 bg-(--hc-surface) py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static">
           <button
             type="button"
             onClick={onReset}

@@ -10,6 +10,8 @@ const mockResetPhotos = jest.fn();
 const mockSetBackgroundColor = jest.fn();
 const mockSetBackgroundImageKey = jest.fn();
 const mockCreateFrame = jest.fn();
+const mockUsage = jest.fn();
+jest.mock("@/lib/userApi", () => ({ getSubscriptionUsage: () => mockUsage() }));
 const mockUpdateFrame = jest.fn();
 const mockDeleteFrame = jest.fn();
 const mockGetFrame = jest.fn();
@@ -138,6 +140,7 @@ jest.mock("@/lib/themeSessionStore", () => ({
 }));
 
 jest.mock("@/lib/remoteFrameApi", () => ({
+  listAllFrames: jest.fn().mockResolvedValue([]),
   createFrame: (...args: unknown[]) => mockCreateFrame(...args),
   updateFrame: (...args: unknown[]) => mockUpdateFrame(...args),
   deleteFrame: (...args: unknown[]) => mockDeleteFrame(...args),
@@ -186,6 +189,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 
 describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
     jest.clearAllMocks();
     clearEditorDraft();
     window.alert = mockAlert;
@@ -221,6 +225,16 @@ describe("ThemeEditorPage save flow", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("저장 한도가 없으면 사진·배경·미리보기를 업로드하기 전에 안내한다", async () => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 0, frameRetentionRemainingCount: 0 });
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    confirmSave(container);
+    await waitFor(() => expect(container.textContent).toContain("저장 공간이 없어요"));
+    expect(mockUploadPresigned).not.toHaveBeenCalled();
+    expect(editorStoreState.finalizeAssetsForSave).not.toHaveBeenCalled();
+    expect(mockCreateFrame).not.toHaveBeenCalled();
   });
 
   it("새 편집이 들어오면 예약된 이전 초안 대신 최신 상태만 저장한다", async () => {

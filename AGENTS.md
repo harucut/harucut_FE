@@ -100,8 +100,10 @@ git config core.hooksPath .githooks
 - e2e: `pnpm test:e2e:web`
 - 앱 수동 확인: [`docs/mobile-qa-checklist.md`](docs/mobile-qa-checklist.md)
 
-`pnpm lint:web` 을 빼먹지 않는다. 미사용 export·도달 불가 분기·죽은 파라미터는 빌드가 아니라
-lint 가 잡아서, `verify_workspace.py` 가 이것을 맨 앞에 둔다.
+`pnpm lint:web` 을 빼먹지 않는다. 미사용 지역 변수·인자는 빌드가 아니라 lint 가 잡아서,
+`verify_workspace.py` 가 이것을 맨 앞에 둔다. 단 **경고**라 종료코드는 0 이다 — 출력을 읽는다.
+도달 불가 코드와 미사용 export·파일은 lint 가 못 잡는다. 미사용 export·파일은 `apps/web` 에서
+`npx knip` 으로 본다 — 루트에서 돌리면 jest 설정을 못 읽어 테스트 파일이 전부 미사용으로 뜬다.
 
 > **인증 흐름을 검증할 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 를 끈다.**
 > 켜져 있으면 `apps/web/proxy.ts:51-53` 이 보호 경로 판정을 통째로 건너뛴다(`return NextResponse.next()`).

@@ -11,13 +11,15 @@
  * 돌아갈 곳을 몇 번 꺼냈는지로 같은 회귀를 잡는다.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
+import { COMPANY, CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
 import OAuthCallbackPage from "@/app/oauth2/callback/page";
 import { ApiRequestError } from "@/lib/clientApi";
 
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
 const mockConsumeSocialLoginRedirect = jest.fn();
+const mockReactivateAccount = jest.fn();
+const mockStartSocialLogin = jest.fn();
 
 // 실제 모듈을 그대로 두고 호출부만 바꾼다 — 페이지가 `instanceof ApiRequestError` 로
 // 실패를 가르므로, 테스트와 페이지가 **같은 클래스**를 봐야 한다.
@@ -34,7 +36,22 @@ jest.mock("@/lib/socialLoginRedirect", () => ({
   consumeSocialLoginRedirect: () => mockConsumeSocialLoginRedirect(),
 }));
 
-const ACTIVE_STATUS = { data: { data: { userStatus: "ACTIVE" } } };
+jest.mock("@/lib/auth/authApi", () => ({
+  reactivateAccount: () => mockReactivateAccount(),
+}));
+
+// 인가를 다시 태우는 것은 문서 이동이라 jsdom 에서 볼 수 없다 — 부른 인자로 본다.
+jest.mock("@/lib/authLogin", () => ({
+  ...jest.requireActual("@/lib/authLogin"),
+  startSocialLogin: (...args: unknown[]) => mockStartSocialLogin(...args),
+}));
+
+/** `clientApi.get` 이 돌려주는 모양 그대로 — `data` 가 서버 봉투 전체다. */
+function statusOf(userStatus: string) {
+  return { data: { code: "GEN-000", status: 200, data: { userStatus } } };
+}
+
+const ACTIVE_STATUS = statusOf("ACTIVE");
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -105,4 +122,89 @@ it("서버가 자격증명을 거부하면(401) 세션을 정리한다", async (
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"),
   );
   expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+});
+
+/*
+  제공자 화면에서 취소하거나 인가가 실패해도 백엔드는 이 콜백으로 보낸다 — `?error=oauth2` 만
+  붙여서. 새 세션이 없는데 상태를 물으면 세션 없는 401 이 재발급 실패를 거쳐 「일시적인 문제」+
+  「다시 시도」로 보였고, 눌러도 같은 자리를 돌았다.
+*/
+describe("제공자가 실패로 돌려보낸 경우(?error=)", () => {
+  beforeEach(() => {
+    window.history.pushState({}, "", "/oauth2/callback?error=oauth2");
+  });
+
+  afterEach(() => {
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("아무것도 묻거나 지우지 않고 실패를 알린 뒤 로그인으로 돌려보낸다", async () => {
+    mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+
+    render(<OAuthCallbackPage />);
+
+    expect(
+      await screen.findByText("로그인을 마치지 못했어요. 다시 시도해 주세요."),
+    ).toBeInTheDocument();
+    // 제목이 「처리 중」으로 남으면 본문과 반대 말을 한다.
+    expect(
+      screen.getByRole("heading", { name: "로그인하지 못했어요" }),
+    ).toBeInTheDocument();
+    // 원래 가려던 곳을 잃지 않는다. 로그인 화면도 같은 이유를 폼 위에 남긴다(socialError).
+    expect(
+      screen.getByRole("link", { name: "로그인으로 돌아가기" }),
+    ).toHaveAttribute("href", "/login?socialError=1&redirectTo=%2Fhistory");
+    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+    // 다음 소셜 로그인이 이번 실패의 제공자 기록을 물려받지 않는다.
+    expect(window.sessionStorage.getItem("social-login-provider")).toBeNull();
+  });
+});
+
+// 상태 조회는 차단·탈퇴 계정에도 200 이다. 그대로 들여보내면 일반 API 가 전부 막힌 홈에 갇힌다.
+it.each(["BLOCKED", "DELETED"])(
+  "%s 계정은 들여보내지 않고 세션을 지운 뒤 문의처를 보여 준다",
+  async (userStatus) => {
+    mockGet.mockResolvedValue(statusOf(userStatus));
+
+    render(<OAuthCallbackPage />);
+
+    expect(
+      await screen.findByText("이용이 제한된 계정이에요. 고객센터로 문의해 주세요."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "로그인하지 못했어요" }),
+    ).toBeInTheDocument();
+    expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+    expect(screen.getByRole("link", { name: COMPANY.email })).toHaveAttribute(
+      "href",
+      `mailto:${COMPANY.email}`,
+    );
+    expect(
+      screen.getByRole("link", { name: "로그인으로 돌아가기" }),
+    ).toHaveAttribute("href", "/login");
+  },
+);
+
+/*
+  상태는 서버 봉투 전체에서 읽는다(lib/authUserStatus.ts 의 readUserStatus). 예전엔 이 화면만
+  봉투 안쪽을 따로 읽었다 — 읽는 자리가 갈라지면 한쪽만 고쳐져 복구 분기가 조용히 빠진다.
+*/
+it("탈퇴요청 계정은 복구한 뒤 같은 제공자로 인가를 한 번 더 탄다", async () => {
+  mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
+  window.sessionStorage.setItem("social-login-provider", "kakao");
+  mockGet.mockResolvedValue(statusOf("DELETED_REQUESTED"));
+  mockReactivateAccount.mockResolvedValue(undefined);
+  jest.spyOn(window, "confirm").mockReturnValue(true);
+
+  render(<OAuthCallbackPage />);
+
+  await waitFor(() =>
+    expect(mockStartSocialLogin).toHaveBeenCalledWith("kakao", "/history"),
+  );
+  expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
+  expect(mockDelete).not.toHaveBeenCalled();
 });
