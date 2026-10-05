@@ -1,0 +1,57 @@
+name: ios-qa
+
+# 서명 계정 없이 네이티브 컴파일까지 검증한다. 이 archive는 TestFlight 제출용이 아니다.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - apps/mobile/**
+      - packages/shared/**
+      - pnpm-lock.yaml
+      - patches/**
+      - .github/workflows/ios-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ios:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-ci')
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      EXPO_NO_DOTENV: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:runtime:mobile
+      - run: pnpm --dir apps/mobile exec expo prebuild --platform ios --no-install
+      - name: Install iOS dependencies
+        working-directory: apps/mobile/ios
+        run: pod install
+      - name: Build unsigned iOS archive
+        run: >-
+          xcodebuild -workspace apps/mobile/ios/harucut.xcworkspace
+          -scheme harucut -configuration Release -destination 'generic/platform=iOS'
+          -archivePath apps/mobile/build/harucut.xcarchive
+          CODE_SIGNING_ALLOWED=NO archive
+      - uses: actions/upload-artifact@v7
+        with:
+          name: harucut-ios-unsigned-${{ github.sha }}
+          path: apps/mobile/build/harucut.xcarchive/
+          if-no-files-found: error
+          retention-days: 14
