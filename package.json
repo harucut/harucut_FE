@@ -8,9 +8,6 @@
       "protobufjs"
     ],
     "overrides": {
-      "@react-native/babel-plugin-codegen": "0.85.2",
-      "@react-native/babel-preset": "0.85.2",
-      "@react-native/codegen": "0.85.2",
       "ajv@<6.14.0": "6.14.0",
       "bn.js@<4.12.3": "4.12.3",
       "bn.js@>=5.0.0 <5.2.3": "5.2.3",
@@ -40,9 +37,7 @@
       "shell-quote@<1.9.0": "1.9.0",
       "@xmldom/xmldom@<0.8.15": "0.8.15"
     },
-    "patchedDependencies": {
-      "expo-modules-core@55.0.24": "patches/expo-modules-core@55.0.24.patch"
-    }
+    "patchedDependencies": {}
   },
   "scripts": {
     "dev": "pnpm dev:web",
