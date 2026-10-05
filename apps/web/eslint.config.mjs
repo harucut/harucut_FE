@@ -17,7 +17,6 @@ const eslintConfig = defineConfig([
     // Local/generated artifacts:
     "playwright-report/**",
     "test-results/**",
-    "storybook-static/**",
     ".codex/.tmp/**",
     ".swc/**",
     "tsconfig.tsbuildinfo",

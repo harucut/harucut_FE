@@ -395,7 +395,7 @@ KAKAO, NAVER, GOOGLE 3종을 지원합니다.
 진입([`apps/web/lib/authLogin.ts`](../apps/web/lib/authLogin.ts)):
 
 ```text
-loginKakao/loginNaver/loginGoogle
+SocialLoginSection 버튼 onClick (components/auth/SocialLoginSection.tsx)
   -> startSocialLogin(provider, redirectTo)
        -> persistSocialLoginRedirect(redirectTo)
        -> persistSocialLoginProvider(provider)      ← 아래 DELETED_REQUESTED 복구가 이걸 쓴다
@@ -417,13 +417,22 @@ loginKakao/loginNaver/loginGoogle
 
 콜백 처리([`apps/web/app/oauth2/callback/page.tsx`](../apps/web/app/oauth2/callback/page.tsx)):
 
-1. `/api/auth/status`로 계정 상태를 조회한다(`userStatus` / `accountStatus` / `status` 중 먼저 잡히는 값)
+0. `?error=` 로 돌아오면(제공자 화면에서 취소·인가 실패 — 백엔드는 실패도 이 콜백으로 보낸다)
+   상태를 묻지도 로그아웃하지도 않는다. 새 세션이 없어서, 물으면 세션 없는 401 이
+   「일시적인 문제」나 「다시 로그인」으로 둔갑한다. `clearSocialLoginProvider()` 뒤
+   「로그인을 마치지 못했어요」와 `/login?socialError=1&redirectTo=…` 링크만 남긴다.
+   로그인 화면은 `socialError=1` 이면 같은 문구를 폼 위에 띄운다
+1. `/api/auth/status` 봉투를 [`lib/authUserStatus.ts`](../apps/web/lib/authUserStatus.ts) 의
+   `readUserStatus` 로 읽는다(`data.userStatus` 하나만)
 2. `UserStatus`별 분기
    - `ACTIVE`: 복귀 경로(없으면 `/home`)로 이동
    - `DELETED_REQUESTED`: 아래 별도 절
-   - `BLOCKED` / `DELETED`: 별도 화면 분기 없이 상태 값만 인식한다.
-     접근 차단은 서버 응답(권한 오류)에 따른 공통 에러 처리로 흡수된다
-3. 상태 조회 자체가 실패하면 로그아웃 후 `/login`
+   - `BLOCKED` / `DELETED`: 들여보내지 않는다 — 상태 조회는 200 이어도 일반 API 가 전부 막혀
+     아무것도 못 하는 홈에 갇힌다. `DELETE /api/client/logout`(실패 무시) 뒤
+     「이용이 제한된 계정이에요」 + 고객센터 메일(`COMPANY.email`) + 로그인으로 돌아가기.
+     이메일 로그인(`app/login/page.tsx`)도 같은 문구와 메일을 폼 위에 띄운다
+3. 상태 조회가 401·403 이면 로그아웃 후 `/login`. 그 밖의 실패(네트워크·5xx·`CLIENT-001`)는
+   방금 받은 세션이 멀쩡할 수 있어 지우지 않고, 사유와 「다시 시도」를 보여 준다
 
 ### `DELETED_REQUESTED` — 복구한 뒤 소셜 인가를 한 번 더 탄다
 

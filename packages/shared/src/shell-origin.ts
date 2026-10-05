@@ -37,6 +37,31 @@ export function isSameOrigin(url: string, origin: string): boolean {
   return parsed !== null && parsed === originOf(origin);
 }
 
+/** 릴리스는 공식 오리진만 사용한다. 로컬 .env가 섞여도 개발 서버를 배포하지 않는다. */
+export function resolveShellOrigin(value: unknown, productionOrigin: string, development: boolean): string {
+  if (!development || typeof value !== 'string') return productionOrigin;
+  try {
+    const parsed = new URL(value.trim());
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return productionOrigin;
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) return productionOrigin;
+    return parsed.origin;
+  } catch {
+    return productionOrigin;
+  }
+}
+
+/** 운영 백엔드의 apex 콜백만 www로 옮긴다. 브리지 허용 오리진은 넓히지 않는다. */
+export function canonicalOAuthCallbackUrl(url: string, webOrigin: string): string | null {
+  if (webOrigin !== 'https://www.harucut.com') return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin !== 'https://harucut.com' || parsed.username || parsed.password || parsed.pathname !== '/oauth2/callback') return null;
+    return `${webOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 백엔드에서 소셜 로그인이 지나가는 경로. **둘 다 필요하다.**
  *

@@ -11,6 +11,9 @@ updates:
     open-pull-requests-limit: 5
     groups:
       react-stack:
+        # 모바일 React는 RN 내장 렌더러와 정확히 맞아야 한다.
+        # verify:standard의 check:runtime:mobile 실패 시 모바일만 고정을 유지한다.
+        # 웹 React 보안 패치까지 막는 전역 ignore는 두지 않는다.
         patterns:
           - "react"
           - "react-dom"
@@ -35,7 +38,6 @@ updates:
         patterns:
           - "@axe-core/*"
           - "@playwright/*"
-          - "playwright"
           - "jest"
           - "jest-*"
           - "jest-axe"

@@ -1,4 +1,4 @@
-import { buildResponse, forward } from "@/app/api/client/_proxy";
+import { proxyJson, validateResourceId } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -12,12 +12,11 @@ type RouteContext = {
 
 export async function GET(req: Request, context: RouteContext) {
   const { mediaId } = await context.params;
+  const invalidId = validateResourceId(mediaId);
+  if (invalidId) return invalidId;
 
-  const upstream = await forward(req, {
+  return proxyJson(req, {
     method: "GET",
     url: `${BASE_URL}/api/auth/user/media/${encodeURIComponent(mediaId)}/download-url`,
-    forwardBody: false,
   });
-
-  return buildResponse(upstream, req);
 }

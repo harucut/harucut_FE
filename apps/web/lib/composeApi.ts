@@ -1,5 +1,6 @@
 "use client";
 
+import { withRequestDeadline } from "@/lib/requestDeadline";
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
@@ -64,10 +65,11 @@ export type ComposeRequest = {
 };
 
 export async function requestCompose(body: ComposeRequest): Promise<ComposeJob> {
-  const res = await clientApi.post<ApiEnvelope<ComposeJob>>(
+  const res = await withRequestDeadline(30_000, (signal) => clientApi.post<ApiEnvelope<ComposeJob>>(
     "/api/client/user/media/compose",
     body,
-  );
+    { signal },
+  ));
   return requireData(res.data, "합성 작업");
 }
 

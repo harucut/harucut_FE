@@ -58,9 +58,9 @@ export function SingleFieldDialog({
     요청 자체는 되돌릴 수 없으니 할 수 있는 일은 결과를 볼 자리를 지키는 것이다. 셋을
     한 함수로 모아 여기서 막는다 — `PasswordChangeDialog`·`ConfirmDialog` 와 같은 모양이다.
 
-    배경 버튼에는 `disabled` 를 붙이지 않는다. 붙이면 저장 중에 눌릴 수 있는 컨트롤이 하나도
-    남지 않아 `useModalDialog` 의 포커스 트랩이 죽는다(`ConfirmDialog` 에서 같은 이유로 뺐다).
-    입력이 `disabled` 라 여기서는 더 그렇다.
+    배경 버튼에는 `disabled` 를 붙이지 않는다 — 눌림은 여기서 막는다. 다만 트랩을 붙잡는 것은
+    배경이 아니다. `useModalDialog` 의 `focusables()` 는 카드(`dialogRef`) 안만 훑어 배경은
+    셈에 안 든다. 붙잡는 것은 아래 취소 버튼의 aria-disabled 다.
   */
   const requestClose = useCallback(() => {
     if (saving) return;
@@ -74,7 +74,7 @@ export function SingleFieldDialog({
   const fieldId = "single-field-dialog-input";
 
   return (
-    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center hc-modal px-4 py-6 sm:items-center">
       <button
         type="button"
         aria-label="닫기"
@@ -131,11 +131,16 @@ export function SingleFieldDialog({
           ) : null}
 
           <div className="mt-4 flex gap-2">
+            {/*
+              disabled 가 아니라 aria-disabled 다. 저장 중에는 입력·저장이 disabled 라 취소까지
+              빠지면 `focusables()` 가 빈 배열이 되고, 저장을 누른 순간 body 로 떨어진 포커스를
+              되끌어오지 못한 채 Tab 이 삼켜진다(ConfirmDialog 와 같은 분석).
+            */}
             <button
               type="button"
               onClick={requestClose}
-              disabled={saving}
-              className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold disabled:opacity-50"
+              aria-disabled={saving}
+              className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             >
               취소
             </button>

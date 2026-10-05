@@ -14,6 +14,11 @@ import {
   UPLOAD_TOO_LARGE_MESSAGE,
 } from "@/lib/presignedUploadApi";
 import { toUploadableFile } from "@/lib/imageDecode";
+import { useServerAssets } from "@/hooks/useServerAssets";
+import { ServerAssetPicker } from "@/components/theme/editor/ServerAssetPicker";
+import { fetchServerAssetFile } from "@/lib/serverAssetFile";
+import { blobToDataUrl } from "@/lib/canvas/loaders";
+import { STICKERS } from "@/constants/stickers.generated";
 
 export function AssetPanel() {
   const tab = useThemeEditorStore((state) => state.tab);
@@ -313,11 +318,18 @@ function PhotoTab() {
 
 function StickerTab() {
   const [isDraggingTiles, setIsDraggingTiles] = useState(false);
-  const stickers = useThemeEditorStore((state) => state.assets.stickers);
+  const stickers = STICKERS;
+  const serverAssets = useServerAssets();
   const addComponent = useThemeEditorStore((state) => state.addComponentFromAsset);
 
   return (
     <div className="flex flex-col gap-3">
+      <ServerAssetPicker assets={serverAssets.stickers} onSelect={async (asset) => {
+        if (!asset.imageUrl) return;
+        const file = await fetchServerAssetFile(asset.imageUrl);
+        await addComponent("STICKER", await blobToDataUrl(file));
+      }} />
+      <p className="text-sm text-(--hc-muted)">기본 스티커</p>
       <div
         className="
           flex gap-2 overflow-x-auto pb-2
@@ -327,7 +339,7 @@ function StickerTab() {
         "
       >
         <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
-          {stickers.map((sticker) => (
+          {stickers.map((sticker, index) => (
             <button
               key={sticker.id}
               type="button"
@@ -341,6 +353,7 @@ function StickerTab() {
                 border border-zinc-800 bg-zinc-950
               "
               title={sticker.name ?? "sticker"}
+              aria-label={`기본 스티커 ${index + 1}`}
             >
               {/*
                 72px 타일에 원본 PNG(최대 2MB, 39장 합계 40MB)를 그대로 내려받고 있었다.

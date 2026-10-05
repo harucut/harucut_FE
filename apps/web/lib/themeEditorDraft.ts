@@ -2,6 +2,7 @@
 
 import type { FrameId } from "@/constants/frames";
 import type { EditorComponent, ThemeBackground } from "@/lib/types/themeEditor";
+import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
 
 // 프레임 꾸미기 작업 중 상태(WIP)를 브라우저 localStorage에 임시 보관한다.
 // 편집 중에는 S3 temp 업로드를 하지 않으므로, 새로고침/이탈 대비 초안을 로컬에 둔다.
@@ -112,7 +113,7 @@ export async function saveEditorDraft(input: {
     const components: EditorComponent[] = [];
     for (const c of input.components) {
       if (revision !== saveRevision) return;
-      if (c.type === "PHOTO" && isLocalSrc(c.source)) {
+      if (c.type !== "TEXT" && isLocalSrc(c.source)) {
         components.push({ ...c, source: await resolve(c.source) });
       } else {
         components.push(c);
@@ -170,6 +171,10 @@ export function loadEditorDraft(): EditorDraft | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as EditorDraft;
     if (!parsed?.frameId || !Array.isArray(parsed.components)) return null;
+    if (!isFreshSavedAt(parsed.savedAt, Date.now(), 24 * 60 * 60 * 1000)) {
+      removeStoredDraft();
+      return null;
+    }
     return parsed;
   } catch {
     return null;

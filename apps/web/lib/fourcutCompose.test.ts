@@ -50,6 +50,13 @@ jest.mock("@/lib/canvas/loaders", () => ({
   loadImage: (...args: unknown[]) => mockLoadImage(...args),
 }));
 
+// jsdom 에는 잴 캔버스가 없다. `ctx.filter` 지원 여부는 시험이 정하고, 굽는 함수는 진짜를 쓴다.
+let mockCanvasFilterSupported = true;
+jest.mock("@/lib/frameFilters", () => ({
+  ...jest.requireActual("@/lib/frameFilters"),
+  canvasFilterSupported: () => mockCanvasFilterSupported,
+}));
+
 // 모델은 못 돌리므로 계약만 흉내낸다: 성공하면 Blob, 실패하면 `reason` 을 단 에러.
 jest.mock("@/lib/canvas/personCutout", () => ({
   cutoutPersonOnBlack: (...args: unknown[]) => mockCutout(...args),
@@ -90,6 +97,15 @@ let revokedUrls: string[] = [];
 /** 어느 원본에서 나온 blob 인지. objectURL 주소에 그대로 적어 굽기까지 따라간다. */
 let cutoutOf: WeakMap<Blob, string>;
 
+/** 굽기 캔버스의 2D 컨텍스트. 칸마다 하나씩 생긴다. */
+type BakeContext = {
+  filter: string;
+  drawImage: jest.Mock;
+  getImageData: jest.Mock;
+  putImageData: jest.Mock;
+};
+let bakeContexts: BakeContext[];
+
 function cutoutResultFor(src: string) {
   const blob = new Blob(["cutout"], { type: "image/jpeg" });
   cutoutOf.set(blob, src);
@@ -100,15 +116,24 @@ beforeEach(() => {
   jest.clearAllMocks();
 
   // jsdom 캔버스는 toBlob 이 없다. 굽는 단계는 형식만 확인하면 되므로 최소로 흉내낸다.
-  HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
-    filter: "none",
-    save: jest.fn(),
-    restore: jest.fn(),
-    beginPath: jest.fn(),
-    rect: jest.fn(),
-    clip: jest.fn(),
-    drawImage: jest.fn(),
-  })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+  bakeContexts = [];
+  HTMLCanvasElement.prototype.getContext = jest.fn(() => {
+    const ctx = {
+      filter: "none",
+      save: jest.fn(),
+      restore: jest.fn(),
+      beginPath: jest.fn(),
+      rect: jest.fn(),
+      clip: jest.fn(),
+      drawImage: jest.fn(),
+      // 아래는 필터를 픽셀에 굽는 길(아이폰)에서만 쓴다. 칸을 빨간 점 하나로 흉내낸다.
+      getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+      getImageData: jest.fn(() => ({ data: Uint8ClampedArray.of(255, 0, 0, 255) })),
+      putImageData: jest.fn(),
+    };
+    bakeContexts.push(ctx);
+    return ctx;
+  }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
   HTMLCanvasElement.prototype.toBlob = function (cb) {
     cb(new Blob(["x"], { type: "image/jpeg" }));
   } as typeof HTMLCanvasElement.prototype.toBlob;
@@ -150,6 +175,13 @@ beforeEach(() => {
 });
 
 describe("resolveComposeFrame", () => {
+  it("먼저 등록된 장식 자산을 합성 기준 프레임으로 고르지 않는다", async () => {
+    mockListAllFrames.mockResolvedValue([
+      { frameId: 2, frameType: "CLASSIC", isSystem: true, title: "[스티커] 웨딩/하트" },
+      { frameId: 6, frameType: "CLASSIC", isSystem: true, title: "기본 클래식" },
+    ]);
+    await expect(resolveComposeFrame("classic-4", null)).resolves.toMatchObject({ frameId: 6 });
+  });
   it("내가 만든 프레임을 골랐으면 그 id 를 그대로 쓴다", async () => {
     await expect(resolveComposeFrame("classic-4", 99)).resolves.toEqual({
       frameId: 99,
@@ -314,6 +346,65 @@ describe("composeFourcutOnServer", () => {
 
     expect(mockCutout).not.toHaveBeenCalled();
     expect(bakedSources()).toEqual(SOURCES);
+  });
+});
+
+/**
+ * 서버는 필터를 모른다 — 올리는 원본에 이미 입혀져 있어야 한다. 그런데 아이폰(WebKit)은
+ * `ctx.filter` 를 받기만 하고 무시해서, 미리보기(CSS)에는 흑백이 보였는데 저장본은 컬러였다.
+ */
+describe("composeFourcutOnServer — 필터를 원본 픽셀에 굽는다", () => {
+  const compose = () =>
+    composeFourcutOnServer({
+      sources: SOURCES,
+      layout,
+      outputFilter: "B&W",
+      frameId: "classic-4",
+      remoteFrameId: null,
+    });
+
+  beforeEach(() => {
+    mockListAllFrames.mockResolvedValue([
+      { frameId: 6, frameType: "CLASSIC", isSystem: true },
+    ]);
+  });
+
+  afterEach(() => {
+    mockCanvasFilterSupported = true;
+  });
+
+  it("ctx.filter 를 무시하는 브라우저면 그린 칸을 픽셀로 구워 올린다", async () => {
+    mockCanvasFilterSupported = false;
+
+    await compose();
+
+    expect(bakeContexts).toHaveLength(4);
+    for (const ctx of bakeContexts) {
+      // 무시될 값을 걸어 두지 않는다 — 언젠가 반쯤 먹으면 두 번 입혀진다.
+      expect(ctx.filter).toBe("none");
+      // 굽기 캔버스가 곧 슬롯이라 칸 전체를 읽는다. 사진을 그린 **뒤에** 읽어야 한다.
+      expect(ctx.getImageData).toHaveBeenCalledWith(0, 0, 1700, 1200);
+      expect(ctx.drawImage.mock.invocationCallOrder[0]).toBeLessThan(
+        ctx.getImageData.mock.invocationCallOrder[0],
+      );
+      // 빨강이 흑백 회색으로 바뀌어 같은 자리에 돌아간다.
+      expect(ctx.putImageData).toHaveBeenCalledWith(
+        { data: Uint8ClampedArray.of(54, 54, 54, 255) },
+        0,
+        0,
+      );
+    }
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+  });
+
+  it("ctx.filter 가 먹는 브라우저(크롬)는 예전처럼 ctx.filter 로 굽는다", async () => {
+    await compose();
+
+    expect(bakeContexts).toHaveLength(4);
+    for (const ctx of bakeContexts) {
+      expect(ctx.filter).toBe("grayscale(1)");
+      expect(ctx.getImageData).not.toHaveBeenCalled();
+    }
   });
 });
 

@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import { canonicalOAuthCallbackUrl } from '@harucut/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -40,6 +41,7 @@ import {
 } from '@/lib/native-bridge';
 
 const WEB_ORIGIN = getWebOrigin();
+const START_URL = `${WEB_ORIGIN}/home`;
 
 /**
  * 콘텐츠가 뜨기 전에 심는 표식.
@@ -135,7 +137,7 @@ export function HarucutWebShell() {
     없는 경우(onRenderProcessGone)와 실패 화면에서 돌아오는 경우에 쓴다. `uri` 는 그때
     다시 열 주소다 — 처음 올릴 때는 웹 첫 화면이다.
   */
-  const [webViewSession, setWebViewSession] = useState({ key: 0, uri: WEB_ORIGIN });
+  const [webViewSession, setWebViewSession] = useState({ key: 0, uri: START_URL });
   /*
     상태바 글자색은 웹 테마를 따라간다.
 
@@ -274,7 +276,7 @@ export function HarucutWebShell() {
 
     setWebViewSession((session) => ({
       key: session.key + 1,
-      uri: lastUrl && isWebOrigin(lastUrl) ? lastUrl : WEB_ORIGIN,
+      uri: lastUrl && isWebOrigin(lastUrl) ? lastUrl : START_URL,
     }));
   }, []);
 
@@ -473,6 +475,17 @@ export function HarucutWebShell() {
           handleNavigation(state.url, state.loading, state.canGoBack);
         }}
         onShouldStartLoadWithRequest={(request) => {
+          // WKWebView는 iframe 탐색도 알린다. 하위 프레임이 Safari나 외부 앱을 열게 하지 않는다.
+          if (request.isTopFrame === false) return true;
+          const canonicalCallback = canonicalOAuthCallbackUrl(request.url, WEB_ORIGIN);
+          if (canonicalCallback) {
+            cancelTransfers();
+            currentUrlRef.current = null;
+            historyResetPendingRef.current = false;
+            canGoBackRef.current = false;
+            setWebViewSession((session) => ({ key: session.key + 1, uri: canonicalCallback }));
+            return false;
+          }
           // 우리 웹이면 그대로 연다. 오리진을 통째로 견준다 — 접두사 비교는
           // `https://www.harucut.com.evil.example/` 를 내부로 오인한다.
           if (isWebOrigin(request.url) || request.url === 'about:blank') return true;

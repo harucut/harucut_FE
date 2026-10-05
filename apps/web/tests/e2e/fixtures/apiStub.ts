@@ -9,8 +9,8 @@ import type { Page } from "@playwright/test";
  * 백엔드가 없는 CI에서는(요청이 네트워크 오류로 죽어서) 화면이 그대로 렌더된다.
  * 같은 스펙이 환경에 따라 다른 것을 검사하는 셈이라, 통과가 아무것도 보장하지 못했다.
  *
- * 여기서는 `/api/client/**`를 전부 가로채 고정 응답을 준다. 백엔드 유무와 무관하게
- * 늘 같은 화면을 검사하고, 빈 화면이 아니라 실제 콘텐츠가 있는 상태를 검사한다.
+ * 여기서는 BFF(`/api/client/**`·`/api/auth/*`)를 전부 가로채 고정 응답을 준다. 백엔드 유무와
+ * 무관하게 늘 같은 화면을 검사하고, 빈 화면이 아니라 실제 콘텐츠가 있는 상태를 검사한다.
  */
 
 const ENVELOPE = (data: unknown) => ({
@@ -98,7 +98,7 @@ const MEDIA = [
 ];
 
 /** 화면이 실제로 이미지를 그리도록, 로컬 정적 자산을 조회 URL로 돌려준다. */
-const PRESIGNED_IMAGE_URL = "/hero-image.png";
+const PRESIGNED_IMAGE_URL = "/demo/cut-1.webp";
 
 /**
  * S3 PUT 자리. 실제 버킷 대신 같은 오리진의 가짜 주소를 주고 아래에서 200으로 받는다.
@@ -146,6 +146,20 @@ export async function stubAuthenticatedApi(page: Page) {
     // 그 밖의 호출(로그아웃·재발급 등)은 성공한 셈 치고 비운다.
     return json(null);
   });
+
+  /*
+    인증 라우트 둘은 `/api/client/**` 밖이라 위 스텁에 안 걸렸다. 백엔드가 떠 있으면 가짜 쿠키로
+    그대로 닿아 401(AUTH-011)을 받고, 재발급(위 스텁이 200) 뒤 재시도도 401 이라
+    SessionExpiryBridge 가 「로그인이 풀렸어요」 안내를 인증 화면마다 띄웠다 — 로컬에서만 인증 화면
+    a11y 스펙이 한꺼번에 깨지던 원인이다. 둘 다 멀쩡한 회원으로 답한다.
+    모양은 실제 응답 그대로다 — session 은 app/api/auth/session/route.ts 의 ACTIVE 응답.
+  */
+  await page.route("**/api/auth/status", (route) =>
+    route.fulfill({ json: ENVELOPE({ userStatus: "ACTIVE" }) }),
+  );
+  await page.route("**/api/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: true, userStatus: "ACTIVE" } }),
+  );
 
   await page.route(`**${S3_STUB_PATH}`, (route) =>
     route.fulfill({ status: 200, body: "" }),

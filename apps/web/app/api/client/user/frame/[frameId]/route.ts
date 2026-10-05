@@ -1,4 +1,4 @@
-import { buildResponse, forward, proxyJson } from "@/app/api/client/_proxy";
+import { proxyJson, validateResourceId } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -12,18 +12,19 @@ type RouteContext = {
 
 export async function GET(req: Request, context: RouteContext) {
   const { frameId } = await context.params;
+  const invalidId = validateResourceId(frameId);
+  if (invalidId) return invalidId;
 
-  const upstream = await forward(req, {
+  return proxyJson(req, {
     method: "GET",
     url: `${BASE_URL}/api/auth/user/frame/${encodeURIComponent(frameId)}`,
-    forwardBody: false,
   });
-
-  return buildResponse(upstream, req);
 }
 
 export async function PUT(req: Request, context: RouteContext) {
   const { frameId } = await context.params;
+  const invalidId = validateResourceId(frameId);
+  if (invalidId) return invalidId;
 
   return proxyJson(req, {
     method: "PUT",
@@ -33,12 +34,11 @@ export async function PUT(req: Request, context: RouteContext) {
 
 export async function DELETE(req: Request, context: RouteContext) {
   const { frameId } = await context.params;
+  const invalidId = validateResourceId(frameId);
+  if (invalidId) return invalidId;
 
-  const upstream = await forward(req, {
+  return proxyJson(req, {
     method: "DELETE",
     url: `${BASE_URL}/api/auth/user/frame/${encodeURIComponent(frameId)}`,
-    forwardBody: false,
   });
-
-  return buildResponse(upstream, req);
 }

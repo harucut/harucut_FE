@@ -77,7 +77,7 @@ export function ConfirmDialog({
   const dialogRef = useModalDialog(true, requestClose);
 
   return (
-    <div className="fixed inset-0 z-120 flex items-end justify-center bg-[rgba(10,24,45,0.42)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-120 flex items-end justify-center hc-modal px-4 py-6 sm:items-center">
       {/*
         배경에는 `disabled` 를 걸지 않는다 — 눌림은 `requestClose` 가 막고, 결과는 같다.
         실행 중에 화면에서 누를 수 있는 것을 하나도 남기지 않는 데 굳이 한몫할 이유가 없다.

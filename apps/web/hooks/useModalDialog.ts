@@ -55,6 +55,8 @@ type OpenDialog = {
 };
 
 const openDialogs: OpenDialog[] = [];
+let scrollLocks = 0;
+let previousOverflow = { body: "", root: "" };
 
 /**
  * 컨테이너가 실제로 얹히는 z-index.
@@ -113,6 +115,20 @@ function topmostDialog(): OpenDialog | null {
  * 반환하는 ref 를 다이얼로그 컨테이너에 붙이면 된다.
  */
 export function useModalDialog(isOpen: boolean, onClose: () => void) {
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    if (scrollLocks++ === 0) {
+      previousOverflow = { body: document.body.style.overflow, root: document.documentElement.style.overflow };
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    }
+    return () => {
+      if (--scrollLocks === 0) {
+        document.body.style.overflow = previousOverflow.body;
+        document.documentElement.style.overflow = previousOverflow.root;
+      }
+    };
+  }, [isOpen]);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const dialogRef = useCallback((node: HTMLElement | null) => {
     setContainer(node);

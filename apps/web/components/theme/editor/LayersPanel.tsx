@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent } from "@/lib/types/themeEditor";
+import { componentImageSrc } from "@/lib/canvas/componentSource";
 import {
   Lock,
   LockOpen,
@@ -45,7 +46,7 @@ export function LayersPanel() {
     })),
   );
 
-  const list = components;
+  const list = [...components].reverse();
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
@@ -152,14 +153,14 @@ function LayerRow({
       title: "위로",
       icon: <ChevronUp size={14} />,
       onClick: onUp,
-      disabled: isLast,
+      disabled: isFirst,
     },
     {
       key: "down",
       title: "아래로",
       icon: <ChevronDown size={14} />,
       onClick: onDown,
-      disabled: isFirst,
+      disabled: isLast,
     },
     {
       key: "dup",
@@ -199,7 +200,8 @@ function LayerRow({
           <div className="h-8 w-8 overflow-hidden rounded-lg border border-zinc-800 bg-(--hc-surface-muted)">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={c.source}
+              src={componentImageSrc(c)}
+              crossOrigin="anonymous"
               alt={c.type}
               className="h-full w-full object-cover"
               draggable={false}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   adaptSetCookiesForRequest,
+  getRequestUrl,
   getSetCookieHeaders,
 } from "@/lib/server/setCookies";
 
@@ -87,10 +88,36 @@ function getAbsoluteUrlOrNull(url: string) {
   }
 }
 
+/**
+ * 우리 화면(같은 출처)이 아닌 곳이 시킨 요청인가.
+ *
+ * 이 프록시는 쿠키를 그대로 싣고 Content-Type 을 JSON 으로 고쳐 보낸다. 그래서 남의 사이트의
+ * `<form enctype="text/plain">` 처럼 사전 요청 없이 나가는 단순 POST 도 백엔드에는 멀쩡한 JSON 으로
+ * 닿는다 — 피해자를 공격자 계정으로 로그인시키는 로그인 CSRF 다.
+ *
+ * `Sec-Fetch-Site` 가 있으면 그것만 본다(same-origin·none 만 통과). same-site 도 막는다 — 우리 화면은
+ * 늘 상대 경로로 부르니 하위 도메인(api. 등)에서 올 일이 없고, 아래 Origin 판정도 같은 출처만 받는다.
+ * 브라우저는 이 헤더를 https·localhost 에만 붙여서, 구형 브라우저와 LAN 개발 주소(에뮬레이터의
+ * http://10.0.2.2:3000)에서는 `Origin` 으로 판정한다. 그 비교 대상은 req.url 이 아니라 브라우저가
+ * 부른 주소다 — 자체 호스팅에서는 req.url 이 늘 localhost 라 그대로 맞대면 개발 앱의 요청이 전부 막힌다.
+ * 둘 다 없으면 브라우저가 보낸 요청이 아니다 — 남의 쿠키를 실을 수 없으니 통과시킨다.
+ */
+function isCrossSiteRequest(req: Request) {
+  const site = req.headers.get("sec-fetch-site");
+  if (site) return site !== "same-origin" && site !== "none";
+  const origin = req.headers.get("origin");
+  return origin !== null && origin !== getRequestUrl(req).origin;
+}
+
 export async function forward(
   req: Request,
   options: ProxyOptions,
 ): Promise<ForwardResult> {
+  // 상태를 바꾸는 요청만 막는다. GET 은 바꾸는 것이 없고, 응답은 CORS 가 남의 사이트에 안 보여 준다.
+  if (options.method !== "GET" && isCrossSiteRequest(req)) {
+    return buildProxyErrorResult(403, "CLIENT-005", "Cross-site request blocked.");
+  }
+
   const upstreamUrl = getAbsoluteUrlOrNull(options.url);
   if (!upstreamUrl) {
     return buildProxyErrorResult(
@@ -150,7 +177,7 @@ export function buildResponse(result: ForwardResult, req?: RequestLike) {
   const body = [204, 205, 304].includes(result.status) ? null : result.body;
   const res = new NextResponse(body, {
     status: result.status,
-    headers: { "Content-Type": result.contentType },
+    headers: { "Content-Type": result.contentType, "Cache-Control": "private, no-store" },
   });
   const setCookies = req
     ? adaptSetCookiesForRequest(result.setCookies, req)
@@ -165,4 +192,9 @@ export function buildResponse(result: ForwardResult, req?: RequestLike) {
 export async function proxyJson(req: Request, options: ProxyOptions) {
   const result = await forward(req, options);
   return buildResponse(result, req);
+}
+
+export function validateResourceId(id: string): NextResponse | null {
+  if (/^[1-9][0-9]{0,18}$/.test(id) && (id.length < 19 || id <= "9223372036854775807")) return null;
+  return buildResponse(buildProxyErrorResult(400, "CLIENT-006", "Invalid resource ID."));
 }

@@ -1,3 +1,4 @@
+import { canvasToBlob } from "@/lib/canvas/toBlob";
 import { fitCanvasScale } from "@/lib/canvas/canvasBudget";
 import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawCover, type Rect } from "@/lib/canvas/draw";
@@ -9,6 +10,8 @@ import {
   nativeSaveImageUrl,
 } from "@/lib/nativeBridge";
 import {
+  applyFilterPixels,
+  canvasFilterSupported,
   getFourcutFilterCanvasValue,
   type FourcutFilterId,
 } from "@/lib/frameFilters";
@@ -32,14 +35,6 @@ function ensureCtx(canvas: HTMLCanvasElement) {
   return ctx;
 }
 
-function toPngBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) return reject(new Error("png blob create failed"));
-      resolve(blob);
-    }, "image/png");
-  });
-}
 
 /**
  * 결과물을 기기에 저장한다.
@@ -167,7 +162,7 @@ function drawThemeOverlay(
 ) {
   if (!theme) return;
 
-  theme.components.forEach((component) => {
+  [...theme.components].sort((a, b) => a.zIndex - b.zIndex).forEach((component) => {
     const scale = component.scale ?? 1;
     const rotation = component.rotation ?? 0;
     const opacityRaw = component.styleJson?.opacity;
@@ -211,6 +206,9 @@ function drawFrameOnce(
 ) {
   const { totalWidth, totalHeight, slots } = layout;
   const slotFilter = getFourcutFilterCanvasValue(outputFilter);
+  // `ctx.filter` 를 무시하는 브라우저(아이폰)면 사진을 그린 뒤 그 칸 픽셀만 굽는다.
+  // 꾸밈(스티커·글자)은 그다음에 얹혀서 필터를 안 탄다 — `ctx.filter` 경로와 같다.
+  const bakeFilter = outputFilter !== "NONE" && !canvasFilterSupported();
 
   ctx.fillStyle = borderColor;
   ctx.fillRect(0, 0, totalWidth, totalHeight);
@@ -236,12 +234,13 @@ function drawFrameOnce(
     if (!drawable) return;
 
     ctx.save();
-    ctx.filter = slotFilter;
+    if (!bakeFilter) ctx.filter = slotFilter;
 
     const imageWidth = drawable.el.naturalWidth || drawable.el.width || 1;
     const imageHeight = drawable.el.naturalHeight || drawable.el.height || 1;
     drawCover(ctx, drawable.el, imageWidth, imageHeight, slot);
     ctx.restore();
+    if (bakeFilter) applyFilterPixels(ctx, slot, outputFilter);
   });
 
   drawThemeOverlay(ctx, theme, overlayImages);
@@ -253,13 +252,15 @@ function drawFrameOnce(
   // 여기서 그릴 값이 아니다(계약은 docs/backend-contract.md).
 }
 
-export async function composeFramePng(opts: {
+export async function composeFrameImage(opts: {
   layout: FrameLayout;
   borderColor: string;
   sources: FrameSource[];
   outputFilter?: FourcutFilterId;
   theme?: ThemeExportJson | null;
   canvas?: HTMLCanvasElement;
+  mimeType?: "image/jpeg" | "image/png";
+  quality?: number;
 }) {
   const {
     layout,
@@ -301,5 +302,5 @@ export async function composeFramePng(opts: {
     backgroundImage,
   );
 
-  return toPngBlob(canvas);
+  return canvasToBlob(canvas, opts.mimeType ?? "image/png", opts.quality);
 }

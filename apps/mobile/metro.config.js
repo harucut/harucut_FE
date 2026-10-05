@@ -24,7 +24,7 @@ const IGNORED = [
   /apps[\\/]web[\\/]\.next([\\/].*)?$/,
   /apps[\\/]web[\\/]\.next-e2e([\\/].*)?$/,
   // 테스트·리포트 산출물.
-  /apps[\\/]web[\\/](playwright-report|test-results|storybook-static)([\\/].*)?$/,
+  /apps[\\/]web[\\/](playwright-report|test-results)([\\/].*)?$/,
   // 버전 관리 내부 파일.
   /[\\/]\.git[\\/].*/,
 ];

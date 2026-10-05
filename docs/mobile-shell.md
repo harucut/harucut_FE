@@ -10,6 +10,23 @@
 
 프로토콜을 바꾸면 **양쪽을 같이** 고쳐야 한다.
 
+## 출시 주소와 런타임 검사
+
+첫 화면은 `/home`이다. 릴리스에서는 `.env.local`의 개발 주소를 무시하고 공식 HTTPS 웹·API만 사용한다.
+개발용 주소는 `__DEV__`일 때만 허용한다. EAS preview/production과 로컬 release 명령은
+`EXPO_NO_DOTENV=1`로 로컬 설정 주입도 막는다.
+
+모바일 React는 RN에 들어 있는 두 렌더러와 정확히 같아야 한다. `pnpm check:runtime:mobile`이
+선언 버전·설치 버전·두 렌더러를 대조하며 `verify:standard`와 `verify:mobile`에도 포함된다.
+웹 React는 독립적으로 보안 패치를 받을 수 있다.
+
+운영 백엔드가 `https://harucut.com/oauth2/callback`으로 돌려보내면 해당 경로만 같은 WebView의
+`https://www.harucut.com/oauth2/callback`으로 옮긴다. apex 전체를 브리지 허용 목록에 넣지 않는다.
+이 경로는 백엔드 세션 쿠키가 `.harucut.com`에 발급되는 기존 구성에 의존하므로 출시 전 실계정으로 확인한다.
+구글은 WebView 로그인 정책이 별개이므로 이 수정만으로 구글 로그인이 지원되는 것은 아니다.
+앱에서는 구글 버튼을 표시하지 않고 웹 브라우저 이용을 안내한다. 일반 웹의 구글 버튼은 유지한다.
+근거는 [Google OAuth의 보안 브라우저 정책](https://developers.google.com/identity/protocols/oauth2/policies#secure-browsers)이다.
+
 **앱에 web 타깃은 없다.** Expo 프로젝트라 `expo start --web` 이 있을 법하지만 이 앱에서는
 성립하지 않는다 — 셸이 그리는 것은 WebView 하나인데 `react-native-webview` 에 web 구현이
 없다(패키지의 `lib/` 에 `.web.js` 가 하나도 없다). 그 위에서 돌리면 빈 화면이다.

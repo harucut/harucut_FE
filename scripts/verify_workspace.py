@@ -20,8 +20,9 @@ LOCKFILE_CHECK = ["pnpm", "install", "--frozen-lockfile"]
 
 
 GROUPS: dict[str, list[list[str]]] = {
-    # lint:web을 가장 앞에 둔다 — 미사용 export·도달 불가 분기·죽은 파라미터는
-    # 빌드가 아니라 lint가 잡는다. 빠르고 실패가 잦은 검사부터 돌려 fail fast.
+    # lint:web을 가장 앞에 둔다 — 빠르고 실패가 잦은 검사부터 돌려 fail fast.
+    # 죽은 코드 중 lint가 잡는 것은 미사용 지역 변수·인자뿐이다(경고). 도달 불가 코드와
+    # 미사용 export·파일은 못 잡는다 — 무엇으로 보는지는 AGENTS.md 「검증」.
     "web": [
         ["pnpm", "lint:web"],
         ["pnpm", "check:classes:web"],
@@ -29,11 +30,13 @@ GROUPS: dict[str, list[list[str]]] = {
         ["pnpm", "build:web"],
     ],
     "mobile": [
+        ["pnpm", "check:runtime:mobile"],
         ["pnpm", "lint:mobile"],
         ["pnpm", "typecheck:mobile"],
     ],
     "standard": [
         LOCKFILE_CHECK,
+        ["pnpm", "check:runtime:mobile"],
         ["pnpm", "lint:web"],
         ["pnpm", "check:classes:web"],
         ["pnpm", "typecheck:shared"],

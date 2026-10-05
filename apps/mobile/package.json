@@ -8,7 +8,9 @@
     "android": "expo start --android",
     "android:dev": "expo run:android",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "export:release": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 expo export --platform ios --platform android --output-dir dist-release",
+    "prebuild:release": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 expo prebuild --no-install"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.10",
@@ -25,7 +27,7 @@
     "expo-splash-screen": "~55.0.23",
     "expo-status-bar": "~55.0.5",
     "expo-system-ui": "~55.0.16",
-    "react": "19.2.8",
+    "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.24.0",

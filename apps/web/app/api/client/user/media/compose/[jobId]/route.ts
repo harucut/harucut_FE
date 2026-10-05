@@ -1,4 +1,4 @@
-import { buildResponse, forward } from "@/app/api/client/_proxy";
+import { proxyJson, validateResourceId } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -13,12 +13,11 @@ type RouteContext = {
 /** 합성 Job 상태 폴링. status 는 PENDING · DONE · FAILED 셋뿐이다(RUNNING 은 없다). */
 export async function GET(req: Request, context: RouteContext) {
   const { jobId } = await context.params;
+  const invalidId = validateResourceId(jobId);
+  if (invalidId) return invalidId;
 
-  const upstream = await forward(req, {
+  return proxyJson(req, {
     method: "GET",
     url: `${BASE_URL}/api/auth/user/media/compose/${encodeURIComponent(jobId)}`,
-    forwardBody: false,
   });
-
-  return buildResponse(upstream, req);
 }

@@ -140,7 +140,7 @@ export function buildFrameContentKey(
   });
 }
 
-type ShootSessionState = {
+export type ShootSessionState = {
   frameId: FrameId | null;
   remoteFrameId: number | null;
   source: ShootSource;

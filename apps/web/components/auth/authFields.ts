@@ -64,6 +64,6 @@ export const SIGNUP_BASE_FIELDS: AuthFieldConfig[] = [
     type: "text",
     label: "닉네임",
     placeholder: "표시할 닉네임을 입력해 주세요",
-    autoComplete: "username",
+    autoComplete: "nickname",
   },
 ];

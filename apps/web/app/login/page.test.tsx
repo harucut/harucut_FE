@@ -9,10 +9,14 @@
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { COMPANY } from "@harucut/shared";
 import LoginPage from "@/app/login/page";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 const mockLoginWithEmail = jest.fn();
 const mockReactivateAccount = jest.fn();
+const mockDelete = jest.fn();
+let mockSearchParams = new URLSearchParams();
 
 const LOGIN_EMAIL = "login@example.com";
 
@@ -27,7 +31,13 @@ const SPACED_PASSWORD = "  harucut pass  ";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
+}));
+
+// 막힌 계정 분기가 받은 세션을 지우는지 본다. 나머지는 실제 모듈 그대로.
+jest.mock("@/lib/clientApi", () => ({
+  ...jest.requireActual("@/lib/clientApi"),
+  clientApi: { delete: (...args: unknown[]) => mockDelete(...args) },
 }));
 
 // 세션 조회는 이 테스트의 관심사가 아니다.
@@ -62,7 +72,9 @@ jest.mock("@/lib/auth/authApi", () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSearchParams = new URLSearchParams();
   mockLoginWithEmail.mockResolvedValue({ userStatus: "ACTIVE" });
+  mockDelete.mockResolvedValue(undefined);
   /*
     로그인에 성공하면 `window.location.href` 로 이동한다. jsdom 은 실제 이동을 하지 않고
     "Not implemented: navigation" 을 console.error 로 흘린다 — 실패가 아니라 잡음이라 막는다.
@@ -162,5 +174,55 @@ describe("LoginPage 이메일 검증", () => {
       await screen.findByText("이메일을 입력해 주세요."),
     ).toBeInTheDocument();
     expect(mockLoginWithEmail).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  로그인은 차단·탈퇴 계정에도 성공하고 쿠키까지 준다. 그런데 일반 API 는 전부 막혀서,
+  그대로 들여보내면 아무것도 못 하는 홈에 갇힌다.
+*/
+describe("LoginPage 막힌 계정", () => {
+  afterEach(() => {
+    useGuestTrialStore.setState({ accessMode: "member" });
+  });
+
+  it.each(["BLOCKED", "DELETED"])(
+    "%s 계정은 받은 세션을 지우고 이 화면에서 이유와 문의처를 말한다",
+    async (userStatus) => {
+      mockLoginWithEmail.mockResolvedValue({ userStatus });
+      useGuestTrialStore.setState({ accessMode: "guest" });
+
+      submitLogin({ email: LOGIN_EMAIL, password: LONG_PASSWORD });
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "이용이 제한된 계정이에요. 고객센터로 문의해 주세요.",
+      );
+      expect(screen.getByRole("link", { name: COMPANY.email })).toHaveAttribute(
+        "href",
+        `mailto:${COMPANY.email}`,
+      );
+      expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+      // 로그인을 마친 것이 아니다 — 체험 중이던 사람은 체험 상태 그대로 남는다.
+      expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+    },
+  );
+});
+
+/** 소셜 콜백이 `?error=` 로 끝나면 이 화면으로 돌려보낸다. alert 는 닫으면 사라져 폼 위에 남긴다. */
+describe("LoginPage 소셜 로그인 실패 안내", () => {
+  it("socialError=1 로 오면 실패 이유를 폼 위에 띄운다", () => {
+    mockSearchParams = new URLSearchParams("socialError=1&redirectTo=%2Fhistory");
+
+    render(<LoginPage />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "로그인을 마치지 못했어요. 다시 시도해 주세요.",
+    );
+  });
+
+  it("socialError 가 없으면 아무 안내도 띄우지 않는다", () => {
+    render(<LoginPage />);
+
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

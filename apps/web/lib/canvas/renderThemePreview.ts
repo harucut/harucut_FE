@@ -1,19 +1,12 @@
 "use client";
 
+import { canvasToBlob } from "@/lib/canvas/toBlob";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { componentImageSrc } from "@/lib/canvas/componentSource";
 import { drawTextComponent } from "@/lib/canvas/textLayer";
 import { loadImage } from "@/lib/canvas/loaders";
 import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
-function toPngBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) return reject(new Error("png blob create failed"));
-      resolve(blob);
-    }, "image/png");
-  });
-}
 
 function normalizeHexColor(input?: string) {
   const cleaned = (input ?? "").trim().replace(/^#/, "");
@@ -185,5 +178,5 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
   // 예전의 비네트 + 초록 링은 배경 제거가 아니라 이름만 누끼인 효과라 걷어냈다.
   // `theme.cellCutouts` 는 저장·복원용 데이터로 그대로 남는다.
 
-  return toPngBlob(canvas);
+  return canvasToBlob(canvas);
 }

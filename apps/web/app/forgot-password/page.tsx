@@ -22,7 +22,15 @@ function ForgotPasswordPageContent() {
       title="비밀번호 찾기"
       description={flow.description}
       icon="lock"
-      footer={null}
+      footer={
+        // 메일이 늦거나 스팸함으로 가면 여기서 멈춘다. 코드를 보낸 뒤(인증 전)에만 일러 둔다.
+        // 소셜로 시작하라고는 하지 않는다 — 소셜 계정엔 재설정할 비밀번호가 없다.
+        flow.codeExpiresAt ? (
+          <p className="text-[12px] leading-relaxed text-(--hc-muted)">
+            메일이 오지 않으면 스팸함을 확인해 주세요.
+          </p>
+        ) : null
+      }
     >
       {flow.step === "VERIFY_CODE" ? (
         <VerifyCodeForm

@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
-import { useMemo, useState, type InputHTMLAttributes } from "react";
+import { useId, useMemo, useState, type InputHTMLAttributes } from "react";
 
 type AuthFieldProps = {
   label: string;
@@ -16,6 +16,7 @@ export function AuthField({
   ...inputProps
 }: AuthFieldProps) {
   const isPassword = type === "password";
+  const errorId = useId();
   const [show, setShow] = useState(false);
 
   const inputType = useMemo(() => {
@@ -46,6 +47,8 @@ export function AuthField({
             ? { spellCheck: false, autoCapitalize: "none", inputMode: "email" as const }
             : {})}
           {...inputProps}
+          aria-invalid={error ? true : inputProps["aria-invalid"]}
+          aria-describedby={[inputProps["aria-describedby"], error ? errorId : null].filter(Boolean).join(" ") || undefined}
         />
 
         {isPassword ? (
@@ -62,7 +65,7 @@ export function AuthField({
       </div>
 
       {error ? (
-        <p role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)">{error}</p>
+        <p id={errorId} role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)">{error}</p>
       ) : null}
     </div>
   );

@@ -3,7 +3,6 @@ import { ArrowRight } from "lucide-react";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { Reveal } from "@/components/ui/Reveal";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
@@ -177,13 +176,13 @@ export function FeaturesView() {
 
       {/* 페이지 헤드 — 랜딩 히어로보다 한 단계 낮은 타입 스케일 */}
       <section className="mx-auto max-w-290 px-7 pb-14 pt-12 sm:pt-16">
-        <Reveal>
+        <div className="min-w-0">
           <h1 className="text-[40px] font-black leading-[1.16] tracking-[-1.8px] sm:text-[56px] sm:tracking-[-2.6px]">
             하루컷은
             <br />
             <span className="hc-accent-word">무엇이 다를까요?</span>
           </h1>
-        </Reveal>
+        </div>
       </section>
 
       {/* 세 축 — 좌우 번갈아 배치. 카드 그리드 대신 점선 구분의 에디토리얼 레이아웃 */}
@@ -194,7 +193,7 @@ export function FeaturesView() {
             className={i ? "border-t border-dashed border-white/12" : ""}
           >
             <div className="mx-auto max-w-290 px-7 py-18">
-              <Reveal>
+              <div className="min-w-0">
                 <div
                   className={`grid items-center gap-12 lg:grid-cols-2 lg:gap-20 ${
                     i % 2 ? "lg:[&>*:first-child]:order-2" : ""
@@ -239,7 +238,7 @@ export function FeaturesView() {
                     <AxisVisual index={i} />
                   </div>
                 </div>
-              </Reveal>
+              </div>
             </div>
           </div>
         ))}

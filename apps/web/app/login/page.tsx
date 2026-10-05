@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { COMPANY } from "@harucut/shared";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
@@ -12,6 +13,11 @@ import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { SOCIAL_LOGIN_FAILED_MESSAGE } from "@/lib/authLogin";
+import {
+  RESTRICTED_ACCOUNT_MESSAGE,
+  isUnusableUserStatus,
+} from "@/lib/authUserStatus";
 import { clientApi } from "@/lib/clientApi";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import {
@@ -25,6 +31,8 @@ type LoginFieldName = Extract<AuthFieldName, "email" | "password">;
 
 type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
   common?: string | null;
+  /** 막힌 계정이라 문의처를 같이 보여 준다. */
+  support?: boolean;
 };
 
 function LoginPageContent() {
@@ -41,7 +49,12 @@ function LoginPageContent() {
   const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<LoginErrors>({});
+  // 소셜 콜백이 실패·취소로 돌려보낸 자리면 이유를 폼 위에 남긴다(alert 는 닫으면 사라진다).
+  const [errors, setErrors] = useState<LoginErrors>(() =>
+    searchParams.get("socialError") === "1"
+      ? { common: SOCIAL_LOGIN_FAILED_MESSAGE }
+      : {},
+  );
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -115,6 +128,12 @@ function LoginPageContent() {
           });
           return;
         }
+      } else if (isUnusableUserStatus(loginData?.userStatus ?? null)) {
+        // 차단·탈퇴 계정 — 쿠키는 받았어도 일반 API 가 전부 막힌다. 들여보내면 아무것도 못 하는
+        // 홈에 갇히므로 받은 세션을 지우고 이 화면에서 이유와 문의처를 말한다.
+        await clientApi.delete("/api/client/logout").catch(() => undefined);
+        setErrors({ common: RESTRICTED_ACCOUNT_MESSAGE, support: true });
+        return;
       }
 
       exitGuestMode();
@@ -157,6 +176,17 @@ function LoginPageContent() {
         {errors.common ? (
           <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
             {errors.common}
+            {errors.support ? (
+              <>
+                {" "}
+                <a
+                  href={`mailto:${COMPANY.email}`}
+                  className="font-semibold underline underline-offset-4"
+                >
+                  {COMPANY.email}
+                </a>
+              </>
+            ) : null}
           </p>
         ) : null}
 

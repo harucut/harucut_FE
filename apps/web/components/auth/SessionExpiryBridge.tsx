@@ -7,25 +7,8 @@ import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { isProtectedPath } from "@/lib/protectedPaths";
 
-/**
- * 액세스 토큰 만료 후 재발급까지 실패(하드 만료)했을 때 다시 로그인하도록 안내한다.
- * 보호 경로에 있고 게스트 체험 모드가 아닐 때만 안내해, 게스트/공개 화면 사용을 방해하지 않는다.
- *
- * **말없이 화면을 갈아치우지 않는다 — 이유를 말하고 이동은 사용자가 고른다.**
- *
- * 로그인은 문서를 새로 받는다(`app/login/page.tsx` 의 `window.location.href`). 그래서 로그인
- * 화면으로 넘어가는 순간 메모리에만 있던 것이 통째로 사라진다 — 촬영한 8장(`lib/shootSessionStore.ts`
- * 는 비영속 zustand 다), 꾸미던 프레임, 쓰다 만 폼. 예전에는 그것을 `router.replace` 로 말없이
- * 했다. 사용자는 촬영 도중 이유 없이 로그인 폼을 만났고, `replace` 라 돌아갈 히스토리 항목까지
- * 없었다. 프로그램적 이동이라 `useUnsavedWorkGuard` 의 이탈 경고도 걸리지 않는다.
- *
- * 지금은 안내를 띄우고 두 갈래를 준다. "다시 로그인하기" 는 오버레이가 `router.push` 로 보내므로
- * (`components/guest/GuestTrialOverlay.tsx`), 마음이 바뀌면 뒤로 가기로 하던 화면에 돌아올 수
- * 있다 — 같은 문서 안의 이동이라 그때까지는 세션이 메모리에 그대로 있다.
- *
- * 찍은 사진을 **로그인 뒤까지 살려 오는 것**은 아직 없다. 그것은 디스크 보관소와 복귀 후
- * 복원 지점이 함께 있어야 하는 일이라 이 파일 밖이다. 여기서 하는 것은 하나다 —
- * 사라진다는 사실을 말하고, 언제 잃을지를 사용자가 정하게 한다.
+/** 재발급까지 실패하면 현재 작업을 지키며 사용자가 재로그인 시점을 고르게 한다.
+ * 촬영 원본은 shootSessionPersistence가 복원한다. 보관 실패는 촬영 화면에서 별도로 알린다.
  */
 export function SessionExpiryBridge() {
   const pathname = usePathname();
@@ -81,7 +64,7 @@ export function SessionExpiryBridge() {
         eyebrow: "NOTICE",
         icon: "lock",
         message:
-          "다시 로그인해야 저장하거나 불러올 수 있어요. 로그인 화면으로 가면 이 화면에서 하던 작업은 남지 않아요.",
+          "다시 로그인해야 저장하거나 불러올 수 있어요. 촬영 사진은 이 기기에 임시 보관되지만, 저장소를 사용할 수 없거나 창을 닫으면 작업을 잃을 수 있어요.",
         title: "로그인이 풀렸어요",
       });
     });

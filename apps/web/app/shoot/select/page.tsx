@@ -52,6 +52,8 @@ export default function ShootSelectPage() {
     }
   }, [frameId, router, shots.length, sourceHref]);
 
+  useEffect(() => { router.prefetch("/shoot/result"); }, [router, selectedIndexes]);
+
   // 잠금은 내용이 아니라 "꾸민 프레임인가"로 가른다. 서버 합성은 remoteFrameId 만 보고
   // 프레임에 저장된 배경을 쓰며 보낸 색은 버린다(lib/fourcutCompose.ts 의 usesStoredBackground).
   // 내용을 못 읽었다고 고르기를 열어 주면, 고른 색은 저장될 때 조용히 사라진다.

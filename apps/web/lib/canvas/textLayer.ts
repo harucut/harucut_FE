@@ -1,5 +1,7 @@
 "use client";
 
+import { canvasToBlob } from "@/lib/canvas/toBlob";
+
 /**
  * 프레임에 얹은 글자(TEXT)를 그리는 규칙 한 벌.
  *
@@ -107,11 +109,5 @@ export async function bakeTextLayerPng(component: {
 
   drawTextComponent(ctx, component.source, width, component.styleJson);
 
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      // 투명도를 살려야 하므로 PNG 다(JPEG 은 알파가 없어 배경이 검게 찍힌다).
-      if (!blob) return reject(new Error("text layer blob create failed"));
-      resolve(blob);
-    }, "image/png");
-  });
+  return canvasToBlob(canvas); // PNG: 글자 레이어의 투명도를 보존한다.
 }

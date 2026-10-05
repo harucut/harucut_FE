@@ -5,6 +5,7 @@ import type { NextConfig } from "next";
 // 필요하므로 별도 과제로 미룬다. 대신 클릭재킹/스니핑/전송보안 등 깨질 위험 없는 헤더만 적용한다.
 // 촬영(getUserMedia)에 카메라가 필요하므로 Permissions-Policy는 camera=(self)로 허용한다.
 const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy", value: "object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -30,7 +31,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
       // public/ 의 정적 자산에는 캐시 정책이 없어 매 방문마다 다시 받아왔다.
-      // 스티커 PNG 78장·히어로 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
+      // 스티커 PNG 39장·OG 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
       // 영구 immutable 은 못 주지만, 하루 캐시 + 하루 stale-while-revalidate 로
       // 재방문의 왕복을 없앤다(바꾸면 최대 하루 뒤 반영된다).
       {
@@ -44,8 +45,9 @@ const nextConfig: NextConfig = {
       },
       {
         // 소셜 로고 PNG 세 개가 여기 있었다. 이제 인라인 SVG 라 공개 파일이 아니다.
-        // hero-image.webp(450×600)도 빠졌다 — 데모 컷을 2배 원본(.png)에서 굽는다.
-        source: "/:file(hero-image.png|og-image.png|shutter.mp3)",
+        // 히어로 이미지(.webp·.png)도 빠졌다 — .png 는 데모 컷을 굽는 원본이라 공개하지 않고
+        // assets-src/ 에 둔다.
+        source: "/:file(og-image.png|shutter.mp3)",
         headers: [
           {
             key: "Cache-Control",

@@ -37,7 +37,7 @@ const mockRemovePhotoAsset = jest.fn();
 const mockStoreState = {
   tab: "PHOTO" as "PHOTO" | "STICKER" | "TEXT",
   setTab: jest.fn(),
-  assets: { photos: [] as Photo[], stickers: [] as Photo[] },
+  assets: { photos: [] as Photo[] },
   addPhotoAssets: (...args: unknown[]) => mockAddPhotoAssets(...args),
   addComponentFromAsset: jest.fn(),
   removePhotoAsset: (...args: unknown[]) => mockRemovePhotoAsset(...args),
@@ -70,7 +70,7 @@ function jpeg(name: string) {
 }
 
 function renderPanel(photos: Photo[] = []) {
-  mockStoreState.assets = { photos, stickers: [] };
+  mockStoreState.assets = { photos };
   const { container } = render(<AssetPanel />);
   return container;
 }

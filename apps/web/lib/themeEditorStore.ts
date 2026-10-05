@@ -3,7 +3,6 @@
 import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import { STICKERS } from "@/constants/stickers.generated";
 import { removeImageBackground } from "@/lib/backgroundRemoval";
 import { needsUpload } from "@/lib/canvas/componentSource";
 import { bakeTextLayerPng } from "@/lib/canvas/textLayer";
@@ -37,6 +36,7 @@ function normalizeZ(components: EditorComponent[]): EditorComponent[] {
 async function readImageSize(src: string): Promise<{ w: number; h: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () =>
       resolve({
         w: img.naturalWidth || img.width,
@@ -141,7 +141,6 @@ type State = {
 
   assets: {
     photos: Asset[];
-    stickers: Asset[];
   };
 
   components: EditorComponent[];
@@ -248,7 +247,6 @@ function resetEditorState(get: () => State) {
     cellCutouts: [false, false, false, false],
     assets: {
       photos: [],
-      stickers: state.assets.stickers,
     },
     background: {
       type: "COLOR" as const,
@@ -264,7 +262,6 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   assets: {
     photos: [],
-    stickers: STICKERS,
   },
 
   components: [],
@@ -923,7 +920,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   // 저장된 JSON을 에디터 상태로 복원
   importJson: (data) => {
-    set((s) => {
+    set(() => {
       const mapped: EditorComponent[] = data.components.map((c) => ({
         ...c,
         scale: c.scale ?? 1,
@@ -958,7 +955,6 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         pendingBackgroundFile: null,
         assets: {
           photos: [],
-          stickers: s.assets.stickers,
         },
       };
     });
@@ -967,7 +963,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   // localStorage WIP 초안을 에디터 상태로 복원한다. dataURL 사진은 File로 되살려
   // 저장 시 finalizeAssetsForSave가 S3에 올릴 수 있게 한다.
   hydrateDraft: (draft) => {
-    set((s) => {
+    set(() => {
       const photoSrcs = Array.from(
         new Set(
           draft.components
@@ -1018,7 +1014,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
             : normalizeHexColor(draft.backgroundColor),
         pendingBackgroundFile,
         cellCutouts: [0, 1, 2, 3].map((i) => Boolean(draft.cellCutouts?.[i])),
-        assets: { photos, stickers: s.assets.stickers },
+        assets: { photos },
       };
     });
   },

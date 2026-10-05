@@ -40,3 +40,10 @@ export function readUserStatus(body: unknown): string | null {
 export function isUnusableUserStatus(userStatus: string | null): boolean {
   return userStatus !== null && UNUSABLE_USER_STATUSES.has(userStatus);
 }
+
+/**
+ * 차단(BLOCKED)·탈퇴(DELETED) 계정에게 하는 말. 이메일 로그인과 소셜 콜백이 같이 쓴다.
+ * 탈퇴요청(DELETED_REQUESTED)은 여기 오지 않는다 — 복구 절차가 따로 있다.
+ */
+export const RESTRICTED_ACCOUNT_MESSAGE =
+  "이용이 제한된 계정이에요. 고객센터로 문의해 주세요.";

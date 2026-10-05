@@ -66,7 +66,7 @@ web
 ## Evidence on Hand
 
 - 실제 제품 카피와 흐름이 코드에 있다: 랜딩 3단계(`촬영하기 / 꾸미기 / 기록하기`), features 3축, FAQ(`constants/faq.ts`), 요금제표와 Enterprise 티저(`constants/plans.ts`), 약관·개인정보(`packages/shared/src/legal.ts`).
-- 데모 테마(`constants/demoTheme.ts`)와 히어로 이미지(`public/hero-image.png`)가 있다.
+- 데모 테마(`constants/demoTheme.ts`)와 데모 사진 넉 장(`constants/demoPhotos.ts`, 원본은 `assets-src/hero-image.png`)이 있다.
 - 로컬 백엔드를 띄워 실측한 API 계약이 `docs/`와 `BACKEND-ISSUES.md`에 있다.
 - **없는 것**: 실제 사용자 후기, 사용량·다운로드 수치, 언론 언급, 도입 행사 사례, Enterprise 가격. 지어내면 안 된다.
 

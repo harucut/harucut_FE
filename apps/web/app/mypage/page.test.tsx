@@ -7,7 +7,7 @@
  * 등급이 아예 안 온 것("아직 모른다")과 이름만 모르는 것("서버는 줬는데 우리가 모른다")은
  * 다른 상태라 문구도 갈라야 한다.
  */
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MyPage from "@/app/mypage/page";
 import type { UserInfo } from "@/lib/api-types";
 
@@ -108,6 +108,18 @@ describe("마이페이지 요금제 표시", () => {
 });
 
 describe("등급 이름을 못 읽어도 화면은 뜬다", () => {
+  it("회원 탈퇴는 취소할 수 있는 확인창을 먼저 연다", async () => {
+    await renderWithPlanTier("BASIC");
+    const trigger = screen.getByRole("button", { name: "회원 탈퇴" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "회원 탈퇴를 신청할까요?" });
+    expect(dialog).toHaveTextContent("7일이 지나면 사진과 프레임이 모두 삭제돼요.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "취소" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it("모르는 등급이어도 화면이 오류로 떨어지지 않는다", async () => {
     await renderWithPlanTier("STUDIO");
 

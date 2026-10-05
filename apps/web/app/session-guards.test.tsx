@@ -32,7 +32,7 @@ const themeSessionState = {
 };
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: mockReplace, push: mockPush }),
+  useRouter: () => ({ replace: mockReplace, push: mockPush, prefetch: jest.fn() }),
 }));
 
 jest.mock("@/components/layout/PageHeader", () => ({

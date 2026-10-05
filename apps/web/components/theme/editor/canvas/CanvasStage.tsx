@@ -132,7 +132,7 @@ export function CanvasStage() {
 
   // touch-none: 스티커를 끌 때 페이지가 같이 스크롤되지 않게. 캔버스 밖을 잡으면 그대로 스크롤된다.
   return (
-    <div ref={containerRef} className="w-full touch-none">
+    <div ref={containerRef} className="w-full">
       <div className="flex justify-center">
         {ready ? (
         <Stage
@@ -141,7 +141,7 @@ export function CanvasStage() {
           height={viewH}
           scaleX={scale}
           scaleY={scale}
-          className="block bg-transparent"
+          className="block touch-none bg-transparent"
           onMouseDown={(e) => {
             if (e.target === e.target.getStage()) setActive(null);
           }}
@@ -149,7 +149,6 @@ export function CanvasStage() {
             if (e.target === e.target.getStage()) setActive(null);
           }}
         >
-          {/* 1) 아래: 프레임 배경 + 슬롯(구멍 느낌) */}
           {/* 1) 아래: 프레임 배경 + 슬롯(구멍 느낌) */}
           <Layer listening={false}>
             <Rect
@@ -221,6 +220,7 @@ export function CanvasStage() {
               <EditableNode
                 key={c.id}
                 c={c}
+                bounds={{ width: frameW, height: frameH }}
                 isActive={c.id === activeId}
                 onSelect={() => setActive(c.id)}
                 onCommit={(patch) => update(c.id, patch)}
@@ -228,22 +228,17 @@ export function CanvasStage() {
               />
             ))}
 
-            {/*
-              핸들 크기는 스테이지 좌표계다(Konva Transformer 는 부모 스케일을 보정하지 않는다 —
-              lib/shapes/Transformer.js update()). 이 스테이지는 2000×6000 을 폰에서 0.075 배로
-              그리므로 기본값 10 은 화면에서 0.75px 이 돼 손가락은커녕 마우스로도 잡을 수 없었다.
-              화면 픽셀로 24px(터치)·2px 테두리가 되게 스케일로 나눈다.
-            */}
+            {/* Konva Transformer는 절대 좌표로 그리므로 핸들 크기는 화면 픽셀이다. */}
             <Transformer
               ref={trRef}
-              anchorSize={24 / scale}
-              anchorCornerRadius={12 / scale}
+              anchorSize={24}
+              anchorCornerRadius={12}
               anchorStroke="#1ED760"
-              anchorStrokeWidth={2 / scale}
+              anchorStrokeWidth={2}
               anchorFill="#06140A"
               borderStroke="#1ED760"
-              borderStrokeWidth={2 / scale}
-              rotateAnchorOffset={40 / scale}
+              borderStrokeWidth={2}
+              rotateAnchorOffset={40}
               ignoreStroke
               rotateEnabled
               flipEnabled={false}

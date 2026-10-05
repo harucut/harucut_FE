@@ -38,7 +38,9 @@ export function getSetCookieHeaders(headers: Headers): string[] {
 
 type RequestLike = Pick<Request, "headers" | "url">;
 
-function getRequestUrl(req: RequestLike) {
+// 브라우저가 실제로 부른 주소. 자체 호스팅(next dev·start)의 route 는 req.url 이 Host 와
+// 무관하게 리슨 주소(기본 http://localhost:<port>)라 헤더로 되살린다. 프록시의 교차 사이트 판정도 쓴다.
+export function getRequestUrl(req: RequestLike) {
   const url = new URL(req.url);
   const forwardedHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const forwardedProto = req.headers.get("x-forwarded-proto");

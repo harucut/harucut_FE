@@ -24,8 +24,8 @@
 웹 로그인은 백엔드 OAuth 엔드포인트로 **전체 페이지 이동**한다.
 
 ```ts
-// apps/web/lib/authLogin.ts:9-11, :23
-export function socialAuthorizeUrl(provider: SocialProvider) {
+// apps/web/lib/authLogin.ts:10-12, :24
+function socialAuthorizeUrl(provider: SocialProvider) {
   return `${backendBase}/oauth2/authorization/${provider}`;
 }
 // startSocialLogin() 안에서
