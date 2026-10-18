@@ -21,10 +21,10 @@ import {
   buildDefaultDisplayName,
   buildDownloadFilename,
   sanitizeDisplayName,
-  FOURCUT_OUTPUT_EXTENSION,
+  getImageExtension,
   type GeneratedFourcutAsset,
 } from "@/lib/fourcutOutput";
-import { describeComposeFailure } from "@/lib/fourcutCompose";
+import { describeComposeFailure, SystemFrameMissingError } from "@/lib/fourcutCompose";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
@@ -356,9 +356,9 @@ export default function ShootResultPage() {
   /*
     완성본을 화면에 띄울 주소. 못 불러오면 null 로 떨어져 아래 미리보기로 되돌아간다.
 
-    회원 경로의 주소는 만료되는 조회 URL 이고(lib/fourcutProcessing.ts), 비회원 경로는
-    메모리 blob 이라 새로고침 한 번에 죽는다. 둘 다 빈 사각형을 남기느니 원본 미리보기라도
-    보여 주는 편이 낫다.
+    계정에 보관한 결과는 만료되는 조회 URL 이고(lib/fourcutProcessing.ts), 기기 합성 결과는
+    메모리 blob 이라 새로고침하면 원본으로 다시 만든다. 주소가 열리지 않으면 빈 사각형
+    대신 원본 미리보기를 보여 준다.
   */
   const resultImageSrc = isResultImageBroken
     ? null
@@ -417,6 +417,49 @@ export default function ShootResultPage() {
     */
     const imageGenerationKey = `${runKey}#${composeKey}:image`;
 
+    // 기본 프레임이 운영에 없어도 원본을 버리지 않고 기기에 저장할 수 있게 한다.
+    // localBlob이 있으면 계정 기록이 아니라는 사실을 표시하고 서버 이름/공유 API를 부르지 않는다.
+    async function prepareLocalOutput() {
+      const blob = await composeFrameImage({
+        layout: currentLayout,
+        borderColor: effectiveBorderColor,
+        sources: imageSources,
+        outputFilter,
+        theme: themeData,
+        canvas: canvasRef.current ?? undefined,
+        mimeType: "image/jpeg",
+        quality: 0.92,
+      });
+
+      // iPhone Safari는 blob 링크의 확인창을 띄워도 다운로드 프로세스가
+      // 바이트를 받지 못할 수 있다. 클릭 전에 파일 자체를 담은 URL을 준비한다.
+      // 미리보기 Blob URL의 수명과 무관하며 서버로 사진을 보내지 않는다.
+      const downloadUrl = await blobToDataUrl(blob);
+
+      if (cancelled) return;
+
+      const objectUrl = URL.createObjectURL(blob);
+      if (cancelled) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+
+      if (guestImageUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(guestImageUrlRef.current);
+      }
+
+      guestImageUrlRef.current = objectUrl;
+      settled = true;
+      setImageResult({
+        mediaId: -1,
+        objectUrl,
+        downloadUrl,
+        displayName: defaultDisplayName,
+        localBlob: blob,
+      });
+      setImageState("done");
+    }
+
     async function prepareOutputs() {
       if (imageResult) return;
       if (imageGenerationKeyRef.current === imageGenerationKey) return;
@@ -430,45 +473,7 @@ export default function ShootResultPage() {
 
       try {
         if (guestMode) {
-          // 비회원은 보관함을 쓸 수 없어서, 브라우저가 그린 그림이 곧 결과물이다.
-          const blob = await composeFrameImage({
-            layout: currentLayout,
-            borderColor: effectiveBorderColor,
-            sources: imageSources,
-            outputFilter,
-            theme: themeData,
-            canvas: canvasRef.current ?? undefined,
-            mimeType: "image/jpeg",
-            quality: 0.92,
-          });
-
-          // iPhone Safari는 blob 링크의 확인창을 띄워도 다운로드 프로세스가
-          // 바이트를 받지 못할 수 있다. 클릭 전에 파일 자체를 담은 URL을 준비한다.
-          // 미리보기 Blob URL의 수명과 무관하며 서버로 사진을 보내지 않는다.
-          const downloadUrl = await blobToDataUrl(blob);
-
-          if (cancelled) return;
-
-          const objectUrl = URL.createObjectURL(blob);
-          if (cancelled) {
-            URL.revokeObjectURL(objectUrl);
-            return;
-          }
-
-          if (guestImageUrlRef.current?.startsWith("blob:")) {
-            URL.revokeObjectURL(guestImageUrlRef.current);
-          }
-
-          guestImageUrlRef.current = objectUrl;
-          settled = true;
-          setImageResult({
-            mediaId: -1,
-            objectUrl,
-            downloadUrl,
-            displayName,
-            localBlob: blob,
-          });
-          setImageState("done");
+          await prepareLocalOutput();
           return;
         }
 
@@ -570,6 +575,16 @@ export default function ShootResultPage() {
         releaseComposeWait();
         if (cancelled) return;
 
+        if (error instanceof SystemFrameMissingError && remoteFrameId == null) {
+          try {
+            await prepareLocalOutput();
+            return;
+          } catch (localError) {
+            error = localError;
+          }
+          if (cancelled) return;
+        }
+
         // 실패 사유를 버리지 않는다. 프레임을 바꾸면 되는 실패인지, 기다리면 되는 실패인지
         // 사용자가 알아야 한다(lib/fourcutCompose.ts describeComposeFailure).
         const failure = describeComposeFailure(error);
@@ -635,7 +650,7 @@ export default function ShootResultPage() {
     헛뜬다. 접수 여부를 화면이 알 수 있는 상태값이 없고, 같은 흐름의 앞 세 단계가 이미
     shots.length > 0 만 보므로(app/shoot/capture·select·upload) 그쪽에 맞춘다.
   */
-  useUnsavedWorkGuard(shots.length > 0 && (guestMode || !imageResult));
+  useUnsavedWorkGuard(shots.length > 0 && (!imageResult || Boolean(imageResult.localBlob)));
 
   if (!frameId || !layout) return null;
 
@@ -665,7 +680,7 @@ export default function ShootResultPage() {
         return;
       }
 
-      if (guestMode) {
+      if (imageResult.localBlob) {
         setImageResult({ ...imageResult, displayName: nextName });
         setImageNameDraft(nextName);
         return;
@@ -721,9 +736,8 @@ export default function ShootResultPage() {
 
     setIsDownloadingImage(true);
     try {
-      if (guestMode) {
+      if (imageResult.localBlob) {
         const blob = imageResult.localBlob;
-        if (!blob) throw new Error("체험 결과를 다시 만들어 주세요.");
         // 앱 셸 안에서는 네이티브가 사진첩에 넣는다 — 끝날 때까지 기다려야 실패를 잡는다.
         await downloadBlob(
           blob,
@@ -735,7 +749,7 @@ export default function ShootResultPage() {
       const url = await getMediaDownloadUrl(imageResult.mediaId);
       await downloadFromUrl(
         url,
-        buildDownloadFilename(imageResult.displayName, FOURCUT_OUTPUT_EXTENSION),
+        buildDownloadFilename(imageResult.displayName, getImageExtension(url) ?? imageResult.extension ?? getImageExtension(imageResult.displayName) ?? "jpg"),
       );
     } catch (error) {
       console.error(error);
@@ -819,7 +833,7 @@ export default function ShootResultPage() {
   const handleShareImage = async () => {
     if (!imageResult || isSharingImage) return;
 
-    if (guestMode) return;
+    if (imageResult.localBlob) return;
 
     setIsSharingImage(true);
     try {
@@ -865,7 +879,9 @@ export default function ShootResultPage() {
           description={
             guestMode
               ? "이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요."
-              : "완성된 네 컷을 저장하거나 링크로 공유해 보세요."
+              : imageResult?.localBlob
+                ? "완성된 네 컷을 지금 기기에 내려받아 주세요."
+                : "완성된 네 컷을 저장하거나 링크로 공유해 보세요."
           }
         />
 
@@ -968,11 +984,17 @@ export default function ShootResultPage() {
           </button>
         ) : null}
 
+        {!guestMode && imageResult?.localBlob ? (
+          <p role="status" className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4 text-sm leading-relaxed text-(--hc-text)">
+            지금은 이 프레임의 결과를 계정 기록에 보관할 수 없어요. 사진은 완성됐으니 아래에서 기기에 내려받아 주세요. 링크 공유는 계정에 보관된 사진에서 사용할 수 있어요.
+          </p>
+        ) : null}
+
         {imageResult ? (
           <GeneratedAssetDownloadCard
             title="이미지 다운로드"
             description={
-              guestMode
+              imageResult.localBlob
                 ? "다운로드한 이미지는 파일 앱의 다운로드 폴더에서 찾을 수 있어요."
                 : "기록으로 저장될 파일 이름을 수정하고 이미지를 내려받을 수 있어요."
             }
@@ -981,8 +1003,8 @@ export default function ShootResultPage() {
             onChangeName={setImageNameDraft}
             onSaveName={handleSaveImageName}
             onDownload={handleDownloadImage}
-            onShare={guestMode ? undefined : handleShareImage}
-            localDownload={guestMode && imageResult.localBlob ? {
+            onShare={imageResult.localBlob ? undefined : handleShareImage}
+            localDownload={imageResult.localBlob ? {
               href: imageResult.downloadUrl ?? imageResult.objectUrl,
               filename: buildDownloadFilename(imageResult.displayName, imageResult.localBlob.type === "image/jpeg" ? "jpg" : "png"),
             } : undefined}

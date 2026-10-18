@@ -427,6 +427,7 @@ export function GuestTrialBridge() {
           frameId: entry.frameId,
           remoteFrameId: entry.remoteFrameId,
           displayName: entry.displayName,
+          initialDisplayName: entry.displayName,
           idempotencyKey,
           // 비회원 때 고른 배경색 그대로 다시 그린다 — 빼면 서버가 프레임에 저장된
           // 배경으로 그려서, 방금 내려받아 본 그림과 색이 갈린다.

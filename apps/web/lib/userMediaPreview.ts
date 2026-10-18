@@ -41,9 +41,8 @@ function isMachineName(name: string) {
 /**
  * 기록이 만들어진 날짜. 서버가 안 주면 null.
  *
- * 서버의 createdAt 은 오프셋 없는 UTC 다("2026-08-14T18:00:00"). `new Date()` 에 그대로
- * 넣으면 브라우저 로컬 시각으로 읽혀서, 한국에서는 하루 어긋난다 — 같은 화면의 월·일
- * 그룹(기록 목록)과 제목이 다른 날짜를 말하게 된다. 다른 기록 코드와 같은 파서를 쓴다.
+ * userMediaApi가 운영의 오프셋 없는 KST를 +09:00로 정규화한다. 제목과 월·일 그룹은
+ * 동일한 파서를 써서 같은 날짜를 표시한다. 명시된 UTC/오프셋은 그대로 해석한다.
  */
 export function getUserMediaDate(item: UserMedia): Date | null {
   return parseServerDateTime(item.createdAt);

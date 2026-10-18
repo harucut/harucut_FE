@@ -70,7 +70,7 @@ const FRAMES = [
   })),
 ];
 
-// createdAt은 서버와 같은 "오프셋 없는 UTC" 형식으로 둔다(parseServerDateTime 경로를 그대로 태운다).
+// 운영 미디어는 오프셋 없는 KST를 반환한다. userMediaApi의 정규화 경로를 태운다.
 const MEDIA = [
   {
     mediaId: 9001,

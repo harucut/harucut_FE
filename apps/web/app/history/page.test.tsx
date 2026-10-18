@@ -384,45 +384,9 @@ describe("기록 화면의 공유 실패 안내", () => {
   });
 });
 
-/*
-  기록이 없을 때의 보관 기간 안내.
-
-  이 문구는 **사용자 등급을 확인했을 때만** 할 수 있는 말이다. 서버가 등급을 안 줬거나
-  우리가 모르는 등급(쿠폰으로 나가는 것·나중에 붙는 것)을 BASIC 으로 떨어뜨려 놓고
-  "최근 3일 기록만 보여요" 라고 적으면, 정작 3개월·무제한인 사람에게 자기 기록이 이미
-  사라졌다고 말하게 된다. 마이페이지가 등급 이름에 거는 규칙과 같다
-  (app/mypage/page.test.tsx) — 확인된 등급만 말하고, 모르면 아무 말도 하지 않는다.
-*/
-describe("기록이 없을 때의 보관 기간 안내", () => {
-  it("확인된 등급이면 그 등급의 보관 기간을 안내한다", async () => {
-    mockGetMyUserInfo.mockResolvedValue({ planTier: "PLUS" });
-
-    await renderEmptyHistory();
-
-    expect(screen.getByText(/최근 3개월 기록만 보여요/)).toBeInTheDocument();
-  });
-
-  it("등급이 오지 않으면 기간을 안내하지 않는다", async () => {
-    mockGetMyUserInfo.mockResolvedValue({});
-
-    await renderEmptyHistory();
-
-    expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
-  });
-
-  it("우리가 모르는 등급이면 기간을 안내하지 않는다", async () => {
-    mockGetMyUserInfo.mockResolvedValue({ planTier: "ENTERPRISE" });
-
-    await renderEmptyHistory();
-
-    expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
-  });
-
-  it("등급 조회가 실패해도 목록은 그대로 그리고 기간만 뺀다", async () => {
-    mockGetMyUserInfo.mockRejectedValue(new Error("boom"));
-
-    await renderEmptyHistory();
-
-    expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
-  });
+// 사용량 API는 프레임 개수만 준다. 빈 목록을 보관 기간 만료라고 추측하지 않는다.
+it("빈 기록에서 확인되지 않은 보관 기간을 단정하지 않는다", async () => {
+  await renderEmptyHistory();
+  expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
+  expect(mockGetMyUserInfo).not.toHaveBeenCalled();
 });
