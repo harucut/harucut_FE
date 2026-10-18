@@ -18,11 +18,13 @@ import {
   PRICING_SUBTITLE,
   PRICING_SUBTITLE_AUTHED,
   toPlanId,
+  getPlanDisplayName,
   type Plan,
   type PlanId,
 } from "@/constants/plans";
 import { PRICING_FAQ } from "@/constants/faq";
-import { getMyUserInfo } from "@/lib/userApi";
+import { getSubscriptionUsage } from "@/lib/userApi";
+import type { SubscriptionUsage } from "@/lib/api-types";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
 
 // 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
@@ -171,19 +173,24 @@ function PlanCard({
 export function PricingView({ authed = false }: { authed?: boolean }) {
   const [open, setOpen] = useState(0);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId | null>(null);
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const [usageFailed, setUsageFailed] = useState(false);
 
   // 현재 플랜은 로그인 상태에서만 조회한다. 비회원까지 호출하면 clientApi가
   // 401 → 재발급 시도까지 태우게 되므로, 서버가 넘겨준 authed로 먼저 걸러낸다.
-  // 실패하면 조용히 넘어간다 — 배지가 안 붙을 뿐 가격표는 그대로 보여야 한다.
+  // 조회 실패는 현재 한도 영역에 표시하고 예정 가격표는 계속 보여 준다.
   useEffect(() => {
     if (!authed) return;
     let cancelled = false;
 
-    getMyUserInfo()
-      .then((user) => {
-        if (!cancelled) setCurrentPlanId(toPlanId(user.planTier));
+    getSubscriptionUsage()
+      .then((current) => {
+        if (!cancelled) {
+          setUsage(current);
+          setCurrentPlanId(toPlanId(current.planTier));
+        }
       })
-      .catch(() => {});
+      .catch(() => { if (!cancelled) setUsageFailed(true); });
 
     return () => {
       cancelled = true;
@@ -214,6 +221,26 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </p>
         </header>
 
+        {authed ? (
+          <section aria-label="현재 프레임 보관 한도" className="hc-surface-card rounded-[20px] border p-6">
+            <h2 className="text-base font-bold">현재 내 프레임 보관</h2>
+            <p role="status" className="mt-2 text-sm leading-relaxed text-(--hc-muted)">
+              {usage
+                ? `${getPlanDisplayName(usage.planTier) ?? usage.planTier} · ${usage.frameRetentionUsedCount}개 보관 / ${usage.frameRetentionUnlimited || usage.frameRetentionLimit === -1 || usage.frameRetentionRemainingCount === -1 ? "무제한" : `${usage.frameRetentionLimit}개까지`}`
+                : usageFailed ? "현재 한도를 불러오지 못했어요. 마이페이지에서 다시 확인해 주세요." : "현재 한도를 확인하고 있어요."}
+            </p>
+          </section>
+        ) : null}
+
+        {!PAYMENTS_ENABLED ? (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-lg font-bold">개인 요금제 · 도입 예정 기준</h2>
+            <p className="text-sm leading-relaxed text-(--hc-muted)">
+              아래 개수와 보관 기간은 예정 기준이에요. 현재 프레임 보관 한도는 {authed ? "위의 계정 조회 결과" : "로그인 후 마이페이지"}에서 확인할 수 있어요.
+            </p>
+          </div>
+        ) : null}
+
         {/* 개인 플랜 카드 — <md 1열, md+ 2열. 세 번째 선택지는 아래 엔터프라이즈 섹션이다. */}
         <section className="grid items-stretch gap-4 md:grid-cols-2">
           {PLANS.map((plan) => (
@@ -221,7 +248,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               key={plan.id}
               plan={plan}
               authed={authed}
-              current={currentPlanId === plan.id}
+              current={PAYMENTS_ENABLED && currentPlanId === plan.id}
             />
           ))}
         </section>
@@ -231,7 +258,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           그러면 이 사람만 어느 카드에도 "현재 플랜" 배지가 안 붙어 자기 등급이 사라진 것처럼
           보인다. 카드를 되살리는 대신 한 줄로 말해 준다.
         */}
-        {currentPlanId === "pro" ? (
+        {PAYMENTS_ENABLED && currentPlanId === "pro" ? (
           <p className="-mt-6 text-[13px] leading-[1.6] text-(--hc-muted)">
             지금 <b className="font-bold text-(--hc-text)">프로</b> 를 이용
             중이에요. 새로 가입할 수는 없는 플랜이지만, 쓰던 혜택(커스텀 프레임 무제한·보관
@@ -278,9 +305,9 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         {/* 전체 스펙 비교 — 기능(행) × 플랜(열) 매트릭스 */}
         <section className="flex flex-col gap-4">
           <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
-            전체 스펙 비교
+            {PAYMENTS_ENABLED ? "전체 스펙 비교" : "예정 요금제 비교"}
           </h2>
-          <PlanComparisonTable currentPlanId={currentPlanId} />
+          <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} />
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
             가격은 부가세 포함이에요. {PRICING_BILLING_PENDING}
             <br />
@@ -336,8 +363,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               비회원도 촬영은 무료예요
             </h2>
             <p className="max-w-105 text-[14px] leading-[1.6] text-(--hc-muted)">
-              먼저 무료로 찍어보고, 저장·보관이 필요해지면 그때 플랜을 올리면
-              돼요.
+              가입 없이 사진을 만들고 기기에 내려받을 수 있어요. 계정 보관이 필요하면 로그인해 주세요.
             </p>
             {/* 이 절은 비회원 촬영 이야기다. 위 카드의 '무료로 시작하기'(가입)와 의도가 다르므로 문구도 다르다. */}
             <GuestTrialStartButton className="hc-button-primary mt-1 inline-flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold" />

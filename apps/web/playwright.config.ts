@@ -73,7 +73,7 @@ export default defineConfig({
   projects: [
     {
       name: "mobile-safari",
-      testMatch: "**/guest-download.spec.ts",
+      testMatch: ["**/guest-download.spec.ts", "**/production-qa.spec.ts"],
       use: { ...devices["iPhone 13"], browserName: "webkit" },
     },
     {

@@ -6,6 +6,7 @@
 // 거짓 표시가 앱에 그대로 남았다. 사람이 지키는 규칙 대신 한 곳에서 읽게 했다.
 //
 // 여기서 더하는 것은 화면용 문구뿐이다(카드 CTA 라벨 등).
+import { PAYMENTS_ENABLED } from "@/constants/company";
 import {
   ENTERPRISE_FACTS,
   PLAN_FACTS,
@@ -55,10 +56,12 @@ export function getPlanDisplayName(tier: string | null | undefined): string | nu
 // 요금제 페이지 헤더 카피. 로그인 후에는 "비회원" 안내가 의미 없어 문장을 바꾼다.
 export const PRICING_HEADLINE = "나에게 맞는 플랜";
 // 보정은 플랜과 무관하게 모두 되므로(서버에 등급 개념이 없다) 문구에서 뺀다.
-export const PRICING_SUBTITLE =
-  "비회원도 촬영은 무료예요. 커스텀 프레임과 보관 기간이 플랜에 따라 달라요.";
-export const PRICING_SUBTITLE_AUTHED =
-  "커스텀 프레임과 보관 기간이 플랜에 따라 달라요. 결제 기능은 준비 중이에요.";
+export const PRICING_SUBTITLE = PAYMENTS_ENABLED
+  ? "비회원도 촬영은 무료예요. 커스텀 프레임과 보관 기간이 플랜에 따라 달라요."
+  : "가입 없이 사진을 만들고 내려받을 수 있어요. 개인 유료 요금제는 준비 중이에요.";
+export const PRICING_SUBTITLE_AUTHED = PAYMENTS_ENABLED
+  ? "현재 이용 중인 플랜과 제공 한도를 확인해 주세요."
+  : "현재 계정에 적용된 한도를 확인해 주세요. 개인 유료 요금제는 준비 중이에요.";
 // 결제 미오픈 안내 — 요금제 카드 CTA·footnote가 함께 쓴다.
 export const PRICING_BILLING_PENDING = "결제 기능은 준비 중이에요.";
 // 요금제를 내릴 때의 안내(비활성화 정책).

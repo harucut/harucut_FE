@@ -17,6 +17,7 @@ import {
   type FourcutFilterId,
 } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import { buildDownloadFilename, getImageExtension } from "@/lib/fourcutOutput";
 
 export type FrameLayout = {
   totalWidth: number;
@@ -104,7 +105,8 @@ export async function downloadFromUrl(url: string, filename?: string) {
     }
 
     const blob = await res.blob();
-    await downloadBlob(blob, name);
+    const extension = getImageExtension(blob.type, url);
+    await downloadBlob(blob, extension ? buildDownloadFilename(name, extension) : name);
   } catch {
     triggerDownloadLink(url, filename);
   }

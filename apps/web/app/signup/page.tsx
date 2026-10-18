@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
@@ -74,6 +75,10 @@ function SignupPageContent() {
         form.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"][tabindex]')?.focus();
       });
     };
+    if (!activeTerms.fromServer) {
+      showErrors({ common: "가입에 필요한 약관을 불러오지 못했어요. 다시 확인해 주세요." });
+      return;
+    }
     setIsSubmitting(true);
     setErrors({});
 
@@ -191,6 +196,24 @@ function SignupPageContent() {
     }
   };
 
+  if (!activeTerms.fromServer) {
+    return (
+      <AuthPageShell title="회원가입" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
+        <div className="flex flex-col gap-4">
+          <p role="status" className="text-sm leading-relaxed text-(--hc-text)">
+            {activeTerms.status === "loading"
+              ? "가입에 필요한 약관을 확인하고 있어요."
+              : "가입에 필요한 약관을 불러오지 못해 회원가입을 잠시 이용할 수 없어요. 가입 없이도 사진을 만들고 기기에 내려받을 수 있어요."}
+          </p>
+          {activeTerms.status !== "loading" ? (
+            <button type="button" onClick={activeTerms.reload} className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold">다시 확인하기</button>
+          ) : null}
+          <GuestTrialStartButton className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-5 text-sm font-bold" />
+        </div>
+      </AuthPageShell>
+    );
+  }
+
   return (
     <AuthPageShell
       title="회원가입"
@@ -199,7 +222,7 @@ function SignupPageContent() {
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
           {/* 로그인 페이지의 대응 문구와 같은 토큰을 쓴다. 하드코딩 text-zinc-500 은 다크에서 어긋났다. */}
           <p className="mt-2 text-center text-[13px] leading-6 text-(--hc-muted)">
-            소셜 계정으로 가입하면{" "}
+            소셜 계정으로도 가입할 수 있어요.{" "}
             <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
               서비스 이용약관
             </Link>
@@ -207,7 +230,7 @@ function SignupPageContent() {
             <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
               개인정보 처리방침
             </Link>
-            에 동의하는 것으로 간주됩니다.
+            을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
           </p>
           <p className="mt-2 text-center text-[14px] text-(--hc-muted)">
             이미 계정이 있으신가요?{" "}

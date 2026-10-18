@@ -1,17 +1,29 @@
 "use client";
 
-// 서버 결과는 PNG, 기기에서 만든 체험 결과는 JPEG다.
+// 운영 서버는 JPEG, 이전 결과는 PNG일 수 있다. 파일마다 형식을 확인한다.
 export type GeneratedFourcutAsset = {
   mediaId: number;
   objectUrl: string;
   downloadUrl?: string;
   displayName: string;
-  /** 서버를 거치지 않는 기기 합성 결과. */
+  extension?: string;
+  /** 서버에 보관되지 않은 기기 합성 결과(게스트 또는 기본 프레임 복구). */
   localBlob?: Blob;
 };
 
-// 결과물 확장자. 파일명·File 생성에 공통으로 쓴다.
-export const FOURCUT_OUTPUT_EXTENSION = "png";
+/** MIME 또는 실제 파일 경로에서 형식을 읽는다. 사용자 지정 이름보다 서버 경로를 우선한다. */
+export function getImageExtension(...candidates: Array<string | null | undefined>) {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const mime = candidate.split(";")[0].trim().toLowerCase();
+    if (mime === "image/jpeg") return "jpg";
+    if (mime === "image/png") return "png";
+    if (mime === "image/webp") return "webp";
+    const extension = candidate.split(/[?#]/)[0].match(/\.(jpe?g|png|webp|gif|avif|heic)$/i)?.[1];
+    if (extension) return extension.toLowerCase() === "jpeg" ? "jpg" : extension.toLowerCase();
+  }
+  return undefined;
+}
 
 /**
  * 서버가 받아 주는 파일명 길이 상한.
@@ -98,5 +110,8 @@ export function buildDownloadFilename(
     return safeName;
   }
 
-  return `${safeName}.${normalizedExtension}`;
+  const stem = /^(jpe?g|png|webp|gif|avif|heic)$/.test(normalizedExtension)
+    ? safeName.replace(/(?:\.(?:jpe?g|png|webp|gif|avif|heic))+$/i, "")
+    : safeName;
+  return `${stem || "harucut"}.${normalizedExtension}`;
 }
