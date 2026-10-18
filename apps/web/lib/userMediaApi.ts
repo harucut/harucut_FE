@@ -5,6 +5,17 @@ import type { ApiEnvelope, UserMedia } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
 
 /**
+ * 운영 미디어의 오프셋 없는 createdAt은 KST다(2026-10-18 실제 생성 시각 대조).
+ * 이 API 경계에서만 보정한다. 다른 API의 과거 UTC 계약과 명시된 Z/+09:00는 유지한다.
+ */
+function normalizeMedia(item: UserMedia): UserMedia {
+  const value = item.createdAt?.trim();
+  return value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
+    ? { ...item, createdAt: `${value}+09:00` }
+    : item;
+}
+
+/**
  * 최근 것 몇 장만. **한 페이지만 부른다.**
  *
  * 홈은 최근 4장만 보여주는데 예전에는 `listMyMedia()` 로 보관함 전체를 순차로 긁었다
@@ -20,7 +31,7 @@ export async function listRecentMedia(limit = 4) {
   >(`/api/client/user/media?${params.toString()}`);
   const data = res.data.data;
   const list = Array.isArray(data) ? data : (data?.content ?? []);
-  return list.slice(0, limit);
+  return list.slice(0, limit).map(normalizeMedia);
 }
 
 export async function listMyMedia() {
@@ -43,8 +54,8 @@ export async function listMyMedia() {
       >
     >(`/api/client/user/media?${params.toString()}`);
     const data = res.data.data;
-    if (Array.isArray(data)) return data;
-    out.push(...(data?.content ?? []));
+    if (Array.isArray(data)) return data.map(normalizeMedia);
+    out.push(...(data?.content ?? []).map(normalizeMedia));
     const current = data?.number ?? page;
     const totalPages = data?.totalPages ?? current + 1;
     if (current + 1 >= totalPages) break;
@@ -67,7 +78,8 @@ export async function findMyMedia(mediaId: number) {
 
   const data = res.data.data;
   const list = Array.isArray(data) ? data : (data?.content ?? []);
-  return list.find((item) => item.mediaId === mediaId) ?? null;
+  const media = list.find((item) => item.mediaId === mediaId);
+  return media ? normalizeMedia(media) : null;
 }
 
 export async function getMediaDownloadUrl(mediaId: number) {
@@ -82,7 +94,7 @@ export async function updateMediaDisplayName(mediaId: number, displayName: strin
     `/api/client/user/media/${mediaId}/display-name`,
     { displayName },
   );
-  return requireData(res.data, "이름을 바꾼 사진");
+  return normalizeMedia(requireData(res.data, "이름을 바꾼 사진"));
 }
 
 /**

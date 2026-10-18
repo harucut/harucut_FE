@@ -105,6 +105,8 @@ beforeEach(() => {
       },
     ],
     fromServer: true,
+    status: "ready",
+    reload: jest.fn(),
   };
   mockSignupWithEmail.mockResolvedValue(undefined);
 });
@@ -170,15 +172,16 @@ describe("SignupPage 약관 동의 보관", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  // 서버에 없는 코드는 보내 봐야 TERMS-001 이라 애초에 보관하지 않는다.
-  it("서버가 준 약관 목록이 아니면 보관하지 않는다", async () => {
-    mockActiveTerms = { ...mockActiveTerms, fromServer: false };
-
+  it("약관이 없으면 가입을 보내지 않고 체험과 재시도를 안내한다", () => {
+    mockActiveTerms = { ...mockActiveTerms, items: [], fromServer: false, status: "unavailable" };
     render(<SignupPage />);
-    fillForm();
-    fireEvent.click(screen.getByRole("button", { name: "회원가입" }));
-
-    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "회원가입" })).toBeNull();
+    expect(screen.queryByTestId("social-login")).toBeNull();
+    expect(screen.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/shoot/start");
+    fireEvent.click(screen.getByRole("button", { name: "다시 확인하기" }));
+    expect(mockActiveTerms.reload).toHaveBeenCalledTimes(1);
+    expect(mockSignupWithEmail).not.toHaveBeenCalled();
     expect(mockSetPending).not.toHaveBeenCalled();
   });
+
 });

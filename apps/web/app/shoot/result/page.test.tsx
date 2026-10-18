@@ -4,6 +4,7 @@ import ShootResultPage from "@/app/shoot/result/page";
 import { newIdempotencyKey } from "@/lib/composeApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { SystemFrameMissingError } from "@/lib/fourcutCompose";
 import { NativeSaveError } from "@/lib/nativeBridge";
 // 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 로 펼쳐 둔 것을 가져온다.
 import { CopyFailedError } from "@/lib/share";
@@ -202,6 +203,7 @@ jest.mock("@/lib/composeApi", () => ({
 }));
 
 jest.mock("@/lib/fourcutCompose", () => ({
+  SystemFrameMissingError: jest.requireActual("@/lib/fourcutCompose").SystemFrameMissingError,
   describeComposeFailure: (...args: unknown[]) => mockDescribeComposeFailure(...args),
 }));
 
@@ -323,6 +325,36 @@ describe("ShootResultPage", () => {
     expect(call.layout.slots).toHaveLength(4);
     // 재시도가 같은 작업을 가리키도록 멱등키를 함께 보낸다.
     expect(call.idempotencyKey).toMatch(/^web-key-\d+$/);
+  });
+
+  it("운영 기본 프레임이 없으면 회원도 로컬 JPEG를 내려받고 계정 미보관 안내를 본다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new SystemFrameMissingError());
+    mockComposeFramePng.mockResolvedValueOnce(new Blob(["jpeg"], { type: "image/jpeg" }));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    render(<ShootResultPage />);
+    await screen.findByRole("button", { name: "이미지 다운로드" });
+    expect(mockUseShootSession.getState().imageResult?.localBlob?.type).toBe("image/jpeg");
+    expect(screen.getByRole("status")).toHaveTextContent("계정 기록에 보관할 수 없어요");
+    expect(screen.queryByRole("button", { name: "공유 링크 만들기" })).toBeNull();
+    expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it("권한 오류를 로컬 저장 성공으로 바꾸지 않는다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(Object.assign(new Error("forbidden"), { status: 403 }));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    render(<ShootResultPage />);
+    await screen.findByText("이미지를 준비하지 못했어요. 다시 시도해 주세요.");
+    expect(mockComposeFramePng).not.toHaveBeenCalled();
+    expect(mockUseShootSession.getState().imageResult).toBeNull();
+  });
+
+  it("회원 JPEG 다운로드는 서버 경로의 확장자를 사용한다", async () => {
+    mockGetMediaDownloadUrl.mockResolvedValueOnce("https://example.com/job-1.jpg?signature=redacted");
+    render(<ShootResultPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "이미지 다운로드" }));
+    await waitFor(() => expect(mockDownloadFromUrl).toHaveBeenCalledWith(
+      "https://example.com/job-1.jpg?signature=redacted", expect.stringMatching(/\.jpg$/),
+    ));
   });
 
   it("체험 결과는 JPEG 다운로드만 제공하고 공유·체험 결과 안내를 띄우지 않는다", async () => {

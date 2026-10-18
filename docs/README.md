@@ -123,9 +123,10 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 
 여기서 나머지가 따라 나온다.
 
-1. **비회원 결과물은 브라우저가 그린다.** `composeFramePng`(`apps/web/lib/canvas/composeFrame.ts`)
-   이 캔버스로 그린 blob 이 곧 결과물이고, 회원은 서버가 그린다 —
-   `apps/web/app/shoot/result/page.tsx` 의 `if (guestMode)` 분기가 갈림길이다.
+1. **비회원 결과물은 브라우저가 그린다.** `composeFrameImage`(`apps/web/lib/canvas/composeFrame.ts`)
+   이 캔버스로 그린 blob 이 곧 결과물이고, 회원은 서버가 그린다.
+   운영 기본 프레임이 누락된 회원 요청만 기기 합성으로 복구한다. 계정에 저장된 것으로
+   표시하지 않으며, 정확한 조건은 [backend-contract.md](./backend-contract.md)가 소유한다.
 2. **그래서 base64 조각 프로토콜이 있다.** 회원 결과물은 https URL 이라 주소만 넘기면
    네이티브가 받아 온다. 비회원 blob 은 주소가 없다. 앱 셸 안에서는 `<a download>` 가
    아무 일도 하지 않으므로, 사진첩에 넣는 유일한 길이 blob 을 base64 로 쪼개

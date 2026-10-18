@@ -59,8 +59,8 @@ export type TermsAgreementItem = {
  * 증명될 때.** 증명할 수단이 생기기 전까지 이 표는 비워 둔다. 비어 있으면 세 동의
  * 화면(가입·재동의·설정)이 전부 서버 본문을 그 자리에 펼친다.
  *
- * 정적 화면 자체는 그대로 있다 — 푸터, 가입 화면의 소셜 안내, 서버에 약관이 하나도
- * 없을 때 쓰는 `useActiveTerms` 의 대체 목록. 없앤 것은 **동의받는 자리의 대역**뿐이다.
+ * 정적 화면은 푸터와 안내 링크에서 읽을 수 있다. 가입 화면은 활성 약관을 읽지 못하면
+ * 대체 동의를 받지 않고 재시도와 가입 없는 체험을 안내한다.
  */
 const TERMS_CONTENT_HREF: Record<string, string> = {};
 
@@ -73,7 +73,7 @@ export function termsContentHref(code: string): string | null {
  * 활성 약관 목록. 인증이 필요 없어 가입 화면에서도 부를 수 있다.
  *
  * 활성 약관이 하나도 없으면 **빈 배열**이다(실패가 아니다). 아직 관리자가 약관을
- * 등록하지 않은 환경이 실제로 그렇다 — 그때는 호출부가 동의 기록을 건너뛴다.
+ * 등록하지 않은 환경이 실제로 그렇다 — 가입 화면은 이때 가입 제출을 열지 않는다.
  */
 export async function fetchActiveTerms(): Promise<ActiveTerms[]> {
   const res = await clientApi.get<ApiEnvelope<ActiveTerms[]>>(

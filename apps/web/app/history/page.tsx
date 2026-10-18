@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
@@ -38,12 +37,6 @@ import {
   listMyMedia,
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
-import {
-  PLAN_HISTORY_RETENTION_LABELS,
-  type PlanTier,
-} from "@/constants/planLimits";
-import { toPlanId, type PlanId } from "@/constants/plans";
-import { getMyUserInfo } from "@/lib/userApi";
 import type { UserMedia } from "@/lib/api-types";
 
 type ViewMode = "grid" | "calendar";
@@ -88,31 +81,6 @@ const MONTH_KO = [
   "11월",
   "12월",
 ];
-
-/** 공용 매핑이 확인한 카드 id 를 서버 등급 이름으로 되돌린다 — 보관 기간 표의 키다. */
-const PLAN_TIER_BY_ID: Record<PlanId, PlanTier> = {
-  basic: "BASIC",
-  plus: "PLUS",
-  pro: "PRO",
-};
-
-/**
- * 서버 등급을 **화면에 쓸 수 있는 등급으로만** 좁힌다. 모르는 값이면 null.
- *
- * `resolvePlanInfo` 를 쓰지 않는 이유가 여기 있다 — 그쪽은 모르는 값을 BASIC 으로
- * 떨어뜨린다. 한도 계산에서는 가장 좁은 등급을 잡는 안전한 폴백이지만, 그 값이 그대로
- * **사용자에게 하는 말**로 새면 등급을 확인하지도 못한 사람에게 "최근 3일 기록만 보여요"
- * 라고 단정하게 된다. 쿠폰으로 PRO 를 받았거나 나중에 붙는 등급을 쓰는 사람은 아직 살아
- * 있는 자기 기록을 사라진 것으로 읽는다.
- *
- * 확인 판정은 공용 매핑(`toPlanId` → packages/shared/src/plans.ts)에 맡긴다. 여기서 등급
- * 목록을 다시 적으면 등급이 늘 때 한쪽만 따라간다. 마이페이지가 등급 이름에 거는 규칙과
- * 같은 것이다(app/mypage/page.tsx 의 planDisplayName) — 확인된 등급만 말한다.
- */
-function toKnownPlanTier(tier: string | null | undefined): PlanTier | null {
-  const planId = toPlanId(tier);
-  return planId ? PLAN_TIER_BY_ID[planId] : null;
-}
 
 function getMediaExtension(item: UserMedia) {
   const candidates = [item.downloadUrl, item.s3Key];
@@ -222,11 +190,6 @@ export default function HistoryPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // 서버가 요금제 보관 기간을 넘긴 기록을 목록에서 잘라 내려주므로, "없음"과 "기간 만료"를
-  // 구분해 안내하려면 요금제를 알아야 한다. **확인된 등급이 아니면 null 이다** — 조회 실패도,
-  // 등급이 안 온 것도, 우리가 모르는 등급도 여기서는 같은 "모른다"이고 그때는 기간 안내를
-  // 통째로 생략한다(toKnownPlanTier).
-  const [planTier, setPlanTier] = useState<PlanTier | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,14 +204,6 @@ export default function HistoryPage() {
 
         if (!cancelled) {
           setItems(sortMedia(media));
-        }
-
-        // 보관 기간 안내용. 실패해도 목록 자체는 이미 받았으므로 조용히 넘어간다.
-        try {
-          const user = await getMyUserInfo();
-          if (!cancelled) setPlanTier(toKnownPlanTier(user.planTier));
-        } catch {
-          if (!cancelled) setPlanTier(null);
         }
       } catch (loadError) {
         console.error(loadError);
@@ -600,15 +555,6 @@ export default function HistoryPage() {
             <p className="text-[13px] text-(--hc-muted)">
               저장한 기록이 아직 없어요.
             </p>
-            {planTier && planTier !== "PRO" ? (
-              <p className="text-[12px] text-(--hc-muted)">
-                {PLAN_HISTORY_RETENTION_LABELS[planTier]} 기록만 보여요. 그 전에 남긴 기록은
-                지워진 게 아니라 지금 요금제에서 보이지 않는 거예요.{" "}
-                <Link href="/pricing" className="underline">
-                  요금제 보기
-                </Link>
-              </p>
-            ) : null}
             {/* 홈의 큰 카드와 같은 것을 연다 — 같은 뜻의 버튼이 화면마다 다르게
                 동작하면 안 된다(여기만 카메라로 직행했다). */}
             <button

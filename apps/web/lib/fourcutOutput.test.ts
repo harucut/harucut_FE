@@ -12,6 +12,7 @@ import {
   buildDefaultDisplayName,
   buildDownloadFilename,
   DISPLAY_NAME_MAX_LENGTH,
+  getImageExtension,
   sanitizeDisplayName,
 } from "@/lib/fourcutOutput";
 
@@ -91,5 +92,20 @@ describe("buildDownloadFilename", () => {
 
   it("이름이 비면 harucut 으로 내려받는다", () => {
     expect(buildDownloadFilename("   ", "png")).toBe("harucut.png");
+  });
+});
+
+
+describe("실제 결과 형식", () => {
+  it("사용자 이름보다 서버 원본 경로를 우선한다", () => {
+    expect(getImageExtension("uploads/job-1.jpg?sig=x", "custom.png")).toBe("jpg");
+    expect(getImageExtension("image/jpeg; charset=binary", "job.png")).toBe("jpg");
+    expect(getImageExtension("blob:preview", "https://example.com/legacy.PNG")).toBe("png");
+    expect(getImageExtension("application/octet-stream", "unknown")).toBeUndefined();
+  });
+  it("다른 이미지 확장자를 중복해서 붙이지 않는다", () => {
+    expect(buildDownloadFilename("QA.jpg", "png")).toBe("QA.png");
+    expect(buildDownloadFilename("QA.jpg.png", "jpg")).toBe("QA.jpg");
+    expect(buildDownloadFilename("여행.1일차", "jpg")).toBe("여행.1일차.jpg");
   });
 });

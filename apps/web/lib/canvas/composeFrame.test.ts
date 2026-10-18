@@ -417,3 +417,23 @@ test("JPEG 품질을 인코더에 넘기고 원본 배열과 무관하게 zIndex
   expect(log.ops.filter((op) => op.startsWith("draw:"))).toEqual(["draw:/photo.jpg", "draw:/bottom.png", "draw:/top.png"]);
   expect(theme.components[0].id).toBe("top");
 });
+
+
+test("다운로드 파일명은 응답 MIME과 일치하고 JPEG를 PNG로 표기하지 않는다", async () => {
+  const previousFetch = global.fetch;
+  const previousCreate = URL.createObjectURL;
+  const filenames: string[] = [];
+  const click = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+    filenames.push(this.download);
+  });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(["jpeg"], { type: "image/jpeg" }) });
+  URL.createObjectURL = jest.fn(() => "blob:download");
+  try {
+    await downloadFromUrl("https://example.com/result.png", "내 사진.jpg.png");
+    expect(filenames).toEqual(["내 사진.jpg"]);
+  } finally {
+    click.mockRestore();
+    global.fetch = previousFetch;
+    URL.createObjectURL = previousCreate;
+  }
+});
