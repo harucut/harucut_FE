@@ -14,12 +14,14 @@ const api = {
   revokeEntitlement: jest.fn(),
   searchWorkspaces: jest.fn(),
   searchEvents: jest.fn(),
+  verifyContractPayment: jest.fn(),
 };
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
 jest.mock("@/lib/admin/cmsApi", () => ({
   ...jest.requireActual("@/lib/admin/cmsApi"),
   searchWorkspaces: (...a: unknown[]) => api.searchWorkspaces(...a),
   searchEvents: (...a: unknown[]) => api.searchEvents(...a),
+  verifyContractPayment: (...a: unknown[]) => api.verifyContractPayment(...a),
   listInquiries: (...a: unknown[]) => api.listInquiries(...a),
   updateInquiry: (...a: unknown[]) => api.updateInquiry(...a),
   listContracts: (...a: unknown[]) => api.listContracts(...a),
@@ -321,4 +323,41 @@ it("계약을 적용하면 이용권 목록을 다시 받아 새 이용권을 �
 
   fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
   expect(await screen.findByText(/계약 Ct1/)).toBeInTheDocument();
+});
+
+// P2B-7 — 웹훅이 결제 근거 등록보다 먼저 오면 확인되지 않는다. 관리자가 다시 대조한다.
+it("확인 전인 PortOne 결제는 다시 확인하고, 맞지 않으면 무엇을 볼지 알린다", async () => {
+  const unverified = { ...CONTRACT, paymentEvidence: { kind: "PORTONE", reference: "pay_1" } };
+  api.listContracts.mockResolvedValue([unverified]);
+  api.verifyContractPayment
+    .mockRejectedValueOnce(new ApiRequestError({ status: 400, code: "GEN-002", apiMessage: "x" }))
+    .mockResolvedValueOnce({ ...unverified, paymentVerifiedAt: "2026-10-26T03:00:00Z" });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "결제 다시 확인" }));
+  expect(await screen.findByText(/결제 번호·상점·금액이 계약과 맞는지/)).toBeInTheDocument();
+  expect(api.verifyContractPayment).toHaveBeenCalledWith("Ct1", expect.any(AbortSignal));
+
+  fireEvent.click(screen.getByRole("button", { name: "결제 다시 확인" }));
+  expect(await screen.findByText("결제를 확인했어요.")).toBeInTheDocument();
+  expect(screen.getByText(/pay_1 · 결제 확인됨/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "결제 다시 확인" })).not.toBeInTheDocument();
+});
+
+it("같은 PortOne 결제 번호로 계약을 만들면(GEN-002) 이유를 알린다", async () => {
+  api.createContract.mockRejectedValue(new ApiRequestError({ status: 400, code: "GEN-002", apiMessage: "x" }));
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /계약자/, "하루컷 팬클럽");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /합성 한도/, "500");
+  fireEvent.change(within(form).getByLabelText(/종류/), { target: { value: "PORTONE" } });
+  fill(form, /참조/, "pay_1");
+  fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
+  expect(await screen.findByText(/같은 PortOne 결제 번호로 만든 계약이 이미 있는지/)).toBeInTheDocument();
 });

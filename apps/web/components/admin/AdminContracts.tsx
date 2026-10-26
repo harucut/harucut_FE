@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { getApiErrorDetails } from "@/lib/apiError";
 import { AdminSearchField } from "@/components/admin/AdminSearchField";
 import {
   EMPTY_TERMS,
@@ -20,6 +21,7 @@ import {
   changeContractStatus,
   createContract,
   listContracts,
+  verifyContractPayment,
   type Contract,
   type ContractStatus,
   type EntitlementScope,
@@ -176,9 +178,43 @@ export function AdminContracts({
       setFormOpen(false);
       setNotice({ kind: "ok", text: "계약을 초안으로 만들었어요. 「적용하기」를 누르면 이용권이 생겨요." });
     } catch (cause) {
-      setNotice({ kind: "error", text: adminErrorMessage(cause, "계약을 만들지 못했어요.") });
+      setNotice({
+        kind: "error",
+        text:
+          // 같은 PortOne 결제 번호를 다시 쓰면 400 GEN-002 — 일반 입력 오류 문구만으로는 이유를 알 수 없다.
+          getApiErrorDetails(cause).code === "GEN-002" && draft.evidenceKind === "PORTONE"
+            ? "계약을 만들지 못했어요. 같은 PortOne 결제 번호로 만든 계약이 이미 있는지 확인해 주세요."
+            : adminErrorMessage(cause, "계약을 만들지 못했어요."),
+      });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const [verifying, setVerifying] = useState<string | null>(null);
+  const verifyPayment = async (contract: Contract) => {
+    setVerifying(contract.contractId);
+    setNotice(null);
+    try {
+      const updated = await withRequestDeadline(ACTION_DEADLINE_MS, (signal) =>
+        verifyContractPayment(contract.contractId, signal),
+      );
+      setItems((prev) => (prev ?? []).map((c) => (c.contractId === updated.contractId ? updated : c)));
+      setNotice(
+        updated.paymentVerifiedAt
+          ? { kind: "ok", text: "결제를 확인했어요." }
+          : { kind: "error", text: "결제를 아직 확인하지 못했어요. 잠시 후 다시 시도해 주세요." },
+      );
+    } catch (cause) {
+      setNotice({
+        kind: "error",
+        text:
+          getApiErrorDetails(cause).code === "GEN-002"
+            ? "결제를 확인하지 못했어요. 결제 번호·상점·금액이 계약과 맞는지, PortOne 연동이 켜져 있는지 확인해 주세요."
+            : adminErrorMessage(cause, "결제를 확인하지 못했어요."),
+      });
+    } finally {
+      setVerifying(null);
     }
   };
 
@@ -345,6 +381,16 @@ export function AdminContracts({
                       : " · 결제 확인 전"
                     : ""}
                 </p>
+              ) : null}
+              {contract.paymentEvidence?.kind === "PORTONE" && !contract.paymentVerifiedAt ? (
+                <button
+                  type="button"
+                  disabled={verifying !== null}
+                  onClick={() => void verifyPayment(contract)}
+                  className="hc-button-secondary h-11 self-start rounded-full px-4 font-semibold disabled:opacity-50"
+                >
+                  {verifying === contract.contractId ? "확인하는 중…" : "결제 다시 확인"}
+                </button>
               ) : null}
               {TRANSITIONS[contract.status].length > 0 ? (
                 <div className="flex flex-wrap gap-2">
