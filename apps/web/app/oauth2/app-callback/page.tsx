@@ -8,11 +8,10 @@
   하던 일(상태 확인·탈퇴 취소·체험 쿠키 정리·돌아갈 곳)을 그대로 맡긴다. 이동은 문서를 새로 받는다 —
   인증 경계라 클라이언트 전환을 쓰지 않는다(app/oauth2/callback/page.tsx 머리말).
 */
-/* eslint-disable @next/next/no-location-assign-relative-destination */
 
 import { useEffect, useRef, useState } from "react";
-import { clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { exchangeAppLoginCode } from "@/lib/auth/authApi";
 
 const FALLBACK = "로그인을 마치지 못했어요. 다시 로그인해 주세요.";
 
@@ -36,8 +35,7 @@ export default function AppLoginCallbackPage() {
       setError(FALLBACK);
       return;
     }
-    clientApi
-      .post("/api/client/auth/oauth2/exchange", { code, codeVerifier })
+    exchangeAppLoginCode(code, codeVerifier)
       .then(() => {
         window.location.replace("/oauth2/callback");
       })

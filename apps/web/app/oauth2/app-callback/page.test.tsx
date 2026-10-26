@@ -7,6 +7,7 @@ jest.mock("@/lib/clientApi", () => ({
   ...jest.requireActual("@/lib/clientApi"),
   clientApi: { post: (...a: unknown[]) => mockPost(...a) },
 }));
+// 교환 함수는 실제 것을 쓴다 — 경로·본문까지 확인한다.
 
 beforeEach(() => {
   jest.clearAllMocks();
