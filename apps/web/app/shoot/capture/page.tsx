@@ -106,7 +106,7 @@ export default function CapturePage() {
       테마와 무관하게 어둡다(hc-stage-dark): 밝은 면 위의 프리뷰는 액자처럼 보이고,
       셔터와 게이지가 사진보다 밝아진다.
     */
-    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-[#0B0B0C] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-white">
+    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text)">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
@@ -144,8 +144,8 @@ export default function CapturePage() {
                   done
                     ? "border-(--hc-primary) bg-(--hc-primary)"
                     : current
-                      ? "border-(--hc-primary) bg-transparent shadow-[0_0_0_3px_rgba(30,215,96,0.22)]"
-                      : "border-[rgba(255,255,255,0.28)] bg-[rgba(255,255,255,0.04)]"
+                      ? "border-(--hc-primary) bg-transparent shadow-[0_0_0_3px_color-mix(in_srgb,var(--hc-primary)_22%,transparent)]"
+                      : "border-(--hc-stage-line) bg-(--hc-stage-fill)"
                 }`}
               />
             );
@@ -228,7 +228,7 @@ export default function CapturePage() {
               ) : null}
             </div>
           ) : (
-            <div className="flex h-full w-full items-center justify-center rounded-xl border border-(--hc-border) bg-black text-[11px] text-zinc-400">
+            <div className="flex h-full w-full items-center justify-center rounded-xl border border-(--hc-border) bg-black text-[11px] text-(--hc-muted)">
               프레임을 먼저 선택해 주세요
             </div>
           )}
@@ -239,7 +239,7 @@ export default function CapturePage() {
 
           카운트다운이 프리뷰 밖에 있는 이유:
             - 얼굴을 가리지 않는다. 예전 링(96px)은 세로 4컷 프리뷰 높이의 38% 를 덮었다.
-            - 대비가 보장된다. 무대 배경(#0B0B0C) 위라 뒤에 뭐가 찍히든 흰 글자가 읽힌다.
+            - 대비가 보장된다. 무대 배경(`--background`, 기본 #0B0B0C) 위라 뒤에 뭐가 찍히든 글자가 읽힌다.
               얼굴 위에 있을 때는 밝은 하늘 앞에서 1.4:1 까지 떨어졌고, 그걸 가리려고 화면을
               30% 어둡게 덮어야 했다 — 그 스크림도 같이 사라졌다.
             - 초록이 하나로 돌아온다. 진행 초록은 위 8컷 게이지가 혼자 갖는다.
@@ -250,7 +250,7 @@ export default function CapturePage() {
             // key 로 매 초 애니메이션을 새로 재생한다 — 링의 연속 스윕을 대신하는 메트로놈.
             <span
               key={countdown ?? 0}
-              className="hc-count-tick text-[56px] font-extrabold leading-none tabular-nums text-white"
+              className="hc-count-tick text-[56px] font-extrabold leading-none tabular-nums text-(--hc-text)"
             >
               {countdown}
             </span>
@@ -265,8 +265,8 @@ export default function CapturePage() {
                   aria-pressed={active}
                   className={`inline-flex h-11 items-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition ${
                     active
-                      ? "bg-white text-[#0B0B0C]"
-                      : "bg-transparent text-white ring-1 ring-[rgba(255,255,255,0.3)]"
+                      ? "bg-(--hc-text) text-(--background)"
+                      : "bg-transparent text-(--hc-text) ring-1 ring-(--hc-stage-line)"
                   }`}
                 >
                   <Timer className="h-3.5 w-3.5" />
@@ -326,7 +326,7 @@ export default function CapturePage() {
               // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다. 화면에서 글자가 빠져도 보조기술에는 남는다.
               aria-label="바로 촬영"
               // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
-              className="grid h-18 w-18 place-items-center rounded-full border-4 border-white transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
+              className="grid h-18 w-18 place-items-center rounded-full border-4 border-(--hc-text) transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >
               <span className="h-13.5 w-13.5 rounded-full bg-(--hc-primary) [@media(max-height:700px)]:h-11 [@media(max-height:700px)]:w-11" />
             </button>

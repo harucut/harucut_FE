@@ -50,7 +50,7 @@ export function RecordSourceDialog({ open, onClose }: Props) {
             onClick={onClose}
             className="flex items-center gap-3.5 rounded-2xl bg-(--hc-primary) p-4 text-(--hc-primary-contrast) shadow-(--hc-button-shadow)"
           >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#06140A]">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-(--hc-primary-contrast)">
               <Camera className="h-5.5 w-5.5 text-(--hc-primary-strong)" />
             </span>
             <span className="min-w-0 flex-1">
