@@ -65,8 +65,8 @@
 
 라우트 목록도 여기 복사하지 않는다. 공개·보호 경로의 진실은 `apps/web/lib/protectedPaths.ts`,
 설명과 분기표는 [`docs/auth-routing.md`](docs/auth-routing.md) 가 갖는다.
-비인증 접근은 `/login?redirectTo=...` 로 보내고, 예외 둘(게스트 체험, 행사 QR `&event=`)도
-그 문서에 있다.
+비인증 접근은 `/login?redirectTo=...` 로 보내고, 예외(게스트 체험)도 그 문서에 있다.
+행사 참가(`/e`·`/r`·`/booth`)는 계정 세션을 쓰지 않는다 — 옛 `/shoot?event=` 는 걷어냈다.
 
 ## 브랜치 · 커밋 · PR
 

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { EventBanner } from "@/components/event/EventBanner";
 import { useRemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
@@ -24,7 +23,6 @@ export default function ShootSelectPage() {
     clearSelection,
     setBorderColor,
     setOutputFilter,
-    eventName,
     source,
   } = useShootSession();
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
@@ -80,7 +78,6 @@ export default function ShootSelectPage() {
           backLabel={fromUpload ? "사진 다시 고르기" : "다시 촬영"}
         />
 
-        {eventName ? <EventBanner eventName={eventName} /> : null}
 
         {/* 조회가 실패해도 배경색은 잠긴 채다. 왜 잠겼는지와 되살릴 길을 같이 준다. */}
         {themeError ? (
