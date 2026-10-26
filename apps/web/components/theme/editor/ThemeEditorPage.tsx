@@ -23,6 +23,7 @@ import {
   getImageUrlByKey,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
+import { uploadAsset } from "@/lib/assetUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -526,15 +527,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         editorState.background.type === "IMAGE" &&
         !editorState.background.key
       ) {
-        // key 만 받아 둔다. 배경은 이미 고른 파일의 로컬 주소로 그려져 있고
-        // `setBackgroundImageKey` 도 url 을 건드리지 않으니, 업로드가 덤으로 해 주는
-        // 조회용 URL 해석(왕복 1회)은 버려진다 — 건너뛴다.
-        const { key } = await uploadToS3WithPresigned({
+        // 공통 자산으로 올린다(서버가 바이트를 열어 본다). 배경은 이미 고른 파일의 로컬
+        // 주소로 그려져 있고 `setBackgroundImageKey` 도 url 을 건드리지 않는다.
+        const { key, assetId } = await uploadAsset({
           file: editorState.pendingBackgroundFile,
-          type: PRESIGNED_UPLOAD_TYPES.FRAME,
-          skipUrlResolve: true,
+          purpose: "FRAME_ASSET",
         });
-        useThemeEditorStore.getState().setBackgroundImageKey(key);
+        useThemeEditorStore.getState().setBackgroundImageKey(key, assetId);
       }
 
       // 캔버스에 올라간 사진·스티커를 이 시점에 S3로 올리고, 글자 층을 구워 둔다

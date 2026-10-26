@@ -194,6 +194,12 @@ export async function proxyJson(req: Request, options: ProxyOptions) {
   return buildResponse(result, req);
 }
 
+/** 행사 경로의 공개 식별자(event·asset·captureRun·device public id). 백엔드에 가기 전에 문법만 본다. */
+export function validatePublicId(id: string): NextResponse | null {
+  if (/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
+  return buildResponse(buildProxyErrorResult(400, "CLIENT-006", "Invalid resource ID."));
+}
+
 export function validateResourceId(id: string): NextResponse | null {
   if (/^[1-9][0-9]{0,18}$/.test(id) && (id.length < 19 || id <= "9223372036854775807")) return null;
   return buildResponse(buildProxyErrorResult(400, "CLIENT-006", "Invalid resource ID."));

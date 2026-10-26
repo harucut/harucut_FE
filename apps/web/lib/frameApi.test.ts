@@ -1,4 +1,5 @@
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { textBakeSignature } from "@/lib/canvas/textBakeSignature";
 import type { RemoteFrame } from "@/lib/api-types";
 import {
   frameIdFromFrameType,
@@ -365,5 +366,65 @@ describe("잠금 왕복(F1-3)", () => {
   it("잠그지 않은 레이어는 locked 를 싣지 않는다(예전 서버 호환)", () => {
     const request = toCreateFrameRequest(makeJson("classic-4"), { title: "t", description: "d", previewKey: "p" });
     expect(request.components[0]).not.toHaveProperty("locked");
+  });
+});
+
+describe("공통 자산 왕복(F1-6)", () => {
+  const meta = { title: "t", description: "d", previewKey: "p" };
+
+  it("사진·스티커는 assetId, 글자는 renderedAssetId, 배경은 assetId 를 싣는다", () => {
+    const request = toCreateFrameRequest(
+      {
+        frameId: "classic-4",
+        background: { type: "IMAGE", key: "uploads/bg.png", assetId: "AsBg" },
+        components: [
+          { id: "p", type: "PHOTO", source: "uploads/p.png", assetId: "AsP", x: 0, y: 0, width: 1, height: 1, scale: 1, rotation: 0, zIndex: 1 },
+          {
+            id: "t",
+            type: "TEXT",
+            source: "안녕",
+            renderedKey: "uploads/t.png",
+            renderedAssetId: "AsT",
+            renderedFor: "signature",
+            // 글자에 assetId 가 남아 있어도 보내지 않는다 — 서버는 TEXT 의 assetId 를 읽지 않는다.
+            assetId: "AsWrong",
+            x: 0, y: 0, width: 1, height: 1, scale: 1, rotation: 0, zIndex: 2,
+          },
+        ],
+      },
+      meta,
+    );
+
+    expect(request.background).toEqual({ type: "IMAGE", key: "uploads/bg.png", assetId: "AsBg", opacity: 1 });
+    expect(request.components[0]).toMatchObject({ source: "uploads/p.png", assetId: "AsP" });
+    expect(request.components[1]).toMatchObject({ renderedKey: "uploads/t.png", renderedAssetId: "AsT" });
+    expect(request.components[1]).not.toHaveProperty("assetId");
+    // 지문은 편집기 안에서만 쓴다.
+    expect(request.components[1]).not.toHaveProperty("renderedFor");
+  });
+
+  it("저장본의 구운 글자는 지문과 함께 되돌려 다시 굽지 않게 한다", () => {
+    const style = { fontFamily: "Pretendard", fontSize: 48, color: "#111111", textAlign: "center" };
+    const back = toThemeExportJson({
+      frameId: 1,
+      title: "t",
+      frameType: "CLASSIC",
+      background: { type: "IMAGE", key: "uploads/bg.png", assetId: "AsBg", url: "https://s3/bg" },
+      components: [
+        { id: 1, type: "PHOTO", source: "https://s3/p", key: "uploads/p.png", assetId: "AsP", x: 0, y: 0, width: 1, height: 1 },
+        { id: 2, type: "TEXT", source: "안녕", style, renderedKey: "uploads/t.png", renderedAssetId: "AsT", x: 0, y: 0, width: 400, height: 120 },
+        { id: 3, type: "TEXT", source: "옛 글자", style, x: 0, y: 0, width: 400, height: 120 },
+      ],
+    });
+
+    expect(back.background).toMatchObject({ assetId: "AsBg" });
+    expect(back.components[0]).toMatchObject({ source: "uploads/p.png", assetId: "AsP" });
+    expect(back.components[1]).toMatchObject({
+      renderedKey: "uploads/t.png",
+      renderedAssetId: "AsT",
+      renderedFor: textBakeSignature({ source: "안녕", width: 400, height: 120, styleJson: style }),
+    });
+    // 예전 서버는 renderedKey 를 주지 않았다 — 그때는 저장할 때 다시 굽는다.
+    expect(back.components[2]).not.toHaveProperty("renderedFor");
   });
 });

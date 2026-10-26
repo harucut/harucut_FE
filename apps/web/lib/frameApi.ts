@@ -3,8 +3,10 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type {
   RemoteFrameBackground,
   RemoteFrame,
+  RemoteFrameComponent,
   RemoteFrameType,
 } from "@/lib/api-types";
+import { textBakeSignature } from "@/lib/canvas/textBakeSignature";
 import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type CreateFrameRequest = {
@@ -31,6 +33,10 @@ export type CreateFrameRequest = {
      * 저장 시점에는 선택이지만 **없으면 그 프레임으로 합성이 400 GEN-002 로 죽는다.**
      */
     renderedKey?: string;
+    /** PHOTO·STICKER 의 자산 public id. 있으면 서버가 `source` 대신 그 자산의 key 를 쓴다. */
+    assetId?: string;
+    /** TEXT 의 구운 PNG 자산 public id. 있으면 `renderedKey` 대신 쓴다. */
+    renderedAssetId?: string;
     /** 편집기 잠금(저장·재열기용). 인가 근거가 아니다. */
     locked?: boolean;
     x: number;
@@ -115,6 +121,7 @@ function toRequestBackground(background?: ThemeBackground): RemoteFrameBackgroun
   return {
     type: "IMAGE",
     key: background.key,
+    ...(background.assetId ? { assetId: background.assetId } : {}),
     opacity: background.opacity ?? 1,
   };
 }
@@ -136,6 +143,7 @@ function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground 
   return {
     type: "IMAGE",
     key: background.key,
+    ...(background.assetId ? { assetId: background.assetId } : {}),
     ...(background.url ? { url: background.url } : {}),
     opacity: background.opacity ?? 1,
   };
@@ -188,6 +196,8 @@ export function toCreateFrameRequest(
         // renderUrl 은 렌더 전용이라 보내지 않는다. 이미지 source 는 key 로 정규화한다.
         source: c.type === "TEXT" ? c.source : toStorageKey(c.source),
         ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+        ...(c.type !== "TEXT" && c.assetId ? { assetId: c.assetId } : {}),
+        ...(c.type === "TEXT" && c.renderedAssetId ? { renderedAssetId: c.renderedAssetId } : {}),
         ...(c.locked ? { locked: true } : {}),
         x: c.x,
         y: c.y,
@@ -202,6 +212,25 @@ export function toCreateFrameRequest(
       // 규칙은 `isBlankSourceComponent` 가 쥔다(위 주석). 여기서 조건을 다시 쓰면
       // 지문 쪽과 갈라진다.
       .filter((c) => !isBlankSourceComponent(c)),
+  };
+}
+
+/**
+ * 저장본의 구운 글자 층. 지문을 함께 남겨, 다시 저장할 때 문구·스타일·크기가 그대로면
+ * 다시 굽지 않게 한다(`textBakeSignature`). 예전 서버는 renderedKey 를 내려주지 않았다 —
+ * 그때는 아무것도 남지 않고 저장할 때 다시 굽는다.
+ */
+function renderedFrom(component: RemoteFrameComponent, source: string) {
+  if (!component.renderedKey) return {};
+  return {
+    renderedKey: component.renderedKey,
+    ...(component.renderedAssetId ? { renderedAssetId: component.renderedAssetId } : {}),
+    renderedFor: textBakeSignature({
+      source,
+      width: component.width,
+      height: component.height,
+      styleJson: (component.styleJson ?? component.style ?? {}) as Record<string, unknown>,
+    }),
   };
 }
 
@@ -231,6 +260,8 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
         source: storageKey,
         ...(renderUrl ? { renderUrl } : {}),
         ...(component.locked ? { locked: true } : {}),
+        ...(!isText && component.assetId ? { assetId: component.assetId } : {}),
+        ...(isText ? renderedFrom(component, rawSource) : {}),
         x: component.x,
         y: component.y,
         width: component.width,

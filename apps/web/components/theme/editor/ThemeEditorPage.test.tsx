@@ -184,6 +184,11 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
 
+const mockUploadAsset = jest.fn();
+jest.mock("@/lib/assetUploadApi", () => ({
+  uploadAsset: (...args: unknown[]) => mockUploadAsset(...args),
+}));
+
 // 컴포넌트가 보는 것과 **같은** 클래스여야 instanceof 가 맞는다.
 const { UploadValidationError } = jest.requireMock("@/lib/presignedUploadApi") as {
   UploadValidationError: new (message: string) => Error;
@@ -322,14 +327,15 @@ describe("ThemeEditorPage save flow", () => {
     로컬 주소로 그려져 있고 `setBackgroundImageKey` 도 url 을 건드리지 않는다.
     조회용 URL 해석이 되살아나면 저장할 때마다 쓸모없는 왕복이 두 번 늘어난다.
   */
-  it("배경·미리보기 업로드 모두 조회용 URL 해석을 건너뛴다", async () => {
+  // 배경은 공통 자산(서버가 바이트를 검증)으로, 미리보기는 해당 용도가 없어 presigned 로 올린다.
+  // 미리보기는 key 로만 실리므로 조회용 URL 해석(왕복 1회)을 건너뛴다.
+  it("배경은 자산으로 올리고 미리보기는 조회 URL 해석 없이 올린다", async () => {
     editorStoreState.background = { type: "IMAGE", key: null };
     editorStoreState.pendingBackgroundFile = new File(["bg"], "bg.png", {
       type: "image/png",
     });
-    mockUploadPresigned
-      .mockResolvedValueOnce({ key: "background-key" })
-      .mockResolvedValueOnce({ key: "preview-key" });
+    mockUploadAsset.mockResolvedValueOnce({ key: "background-key", assetId: "AsBg" });
+    mockUploadPresigned.mockResolvedValueOnce({ key: "preview-key" });
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -339,11 +345,12 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
     });
 
-    expect(mockSetBackgroundImageKey).toHaveBeenCalledWith("background-key");
-    expect(mockUploadPresigned).toHaveBeenCalledTimes(2);
-    for (const [args] of mockUploadPresigned.mock.calls) {
-      expect(args).toMatchObject({ skipUrlResolve: true });
-    }
+    expect(mockUploadAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: "FRAME_ASSET" }),
+    );
+    expect(mockSetBackgroundImageKey).toHaveBeenCalledWith("background-key", "AsBg");
+    expect(mockUploadPresigned).toHaveBeenCalledTimes(1);
+    expect(mockUploadPresigned.mock.calls[0][0]).toMatchObject({ skipUrlResolve: true });
   });
 
   // F16 — 두 기기 편집은 version 으로 검사한다. 불러온 버전을 보내고, 충돌하면 사용자가 고른다.
