@@ -38,7 +38,7 @@ type Revoking = { entitlement: Entitlement; impact: EntitlementImpact | null; im
  * 이용권 — 계약으로 생긴 것과 수동 부여(체험 · 보상 · 파트너)를 함께 본다. 수동 부여는 사유가 필수고 결제를 꾸미지 않는다.
  * 회수 전에 영향(운영 중 행사 · 아직 끝나지 않은 합성 예약)을 먼저 보여 준다.
  */
-export function AdminEntitlements() {
+export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
   const [items, setItems] = useState<Entitlement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -56,10 +56,12 @@ export function AdminEntitlements() {
     }
   }, []);
 
+  // 마운트할 때와, 부모가 reloadKey 를 올릴 때(계약 상태가 바뀜·이용권 탭에 들어옴) 목록을 다시 받는다.
+  // 패널은 늘 마운트돼 있어서 마운트 때 한 번만 받으면 계약을 적용해 생긴 이용권이 보이지 않는다(Codex #546).
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 원격 조회
     void load();
-  }, [load]);
+  }, [load, reloadKey]);
 
   const terms = termsOf(draft.terms);
   const validFrom = toServerDateTime(draft.validFrom);
