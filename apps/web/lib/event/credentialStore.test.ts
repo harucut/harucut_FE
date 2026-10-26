@@ -42,3 +42,26 @@ describe("행사 자격 보관", () => {
     expect(window.localStorage.getItem("harucut:theme-editor-draft:v2:u:classic-4")).toBe("{}");
   });
 });
+
+// Codex 리뷰(#523): 저장소 쓰기가 막히면 연결로 받은 기기 자격을 잃어 연결 화면에 남았다.
+it("저장소에 쓰지 못해도 이번 방문 동안은 받은 부스 자격을 돌려준다", () => {
+  const setItem = jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("quota", "QuotaExceededError");
+  });
+  try {
+    saveBoothDevice({ token: "b-mem", deviceId: "d-1", eventId: "evt-1" });
+    expect(readBoothDevice()?.token).toBe("b-mem");
+  } finally {
+    setItem.mockRestore();
+  }
+});
+
+// Codex 리뷰(#541): 다른 탭이 회수(BOOTH-003)로 지운 자격을 이 탭이 메모리에서 되살리면 안 된다.
+it("저장소에 저장된 부스 자격을 다른 탭이 지우면 메모리에서 되살리지 않는다", () => {
+  window.localStorage.clear();
+  saveBoothDevice({ token: "b-1", deviceId: "d-1", eventId: "evt-1" });
+  expect(readBoothDevice()?.token).toBe("b-1");
+  // 다른 탭의 forgetBoothDevice — 이 탭의 메모리는 건드리지 못하고 저장소만 지운다.
+  window.localStorage.removeItem("harucut:event:booth-device");
+  expect(readBoothDevice()).toBeNull();
+});

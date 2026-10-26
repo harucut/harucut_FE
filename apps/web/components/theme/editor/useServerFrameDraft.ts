@@ -23,8 +23,12 @@ import type { ThemeExportJson } from "@/lib/types/themeEditor";
 /** 편집이 멈추고 이만큼 지나면 서버 초안을 쓴다. 로컬 초안(1초)보다 길다 — 왕복과 업로드가 든다. */
 export const SERVER_DRAFT_DEBOUNCE_MS = 4000;
 
-/** 열 때 문서까지 받아 볼 초안 수. 판형이 다른 새 프레임 초안이 섞여 있어 최근 몇 개만 본다. */
-const DRAFTS_TO_INSPECT = 3;
+/**
+ * 열 때 문서까지 받아 볼 초안 수의 상한. 새 프레임 초안 목록에는 판형 넷이 섞여 오므로, 판형마다 하나씩만 있어도
+ * 넷이다 — 셋으로 자르면 가장 오래된 판형의 초안을 영영 못 찾았다(Codex 리뷰 #528). 맞는 것을 찾으면 멈춘다.
+ * 상한은 비정상적으로 많이 쌓인 경우의 요청 폭주를 막는 값이다.
+ */
+const DRAFTS_TO_INSPECT = 20;
 
 /**
  * 같은 기기에서 방금 쓴 초안을 「다른 기기의 초안」으로 묻지 않으려고 두는 여유.
@@ -71,7 +75,7 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
     cellCutouts: doc.cellCutouts,
     components: resolved.components as ServerEditorDocument["components"],
     savedAt: Date.now(),
-  });
+  }, { preserveHidden: true });
 }
 
 /**
@@ -121,6 +125,8 @@ export function useServerFrameDraft(options: {
     try {
       setStatus("saving");
       await useThemeEditorStore.getState().uploadLocalImagesForDraft();
+      // 올리는 사이 저장을 마쳤거나 버렸으면 새로 만들지 않는다.
+      if (stoppedRef.current) return;
       const built = currentDocument();
       if (!built) {
         setStatus("error");
@@ -142,6 +148,14 @@ export function useServerFrameDraft(options: {
             document: built.document,
             assetIds: built.assetIds,
           });
+      if (stoppedRef.current) {
+        /*
+          요청이 도는 사이 저장을 마쳤거나 버렸다. finish 는 그때 draftRef 가 비어 있어 지울 것을 몰랐으니 여기서
+          지운다 — 남기면 버린 작업이 다음 방문에 「다른 기기의 초안」으로 나타난다(Codex 리뷰 #528).
+        */
+        await deleteFrameDraft(saved.draftId).catch(() => {});
+        return;
+      }
       draftRef.current = { draftId: saved.draftId, revision: saved.revision };
       lastSentRef.current = json;
       setStatus("saved");
@@ -204,7 +218,11 @@ export function useServerFrameDraft(options: {
       } catch {
         // 찾지 못하면 이번 세션은 새 초안으로 시작한다. 로컬 초안은 그대로 돈다.
       }
-      if (!cancelled) discoveredRef.current = true;
+      if (cancelled) return;
+      discoveredRef.current = true;
+      // 찾는 동안(또는 계정을 알기 전에) 한 편집은 예약된 저장이 찾기 전이라 건너뛰었을 수 있다. 지금 한 번 맡긴다
+      // — 다음 편집을 기다리면 그대로 다른 기기로 옮겼을 때 그 편집이 서버에 없다(Codex 리뷰 #528).
+      if (!blockedRef.current && useThemeEditorStore.getState().past.length > 0) void syncRef.current();
     })();
     return () => {
       cancelled = true;

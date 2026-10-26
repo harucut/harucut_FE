@@ -432,6 +432,76 @@ describe("ThemeEditorPage save flow", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/theme"));
   });
 
+  // Codex 리뷰(#524): 페이지를 새로고침하면 메모리 세션(판형·저장본 id)이 사라져 목록으로 튕겼다.
+  it("저장본 다시 불러오기는 새로고침 없이 그 자리에서 저장본을 다시 받는다", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockResolvedValue({
+      frameId: 7,
+      title: "saved",
+      frameType: "CLASSIC",
+      background: { type: "COLOR", value: "111827" },
+      components: [],
+      version: 3,
+    });
+    mockUpdateFrame.mockRejectedValueOnce(
+      Object.assign(new Error("conflict"), {
+        status: 409,
+        code: "FRAME-002",
+        data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+      }),
+    );
+    const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+    confirmSave(container);
+
+    fireEvent.click(await findByRole("button", { name: "저장본 다시 불러오기" }));
+    await waitFor(() => expect(mockGetFrame).toHaveBeenCalledTimes(2));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  // Codex 리뷰(#540): 다시 받은 저장본이 곧 새 기준이다 — 안 고쳤으면 이탈 경고가 뜨면 안 된다.
+  it("저장본을 다시 불러오면 이탈 경고 기준도 새 저장본으로 바꾼다", async () => {
+    mockRemoteFrameId = 7;
+    const saved = { frameId: 7, title: "saved", frameType: "CLASSIC", components: [], version: 3 };
+    mockGetFrame
+      .mockResolvedValueOnce({ ...saved, background: { type: "COLOR", value: "111827" } })
+      .mockResolvedValueOnce({ ...saved, background: { type: "COLOR", value: "FF0000" }, version: 5 });
+    mockUpdateFrame.mockRejectedValueOnce(
+      Object.assign(new Error("conflict"), {
+        status: 409,
+        code: "FRAME-002",
+        data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+      }),
+    );
+    // 가짜 스토어도 실제처럼 불러온 배경을 반영하게 한다(편집 지문이 바뀌어야 기준선 문제가 드러난다).
+    const before = { background: editorStoreState.background, backgroundColor: editorStoreState.backgroundColor };
+    mockImportJson.mockImplementation((json: { background?: MockBackground }) => {
+      if (json.background?.type === "COLOR") {
+        editorStoreState.background = json.background;
+        editorStoreState.backgroundColor = json.background.value;
+      }
+    });
+    try {
+      const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      confirmSave(container);
+      fireEvent.click(await findByRole("button", { name: "저장본 다시 불러오기" }));
+      await waitFor(() => expect(mockGetFrame).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(editorStoreState.backgroundColor.toUpperCase()).toBe("FF0000"));
+      // 스토어 값이 바뀐 것만으로는 부족하다 — 다시 그리고 이탈 경고 effect 가 돈 뒤에 본다.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const leave = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(leave);
+      expect(leave.defaultPrevented).toBe(false);
+    } finally {
+      mockImportJson.mockReset();
+      Object.assign(editorStoreState, before);
+    }
+  });
+
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
     // 같은 판형으로 만들던 새 프레임 초안. 저장본을 고쳐 저장해도 남아야 한다.
