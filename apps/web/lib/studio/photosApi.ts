@@ -104,3 +104,52 @@ export async function getPhotoExportDownload(eventId: string, exportId: string):
   );
   return requireData(res.data, "내려받기 주소");
 }
+
+// ── 여러 행사 묶음(ADR-0009 §6, P3-5) ──
+
+/** 프로젝트(OWNER·ADMIN·프로젝트 멤버) 또는 공간(OWNER·ADMIN) 범위. 경로 접두사만 다르고 흐름은 행사 묶음과 같다. */
+/** 여러 행사 묶음 한 번에 담을 수 있는 행사 수(백엔드 요청 검증 1~200개). */
+export const MAX_EXPORT_EVENTS = 200;
+
+export type MultiExportScope = { kind: "project"; projectId: string } | { kind: "workspace"; workspaceId: string };
+
+export type MultiPhotoExport = PhotoExport & {
+  scope?: "PROJECT" | "WORKSPACE";
+  /** 담긴 행사와 행사마다 담긴 장수. */
+  events?: Array<{ eventId: string; name: string; photoCount: number }>;
+};
+
+function multiExportBase(scope: MultiExportScope) {
+  return scope.kind === "project"
+    ? `/api/client/projects/${encodeURIComponent(scope.projectId)}/exports`
+    : `/api/client/workspaces/${encodeURIComponent(scope.workspaceId)}/exports`;
+}
+
+/**
+ * 고른 행사들의 보이는 완성 사진 전부를 묶는다. 합계 0장·2,000장 초과면 400 EXPORT-003.
+ * 사진 권한(BULK_DOWNLOAD)이나 이용권 기능이 없는 행사가 있으면 조용히 빼지 않고 403 PHOTO-001·ENT-004 — data.eventIds 에 그 행사들.
+ */
+export async function createMultiExport(scope: MultiExportScope, eventIds: string[]): Promise<MultiPhotoExport> {
+  const res = await clientApi.post<ApiEnvelope<MultiPhotoExport>>(multiExportBase(scope), { eventIds });
+  return requireData(res.data, "묶음");
+}
+
+/** 내가 만든 최근 20개, 최신순. */
+export async function listMultiExports(scope: MultiExportScope): Promise<MultiPhotoExport[]> {
+  const res = await clientApi.get<ApiEnvelope<MultiPhotoExport[]>>(multiExportBase(scope));
+  return res.data.data ?? [];
+}
+
+/** 받을 때 기한·담긴 사진·행사마다 권한을 다시 본다. 준비 전 409 EXPORT-001, 만료·무효 410 EXPORT-002. */
+export async function getMultiExportDownload(scope: MultiExportScope, exportId: string): Promise<{ url: string; expiresAt: string }> {
+  const res = await clientApi.post<ApiEnvelope<{ url: string; expiresAt: string }>>(
+    `${multiExportBase(scope)}/${encodeURIComponent(exportId)}/download`,
+  );
+  return requireData(res.data, "내려받기 주소");
+}
+
+/** 403 PHOTO-001·ENT-004 의 data.eventIds(여러 행사 묶음만 싣는다). 없으면 빈 배열. */
+export function blockedExportEventIds(error: unknown): string[] {
+  const data = (error as { data?: { data?: { eventIds?: unknown } } }).data?.data;
+  return Array.isArray(data?.eventIds) ? data.eventIds.filter((id): id is string => typeof id === "string") : [];
+}
