@@ -65,6 +65,7 @@
 | **안전영역** | WebView 안에서는 `env(safe-area-inset-*)` 가 믿을 만하지 않다 — 안드로이드 WebView 는 edge-to-edge 로 상태바·내비바 뒤까지 그리면서 그 높이를 env 에 주지 않고, iOS 는 react-native-webview 기본값(`contentInsetAdjustmentBehavior=never`)이라 스크롤뷰가 상태바를 비키지 않는다. 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비우고 무대색(`STAGE_COLORS`)으로 칠한다. iOS 하단 홈 인디케이터만 웹의 `env(safe-area-inset-bottom)` 이 맡는다 |
 | **카메라 권한(안드로이드)** | 웹 권한이 아니라 앱 권한이다. 셸이 `CAMERA` 를 선언해 두었는데 런타임 권한이 없으면 WebView 가 파일 선택기에서 「사진 찍기」를 통째로 뺀다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
+| **구글 로그인(시스템 브라우저)** | 구글은 임베디드 WebView 의 OAuth 를 `disallowed_useragent` 로 막는다. 셸이 백엔드의 구글 로그인 시작을 가로채 PKCE challenge 를 붙여 ASWebAuthenticationSession·Custom Tabs 로 열고, `harucut://oauth2/callback?code=` 로 돌아오면 코드와 verifier 를 웹 교환 화면(`/oauth2/app-callback#…`)에 넘긴다. 교환은 WebView 안의 웹이 해야 쿠키가 이 WebView 에 남는다(`apps/mobile/lib/app-login.ts`, 규칙은 `packages/shared/src/app-login.ts`). 카카오·네이버는 WebView 안에서 그대로 된다 |
 
 ## 셸이 WebView 를 부리는 길 — `ref`
 
@@ -405,7 +406,8 @@ URL 에 토큰도, 교환용 코드도 없다.
 
 없는 것이 둘이다. 셸에 알림 응답 리스너가 없고(`apps/mobile/app/_layout.tsx` —
 "딥링크를 실제로 쓰게 되면 여기에 핸들러가 붙는다"), 브리지에 **들어오는 경로**를 웹으로
-넘길 메시지가 없다. `harucut://` 도 scheme 만 등록돼 있다.
+넘길 메시지가 없다. `harucut://` 로 받는 것은 앱 로그인 콜백 하나뿐이고, 그것도 시스템 브라우저 세션이 직접 받는다
+— 알림이 열 주소를 받는 길은 아니다.
 
 그래서 합성 완료 알림의 본문은 「눌러서 보러 가기」가 아니라 「기록 화면에서 볼 수
 있어요」다(`apps/web/app/shoot/result/page.tsx` 의 `notifyServerComposeDone`). **되는 것만

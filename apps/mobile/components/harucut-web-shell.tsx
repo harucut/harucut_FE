@@ -1,5 +1,5 @@
 import * as Linking from 'expo-linking';
-import { canonicalOAuthCallbackUrl } from '@harucut/shared';
+import { appLoginProviderOf, canonicalOAuthCallbackUrl } from '@harucut/shared';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import {
   SHELL_PLATFORM,
   SHELL_USER_AGENT_TOKEN,
+  getApiOrigin,
   getWebOrigin,
   isOAuthFlowUrl,
   isWebOrigin,
@@ -39,6 +40,7 @@ import {
   type BridgeMessage,
   type BridgeResult,
 } from '@/lib/native-bridge';
+import { startAppLogin } from '@/lib/app-login';
 
 const WEB_ORIGIN = getWebOrigin();
 const START_URL = `${WEB_ORIGIN}/home`;
@@ -138,6 +140,8 @@ export function HarucutWebShell() {
     다시 열 주소다 — 처음 올릴 때는 웹 첫 화면이다.
   */
   const [webViewSession, setWebViewSession] = useState({ key: 0, uri: START_URL });
+  // 시스템 브라우저 로그인이 떠 있는 동안 두 번째 시작을 막는다(두 번 누름·리다이렉트 반복).
+  const appLoginPendingRef = useRef(false);
   /*
     상태바 글자색은 웹 테마를 따라간다.
 
@@ -477,13 +481,32 @@ export function HarucutWebShell() {
         onShouldStartLoadWithRequest={(request) => {
           // WKWebView는 iframe 탐색도 알린다. 하위 프레임이 Safari나 외부 앱을 열게 하지 않는다.
           if (request.isTopFrame === false) return true;
-          const canonicalCallback = canonicalOAuthCallbackUrl(request.url, WEB_ORIGIN);
-          if (canonicalCallback) {
+          const openFresh = (uri: string) => {
             cancelTransfers();
             currentUrlRef.current = null;
             historyResetPendingRef.current = false;
             canGoBackRef.current = false;
-            setWebViewSession((session) => ({ key: session.key + 1, uri: canonicalCallback }));
+            setWebViewSession((session) => ({ key: session.key + 1, uri }));
+          };
+          const canonicalCallback = canonicalOAuthCallbackUrl(request.url, WEB_ORIGIN);
+          if (canonicalCallback) {
+            openFresh(canonicalCallback);
+            return false;
+          }
+          // 구글 로그인은 시스템 브라우저로 연다(P4) — WebView 안 OAuth 는 구글이 막는다. 돌아온 코드는
+          // 웹 교환 화면이 이 WebView 안에서 바꿔야 쿠키가 여기 남는다(lib/app-login.ts).
+          if (appLoginProviderOf(request.url, getApiOrigin())) {
+            if (!appLoginPendingRef.current) {
+              appLoginPendingRef.current = true;
+              void startAppLogin(request.url, WEB_ORIGIN)
+                .then((uri) => {
+                  if (uri) openFresh(uri);
+                })
+                .catch(() => undefined)
+                .finally(() => {
+                  appLoginPendingRef.current = false;
+                });
+            }
             return false;
           }
           // 우리 웹이면 그대로 연다. 오리진을 통째로 견준다 — 접두사 비교는
