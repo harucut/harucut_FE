@@ -108,6 +108,9 @@ export async function getPhotoExportDownload(eventId: string, exportId: string):
 // ── 여러 행사 묶음(ADR-0009 §6, P3-5) ──
 
 /** 프로젝트(OWNER·ADMIN·프로젝트 멤버) 또는 공간(OWNER·ADMIN) 범위. 경로 접두사만 다르고 흐름은 행사 묶음과 같다. */
+/** 여러 행사 묶음 한 번에 담을 수 있는 행사 수(백엔드 요청 검증 1~200개). */
+export const MAX_EXPORT_EVENTS = 200;
+
 export type MultiExportScope = { kind: "project"; projectId: string } | { kind: "workspace"; workspaceId: string };
 
 export type MultiPhotoExport = PhotoExport & {

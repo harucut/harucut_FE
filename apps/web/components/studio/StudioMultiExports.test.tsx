@@ -112,3 +112,11 @@ it("다 된 묶음을 받고, 행사마다 담긴 장수를 보인다", async ()
   fireEvent.click(screen.getByRole("button", { name: "받기" }));
   await waitFor(() => expect(mockDownload).toHaveBeenCalledWith({ kind: "workspace", workspaceId: "Ws1" }, "Ex9"));
 });
+
+it("행사는 한 번에 200개까지만 담는다", async () => {
+  const many = Array.from({ length: 201 }, (_, i) => ev(`Ev${i + 100}`, `행사 ${i + 1}`));
+  render(<StudioMultiExports workspaceId="Ws1" canUseWorkspace events={many} />);
+  fireEvent.click(await screen.findByRole("checkbox", { name: "모두 고르기" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("한 번에 행사 200개까지 담을 수 있어요.");
+  expect(screen.getByRole("button", { name: "고른 행사 사진 묶기 (201)" })).toBeDisabled();
+});

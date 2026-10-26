@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EXPORT_POLL_MS, STATUS_LABEL, formatSize, openWithoutReferrer } from "@/components/studio/StudioPhotoExports";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
+  MAX_EXPORT_EVENTS,
   MAX_EXPORT_PHOTOS,
   blockedExportEventIds,
   createMultiExport,
@@ -155,6 +156,7 @@ export function StudioMultiExports({
   };
 
   const allPicked = candidates.length > 0 && candidates.every((e) => picked.includes(e.eventId));
+  const tooManyEvents = picked.length > MAX_EXPORT_EVENTS;
 
   return (
     <div className="flex flex-col gap-3">
@@ -208,7 +210,7 @@ export function StudioMultiExports({
 
       <button
         type="button"
-        disabled={busy !== null || picked.length === 0}
+        disabled={busy !== null || picked.length === 0 || tooManyEvents}
         onClick={() => void create()}
         className="hc-button-secondary h-11 self-start rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
       >
@@ -219,6 +221,11 @@ export function StudioMultiExports({
         행사마다 폴더로 나뉘고, 다 된 묶음은 24시간 동안 받을 수 있어요. 사진 묶음 권한이 있는 행사만 담을 수 있어요.
       </p>
 
+      {tooManyEvents ? (
+        <p role="alert" className="text-[13px] text-(--hc-danger)">
+          한 번에 행사 {MAX_EXPORT_EVENTS}개까지 담을 수 있어요.
+        </p>
+      ) : null}
       {notice ? (
         <p
           role={notice.kind === "error" ? "alert" : "status"}
