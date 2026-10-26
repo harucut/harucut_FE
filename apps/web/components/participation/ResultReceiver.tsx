@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { EventLogo, EventSurface, useEventCopy } from "@/components/participation/EventSurface";
 import { getResult, getResultDownload } from "@/lib/event/eventApi";
 import type { ResultStatus } from "@/lib/event/types";
 
@@ -154,8 +155,12 @@ export function ResultReceiver() {
   };
 
   return (
-    <main className="ev-surface flex min-h-dvh flex-col items-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-10">
+    <EventSurface
+      theme={view.kind === "ready" ? view.result.theme : null}
+      className="flex min-h-dvh flex-col items-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-10"
+    >
       <div className="flex w-full max-w-md flex-col gap-5">
+        <EventLogo />
         <h1 className="text-[24px] font-extrabold">
           {view.kind === "ready" ? view.result.eventName : "사진 받기"}
         </h1>
@@ -230,11 +235,15 @@ export function ResultReceiver() {
           </div>
         ) : null}
       </div>
-    </main>
+    </EventSurface>
   );
 }
 
 function ResultBody({ result }: { result: ResultStatus }) {
+  const expired = useEventCopy("expired", "사진을 받을 수 있는 기간이 지났어요.");
+  const failed = useEventCopy("error", "사진을 만들지 못했어요. 행사 담당자에게 문의해 주세요.");
+  const composing = useEventCopy("composing", "사진을 만들고 있어요. 이 화면을 열어 두면 준비되는 대로 보여 드려요.");
+  const done = useEventCopy("done", "");
   const until = new Date(result.expiresAt);
   const untilText = Number.isNaN(until.getTime())
     ? null
@@ -243,26 +252,27 @@ function ResultBody({ result }: { result: ResultStatus }) {
   if (result.status === "EXPIRED") {
     return (
       <p role="status" className="text-[15px] text-(--ev-muted)">
-        사진을 받을 수 있는 기간이 지났어요.
+        {expired}
       </p>
     );
   }
   if (result.status === "FAILED") {
     return (
       <p role="alert" className="text-[15px] text-(--ev-danger)">
-        사진을 만들지 못했어요. 행사 담당자에게 문의해 주세요.
+        {failed}
       </p>
     );
   }
   if (result.status === "PENDING") {
     return (
       <p role="status" className="text-[15px] text-(--ev-muted)">
-        사진을 만들고 있어요. 이 화면을 열어 두면 준비되는 대로 보여 드려요.
+        {composing}
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-3">
+      {done ? <p className="text-[15px]">{done}</p> : null}
       {result.thumbnailUrl ? (
         // 짧은 서명 URL 이라 next/image 최적화 경로로 보내지 않는다(서버가 주소를 받아 가면 로그에 남는다).
         // eslint-disable-next-line @next/next/no-img-element

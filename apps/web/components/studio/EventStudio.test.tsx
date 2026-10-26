@@ -111,8 +111,8 @@ it("문구를 바꾼 동의 항목만 version 을 올려 저장한다", async ()
     ["photo", 3],
     ["share", 1],
   ]);
-  // 이 화면이 다루지 않는 테마는 보내지 않는다 — 보낸 필드만 바뀐다.
-  expect(settings).not.toHaveProperty("theme");
+  // 꾸민 것이 없으면 테마는 null(테마 없음)로 보낸다.
+  expect(settings.theme).toBeNull();
 });
 
 it("다른 곳이 먼저 바꿨으면(EVENT-005) 묻고, 덮어쓰기를 고르면 서버 버전으로 다시 저장한다", async () => {
@@ -256,4 +256,21 @@ it("현장 부스를 켠 행사에만 부스 기기 관리를 보여 준다", as
 it("현장 부스를 끈 행사에는 부스 기기 관리가 없다", async () => {
   await renderStudio();
   expect(screen.queryByRole("heading", { name: "부스 기기" })).not.toBeInTheDocument();
+});
+
+// P2B-4 — 행사 화면 꾸미기는 설정 저장과 같은 PATCH 로 간다. 빈 문구·빈 색은 빼고 보낸다.
+it("꾸민 문구와 글꼴만 테마로 저장한다", async () => {
+  await renderStudio();
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+  fireEvent.change(screen.getByLabelText("처음 화면 · 부스 대기 화면"), { target: { value: "와 주셔서 고마워요" } });
+  fireEvent.change(screen.getByLabelText("글꼴"), { target: { value: "GOWUN_DODUM" } });
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2].theme).toEqual({
+    schemaVersion: 1,
+    font: "GOWUN_DODUM",
+    copy: { welcome: "와 주셔서 고마워요" },
+  });
 });

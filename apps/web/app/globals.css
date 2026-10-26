@@ -325,7 +325,8 @@ body {
 /* 행사 화면(lib/eventSurface.ts — /e·/r·/booth)의 기본 토큰.
 
    주최자 디자인으로 그리는 화면이라 하루컷 브랜드색(--hc-primary 녹색)을 쓰지 않는다(기획 R5 18절).
-   게시된 행사 테마가 이 값을 덮어쓴다(P2B). 테마가 없거나 못 읽었을 때 보이는 것은 이 중립 값이다.
+   게시된 행사 테마가 이 값을 덮어쓴다(P2B-4, components/participation/EventSurface.tsx). 테마가 없거나 못 읽었을 때
+   보이는 것은 이 중립 값이다 — lib/event/pageTheme.ts · 백엔드 ThemeResolver.DEFAULT_COLORS 와 같아야 한다.
    개인 색 테마(data-theme)와 무관하다 — 행사 화면에서는 부트스트랩이 data-theme 을 심지 않는다. */
 .ev-surface {
   color-scheme: light;
@@ -333,7 +334,7 @@ body {
   --ev-text: #1b1b1b;
   --ev-muted: #5e5e5e;
   --ev-card: #ffffff;
-  --ev-border: rgba(0, 0, 0, 0.12);
+  --ev-border: #dadad8;
   --ev-accent: #1b1b1b;
   --ev-accent-contrast: #ffffff;
   --ev-danger: #b42318;

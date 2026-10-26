@@ -3,6 +3,8 @@
  * docs/api/openapi.generated.json 이다 — p2a 초안은 더 고치지 않는다(백엔드 fork #21).
  * 계약이 바뀌면 이 파일과 BFF(app/api/client/{public,participant,booth}/**)를 함께 고친다.
  */
+import type { ResolvedPageTheme } from "@/lib/event/pageTheme";
+
 export type LayoutType = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
 export type EventStatus = "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
 export type JobStatus = "PENDING" | "DONE" | "FAILED";
@@ -26,8 +28,8 @@ export type ConsentItem = {
   body?: string;
 };
 
-/** P2A 는 자리만 있다. 페이지 테마 스키마는 P2B 에서 정한다. */
-export type EventTheme = Record<string, unknown>;
+/** 화면용 페이지 테마(P2B-4). 서버가 기본값을 채우고 자산은 URL 로 바꿔 싣는다. */
+export type EventTheme = ResolvedPageTheme;
 
 export type PublicEvent = {
   eventId: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { EventLogo, EventSurface } from "@/components/participation/EventSurface";
 import { QrCode } from "@/components/qr/QrCode";
 import {
   CaptureAndSend,
@@ -23,6 +24,7 @@ import {
   startBoothGuest,
   submitConsents,
 } from "@/lib/event/eventApi";
+import { pageThemeCopy } from "@/lib/event/pageTheme";
 import type { CaptureRun, EventFrameRef, PublicEvent } from "@/lib/event/types";
 
 /**
@@ -224,8 +226,12 @@ export function BoothScreen() {
       : null;
 
   return (
-    <main className="ev-surface flex min-h-dvh flex-col items-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+    <EventSurface
+      theme={event?.theme}
+      className="flex min-h-dvh flex-col items-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8"
+    >
       <div className="flex w-full max-w-xl flex-col gap-6">
+        <EventLogo className="h-16 w-auto max-w-[50%] self-start object-contain" />
         <header className="flex items-center justify-between gap-4">
           <h1 className="text-[30px] font-extrabold">{event?.name ?? "부스"}</h1>
           <FullscreenToggle />
@@ -250,15 +256,22 @@ export function BoothScreen() {
 
         {phase.kind === "idle" && event ? (
           event.captureOpen ? (
-            <button
+            <div className="flex flex-col gap-4">
+              {event.theme?.copy?.welcome ? (
+                <p className="text-[18px] font-bold">{pageThemeCopy(event.theme, "welcome", "")}</p>
+              ) : null}
+              <button
               type="button"
               onClick={() => void onStartGuest()}
               className="h-24 rounded-3xl bg-(--ev-accent) text-[30px] font-extrabold text-(--ev-accent-contrast)"
             >
               촬영 시작
-            </button>
+              </button>
+            </div>
           ) : (
-            <p className="text-[18px] text-(--ev-muted)">지금은 촬영 시간이 아니에요.</p>
+            <p className="text-[18px] text-(--ev-muted)">
+              {pageThemeCopy(event.theme, "closed", "지금은 촬영 시간이 아니에요.")}
+            </p>
           )
         ) : null}
 
@@ -294,7 +307,9 @@ export function BoothScreen() {
             <div className="rounded-3xl bg-white p-4">
               <QrCode value={resultLink} size={280} label="사진 받기 QR" />
             </div>
-            <p className="text-[14px] text-(--ev-muted)">사진은 잠시 뒤 완성돼요. 링크는 지금 받아 가도 돼요.</p>
+            <p className="text-[14px] text-(--ev-muted)">
+              {pageThemeCopy(event?.theme, "composing", "사진은 잠시 뒤 완성돼요. 링크는 지금 받아 가도 돼요.")}
+            </p>
             <button
               type="button"
               onClick={() => void finishGuest()}
@@ -305,7 +320,7 @@ export function BoothScreen() {
           </section>
         ) : null}
       </div>
-    </main>
+    </EventSurface>
   );
 }
 

@@ -138,3 +138,16 @@ it("회수된 기기(BOOTH-003)는 자격을 버리고 연결 화면으로 간�
   expect(await screen.findByRole("button", { name: "연결" })).toBeInTheDocument();
   expect(window.localStorage.getItem("harucut:event:booth-device")).toBeNull();
 });
+
+// P2B-4 — 부스 대기 화면은 주최자 문구(welcome)와 행사 색으로 그린다.
+it("행사 테마의 대기 문구와 색으로 대기 화면을 그린다", async () => {
+  pairDevice();
+  api.getBoothMe.mockResolvedValue({
+    deviceId: "d-1",
+    status: "ACTIVE",
+    event: { ...eventInfo(), theme: { colors: { accent: "#C8553D" }, copy: { welcome: "신랑 신부와 한 컷!" } } },
+  });
+  render(<BoothScreen />);
+  expect(await screen.findByText("신랑 신부와 한 컷!")).toBeInTheDocument();
+  expect(screen.getByRole("main")).toHaveStyle({ "--ev-accent": "#C8553D" });
+});
