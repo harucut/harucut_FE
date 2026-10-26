@@ -96,8 +96,11 @@ export type RemoteFrameComponent = {
   zIndex?: number;
   style?: Record<string, unknown>;
   styleJson?: Record<string, unknown>;
-  // 참고: 서버는 `renderedKey` 를 **응답에 내려주지 않는다**(합성 전용).
-  // 그래서 저장된 TEXT 프레임을 다시 저장할 때는 글자 층을 항상 새로 구워야 한다.
+  /** 편집기 잠금(ADR-0006 §3). 인가 근거가 아니다. */
+  locked?: boolean;
+  /** TEXT 의 구운 글자 층 key·조회 URL. 예전 서버는 내려주지 않았다(그땐 다시 저장할 때마다 다시 구웠다). */
+  renderedKey?: string;
+  renderedUrl?: string;
 };
 
 // GET /api/auth/user/frame 응답.
@@ -119,6 +122,11 @@ export type RemoteFrame = {
   // frameType으로 서버가 고정하는 캔버스 크기(요청값은 저장되지 않는다).
   canvasWidth?: number;
   canvasHeight?: number;
+  /**
+   * 낙관적 잠금 버전(ADR-0006 §3). 수정 저장(PUT)에 그대로 보낸다. 서버 값과 다르면 409 FRAME-002
+   * 이고 `data.currentVersion` 에 서버의 현재 값이 실린다.
+   */
+  version?: number;
 };
 
 // GET /api/auth/user/subscription/usage 응답 (프레임 보관 한도·사용량).

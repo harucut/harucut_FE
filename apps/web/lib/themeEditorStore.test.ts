@@ -156,6 +156,20 @@ describe("themeEditorStore 되돌리기·다시 하기", () => {
   });
 });
 
+describe("themeEditorStore 잠금 저장·재열기(F1-3)", () => {
+  it("불러온 잠금을 유지하고, 내보낼 때도 싣는다", () => {
+    const json = makeJson(["a", "b"]);
+    json.components[0] = { ...json.components[0], locked: true };
+    useThemeEditorStore.getState().reset();
+    useThemeEditorStore.getState().importJson(json);
+
+    expect(useThemeEditorStore.getState().components.map((c) => c.locked)).toEqual([true, false]);
+    const exported = useThemeEditorStore.getState().exportJson()!;
+    expect(exported.components[0].locked).toBe(true);
+    expect(exported.components[1]).not.toHaveProperty("locked");
+  });
+});
+
 describe("themeEditorStore 이동(nudge)", () => {
   const store = () => useThemeEditorStore.getState();
 
