@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { getAsset, uploadAsset } from "@/lib/assetUploadApi";
 import { eventFontClassName } from "@/lib/event/eventFonts";
@@ -63,28 +63,39 @@ export function StudioPageTheme({
 }: {
   workspaceId: string;
   value: PageTheme;
-  onChange: (next: PageTheme) => void;
+  /**
+   * 이전 테마를 받아 다음 테마를 돌려주는 함수로 바꾼다. 업로드처럼 기다리는 동안 다른 칸을 고칠 수 있어서,
+   * 그때의 `value` 로 통째로 덮으면 그사이 고친 것이 되돌아간다(Codex #544).
+   */
+  onChange: (apply: (prev: PageTheme) => PageTheme) => void;
   /** 이 행사에 적용된 이용권 기능. null 이면 아직 모른다(안내를 띄우지 않는다). */
   features?: EntitlementFeature[] | null;
 }) {
-  const [previews, setPreviews] = useState<Partial<Record<AssetField, string>>>({});
+  // 자산 ID → 짧은 조회 URL. 칸이 아니라 ID 로 기억해야, 다시 불러온 테마의 로고·배경이 바뀌면 옛 그림을 쓰지 않는다.
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const requestedRef = useRef(new Set<string>());
   const [uploading, setUploading] = useState<AssetField | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // 이미 고른 로고 · 배경을 미리 보여 준다(짧은 조회 URL). 못 받아도 편집은 된다.
+  // 고른 로고 · 배경을 미리 보여 준다(짧은 조회 URL). ID 가 바뀌면(다시 불러오기 등) 그 ID 로 새로 받는다.
+  // 못 받아도 편집은 된다. 같은 ID 는 한 번만 묻는다.
+  const { logoAssetId, backgroundAssetId } = value;
   useEffect(() => {
-    for (const field of ["logoAssetId", "backgroundAssetId"] as const) {
-      const assetId = value[field];
-      if (!assetId || previews[field]) continue;
+    for (const assetId of [logoAssetId, backgroundAssetId]) {
+      if (!assetId || requestedRef.current.has(assetId)) continue;
+      requestedRef.current.add(assetId);
       getAsset(assetId)
         .then((asset) => {
-          if (asset.url) setPreviews((prev) => ({ ...prev, [field]: asset.url }));
+          const url = asset.url;
+          if (url) setPreviews((prev) => ({ ...prev, [assetId]: url }));
         })
-        .catch(() => {});
+        .catch(() => requestedRef.current.delete(assetId));
     }
-    // 처음 열 때만 — 새로 올린 것은 업로드 결과로 바로 채운다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [logoAssetId, backgroundAssetId]);
+  const previewOf = (field: AssetField) => {
+    const assetId = value[field];
+    return assetId ? previews[assetId] : undefined;
+  };
 
   const colors = { ...DEFAULT_PAGE_THEME_COLORS, ...value.colors };
   // 화면 문구는 기능 없이 쓸 수 있다. 색 · 글꼴 · 로고 · 배경은 이용권 기능 CUSTOM_THEME 이 있어야 게시된다.
@@ -98,9 +109,10 @@ export function StudioPageTheme({
   const lowContrast = lowContrastPairs(value.colors ?? {});
 
   const setColor = (key: PageThemeColorKey, color: string) =>
-    onChange({ ...value, colors: { ...value.colors, [key]: color } });
+    onChange((prev) => ({ ...prev, colors: { ...prev.colors, [key]: color } }));
 
-  const setCopy = (key: PageThemeCopyKey, text: string) => onChange({ ...value, copy: { ...value.copy, [key]: text } });
+  const setCopy = (key: PageThemeCopyKey, text: string) =>
+    onChange((prev) => ({ ...prev, copy: { ...prev.copy, [key]: text } }));
 
   const upload = async (field: AssetField, file: File | undefined) => {
     if (!file) return;
@@ -108,8 +120,11 @@ export function StudioPageTheme({
     setNotice(null);
     try {
       const asset = await uploadAsset({ file, purpose: "PAGE_THEME_ASSET", workspaceId });
-      onChange({ ...value, [field]: asset.assetId });
-      setPreviews((prev) => ({ ...prev, [field]: asset.url }));
+      // 업로드를 기다리는 사이 고친 다른 칸은 그대로 두고 이 칸의 자산 ID 만 바꾼다.
+      onChange((prev) => ({ ...prev, [field]: asset.assetId }));
+      requestedRef.current.add(asset.assetId);
+      const url = asset.url;
+      if (url) setPreviews((prev) => ({ ...prev, [asset.assetId]: url }));
     } catch (cause) {
       setNotice(getUserFacingApiErrorMessage(cause, "이미지를 올리지 못했어요."));
     } finally {
@@ -118,8 +133,7 @@ export function StudioPageTheme({
   };
 
   const removeAsset = (field: AssetField) => {
-    onChange({ ...value, [field]: undefined });
-    setPreviews((prev) => ({ ...prev, [field]: undefined }));
+    onChange((prev) => ({ ...prev, [field]: undefined }));
   };
 
   return (
@@ -135,11 +149,11 @@ export function StudioPageTheme({
         className={["ev-surface flex flex-col gap-3 rounded-2xl border border-(--hc-border) p-4", eventFontClassName(value.font)]
           .filter(Boolean)
           .join(" ")}
-        style={pageThemeStyle({ colors: value.colors, backgroundUrl: previews.backgroundAssetId })}
+        style={pageThemeStyle({ colors: value.colors, backgroundUrl: previewOf("backgroundAssetId") })}
       >
-        {previews.logoAssetId ? (
+        {previewOf("logoAssetId") ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previews.logoAssetId} alt="" referrerPolicy="no-referrer" className="h-10 w-auto self-start object-contain" />
+          <img src={previewOf("logoAssetId")} alt="" referrerPolicy="no-referrer" className="h-10 w-auto self-start object-contain" />
         ) : null}
         <p className="text-[18px] font-extrabold">행사 이름</p>
         <p className="text-[14px] text-(--ev-muted)">
@@ -192,7 +206,7 @@ export function StudioPageTheme({
         ) : null}
         <button
           type="button"
-          onClick={() => onChange({ ...value, colors: {} })}
+          onClick={() => onChange((prev) => ({ ...prev, colors: {} }))}
           className="h-11 self-start rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
         >
           기본 색으로
@@ -203,7 +217,10 @@ export function StudioPageTheme({
         글꼴
         <select
           value={value.font ?? "SYSTEM"}
-          onChange={(e) => onChange({ ...value, font: e.target.value as PageThemeFont })}
+          onChange={(e) => {
+            const font = e.target.value as PageThemeFont;
+            onChange((prev) => ({ ...prev, font }));
+          }}
           className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
         >
           {PAGE_THEME_FONTS.map((font) => (
@@ -225,9 +242,9 @@ export function StudioPageTheme({
             <span className="font-semibold">{label}</span>
             {value[field] ? (
               <span className="flex items-center gap-2">
-                {previews[field] ? (
+                {previewOf(field) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previews[field]} alt={`고른 ${label}`} referrerPolicy="no-referrer" className="h-12 w-auto max-w-32 rounded-lg object-contain" />
+                  <img src={previewOf(field)} alt={`고른 ${label}`} referrerPolicy="no-referrer" className="h-12 w-auto max-w-32 rounded-lg object-contain" />
                 ) : (
                   <span className="text-[13px] text-(--hc-muted)">고른 이미지가 있어요</span>
                 )}
@@ -286,7 +303,10 @@ export function StudioPageTheme({
             type="checkbox"
             className="size-5"
             checked={Boolean(value.branding?.hideHarucutBranding)}
-            onChange={(e) => onChange({ ...value, branding: { ...value.branding, hideHarucutBranding: e.target.checked } })}
+            onChange={(e) => {
+              const hideHarucutBranding = e.target.checked;
+              onChange((prev) => ({ ...prev, branding: { ...prev.branding, hideHarucutBranding } }));
+            }}
           />
           하루컷 표시 숨기기
         </label>
@@ -299,12 +319,10 @@ export function StudioPageTheme({
           완성 사진의 로고
           <select
             value={value.branding?.outputLogo ?? "NONE"}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                branding: { ...value.branding, outputLogo: e.target.value as "NONE" | "ORGANIZER_LOGO" },
-              })
-            }
+            onChange={(e) => {
+              const outputLogo = e.target.value as "NONE" | "ORGANIZER_LOGO";
+              onChange((prev) => ({ ...prev, branding: { ...prev.branding, outputLogo } }));
+            }}
             className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
           >
             <option value="NONE">넣지 않기</option>
