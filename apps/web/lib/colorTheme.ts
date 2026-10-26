@@ -146,7 +146,15 @@ export function subscribeSystemColorTheme(
   };
 }
 
+/**
+ * 행사 화면 경로(`lib/eventSurface.ts` 의 EVENT_SURFACE_PREFIXES 와 같은 규칙).
+ * 부트스트랩은 번들이 아니라 인라인 문자열이라 모듈을 못 읽는다. 테스트가 둘을 맞춰 본다.
+ */
+export const EVENT_SURFACE_PATH_PATTERN = "^/(e|r|booth)(/|$)";
+
 export const COLOR_THEME_BOOTSTRAP_SCRIPT = `(function(){
+// 행사 화면은 게시된 행사 테마로 그린다. 개인의 저장된 선호를 심지 않는다.
+if (new RegExp(${JSON.stringify(EVENT_SURFACE_PATH_PATTERN)}).test(window.location.pathname)) return;
 try {
   var stored = window.localStorage.getItem("harucut-web-color-theme");
   var theme = stored === "dark" || stored === "light"

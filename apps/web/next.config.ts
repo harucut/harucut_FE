@@ -57,7 +57,7 @@ const nextConfig: NextConfig = {
       },
       // 아이콘·매니페스트는 훨씬 덜 바뀐다.
       {
-        source: "/:file(favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|icon-192.png|icon-512.png|icon-maskable-512.png|site.webmanifest)",
+        source: "/:file(favicon.ico|favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|icon-192.png|icon-512.png|icon-maskable-512.png|site.webmanifest)",
         headers: [
           {
             key: "Cache-Control",
