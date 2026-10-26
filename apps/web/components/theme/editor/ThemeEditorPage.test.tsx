@@ -799,3 +799,41 @@ describe("ThemeEditorPage 방향키 이동", () => {
     input.remove();
   });
 });
+
+describe("ThemeEditorPage 모바일 도구 시트", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.activeId = null;
+  });
+
+  /** 모바일에서 보이는 패널. 데스크톱 배치는 CSS(`lg:`)가 맡아 jsdom 에서는 클래스로만 본다. */
+  function shownPanels(container: HTMLElement) {
+    return Array.from(
+      container.querySelectorAll("#theme-editor-tool-sheet > div"),
+    )
+      .filter((node) => !node.className.includes("max-lg:hidden"))
+      .map((node) => node.firstElementChild?.getAttribute("data-testid"));
+  }
+
+  it("처음에는 추가 도구 하나만 시트에 띄우고, 고른 도구로 바꾼다", () => {
+    const { container, getByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    expect(shownPanels(container)).toEqual(["asset-panel"]);
+
+    fireEvent.click(getByRole("button", { name: "레이어" }));
+    expect(shownPanels(container)).toEqual(["layers-panel"]);
+    expect(getByRole("button", { name: "레이어" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // 캔버스에서 고른 것을 바로 고치러 온 것이다.
+  it("레이어를 새로 고르면 속성 시트로 넘긴다", () => {
+    const { container, rerender } = render(<ThemeEditorPage frameId="classic-4" />);
+    editorStoreState.activeId = "layer-1";
+    rerender(<ThemeEditorPage frameId="classic-4" />);
+    expect(shownPanels(container)).toEqual(["inspector-panel"]);
+    editorStoreState.activeId = null;
+  });
+});
