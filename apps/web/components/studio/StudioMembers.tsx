@@ -292,3 +292,54 @@ export function StudioMembers({
     </div>
   );
 }
+
+/**
+ * 멤버 목록 밖의 「이 공간에서 나가기」. 운영 담당은 멤버 목록을 볼 수 없어(서버 403) 목록 안의 나가기가 없다(Codex #554).
+ * 본인 탈퇴는 어느 역할이든 된다(DELETE members/me).
+ */
+export function LeaveWorkspaceButton({ workspaceId, onLeft }: { workspaceId: string; onLeft: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="h-11 self-start rounded-full px-3 text-[13px] text-(--hc-muted)"
+      >
+        이 공간에서 나가기
+      </button>
+      {error ? (
+        <p role="alert" className="text-[13px] text-(--hc-danger)">
+          {error}
+        </p>
+      ) : null}
+      {confirming ? (
+        <ConfirmDialog
+          title="이 공간에서 나갈까요?"
+          description="맡은 행사를 더 운영할 수 없어요. 다시 들어오려면 초대를 받아야 해요."
+          confirmLabel="나가기"
+          runningLabel="처리하는 중…"
+          running={running}
+          destructive
+          onClose={() => setConfirming(false)}
+          onConfirm={async () => {
+            setRunning(true);
+            setError(null);
+            try {
+              await removeMember(workspaceId, "me");
+              onLeft();
+            } catch (cause) {
+              setError(getUserFacingApiErrorMessage(cause, "나가지 못했어요."));
+            } finally {
+              setRunning(false);
+              setConfirming(false);
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}

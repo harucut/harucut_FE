@@ -15,7 +15,7 @@ import {
 } from "@/lib/studio/studioApi";
 import { STUDIO_TIMEZONE } from "@/lib/studio/eventTime";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
-import { StudioMembers } from "@/components/studio/StudioMembers";
+import { LeaveWorkspaceButton, StudioMembers } from "@/components/studio/StudioMembers";
 import { StudioProjects } from "@/components/studio/StudioProjects";
 import { PERMISSION_LABEL, listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
@@ -227,9 +227,19 @@ export function StudioHome() {
                 onCreated={(event) => router.push(`/studio/events/${encodeURIComponent(event.eventId)}`)}
               />
             ) : current.role === "OPERATOR" ? (
-              <p className="text-[13px] text-(--hc-muted)">
-                운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요.
-              </p>
+              <div className="flex flex-col gap-2">
+                <p className="text-[13px] text-(--hc-muted)">
+                  운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요.
+                </p>
+                <LeaveWorkspaceButton
+                  key={current.workspaceId}
+                  workspaceId={current.workspaceId}
+                  onLeft={() => {
+                    router.replace("/studio");
+                    void reload();
+                  }}
+                />
+              </div>
             ) : (
               <p className="text-[13px] text-(--hc-muted)">행사를 만들고 게시하려면 이 공간의 관리자 권한이 필요해요.</p>
             )}
