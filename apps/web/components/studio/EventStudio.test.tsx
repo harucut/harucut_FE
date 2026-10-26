@@ -26,6 +26,10 @@ jest.mock("@/lib/studio/studioApi", () => ({
   publishFrameVersion: (...args: unknown[]) => mockPublishFrame(...args),
   listBoothDevices: async () => [],
 }));
+jest.mock("@/lib/studio/accessApi", () => ({
+  ...jest.requireActual("@/lib/studio/accessApi"),
+  listEventGrants: async () => [],
+}));
 
 const VERSION_CLASSIC = {
   frameVersionId: 41,

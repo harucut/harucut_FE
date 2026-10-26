@@ -46,6 +46,15 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
+      // 초대 링크(/invite#<token>)도 토큰이 곧 권한이다. 결과 링크와 같은 이유로 막는다.
+      {
+        source: "/invite",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
       // public/ 의 정적 자산에는 캐시 정책이 없어 매 방문마다 다시 받아왔다.
       // 스티커 PNG 39장·OG 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
       // 영구 immutable 은 못 주지만, 하루 캐시 + 하루 stale-while-revalidate 로

@@ -15,6 +15,9 @@ import {
 } from "@/lib/studio/studioApi";
 import { STUDIO_TIMEZONE } from "@/lib/studio/eventTime";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
+import { StudioMembers } from "@/components/studio/StudioMembers";
+import { PERMISSION_LABEL, listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
+import { getMyUserInfo } from "@/lib/userApi";
 
 /** 행사는 조직 공간에만 만든다 — 개인 공간은 회원 탈퇴 때 통째로 지워진다(백엔드 fork #15, R5 14절). */
 function organizationsOf(workspaces: Workspace[]) {
@@ -34,6 +37,9 @@ export function StudioHome() {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [events, setEvents] = useState<StudioEvent[] | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  // 행사 고객으로 사진 권한만 받은 행사(공간 멤버가 아니다). 고객에게는 이 목록이 Studio 의 시작점이다.
+  const [customerEvents, setCustomerEvents] = useState<MyEvent[]>([]);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
 
   const organizations = load.state === "ready" ? organizationsOf(load.workspaces) : [];
   const requested = searchParams.get("workspace");
@@ -51,6 +57,12 @@ export function StudioHome() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
     void reload();
+    listMyEvents()
+      .then((list) => setCustomerEvents(list.filter((e) => !e.access.role)))
+      .catch(() => {});
+    getMyUserInfo()
+      .then((user) => setMyUserId(user.id ?? null))
+      .catch(() => {});
   }, [reload]);
 
   useEffect(() => {
@@ -88,6 +100,24 @@ export function StudioHome() {
           <p role="alert" className="text-[14px] text-(--hc-danger)">
             {load.message}
           </p>
+        ) : null}
+
+        {customerEvents.length > 0 ? (
+          <section aria-labelledby="studio-customer-events" className="flex flex-col gap-3">
+            <h2 id="studio-customer-events" className="text-[18px] font-bold">
+              초대받은 행사
+            </h2>
+            <ul className="flex flex-col gap-2">
+              {customerEvents.map((event) => (
+                <li key={event.eventId} className="hc-surface-card flex flex-col gap-1 rounded-2xl px-4 py-3">
+                  <span className="text-[15px] font-semibold">{event.name || "이름 없는 행사"}</span>
+                  <span className="text-[12px] text-(--hc-muted)">
+                    {event.access.permissions.map((p) => PERMISSION_LABEL[p]).join(" · ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         {load.state === "ready" && organizations.length === 0 ? (
@@ -152,6 +182,24 @@ export function StudioHome() {
                   ))}
                 </ul>
               ) : null}
+            </section>
+
+            <section aria-labelledby="studio-members-title" className="flex flex-col gap-3">
+              <h2 id="studio-members-title" className="text-[18px] font-bold">
+                멤버
+              </h2>
+              {/* 공간마다 새로 그린다 — 앞 공간에서 만든 초대 링크·확인 창이 다음 공간에 남지 않게. */}
+              <StudioMembers
+                key={current.workspaceId}
+                workspaceId={current.workspaceId}
+                myRole={current.role}
+                myUserId={myUserId}
+                onLeft={() => {
+                  // 같은 화면에 머무르므로 목록을 다시 받아 나간 공간을 지운다.
+                  router.replace("/studio");
+                  void reload();
+                }}
+              />
             </section>
 
             {current.role === "OWNER" || current.role === "ADMIN" ? (
