@@ -1,6 +1,7 @@
 import type { ApiEnvelope } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
 import { clientApi } from "@/lib/clientApi";
+import type { EventOperation, EventPermission } from "@/lib/studio/accessApi";
 import type { EventSettings } from "@/lib/studio/studioApi";
 
 /**
@@ -99,4 +100,36 @@ export async function getEffectiveSettings(eventId: string): Promise<EffectiveSe
   );
   const data = requireData(res.data, "유효 설정");
   return { settings: data.settings ?? {}, sources: data.sources ?? {} };
+}
+
+/** 프로젝트 멤버(P3-2) — 그 프로젝트의 모든 행사(앞으로 만들 행사 포함)에 같은 권한. 대상은 공간의 OPERATOR 멤버. */
+export type ProjectMember = {
+  userId: string;
+  name: string;
+  operations: EventOperation[];
+  permissions: EventPermission[];
+  createdAt: string;
+};
+
+export async function listProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  const res = await clientApi.get<ApiEnvelope<ProjectMember[]>>(`/api/client/projects/${encodeURIComponent(projectId)}/members`);
+  return res.data.data ?? [];
+}
+
+/** 통째로 바꾸고(없으면 만든다), 둘 다 비면 뺀다. */
+export async function putProjectMember(
+  projectId: string,
+  userId: string,
+  operations: EventOperation[],
+  permissions: EventPermission[],
+): Promise<ProjectMember | null> {
+  const res = await clientApi.put<ApiEnvelope<ProjectMember>>(
+    `/api/client/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+    { operations, permissions },
+  );
+  return res.data.data ?? null;
+}
+
+export async function removeProjectMember(projectId: string, userId: string): Promise<void> {
+  await clientApi.delete(`/api/client/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`);
 }

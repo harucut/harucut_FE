@@ -22,7 +22,14 @@ const DEFAULT_PERMISSIONS: EventPermission[] = ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"
  * 행사 고객(ADR-0008 §2-2) — 신랑신부처럼 이 행사 사진만 보는 사람. 공간 멤버가 아니라서 공간의 다른 행사는
  * 모른다. 권한은 사진 보기·내려받기·한꺼번에 받기·지우기로 나뉘고, 행사 설정은 고객이 바꾸지 못한다.
  */
-export function StudioEventCustomers({ eventId }: { eventId: string }) {
+export function StudioEventCustomers({
+  eventId,
+  onRemoved,
+}: {
+  eventId: string;
+  /** 권한 행을 지운 뒤. 운영자 배정도 같은 행을 보므로 다시 받게 한다(행을 지우면 운영 권한도 함께 사라진다). */
+  onRemoved?: () => void;
+}) {
   const [grants, setGrants] = useState<EventGrant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -197,7 +204,11 @@ export function StudioEventCustomers({ eventId }: { eventId: string }) {
       {confirm ? (
         <ConfirmDialog
           title={`${confirm.name}님의 사진 권한을 회수할까요?`}
-          description="이 행사 사진을 더 보거나 내려받을 수 없어요. 다시 주려면 새로 초대해야 해요."
+          description={
+            confirm.operations?.length
+              ? "이 행사 사진을 더 보거나 내려받을 수 없고, 이 행사의 운영 권한도 함께 빠져요."
+              : "이 행사 사진을 더 보거나 내려받을 수 없어요. 다시 주려면 새로 초대해야 해요."
+          }
           confirmLabel="권한 회수"
           runningLabel="처리하는 중…"
           running={busy === String(confirm.grantId)}
@@ -210,6 +221,7 @@ export function StudioEventCustomers({ eventId }: { eventId: string }) {
               async () => {
                 await removeEventGrant(eventId, grant.grantId);
                 setGrants((prev) => prev?.filter((g) => g.grantId !== grant.grantId) ?? null);
+                onRemoved?.();
               },
               "권한을 회수하지 못했어요.",
             );

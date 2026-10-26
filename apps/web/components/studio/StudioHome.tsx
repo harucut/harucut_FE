@@ -15,7 +15,7 @@ import {
 } from "@/lib/studio/studioApi";
 import { STUDIO_TIMEZONE } from "@/lib/studio/eventTime";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
-import { StudioMembers } from "@/components/studio/StudioMembers";
+import { LeaveWorkspaceButton, StudioMembers } from "@/components/studio/StudioMembers";
 import { StudioProjects } from "@/components/studio/StudioProjects";
 import { PERMISSION_LABEL, listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
@@ -200,29 +200,46 @@ export function StudioHome() {
               </section>
             ) : null}
 
-            <section aria-labelledby="studio-members-title" className="flex flex-col gap-3">
-              <h2 id="studio-members-title" className="text-[18px] font-bold">
-                멤버
-              </h2>
-              {/* 공간마다 새로 그린다 — 앞 공간에서 만든 초대 링크·확인 창이 다음 공간에 남지 않게. */}
-              <StudioMembers
-                key={current.workspaceId}
-                workspaceId={current.workspaceId}
-                myRole={current.role}
-                myUserId={myUserId}
-                onLeft={() => {
-                  // 같은 화면에 머무르므로 목록을 다시 받아 나간 공간을 지운다.
-                  router.replace("/studio");
-                  void reload();
-                }}
-              />
-            </section>
+            {/* 운영 담당은 멤버 목록을 보지 못한다(서버 403) — 맡은 행사만 운영한다(ADR-0009 §3). */}
+            {current.role === "OPERATOR" ? null : (
+              <section aria-labelledby="studio-members-title" className="flex flex-col gap-3">
+                <h2 id="studio-members-title" className="text-[18px] font-bold">
+                  멤버
+                </h2>
+                {/* 공간마다 새로 그린다 — 앞 공간에서 만든 초대 링크·확인 창이 다음 공간에 남지 않게. */}
+                <StudioMembers
+                  key={current.workspaceId}
+                  workspaceId={current.workspaceId}
+                  myRole={current.role}
+                  myUserId={myUserId}
+                  onLeft={() => {
+                    // 같은 화면에 머무르므로 목록을 다시 받아 나간 공간을 지운다.
+                    router.replace("/studio");
+                    void reload();
+                  }}
+                />
+              </section>
+            )}
 
             {current.role === "OWNER" || current.role === "ADMIN" ? (
               <CreateEventCard
                 workspaceId={current.workspaceId}
                 onCreated={(event) => router.push(`/studio/events/${encodeURIComponent(event.eventId)}`)}
               />
+            ) : current.role === "OPERATOR" ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[13px] text-(--hc-muted)">
+                  운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요.
+                </p>
+                <LeaveWorkspaceButton
+                  key={current.workspaceId}
+                  workspaceId={current.workspaceId}
+                  onLeft={() => {
+                    router.replace("/studio");
+                    void reload();
+                  }}
+                />
+              </div>
             ) : (
               <p className="text-[13px] text-(--hc-muted)">행사를 만들고 게시하려면 이 공간의 관리자 권한이 필요해요.</p>
             )}
