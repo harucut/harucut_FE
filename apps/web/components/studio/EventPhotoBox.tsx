@@ -198,6 +198,10 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
           ← {access?.access.role ? "행사 설정" : "행사 목록"}
         </Link>
         <h1 className="text-[30px] font-extrabold tracking-tight">{access?.name ? `${access.name} 사진함` : "사진함"}</h1>
+        {/* 보관 종료 배치(ADR-0008 §7)가 기한이 지난 결과를 지운다 — 사진함에서도 빠진다. */}
+        <p className="text-[13px] text-(--hc-muted)">
+          사진은 만든 날부터 행사의 보관 기간이 지나면 지워져요. 필요한 사진은 미리 받아 두세요.
+        </p>
 
         <div className="flex flex-wrap gap-2">
           <label className="flex flex-col gap-1 text-[13px] font-semibold">

@@ -461,10 +461,16 @@ export function EventStudio({ eventId }: { eventId: string }) {
             </Section>
 
             <Section title="결과 보관">
-              <Field label="보관 일수" help="참가자가 결과 링크로 다시 내려받을 수 있는 기간이에요.">
+              <Field
+                label="보관 일수"
+                help={`사진을 만든 날부터 이 기간 동안 참가자가 결과 링크로 다시 받고, 사진함에도 남아요. 지나면 사진이 지워져요 — 필요한 사진은 미리 받아 두세요.${
+                  usage?.retentionDays ? ` 지금 이용권으로는 ${usage.retentionDays}일까지 정할 수 있어요.` : ""
+                }`}
+              >
                 <input
                   type="number"
                   min={1}
+                  max={usage?.retentionDays ?? undefined}
                   inputMode="numeric"
                   className="hc-input h-11 w-32 rounded-xl border px-3 text-[14px]"
                   value={form.retentionDays}
