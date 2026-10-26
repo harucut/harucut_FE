@@ -103,3 +103,21 @@ it("받지 않기를 누르면 토큰을 지운다", async () => {
   expect(window.sessionStorage.getItem(KEY)).toBeNull();
   expect(mockReplace).toHaveBeenCalledWith("/home");
 });
+
+// 세션이 끝나도(다른 탭 로그아웃 등) 초대는 살아 있다 — 토큰을 남기고 로그인으로 잇는다.
+it("확인 중 인증이 끝나면(401) 토큰을 남기고 로그인 안내로 간다", async () => {
+  window.sessionStorage.setItem(KEY, TOKEN);
+  mockPreview.mockRejectedValue(new ApiRequestError({ status: 401, code: "AUTH-001", apiMessage: "x" }));
+  render(<InviteAccept />);
+  expect(await screen.findByRole("link", { name: "로그인하고 초대 받기" })).toBeInTheDocument();
+  expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
+});
+
+it("수락 중 인증이 끝나도(401) 로그인 안내로 간다", async () => {
+  window.sessionStorage.setItem(KEY, TOKEN);
+  mockAccept.mockRejectedValue(new ApiRequestError({ status: 401, code: "AUTH-001", apiMessage: "x" }));
+  render(<InviteAccept />);
+  fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
+  expect(await screen.findByRole("link", { name: "로그인하고 초대 받기" })).toBeInTheDocument();
+  expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
+});
