@@ -79,6 +79,9 @@ function setBoothDevice(value: StoredBoothDevice | null) {
   window.dispatchEvent(new Event(BOOTH_DEVICE_CHANGED));
 }
 
+/** 대기 화면에서 행사 상태를 다시 묻는 간격. */
+export const BOOTH_STATUS_POLL_MS = 30_000;
+
 export function BoothScreen() {
   const deviceJson = useSyncExternalStore(subscribeBoothDevice, boothDeviceSnapshot, () => null);
   const device = useMemo<StoredBoothDevice | null>(() => (deviceJson ? JSON.parse(deviceJson) : null), [deviceJson]);
@@ -148,6 +151,32 @@ export function BoothScreen() {
     })();
     return () => controller.abort();
   }, [device, toPairing]);
+
+  /*
+    대기 · 이용 불가 화면에서는 행사 상태를 다시 묻는다. 촬영 전에 부스를 켜 두면 「촬영 시간이 아님」이나 「배정된
+    행사 없음」에서 시작하는데, 운영자가 게시하거나 촬영을 열어도 새로고침 전에는 그대로 멈춰 있었다
+    (Codex 리뷰 #523). 이전 손님의 회차를 닫는 일은 처음 한 번만 한다 — 여기서는 행사 정보만 바꾼다.
+  */
+  const waitingForEvent =
+    Boolean(device) && (phase.kind === "unavailable" || (phase.kind === "idle" && !event?.captureOpen));
+  useEffect(() => {
+    if (!waitingForEvent || !device) return;
+    // 대기 화면을 떠난 뒤(손님이 촬영을 시작함) 도착한 응답은 버린다 — 촬영 화면을 대기로 되돌리지 않게.
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void getBoothMe(device.token)
+        .then((me) => {
+          if (cancelled || !me.event) return;
+          setEvent(me.event);
+          setPhase({ kind: "idle" });
+        })
+        .catch(() => {});
+    }, BOOTH_STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [waitingForEvent, device]);
 
   // 유휴 종료: 손님 단계에서 손을 떼고 시간이 지나면 안내 뒤 처음으로.
   const inGuestFlow = phase.kind === "consent" || phase.kind === "frame" || phase.kind === "capture" || phase.kind === "result";
@@ -290,6 +319,10 @@ export function BoothScreen() {
             frame={frame}
             sending={phase.kind === "sending" ? phase.progress : null}
             onProgress={(progress) => setPhase(progress ? { kind: "sending", progress } : { kind: "capture" })}
+            onRunOpened={(run, runToken) =>
+              // 앞 손님의 회차 열림 응답이 다음 손님 뒤에 도착할 수 있다(유휴 종료 뒤). 그 손님의 것일 때만 반영한다.
+              setGuest((current) => (current && current.token === runToken ? { ...current, run } : current))
+            }
             onDone={(resultToken, run) => {
               setGuest((current) => (current ? { ...current, run } : current));
               setPhase({ kind: "result", resultToken });

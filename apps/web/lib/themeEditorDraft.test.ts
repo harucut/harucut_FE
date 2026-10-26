@@ -257,3 +257,30 @@ describe("초안은 계정 × 프레임 종류마다 따로 둔다", () => {
     expect(window.localStorage.getItem("harucut:theme-editor-draft:v1")).toBeNull();
   });
 });
+
+describe("Codex 리뷰 반영", () => {
+  // #527 · #528: 자산으로 올린 뒤 source 는 key, renderUrl 만 이 기기의 blob 이다. blob 은 새로고침하면 죽는다.
+  it("올린 사진의 blob renderUrl 도 dataURL 로 남긴다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    const uploaded = { ...photoComponent("c0", "uploads/users/me/assets/As1.png"), renderUrl: "blob:local-photo", assetId: "As1" };
+    await saveEditorDraft({ ...saveInput([]), components: [uploaded] });
+
+    const restored = loadEditorDraft(OWNER, "classic-4")!.components[0];
+    expect(restored.source).toBe("uploads/users/me/assets/As1.png");
+    expect(restored.renderUrl).toMatch(/^data:image\//);
+  });
+
+  // #534: 공간을 붙인 주인 값을 다른 계정으로 보고 같은 계정의 다른 공간 초안을 지웠다.
+  it("같은 계정의 다른 공간·개인 초안은 남기고 다른 계정 것만 지운다", async () => {
+    const { saveEditorDraft, loadEditorDraft, draftOwnerKey } = await loadModule();
+    // 앞 사람이 남긴 초안 → 내가 개인·공간 A 를 편집 → 공간 B 를 편집.
+    await saveEditorDraft({ ...saveInput([]), ownerId: "OtherUser0001" });
+    await saveEditorDraft({ ...saveInput([]), ownerId: OWNER });
+    await saveEditorDraft({ ...saveInput([]), ownerId: draftOwnerKey(OWNER, "WsA") });
+    await saveEditorDraft({ ...saveInput([]), ownerId: draftOwnerKey(OWNER, "WsB") });
+
+    expect(loadEditorDraft(OWNER, "classic-4")).not.toBeNull();
+    expect(loadEditorDraft(draftOwnerKey(OWNER, "WsA"), "classic-4")).not.toBeNull();
+    expect(loadEditorDraft("OtherUser0001", "classic-4")).toBeNull();
+  });
+});

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiRequestError } from "@/lib/clientApi";
-import { EventParticipation } from "@/components/participation/EventParticipation";
+import { RESULT_POLL_MS, EventParticipation } from "@/components/participation/EventParticipation";
 import type { PublicEvent } from "@/lib/event/types";
 
 const mockPush = jest.fn();
@@ -272,3 +272,86 @@ it("합성 접수가 한도로 막혀도(ENT-002) 다시 보내지 않고 마감
   expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
   expect(api.submitEventCompose).toHaveBeenCalledTimes(1);
 });
+
+describe("Codex 리뷰 반영(#523)", () => {
+  // 다른 앱이 카메라를 쥐고 있으면(NotReadableError) 안내 없이 검은 화면만 남았다.
+  it("카메라를 켜지 못한 일반 오류도 안내하고 다시 시도를 둔다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    mockCameraState = "error";
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+
+    expect(await screen.findByText(/카메라를 켜지 못했어요/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+  });
+
+  // 만드는 중이던 사진이 서버에서 완성돼도 새로고침 전에는 받을 길이 없었다.
+  it("만드는 중인 사진이 있으면 다시 물어 완성되면 저장을 보인다", async () => {
+    jest.useFakeTimers();
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([{ jobId: 9, status: "PENDING" }]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByText(/만드는 중/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+
+    api.listParticipantResults.mockResolvedValue([{ jobId: 9, status: "DONE" }]);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(RESULT_POLL_MS);
+    });
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+  });
+
+  // Codex 리뷰(#541): 수동 갱신이 잠깐 실패했다고 완성 사진 목록까지 지우면 다시 누를 버튼도 사라진다.
+  it("다시 확인이 실패해도 있던 사진 목록은 그대로 두고 알린다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([
+      { jobId: 8, status: "DONE" },
+      { jobId: 9, status: "PENDING" },
+    ]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
+
+    api.listParticipantResults.mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }));
+    fireEvent.click(screen.getByRole("button", { name: "다시 확인" }));
+
+    expect(await screen.findByText("사진 목록을 다시 확인하지 못했어요. 잠시 후 다시 눌러 주세요.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+  });
+
+  // Codex 리뷰(#541): 401 로 자격이 바뀐 뒤 도착한 이전 자격의 결과 응답이 새 참여의 목록에 붙으면 안 된다.
+  it("자격이 바뀐 뒤 도착한 이전 결과 응답은 버린다", async () => {
+    jest.useFakeTimers();
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([{ jobId: 9, status: "PENDING" }]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByText(/만드는 중/)).toBeInTheDocument();
+
+    // 폴링 요청은 늦게 끝난다.
+    let releaseOld: (value: unknown) => void = () => {};
+    api.listParticipantResults.mockImplementationOnce(() => new Promise((resolve) => { releaseOld = resolve; }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(RESULT_POLL_MS);
+    });
+
+    // 그사이 촬영을 열다 자격이 끝나(401) 새로 참여한다.
+    api.startCaptureRun.mockRejectedValueOnce(new ApiRequestError({ status: 401, code: "PART-001", apiMessage: "x" }));
+    api.startByodSession.mockResolvedValue({ participantToken: "p-new", participantId: "p-9", status: "RESTRICTED", expiresAt: "2999-01-01T00:00:00Z" });
+    api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValue([]);
+    fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
+    expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+
+    await act(async () => releaseOld([{ jobId: 9, status: "DONE" }]));
+    expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/1번째 사진/)).not.toBeInTheDocument();
+  });
+});
+

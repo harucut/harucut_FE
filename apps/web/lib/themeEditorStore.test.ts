@@ -738,3 +738,33 @@ describe("themeEditorStore 공통 자산 업로드", () => {
     );
   });
 });
+
+// Codex 리뷰(#528): 서버 초안 복원이 숨긴 레이어를 모두 보이게 풀었다.
+describe("hydrateDraft 의 숨김", () => {
+  const hiddenLayer = {
+    id: "s1",
+    type: "STICKER" as const,
+    source: "/stickers/sticker-001.png",
+    x: 0, y: 0, width: 10, height: 10, scale: 1, rotation: 0, zIndex: 1,
+    hidden: true,
+  };
+  const draft = {
+    ownerId: "u",
+    frameId: "classic-4" as const,
+    backgroundColor: "111827",
+    background: { type: "COLOR" as const, value: "111827" },
+    cellCutouts: [false, false, false, false],
+    components: [hiddenLayer],
+    savedAt: 1,
+  };
+
+  it("서버 초안은 숨김을 지킨다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draft, { preserveHidden: true });
+    expect(useThemeEditorStore.getState().components[0].hidden).toBe(true);
+  });
+
+  it("로컬 초안은 예전처럼 숨김을 푼다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draft);
+    expect(useThemeEditorStore.getState().components[0].hidden).toBe(false);
+  });
+});

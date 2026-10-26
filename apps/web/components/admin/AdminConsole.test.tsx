@@ -216,3 +216,18 @@ it("PortOne 근거가 있는 계약은 결제 확인 여부를 보여 준다", a
   expect(await screen.findByText(/pay_1 · 결제 확인됨/)).toBeInTheDocument();
   expect(screen.getByText(/pay_2 · 결제 확인 전/)).toBeInTheDocument();
 });
+
+// Codex 리뷰(#546): 메모를 적고 저장 전에 상태를 바꿔도 적던 메모가 사라지면 안 된다.
+it("상태를 바꿔도 저장하지 않은 담당 메모는 그대로 둔다", async () => {
+  api.updateInquiry.mockImplementation(async (_id: string, patch: object) => ({ ...INQUIRY, ...patch }));
+  render(<AdminConsole />);
+  await screen.findByText("참가자 휴대폰 · 현장 부스");
+
+  fireEvent.change(screen.getByLabelText("담당 메모"), { target: { value: "견적 초안 작성 중" } });
+  fireEvent.change(screen.getByLabelText("상태"), { target: { value: "CONTACTED" } });
+  await waitFor(() => expect(api.updateInquiry).toHaveBeenCalledWith("Iq1", { status: "CONTACTED" }));
+
+  await waitFor(() => expect(screen.getByLabelText("상태")).toHaveValue("CONTACTED"));
+  expect(screen.getByLabelText("담당 메모")).toHaveValue("견적 초안 작성 중");
+  expect(screen.getByRole("button", { name: "메모 저장" })).toBeInTheDocument();
+});
