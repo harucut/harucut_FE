@@ -8,6 +8,7 @@ import { BackgroundPanel } from "@/components/theme/editor/BackgroundPanel";
 import { CanvasStage } from "@/components/theme/editor/canvas/CanvasStage";
 import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
+import { NUDGE_STEP, NUDGE_STEP_LARGE } from "@/constants/editorNudge";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -88,6 +89,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
   const undo = useThemeEditorStore((s) => s.undo);
   const redo = useThemeEditorStore((s) => s.redo);
+  const nudge = useThemeEditorStore((s) => s.nudge);
 
   /*
     되돌리기 단축키. Ctrl/⌘+Z 는 되돌리기, Ctrl/⌘+Shift+Z 와 Ctrl+Y 는 다시 하기다.
@@ -95,8 +97,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     고치다 Ctrl+Z 를 눌렀는데 캔버스 레이어가 사라지면 안 된다.
   */
   useEffect(() => {
+    const ARROWS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -104,6 +111,17 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       ) {
         return;
       }
+      // 방향키: 고른 레이어를 움직인다. 버튼·링크에 포커스가 있으면 그 조작을 가로채지 않는다.
+      const arrow = ARROWS[event.key];
+      if (arrow && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const activeId = useThemeEditorStore.getState().activeId;
+        if (!activeId || (target && ["BUTTON", "A"].includes(target.tagName))) return;
+        event.preventDefault();
+        const step = event.shiftKey ? NUDGE_STEP_LARGE : NUDGE_STEP;
+        nudge(activeId, arrow[0] * step, arrow[1] * step);
+        return;
+      }
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
@@ -115,7 +133,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, nudge]);
   const { remoteFrameId } = useThemeSession();
   // 저장 다이얼로그에서 알려 준다. 예전에는 저장을 누른 순간 window.alert 로 끼어들었다.
   const hiddenLayerCount = editorComponents.filter((c) => c.hidden).length;

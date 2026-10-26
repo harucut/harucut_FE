@@ -156,6 +156,33 @@ describe("themeEditorStore 되돌리기·다시 하기", () => {
   });
 });
 
+describe("themeEditorStore 이동(nudge)", () => {
+  const store = () => useThemeEditorStore.getState();
+
+  beforeEach(() => {
+    store().reset();
+    store().importJson(makeJson(["a"]));
+  });
+
+  it("고른 거리만큼 움직이고, 연달아 누른 이동은 되돌리기 한 단계다", () => {
+    store().nudge("a", 10, 0);
+    store().nudge("a", 0, -10);
+    expect(store().components[0]).toMatchObject({ x: 20, y: 10 });
+    expect(store().past).toHaveLength(1);
+
+    store().undo();
+    expect(store().components[0]).toMatchObject({ x: 10, y: 20 });
+  });
+
+  it("잠긴 레이어는 움직이지 않는다", () => {
+    store().toggleLocked("a");
+    const before = store().past.length;
+    store().nudge("a", 10, 10);
+    expect(store().components[0]).toMatchObject({ x: 10, y: 20 });
+    expect(store().past).toHaveLength(before);
+  });
+});
+
 describe("themeEditorStore 되돌리기와 배경 이미지", () => {
   const store = () => useThemeEditorStore.getState();
   let seq = 0;

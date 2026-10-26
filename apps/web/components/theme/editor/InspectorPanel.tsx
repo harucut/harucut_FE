@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
+import { NUDGE_STEP } from "@/constants/editorNudge";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent, TextStyleJson } from "@/lib/types/themeEditor";
 
@@ -25,6 +27,7 @@ export function InspectorPanel() {
   const components = useThemeEditorStore((s) => s.components);
   const activeId = useThemeEditorStore((s) => s.activeId);
   const update = useThemeEditorStore((s) => s.updateComponent);
+  const nudge = useThemeEditorStore((s) => s.nudge);
 
   // 현재 선택된 컴포넌트
   const active = useMemo(
@@ -109,6 +112,34 @@ export function InspectorPanel() {
               }} className="hc-input h-11 rounded-lg px-3 text-sm tabular-nums" />
           </label>
         ))}
+      </div>
+
+      {/*
+        손잡이를 끌지 않는 대체 조작. 작은 손잡이는 손가락으로 정확히 잡기 어렵고, 키보드만 쓰는
+        사람은 끌 수가 없다(기획 R5 5절). 캔버스에서 레이어를 고른 뒤 방향키로도 움직인다.
+      */}
+      <div className="flex items-center gap-3">
+        <span className="w-14 text-[12px] text-zinc-400">이동</span>
+        <div className="flex gap-1">
+          {([
+            ["왼쪽으로 이동", -NUDGE_STEP, 0, ArrowLeft],
+            ["위로 이동", 0, -NUDGE_STEP, ArrowUp],
+            ["아래로 이동", 0, NUDGE_STEP, ArrowDown],
+            ["오른쪽으로 이동", NUDGE_STEP, 0, ArrowRight],
+          ] as const).map(([label, dx, dy, Icon]) => (
+            <button
+              key={label}
+              type="button"
+              aria-label={label}
+              title={`${label} (방향키)`}
+              disabled={active.locked}
+              onClick={() => nudge(active.id, dx, dy)}
+              className="flex size-11 items-center justify-center rounded-lg border border-(--hc-border-strong) text-(--hc-text) disabled:opacity-35"
+            >
+              <Icon className="size-4" aria-hidden />
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   );
