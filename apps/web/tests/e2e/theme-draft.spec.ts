@@ -1,7 +1,22 @@
 import { expect, test } from "@playwright/test";
 import { stubAuthenticatedApi } from "./fixtures/apiStub";
 
-const DRAFT_KEY = "harucut:theme-editor-draft:v1";
+/**
+ * 편집 초안은 계정 × 프레임 종류마다 따로 둔다(lib/themeEditorDraft.ts) —
+ * `harucut:theme-editor-draft:v2:{계정 id}:{frameId}`. 계정 id 는 스텁(fixtures/apiStub.ts)이,
+ * frameId 는 「새 프레임 만들기」가 고른 판형이 정하므로 접두사로 찾는다.
+ */
+const DRAFT_PREFIX = "harucut:theme-editor-draft:v2:";
+
+function readDraftBackground(prefix: string) {
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(prefix)) {
+      return JSON.parse(localStorage.getItem(key) ?? "null")?.backgroundColor ?? null;
+    }
+  }
+  return null;
+}
 
 test.beforeEach(async ({ page, baseURL }) => {
   await page.clock.install();
@@ -22,12 +37,7 @@ test.beforeEach(async ({ page, baseURL }) => {
 test("배경색만 바꾼 초안도 새로고침 후 복원한다", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "스튜디오 그린", exact: true }).click();
   await expect
-    .poll(() =>
-      page.evaluate((key) => {
-        const draft = localStorage.getItem(key);
-        return draft ? JSON.parse(draft).backgroundColor : null;
-      }, DRAFT_KEY),
-    )
+    .poll(() => page.evaluate(readDraftBackground, DRAFT_PREFIX))
     .toBe("1ed760");
 
   page.on("dialog", (dialog) => dialog.accept());
@@ -82,5 +92,5 @@ test("저장 실패는 안내하고 다시 저장한 뒤에는 초안이 남지 
   expect(saves).toBe(2);
   // 예약된 자동 저장과 비동기 변환이 뒤늦게 초안을 되살리는지 본다.
   await page.clock.fastForward(5_000);
-  expect(await page.evaluate((key) => localStorage.getItem(key), DRAFT_KEY)).toBeNull();
+  expect(await page.evaluate(readDraftBackground, DRAFT_PREFIX)).toBeNull();
 });
