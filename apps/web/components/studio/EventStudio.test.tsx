@@ -488,3 +488,25 @@ it("관리자는 운영 담당에게 이 행사의 운영 권한을 정해 저�
   expect(await within(section).findByText("운영 권한을 저장했어요.")).toBeInTheDocument();
   expect(within(section).queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
 });
+
+// 운영자 배정이 권한 행을 새로 만들면 같은 화면의 「행사 고객」에도 보여야 사진 권한을 이어서 줄 수 있다(Codex #554).
+it("운영자를 처음 배정하면 행사 고객 목록을 다시 받아 새 행을 보인다", async () => {
+  mockMembers.mockResolvedValue([{ userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" }]);
+  const row = { grantId: 2, userId: "u-op", name: "운영 지수", permissions: [], operations: ["MANAGE_BOOTH"], createdAt: "" };
+  mockGrants.mockResolvedValue([]);
+  mockAssign.mockImplementation(async () => {
+    mockGrants.mockResolvedValue([row]);
+    return row;
+  });
+  await renderStudio();
+
+  const customers = (await screen.findByRole("heading", { name: "행사 고객" })).closest("section")!;
+  const operators = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await within(operators).findByText("운영 지수");
+  expect(within(customers).queryByText("운영 지수")).not.toBeInTheDocument();
+
+  fireEvent.click(within(operators).getByRole("checkbox", { name: "부스 기기" }));
+  fireEvent.click(within(operators).getByRole("button", { name: "저장" }));
+
+  expect(await within(customers).findByText("운영 지수")).toBeInTheDocument();
+});

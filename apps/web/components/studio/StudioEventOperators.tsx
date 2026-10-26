@@ -17,7 +17,16 @@ import {
  * 사진 권한은 따로다 — 운영을 맡겨도 사진은 자동으로 열리지 않는다(「행사 고객」에서 사진 권한을 준다).
  * 프로젝트 멤버로 받은 권한은 여기서 보이지 않고 빼지도 못한다(프로젝트에서 관리).
  */
-export function StudioEventOperators({ eventId, workspaceId }: { eventId: string; workspaceId: string }) {
+export function StudioEventOperators({
+  eventId,
+  workspaceId,
+  onSaved,
+}: {
+  eventId: string;
+  workspaceId: string;
+  /** 저장한 뒤. 같은 권한 행을 보는 「행사 고객」이 다시 받게 한다. */
+  onSaved?: () => void;
+}) {
   const [operators, setOperators] = useState<Member[] | null>(null);
   const [assigned, setAssigned] = useState<Record<string, EventOperation[]>>({});
   const [draft, setDraft] = useState<Record<string, EventOperation[]>>({});
@@ -54,6 +63,7 @@ export function StudioEventOperators({ eventId, workspaceId }: { eventId: string
       setAssigned((prev) => ({ ...prev, [userId]: next }));
       setDraft((prev) => ({ ...prev, [userId]: next }));
       setNotice(next.length ? "운영 권한을 저장했어요." : "운영 권한을 뺐어요.");
+      onSaved?.();
     } catch (cause) {
       setNotice(getUserFacingApiErrorMessage(cause, "운영 권한을 저장하지 못했어요."));
     } finally {
