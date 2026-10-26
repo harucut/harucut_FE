@@ -81,3 +81,20 @@ it("기본값을 저장하는 동안에는 입력을 잠근다", async () => {
   await waitFor(() => expect(within(form).getByLabelText("결과 보관 일수")).toBeDisabled());
   expect(within(form).getByLabelText("개인 휴대폰 참가")).toBeDisabled();
 });
+
+// Codex 리뷰(#553): 프로젝트가 공간의 숨김을 끈 재정의(false)는 다른 칸을 저장해도 남아야 한다.
+it("프로젝트 기본값의 명시적인 브랜딩 해제는 다른 칸을 저장해도 보낸다", async () => {
+  api.listProjects.mockResolvedValue([
+    { ...SPRING, brandDefaults: { theme: { schemaVersion: 1, branding: { hideHarucutBranding: false } } } },
+  ]);
+  api.updateProject.mockImplementation(async (id: string, patch: { brandDefaults: object }) => ({ ...SPRING, brandDefaults: patch.brandDefaults }));
+  render(<StudioProjects workspaceId="Ws1" />);
+  fireEvent.click(await screen.findByRole("button", { name: /프로젝트 기본값/ }));
+  const form = screen.getByRole("form", { name: "프로젝트 기본값" });
+  fireEvent.change(within(form).getByLabelText("결과 보관 일수"), { target: { value: "90" } });
+  fireEvent.click(within(form).getByRole("button", { name: "기본값 저장" }));
+  await waitFor(() => expect(api.updateProject).toHaveBeenCalled());
+  const patch = api.updateProject.mock.calls[0][1].brandDefaults;
+  expect(patch.resultRetentionDays).toBe(90);
+  expect(patch.theme).toEqual({ schemaVersion: 1, branding: { hideHarucutBranding: false } });
+});

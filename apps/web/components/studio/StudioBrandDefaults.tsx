@@ -24,6 +24,8 @@ type Draft = {
   layouts: EventLayout[];
   retentionDays: string;
   theme: PageTheme;
+  /** 저장된 기본값에 브랜딩 키가 명시돼 있었는가 — 끈 값(false·NONE)도 「정함」이다. */
+  explicitBranding: { hideHarucutBranding: boolean; outputLogo: boolean };
 };
 
 function draftOf(defaults: BrandDefaults): Draft {
@@ -38,11 +40,37 @@ function draftOf(defaults: BrandDefaults): Draft {
       ? String(defaults.resultRetentionDays)
       : "",
     theme: parsePageTheme(defaults.theme),
+    explicitBranding: {
+      hideHarucutBranding: brandingOf(defaults.theme)?.hideHarucutBranding !== undefined,
+      outputLogo: brandingOf(defaults.theme)?.outputLogo !== undefined,
+    },
   };
 }
 
 /** 폼 → 머지 패치. 정하지 않은 필드는 null(그 키를 지운다 — 위 단계·서버 기본값을 따른다). */
-function patchOf(draft: Draft): Partial<Record<keyof BrandDefaults, unknown>> {
+function brandingOf(theme: unknown): { hideHarucutBranding?: unknown; outputLogo?: unknown } | undefined {
+  const branding = (theme as { branding?: unknown } | null | undefined)?.branding;
+  return branding && typeof branding === "object" ? (branding as { hideHarucutBranding?: unknown; outputLogo?: unknown }) : undefined;
+}
+
+/**
+ * 저장할 테마. 빈 문구·색은 빼되, 브랜딩은 원래 명시돼 있었거나 이번에 바꾼 키를 끈 값(false·NONE)까지 남긴다 —
+ * 키를 빼면 위 단계(공간) 값을 따르므로, 프로젝트가 공간의 숨김·로고를 끈 재정의가 다른 칸 저장 때 사라진다(Codex #553).
+ */
+function themeOf(draft: Draft, saved: Draft): PageTheme | null {
+  const compact = compactPageTheme(draft.theme);
+  const branding: Record<string, unknown> = {};
+  const hide = Boolean(draft.theme.branding?.hideHarucutBranding);
+  const logo = draft.theme.branding?.outputLogo === "ORGANIZER_LOGO" ? "ORGANIZER_LOGO" : "NONE";
+  if (draft.explicitBranding.hideHarucutBranding || hide !== Boolean(saved.theme.branding?.hideHarucutBranding)) {
+    branding.hideHarucutBranding = hide;
+  }
+  if (draft.explicitBranding.outputLogo || logo !== (saved.theme.branding?.outputLogo ?? "NONE")) branding.outputLogo = logo;
+  if (Object.keys(branding).length === 0) return compact;
+  return { ...(compact ?? { schemaVersion: 1 }), branding };
+}
+
+function patchOf(draft: Draft, saved: Draft = draft): Partial<Record<keyof BrandDefaults, unknown>> {
   const bool = (v: Tri) => (v === "" ? null : v === "on");
   const days = Number(draft.retentionDays);
   return {
@@ -53,7 +81,7 @@ function patchOf(draft: Draft): Partial<Record<keyof BrandDefaults, unknown>> {
       draft.retentionDays.trim() && Number.isSafeInteger(days) && days > 0
         ? days
         : null,
-    theme: compactPageTheme(draft.theme),
+    theme: themeOf(draft, saved),
   };
 }
 
@@ -86,14 +114,14 @@ export function StudioBrandDefaults({
   const days = Number(draft.retentionDays);
   const retentionInvalid =
     draft.retentionDays.trim() !== "" && !(Number.isSafeInteger(days) && days > 0);
-  const dirty = JSON.stringify(patchOf(draft)) !== JSON.stringify(patchOf(saved));
+  const dirty = JSON.stringify(patchOf(draft, saved)) !== JSON.stringify(patchOf(saved));
   const set = (patch: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   const save = async () => {
     setBusy(true);
     setNotice(null);
     try {
-      const next = draftOf(await onSave(patchOf(draft)));
+      const next = draftOf(await onSave(patchOf(draft, saved)));
       setSaved(next);
       setDraft(next);
       setNotice({

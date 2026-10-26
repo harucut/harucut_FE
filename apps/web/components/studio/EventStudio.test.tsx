@@ -397,3 +397,18 @@ it("출처를 받기 전에는 설정 저장을 막는다", async () => {
   fireEvent.change(screen.getByLabelText(/^행사 이름/), { target: { value: "새 이름" } });
   expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
 });
+
+// Codex 리뷰(#553): 「기본값 따르기」 뒤에 같은 섹션을 다시 고치면 그 입력을 저장해야 한다.
+it("기본값 따르기를 고른 뒤 다시 고치면 따르기를 풀고 새 값을 보낸다", async () => {
+  mockEffective.mockResolvedValue({ settings: {}, sources: { resultRetentionDays: "EVENT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x", brandDefaults: { resultRetentionDays: 60 } }]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pj1" } }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "기본값 따르기" }));
+  fireEvent.change(screen.getByLabelText("보관 일수"), { target: { value: "45" } });
+  expect(screen.queryByText("저장하면 기본값을 따라요")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ resultRetentionDays: 45 });
+});

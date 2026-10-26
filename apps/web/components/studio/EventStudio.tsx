@@ -311,7 +311,22 @@ export function EventStudio({ eventId }: { eventId: string }) {
     session.setWorkspaceContext(event.workspaceId, `/studio/events/${encodeURIComponent(event.eventId)}`);
     router.push("/theme/sticker");
   };
-  const update = (patch: Partial<Form>) => setForm({ ...form, ...patch });
+  // 「기본값 따르기」를 고른 섹션을 다시 고치면 그 선택을 푼다 — 안 그러면 저장할 때 새 입력을 버리고 null 을 보낸다(Codex #553).
+  const FORM_TO_FIELDS: Partial<Record<keyof Form, InheritableField[]>> = {
+    byod: ["byodEnabled"],
+    booth: ["boothEnabled"],
+    layouts: ["allowedLayouts"],
+    frames: ["frames"],
+    consents: ["consentItems"],
+    retentionDays: ["resultRetentionDays"],
+    theme: ["theme"],
+  };
+  const stopFollowing = (fields: InheritableField[]) =>
+    setInherit((prev) => (fields.some((f) => prev.has(f)) ? new Set([...prev].filter((f) => !fields.includes(f))) : prev));
+  const update = (patch: Partial<Form>) => {
+    setForm({ ...form, ...patch });
+    stopFollowing(Object.keys(patch).flatMap((k) => FORM_TO_FIELDS[k as keyof Form] ?? []));
+  };
 
   const save = async (settingsVersion = event.settingsVersion) => {
     setBusy("save");
@@ -598,7 +613,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
                 value={form.theme}
                 // 최신 폼 위에 적용한다 — 업로드를 기다리는 사이 바꾼 이름 등 테마 밖의 칸도 되돌리지 않게.
                 onUploadingChange={setThemeUploading}
-                onChange={(apply) => setForm((current) => (current ? { ...current, theme: apply(current.theme) } : current))}
+                onChange={(apply) => {
+                  setForm((current) => (current ? { ...current, theme: apply(current.theme) } : current));
+                  stopFollowing(["theme"]);
+                }}
               />
             </Section>
 
