@@ -21,6 +21,22 @@ type Channel = InquiryRequest["channels"][number];
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const ORGANIZER_LABEL: Record<InquiryRequest["organizerType"], string> = {
+  BUSINESS: "기업·단체 행사",
+  PERSONAL: "개인 행사(결혼식·돌잔치 등)",
+};
+const CHANNEL_LABEL: Record<Channel, string> = { BYOD: "참가자 휴대폰(QR)", BOOTH: "현장 부스(태블릿)" };
+
+/**
+ * 예상 인원 칸 값 → 정수. `type="number"` 는 `1e3` 같은 지수 표기도 받으므로 parseInt 가 아니라 Number 로 통째로
+ * 바꾼다(parseInt 는 1 로 읽는다, Codex #545). 비었거나 0 이상의 안전한 정수가 아니면 undefined.
+ */
+function parseCount(text: string): number | undefined {
+  if (!text.trim()) return undefined;
+  const n = Number(text);
+  return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
+}
+
 /**
  * 행사 도입 문의.
  *
@@ -71,8 +87,11 @@ export function EnterpriseInquiryForm() {
     `담당자: ${values.contactName.trim() || "-"}`,
     `이메일: ${values.email.trim() || "-"}`,
     `전화번호: ${values.phone.trim() || "-"}`,
+    // 저장이 막혀 메일·복사로 보내도 고른 값이 담당자에게 가야 한다(Codex #545).
+    `행사 형태: ${ORGANIZER_LABEL[organizerType]}`,
+    `참가 방식: ${channels.map((c) => CHANNEL_LABEL[c]).join(", ") || "-"}`,
     `행사 날짜: ${date || "-"}`,
-    `예상 참가 인원: ${people || "-"}`,
+    `예상 참가 인원: ${parseCount(people) ?? (people.trim() || "-")}`,
   ].join("\n");
   const mailtoHref = `mailto:${COMPANY.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(mailBody)}`;
 
@@ -80,7 +99,7 @@ export function EnterpriseInquiryForm() {
     if (!canSend || sending) return;
     setSending(true);
     setError(null);
-    const count = Number.parseInt(people, 10);
+    const count = parseCount(people);
     try {
       const { inquiryId } = await submitInquiry({
         contactName: values.contactName.trim(),
@@ -89,7 +108,7 @@ export function EnterpriseInquiryForm() {
         organizerType,
         channels,
         ...(date ? { expectedDate: date } : {}),
-        ...(Number.isFinite(count) && count >= 0 ? { expectedCount: count } : {}),
+        ...(count !== undefined ? { expectedCount: count } : {}),
         message,
       });
       setSent(inquiryId);

@@ -28,6 +28,11 @@ jest.mock("@/lib/studio/studioApi", () => ({
 }));
 const mockUsage = jest.fn();
 jest.mock("@/lib/studio/usageApi", () => ({ getEventUsage: (...a: unknown[]) => mockUsage(...a) }));
+const mockThemeUpload = jest.fn();
+jest.mock("@/lib/assetUploadApi", () => ({
+  ...jest.requireActual("@/lib/assetUploadApi"),
+  uploadAsset: (...a: unknown[]) => mockThemeUpload(...a),
+}));
 jest.mock("@/lib/studio/accessApi", () => ({
   ...jest.requireActual("@/lib/studio/accessApi"),
   listEventGrants: async () => [],
@@ -301,4 +306,19 @@ it("보관 일수 설명에 사진이 지워진다는 것과 이용권 상한을
   const input = screen.getByLabelText("보관 일수");
   await waitFor(() => expect(input).toHaveAttribute("max", "60"));
   expect(input).toHaveAccessibleDescription(/지나면 사진이 지워져요.*지금 이용권으로는 60일까지/);
+});
+
+// Codex 리뷰(#544): 업로드 중 저장하면 저장 응답이 업로드 결과(자산 ID)를 덮어 이미지가 사라진다.
+it("행사 화면 이미지를 올리는 동안에는 설정 저장을 막는다", async () => {
+  let finish: (value: unknown) => void = () => {};
+  mockThemeUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText(/^행사 이름/), { target: { value: "새 이름" } });
+  fireEvent.change(screen.getByLabelText("로고 올리기"), {
+    target: { files: [new File(["x"], "logo.png", { type: "image/png" })] },
+  });
+  expect(await screen.findByRole("button", { name: "이미지 올리는 중…" })).toBeDisabled();
+
+  await act(async () => finish({ assetId: "AsLogo", key: "k", url: "https://s3/logo.png" }));
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeEnabled();
 });

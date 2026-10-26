@@ -341,7 +341,16 @@ export function EventParticipation({ slug }: { slug: string }) {
             onProgress={(progress) => setStep(progress ? { kind: "sending", progress } : { kind: "capture" })}
             onDone={goToResult}
             onSessionEnded={() => resetSession(event.eventId)}
-            onUnavailable={(cause) => showUnavailable(cause, "지금은 촬영할 수 없어요.")}
+            onUnavailable={(cause) => {
+              // 촬영 한도(ENT-002)는 새 촬영만 막는다 — 이미 만든 사진은 받을 수 있어야 하니 홈으로 돌아가 알린다(Codex #545).
+              if (getApiErrorDetails(cause).code === "ENT-002") {
+                setError(getUserFacingApiErrorMessage(cause, "지금은 촬영이 마감됐어요."));
+                setStep({ kind: "home" });
+                void loadResults(session.token, event.eventId);
+                return;
+              }
+              showUnavailable(cause, "지금은 촬영할 수 없어요.");
+            }}
           />
         ) : null}
       </div>
