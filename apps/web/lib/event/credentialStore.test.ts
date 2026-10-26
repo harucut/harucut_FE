@@ -55,3 +55,13 @@ it("저장소에 쓰지 못해도 이번 방문 동안은 받은 부스 자격�
     setItem.mockRestore();
   }
 });
+
+// Codex 리뷰(#541): 다른 탭이 회수(BOOTH-003)로 지운 자격을 이 탭이 메모리에서 되살리면 안 된다.
+it("저장소에 저장된 부스 자격을 다른 탭이 지우면 메모리에서 되살리지 않는다", () => {
+  window.localStorage.clear();
+  saveBoothDevice({ token: "b-1", deviceId: "d-1", eventId: "evt-1" });
+  expect(readBoothDevice()?.token).toBe("b-1");
+  // 다른 탭의 forgetBoothDevice — 이 탭의 메모리는 건드리지 못하고 저장소만 지운다.
+  window.localStorage.removeItem("harucut:event:booth-device");
+  expect(readBoothDevice()).toBeNull();
+});

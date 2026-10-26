@@ -295,5 +295,37 @@ describe("Codex 리뷰 반영(#523)", () => {
     expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
   });
+
+  // Codex 리뷰(#541): 401 로 자격이 바뀐 뒤 도착한 이전 자격의 결과 응답이 새 참여의 목록에 붙으면 안 된다.
+  it("자격이 바뀐 뒤 도착한 이전 결과 응답은 버린다", async () => {
+    jest.useFakeTimers();
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([{ jobId: 9, status: "PENDING" }]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByText(/만드는 중/)).toBeInTheDocument();
+
+    // 폴링 요청은 늦게 끝난다.
+    let releaseOld: (value: unknown) => void = () => {};
+    api.listParticipantResults.mockImplementationOnce(() => new Promise((resolve) => { releaseOld = resolve; }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(RESULT_POLL_MS);
+    });
+
+    // 그사이 촬영을 열다 자격이 끝나(401) 새로 참여한다.
+    api.startCaptureRun.mockRejectedValueOnce(new ApiRequestError({ status: 401, code: "PART-001", apiMessage: "x" }));
+    api.startByodSession.mockResolvedValue({ participantToken: "p-new", participantId: "p-9", status: "RESTRICTED", expiresAt: "2999-01-01T00:00:00Z" });
+    api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValue([]);
+    fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
+    expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+
+    await act(async () => releaseOld([{ jobId: 9, status: "DONE" }]));
+    expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/1번째 사진/)).not.toBeInTheDocument();
+  });
 });
 

@@ -79,6 +79,11 @@ export function EventParticipation({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<EventFrameRef | null>(null);
   const [results, setResults] = useState<ParticipantJob[]>([]);
+  // 결과 목록 응답이 늦게 오면 그사이 자격이 바뀌었을 수 있다(401 뒤 새 참여). 요청 당시 자격이 지금 것일 때만 반영한다.
+  const sessionTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    sessionTokenRef.current = session?.token ?? null;
+  }, [session]);
 
   const frames = useMemo(() => (event ? sortedFrames(event) : []), [event]);
 
@@ -92,17 +97,24 @@ export function EventParticipation({ slug }: { slug: string }) {
   useEffect(() => {
     if (!hasPending || !session || !event) return;
     pendingPollsRef.current = 0;
+    let cancelled = false;
+    const token = session.token;
     const timer = window.setInterval(() => {
       pendingPollsRef.current += 1;
       if (pendingPollsRef.current > RESULT_POLL_LIMIT) {
         window.clearInterval(timer);
         return;
       }
-      void listParticipantResults(session.token, event.eventId)
-        .then(setResults)
+      void listParticipantResults(token, event.eventId)
+        .then((list) => {
+          if (!cancelled && sessionTokenRef.current === token) setResults(list);
+        })
         .catch(() => {});
     }, RESULT_POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [hasPending, session, event]);
 
   const showUnavailable = useCallback((cause: unknown, fallback: string) => {
@@ -112,6 +124,7 @@ export function EventParticipation({ slug }: { slug: string }) {
   /** 참가자 자격이 끝났다(만료·회수). 이 행사의 자격만 버리고 처음으로 돌아간다. */
   const resetSession = useCallback((eventId: string) => {
     forgetParticipant(eventId);
+    sessionTokenRef.current = null;
     setSession(null);
     // 자격이 끝났으면 그 자격으로 받은 결과 목록도 버린다(다음 참여에 이어 보이지 않게).
     setResults([]);
@@ -124,7 +137,9 @@ export function EventParticipation({ slug }: { slug: string }) {
    */
   const loadResults = useCallback(async (token: string, eventId: string) => {
     try {
-      setResults(await listParticipantResults(token, eventId));
+      const list = await listParticipantResults(token, eventId);
+      // 그사이 자격이 바뀌었으면 이전 자격의 목록을 새 화면에 붙이지 않는다.
+      if (sessionTokenRef.current === token) setResults(list);
       return true;
     } catch {
       return false;
@@ -160,6 +175,7 @@ export function EventParticipation({ slug }: { slug: string }) {
       try {
         const state = await getParticipantSession(stored.token, controller.signal);
         if (controller.signal.aborted) return;
+        sessionTokenRef.current = stored.token;
         setSession(stored);
         if (state.status === "ACTIVE") {
           setStep({ kind: "home" });
@@ -187,6 +203,7 @@ export function EventParticipation({ slug }: { slug: string }) {
       const issued = await startByodSession(slug);
       const stored = { token: issued.participantToken, participantId: issued.participantId, expiresAt: issued.expiresAt };
       saveParticipant(event.eventId, stored);
+      sessionTokenRef.current = stored.token;
       setSession(stored);
       setStep({ kind: "consent" });
     } catch (cause) {
