@@ -109,11 +109,16 @@ export function StudioHome() {
             </h2>
             <ul className="flex flex-col gap-2">
               {customerEvents.map((event) => (
-                <li key={event.eventId} className="hc-surface-card flex flex-col gap-1 rounded-2xl px-4 py-3">
-                  <span className="text-[15px] font-semibold">{event.name || "이름 없는 행사"}</span>
-                  <span className="text-[12px] text-(--hc-muted)">
-                    {event.access.permissions.map((p) => PERMISSION_LABEL[p]).join(" · ")}
-                  </span>
+                <li key={event.eventId}>
+                  <Link
+                    href={`/studio/events/${encodeURIComponent(event.eventId)}/photos`}
+                    className="hc-surface-card flex flex-col gap-1 rounded-2xl px-4 py-3"
+                  >
+                    <span className="text-[15px] font-semibold">{event.name || "이름 없는 행사"}</span>
+                    <span className="text-[12px] text-(--hc-muted)">
+                      {event.access.permissions.map((p) => PERMISSION_LABEL[p]).join(" · ")}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
