@@ -70,6 +70,18 @@ export {
   canonicalOAuthCallbackUrl,
 } from './shell-origin';
 export {
+  APP_LOGIN_CALLBACK,
+  APP_LOGIN_EXCHANGE_PATH,
+  APP_LOGIN_PROVIDERS,
+  appLoginIntentPath,
+  appLoginProviderOf,
+  appLoginStartUrl,
+  appLoginWebUrl,
+  parseAppLoginCallback,
+  toBase64Url,
+  type AppLoginCallback,
+} from './app-login';
+export {
   NATIVE_FILENAME_MAX_BYTES,
   clampFilenameBytes,
   safeNativeFilename,

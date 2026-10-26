@@ -82,12 +82,16 @@ POST /api/harucut/oauth2/exchange
 앱은 이 요청을 **WebView 안에서** 보낸다. 그래야 Set-Cookie 가 WebView 쿠키 저장소에 남아
 이후 모든 화면이 로그인 상태가 된다.
 
-### 프론트가 할 일 (백엔드가 열리면)
+### 프론트가 할 일 — 만들었다(P4-A)
 
-1. 셸이 `/oauth2/authorization/google` 로의 이동을 가로채 `?client=app` 을 붙여 Custom Tabs 로 연다
-2. `harucut://oauth2/callback?code=...` 딥링크를 받는다
-3. 그 코드를 WebView 안에서 `POST /api/harucut/oauth2/exchange` 로 교환한다
-4. 웹을 새로고침한다 — 쿠키가 생겼으니 로그인 상태로 뜬다
+백엔드 계약은 PKCE 를 더해 정해졌다(fork P4-A): 시작에 `code_challenge`(S256), 교환에 `codeVerifier`, 실패는 400 `AUTH-041` 하나.
+
+1. 셸이 `/oauth2/authorization/google` 로의 이동을 가로채 verifier 를 만들고 `?client=app&code_challenge=…` 를 붙여
+   시스템 브라우저(ASWebAuthenticationSession·Custom Tabs)로 연다 — `apps/mobile/lib/app-login.ts`
+2. `harucut://oauth2/callback?code=...` 로 돌아오면 그 세션이 닫히며 주소를 받는다
+3. WebView 에 `/oauth2/app-callback#code=…&verifier=…` 를 연다. 그 화면이 WebView 안에서
+   `POST /api/client/auth/oauth2/exchange`(→ `/api/harucut/oauth2/exchange`)로 교환한다
+4. 교환되면 `/oauth2/callback` 으로 문서를 새로 받는다 — 소셜 로그인 콜백이 하던 상태 확인·체험 쿠키 정리·이동을 그대로 탄다
 
 카카오·네이버는 WebView 안에서 그대로 진행되므로 이 경로가 필요 없다(지금도 동작한다).
 
