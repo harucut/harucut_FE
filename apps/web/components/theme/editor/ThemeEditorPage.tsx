@@ -410,8 +410,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     didRestoreDraftRef.current = true;
     // 계정 조회는 왕복이라 그 사이 사용자가 이미 편집을 시작했을 수 있다. 그 편집을 초안으로
     // 덮지 않는다(초안은 남아 있다가 다음 자동 저장이 새 편집으로 바꾼다).
+    // 배경색만 바꾼 편집은 아래 모양으로는 처음과 같아 보여서 히스토리로도 판정한다.
     const s = useThemeEditorStore.getState();
     const pristine =
+      s.past.length === 0 &&
       s.components.length === 0 &&
       s.background.type === "COLOR" &&
       !s.cellCutouts.some(Boolean);
@@ -451,7 +453,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       idle = ric ? ric(() => run(), { timeout: 2000 }) : window.setTimeout(run, 0);
     };
 
-    const unsubscribe = useThemeEditorStore.subscribe(() => {
+    const schedule = () => {
       cancelScheduled();
       timer = window.setTimeout(() => {
         whenIdle(() => {
@@ -471,7 +473,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           });
         });
       }, 1000);
-    });
+    };
+    const unsubscribe = useThemeEditorStore.subscribe(schedule);
+    // 구독은 계정 조회가 끝난 뒤에 시작한다. 그 사이에 한 편집은 구독이 못 봤으니 지금 한 번 맡긴다.
+    if (useThemeEditorStore.getState().past.length > 0) schedule();
     const stop = () => {
       stopped = true;
       cancelScheduled();
