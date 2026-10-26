@@ -142,3 +142,17 @@ it("지우기 요청이 멈추면 상한 뒤 확인 창을 풀고 알린다", as
   expect(screen.getByText(/지우지 못했어요|요청/)).toBeInTheDocument();
   jest.useRealTimers();
 });
+
+// Codex 리뷰(#542): 필터를 바꾼 뒤 첫 쪽이 실패하면 이전 필터의 커서로 「더 보기」를 하면 안 된다.
+it("필터를 바꾼 뒤 첫 쪽이 실패하면 이전 목록과 커서를 남기지 않는다", async () => {
+  mockList
+    .mockResolvedValueOnce({ items: [DONE], nextCursor: "c-all-2" })
+    .mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }));
+  render(<EventPhotoBox eventId="Ev1" />);
+  expect(await screen.findByRole("button", { name: "더 보기" })).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+});
