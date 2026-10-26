@@ -73,3 +73,21 @@ it("저장에 실패하면 서버 문구를 보여 주고 메일 보내기는 �
   expect(mail.getAttribute("href")).toMatch(/^mailto:/);
   await waitFor(() => expect(decodeURIComponent(mail.getAttribute("href") ?? "")).toContain("행사 이름: 2026 여름 팬미팅"));
 });
+
+// Codex 리뷰(#545): 지수 표기(1e3)를 1 로 읽으면 안 된다. 메일로 보낼 때도 고른 행사 형태·참가 방식이 가야 한다.
+it("인원의 지수 표기를 그대로 숫자로 보내고, 메일 본문에 행사 형태와 참가 방식을 담는다", async () => {
+  mockSubmit.mockResolvedValue({ inquiryId: "Iq9" });
+  render(<EnterpriseInquiryForm />);
+  fillRequired();
+  fill(/예상 참가 인원/, "1e3");
+  fireEvent.click(screen.getByLabelText("현장 부스(태블릿)"));
+
+  const mail = decodeURIComponent(screen.getByRole("link", { name: "메일로 보내기" }).getAttribute("href") ?? "");
+  expect(mail).toContain("행사 형태: 기업·단체 행사");
+  expect(mail).toContain("참가 방식: 참가자 휴대폰(QR), 현장 부스(태블릿)");
+  expect(mail).toContain("예상 참가 인원: 1000");
+
+  fireEvent.click(screen.getByRole("button", { name: "문의 남기기" }));
+  await waitFor(() => expect(mockSubmit).toHaveBeenCalled());
+  expect(mockSubmit.mock.calls[0][0].expectedCount).toBe(1000);
+});

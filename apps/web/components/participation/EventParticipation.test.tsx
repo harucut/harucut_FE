@@ -259,6 +259,19 @@ it("회차 시작이 한도로 막히면(ENT-002) 촬영 화면 대신 마감 �
   expect(screen.queryByRole("button", { name: "1번째 사진 찍기" })).not.toBeInTheDocument();
 });
 
+// Codex 리뷰(#545): 한도에 걸려도 이미 만든 사진은 받을 수 있어야 한다 — 홈(사진 목록)으로 돌아간다.
+it("촬영 한도에 걸리면 이미 만든 사진 목록으로 돌아가 받을 수 있게 한다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.listParticipantResults.mockResolvedValue([{ jobId: 8, status: "DONE" }]);
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+
+  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
+});
+
 it("합성 접수가 한도로 막혀도(ENT-002) 다시 보내지 않고 마감 안내로 간다", async () => {
   storeSession();
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
