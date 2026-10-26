@@ -6,6 +6,8 @@ import { AppNav } from "@/components/layout/AppNav";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StudioPhotoExports } from "@/components/studio/StudioPhotoExports";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { NativeSaveError, getNativeSaveErrorMessage, nativeSaveImageUrl } from "@/lib/nativeBridge";
+import { withRequestDeadline } from "@/lib/requestDeadline";
 import { listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import {
   deleteEventPhoto,
@@ -38,6 +40,9 @@ const FAILURE_LABEL: Record<string, string> = {
 
 /** 썸네일 주소는 5분이면 끝난다. 깨지면 목록을 다시 받는데, 여러 장이 한꺼번에 깨져도 한 번만 받는다. */
 const THUMBNAIL_REFRESH_GAP_MS = 30_000;
+
+/** 지우기 요청 상한. 확인 창은 실행 중에 닫히지 않으므로 요청이 반드시 끝나야 한다(ConfirmDialog 주석). */
+const DELETE_DEADLINE_MS = 30_000;
 
 /** 짧은 서명 URL 로 이동한다. 이 화면 주소가 Referer 로 저장소에 넘어가지 않게 noreferrer 링크를 쓴다. */
 function openWithoutReferrer(url: string) {
@@ -145,9 +150,20 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
     setNotice(null);
     try {
       const { url } = await getEventPhotoDownload(eventId, photo.photoId);
+      // 앱 셸 안에서는 링크를 열면 외부 브라우저로 나간다 — 네이티브가 내려받아 사진첩에 넣는다.
+      const native = await nativeSaveImageUrl(url, `harucut-${photo.photoId}.jpg`);
+      if (native) {
+        if (!native.ok) throw new NativeSaveError(native);
+        setNotice("사진첩에 저장했어요.");
+        return;
+      }
       openWithoutReferrer(url);
     } catch (cause) {
-      setNotice(getUserFacingApiErrorMessage(cause, "사진을 내려받지 못했어요."));
+      setNotice(
+        cause instanceof NativeSaveError
+          ? (getNativeSaveErrorMessage(cause) ?? "사진첩에 저장하지 못했어요.")
+          : getUserFacingApiErrorMessage(cause, "사진을 내려받지 못했어요."),
+      );
     } finally {
       setBusy(null);
     }
@@ -157,7 +173,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
     setBusy(photo.photoId);
     setNotice(null);
     try {
-      await deleteEventPhoto(eventId, photo.photoId);
+      await withRequestDeadline(DELETE_DEADLINE_MS, (signal) => deleteEventPhoto(eventId, photo.photoId, signal));
       setItems((prev) => prev.filter((p) => p.photoId !== photo.photoId));
       setSelected((prev) => prev.filter((id) => id !== photo.photoId));
     } catch (cause) {
@@ -260,6 +276,8 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
                   <input
                     type="checkbox"
                     className="size-5"
+                    // 필터를 바꿔 새 목록을 받는 동안에는 이전 목록의 사진을 고르지 못하게 한다(Codex #543).
+                    disabled={loading}
                     aria-label={`${formatTime(photo.createdAt)} 사진 고르기`}
                     checked={selected.includes(photo.photoId)}
                     onChange={(e) =>

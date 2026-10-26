@@ -81,10 +81,21 @@ export function StudioPhotoExports({
   }, [load]);
 
   const working = (exports ?? []).some((e) => e.status === "PENDING" || e.status === "RUNNING");
+  // 앞 조회가 끝난 뒤에 다음 조회를 예약한다. 고정 간격으로 쏘면 조회가 간격보다 오래 걸릴 때 매번 새 요청이
+  // 앞 응답을 세대 검사로 버리게 해 다 된 묶음이 영영 안 보인다(Codex #543).
   useEffect(() => {
     if (!working) return;
-    const timer = window.setInterval(() => void load(), EXPORT_POLL_MS);
-    return () => window.clearInterval(timer);
+    let cancelled = false;
+    let timer: number | undefined;
+    const tick = async () => {
+      await load();
+      if (!cancelled) timer = window.setTimeout(() => void tick(), EXPORT_POLL_MS);
+    };
+    timer = window.setTimeout(() => void tick(), EXPORT_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [working, load]);
 
   const create = async (target: Parameters<typeof createPhotoExport>[1], key: string) => {
