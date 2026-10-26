@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StudioPhotoExports } from "@/components/studio/StudioPhotoExports";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import {
@@ -74,6 +75,8 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
   const permissions = new Set(access?.access.permissions ?? []);
   const canDownload = permissions.has("DOWNLOAD_PHOTOS");
   const canDelete = permissions.has("DELETE_PHOTOS");
+  const canBulk = permissions.has("BULK_DOWNLOAD");
+  const [selected, setSelected] = useState<number[]>([]);
 
   const loadFirst = useCallback(
     async (nextFilter: PhotoFilter) => {
@@ -102,6 +105,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
 
   const changeFilter = (next: PhotoFilter) => {
     setFilter(next);
+    setSelected([]);
     void loadFirst(next);
   };
 
@@ -146,6 +150,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
     try {
       await deleteEventPhoto(eventId, photo.photoId);
       setItems((prev) => prev.filter((p) => p.photoId !== photo.photoId));
+      setSelected((prev) => prev.filter((id) => id !== photo.photoId));
     } catch (cause) {
       setNotice(getUserFacingApiErrorMessage(cause, "사진을 지우지 못했어요."));
     } finally {
@@ -212,6 +217,15 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
           <p className="text-[14px] text-(--hc-muted)">아직 사진이 없어요.</p>
         ) : null}
 
+        {canBulk ? (
+          <StudioPhotoExports
+            eventId={eventId}
+            selectedIds={selected}
+            channel={filter.channel}
+            onCreated={() => setSelected([])}
+          />
+        ) : null}
+
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {items.map((photo) => (
             <li key={photo.photoId} className="hc-surface-card flex flex-col gap-2 rounded-2xl p-2">
@@ -231,8 +245,21 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
                     : (photo.failure && FAILURE_LABEL[photo.failure.code]) || "만들지 못했어요"}
                 </div>
               )}
-              <span className="text-[12px] text-(--hc-muted)">
+              <span className="flex items-center justify-between gap-2 text-[12px] text-(--hc-muted)">
                 {formatTime(photo.createdAt)} · {photo.channel === "BOOTH" ? "부스" : "휴대폰"}
+                {canBulk && photo.status === "DONE" ? (
+                  <input
+                    type="checkbox"
+                    className="size-5"
+                    aria-label={`${formatTime(photo.createdAt)} 사진 고르기`}
+                    checked={selected.includes(photo.photoId)}
+                    onChange={(e) =>
+                      setSelected((prev) =>
+                        e.target.checked ? [...prev, photo.photoId] : prev.filter((id) => id !== photo.photoId),
+                      )
+                    }
+                  />
+                ) : null}
               </span>
               {photo.status === "DONE" && (canDownload || canDelete) ? (
                 <span className="flex gap-2">

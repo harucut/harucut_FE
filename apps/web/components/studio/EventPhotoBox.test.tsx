@@ -13,6 +13,7 @@ jest.mock("@/lib/studio/photosApi", () => ({
   listEventPhotos: (...a: unknown[]) => mockList(...a),
   getEventPhotoDownload: (...a: unknown[]) => mockDownload(...a),
   deleteEventPhoto: (...a: unknown[]) => mockDelete(...a),
+  listPhotoExports: () => Promise.resolve([]),
 }));
 jest.mock("@/lib/studio/accessApi", () => ({
   ...jest.requireActual("@/lib/studio/accessApi"),
@@ -82,4 +83,23 @@ it("서버가 권한으로 막으면(PHOTO-001) 그 문구를 보여 준다", as
   mockList.mockRejectedValue(new ApiRequestError({ status: 403, code: "PHOTO-001", apiMessage: "x" }));
   render(<EventPhotoBox eventId="Ev1" />);
   expect(await screen.findByRole("alert")).toHaveTextContent("이 사진을 다룰 권한이 없어요");
+});
+
+// 묶음 받기는 따로 받은 권한(BULK_DOWNLOAD)이다. 완성 사진만 고를 수 있다.
+it("한꺼번에 받기 권한이 있을 때만 완성 사진에 고르기를 두고, 필터를 바꾸면 고른 것을 비운다", async () => {
+  mockMyEvents.mockResolvedValue(access(["VIEW_PHOTOS", "BULK_DOWNLOAD"]));
+  render(<EventPhotoBox eventId="Ev1" />);
+  const box = await screen.findByRole("checkbox");
+  expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+  fireEvent.click(box);
+  expect(screen.getByRole("button", { name: "고른 사진 묶어 받기 (1)" })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
+  expect(screen.getByRole("button", { name: "고른 사진 묶어 받기 (0)" })).toBeDisabled();
+});
+
+it("한꺼번에 받기 권한이 없으면 고르기와 묶음 영역이 없다", async () => {
+  render(<EventPhotoBox eventId="Ev1" />);
+  await screen.findByRole("button", { name: "저장" });
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "한꺼번에 받기" })).not.toBeInTheDocument();
 });

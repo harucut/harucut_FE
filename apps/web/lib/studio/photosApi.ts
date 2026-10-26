@@ -62,3 +62,45 @@ export async function cloneEvent(eventId: string, name: string, slug: string): P
   });
   return requireData(res.data, "행사");
 }
+
+// ── 묶음 다운로드(ZIP, ADR-0008 §4) ──
+
+export type ExportStatus = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "EXPIRED";
+
+export type PhotoExport = {
+  exportId: string;
+  status: ExportStatus;
+  photoCount: number;
+  sizeBytes?: number | null;
+  /** DONE 일 때만 — 이 시각 뒤에는 받을 수 없다(24시간). */
+  expiresAt?: string | null;
+  createdAt: string;
+};
+
+/** 한 묶음에 담을 수 있는 최대 장수(백엔드 event.export.max-photos). 넘으면 400 EXPORT-003. */
+export const MAX_EXPORT_PHOTOS = 2000;
+
+/** 고른 사진(photoIds) 또는 필터. 둘 다 없으면 완성 사진 전부. */
+export async function createPhotoExport(
+  eventId: string,
+  target: { photoIds: number[] } | { filter: { channel?: PhotoChannel } },
+): Promise<PhotoExport> {
+  const res = await clientApi.post<ApiEnvelope<PhotoExport>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/exports`,
+    target,
+  );
+  return requireData(res.data, "묶음");
+}
+
+export async function listPhotoExports(eventId: string): Promise<PhotoExport[]> {
+  const res = await clientApi.get<ApiEnvelope<PhotoExport[]>>(`/api/client/events/${encodeURIComponent(eventId)}/exports`);
+  return res.data.data ?? [];
+}
+
+/** 받을 때마다 서버가 권한 · 기한 · 담긴 사진을 다시 본다. 준비 전 409 EXPORT-001, 만료 · 무효 410 EXPORT-002. */
+export async function getPhotoExportDownload(eventId: string, exportId: string): Promise<{ url: string; expiresAt: string }> {
+  const res = await clientApi.post<ApiEnvelope<{ url: string; expiresAt: string }>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/exports/${encodeURIComponent(exportId)}/download`,
+  );
+  return requireData(res.data, "내려받기 주소");
+}
