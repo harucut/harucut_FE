@@ -39,6 +39,9 @@ export function StudioMultiExports({
   events: StudioEvent[];
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
+  // 프로젝트 목록을 못 받은 것과 맡은 프로젝트가 없는 것은 다르다(Codex #558) — 못 받았으면 다시 받을 수 있게 둔다.
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [projectsAttempt, setProjectsAttempt] = useState(0);
   const [scopeKey, setScopeKey] = useState<ScopeKey | null>(canUseWorkspace ? "" : null);
   const [picked, setPicked] = useState<string[]>([]);
   const [exports, setExports] = useState<MultiPhotoExport[] | null>(null);
@@ -54,14 +57,21 @@ export function StudioMultiExports({
       .then((list) => {
         if (cancelled) return;
         setProjects(list);
+        setProjectsError(null);
         // 공간 범위를 못 쓰면 첫 프로젝트로 시작한다.
         if (!canUseWorkspace) setScopeKey((prev) => prev ?? list[0]?.projectId ?? null);
       })
-      .catch(() => !cancelled && setProjects([]));
+      .catch((cause) => {
+        if (cancelled) return;
+        setProjectsError(getUserFacingApiErrorMessage(cause, "프로젝트 목록을 불러오지 못했어요."));
+      });
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, canUseWorkspace]);
+  }, [workspaceId, canUseWorkspace, projectsAttempt]);
+
+  // 사용자가 마지막으로 고른 범위. 만들기 응답이 왔을 때 요청을 보낸 범위와 다르면 그 응답은 버린다(Codex #558).
+  const scopeRef = useRef(scopeKey);
 
   const load = useCallback(async () => {
     if (scopeKey === null) return;
@@ -99,8 +109,25 @@ export function StudioMultiExports({
     };
   }, [working, load]);
 
+  const projectsRetry = projectsError ? (
+    <div role="alert" className="flex flex-wrap items-center gap-2 text-[13px] text-(--hc-danger)">
+      {projectsError}
+      <button
+        type="button"
+        onClick={() => {
+          setProjectsError(null);
+          setProjectsAttempt((n) => n + 1);
+        }}
+        className="h-11 rounded-full border border-(--hc-border) px-4 font-semibold text-(--hc-text)"
+      >
+        다시 불러오기
+      </button>
+    </div>
+  ) : null;
+
   if (scopeKey === null) {
-    // 운영 담당인데 멤버인 프로젝트가 없다 — 여러 행사 묶음은 프로젝트 범위에서만 쓸 수 있다.
+    // 운영 담당은 프로젝트 범위만 쓴다. 목록을 못 받았으면 다시 받게 하고, 받았는데 없으면 그렇다고 알린다.
+    if (projectsError) return projectsRetry;
     return projects === null ? null : (
       <p className="text-[13px] text-(--hc-muted)">맡은 프로젝트가 있어야 여러 행사 사진을 한 번에 묶을 수 있어요.</p>
     );
@@ -112,6 +139,7 @@ export function StudioMultiExports({
 
   const changeScope = (key: ScopeKey) => {
     listGenerationRef.current += 1;
+    scopeRef.current = key;
     setScopeKey(key);
     setPicked([]);
     setExports(null);
@@ -119,13 +147,15 @@ export function StudioMultiExports({
   };
 
   const create = async () => {
+    const requested = scopeKey;
     setBusy("create");
     setNotice(null);
     try {
       const created = await createMultiExport(
-        scopeOf(workspaceId, scopeKey),
+        scopeOf(workspaceId, requested),
         candidates.map((e) => e.eventId).filter((id) => picked.includes(id)),
       );
+      if (scopeRef.current !== null && scopeRef.current !== requested) return;
       listGenerationRef.current += 1;
       setExports((prev) => [created, ...(prev ?? []).filter((e) => e.exportId !== created.exportId)]);
       setPicked([]);
@@ -164,6 +194,8 @@ export function StudioMultiExports({
         범위
         <select
           value={scopeKey}
+          // 만들기·받기 중에는 범위를 바꾸지 않는다 — 앞 범위의 응답이 새 범위 목록에 섞이지 않게.
+          disabled={busy !== null}
           onChange={(e) => changeScope(e.target.value)}
           className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
         >
@@ -175,6 +207,8 @@ export function StudioMultiExports({
           ))}
         </select>
       </label>
+
+      {projectsRetry}
 
       {candidates.length === 0 ? (
         <p className="text-[13px] text-(--hc-muted)">이 범위에 고를 행사가 없어요.</p>

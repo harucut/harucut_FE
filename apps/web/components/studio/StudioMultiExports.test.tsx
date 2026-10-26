@@ -120,3 +120,31 @@ it("행사는 한 번에 200개까지만 담는다", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent("한 번에 행사 200개까지 담을 수 있어요.");
   expect(screen.getByRole("button", { name: "고른 행사 사진 묶기 (201)" })).toBeDisabled();
 });
+
+// 만들기 응답이 오기 전에 범위를 바꾸면 앞 범위의 묶음이 새 범위 목록에 섞인다(Codex #558) — 그동안 범위를 잠근다.
+it("묶음을 만드는 동안에는 범위를 바꾸지 못한다", async () => {
+  let resolve: (value: unknown) => void = () => {};
+  mockCreate.mockImplementation(() => new Promise((r) => (resolve = r)));
+  render(<StudioMultiExports workspaceId="Ws1" canUseWorkspace events={EVENTS} />);
+  await screen.findByRole("option", { name: "봄 시즌" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "팝업 행사" }));
+  fireEvent.click(screen.getByRole("button", { name: /고른 행사 사진 묶기/ }));
+
+  await waitFor(() => expect(screen.getByLabelText("범위")).toBeDisabled());
+  resolve({ exportId: "Ex1", status: "PENDING", photoCount: 3, createdAt: "x" });
+  await waitFor(() => expect(screen.getByLabelText("범위")).toBeEnabled());
+});
+
+// 프로젝트 목록을 못 받은 것을 「맡은 프로젝트 없음」으로 보이면 다시 열기 전까지 쓸 수 없다(Codex #558).
+it("운영 담당의 프로젝트 목록을 못 받으면 알리고 다시 받는다", async () => {
+  mockProjects.mockRejectedValueOnce(new Error("network")).mockResolvedValue([SPRING]);
+  render(<StudioMultiExports workspaceId="Ws1" canUseWorkspace={false} events={EVENTS.slice(0, 2)} />);
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("프로젝트 목록을 불러오지 못했어요.");
+  expect(screen.queryByText(/맡은 프로젝트가 있어야/)).not.toBeInTheDocument();
+
+  fireEvent.click(within(alert).getByRole("button", { name: "다시 불러오기" }));
+  await waitFor(() => expect(mockList).toHaveBeenCalledWith({ kind: "project", projectId: "Pj1" }));
+  expect(screen.getByRole("checkbox", { name: "봄 웨딩 A" })).toBeInTheDocument();
+});
