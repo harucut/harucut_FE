@@ -27,10 +27,15 @@ export function formatDateTime(iso?: string | null) {
     : date.toLocaleString("ko-KR", { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-/** 숫자 칸 값 → 정수. 비었으면 undefined(서버 기본값). */
+/**
+ * 숫자 칸 값 → 0 이상의 정수. 비었거나 정수가 아니면 undefined(서버 기본값).
+ * `type="number"` 는 `1e6` 같은 지수 표기도 받으므로 parseInt 가 아니라 Number 로 통째로 읽는다 —
+ * parseInt 는 1 로 읽어 백만 원 계약이 1원, 500장 이용권이 5장이 된다(Codex #546).
+ */
 export function optionalInt(value: string): number | undefined {
-  const n = Number.parseInt(value, 10);
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
+  if (!value.trim()) return undefined;
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
 }
 
 export type TermsDraft = {

@@ -231,3 +231,21 @@ it("상태를 바꿔도 저장하지 않은 담당 메모는 그대로 둔다", 
   expect(screen.getByLabelText("담당 메모")).toHaveValue("견적 초안 작성 중");
   expect(screen.getByRole("button", { name: "메모 저장" })).toBeInTheDocument();
 });
+
+// Codex 리뷰(#546): 숫자 칸의 지수 표기를 parseInt 로 읽으면 1e6 원이 1 원이 된다.
+it("금액·한도의 지수 표기를 그대로 숫자로 보낸다", async () => {
+  api.createContract.mockResolvedValue({ ...CONTRACT, contractId: "Ct9" });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /계약자/, "하루컷 팬클럽");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /금액/, "1e6");
+  fill(form, /합성 한도/, "5e2");
+  fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
+  await waitFor(() => expect(api.createContract).toHaveBeenCalled());
+  expect(api.createContract.mock.calls[0][0]).toMatchObject({ amount: 1000000, entitlement: { composeQuota: 500 } });
+});

@@ -133,6 +133,8 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [usage, setUsage] = useState<EventUsage | undefined>(undefined);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // 행사 화면 꾸미기에서 로고·배경을 올리는 중이면 저장을 막는다. 저장 응답(저장 시점 폼)이 업로드 결과를 덮는다.
+  const [themeUploading, setThemeUploading] = useState(false);
 
   const accept = useCallback((event: StudioEvent) => {
     setLoad({ state: "ready", event });
@@ -306,7 +308,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
           className="flex flex-col gap-6"
           onSubmit={(e) => {
             e.preventDefault();
-            if (dirty && busy === null) void save();
+            if (dirty && busy === null && !themeUploading) void save();
           }}
         >
           <fieldset disabled={!editable || busy !== null} className="flex flex-col gap-6">
@@ -453,6 +455,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
                 workspaceId={event.workspaceId}
                 value={form.theme}
                 // 최신 폼 위에 적용한다 — 업로드를 기다리는 사이 바꾼 이름 등 테마 밖의 칸도 되돌리지 않게.
+                onUploadingChange={setThemeUploading}
                 onChange={(apply) => setForm((current) => (current ? { ...current, theme: apply(current.theme) } : current))}
               />
             </Section>
@@ -503,10 +506,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
           {editable ? (
             <button
               type="submit"
-              disabled={!dirty || busy !== null}
+              disabled={!dirty || busy !== null || themeUploading}
               className="hc-button-primary h-11 self-start rounded-full px-5 text-[14px] font-semibold disabled:opacity-50"
             >
-              {busy === "save" ? "저장하는 중…" : "설정 저장"}
+              {busy === "save" ? "저장하는 중…" : themeUploading ? "이미지 올리는 중…" : "설정 저장"}
             </button>
           ) : null}
         </form>
