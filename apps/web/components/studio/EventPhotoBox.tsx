@@ -117,6 +117,9 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
   const changeFilter = (next: PhotoFilter) => {
     setFilter(next);
     setSelected([]);
+    // 이전 필터의 목록·커서를 바로 버린다. 새 첫 쪽이 실패해도 「더 보기」가 새 필터에 이전 커서를 붙이지 않게(Codex #542).
+    setItems([]);
+    setNextCursor(null);
     void loadFirst(next);
   };
 
