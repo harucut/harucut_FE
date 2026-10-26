@@ -33,6 +33,15 @@ jest.mock("@/lib/assetUploadApi", () => ({
   ...jest.requireActual("@/lib/assetUploadApi"),
   uploadAsset: (...a: unknown[]) => mockThemeUpload(...a),
 }));
+const mockEffective = jest.fn();
+const mockProjects = jest.fn();
+const mockWsDefaults = jest.fn();
+jest.mock("@/lib/studio/projectsApi", () => ({
+  ...jest.requireActual("@/lib/studio/projectsApi"),
+  getEffectiveSettings: (...a: unknown[]) => mockEffective(...a),
+  listProjects: (...a: unknown[]) => mockProjects(...a),
+  getWorkspaceBrandDefaults: (...a: unknown[]) => mockWsDefaults(...a),
+}));
 jest.mock("@/lib/studio/accessApi", () => ({
   ...jest.requireActual("@/lib/studio/accessApi"),
   listEventGrants: async () => [],
@@ -91,6 +100,9 @@ beforeEach(() => {
   mockListVersions.mockResolvedValue([VERSION_CLASSIC, VERSION_SYSTEM]);
   mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 세로", frameType: "CLASSIC", components: [] }]);
   useThemeSession.getState().reset();
+  mockEffective.mockRejectedValue(new Error("no sources"));
+  mockProjects.mockResolvedValue([]);
+  mockWsDefaults.mockResolvedValue({});
   mockUsage.mockResolvedValue({ composeQuota: 0, used: 0, reserved: 0, remaining: 0 });
 });
 
@@ -119,8 +131,8 @@ it("문구를 바꾼 동의 항목만 version 을 올려 저장한다", async ()
     ["photo", 3],
     ["share", 1],
   ]);
-  // 꾸민 것이 없으면 테마는 null(테마 없음)로 보낸다.
-  expect(settings.theme).toBeNull();
+  // 바뀐 필드만 보낸다 — 상속받은 값을 행사 직접 값으로 굳히지 않는다(ADR-0009 §2-3).
+  expect(Object.keys(settings)).toEqual(["consentItems"]);
 });
 
 it("다른 곳이 먼저 바꿨으면(EVENT-005) 묻고, 덮어쓰기를 고르면 서버 버전으로 다시 저장한다", async () => {
@@ -276,10 +288,12 @@ it("꾸민 문구와 글꼴만 테마로 저장한다", async () => {
   fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
 
   await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  // 출처를 못 받으면(여기서는 effective-settings 실패) 지금 테마 전체를 보낸다 — 브랜딩은 끈 값도 명시한다.
   expect(mockUpdate.mock.calls[0][2].theme).toEqual({
     schemaVersion: 1,
     font: "GOWUN_DODUM",
     copy: { welcome: "와 주셔서 고마워요" },
+    branding: { hideHarucutBranding: false, outputLogo: "NONE" },
   });
 });
 
@@ -321,4 +335,80 @@ it("행사 화면 이미지를 올리는 동안에는 설정 저장을 막는다
 
   await act(async () => finish({ assetId: "AsLogo", key: "k", url: "https://s3/logo.png" }));
   expect(screen.getByRole("button", { name: "설정 저장" })).toBeEnabled();
+});
+
+// ADR-0009 §2 — 공간·프로젝트 기본값을 받은 값은 출처를 보이고, 「기본값 따르기」는 그 필드를 null 로 보낸다.
+it("상속받은 값의 출처를 보이고, 기본값 따르기는 그 필드만 null 로 보낸다", async () => {
+  mockEffective.mockResolvedValue({
+    settings: {},
+    sources: { name: "EVENT", allowedLayouts: "PROJECT", resultRetentionDays: "EVENT", consentItems: "EVENT" },
+  });
+  mockProjects.mockResolvedValue([{ projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x", brandDefaults: { resultRetentionDays: 60 } }]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pj1" } }));
+
+  expect(await screen.findByText("프로젝트 기본값")).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole("button", { name: "기본값 따르기" })[0]);
+  expect(screen.getByText("저장하면 기본값을 따라요")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ resultRetentionDays: null });
+});
+
+it("초안 행사는 프로젝트를 고를 수 있고, 게시한 행사는 막는다", async () => {
+  mockProjects.mockResolvedValue([
+    { projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x" },
+    { projectId: "Pj2", workspaceId: "Ws1", name: "지난 시즌", archived: true, createdAt: "x" },
+  ]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio();
+  const select = await screen.findByLabelText("프로젝트");
+  expect(within(select).queryByRole("option", { name: /지난 시즌/ })).not.toBeInTheDocument();
+  fireEvent.change(select, { target: { value: "Pj1" } });
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ projectId: "Pj1" });
+});
+
+// Codex 리뷰(#553): 상속받은 브랜딩을 이 행사만 끄면 끈 값을 명시해야 한다 — 키를 빼면 위 단계 값이 다시 켜진다.
+it("상속받은 하루컷 표시 숨김을 끄면 끈 값을 테마에 담아 보낸다", async () => {
+  mockEffective.mockResolvedValue({
+    settings: {},
+    sources: { "theme.branding.hideHarucutBranding": "PROJECT", "theme.branding.outputLogo": "PROJECT" },
+  });
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(
+    event({ settings: { ...event().settings, theme: { schemaVersion: 1, branding: { hideHarucutBranding: true, outputLogo: "NONE" } } } }),
+  );
+  await screen.findByText("프로젝트 기본값");
+  fireEvent.click(screen.getByLabelText("하루컷 표시 숨기기"));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({
+    theme: { schemaVersion: 1, branding: { hideHarucutBranding: false } },
+  });
+});
+
+// Codex 리뷰(#553): 출처를 다시 받기 전에 저장하면 옛 출처로 테마를 담아 방금 정한 키를 지운다.
+it("출처를 받기 전에는 설정 저장을 막는다", async () => {
+  mockEffective.mockImplementation(() => new Promise(() => {}));
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText(/^행사 이름/), { target: { value: "새 이름" } });
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+});
+
+// Codex 리뷰(#553): 「기본값 따르기」 뒤에 같은 섹션을 다시 고치면 그 입력을 저장해야 한다.
+it("기본값 따르기를 고른 뒤 다시 고치면 따르기를 풀고 새 값을 보낸다", async () => {
+  mockEffective.mockResolvedValue({ settings: {}, sources: { resultRetentionDays: "EVENT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x", brandDefaults: { resultRetentionDays: 60 } }]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pj1" } }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "기본값 따르기" }));
+  fireEvent.change(screen.getByLabelText("보관 일수"), { target: { value: "45" } });
+  expect(screen.queryByText("저장하면 기본값을 따라요")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ resultRetentionDays: 45 });
 });

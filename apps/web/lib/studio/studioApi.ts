@@ -52,8 +52,10 @@ export type EventSettings = {
   frames?: FrameRef[] | null;
   consentItems?: ConsentItem[] | null;
   resultRetentionDays?: number | null;
-  /** P2A 는 자리표시자 — 서버는 해석하지 않는다. */
+  /** 행사 화면 테마(ADR-0008 §5). 객체째 바꾸고, 그 안에서 빠진 키는 위 단계 값을 쓴다(ADR-0009 §2). */
   theme?: unknown;
+  /** 프로젝트(선택, ADR-0009 §2). 같은 공간의 것만. 보관된 프로젝트는 PROJECT-001, 게시한 행사의 변경은 PROJECT-002. */
+  projectId?: string | null;
 };
 
 export type EventStatus = "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";

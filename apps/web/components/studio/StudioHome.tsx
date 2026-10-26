@@ -16,6 +16,7 @@ import {
 import { STUDIO_TIMEZONE } from "@/lib/studio/eventTime";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { StudioMembers } from "@/components/studio/StudioMembers";
+import { StudioProjects } from "@/components/studio/StudioProjects";
 import { PERMISSION_LABEL, listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
 
@@ -188,6 +189,16 @@ export function StudioHome() {
                 </ul>
               ) : null}
             </section>
+
+            {current.role === "OWNER" || current.role === "ADMIN" ? (
+              <section aria-labelledby="studio-projects-title" className="flex flex-col gap-3">
+                <h2 id="studio-projects-title" className="text-[18px] font-bold">
+                  프로젝트와 기본값
+                </h2>
+                {/* 공간마다 새로 그린다 — 앞 공간의 펼침·입력이 남지 않게. */}
+                <StudioProjects key={current.workspaceId} workspaceId={current.workspaceId} />
+              </section>
+            ) : null}
 
             <section aria-labelledby="studio-members-title" className="flex flex-col gap-3">
               <h2 id="studio-members-title" className="text-[18px] font-bold">
