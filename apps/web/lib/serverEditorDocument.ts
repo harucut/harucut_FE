@@ -35,7 +35,9 @@ function isLocalSource(src: string) {
 /** 자산으로 올려야 문서에 넣을 수 있는 이미지가 남아 있는가. 정적 스티커 경로(`/stickers/…`)는 우리 웹 자산이라 그대로 둔다. */
 export function hasLocalImages(state: EditorSnapshot): boolean {
   if (state.components.some((c) => c.type !== "TEXT" && isLocalSource(c.source))) return true;
-  return state.background.type === "IMAGE" && (Boolean(state.pendingBackgroundFile) || !state.background.key);
+  // 고른 배경 파일이 남아 있어도 이미 올려 key 가 생겼으면 문서에 넣을 수 있다. 파일이 남은 것만 보면
+  // 배경을 쓰는 동안 서버 초안이 한 번도 저장되지 않는다(Codex 리뷰 #528).
+  return state.background.type === "IMAGE" && !state.background.key;
 }
 
 /**

@@ -432,6 +432,33 @@ describe("ThemeEditorPage save flow", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/theme"));
   });
 
+  // Codex 리뷰(#524): 페이지를 새로고침하면 메모리 세션(판형·저장본 id)이 사라져 목록으로 튕겼다.
+  it("저장본 다시 불러오기는 새로고침 없이 그 자리에서 저장본을 다시 받는다", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockResolvedValue({
+      frameId: 7,
+      title: "saved",
+      frameType: "CLASSIC",
+      background: { type: "COLOR", value: "111827" },
+      components: [],
+      version: 3,
+    });
+    mockUpdateFrame.mockRejectedValueOnce(
+      Object.assign(new Error("conflict"), {
+        status: 409,
+        code: "FRAME-002",
+        data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+      }),
+    );
+    const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+    confirmSave(container);
+
+    fireEvent.click(await findByRole("button", { name: "저장본 다시 불러오기" }));
+    await waitFor(() => expect(mockGetFrame).toHaveBeenCalledTimes(2));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
     // 같은 판형으로 만들던 새 프레임 초안. 저장본을 고쳐 저장해도 남아야 한다.

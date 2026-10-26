@@ -35,6 +35,7 @@ import {
   discardEditorDraft,
   loadEditorDraft,
   saveEditorDraft,
+  draftOwnerKey,
 } from "@/lib/themeEditorDraft";
 import { getMyUserInfo } from "@/lib/userApi";
 import {
@@ -296,6 +297,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
    * 사용자에게 고르게 한다(기획 R5 5절 「두 기기 편집은 version 기반으로 검사」, F16).
    */
   const frameVersionRef = useRef<number | null>(null);
+  // 바꾸면 저장본을 다시 받는다(버전 충돌 뒤 「저장본 다시 불러오기」).
+  const [remoteReloadNonce, setRemoteReloadNonce] = useState(0);
   const [versionConflict, setVersionConflict] = useState<{ currentVersion: number | null } | null>(null);
   useEffect(() => {
     isSavingRef.current = isSaving;
@@ -394,7 +397,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     return () => {
       cancelled = true;
     };
-  }, [importJson, remoteFrameId, setBackgroundImageUrl]);
+  }, [importJson, remoteFrameId, setBackgroundImageUrl, remoteReloadNonce]);
 
   // 새 프레임(원격 id 없음)이면 기본 이름·설명을 채운다.
   // 원격 프레임에서 새 프레임으로 바뀌는 전환도 렌더 중에 맞춘다.
@@ -429,7 +432,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       .then((user) => {
         // 공간 프레임의 로컬 초안은 개인 것과 섞이지 않게 공간까지 키에 넣는다 — 안 그러면
         // 개인 새 프레임 초안이 행사용 프레임으로 복원된다.
-        if (!cancelled && user.id) setDraftOwnerId(workspaceId ? `${user.id}@${workspaceId}` : user.id);
+        if (!cancelled && user.id) setDraftOwnerId(draftOwnerKey(user.id, workspaceId));
       })
       .catch(() => {});
     return () => {
@@ -988,7 +991,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                     <button
                       type="button"
                       disabled={isSaving}
-                      onClick={() => window.location.reload()}
+                      onClick={() => {
+                        /*
+                          새로고침하지 않고 그 자리에서 저장본을 다시 받는다. 판형·저장본 id 는 메모리 세션이라
+                          새로고침하면 사라져 프레임 목록으로 튕긴다(Codex 리뷰 #524).
+                        */
+                        setVersionConflict(null);
+                        setIsSaveDialogOpen(false);
+                        setRemoteReloadNonce((n) => n + 1);
+                      }}
                       className="h-11 rounded-full border border-zinc-700 px-4 font-semibold"
                     >
                       저장본 다시 불러오기
