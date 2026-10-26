@@ -185,6 +185,21 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
 
+const mockServerDraftFinish = jest.fn().mockResolvedValue(undefined);
+const mockServerDraftArgs = jest.fn();
+jest.mock("@/components/theme/editor/useServerFrameDraft", () => ({
+  useServerFrameDraft: (args: unknown) => (mockServerDraftArgs(args), {
+    status: "idle",
+    offer: null,
+    conflict: null,
+    restoreOffer: jest.fn(),
+    dismissOffer: jest.fn(),
+    overwriteConflict: jest.fn(),
+    reloadConflict: jest.fn(),
+    finish: mockServerDraftFinish,
+  }),
+}));
+
 const mockUploadAsset = jest.fn();
 jest.mock("@/lib/assetUploadApi", () => ({
   uploadAsset: (...args: unknown[]) => mockUploadAsset(...args),
@@ -307,6 +322,14 @@ describe("ThemeEditorPage save flow", () => {
     expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
   });
 
+  // 저장을 마친 편집을 다른 기기가 「이어 편집할 초안」으로 다시 묻지 않게 한다.
+  it("저장에 성공하면 서버 초안을 지운다", async () => {
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    confirmSave(container);
+    await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockServerDraftFinish).toHaveBeenCalledTimes(1));
+  });
+
   it("adds a local draft when creating a new frame", async () => {
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -388,6 +411,16 @@ describe("ThemeEditorPage save flow", () => {
 
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
+    // 같은 판형으로 만들던 새 프레임 초안. 저장본을 고쳐 저장해도 남아야 한다.
+    await saveEditorDraft({
+      ownerId: DRAFT_OWNER,
+      frameId: "classic-4",
+      backgroundColor: "123456",
+      background: { type: "COLOR", value: "123456" },
+      cellCutouts: [false, false, false, false],
+      components: [],
+      now: Date.now(),
+    });
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -404,6 +437,18 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+    expect(loadEditorDraft(DRAFT_OWNER, "classic-4")).not.toBeNull();
+  });
+
+  // 서버 초안은 계정을 알아야 켜진다. 저장본 수정에서 계정을 안 물어 서버 초안이 꺼져 있었다.
+  it("저장본을 고칠 때도 서버 초안에 계정을 넘긴다", async () => {
+    mockRemoteFrameId = 7;
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() =>
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ownerId: DRAFT_OWNER, remoteFrameId: 7 }),
+      ),
+    );
   });
 
   /*

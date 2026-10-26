@@ -37,6 +37,26 @@ import {
   saveEditorDraft,
 } from "@/lib/themeEditorDraft";
 import { getMyUserInfo } from "@/lib/userApi";
+import {
+  useServerFrameDraft,
+  type ServerDraftStatus,
+} from "@/components/theme/editor/useServerFrameDraft";
+
+/** 서버 초안 상태 줄. 빈 문자열이면 아무것도 띄우지 않는다. */
+const SERVER_DRAFT_STATUS_TEXT: Record<ServerDraftStatus, string> = {
+  idle: "",
+  saving: "초안을 저장하는 중…",
+  saved: "초안을 저장했어요. 다른 기기에서도 이어서 편집할 수 있어요.",
+  error: "초안을 서버에 저장하지 못했어요. 이 기기에는 남아 있어요.",
+  tooLarge: "초안이 너무 커서 이 기기에만 보관해요.",
+};
+
+function formatDraftTime(iso: string) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? "최근"
+    : date.toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
 
 // 새 프레임을 만들 때 채워 두는 기본 이름·설명
 const DEFAULT_FRAME_TITLE = "새 테마 프레임";
@@ -396,10 +416,12 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     공용 기기에서 앞 사람이 로그아웃하지 않고 떠나도, 다음 사람이 그 사진이 든 초안을 복원하지
     않게 하려면 지금 계정을 알아야 한다. 모르면 복원도 자동 저장도 하지 않는다 — 주인 없는
     초안을 남기는 것보다 이번 편집의 자동 저장을 건너뛰는 편이 안전하다.
+
+    저장본 수정에서도 알아 둔다 — 서버 초안(useServerFrameDraft)이 계정을 알아야 켜진다. 로컬 초안의
+    복원·자동 저장·삭제는 각자 remoteFrameId 를 보고 새 프레임에서만 돈다.
   */
   const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
   useEffect(() => {
-    if (remoteFrameId) return;
     let cancelled = false;
     void getMyUserInfo()
       .then((user) => {
@@ -409,7 +431,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     return () => {
       cancelled = true;
     };
-  }, [remoteFrameId]);
+  }, []);
+
+  // 다른 기기에서 이어 편집하는 서버 초안(F1-5). 같은 기기의 새로고침 복구는 아래 로컬 초안이 맡는다.
+  const serverDraft = useServerFrameDraft({
+    ownerId: draftOwnerId,
+    frameId,
+    remoteFrameId,
+    ready: remoteFrameId ? isRemoteFrameSettled && !loadError : true,
+  });
 
   // 새 프레임 작업 시: 새로고침/이탈로 남은 WIP 초안(localStorage)이 있으면 복원한다.
   // 원격 프레임 수정 중에는 저장본을 불러오므로 초안 복원을 하지 않는다.
@@ -603,7 +633,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       stopDraftAutosaveRef.current?.();
-      if (draftOwnerId) discardEditorDraft(draftOwnerId, frameId);
+      // 로컬 초안은 새 프레임 것이다. 저장본을 고치다 지우면 같은 판형의 새 프레임 초안이 사라진다.
+      if (draftOwnerId && !remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
+      void serverDraft.finish();
       // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
       // /theme로 나가는 길에도 경고가 뜬다.
       setBaseline({ key: baselineKey, signature: editorSignature });
@@ -706,7 +738,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             onBackClick={() => {
               stopDraftAutosaveRef.current?.();
               useThemeEditorStore.getState().reset();
-              if (draftOwnerId) discardEditorDraft(draftOwnerId, frameId);
+              if (draftOwnerId && !remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
+              void serverDraft.finish();
             }}
             rightSlot={
               <button
@@ -743,6 +776,64 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         {loadError || actionError ? (
           <p role="alert" className="text-[12px] text-(--hc-danger)">
             {loadError ?? actionError}
+          </p>
+        ) : null}
+
+        {serverDraft.offer ? (
+          <section
+            aria-label="다른 기기의 초안"
+            className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-card) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p>
+              다른 기기에서 {formatDraftTime(serverDraft.offer.updatedAt)}에 편집한 초안이 있어요.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={serverDraft.dismissOffer}
+                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+              >
+                지금 화면 유지
+              </button>
+              <button
+                type="button"
+                onClick={() => void serverDraft.restoreOffer()}
+                className="hc-button-primary h-11 rounded-full px-4 text-[13px] font-semibold"
+              >
+                초안 불러오기
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {serverDraft.conflict ? (
+          <section
+            aria-label="초안 충돌"
+            className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p>다른 기기에서 이 초안을 먼저 고쳤어요. 어느 쪽을 남길까요?</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void serverDraft.reloadConflict()}
+                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+              >
+                다른 기기 내용 불러오기
+              </button>
+              <button
+                type="button"
+                onClick={serverDraft.overwriteConflict}
+                className="h-11 rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger)"
+              >
+                이 기기 내용으로 덮어쓰기
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {SERVER_DRAFT_STATUS_TEXT[serverDraft.status] ? (
+          <p role="status" className="text-[12px] text-(--hc-muted)">
+            {SERVER_DRAFT_STATUS_TEXT[serverDraft.status]}
           </p>
         ) : null}
 
