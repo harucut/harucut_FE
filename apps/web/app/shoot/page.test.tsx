@@ -98,60 +98,34 @@ describe("프레임을 다시 고를 때 들고 온 사진", () => {
   });
 });
 
-const EVENT_NAME = "여름 팬미팅";
-
 /** 한 SPA 세션 안에서 `/shoot` 에 다시 서는 것 — 스토어는 모듈 수준이라 그대로 남는다. */
 function enterShoot(query: string) {
   mockQuery = query;
   return render(<ShootPage />);
 }
 
-describe("행사 이름", () => {
+/*
+  옛 행사 QR 주소(`/shoot?event=…`)는 걷어냈다. 행사는 `/e/{slug}` 로 옮겼고, 배포한 QR 이
+  없어서 호환하지 않는다(기획 R3·R4 검수 D01). 남은 주소로 와도 평범한 새 촬영이다.
+*/
+describe("옛 행사 쿼리", () => {
   beforeEach(() => {
     mockPush.mockClear();
     useShootSession.getState().reset();
   });
 
-  it("행사 쿼리로 들어오면 배너에 행사 이름이 뜬다", () => {
-    enterShoot(`frame=classic-4&event=${encodeURIComponent(EVENT_NAME)}`);
-    expect(useShootSession.getState().eventName).toBe(EVENT_NAME);
-    expect(screen.getByText(EVENT_NAME)).toBeInTheDocument();
-  });
-
-  /*
-    결과 화면이 "다른 프레임으로" 로 돌려보내는 길에는 행사 쿼리가 없다(result/page.tsx).
-    같은 촬영을 이어 가는 것이므로 행사 맥락은 남아야 한다.
-  */
-  it("keepShots=1 로 이어 가면 행사 이름을 물려받는다", () => {
-    enterShoot(`frame=classic-4&event=${encodeURIComponent(EVENT_NAME)}`).unmount();
-
-    enterShoot("keepShots=1");
-
-    expect(useShootSession.getState().eventName).toBe(EVENT_NAME);
-    expect(screen.getByText(EVENT_NAME)).toBeInTheDocument();
-  });
-
-  /*
-    행사 촬영을 마친 브라우저로 일반 `/shoot` 에 다시 들어오는 경우. 이어 가겠다는 표시가
-    없으므로 새 촬영이고, 지난 행사의 배너가 따라붙으면 안 된다.
-  */
-  it("쿼리 없는 새 진입은 이전 행사 이름을 지운다", () => {
-    enterShoot(`frame=classic-4&event=${encodeURIComponent(EVENT_NAME)}`).unmount();
-
-    enterShoot("");
-
-    expect(useShootSession.getState().eventName).toBeNull();
-    expect(screen.queryByText(EVENT_NAME)).not.toBeInTheDocument();
+  it("event 쿼리가 있어도 행사 배너를 띄우지 않는다", () => {
+    enterShoot(`frame=classic-4&event=${encodeURIComponent("여름 팬미팅")}`);
+    expect(screen.queryByText("여름 팬미팅")).not.toBeInTheDocument();
   });
 });
 
 /*
-  ── 갤러리 불러오기로 보낼 때는 행사 상태를 주소에 싣는다 ──
+  ── 갤러리 불러오기로 보낼 때는 고른 프레임을 주소에 싣는다 ──
 
   그 경로는 회원 전용이라 게스트 쿠키가 이미 있으면 **화면이 마운트되기 전에** 프록시가
   막는다. 프록시는 세션을 못 보므로, 되돌릴 주소에 넣을 것이 요청에 실려 있지 않으면
-  행사 배너와 QR 이 지정한 프레임이 그대로 사라진다 — `/shoot` 은 쿼리 없는 진입을
-  새 촬영으로 보고 세션을 비운다.
+  고른 프레임이 사라진다 — `/shoot` 은 쿼리 없는 진입을 새 촬영으로 보고 세션을 비운다.
 
   업로드 화면 자체는 이 쿼리를 읽지 않는다(세션에서 같은 값을 꺼낸다). 싣는 이유는
   **프록시가 되돌릴 때 잃지 않기 위해서**다.
@@ -162,21 +136,9 @@ describe("갤러리 불러오기로 보내는 주소", () => {
     useShootSession.setState({ shots: [], shotsFrameId: null });
   });
 
-  it("행사 진입이면 프레임과 행사 이름을 실어 보낸다", () => {
+  // 옛 event 쿼리가 남아 있어도 옮기지 않는다 — 되돌아갈 때 고른 프레임만 지킨다.
+  it("프레임만 실어 보낸다", () => {
     mockQuery = "source=upload&event=hongdae-2026";
-    mockChosenFrameId = "grid-4";
-
-    render(<ShootPage />);
-    fireEvent.click(screen.getByRole("button", { name: "확인" }));
-
-    expect(mockPush).toHaveBeenCalledWith(
-      "/shoot/upload?frame=grid-4&event=hongdae-2026",
-    );
-  });
-
-  // 행사가 아니어도 프레임은 싣는다 — 되돌아갈 때 고른 프레임을 잃지 않는다.
-  it("행사가 아니면 프레임만 실어 보낸다", () => {
-    mockQuery = "source=upload";
     mockChosenFrameId = "classic-4";
 
     render(<ShootPage />);
@@ -187,7 +149,7 @@ describe("갤러리 불러오기로 보내는 주소", () => {
 
   // 반대쪽 못 — 촬영 경로는 예전 주소 그대로다(프록시가 막는 경로가 아니다).
   it("촬영으로 갈 때는 주소를 건드리지 않는다", () => {
-    mockQuery = "event=hongdae-2026";
+    mockQuery = "";
     mockChosenFrameId = "grid-4";
 
     render(<ShootPage />);
@@ -198,17 +160,17 @@ describe("갤러리 불러오기로 보내는 주소", () => {
 });
 
 /*
-  ── 행사 QR 진입: 게스트 전환은 **여기서** 판정한다 ──
+  ── 회원 후보 진입(`checkSession=1`): 게스트 전환은 **여기서** 판정한다 ──
 
-  프록시는 쿠키가 아예 없는 방문자에게만 체험 쿠키를 심는다. 쿠키가 남아 있는 브라우저는
-  그냥 통과해 이 화면까지 오고, 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다.
+  랜딩의 「가입 없이 체험하기」(`/shoot/start`)는 인증 쿠키가 남은 방문자를 체험 쿠키 없이
+  `/shoot?checkSession=1` 로 보낸다. 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다.
   한때 미들웨어가 「살아 있는 access 가 아니면 심는다」로 점쳤는데, access 만 자연 만료되고
   refresh 는 멀쩡한 회원(흔하다)이 7일짜리 체험 쿠키를 받아 기록·커스텀 프레임을 잃었다.
 
   `isUsableMember()` 는 `clientApi` 로 물어 401 이면 재발급까지 해 본다. 그러니 여기서
   **정말 회원이 아닌 것이 확인된 뒤에만** 체험을 시작한다.
 */
-describe("행사 QR 진입의 게스트 전환", () => {
+describe("회원 후보 진입의 게스트 전환", () => {
   function resetGuest() {
     document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     useGuestTrialStore.setState({
@@ -228,7 +190,7 @@ describe("행사 QR 진입의 게스트 전환", () => {
   });
 
   it("회원이 아닌 것이 확인되면 체험을 시작한다", async () => {
-    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockQuery = "frame=classic-4&checkSession=1";
     mockResolveMembership.mockResolvedValue("guest");
 
     render(<ShootPage />);
@@ -239,11 +201,11 @@ describe("행사 QR 진입의 게스트 전환", () => {
   });
 
   /*
-    반대쪽 못 — **회원이면 덮지 않는다.** 이 못이 없으면 "행사 진입이면 무조건 게스트"로
+    반대쪽 못 — **회원이면 덮지 않는다.** 이 못이 없으면 "이 진입이면 무조건 게스트"로
     고쳐도 위 테스트가 통과하고, 그러면 미들웨어에서 옮겨 온 그 결함이 화면 쪽에서 되살아난다.
   */
   it("회원으로 확인되면 아무것도 심지 않는다", async () => {
-    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockQuery = "frame=classic-4&checkSession=1";
     mockResolveMembership.mockResolvedValue("member");
 
     render(<ShootPage />);
@@ -258,11 +220,11 @@ describe("행사 QR 진입의 게스트 전환", () => {
 
     판정은 왕복 하나만큼 걸리고, 그 사이 사용자는 기본 프레임으로 「확인」을 눌러 다음
     화면으로 갈 수 있다. 한때 cleanup 의 `cancelled` 가 그때 전환을 버렸는데, 그러면 죽은
-    인증 쿠키를 든 행사 참가자가 게스트 자격 없이 촬영을 계속하다 인증 API 에서 막힌다 —
+    인증 쿠키를 든 방문자가 게스트 자격 없이 촬영을 계속하다 인증 API 에서 막힌다 —
     다음 경로도 남은 쿠키로 프록시를 통과하므로 아무도 그것을 잡지 못한다.
   */
   it("판정 중에 화면을 떠나도 체험 전환은 끝까지 간다", async () => {
-    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockQuery = "frame=classic-4&checkSession=1";
     let answer: (value: string) => void = () => {};
     mockResolveMembership.mockImplementation(
       () =>
@@ -293,7 +255,7 @@ describe("행사 QR 진입의 게스트 전환", () => {
     돌아오면 다음 진입에서 판정된다.
   */
   it("판정할 수 없으면 게스트로 전환하지 않는다", async () => {
-    mockQuery = "frame=classic-4&event=hongdae-2026";
+    mockQuery = "frame=classic-4&checkSession=1";
     mockResolveMembership.mockResolvedValue("unknown");
 
     render(<ShootPage />);
@@ -303,9 +265,10 @@ describe("행사 QR 진입의 게스트 전환", () => {
     expect(document.cookie).not.toContain(`${GUEST_TRIAL_COOKIE}=1`);
   });
 
-  // 행사 진입이 아니면 묻지도 않는다 — 촬영 화면을 열 때마다 인증 왕복이 붙으면 안 된다.
-  it("행사 진입이 아니면 회원 여부를 묻지 않는다", async () => {
-    mockQuery = "frame=classic-4";
+  // 이 진입이 아니면 묻지도 않는다 — 촬영 화면을 열 때마다 인증 왕복이 붙으면 안 된다.
+  // 옛 event 쿼리도 더는 묻는 이유가 아니다.
+  it.each(["frame=classic-4", "frame=classic-4&event=hongdae-2026"])("%s 로 열면 회원 여부를 묻지 않는다", async (query) => {
+    mockQuery = query;
     mockResolveMembership.mockResolvedValue("guest");
 
     render(<ShootPage />);
@@ -315,8 +278,8 @@ describe("행사 QR 진입의 게스트 전환", () => {
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
 
-  it("이미 체험 중이면 행사 진입에서도 인증 API를 부르지 않는다", async () => {
-    mockQuery = "frame=classic-4&event=hongdae-2026";
+  it("이미 체험 중이면 이 진입에서도 인증 API를 부르지 않는다", async () => {
+    mockQuery = "frame=classic-4&checkSession=1";
     useGuestTrialStore.getState().enterGuestMode();
     render(<ShootPage />);
     await act(async () => {});
