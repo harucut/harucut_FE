@@ -9,6 +9,8 @@ import {
   adminErrorMessage,
   describeTerms,
   formatDateTime,
+  INVALID_NUMBER_MESSAGE,
+  isInvalidNumber,
   optionalInt,
   termsOf,
   type TermsDraft,
@@ -133,10 +135,12 @@ export function AdminContracts({ prefill }: { prefill?: { contractorName: string
     .map((id) => id.trim())
     .filter(Boolean);
   const evidencePartial = Boolean(draft.evidenceKind) !== Boolean(draft.evidenceReference.trim());
+  const amountInvalid = isInvalidNumber(draft.amount);
   const canCreate =
     Boolean(draft.workspaceId.trim() && draft.contractorName.trim() && startsAt && endsAt && terms) &&
     (draft.scope === "WORKSPACE" || eventIds.length > 0) &&
-    !evidencePartial;
+    !evidencePartial &&
+    !amountInvalid;
 
   const create = async () => {
     if (!canCreate || !terms || !startsAt || !endsAt) return;
@@ -209,7 +213,13 @@ export function AdminContracts({ prefill }: { prefill?: { contractorName: string
             <TextField label="계약자" value={draft.contractorName} onChange={(v) => set({ contractorName: v })} required maxLength={100} />
             <TextField label="시작" type="datetime-local" value={draft.startsAt} onChange={(v) => set({ startsAt: v })} required help="한국 시간" />
             <TextField label="끝" type="datetime-local" value={draft.endsAt} onChange={(v) => set({ endsAt: v })} required help="한국 시간" />
-            <TextField label="금액(원)" type="number" value={draft.amount} onChange={(v) => set({ amount: v })} />
+            <TextField
+              label="금액(원)"
+              type="number"
+              value={draft.amount}
+              onChange={(v) => set({ amount: v })}
+              error={amountInvalid ? INVALID_NUMBER_MESSAGE : undefined}
+            />
           </div>
           <fieldset className="flex flex-col gap-1">
             <legend className="mb-1 text-[14px] font-semibold">적용 범위</legend>

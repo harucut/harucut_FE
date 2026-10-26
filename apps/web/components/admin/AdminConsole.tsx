@@ -47,17 +47,20 @@ export function AdminConsole() {
             </button>
           ))}
         </div>
-        <section role="tabpanel" id={`admin-panel-${tab}`} aria-labelledby={`admin-tab-${tab}`}>
-          {tab === "inquiries" ? (
-            <AdminInquiries
-              onStartContract={(inquiry) => {
-                setPrefill({ contractorName: inquiry.contactName, nonce: Date.now() });
-                setTab("contracts");
-              }}
-            />
-          ) : null}
-          {tab === "contracts" ? <AdminContracts prefill={prefill} /> : null}
-          {tab === "entitlements" ? <AdminEntitlements /> : null}
+        {/* 세 패널을 모두 마운트해 두고 고르지 않은 것만 숨긴다 — 탭을 오가도 작성 중인 계약·이용권 초안이 남는다(Codex #546). */}
+        <section role="tabpanel" id="admin-panel-inquiries" aria-labelledby="admin-tab-inquiries" hidden={tab !== "inquiries"}>
+          <AdminInquiries
+            onStartContract={(inquiry) => {
+              setPrefill({ contractorName: inquiry.contactName, nonce: Date.now() });
+              setTab("contracts");
+            }}
+          />
+        </section>
+        <section role="tabpanel" id="admin-panel-contracts" aria-labelledby="admin-tab-contracts" hidden={tab !== "contracts"}>
+          <AdminContracts prefill={prefill} />
+        </section>
+        <section role="tabpanel" id="admin-panel-entitlements" aria-labelledby="admin-tab-entitlements" hidden={tab !== "entitlements"}>
+          <AdminEntitlements />
         </section>
       </div>
     </main>
