@@ -345,3 +345,25 @@ describe("frame api mapping", () => {
     });
   });
 });
+
+describe("잠금 왕복(F1-3)", () => {
+  it("잠근 레이어는 저장 요청에 locked 를 싣고, 응답의 locked 를 편집기로 되돌린다", () => {
+    const json = makeJson("classic-4");
+    json.components[0] = { ...json.components[0], locked: true };
+    const request = toCreateFrameRequest(json, { title: "t", description: "d", previewKey: "p" });
+    expect(request.components[0]).toMatchObject({ locked: true });
+
+    const back = toThemeExportJson({
+      frameId: 1,
+      title: "t",
+      frameType: "CLASSIC",
+      components: [{ ...request.components[0], id: 1, locked: true }],
+    });
+    expect(back.components[0].locked).toBe(true);
+  });
+
+  it("잠그지 않은 레이어는 locked 를 싣지 않는다(예전 서버 호환)", () => {
+    const request = toCreateFrameRequest(makeJson("classic-4"), { title: "t", description: "d", previewKey: "p" });
+    expect(request.components[0]).not.toHaveProperty("locked");
+  });
+});

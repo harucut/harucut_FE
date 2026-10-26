@@ -347,6 +347,38 @@ describe("ThemeEditorPage save flow", () => {
     }
   });
 
+  // F16 — 두 기기 편집은 version 으로 검사한다. 불러온 버전을 보내고, 충돌하면 사용자가 고른다.
+  it("불러온 버전으로 수정 저장하고, 다른 기기가 먼저 저장했으면(FRAME-002) 덮어쓸지 묻는다", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockResolvedValue({
+      frameId: 7,
+      title: "saved",
+      frameType: "CLASSIC",
+      background: { type: "COLOR", value: "111827" },
+      components: [],
+      version: 3,
+    });
+    const conflict = Object.assign(new Error("conflict"), {
+      status: 409,
+      code: "FRAME-002",
+      data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+    });
+    mockUpdateFrame.mockRejectedValueOnce(conflict).mockResolvedValueOnce({ frameId: 7, version: 6 });
+
+    const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+    confirmSave(container);
+
+    await waitFor(() => expect(mockUpdateFrame).toHaveBeenCalledTimes(1));
+    expect(mockUpdateFrame.mock.calls[0][1]).toMatchObject({ version: 3 });
+    expect(mockPush).not.toHaveBeenCalled();
+
+    fireEvent.click(await findByRole("button", { name: "내 편집으로 덮어쓰기" }));
+    await waitFor(() => expect(mockUpdateFrame).toHaveBeenCalledTimes(2));
+    expect(mockUpdateFrame.mock.calls[1][1]).toMatchObject({ version: 5 });
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/theme"));
+  });
+
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
 

@@ -8,6 +8,8 @@ import type {
 import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type CreateFrameRequest = {
+  /** 수정 저장(PUT) 전용 낙관적 잠금 버전. 생략하면 서버가 덮어쓴다(호환). */
+  version?: number;
   title: string;
   description: string;
   previewKey: string;
@@ -29,6 +31,8 @@ export type CreateFrameRequest = {
      * 저장 시점에는 선택이지만 **없으면 그 프레임으로 합성이 400 GEN-002 로 죽는다.**
      */
     renderedKey?: string;
+    /** 편집기 잠금(저장·재열기용). 인가 근거가 아니다. */
+    locked?: boolean;
     x: number;
     y: number;
     width: number;
@@ -184,6 +188,7 @@ export function toCreateFrameRequest(
         // renderUrl 은 렌더 전용이라 보내지 않는다. 이미지 source 는 key 로 정규화한다.
         source: c.type === "TEXT" ? c.source : toStorageKey(c.source),
         ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+        ...(c.locked ? { locked: true } : {}),
         x: c.x,
         y: c.y,
         width: c.width,
@@ -225,6 +230,7 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
         type: component.type,
         source: storageKey,
         ...(renderUrl ? { renderUrl } : {}),
+        ...(component.locked ? { locked: true } : {}),
         x: component.x,
         y: component.y,
         width: component.width,

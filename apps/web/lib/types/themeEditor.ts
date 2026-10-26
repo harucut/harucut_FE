@@ -111,6 +111,11 @@ export type ThemeExportJson = {
     renderUrl?: string;
     /** TEXT 전용. 구운 글자 층의 S3 key. */
     renderedKey?: string;
+    /**
+     * 편집기 잠금. 저장·재열기에서 유지한다(고도화 P1 F1-3). 서버는 이 값을 인가 근거로 쓰지 않는다 —
+     * 행사 편집 정책은 발행본과 서버 허용 목록이 정한다(기획 R5 5절).
+     */
+    locked?: boolean;
     x: number;
     y: number;
     width: number;
