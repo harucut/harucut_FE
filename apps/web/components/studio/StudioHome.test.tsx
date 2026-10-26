@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StudioHome } from "@/components/studio/StudioHome";
 
 const mockReplace = jest.fn();
@@ -14,6 +14,19 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mockQuery),
 }));
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
+const mockListMyEvents = jest.fn();
+jest.mock("@/lib/studio/accessApi", () => ({
+  ...jest.requireActual("@/lib/studio/accessApi"),
+  listMyEvents: () => mockListMyEvents(),
+  listMembers: () => mockListMembers(),
+  listInvitations: async () => [],
+  inviteMember: (...a: unknown[]) => mockInvite(...a),
+  removeMember: (...a: unknown[]) => mockRemoveMember(...a),
+}));
+const mockListMembers = jest.fn();
+const mockInvite = jest.fn();
+const mockRemoveMember = jest.fn();
+jest.mock("@/lib/userApi", () => ({ getMyUserInfo: async () => ({ id: "u-me" }) }));
 jest.mock("@/lib/studio/studioApi", () => ({
   listWorkspaces: () => mockListWorkspaces(),
   createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
@@ -28,6 +41,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = "";
   mockListEvents.mockResolvedValue([]);
+  mockListMyEvents.mockResolvedValue([]);
+  mockListMembers.mockResolvedValue([]);
 });
 
 // 행사는 조직 공간에만 만든다 — 개인 공간은 탈퇴 때 통째로 지워진다.
@@ -88,4 +103,45 @@ it("관리자가 아니면 행사 만들기를 보여 주지 않는다", async (
   render(<StudioHome />);
   expect(await screen.findByText(/관리자 권한이 필요해요/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "행사 만들기" })).not.toBeInTheDocument();
+});
+
+// 행사 고객은 공간 멤버가 아니다 — 받은 행사만 보이고, 운영 공간이 없어도 목록은 보인다.
+it("고객으로 받은 행사를 권한과 함께 보여 준다", async () => {
+  mockListWorkspaces.mockResolvedValue([PERSONAL]);
+  mockListMyEvents.mockResolvedValue([
+    { eventId: "Ev9", name: "민지 ♥ 준호", status: "LIVE", access: { permissions: ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"] } },
+    { eventId: "Ev1", name: "운영하는 행사", status: "LIVE", access: { role: "OWNER", permissions: [] } },
+  ]);
+  render(<StudioHome />);
+  expect(await screen.findByText("민지 ♥ 준호")).toBeInTheDocument();
+  expect(screen.getByText("사진 보기 · 사진 내려받기")).toBeInTheDocument();
+  // 멤버로 운영하는 행사는 공간의 행사 목록에 나온다.
+  expect(screen.queryByText("운영하는 행사")).not.toBeInTheDocument();
+});
+
+const ORG_B = { workspaceId: "WsB", name: "두 번째 팀", type: "ORGANIZATION", role: "OWNER" };
+
+// 앞 공간에서 만든 초대 링크가 다음 공간의 것처럼 보이면 엉뚱한 공간 권한을 건네게 된다.
+it("공간을 바꾸면 앞 공간에서 만든 초대 링크를 지운다", async () => {
+  mockListWorkspaces.mockResolvedValue([ORG, ORG_B]);
+  mockInvite.mockResolvedValue({ invitationId: "Iv1", inviteToken: "T".repeat(43), expiresAt: "2026-11-02T00:00:00Z" });
+  const { rerender } = render(<StudioHome />);
+  fireEvent.click(await screen.findByRole("button", { name: "초대 링크 만들기" }));
+  expect(await screen.findByText(/T{43}/)).toBeInTheDocument();
+
+  mockQuery = "workspace=WsB";
+  rerender(<StudioHome />);
+  await waitFor(() => expect(screen.queryByText(/T{43}/)).not.toBeInTheDocument());
+});
+
+it("공간에서 나가면 공간 목록을 다시 받아 그 공간을 지운다", async () => {
+  mockListWorkspaces.mockResolvedValueOnce([ORG, ORG_B]).mockResolvedValueOnce([ORG_B]);
+  mockListMembers.mockResolvedValue([{ userId: "u-me", name: "나", role: "ADMIN", joinedAt: "2026-10-01T00:00:00Z" }]);
+  mockRemoveMember.mockResolvedValue(undefined);
+  render(<StudioHome />);
+  fireEvent.click(await screen.findByRole("button", { name: "나가기" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "나가기" }));
+  await waitFor(() => expect(mockListWorkspaces).toHaveBeenCalledTimes(2));
+  expect(mockReplace).toHaveBeenCalledWith("/studio");
+  expect(await screen.findByText("두 번째 팀")).toBeInTheDocument();
 });
