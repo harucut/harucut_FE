@@ -209,103 +209,14 @@ describe("proxy 회원 전환", () => {
 });
 
 /*
-  행사 QR 진입에서 미들웨어가 하는 일은 **하나뿐이다** — 쿠키가 아예 없는 방문자에게
-  체험 쿠키를 심어 `/shoot` 이 로그인으로 튕기지 않게 하는 것.
-
-  쿠키가 남아 있는 브라우저(행사장에 흔하다)는 그냥 통과시킨다. 그 쿠키가 살아 있는지는
-  여기서 알 수 없고 — 재발급은 토큰을 회전시키는 쓰기라 모든 요청에 붙는 프록시가 할 일이
-  아니다 — 화면이 `isUsableMember()` 로 물어본 뒤 정말 회원이 아닐 때만 전환한다.
-  그 판정과 이유는 proxy.ts 의 분기 주석과 app/shoot/page.tsx 에 있다.
+  옛 행사 QR 주소(`/shoot?event=…`)는 걷어냈다 — 행사는 `/e/{slug}` 로 옮겼고, 배포한 QR 이
+  없어 호환하지 않는다(기획 R3·R4 검수 D01). 이 주소는 이제 평범한 `/shoot` 이다.
+  예전에는 쿠키 없는 방문자에게 여기서 체험 쿠키를 심었다. 체험은 이제 랜딩의 공개 진입점
+  (`/shoot/start`)에서만 시작한다.
 */
-describe("proxy 행사 QR 진입", () => {
-  const EVENT_ENTRY = "/shoot?frame=classic&event=hongdae-2026";
-
-  test("쿠키가 하나도 없으면 체험 쿠키를 심어 통과시킨다", async () => {
-    const response = await proxy(request(EVENT_ENTRY));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
-  });
-
-  /*
-    회귀 — **인증 쿠키가 하나라도 있으면 여기서는 심지 않는다.**
-
-    한때 「살아 있는 access 만 아니면 심는다」로 두었다. 회수된 refresh 를 든 행사 참가자를
-    회원으로 오해해 막지 말자는 뜻이었는데, 반대쪽을 더 크게 깼다 — access 만 자연 만료되고
-    refresh 는 멀쩡한 회원(흔하다)이 QR 을 찍으면 7일짜리 체험 쿠키를 받았고, `clientApi` 가
-    재발급에 성공한 뒤에도 `guestTrialStore` 는 그 쿠키만 보고 게스트로 복원해 기록·커스텀
-    프레임을 잃었다.
-
-    쿠키가 살아 있는지는 미들웨어가 알 수 없다(재발급은 토큰을 회전시키는 쓰기이고 프록시는
-    모든 요청에 붙는다 — proxy.ts 의 그 분기 주석). 그래서 **판정을 화면으로 넘긴다.**
-    쿠키가 있으면 그냥 통과시키고, `app/shoot/page.tsx` 가 `isUsableMember()` 로 —
-    재발급을 포함해 — 물어본 뒤 정말 회원이 아닐 때만 체험을 시작한다.
-  */
-  test.each([
-    ["형식이 깨진 access 쿠키", STALE_AUTH],
-    ["만료된 access 쿠키", accessToken(-3600)],
-    ["페이로드가 base64 가 아닌 access 쿠키", BROKEN_BASE64_AUTH],
-    ["페이로드가 JSON 이 아닌 access 쿠키", BROKEN_JSON_AUTH],
-    ["회수된 refresh 쿠키만", "refreshToken=revoked-elsewhere"],
-    [
-      "만료된 access 와 회수된 refresh",
-      `${accessToken(-3600)}; refreshToken=revoked-elsewhere`,
-    ],
-    ["살아 있는 access 토큰", accessToken(3600)],
-    ["살아 있는 access 와 refresh", `${accessToken(3600)}; refreshToken=live`],
-  ])("%s 를 들고 오면 심지 않고 통과시킨다", async (_label, cookie) => {
-    const response = await proxy(request(EVENT_ENTRY, cookie));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.get("set-cookie")).toBeNull();
-  });
-
-  /*
-    반대쪽 못. 쿠키가 **아예 없는** 방문자에게는 여기서 심어야 한다 — 물어볼 곳이 없고,
-    안 심으면 `/shoot` 이 보호 경로라 로그인으로 튕겨 행사 흐름이 그 자리에서 끊긴다.
-    이 못이 없으면 「행사 분기를 통째로 없앤다」로 고쳐도 위 테스트가 전부 통과한다.
-  */
-  test("쿠키가 없는 방문자에게는 심어서 로그인으로 튕기지 않는다", async () => {
-    const response = await proxy(request(EVENT_ENTRY));
-
-    expect(response.status).toBe(200);
-    expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
-  });
-
-  test("행사 QR 이 아닌 보호 경로는 죽은 쿠키로도 그대로 통과한다", async () => {
-    // 보호 경로 판정 자체는 건드리지 않았다는 고정.
-    const response = await proxy(request("/home", STALE_AUTH));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.get("set-cookie")).toBeNull();
-  });
-
-  test("이미 체험 중이면 쿠키를 다시 심지 않는다", async () => {
-    const response = await proxy(
-      request(EVENT_ENTRY, `${GUEST_TRIAL_COOKIE}=1`),
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie")).toBeNull();
-  });
-
-  /*
-    **행사 진입이 아닌 것에 못을 박는다.**
-
-    `isEventEntry` 가 보는 조건은 둘이다 — 경로가 **정확히** `/shoot` 이고, `event` 쿼리에
-    공백이 아닌 값이 있을 것. 위 회귀 테스트들은 전부 그 둘을 만족하는 주소만 부르므로,
-    조건을 지워도(`event` 를 안 보게) 넓혀도(`startsWith("/shoot")`) 전부 통과했다.
-    그렇게 넓히면 평범한 `/shoot` 방문자와 하위 단계 직접 진입자까지 7일짜리 게스트가 된다.
-  */
-  test.each([
-    ["event 쿼리가 없는 촬영 진입점", "/shoot"],
-    ["event 없이 프레임만 든 진입점", "/shoot?frame=classic"],
-    ["행사 쿼리를 든 회원 전용 하위 경로", "/shoot/upload?event=hongdae-2026"],
-    ["행사 쿼리를 든 촬영 단계", "/shoot/capture?event=hongdae-2026"],
-  ])("%s 는 쿠키가 없으면 로그인으로 보낸다", async (_label, path) => {
+describe("proxy 옛 행사 QR 주소", () => {
+  test("event 쿼리가 있어도 체험 쿠키를 심지 않고 로그인으로 보낸다", async () => {
+    const path = "/shoot?frame=classic&event=hongdae-2026";
     const response = await proxy(request(path));
 
     expect(response.status).toBe(307);
@@ -314,24 +225,16 @@ describe("proxy 행사 QR 진입", () => {
     );
     expect(response.headers.get("set-cookie")).toBeNull();
   });
+});
 
-  test("event 값이 공백뿐이면 행사 진입으로 보지 않는다", async () => {
-    const response = await proxy(request("/shoot?frame=classic&event=%20%20"));
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain("/login?redirectTo=");
-    expect(response.headers.get("set-cookie")).toBeNull();
-  });
-
-  /*
-    심는 쿠키의 **속성**까지 고정한다. 클라이언트(guestTrialStore.setGuestCookie)가 심는
-    것과 같아야 한쪽이 심고 다른 쪽이 못 읽는 일이 없다. 값만 보던 위 테스트들은
-    max-age 를 60초로 줄여도, path 를 `/shoot` 으로 좁혀도 전부 통과했다.
-  */
+/*
+  심는 체험 쿠키의 **속성**까지 고정한다. 지금 심는 자리는 공개 진입점(`/shoot/start`) 하나다.
+  클라이언트(guestTrialStore.setGuestCookie)가 심는 것과 같아야 한쪽이 심고 다른 쪽이 못
+  읽는 일이 없다. 값만 보면 max-age 를 60초로 줄여도, path 를 `/shoot` 으로 좁혀도 통과한다.
+*/
+describe("proxy 체험 쿠키 속성", () => {
   test("심는 체험 쿠키의 속성은 클라이언트와 같은 값이다", async () => {
-    const cookie = (await proxy(request(EVENT_ENTRY))).cookies.get(
-      GUEST_TRIAL_COOKIE,
-    );
+    const cookie = (await proxy(request("/shoot/start"))).cookies.get(GUEST_TRIAL_COOKIE);
 
     expect(cookie?.value).toBe("1");
     // 기간은 공유 상수와 대조한다 — 숫자를 여기 또 적으면 그게 세 번째 사본이 된다.
@@ -345,7 +248,7 @@ describe("proxy 행사 QR 진입", () => {
     // 로컬 개발(http://localhost:3000)에서 Secure 를 붙이면 브라우저가 아예 저장하지 않아
     // 체험이 시작되지 않는다.
     const response = await proxy(
-      new NextRequest(new URL(EVENT_ENTRY, "http://localhost:3000")),
+      new NextRequest(new URL("/shoot/start", "http://localhost:3000")),
     );
 
     expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
@@ -358,9 +261,9 @@ describe("proxy 행사 QR 진입", () => {
 
   통과 판정(hasAuthCookie)이 게스트 판정보다 앞에 있었고, 그 판정은 쿠키가 있는지만 본다.
   그래서 체험 쿠키를 든 사람이라도 `refreshToken` 쿠키가 하나 남아 있으면 `/shoot/upload`
-  차단에 **닿지도 못했다.** 위 행사 QR 분기가 refresh 를 회원 근거로 보지 않게 된 뒤로는
-  그 조합이 행사장에서 그대로 만들어진다 — 예전에 로그인해 둔 브라우저로 QR 을 찍으면
-  체험 쿠키가 심기고 refresh 쿠키는 남는다. 화면 쪽 방어도 없다
+  차단에 **닿지도 못했다.** 그 조합은 흔하다 — 예전에 로그인해 둔 브라우저로 체험을
+  시작하면 체험 쿠키가 심기고 refresh 쿠키는 남는다(그때는 옛 행사 QR 분기도 같은 조합을
+  만들었다. 그 분기는 지금 없다). 화면 쪽 방어도 없다
   (app/shoot/upload/page.tsx 는 accessMode 를 보지 않는다).
 */
 describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", () => {
@@ -403,7 +306,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     반대쪽 못 — **촬영 밖 보호 경로까지 막지는 않는다.**
 
     한때 게스트 판정 전체를 인증 쿠키 통과 앞으로 옮겨 여기서도 307 을 줬는데, 그러면
-    access 만 자연 만료된 **진짜 회원**이 행사 주소를 열어 체험 쿠키를 받은 순간
+    access 만 자연 만료된 **진짜 회원**이 체험 쿠키를 받은 순간
     `/home`·`/mypage`·`/history` 까지 통째로 막힌다. 미들웨어는 refresh 가 살아 있는지
     죽었는지 구별하지 못하므로(같은 쿠키 모양이다) 여기서 막는 것은 멀쩡한 회원을
     쫓아내는 쪽으로도 똑같이 작동한다.
@@ -428,17 +331,16 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     게스트 차단 자체를 끄지 않았다는 못이다.
   */
   /*
-    회귀 — **되돌릴 때 행사 상태를 잃지 않는다.**
+    회귀 — **되돌릴 때 고른 프레임을 잃지 않는다.**
 
     게스트 쿠키가 이미 있으면 이 차단은 **화면이 마운트되기 전에** 걸린다. 그래서 업로드
     화면에 넣은 보존 로직이 아예 돌지 않는다 — 프록시가 고정 주소로 보내면 `/shoot` 이
-    쿼리 없는 진입을 새 촬영으로 보고 세션을 비워, 행사 배너와 QR 이 지정한 프레임이
-    사라진다. 막는 것은 회원 전용 경로 하나지 행사 진입 전체가 아니다.
+    쿼리 없는 진입을 새 촬영으로 보고 세션을 비워, 고른 프레임이 사라진다.
 
     미들웨어는 세션을 못 보므로 요청에 실려 온 것만 옮긴다 — 프레임 선택 화면이 그것을
-    싣는다(app/shoot/page.tsx).
+    싣는다(app/shoot/page.tsx). 옛 `event` 쿼리는 옮기지 않는다.
   */
-  test("회원 전용 경로를 막을 때 행사·프레임 쿼리를 들려 보낸다", async () => {
+  test("회원 전용 경로를 막을 때 프레임 쿼리만 들려 보낸다", async () => {
     const response = await proxy(
       request(
         "/shoot/upload?frame=classic-4&event=hongdae-2026",
@@ -448,7 +350,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      `${GUEST_RESTRICTED}&frame=classic-4&event=hongdae-2026`,
+      `${GUEST_RESTRICTED}&frame=classic-4`,
     );
   });
 
@@ -471,7 +373,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
   test.each(DEAD_SESSIONS)(
     "%s 가 있어도 촬영 흐름은 그대로 지나간다",
     async (_label, cookie) => {
-      // 구멍을 닫으면서 "가입 없이 바로 촬영"까지 닫아 버리면 행사 흐름이 죽는다.
+      // 구멍을 닫으면서 "가입 없이 바로 촬영"까지 닫아 버리면 체험 흐름이 죽는다.
       for (const path of ["/shoot", "/shoot/capture", "/shoot/result"]) {
         const response = await proxy(guestWith(path, cookie));
 

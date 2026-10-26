@@ -96,12 +96,23 @@ export async function toAssetFile(file: File, purpose: AssetPurpose): Promise<Fi
   if (!decoded) {
     throw new UploadValidationError(`${UNSUPPORTED_UPLOAD_MESSAGE} (${file.type || file.name})`);
   }
-  const scale = fitCanvasScale(decoded.width, decoded.height);
-  const blob = await encodePng(
-    decoded.source,
-    Math.max(1, Math.floor(decoded.width * scale)),
-    Math.max(1, Math.floor(decoded.height * scale)),
-  );
+  let scale = fitCanvasScale(decoded.width, decoded.height);
+  const encode = () =>
+    encodePng(
+      decoded.source,
+      Math.max(1, Math.floor(decoded.width * scale)),
+      Math.max(1, Math.floor(decoded.height * scale)),
+    );
+  let blob = await encode();
+  /*
+    PNG 는 같은 화소라도 원본(WEBP 등)보다 몇 배 크다. 10MB 이하로 고른 사진이 바꾼 뒤 넘으면 업로드가 막히고
+    같은 파일로 다시 해도 안 된다(Codex 리뷰 #527). JPEG 변환 경로(`toUploadableFile`)처럼, 넘긴 배수의 제곱근만큼
+    변을 줄여 다시 굽는다. 배율이 매번 10% 이상 작아지므로 멈춘다.
+  */
+  while (blob && blob.size > MAX_UPLOAD_BYTES) {
+    scale *= Math.sqrt(MAX_UPLOAD_BYTES / blob.size) * 0.9;
+    blob = await encode();
+  }
   if (!blob) {
     throw new UploadValidationError(`${UNSUPPORTED_UPLOAD_MESSAGE} (${file.type || file.name})`);
   }

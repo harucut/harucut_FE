@@ -149,3 +149,26 @@ describe("toAssetFile", () => {
     ).rejects.toBeInstanceOf(UploadValidationError);
   });
 });
+
+describe("toAssetFile 용량", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  // Codex 리뷰(#527): PNG 로 바꾼 결과가 10MB 를 넘으면 같은 파일로는 영영 못 올렸다.
+  it("PNG 로 바꾼 결과가 10MB 를 넘으면 줄여서 다시 굽는다", async () => {
+    mockDecode.mockResolvedValue({ source: {} as CanvasImageSource, width: 4000, height: 3000 });
+    const sizes: number[] = [];
+    jest
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue({ drawImage: jest.fn() } as unknown as CanvasRenderingContext2D);
+    jest.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (this: HTMLCanvasElement, cb) {
+      // 화소 수에 비례하는 가짜 크기 — 처음 굽기는 12MB 다.
+      const bytes = Math.round((this.width * this.height) * 1);
+      sizes.push(this.width);
+      cb(new Blob([new Uint8Array(bytes)], { type: "image/png" }));
+    });
+
+    const file = await toAssetFile(new File(["x"], "big.webp", { type: "image/webp" }), "FRAME_ASSET");
+    expect(file.size).toBeLessThanOrEqual(10 * 1024 * 1024);
+    expect(sizes.length).toBeGreaterThan(1);
+  });
+});
