@@ -79,3 +79,16 @@ describe("parseServerDocument", () => {
     expect(parseServerDocument("x", "classic-4")).toBeNull();
   });
 });
+
+// Codex 리뷰(#528): 올린 뒤에도 고른 파일이 남아 있어, 그 배경을 쓰는 동안 서버 초안이 한 번도 저장되지 않았다.
+it("배경 파일이 남아 있어도 이미 올려 key 가 있으면 문서를 만든다", () => {
+  const built = toServerDocument({
+    frameId: "classic-4",
+    backgroundColor: "111827",
+    background: { type: "IMAGE", key: "uploads/bg.png", assetId: "AsBg", url: "blob:bg" },
+    cellCutouts: [false, false, false, false],
+    components: [],
+    pendingBackgroundFile: new File(["x"], "bg.png"),
+  });
+  expect(built?.assetIds).toEqual(["AsBg"]);
+});
