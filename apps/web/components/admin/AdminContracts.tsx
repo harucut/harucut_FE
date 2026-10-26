@@ -103,7 +103,14 @@ const EMPTY_DRAFT: Draft = {
 };
 
 /** 계약 — DRAFT 로 만들고 ACTIVE 로 바꾸면 이용권이 생긴다. 결제를 꾸미지 않는다: 근거는 참조만 남긴다. */
-export function AdminContracts({ prefill }: { prefill?: { contractorName: string; nonce: number } | null }) {
+export function AdminContracts({
+  prefill,
+  onContractChanged,
+}: {
+  prefill?: { contractorName: string; nonce: number } | null;
+  /** 계약 상태가 바뀌었다 — 적용하면 이용권이 생기고, 끝내면 이용권이 끝난다. 부모가 이용권 목록을 다시 받게 한다. */
+  onContractChanged?: () => void;
+}) {
   const [items, setItems] = useState<Contract[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -184,6 +191,7 @@ export function AdminContracts({ prefill }: { prefill?: { contractorName: string
       );
       setItems((prev) => (prev ?? []).map((c) => (c.contractId === updated.contractId ? updated : c)));
       setNotice({ kind: "ok", text: `계약을 「${STATUS_LABEL[updated.status]}」으로 바꿨어요.` });
+      onContractChanged?.();
     } catch (cause) {
       setNotice({ kind: "error", text: adminErrorMessage(cause, "계약 상태를 바꾸지 못했어요.") });
       // 다른 곳이 먼저 바꿨을 수 있다(ENT-003) — 목록을 맞춘다.
