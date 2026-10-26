@@ -119,6 +119,9 @@ body:has(.hc-stage-dark) .hc-modal {
   --hc-border: rgba(255, 255, 255, 0.1);
   --hc-border-subtle: rgba(255, 255, 255, 0.08);
   --hc-border-strong: rgba(255, 255, 255, 0.2);
+  /* 촬영 무대(app/shoot/capture)의 고르지 않은 칸 테두리·바탕. 행사 테마가 이 둘을 덮어 칠한다. */
+  --hc-stage-line: rgba(255, 255, 255, 0.28);
+  --hc-stage-fill: rgba(255, 255, 255, 0.04);
   --hc-surface: #18181a;
   --hc-card: rgba(24, 24, 26, 0.9);
   --hc-surface-strong: #1c1c1e;
