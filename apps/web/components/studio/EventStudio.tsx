@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { getFrameConfig, type FrameId } from "@/constants/frames";
 import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
 import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
+import { StudioEventOperators } from "@/components/studio/StudioEventOperators";
 import { CloneEventForm } from "@/components/studio/CloneEventForm";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
@@ -24,6 +25,7 @@ import {
   type SettingSource,
 } from "@/lib/studio/projectsApi";
 import { settingsPatch } from "@/lib/studio/settingsPatch";
+import { EVENT_OPERATIONS, listMyEvents, type EventOperation, type MyEvent } from "@/lib/studio/accessApi";
 import { compactPageTheme, parsePageTheme, type PageTheme } from "@/lib/event/pageTheme";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -170,6 +172,9 @@ function useOrigin() {
 
 type Load = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; event: StudioEvent };
 
+/** 내 운영 권한. undefined 는 받는 중, null 은 못 받음(서버가 판정하게 다 보인다 — 막히면 그 칸이 오류를 보인다). */
+type Access = MyEvent["access"] | null | undefined;
+
 export function EventStudio({ eventId }: { eventId: string }) {
   const router = useRouter();
   const origin = useOrigin();
@@ -195,6 +200,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [inherit, setInherit] = useState<Set<InheritableField>>(() => new Set());
   const [projects, setProjects] = useState<Project[]>([]);
   const [workspaceDefaults, setWorkspaceDefaults] = useState<BrandDefaults | null>(null);
+  const [access, setAccess] = useState<Access>(undefined);
+  // 「행사 고객」과 「행사 운영자」는 같은 권한 행을 본다(Codex #554). 한쪽이 행을 만들거나 지우면 다른 쪽을 다시 그려 목록을 새로 받는다.
+  const [customersVersion, setCustomersVersion] = useState(0);
+  const [operatorsVersion, setOperatorsVersion] = useState(0);
 
   const loadSources = useCallback(async () => {
     setSourcesReady(false);
@@ -242,6 +251,17 @@ export function EventStudio({ eventId }: { eventId: string }) {
     void loadUsage();
   }, [reload, loadUsage]);
 
+  // 운영 담당(OPERATOR)은 받은 운영 권한의 칸만 쓴다(ADR-0009 §3, P3-2). 판정은 서버가 하고 화면은 그 결과를 따른다.
+  useEffect(() => {
+    let cancelled = false;
+    listMyEvents()
+      .then((events) => !cancelled && setAccess(events.find((e) => e.eventId === eventId)?.access ?? null))
+      .catch(() => !cancelled && setAccess(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
   // 프로젝트 목록과 공간 기본값 — 「기본값 따르기」를 보일지(위 단계에 값이 있는지) 가린다. 못 받으면 상속 안내를 줄인다.
   const workspaceId = load.state === "ready" ? load.event.workspaceId : null;
   useEffect(() => {
@@ -276,7 +296,14 @@ export function EventStudio({ eventId }: { eventId: string }) {
   }
 
   const event = load.event;
-  const editable = event.status === "DRAFT" || event.status === "LIVE";
+  // 옛 서버는 operations 키가 없다 — 그때는 지금처럼 다 보인다.
+  const can = (op: EventOperation) =>
+    access === null || (access !== undefined && (access.operations ?? EVENT_OPERATIONS).includes(op));
+  const isAdmin = access === null || access?.role === "OWNER" || access?.role === "ADMIN";
+  // 운영 담당의 복제는 MANAGE_EVENT 를 받은 프로젝트 안에서만 된다(원본 프로젝트로 복제).
+  const canClone =
+    isAdmin || (Boolean(event.settings.projectId) && ["PROJECT", "BOTH"].includes(access?.sources?.MANAGE_EVENT ?? ""));
+  const editable = (event.status === "DRAFT" || event.status === "LIVE") && can("MANAGE_EVENT");
   const slugLocked = event.status !== "DRAFT";
   const next = settingsOf(form, event.settings);
   // 저장 본문은 바뀐 필드만 — 상속받은 값을 행사 직접 값으로 굳히지 않는다(settingsPatch).
@@ -392,13 +419,15 @@ export function EventStudio({ eventId }: { eventId: string }) {
           >
             사진함
           </Link>
-          <button
-            type="button"
-            onClick={() => setCloning(true)}
-            className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
-          >
-            행사 복제
-          </button>
+          {canClone ? (
+            <button
+              type="button"
+              onClick={() => setCloning(true)}
+              className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+            >
+              행사 복제
+            </button>
+          ) : null}
         </div>
         {cloning ? (
           <CloneEventForm
@@ -468,16 +497,22 @@ export function EventStudio({ eventId }: { eventId: string }) {
                   help={
                     event.status !== "DRAFT"
                       ? "게시한 행사는 프로젝트를 바꿀 수 없어요."
-                      : "고르면 그 프로젝트의 기본값(참가 방식·프레임·동의·꾸미기 등)을 따라요. 저장하면 반영돼요."
+                      : !isAdmin
+                        ? "프로젝트는 공간 관리자만 바꿀 수 있어요."
+                        : "고르면 그 프로젝트의 기본값(참가 방식·프레임·동의·꾸미기 등)을 따라요. 저장하면 반영돼요."
                   }
                 >
                   <select
                     className="hc-input h-11 rounded-xl border px-2 text-[14px]"
                     value={form.projectId}
-                    disabled={event.status !== "DRAFT"}
+                    disabled={event.status !== "DRAFT" || !isAdmin}
                     onChange={(e) => update({ projectId: e.target.value })}
                   >
                     <option value="">프로젝트 없음</option>
+                    {/* 운영 담당은 멤버인 프로젝트만 받는다 — 목록에 없는 현재 프로젝트도 비어 보이지 않게 남긴다. */}
+                    {form.projectId && !projects.some((p) => p.projectId === form.projectId) ? (
+                      <option value={form.projectId}>다른 프로젝트</option>
+                    ) : null}
                     {projects
                       .filter((p) => !p.archived || p.projectId === form.projectId)
                       .map((p) => (
@@ -716,7 +751,11 @@ export function EventStudio({ eventId }: { eventId: string }) {
           ) : null}
         </form>
 
-        {event.settings.boothEnabled ? (
+        {access !== undefined && !can("MANAGE_EVENT") ? (
+          <p className="text-[13px] text-(--hc-muted)">행사 설정과 게시는 「행사 설정·게시」 권한이 있어야 바꿀 수 있어요.</p>
+        ) : null}
+
+        {event.settings.boothEnabled && can("MANAGE_BOOTH") ? (
           <section aria-labelledby="studio-booth-title" className="flex flex-col gap-3">
             <h2 id="studio-booth-title" className="text-[18px] font-bold">
               부스 기기
@@ -725,15 +764,38 @@ export function EventStudio({ eventId }: { eventId: string }) {
           </section>
         ) : null}
 
-        <section aria-labelledby="studio-customers-title" className="flex flex-col gap-3">
-          <h2 id="studio-customers-title" className="text-[18px] font-bold">
-            행사 고객
-          </h2>
-          <p className="text-[13px] text-(--hc-muted)">
-            신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 공간의 다른 행사는 보이지 않아요.
-          </p>
-          <StudioEventCustomers eventId={event.eventId} />
-        </section>
+        {can("INVITE_CUSTOMERS") ? (
+          <section aria-labelledby="studio-customers-title" className="flex flex-col gap-3">
+            <h2 id="studio-customers-title" className="text-[18px] font-bold">
+              행사 고객
+            </h2>
+            <p className="text-[13px] text-(--hc-muted)">
+              신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 공간의 다른 행사는 보이지 않아요.
+            </p>
+            <StudioEventCustomers
+              key={customersVersion}
+              eventId={event.eventId}
+              onRemoved={() => setOperatorsVersion((v) => v + 1)}
+            />
+          </section>
+        ) : null}
+
+        {access !== undefined && isAdmin ? (
+          <section aria-labelledby="studio-operators-title" className="flex flex-col gap-3">
+            <h2 id="studio-operators-title" className="text-[18px] font-bold">
+              행사 운영자
+            </h2>
+            <p className="text-[13px] text-(--hc-muted)">
+              운영 담당 멤버에게 이 행사만 맡겨요. 공간의 다른 행사는 보이지 않아요.
+            </p>
+            <StudioEventOperators
+              key={operatorsVersion}
+              eventId={event.eventId}
+              workspaceId={event.workspaceId}
+              onSaved={() => setCustomersVersion((v) => v + 1)}
+            />
+          </section>
+        ) : null}
 
         <section aria-labelledby="studio-usage-title" className="flex flex-col gap-3">
           <h2 id="studio-usage-title" className="text-[18px] font-bold">
@@ -742,55 +804,57 @@ export function EventStudio({ eventId }: { eventId: string }) {
           <StudioEventUsage usage={usage} error={usageError} now={now} onRefresh={() => void loadUsage()} />
         </section>
 
-        <section aria-labelledby="studio-run-title" className="flex flex-col gap-3">
-          <h2 id="studio-run-title" className="text-[18px] font-bold">
-            게시와 운영
-          </h2>
-          {violations.length > 0 ? (
-            <div role="alert" className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-4">
-              <p className="text-[14px] font-semibold">게시하려면 아래를 고쳐 주세요.</p>
-              <ul className="flex flex-col gap-2 text-[13px]">
-                {violations.map((group) => (
-                  <li key={group.key}>
-                    <p>{group.message}</p>
-                    <p className="text-[12px] text-(--hc-muted)">{group.reasons.join(" · ")}</p>
-                  </li>
-                ))}
-              </ul>
+        {can("MANAGE_EVENT") ? (
+          <section aria-labelledby="studio-run-title" className="flex flex-col gap-3">
+            <h2 id="studio-run-title" className="text-[18px] font-bold">
+              게시와 운영
+            </h2>
+            {violations.length > 0 ? (
+              <div role="alert" className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-4">
+                <p className="text-[14px] font-semibold">게시하려면 아래를 고쳐 주세요.</p>
+                <ul className="flex flex-col gap-2 text-[13px]">
+                  {violations.map((group) => (
+                    <li key={group.key}>
+                      <p>{group.message}</p>
+                      <p className="text-[12px] text-(--hc-muted)">{group.reasons.join(" · ")}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {dirty ? <p className="text-[13px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 게시할 수 있어요.</p> : null}
+            <div className="flex flex-wrap gap-2">
+              {event.status === "DRAFT" || event.status === "LIVE" ? (
+                <RunButton busy={busy} action="publish" disabled={dirty} primary onRun={act}>
+                  {event.status === "DRAFT" ? "게시하기" : "바뀐 설정 게시"}
+                </RunButton>
+              ) : null}
+              {event.status === "LIVE" && !event.paused ? (
+                <RunButton busy={busy} action="pause" onRun={act}>
+                  일시 중지
+                </RunButton>
+              ) : null}
+              {event.status === "LIVE" && event.paused ? (
+                <RunButton busy={busy} action="resume" onRun={act}>
+                  다시 열기
+                </RunButton>
+              ) : null}
+              {event.status === "LIVE" ? (
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => setConfirmClose(true)}
+                  className="h-11 rounded-full border border-(--hc-danger-border) px-4 text-[14px] font-semibold text-(--hc-danger) disabled:opacity-50"
+                >
+                  촬영 종료
+                </button>
+              ) : null}
             </div>
-          ) : null}
-          {dirty ? <p className="text-[13px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 게시할 수 있어요.</p> : null}
-          <div className="flex flex-wrap gap-2">
-            {event.status === "DRAFT" || event.status === "LIVE" ? (
-              <RunButton busy={busy} action="publish" disabled={dirty} primary onRun={act}>
-                {event.status === "DRAFT" ? "게시하기" : "바뀐 설정 게시"}
-              </RunButton>
-            ) : null}
-            {event.status === "LIVE" && !event.paused ? (
-              <RunButton busy={busy} action="pause" onRun={act}>
-                일시 중지
-              </RunButton>
-            ) : null}
-            {event.status === "LIVE" && event.paused ? (
-              <RunButton busy={busy} action="resume" onRun={act}>
-                다시 열기
-              </RunButton>
-            ) : null}
-            {event.status === "LIVE" ? (
-              <button
-                type="button"
-                disabled={busy !== null}
-                onClick={() => setConfirmClose(true)}
-                className="h-11 rounded-full border border-(--hc-danger-border) px-4 text-[14px] font-semibold text-(--hc-danger) disabled:opacity-50"
-              >
-                촬영 종료
-              </button>
-            ) : null}
-          </div>
-          {event.status === "DRAFT" || event.status === "LIVE" ? null : (
-            <p className="text-[13px] text-(--hc-muted)">촬영이 끝난 행사예요. 참가자는 결과 링크로 사진을 계속 받을 수 있어요.</p>
-          )}
-        </section>
+            {event.status === "DRAFT" || event.status === "LIVE" ? null : (
+              <p className="text-[13px] text-(--hc-muted)">촬영이 끝난 행사예요. 참가자는 결과 링크로 사진을 계속 받을 수 있어요.</p>
+            )}
+          </section>
+        ) : null}
       </div>
 
       {confirmClose ? (

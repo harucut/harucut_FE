@@ -25,6 +25,7 @@ export const PERMISSION_LABEL: Record<EventPermission, string> = {
 export const ROLE_LABEL: Record<WorkspaceRole, string> = {
   OWNER: "소유자",
   ADMIN: "관리자",
+  OPERATOR: "운영 담당",
   DESIGNER: "디자이너",
   VIEWER: "보기 전용",
 };
@@ -65,14 +66,40 @@ export type InvitationAccepted = {
 
 export type Member = { userId: string; name: string; role: WorkspaceRole; joinedAt: string };
 
-export type EventGrant = { grantId: number; userId: string; name: string; permissions: EventPermission[]; createdAt: string };
+/** 운영 권한(ADR-0009 §3). OWNER·ADMIN 은 셋 다, OPERATOR 는 배정받은 것만. 사진 권한과 따로다. */
+export type EventOperation = "MANAGE_EVENT" | "MANAGE_BOOTH" | "INVITE_CUSTOMERS";
+
+export const EVENT_OPERATIONS: EventOperation[] = ["MANAGE_EVENT", "MANAGE_BOOTH", "INVITE_CUSTOMERS"];
+
+export const OPERATION_LABEL: Record<EventOperation, string> = {
+  MANAGE_EVENT: "행사 설정·게시",
+  MANAGE_BOOTH: "부스 기기",
+  INVITE_CUSTOMERS: "고객 초대·사진 권한",
+};
+
+/** 행사 고객은 operations 가 빈 목록이다. 운영자 배정 행은 사진 권한 없이 운영 권한만 가질 수 있다. */
+export type EventGrant = {
+  grantId: number;
+  userId: string;
+  name: string;
+  permissions: EventPermission[];
+  operations?: EventOperation[];
+  createdAt: string;
+};
 
 export type MyEvent = {
   eventId: string;
   name: string;
   status: "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
   /** role 이 있으면 공간 멤버로서 운영하는 행사, 없으면 고객으로 권한만 받은 행사. */
-  access: { role?: WorkspaceRole; permissions: EventPermission[] };
+  access: {
+    role?: WorkspaceRole;
+    permissions: EventPermission[];
+    /** 운영 권한. OWNER·ADMIN 은 셋 다, 고객은 빈 목록(옛 서버면 키가 없다). */
+    operations?: EventOperation[];
+    /** OPERATOR 만 — 권한마다 행사 배정(EVENT)·프로젝트 멤버(PROJECT)·둘 다(BOTH). */
+    sources?: Record<string, "EVENT" | "PROJECT" | "BOTH">;
+  };
 };
 
 const ws = (workspaceId: string) => `/api/client/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -131,6 +158,14 @@ export async function updateEventGrant(eventId: string, grantId: number, permiss
 
 export async function removeEventGrant(eventId: string, grantId: number) {
   await clientApi.delete(`${ev(eventId)}/grants/${grantId}`);
+}
+
+/** 행사 운영자 배정(OWNER·ADMIN). 운영 권한 집합을 통째로 바꾸고, 빈 목록이면 뺀다. 대상은 이 공간의 OPERATOR 멤버. */
+export async function assignEventOperator(eventId: string, userId: string, operations: EventOperation[]): Promise<EventGrant> {
+  const res = await clientApi.put<ApiEnvelope<EventGrant>>(`${ev(eventId)}/operators/${encodeURIComponent(userId)}`, {
+    operations,
+  });
+  return requireData(res.data, "운영자");
 }
 
 export async function listMyEvents(): Promise<MyEvent[]> {

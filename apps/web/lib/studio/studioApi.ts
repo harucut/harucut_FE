@@ -10,7 +10,8 @@ import { requireData } from "@/lib/apiEnvelope";
  * 권한은 서버가 조직 공간 역할(OWNER·ADMIN)로 본다. 이 모듈은 화면이 고를 수 있는 것만 다루고,
  * 버튼을 숨긴다고 권한이 생기지 않는다.
  */
-export type WorkspaceRole = "OWNER" | "ADMIN" | "DESIGNER" | "VIEWER";
+/** OPERATOR(운영 담당, P3-2)는 공간 전체 권한 없이 배정받은 행사·프로젝트만 운영한다. */
+export type WorkspaceRole = "OWNER" | "ADMIN" | "OPERATOR" | "DESIGNER" | "VIEWER";
 
 export type Workspace = {
   workspaceId: string;

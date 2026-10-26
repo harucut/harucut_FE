@@ -150,3 +150,28 @@ it("공간에서 나가면 공간 목록을 다시 받아 그 공간을 지운�
   expect(mockReplace).toHaveBeenCalledWith("/studio");
   expect(await screen.findByText("두 번째 팀")).toBeInTheDocument();
 });
+
+// 운영 담당은 멤버 목록을 보지 못한다(서버 403) — 맡은 행사만 보이고 행사도 만들지 않는다.
+it("운영 담당에게는 멤버·프로젝트·행사 만들기를 보이지 않는다", async () => {
+  mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "OPERATOR" }]);
+  render(<StudioHome />);
+
+  expect(await screen.findByText("운영 담당은 맡은 행사만 보여요.", { exact: false })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "멤버" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "프로젝트와 기본값" })).not.toBeInTheDocument();
+  expect(mockListMembers).not.toHaveBeenCalled();
+});
+
+// 멤버 목록이 없어도 운영 담당은 스스로 나갈 수 있어야 한다(Codex #554) — 본인 탈퇴는 어느 역할이든 된다.
+it("운영 담당은 멤버 목록 없이도 이 공간에서 나갈 수 있다", async () => {
+  mockListWorkspaces.mockResolvedValueOnce([{ ...ORG, role: "OPERATOR" }]).mockResolvedValue([]);
+  mockRemoveMember.mockResolvedValue(undefined);
+  render(<StudioHome />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "이 공간에서 나가기" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "나가기" }));
+
+  await waitFor(() => expect(mockRemoveMember).toHaveBeenCalledWith("WsOrg", "me"));
+  expect(mockReplace).toHaveBeenCalledWith("/studio");
+  await waitFor(() => expect(mockListWorkspaces).toHaveBeenCalledTimes(2));
+});

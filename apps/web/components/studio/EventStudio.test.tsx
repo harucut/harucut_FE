@@ -42,10 +42,23 @@ jest.mock("@/lib/studio/projectsApi", () => ({
   listProjects: (...a: unknown[]) => mockProjects(...a),
   getWorkspaceBrandDefaults: (...a: unknown[]) => mockWsDefaults(...a),
 }));
+const mockMyEvents = jest.fn();
+const mockMembers = jest.fn();
+const mockGrants = jest.fn();
+const mockAssign = jest.fn();
 jest.mock("@/lib/studio/accessApi", () => ({
   ...jest.requireActual("@/lib/studio/accessApi"),
-  listEventGrants: async () => [],
+  listEventGrants: (...a: unknown[]) => mockGrants(...a),
+  listMyEvents: (...a: unknown[]) => mockMyEvents(...a),
+  listMembers: (...a: unknown[]) => mockMembers(...a),
+  assignEventOperator: (...a: unknown[]) => mockAssign(...a),
+  removeEventGrant: (...a: unknown[]) => mockRemoveGrant(...a),
 }));
+const mockRemoveGrant = jest.fn();
+
+function myAccess(access: Record<string, unknown>) {
+  mockMyEvents.mockResolvedValue([{ eventId: "Ev1", name: "", status: "DRAFT", access }]);
+}
 
 const VERSION_CLASSIC = {
   frameVersionId: 41,
@@ -104,6 +117,9 @@ beforeEach(() => {
   mockProjects.mockResolvedValue([]);
   mockWsDefaults.mockResolvedValue({});
   mockUsage.mockResolvedValue({ composeQuota: 0, used: 0, reserved: 0, remaining: 0 });
+  myAccess({ role: "OWNER", permissions: [], operations: ["MANAGE_EVENT", "MANAGE_BOOTH", "INVITE_CUSTOMERS"] });
+  mockMembers.mockResolvedValue([]);
+  mockGrants.mockResolvedValue([]);
 });
 
 it("참가 링크를 이 화면의 오리진에 붙여 QR 과 함께 보여 준다", async () => {
@@ -446,4 +462,111 @@ it("저장된 상시 캠페인에 종료 시각이 남아 있으면 지우기만
   fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
   await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
   expect(mockUpdate.mock.calls[0][2]).toEqual({ captureEndsAt: null });
+});
+
+/*
+  운영 담당(OPERATOR)은 받은 운영 권한의 칸만 쓴다(ADR-0009 §3, P3-2). 막힌 칸을 보여 주면 누를 때마다 403 이 난다.
+*/
+it("운영 담당은 받은 운영 권한의 칸만 보고, 설정·게시·복제·운영자 배정·프로젝트 변경은 막힌다", async () => {
+  myAccess({ role: "OPERATOR", permissions: [], operations: ["INVITE_CUSTOMERS"], sources: { INVITE_CUSTOMERS: "EVENT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pr1", name: "봄 시즌", archived: false, brandDefaults: null }]);
+  await renderStudio(event({ settings: { ...event().settings, boothEnabled: true, projectId: "Pr1" } }));
+
+  expect(await screen.findByRole("heading", { name: "행사 고객" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "게시와 운영" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "부스 기기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "행사 운영자" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "설정 저장" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "행사 복제" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("행사 이름")).toBeDisabled();
+  expect(screen.getByLabelText("프로젝트")).toBeDisabled();
+});
+
+it("운영 담당이 프로젝트에서 행사 설정 권한을 받았으면 설정과 복제를 쓴다", async () => {
+  myAccess({ role: "OPERATOR", permissions: [], operations: ["MANAGE_EVENT"], sources: { MANAGE_EVENT: "PROJECT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pr1", name: "봄 시즌", archived: false, brandDefaults: null }]);
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pr1" } }));
+
+  expect(await screen.findByRole("heading", { name: "게시와 운영" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "행사 복제" })).toBeInTheDocument();
+  expect(screen.getByLabelText("행사 이름")).toBeEnabled();
+  // 프로젝트 변경은 OWNER·ADMIN 만.
+  expect(screen.getByLabelText("프로젝트")).toBeDisabled();
+  expect(screen.queryByRole("heading", { name: "행사 고객" })).not.toBeInTheDocument();
+});
+
+it("관리자는 운영 담당에게 이 행사의 운영 권한을 정해 저장한다", async () => {
+  mockMembers.mockResolvedValue([
+    { userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" },
+    { userId: "u-de", name: "디자인 민", role: "DESIGNER", joinedAt: "" },
+  ]);
+  mockGrants.mockResolvedValue([
+    { grantId: 1, userId: "u-op", name: "운영 지수", permissions: [], operations: ["MANAGE_BOOTH"], createdAt: "" },
+  ]);
+  mockAssign.mockResolvedValue({
+    grantId: 1,
+    userId: "u-op",
+    name: "운영 지수",
+    permissions: [],
+    operations: ["MANAGE_EVENT", "MANAGE_BOOTH"],
+    createdAt: "",
+  });
+  await renderStudio();
+
+  const section = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await within(section).findByText("운영 지수");
+  expect(within(section).queryByText("디자인 민")).not.toBeInTheDocument();
+  expect(within(section).getByRole("checkbox", { name: "부스 기기" })).toBeChecked();
+
+  fireEvent.click(within(section).getByRole("checkbox", { name: "행사 설정·게시" }));
+  fireEvent.click(within(section).getByRole("button", { name: "저장" }));
+
+  await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("Ev1", "u-op", ["MANAGE_EVENT", "MANAGE_BOOTH"]));
+  expect(await within(section).findByText("운영 권한을 저장했어요.")).toBeInTheDocument();
+  expect(within(section).queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+});
+
+// 운영자 배정이 권한 행을 새로 만들면 같은 화면의 「행사 고객」에도 보여야 사진 권한을 이어서 줄 수 있다(Codex #554).
+it("운영자를 처음 배정하면 행사 고객 목록을 다시 받아 새 행을 보인다", async () => {
+  mockMembers.mockResolvedValue([{ userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" }]);
+  const row = { grantId: 2, userId: "u-op", name: "운영 지수", permissions: [], operations: ["MANAGE_BOOTH"], createdAt: "" };
+  mockGrants.mockResolvedValue([]);
+  mockAssign.mockImplementation(async () => {
+    mockGrants.mockResolvedValue([row]);
+    return row;
+  });
+  await renderStudio();
+
+  const customers = (await screen.findByRole("heading", { name: "행사 고객" })).closest("section")!;
+  const operators = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await within(operators).findByText("운영 지수");
+  expect(within(customers).queryByText("운영 지수")).not.toBeInTheDocument();
+
+  fireEvent.click(within(operators).getByRole("checkbox", { name: "부스 기기" }));
+  fireEvent.click(within(operators).getByRole("button", { name: "저장" }));
+
+  expect(await within(customers).findByText("운영 지수")).toBeInTheDocument();
+});
+
+// 거꾸로, 「행사 고객」에서 운영자의 행을 회수하면 운영 권한도 함께 사라진다 — 운영자 칸이 지운 권한을 계속 보이면 안 된다(Codex #554).
+it("행사 고객에서 운영자의 행을 회수하면 운영자 칸을 다시 받는다", async () => {
+  mockMembers.mockResolvedValue([{ userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" }]);
+  const row = { grantId: 2, userId: "u-op", name: "운영 지수", permissions: ["VIEW_PHOTOS"], operations: ["MANAGE_BOOTH"], createdAt: "" };
+  mockGrants.mockResolvedValue([row]);
+  mockRemoveGrant.mockImplementation(async () => {
+    mockGrants.mockResolvedValue([]);
+  });
+  await renderStudio();
+
+  const customers = (await screen.findByRole("heading", { name: "행사 고객" })).closest("section")!;
+  const operators = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).toBeChecked());
+
+  fireEvent.click(await within(customers).findByRole("button", { name: "권한 회수" }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText(/운영 권한도 함께 빠져요/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "권한 회수" }));
+
+  await waitFor(() => expect(mockRemoveGrant).toHaveBeenCalledWith("Ev1", 2));
+  await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).not.toBeChecked());
 });
