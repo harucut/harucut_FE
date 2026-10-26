@@ -69,3 +69,15 @@ it("공간 기본값은 정한 것만 보내고, 정하지 않음으로 돌린 �
   });
   expect(await within(form).findByText(/공간 기본값을 저장했어요/)).toBeInTheDocument();
 });
+
+// Codex 리뷰(#553): 기본값 저장을 기다리는 동안 바꾼 입력이 응답으로 덮이면 안 된다 — 저장 중에는 편집을 잠근다.
+it("기본값을 저장하는 동안에는 입력을 잠근다", async () => {
+  api.updateWorkspaceBrandDefaults.mockImplementation(() => new Promise(() => {}));
+  render(<StudioProjects workspaceId="Ws1" />);
+  fireEvent.click(await screen.findByRole("button", { name: /공간 기본값/ }));
+  const form = screen.getByRole("form", { name: "공간 기본값" });
+  fireEvent.change(within(form).getByLabelText("개인 휴대폰 참가"), { target: { value: "on" } });
+  fireEvent.click(within(form).getByRole("button", { name: "기본값 저장" }));
+  await waitFor(() => expect(within(form).getByLabelText("결과 보관 일수")).toBeDisabled());
+  expect(within(form).getByLabelText("개인 휴대폰 참가")).toBeDisabled();
+});

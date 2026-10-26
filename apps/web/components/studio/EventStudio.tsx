@@ -111,8 +111,24 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
       return { ...c, version: before ? before.version + (changed ? 1 : 0) : 1 };
     }),
     resultRetentionDays: Number.isFinite(retention) && retention > 0 ? retention : null,
-    theme: compactPageTheme(form.theme),
+    theme: themeForSave(form.theme),
     projectId: form.projectId || null,
+  };
+}
+
+/**
+ * 저장용 테마. 빈 문구·빈 색은 빼되(위 단계 값을 따른다), 브랜딩은 끈 값(false·NONE)도 남긴다 — 상속 계약에서 키를 빼면
+ * 「위 단계 값」이라, 공간·프로젝트가 켠 숨김·로고를 이 행사만 끄려면 끈 값을 명시해야 한다(Codex #553).
+ * 바뀌지 않은 브랜딩은 settingsPatch 가 출처를 보고 뺀다.
+ */
+function themeForSave(theme: PageTheme): PageTheme {
+  const compact = compactPageTheme(theme) ?? { schemaVersion: 1 };
+  return {
+    ...compact,
+    branding: {
+      hideHarucutBranding: Boolean(theme.branding?.hideHarucutBranding),
+      outputLogo: theme.branding?.outputLogo === "ORGANIZER_LOGO" ? "ORGANIZER_LOGO" : "NONE",
+    },
   };
 }
 
@@ -169,15 +185,21 @@ export function EventStudio({ eventId }: { eventId: string }) {
   // 상속(ADR-0009 §2): 경로마다 출처, 「기본값 따르기」를 고른 필드, 공간·프로젝트 기본값. 출처를 못 받으면 null — 그때는
   // 예전처럼 저장한다(settingsPatch 주석).
   const [sources, setSources] = useState<Record<string, SettingSource> | null>(null);
+  // 저장한 직후에는 출처가 아직 옛것이다 — 옛 출처로 테마를 담으면 방금 직접 정한 키를 빼서 지운다(Codex #553).
+  // 새 출처를 받을 때까지 저장을 막는다.
+  const [sourcesReady, setSourcesReady] = useState(false);
   const [inherit, setInherit] = useState<Set<InheritableField>>(() => new Set());
   const [projects, setProjects] = useState<Project[]>([]);
   const [workspaceDefaults, setWorkspaceDefaults] = useState<BrandDefaults | null>(null);
 
   const loadSources = useCallback(async () => {
+    setSourcesReady(false);
     try {
       setSources((await getEffectiveSettings(eventId)).sources);
     } catch {
       setSources(null);
+    } finally {
+      setSourcesReady(true);
     }
   }, [eventId]);
 
@@ -399,7 +421,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
           className="flex flex-col gap-6"
           onSubmit={(e) => {
             e.preventDefault();
-            if (dirty && busy === null && !themeUploading) void save();
+            if (dirty && busy === null && !themeUploading && sourcesReady) void save();
           }}
         >
           <fieldset disabled={!editable || busy !== null} className="flex flex-col gap-6">
@@ -626,7 +648,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
           {editable ? (
             <button
               type="submit"
-              disabled={!dirty || busy !== null || themeUploading}
+              disabled={!dirty || busy !== null || themeUploading || !sourcesReady}
               className="hc-button-primary h-11 self-start rounded-full px-5 text-[14px] font-semibold disabled:opacity-50"
             >
               {busy === "save" ? "저장하는 중…" : themeUploading ? "이미지 올리는 중…" : "설정 저장"}

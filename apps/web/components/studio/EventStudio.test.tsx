@@ -288,10 +288,12 @@ it("꾸민 문구와 글꼴만 테마로 저장한다", async () => {
   fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
 
   await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  // 출처를 못 받으면(여기서는 effective-settings 실패) 지금 테마 전체를 보낸다 — 브랜딩은 끈 값도 명시한다.
   expect(mockUpdate.mock.calls[0][2].theme).toEqual({
     schemaVersion: 1,
     font: "GOWUN_DODUM",
     copy: { welcome: "와 주셔서 고마워요" },
+    branding: { hideHarucutBranding: false, outputLogo: "NONE" },
   });
 });
 
@@ -367,4 +369,31 @@ it("초안 행사는 프로젝트를 고를 수 있고, 게시한 행사는 막�
   fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
   await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
   expect(mockUpdate.mock.calls[0][2]).toEqual({ projectId: "Pj1" });
+});
+
+// Codex 리뷰(#553): 상속받은 브랜딩을 이 행사만 끄면 끈 값을 명시해야 한다 — 키를 빼면 위 단계 값이 다시 켜진다.
+it("상속받은 하루컷 표시 숨김을 끄면 끈 값을 테마에 담아 보낸다", async () => {
+  mockEffective.mockResolvedValue({
+    settings: {},
+    sources: { "theme.branding.hideHarucutBranding": "PROJECT", "theme.branding.outputLogo": "PROJECT" },
+  });
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(
+    event({ settings: { ...event().settings, theme: { schemaVersion: 1, branding: { hideHarucutBranding: true, outputLogo: "NONE" } } } }),
+  );
+  await screen.findByText("프로젝트 기본값");
+  fireEvent.click(screen.getByLabelText("하루컷 표시 숨기기"));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({
+    theme: { schemaVersion: 1, branding: { hideHarucutBranding: false } },
+  });
+});
+
+// Codex 리뷰(#553): 출처를 다시 받기 전에 저장하면 옛 출처로 테마를 담아 방금 정한 키를 지운다.
+it("출처를 받기 전에는 설정 저장을 막는다", async () => {
+  mockEffective.mockImplementation(() => new Promise(() => {}));
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText(/^행사 이름/), { target: { value: "새 이름" } });
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
 });
