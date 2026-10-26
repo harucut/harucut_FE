@@ -9,6 +9,7 @@ import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { useRouter } from "next/navigation";
 import { getFrameConfig, type FrameId } from "@/constants/frames";
 import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
+import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -450,6 +451,16 @@ export function EventStudio({ eventId }: { eventId: string }) {
             <StudioBoothDevices eventId={event.eventId} boothUrl={`${origin}/booth`} />
           </section>
         ) : null}
+
+        <section aria-labelledby="studio-customers-title" className="flex flex-col gap-3">
+          <h2 id="studio-customers-title" className="text-[18px] font-bold">
+            행사 고객
+          </h2>
+          <p className="text-[13px] text-(--hc-muted)">
+            신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 공간의 다른 행사는 보이지 않아요.
+          </p>
+          <StudioEventCustomers eventId={event.eventId} />
+        </section>
 
         <section aria-labelledby="studio-run-title" className="flex flex-col gap-3">
           <h2 id="studio-run-title" className="text-[18px] font-bold">

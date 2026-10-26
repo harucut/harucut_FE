@@ -14,6 +14,14 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mockQuery),
 }));
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
+const mockListMyEvents = jest.fn();
+jest.mock("@/lib/studio/accessApi", () => ({
+  ...jest.requireActual("@/lib/studio/accessApi"),
+  listMyEvents: () => mockListMyEvents(),
+  listMembers: async () => [],
+  listInvitations: async () => [],
+}));
+jest.mock("@/lib/userApi", () => ({ getMyUserInfo: async () => ({ id: "u-me" }) }));
 jest.mock("@/lib/studio/studioApi", () => ({
   listWorkspaces: () => mockListWorkspaces(),
   createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
@@ -28,6 +36,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = "";
   mockListEvents.mockResolvedValue([]);
+  mockListMyEvents.mockResolvedValue([]);
 });
 
 // 행사는 조직 공간에만 만든다 — 개인 공간은 탈퇴 때 통째로 지워진다.
@@ -88,4 +97,18 @@ it("관리자가 아니면 행사 만들기를 보여 주지 않는다", async (
   render(<StudioHome />);
   expect(await screen.findByText(/관리자 권한이 필요해요/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "행사 만들기" })).not.toBeInTheDocument();
+});
+
+// 행사 고객은 공간 멤버가 아니다 — 받은 행사만 보이고, 운영 공간이 없어도 목록은 보인다.
+it("고객으로 받은 행사를 권한과 함께 보여 준다", async () => {
+  mockListWorkspaces.mockResolvedValue([PERSONAL]);
+  mockListMyEvents.mockResolvedValue([
+    { eventId: "Ev9", name: "민지 ♥ 준호", status: "LIVE", access: { permissions: ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"] } },
+    { eventId: "Ev1", name: "운영하는 행사", status: "LIVE", access: { role: "OWNER", permissions: [] } },
+  ]);
+  render(<StudioHome />);
+  expect(await screen.findByText("민지 ♥ 준호")).toBeInTheDocument();
+  expect(screen.getByText("사진 보기 · 사진 내려받기")).toBeInTheDocument();
+  // 멤버로 운영하는 행사는 공간의 행사 목록에 나온다.
+  expect(screen.queryByText("운영하는 행사")).not.toBeInTheDocument();
 });
