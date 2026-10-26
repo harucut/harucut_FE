@@ -13,9 +13,11 @@ import {
   type TermsDraft,
 } from "@/components/admin/adminShared";
 import {
+  allocateEntitlement,
   getEntitlementImpact,
   grantEntitlement,
   listEntitlements,
+  resizeAllocation,
   revokeEntitlement,
   type Entitlement,
   type EntitlementImpact,
@@ -33,6 +35,15 @@ type GrantDraft = {
 
 const EMPTY_GRANT: GrantDraft = { workspaceId: "", eventId: "", grantorNote: "", validFrom: "", validTo: "", terms: EMPTY_TERMS };
 
+/** 기업 총량에서 행사에 배분하거나(allocate), 배분량을 바꾼다(resize). */
+type Allocating = { entitlementId: string; mode: "allocate" | "resize"; eventId: string; quota: string };
+
+/** 1 이상의 정수만. 아니면 null. */
+function quotaOf(text: string): number | null {
+  const n = Number(text);
+  return text.trim() && Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
 type Revoking = { entitlement: Entitlement; impact: EntitlementImpact | null; impactError: string | null; reason: string };
 
 /**
@@ -47,6 +58,7 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [revoking, setRevoking] = useState<Revoking | null>(null);
+  const [allocating, setAllocating] = useState<Allocating | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -111,11 +123,36 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
     try {
       const updated = await revokeEntitlement(revoking.entitlement.entitlementId, revoking.reason.trim());
       setItems((prev) => (prev ?? []).map((e) => (e.entitlementId === updated.entitlementId ? updated : e)));
+      const { entitlement } = revoking;
       setRevoking(null);
       setNotice({ kind: "ok", text: "이용권을 회수했어요." });
+      // 배분을 회수하면 그 양이 부모로 돌아가고, 부모를 회수하면 활성 배분도 함께 회수된다 — 목록을 다시 받는다.
+      if (entitlement.parentEntitlementId || (entitlement.allocatedQuota ?? 0) > 0) await load();
     } catch (cause) {
       setNotice({ kind: "error", text: adminErrorMessage(cause, "이용권을 회수하지 못했어요.") });
       void load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 배분·배분량 변경은 부모의 allocatedQuota 도 바꾸므로 목록을 다시 받는다.
+  const allocate = async () => {
+    const quota = allocating ? quotaOf(allocating.quota) : null;
+    if (!allocating || quota === null || (allocating.mode === "allocate" && !allocating.eventId.trim())) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      if (allocating.mode === "allocate") {
+        await allocateEntitlement(allocating.entitlementId, allocating.eventId.trim(), quota);
+      } else {
+        await resizeAllocation(allocating.entitlementId, quota);
+      }
+      setNotice({ kind: "ok", text: allocating.mode === "allocate" ? "행사에 배분했어요." : "배분량을 바꿨어요." });
+      setAllocating(null);
+      await load();
+    } catch (cause) {
+      setNotice({ kind: "error", text: adminErrorMessage(cause, "배분하지 못했어요.") });
     } finally {
       setBusy(false);
     }
@@ -201,13 +238,22 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
         <ul className="flex flex-col gap-3">
           {items.map((e) => {
             const open = revoking?.entitlement.entitlementId === e.entitlementId ? revoking : null;
+            const alloc = allocating?.entitlementId === e.entitlementId ? allocating : null;
+            const isChild = Boolean(e.parentEntitlementId);
+            // 배분은 활성 공간 범위 이용권(그 자신이 배분이 아닌 것)에서만 한다.
+            const isParent = e.scope === "WORKSPACE" && !isChild;
+            const allocated = e.allocatedQuota ?? 0;
             return (
               <li key={e.entitlementId} className="hc-surface-card flex flex-col gap-2 rounded-2xl p-4 text-[13px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-[15px] font-bold">
                     {e.scope === "EVENT" ? `행사 ${e.eventId}` : `공간 ${e.workspaceId}`}
                     <span className="ml-2 text-[12px] font-normal text-(--hc-muted)">
-                      {e.source === "CONTRACT" ? `계약 ${e.contractId ?? ""}` : "수동 부여"}
+                      {isChild
+                        ? `기업 총량 ${e.parentEntitlementId}에서 배분`
+                        : e.source === "CONTRACT"
+                          ? `계약 ${e.contractId ?? ""}`
+                          : "수동 부여"}
                     </span>
                   </p>
                   <span className="rounded-full bg-(--hc-surface-well) px-3 py-1 text-[12px] font-semibold">
@@ -221,17 +267,94 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
                 <p className="tabular-nums">
                   완성 {e.used.toLocaleString("ko-KR")} · 만드는 중 {e.reserved.toLocaleString("ko-KR")} / {e.terms.composeQuota.toLocaleString("ko-KR")}장
                 </p>
+                {isParent && (allocated > 0 || e.status === "ACTIVE") ? (
+                  <p className="tabular-nums">
+                    행사 배분 {allocated.toLocaleString("ko-KR")}장 · 더 배분할 수 있는 양{" "}
+                    {Math.max(0, e.terms.composeQuota - allocated).toLocaleString("ko-KR")}장
+                  </p>
+                ) : null}
                 {e.grantorNote ? <p className="text-(--hc-muted)">사유: {e.grantorNote}</p> : null}
                 {e.revokeReason ? <p className="text-(--hc-muted)">회수 사유: {e.revokeReason}</p> : null}
 
-                {e.status === "ACTIVE" && !open ? (
-                  <button
-                    type="button"
-                    onClick={() => void startRevoke(e)}
-                    className="h-11 self-start rounded-full border border-(--hc-danger-border) px-4 font-semibold text-(--hc-danger)"
+                {e.status === "ACTIVE" && !open && !alloc ? (
+                  <div className="flex flex-wrap gap-2">
+                    {isParent ? (
+                      <button
+                        type="button"
+                        onClick={() => setAllocating({ entitlementId: e.entitlementId, mode: "allocate", eventId: "", quota: "" })}
+                        className="hc-button-secondary h-11 rounded-full px-4 font-semibold"
+                      >
+                        행사에 배분
+                      </button>
+                    ) : null}
+                    {isChild ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAllocating({ entitlementId: e.entitlementId, mode: "resize", eventId: "", quota: String(e.terms.composeQuota) })
+                        }
+                        className="hc-button-secondary h-11 rounded-full px-4 font-semibold"
+                      >
+                        배분량 바꾸기
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void startRevoke(e)}
+                      className="h-11 rounded-full border border-(--hc-danger-border) px-4 font-semibold text-(--hc-danger)"
+                    >
+                      회수
+                    </button>
+                  </div>
+                ) : null}
+
+                {alloc ? (
+                  <form
+                    aria-label={alloc.mode === "allocate" ? "행사에 배분" : "배분량 바꾸기"}
+                    className="flex flex-col gap-2 rounded-xl border border-(--hc-border) p-3"
+                    onSubmit={(ev) => {
+                      ev.preventDefault();
+                      void allocate();
+                    }}
                   >
-                    회수
-                  </button>
+                    {alloc.mode === "allocate" ? (
+                      <div className="flex flex-col gap-2">
+                        <TextField
+                          label="행사 ID"
+                          value={alloc.eventId}
+                          onChange={(v) => setAllocating({ ...alloc, eventId: v })}
+                          required
+                          help="이 공간의 행사만 배분할 수 있어요. 기간·기능·조건은 기업 총량을 따라요."
+                        />
+                        <AdminSearchField kind="event" onPick={(ev) => setAllocating({ ...alloc, eventId: ev.eventId })} />
+                      </div>
+                    ) : null}
+                    <TextField
+                      label="배분량(장)"
+                      type="number"
+                      value={alloc.quota}
+                      onChange={(v) => setAllocating({ ...alloc, quota: v })}
+                      required
+                      error={alloc.quota.trim() && quotaOf(alloc.quota) === null ? "1 이상의 정수로 적어 주세요." : undefined}
+                      help={
+                        alloc.mode === "resize"
+                          ? `이미 쓴 ${(e.used + e.reserved).toLocaleString("ko-KR")}장(만드는 중 포함)보다 적게 줄일 수 없어요.`
+                          : undefined
+                      }
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={busy || quotaOf(alloc.quota) === null || (alloc.mode === "allocate" && !alloc.eventId.trim())}
+                        className="hc-button-primary h-11 rounded-full px-4 font-semibold disabled:opacity-50"
+                      >
+                        {busy ? "저장하는 중…" : alloc.mode === "allocate" ? "배분하기" : "바꾸기"}
+                      </button>
+                      <button type="button" disabled={busy} onClick={() => setAllocating(null)} className="h-11 rounded-full px-4">
+                        그만두기
+                      </button>
+                    </div>
+                  </form>
                 ) : null}
 
                 {open ? (

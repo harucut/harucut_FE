@@ -96,6 +96,10 @@ export type Entitlement = {
   validTo: string;
   grantorNote?: string | null;
   revokeReason?: string | null;
+  /** 행사 배분(ADR-0009 §5)이면 부모(기업 총량) 이용권. 기간·기능·조건은 부모를 따른다. */
+  parentEntitlementId?: string | null;
+  /** 부모일 때 활성 배분 합. 남은 배분 가능량 = terms.composeQuota − allocatedQuota. */
+  allocatedQuota?: number | null;
 };
 
 export type ManualGrantRequest = {
@@ -184,6 +188,24 @@ export async function revokeEntitlement(entitlementId: string, reason: string): 
     { reason },
   );
   return requireData(res.data, "이용권");
+}
+
+/** 기업 총량(공간 범위)에서 행사 하나에 배분. 같은 공간의 행사만, 같은 행사엔 활성 배분 하나. 합이 넘으면 409 ENT-005. */
+export async function allocateEntitlement(parentId: string, eventId: string, composeQuota: number): Promise<Entitlement> {
+  const res = await clientApi.post<ApiEnvelope<Entitlement>>(
+    `/api/client/admin/entitlements/${encodeURIComponent(parentId)}/allocations`,
+    { eventId, composeQuota },
+  );
+  return requireData(res.data, "배분");
+}
+
+/** 배분량 바꾸기 — 늘리면 합 검사(ENT-005), 이미 사용·예약한 양 아래로 줄이면 ENT-006. */
+export async function resizeAllocation(childId: string, composeQuota: number): Promise<Entitlement> {
+  const res = await clientApi.patch<ApiEnvelope<Entitlement>>(
+    `/api/client/admin/entitlements/${encodeURIComponent(childId)}`,
+    { composeQuota },
+  );
+  return requireData(res.data, "배분");
 }
 
 export async function searchWorkspaces(query: string): Promise<AdminWorkspaceItem[]> {

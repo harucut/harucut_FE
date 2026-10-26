@@ -86,3 +86,23 @@ it("넘은 한도 알림을 비율과 시각으로 보여 주고, 없으면 그�
   rerender(<StudioEventUsage usage={usage({ alerts: [] })} error={null} now={NOW} onRefresh={jest.fn()} />);
   expect(screen.queryByText("한도 알림")).not.toBeInTheDocument();
 });
+
+// 배분을 받은 행사(ADR-0009 §5)는 기업 총량이 먼저 끝나도 마감된다 — 관리자에게 둘 다 보이고, 적은 쪽으로 미리 알린다.
+it("기업 총량을 함께 보이고, 총량이 배분보다 적게 남았으면 그것으로 미리 알린다", () => {
+  const { rerender } = render(
+    <StudioEventUsage
+      usage={usage({ parent: { composeQuota: 2000, used: 1980, reserved: 0, remaining: 20 } })}
+      error={null}
+      now={NOW}
+      onRefresh={jest.fn()}
+    />,
+  );
+  expect(screen.getByText("기업 총량에서 이 행사에 배분")).toBeInTheDocument();
+  expect(screen.getByText(/기업 총량 남은 촬영/)).toHaveTextContent("기업 총량 남은 촬영 20 / 2,000장");
+  expect(screen.getByText(/총량을 다 쓰면 이 행사도 촬영이 마감돼요/)).toBeInTheDocument();
+  expect(screen.getByText(/남은 촬영이 얼마 없어요/)).toBeInTheDocument();
+
+  // 운영 담당·행사 고객에게는 parent 가 오지 않는다.
+  rerender(<StudioEventUsage usage={usage()} error={null} now={NOW} onRefresh={jest.fn()} />);
+  expect(screen.queryByText(/기업 총량/)).not.toBeInTheDocument();
+});

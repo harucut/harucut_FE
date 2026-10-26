@@ -12,6 +12,8 @@ const api = {
   grantEntitlement: jest.fn(),
   getEntitlementImpact: jest.fn(),
   revokeEntitlement: jest.fn(),
+  allocateEntitlement: jest.fn(),
+  resizeAllocation: jest.fn(),
   searchWorkspaces: jest.fn(),
   searchEvents: jest.fn(),
   verifyContractPayment: jest.fn(),
@@ -31,6 +33,8 @@ jest.mock("@/lib/admin/cmsApi", () => ({
   grantEntitlement: (...a: unknown[]) => api.grantEntitlement(...a),
   getEntitlementImpact: (...a: unknown[]) => api.getEntitlementImpact(...a),
   revokeEntitlement: (...a: unknown[]) => api.revokeEntitlement(...a),
+  allocateEntitlement: (...a: unknown[]) => api.allocateEntitlement(...a),
+  resizeAllocation: (...a: unknown[]) => api.resizeAllocation(...a),
 }));
 
 const INQUIRY = {
@@ -360,4 +364,50 @@ it("같은 PortOne 결제 번호로 계약을 만들면(GEN-002) 이유를 알�
   fill(form, /참조/, "pay_1");
   fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
   expect(await screen.findByText(/같은 PortOne 결제 번호로 만든 계약이 이미 있는지/)).toBeInTheDocument();
+});
+
+// 기업 총량과 행사 배분(ADR-0009 §5, P3-4). 배분은 부모의 남은 양을 바꾸므로 목록을 다시 받는다.
+it("기업 총량에서 행사에 배분하고, 배분량을 바꾸며, 넘치면(ENT-005) 알린다", async () => {
+  const child = {
+    ...ENTITLEMENT,
+    entitlementId: "En7",
+    scope: "EVENT",
+    eventId: "Ev3",
+    parentEntitlementId: "En1",
+    terms: { ...TERMS, composeQuota: 200 },
+    used: 40,
+    reserved: 2,
+  };
+  api.listEntitlements.mockResolvedValue([{ ...ENTITLEMENT, allocatedQuota: 0 }]);
+  api.allocateEntitlement.mockImplementation(async () => {
+    api.listEntitlements.mockResolvedValue([child, { ...ENTITLEMENT, allocatedQuota: 200 }]);
+    return child;
+  });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+
+  expect(await screen.findByText(/행사 배분 0장 · 더 배분할 수 있는 양 500장/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "행사에 배분" }));
+  const form = screen.getByRole("form", { name: "행사에 배분" });
+  fill(form, /행사 ID/, "Ev3");
+  fill(form, /배분량/, "0");
+  expect(within(form).getByText("1 이상의 정수로 적어 주세요.")).toBeInTheDocument();
+  expect(within(form).getByRole("button", { name: "배분하기" })).toBeDisabled();
+  fill(form, /배분량/, "200");
+  fireEvent.click(within(form).getByRole("button", { name: "배분하기" }));
+
+  await waitFor(() => expect(api.allocateEntitlement).toHaveBeenCalledWith("En1", "Ev3", 200));
+  expect(await screen.findByText(/행사 배분 200장 · 더 배분할 수 있는 양 300장/)).toBeInTheDocument();
+  expect(screen.getByText("기업 총량 En1에서 배분")).toBeInTheDocument();
+
+  api.resizeAllocation.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-005", apiMessage: "x" }));
+  fireEvent.click(screen.getByRole("button", { name: "배분량 바꾸기" }));
+  const resize = screen.getByRole("form", { name: "배분량 바꾸기" });
+  expect(within(resize).getByLabelText(/배분량/)).toHaveValue(200);
+  expect(within(resize).getByText(/이미 쓴 42장/)).toBeInTheDocument();
+  fill(resize, /배분량/, "900");
+  fireEvent.click(within(resize).getByRole("button", { name: "바꾸기" }));
+
+  await waitFor(() => expect(api.resizeAllocation).toHaveBeenCalledWith("En7", 900));
+  expect(await screen.findByRole("alert")).toHaveTextContent("행사 배분 합계가 계약 총량을 넘어요.");
 });
