@@ -14,6 +14,7 @@ import { ColorThemeSync } from "@/components/theme/ColorThemeSync";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { ExternalBrowserGate } from "./ExternalBrowserGate";
+import { ServiceSurfaceOnly } from "@/components/layout/ServiceSurfaceOnly";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.harucut.com"),
@@ -24,8 +25,15 @@ export const metadata: Metadata = {
   creator: "vailen",
   publisher: "vailen",
   manifest: "/site.webmanifest",
+  /*
+    아이콘은 파일 규칙(app/favicon.ico)이 아니라 여기서만 정한다. 파일 규칙 메타데이터는
+    metadata 객체보다 우선하고 루트에만 둘 수 있어서, 행사 레이아웃이 icons 를 바꿔도
+    하루컷 favicon 링크가 그대로 남는다(기획 R5 18절, F35). 행사 레이아웃이 icons 를
+    지정하면 얕은 병합으로 이 목록 전체가 바뀐다.
+  */
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],
@@ -67,20 +75,27 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body>
         <ColorThemeScript />
-        <ColorThemeSync />
+        {/* 인앱 브라우저 → 외부 브라우저 전환은 행사 참가에도 필요하다. 가르지 않는다. */}
         <ExternalBrowserGate />
-        <Suspense fallback={null}>
-          <GuestTrialBridge />
-        </Suspense>
-        <Suspense fallback={null}>
-          <SessionExpiryBridge />
-        </Suspense>
-        <Suspense fallback={null}>
-          <AccountRecoveryBridge />
-        </Suspense>
-        <Suspense fallback={null}>
-          <TermsConsentBridge />
-        </Suspense>
+        {/*
+          개인 계정 팝업과 개인 색 테마는 행사 화면(/e·/r·/booth)에서 돌지 않는다.
+          루트 레이아웃은 모든 경로를 감싸므로 여기서 직접 가른다(lib/eventSurface.ts).
+        */}
+        <ServiceSurfaceOnly>
+          <ColorThemeSync />
+          <Suspense fallback={null}>
+            <GuestTrialBridge />
+          </Suspense>
+          <Suspense fallback={null}>
+            <SessionExpiryBridge />
+          </Suspense>
+          <Suspense fallback={null}>
+            <AccountRecoveryBridge />
+          </Suspense>
+          <Suspense fallback={null}>
+            <TermsConsentBridge />
+          </Suspense>
+        </ServiceSurfaceOnly>
         {children}
       </body>
     </html>
