@@ -58,6 +58,7 @@ export function StudioPageTheme({
   workspaceId,
   value,
   onChange,
+  onUploadingChange,
 }: {
   workspaceId: string;
   value: PageTheme;
@@ -66,6 +67,8 @@ export function StudioPageTheme({
    * 그때의 `value` 로 통째로 덮으면 그사이 고친 것이 되돌아간다(Codex #544).
    */
   onChange: (apply: (prev: PageTheme) => PageTheme) => void;
+  /** 로고·배경을 올리는 중인지. 부모가 그동안 저장을 막는다 — 저장 응답이 업로드 결과를 덮지 않게(Codex #544). */
+  onUploadingChange?: (uploading: boolean) => void;
 }) {
   // 자산 ID → 짧은 조회 URL. 칸이 아니라 ID 로 기억해야, 다시 불러온 테마의 로고·배경이 바뀌면 옛 그림을 쓰지 않는다.
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -105,6 +108,7 @@ export function StudioPageTheme({
   const upload = async (field: AssetField, file: File | undefined) => {
     if (!file) return;
     setUploading(field);
+    onUploadingChange?.(true);
     setNotice(null);
     try {
       const asset = await uploadAsset({ file, purpose: "PAGE_THEME_ASSET", workspaceId });
@@ -117,6 +121,7 @@ export function StudioPageTheme({
       setNotice(getUserFacingApiErrorMessage(cause, "이미지를 올리지 못했어요."));
     } finally {
       setUploading(null);
+      onUploadingChange?.(false);
     }
   };
 
