@@ -247,6 +247,45 @@ it("프레임이 여럿이면 서버가 준 목록만 순서대로 보여 준다
   expect(choices[0]).toHaveAttribute("aria-pressed", "true");
 });
 
+// ADR-0008 §6-2 — 촬영 한도를 다 썼거나 이용권이 끝났으면(ENT-002) 찍기 전에 마감으로 보여 준다.
+it("회차 시작이 한도로 막히면(ENT-002) 촬영 화면 대신 마감 안내를 보여 준다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+
+  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "1번째 사진 찍기" })).not.toBeInTheDocument();
+});
+
+// Codex 리뷰(#545): 한도에 걸려도 이미 만든 사진은 받을 수 있어야 한다 — 홈(사진 목록)으로 돌아간다.
+it("촬영 한도에 걸리면 이미 만든 사진 목록으로 돌아가 받을 수 있게 한다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.listParticipantResults.mockResolvedValue([{ jobId: 8, status: "DONE" }]);
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+
+  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
+});
+
+it("합성 접수가 한도로 막혀도(ENT-002) 다시 보내지 않고 마감 안내로 간다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.submitEventCompose.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+  await shootAll();
+
+  fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(api.submitEventCompose).toHaveBeenCalledTimes(1);
+});
+
 describe("Codex 리뷰 반영(#523)", () => {
   // 다른 앱이 카메라를 쥐고 있으면(NotReadableError) 안내 없이 검은 화면만 남았다.
   it("카메라를 켜지 못한 일반 오류도 안내하고 다시 시도를 둔다", async () => {

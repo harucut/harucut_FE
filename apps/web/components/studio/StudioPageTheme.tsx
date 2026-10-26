@@ -18,6 +18,7 @@ import {
   type PageThemeCopyKey,
   type PageThemeFont,
 } from "@/lib/event/pageTheme";
+import type { EntitlementFeature } from "@/lib/studio/usageApi";
 
 const COLOR_LABEL: Record<PageThemeColorKey, string> = {
   bg: "바탕",
@@ -58,6 +59,7 @@ export function StudioPageTheme({
   workspaceId,
   value,
   onChange,
+  features = null,
   onUploadingChange,
 }: {
   workspaceId: string;
@@ -67,6 +69,8 @@ export function StudioPageTheme({
    * 그때의 `value` 로 통째로 덮으면 그사이 고친 것이 되돌아간다(Codex #544).
    */
   onChange: (apply: (prev: PageTheme) => PageTheme) => void;
+  /** 이 행사에 적용된 이용권 기능. null 이면 아직 모른다(안내를 띄우지 않는다). */
+  features?: EntitlementFeature[] | null;
   /** 로고·배경을 올리는 중인지. 부모가 그동안 저장을 막는다 — 저장 응답이 업로드 결과를 덮지 않게(Codex #544). */
   onUploadingChange?: (uploading: boolean) => void;
 }) {
@@ -97,6 +101,14 @@ export function StudioPageTheme({
   };
 
   const colors = { ...DEFAULT_PAGE_THEME_COLORS, ...value.colors };
+  // 화면 문구는 기능 없이 쓸 수 있다. 색 · 글꼴 · 로고 · 배경은 이용권 기능 CUSTOM_THEME 이 있어야 게시된다.
+  const designed =
+    Object.values(value.colors ?? {}).some(Boolean) ||
+    (value.font !== undefined && value.font !== "SYSTEM") ||
+    Boolean(value.logoAssetId || value.backgroundAssetId);
+  const designBlocked = features !== null && !features.includes("CUSTOM_THEME") && designed;
+  const whiteLabelBlocked =
+    features !== null && !features.includes("WHITE_LABEL") && Boolean(value.branding?.hideHarucutBranding);
   const lowContrast = lowContrastPairs(value.colors ?? {});
 
   const setColor = (key: PageThemeColorKey, color: string) =>
@@ -131,6 +143,12 @@ export function StudioPageTheme({
 
   return (
     <div className="flex flex-col gap-5">
+      {designBlocked ? (
+        <p role="status" className="rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
+          지금 이용권에는 행사 화면 디자인 기능이 없어요. 색 · 글꼴 · 로고 · 배경을 바꾸면 게시할 수 없어요. 화면 문구는 그대로
+          쓸 수 있어요.
+        </p>
+      ) : null}
       <div
         aria-label="행사 화면 미리보기"
         className={["ev-surface flex flex-col gap-3 rounded-2xl border border-(--hc-border) p-4", eventFontClassName(value.font)]
@@ -297,7 +315,11 @@ export function StudioPageTheme({
           />
           하루컷 표시 숨기기
         </label>
-        <p className="text-[12px] text-(--hc-muted)">화이트라벨 이용권이 있어야 게시할 수 있어요.</p>
+        <p className={whiteLabelBlocked ? "text-[12px] text-(--hc-danger)" : "text-[12px] text-(--hc-muted)"}>
+          {whiteLabelBlocked
+            ? "지금 이용권에는 이 기능이 없어요. 켜 두면 게시할 수 없어요."
+            : "화이트라벨 이용권이 있어야 게시할 수 있어요."}
+        </p>
         <label className="flex flex-col gap-1 text-[14px] font-semibold">
           완성 사진의 로고
           <select

@@ -13,6 +13,8 @@ import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
 import { CloneEventForm } from "@/components/studio/CloneEventForm";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
+import { StudioEventUsage } from "@/components/studio/StudioEventUsage";
+import { getEventUsage, type EventUsage } from "@/lib/studio/usageApi";
 import { compactPageTheme, parsePageTheme, type PageTheme } from "@/lib/event/pageTheme";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -128,6 +130,9 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [violations, setViolations] = useState<ViolationGroup[]>([]);
   const [confirmClose, setConfirmClose] = useState(false);
   const [cloning, setCloning] = useState(false);
+  const [usage, setUsage] = useState<EventUsage | undefined>(undefined);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   // 행사 화면 꾸미기에서 로고·배경을 올리는 중이면 저장을 막는다. 저장 응답(저장 시점 폼)이 업로드 결과를 덮는다.
   const [themeUploading, setThemeUploading] = useState(false);
 
@@ -145,10 +150,21 @@ export function EventStudio({ eventId }: { eventId: string }) {
     }
   }, [accept, eventId]);
 
+  const loadUsage = useCallback(async () => {
+    setUsageError(null);
+    setNow(() => Date.now());
+    try {
+      setUsage(await getEventUsage(eventId));
+    } catch (error) {
+      setUsageError(getUserFacingApiErrorMessage(error, "이용권 정보를 불러오지 못했어요."));
+    }
+  }, [eventId]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
     void reload();
-  }, [reload]);
+    void loadUsage();
+  }, [reload, loadUsage]);
 
   if (load.state !== "ready" || !form) {
     return (
@@ -435,6 +451,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
               description="참가 · 부스 · 결과 화면에 보이는 색과 글꼴, 로고, 문구예요. 게시하면 참가자 화면에 반영돼요."
             >
               <StudioPageTheme
+                features={usage ? (usage.entitlement?.features ?? []) : null}
                 workspaceId={event.workspaceId}
                 value={form.theme}
                 // 최신 폼 위에 적용한다 — 업로드를 기다리는 사이 바꾼 이름 등 테마 밖의 칸도 되돌리지 않게.
@@ -508,6 +525,13 @@ export function EventStudio({ eventId }: { eventId: string }) {
             신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 공간의 다른 행사는 보이지 않아요.
           </p>
           <StudioEventCustomers eventId={event.eventId} />
+        </section>
+
+        <section aria-labelledby="studio-usage-title" className="flex flex-col gap-3">
+          <h2 id="studio-usage-title" className="text-[18px] font-bold">
+            이용권과 사용량
+          </h2>
+          <StudioEventUsage usage={usage} error={usageError} now={now} onRefresh={() => void loadUsage()} />
         </section>
 
         <section aria-labelledby="studio-run-title" className="flex flex-col gap-3">
