@@ -342,6 +342,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         const imported = await resolveThemeAssetUrls(toThemeExportJson(remoteFrame));
         if (cancelled) return;
         importJson(imported);
+        // 「저장본 다시 불러오기」로 다시 받았으면 이탈 경고 기준도 새 저장본이다. 비워 두면 아래(렌더)에서
+        // 지금 스토어(=새 저장본)의 지문으로 다시 잡는다. 안 비우면 처음 불러온 상태가 기준으로 남아,
+        // 아무것도 안 고쳐도 경고가 뜨고 처음 상태로 되돌리는 편집에는 경고가 사라진다.
+        setBaseline((prev) => ({ ...prev, signature: null }));
         savedContentKeyRef.current = buildFrameContentKey(
           useThemeEditorStore.getState().exportJson(),
         );
