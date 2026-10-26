@@ -8,6 +8,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
  */
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsConsentBridge } from "@/components/terms/TermsConsentBridge";
+import { clientApi } from "@/lib/clientApi";
 import type { ActiveTerms } from "@/lib/termsApi";
 
 const mockSubmit = jest.fn();
@@ -602,4 +603,43 @@ test.each([false, true])("비회원 촬영에서는 약관·인증 API를 부르
   expect(mockResolveMembership).not.toHaveBeenCalled();
   expect(mockFetchMine).not.toHaveBeenCalled();
   expect(mockSubmit).not.toHaveBeenCalled();
+});
+
+/*
+  서버가 필수 약관 미동의(TERMS-004)로 API 를 막는 갈래. 한 번 확인한 뒤에 약관이 개정되면
+  `checkedRef` 때문에 다시 묻지 않아, 화면마다 403 만 받고 재동의 화면을 끝내 보지 못한다.
+*/
+it("확인한 뒤에도 서버가 TERMS-004 로 막으면 다시 묻고 재동의를 띄운다", async () => {
+  const originalFetch = global.fetch;
+  // jsdom 에는 Response 가 없다. clientApi 가 읽는 것(status·ok·text)만 갖춘다.
+  global.fetch = jest.fn(async () => ({
+    status: 403,
+    ok: false,
+    text: async () => JSON.stringify({ code: "TERMS-004", status: 403, message: "…" }),
+  })) as unknown as typeof fetch;
+
+  try {
+    render(<TermsConsentBridge />);
+    await waitFor(() => expect(mockFetchMine).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    mockFetchMine.mockResolvedValue([
+      {
+        code: "tos",
+        title: "서비스 이용약관",
+        required: true,
+        status: "NEEDS_RECONSENT",
+        agreedVersion: 1,
+        latestVersion: 2,
+      },
+    ]);
+    await act(async () => {
+      await clientApi.get("/api/client/user/frame").catch(() => undefined);
+    });
+
+    await waitFor(() => expect(mockFetchMine).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
