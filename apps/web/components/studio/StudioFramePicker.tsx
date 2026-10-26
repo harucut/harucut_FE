@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { getFrameConfig } from "@/constants/frames";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -53,9 +53,12 @@ export function StudioFramePicker({
   disabled?: boolean;
   /** 저장 안 한 설정이 있으면 편집기로 떠나지 않는다 — 돌아오면 그 설정이 사라진다. */
   editLocked?: boolean;
-  onEditFrame: (frame: RemoteFrame) => void;
-  onCreateFrame: (layout: EventLayout) => void;
+  /** 둘 다 없으면 고르기만 한다 — 공간·프로젝트 기본값처럼 편집기로 떠날 수 없는 자리. 「공간 프레임」 관리 칸을 그리지 않는다. */
+  onEditFrame?: (frame: RemoteFrame) => void;
+  onCreateFrame?: (layout: EventLayout) => void;
 }) {
+  const radioName = useId();
+  const manage = Boolean(onEditFrame && onCreateFrame);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<number | null>(null);
@@ -140,7 +143,9 @@ export function StudioFramePicker({
             <legend className="mb-1 text-[14px] font-semibold">{layoutName(layout)}</legend>
             {candidates.length === 0 ? (
               <p className="text-[13px] text-(--hc-muted)">
-                고를 수 있는 발행본이 없어요. 아래 「공간 프레임」에서 만들고 발행해 주세요.
+                {manage
+                  ? "고를 수 있는 발행본이 없어요. 아래 「공간 프레임」에서 만들고 발행해 주세요."
+                  : "고를 수 있는 발행본이 없어요. 행사 화면의 「공간 프레임」에서 만들고 발행해 주세요."}
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
@@ -174,7 +179,7 @@ export function StudioFramePicker({
                         <label className="flex min-h-11 shrink-0 items-center gap-1.5 text-[13px]">
                           <input
                             type="radio"
-                            name="studio-default-frame"
+                            name={radioName}
                             className="size-4"
                             checked={Boolean(ref?.isDefault)}
                             onChange={() => makeDefault(version.frameVersionId)}
@@ -218,72 +223,74 @@ export function StudioFramePicker({
         </div>
       ) : null}
 
-      <section aria-labelledby="studio-workspace-frames" className="flex flex-col gap-2">
-        <h3 id="studio-workspace-frames" className="text-[14px] font-semibold">
-          공간 프레임
-        </h3>
-        <p className="text-[12px] text-(--hc-muted)">
-          고친 프레임은 「새 버전 발행」을 눌러야 고를 수 있어요. 이미 게시한 행사는 고른 발행본을 그대로 써요.
-        </p>
-        {editLocked ? (
-          <p className="text-[12px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 프레임을 만들거나 고칠 수 있어요.</p>
-        ) : null}
-        {notice ? (
-          <p role="status" className="text-[13px]">
-            {notice}
+      {manage ? (
+        <section aria-labelledby="studio-workspace-frames" className="flex flex-col gap-2">
+          <h3 id="studio-workspace-frames" className="text-[14px] font-semibold">
+            공간 프레임
+          </h3>
+          <p className="text-[12px] text-(--hc-muted)">
+            고친 프레임은 「새 버전 발행」을 눌러야 고를 수 있어요. 이미 게시한 행사는 고른 발행본을 그대로 써요.
           </p>
-        ) : null}
-        {catalog.frames.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {catalog.frames.map((frame) => {
-              const latest = latestByFrame.get(frame.frameId);
-              return (
-                <li key={frame.frameId} className="flex flex-wrap items-center justify-between gap-2 text-[14px]">
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">{frame.title || "이름 없는 프레임"}</span>
-                    <span className="block text-[12px] text-(--hc-muted)">
-                      {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "아직 발행 안 함"}
+          {editLocked ? (
+            <p className="text-[12px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 프레임을 만들거나 고칠 수 있어요.</p>
+          ) : null}
+          {notice ? (
+            <p role="status" className="text-[13px]">
+              {notice}
+            </p>
+          ) : null}
+          {catalog.frames.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {catalog.frames.map((frame) => {
+                const latest = latestByFrame.get(frame.frameId);
+                return (
+                  <li key={frame.frameId} className="flex flex-wrap items-center justify-between gap-2 text-[14px]">
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{frame.title || "이름 없는 프레임"}</span>
+                      <span className="block text-[12px] text-(--hc-muted)">
+                        {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "아직 발행 안 함"}
+                      </span>
                     </span>
-                  </span>
-                  <span className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={editLocked}
-                      onClick={() => onEditFrame(frame)}
-                      className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold disabled:opacity-50"
-                    >
-                      고치기
-                    </button>
-                    <button
-                      type="button"
-                      disabled={publishing !== null}
-                      onClick={() => void publish(frame)}
-                      className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold disabled:opacity-50"
-                    >
-                      {publishing === frame.frameId ? "발행하는 중…" : latest ? "새 버전 발행" : "발행하기"}
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="text-[13px] text-(--hc-muted)">아직 이 공간에 만든 프레임이 없어요.</p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {(layouts.length > 0 ? layouts : (["CLASSIC", "WIDE", "GRID", "POLAROID"] as EventLayout[])).map((layout) => (
-            <button
-              key={layout}
-              type="button"
-              disabled={editLocked}
-              onClick={() => onCreateFrame(layout)}
-              className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
-            >
-              {layoutName(layout)} 만들기
-            </button>
-          ))}
-        </div>
-      </section>
+                    <span className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={editLocked}
+                        onClick={() => onEditFrame?.(frame)}
+                        className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold disabled:opacity-50"
+                      >
+                        고치기
+                      </button>
+                      <button
+                        type="button"
+                        disabled={publishing !== null}
+                        onClick={() => void publish(frame)}
+                        className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold disabled:opacity-50"
+                      >
+                        {publishing === frame.frameId ? "발행하는 중…" : latest ? "새 버전 발행" : "발행하기"}
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-[13px] text-(--hc-muted)">아직 이 공간에 만든 프레임이 없어요.</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {(layouts.length > 0 ? layouts : (["CLASSIC", "WIDE", "GRID", "POLAROID"] as EventLayout[])).map((layout) => (
+              <button
+                key={layout}
+                type="button"
+                disabled={editLocked}
+                onClick={() => onCreateFrame?.(layout)}
+                className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
+              >
+                {layoutName(layout)} 만들기
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

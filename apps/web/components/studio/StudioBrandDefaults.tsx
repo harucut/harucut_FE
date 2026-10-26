@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { layoutName } from "@/components/studio/StudioFramePicker";
+import { StudioConsentItems, consentItemsOf, toConsentDrafts, type ConsentDraft } from "@/components/studio/StudioConsentItems";
+import { StudioFramePicker, layoutName, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
@@ -10,7 +11,7 @@ import {
   type PageTheme,
 } from "@/lib/event/pageTheme";
 import type { BrandDefaults } from "@/lib/studio/projectsApi";
-import type { EventLayout } from "@/lib/studio/studioApi";
+import type { ConsentItem, EventLayout, FrameRef } from "@/lib/studio/studioApi";
 
 const LAYOUTS: EventLayout[] = ["CLASSIC", "WIDE", "GRID", "POLAROID"];
 
@@ -22,6 +23,13 @@ type Draft = {
   booth: Tri;
   setLayouts: boolean;
   layouts: EventLayout[];
+  /** 제공 프레임·동의 항목도 목록째 바뀐다 — 정하면 아래 행사가 통째로 받는다. */
+  setFrames: boolean;
+  frames: FrameRef[];
+  setConsents: boolean;
+  consents: ConsentDraft[];
+  /** 저장된 동의 항목 — 문구를 바꾼 항목만 version 을 올리는 기준. */
+  savedConsents: ConsentItem[];
   retentionDays: string;
   /** 브랜딩을 뺀 테마(색·글꼴·로고·배경·문구). */
   theme: PageTheme;
@@ -42,6 +50,11 @@ function draftOf(defaults: BrandDefaults): Draft {
     booth: tri(defaults.boothEnabled),
     setLayouts: Array.isArray(defaults.allowedLayouts),
     layouts: defaults.allowedLayouts ?? [],
+    setFrames: Array.isArray(defaults.frames),
+    frames: normalizeFrameRefs([...(defaults.frames ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)),
+    setConsents: Array.isArray(defaults.consentItems),
+    consents: toConsentDrafts(defaults.consentItems),
+    savedConsents: defaults.consentItems ?? [],
     retentionDays: defaults.resultRetentionDays ? String(defaults.resultRetentionDays) : "",
     theme: { ...parsePageTheme(defaults.theme), branding: undefined },
     hideBranding: tri(raw?.hideHarucutBranding),
@@ -67,6 +80,8 @@ function patchOf(draft: Draft): Partial<Record<keyof BrandDefaults, unknown>> {
     byodEnabled: bool(draft.byod),
     boothEnabled: bool(draft.booth),
     allowedLayouts: draft.setLayouts ? draft.layouts : null,
+    frames: draft.setFrames ? draft.frames : null,
+    consentItems: draft.setConsents ? consentItemsOf(draft.consents, draft.savedConsents) : null,
     resultRetentionDays: draft.retentionDays.trim() && Number.isSafeInteger(days) && days > 0 ? days : null,
     theme: themeOf(draft),
   };
@@ -74,7 +89,7 @@ function patchOf(draft: Draft): Partial<Record<keyof BrandDefaults, unknown>> {
 
 /**
  * 공간·프로젝트의 브랜드 기본값(ADR-0009 §2). 정한 것만 아래(프로젝트 → 행사)로 내려가고, 행사가 직접 정한 값이 이긴다.
- * 게시한 행사는 다시 게시하기 전까지 바뀌지 않는다. 제공 프레임·동의 항목 기본값은 아직 여기서 고르지 않는다.
+ * 게시한 행사는 다시 게시하기 전까지 바뀌지 않는다. 제공 프레임·동의 항목은 목록째 내려간다(행사가 정하면 통째로 이긴다).
  */
 export function StudioBrandDefaults({
   workspaceId,
@@ -194,6 +209,44 @@ export function StudioBrandDefaults({
                 </label>
               ))}
             </div>
+          ) : null}
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-[13px] font-semibold">제공 프레임</legend>
+          <label className="flex min-h-11 items-center gap-2 text-[14px]">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={draft.setFrames}
+              onChange={(e) => set({ setFrames: e.target.checked })}
+            />
+            기본값으로 정하기
+          </label>
+          {draft.setFrames ? (
+            <StudioFramePicker
+              workspaceId={workspaceId}
+              // 허용 레이아웃을 정하지 않았으면 모든 판형에서 고른다 — 행사의 허용 레이아웃 밖 프레임은 게시 검사가 막는다.
+              layouts={draft.setLayouts ? draft.layouts : LAYOUTS}
+              value={draft.frames}
+              onChange={(frames) => set({ frames })}
+            />
+          ) : null}
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-[13px] font-semibold">참가 동의</legend>
+          <label className="flex min-h-11 items-center gap-2 text-[14px]">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={draft.setConsents}
+              onChange={(e) => set({ setConsents: e.target.checked })}
+            />
+            기본값으로 정하기
+          </label>
+          {draft.setConsents ? (
+            <StudioConsentItems value={draft.consents} onChange={(consents) => set({ consents })} />
           ) : null}
         </fieldset>
 
