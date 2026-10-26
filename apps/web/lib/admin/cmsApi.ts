@@ -148,6 +148,19 @@ export async function changeContractStatus(
   return requireData(res.data, "계약");
 }
 
+/**
+ * PORTONE 근거를 PortOne 조회로 다시 대조한다(웹훅이 근거 등록보다 먼저 와서 확인되지 않은 계약용).
+ * 맞으면 paymentVerifiedAt 이 채워진 계약. 근거 없음·연동 꺼짐·불일치는 400 GEN-002. 실연동 미확인.
+ */
+export async function verifyContractPayment(contractId: string, signal?: AbortSignal): Promise<Contract> {
+  const res = await clientApi.post<ApiEnvelope<Contract>>(
+    `/api/client/admin/contracts/${encodeURIComponent(contractId)}/payment-verification`,
+    undefined,
+    { signal },
+  );
+  return requireData(res.data, "계약");
+}
+
 export async function listEntitlements(): Promise<Entitlement[]> {
   const res = await clientApi.get<ApiEnvelope<Entitlement[]>>(`/api/client/admin/entitlements`);
   return res.data.data ?? [];
