@@ -63,3 +63,26 @@ it("남은 촬영이 적거나 기간이 곧 끝나면 미리 알린다", () => 
   expect(screen.getByText(/이용권이 2026년 10월 30일에 끝나요/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "증설·연장 문의" })).toBeInTheDocument();
 });
+
+// 한도 알림(ADR-0009 §4) — 확정 사용량이 처음 넘은 비율만 서버가 준다. 상시 캠페인은 끝나는 날이 없어 이것으로 증설 시점을 안다.
+it("넘은 한도 알림을 비율과 시각으로 보여 주고, 없으면 그리지 않는다", () => {
+  const { rerender } = render(
+    <StudioEventUsage
+      usage={usage({
+        alerts: [
+          { threshold: 80, reachedAt: "2026-10-20T05:03:00Z" },
+          { threshold: 95, reachedAt: "2026-10-24T05:03:00Z" },
+        ],
+      })}
+      error={null}
+      now={NOW}
+      onRefresh={jest.fn()}
+    />,
+  );
+  expect(screen.getByText("한도 알림")).toBeInTheDocument();
+  expect(screen.getByText(/한도의 80%에 닿았어요/)).toBeInTheDocument();
+  expect(screen.getByText(/한도의 95%에 닿았어요/)).toBeInTheDocument();
+
+  rerender(<StudioEventUsage usage={usage({ alerts: [] })} error={null} now={NOW} onRefresh={jest.fn()} />);
+  expect(screen.queryByText("한도 알림")).not.toBeInTheDocument();
+});

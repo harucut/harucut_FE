@@ -37,8 +37,13 @@ export type FrameRef = {
   sortOrder: number;
 };
 
+/** 행사 종류(ADR-0009 §4). ALWAYS_ON 은 종료 시각 없이 「촬영 종료」로 끝낸다. 게시 전 초안에서만 바뀐다. 상속하지 않는다. */
+export type EventKind = "SCHEDULED" | "ALWAYS_ON";
+
 export type EventSettings = {
   name?: string | null;
+  /** 없으면 SCHEDULED(옛 서버 포함). */
+  kind?: EventKind | null;
   /** `/e/{slug}`. 영문 소문자·숫자·하이픈 3~40자. **게시 후에는 바꿀 수 없다.** */
   slug?: string | null;
   timezone?: string | null;

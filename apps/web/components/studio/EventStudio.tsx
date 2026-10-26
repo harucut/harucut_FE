@@ -40,6 +40,7 @@ import {
   updateEventSettings,
   type ConsentItem,
   type EventAction,
+  type EventKind,
   type EventLayout,
   type EventSettings,
   type FrameRef,
@@ -56,6 +57,7 @@ type ConsentDraft = Pick<ConsentItem, "code" | "title" | "body" | "required">;
 type Form = {
   name: string;
   slug: string;
+  kind: EventKind;
   startsAt: string;
   endsAt: string;
   byod: boolean;
@@ -73,6 +75,7 @@ function formOf(settings: EventSettings): Form {
   return {
     name: settings.name ?? "",
     slug: settings.slug ?? "",
+    kind: settings.kind === "ALWAYS_ON" ? "ALWAYS_ON" : "SCHEDULED",
     startsAt: toLocalInputValue(settings.captureStartsAt),
     endsAt: toLocalInputValue(settings.captureEndsAt),
     byod: Boolean(settings.byodEnabled),
@@ -99,6 +102,7 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
   return {
     name: form.name.trim(),
     slug: form.slug,
+    kind: form.kind,
     captureStartsAt: toServerDateTime(form.startsAt),
     captureEndsAt: toServerDateTime(form.endsAt),
     byodEnabled: form.byod,
@@ -486,7 +490,29 @@ export function EventStudio({ eventId }: { eventId: string }) {
               ) : null}
             </Section>
 
-            <Section title="촬영 기간" description="비워 두면 게시하는 즉시 시작하고, 「촬영 종료」를 누를 때까지 열려 있어요. 시각은 한국 시간이에요.">
+            <Section
+              title="촬영 기간"
+              description={
+                form.kind === "ALWAYS_ON"
+                  ? "상시 캠페인은 끝나는 시각 없이 「촬영 종료」를 누를 때까지 열려 있어요. 이용권 기간과 한도는 그대로 적용돼요."
+                  : "비워 두면 게시하는 즉시 시작하고, 「촬영 종료」를 누를 때까지 열려 있어요. 시각은 한국 시간이에요."
+              }
+            >
+              <Field label="행사 종류" help={slugLocked ? "게시한 뒤에는 바꿀 수 없어요." : undefined}>
+                <select
+                  className="hc-input h-11 rounded-xl border px-2 text-[14px]"
+                  value={form.kind}
+                  disabled={slugLocked}
+                  // 상시로 바꾸면 종료 시각을 비운다 — 남겨 두면 게시 검사에서 막힌다.
+                  onChange={(e) => {
+                    const kind = e.target.value as EventKind;
+                    update(kind === "ALWAYS_ON" ? { kind, endsAt: "" } : { kind });
+                  }}
+                >
+                  <option value="SCHEDULED">정해진 기간의 행사</option>
+                  <option value="ALWAYS_ON">상시 캠페인</option>
+                </select>
+              </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="시작">
                   <input
@@ -496,14 +522,20 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     onChange={(e) => update({ startsAt: e.target.value })}
                   />
                 </Field>
-                <Field label="종료">
-                  <input
-                    type="datetime-local"
-                    className="hc-input h-11 rounded-xl border px-3 text-[14px]"
-                    value={form.endsAt}
-                    onChange={(e) => update({ endsAt: e.target.value })}
-                  />
-                </Field>
+                {/* 상시 캠페인에는 종료 시각이 없다. 이미 저장된 값이 있으면 지울 수 있게 남겨 둔다. */}
+                {form.kind === "SCHEDULED" || form.endsAt ? (
+                  <Field
+                    label="종료"
+                    help={form.kind === "ALWAYS_ON" ? "상시 캠페인은 종료 시각을 비워야 게시할 수 있어요." : undefined}
+                  >
+                    <input
+                      type="datetime-local"
+                      className="hc-input h-11 rounded-xl border px-3 text-[14px]"
+                      value={form.endsAt}
+                      onChange={(e) => update({ endsAt: e.target.value })}
+                    />
+                  </Field>
+                ) : null}
               </div>
             </Section>
 
