@@ -172,5 +172,20 @@ it("필터를 바꿔 새 목록을 받는 동안에는 사진 고르기를 막�
   render(<EventPhotoBox eventId="Ev1" />);
   expect(await screen.findByRole("checkbox")).toBeEnabled();
   fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
-  expect(screen.getByRole("checkbox")).toBeDisabled();
+  // 필터를 바꾸면 이전 목록을 바로 비우므로 이전 사진을 고를 길이 없다.
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+});
+
+// Codex 리뷰(#542): 필터를 바꾼 뒤 첫 쪽이 실패하면 이전 필터의 커서로 「더 보기」를 하면 안 된다.
+it("필터를 바꾼 뒤 첫 쪽이 실패하면 이전 목록과 커서를 남기지 않는다", async () => {
+  mockList
+    .mockResolvedValueOnce({ items: [DONE], nextCursor: "c-all-2" })
+    .mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }));
+  render(<EventPhotoBox eventId="Ev1" />);
+  expect(await screen.findByRole("button", { name: "더 보기" })).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
 });
