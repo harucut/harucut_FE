@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdminSearchField } from "@/components/admin/AdminSearchField";
 import {
   EMPTY_TERMS,
   TermsFields,
@@ -138,8 +139,14 @@ export function AdminEntitlements() {
           }}
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="공간 ID" value={draft.workspaceId} onChange={(v) => set({ workspaceId: v })} required help="조직 공간에만 줄 수 있어요." />
-            <TextField label="행사 ID" value={draft.eventId} onChange={(v) => set({ eventId: v })} help="적으면 그 행사에만 적용돼요." />
+            <div className="flex flex-col gap-2">
+              <TextField label="공간 ID" value={draft.workspaceId} onChange={(v) => set({ workspaceId: v })} required help="조직 공간에만 줄 수 있어요." />
+              <AdminSearchField kind="workspace" onPick={(w) => set({ workspaceId: w.workspaceId })} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <TextField label="행사 ID" value={draft.eventId} onChange={(v) => set({ eventId: v })} help="적으면 그 행사에만 적용돼요." />
+              <AdminSearchField kind="event" onPick={(ev) => set({ eventId: ev.eventId, workspaceId: ev.workspaceId })} />
+            </div>
             <TextField label="시작" type="datetime-local" value={draft.validFrom} onChange={(v) => set({ validFrom: v })} required help="한국 시간" />
             <TextField label="끝" type="datetime-local" value={draft.validTo} onChange={(v) => set({ validTo: v })} required help="한국 시간" />
           </div>

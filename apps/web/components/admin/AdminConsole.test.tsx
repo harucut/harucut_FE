@@ -12,9 +12,14 @@ const api = {
   grantEntitlement: jest.fn(),
   getEntitlementImpact: jest.fn(),
   revokeEntitlement: jest.fn(),
+  searchWorkspaces: jest.fn(),
+  searchEvents: jest.fn(),
 };
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
 jest.mock("@/lib/admin/cmsApi", () => ({
+  ...jest.requireActual("@/lib/admin/cmsApi"),
+  searchWorkspaces: (...a: unknown[]) => api.searchWorkspaces(...a),
+  searchEvents: (...a: unknown[]) => api.searchEvents(...a),
   listInquiries: (...a: unknown[]) => api.listInquiries(...a),
   updateInquiry: (...a: unknown[]) => api.updateInquiry(...a),
   listContracts: (...a: unknown[]) => api.listContracts(...a),
@@ -175,4 +180,39 @@ it("수동 이용권은 사유가 있어야 주고, 회수는 영향을 본 뒤 
   fireEvent.click(revoke);
   await waitFor(() => expect(api.revokeEntitlement).toHaveBeenCalledWith("En1", "계약 해지"));
   expect(await screen.findByText("회수됨")).toBeInTheDocument();
+});
+
+// 계약 대상은 ID 를 손으로 적지 않고 찾아 고른다. 행사 범위면 그 행사의 공간 ID 도 함께 채운다.
+it("행사를 찾아 고르면 행사 ID 와 그 공간 ID 를 채운다(두 글자 미만은 찾지 않는다)", async () => {
+  api.searchEvents.mockResolvedValue([
+    { eventId: "Ev7", slug: "wedding-1205", name: "민지 ♥ 준호", status: "LIVE", workspaceId: "Ws9", workspaceName: "웨딩홀 A", createdAt: "x" },
+  ]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fireEvent.click(within(form).getByLabelText("고른 행사만"));
+
+  const search = within(form).getByLabelText("행사 찾기");
+  fireEvent.change(search, { target: { value: "웨" } });
+  expect(within(form).getAllByRole("button", { name: "찾기" }).at(-1)).toBeDisabled();
+  fireEvent.change(search, { target: { value: "웨딩" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+
+  fireEvent.click(await within(form).findByRole("button", { name: /민지 ♥ 준호/ }));
+  expect(api.searchEvents).toHaveBeenCalledWith("웨딩");
+  expect(within(form).getByLabelText(/공간 ID/)).toHaveValue("Ws9");
+  expect(within(form).getByLabelText(/^행사 ID/)).toHaveValue("Ev7");
+  expect(api.createContract).not.toHaveBeenCalled();
+});
+
+it("PortOne 근거가 있는 계약은 결제 확인 여부를 보여 준다", async () => {
+  api.listContracts.mockResolvedValue([
+    { ...CONTRACT, paymentEvidence: { kind: "PORTONE", reference: "pay_1" }, paymentVerifiedAt: "2026-10-26T03:00:00Z" },
+    { ...CONTRACT, contractId: "Ct3", paymentEvidence: { kind: "PORTONE", reference: "pay_2" } },
+  ]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  expect(await screen.findByText(/pay_1 · 결제 확인됨/)).toBeInTheDocument();
+  expect(screen.getByText(/pay_2 · 결제 확인 전/)).toBeInTheDocument();
 });
