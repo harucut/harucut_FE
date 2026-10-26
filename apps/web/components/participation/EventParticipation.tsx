@@ -54,7 +54,7 @@ type Session = { token: string; participantId: string; expiresAt: string };
 const SHOT_COUNT = 4;
 const COUNTDOWN_SECONDS = 3;
 
-function sortedFrames(event: PublicEvent): EventFrameRef[] {
+export function sortedFrames(event: PublicEvent): EventFrameRef[] {
   const allowed = new Set(event.allowedLayouts);
   return [...event.frames]
     .filter((frame) => allowed.has(frame.layoutType))
@@ -305,7 +305,7 @@ function IntroStep({ event, onJoin }: { event: PublicEvent; onJoin: () => void }
   );
 }
 
-function ConsentStep({
+export function ConsentStep({
   items,
   onSubmit,
 }: {
@@ -404,7 +404,7 @@ function HomeStep({
   );
 }
 
-function FrameStep({
+export function FrameStep({
   frames,
   selected,
   onSelect,
@@ -455,7 +455,7 @@ function FrameStep({
  * 칸은 다시 올리지 않는다. 다시 찍은 칸만 새로 올린다. 회차가 끝났으면(PART-003) 새 회차를 열어
  * 처음부터 다시 올린다 — 이전 회차의 입력을 새 회차에 이어 붙이지 않는다.
  */
-function CaptureAndSend({
+export function CaptureAndSend({
   event,
   token,
   frame,
@@ -470,7 +470,8 @@ function CaptureAndSend({
   frame: EventFrameRef;
   sending: string | null;
   onProgress: (progress: string | null) => void;
-  onDone: (resultToken: string) => void;
+  /** 접수가 끝났다. 부스는 회차를 닫으려고 회차 정보도 받는다. */
+  onDone: (resultToken: string, run: CaptureRun) => void;
   onSessionEnded: () => void;
   onUnavailable: (cause: unknown) => void;
 }) {
@@ -577,7 +578,7 @@ function CaptureAndSend({
         idempotencyKey: idempotencyKeyRef.current!,
       });
       stopCamera();
-      onDone(accepted.resultToken);
+      onDone(accepted.resultToken, run);
     } catch (cause) {
       onProgress(null);
       const { status, code } = getApiErrorDetails(cause);
