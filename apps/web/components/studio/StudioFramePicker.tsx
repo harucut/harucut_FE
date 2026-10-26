@@ -84,7 +84,10 @@ export function StudioFramePicker({
 
   const selectedIds = new Set(value.map((r) => r.frameVersionId));
   const known = new Set(catalog?.versions.map((v) => v.frameVersionId) ?? []);
-  const unknownRefs = catalog ? value.filter((r) => !known.has(r.frameVersionId)) : [];
+  // 목록에 없거나, 허용하지 않은 판형이라 위에서 보이지 않는 연결 — 숨은 채 저장되면 게시가 막힌다(Codex #559).
+  const unknownRefs = catalog
+    ? value.filter((r) => !known.has(r.frameVersionId) || !layouts.includes(r.layoutType))
+    : [];
   const latestByFrame = new Map(catalog?.versions.map((v) => [v.frameId, v]) ?? []);
 
   const toggle = (version: PickableFrameVersion, on: boolean) => {
@@ -199,8 +202,8 @@ export function StudioFramePicker({
       {unknownRefs.length > 0 ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) p-3 text-[13px]">
           <p>
-            지금 목록에 없는 발행본이 연결돼 있어요. 더 새 발행본이 나왔거나 원본 프레임이 지워졌을 수
-            있어요. 위에서 다시 고른 뒤 빼 주세요.
+            지금 고를 수 없는 발행본이 연결돼 있어요. 허용하지 않은 판형이거나, 더 새 발행본이 나왔거나
+            원본 프레임이 지워졌을 수 있어요. 위에서 다시 고른 뒤 빼 주세요.
           </p>
           <ul className="flex flex-col gap-1">
             {unknownRefs.map((ref) => (

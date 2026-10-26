@@ -118,6 +118,13 @@ export function StudioBrandDefaults({
     draft.retentionDays.trim() !== "" && !(Number.isSafeInteger(days) && days > 0);
   const dirty = JSON.stringify(patchOf(draft)) !== JSON.stringify(patchOf(saved));
   const set = (patch: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...patch }));
+  // 허용 레이아웃이 줄면 빠진 판형의 프레임도 뺀다 — 선택기에서 숨은 프레임이 저장돼 상속한 행사의 게시를 막지 않게(Codex #559).
+  const setLayoutsDraft = (patch: Pick<Partial<Draft>, "setLayouts" | "layouts">) =>
+    setDraft((prev) => {
+      const next = { ...prev, ...patch };
+      const allowed = next.setLayouts ? next.layouts : LAYOUTS;
+      return { ...next, frames: normalizeFrameRefs(next.frames.filter((f) => allowed.includes(f.layoutType))) };
+    });
 
   const save = async () => {
     setBusy(true);
@@ -182,7 +189,7 @@ export function StudioBrandDefaults({
               type="checkbox"
               className="size-5"
               checked={draft.setLayouts}
-              onChange={(e) => set({ setLayouts: e.target.checked })}
+              onChange={(e) => setLayoutsDraft({ setLayouts: e.target.checked })}
             />
             기본값으로 정하기
           </label>
@@ -198,7 +205,7 @@ export function StudioBrandDefaults({
                     className="size-5"
                     checked={draft.layouts.includes(layout)}
                     onChange={(e) =>
-                      set({
+                      setLayoutsDraft({
                         layouts: LAYOUTS.filter((l) =>
                           l === layout ? e.target.checked : draft.layouts.includes(l),
                         ),
