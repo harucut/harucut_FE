@@ -310,6 +310,7 @@ export const config = {
     "/theme/:path*",
     "/mypage",
     "/studio/:path*",
+    "/admin/:path*",
     // 보호 경로는 아니지만 로그인이 끝나는 자리라, 게스트 쿠키를 걷으러 들어간다.
     // matcher 는 Next 가 빌드 때 읽으므로 문자열을 그대로 적는다 —
     // 위 SOCIAL_LOGIN_CALLBACK 과 같은 값이어야 한다(proxy.test.ts 가 확인한다).

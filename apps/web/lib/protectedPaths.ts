@@ -6,6 +6,8 @@ export const PROTECTED_PATHS = [
   "/mypage",
   // 고객용 Studio(행사 운영). 운영자 API 는 조직 공간 역할을 서버가 다시 본다.
   "/studio",
+  // 하루컷 플랫폼 CMS. 로그인만 여기서 보고, ADMIN 권한은 백엔드가 /api/admin/** 에서 본다.
+  "/admin",
 ] as const;
 
 export function isProtectedPath(pathname: string) {
