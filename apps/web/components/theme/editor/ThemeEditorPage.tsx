@@ -416,10 +416,12 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     공용 기기에서 앞 사람이 로그아웃하지 않고 떠나도, 다음 사람이 그 사진이 든 초안을 복원하지
     않게 하려면 지금 계정을 알아야 한다. 모르면 복원도 자동 저장도 하지 않는다 — 주인 없는
     초안을 남기는 것보다 이번 편집의 자동 저장을 건너뛰는 편이 안전하다.
+
+    저장본 수정에서도 알아 둔다 — 서버 초안(useServerFrameDraft)이 계정을 알아야 켜진다. 로컬 초안의
+    복원·자동 저장·삭제는 각자 remoteFrameId 를 보고 새 프레임에서만 돈다.
   */
   const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
   useEffect(() => {
-    if (remoteFrameId) return;
     let cancelled = false;
     void getMyUserInfo()
       .then((user) => {
@@ -429,7 +431,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     return () => {
       cancelled = true;
     };
-  }, [remoteFrameId]);
+  }, []);
 
   // 다른 기기에서 이어 편집하는 서버 초안(F1-5). 같은 기기의 새로고침 복구는 아래 로컬 초안이 맡는다.
   const serverDraft = useServerFrameDraft({
@@ -631,7 +633,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       stopDraftAutosaveRef.current?.();
-      if (draftOwnerId) discardEditorDraft(draftOwnerId, frameId);
+      // 로컬 초안은 새 프레임 것이다. 저장본을 고치다 지우면 같은 판형의 새 프레임 초안이 사라진다.
+      if (draftOwnerId && !remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
       void serverDraft.finish();
       // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
       // /theme로 나가는 길에도 경고가 뜬다.
@@ -735,7 +738,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             onBackClick={() => {
               stopDraftAutosaveRef.current?.();
               useThemeEditorStore.getState().reset();
-              if (draftOwnerId) discardEditorDraft(draftOwnerId, frameId);
+              if (draftOwnerId && !remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
               void serverDraft.finish();
             }}
             rightSlot={
