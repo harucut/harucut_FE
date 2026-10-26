@@ -8,7 +8,7 @@ export const useShootPersistence = create<{ ready: boolean; error: boolean }>(()
 let initialization: Promise<void> | undefined;
 let queue = Promise.resolve();
 let revision = 0;
-const FIELDS = ["frameId", "remoteFrameId", "source", "shots", "shotsFrameId", "selectedIndexes", "borderColor", "outputFilter", "composeIdempotency", "eventName"] as const;
+const FIELDS = ["frameId", "remoteFrameId", "source", "shots", "shotsFrameId", "selectedIndexes", "borderColor", "outputFilter", "composeIdempotency"] as const;
 // 삭제 실패 후 저장소가 다시 열려도 로그아웃 전의 사진을 복원하지 않는다.
 const CLEARED_KEY = "harucut:shoot-cleared-at";
 function clearedAt() {

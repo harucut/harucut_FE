@@ -40,7 +40,6 @@ const mockShootSession = {
   clearSelection: noop,
   setBorderColor: noop,
   setOutputFilter: noop,
-  eventName: null as string | null,
   source: "capture" as const,
 };
 

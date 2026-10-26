@@ -62,50 +62,36 @@ test("preserves the original query string in redirectTo", async ({ page }) => {
 });
 
 /**
- * 행사장 QR 로 들어온 참가자.
- *
- * 쿠키가 하나도 없는 새 브라우저로 도착하므로, 프록시가 여기서 막으면 "가입 없이 바로
- * 찍는다"는 행사 흐름이 정작 행사장에서만 동작하지 않는다.
+ * 옛 행사 QR 주소(`/shoot?event=`)는 걷어냈다. 행사는 `/e/{slug}` 로 옮겼고 배포한 QR 이 없어
+ * 호환하지 않는다(기획 R3·R4 검수 D01). 이 주소는 이제 평범한 `/shoot` 이다 — 쿠키가 없으면
+ * 로그인으로 가고, 체험 쿠키를 심지 않는다.
  */
-test("lets an event QR visitor shoot without signing up", async ({ page }) => {
+test("treats the retired event QR address as a plain protected shoot route", async ({ page }) => {
   await page.goto("/shoot?frame=classic-4&event=%EC%97%AC%EB%A6%84%20%ED%8C%AC%EB%AF%B8%ED%8C%85");
 
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
-  await expect(page.getByText("여름 팬미팅")).toBeVisible();
-
-  // 다음 단계로 이어질 수 있도록 비회원 체험 쿠키가 심겨야 한다.
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
   const cookies = await page.context().cookies();
-  expect(
-    cookies.find((cookie) => cookie.name === "harucut_guest_trial")?.value,
-  ).toBe("1");
+  expect(cookies.find((cookie) => cookie.name === "harucut_guest_trial")).toBeUndefined();
 });
 
-// event 없이 오는 /shoot 은 그대로 로그인으로 보낸다(위 protectedRoutes 가 검증한다).
-
 /**
- * 촬영 화면에서 "프레임 다시 선택"으로 돌아와도 행사 맥락이 살아 있어야 한다.
+ * 촬영 화면에서 "프레임 다시 선택"으로 돌아와도 고른 컷 구성이 살아 있어야 한다.
  *
- * 돌아오는 주소에 행사 쿼리가 없으면 세션이 초기화되면서 행사 이름과 컷 구성이 함께
- * 사라졌다. 참가자가 구성을 한 번 바꿔보려다 행사에서 튕겨 나오는 셈이었다.
+ * 돌아오는 주소에 프레임 쿼리가 없으면 세션이 초기화되면서 컷 구성이 사라진다.
  */
-test("keeps the event context when going back to frame selection", async ({
-  page,
-}) => {
-  await page.goto("/shoot?frame=classic-4&event=%EC%97%AC%EB%A6%84%20%ED%8C%AC%EB%AF%B8%ED%8C%85");
-  await expect(page.getByText("여름 팬미팅")).toBeVisible();
+test("keeps the chosen frame when going back to frame selection", async ({ page }) => {
+  // 랜딩의 「가입 없이 체험하기」와 같은 진입이다 — 체험 쿠키를 받고 /shoot 으로 간다.
+  await page.goto("/shoot/start");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
 
   await page.getByRole("button", { name: "촬영 시작하기" }).click();
   await page.waitForURL("**/shoot/capture");
-  await expect(page.getByText("여름 팬미팅")).toBeVisible();
 
   await page.getByRole("link", { name: "프레임 다시 선택" }).click();
-  // `**/shoot**` 로 기다리면 아직 /shoot/capture 인 상태에서 바로 통과해, 검사가
-  // 촬영 화면의 배너를 다시 보는 꼴이 된다. 프레임 선택 화면에 도착한 것을 정확히 본다.
+  // `**/shoot**` 로 기다리면 아직 /shoot/capture 인 상태에서 바로 통과한다.
   await page.waitForURL((url) => new URL(url).pathname === "/shoot");
-  await expect(
-    page.getByRole("heading", { name: "프레임 선택" }),
-  ).toBeVisible();
-  await expect(page.getByText("여름 팬미팅")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "프레임 선택" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("frame")).not.toBeNull();
 });
 
 // 게스트 체험은 촬영까지다. 찍고 그 이미지를 받는 데까지만 열려 있다.
