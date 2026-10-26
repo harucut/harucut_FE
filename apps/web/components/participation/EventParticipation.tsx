@@ -113,14 +113,21 @@ export function EventParticipation({ slug }: { slug: string }) {
   const resetSession = useCallback((eventId: string) => {
     forgetParticipant(eventId);
     setSession(null);
+    // 자격이 끝났으면 그 자격으로 받은 결과 목록도 버린다(다음 참여에 이어 보이지 않게).
+    setResults([]);
     setStep({ kind: "intro" });
   }, []);
 
+  /**
+   * 이 행사에서 만든 결과 목록을 다시 받는다. 실패하면 **있던 목록을 그대로 둔다** — 일시적인 오류로 완성 사진이
+   * 사라지면 PENDING 이 없어져 자동 확인도 멈추고, 「다시 확인」도 목록 안에만 있어 다시 누를 수 없다(Codex #541).
+   */
   const loadResults = useCallback(async (token: string, eventId: string) => {
     try {
       setResults(await listParticipantResults(token, eventId));
+      return true;
     } catch {
-      setResults([]);
+      return false;
     }
   }, []);
 
@@ -284,7 +291,13 @@ export function EventParticipation({ slug }: { slug: string }) {
             onStart={onStartShooting}
             onShare={(jobId) => void onShareResult(jobId)}
             onDownload={(jobId) => void onDownloadResult(jobId)}
-            onRefresh={() => session && void loadResults(session.token, event.eventId)}
+            onRefresh={() => {
+              if (!session) return;
+              setError(null);
+              void loadResults(session.token, event.eventId).then((ok) => {
+                if (!ok) setError("사진 목록을 다시 확인하지 못했어요. 잠시 후 다시 눌러 주세요.");
+              });
+            }}
           />
         ) : null}
 
@@ -511,7 +524,7 @@ export function CaptureAndSend({
    * 서버가 회차를 열었다. 부스는 손님이 전송 전에 떠나도(유휴 종료) 이 회차를 닫아야 한다 — 접수가 끝난 뒤에야
    * 회차를 알면, 그 전에 끝난 손님의 회차와 참가자 세션이 서버에 열린 채 남는다(Codex 리뷰 #523).
    */
-  onRunOpened?: (run: CaptureRun) => void;
+  onRunOpened?: (run: CaptureRun, token: string) => void;
   onSessionEnded: () => void;
   onUnavailable: (cause: unknown) => void;
 }) {
@@ -540,7 +553,8 @@ export function CaptureAndSend({
     runRef.current = run;
     uploadedRef.current = Array(SHOT_COUNT).fill(null);
     idempotencyKeyRef.current = crypto.randomUUID();
-    onRunOpenedRef.current?.(run);
+    // 요청한 손님의 자격도 함께 넘긴다 — 늦게 끝난 앞 손님의 회차가 다음 손님에게 붙지 않게(부스).
+    onRunOpenedRef.current?.(run, token);
   }, [token, event.eventId]);
 
   /*

@@ -159,16 +159,21 @@ export function BoothScreen() {
     Boolean(device) && (phase.kind === "unavailable" || (phase.kind === "idle" && !event?.captureOpen));
   useEffect(() => {
     if (!waitingForEvent || !device) return;
+    // 대기 화면을 떠난 뒤(손님이 촬영을 시작함) 도착한 응답은 버린다 — 촬영 화면을 대기로 되돌리지 않게.
+    let cancelled = false;
     const timer = window.setInterval(() => {
       void getBoothMe(device.token)
         .then((me) => {
-          if (!me.event) return;
+          if (cancelled || !me.event) return;
           setEvent(me.event);
           setPhase({ kind: "idle" });
         })
         .catch(() => {});
     }, BOOTH_STATUS_POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [waitingForEvent, device]);
 
   // 유휴 종료: 손님 단계에서 손을 떼고 시간이 지나면 안내 뒤 처음으로.
@@ -301,7 +306,10 @@ export function BoothScreen() {
             frame={frame}
             sending={phase.kind === "sending" ? phase.progress : null}
             onProgress={(progress) => setPhase(progress ? { kind: "sending", progress } : { kind: "capture" })}
-            onRunOpened={(run) => setGuest((current) => (current ? { ...current, run } : current))}
+            onRunOpened={(run, runToken) =>
+              // 앞 손님의 회차 열림 응답이 다음 손님 뒤에 도착할 수 있다(유휴 종료 뒤). 그 손님의 것일 때만 반영한다.
+              setGuest((current) => (current && current.token === runToken ? { ...current, run } : current))
+            }
             onDone={(resultToken, run) => {
               setGuest((current) => (current ? { ...current, run } : current));
               setPhase({ kind: "result", resultToken });

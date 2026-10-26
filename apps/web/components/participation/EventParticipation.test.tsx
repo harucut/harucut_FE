@@ -276,5 +276,24 @@ describe("Codex 리뷰 반영(#523)", () => {
     });
     expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
   });
+
+  // Codex 리뷰(#541): 수동 갱신이 잠깐 실패했다고 완성 사진 목록까지 지우면 다시 누를 버튼도 사라진다.
+  it("다시 확인이 실패해도 있던 사진 목록은 그대로 두고 알린다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([
+      { jobId: 8, status: "DONE" },
+      { jobId: 9, status: "PENDING" },
+    ]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
+
+    api.listParticipantResults.mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }));
+    fireEvent.click(screen.getByRole("button", { name: "다시 확인" }));
+
+    expect(await screen.findByText("사진 목록을 다시 확인하지 못했어요. 잠시 후 다시 눌러 주세요.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+  });
 });
 

@@ -26,15 +26,20 @@ jest.mock("@/components/participation/EventParticipation", () => {
   return {
     ...actual,
     CaptureAndSend: ({
+      token,
       onDone,
       onRunOpened,
     }: {
+      token: string;
       onDone: (token: string, run: unknown) => void;
-      onRunOpened?: (run: unknown) => void;
+      onRunOpened?: (run: unknown, token: string) => void;
     }) => (
       <>
-        <button type="button" onClick={() => onRunOpened?.({ captureRunId: "run-7", stateVersion: 4 })}>
+        <button type="button" onClick={() => onRunOpened?.({ captureRunId: "run-7", stateVersion: 4 }, token)}>
           회차 열림
+        </button>
+        <button type="button" onClick={() => onRunOpened?.({ captureRunId: "run-old", stateVersion: 1 }, "guest-old")}>
+          앞 손님 회차 열림
         </button>
         <button type="button" onClick={() => onDone("R".repeat(43), { captureRunId: "run-7", stateVersion: 4 })}>
           전송 끝
@@ -181,5 +186,50 @@ describe("Codex 리뷰 반영(#523)", () => {
     });
     expect(screen.getByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
   });
+
 });
 
+describe("Codex 리뷰 반영(#541)", () => {
+  // 늦게 끝난 앞 손님의 회차 열림이 지금 손님의 회차를 덮으면, 다음 손님에서 엉뚱한 회차를 닫는다.
+  it("다른 손님의 회차 열림 응답은 지금 손님에게 붙이지 않는다", async () => {
+    jest.useFakeTimers();
+    pairDevice();
+    render(<BoothScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
+    fireEvent.click(await screen.findByRole("button", { name: "회차 열림" }));
+    fireEvent.click(screen.getByRole("button", { name: "앞 손님 회차 열림" }));
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(BOOTH_IDLE_MS + 2_000);
+    });
+    expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-7", 4);
+    expect(api.closeBoothRun).not.toHaveBeenCalledWith("b-token", "run-old", 1);
+  });
+
+  // 대기 화면 폴링 응답이 30초 넘게 걸려 겹치면, 늦은 응답이 촬영 중인 화면을 대기로 되돌렸다.
+  it("대기 화면을 떠난 뒤 도착한 상태 응답은 무시한다", async () => {
+    jest.useFakeTimers();
+    pairDevice();
+    const closed = { deviceId: "d-1", status: "ACTIVE", event: { ...eventInfo(), captureOpen: false } };
+    const open = { deviceId: "d-1", status: "ACTIVE", event: eventInfo() };
+    let releaseSlow: (value: unknown) => void = () => {};
+    api.getBoothMe
+      .mockResolvedValueOnce(closed)
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseSlow = resolve; }))
+      .mockResolvedValueOnce(open);
+    render(<BoothScreen />);
+    expect(await screen.findByText("지금은 촬영 시간이 아니에요.")).toBeInTheDocument();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(BOOTH_STATUS_POLL_MS * 2);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+    expect(await screen.findByRole("button", { name: "동의하고 계속" })).toBeInTheDocument();
+
+    await act(async () => releaseSlow(open));
+    expect(screen.getByRole("button", { name: "동의하고 계속" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "촬영 시작" })).not.toBeInTheDocument();
+  });
+});
