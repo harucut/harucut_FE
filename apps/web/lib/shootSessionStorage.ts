@@ -8,7 +8,7 @@ import type { ShootSessionState } from "@/lib/shootSessionStore";
 
 export type ShootDraft = Pick<ShootSessionState,
   "frameId" | "remoteFrameId" | "source" | "shots" | "shotsFrameId" |
-  "selectedIndexes" | "borderColor" | "outputFilter" | "composeIdempotency" | "eventName">;
+  "selectedIndexes" | "borderColor" | "outputFilter" | "composeIdempotency">;
 export const SHOOT_DRAFT_TTL = 24 * 60 * 60 * 1000;
 const STORE = "session";
 const META = "meta";
@@ -22,7 +22,7 @@ function encodeDraft(draft: ShootDraft, keys: string[], now: number): StoredDraf
   // Zustand 상태에는 함수도 있다. Pick 타입은 런타임 필드를 제거하지 않으므로
   // 나머지 전개(...meta)로 쓰면 IndexedDB가 DataCloneError로 전체 저장을 거부한다.
   const { shots, composeIdempotency, frameId, remoteFrameId, source, shotsFrameId,
-    selectedIndexes, borderColor, outputFilter, eventName } = draft;
+    selectedIndexes, borderColor, outputFilter } = draft;
   let composition = null;
   if (composeIdempotency) {
     try {
@@ -34,7 +34,7 @@ function encodeDraft(draft: ShootDraft, keys: string[], now: number): StoredDraf
     } catch { /* 이전 입력이 현재 사진을 가리키지 않으면 복원할 멱등키도 없다. */ }
   }
   return { frameId, remoteFrameId, source, shotsFrameId, selectedIndexes, borderColor,
-    outputFilter, eventName, composeIdempotency: composition, shotKeys: keys, savedAt: now };
+    outputFilter, composeIdempotency: composition, shotKeys: keys, savedAt: now };
 }
 
 function validMeta(value: unknown, now: number): value is StoredDraft {
@@ -50,8 +50,9 @@ function validMeta(value: unknown, now: number): value is StoredDraft {
     Array.isArray(meta.selectedIndexes) && meta.selectedIndexes.length === 4 &&
     meta.selectedIndexes.every((index) => index === null || (Number.isInteger(index) && index >= 0 && index < meta.shotKeys.length)) &&
     typeof meta.borderColor === "string" && /^#?[a-f\d]{6}$/i.test(meta.borderColor) &&
-    FOURCUT_FILTERS.some((filter) => filter.id === meta.outputFilter) &&
-    (meta.eventName === null || (typeof meta.eventName === "string" && meta.eventName.length <= 200));
+    // 옛 `eventName` 필드는 보지 않는다. 그 검사를 남기면 필드가 든 옛 초안이 「무효」가 되어
+    // 사진째 지워진다(기획 R5 D01 「무관한 개인 초안을 통째로 지우지 않는다」).
+    FOURCUT_FILTERS.some((filter) => filter.id === meta.outputFilter);
 }
 
 export async function readShootDraft(now = Date.now()): Promise<ShootDraft | null> {
@@ -91,7 +92,7 @@ export async function readShootDraft(now = Date.now()): Promise<ShootDraft | nul
       frameId: meta.frameId, remoteFrameId: meta.remoteFrameId, source: meta.source,
       shots, shotsFrameId: meta.shotsFrameId, selectedIndexes: meta.selectedIndexes,
       borderColor: meta.borderColor, outputFilter: meta.outputFilter,
-      eventName: meta.eventName, composeIdempotency: composition,
+      composeIdempotency: composition,
     };
   } finally { db.close(); }
 }
