@@ -76,6 +76,8 @@ export type RemoteFrameBackground =
   | {
       type: "IMAGE";
       key?: string;
+      /** 배경 이미지 자산 public id(ADR-0006 §2). 요청에 있으면 서버가 그 자산의 key 를 쓴다. */
+      assetId?: string;
       opacity?: number;
       // 서버가 채워 주는 조회용 서명 URL(응답 전용). 요청에 실어도 무시된다.
       url?: string;
@@ -101,6 +103,10 @@ export type RemoteFrameComponent = {
   /** TEXT 의 구운 글자 층 key·조회 URL. 예전 서버는 내려주지 않았다(그땐 다시 저장할 때마다 다시 구웠다). */
   renderedKey?: string;
   renderedUrl?: string;
+  /** PHOTO·STICKER 를 자산으로 저장했으면 그 public id. */
+  assetId?: string | null;
+  /** TEXT 의 구운 PNG 를 자산으로 저장했으면 그 public id. */
+  renderedAssetId?: string | null;
 };
 
 // GET /api/auth/user/frame 응답.
