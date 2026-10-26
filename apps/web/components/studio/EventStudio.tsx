@@ -12,6 +12,8 @@ import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
 import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
 import { CloneEventForm } from "@/components/studio/CloneEventForm";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
+import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
+import { compactPageTheme, parsePageTheme, type PageTheme } from "@/lib/event/pageTheme";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { frameIdFromFrameType } from "@/lib/frameApi";
@@ -51,6 +53,7 @@ type Form = {
   consents: ConsentDraft[];
   frames: FrameRef[];
   retentionDays: string;
+  theme: PageTheme;
 };
 
 function formOf(settings: EventSettings): Form {
@@ -65,11 +68,12 @@ function formOf(settings: EventSettings): Form {
     consents: (settings.consentItems ?? []).map(({ code, title, body, required }) => ({ code, title, body, required })),
     frames: [...(settings.frames ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
     retentionDays: String(settings.resultRetentionDays ?? DEFAULT_RETENTION_DAYS),
+    theme: parsePageTheme(settings.theme),
   };
 }
 
 /**
- * 폼 → PATCH 본문. 테마는 이 화면이 다루지 않으므로 보내지 않는다(보낸 필드만 바뀐다).
+ * 폼 → PATCH 본문. 테마는 빈 값을 뺀 모양으로 보내고, 꾸민 것이 없으면 null(테마 없음)이다.
  *
  * 동의 항목의 version 은 **문구가 바뀌었을 때만** 올린다. 참가자 동의 기록은 「어느 버전의 문구」에
  * 대한 것이라, 같은 문구에 새 버전을 매기면 기록이 가리키는 문구가 흐려지고, 바꾼 문구에 옛 버전을
@@ -93,6 +97,7 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
       return { ...c, version: before ? before.version + (changed ? 1 : 0) : 1 };
     }),
     resultRetentionDays: Number.isFinite(retention) && retention > 0 ? retention : null,
+    theme: compactPageTheme(form.theme),
   };
 }
 
@@ -123,6 +128,8 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [violations, setViolations] = useState<ViolationGroup[]>([]);
   const [confirmClose, setConfirmClose] = useState(false);
   const [cloning, setCloning] = useState(false);
+  // 행사 화면 꾸미기에서 로고·배경을 올리는 중이면 저장을 막는다. 저장 응답(저장 시점 폼)이 업로드 결과를 덮는다.
+  const [themeUploading, setThemeUploading] = useState(false);
 
   const accept = useCallback((event: StudioEvent) => {
     setLoad({ state: "ready", event });
@@ -285,7 +292,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
           className="flex flex-col gap-6"
           onSubmit={(e) => {
             e.preventDefault();
-            if (dirty && busy === null) void save();
+            if (dirty && busy === null && !themeUploading) void save();
           }}
         >
           <fieldset disabled={!editable || busy !== null} className="flex flex-col gap-6">
@@ -423,6 +430,19 @@ export function EventStudio({ eventId }: { eventId: string }) {
               </button>
             </Section>
 
+            <Section
+              title="행사 화면 꾸미기"
+              description="참가 · 부스 · 결과 화면에 보이는 색과 글꼴, 로고, 문구예요. 게시하면 참가자 화면에 반영돼요."
+            >
+              <StudioPageTheme
+                workspaceId={event.workspaceId}
+                value={form.theme}
+                // 최신 폼 위에 적용한다 — 업로드를 기다리는 사이 바꾼 이름 등 테마 밖의 칸도 되돌리지 않게.
+                onUploadingChange={setThemeUploading}
+                onChange={(apply) => setForm((current) => (current ? { ...current, theme: apply(current.theme) } : current))}
+              />
+            </Section>
+
             <Section title="결과 보관">
               <Field label="보관 일수" help="참가자가 결과 링크로 다시 내려받을 수 있는 기간이에요.">
                 <input
@@ -463,10 +483,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
           {editable ? (
             <button
               type="submit"
-              disabled={!dirty || busy !== null}
+              disabled={!dirty || busy !== null || themeUploading}
               className="hc-button-primary h-11 self-start rounded-full px-5 text-[14px] font-semibold disabled:opacity-50"
             >
-              {busy === "save" ? "저장하는 중…" : "설정 저장"}
+              {busy === "save" ? "저장하는 중…" : themeUploading ? "이미지 올리는 중…" : "설정 저장"}
             </button>
           ) : null}
         </form>

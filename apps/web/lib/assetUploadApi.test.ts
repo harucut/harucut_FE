@@ -62,6 +62,22 @@ describe("uploadAsset", () => {
     expect(mockPost).toHaveBeenNthCalledWith(2, "/api/client/assets/As1/complete");
   });
 
+  // 행사 테마의 로고·배경은 공간 자산이다 — 어느 공간인지 함께 보내야 그 공간의 게시 검사를 통과한다.
+  it("공간 자산이면 workspaceId 를 의도에 싣는다", async () => {
+    mockPost
+      .mockResolvedValueOnce(ok(INTENT))
+      .mockResolvedValueOnce(ok({ assetId: "As1", status: "VERIFIED", key: "uploads/w/a.png" }));
+    const file = new File(["png"], "logo.png", { type: "image/png" });
+    await uploadAsset({ file, purpose: "PAGE_THEME_ASSET", workspaceId: "Ws1" });
+    expect(mockPost).toHaveBeenNthCalledWith(1, "/api/client/assets/upload-intents", {
+      purpose: "PAGE_THEME_ASSET",
+      contentType: "PNG",
+      filename: "logo.png",
+      fileSize: file.size,
+      workspaceId: "Ws1",
+    });
+  });
+
   it("검증이 붐비면(ASSET-006) 잠시 뒤 완료 확인을 다시 부른다", async () => {
     jest.useFakeTimers();
     mockPost

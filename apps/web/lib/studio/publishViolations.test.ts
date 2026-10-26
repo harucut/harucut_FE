@@ -16,10 +16,20 @@ describe("게시 위반 묶기", () => {
 
   it("모르는 field 는 일반 문구로 맨 뒤에 둔다", () => {
     const groups = groupViolations([
-      { field: "theme", reason: "x" },
+      { field: "somethingNew", reason: "x" },
       { field: "allowedLayouts", reason: "y" },
     ]);
-    expect(groups.map((g) => g.key)).toEqual(["allowedLayouts", "theme"]);
+    expect(groups.map((g) => g.key)).toEqual(["allowedLayouts", "somethingNew"]);
     expect(groups[1].message).toBe("설정을 다시 확인해 주세요.");
+  });
+
+  it("테마 위반(theme.colors.bg 등)은 행사 화면 꾸미기 하나로 묶는다", () => {
+    const groups = groupViolations([
+      { field: "theme.colors.bg", reason: "#RRGGBB 형식이어야 한다" },
+      { field: "theme.branding.hideHarucutBranding", reason: "이용권 기능 WHITE_LABEL 이 있어야 숨길 수 있다" },
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].message).toMatch(/^행사 화면 꾸미기를 확인해 주세요/);
+    expect(groups[0].reasons).toHaveLength(2);
   });
 });

@@ -24,10 +24,11 @@ import { withRequestDeadline } from "@/lib/requestDeadline";
  * 맞아야 VERIFIED 가 되고, VERIFIED 자산만 프레임에 쓸 수 있다(아니면 저장이 400 FRAME-005).
  * 그래서 이 경로로 올린 key 는 남의 key 를 끼워 넣거나 깨진 파일을 넣는 일이 서버에서 막힌다.
  *
- * 이 경로를 쓰는 곳: 편집기의 PHOTO·STICKER·배경(`FRAME_ASSET`)과 구운 글자(`TEXT_RENDER`).
+ * 이 경로를 쓰는 곳: 편집기의 PHOTO·STICKER·배경(`FRAME_ASSET`)과 구운 글자(`TEXT_RENDER`),
+ * Studio 행사 테마의 로고·배경(`PAGE_THEME_ASSET` — 공간 자산이라 workspaceId 를 함께 보낸다).
  * 미리보기 PNG 는 해당 용도가 없어 presigned 로 남는다.
  */
-export type AssetPurpose = "FRAME_ASSET" | "TEXT_RENDER";
+export type AssetPurpose = "FRAME_ASSET" | "TEXT_RENDER" | "PAGE_THEME_ASSET";
 
 type AssetContentType = "PNG" | "JPEG";
 
@@ -35,6 +36,7 @@ type AssetContentType = "PNG" | "JPEG";
 const ALLOWED_TYPES: Record<AssetPurpose, readonly AssetContentType[]> = {
   FRAME_ASSET: ["PNG", "JPEG"],
   TEXT_RENDER: ["PNG"],
+  PAGE_THEME_ASSET: ["PNG", "JPEG"],
 };
 
 type UploadIntentData = {
@@ -143,7 +145,12 @@ async function completeAsset(assetId: string): Promise<AssetData> {
 }
 
 /** 업로드 의도 → S3 PUT → 완료 확인. VERIFIED 가 아니면 던진다. */
-export async function uploadAsset(opts: { file: File; purpose: AssetPurpose }): Promise<UploadedAsset> {
+export async function uploadAsset(opts: {
+  file: File;
+  purpose: AssetPurpose;
+  /** 공간 자산이면 그 공간의 public id. 없으면 개인 공간. */
+  workspaceId?: string;
+}): Promise<UploadedAsset> {
   const file = await toAssetFile(opts.file, opts.purpose);
   if (file.size < MIN_UPLOAD_BYTES) throw new UploadValidationError(EMPTY_UPLOAD_MESSAGE);
   if (file.size > MAX_UPLOAD_BYTES) throw new UploadValidationError(UPLOAD_TOO_LARGE_MESSAGE);
@@ -151,7 +158,13 @@ export async function uploadAsset(opts: { file: File; purpose: AssetPurpose }): 
   const { contentType, filename } = resolveUpload(file);
   const intentRes = await clientApi.post<ApiEnvelope<UploadIntentData>>(
     "/api/client/assets/upload-intents",
-    { purpose: opts.purpose, contentType, filename, fileSize: file.size },
+    {
+      purpose: opts.purpose,
+      contentType,
+      filename,
+      fileSize: file.size,
+      ...(opts.workspaceId ? { workspaceId: opts.workspaceId } : {}),
+    },
   );
   const intent = requireData(intentRes.data, "업로드 주소");
 
@@ -174,4 +187,10 @@ export async function uploadAsset(opts: { file: File; purpose: AssetPurpose }): 
     });
   }
   return { assetId: asset.assetId, key: asset.key, ...(asset.url ? { url: asset.url } : {}) };
+}
+
+/** 자산 하나의 상태. VERIFIED 면 짧은 조회 URL(기본 5분)이 실린다. */
+export async function getAsset(assetId: string): Promise<AssetData> {
+  const res = await clientApi.get<ApiEnvelope<AssetData>>(`/api/client/assets/${encodeURIComponent(assetId)}`);
+  return requireData(res.data, "자산");
 }

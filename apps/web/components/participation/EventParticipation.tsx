@@ -30,6 +30,7 @@ import type {
   PublicEvent,
 } from "@/lib/event/types";
 import { useEventCamera } from "@/components/participation/useEventCamera";
+import { EventLogo, EventSurface, useEventCopy } from "@/components/participation/EventSurface";
 
 /**
  * 개인 휴대폰 참가 `/e/{slug}`(기획 R5 4절, ADR-0007 §5).
@@ -277,8 +278,12 @@ export function EventParticipation({ slug }: { slug: string }) {
   };
 
   return (
-    <main className="ev-surface flex min-h-dvh flex-col items-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+    <EventSurface
+      theme={event?.theme}
+      className="flex min-h-dvh flex-col items-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8"
+    >
       <div className="flex w-full max-w-md flex-col gap-5">
+        <EventLogo />
         <h1 className="text-[24px] font-extrabold">{event?.name ?? "행사 촬영"}</h1>
 
         {step.kind === "loading" ? (
@@ -340,18 +345,16 @@ export function EventParticipation({ slug }: { slug: string }) {
           />
         ) : null}
       </div>
-    </main>
+    </EventSurface>
   );
 }
 
 function IntroStep({ event, onJoin }: { event: PublicEvent; onJoin: () => void }) {
+  const welcome = useEventCopy("welcome", "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.");
+  const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요. 받은 사진은 그대로 다시 받을 수 있어요.");
   return (
     <section className="flex flex-col gap-4">
-      {!event.captureOpen ? (
-        <p className="text-[15px] text-(--ev-muted)">지금은 촬영 시간이 아니에요. 받은 사진은 그대로 다시 받을 수 있어요.</p>
-      ) : (
-        <p className="text-[15px] text-(--ev-muted)">휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.</p>
-      )}
+      <p className="text-[15px] text-(--ev-muted)">{event.captureOpen ? welcome : closed}</p>
       <button
         type="button"
         onClick={onJoin}
@@ -371,10 +374,11 @@ export function ConsentStep({
   onSubmit: (decisions: Record<string, boolean>) => void;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const intro = useEventCopy("consentIntro", "사진을 받는 곳과 쓰는 목적, 보관 기간을 확인해 주세요.");
   const missingRequired = items.some((item) => item.required && !checked[item.code]);
   return (
     <section className="flex flex-col gap-4">
-      <p className="text-[15px]">사진을 받는 곳과 쓰는 목적, 보관 기간을 확인해 주세요.</p>
+      <p className="text-[15px]">{intro}</p>
       <ul className="flex flex-col gap-3">
         {items.map((item) => (
           <li key={`${item.code}:${item.version}`} className="rounded-2xl border border-(--ev-border) bg-(--ev-card) p-4">
@@ -423,6 +427,7 @@ function HomeStep({
   onDownload: (jobId: number) => void;
   onRefresh: () => void;
 }) {
+  const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요.");
   return (
     <section className="flex flex-col gap-4">
       {captureOpen ? (
@@ -434,7 +439,7 @@ function HomeStep({
           촬영 시작
         </button>
       ) : (
-        <p className="text-[15px] text-(--ev-muted)">지금은 촬영 시간이 아니에요.</p>
+        <p className="text-[15px] text-(--ev-muted)">{closed}</p>
       )}
       {results.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -672,6 +677,7 @@ export function CaptureAndSend({
   };
 
   const allTaken = nextEmpty < 0;
+  const guide = useEventCopy("captureGuide", "");
 
   // "error" 는 다른 앱이 카메라를 쥐고 있는 경우 등이다(NotReadableError). 안내 없이 두면 검은 화면과 꺼진
   // 촬영 버튼만 남아, 카메라가 풀려도 새로고침 말고는 돌아올 길이 없었다(Codex 리뷰 #523).
@@ -694,6 +700,7 @@ export function CaptureAndSend({
 
   return (
     <section className="flex flex-col gap-4">
+      {guide ? <p className="text-[15px]">{guide}</p> : null}
       <div className="relative overflow-hidden rounded-2xl bg-black" style={{ aspectRatio: String(slotAspectOf(frame)) }}>
         <video ref={videoRef} playsInline muted className="size-full -scale-x-100 object-cover" />
         {countdown !== null && countdown > 0 ? (

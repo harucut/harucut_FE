@@ -137,6 +137,32 @@ it("요청이 너무 잦으면(GEN-061) 안내하고 다시 확인을 둔다", a
   expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
 });
 
+// P2B-4 — 결과 화면도 그 결과가 만들어진 경험 버전의 행사 테마로 그린다.
+it("행사 테마의 색·로고·문구로 그린다", async () => {
+  window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+  mockGetResult.mockResolvedValue({
+    ...done(),
+    theme: {
+      colors: { bg: "#FFF8F3", accent: "#C8553D" },
+      font: "SYSTEM",
+      logoUrl: "https://bucket/logo.png",
+      copy: { done: "와 주셔서 고마워요!" },
+      branding: { hideHarucutBranding: false, outputLogo: "NONE" },
+    },
+  });
+  render(<ResultReceiver />);
+  expect(await screen.findByText("와 주셔서 고마워요!")).toBeInTheDocument();
+  expect(screen.getByRole("main")).toHaveStyle({ "--ev-bg": "#FFF8F3", "--ev-accent": "#C8553D" });
+  expect(screen.getByAltText("행사 로고")).toHaveAttribute("referrerpolicy", "no-referrer");
+});
+
+it("주최자 문구가 없는 화면은 기본 문구를 쓴다", async () => {
+  window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+  mockGetResult.mockResolvedValue({ ...done(), status: "EXPIRED", thumbnailUrl: null, theme: { copy: { done: "x" } } });
+  render(<ResultReceiver />);
+  expect(await screen.findByText("사진을 받을 수 있는 기간이 지났어요.")).toBeInTheDocument();
+});
+
 // Codex 리뷰(#523): 저장을 누른 뒤 다른 결과 링크로 바뀌면 이전 요청의 응답이 새 화면에 닿았다.
 it("결과 링크가 바뀐 뒤 도착한 이전 저장 응답은 쓰지 않는다", async () => {
   window.history.replaceState({}, "", `/r#${TOKEN_A}`);
