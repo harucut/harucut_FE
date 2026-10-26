@@ -50,8 +50,8 @@ export async function getEventPhotoDownload(eventId: string, photoId: number): P
   return requireData(res.data, "내려받기 주소");
 }
 
-export async function deleteEventPhoto(eventId: string, photoId: number): Promise<void> {
-  await clientApi.delete(`/api/client/events/${encodeURIComponent(eventId)}/photos/${photoId}`);
+export async function deleteEventPhoto(eventId: string, photoId: number, signal?: AbortSignal): Promise<void> {
+  await clientApi.delete(`/api/client/events/${encodeURIComponent(eventId)}/photos/${photoId}`, { signal });
 }
 
 /** 설정 · 테마 · 제공 프레임만 새 초안으로 복제한다. 사진 · 참가자 · 고객 · 부스는 복제하지 않는다. */
