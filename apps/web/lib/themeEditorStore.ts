@@ -188,6 +188,8 @@ type State = {
 
   setActive: (id: string | null) => void;
   updateComponent: (id: string, patch: UpdatePatch) => void;
+  /** 손잡이를 끌지 않고 움직이는 대체 조작(이동 버튼·방향키). 잠긴 레이어는 움직이지 않는다. */
+  nudge: (id: string, dx: number, dy: number) => void;
 
   remove: (id: string) => void;
   duplicate: (id: string) => void;
@@ -894,6 +896,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         return { ...c, ...p, zIndex: c.zIndex, styleJson: nextStyle };
       }),
     }));
+  },
+
+  nudge: (id, dx, dy) => {
+    const target = get().components.find((c) => c.id === id);
+    if (!target || target.locked) return;
+    // x·y 를 함께 넘겨 연달아 누른 이동이 되돌리기 한 단계로 묶이게 한다(record 의 묶음 키).
+    get().updateComponent(id, { x: target.x + dx, y: target.y + dy });
   },
 
   // 삭제는 되돌리기(undo)로 원래 쌓임 순서 그대로 돌아온다 — 이력이 레이어 배열 전체를 든다.

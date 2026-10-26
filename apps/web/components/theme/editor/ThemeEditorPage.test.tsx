@@ -49,6 +49,8 @@ const editorStoreState = {
   hydrateDraft: jest.fn(),
   undo: jest.fn(),
   redo: jest.fn(),
+  nudge: jest.fn(),
+  activeId: null as string | null,
 };
 
 function themeEditorStoreMock(selector: (s: typeof editorStoreState) => unknown) {
@@ -754,5 +756,46 @@ describe("ThemeEditorPage 초안 복원과 계정", () => {
     await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
     await act(async () => {});
     expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("ThemeEditorPage 방향키 이동", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.activeId = "layer-1";
+  });
+
+  afterEach(() => {
+    editorStoreState.activeId = null;
+  });
+
+  it.each([
+    ["ArrowLeft", false, [-10, 0]],
+    ["ArrowDown", false, [0, 10]],
+    ["ArrowRight", true, [50, 0]],
+  ] as const)("%s(Shift %s) 는 고른 레이어를 움직인다", (key, shiftKey, [dx, dy]) => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.keyDown(window, { key, shiftKey });
+    expect(editorStoreState.nudge).toHaveBeenCalledWith("layer-1", dx, dy);
+  });
+
+  it("고른 레이어가 없으면 방향키를 가로채지 않는다", () => {
+    editorStoreState.activeId = null;
+    render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+  });
+
+  it("입력 칸의 방향키는 그대로 둔다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+    input.remove();
   });
 });
