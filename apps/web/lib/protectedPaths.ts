@@ -4,6 +4,8 @@ export const PROTECTED_PATHS = [
   "/history",
   "/theme",
   "/mypage",
+  // 고객용 Studio(행사 운영). 운영자 API 는 조직 공간 역할을 서버가 다시 본다.
+  "/studio",
 ] as const;
 
 export function isProtectedPath(pathname: string) {
