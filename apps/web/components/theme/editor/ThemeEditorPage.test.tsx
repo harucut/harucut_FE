@@ -47,6 +47,7 @@ const editorStoreState = {
   frameId: "classic",
   finalizeAssetsForSave: jest.fn().mockResolvedValue(undefined),
   hydrateDraft: jest.fn(),
+  past: [] as unknown[],
   undo: jest.fn(),
   redo: jest.fn(),
   nudge: jest.fn(),
@@ -759,6 +760,12 @@ describe("ThemeEditorPage 초안 복원과 계정", () => {
     mockRemoteFrameId = null;
     editorStoreState.components = [];
     editorStoreState.background = { type: "COLOR", value: "111827" };
+    editorStoreState.past = [];
+  });
+
+  afterEach(() => {
+    editorStoreState.past = [];
+    jest.useRealTimers();
   });
 
   async function stashDraft(ownerId: string) {
@@ -772,6 +779,27 @@ describe("ThemeEditorPage 초안 복원과 계정", () => {
       now: Date.now(),
     });
   }
+
+  // 계정 조회가 끝나기 전에 배경색만 바꾼 경우다 — 자동 저장 구독은 아직 그 변경을 못 봤다.
+  it("계정을 알기 전에 한 편집도 초안에 남긴다", async () => {
+    jest.useFakeTimers();
+    editorStoreState.past = [{}];
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await act(async () => {}); // 계정 조회 응답
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1200);
+    });
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
+  });
+
+  it("계정을 알기 전에 편집을 시작했으면 예전 초안으로 덮지 않는다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    editorStoreState.past = [{}];
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
 
   it("내 계정의 초안을 복원한다", async () => {
     await stashDraft(DRAFT_OWNER);
