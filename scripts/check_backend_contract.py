@@ -18,6 +18,16 @@
     python3 scripts/check_backend_contract.py --base-url http://localhost:8080
   운영 스펙과 맞춰 볼 때(스펙을 읽기만 한다):
     python3 scripts/check_backend_contract.py --base-url https://api.harucut.com
+  백엔드 develop 이 남긴 계약 산출물과 맞춰 볼 때(CI 가 쓰는 기준, 아래 「산출물 기준」):
+    python3 scripts/check_backend_contract.py \
+      --spec https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/openapi.generated.json \
+      --error-codes https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/error-codes.generated.json
+
+산출물 기준 — develop 에서는 프론트가 운영보다 앞선다. 운영 스웨거와만 대조하면 아직 배포하지 않은
+API 의 BFF 경로가 전부 「백엔드에 없다」로 떨어진다. 그래서 백엔드 develop 이 같은 커밋의
+/v3/api-docs 와 ErrorCode 전체를 파일로 남기고(ApiContractSnapshotTest 가 「파일 = 실제」를
+지킨다), 여기서 그 파일과 대조한다(기획 R5 15절). --spec 은 --base-url 보다 우선한다.
+--error-codes 를 주면 C 는 그 목록을 서버 기준으로 쓴다 — jar·스웨거 예시보다 정확하다.
 
 에러코드는 컨테이너가 떠 있으면 **실행 중인 jar 의 ErrorCode enum** 에서 뽑는다.
 스웨거 응답 예시에만 의존하면 문서화되지 않은 코드(GEN-091 같은 5xx)를 죽은 항목으로
@@ -72,6 +82,30 @@ def fetch_spec(base_url: str) -> dict:
         print(f"✖ 백엔드 스펙을 못 읽었다: {url}\n  {exc}")
         print("  백엔드를 먼저 띄울 것 — docs/local-backend.md")
         raise SystemExit(2)
+
+
+def load_json(source: str) -> object:
+    """URL 이면 받아 오고, 아니면 파일로 읽는다."""
+    try:
+        if re.match(r"^https?://", source):
+            with urllib.request.urlopen(source, timeout=20) as res:
+                return json.loads(res.read().decode("utf-8"))
+        with open(source, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:  # noqa: BLE001
+        print(f"✖ 계약 산출물을 못 읽었다: {source}\n  {exc}")
+        raise SystemExit(2)
+
+
+def artifact_error_codes(source: str) -> set[str]:
+    """백엔드 산출물(error-codes.generated.json)의 [{code, status, message}] 에서 코드를 뽑는다."""
+    data = load_json(source)
+    if not isinstance(data, list):
+        print(f"✖ 오류 코드 산출물 형식이 목록이 아니다: {source}")
+        raise SystemExit(2)
+    codes = {str(item.get("code")) for item in data if isinstance(item, dict) and item.get("code")}
+    codes.discard("GEN-000")
+    return codes
 
 
 def normalize(path: str) -> str:
@@ -482,6 +516,8 @@ def check_required_fields(spec, backend, fe_routes, backend_norm):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default=os.environ.get("HARUCUT_API", "http://localhost:8080"))
+    ap.add_argument("--spec", help="OpenAPI JSON 의 URL 또는 파일. 주면 --base-url 의 스펙 대신 쓴다")
+    ap.add_argument("--error-codes", help="백엔드 ErrorCode 산출물(JSON 목록)의 URL 또는 파일")
     ap.add_argument(
         "--show-required",
         action="store_true",
@@ -489,7 +525,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    spec = fetch_spec(args.base_url)
+    spec = load_json(args.spec) if args.spec else fetch_spec(args.base_url)
     backend = collect_backend(spec)
     backend_norm = {(m, normalize(p)): p for (m, p) in backend}
     fe_routes = collect_fe_routes()
@@ -521,8 +557,10 @@ def main() -> int:
     # jar 는 로컬 컨테이너(harucut-app)의 것이다. 운영을 대조하며 읽으면 운영 스펙 ↔ 로컬 jar 로
     # 서로 다른 서버를 섞는다.
     local = urllib.parse.urlparse(args.base_url).hostname in {"localhost", "127.0.0.1"}
-    jar = jar_error_codes() if local else None
-    if jar is not None:
+    jar = jar_error_codes() if local and not args.spec and not args.error_codes else None
+    if args.error_codes:
+        server, source = artifact_error_codes(args.error_codes), "백엔드 계약 산출물의 ErrorCode 전체"
+    elif jar is not None:
         server, source = jar, "실행 중인 jar 의 ErrorCode enum"
     else:
         why = "jar 를 못 읽어" if local else "로컬이 아니라 jar 를 안 읽고"

@@ -39,7 +39,17 @@
 # 로컬 백엔드를 띄운 뒤 (docs/local-backend.md)
 pnpm check:contract                                          # 요약
 python3 scripts/check_backend_contract.py --show-required    # 스웨거 required 목록까지
+
+# CI 가 쓰는 기준 — 백엔드 develop 이 남긴 계약 산출물과 대조(백엔드를 띄우지 않아도 된다)
+python3 scripts/check_backend_contract.py \
+  --spec https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/openapi.generated.json \
+  --error-codes https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/error-codes.generated.json
 ```
+
+CI(`backend-contract.yml`)는 운영 스웨거가 아니라 **백엔드 develop 의 계약 산출물**로 판정한다.
+develop 에서는 프론트가 운영보다 앞서서, 운영과만 대조하면 아직 배포하지 않은 API 의 BFF 경로가
+전부 「백엔드에 없다」로 떨어진다. 운영 대조는 정보용 단계로 남아 있다. 새 API 를 쓰는 프론트 PR 은
+백엔드 develop 에 그 API(와 갱신된 산출물)가 먼저 들어간 뒤에 merge 한다.
 
 인자를 넘길 때 **`--` 를 끼우지 않는다.** pnpm 10 은 `--` 를 스크립트에 그대로 넘기고
 argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료코드 2).
