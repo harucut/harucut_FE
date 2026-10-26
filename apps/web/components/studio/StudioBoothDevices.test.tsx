@@ -45,6 +45,8 @@ it("기기를 추가하면 받은 연결 코드와 남은 시간을 보여 준�
 
   expect(mockCreate).toHaveBeenCalledWith("Ev1", "입구 부스");
   expect(screen.getByText("K7QM-3XPA")).toBeInTheDocument();
+  // 코드를 띄운 동안 목록을 다시 묻는다 — 아직 연결 대기다.
+  mockList.mockResolvedValue([{ deviceId: "d1", name: "입구 부스", status: "PENDING_PAIRING" }]);
   expect(screen.getByText("10분 00초 남음")).toBeInTheDocument();
   await act(async () => {
     jest.advanceTimersByTime(61_000);
@@ -63,7 +65,7 @@ it("연결된 기기를 바꿀 때는 확인을 받고 새 코드를 받는다",
   await act(async () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "새 코드 받기" }));
   });
-  expect(mockReissue).toHaveBeenCalledWith("d1");
+  expect(mockReissue).toHaveBeenCalledWith("d1", expect.anything());
   expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
 });
 
@@ -76,7 +78,7 @@ it("해제는 확인 뒤에 하고, 해제된 기기에는 버튼을 두지 않�
   await act(async () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "해제" }));
   });
-  expect(mockRevoke).toHaveBeenCalledWith("d1");
+  expect(mockRevoke).toHaveBeenCalledWith("d1", expect.anything());
   await waitFor(() => expect(screen.getByText("해제됨")).toBeInTheDocument());
   expect(screen.queryByRole("button", { name: "해제" })).not.toBeInTheDocument();
 });
@@ -100,4 +102,43 @@ it("서버가 상한(BOOTH-006)으로 막으면 그 문구를 보여 준다", as
     fireEvent.click(screen.getByRole("button", { name: "기기 추가" }));
   });
   expect(screen.getByRole("alert")).toHaveTextContent("부스 기기 수를 다 썼어요");
+});
+
+// Codex 리뷰(#536): 화면을 열어 둔 채 다른 태블릿에서 코드를 쓰면 목록이 「연결 대기」로 남았다.
+it("코드를 띄워 둔 동안 다시 물어 연결되면 상태를 바꾸고 코드를 걷는다", async () => {
+  mockCreate.mockResolvedValue({ deviceId: "d1", name: "입구", status: "PENDING_PAIRING", pairingCode: "K7QM-3XPA", pairingExpiresAt: in10min });
+  renderDevices();
+  fireEvent.change(await screen.findByLabelText("기기 이름"), { target: { value: "입구" } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "기기 추가" }));
+  });
+  expect(screen.getByText("K7QM-3XPA")).toBeInTheDocument();
+
+  mockList.mockResolvedValue([{ deviceId: "d1", name: "입구", status: "ACTIVE" }]);
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(5_000);
+  });
+  expect(screen.getByText("연결됨")).toBeInTheDocument();
+  expect(screen.queryByText("K7QM-3XPA")).not.toBeInTheDocument();
+  // 연결된 기기는 교체 확인을 거친다.
+  expect(screen.getByRole("button", { name: "다른 기기로 바꾸기" })).toBeInTheDocument();
+});
+
+// Codex 리뷰(#536): 확인 창은 도는 동안 닫히지 않아, 응답 없이 멈춘 요청이면 빠져나올 길이 없었다.
+it("해제가 응답 없이 멈추면 상한 뒤에 풀고 결과를 모른다고 알린다", async () => {
+  mockList.mockResolvedValue([{ deviceId: "d1", name: "입구", status: "ACTIVE" }]);
+  mockRevoke.mockImplementation(
+    (_id: string, signal?: AbortSignal) =>
+      new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+  );
+  renderDevices();
+  fireEvent.click(await screen.findByRole("button", { name: "해제" }));
+  await act(async () => {
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "해제" }));
+  });
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(20_000);
+  });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByText(/응답이 늦어 결과를 확인하지 못했어요/)).toBeInTheDocument();
 });

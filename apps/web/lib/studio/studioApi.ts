@@ -204,9 +204,10 @@ export type BoothDevice = {
 export const MAX_BOOTH_DEVICES = 20;
 export const BOOTH_DEVICE_NAME_MAX = 50;
 
-export async function listBoothDevices(eventId: string): Promise<BoothDevice[]> {
+export async function listBoothDevices(eventId: string, signal?: AbortSignal): Promise<BoothDevice[]> {
   const res = await clientApi.get<ApiEnvelope<BoothDevice[]>>(
     `/api/client/events/${encodeURIComponent(eventId)}/booth-devices`,
+    { signal },
   );
   return res.data.data ?? [];
 }
@@ -220,17 +221,21 @@ export async function createBoothDevice(eventId: string, name: string): Promise<
 }
 
 /** 새 연결 코드. 이전 코드는 닫히고, 이미 연결된 기기는 새 코드가 쓰이는 순간 끊긴다(기기 교체). */
-export async function reissuePairingCode(deviceId: string): Promise<BoothDevice> {
+export async function reissuePairingCode(deviceId: string, signal?: AbortSignal): Promise<BoothDevice> {
   const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
     `/api/client/booth-devices/${encodeURIComponent(deviceId)}/pairing-codes`,
+    undefined,
+    { signal },
   );
   return requireData(res.data, "연결 코드");
 }
 
 /** 되돌릴 수 없다 — 기기 토큰·열린 코드·진행 중 회차·그 기기의 손님 세션이 모두 닫힌다. */
-export async function revokeBoothDevice(deviceId: string): Promise<BoothDevice> {
+export async function revokeBoothDevice(deviceId: string, signal?: AbortSignal): Promise<BoothDevice> {
   const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
     `/api/client/booth-devices/${encodeURIComponent(deviceId)}/revoke`,
+    undefined,
+    { signal },
   );
   return requireData(res.data, "부스 기기");
 }

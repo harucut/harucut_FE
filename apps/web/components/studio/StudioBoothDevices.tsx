@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { withRequestDeadline } from "@/lib/requestDeadline";
 import {
   BOOTH_DEVICE_NAME_MAX,
   MAX_BOOTH_DEVICES,
@@ -19,8 +20,25 @@ const STATUS_LABEL: Record<BoothDevice["status"], string> = {
   REVOKED: "해제됨",
 };
 
+/**
+ * 확인 창에서 보내는 교체·해제의 종료 상한. 확인 창은 도는 동안 닫히지 않으므로(ConfirmDialog), 회선이 응답 없이
+ * 멈추면 운영자가 화면에서 빠져나올 길이 없다. 넘기면 결과를 모른다고 말하고 목록을 다시 받는다.
+ */
+const ACTION_DEADLINE_MS = 20_000;
+/** 연결 대기 중인 기기에 코드를 띄워 둔 동안, 다른 기기에서 그 코드를 쓴 것을 알아채는 간격. */
+const PAIRING_POLL_MS = 5_000;
+
+function isAbort(cause: unknown) {
+  return cause instanceof DOMException && cause.name === "AbortError";
+}
+
 /** 방금 받은 연결 코드. 목록 응답에는 코드가 없어서(서버는 해시만 둔다) 받은 자리에서만 보여 준다. */
-type IssuedCode = { code: string; expiresAt: number };
+type IssuedCode = {
+  code: string;
+  expiresAt: number;
+  /** 연결 대기 기기에 받은 코드인가 — 그 기기가 연결되면 코드를 걷는다. 교체용 코드는 연결된 기기에서 받는다. */
+  pending: boolean;
+};
 
 function remainingText(expiresAt: number, now: number) {
   const seconds = Math.max(0, Math.round((expiresAt - now) / 1000));
@@ -45,7 +63,16 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
 
   const load = useCallback(async () => {
     try {
-      setDevices(await listBoothDevices(eventId));
+      const list = await listBoothDevices(eventId);
+      setDevices(list);
+      // 연결 대기일 때 받은 코드는 기기가 연결되면(다른 상태가 되면) 더 쓸 데가 없다.
+      setCodes((prev) => {
+        const next = { ...prev };
+        for (const device of list) {
+          if (next[device.deviceId]?.pending && device.status !== "PENDING_PAIRING") delete next[device.deviceId];
+        }
+        return next;
+      });
       setError(null);
     } catch (cause) {
       setError(getUserFacingApiErrorMessage(cause, "부스 기기 목록을 불러오지 못했어요."));
@@ -65,10 +92,21 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
     return () => window.clearInterval(timer);
   }, [hasCode]);
 
+  // 연결 대기 기기에 코드가 떠 있는 동안만 다시 묻는다 — 다른 태블릿에서 코드를 쓰면 여기서 알아챈다.
+  const waitingPairing = Object.values(codes).some((c) => c.pending);
+  useEffect(() => {
+    if (!waitingPairing) return;
+    const timer = window.setInterval(() => void load(), PAIRING_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [waitingPairing, load]);
+
   const remember = (device: BoothDevice) => {
     if (!device.pairingCode || !device.pairingExpiresAt) return;
     const expiresAt = Date.parse(device.pairingExpiresAt);
-    setCodes((prev) => ({ ...prev, [device.deviceId]: { code: device.pairingCode!, expiresAt } }));
+    setCodes((prev) => ({
+      ...prev,
+      [device.deviceId]: { code: device.pairingCode!, expiresAt, pending: device.status === "PENDING_PAIRING" },
+    }));
     // 받은 순간의 남은 시간을 바로 보인다(다음 1초 틱을 기다리지 않는다).
     setNow(() => Date.now());
   };
@@ -88,7 +126,13 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
     try {
       await task();
     } catch (cause) {
-      setNotice(getUserFacingApiErrorMessage(cause, fallback));
+      if (isAbort(cause)) {
+        // 서버가 이미 처리했을 수도 있다 — 실패라고 단정하지 않고 지금 상태를 다시 받는다.
+        setNotice("응답이 늦어 결과를 확인하지 못했어요. 목록을 다시 불러왔어요.");
+        void load();
+      } else {
+        setNotice(getUserFacingApiErrorMessage(cause, fallback));
+      }
     } finally {
       setBusy(null);
     }
@@ -110,7 +154,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
     run(
       device.deviceId,
       async () => {
-        const next = await reissuePairingCode(device.deviceId);
+        const next = await withRequestDeadline(ACTION_DEADLINE_MS, (signal) => reissuePairingCode(device.deviceId, signal));
         replaceInList(next);
         remember(next);
       },
@@ -121,7 +165,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
     run(
       device.deviceId,
       async () => {
-        replaceInList(await revokeBoothDevice(device.deviceId));
+        replaceInList(await withRequestDeadline(ACTION_DEADLINE_MS, (signal) => revokeBoothDevice(device.deviceId, signal)));
         setCodes((prev) => {
           const next = { ...prev };
           delete next[device.deviceId];
@@ -150,6 +194,15 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold"
+        >
+          새로고침
+        </button>
+      </div>
       <p className="text-[13px] text-(--hc-muted)">
         부스로 쓸 태블릿이나 PC 에서 <span className="font-semibold text-(--hc-text)">{boothUrl}</span> 를 열고 아래 연결
         코드를 입력해요. 코드는 10분 동안 한 번만 쓸 수 있고, 참가자에게 나눠 주는 링크가 아니에요.
