@@ -4,19 +4,19 @@ import {
   EDITOR_HISTORY_LIMIT,
   useThemeEditorStore,
 } from "@/lib/themeEditorStore";
+import { textBakeSignature } from "@/lib/canvas/textBakeSignature";
 import type { EditorComponent, ThemeExportJson } from "@/lib/types/themeEditor";
 
 const mockUpload = jest.fn();
 const mockRemoveImageBackground = jest.fn();
 
-jest.mock("@/lib/presignedUploadApi", () => ({
-  PRESIGNED_UPLOAD_TYPES: {
-    FRAME: "FRAME",
-    FRAME_COMPONENT: "FRAME_COMPONENT",
-    PROFILE: "PROFILE",
-    FOURCUT_SOURCE: "FOURCUT_SOURCE",
-  },
-  uploadToS3WithPresigned: (...args: unknown[]) => mockUpload(...args),
+jest.mock("@/lib/assetUploadApi", () => ({
+  uploadAsset: (...args: unknown[]) => mockUpload(...args),
+}));
+
+// jsdom 에는 캔버스가 없다. 굽기 결과는 PNG 하나로 흉내 낸다.
+jest.mock("@/lib/canvas/textLayer", () => ({
+  bakeTextLayerPng: async () => new Blob(["text"], { type: "image/png" }),
 }));
 
 // 실제 누끼 모델은 무겁고 브라우저 전용이라 테스트에서는 결과 파일만 흉내 낸다.
@@ -292,7 +292,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     mockUpload.mockImplementation(async ({ file }: { file: File }) => {
       counter += 1;
       const key = `uploads/users/me/components/${counter}-${file.name}`;
-      return { key, objectUrl: `https://cdn.example.com/${key}?sig=x` };
+      return { key, assetId: `As${counter}` };
     });
     mockRemoveImageBackground.mockImplementation(
       async () => new File(["cut"], "photo-cutout.png", { type: "image/png" }),
@@ -633,5 +633,108 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     expect(result).toEqual({ ok: false, reason: "NOT_FOUND" });
     expect(layer().source).toBe("blob:photo.png");
     expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("themeEditorStore 공통 자산 업로드", () => {
+  const TEXT_STYLE = { fontFamily: "Pretendard", fontSize: 48, color: "#111111", textAlign: "center" as const };
+
+  function textLayer(source: string, extra: Partial<EditorComponent> = {}): EditorComponent {
+    return {
+      id: "text-1",
+      type: "TEXT",
+      source,
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 120,
+      scale: 1,
+      rotation: 0,
+      zIndex: 1,
+      styleJson: TEXT_STYLE,
+      locked: false,
+      hidden: false,
+      ...extra,
+    } as EditorComponent;
+  }
+
+  function text() {
+    return useThemeEditorStore.getState().components.find((c) => c.id === "text-1") as EditorComponent;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    URL.createObjectURL = jest.fn((blob: Blob) => `blob:${(blob as File).name}`) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = jest.fn();
+    let counter = 0;
+    mockUpload.mockImplementation(async ({ file }: { file: File }) => {
+      counter += 1;
+      return { key: `uploads/users/me/components/${counter}-${file.name}`, assetId: `As${counter}` };
+    });
+    mockRemoveImageBackground.mockImplementation(
+      async () => new File(["cut"], "photo-cutout.png", { type: "image/png" }),
+    );
+    useThemeEditorStore.getState().reset();
+    useThemeEditorStore.getState().setFrameId("classic-4");
+  });
+
+  it("올린 사진의 자산 id 를 레이어에 남기고, 누끼로 바꾸면 지운다", async () => {
+    const store = useThemeEditorStore.getState();
+    await store.addPhotoAssets([new File(["raw"], "photo.png", { type: "image/png" })]);
+    const asset = useThemeEditorStore.getState().assets.photos[0];
+    useThemeEditorStore.setState({
+      components: [{ ...textLayer(""), id: "photo-1", type: "PHOTO", source: asset.src, styleJson: { opacity: 1 } } as EditorComponent],
+    });
+
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledWith(expect.objectContaining({ purpose: "FRAME_ASSET" }));
+    expect(useThemeEditorStore.getState().exportJson()?.components[0]).toEqual(
+      expect.objectContaining({ source: "uploads/users/me/components/1-photo.png", assetId: "As1" }),
+    );
+
+    // 남기면 서버가 source 대신 그 자산(누끼 전 원본)을 저장한다.
+    await useThemeEditorStore.getState().removePhotoBackground(asset.id);
+    expect(useThemeEditorStore.getState().components[0].assetId).toBeUndefined();
+  });
+
+  it("글자는 TEXT_RENDER 자산으로 굽고, 바뀌지 않았으면 다시 굽지 않는다", async () => {
+    useThemeEditorStore.setState({ components: [textLayer("안녕")] });
+
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+    expect(mockUpload).toHaveBeenCalledWith(expect.objectContaining({ purpose: "TEXT_RENDER" }));
+    expect(text()).toEqual(
+      expect.objectContaining({ renderedKey: "uploads/users/me/components/1-text-text-1.png", renderedAssetId: "As1" }),
+    );
+
+    // 저장이 뒤에서 실패해 다시 누른 경우 — 같은 글자를 또 올리지 않는다.
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+
+    useThemeEditorStore.setState({ components: [{ ...text(), source: "반가워" }] });
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(2);
+    expect(text().renderedAssetId).toBe("As2");
+  });
+
+  it("저장본의 구운 글자는 지문이 맞으면 그대로 쓴다", async () => {
+    // frameApi.toThemeExportJson 이 남기는 모양과 같다.
+    const saved = textLayer("안녕");
+    useThemeEditorStore.setState({
+      components: [
+        {
+          ...saved,
+          renderedKey: "uploads/users/me/components/saved.png",
+          renderedAssetId: "AsSaved",
+          renderedFor: textBakeSignature({ ...saved, styleJson: TEXT_STYLE }),
+        },
+      ],
+    });
+
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(useThemeEditorStore.getState().exportJson()?.components[0]).toEqual(
+      expect.objectContaining({ renderedKey: "uploads/users/me/components/saved.png", renderedAssetId: "AsSaved" }),
+    );
   });
 });
