@@ -14,6 +14,11 @@ jest.mock("@/lib/studio/photosApi", () => ({
   getEventPhotoDownload: (...a: unknown[]) => mockDownload(...a),
   deleteEventPhoto: (...a: unknown[]) => mockDelete(...a),
 }));
+const mockNativeSave = jest.fn();
+jest.mock("@/lib/nativeBridge", () => ({
+  ...jest.requireActual("@/lib/nativeBridge"),
+  nativeSaveImageUrl: (...a: unknown[]) => mockNativeSave(...a),
+}));
 jest.mock("@/lib/studio/accessApi", () => ({
   ...jest.requireActual("@/lib/studio/accessApi"),
   listMyEvents: () => mockMyEvents(),
@@ -28,6 +33,8 @@ function access(permissions: string[], role?: string) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // 기본은 일반 브라우저(앱 셸 아님).
+  mockNativeSave.mockResolvedValue(null);
   mockList.mockResolvedValue({ items: [DONE, FAILED], nextCursor: null });
   mockMyEvents.mockResolvedValue(access(["VIEW_PHOTOS", "DOWNLOAD_PHOTOS", "DELETE_PHOTOS"]));
 });
@@ -74,7 +81,7 @@ it("지우기는 확인 뒤에 하고 목록에서 뺀다", async () => {
   await act(async () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "지우기" }));
   });
-  expect(mockDelete).toHaveBeenCalledWith("Ev1", 11);
+  expect(mockDelete).toHaveBeenCalledWith("Ev1", 11, expect.any(AbortSignal));
   expect(screen.queryByRole("img")).not.toBeInTheDocument();
 });
 
@@ -103,4 +110,35 @@ it("필터를 바꾸기 전에 시작한 조회 응답은 버린다", async () =
   await act(async () => releaseBooth({ items: [BOOTH_PHOTO], nextCursor: "c-booth" }));
   expect(document.querySelector('img[src="https://s3/t21"]')).toBeNull();
   expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
+});
+
+// Codex 리뷰(#542): 앱 셸 안에서 링크를 열면 외부 브라우저로 나간다 — 네이티브 사진첩 저장으로 보낸다.
+it("앱 안에서는 저장을 네이티브 사진첩 저장으로 보내고 링크를 열지 않는다", async () => {
+  mockNativeSave.mockResolvedValue({ ok: true });
+  mockDownload.mockResolvedValue({ url: "https://s3/full11.jpg", expiresAt: "x" });
+  const click = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  render(<EventPhotoBox eventId="Ev1" />);
+  fireEvent.click(await screen.findByRole("button", { name: "저장" }));
+  expect(await screen.findByText("사진첩에 저장했어요.")).toBeInTheDocument();
+  expect(mockNativeSave).toHaveBeenCalledWith("https://s3/full11.jpg", "harucut-11.jpg");
+  expect(click).not.toHaveBeenCalled();
+  click.mockRestore();
+});
+
+// Codex 리뷰(#542): 지우기가 응답 없이 멈추면 확인 창에서 빠져나올 수 없었다.
+it("지우기 요청이 멈추면 상한 뒤 확인 창을 풀고 알린다", async () => {
+  jest.useFakeTimers();
+  mockDelete.mockImplementation(
+    (_e: string, _p: number, signal?: AbortSignal) =>
+      new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+  );
+  render(<EventPhotoBox eventId="Ev1" />);
+  fireEvent.click(await screen.findByRole("button", { name: "지우기" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "지우기" }));
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(30_000);
+  });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByText(/지우지 못했어요|요청/)).toBeInTheDocument();
+  jest.useRealTimers();
 });
