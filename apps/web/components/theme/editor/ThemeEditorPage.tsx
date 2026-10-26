@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ImagePlus, Layers, Paintbrush, Scissors, SlidersHorizontal } from "lucide-react";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
@@ -74,6 +75,51 @@ function buildEditorSignature(
   });
 }
 
+/**
+ * 모바일(< lg)에서 하단 시트에 띄울 도구. 데스크톱은 캔버스 옆에 전부 나란히 둔다.
+ *
+ * 예전에는 모바일에서도 패널을 캔버스 아래로 전부 쌓아서, 속성을 고치려면 캔버스를 화면 밖으로
+ * 밀어내고 내려가야 했다 — 고친 결과를 보면서 고칠 수가 없었다. 기획 R5 5절 「모바일은 캔버스를
+ * 유지하며 도구를 하단 시트로 연다」.
+ */
+const MOBILE_TOOLS = [
+  { id: "assets", label: "추가", Icon: ImagePlus },
+  { id: "background", label: "배경", Icon: Paintbrush },
+  { id: "cutout", label: "누끼", Icon: Scissors },
+  { id: "layers", label: "레이어", Icon: Layers },
+  { id: "inspector", label: "속성", Icon: SlidersHorizontal },
+] as const;
+type MobileTool = (typeof MOBILE_TOOLS)[number]["id"];
+
+const DESKTOP_QUERY = "(min-width: 1024px)";
+
+function subscribeViewport(onChange: () => void) {
+  const query = window.matchMedia?.(DESKTOP_QUERY);
+  query?.addEventListener?.("change", onChange);
+  window.addEventListener("resize", onChange);
+  return () => {
+    query?.removeEventListener?.("change", onChange);
+    window.removeEventListener("resize", onChange);
+  };
+}
+
+/**
+ * 모바일에서 캔버스에 줄 세로 상한. 위 헤더(약 92px)·여백과 아래 도구 시트(최대 30dvh)·도구
+ * 막대(64px)를 뺀 나머지다. 0.70h − 180 은 그 합(0.30h + 64 + 92 + 여백 24)을 뺀 값이다.
+ * 클래식처럼 세로로 긴 판형은 이 높이가 곧 캔버스 크기라, 넉넉히 잡되 시트에 가리지 않게 한다
+ * (e2e theme-editor-mobile 이 겹침을 잰다). 데스크톱은 undefined — 기본값(useStageFit)을 쓴다.
+ */
+function useMobileCanvasMaxHeight(): number | undefined {
+  return useSyncExternalStore(
+    subscribeViewport,
+    () =>
+      window.matchMedia?.(DESKTOP_QUERY).matches
+        ? undefined
+        : Math.max(200, Math.round(window.innerHeight * 0.7 - 180)),
+    () => undefined,
+  );
+}
+
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const router = useRouter();
   const setFrameId = useThemeEditorStore((s) => s.setFrameId);
@@ -90,6 +136,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const undo = useThemeEditorStore((s) => s.undo);
   const redo = useThemeEditorStore((s) => s.redo);
   const nudge = useThemeEditorStore((s) => s.nudge);
+  const activeId = useThemeEditorStore((s) => s.activeId);
+  const mobileCanvasMaxHeight = useMobileCanvasMaxHeight();
+  const [mobileTool, setMobileTool] = useState<MobileTool>("assets");
+  // 캔버스에서 레이어를 새로 고르면 속성 시트로 넘긴다 — 고른 것을 바로 고치러 온 것이다.
+  const [seenActiveId, setSeenActiveId] = useState(activeId);
+  if (seenActiveId !== activeId) {
+    setSeenActiveId(activeId);
+    if (activeId) setMobileTool("inspector");
+  }
 
   /*
     되돌리기 단축키. Ctrl/⌘+Z 는 되돌리기, Ctrl/⌘+Shift+Z 와 Ctrl+Y 는 다시 하기다.
@@ -673,18 +728,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           </section>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 lg:gap-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:auto-rows-min">
-          <div className="lg:col-start-2 lg:row-start-1 min-w-0">
-            <AssetPanel />
-          </div>
-
-          <div className="lg:col-start-2 lg:row-start-2">
-            <BackgroundPanel frameId={frameId} />
-          </div>
-
-          <div className="order-first lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-3">
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 gap-4 pb-[calc(30dvh+5rem)] lg:gap-6 lg:pb-0 lg:grid-cols-[380px_minmax(0,1fr)] lg:auto-rows-min">
+          <div className="lg:col-start-1 lg:row-start-1 lg:row-span-3">
+            {/* 모바일은 캔버스 자리가 모자라 카드 테두리·제목 줄을 걷는다. */}
+            <section className="flex flex-col gap-3 lg:rounded-2xl lg:border lg:border-zinc-800 lg:bg-zinc-900/60 lg:p-4">
+              <div className="flex items-center justify-between max-lg:hidden">
                 <p className="text-sm font-semibold">미리보기</p>
                 <p className="text-[12px] text-(--hc-muted)">
                   스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.
@@ -692,24 +740,56 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               </div>
 
               {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
-              <div className="flex min-h-82.5 items-center justify-center">
-                <CanvasStage />
+              <div className="flex items-center justify-center lg:min-h-82.5">
+                <CanvasStage maxHeight={mobileCanvasMaxHeight} />
               </div>
             </section>
           </div>
-
-          <div className="lg:col-start-2 lg:row-start-3">
-            <CutoutPanel />
-          </div>
-
-          <div className="lg:col-start-2 lg:row-start-4">
-            <LayersPanel />
-          </div>
-
-          <div className="lg:col-start-2 lg:row-start-5">
-            <InspectorPanel />
+          {/*
+            모바일: 고른 도구 하나만 하단 시트에 띄운다. 데스크톱: `lg:contents` 로 감싼 칸이
+            사라져 각 패널이 오른쪽 열의 제자리로 들어간다(예전 배치 그대로).
+          */}
+          <div
+            id="theme-editor-tool-sheet"
+            className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 max-h-[30dvh] overflow-y-auto overscroll-contain border-t border-(--hc-border) bg-(--hc-surface-soft) px-4 pb-3 pt-3 lg:contents"
+          >
+            <div className={`lg:col-start-2 lg:row-start-1 min-w-0 ${mobileTool === "assets" ? "" : "max-lg:hidden"}`}>
+              <AssetPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-2 ${mobileTool === "background" ? "" : "max-lg:hidden"}`}>
+              <BackgroundPanel frameId={frameId} />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-3 ${mobileTool === "cutout" ? "" : "max-lg:hidden"}`}>
+              <CutoutPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-4 ${mobileTool === "layers" ? "" : "max-lg:hidden"}`}>
+              <LayersPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-5 ${mobileTool === "inspector" ? "" : "max-lg:hidden"}`}>
+              <InspectorPanel />
+            </div>
           </div>
         </div>
+        <nav
+          aria-label="편집 도구"
+          className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-(--hc-border) bg-(--hc-card) pb-[env(safe-area-inset-bottom)] lg:hidden"
+        >
+          {MOBILE_TOOLS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={mobileTool === id}
+              aria-controls="theme-editor-tool-sheet"
+              onClick={() => setMobileTool(id)}
+              className={`flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold ${
+                mobileTool === id ? "text-(--hc-text)" : "text-(--hc-muted)"
+              }`}
+            >
+              <Icon className="size-5" aria-hidden />
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {isDeleteConfirmOpen && remoteFrameId ? (
