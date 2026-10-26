@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { adminErrorMessage } from "@/components/admin/adminShared";
 import {
   ADMIN_SEARCH_MIN,
@@ -30,19 +30,24 @@ export function AdminSearchField(props: Props) {
   const [results, setResults] = useState<Array<AdminWorkspaceItem | AdminEventItem> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 검색 순번. 마지막으로 보낸 검색의 응답만 반영한다 — 앞 검색이 늦게 와서 결과를 덮으면 고른 ID 가
+  // 지금 검색어와 다른 대상이 된다(Codex #548).
+  const searchSeqRef = useRef(0);
   const label = props.kind === "workspace" ? "공간 찾기" : "행사 찾기";
   const trimmed = query.trim();
 
   const run = async () => {
     if (trimmed.length < ADMIN_SEARCH_MIN) return;
+    const seq = ++searchSeqRef.current;
     setBusy(true);
     setError(null);
     try {
-      setResults(props.kind === "workspace" ? await searchWorkspaces(trimmed) : await searchEvents(trimmed));
+      const found = props.kind === "workspace" ? await searchWorkspaces(trimmed) : await searchEvents(trimmed);
+      if (seq === searchSeqRef.current) setResults(found);
     } catch (cause) {
-      setError(adminErrorMessage(cause, "찾지 못했어요."));
+      if (seq === searchSeqRef.current) setError(adminErrorMessage(cause, "찾지 못했어요."));
     } finally {
-      setBusy(false);
+      if (seq === searchSeqRef.current) setBusy(false);
     }
   };
 
