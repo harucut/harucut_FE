@@ -5,7 +5,6 @@ import { nativeEnsureCameraPermission } from "@/lib/nativeBridge";
 import { useRouter } from "next/navigation";
 import { ImagePlus, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { EventBanner } from "@/components/event/EventBanner";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
@@ -43,7 +42,6 @@ export default function ShootUploadPage() {
   const router = useRouter();
   const frameId = useShootSession((state) => state.frameId);
   const shots = useShootSession((state) => state.shots);
-  const eventName = useShootSession((state) => state.eventName);
   const addShotPhotos = useShootSession((state) => state.addShotPhotos);
   const removeShotPhoto = useShootSession((state) => state.removeShotPhoto);
 
@@ -96,9 +94,9 @@ export default function ShootUploadPage() {
 
     한동안 이 판정의 유일한 집행 지점이 프록시였다(`GUEST_MEMBER_ONLY_PREFIXES`). 그런데
     프록시는 **요청이 올 때** 한 번 보고, 그 판정의 근거인 게스트 쿠키는 나중에 심길 수 있다.
-    행사 진입이 그렇다 — 인증 쿠키가 남은 브라우저는 프록시를 그대로 지나가고, 회원이
-    아니라는 판정은 화면이 인증 왕복 뒤에 내린다(app/shoot/page.tsx). 그 사이에
-    `/shoot?source=upload&event=...` 에서 「확인」을 누르면 이 화면이 **먼저** 열리고,
+    `/shoot?checkSession=1` 진입이 그렇다 — 인증 쿠키가 남은 브라우저는 프록시를 그대로
+    지나가고, 회원이 아니라는 판정은 화면이 인증 왕복 뒤에 내린다(app/shoot/page.tsx). 그 사이에
+    `/shoot?source=upload&checkSession=1` 에서 「확인」을 누르면 이 화면이 **먼저** 열리고,
     뒤늦게 게스트가 되어도 이미 들어와 있어 아무도 되돌리지 않았다.
 
     **다만 쿠키만 보고 내보내지는 않는다.** 게스트 쿠키는 남아 있는데 세션은 멀쩡한 회원이
@@ -145,7 +143,7 @@ export default function ShootUploadPage() {
 
       반대로 쿠키를 걷고 심는 것(`exitGuestMode`·`enterGuestMode`)은 이 화면의 상태가
       아니라 **전역 상태**라 그대로 둔다 — 접으면 다음 화면이 거짓 상태로 돌아간다
-      (app/shoot/page.tsx 의 행사 전환과 같은 판단이다).
+      (app/shoot/page.tsx 의 게스트 전환과 같은 판단이다).
     */
     let cancelled = false;
 
@@ -176,7 +174,7 @@ export default function ShootUploadPage() {
         **화면 상태를 사실에 맞춘다.** 서버가 「쓸 수 있는 세션이 없다」고 확인해 줬는데
         `accessMode` 를 `member` 로 두면 앱이 거짓말을 한다 — 프록시는 남은 죽은 쿠키로
         계속 통과시키고, 화면은 회원처럼 그리다가 결과 단계의 인증 API 에서 다시 막힌다.
-        행사 진입이 아닌 방문자에게는 그 막다른 길을 벗어날 손잡이도 없다.
+        그 방문자에게는 그 막다른 길을 벗어날 손잡이도 없다.
 
         여기서 심는 것은 랜딩의 "가입 없이 찍어보기"가 주는 것과 **같은 자격**이고, 곧
         이어지는 안내(`guestNotice=restricted`)가 그 범위와 「로그인하기」를 함께 보여 준다.
@@ -187,16 +185,13 @@ export default function ShootUploadPage() {
       if (cancelled) return;
 
       /*
-        **되돌릴 때 행사 이름과 고른 프레임을 들려 보낸다.**
+        **되돌릴 때 고른 프레임을 들려 보낸다.**
 
         `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다.
-        그냥 `/shoot?guestNotice=restricted` 로 보내면 행사 배너와 QR 이 지정한 프레임이 함께
-        사라져, 참가자가 기본 프레임으로 찍게 된다. 막는 것은 회원 전용 경로 하나지 행사
-        진입 전체가 아니다.
+        그냥 `/shoot?guestNotice=restricted` 로 보내면 방금 고른 프레임이 사라진다.
       */
       const params = new URLSearchParams({ guestNotice: "restricted" });
       if (frameId) params.set("frame", frameId);
-      if (eventName) params.set("event", eventName);
       router.replace(`/shoot?${params.toString()}`);
     })();
 
@@ -206,7 +201,6 @@ export default function ShootUploadPage() {
   }, [
     accessMode,
     enterGuestMode,
-    eventName,
     exitGuestMode,
     frameId,
     guestHydrated,
@@ -218,7 +212,7 @@ export default function ShootUploadPage() {
     **회원으로 확인되기 전까지 이 화면의 조작을 잠근다.**
 
     기준이 쿠키가 아니라 **서버의 답**이다. `accessMode` 로 잠그면 그 초깃값이 "member" 라
-    잠금이 처음부터 풀려 있다 — 행사 진입에서 죽은 쿠키를 든 사람이 앞 화면의 판정을
+    잠금이 처음부터 풀려 있다 — 죽은 쿠키를 든 사람이 앞 화면의 판정을
     기다리는 동안 여기 오면, 그 틈에 사진을 담아 `/shoot/select` 로 넘어갈 수 있다. 그 뒤
     뒤늦게 게스트가 되어도 이 화면은 이미 언마운트라 되돌릴 자리가 없고, 고르기·결과는
     게스트 허용 경로라 합성까지 끝난다.
@@ -289,7 +283,6 @@ export default function ShootUploadPage() {
           backLabel="프레임 다시 선택"
         />
 
-        {eventName ? <EventBanner eventName={eventName} /> : null}
 
         <input
           ref={fileInputRef}

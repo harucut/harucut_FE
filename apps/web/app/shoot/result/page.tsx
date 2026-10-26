@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { EventBanner } from "@/components/event/EventBanner";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -191,7 +190,6 @@ export default function ShootResultPage() {
     setImageResult,
     ensureComposeIdempotencyKey,
     clearResults,
-    eventName,
     source,
   } = useShootSession();
   // 갤러리에서 온 사진이면 "다시 촬영"이라고 말하면 안 된다 — 찍은 적이 없다.
@@ -885,7 +883,6 @@ export default function ShootResultPage() {
           }
         />
 
-        {eventName ? <EventBanner eventName={eventName} /> : null}
 
         {/*
           준비 중일 때만 상태 카드를 둔다. 예전에는 다 된 뒤에도 "결과 준비 완료 / 마음에 드는 결과를
