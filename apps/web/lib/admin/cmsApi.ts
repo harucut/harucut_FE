@@ -51,7 +51,35 @@ export type ContractRequest = {
   entitlement: EntitlementTerms;
 };
 
-export type Contract = ContractRequest & { contractId: string; status: ContractStatus; createdAt: string };
+export type Contract = ContractRequest & {
+  contractId: string;
+  status: ContractStatus;
+  createdAt: string;
+  /** 결제 근거(PORTONE)를 PortOne 조회로 대조해 확인한 시각. 없으면 아직 확인 전. */
+  paymentVerifiedAt?: string | null;
+};
+
+/** 계약 대상 찾기 — 조직 공간만 나온다(개인 공간은 계약 대상이 아니다). 최신순 최대 20건. */
+export type AdminWorkspaceItem = {
+  workspaceId: string;
+  name: string;
+  type: "PERSONAL" | "ORGANIZATION";
+  ownerEmails: string[];
+  createdAt: string;
+};
+
+export type AdminEventItem = {
+  eventId: string;
+  slug: string;
+  name: string;
+  status: "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
+  workspaceId: string;
+  workspaceName: string;
+  createdAt: string;
+};
+
+/** 검색어는 두 글자 이상이어야 한다(아니면 400 GEN-002). */
+export const ADMIN_SEARCH_MIN = 2;
 
 export type Entitlement = {
   entitlementId: string;
@@ -143,4 +171,18 @@ export async function revokeEntitlement(entitlementId: string, reason: string): 
     { reason },
   );
   return requireData(res.data, "이용권");
+}
+
+export async function searchWorkspaces(query: string): Promise<AdminWorkspaceItem[]> {
+  const res = await clientApi.get<ApiEnvelope<AdminWorkspaceItem[]>>(
+    `/api/client/admin/workspaces?query=${encodeURIComponent(query)}`,
+  );
+  return res.data.data ?? [];
+}
+
+export async function searchEvents(query: string): Promise<AdminEventItem[]> {
+  const res = await clientApi.get<ApiEnvelope<AdminEventItem[]>>(
+    `/api/client/admin/events?query=${encodeURIComponent(query)}`,
+  );
+  return res.data.data ?? [];
 }

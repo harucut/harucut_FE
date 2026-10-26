@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AdminSearchField } from "@/components/admin/AdminSearchField";
 import {
   EMPTY_TERMS,
   TermsFields,
@@ -64,6 +65,13 @@ const TRANSITIONS: Record<ContractStatus, Array<{ to: ContractStatus; label: str
   ENDED: [],
   CANCELLED: [],
 };
+
+function eventIdsOf(text: string) {
+  return text
+    .split(/[\s,]+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
 
 /** 상태 전이 요청 상한. 확인 창은 요청이 끝나야 닫히므로 반드시 끝나게 한다(ConfirmDialog 주석). */
 const ACTION_DEADLINE_MS = 20_000;
@@ -137,10 +145,7 @@ export function AdminContracts({
   const terms = termsOf(draft.terms);
   const startsAt = toServerDateTime(draft.startsAt);
   const endsAt = toServerDateTime(draft.endsAt);
-  const eventIds = draft.eventIds
-    .split(/[\s,]+/)
-    .map((id) => id.trim())
-    .filter(Boolean);
+  const eventIds = eventIdsOf(draft.eventIds);
   const evidencePartial = Boolean(draft.evidenceKind) !== Boolean(draft.evidenceReference.trim());
   const amountInvalid = isInvalidNumber(draft.amount);
   const canCreate =
@@ -217,7 +222,10 @@ export function AdminContracts({
           }}
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="공간 ID" value={draft.workspaceId} onChange={(v) => set({ workspaceId: v })} required help="조직 공간에만 줄 수 있어요." />
+            <div className="flex flex-col gap-2">
+              <TextField label="공간 ID" value={draft.workspaceId} onChange={(v) => set({ workspaceId: v })} required help="조직 공간에만 줄 수 있어요." />
+              <AdminSearchField kind="workspace" onPick={(w) => set({ workspaceId: w.workspaceId })} />
+            </div>
             <TextField label="계약자" value={draft.contractorName} onChange={(v) => set({ contractorName: v })} required maxLength={100} />
             <TextField label="시작" type="datetime-local" value={draft.startsAt} onChange={(v) => set({ startsAt: v })} required help="한국 시간" />
             <TextField label="끝" type="datetime-local" value={draft.endsAt} onChange={(v) => set({ endsAt: v })} required help="한국 시간" />
@@ -243,7 +251,22 @@ export function AdminContracts({
               </label>
             ))}
             {draft.scope === "EVENT" ? (
-              <TextField label="행사 ID" value={draft.eventIds} onChange={(v) => set({ eventIds: v })} required help="여러 개면 쉼표로 나눠요." />
+              <>
+                <TextField label="행사 ID" value={draft.eventIds} onChange={(v) => set({ eventIds: v })} required help="여러 개면 쉼표로 나눠요." />
+                <AdminSearchField
+                  kind="event"
+                  onPick={(ev) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      // 행사 범위 계약도 그 행사가 속한 공간 ID 가 필요하다. 비었으면 채운다.
+                      workspaceId: prev.workspaceId.trim() || ev.workspaceId,
+                      eventIds: eventIdsOf(prev.eventIds).includes(ev.eventId)
+                        ? prev.eventIds
+                        : [...eventIdsOf(prev.eventIds), ev.eventId].join(", "),
+                    }))
+                  }
+                />
+              </>
             ) : null}
           </fieldset>
           <fieldset className="grid gap-3 sm:grid-cols-2">
@@ -316,6 +339,11 @@ export function AdminContracts({
               {contract.paymentEvidence ? (
                 <p className="text-(--hc-muted)">
                   근거: {contract.paymentEvidence.kind} · {contract.paymentEvidence.reference}
+                  {contract.paymentEvidence.kind === "PORTONE"
+                    ? contract.paymentVerifiedAt
+                      ? ` · 결제 확인됨(${formatDateTime(contract.paymentVerifiedAt)})`
+                      : " · 결제 확인 전"
+                    : ""}
                 </p>
               ) : null}
               {TRANSITIONS[contract.status].length > 0 ? (

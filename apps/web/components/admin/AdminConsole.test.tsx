@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ApiRequestError } from "@/lib/clientApi";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -12,9 +12,14 @@ const api = {
   grantEntitlement: jest.fn(),
   getEntitlementImpact: jest.fn(),
   revokeEntitlement: jest.fn(),
+  searchWorkspaces: jest.fn(),
+  searchEvents: jest.fn(),
 };
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
 jest.mock("@/lib/admin/cmsApi", () => ({
+  ...jest.requireActual("@/lib/admin/cmsApi"),
+  searchWorkspaces: (...a: unknown[]) => api.searchWorkspaces(...a),
+  searchEvents: (...a: unknown[]) => api.searchEvents(...a),
   listInquiries: (...a: unknown[]) => api.listInquiries(...a),
   updateInquiry: (...a: unknown[]) => api.updateInquiry(...a),
   listContracts: (...a: unknown[]) => api.listContracts(...a),
@@ -177,6 +182,41 @@ it("수동 이용권은 사유가 있어야 주고, 회수는 영향을 본 뒤 
   expect(await screen.findByText("회수됨")).toBeInTheDocument();
 });
 
+// 계약 대상은 ID 를 손으로 적지 않고 찾아 고른다. 행사 범위면 그 행사의 공간 ID 도 함께 채운다.
+it("행사를 찾아 고르면 행사 ID 와 그 공간 ID 를 채운다(두 글자 미만은 찾지 않는다)", async () => {
+  api.searchEvents.mockResolvedValue([
+    { eventId: "Ev7", slug: "wedding-1205", name: "민지 ♥ 준호", status: "LIVE", workspaceId: "Ws9", workspaceName: "웨딩홀 A", createdAt: "x" },
+  ]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fireEvent.click(within(form).getByLabelText("고른 행사만"));
+
+  const search = within(form).getByLabelText("행사 찾기");
+  fireEvent.change(search, { target: { value: "웨" } });
+  expect(within(form).getAllByRole("button", { name: "찾기" }).at(-1)).toBeDisabled();
+  fireEvent.change(search, { target: { value: "웨딩" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+
+  fireEvent.click(await within(form).findByRole("button", { name: /민지 ♥ 준호/ }));
+  expect(api.searchEvents).toHaveBeenCalledWith("웨딩");
+  expect(within(form).getByLabelText(/공간 ID/)).toHaveValue("Ws9");
+  expect(within(form).getByLabelText(/^행사 ID/)).toHaveValue("Ev7");
+  expect(api.createContract).not.toHaveBeenCalled();
+});
+
+it("PortOne 근거가 있는 계약은 결제 확인 여부를 보여 준다", async () => {
+  api.listContracts.mockResolvedValue([
+    { ...CONTRACT, paymentEvidence: { kind: "PORTONE", reference: "pay_1" }, paymentVerifiedAt: "2026-10-26T03:00:00Z" },
+    { ...CONTRACT, contractId: "Ct3", paymentEvidence: { kind: "PORTONE", reference: "pay_2" } },
+  ]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  expect(await screen.findByText(/pay_1 · 결제 확인됨/)).toBeInTheDocument();
+  expect(screen.getByText(/pay_2 · 결제 확인 전/)).toBeInTheDocument();
+});
+
 // Codex 리뷰(#546): 메모를 적고 저장 전에 상태를 바꿔도 적던 메모가 사라지면 안 된다.
 it("상태를 바꿔도 저장하지 않은 담당 메모는 그대로 둔다", async () => {
   api.updateInquiry.mockImplementation(async (_id: string, patch: object) => ({ ...INQUIRY, ...patch }));
@@ -208,6 +248,29 @@ it("금액·한도의 지수 표기를 그대로 숫자로 보낸다", async () 
   fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
   await waitFor(() => expect(api.createContract).toHaveBeenCalled());
   expect(api.createContract.mock.calls[0][0]).toMatchObject({ amount: 1000000, entitlement: { composeQuota: 500 } });
+});
+
+// Codex 리뷰(#548): 검색어를 바꿔 다시 찾았는데 앞 검색 응답이 늦게 오면 그 결과로 덮으면 안 된다.
+it("마지막 검색의 결과만 보여 준다", async () => {
+  let releaseFirst: (value: unknown) => void = () => {};
+  api.searchWorkspaces
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseFirst = resolve; }))
+    .mockResolvedValueOnce([{ workspaceId: "WsB", name: "B 웨딩홀", type: "ORGANIZATION", ownerEmails: [], createdAt: "x" }]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+  fireEvent.click(await screen.findByRole("button", { name: "수동 이용권 주기" }));
+  const form = screen.getByRole("form", { name: "수동 이용권 주기" });
+  const search = within(form).getByLabelText("공간 찾기");
+
+  fireEvent.change(search, { target: { value: "AA" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+  fireEvent.change(search, { target: { value: "BB" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+  expect(await within(form).findByRole("button", { name: /B 웨딩홀/ })).toBeInTheDocument();
+
+  await act(async () => releaseFirst([{ workspaceId: "WsA", name: "A 웨딩홀", type: "ORGANIZATION", ownerEmails: [], createdAt: "x" }]));
+  expect(within(form).queryByRole("button", { name: /A 웨딩홀/ })).not.toBeInTheDocument();
+  expect(within(form).getByRole("button", { name: /B 웨딩홀/ })).toBeInTheDocument();
 });
 
 // Codex 리뷰(#546): 잘못 적은 금액을 빈칸처럼 빼고 보내면 입력 오류를 아무도 알리지 못한다.
