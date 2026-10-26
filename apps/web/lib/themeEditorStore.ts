@@ -23,6 +23,10 @@ import type {
 } from "@/lib/types/themeEditor";
 
 // 에디터 내부에서 쓰는 임시 ID 생성기
+function isLocalImageSource(src: string) {
+  return src.startsWith("blob:") || src.startsWith("data:");
+}
+
 const uid = (prefix = "front") => `${prefix}-${crypto.randomUUID()}`;
 
 // zIndex를 1..N으로 정규화해 레이어 순서 일관성 유지
@@ -180,6 +184,7 @@ type State = {
   // 컴포넌트 source는 S3 key가 되고, 그릴 주소는 renderUrl로 옮긴다.
   // 안 쓰는 자산은 올리지 않는다. (자세한 이유는 아래 구현부 주석)
   finalizeAssetsForSave: () => Promise<void>;
+  uploadLocalImagesForDraft: () => Promise<void>;
 
   addComponentFromAsset: (type: "PHOTO" | "STICKER", src: string) => Promise<void>;
   addText: (options?: { text?: string; fontSize?: number }) => void;
@@ -323,6 +328,37 @@ function restoreSnapshot(s: State, snap: EditorSnapshot): Partial<State> {
 }
 
 // 프레임 변경/리셋 시 에디터 상태 초기화 (메모리 정리 포함)
+type UploadedImage = { key: string; url: string; assetId: string };
+
+/**
+ * 올린 이미지를 레이어·되돌리기 이력·사진 목록에 반영한다. 최종 저장과 서버 초안이 같이 쓴다.
+ *
+ * 이력 속 레이어도 key 로 바꾼다. 안 바꾸면 되돌린 레이어가 blob 주소를 들고 있다가, 원본 삭제
+ * 판정(removePhotoAsset)이 그 연결을 놓친다. 사진 목록의 src 는 화면용이라 그대로 두고, 올린
+ * 사실만 s3Key 로 남겨 재업로드를 막는다.
+ */
+function withUploadedImages(
+  s: State,
+  uploaded: Map<string, UploadedImage>,
+): Pick<State, "components" | "past" | "future" | "assets"> {
+  const toUploaded = (c: EditorComponent): EditorComponent => {
+    if (c.type === "TEXT") return c;
+    const entry = uploaded.get(c.source);
+    return entry ? { ...c, source: entry.key, renderUrl: entry.url, assetId: entry.assetId } : c;
+  };
+  return {
+    components: s.components.map(toUploaded),
+    ...mapHistory(s, toUploaded),
+    assets: {
+      ...s.assets,
+      photos: s.assets.photos.map((a) => {
+        const entry = uploaded.get(a.src);
+        return entry ? { ...a, s3Key: entry.key } : a;
+      }),
+    },
+  };
+}
+
 function resetEditorState(get: () => State) {
   const state = get();
 
@@ -633,7 +669,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   finalizeAssetsForSave: () =>
     runOnAssetQueue(async () => {
       // 같은 원본을 두 번 올리지 않도록 경로별로 한 번만 올린다.
-      const uploaded = new Map<string, { key: string; url: string; assetId: string }>();
+      const uploaded = new Map<string, UploadedImage>();
 
       const uploadOnce = async (src: string, file: File) => {
         const cached = uploaded.get(src);
@@ -731,33 +767,52 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
       if (uploaded.size === 0 && textKeys.size === 0) return;
 
-      // 올린 자산은 이력 속 레이어도 key 로 바꾼다. 안 바꾸면 되돌린 레이어가 blob 주소를
-      // 들고 있다가, 원본 삭제 판정(removePhotoAsset)이 그 연결을 놓친다. 글자의 구운 key 는
-      // 그 시점 문구에만 맞으므로 이력에는 옮기지 않는다 — 지문이 다르면 다시 굽는다.
-      const toUploaded = (c: EditorComponent): EditorComponent => {
-        if (c.type === "TEXT") return c;
-        const entry = uploaded.get(c.source);
-        return entry
-          ? { ...c, source: entry.key, renderUrl: entry.url, assetId: entry.assetId }
-          : c;
-      };
-      set((s) => ({
-        components: s.components.map((c) => {
-          if (c.type === "TEXT") {
-            const rendered = textKeys.get(c.id);
+      // 글자의 구운 key 는 그 시점 문구에만 맞으므로 이력에는 옮기지 않는다 — 지문이 다르면 다시 굽는다.
+      set((s) => {
+        const next = withUploadedImages(s, uploaded);
+        return {
+          ...next,
+          components: next.components.map((c) => {
+            const rendered = c.type === "TEXT" ? textKeys.get(c.id) : undefined;
             return rendered ? { ...c, ...rendered } : c;
-          }
-          return toUploaded(c);
-        }),
-        ...mapHistory(s, toUploaded),
-        assets: {
-          ...s.assets,
-          photos: s.assets.photos.map((a) => {
-            const entry = uploaded.get(a.src);
-            // src 는 화면용이라 그대로 두고, 올린 사실만 s3Key 로 남겨 재업로드를 막는다.
-            return entry ? { ...a, s3Key: entry.key } : a;
           }),
-        },
+        };
+      });
+    }, ASSET_QUEUE_WAIT_LIMIT_MS),
+
+  /**
+   * 서버 초안(ADR-0006 §5)을 쓰기 전에, 문서에 넣을 수 없는 로컬 이미지만 자산으로 올린다.
+   *
+   * 최종 저장(`finalizeAssetsForSave`)과 다른 점: 글자는 굽지 않고(초안은 합성에 쓰지 않는다),
+   * 정적 스티커도 올리지 않는다(`/stickers/…` 는 어느 기기에서나 열린다). 숨긴 사진도 올린다 —
+   * 초안은 숨긴 레이어까지 담아야 다른 기기에서 그대로 이어진다.
+   */
+  uploadLocalImagesForDraft: () =>
+    runOnAssetQueue(async () => {
+      const uploaded = new Map<string, UploadedImage>();
+      const { components, assets } = get();
+      const usedPhotoSrcs = new Set(
+        components.filter((c) => c.type === "PHOTO" && isLocalImageSource(c.source)).map((c) => c.source),
+      );
+      for (const asset of assets.photos) {
+        if (!asset.file || !usedPhotoSrcs.has(asset.src) || uploaded.has(asset.src)) continue;
+        const { key, assetId } = await uploadAsset({ file: asset.file, purpose: "FRAME_ASSET" });
+        uploaded.set(asset.src, { key, url: asset.src, assetId });
+      }
+
+      const { background, pendingBackgroundFile } = get();
+      const backgroundUpload =
+        pendingBackgroundFile && background.type === "IMAGE" && !background.key
+          ? await uploadAsset({ file: pendingBackgroundFile, purpose: "FRAME_ASSET" })
+          : null;
+
+      if (uploaded.size === 0 && !backgroundUpload) return;
+      set((s) => ({
+        ...withUploadedImages(s, uploaded),
+        // 그 사이 다른 배경을 골랐으면 옛 배경의 key 를 붙이지 않는다.
+        ...(backgroundUpload && s.background.type === "IMAGE" && s.pendingBackgroundFile === pendingBackgroundFile
+          ? { background: { ...s.background, key: backgroundUpload.key, assetId: backgroundUpload.assetId } }
+          : {}),
       }));
     }, ASSET_QUEUE_WAIT_LIMIT_MS),
 

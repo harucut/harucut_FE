@@ -185,6 +185,20 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
 
+const mockServerDraftFinish = jest.fn().mockResolvedValue(undefined);
+jest.mock("@/components/theme/editor/useServerFrameDraft", () => ({
+  useServerFrameDraft: () => ({
+    status: "idle",
+    offer: null,
+    conflict: null,
+    restoreOffer: jest.fn(),
+    dismissOffer: jest.fn(),
+    overwriteConflict: jest.fn(),
+    reloadConflict: jest.fn(),
+    finish: mockServerDraftFinish,
+  }),
+}));
+
 const mockUploadAsset = jest.fn();
 jest.mock("@/lib/assetUploadApi", () => ({
   uploadAsset: (...args: unknown[]) => mockUploadAsset(...args),
@@ -305,6 +319,14 @@ describe("ThemeEditorPage save flow", () => {
       await jest.advanceTimersByTimeAsync(1200);
     });
     expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
+  });
+
+  // 저장을 마친 편집을 다른 기기가 「이어 편집할 초안」으로 다시 묻지 않게 한다.
+  it("저장에 성공하면 서버 초안을 지운다", async () => {
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    confirmSave(container);
+    await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockServerDraftFinish).toHaveBeenCalledTimes(1));
   });
 
   it("adds a local draft when creating a new frame", async () => {
