@@ -16,6 +16,7 @@ import {
 import { STUDIO_TIMEZONE } from "@/lib/studio/eventTime";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { LeaveWorkspaceButton, StudioMembers } from "@/components/studio/StudioMembers";
+import { StudioMultiExports } from "@/components/studio/StudioMultiExports";
 import { StudioProjects } from "@/components/studio/StudioProjects";
 import { PERMISSION_LABEL, listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
@@ -189,6 +190,21 @@ export function StudioHome() {
                 </ul>
               ) : null}
             </section>
+
+            {/* 여러 행사 묶음(P3-5) — 공간 범위는 OWNER·ADMIN, 프로젝트 범위는 그 프로젝트 멤버(운영 담당)도. */}
+            {events && events.length > 0 && ["OWNER", "ADMIN", "OPERATOR"].includes(current.role) ? (
+              <section aria-labelledby="studio-multi-exports-title" className="flex flex-col gap-3">
+                <h2 id="studio-multi-exports-title" className="text-[18px] font-bold">
+                  여러 행사 사진 묶기
+                </h2>
+                <StudioMultiExports
+                  key={current.workspaceId}
+                  workspaceId={current.workspaceId}
+                  canUseWorkspace={current.role !== "OPERATOR"}
+                  events={events}
+                />
+              </section>
+            ) : null}
 
             {current.role === "OWNER" || current.role === "ADMIN" ? (
               <section aria-labelledby="studio-projects-title" className="flex flex-col gap-3">

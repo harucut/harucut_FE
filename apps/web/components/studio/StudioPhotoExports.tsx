@@ -12,7 +12,7 @@ import {
   type PhotoExport,
 } from "@/lib/studio/photosApi";
 
-const STATUS_LABEL: Record<ExportStatus, string> = {
+export const STATUS_LABEL: Record<ExportStatus, string> = {
   PENDING: "기다리는 중",
   RUNNING: "묶는 중",
   DONE: "받을 수 있어요",
@@ -23,12 +23,12 @@ const STATUS_LABEL: Record<ExportStatus, string> = {
 /** 만드는 중인 묶음이 있을 때 다시 묻는 간격. 압축은 서버 작업이 맡고 이 화면은 상태만 본다. */
 export const EXPORT_POLL_MS = 5_000;
 
-function formatSize(bytes?: number | null) {
+export function formatSize(bytes?: number | null) {
   if (!bytes) return "";
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
 }
 
-function openWithoutReferrer(url: string) {
+export function openWithoutReferrer(url: string) {
   const link = document.createElement("a");
   link.href = url;
   link.rel = "noreferrer";
