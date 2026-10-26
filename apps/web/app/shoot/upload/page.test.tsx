@@ -33,7 +33,6 @@ const mockImportPhotoFiles = jest.fn();
 const sessionState = {
   frameId: "classic-4" as string | null,
   shots: [] as string[],
-  eventName: null as string | null,
   addShotPhotos: (...args: unknown[]) => mockAddShotPhotos(...args),
   removeShotPhoto: jest.fn(),
 };
@@ -93,7 +92,6 @@ beforeEach(() => {
   mockResolveMembership.mockResolvedValue("member");
   document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
   sessionState.frameId = "classic-4";
-  sessionState.eventName = null;
   sessionState.shots = [];
   // 진짜 importPhotoFiles 처럼 상한만큼만 변환한 결과를 돌려준다.
   mockImportPhotoFiles.mockImplementation(
@@ -303,8 +301,8 @@ describe("사진 불러오기 개수 상한", () => {
 
   한동안 이 판정의 유일한 집행 지점이 프록시였다(`GUEST_MEMBER_ONLY_PREFIXES`). 그런데
   프록시는 **요청이 올 때** 한 번 보고, 그 판정의 근거인 게스트 쿠키는 나중에 심길 수 있다 —
-  행사 진입이 그렇다(app/shoot/page.tsx 가 인증 왕복 뒤에 판정한다). 그 사이에
-  `/shoot?source=upload&event=...` 에서 확인을 누르면 이 화면이 먼저 열리고, 뒤늦게
+  `checkSession=1` 진입이 그렇다(app/shoot/page.tsx 가 인증 왕복 뒤에 판정한다). 그 사이에
+  `/shoot?source=upload&checkSession=1` 에서 확인을 누르면 이 화면이 먼저 열리고, 뒤늦게
   게스트가 되어도 이미 들어와 있어 아무도 되돌리지 않았다.
 
   비회원 범위는 약관 제8조와 `@harucut/shared` 의 `GUEST_ALLOWED_ITEMS` 가 "사진 촬영과
@@ -325,28 +323,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
   });
 
   /*
-    회귀 — **되돌릴 때 행사 이름과 고른 프레임을 잃지 않는다.**
-
-    `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 새 촬영으로 보고 세션을 비운다. 고정 주소로
-    보내면 행사 배너와 QR 이 지정한 프레임이 함께 사라져, 참가자가 기본 프레임으로 찍게 된다.
-    막는 것은 회원 전용 경로 하나지 행사 진입 전체가 아니다.
-  */
-  it("되돌릴 때 행사 이름과 프레임을 들려 보낸다", async () => {
-    mockResolveMembership.mockResolvedValue("guest");
-    sessionState.eventName = "hongdae-2026";
-    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
-
-    render(<ShootUploadPage />);
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith(
-        "/shoot?guestNotice=restricted&frame=classic-4&event=hongdae-2026",
-      );
-    });
-  });
-
-  /*
-    이 화면이 열린 **뒤에** 게스트가 되는 경우가 이번에 잡힌 자리다 — 행사 진입의 판정이
+    이 화면이 열린 **뒤에** 게스트가 되는 경우가 이번에 잡힌 자리다 — 회원 후보 진입의 판정이
     인증 왕복 뒤에 끝난다. 마운트 시점만 보면 그 순간을 놓친다.
   */
   it("들어온 뒤에 게스트가 되어도 되돌린다", async () => {
@@ -467,7 +444,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
     fireEvent.change(input, { target: { files: photoFiles(SLOT_COUNT) } });
     await waitFor(() => expect(mockImportPhotoFiles).toHaveBeenCalledTimes(1));
 
-    // 그 사이 게스트로 뒤집힌다(행사 화면의 늦은 판정).
+    // 그 사이 게스트로 뒤집힌다(프레임 선택 화면의 늦은 판정).
     mockResolveMembership.mockResolvedValue("guest");
     act(() => {
       useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
@@ -492,7 +469,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
   /*
     회귀 — **확정된 비회원은 실제로 게스트가 된다.**
 
-    행사 쿼리 없이 이 화면을 연 사람의 쿠키가 만료·회수됐으면, 되돌리기만 해서는 `accessMode`
+    회원 후보 진입이 아닌 길로 이 화면을 연 사람의 쿠키가 만료·회수됐으면, 되돌리기만 해서는 `accessMode`
     가 `member` 로 남는다. 프록시는 남은 죽은 쿠키로 계속 통과시키고, 화면은 회원처럼
     그리다가 결과 단계의 인증 API 에서 막힌다 — 벗어날 손잡이가 없는 막다른 길이다.
   */
@@ -559,7 +536,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
   */
   /*
     회원도 **묻는다.** 기준을 쿠키가 아니라 서버의 답으로 두었기 때문이다 — `accessMode` 의
-    초깃값이 "member" 라 쿠키로 잠그면 잠금이 처음부터 풀려 있고, 행사 진입에서 앞 화면의
+    초깃값이 "member" 라 쿠키로 잠그면 잠금이 처음부터 풀려 있고, 회원 후보 진입에서 앞 화면의
     판정을 기다리는 사람이 그 틈에 사진을 담아 다음 화면으로 넘어갈 수 있다.
     값은 왕복 하나다(재발급은 clientApi 가 하나로 묶는다).
   */
@@ -576,7 +553,7 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
 
   /*
     회귀 — **확인되기 전에는 잠겨 있다.** 이 못이 없으면 「처음부터 열어 둔다」로 고쳐도
-    나머지가 통과한다. 행사 진입의 죽은 쿠키 사용자가 그 틈을 쓰던 자리다.
+    나머지가 통과한다. 죽은 쿠키를 든 회원 후보가 그 틈을 쓰던 자리다.
   */
   it("확인되기 전에는 잠겨 있다", () => {
     // 답을 붙잡아 둔다 — 판정이 아직 안 끝난 순간이다.

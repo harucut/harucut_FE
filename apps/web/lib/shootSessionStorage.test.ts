@@ -106,3 +106,17 @@ test("다른 탭이 사진을 삭제해도 현재 사진을 빠짐없이 다시 
   await writeShootDraft(draft(), now);
   expect((await readShootDraft(now))?.shots).toEqual(shots);
 });
+
+/*
+  옛 행사 촬영(`/shoot?event=`)을 걷어내며 `eventName` 필드도 없앴다. 예전 앱이 쓴 보관물에는
+  그 필드가 남아 있다 — 검사가 남아 있으면 「무효」가 되어 **사진째** 지워진다(기획 R5 D01).
+*/
+test("옛 eventName 필드가 남은 보관물도 사진을 지우지 않고 복원한다", async () => {
+  await writeShootDraft(draft(), now);
+  const meta = mockData.get("meta") as Record<string, unknown>;
+  mockData.set("meta", { ...meta, eventName: "x".repeat(500) });
+
+  const restored = await readShootDraft(now);
+  expect(restored?.shots).toEqual(shots);
+  expect(restored).not.toHaveProperty("eventName");
+});
