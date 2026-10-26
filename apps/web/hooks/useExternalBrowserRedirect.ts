@@ -16,6 +16,18 @@ export function useExternalBrowserRedirect() {
       return;
     }
 
+    /*
+      결과 수령(/r#<token>)은 자동으로 내보내지 않는다.
+      - 토큰이 fragment 에 있다. 안드로이드 intent:// 주소는 `#Intent;` 앞의 `#토큰` 을 보존한다는
+        보장이 없어, 외부 브라우저가 토큰 없이 열릴 수 있다.
+      - 카카오톡 탈출은 링크 전체를 `?url=` 에 실어 앱에 넘긴다 — 결과 링크를 중계 주소에 옮기지
+        않는다는 규칙(기획 R5 16절)과 부딪힌다.
+      결과 화면은 카메라가 필요 없어 인앱 브라우저 안에서도 받을 수 있다.
+    */
+    if (url.pathname === "/r") {
+      return;
+    }
+
     // 우리 앱 셸은 인앱 브라우저가 아니다. 이 검사가 없으면 앱이 켜지자마자 자기 화면을
     // 밖의 크롬으로 내보내고 빈 껍데기만 남는다. UA 토큰은 apps/mobile 셸이 붙인다.
     if (userAgent.includes("harucutapp") || window.__HARUCUT_NATIVE__) {

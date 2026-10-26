@@ -1,8 +1,17 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { EventStudio } from "@/components/studio/EventStudio";
+import { useThemeSession } from "@/lib/themeSessionStore";
 import type { StudioEvent } from "@/lib/studio/studioApi";
 
 const mockGetEvent = jest.fn();
+const mockPush = jest.fn();
+const mockListVersions = jest.fn();
+const mockListFrames = jest.fn();
+const mockPublishFrame = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 const mockUpdate = jest.fn();
 const mockRun = jest.fn();
 
@@ -12,7 +21,23 @@ jest.mock("@/lib/studio/studioApi", () => ({
   getEvent: (...args: unknown[]) => mockGetEvent(...args),
   updateEventSettings: (...args: unknown[]) => mockUpdate(...args),
   runEventAction: (...args: unknown[]) => mockRun(...args),
+  listPickableFrameVersions: (...args: unknown[]) => mockListVersions(...args),
+  listWorkspaceFrames: (...args: unknown[]) => mockListFrames(...args),
+  publishFrameVersion: (...args: unknown[]) => mockPublishFrame(...args),
+  listBoothDevices: async () => [],
 }));
+
+const VERSION_CLASSIC = {
+  frameVersionId: 41,
+  frameId: 7,
+  versionNo: 2,
+  frameType: "CLASSIC",
+  title: "웨딩 세로",
+  previewUrl: null,
+  source: "WORKSPACE",
+  publishedAt: "2026-10-26T00:00:00Z",
+};
+const VERSION_SYSTEM = { ...VERSION_CLASSIC, frameVersionId: 9, frameId: 201, versionNo: 1, title: "기본 세로", source: "SYSTEM" };
 
 function apiError(code: string, data?: unknown) {
   return Object.assign(new Error(code), { code, data: { code, data } });
@@ -52,6 +77,9 @@ async function renderStudio(initial = event()) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockListVersions.mockResolvedValue([VERSION_CLASSIC, VERSION_SYSTEM]);
+  mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 세로", frameType: "CLASSIC", components: [] }]);
+  useThemeSession.getState().reset();
 });
 
 it("참가 링크를 이 화면의 오리진에 붙여 QR 과 함께 보여 준다", async () => {
@@ -79,8 +107,8 @@ it("문구를 바꾼 동의 항목만 version 을 올려 저장한다", async ()
     ["photo", 3],
     ["share", 1],
   ]);
-  // 이 화면이 다루지 않는 프레임은 보내지 않는다 — 보낸 필드만 바뀐다.
-  expect(settings).not.toHaveProperty("frames");
+  // 이 화면이 다루지 않는 테마는 보내지 않는다 — 보낸 필드만 바뀐다.
+  expect(settings).not.toHaveProperty("theme");
 });
 
 it("다른 곳이 먼저 바꿨으면(EVENT-005) 묻고, 덮어쓰기를 고르면 서버 버전으로 다시 저장한다", async () => {
@@ -148,4 +176,80 @@ it("촬영 종료는 확인을 받은 뒤에 보낸다", async () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "촬영 종료" }));
   });
   await waitFor(() => expect(mockRun).toHaveBeenCalledWith("Ev1", "close-capture"));
+});
+
+it("처음 고른 프레임이 기본이 되고, 저장하면 고른 발행본을 보낸다", async () => {
+  await renderStudio();
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+  fireEvent.click(await screen.findByRole("checkbox", { name: /웨딩 세로/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /기본 세로/ }));
+  expect(screen.getAllByRole("radio", { name: "기본" })[0]).toBeChecked();
+
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2].frames).toEqual([
+    { frameVersionId: 41, layoutType: "CLASSIC", isDefault: true, sortOrder: 1 },
+    { frameVersionId: 9, layoutType: "CLASSIC", isDefault: false, sortOrder: 2 },
+  ]);
+});
+
+// 남기면 게시 검사가 「허용하지 않은 레이아웃의 프레임」으로 막는다.
+it("허용 레이아웃을 빼면 그 판형의 프레임도 같이 뺀다", async () => {
+  await renderStudio(
+    event({
+      settings: {
+        ...event().settings,
+        frames: [{ frameVersionId: 41, layoutType: "CLASSIC", isDefault: true, sortOrder: 1 }],
+      },
+    }),
+  );
+  mockUpdate.mockResolvedValue(event());
+
+  fireEvent.click(screen.getByLabelText("세로 4컷"));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toMatchObject({ allowedLayouts: [], frames: [] });
+});
+
+it("행사용 프레임 만들기는 편집기를 이 공간 맥락으로 열고 여기로 돌아오게 한다", async () => {
+  await renderStudio();
+  fireEvent.click(await screen.findByRole("button", { name: "세로 4컷 만들기" }));
+
+  expect(useThemeSession.getState()).toMatchObject({
+    frameId: "classic-4",
+    remoteFrameId: null,
+    workspaceId: "Ws1",
+    returnTo: "/studio/events/Ev1",
+  });
+  expect(mockPush).toHaveBeenCalledWith("/theme/sticker");
+});
+
+// 편집기로 떠나면 저장 안 한 설정이 사라진다.
+it("저장 안 한 설정이 있으면 프레임을 만들러 떠나지 않는다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText("행사 이름"), { target: { value: "바뀐 이름" } });
+  expect(await screen.findByRole("button", { name: "세로 4컷 만들기" })).toBeDisabled();
+});
+
+it("공간 프레임을 발행하면 고르기 목록을 다시 받는다", async () => {
+  await renderStudio();
+  mockPublishFrame.mockResolvedValue({ frameVersionId: 42, versionNo: 3 });
+  fireEvent.click(await screen.findByRole("button", { name: "새 버전 발행" }));
+
+  await waitFor(() => expect(mockPublishFrame).toHaveBeenCalledWith(7));
+  await waitFor(() => expect(mockListVersions).toHaveBeenCalledTimes(2));
+  expect(screen.getByText(/3번째 발행본을 만들었어요/)).toBeInTheDocument();
+});
+
+// 부스 관리는 저장된 설정에서 현장 부스를 켠 행사에만 보인다.
+it("현장 부스를 켠 행사에만 부스 기기 관리를 보여 준다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, boothEnabled: true } }));
+  expect(await screen.findByRole("heading", { name: "부스 기기" })).toBeInTheDocument();
+});
+
+it("현장 부스를 끈 행사에는 부스 기기 관리가 없다", async () => {
+  await renderStudio();
+  expect(screen.queryByRole("heading", { name: "부스 기기" })).not.toBeInTheDocument();
 });

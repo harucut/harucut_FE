@@ -1,7 +1,7 @@
 "use client";
 
 import { clientApi } from "@/lib/clientApi";
-import type { ApiEnvelope } from "@/lib/api-types";
+import type { ApiEnvelope, RemoteFrame } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
 
 /**
@@ -146,4 +146,96 @@ export function publishViolations(error: unknown): PublishViolation[] {
     (v): v is PublishViolation =>
       Boolean(v) && typeof v.field === "string" && typeof v.reason === "string",
   );
+}
+
+// ── 행사 제공 프레임 (백엔드 fork #18) ──
+
+/** 행사에 고를 수 있는 발행본. 프레임마다 최신 발행본 하나, 공간 프레임이 먼저·시스템 프레임이 다음. */
+export type PickableFrameVersion = {
+  frameVersionId: number;
+  frameId: number;
+  versionNo: number;
+  frameType: EventLayout;
+  /** 원본 프레임의 지금 제목. */
+  title: string;
+  /** 원본 프레임 미리보기(24시간). 참고용이라 발행본과 다를 수 있다. */
+  previewUrl?: string | null;
+  source: "SYSTEM" | "WORKSPACE";
+  publishedAt: string;
+};
+
+export async function listWorkspaceFrames(workspaceId: string): Promise<RemoteFrame[]> {
+  const res = await clientApi.get<ApiEnvelope<RemoteFrame[]>>(
+    `/api/client/workspaces/${encodeURIComponent(workspaceId)}/frames`,
+  );
+  return res.data.data ?? [];
+}
+
+export async function listPickableFrameVersions(workspaceId: string): Promise<PickableFrameVersion[]> {
+  const res = await clientApi.get<ApiEnvelope<PickableFrameVersion[]>>(
+    `/api/client/workspaces/${encodeURIComponent(workspaceId)}/frame-versions`,
+  );
+  return res.data.data ?? [];
+}
+
+/** 지금 저장된 프레임을 발행본으로 고정한다. 정적 스티커·구운 PNG 없는 글자가 남아 있으면 400 GEN-002. */
+export async function publishFrameVersion(frameId: number): Promise<{ frameVersionId: number; versionNo: number }> {
+  const res = await clientApi.post<ApiEnvelope<{ frameVersionId: number; versionNo: number }>>(
+    `/api/client/user/frame/${frameId}/versions`,
+  );
+  return requireData(res.data, "발행본");
+}
+
+// ── 부스 기기 (백엔드 fork #19) ──
+
+export type BoothDeviceStatus = "PENDING_PAIRING" | "ACTIVE" | "REVOKED";
+
+export type BoothDevice = {
+  deviceId: string;
+  name: string;
+  status: BoothDeviceStatus;
+  /** 만들 때·재발급할 때만 실린다(XXXX-XXXX, 10분). 목록에는 없다 — 다시 보려면 재발급한다. */
+  pairingCode?: string;
+  pairingExpiresAt?: string;
+  lastSeenAt?: string | null;
+};
+
+/** 행사당 회수되지 않은 기기 상한(백엔드 설정 기본값). 넘으면 403 BOOTH-006. */
+export const MAX_BOOTH_DEVICES = 20;
+export const BOOTH_DEVICE_NAME_MAX = 50;
+
+export async function listBoothDevices(eventId: string, signal?: AbortSignal): Promise<BoothDevice[]> {
+  const res = await clientApi.get<ApiEnvelope<BoothDevice[]>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/booth-devices`,
+    { signal },
+  );
+  return res.data.data ?? [];
+}
+
+export async function createBoothDevice(eventId: string, name: string): Promise<BoothDevice> {
+  const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/booth-devices`,
+    { name },
+  );
+  return requireData(res.data, "부스 기기");
+}
+
+/** 새 연결 코드. 이전 코드는 닫히고, 이미 연결된 기기는 새 코드가 쓰이는 순간 끊긴다(기기 교체). */
+export async function reissuePairingCode(deviceId: string, signal?: AbortSignal): Promise<BoothDevice> {
+  const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
+    `/api/client/booth-devices/${encodeURIComponent(deviceId)}/pairing-codes`,
+    undefined,
+    { signal },
+  );
+  return requireData(res.data, "연결 코드");
+}
+
+/** 되돌릴 수 없다 — 기기 토큰·열린 코드·진행 중 회차·그 기기의 손님 세션이 모두 닫힌다. */
+export async function revokeBoothDevice(deviceId: string, signal?: AbortSignal): Promise<BoothDevice> {
+  const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
+    `/api/client/booth-devices/${encodeURIComponent(deviceId)}/revoke`,
+    undefined,
+    { signal },
+  );
+  return requireData(res.data, "부스 기기");
 }

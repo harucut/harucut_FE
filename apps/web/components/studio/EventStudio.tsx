@@ -6,7 +6,11 @@ import { AppNav } from "@/components/layout/AppNav";
 import { QrCode } from "@/components/qr/QrCode";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
-import { getFrameConfig } from "@/constants/frames";
+import { useRouter } from "next/navigation";
+import { getFrameConfig, type FrameId } from "@/constants/frames";
+import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
+import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
+import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { toLocalInputValue, toServerDateTime } from "@/lib/studio/eventTime";
@@ -23,6 +27,7 @@ import {
   type EventAction,
   type EventLayout,
   type EventSettings,
+  type FrameRef,
   type StudioEvent,
 } from "@/lib/studio/studioApi";
 
@@ -42,6 +47,7 @@ type Form = {
   booth: boolean;
   layouts: EventLayout[];
   consents: ConsentDraft[];
+  frames: FrameRef[];
   retentionDays: string;
 };
 
@@ -55,12 +61,13 @@ function formOf(settings: EventSettings): Form {
     booth: Boolean(settings.boothEnabled),
     layouts: LAYOUTS.filter((l) => settings.allowedLayouts?.includes(l)),
     consents: (settings.consentItems ?? []).map(({ code, title, body, required }) => ({ code, title, body, required })),
+    frames: [...(settings.frames ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
     retentionDays: String(settings.resultRetentionDays ?? DEFAULT_RETENTION_DAYS),
   };
 }
 
 /**
- * 폼 → PATCH 본문. 프레임·테마는 이 화면이 다루지 않으므로 보내지 않는다(보낸 필드만 바뀐다).
+ * 폼 → PATCH 본문. 테마는 이 화면이 다루지 않으므로 보내지 않는다(보낸 필드만 바뀐다).
  *
  * 동의 항목의 version 은 **문구가 바뀌었을 때만** 올린다. 참가자 동의 기록은 「어느 버전의 문구」에
  * 대한 것이라, 같은 문구에 새 버전을 매기면 기록이 가리키는 문구가 흐려지고, 바꾼 문구에 옛 버전을
@@ -77,6 +84,7 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
     byodEnabled: form.byod,
     boothEnabled: form.booth,
     allowedLayouts: form.layouts,
+    frames: form.frames,
     consentItems: form.consents.map((c) => {
       const before = previous.get(c.code);
       const changed = !before || before.title !== c.title || before.body !== c.body;
@@ -103,6 +111,7 @@ function useOrigin() {
 type Load = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; event: StudioEvent };
 
 export function EventStudio({ eventId }: { eventId: string }) {
+  const router = useRouter();
   const origin = useOrigin();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [form, setForm] = useState<Form | null>(null);
@@ -154,6 +163,15 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const next = settingsOf(form, event.settings);
   const dirty = JSON.stringify(next) !== JSON.stringify(settingsOf(formOf(event.settings), event.settings));
   const joinUrl = `${origin}${event.joinUrlPath}`;
+
+  // 행사용 프레임은 같은 편집기를 공간 맥락으로 연다 — 저장하면 이 공간에 만들고 여기로 돌아온다.
+  const openEditor = (frameId: FrameId, remoteFrameId: number | null) => {
+    const session = useThemeSession.getState();
+    session.setFrameId(frameId);
+    session.setRemoteFrameId(remoteFrameId);
+    session.setWorkspaceContext(event.workspaceId, `/studio/events/${encodeURIComponent(event.eventId)}`);
+    router.push("/theme/sticker");
+  };
   const update = (patch: Partial<Form>) => setForm({ ...form, ...patch });
 
   const save = async (settingsVersion = event.settingsVersion) => {
@@ -295,23 +313,30 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     key={layout}
                     label={getFrameConfig(frameIdFromFrameType(layout)).name}
                     checked={form.layouts.includes(layout)}
-                    onChange={(on) =>
-                      update({
-                        layouts: LAYOUTS.filter((l) => (l === layout ? on : form.layouts.includes(l))),
-                      })
-                    }
+                    onChange={(on) => {
+                      const layouts = LAYOUTS.filter((l) => (l === layout ? on : form.layouts.includes(l)));
+                      // 뺀 판형의 프레임도 같이 뺀다 — 남기면 게시 검사가 「허용하지 않은 레이아웃의 프레임」으로 막는다.
+                      update({ layouts, frames: normalizeFrameRefs(form.frames.filter((f) => layouts.includes(f.layoutType))) });
+                    }}
                   />
                 ))}
               </div>
             </Section>
 
-            <Section title="제공 프레임">
-              <p className="text-[13px] text-(--hc-muted)">
-                {(event.settings.frames ?? []).length > 0
-                  ? `연결된 프레임 ${(event.settings.frames ?? []).length}개.`
-                  : "아직 연결된 프레임이 없어요."}{" "}
-                프레임 고르기는 곧 열려요.
-              </p>
+            <Section
+              title="제공 프레임"
+              description="참가자가 고를 수 있는 프레임이에요. 허용한 레이아웃마다 하나 이상, 기본 프레임은 전체에서 하나예요."
+            >
+              <StudioFramePicker
+                workspaceId={event.workspaceId}
+                layouts={form.layouts}
+                value={form.frames}
+                onChange={(frames) => update({ frames })}
+                disabled={!editable || busy !== null}
+                editLocked={dirty}
+                onEditFrame={(frame) => openEditor(frameIdFromFrameType(frame.frameType), frame.frameId)}
+                onCreateFrame={(layout) => openEditor(frameIdFromFrameType(layout), null)}
+              />
             </Section>
 
             <Section
@@ -416,6 +441,15 @@ export function EventStudio({ eventId }: { eventId: string }) {
             </button>
           ) : null}
         </form>
+
+        {event.settings.boothEnabled ? (
+          <section aria-labelledby="studio-booth-title" className="flex flex-col gap-3">
+            <h2 id="studio-booth-title" className="text-[18px] font-bold">
+              부스 기기
+            </h2>
+            <StudioBoothDevices eventId={event.eventId} boothUrl={`${origin}/booth`} />
+          </section>
+        ) : null}
 
         <section aria-labelledby="studio-run-title" className="flex flex-col gap-3">
           <h2 id="studio-run-title" className="text-[18px] font-bold">

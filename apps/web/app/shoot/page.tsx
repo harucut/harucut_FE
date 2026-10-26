@@ -3,10 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { sanitizeEventName } from "@/lib/eventName";
 import { FrameChooser, type FrameChoice } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { EventBanner } from "@/components/event/EventBanner";
 import { resolveMembership } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
@@ -37,7 +35,6 @@ function ShootPageContent() {
     setFrameId,
     setRemoteFrameId,
     setSource,
-    setEventName,
     reset,
     resetFrameSelection,
   } = useShootSession();
@@ -53,45 +50,21 @@ function ShootPageContent() {
   // 촬영으로 갈지 불러오기로 갈지는 **주소가 들고 있다.** 상태가 아니라 "다음 단계가
   // 무엇인가"라는 라우팅 정보라, 새로고침하거나 링크를 공유해도 그대로여야 한다.
   const source = searchParams.get("source") === "upload" ? "upload" : "camera";
-  // 행사장 QR 은 `/shoot?frame=...&event=행사이름` 으로 들어온다. 이름은 화면에만 쓰므로
-  // 길이를 잘라 두고(제목 한 줄), 앞뒤 공백은 버린다.
-  const queriedEventName =
-    sanitizeEventName(searchParams.get("event"));
-  // 화면에는 세션에 자리잡은 값을 쓴다 — 아래 effect 가 쿼리와 이어 가기 여부로 정한 값이다.
-  const eventName = useShootSession((state) => state.eventName);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const guestHydrated = useGuestTrialStore((state) => state.hydrated);
   const { frames, isLoading, error, refresh } = useMyFrames(guestHydrated && accessMode === "member");
 
   useEffect(() => {
-    /*
-      행사 이름을 물려받는 것은 **이어 가는 진입뿐이다.** 결과 화면이 "다른 프레임으로" 로
-      돌려보내는 길에는 행사 쿼리가 없으므로(`keepShots=1` 만 붙는다) 거기서는 이어 쓴다.
-      촬영 화면의 "프레임 다시 선택"은 주소에 `event=` 를 실어 보내므로 쿼리로 살아 온다.
-
-      반대로 쿼리도 `keepShots` 도 없는 진입은 **새 촬영**이다. 여기서 이어 쓰면 행사 QR 로
-      한 번 찍은 브라우저가 그 뒤의 일반 촬영·결과 화면까지 지난 행사 배너를 달고 다닌다.
-    */
+    // `keepShots` 없는 진입은 **새 촬영**이다. 이어 가는 진입은 찍은 사진만 두고 프레임을 다시 고른다.
     if (resumeAvailable) return;
-    const carried = keepShots ? useShootSession.getState().eventName : null;
     if (keepShots) resetFrameSelection();
     else reset();
-    setEventName(queriedEventName ?? carried);
     // reset 이 출처를 기본값으로 되돌린다. 주소가 진실이므로 다시 심는다.
     setSource(source);
-  }, [
-    resumeAvailable,
-    keepShots,
-    queriedEventName,
-    reset,
-    resetFrameSelection,
-    setEventName,
-    setSource,
-    source,
-  ]);
+  }, [resumeAvailable, keepShots, reset, resetFrameSelection, setSource, source]);
 
   // 인증 쿠키가 남아 있는 방문자만 확인한다. 이미 체험 중인 방문자는 API를 부르지 않는다.
-  const checkSession = queriedEventName || searchParams.get("checkSession") === "1";
+  const checkSession = searchParams.get("checkSession") === "1";
   const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
   const hydrated = useGuestTrialStore((state) => state.hydrated);
 
@@ -129,9 +102,8 @@ function ShootPageContent() {
     }
     if (session.shots.length > 0) session.resetShots();
     if (source === "upload") {
-      // 인증 프록시가 되돌릴 때도 행사와 프레임을 보존한다.
+      // 인증 프록시가 되돌릴 때도 프레임을 보존한다.
       const next = new URLSearchParams({ frame: frameId });
-      if (eventName) next.set("event", eventName);
       router.push(`/shoot/upload?${next.toString()}`);
       return;
     }
@@ -184,9 +156,7 @@ function ShootPageContent() {
               만드는 것은 그대로 할 수 있어요.
             </p>
           }
-        >
-          {eventName ? <EventBanner eventName={eventName} /> : null}
-        </FrameChooser>
+        />
         {pendingFrame ? <ConfirmDialog
           title="새 비율로 다시 촬영할까요?"
           description="선택한 프레임은 사진 비율이 달라요. 다시 촬영하면 현재 사진이 이 기기에서 지워져요. 사진을 남기려면 취소하고 같은 비율의 프레임을 골라 주세요."
