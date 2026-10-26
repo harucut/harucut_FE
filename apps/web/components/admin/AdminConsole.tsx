@@ -21,6 +21,7 @@ type TabKey = (typeof TABS)[number]["key"];
 export function AdminConsole() {
   const [tab, setTab] = useState<TabKey>("inquiries");
   const [prefill, setPrefill] = useState<{ contractorName: string; nonce: number } | null>(null);
+  const [entitlementsVersion, setEntitlementsVersion] = useState(0);
 
   return (
     <main className="hc-page-app min-h-dvh pb-16 text-(--hc-text)">
@@ -36,7 +37,11 @@ export function AdminConsole() {
               id={`admin-tab-${t.key}`}
               aria-selected={tab === t.key}
               aria-controls={`admin-panel-${t.key}`}
-              onClick={() => setTab(t.key)}
+              onClick={() => {
+                setTab(t.key);
+                // 이용권 탭에 들어올 때마다 새로 받는다(다른 관리자가 바꿨을 수도 있다).
+                if (t.key === "entitlements") setEntitlementsVersion((v) => v + 1);
+              }}
               className={
                 tab === t.key
                   ? "hc-button-primary h-11 rounded-full px-5 text-[14px] font-semibold"
@@ -57,10 +62,10 @@ export function AdminConsole() {
           />
         </section>
         <section role="tabpanel" id="admin-panel-contracts" aria-labelledby="admin-tab-contracts" hidden={tab !== "contracts"}>
-          <AdminContracts prefill={prefill} />
+          <AdminContracts prefill={prefill} onContractChanged={() => setEntitlementsVersion((v) => v + 1)} />
         </section>
         <section role="tabpanel" id="admin-panel-entitlements" aria-labelledby="admin-tab-entitlements" hidden={tab !== "entitlements"}>
-          <AdminEntitlements />
+          <AdminEntitlements reloadKey={entitlementsVersion} />
         </section>
       </div>
     </main>

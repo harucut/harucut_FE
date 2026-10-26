@@ -243,3 +243,19 @@ it("탭을 오가도 작성 중인 계약 초안을 지우지 않는다", async 
   fireEvent.click(screen.getByRole("tab", { name: "계약" }));
   expect(within(screen.getByRole("form", { name: "새 계약" })).getByLabelText(/계약자/)).toHaveValue("작성 중 계약자");
 });
+
+// Codex 리뷰(#546): 패널을 늘 마운트해 두면, 계약을 적용해 생긴 이용권이 이용권 탭에 안 보였다.
+it("계약을 적용하면 이용권 목록을 다시 받아 새 이용권을 보여 준다", async () => {
+  api.changeContractStatus.mockResolvedValue({ ...CONTRACT, status: "ACTIVE" });
+  render(<AdminConsole />);
+  await waitFor(() => expect(api.listEntitlements).toHaveBeenCalledTimes(1));
+  api.listEntitlements.mockResolvedValue([ENTITLEMENT, { ...ENTITLEMENT, entitlementId: "EnNew", source: "CONTRACT", contractId: "Ct1" }]);
+
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "적용하기" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "적용하기" }));
+  await waitFor(() => expect(api.listEntitlements).toHaveBeenCalledTimes(2));
+
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+  expect(await screen.findByText(/계약 Ct1/)).toBeInTheDocument();
+});
