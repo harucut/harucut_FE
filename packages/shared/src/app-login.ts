@@ -73,7 +73,20 @@ export function appLoginWebUrl(webOrigin: string, result: AppLoginCallback, code
   return `${webOrigin}${APP_LOGIN_EXCHANGE_PATH}#${fragment.toString()}`;
 }
 
+/**
+ * 라우터(expo-router `+native-intent`)가 들어온 링크를 어디로 보낼지. 앱 로그인 콜백은 시스템 브라우저
+ * 세션이 받으므로 라우터는 지금 화면에 둔다(null). 앱이 그 링크로 막 켜졌을 때만 첫 화면('/')으로.
+ * 그 밖의 링크는 그대로 둔다.
+ */
+export function appLoginIntentPath(path: string, initial: boolean): string | null {
+  if (path.includes('oauth2/callback')) return initial ? '/' : null;
+  return path;
+}
+
 /** base64 → base64url(패딩 없음). PKCE challenge·verifier 모양(RFC 7636). */
 export function toBase64Url(base64: string): string {
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  // 끝의 패딩은 반복문으로 뗀다 — `=+$` 정규식은 `=` 가 많은 입력에서 느려질 수 있다(CodeQL).
+  let end = base64.length;
+  while (end > 0 && base64[end - 1] === '=') end -= 1;
+  return base64.slice(0, end).replace(/\+/g, '-').replace(/\//g, '_');
 }

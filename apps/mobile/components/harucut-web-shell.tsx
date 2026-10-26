@@ -500,7 +500,14 @@ export function HarucutWebShell() {
               appLoginPendingRef.current = true;
               void startAppLogin(request.url, WEB_ORIGIN)
                 .then((uri) => {
-                  if (uri) openFresh(uri);
+                  if (!uri) return;
+                  // 지금 WebView 안에서 이동한다 — 새로 올리면 sessionStorage 가 사라져 로그인 뒤 돌아갈 곳과
+                  // 제공자(lib/socialLoginRedirect.ts)를 잃는다(Codex #562). WebView 가 없을 때만 새로 올린다.
+                  if (webViewRef.current) {
+                    webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(uri)}); true;`);
+                  } else {
+                    openFresh(uri);
+                  }
                 })
                 .catch(() => undefined)
                 .finally(() => {

@@ -73,6 +73,7 @@ export {
   APP_LOGIN_CALLBACK,
   APP_LOGIN_EXCHANGE_PATH,
   APP_LOGIN_PROVIDERS,
+  appLoginIntentPath,
   appLoginProviderOf,
   appLoginStartUrl,
   appLoginWebUrl,

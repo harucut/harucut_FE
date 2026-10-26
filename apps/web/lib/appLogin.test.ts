@@ -1,5 +1,6 @@
 import {
   APP_LOGIN_CALLBACK,
+  appLoginIntentPath,
   appLoginProviderOf,
   appLoginStartUrl,
   appLoginWebUrl,
@@ -54,5 +55,15 @@ describe("앱 로그인 판정", () => {
 
   it("base64 를 패딩 없는 base64url 로 바꾼다", () => {
     expect(toBase64Url("ab+/cd==")).toBe("ab-_cd");
+    expect(toBase64Url("====")).toBe("");
+    expect(toBase64Url(`a${"=".repeat(50_000)}`)).toBe("a");
+  });
+
+  // 안드로이드는 앱 콜백을 일반 링크로도 보내 라우터가 「없는 화면」으로 이동했다(Codex #562).
+  it("라우터는 앱 로그인 콜백으로 이동하지 않는다", () => {
+    expect(appLoginIntentPath("harucut://oauth2/callback?code=c1", false)).toBeNull();
+    expect(appLoginIntentPath("/oauth2/callback?code=c1", false)).toBeNull();
+    expect(appLoginIntentPath("harucut://oauth2/callback?code=c1", true)).toBe("/");
+    expect(appLoginIntentPath("/", false)).toBe("/");
   });
 });
