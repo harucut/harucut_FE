@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
@@ -33,12 +32,14 @@ export function StudioMembers({
   workspaceId,
   myRole,
   myUserId,
+  onLeft,
 }: {
   workspaceId: string;
   myRole: WorkspaceRole;
   myUserId: string | null;
+  /** 내가 이 공간에서 나간 뒤. 부모가 공간 목록을 다시 받아 남은 공간을 고른다. */
+  onLeft: () => void;
 }) {
-  const router = useRouter();
   const manage = myRole === "OWNER" || myRole === "ADMIN";
   const [members, setMembers] = useState<Member[] | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -279,7 +280,7 @@ export function StudioMembers({
               member.userId,
               async () => {
                 await removeMember(workspaceId, kind === "leave" ? "me" : member.userId);
-                if (kind === "leave") router.replace("/studio");
+                if (kind === "leave") onLeft();
                 else setMembers((prev) => prev?.filter((m) => m.userId !== member.userId) ?? null);
               },
               kind === "leave" ? "나가지 못했어요." : "내보내지 못했어요.",

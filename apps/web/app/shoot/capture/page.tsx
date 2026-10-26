@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SwitchCamera, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { EventBanner } from "@/components/event/EventBanner";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { isNativeShell } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -41,7 +40,7 @@ export default function CapturePage() {
     TIMER_OPTIONS,
   } = useCaptureFlow();
 
-  const { frameId, shots, eventName } = useShootSession();
+  const { frameId, shots } = useShootSession();
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
   // 앱 셸 안인지는 클라이언트에서만 알 수 있다. 서버 스냅샷은 false 로 두어 하이드레이션이 어긋나지 않게 한다.
   const inShell = useSyncExternalStore(subscribeNever, isNativeShell, () => false);
@@ -89,7 +88,6 @@ export default function CapturePage() {
   const backToFrameHref = (() => {
     const params = new URLSearchParams();
     if (frameId) params.set("frame", frameId);
-    if (eventName) params.set("event", eventName);
     const query = params.toString();
     return query ? `/shoot?${query}` : "/shoot";
   })();
@@ -116,12 +114,11 @@ export default function CapturePage() {
       <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-3">
         <PageHeader
           title="사진 촬영"
-          // 고른 컷 구성과 행사 맥락을 들고 돌아간다. 맨 주소로 보내면 둘 다 초기화된다.
+          // 고른 컷 구성을 들고 돌아간다. 맨 주소로 보내면 초기화된다.
           backHref={backToFrameHref}
           backLabel="프레임 다시 선택"
         />
 
-        {eventName ? <EventBanner eventName={eventName} /> : null}
 
         {/*
           8컷 게이지. 몇 장을 찍는지·몇 장 찍었는지가 늘 보인다(DESIGN.md 「필름의 리듬」).

@@ -51,7 +51,7 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
       store.put({
         frameId: "classic-4", remoteFrameId: 999, source: "camera", shotsFrameId: "classic-4",
         selectedIndexes: [0, 1, 2, 3], borderColor: "#ffffff", outputFilter: "NONE",
-        eventName: null, composeIdempotency: null, shotKeys, savedAt: Date.now(),
+        composeIdempotency: null, shotKeys, savedAt: Date.now(),
       }, "meta");
       tx.oncomplete = () => { db.close(); resolve(); };
       tx.onabort = () => { db.close(); reject(new Error(`fixture transaction abort: ${tx.error?.name}: ${tx.error?.message}`)); };
