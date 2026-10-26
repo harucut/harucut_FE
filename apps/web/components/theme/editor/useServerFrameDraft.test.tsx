@@ -191,3 +191,62 @@ it("저장을 마치면 서버 초안을 지우고 더 쓰지 않는다", async 
   await afterDebounce();
   expect(mockUpdate).not.toHaveBeenCalled();
 });
+
+describe("Codex 리뷰 반영", () => {
+  // #528: 첫 생성이 도는 사이 나가면 그 뒤 만들어진 초안이 서버에 남았다.
+  it("생성 요청이 도는 사이 마치면 만들어진 초안을 지운다", async () => {
+    let resolveCreate: (v: unknown) => void = () => {};
+    mockCreate.mockImplementation(() => new Promise((resolve) => (resolveCreate = resolve)));
+    const { result } = renderDraftHook();
+    await flush();
+    act(() => useThemeEditorStore.getState().setBackgroundColor("ff0000"));
+    await afterDebounce();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.finish();
+    });
+    await act(async () => {
+      resolveCreate({ draftId: "DrLate", frameId: null, revision: 1, updatedAt: "x" });
+    });
+    expect(mockDelete).toHaveBeenCalledWith("DrLate");
+  });
+
+  // #528: 초안을 찾는 동안 한 편집은 예약된 저장이 건너뛰고, 찾은 뒤에도 다시 예약되지 않았다.
+  it("초안을 찾기 전에 한 편집도 찾은 뒤에 저장한다", async () => {
+    let resolveList: (v: unknown) => void = () => {};
+    mockList.mockImplementation(() => new Promise((resolve) => (resolveList = resolve)));
+    renderDraftHook();
+    act(() => useThemeEditorStore.getState().setBackgroundColor("ff0000"));
+    await afterDebounce();
+    expect(mockCreate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveList([]);
+    });
+    await flush();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  // #528: 판형이 넷인데 최근 셋만 봐서 가장 오래된 판형의 초안을 못 찾았다.
+  it("최근 셋 밖에 있는 이 판형의 초안도 찾는다", async () => {
+    const summaries = ["grid-4", "wide-4", "polaroid-4", "classic-4"].map((frameId, i) => ({
+      draftId: `Dr${i}`,
+      frameId: null,
+      revision: 1,
+      updatedAt: `2026-10-26T0${4 - i}:00:00Z`,
+      layout: frameId,
+    }));
+    mockList.mockResolvedValue(summaries);
+    mockGet.mockImplementation(async (draftId: string) => {
+      const s = summaries.find((x) => x.draftId === draftId)!;
+      return { ...s, document: { ...serverDoc("123456"), frameId: s.layout } };
+    });
+    const { result } = renderDraftHook();
+    await flush();
+    await flush();
+    expect(mockGet).toHaveBeenCalledWith("Dr3");
+    expect(result.current.offer).not.toBeNull();
+  });
+});
+

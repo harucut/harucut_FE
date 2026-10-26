@@ -24,8 +24,24 @@ function draftKey(ownerId: string, frameId: FrameId) {
   return `${DRAFT_V2_PREFIX}${encodeURIComponent(ownerId)}:${frameId}`;
 }
 
-function ownerPrefix(ownerId: string) {
-  return `${DRAFT_V2_PREFIX}${encodeURIComponent(ownerId)}:`;
+/** 공간 프레임 초안은 계정 뒤에 공간을 붙인 값을 주인으로 쓴다. 계정과 공간을 가르는 문자다. */
+const WORKSPACE_SEPARATOR = "@";
+
+/**
+ * 초안의 주인 값. 공간 프레임이면 계정 + 공간 — 같은 계정이라도 개인 새 프레임 초안이 행사용 프레임으로
+ * 복원되면 안 된다. 계정 부분은 `makeRoomFor` 가 「같은 사람인가」를 가르는 데 쓴다.
+ */
+export function draftOwnerKey(userId: string, workspaceId?: string | null) {
+  return workspaceId ? `${userId}${WORKSPACE_SEPARATOR}${workspaceId}` : userId;
+}
+
+/** 같은 계정의 초안 키인가 — 공간이 달라도 같은 사람이다. */
+function isSameAccountKey(storedKey: string, ownerId: string) {
+  const account = encodeURIComponent(ownerId.split(WORKSPACE_SEPARATOR)[0]);
+  return (
+    storedKey.startsWith(`${DRAFT_V2_PREFIX}${account}:`) ||
+    storedKey.startsWith(`${DRAFT_V2_PREFIX}${account}${encodeURIComponent(WORKSPACE_SEPARATOR)}`)
+  );
 }
 
 function storedDraftKeys(): string[] {
@@ -142,11 +158,17 @@ export async function saveEditorDraft(input: {
     const components: EditorComponent[] = [];
     for (const c of input.components) {
       if (revision !== saveRevision) return;
-      if (c.type !== "TEXT" && isLocalSrc(c.source)) {
-        components.push({ ...c, source: await resolve(c.source) });
-      } else {
-        components.push(c);
+      let next = c;
+      if (c.type !== "TEXT" && isLocalSrc(c.source)) next = { ...next, source: await resolve(c.source) };
+      /*
+        자산으로 올린 뒤에는 source 가 key 이고 그리는 주소(renderUrl)만 이 기기의 blob 이다. blob 은 새로고침하면
+        죽으므로 그것도 dataURL 로 남긴다 — 안 그러면 복원한 초안의 사진이 화면에서도 미리보기에서도 빠진다
+        (Codex 리뷰 #527 · #528).
+      */
+      if (c.type !== "TEXT" && c.renderUrl && c.renderUrl.startsWith("blob:")) {
+        next = { ...next, renderUrl: await resolve(c.renderUrl) };
       }
+      components.push(next);
     }
 
     if (revision !== saveRevision) return;
@@ -204,11 +226,11 @@ function sameExceptSavedAt(a: string, b: string) {
  * 복원할 일은 없다. 주인을 모르는 옛 초안도 같다. 그래도 넘치면 이 계정의 오래된 초안부터 버린다.
  */
 function makeRoomFor(ownerId: string, key: string, bytes: number) {
-  const mine = ownerPrefix(ownerId);
   const kept: { key: string; bytes: number; savedAt: number }[] = [];
   for (const stored of storedDraftKeys()) {
     if (stored === key) continue;
-    if (!stored.startsWith(mine)) {
+    // 같은 계정의 다른 공간 초안은 남긴다(Codex 리뷰 #534). 다른 계정 것만 지운다.
+    if (!isSameAccountKey(stored, ownerId)) {
       removeStoredDraft(stored);
       continue;
     }

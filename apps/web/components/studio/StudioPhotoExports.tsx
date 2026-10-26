@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
   MAX_EXPORT_PHOTOS,
@@ -57,12 +57,21 @@ export function StudioPhotoExports({
   const [exports, setExports] = useState<PhotoExport[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // 목록 요청의 세대. 새 요청과 묶음 만들기가 올린다 — 그 전에 시작한 목록 응답이 방금 만든 묶음을 지우지 않게(Codex #543).
+  const listGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = ++listGenerationRef.current;
     try {
-      setExports(await listPhotoExports(eventId));
-    } catch {
-      setExports((prev) => prev ?? []);
+      const list = await listPhotoExports(eventId);
+      if (generation !== listGenerationRef.current) return;
+      setExports(list);
+      setLoadError(null);
+    } catch (cause) {
+      if (generation !== listGenerationRef.current) return;
+      // 실패를 빈 목록으로 바꾸면 있던 묶음이 없는 것처럼 보인다. 있던 목록은 두고 실패를 알린다.
+      setLoadError(getUserFacingApiErrorMessage(cause, "묶음 목록을 불러오지 못했어요."));
     }
   }, [eventId]);
 
@@ -83,6 +92,7 @@ export function StudioPhotoExports({
     setNotice(null);
     try {
       const created = await createPhotoExport(eventId, target);
+      listGenerationRef.current += 1;
       setExports((prev) => [created, ...(prev ?? []).filter((e) => e.exportId !== created.exportId)]);
       setNotice(`${created.photoCount}장을 묶고 있어요. 다 되면 아래에서 받을 수 있어요.`);
       onCreated();
@@ -145,6 +155,18 @@ export function StudioPhotoExports({
         <p role="status" className="text-[13px]">
           {notice}
         </p>
+      ) : null}
+      {loadError ? (
+        <div role="alert" className="flex flex-wrap items-center gap-2 text-[13px] text-(--hc-danger)">
+          {loadError}
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="h-11 rounded-full border border-(--hc-border) px-4 font-semibold text-(--hc-text)"
+          >
+            목록 다시 불러오기
+          </button>
+        </div>
       ) : null}
 
       {exports && exports.length > 0 ? (

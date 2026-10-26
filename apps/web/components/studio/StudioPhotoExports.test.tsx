@@ -60,3 +60,29 @@ it("받을 수 없는 묶음(EXPORT-002)은 안내하고 목록을 다시 받는
   expect(await screen.findByText(/받을 수 없는 묶음이에요/)).toBeInTheDocument();
   await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
 });
+
+// Codex 리뷰(#543): 만들기 전에 시작한 목록 응답이 늦게 오면 방금 만든 묶음을 지우고 폴링도 멈췄다.
+it("묶음을 만들기 전에 시작한 목록 응답은 방금 만든 묶음을 지우지 않는다", async () => {
+  let releaseList: (value: unknown) => void = () => {};
+  mockList.mockReset();
+  mockList.mockImplementationOnce(() => new Promise((resolve) => { releaseList = resolve; }));
+  mockCreate.mockResolvedValue(PENDING);
+  render(<StudioPhotoExports eventId="Ev1" selectedIds={[11, 12]} onCreated={jest.fn()} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "고른 사진 묶어 받기 (2)" }));
+  expect(await screen.findByText("2장 · 기다리는 중")).toBeInTheDocument();
+  await act(async () => releaseList([]));
+  expect(screen.getByText("2장 · 기다리는 중")).toBeInTheDocument();
+});
+
+it("목록을 못 불러오면 빈 목록으로 보이지 않고 다시 불러오기를 둔다", async () => {
+  mockList.mockReset();
+  mockList
+    .mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }))
+    .mockResolvedValueOnce([{ ...PENDING, status: "DONE" }]);
+  render(<StudioPhotoExports eventId="Ev1" selectedIds={[]} onCreated={jest.fn()} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "목록 다시 불러오기" }));
+  expect(await screen.findByRole("button", { name: "받기" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "목록 다시 불러오기" })).not.toBeInTheDocument();
+});
