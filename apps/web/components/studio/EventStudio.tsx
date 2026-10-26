@@ -435,7 +435,8 @@ export function EventStudio({ eventId }: { eventId: string }) {
               <StudioPageTheme
                 workspaceId={event.workspaceId}
                 value={form.theme}
-                onChange={(theme) => update({ theme })}
+                // 최신 폼 위에 적용한다 — 업로드를 기다리는 사이 바꾼 이름 등 테마 밖의 칸도 되돌리지 않게.
+                onChange={(apply) => setForm((current) => (current ? { ...current, theme: apply(current.theme) } : current))}
               />
             </Section>
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
 import type { PageTheme } from "@/lib/event/pageTheme";
 
@@ -13,16 +13,25 @@ jest.mock("@/lib/assetUploadApi", () => ({
 
 let latest: PageTheme | null = null;
 
-function Harness({ initial = { schemaVersion: 1 } as PageTheme }) {
-  const [theme, setTheme] = useState<PageTheme>(initial);
+function Harness({ initial = { schemaVersion: 1 } as PageTheme, value }: { initial?: PageTheme; value?: PageTheme }) {
+  const [theme, setTheme] = useState<PageTheme>(value ?? initial);
+  const [shown, setShown] = useState<PageTheme | undefined>(value);
+  if (value !== shown) {
+    // 부모가 테마를 통째로 바꾼 경우(다시 불러오기)를 흉내 낸다.
+    setShown(value);
+    if (value) setTheme(value);
+  }
   return (
     <StudioPageTheme
       workspaceId="Ws1"
       value={theme}
-      onChange={(next) => {
-        latest = next;
-        setTheme(next);
-      }}
+      onChange={(apply) =>
+        setTheme((prev) => {
+          const next = apply(prev);
+          latest = next;
+          return next;
+        })
+      }
     />
   );
 }
@@ -76,4 +85,33 @@ it("올리기에 실패하면 서버 문구로 알리고 테마는 그대로 둔
   });
   expect(await screen.findByRole("alert")).toHaveTextContent("이미지를 올리지 못했어요.");
   expect(latest?.backgroundAssetId).toBeUndefined();
+});
+
+// Codex 리뷰(#544): 업로드를 기다리는 사이 고친 색이 업로드 완료로 되돌아가면 안 된다.
+it("로고를 올리는 사이 바꾼 색은 업로드가 끝나도 남는다", async () => {
+  let finishUpload: (value: unknown) => void = () => {};
+  mockUpload.mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
+  render(<Harness />);
+  fireEvent.change(screen.getByLabelText("로고 올리기"), {
+    target: { files: [new File(["x"], "logo.png", { type: "image/png" })] },
+  });
+  fireEvent.change(screen.getByLabelText("바탕 색 값"), { target: { value: "#FFF8F3" } });
+
+  await act(async () => finishUpload({ assetId: "AsLogo", key: "k", url: "https://s3/logo.png" }));
+  expect(latest?.logoAssetId).toBe("AsLogo");
+  expect(latest?.colors?.bg).toBe("#FFF8F3");
+});
+
+// Codex 리뷰(#544): 다시 불러온 테마의 배경이 바뀌거나 빠지면 미리보기도 따라가야 한다.
+it("테마의 자산 ID 가 바뀌면 미리보기도 그 ID 로 바꾸고, 빠지면 지운다", async () => {
+  mockGetAsset.mockImplementation(async (id: string) => ({ assetId: id, status: "VERIFIED", url: `https://s3/${id}.png` }));
+  const { rerender } = render(<Harness value={{ schemaVersion: 1, backgroundAssetId: "AsOld" }} />);
+  expect(await screen.findByAltText("고른 배경 이미지")).toHaveAttribute("src", "https://s3/AsOld.png");
+
+  rerender(<Harness value={{ schemaVersion: 1, backgroundAssetId: "AsNew" }} />);
+  await waitFor(() => expect(screen.getByAltText("고른 배경 이미지")).toHaveAttribute("src", "https://s3/AsNew.png"));
+
+  rerender(<Harness value={{ schemaVersion: 1 }} />);
+  await waitFor(() => expect(screen.queryByAltText("고른 배경 이미지")).not.toBeInTheDocument());
+  expect(screen.getByLabelText("행사 화면 미리보기").style.backgroundImage).toBe("");
 });
