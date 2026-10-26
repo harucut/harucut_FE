@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { getFrameConfig, type FrameId } from "@/constants/frames";
 import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
 import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
+import { CloneEventForm } from "@/components/studio/CloneEventForm";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -121,6 +122,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [conflict, setConflict] = useState<{ currentVersion: number | null } | null>(null);
   const [violations, setViolations] = useState<ViolationGroup[]>([]);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   const accept = useCallback((event: StudioEvent) => {
     setLoad({ state: "ready", event });
@@ -228,6 +230,32 @@ export function EventStudio({ eventId }: { eventId: string }) {
           </h1>
           <EventStatusBadge event={event} />
         </header>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/studio/events/${encodeURIComponent(event.eventId)}/photos`}
+            className="hc-button-secondary flex h-11 items-center rounded-full px-4 text-[13px] font-semibold"
+          >
+            사진함
+          </Link>
+          <button
+            type="button"
+            onClick={() => setCloning(true)}
+            className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+          >
+            행사 복제
+          </button>
+        </div>
+        {cloning ? (
+          <CloneEventForm
+            eventId={event.eventId}
+            defaultName={`${event.settings.name ?? "행사"} 복사본`}
+            onCancel={() => setCloning(false)}
+            onCloned={(next) => {
+              setCloning(false);
+              router.push(`/studio/events/${encodeURIComponent(next.eventId)}`);
+            }}
+          />
+        ) : null}
 
         {notice ? (
           <p
