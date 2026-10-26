@@ -30,6 +30,22 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
+      /*
+        결과 수령 화면. 같은 키는 뒤 규칙이 이긴다(설치된 Next 문서 next-config-js/headers.md:47) —
+        전역의 strict-origin-when-cross-origin 을 no-referrer 로 덮는다(기획 R5 16절).
+        - 토큰은 fragment 라 Referer 에 실리지 않지만, 경로 자체도 남의 사이트로 넘기지 않는다.
+        - no-store: 공유 캐시에 결과 화면을 남기지 않는다.
+        - X-Robots-Tag: 색인 금지. robots.txt 로 막지 않는 이유 — 막으면 크롤러가 이 헤더와
+          noindex 를 읽지 못해 주소만 색인될 수 있다(R5 16절, Google 「block indexing」).
+      */
+      {
+        source: "/r",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
       // public/ 의 정적 자산에는 캐시 정책이 없어 매 방문마다 다시 받아왔다.
       // 스티커 PNG 39장·OG 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
       // 영구 immutable 은 못 주지만, 하루 캐시 + 하루 stale-while-revalidate 로

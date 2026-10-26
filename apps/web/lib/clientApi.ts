@@ -25,7 +25,7 @@ type ApiOptions = {
   signal?: AbortSignal;
 };
 
-function extractEnvelopeLike(value: unknown): ApiEnvelopeLike | null {
+export function extractEnvelopeLike(value: unknown): ApiEnvelopeLike | null {
   if (!value || typeof value !== "object") return null;
 
   const record = value as Record<string, unknown>;

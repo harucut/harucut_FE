@@ -18,7 +18,25 @@ type ProxyOptions = {
    * 인증 토큰 쿠키만 제거하고 나머지(게스트 쿠키 등)는 그대로 전달한다.
    */
   stripAuthCookies?: boolean;
+  /**
+   * 행사 경로의 자격(기획 R5 15절, ADR-0007 §1). 주면 **쿠키를 하나도 넘기지 않고** 그 자격의
+   * 헤더 하나만 넘긴다. 백엔드의 Set-Cookie 도 브라우저로 돌려주지 않는다.
+   *  - "none": 공개 행사 정보·세션 발급·부스 연결 교환 — 자격 없음
+   *  - "participant": `X-Participant-Token`
+   *  - "booth": `X-Booth-Token`
+   *  - "result": `Authorization: Bearer <결과 토큰>`
+   * 회원 쿠키가 같이 실리면 무관한 만료 쿠키가 참가 요청을 401 로 만들 수 있고, 반대로 회원
+   * 자격이 참가자 자격을 대신하는 일도 생긴다. 그래서 섞지 않는다.
+   */
+  eventCredential?: "none" | "participant" | "booth" | "result";
 };
+
+const EVENT_CREDENTIAL_HEADER = {
+  none: null,
+  participant: "x-participant-token",
+  booth: "x-booth-token",
+  result: "authorization",
+} as const;
 
 const AUTH_COOKIE_NAMES = new Set(["accessToken", "refreshToken"]);
 
@@ -127,7 +145,7 @@ export async function forward(
     );
   }
 
-  const rawCookie = req.headers.get("cookie") ?? "";
+  const rawCookie = options.eventCredential ? "" : req.headers.get("cookie") ?? "";
   const cookie = options.stripAuthCookies ? stripAuthCookies(rawCookie) : rawCookie;
   const shouldForwardBody =
     options.forwardBody ?? (options.method !== "GET" && options.method !== "DELETE");
@@ -138,6 +156,21 @@ export async function forward(
     headers["Content-Type"] = options.contentType ?? "application/json";
   }
   if (cookie) headers.cookie = cookie;
+  const credentialHeader = options.eventCredential
+    ? EVENT_CREDENTIAL_HEADER[options.eventCredential]
+    : null;
+  const credential = credentialHeader ? req.headers.get(credentialHeader) : null;
+  if (credentialHeader && credential) headers[credentialHeader] = credential;
+  /*
+    행사 경로는 참가자 IP 를 넘긴다. 백엔드의 세션 발급 빈도 제한(분당 30, GEN-061)이 IP 기준이라,
+    넘기지 않으면 모든 참가자가 이 BFF 의 IP 하나를 나눠 써서 행사 전체가 거기서 막힌다.
+    값은 호스팅 엣지가 채운 것을 그대로 옮긴다 — 브라우저가 보낸 값을 믿을지는 백엔드의 신뢰
+    프록시 설정이 정한다(그 설정 없이 운영하면 위조로 제한을 피할 수 있다. 진행 상태 문서 「운영 반영 조건」).
+  */
+  if (options.eventCredential) {
+    const clientIp = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip");
+    if (clientIp) headers["x-forwarded-for"] = clientIp;
+  }
 
   let upstream: Response;
   try {
@@ -168,7 +201,8 @@ export async function forward(
     status: upstream.status,
     body: responseBody,
     contentType,
-    setCookies: getSetCookieHeaders(upstream.headers),
+    // 행사 경로는 쿠키로 인증하지 않는다. 백엔드가 무엇을 심든 브라우저로 넘기지 않는다.
+    setCookies: options.eventCredential ? [] : getSetCookieHeaders(upstream.headers),
   };
 }
 
@@ -191,12 +225,21 @@ export function buildResponse(result: ForwardResult, req?: RequestLike) {
 
 export async function proxyJson(req: Request, options: ProxyOptions) {
   const result = await forward(req, options);
-  return buildResponse(result, req);
+  const res = buildResponse(result, req);
+  // 결과 토큰이 오가는 응답은 리퍼러로 새지 않게 한다(R5 16절). no-store 는 buildResponse 가 붙인다.
+  if (options.eventCredential === "result") res.headers.set("Referrer-Policy", "no-referrer");
+  return res;
 }
 
 /** 행사 경로의 공개 식별자(event·asset·captureRun·device public id). 백엔드에 가기 전에 문법만 본다. */
 export function validatePublicId(id: string): NextResponse | null {
   if (/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
+  return buildResponse(buildProxyErrorResult(400, "CLIENT-006", "Invalid resource ID."));
+}
+
+/** 행사 slug(ADR-0007: 소문자·숫자·하이픈 3~40자). */
+export function validateEventSlug(slug: string): NextResponse | null {
+  if (/^[a-z0-9-]{3,40}$/.test(slug)) return null;
   return buildResponse(buildProxyErrorResult(400, "CLIENT-006", "Invalid resource ID."));
 }
 
