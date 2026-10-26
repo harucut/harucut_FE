@@ -20,6 +20,7 @@ describe("route protection contract", () => {
       "/theme",
       "/mypage",
       "/studio",
+      "/admin",
     ]);
   });
 
@@ -31,6 +32,7 @@ describe("route protection contract", () => {
       '"/theme/:path*"',
       '"/mypage"',
       '"/studio/:path*"',
+      '"/admin/:path*"',
     ]) {
       expect(proxySource).toContain(matcher);
     }
@@ -43,6 +45,7 @@ describe("route protection contract", () => {
     expect(isProtectedPath("/history")).toBe(true);
     expect(isProtectedPath("/mypage")).toBe(true);
     expect(isProtectedPath("/studio/events/Ev1")).toBe(true);
+    expect(isProtectedPath("/admin")).toBe(true);
   });
 
   test("does not treat public auth routes as protected", () => {
