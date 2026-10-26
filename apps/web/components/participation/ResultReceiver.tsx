@@ -155,7 +155,7 @@ export function ResultReceiver() {
   return (
     <main className="ev-surface flex min-h-dvh flex-col items-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-10">
       <div className="flex w-full max-w-md flex-col gap-5">
-        <h1 className="text-[22px] font-extrabold">
+        <h1 className="text-[24px] font-extrabold">
           {view.kind === "ready" ? view.result.eventName : "사진 받기"}
         </h1>
 
