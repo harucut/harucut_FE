@@ -2,7 +2,14 @@
 
 import { getApiErrorMessageByCode } from "@harucut/shared";
 
-import { buildResponse, forward, proxyJson, validatePublicId, validateResourceId } from "@/app/api/client/_proxy";
+import {
+  buildResponse,
+  forward,
+  proxyJson,
+  validateEventSlug,
+  validatePublicId,
+  validateResourceId,
+} from "@/app/api/client/_proxy";
 
 test.each([200, 401, 503])("인증을 포함한 BFF 응답 %s를 캐시하지 않는다", (status) => {
   const response = buildResponse({ ok: status === 200, status, body: "{}", contentType: "application/json", setCookies: [] });
@@ -347,5 +354,136 @@ describe("client proxy cross-site guard", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("행사 경로의 자격 전달(eventCredential)", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  function upstream() {
+    return jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: "GEN-000" }), {
+        status: 200,
+        headers: { "content-type": "application/json", "set-cookie": "accessToken=from-backend; Path=/" },
+      }),
+    );
+  }
+
+  function sentHeaders(fetchMock: jest.Mock) {
+    return fetchMock.mock.calls[0][1].headers as Record<string, string>;
+  }
+
+  // F48·O34 — 만료된 회원 쿠키가 참가 요청을 401 로 만들거나, 회원 자격이 참가자 자격을 대신하면 안 된다.
+  it.each([
+    ["participant", "x-participant-token", "p-token"],
+    ["booth", "x-booth-token", "b-token"],
+    ["result", "authorization", "Bearer r-token"],
+  ] as const)("%s 자격은 쿠키를 하나도 넘기지 않고 %s 헤더만 넘긴다", async (credential, header, value) => {
+    const fetchMock = upstream();
+    global.fetch = fetchMock;
+    const req = new Request("http://localhost:3000/api/client/participant/session", {
+      method: "GET",
+      headers: {
+        cookie: "accessToken=member; refreshToken=member; guestTrial=1",
+        [header]: value,
+        "x-participant-token": header === "x-participant-token" ? value : "should-not-forward",
+      },
+    });
+
+    await forward(req, { method: "GET", url: "https://api.harucut.com/api/x", eventCredential: credential });
+
+    const headers = sentHeaders(fetchMock);
+    expect(headers.cookie).toBeUndefined();
+    expect(headers[header]).toBe(value);
+    for (const other of ["x-participant-token", "x-booth-token", "authorization"]) {
+      if (other !== header) expect(headers[other]).toBeUndefined();
+    }
+  });
+
+  it("공개 행사 경로(none)는 쿠키도 자격 헤더도 넘기지 않는다", async () => {
+    const fetchMock = upstream();
+    global.fetch = fetchMock;
+    const req = new Request("http://localhost:3000/api/client/public/events/wedding", {
+      headers: { cookie: "accessToken=member", authorization: "Bearer member-jwt" },
+    });
+
+    await forward(req, { method: "GET", url: "https://api.harucut.com/api/public/events/wedding", eventCredential: "none" });
+
+    const headers = sentHeaders(fetchMock);
+    expect(headers.cookie).toBeUndefined();
+    expect(headers.authorization).toBeUndefined();
+  });
+
+  /*
+    세션 발급 빈도 제한(분당 30)은 IP 기준이다. 넘기지 않으면 모든 참가자가 이 BFF 의 IP 하나를
+    나눠 써서 행사 전체가 거기서 막힌다(백엔드 fork #16 「배포 전 확인」).
+  */
+  it("행사 경로는 엣지가 채운 참가자 IP 를 x-forwarded-for 로 넘긴다", async () => {
+    const fetchMock = upstream();
+    global.fetch = fetchMock;
+    const req = new Request("http://localhost:3000/api/client/public/events/wedding/sessions", {
+      method: "POST",
+      headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
+      body: JSON.stringify({ channel: "BYOD" }),
+    });
+
+    await forward(req, { method: "POST", url: "https://api.harucut.com/api/public/events/wedding/sessions", eventCredential: "none" });
+
+    expect(sentHeaders(fetchMock)["x-forwarded-for"]).toBe("203.0.113.7, 10.0.0.1");
+  });
+
+  it("x-forwarded-for 가 없으면 x-real-ip 를 쓰고, 둘 다 없으면 싣지 않는다", async () => {
+    const fetchMock = upstream();
+    global.fetch = fetchMock;
+    await forward(new Request("http://localhost:3000/x", { headers: { "x-real-ip": "198.51.100.2" } }), {
+      method: "GET",
+      url: "https://api.harucut.com/api/public/events/wedding",
+      eventCredential: "none",
+    });
+    await forward(new Request("http://localhost:3000/x"), {
+      method: "GET",
+      url: "https://api.harucut.com/api/public/events/wedding",
+      eventCredential: "none",
+    });
+
+    expect((fetchMock.mock.calls[0][1].headers as Record<string, string>)["x-forwarded-for"]).toBe("198.51.100.2");
+    expect((fetchMock.mock.calls[1][1].headers as Record<string, string>)["x-forwarded-for"]).toBeUndefined();
+  });
+
+  it("백엔드가 심으려는 쿠키를 브라우저로 돌려주지 않는다", async () => {
+    global.fetch = upstream();
+    const req = new Request("http://localhost:3000/api/client/participant/session");
+    const res = await proxyJson(req, { method: "GET", url: "https://api.harucut.com/api/x", eventCredential: "participant" });
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("결과 응답에는 no-referrer 와 no-store 를 붙인다", async () => {
+    global.fetch = upstream();
+    const req = new Request("http://localhost:3000/api/client/public/results", {
+      headers: { authorization: "Bearer r-token" },
+    });
+    const res = await proxyJson(req, { method: "GET", url: "https://api.harucut.com/api/public/results", eventCredential: "result" });
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+});
+
+describe("행사 경로 식별자 검사", () => {
+  it.each(["evt_01HZ", "a-b_c", "K7QM3XRP"])("공개 식별자 %s 는 통과한다", (id) => {
+    expect(validatePublicId(id)).toBeNull();
+  });
+  it.each(["../x", "a/b", "", "a b", "%2e"])("공개 식별자 %s 는 막는다", (id) => {
+    expect(validatePublicId(id)?.status).toBe(400);
+  });
+  it.each(["wedding-1027", "abc"])("slug %s 는 통과한다", (slug) => {
+    expect(validateEventSlug(slug)).toBeNull();
+  });
+  it.each(["ab", "Wedding", "a_b", "x".repeat(41)])("slug %s 는 막는다", (slug) => {
+    expect(validateEventSlug(slug)?.status).toBe(400);
   });
 });
