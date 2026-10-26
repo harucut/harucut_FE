@@ -82,6 +82,15 @@ export function registerDeletionRequestedHandler(handler: (() => void) | null) {
   onDeletionRequested = handler;
 }
 
+// 서버가 필수 약관 미동의(TERMS-004)로 API 를 막았을 때 호출되는 핸들러.
+// 재동의 화면을 다시 띄우는 것은 TermsConsentBridge 가 맡는다. 탈퇴요청과 달리 상태를 다시
+// 묻지 않는다 — 이 코드는 그 뜻 하나로만 온다.
+let onTermsConsentRequired: (() => void) | null = null;
+
+export function registerTermsConsentRequiredHandler(handler: (() => void) | null) {
+  onTermsConsentRequired = handler;
+}
+
 // 재발급까지 실패해 세션이 끊긴 것으로 판정됐을 때 호출되는 핸들러.
 // 페이지가 로그인 유도 등을 붙일 수 있도록 레지스트리로 위임한다(기본 동작 없음 =
 // 각 화면의 기존 401 처리를 유지, 등록 시 전역 만료 처리 추가).
@@ -106,6 +115,10 @@ type ReissueResult = "ok" | "expired" | "unavailable";
  * 탈퇴요청인지 알 수 없다. 그래서 /api/auth/status 로 상태를 한 번 더 확인한다.
  */
 const ACCESS_DENIED_CODE = "GEN-021";
+
+// 로그인한 계정이 현재 필수 약관에 동의하지 않아 서버가 막았다는 코드.
+// 약관 조회·동의 제출·상태 조회 등 재동의에 필요한 경로는 서버가 이 검사에서 뺀다.
+const TERMS_CONSENT_REQUIRED_CODE = "TERMS-004";
 
 // 상태 조회 자체와 탈퇴 취소는 이 검사에서 빼야 한다(자기 자신을 다시 부르는 순환 방지).
 const DELETION_CHECK_EXEMPT_PATHS = new Set<string>([
@@ -346,6 +359,10 @@ async function request<T>(
       !DELETION_CHECK_EXEMPT_PATHS.has(path)
     ) {
       void checkDeletionRequested();
+    }
+
+    if (res.status === 403 && envelope?.code === TERMS_CONSENT_REQUIRED_CODE) {
+      onTermsConsentRequired?.();
     }
 
     throw new ApiRequestError<T>({

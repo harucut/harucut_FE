@@ -11,6 +11,7 @@ import {
   clientApi,
   registerDeletionRequestedHandler,
   registerSessionExpiredHandler,
+  registerTermsConsentRequiredHandler,
 } from "@/lib/clientApi";
 
 // 실제 응답 형태 그대로(2026-08-20 실측, docs/backend-contract.md).
@@ -116,6 +117,58 @@ describe("clientApi — 탈퇴요청(GEN-021) 감지", () => {
     await flushAsync();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("clientApi — 필수 약관 미동의(TERMS-004) 감지", () => {
+  const originalFetch = global.fetch;
+
+  function termsRequired() {
+    return new Response(
+      JSON.stringify({
+        code: "TERMS-004",
+        status: 403,
+        message: "Required terms consent is missing or outdated.",
+      }),
+      { status: 403, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  afterEach(() => {
+    registerTermsConsentRequiredHandler(null);
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  it("403 TERMS-004 면 재동의 핸들러를 부르고 오류는 그대로 던진다", async () => {
+    const onTermsConsentRequired = jest.fn();
+    registerTermsConsentRequiredHandler(onTermsConsentRequired);
+    const fetchMock = jest.fn(async () => termsRequired());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({
+      status: 403,
+      code: "TERMS-004",
+    });
+
+    expect(onTermsConsentRequired).toHaveBeenCalledTimes(1);
+    // 탈퇴요청 확인(/api/auth/status)으로 새지 않는다.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("다른 403 에는 재동의 핸들러를 부르지 않는다", async () => {
+    const onTermsConsentRequired = jest.fn();
+    registerTermsConsentRequiredHandler(onTermsConsentRequired);
+    global.fetch = jest.fn(async () => accessDenied()) as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toBeDefined();
+    await flushAsync();
+
+    expect(onTermsConsentRequired).not.toHaveBeenCalled();
+  });
+
+  it("문구가 있다", () => {
+    expect(getApiErrorMessageByCode("TERMS-004")).toBeTruthy();
   });
 });
 

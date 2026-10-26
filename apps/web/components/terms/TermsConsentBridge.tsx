@@ -21,6 +21,7 @@ import {
   type MyTermsConsent,
 } from "@/lib/termsApi";
 import { getApiErrorDetails } from "@/lib/apiError";
+import { registerTermsConsentRequiredHandler } from "@/lib/clientApi";
 import { TermsReconsentDialog } from "@/components/terms/TermsReconsentDialog";
 
 /**
@@ -55,6 +56,8 @@ export function TermsConsentBridge() {
   // 동의를 **두 번** 보내게 되는데, 동의 이력은 법적 증빙용이라 수정·삭제되지 않는다 —
   // 같은 동의가 두 줄로 남는다.
   const runningRef = useRef(false);
+  // 검사 도중 서버가 TERMS-004 로 막았다는 신호. 끝난 뒤 한 번 더 묻는다(아래 핸들러 참고).
+  const recheckRequestedRef = useRef(false);
   // 이번 회차에 **내가 읽은** 보관물. 재동의 화면을 통과했을 때 지울 대상을 이것으로
   // 못 박는다 — 아래 `onDone` 주석 참고.
   const stashedRef = useRef<PendingTermsConsent | null>(null);
@@ -154,9 +157,34 @@ export function TermsConsentBridge() {
         setRetryNeeded(true);
       } finally {
         runningRef.current = false;
+        if (recheckRequestedRef.current) {
+          recheckRequestedRef.current = false;
+          checkedRef.current = false;
+          setRetryNonce((nonce) => nonce + 1);
+        }
       }
     })();
   }, [accessMode, hydrated, pathname, retryNonce, runCheck]);
+
+  /*
+    서버가 필수 약관 미동의(TERMS-004)로 API 를 막으면 다시 묻는다.
+
+    한 번 확인했다는 표식(`checkedRef`)만 믿으면, 확인한 뒤 약관이 개정됐거나 다른 기기에서
+    상태가 바뀐 계정은 화면마다 403 만 받고 재동의 화면을 끝내 보지 못한다. 표식을 내리고
+    검사를 다시 돌린다. 이미 도는 중이면 버리지 않고 끝난 뒤에 한 번 더 돈다 — 도는 검사가
+    이미 약관을 읽어 간 뒤라면 그 결과는 403 보다 오래된 것이다.
+  */
+  useEffect(() => {
+    registerTermsConsentRequiredHandler(() => {
+      if (runningRef.current) {
+        recheckRequestedRef.current = true;
+        return;
+      }
+      checkedRef.current = false;
+      setRetryNonce((nonce) => nonce + 1);
+    });
+    return () => registerTermsConsentRequiredHandler(null);
+  }, []);
 
   useEffect(() => {
     if (!hydrated || accessMode === "guest" || !retryNeeded || autoRetriedRef.current || !isProtectedPath(pathname)) return;
