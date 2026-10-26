@@ -12,6 +12,8 @@ import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 export type CreateFrameRequest = {
   /** 수정 저장(PUT) 전용 낙관적 잠금 버전. 생략하면 서버가 덮어쓴다(호환). */
   version?: number;
+  /** 만들 공간(POST 에서만 의미가 있다). 생략하면 개인 공간. PUT 에 보내도 서버가 무시한다. */
+  workspaceId?: string;
   title: string;
   description: string;
   previewKey: string;

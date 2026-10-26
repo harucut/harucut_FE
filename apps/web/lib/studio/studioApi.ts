@@ -1,7 +1,7 @@
 "use client";
 
 import { clientApi } from "@/lib/clientApi";
-import type { ApiEnvelope } from "@/lib/api-types";
+import type { ApiEnvelope, RemoteFrame } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
 
 /**
@@ -146,4 +146,42 @@ export function publishViolations(error: unknown): PublishViolation[] {
     (v): v is PublishViolation =>
       Boolean(v) && typeof v.field === "string" && typeof v.reason === "string",
   );
+}
+
+// ── 행사 제공 프레임 (백엔드 fork #18) ──
+
+/** 행사에 고를 수 있는 발행본. 프레임마다 최신 발행본 하나, 공간 프레임이 먼저·시스템 프레임이 다음. */
+export type PickableFrameVersion = {
+  frameVersionId: number;
+  frameId: number;
+  versionNo: number;
+  frameType: EventLayout;
+  /** 원본 프레임의 지금 제목. */
+  title: string;
+  /** 원본 프레임 미리보기(24시간). 참고용이라 발행본과 다를 수 있다. */
+  previewUrl?: string | null;
+  source: "SYSTEM" | "WORKSPACE";
+  publishedAt: string;
+};
+
+export async function listWorkspaceFrames(workspaceId: string): Promise<RemoteFrame[]> {
+  const res = await clientApi.get<ApiEnvelope<RemoteFrame[]>>(
+    `/api/client/workspaces/${encodeURIComponent(workspaceId)}/frames`,
+  );
+  return res.data.data ?? [];
+}
+
+export async function listPickableFrameVersions(workspaceId: string): Promise<PickableFrameVersion[]> {
+  const res = await clientApi.get<ApiEnvelope<PickableFrameVersion[]>>(
+    `/api/client/workspaces/${encodeURIComponent(workspaceId)}/frame-versions`,
+  );
+  return res.data.data ?? [];
+}
+
+/** 지금 저장된 프레임을 발행본으로 고정한다. 정적 스티커·구운 PNG 없는 글자가 남아 있으면 400 GEN-002. */
+export async function publishFrameVersion(frameId: number): Promise<{ frameVersionId: number; versionNo: number }> {
+  const res = await clientApi.post<ApiEnvelope<{ frameVersionId: number; versionNo: number }>>(
+    `/api/client/user/frame/${frameId}/versions`,
+  );
+  return requireData(res.data, "발행본");
 }
