@@ -7,7 +7,15 @@ const api = {
   updateProject: jest.fn(),
   getWorkspaceBrandDefaults: jest.fn(),
   updateWorkspaceBrandDefaults: jest.fn(),
+  listProjectMembers: jest.fn(),
+  putProjectMember: jest.fn(),
+  removeProjectMember: jest.fn(),
 };
+const mockListMembers = jest.fn();
+jest.mock("@/lib/studio/accessApi", () => ({
+  ...jest.requireActual("@/lib/studio/accessApi"),
+  listMembers: (...a: unknown[]) => mockListMembers(...a),
+}));
 jest.mock("@/lib/studio/projectsApi", () => ({
   ...jest.requireActual("@/lib/studio/projectsApi"),
   listProjects: (...a: unknown[]) => api.listProjects(...a),
@@ -15,6 +23,9 @@ jest.mock("@/lib/studio/projectsApi", () => ({
   updateProject: (...a: unknown[]) => api.updateProject(...a),
   getWorkspaceBrandDefaults: (...a: unknown[]) => api.getWorkspaceBrandDefaults(...a),
   updateWorkspaceBrandDefaults: (...a: unknown[]) => api.updateWorkspaceBrandDefaults(...a),
+  listProjectMembers: (...a: unknown[]) => api.listProjectMembers(...a),
+  putProjectMember: (...a: unknown[]) => api.putProjectMember(...a),
+  removeProjectMember: (...a: unknown[]) => api.removeProjectMember(...a),
 }));
 jest.mock("@/lib/assetUploadApi", () => ({ uploadAsset: jest.fn(), getAsset: jest.fn() }));
 
@@ -116,4 +127,43 @@ it("브랜딩은 정하지 않음과 명시적 해제를 구분해, 새로 끈 �
     schemaVersion: 1,
     branding: { hideHarucutBranding: false, outputLogo: "NONE" },
   });
+});
+
+// 프로젝트 멤버(P3-2) — 공간의 운영 담당에게 이 프로젝트의 모든 행사를 맡긴다. 운영 권한과 사진 권한을 따로 고른다.
+it("운영 담당에게 프로젝트 권한을 주고, 프로젝트에서 뺀다", async () => {
+  mockListMembers.mockResolvedValue([
+    { userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" },
+    { userId: "u-ad", name: "관리 현", role: "ADMIN", joinedAt: "" },
+  ]);
+  api.listProjectMembers.mockResolvedValue([]);
+  api.putProjectMember.mockResolvedValue({
+    userId: "u-op",
+    name: "운영 지수",
+    operations: ["MANAGE_EVENT", "MANAGE_BOOTH"],
+    permissions: ["VIEW_PHOTOS"],
+    createdAt: "",
+  });
+  api.removeProjectMember.mockResolvedValue(undefined);
+  render(<StudioProjects workspaceId="Ws1" />);
+
+  const spring = (await screen.findByText("봄 웨딩")).closest("li")!;
+  fireEvent.click(within(spring).getByRole("button", { name: /운영 담당/ }));
+  const row = (await within(spring).findByText("운영 지수")).closest("li")!;
+  expect(within(spring).queryByText("관리 현")).not.toBeInTheDocument();
+  expect(api.listProjectMembers).toHaveBeenCalledWith("Pj1");
+
+  fireEvent.click(within(row).getByRole("checkbox", { name: "부스 기기" }));
+  fireEvent.click(within(row).getByRole("checkbox", { name: "행사 설정·게시" }));
+  fireEvent.click(within(row).getByRole("checkbox", { name: "사진 보기" }));
+  fireEvent.click(within(row).getByRole("button", { name: "저장" }));
+  // 순서는 화면이 아니라 정해진 순서로 보낸다.
+  await waitFor(() =>
+    expect(api.putProjectMember).toHaveBeenCalledWith("Pj1", "u-op", ["MANAGE_EVENT", "MANAGE_BOOTH"], ["VIEW_PHOTOS"]),
+  );
+  expect(await within(row).findByText("멤버")).toBeInTheDocument();
+
+  fireEvent.click(within(row).getByRole("button", { name: "프로젝트에서 빼기" }));
+  await waitFor(() => expect(api.removeProjectMember).toHaveBeenCalledWith("Pj1", "u-op"));
+  await waitFor(() => expect(within(row).queryByText("멤버")).not.toBeInTheDocument());
+  expect(within(row).getByRole("checkbox", { name: "행사 설정·게시" })).not.toBeChecked();
 });

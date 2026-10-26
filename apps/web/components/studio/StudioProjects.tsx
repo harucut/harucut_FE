@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { StudioBrandDefaults } from "@/components/studio/StudioBrandDefaults";
+import { StudioProjectMembers } from "@/components/studio/StudioProjectMembers";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
   createProject,
@@ -219,6 +220,20 @@ export function StudioProjects({ workspaceId }: { workspaceId: string }) {
                         return updated.brandDefaults ?? {};
                       }}
                     />
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <Disclosure
+                  label="운영 담당"
+                  open={open === `members:${project.projectId}`}
+                  onToggle={() =>
+                    setOpen(open === `members:${project.projectId}` ? null : `members:${project.projectId}`)
+                  }
+                />
+                {open === `members:${project.projectId}` ? (
+                  <div className="mt-3">
+                    <StudioProjectMembers projectId={project.projectId} workspaceId={workspaceId} />
                   </div>
                 ) : null}
               </div>

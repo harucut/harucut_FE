@@ -73,3 +73,18 @@ it("보기 전용 멤버에게는 초대·역할 조작이 없다", async () => 
   expect(screen.queryByRole("button", { name: "초대 링크 만들기" })).not.toBeInTheDocument();
   expect(mockListInvitations).not.toHaveBeenCalled();
 });
+
+// 운영 담당(P3-2)은 공간 전체가 아니라 맡긴 행사·프로젝트만 운영한다. 초대와 역할 변경에서 고를 수 있어야 맡길 사람이 생긴다.
+it("운영 담당 역할로 초대하고 역할을 바꿀 수 있다", async () => {
+  mockInvite.mockResolvedValue({ invitationId: "Iv1", inviteToken: "tok_abcdefghijklmnopqrstuvwxyz", expiresAt: "x" });
+  mockChangeRole.mockResolvedValue({ ...DESIGNER, role: "OPERATOR" });
+  render(<StudioMembers workspaceId="Ws1" myRole="ADMIN" myUserId="u-admin" onLeft={mockLeft} />);
+  await screen.findByText("서연");
+
+  fireEvent.change(screen.getByLabelText("서연 역할"), { target: { value: "OPERATOR" } });
+  await waitFor(() => expect(mockChangeRole).toHaveBeenCalledWith("Ws1", "u-designer", "OPERATOR"));
+
+  fireEvent.change(screen.getByLabelText("초대할 역할"), { target: { value: "OPERATOR" } });
+  fireEvent.click(screen.getByRole("button", { name: "초대 링크 만들기" }));
+  await waitFor(() => expect(mockInvite).toHaveBeenCalledWith("Ws1", "OPERATOR"));
+});

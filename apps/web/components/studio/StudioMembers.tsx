@@ -17,7 +17,7 @@ import {
 } from "@/lib/studio/accessApi";
 import type { WorkspaceRole } from "@/lib/studio/studioApi";
 
-const ROLES: WorkspaceRole[] = ["OWNER", "ADMIN", "DESIGNER", "VIEWER"];
+const ROLES: WorkspaceRole[] = ["OWNER", "ADMIN", "OPERATOR", "DESIGNER", "VIEWER"];
 
 /** 역할을 고를 수 있는 사람이 줄 수 있는 역할. OWNER 를 주는 일은 OWNER 만 한다(백엔드 GEN-021). */
 function assignableRoles(myRole: WorkspaceRole): WorkspaceRole[] {
