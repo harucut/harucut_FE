@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { useRouter } from "next/navigation";
 import { getFrameConfig, type FrameId } from "@/constants/frames";
+import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -440,6 +441,15 @@ export function EventStudio({ eventId }: { eventId: string }) {
             </button>
           ) : null}
         </form>
+
+        {event.settings.boothEnabled ? (
+          <section aria-labelledby="studio-booth-title" className="flex flex-col gap-3">
+            <h2 id="studio-booth-title" className="text-[18px] font-bold">
+              부스 기기
+            </h2>
+            <StudioBoothDevices eventId={event.eventId} boothUrl={`${origin}/booth`} />
+          </section>
+        ) : null}
 
         <section aria-labelledby="studio-run-title" className="flex flex-col gap-3">
           <h2 id="studio-run-title" className="text-[18px] font-bold">
