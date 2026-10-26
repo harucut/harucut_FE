@@ -29,10 +29,11 @@ import { useThemeSession } from "@/lib/themeSessionStore";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
-  clearEditorDraft,
+  discardEditorDraft,
   loadEditorDraft,
   saveEditorDraft,
 } from "@/lib/themeEditorDraft";
+import { getMyUserInfo } from "@/lib/userApi";
 
 // 새 프레임을 만들 때 채워 두는 기본 이름·설명
 const DEFAULT_FRAME_TITLE = "새 테마 프레임";
@@ -308,22 +309,48 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [resetPhotos]);
 
+  /*
+    초안의 주인. 초안은 계정 × 프레임 종류마다 따로 둔다(lib/themeEditorDraft.ts).
+    공용 기기에서 앞 사람이 로그아웃하지 않고 떠나도, 다음 사람이 그 사진이 든 초안을 복원하지
+    않게 하려면 지금 계정을 알아야 한다. 모르면 복원도 자동 저장도 하지 않는다 — 주인 없는
+    초안을 남기는 것보다 이번 편집의 자동 저장을 건너뛰는 편이 안전하다.
+  */
+  const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
+  useEffect(() => {
+    if (remoteFrameId) return;
+    let cancelled = false;
+    void getMyUserInfo()
+      .then((user) => {
+        if (!cancelled && user.id) setDraftOwnerId(user.id);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteFrameId]);
+
   // 새 프레임 작업 시: 새로고침/이탈로 남은 WIP 초안(localStorage)이 있으면 복원한다.
   // 원격 프레임 수정 중에는 저장본을 불러오므로 초안 복원을 하지 않는다.
   const didRestoreDraftRef = useRef(false);
   useEffect(() => {
-    if (remoteFrameId || didRestoreDraftRef.current) return;
+    if (remoteFrameId || !draftOwnerId || didRestoreDraftRef.current) return;
     didRestoreDraftRef.current = true;
-    const draft = loadEditorDraft();
-    if (draft && draft.frameId === frameId) {
-      hydrateDraft(draft);
-    }
-  }, [frameId, remoteFrameId, hydrateDraft]);
+    // 계정 조회는 왕복이라 그 사이 사용자가 이미 편집을 시작했을 수 있다. 그 편집을 초안으로
+    // 덮지 않는다(초안은 남아 있다가 다음 자동 저장이 새 편집으로 바꾼다).
+    const s = useThemeEditorStore.getState();
+    const pristine =
+      s.components.length === 0 &&
+      s.background.type === "COLOR" &&
+      !s.cellCutouts.some(Boolean);
+    if (!pristine) return;
+    const draft = loadEditorDraft(draftOwnerId, frameId);
+    if (draft) hydrateDraft(draft);
+  }, [frameId, remoteFrameId, hydrateDraft, draftOwnerId]);
 
   const stopDraftAutosaveRef = useRef<(() => void) | null>(null);
   // 편집 중 상태를 localStorage에 자동 저장(디바운스). S3 temp 업로드 대신 로컬 보관.
   useEffect(() => {
-    if (remoteFrameId) return;
+    if (remoteFrameId || !draftOwnerId) return;
     let timer: number | undefined;
     let idle: number | undefined;
     let stopped = false;
@@ -361,6 +388,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           if (!s.frameId) return;
           // 레이어가 없어도 배경색·칸별 설정은 편집 내용이다. 함께 보관한다.
           void saveEditorDraft({
+            ownerId: draftOwnerId,
             frameId: s.frameId,
             backgroundColor: s.backgroundColor,
             background: s.background,
@@ -378,7 +406,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
     stopDraftAutosaveRef.current = stop;
     return stop;
-  }, [remoteFrameId]);
+  }, [remoteFrameId, draftOwnerId]);
 
   const openSaveDialog = () => {
     setDraftTitle(title);
@@ -485,7 +513,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       stopDraftAutosaveRef.current?.();
-      clearEditorDraft();
+      if (draftOwnerId) discardEditorDraft(draftOwnerId, frameId);
       // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
       // /theme로 나가는 길에도 경고가 뜬다.
       setBaseline({ key: baselineKey, signature: editorSignature });
@@ -581,7 +609,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             onBackClick={() => {
               stopDraftAutosaveRef.current?.();
               useThemeEditorStore.getState().reset();
-              clearEditorDraft();
+              if (draftOwnerId) discardEditorDraft(draftOwnerId, frameId);
             }}
             rightSlot={
               <button
