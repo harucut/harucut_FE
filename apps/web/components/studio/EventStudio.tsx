@@ -15,6 +15,15 @@ import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/Studi
 import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
 import { StudioEventUsage } from "@/components/studio/StudioEventUsage";
 import { getEventUsage, type EventUsage } from "@/lib/studio/usageApi";
+import {
+  getEffectiveSettings,
+  getWorkspaceBrandDefaults,
+  listProjects,
+  type BrandDefaults,
+  type Project,
+  type SettingSource,
+} from "@/lib/studio/projectsApi";
+import { settingsPatch } from "@/lib/studio/settingsPatch";
 import { compactPageTheme, parsePageTheme, type PageTheme } from "@/lib/event/pageTheme";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -56,6 +65,8 @@ type Form = {
   frames: FrameRef[];
   retentionDays: string;
   theme: PageTheme;
+  /** 프로젝트 public id. 빈 문자열이면 프로젝트 없음. */
+  projectId: string;
 };
 
 function formOf(settings: EventSettings): Form {
@@ -71,6 +82,7 @@ function formOf(settings: EventSettings): Form {
     frames: [...(settings.frames ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
     retentionDays: String(settings.resultRetentionDays ?? DEFAULT_RETENTION_DAYS),
     theme: parsePageTheme(settings.theme),
+    projectId: settings.projectId ?? "",
   };
 }
 
@@ -100,7 +112,26 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
     }),
     resultRetentionDays: Number.isFinite(retention) && retention > 0 ? retention : null,
     theme: compactPageTheme(form.theme),
+    projectId: form.projectId || null,
   };
+}
+
+/** 상속 가능한 필드가 섹션마다 어떤 것인지(ADR-0009 §2-1). 섹션 제목 옆에 출처와 「기본값 따르기」를 둔다. */
+type InheritableField = keyof BrandDefaults;
+
+function sourceOf(fields: InheritableField[], sources: Record<string, SettingSource> | null): SettingSource | "MIXED" | null {
+  if (!sources) return null;
+  const found = new Set<SettingSource>();
+  for (const field of fields) {
+    if (field === "theme") {
+      for (const [path, source] of Object.entries(sources)) if (path.startsWith("theme.")) found.add(source);
+    } else if (sources[field]) {
+      found.add(sources[field]);
+    }
+  }
+  if (found.size === 0) return null;
+  if (found.size > 1) return "MIXED";
+  return [...found][0];
 }
 
 function newConsentCode(existing: ConsentDraft[]) {
@@ -135,11 +166,30 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [now, setNow] = useState(() => Date.now());
   // 행사 화면 꾸미기에서 로고·배경을 올리는 중이면 저장을 막는다. 저장 응답(저장 시점 폼)이 업로드 결과를 덮는다.
   const [themeUploading, setThemeUploading] = useState(false);
+  // 상속(ADR-0009 §2): 경로마다 출처, 「기본값 따르기」를 고른 필드, 공간·프로젝트 기본값. 출처를 못 받으면 null — 그때는
+  // 예전처럼 저장한다(settingsPatch 주석).
+  const [sources, setSources] = useState<Record<string, SettingSource> | null>(null);
+  const [inherit, setInherit] = useState<Set<InheritableField>>(() => new Set());
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [workspaceDefaults, setWorkspaceDefaults] = useState<BrandDefaults | null>(null);
 
-  const accept = useCallback((event: StudioEvent) => {
-    setLoad({ state: "ready", event });
-    setForm(formOf(event.settings));
-  }, []);
+  const loadSources = useCallback(async () => {
+    try {
+      setSources((await getEffectiveSettings(eventId)).sources);
+    } catch {
+      setSources(null);
+    }
+  }, [eventId]);
+
+  const accept = useCallback(
+    (event: StudioEvent) => {
+      setLoad({ state: "ready", event });
+      setForm(formOf(event.settings));
+      setInherit(new Set());
+      void loadSources();
+    },
+    [loadSources],
+  );
 
   const reload = useCallback(async () => {
     try {
@@ -166,6 +216,22 @@ export function EventStudio({ eventId }: { eventId: string }) {
     void loadUsage();
   }, [reload, loadUsage]);
 
+  // 프로젝트 목록과 공간 기본값 — 「기본값 따르기」를 보일지(위 단계에 값이 있는지) 가린다. 못 받으면 상속 안내를 줄인다.
+  const workspaceId = load.state === "ready" ? load.event.workspaceId : null;
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    listProjects(workspaceId)
+      .then((list) => !cancelled && setProjects(list))
+      .catch(() => {});
+    getWorkspaceBrandDefaults(workspaceId)
+      .then((defaults) => !cancelled && setWorkspaceDefaults(defaults))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
   if (load.state !== "ready" || !form) {
     return (
       <main className="hc-page-app min-h-dvh text-(--hc-text)">
@@ -187,7 +253,32 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const editable = event.status === "DRAFT" || event.status === "LIVE";
   const slugLocked = event.status !== "DRAFT";
   const next = settingsOf(form, event.settings);
-  const dirty = JSON.stringify(next) !== JSON.stringify(settingsOf(formOf(event.settings), event.settings));
+  // 저장 본문은 바뀐 필드만 — 상속받은 값을 행사 직접 값으로 굳히지 않는다(settingsPatch).
+  const patch = settingsPatch(next, settingsOf(formOf(event.settings), event.settings), { sources, inherit });
+  const dirty = Object.keys(patch).length > 0;
+  const currentProject = projects.find((p) => p.projectId === form.projectId) ?? null;
+  const parentHas = (field: InheritableField) => {
+    const has = (defaults: BrandDefaults | null | undefined) => {
+      const value = defaults?.[field];
+      if (field === "theme") return Boolean(value && Object.keys(value as object).some((k) => k !== "schemaVersion"));
+      return value !== undefined && value !== null;
+    };
+    return has(workspaceDefaults) || has(currentProject?.brandDefaults);
+  };
+  const inheritAside = (fields: InheritableField[]) => {
+    const source = sourceOf(fields, sources);
+    const following = fields.every((f) => inherit.has(f));
+    const canFollow = editable && fields.some((f) => parentHas(f)) && (source === "EVENT" || source === "MIXED");
+    return (
+      <InheritNote
+        source={source}
+        following={following}
+        canFollow={canFollow}
+        onFollow={() => setInherit((prev) => new Set([...prev, ...fields]))}
+        onCancel={() => setInherit((prev) => new Set([...prev].filter((f) => !fields.includes(f))))}
+      />
+    );
+  };
   const joinUrl = `${origin}${event.joinUrlPath}`;
 
   // 행사용 프레임은 같은 편집기를 공간 맥락으로 연다 — 저장하면 이 공간에 만들고 여기로 돌아온다.
@@ -204,7 +295,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
     setBusy("save");
     setNotice(null);
     try {
-      accept(await updateEventSettings(event.eventId, settingsVersion, next));
+      accept(await updateEventSettings(event.eventId, settingsVersion, patch));
       setConflict(null);
       setNotice({ kind: "ok", text: "설정을 저장했어요." });
     } catch (error) {
@@ -330,6 +421,32 @@ export function EventStudio({ eventId }: { eventId: string }) {
                   onChange={(e) => update({ slug: e.target.value.toLowerCase() })}
                 />
               </Field>
+              {projects.length > 0 || form.projectId ? (
+                <Field
+                  label="프로젝트"
+                  help={
+                    event.status !== "DRAFT"
+                      ? "게시한 행사는 프로젝트를 바꿀 수 없어요."
+                      : "고르면 그 프로젝트의 기본값(참가 방식·프레임·동의·꾸미기 등)을 따라요. 저장하면 반영돼요."
+                  }
+                >
+                  <select
+                    className="hc-input h-11 rounded-xl border px-2 text-[14px]"
+                    value={form.projectId}
+                    disabled={event.status !== "DRAFT"}
+                    onChange={(e) => update({ projectId: e.target.value })}
+                  >
+                    <option value="">프로젝트 없음</option>
+                    {projects
+                      .filter((p) => !p.archived || p.projectId === form.projectId)
+                      .map((p) => (
+                        <option key={p.projectId} value={p.projectId}>
+                          {p.archived ? `${p.name} (보관됨)` : p.name}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+              ) : null}
             </Section>
 
             <Section title="촬영 기간" description="비워 두면 게시하는 즉시 시작하고, 「촬영 종료」를 누를 때까지 열려 있어요. 시각은 한국 시간이에요.">
@@ -353,12 +470,12 @@ export function EventStudio({ eventId }: { eventId: string }) {
               </div>
             </Section>
 
-            <Section title="참가 방식">
+            <Section title="참가 방식" aside={inheritAside(["byodEnabled", "boothEnabled"])}>
               <Check label="개인 휴대폰 (링크·QR)" checked={form.byod} onChange={(byod) => update({ byod })} />
               <Check label="현장 부스" checked={form.booth} onChange={(booth) => update({ booth })} />
             </Section>
 
-            <Section title="허용 레이아웃" description="참가자가 고를 수 있는 컷 구성이에요. 고른 레이아웃마다 제공 프레임이 하나 이상 있어야 게시할 수 있어요.">
+            <Section title="허용 레이아웃" aside={inheritAside(["allowedLayouts"])} description="참가자가 고를 수 있는 컷 구성이에요. 고른 레이아웃마다 제공 프레임이 하나 이상 있어야 게시할 수 있어요.">
               <div className="grid gap-2 sm:grid-cols-2">
                 {LAYOUTS.map((layout) => (
                   <Check
@@ -377,6 +494,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
 
             <Section
               title="제공 프레임"
+              aside={inheritAside(["frames"])}
               description="참가자가 고를 수 있는 프레임이에요. 허용한 레이아웃마다 하나 이상, 기본 프레임은 전체에서 하나예요."
             >
               <StudioFramePicker
@@ -393,6 +511,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
 
             <Section
               title="참가 동의"
+              aside={inheritAside(["consentItems"])}
               description="사진을 받는 주체, 목적, 보관 기간을 참가자가 촬영 전에 읽고 동의해요. 필수 항목이 하나 이상 있어야 게시할 수 있어요."
             >
               {form.consents.map((consent, index) => (
@@ -448,6 +567,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
 
             <Section
               title="행사 화면 꾸미기"
+              aside={inheritAside(["theme"])}
               description="참가 · 부스 · 결과 화면에 보이는 색과 글꼴, 로고, 문구예요. 게시하면 참가자 화면에 반영돼요."
             >
               <StudioPageTheme
@@ -460,7 +580,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
               />
             </Section>
 
-            <Section title="결과 보관">
+            <Section title="결과 보관" aside={inheritAside(["resultRetentionDays"])}>
               <Field
                 label="보관 일수"
                 help={`사진을 만든 날부터 이 기간 동안 참가자가 결과 링크로 다시 받고, 사진함에도 남아요. 지나면 사진이 지워져요 — 필요한 사진은 미리 받아 두세요.${
@@ -643,11 +763,25 @@ const ACTION_DONE: Record<EventAction, string> = {
   "close-capture": "촬영을 끝냈어요.",
 };
 
-function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  description,
+  aside,
+  children,
+}: {
+  title: string;
+  description?: string;
+  /** 제목 옆 — 상속 출처와 「기본값 따르기」. */
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-[18px] font-bold">{title}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-[18px] font-bold">{title}</h2>
+          {aside}
+        </div>
         {description ? <p className="text-[13px] text-(--hc-muted)">{description}</p> : null}
       </div>
       {children}
@@ -691,5 +825,52 @@ function Check({ label, checked, onChange }: { label: string; checked: boolean; 
       <input type="checkbox" className="size-5" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
+  );
+}
+
+const SOURCE_LABEL: Record<SettingSource | "MIXED", string> = {
+  WORKSPACE: "공간 기본값",
+  PROJECT: "프로젝트 기본값",
+  EVENT: "이 행사에서 정함",
+  MIXED: "일부는 기본값",
+};
+
+/**
+ * 섹션 값의 출처(ADR-0009 §2-2)와 「기본값 따르기」. 기본값을 따르는 값을 이 화면에서 바꾸면 그 행사에서 정한 값이 된다.
+ * 「기본값 따르기」는 저장할 때 그 필드를 null 로 보내 직접 값을 지운다(위 단계 값을 따른다).
+ */
+function InheritNote({
+  source,
+  following,
+  canFollow,
+  onFollow,
+  onCancel,
+}: {
+  source: SettingSource | "MIXED" | null;
+  following: boolean;
+  canFollow: boolean;
+  onFollow: () => void;
+  onCancel: () => void;
+}) {
+  if (following) {
+    return (
+      <span className="flex items-center gap-2 text-[12px]">
+        <span className="rounded-full bg-(--hc-surface-well) px-2 py-0.5">저장하면 기본값을 따라요</span>
+        <button type="button" onClick={onCancel} className="h-11 px-2 font-semibold text-(--hc-muted) underline">
+          취소
+        </button>
+      </span>
+    );
+  }
+  if (!source) return null;
+  return (
+    <span className="flex items-center gap-2 text-[12px]">
+      {source !== "EVENT" ? <span className="rounded-full bg-(--hc-surface-well) px-2 py-0.5">{SOURCE_LABEL[source]}</span> : null}
+      {canFollow ? (
+        <button type="button" onClick={onFollow} className="h-11 px-2 font-semibold text-(--hc-muted) underline">
+          기본값 따르기
+        </button>
+      ) : null}
+    </span>
   );
 }

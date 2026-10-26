@@ -27,6 +27,11 @@ const mockListMembers = jest.fn();
 const mockInvite = jest.fn();
 const mockRemoveMember = jest.fn();
 jest.mock("@/lib/userApi", () => ({ getMyUserInfo: async () => ({ id: "u-me" }) }));
+jest.mock("@/lib/studio/projectsApi", () => ({
+  ...jest.requireActual("@/lib/studio/projectsApi"),
+  listProjects: async () => [],
+  getWorkspaceBrandDefaults: async () => ({}),
+}));
 jest.mock("@/lib/studio/studioApi", () => ({
   listWorkspaces: () => mockListWorkspaces(),
   createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
