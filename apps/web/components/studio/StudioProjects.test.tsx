@@ -98,3 +98,22 @@ it("프로젝트 기본값의 명시적인 브랜딩 해제는 다른 칸을 저
   expect(patch.resultRetentionDays).toBe(90);
   expect(patch.theme).toEqual({ schemaVersion: 1, branding: { hideHarucutBranding: false } });
 });
+
+// Codex 리뷰(#553): 공간이 켠 숨김을 프로젝트에서 새로 끄려면 「정하지 않음」과 「보이기(끔)」를 구분해야 한다.
+it("브랜딩은 정하지 않음과 명시적 해제를 구분해, 새로 끈 값을 보낸다", async () => {
+  api.updateProject.mockImplementation(async (id: string, patch: { brandDefaults: object }) => ({ ...SPRING, brandDefaults: patch.brandDefaults }));
+  render(<StudioProjects workspaceId="Ws1" />);
+  fireEvent.click(await screen.findByRole("button", { name: /프로젝트 기본값/ }));
+  const form = screen.getByRole("form", { name: "프로젝트 기본값" });
+  expect(within(form).getByLabelText("하루컷 표시")).toHaveValue("");
+  expect(within(form).queryByLabelText("하루컷 표시 숨기기")).not.toBeInTheDocument();
+
+  fireEvent.change(within(form).getByLabelText("하루컷 표시"), { target: { value: "off" } });
+  fireEvent.change(within(form).getByLabelText("완성 사진의 로고"), { target: { value: "NONE" } });
+  fireEvent.click(within(form).getByRole("button", { name: "기본값 저장" }));
+  await waitFor(() => expect(api.updateProject).toHaveBeenCalled());
+  expect(api.updateProject.mock.calls[0][1].brandDefaults.theme).toEqual({
+    schemaVersion: 1,
+    branding: { hideHarucutBranding: false, outputLogo: "NONE" },
+  });
+});

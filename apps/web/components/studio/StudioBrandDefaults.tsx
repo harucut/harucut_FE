@@ -23,65 +23,52 @@ type Draft = {
   setLayouts: boolean;
   layouts: EventLayout[];
   retentionDays: string;
+  /** 브랜딩을 뺀 테마(색·글꼴·로고·배경·문구). */
   theme: PageTheme;
-  /** 저장된 기본값에 브랜딩 키가 명시돼 있었는가 — 끈 값(false·NONE)도 「정함」이다. */
-  explicitBranding: { hideHarucutBranding: boolean; outputLogo: boolean };
+  /**
+   * 브랜딩은 「정하지 않음(위 단계 값을 따름)」과 「명시적으로 끔」을 구분해야 한다 — 프로젝트가 공간이 켠 숨김·로고를 끄려면
+   * 끈 값을 명시해야 하기 때문이다(Codex #553). 그래서 체크박스가 아니라 3단 선택이다.
+   */
+  hideBranding: Tri;
+  outputLogo: "" | "NONE" | "ORGANIZER_LOGO";
 };
 
 function draftOf(defaults: BrandDefaults): Draft {
-  const tri = (v: boolean | null | undefined): Tri =>
-    v === true ? "on" : v === false ? "off" : "";
+  const tri = (v: unknown): Tri => (v === true ? "on" : v === false ? "off" : "");
+  const raw = (defaults.theme as { branding?: { hideHarucutBranding?: unknown; outputLogo?: unknown } } | null | undefined)
+    ?.branding;
   return {
     byod: tri(defaults.byodEnabled),
     booth: tri(defaults.boothEnabled),
     setLayouts: Array.isArray(defaults.allowedLayouts),
     layouts: defaults.allowedLayouts ?? [],
-    retentionDays: defaults.resultRetentionDays
-      ? String(defaults.resultRetentionDays)
-      : "",
-    theme: parsePageTheme(defaults.theme),
-    explicitBranding: {
-      hideHarucutBranding: brandingOf(defaults.theme)?.hideHarucutBranding !== undefined,
-      outputLogo: brandingOf(defaults.theme)?.outputLogo !== undefined,
-    },
+    retentionDays: defaults.resultRetentionDays ? String(defaults.resultRetentionDays) : "",
+    theme: { ...parsePageTheme(defaults.theme), branding: undefined },
+    hideBranding: tri(raw?.hideHarucutBranding),
+    outputLogo: raw?.outputLogo === "NONE" || raw?.outputLogo === "ORGANIZER_LOGO" ? raw.outputLogo : "",
   };
 }
 
-/** 폼 → 머지 패치. 정하지 않은 필드는 null(그 키를 지운다 — 위 단계·서버 기본값을 따른다). */
-function brandingOf(theme: unknown): { hideHarucutBranding?: unknown; outputLogo?: unknown } | undefined {
-  const branding = (theme as { branding?: unknown } | null | undefined)?.branding;
-  return branding && typeof branding === "object" ? (branding as { hideHarucutBranding?: unknown; outputLogo?: unknown }) : undefined;
-}
-
-/**
- * 저장할 테마. 빈 문구·색은 빼되, 브랜딩은 원래 명시돼 있었거나 이번에 바꾼 키를 끈 값(false·NONE)까지 남긴다 —
- * 키를 빼면 위 단계(공간) 값을 따르므로, 프로젝트가 공간의 숨김·로고를 끈 재정의가 다른 칸 저장 때 사라진다(Codex #553).
- */
-function themeOf(draft: Draft, saved: Draft): PageTheme | null {
+/** 저장할 테마. 빈 문구·색은 빼고(위 단계 값을 따른다), 브랜딩은 정한 키만 끈 값까지 담는다. */
+function themeOf(draft: Draft): PageTheme | null {
   const compact = compactPageTheme(draft.theme);
   const branding: Record<string, unknown> = {};
-  const hide = Boolean(draft.theme.branding?.hideHarucutBranding);
-  const logo = draft.theme.branding?.outputLogo === "ORGANIZER_LOGO" ? "ORGANIZER_LOGO" : "NONE";
-  if (draft.explicitBranding.hideHarucutBranding || hide !== Boolean(saved.theme.branding?.hideHarucutBranding)) {
-    branding.hideHarucutBranding = hide;
-  }
-  if (draft.explicitBranding.outputLogo || logo !== (saved.theme.branding?.outputLogo ?? "NONE")) branding.outputLogo = logo;
+  if (draft.hideBranding) branding.hideHarucutBranding = draft.hideBranding === "on";
+  if (draft.outputLogo) branding.outputLogo = draft.outputLogo;
   if (Object.keys(branding).length === 0) return compact;
   return { ...(compact ?? { schemaVersion: 1 }), branding };
 }
 
-function patchOf(draft: Draft, saved: Draft = draft): Partial<Record<keyof BrandDefaults, unknown>> {
+/** 폼 → 머지 패치. 정하지 않은 필드는 null(그 키를 지운다 — 위 단계·서버 기본값을 따른다). */
+function patchOf(draft: Draft): Partial<Record<keyof BrandDefaults, unknown>> {
   const bool = (v: Tri) => (v === "" ? null : v === "on");
   const days = Number(draft.retentionDays);
   return {
     byodEnabled: bool(draft.byod),
     boothEnabled: bool(draft.booth),
     allowedLayouts: draft.setLayouts ? draft.layouts : null,
-    resultRetentionDays:
-      draft.retentionDays.trim() && Number.isSafeInteger(days) && days > 0
-        ? days
-        : null,
-    theme: themeOf(draft, saved),
+    resultRetentionDays: draft.retentionDays.trim() && Number.isSafeInteger(days) && days > 0 ? days : null,
+    theme: themeOf(draft),
   };
 }
 
@@ -114,14 +101,14 @@ export function StudioBrandDefaults({
   const days = Number(draft.retentionDays);
   const retentionInvalid =
     draft.retentionDays.trim() !== "" && !(Number.isSafeInteger(days) && days > 0);
-  const dirty = JSON.stringify(patchOf(draft, saved)) !== JSON.stringify(patchOf(saved));
+  const dirty = JSON.stringify(patchOf(draft)) !== JSON.stringify(patchOf(saved));
   const set = (patch: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   const save = async () => {
     setBusy(true);
     setNotice(null);
     try {
-      const next = draftOf(await onSave(patchOf(draft, saved)));
+      const next = draftOf(await onSave(patchOf(draft)));
       setSaved(next);
       setDraft(next);
       setNotice({
@@ -232,6 +219,7 @@ export function StudioBrandDefaults({
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-[13px] font-semibold">행사 화면 꾸미기</legend>
           <StudioPageTheme
+            showBranding={false}
             workspaceId={workspaceId}
             value={draft.theme}
             onUploadingChange={setUploading}
@@ -239,6 +227,39 @@ export function StudioBrandDefaults({
               setDraft((prev) => ({ ...prev, theme: apply(prev.theme) }))
             }
           />
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-1 text-[13px] font-semibold">브랜딩</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-[13px] font-semibold">
+              하루컷 표시
+              <select
+                value={draft.hideBranding}
+                onChange={(e) => set({ hideBranding: e.target.value as Tri })}
+                className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+              >
+                <option value="">정하지 않음</option>
+                <option value="on">숨기기</option>
+                <option value="off">보이기</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[13px] font-semibold">
+              완성 사진의 로고
+              <select
+                value={draft.outputLogo}
+                onChange={(e) => set({ outputLogo: e.target.value as Draft["outputLogo"] })}
+                className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+              >
+                <option value="">정하지 않음</option>
+                <option value="ORGANIZER_LOGO">행사 로고 넣기</option>
+                <option value="NONE">넣지 않기</option>
+              </select>
+            </label>
+          </div>
+          <p className="text-[12px] text-(--hc-muted)">
+            하루컷 표시 숨기기는 화이트라벨 이용권이 있어야 게시돼요. 완성 사진 로고는 준비 중이라 지금은 설정만 저장돼요.
+          </p>
         </fieldset>
       </fieldset>
 

@@ -61,6 +61,7 @@ export function StudioPageTheme({
   onChange,
   features = null,
   onUploadingChange,
+  showBranding = true,
 }: {
   workspaceId: string;
   value: PageTheme;
@@ -73,6 +74,8 @@ export function StudioPageTheme({
   features?: EntitlementFeature[] | null;
   /** 로고·배경을 올리는 중인지. 부모가 그동안 저장을 막는다 — 저장 응답이 업로드 결과를 덮지 않게(Codex #544). */
   onUploadingChange?: (uploading: boolean) => void;
+  /** 브랜딩 칸을 그릴지. 공간·프로젝트 기본값 편집은 「정하지 않음」이 있는 자기 칸을 쓴다. */
+  showBranding?: boolean;
 }) {
   // 자산 ID → 짧은 조회 URL. 칸이 아니라 ID 로 기억해야, 다시 불러온 테마의 로고·배경이 바뀌면 옛 그림을 쓰지 않는다.
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -301,6 +304,7 @@ export function StudioPageTheme({
         ))}
       </fieldset>
 
+      {showBranding ? (
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-1 text-[14px] font-semibold">브랜딩</legend>
         <label className="flex items-center gap-2 text-[14px]">
@@ -336,6 +340,7 @@ export function StudioPageTheme({
         </label>
         <p className="text-[12px] text-(--hc-muted)">완성 사진에 로고를 넣는 기능은 준비 중이에요. 지금은 설정만 저장돼요.</p>
       </fieldset>
+      ) : null}
     </div>
   );
 }
