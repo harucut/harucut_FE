@@ -20,6 +20,8 @@
      통째로 빠진 채 "A·B·C·D 일치" 가 찍힌다.
   8. --base-url 이 로컬이 아니면 **로컬 jar 를 대지 않는가** — 컨테이너는 늘 이 기계의
      것이라, 운영 스펙에 대면 서로 다른 두 서버를 섞어 C 를 판정한다.
+  9. 백엔드 develop 의 계약 산출물(--spec·--error-codes)을 주면 그 파일을 기준으로 삼는가 —
+     운영 스펙을 받지 않고, C 의 서버 코드도 산출물 목록에서 가져오는가.
 
 레포에 pytest 가 없고 scripts/ 에도 테스트 하네스가 없어서, 표준 라이브러리만 쓰고
 직접 돌리는 형태로 둔다:
@@ -33,6 +35,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import sys
 import tempfile
@@ -346,6 +349,39 @@ def test_loopback_base_url_still_reads_jar() -> None:
     assert calls, out
     assert code == 0, out
     assert "기준: 실행 중인 jar 의 ErrorCode enum" in out, out
+
+
+def test_artifacts_are_the_baseline_when_given() -> None:
+    """--spec·--error-codes 를 주면 그 파일이 기준이다. --base-url 스펙도 jar 도 쓰지 않는다.
+
+    --base-url 쪽 스펙(가짜)은 비워 둔다. 그걸 읽었다면 A 가 「백엔드에 없다」로 떨어진다.
+    """
+    def jar_must_not_run():
+        raise AssertionError("산출물을 줬는데 jar 를 읽었다")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        spec_path = os.path.join(tmp, "openapi.generated.json")
+        codes_path = os.path.join(tmp, "error-codes.generated.json")
+        with open(spec_path, "w", encoding="utf-8") as f:
+            json.dump(spec_with(["frameId", "sourceKeys"]), f)
+        with open(codes_path, "w", encoding="utf-8") as f:
+            json.dump(
+                [
+                    {"code": "GEN-001", "status": 400, "message": "x"},
+                    {"code": "MEDIA-001", "status": 409, "message": "y"},
+                ],
+                f,
+            )
+        code, out = run(
+            ["--spec", spec_path, "--error-codes", codes_path],
+            spec={"paths": {}, "components": {"schemas": {}}},
+            jar=jar_must_not_run,
+        )
+    assert "가 백엔드에 없다" not in out, out
+    assert "기준: 백엔드 계약 산출물의 ErrorCode 전체" in out, out
+    # FE 표에는 GEN-001 만 있으니 산출물의 MEDIA-001 이 누락으로 걸려야 한다.
+    assert code == 1, out
+    assert "누락 MEDIA-001" in out, out
 
 
 if __name__ == "__main__":
