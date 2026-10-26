@@ -145,10 +145,9 @@ describe("프레임만 다시 고르기", () => {
     useShootSession.setState(initial, true);
   });
 
-  it("촬영본과 그것을 찍은 프레임·출처·행사는 남기고 나머지를 되돌린다", () => {
+  it("촬영본과 그것을 찍은 프레임·출처는 남기고 나머지를 되돌린다", () => {
     const store = useShootSession.getState();
     store.setSource("upload");
-    store.setEventName("여름 팬미팅");
     store.setFrameId("classic-4");
     store.addShotPhotos(["data:image/jpeg;base64,a", "data:image/jpeg;base64,b"]);
     store.toggleSelect(0);
@@ -160,7 +159,6 @@ describe("프레임만 다시 고르기", () => {
     expect(next.shots).toHaveLength(2);
     expect(next.shotsFrameId).toBe("classic-4");
     expect(next.source).toBe("upload");
-    expect(next.eventName).toBe("여름 팬미팅");
     // 프레임 선택은 처음으로 — 이 화면에 다시 고르러 왔으므로.
     expect(next.frameId).toBeNull();
     expect(next.selectedIndexes.every((slot) => slot === null)).toBe(true);
