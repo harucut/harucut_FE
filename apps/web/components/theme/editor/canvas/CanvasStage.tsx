@@ -16,7 +16,11 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { EditableNode } from "./EditableNode";
 
-export function CanvasStage() {
+/**
+ * @param maxHeight 캔버스 세로 상한(px). 비우면 뷰포트 기준 기본값(useStageFit)을 쓴다.
+ *   모바일 편집 화면은 아래 도구 시트가 화면을 나눠 쓰므로 더 낮게 준다.
+ */
+export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
   const frameId = useThemeEditorStore((s) => s.frameId);
   const components = useThemeEditorStore((s) => s.components);
   const activeId = useThemeEditorStore((s) => s.activeId);
@@ -77,7 +81,7 @@ export function CanvasStage() {
         : null,
     [layout],
   );
-  const { containerRef, viewW, viewH, scale, ready } = useStageFit(stageBase);
+  const { containerRef, viewW, viewH, scale, ready } = useStageFit(stageBase, { maxHeight });
 
   // 선택된 노드를 Konva Transformer에 연결
   useLayoutEffect(() => {

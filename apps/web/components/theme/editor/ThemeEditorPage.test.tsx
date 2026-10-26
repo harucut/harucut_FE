@@ -47,6 +47,7 @@ const editorStoreState = {
   frameId: "classic",
   finalizeAssetsForSave: jest.fn().mockResolvedValue(undefined),
   hydrateDraft: jest.fn(),
+  past: [] as unknown[],
   undo: jest.fn(),
   redo: jest.fn(),
   nudge: jest.fn(),
@@ -720,6 +721,12 @@ describe("ThemeEditorPage 초안 복원과 계정", () => {
     mockRemoteFrameId = null;
     editorStoreState.components = [];
     editorStoreState.background = { type: "COLOR", value: "111827" };
+    editorStoreState.past = [];
+  });
+
+  afterEach(() => {
+    editorStoreState.past = [];
+    jest.useRealTimers();
   });
 
   async function stashDraft(ownerId: string) {
@@ -733,6 +740,27 @@ describe("ThemeEditorPage 초안 복원과 계정", () => {
       now: Date.now(),
     });
   }
+
+  // 계정 조회가 끝나기 전에 배경색만 바꾼 경우다 — 자동 저장 구독은 아직 그 변경을 못 봤다.
+  it("계정을 알기 전에 한 편집도 초안에 남긴다", async () => {
+    jest.useFakeTimers();
+    editorStoreState.past = [{}];
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await act(async () => {}); // 계정 조회 응답
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1200);
+    });
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
+  });
+
+  it("계정을 알기 전에 편집을 시작했으면 예전 초안으로 덮지 않는다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    editorStoreState.past = [{}];
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
 
   it("내 계정의 초안을 복원한다", async () => {
     await stashDraft(DRAFT_OWNER);
@@ -797,5 +825,43 @@ describe("ThemeEditorPage 방향키 이동", () => {
     fireEvent.keyDown(input, { key: "ArrowLeft" });
     expect(editorStoreState.nudge).not.toHaveBeenCalled();
     input.remove();
+  });
+});
+
+describe("ThemeEditorPage 모바일 도구 시트", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.activeId = null;
+  });
+
+  /** 모바일에서 보이는 패널. 데스크톱 배치는 CSS(`lg:`)가 맡아 jsdom 에서는 클래스로만 본다. */
+  function shownPanels(container: HTMLElement) {
+    return Array.from(
+      container.querySelectorAll("#theme-editor-tool-sheet > div"),
+    )
+      .filter((node) => !node.className.includes("max-lg:hidden"))
+      .map((node) => node.firstElementChild?.getAttribute("data-testid"));
+  }
+
+  it("처음에는 추가 도구 하나만 시트에 띄우고, 고른 도구로 바꾼다", () => {
+    const { container, getByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    expect(shownPanels(container)).toEqual(["asset-panel"]);
+
+    fireEvent.click(getByRole("button", { name: "레이어" }));
+    expect(shownPanels(container)).toEqual(["layers-panel"]);
+    expect(getByRole("button", { name: "레이어" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // 캔버스에서 고른 것을 바로 고치러 온 것이다.
+  it("레이어를 새로 고르면 속성 시트로 넘긴다", () => {
+    const { container, rerender } = render(<ThemeEditorPage frameId="classic-4" />);
+    editorStoreState.activeId = "layer-1";
+    rerender(<ThemeEditorPage frameId="classic-4" />);
+    expect(shownPanels(container)).toEqual(["inspector-panel"]);
+    editorStoreState.activeId = null;
   });
 });
