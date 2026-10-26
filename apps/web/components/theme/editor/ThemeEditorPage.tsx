@@ -85,6 +85,36 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const editorComponents = useThemeEditorStore((s) => s.components);
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
+  const undo = useThemeEditorStore((s) => s.undo);
+  const redo = useThemeEditorStore((s) => s.redo);
+
+  /*
+    되돌리기 단축키. Ctrl/⌘+Z 는 되돌리기, Ctrl/⌘+Shift+Z 와 Ctrl+Y 는 다시 하기다.
+    글자를 입력하는 칸에 포커스가 있으면 브라우저의 입력 되돌리기를 그대로 둔다 — 문구를
+    고치다 Ctrl+Z 를 눌렀는데 캔버스 레이어가 사라지면 안 된다.
+  */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if ((key === "z" && event.shiftKey) || (key === "y" && event.ctrlKey)) {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undo, redo]);
   const { remoteFrameId } = useThemeSession();
   // 저장 다이얼로그에서 알려 준다. 예전에는 저장을 누른 순간 window.alert 로 끼어들었다.
   const hiddenLayerCount = editorComponents.filter((c) => c.hidden).length;
