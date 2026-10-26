@@ -1010,6 +1010,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           // 후자는 TEXT 합성에 반드시 실려야 한다(lib/frameApi.ts).
           ...(c.renderUrl ? { renderUrl: c.renderUrl } : {}),
           ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+          // 잠금은 저장·재열기에서 유지한다(F1-3). 숨김은 내보내지 않으므로 싣지 않는다.
+          ...(c.locked ? { locked: true } : {}),
           x: c.x,
           y: c.y,
           width: c.width,
@@ -1029,7 +1031,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         ...c,
         scale: c.scale ?? 1,
         rotation: c.rotation ?? 0,
-        locked: false,
+        locked: Boolean(c.locked),
         hidden: false,
       })) as EditorComponent[];
 
@@ -1097,7 +1099,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         components: normalizeZ(
           draft.components.map((c) => ({
             ...c,
-            locked: false,
+            locked: Boolean(c.locked),
             hidden: false,
           })) as EditorComponent[],
         ),

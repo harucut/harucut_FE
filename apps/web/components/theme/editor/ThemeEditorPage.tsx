@@ -25,7 +25,7 @@ import {
 } from "@/lib/presignedUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { useModalDialog } from "@/hooks/useModalDialog";
@@ -267,6 +267,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     왕복 정규화 차이가 「고쳤다」로 잡히지 않는다.
   */
   const savedContentKeyRef = useRef<string | null>(null);
+  /**
+   * 불러온 저장본의 낙관적 잠금 버전(ADR-0006 §3). 수정 저장에 보내고, 응답의 새 값으로 바꾼다.
+   * 다른 기기가 먼저 저장했으면 서버가 409 FRAME-002 와 현재 버전을 준다 — 그때는 조용히 덮지 않고
+   * 사용자에게 고르게 한다(기획 R5 5절 「두 기기 편집은 version 기반으로 검사」, F16).
+   */
+  const frameVersionRef = useRef<number | null>(null);
+  const [versionConflict, setVersionConflict] = useState<{ currentVersion: number | null } | null>(null);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -303,6 +310,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       try {
         const remoteFrame = await getFrame(remoteFrameId);
         if (cancelled) return;
+        frameVersionRef.current = typeof remoteFrame.version === "number" ? remoteFrame.version : null;
         // 컴포넌트 자산은 S3 key 로 저장돼 있다. 그릴 주소를 먼저 붙여 두지 않으면
         // 캔버스에 빈칸이 뜨고, 그 상태로 다시 저장하면 미리보기까지 빈 채로 올라간다.
         const imported = await resolveThemeAssetUrls(toThemeExportJson(remoteFrame));
@@ -502,6 +510,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
     setIsSaving(true);
     setSaveDialogError(null);
+    setVersionConflict(null);
     try {
       if (!remoteFrameId) {
         const usage = await getSubscriptionUsage();
@@ -558,7 +567,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       });
 
       if (remoteFrameId) {
-        await updateFrame(remoteFrameId, body);
+        const saved = await updateFrame(remoteFrameId, {
+          ...body,
+          ...(frameVersionRef.current !== null ? { version: frameVersionRef.current } : {}),
+        });
+        frameVersionRef.current = typeof saved?.version === "number" ? saved.version : null;
         /*
           **합성 결과가 달라진 저장에만** 촬영 세션의 결과와 멱등키를 버린다.
 
@@ -596,6 +609,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       router.push("/theme");
     } catch (error) {
       console.error(error);
+      const details = getApiErrorDetails(error);
+      if (details.code === "FRAME-002") {
+        const data = (error as { data?: { data?: { currentVersion?: unknown } } }).data?.data;
+        setVersionConflict({
+          currentVersion: typeof data?.currentVersion === "number" ? data.currentVersion : null,
+        });
+      }
       /*
         올리기 전에 우리가 걸러낸 것(형식·용량·빈 파일)만 자기 문구를 살린다.
         저장 한 번에 배경·사진·스티커·글자 층·미리보기가 줄줄이 올라가는데,
@@ -858,6 +878,33 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 <p className="text-[11px] leading-5 text-(--hc-danger)">
                   {saveDialogError}
                 </p>
+              ) : null}
+              {versionConflict ? (
+                <div className="flex flex-col gap-2 rounded-xl border border-(--hc-danger-border) p-3 text-[12px]">
+                  <p>다른 기기에서 이 프레임을 먼저 저장했어요. 어떻게 할까요?</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => window.location.reload()}
+                      className="h-11 rounded-full border border-zinc-700 px-4 font-semibold"
+                    >
+                      저장본 다시 불러오기
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving || versionConflict.currentVersion === null}
+                      onClick={() => {
+                        // 서버의 현재 버전 위에 지금 편집을 덮어쓴다 — 사용자가 고른 경우에만.
+                        frameVersionRef.current = versionConflict.currentVersion;
+                        void onDone();
+                      }}
+                      className="h-11 rounded-full border border-(--hc-danger-border) px-4 font-semibold text-(--hc-danger)"
+                    >
+                      내 편집으로 덮어쓰기
+                    </button>
+                  </div>
+                </div>
               ) : null}
             </div>
 
