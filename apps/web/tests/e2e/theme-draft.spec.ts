@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { stubAuthenticatedApi } from "./fixtures/apiStub";
 
 /**
@@ -18,6 +18,17 @@ function readDraftBackground(prefix: string) {
   return null;
 }
 
+/**
+ * 모바일 편집 화면은 도구를 하나씩 하단 시트로 연다 — 배경 패널은 「배경」 도구를 골라야 보인다.
+ * 데스크톱에는 도구 막대가 없고 패널이 모두 보인다.
+ */
+async function openBackgroundTool(page: Page) {
+  // 편집 화면이 그려진 뒤에 판단한다 — 그리기 전에 보면 모바일에서도 막대가 없다고 읽는다.
+  await expect(page.locator("canvas").first()).toBeVisible();
+  const tools = page.getByRole("navigation", { name: "편집 도구" });
+  if (await tools.isVisible()) await tools.getByRole("button", { name: "배경" }).click();
+}
+
 test.beforeEach(async ({ page, baseURL }) => {
   await page.clock.install();
   await stubAuthenticatedApi(page);
@@ -35,6 +46,7 @@ test.beforeEach(async ({ page, baseURL }) => {
 });
 
 test("배경색만 바꾼 초안도 새로고침 후 복원한다", async ({ page }, testInfo) => {
+  await openBackgroundTool(page);
   await page.getByRole("button", { name: "스튜디오 그린", exact: true }).click();
   await expect
     .poll(() => page.evaluate(readDraftBackground, DRAFT_PREFIX))
@@ -45,6 +57,8 @@ test("배경색만 바꾼 초안도 새로고침 후 복원한다", async ({ pag
   // 판형은 메모리 세션이라 새로고침 뒤 목록에서 다시 고른다.
   await expect(page).toHaveURL(/\/theme$/);
   await page.getByRole("button", { name: "새 프레임 만들기" }).click();
+  await expect(page).toHaveURL(/\/theme\/sticker$/);
+  await openBackgroundTool(page);
   await expect(
     page.getByRole("button", { name: "스튜디오 그린", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -74,6 +88,7 @@ test("저장 실패는 안내하고 다시 저장한 뒤에는 초안이 남지 
           },
     );
   });
+  await openBackgroundTool(page);
   await page.getByRole("button", { name: "스튜디오 그린", exact: true }).click();
   await page
     .locator("header")
