@@ -27,6 +27,12 @@ jest.mock("@/lib/studio/projectsApi", () => ({
   putProjectMember: (...a: unknown[]) => api.putProjectMember(...a),
   removeProjectMember: (...a: unknown[]) => api.removeProjectMember(...a),
 }));
+const mockVersions = jest.fn();
+jest.mock("@/lib/studio/studioApi", () => ({
+  ...jest.requireActual("@/lib/studio/studioApi"),
+  listPickableFrameVersions: (...a: unknown[]) => mockVersions(...a),
+  listWorkspaceFrames: async () => [],
+}));
 jest.mock("@/lib/assetUploadApi", () => ({ uploadAsset: jest.fn(), getAsset: jest.fn() }));
 
 const SPRING = { projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x", brandDefaults: {} };
@@ -75,6 +81,8 @@ it("공간 기본값은 정한 것만 보내고, 정하지 않음으로 돌린 �
     byodEnabled: true,
     boothEnabled: null,
     allowedLayouts: null,
+    frames: null,
+    consentItems: null,
     resultRetentionDays: null,
     theme: null,
   });
@@ -166,4 +174,75 @@ it("운영 담당에게 프로젝트 권한을 주고, 프로젝트에서 뺀다
   await waitFor(() => expect(api.removeProjectMember).toHaveBeenCalledWith("Pj1", "u-op"));
   await waitFor(() => expect(within(row).queryByText("멤버")).not.toBeInTheDocument());
   expect(within(row).getByRole("checkbox", { name: "행사 설정·게시" })).not.toBeChecked();
+});
+
+// P3-1 에서 미룬 제공 프레임·동의 항목 기본값 — 목록째 내려간다. 동의 문구를 바꾼 항목만 version 을 올린다.
+it("프로젝트 기본값에 제공 프레임과 동의 항목을 정해 보낸다", async () => {
+  mockVersions.mockResolvedValue([
+    { frameVersionId: 41, frameId: 7, versionNo: 2, frameType: "CLASSIC", title: "웨딩 세로", previewUrl: null, source: "WORKSPACE", publishedAt: "x" },
+  ]);
+  api.listProjects.mockResolvedValue([
+    {
+      ...SPRING,
+      brandDefaults: { consentItems: [{ code: "photo", title: "사진 수집", body: "신랑신부가 받아요.", required: true, version: 3 }] },
+    },
+  ]);
+  api.updateProject.mockImplementation(async (id: string, patch: { brandDefaults: object }) => ({ ...SPRING, brandDefaults: patch.brandDefaults }));
+  render(<StudioProjects workspaceId="Ws1" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: /프로젝트 기본값/ }));
+  const form = screen.getByRole("form", { name: "프로젝트 기본값" });
+  expect(within(form).getAllByRole("checkbox", { name: "기본값으로 정하기" })[2]).toBeChecked();
+
+  fireEvent.click(within(form).getAllByRole("checkbox", { name: "기본값으로 정하기" })[1]);
+  fireEvent.click(await within(form).findByRole("checkbox", { name: /웨딩 세로/ }));
+  // 편집기로 떠나는 「공간 프레임」 관리 칸은 기본값 화면에 없다.
+  expect(within(form).queryByRole("button", { name: /만들기$/ })).not.toBeInTheDocument();
+
+  fireEvent.change(within(form).getByLabelText("본문"), { target: { value: "신랑신부와 사진 업체가 받아요." } });
+  fireEvent.click(within(form).getByRole("button", { name: "동의 항목 추가" }));
+  fireEvent.change(within(form).getAllByLabelText("제목")[1], { target: { value: "공유 동의" } });
+  fireEvent.click(within(form).getByRole("button", { name: "기본값 저장" }));
+
+  await waitFor(() => expect(api.updateProject).toHaveBeenCalled());
+  const sent = api.updateProject.mock.calls[0][1].brandDefaults;
+  expect(sent.frames).toEqual([{ frameVersionId: 41, layoutType: "CLASSIC", isDefault: true, sortOrder: 1 }]);
+  expect(sent.consentItems).toEqual([
+    { code: "photo", title: "사진 수집", body: "신랑신부와 사진 업체가 받아요.", required: true, version: 4 },
+    { code: "consent-2", title: "공유 동의", body: "", required: true, version: 1 },
+  ]);
+});
+
+// 허용 레이아웃을 줄이면 빠진 판형의 프레임이 선택기에서 숨은 채 저장돼 상속한 행사의 게시를 막았다(Codex #559).
+it("기본값에서 허용 레이아웃을 빼면 그 판형의 프레임도 빼고 기본 프레임을 다시 정한다", async () => {
+  mockVersions.mockResolvedValue([
+    { frameVersionId: 41, frameId: 7, versionNo: 2, frameType: "CLASSIC", title: "웨딩 세로", previewUrl: null, source: "WORKSPACE", publishedAt: "x" },
+    { frameVersionId: 52, frameId: 8, versionNo: 1, frameType: "WIDE", title: "웨딩 가로", previewUrl: null, source: "WORKSPACE", publishedAt: "x" },
+  ]);
+  api.listProjects.mockResolvedValue([
+    {
+      ...SPRING,
+      brandDefaults: {
+        allowedLayouts: ["CLASSIC", "WIDE"],
+        frames: [
+          { frameVersionId: 41, layoutType: "CLASSIC", isDefault: true, sortOrder: 1 },
+          { frameVersionId: 52, layoutType: "WIDE", isDefault: false, sortOrder: 2 },
+        ],
+      },
+    },
+  ]);
+  api.updateProject.mockImplementation(async (id: string, patch: { brandDefaults: object }) => ({ ...SPRING, brandDefaults: patch.brandDefaults }));
+  render(<StudioProjects workspaceId="Ws1" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: /프로젝트 기본값/ }));
+  const form = screen.getByRole("form", { name: "프로젝트 기본값" });
+  await within(form).findByRole("checkbox", { name: /웨딩 가로/ });
+  // 기본 프레임(CLASSIC)이 있는 판형을 뺀다.
+  fireEvent.click(within(form).getByRole("checkbox", { name: "세로 4컷" }));
+  fireEvent.click(within(form).getByRole("button", { name: "기본값 저장" }));
+
+  await waitFor(() => expect(api.updateProject).toHaveBeenCalled());
+  const sent = api.updateProject.mock.calls[0][1].brandDefaults;
+  expect(sent.allowedLayouts).toEqual(["WIDE"]);
+  expect(sent.frames).toEqual([{ frameVersionId: 52, layoutType: "WIDE", isDefault: true, sortOrder: 1 }]);
 });
