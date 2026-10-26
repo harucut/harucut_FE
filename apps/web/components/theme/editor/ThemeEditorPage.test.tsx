@@ -186,8 +186,9 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 }));
 
 const mockServerDraftFinish = jest.fn().mockResolvedValue(undefined);
+const mockServerDraftArgs = jest.fn();
 jest.mock("@/components/theme/editor/useServerFrameDraft", () => ({
-  useServerFrameDraft: () => ({
+  useServerFrameDraft: (args: unknown) => (mockServerDraftArgs(args), {
     status: "idle",
     offer: null,
     conflict: null,
@@ -410,6 +411,16 @@ describe("ThemeEditorPage save flow", () => {
 
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
+    // 같은 판형으로 만들던 새 프레임 초안. 저장본을 고쳐 저장해도 남아야 한다.
+    await saveEditorDraft({
+      ownerId: DRAFT_OWNER,
+      frameId: "classic-4",
+      backgroundColor: "123456",
+      background: { type: "COLOR", value: "123456" },
+      cellCutouts: [false, false, false, false],
+      components: [],
+      now: Date.now(),
+    });
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -426,6 +437,18 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+    expect(loadEditorDraft(DRAFT_OWNER, "classic-4")).not.toBeNull();
+  });
+
+  // 서버 초안은 계정을 알아야 켜진다. 저장본 수정에서 계정을 안 물어 서버 초안이 꺼져 있었다.
+  it("저장본을 고칠 때도 서버 초안에 계정을 넘긴다", async () => {
+    mockRemoteFrameId = 7;
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() =>
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ownerId: DRAFT_OWNER, remoteFrameId: 7 }),
+      ),
+    );
   });
 
   /*
