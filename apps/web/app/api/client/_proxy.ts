@@ -161,6 +161,16 @@ export async function forward(
     : null;
   const credential = credentialHeader ? req.headers.get(credentialHeader) : null;
   if (credentialHeader && credential) headers[credentialHeader] = credential;
+  /*
+    행사 경로는 참가자 IP 를 넘긴다. 백엔드의 세션 발급 빈도 제한(분당 30, GEN-061)이 IP 기준이라,
+    넘기지 않으면 모든 참가자가 이 BFF 의 IP 하나를 나눠 써서 행사 전체가 거기서 막힌다.
+    값은 호스팅 엣지가 채운 것을 그대로 옮긴다 — 브라우저가 보낸 값을 믿을지는 백엔드의 신뢰
+    프록시 설정이 정한다(그 설정 없이 운영하면 위조로 제한을 피할 수 있다. 진행 상태 문서 「운영 반영 조건」).
+  */
+  if (options.eventCredential) {
+    const clientIp = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip");
+    if (clientIp) headers["x-forwarded-for"] = clientIp;
+  }
 
   let upstream: Response;
   try {

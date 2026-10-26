@@ -419,6 +419,42 @@ describe("행사 경로의 자격 전달(eventCredential)", () => {
     expect(headers.authorization).toBeUndefined();
   });
 
+  /*
+    세션 발급 빈도 제한(분당 30)은 IP 기준이다. 넘기지 않으면 모든 참가자가 이 BFF 의 IP 하나를
+    나눠 써서 행사 전체가 거기서 막힌다(백엔드 fork #16 「배포 전 확인」).
+  */
+  it("행사 경로는 엣지가 채운 참가자 IP 를 x-forwarded-for 로 넘긴다", async () => {
+    const fetchMock = upstream();
+    global.fetch = fetchMock;
+    const req = new Request("http://localhost:3000/api/client/public/events/wedding/sessions", {
+      method: "POST",
+      headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
+      body: JSON.stringify({ channel: "BYOD" }),
+    });
+
+    await forward(req, { method: "POST", url: "https://api.harucut.com/api/public/events/wedding/sessions", eventCredential: "none" });
+
+    expect(sentHeaders(fetchMock)["x-forwarded-for"]).toBe("203.0.113.7, 10.0.0.1");
+  });
+
+  it("x-forwarded-for 가 없으면 x-real-ip 를 쓰고, 둘 다 없으면 싣지 않는다", async () => {
+    const fetchMock = upstream();
+    global.fetch = fetchMock;
+    await forward(new Request("http://localhost:3000/x", { headers: { "x-real-ip": "198.51.100.2" } }), {
+      method: "GET",
+      url: "https://api.harucut.com/api/public/events/wedding",
+      eventCredential: "none",
+    });
+    await forward(new Request("http://localhost:3000/x"), {
+      method: "GET",
+      url: "https://api.harucut.com/api/public/events/wedding",
+      eventCredential: "none",
+    });
+
+    expect((fetchMock.mock.calls[0][1].headers as Record<string, string>)["x-forwarded-for"]).toBe("198.51.100.2");
+    expect((fetchMock.mock.calls[1][1].headers as Record<string, string>)["x-forwarded-for"]).toBeUndefined();
+  });
+
   it("백엔드가 심으려는 쿠키를 브라우저로 돌려주지 않는다", async () => {
     global.fetch = upstream();
     const req = new Request("http://localhost:3000/api/client/participant/session");
