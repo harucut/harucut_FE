@@ -132,7 +132,7 @@ export function BoothScreen() {
         }
         setEvent(me.event);
         const current = await getBoothCurrentRun(device.token, 0, controller.signal);
-        if (current.captureRunId) {
+        if (current?.captureRunId) {
           await closeBoothRun(device.token, current.captureRunId, current.stateVersion).catch(() => {});
         }
         if (controller.signal.aborted) return;

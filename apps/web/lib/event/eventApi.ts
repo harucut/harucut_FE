@@ -169,11 +169,12 @@ export function startBoothGuest(token: string) {
   });
 }
 
+/** 활성 회차가 없으면 서버는 200 에 data 키를 싣지 않는다 — 그때는 undefined 다(빈 응답이 정상이다). */
 export function getBoothCurrentRun(token: string, version: number, signal?: AbortSignal) {
-  return sendEventRequest<BoothCurrentRun>(
+  return sendEventRequest<BoothCurrentRun | undefined>(
     "GET",
     `/api/client/booth/capture-runs/current?version=${version}`,
-    { credential: booth(token), signal, what: "부스 회차" },
+    { credential: booth(token), signal },
   );
 }
 

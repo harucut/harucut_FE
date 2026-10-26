@@ -94,16 +94,22 @@ export type BoothPairing = { boothToken: string; deviceId: string; eventId: stri
 
 export type BoothMe = {
   deviceId: string;
+  name?: string;
   status: string;
-  event: PublicEvent | null;
+  /** 게시 전이거나 보관이 끝났으면 키가 없다 — 「대기」로 보여 준다. */
+  event?: PublicEvent | null;
 };
 
+/**
+ * 결과 토큰은 싣지 않는다 — 서버는 해시만 저장해 원문을 다시 못 보여 준다. 부스는 합성 접수 응답의
+ * 토큰을 QR 에 쓴다(부스가 곧 그 참가자 클라이언트다).
+ */
 export type BoothCurrentRun = {
-  captureRunId: string | null;
+  captureRunId: string;
   stateVersion: number;
   status: string;
-  job: ParticipantJob | null;
-  resultToken: string | null;
+  /** 요청한 version 이 서버 stateVersion 과 다르면 싣지 않는다. */
+  job?: ParticipantJob | null;
 };
 
 export type ResultStatus = {

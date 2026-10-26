@@ -60,7 +60,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
   api.getBoothMe.mockResolvedValue({ deviceId: "d-1", status: "ACTIVE", event: eventInfo() });
-  api.getBoothCurrentRun.mockResolvedValue({ captureRunId: null, stateVersion: 0, status: "IDLE", job: null, resultToken: null });
+  // 활성 회차가 없으면 서버는 data 키를 싣지 않는다.
+  api.getBoothCurrentRun.mockResolvedValue(undefined);
   api.closeBoothRun.mockResolvedValue({});
   api.startBoothGuest.mockResolvedValue({ participantToken: "guest-1", participantId: "p-1", expiresAt: "x" });
   api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
@@ -83,7 +84,7 @@ it("기기 자격이 없으면 연결 코드를 받아 기기 자격만 보관�
 // R5 4절 — 재시작·새로고침 뒤 이전 손님의 회차를 이어 가거나 사진을 보여 주지 않는다.
 it("켜질 때 남아 있는 회차가 있으면 닫기만 하고 대기 화면으로 간다", async () => {
   pairDevice();
-  api.getBoothCurrentRun.mockResolvedValue({ captureRunId: "run-old", stateVersion: 9, status: "ACTIVE", job: { jobId: 1, status: "DONE" }, resultToken: "old" });
+  api.getBoothCurrentRun.mockResolvedValue({ captureRunId: "run-old", stateVersion: 9, status: "ACTIVE", job: { jobId: 1, status: "DONE" } });
   render(<BoothScreen />);
 
   expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
