@@ -126,6 +126,7 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'TERMS-001': '약관을 찾을 수 없어요.',
   'TERMS-002': '이미 등록된 약관이에요.',
   'TERMS-003': '필수 약관은 철회할 수 없어요.',
+  'TERMS-004': '필수 약관에 동의하면 계속 이용할 수 있어요.',
   'COUPON-001': '존재하지 않는 쿠폰이에요.',
   'COUPON-002': '이미 등록된 쿠폰 코드예요.',
   'COUPON-003': '사용할 수 없는 쿠폰이에요.',
