@@ -430,13 +430,20 @@ it("상시 캠페인으로 바꾸면 종료 시각을 비우고 종류와 함께
   expect(mockUpdate.mock.calls[0][2]).toEqual({ kind: "ALWAYS_ON", captureEndsAt: null });
 });
 
-it("저장된 상시 캠페인에 종료 시각이 남아 있으면 지울 수 있게 보여 주고, 게시한 행사는 종류를 바꾸지 못한다", async () => {
+// 게시한 상시 행사에 종료 시각을 넣으면 서버가 GEN-002 로 막는다 — 남은 값은 지우기만 할 수 있게 한다.
+it("저장된 상시 캠페인에 종료 시각이 남아 있으면 지우기만 하고, 게시한 행사는 종류를 바꾸지 못한다", async () => {
   await renderStudio(
     event({ status: "LIVE", settings: { ...event().settings, kind: "ALWAYS_ON", captureEndsAt: "2026-11-01T18:00:00+09:00" } }),
   );
+  mockUpdate.mockResolvedValue(event({ status: "LIVE", settingsVersion: 4 }));
   expect(screen.getByLabelText("행사 종류")).toHaveValue("ALWAYS_ON");
   expect(screen.getByLabelText("행사 종류")).toBeDisabled();
-  expect(screen.getByLabelText("종료")).toHaveAccessibleDescription("상시 캠페인은 종료 시각을 비워야 게시할 수 있어요.");
+  expect(screen.queryByLabelText("종료")).not.toBeInTheDocument();
   // 종류는 바뀌지 않았으니 보내지 않는다.
-  expect(screen.queryByRole("button", { name: "설정 저장" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "종료 시각 지우기" }));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ captureEndsAt: null });
 });

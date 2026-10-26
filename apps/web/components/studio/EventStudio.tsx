@@ -522,12 +522,8 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     onChange={(e) => update({ startsAt: e.target.value })}
                   />
                 </Field>
-                {/* 상시 캠페인에는 종료 시각이 없다. 이미 저장된 값이 있으면 지울 수 있게 남겨 둔다. */}
-                {form.kind === "SCHEDULED" || form.endsAt ? (
-                  <Field
-                    label="종료"
-                    help={form.kind === "ALWAYS_ON" ? "상시 캠페인은 종료 시각을 비워야 게시할 수 있어요." : undefined}
-                  >
+                {form.kind === "SCHEDULED" ? (
+                  <Field label="종료">
                     <input
                       type="datetime-local"
                       className="hc-input h-11 rounded-xl border px-3 text-[14px]"
@@ -535,6 +531,20 @@ export function EventStudio({ eventId }: { eventId: string }) {
                       onChange={(e) => update({ endsAt: e.target.value })}
                     />
                   </Field>
+                ) : form.endsAt ? (
+                  // 상시 캠페인에는 종료 시각이 없다. 저장된 값이 남았으면 지우기만 한다 — 게시한 상시 행사에 값을 넣으면 서버가 GEN-002 로 막는다.
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[13px] font-semibold">종료</p>
+                    <p className="text-[14px]">{form.endsAt.replace("T", " ")}</p>
+                    <button
+                      type="button"
+                      onClick={() => update({ endsAt: "" })}
+                      className="h-11 self-start rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+                    >
+                      종료 시각 지우기
+                    </button>
+                    <p className="text-[12px] text-(--hc-muted)">상시 캠페인은 종료 시각을 비워야 게시할 수 있어요.</p>
+                  </div>
                 ) : null}
               </div>
             </Section>
