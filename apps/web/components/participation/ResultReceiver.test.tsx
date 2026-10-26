@@ -127,3 +127,12 @@ it("잘못된 토큰(RESULT-001)은 서버 문구로 안내하고 다시 확인�
   expect(await screen.findByRole("alert")).toHaveTextContent("결과 링크가 올바르지 않아요.");
   expect(screen.queryByRole("button", { name: "다시 확인" })).not.toBeInTheDocument();
 });
+
+// 같은 IP 에서 틀린 토큰을 분당 30회 넘게 내면 429(백엔드 fork #20). 잠시 뒤 다시 하면 되는 실패다.
+it("요청이 너무 잦으면(GEN-061) 안내하고 다시 확인을 둔다", async () => {
+  window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+  mockGetResult.mockRejectedValue(new ApiRequestError({ status: 429, code: "GEN-061", apiMessage: "x" }));
+  render(<ResultReceiver />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("요청이 너무 많아요.");
+  expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+});

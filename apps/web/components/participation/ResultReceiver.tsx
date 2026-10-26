@@ -100,7 +100,8 @@ export function ResultReceiver() {
           setView({
             kind: "error",
             message: getUserFacingApiErrorMessage(error, "사진을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."),
-            retryable: status === undefined || status >= 500,
+            // 429(GEN-061)는 잠시 뒤 다시 하면 되는 실패다 — 틀린 토큰을 많이 낸 같은 IP 에만 난다.
+            retryable: status === undefined || status >= 500 || status === 429,
           });
         });
     },
