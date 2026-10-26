@@ -114,6 +114,8 @@ export type RemoteFrameComponent = {
 // 따라서 클라이언트가 보관 한도로 잠금 대상을 추정하면 안 된다(목록 = 사용 가능한 전부).
 export type RemoteFrame = {
   frameId: number;
+  /** 프레임이 속한 공간 public id. 시스템 프레임·공간이 없던 옛 프레임은 없다(백엔드 fork #18). */
+  workspaceId?: string | null;
   title: string;
   description?: string;
   source?: string;

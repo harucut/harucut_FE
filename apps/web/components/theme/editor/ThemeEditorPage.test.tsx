@@ -143,9 +143,13 @@ jest.mock("@/lib/themeEditorStore", () => ({
   useThemeEditorStore: themeEditorStoreMock,
 }));
 
+let mockWorkspaceId: string | null = null;
+let mockReturnTo: string | null = null;
 jest.mock("@/lib/themeSessionStore", () => ({
   useThemeSession: () => ({
     remoteFrameId: mockRemoteFrameId,
+    workspaceId: mockWorkspaceId,
+    returnTo: mockReturnTo,
   }),
 }));
 
@@ -328,6 +332,25 @@ describe("ThemeEditorPage save flow", () => {
     confirmSave(container);
     await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockServerDraftFinish).toHaveBeenCalledTimes(1));
+  });
+
+  // Studio 에서 연 행사용 프레임: 공간에 만들고, 개인 요금제 한도를 보지 않고, Studio 로 돌아간다.
+  it("공간 맥락이면 공간에 만들고 개인 한도를 보지 않고 돌아갈 곳으로 간다", async () => {
+    mockWorkspaceId = "WsOrg";
+    mockReturnTo = "/studio/events/Ev1";
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 0, frameRetentionRemainingCount: 0 });
+    try {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      confirmSave(container);
+      await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "WsOrg" })));
+      expect(mockUsage).not.toHaveBeenCalled();
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/studio/events/Ev1"));
+      // 공간의 새 프레임은 서버 초안을 쓰지 않는다(목록이 공간을 가리지 않는다).
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(expect.objectContaining({ ownerId: null }));
+    } finally {
+      mockWorkspaceId = null;
+      mockReturnTo = null;
+    }
   });
 
   it("adds a local draft when creating a new frame", async () => {

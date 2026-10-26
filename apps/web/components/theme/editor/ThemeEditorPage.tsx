@@ -210,7 +210,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [undo, redo, nudge]);
-  const { remoteFrameId } = useThemeSession();
+  const { remoteFrameId, workspaceId, returnTo } = useThemeSession();
+  // Studio 에서 행사용 프레임을 고치러 왔으면 그리로 돌아간다.
+  const exitTo = returnTo ?? "/theme";
   // 저장 다이얼로그에서 알려 준다. 예전에는 저장을 누른 순간 window.alert 로 끼어들었다.
   const hiddenLayerCount = editorComponents.filter((c) => c.hidden).length;
 
@@ -425,17 +427,21 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     let cancelled = false;
     void getMyUserInfo()
       .then((user) => {
-        if (!cancelled && user.id) setDraftOwnerId(user.id);
+        // 공간 프레임의 로컬 초안은 개인 것과 섞이지 않게 공간까지 키에 넣는다 — 안 그러면
+        // 개인 새 프레임 초안이 행사용 프레임으로 복원된다.
+        if (!cancelled && user.id) setDraftOwnerId(workspaceId ? `${user.id}@${workspaceId}` : user.id);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workspaceId]);
 
   // 다른 기기에서 이어 편집하는 서버 초안(F1-5). 같은 기기의 새로고침 복구는 아래 로컬 초안이 맡는다.
   const serverDraft = useServerFrameDraft({
-    ownerId: draftOwnerId,
+    // 공간의 새 프레임은 서버 초안을 쓰지 않는다. 목록이 공간을 가리지 않아 개인 새 프레임 초안과
+    // 섞인다. 저장본(공간 프레임 포함)은 frameId 로 가려지므로 쓴다.
+    ownerId: workspaceId && !remoteFrameId ? null : draftOwnerId,
     frameId,
     remoteFrameId,
     ready: remoteFrameId ? isRemoteFrameSettled && !loadError : true,
@@ -548,7 +554,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     setSaveDialogError(null);
     setVersionConflict(null);
     try {
-      if (!remoteFrameId) {
+      // 공간 프레임은 개인 요금제 한도를 받지 않는다(공간 상한은 서버가 FRAME-007 로 본다).
+      if (!remoteFrameId && !workspaceId) {
         const usage = await getSubscriptionUsage();
         if (!usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0 && usage.frameRetentionRemainingCount === 0) {
           setSaveDialogError("저장 공간이 없어요. 기존 프레임을 수정하거나 마이페이지에서 보관 한도를 확인해 주세요.");
@@ -629,7 +636,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         }
         savedContentKeyRef.current = savedContentKey;
       } else {
-        await createFrame(body);
+        await createFrame(workspaceId ? { ...body, workspaceId } : body);
       }
 
       stopDraftAutosaveRef.current?.();
@@ -642,7 +649,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       setTitle(nextTitle);
       setDescription(nextDescription);
       setIsSaveDialogOpen(false);
-      router.push("/theme");
+      router.push(exitTo);
     } catch (error) {
       console.error(error);
       const details = getApiErrorDetails(error);
@@ -689,7 +696,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     try {
       await deleteFrame(remoteFrameId);
       setIsDeleteConfirmOpen(false);
-      router.push("/theme");
+      router.push(exitTo);
     } catch (error) {
       console.error(error);
       setIsDeleteConfirmOpen(false);
@@ -732,7 +739,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         */}
         <div className="sticky top-0 z-20 -mx-4 -mt-6 bg-(--hc-surface-soft) px-4 pb-2 pt-6 backdrop-blur-md lg:static lg:mx-0 lg:mt-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <PageHeader
-            backHref="/theme"
+            backHref={exitTo}
             backLabel="프레임 목록으로"
             title={remoteFrameId ? "프레임 수정" : "프레임 꾸미기"}
             onBackClick={() => {
