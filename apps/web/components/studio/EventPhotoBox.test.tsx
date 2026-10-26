@@ -83,3 +83,24 @@ it("서버가 권한으로 막으면(PHOTO-001) 그 문구를 보여 준다", as
   render(<EventPhotoBox eventId="Ev1" />);
   expect(await screen.findByRole("alert")).toHaveTextContent("이 사진을 다룰 권한이 없어요");
 });
+
+// Codex 리뷰(#542): 필터를 바꾸기 전에 시작한 조회가 늦게 오면 지금 필터의 목록을 덮으면 안 된다.
+it("필터를 바꾸기 전에 시작한 조회 응답은 버린다", async () => {
+  const BOOTH_PHOTO = { ...DONE, photoId: 21, channel: "BOOTH", thumbnailUrl: "https://s3/t21" };
+  let releaseBooth: (value: unknown) => void = () => {};
+  mockList
+    .mockResolvedValueOnce({ items: [DONE, FAILED], nextCursor: null })
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseBooth = resolve; }))
+    .mockResolvedValueOnce({ items: [DONE], nextCursor: null });
+  render(<EventPhotoBox eventId="Ev1" />);
+  await screen.findByText("촬영 사진이 빠졌어요");
+
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BYOD" } });
+  await waitFor(() => expect(mockList).toHaveBeenLastCalledWith("Ev1", { channel: "BYOD" }));
+  await waitFor(() => expect(screen.queryByText("촬영 사진이 빠졌어요")).not.toBeInTheDocument());
+
+  await act(async () => releaseBooth({ items: [BOOTH_PHOTO], nextCursor: "c-booth" }));
+  expect(document.querySelector('img[src="https://s3/t21"]')).toBeNull();
+  expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
+});
