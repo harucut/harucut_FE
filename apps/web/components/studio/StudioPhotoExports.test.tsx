@@ -86,3 +86,22 @@ it("목록을 못 불러오면 빈 목록으로 보이지 않고 다시 불러�
   expect(await screen.findByRole("button", { name: "받기" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "목록 다시 불러오기" })).not.toBeInTheDocument();
 });
+
+// Codex 리뷰(#543): 조회가 폴링 간격보다 오래 걸려도 다 된 묶음이 보여야 한다.
+it("조회가 간격보다 오래 걸려도 앞 조회가 끝난 뒤 다음 조회를 한다", async () => {
+  jest.useFakeTimers();
+  mockList.mockReset();
+  let releaseSlow: (value: unknown) => void = () => {};
+  mockList
+    .mockResolvedValueOnce([PENDING])
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseSlow = resolve; }));
+  render(<StudioPhotoExports eventId="Ev1" selectedIds={[]} onCreated={jest.fn()} />);
+  expect(await screen.findByText("2장 · 기다리는 중")).toBeInTheDocument();
+
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(EXPORT_POLL_MS * 3);
+  });
+  expect(mockList).toHaveBeenCalledTimes(2);
+  await act(async () => releaseSlow([{ ...PENDING, status: "DONE" }]));
+  expect(screen.getByRole("button", { name: "받기" })).toBeInTheDocument();
+});

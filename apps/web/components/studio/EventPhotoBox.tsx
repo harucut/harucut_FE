@@ -276,6 +276,8 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
                   <input
                     type="checkbox"
                     className="size-5"
+                    // 필터를 바꿔 새 목록을 받는 동안에는 이전 목록의 사진을 고르지 못하게 한다(Codex #543).
+                    disabled={loading}
                     aria-label={`${formatTime(photo.createdAt)} 사진 고르기`}
                     checked={selected.includes(photo.photoId)}
                     onChange={(e) =>

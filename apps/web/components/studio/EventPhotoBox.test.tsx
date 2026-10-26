@@ -162,3 +162,15 @@ it("지우기 요청이 멈추면 상한 뒤 확인 창을 풀고 알린다", as
   expect(screen.getByText(/지우지 못했어요|요청/)).toBeInTheDocument();
   jest.useRealTimers();
 });
+
+// Codex 리뷰(#543): 필터를 바꿔 새 목록을 받는 동안 이전 목록의 사진을 고르면 다른 필터의 사진이 묶음에 들어간다.
+it("필터를 바꿔 새 목록을 받는 동안에는 사진 고르기를 막는다", async () => {
+  mockMyEvents.mockResolvedValue(access(["VIEW_PHOTOS", "BULK_DOWNLOAD"]));
+  mockList
+    .mockResolvedValueOnce({ items: [DONE, FAILED], nextCursor: null })
+    .mockImplementationOnce(() => new Promise(() => {}));
+  render(<EventPhotoBox eventId="Ev1" />);
+  expect(await screen.findByRole("checkbox")).toBeEnabled();
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
+  expect(screen.getByRole("checkbox")).toBeDisabled();
+});
