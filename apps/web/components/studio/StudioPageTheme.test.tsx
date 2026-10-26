@@ -77,3 +77,16 @@ it("올리기에 실패하면 서버 문구로 알리고 테마는 그대로 둔
   expect(await screen.findByRole("alert")).toHaveTextContent("이미지를 올리지 못했어요.");
   expect(latest?.backgroundAssetId).toBeUndefined();
 });
+
+// 화면 문구는 기능 없이 쓸 수 있다 — 디자인(색·글꼴·이미지)만 CUSTOM_THEME 이 필요하다.
+it("디자인 기능이 없는 이용권이면 색을 바꿀 때만 알리고, 문구만 바꾸면 알리지 않는다", () => {
+  function WithFeatures() {
+    const [theme, setTheme] = useState<PageTheme>({ schemaVersion: 1 });
+    return <StudioPageTheme workspaceId="Ws1" value={theme} onChange={setTheme} features={[]} />;
+  }
+  render(<WithFeatures />);
+  fireEvent.change(screen.getByLabelText("처음 화면 · 부스 대기 화면"), { target: { value: "어서 오세요" } });
+  expect(screen.queryByText(/디자인 기능이 없어요/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("바탕 색 값"), { target: { value: "#FFF8F3" } });
+  expect(screen.getByText(/디자인 기능이 없어요/)).toBeInTheDocument();
+});

@@ -238,8 +238,8 @@ export function EnterpriseView() {
               도입 문의
             </h2>
             <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
-              아래를 채우면 메일 본문이 그대로 만들어져요. {COMPANY.hours} 안에
-              답장드립니다.
+              아래를 남기면 담당자가 확인하고 {COMPANY.hours} 안에 연락드려요.
+              메일로 보내셔도 돼요.
             </p>
           </div>
           <div className="hc-surface-card rounded-[20px] border p-6 lg:p-8">

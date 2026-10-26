@@ -517,7 +517,8 @@ export function CaptureAndSend({
     void open().catch((cause) => {
       const { status, code } = getApiErrorDetails(cause);
       if (status === 401) handlersRef.current.onSessionEnded();
-      else if (code === "EVENT-001") handlersRef.current.onUnavailable(cause);
+      // ENT-002: 이 행사의 촬영 한도를 다 썼거나 이용권이 끝났다 — 찍기 전에 막는다(접수에서도 다시 본다).
+      else if (code === "EVENT-001" || code === "ENT-002") handlersRef.current.onUnavailable(cause);
       else setError(getUserFacingApiErrorMessage(cause, "촬영을 시작하지 못했어요. 잠시 후 다시 시도해 주세요."));
     });
     return () => stop();
@@ -588,7 +589,7 @@ export function CaptureAndSend({
       onProgress(null);
       const { status, code } = getApiErrorDetails(cause);
       if (status === 401) return onSessionEnded();
-      if (code === "EVENT-001") return onUnavailable(cause);
+      if (code === "EVENT-001" || code === "ENT-002") return onUnavailable(cause);
       if (code === "PART-003" && !retriedForNewRun) {
         // 회차가 끝났다(유효시간 초과 등). 새 회차를 열고 같은 사진을 처음부터 올린다.
         runRef.current = null;

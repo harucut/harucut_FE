@@ -26,6 +26,8 @@ jest.mock("@/lib/studio/studioApi", () => ({
   publishFrameVersion: (...args: unknown[]) => mockPublishFrame(...args),
   listBoothDevices: async () => [],
 }));
+const mockUsage = jest.fn();
+jest.mock("@/lib/studio/usageApi", () => ({ getEventUsage: (...a: unknown[]) => mockUsage(...a) }));
 jest.mock("@/lib/studio/accessApi", () => ({
   ...jest.requireActual("@/lib/studio/accessApi"),
   listEventGrants: async () => [],
@@ -84,6 +86,7 @@ beforeEach(() => {
   mockListVersions.mockResolvedValue([VERSION_CLASSIC, VERSION_SYSTEM]);
   mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 세로", frameType: "CLASSIC", components: [] }]);
   useThemeSession.getState().reset();
+  mockUsage.mockResolvedValue({ composeQuota: 0, used: 0, reserved: 0, remaining: 0 });
 });
 
 it("참가 링크를 이 화면의 오리진에 붙여 QR 과 함께 보여 준다", async () => {
@@ -273,4 +276,13 @@ it("꾸민 문구와 글꼴만 테마로 저장한다", async () => {
     font: "GOWUN_DODUM",
     copy: { welcome: "와 주셔서 고마워요" },
   });
+});
+
+it("이용권이 없으면 사용량 자리에 문의를 두고, 디자인을 바꾸면 게시 전에 미리 알린다", async () => {
+  await renderStudio();
+  expect(await screen.findByText("아직 이 행사에 적용된 이용권이 없어요.")).toBeInTheDocument();
+  expect(mockUsage).toHaveBeenCalledWith("Ev1");
+
+  fireEvent.change(screen.getByLabelText("글꼴"), { target: { value: "NANUM_MYEONGJO" } });
+  expect(screen.getByText(/지금 이용권에는 행사 화면 디자인 기능이 없어요/)).toBeInTheDocument();
 });
