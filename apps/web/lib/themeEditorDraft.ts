@@ -7,11 +7,39 @@ import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
 // 프레임 꾸미기 작업 중 상태(WIP)를 브라우저 localStorage에 임시 보관한다.
 // 편집 중에는 S3 temp 업로드를 하지 않으므로, 새로고침/이탈 대비 초안을 로컬에 둔다.
 // 로컬 이미지(blob:)는 dataURL로 변환해 저장하고, 최종 저장 시 finalizeAssetsForSave가 S3로 올린다.
-const DRAFT_KEY = "harucut:theme-editor-draft:v1";
-// localStorage 용량(보통 ~5MB)을 넘기면 저장을 건너뛴다.
+//
+// 초안은 **계정 × 프레임 종류**마다 따로 둔다(기획 R5 5절 「계정·공간·프레임·버전별로 분리」).
+//  - 계정: 예전에는 키가 하나라, 명시적으로 로그아웃하지 않은 공용 기기에서 다음 사람이 앞
+//    사람의 사진이 든 초안을 그대로 복원했다. 주인이 다른 초안은 복원하지 않고 저장할 때 지운다.
+//  - 프레임 종류: 클래식을 꾸미다 그리드를 열면 클래식 초안이 덮였다.
+//  - 저장본 수정(remoteFrameId)은 서버 버전 비교가 생길 때까지 자동 저장하지 않는다(F1-5).
+const DRAFT_PREFIX = "harucut:theme-editor-draft:";
+const DRAFT_V2_PREFIX = `${DRAFT_PREFIX}v2:`;
+/** 주인을 모르는 옛 초안. 누구 것인지 가릴 수 없으므로 복원하지 않고 지운다. */
+const LEGACY_DRAFT_KEY = `${DRAFT_PREFIX}v1`;
+// localStorage 용량(보통 ~5MB)을 넘기지 않게 한 초안과 **모든 초안의 합**을 함께 묶는다.
 const MAX_DRAFT_BYTES = 4_500_000;
 
+function draftKey(ownerId: string, frameId: FrameId) {
+  return `${DRAFT_V2_PREFIX}${encodeURIComponent(ownerId)}:${frameId}`;
+}
+
+function ownerPrefix(ownerId: string) {
+  return `${DRAFT_V2_PREFIX}${encodeURIComponent(ownerId)}:`;
+}
+
+function storedDraftKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i);
+    if (key?.startsWith(DRAFT_PREFIX)) keys.push(key);
+  }
+  return keys;
+}
+
 export type EditorDraft = {
+  /** 초안을 만든 계정의 공개 식별자(UserInfo.id). */
+  ownerId: string;
   frameId: FrameId;
   backgroundColor: string;
   background: ThemeBackground;
@@ -48,8 +76,8 @@ function cachedBytes() {
   return total;
 }
 
-/** 직전에 쓴 내용과 같으면 localStorage 쓰기를 건너뛴다(5MB setItem 이 17ms 였다). */
-let lastWrittenJson: string | null = null;
+/** 직전에 쓴 내용과 같으면 localStorage 쓰기를 건너뛴다(5MB setItem 이 17ms 였다). 키마다 든다. */
+const lastWrittenJson = new Map<string, string>();
 // 시작 순서가 저장 순서다. 늦게 끝난 변환이 최신 초안이나 삭제를 되돌리면 안 된다.
 let saveRevision = 0;
 
@@ -80,6 +108,7 @@ export function dataUrlToFile(dataUrl: string, name: string): File {
 
 // 편집 중 상태를 저장(베스트 에포트). 용량 초과/직렬화 실패 시 조용히 건너뛴다.
 export async function saveEditorDraft(input: {
+  ownerId: string;
   frameId: FrameId;
   backgroundColor: string;
   background: ThemeBackground;
@@ -128,6 +157,7 @@ export async function saveEditorDraft(input: {
 
     if (revision !== saveRevision) return;
     const draft: EditorDraft = {
+      ownerId: input.ownerId,
       frameId: input.frameId,
       backgroundColor: input.backgroundColor,
       background,
@@ -136,17 +166,20 @@ export async function saveEditorDraft(input: {
       savedAt: input.now,
     };
 
+    const key = draftKey(input.ownerId, input.frameId);
     const json = JSON.stringify(draft);
     if (json.length > MAX_DRAFT_BYTES) {
-      // 이미지가 너무 커서 보관 불가 — 이전 초안만 비운다.
+      // 이미지가 너무 커서 보관 불가 — 이 프레임의 이전 초안만 비운다.
       // 편집은 계속되므로 캐시는 남긴다(여기서 비우면 디바운스마다 사진을 전부 다시 인코딩한다).
-      removeStoredDraft();
+      removeStoredDraft(key);
       return;
     }
     // savedAt 만 다른 동일 내용이면 쓰지 않는다.
-    if (lastWrittenJson !== null && sameExceptSavedAt(lastWrittenJson, json)) return;
-    window.localStorage.setItem(DRAFT_KEY, json);
-    lastWrittenJson = json;
+    const previous = lastWrittenJson.get(key);
+    if (previous !== undefined && sameExceptSavedAt(previous, json)) return;
+    makeRoomFor(input.ownerId, key, json.length);
+    window.localStorage.setItem(key, json);
+    lastWrittenJson.set(key, json);
   } catch {
     // 직렬화/용량 오류는 무시한다(초안 저장은 베스트 에포트).
   }
@@ -164,15 +197,54 @@ function sameExceptSavedAt(a: string, b: string) {
   return a.length === b.length && cut(a) === cut(b);
 }
 
-export function loadEditorDraft(): EditorDraft | null {
+/**
+ * 이 계정의 다른 프레임 초안까지 합쳐 예산 안에 들도록 자리를 만든다.
+ *
+ * 다른 계정의 초안은 먼저 지운다 — 같은 기기에서 다른 사람이 로그인했다는 뜻이고, 그 초안을
+ * 복원할 일은 없다. 주인을 모르는 옛 초안도 같다. 그래도 넘치면 이 계정의 오래된 초안부터 버린다.
+ */
+function makeRoomFor(ownerId: string, key: string, bytes: number) {
+  const mine = ownerPrefix(ownerId);
+  const kept: { key: string; bytes: number; savedAt: number }[] = [];
+  for (const stored of storedDraftKeys()) {
+    if (stored === key) continue;
+    if (!stored.startsWith(mine)) {
+      removeStoredDraft(stored);
+      continue;
+    }
+    const raw = window.localStorage.getItem(stored) ?? "";
+    let savedAt = 0;
+    try {
+      savedAt = Number((JSON.parse(raw) as EditorDraft).savedAt) || 0;
+    } catch {}
+    kept.push({ key: stored, bytes: raw.length, savedAt });
+  }
+  kept.sort((a, b) => a.savedAt - b.savedAt);
+  let total = bytes + kept.reduce((sum, entry) => sum + entry.bytes, 0);
+  for (const entry of kept) {
+    if (total <= MAX_DRAFT_BYTES) break;
+    removeStoredDraft(entry.key);
+    total -= entry.bytes;
+  }
+}
+
+/** 이 계정·프레임의 초안을 읽는다. 주인이 다르거나 하루가 지난 초안은 돌려주지 않는다. */
+export function loadEditorDraft(ownerId: string, frameId: FrameId): EditorDraft | null {
   if (typeof window === "undefined") return null;
+  removeStoredDraft(LEGACY_DRAFT_KEY);
+  const key = draftKey(ownerId, frameId);
   try {
-    const raw = window.localStorage.getItem(DRAFT_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as EditorDraft;
     if (!parsed?.frameId || !Array.isArray(parsed.components)) return null;
+    // 키가 같아도 본문의 주인·프레임이 다르면 쓰지 않는다(손으로 고친 값 등).
+    if (parsed.ownerId !== ownerId || parsed.frameId !== frameId) {
+      removeStoredDraft(key);
+      return null;
+    }
     if (!isFreshSavedAt(parsed.savedAt, Date.now(), 24 * 60 * 60 * 1000)) {
-      removeStoredDraft();
+      removeStoredDraft(key);
       return null;
     }
     return parsed;
@@ -181,13 +253,25 @@ export function loadEditorDraft(): EditorDraft | null {
   }
 }
 
-/** 보관된 초안만 지운다. 세션이 이어지는 경우(용량 초과)에 쓴다. */
-function removeStoredDraft(): void {
+/** 보관된 초안 하나만 지운다. 세션이 이어지는 경우(용량 초과·다른 계정 정리)에 쓴다. */
+function removeStoredDraft(key: string): void {
   if (typeof window === "undefined") return;
-  lastWrittenJson = null;
+  lastWrittenJson.delete(key);
   try {
-    window.localStorage.removeItem(DRAFT_KEY);
+    window.localStorage.removeItem(key);
   } catch {}
+}
+
+/**
+ * 이 계정·프레임의 초안만 버린다 — 서버에 저장했거나 사용자가 편집을 버리고 나갔을 때.
+ * 같은 계정의 다른 프레임 초안은 남긴다. 늦게 끝난 저장이 되살리지 않게 순번도 올린다.
+ */
+export function discardEditorDraft(ownerId: string, frameId: FrameId): void {
+  saveRevision += 1;
+  if (typeof window === "undefined") return;
+  removeStoredDraft(draftKey(ownerId, frameId));
+  // 편집 세션이 끝났다. 캐시는 아래 clearEditorDraft 와 같은 이유로 비운다.
+  dataUrlCache.clear();
 }
 
 /**
@@ -200,6 +284,8 @@ function removeStoredDraft(): void {
 export function clearEditorDraft(): void {
   saveRevision += 1;
   if (typeof window === "undefined") return;
-  removeStoredDraft();
+  try {
+    for (const key of storedDraftKeys()) removeStoredDraft(key);
+  } catch {}
   dataUrlCache.clear();
 }

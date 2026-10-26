@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
-import { clearEditorDraft, loadEditorDraft } from "@/lib/themeEditorDraft";
+import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "@/lib/themeEditorDraft";
 
 const mockPush = jest.fn();
 const mockSetFrameId = jest.fn();
@@ -11,7 +11,12 @@ const mockSetBackgroundColor = jest.fn();
 const mockSetBackgroundImageKey = jest.fn();
 const mockCreateFrame = jest.fn();
 const mockUsage = jest.fn();
-jest.mock("@/lib/userApi", () => ({ getSubscriptionUsage: () => mockUsage() }));
+jest.mock("@/lib/userApi", () => ({
+  getSubscriptionUsage: () => mockUsage(),
+  getMyUserInfo: () => mockUserInfo(),
+}));
+const mockUserInfo = jest.fn();
+const DRAFT_OWNER = "owner-1";
 const mockUpdateFrame = jest.fn();
 const mockDeleteFrame = jest.fn();
 const mockGetFrame = jest.fn();
@@ -193,6 +198,7 @@ describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
     jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
     clearEditorDraft();
     window.alert = mockAlert;
     mockRemoteFrameId = null;
@@ -251,11 +257,11 @@ describe("ThemeEditorPage save flow", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(200);
     });
-    expect(loadEditorDraft()).toBeNull();
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).toBeNull();
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1000);
     });
-    expect(loadEditorDraft()?.backgroundColor).toBe("abcdef");
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)?.backgroundColor).toBe("abcdef");
   });
 
   it("저장 성공 후 화면 이동이 늦어도 예약 초안이 되살아나지 않는다", async () => {
@@ -274,7 +280,7 @@ describe("ThemeEditorPage save flow", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(2000);
     });
-    expect(loadEditorDraft()).toBeNull();
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).toBeNull();
   });
 
   it("서버 저장이 실패하면 편집 초안의 자동 저장은 계속된다", async () => {
@@ -290,7 +296,7 @@ describe("ThemeEditorPage save flow", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1200);
     });
-    expect(loadEditorDraft()).not.toBeNull();
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
   });
 
   it("adds a local draft when creating a new frame", async () => {
@@ -675,6 +681,7 @@ describe("ThemeEditorPage 되돌리기 단축키", () => {
   beforeEach(() => {
     mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
     jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
     clearEditorDraft();
     mockRemoteFrameId = null;
   });
@@ -699,5 +706,53 @@ describe("ThemeEditorPage 되돌리기 단축키", () => {
     fireEvent.keyDown(input, { key: "z", ctrlKey: true });
     expect(editorStoreState.undo).not.toHaveBeenCalled();
     input.remove();
+  });
+});
+
+describe("ThemeEditorPage 초안 복원과 계정", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.components = [];
+    editorStoreState.background = { type: "COLOR", value: "111827" };
+  });
+
+  async function stashDraft(ownerId: string) {
+    await saveEditorDraft({
+      ownerId,
+      frameId: "classic-4",
+      backgroundColor: "123456",
+      background: { type: "COLOR", value: "123456" },
+      cellCutouts: [false, false, false, false],
+      components: [],
+      now: Date.now(),
+    });
+  }
+
+  it("내 계정의 초안을 복원한다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+  });
+
+  // 공용 기기에서 앞 사람이 로그아웃하지 않고 떠난 경우다.
+  it("다른 계정의 초안은 복원하지 않는다", async () => {
+    await stashDraft("someone-else");
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
+
+  it("계정을 알 수 없으면 복원하지 않는다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    mockUserInfo.mockRejectedValue(new Error("network"));
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
   });
 });
