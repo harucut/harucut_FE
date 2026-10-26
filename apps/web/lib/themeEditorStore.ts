@@ -5,11 +5,9 @@ import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { removeImageBackground } from "@/lib/backgroundRemoval";
 import { needsUpload } from "@/lib/canvas/componentSource";
+import { uploadAsset } from "@/lib/assetUploadApi";
+import { textBakeSignature } from "@/lib/canvas/textBakeSignature";
 import { bakeTextLayerPng } from "@/lib/canvas/textLayer";
-import {
-  PRESIGNED_UPLOAD_TYPES,
-  uploadToS3WithPresigned,
-} from "@/lib/presignedUploadApi";
 import { dataUrlToFile, type EditorDraft } from "@/lib/themeEditorDraft";
 import type {
   Asset,
@@ -25,6 +23,10 @@ import type {
 } from "@/lib/types/themeEditor";
 
 // 에디터 내부에서 쓰는 임시 ID 생성기
+function isLocalImageSource(src: string) {
+  return src.startsWith("blob:") || src.startsWith("data:");
+}
+
 const uid = (prefix = "front") => `${prefix}-${crypto.randomUUID()}`;
 
 // zIndex를 1..N으로 정규화해 레이어 순서 일관성 유지
@@ -160,7 +162,7 @@ type State = {
   setCutMode: (on: boolean) => void;
   setBackgroundColor: (color: string) => void;
   setBackgroundImage: (file: File) => void;
-  setBackgroundImageKey: (key: string) => void;
+  setBackgroundImageKey: (key: string, assetId?: string) => void;
   setBackgroundImageUrl: (url: string) => void;
   clearBackgroundImage: () => void;
 
@@ -182,6 +184,7 @@ type State = {
   // 컴포넌트 source는 S3 key가 되고, 그릴 주소는 renderUrl로 옮긴다.
   // 안 쓰는 자산은 올리지 않는다. (자세한 이유는 아래 구현부 주석)
   finalizeAssetsForSave: () => Promise<void>;
+  uploadLocalImagesForDraft: () => Promise<void>;
 
   addComponentFromAsset: (type: "PHOTO" | "STICKER", src: string) => Promise<void>;
   addText: (options?: { text?: string; fontSize?: number }) => void;
@@ -325,6 +328,37 @@ function restoreSnapshot(s: State, snap: EditorSnapshot): Partial<State> {
 }
 
 // 프레임 변경/리셋 시 에디터 상태 초기화 (메모리 정리 포함)
+type UploadedImage = { key: string; url: string; assetId: string };
+
+/**
+ * 올린 이미지를 레이어·되돌리기 이력·사진 목록에 반영한다. 최종 저장과 서버 초안이 같이 쓴다.
+ *
+ * 이력 속 레이어도 key 로 바꾼다. 안 바꾸면 되돌린 레이어가 blob 주소를 들고 있다가, 원본 삭제
+ * 판정(removePhotoAsset)이 그 연결을 놓친다. 사진 목록의 src 는 화면용이라 그대로 두고, 올린
+ * 사실만 s3Key 로 남겨 재업로드를 막는다.
+ */
+function withUploadedImages(
+  s: State,
+  uploaded: Map<string, UploadedImage>,
+): Pick<State, "components" | "past" | "future" | "assets"> {
+  const toUploaded = (c: EditorComponent): EditorComponent => {
+    if (c.type === "TEXT") return c;
+    const entry = uploaded.get(c.source);
+    return entry ? { ...c, source: entry.key, renderUrl: entry.url, assetId: entry.assetId } : c;
+  };
+  return {
+    components: s.components.map(toUploaded),
+    ...mapHistory(s, toUploaded),
+    assets: {
+      ...s.assets,
+      photos: s.assets.photos.map((a) => {
+        const entry = uploaded.get(a.src);
+        return entry ? { ...a, s3Key: entry.key } : a;
+      }),
+    },
+  };
+}
+
 function resetEditorState(get: () => State) {
   const state = get();
 
@@ -442,10 +476,10 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         pendingBackgroundFile: file,
       };
     }),
-  setBackgroundImageKey: (key) =>
+  setBackgroundImageKey: (key, assetId) =>
     set((s) => {
       if (s.background.type !== "IMAGE") return s;
-      return { background: { ...s.background, key } };
+      return { background: { ...s.background, key, ...(assetId ? { assetId } : {}) } };
     }),
   // 저장된 원격 IMAGE 배경(key만 있음)을 편집/썸네일에 렌더하도록 해석된 url을 주입.
   // 재업로드 대상이 아니므로 pendingBackgroundFile은 건드리지 않는다(기존 key 보존).
@@ -528,8 +562,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
             component.source === previousSrc ||
             (Boolean(previousKey) && component.source === previousKey);
           // 올려 둔 원본의 renderUrl도 버린다. 되돌리기 이력 역시 같은 자산을 가리킨다.
+          // 자산 id 도 버린다. 남기면 서버가 source 대신 그 자산(누끼 전 원본)을 저장한다.
           return linked
-            ? { ...component, source: objectUrl, renderUrl: undefined }
+            ? { ...component, source: objectUrl, renderUrl: undefined, assetId: undefined }
             : component;
         };
 
@@ -634,17 +669,17 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   finalizeAssetsForSave: () =>
     runOnAssetQueue(async () => {
       // 같은 원본을 두 번 올리지 않도록 경로별로 한 번만 올린다.
-      const uploaded = new Map<string, { key: string; url: string }>();
+      const uploaded = new Map<string, UploadedImage>();
 
       const uploadOnce = async (src: string, file: File) => {
         const cached = uploaded.get(src);
         if (cached) return cached;
 
-        const { key, objectUrl } = await uploadToS3WithPresigned({
-          file,
-          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-        });
-        const entry = { key, url: objectUrl || src };
+        // 공통 자산으로 올린다 — 서버가 바이트를 열어 보고 VERIFIED 로 만든 것만 프레임에
+        // 쓸 수 있다(lib/assetUploadApi.ts). WEBP·GIF 는 거기서 PNG 로 바뀐다.
+        // 그릴 주소는 이번 세션의 로컬 src 를 그대로 쓴다. 자산 조회 URL 은 5분이면 끝난다.
+        const { key, assetId } = await uploadAsset({ file, purpose: "FRAME_ASSET" });
+        const entry = { key, url: src, assetId };
         uploaded.set(src, entry);
         return entry;
       };
@@ -696,55 +731,88 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       }
 
       // 3) 글자 — 편집 화면에서 본 픽셀 그대로 구워 올린다.
-      //    응답에는 renderedKey 가 안 실려서(합성 전용) 다시 저장할 때도 매번 새로 굽는다.
-      //    스타일이나 내용을 고쳤는데 옛 key 를 재사용하면 결과물만 조용히 어긋난다.
-      const textKeys = new Map<string, string>();
+      //    지금 든 PNG 가 지금 문구·스타일·크기로 구운 것이면(지문이 같으면) 다시 쓴다.
+      //    저장본을 연 직후(frameApi.renderedFrom)와 저장에 실패해 다시 누른 경우다.
+      //    지문이 다르면 반드시 다시 굽는다 — 옛 PNG 를 쓰면 결과물만 조용히 어긋난다.
+      const textKeys = new Map<
+        string,
+        { renderedKey: string; renderedAssetId: string; renderedFor: string }
+      >();
       for (const component of get().components) {
         // 숨긴 글자는 굽지도 올리지도 않는다 — 위 스티커와 같은 이유다.
         if (component.hidden) continue;
         if (component.type !== "TEXT") continue;
         if (!component.source.trim()) continue;
 
-        const blob = await bakeTextLayerPng({
+        const input = {
           source: component.source,
           width: component.width,
           height: component.height,
           styleJson: component.styleJson as Record<string, unknown> | undefined,
-        });
-        const { key } = await uploadToS3WithPresigned({
+        };
+        const signature = textBakeSignature(input);
+        if (component.renderedKey && component.renderedFor === signature) continue;
+
+        const blob = await bakeTextLayerPng(input);
+        const { key, assetId } = await uploadAsset({
           file: new File([blob], `text-${component.id}.png`, { type: "image/png" }),
-          type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
+          purpose: "TEXT_RENDER",
         });
-        textKeys.set(component.id, key);
+        textKeys.set(component.id, {
+          renderedKey: key,
+          renderedAssetId: assetId,
+          renderedFor: signature,
+        });
       }
 
       if (uploaded.size === 0 && textKeys.size === 0) return;
 
-      // 올린 자산은 이력 속 레이어도 key 로 바꾼다. 안 바꾸면 되돌린 레이어가 blob 주소를
-      // 들고 있다가, 원본 삭제 판정(removePhotoAsset)이 그 연결을 놓친다. 글자의 구운 key 는
-      // 그 시점 문구에만 맞으므로 이력에는 옮기지 않는다 — 저장할 때마다 다시 굽는다.
-      const toUploaded = (c: EditorComponent): EditorComponent => {
-        if (c.type === "TEXT") return c;
-        const entry = uploaded.get(c.source);
-        return entry ? { ...c, source: entry.key, renderUrl: entry.url } : c;
-      };
-      set((s) => ({
-        components: s.components.map((c) => {
-          if (c.type === "TEXT") {
-            const renderedKey = textKeys.get(c.id);
-            return renderedKey ? { ...c, renderedKey } : c;
-          }
-          return toUploaded(c);
-        }),
-        ...mapHistory(s, toUploaded),
-        assets: {
-          ...s.assets,
-          photos: s.assets.photos.map((a) => {
-            const entry = uploaded.get(a.src);
-            // src 는 화면용이라 그대로 두고, 올린 사실만 s3Key 로 남겨 재업로드를 막는다.
-            return entry ? { ...a, s3Key: entry.key } : a;
+      // 글자의 구운 key 는 그 시점 문구에만 맞으므로 이력에는 옮기지 않는다 — 지문이 다르면 다시 굽는다.
+      set((s) => {
+        const next = withUploadedImages(s, uploaded);
+        return {
+          ...next,
+          components: next.components.map((c) => {
+            const rendered = c.type === "TEXT" ? textKeys.get(c.id) : undefined;
+            return rendered ? { ...c, ...rendered } : c;
           }),
-        },
+        };
+      });
+    }, ASSET_QUEUE_WAIT_LIMIT_MS),
+
+  /**
+   * 서버 초안(ADR-0006 §5)을 쓰기 전에, 문서에 넣을 수 없는 로컬 이미지만 자산으로 올린다.
+   *
+   * 최종 저장(`finalizeAssetsForSave`)과 다른 점: 글자는 굽지 않고(초안은 합성에 쓰지 않는다),
+   * 정적 스티커도 올리지 않는다(`/stickers/…` 는 어느 기기에서나 열린다). 숨긴 사진도 올린다 —
+   * 초안은 숨긴 레이어까지 담아야 다른 기기에서 그대로 이어진다.
+   */
+  uploadLocalImagesForDraft: () =>
+    runOnAssetQueue(async () => {
+      const uploaded = new Map<string, UploadedImage>();
+      const { components, assets } = get();
+      const usedPhotoSrcs = new Set(
+        components.filter((c) => c.type === "PHOTO" && isLocalImageSource(c.source)).map((c) => c.source),
+      );
+      for (const asset of assets.photos) {
+        if (!asset.file || !usedPhotoSrcs.has(asset.src) || uploaded.has(asset.src)) continue;
+        const { key, assetId } = await uploadAsset({ file: asset.file, purpose: "FRAME_ASSET" });
+        uploaded.set(asset.src, { key, url: asset.src, assetId });
+      }
+
+      const { background, pendingBackgroundFile } = get();
+      const backgroundUpload =
+        pendingBackgroundFile && background.type === "IMAGE" && !background.key
+          ? await uploadAsset({ file: pendingBackgroundFile, purpose: "FRAME_ASSET" })
+          : null;
+
+      if (uploaded.size === 0 && !backgroundUpload) return;
+      set((s) => ({
+        ...withUploadedImages(s, uploaded),
+        // 그 사이 다른 배경을 골랐으면 옛 배경의 key 를 붙이지 않는다.
+        ...(backgroundUpload && s.background.type === "IMAGE" && s.pendingBackgroundFile === pendingBackgroundFile
+          ? { background: { ...s.background, key: backgroundUpload.key, assetId: backgroundUpload.assetId } }
+          : {}),
       }));
     }, ASSET_QUEUE_WAIT_LIMIT_MS),
 
@@ -1010,6 +1078,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           // 후자는 TEXT 합성에 반드시 실려야 한다(lib/frameApi.ts).
           ...(c.renderUrl ? { renderUrl: c.renderUrl } : {}),
           ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+          ...(c.assetId ? { assetId: c.assetId } : {}),
+          ...(c.renderedAssetId ? { renderedAssetId: c.renderedAssetId } : {}),
+          ...(c.renderedFor ? { renderedFor: c.renderedFor } : {}),
           // 잠금은 저장·재열기에서 유지한다(F1-3). 숨김은 내보내지 않으므로 싣지 않는다.
           ...(c.locked ? { locked: true } : {}),
           x: c.x,

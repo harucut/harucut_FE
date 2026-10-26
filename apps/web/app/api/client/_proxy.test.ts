@@ -2,7 +2,7 @@
 
 import { getApiErrorMessageByCode } from "@harucut/shared";
 
-import { buildResponse, forward, proxyJson, validateResourceId } from "@/app/api/client/_proxy";
+import { buildResponse, forward, proxyJson, validatePublicId, validateResourceId } from "@/app/api/client/_proxy";
 
 test.each([200, 401, 503])("인증을 포함한 BFF 응답 %s를 캐시하지 않는다", (status) => {
   const response = buildResponse({ ok: status === 200, status, body: "{}", contentType: "application/json", setCookies: [] });
@@ -18,6 +18,17 @@ test.each(["../2", "1/2", "%2e%2e", "", "-1", "0", "1.5", "NaN", "92233720368547
 test("유효한 ID는 정밀도 손실 없이 통과한다", () => {
   expect(validateResourceId("1")).toBeNull();
   expect(validateResourceId("9223372036854775807")).toBeNull();
+});
+
+// 자산 public id(As8kLm2Pq9Xz 모양). 경로를 바꾸는 문자는 백엔드에 닿기 전에 막는다.
+test.each(["../x", "a/b", "%2e%2e", "", "a b", "x".repeat(65)])("부적절한 공개 ID %s는 서버로 보내지 않는다", async (id) => {
+  const response = validatePublicId(id)!;
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "CLIENT-006" });
+});
+test("유효한 공개 ID는 통과한다", () => {
+  expect(validatePublicId("As8kLm2Pq9Xz")).toBeNull();
+  expect(validatePublicId("a_b-C")).toBeNull();
 });
 
 describe("client proxy forward", () => {
