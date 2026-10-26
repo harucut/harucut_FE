@@ -53,7 +53,9 @@ type ViewState =
 export function ResultReceiver() {
   const [token, setToken] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>({ kind: "reading" });
-  const [downloading, setDownloading] = useState(false);
+  // 어느 결과의 저장을 받고 있는가. 지금 토큰과 같을 때만 「저장 중」이다 — 링크가 바뀌면 새 화면은 저장 중이 아니다.
+  const [downloadingFor, setDownloadingFor] = useState<string | null>(null);
+  const downloading = downloadingFor !== null && downloadingFor === token;
   const [copied, setCopied] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -126,20 +128,29 @@ export function ResultReceiver() {
     };
   }, [token, load, stopPolling]);
 
+  // 저장을 누른 뒤 다른 결과 링크로 바뀌면, 이전 요청의 응답이 새 결과 화면에 닿으면 안 된다 — 이전 사진을
+  // 열거나 이전 실패로 새 화면을 덮었다(Codex 리뷰 #523). 응답을 받을 때 지금 토큰과 견준다.
+  const currentTokenRef = useRef(token);
+  useEffect(() => {
+    currentTokenRef.current = token;
+  }, [token]);
+
   const onDownload = async () => {
     if (!token) return;
-    setDownloading(true);
+    const requested = token;
+    setDownloadingFor(requested);
     try {
-      const { url } = await getResultDownload(token);
-      openWithoutReferrer(url);
+      const { url } = await getResultDownload(requested);
+      if (currentTokenRef.current === requested) openWithoutReferrer(url);
     } catch (error) {
+      if (currentTokenRef.current !== requested) return;
       setView({
         kind: "error",
         message: getUserFacingApiErrorMessage(error, "사진을 내려받지 못했어요. 잠시 후 다시 시도해 주세요."),
         retryable: true,
       });
     } finally {
-      setDownloading(false);
+      setDownloadingFor((current) => (current === requested ? null : current));
     }
   };
 

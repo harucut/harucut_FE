@@ -67,6 +67,10 @@ function slotAspectOf(frame: EventFrameRef | null) {
   return slot.width / slot.height;
 }
 
+/** 홈의 「만드는 중」 사진을 다시 묻는 간격과 횟수(5초 × 24 = 2분). */
+export const RESULT_POLL_MS = 5_000;
+const RESULT_POLL_LIMIT = 24;
+
 export function EventParticipation({ slug }: { slug: string }) {
   const router = useRouter();
   const [event, setEvent] = useState<PublicEvent | null>(null);
@@ -77,6 +81,29 @@ export function EventParticipation({ slug }: { slug: string }) {
   const [results, setResults] = useState<ParticipantJob[]>([]);
 
   const frames = useMemo(() => (event ? sortedFrames(event) : []), [event]);
+
+  /*
+    「만드는 중」 사진은 서버에서 완성돼도 화면이 모른다 — 목록은 세션 복원·동의 때 한 번만 받아, 새로고침 말고는
+    사진을 받을 길이 없었다(Codex 리뷰 #523). 홈에 만드는 중인 사진이 있는 동안 다시 묻는다. 합성이 오래 걸리는
+    경우를 위해 상한을 두고, 그 뒤에는 「다시 확인」으로 묻는다.
+  */
+  const hasPending = step.kind === "home" && results.some((job) => job.status === "PENDING");
+  const pendingPollsRef = useRef(0);
+  useEffect(() => {
+    if (!hasPending || !session || !event) return;
+    pendingPollsRef.current = 0;
+    const timer = window.setInterval(() => {
+      pendingPollsRef.current += 1;
+      if (pendingPollsRef.current > RESULT_POLL_LIMIT) {
+        window.clearInterval(timer);
+        return;
+      }
+      void listParticipantResults(session.token, event.eventId)
+        .then(setResults)
+        .catch(() => {});
+    }, RESULT_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasPending, session, event]);
 
   const showUnavailable = useCallback((cause: unknown, fallback: string) => {
     setStep({ kind: "unavailable", message: getUserFacingApiErrorMessage(cause, fallback) });
@@ -257,6 +284,7 @@ export function EventParticipation({ slug }: { slug: string }) {
             onStart={onStartShooting}
             onShare={(jobId) => void onShareResult(jobId)}
             onDownload={(jobId) => void onDownloadResult(jobId)}
+            onRefresh={() => session && void loadResults(session.token, event.eventId)}
           />
         ) : null}
 
@@ -356,12 +384,14 @@ function HomeStep({
   onStart,
   onShare,
   onDownload,
+  onRefresh,
 }: {
   captureOpen: boolean;
   results: ParticipantJob[];
   onStart: () => void;
   onShare: (jobId: number) => void;
   onDownload: (jobId: number) => void;
+  onRefresh: () => void;
 }) {
   return (
     <section className="flex flex-col gap-4">
@@ -394,6 +424,10 @@ function HomeStep({
                       링크
                     </button>
                   </span>
+                ) : job.status === "PENDING" ? (
+                  <button type="button" onClick={onRefresh} className="h-11 rounded-full border border-(--ev-border) px-4 text-[13px] font-bold">
+                    다시 확인
+                  </button>
                 ) : null}
               </li>
             ))}
@@ -462,6 +496,7 @@ export function CaptureAndSend({
   sending,
   onProgress,
   onDone,
+  onRunOpened,
   onSessionEnded,
   onUnavailable,
 }: {
@@ -472,6 +507,11 @@ export function CaptureAndSend({
   onProgress: (progress: string | null) => void;
   /** 접수가 끝났다. 부스는 회차를 닫으려고 회차 정보도 받는다. */
   onDone: (resultToken: string, run: CaptureRun) => void;
+  /**
+   * 서버가 회차를 열었다. 부스는 손님이 전송 전에 떠나도(유휴 종료) 이 회차를 닫아야 한다 — 접수가 끝난 뒤에야
+   * 회차를 알면, 그 전에 끝난 손님의 회차와 참가자 세션이 서버에 열린 채 남는다(Codex 리뷰 #523).
+   */
+  onRunOpened?: (run: CaptureRun) => void;
   onSessionEnded: () => void;
   onUnavailable: (cause: unknown) => void;
 }) {
@@ -490,10 +530,17 @@ export function CaptureAndSend({
   const uploadedRef = useRef<(string | null)[]>(Array(SHOT_COUNT).fill(null));
   const idempotencyKeyRef = useRef<string | null>(null);
 
+  const onRunOpenedRef = useRef(onRunOpened);
+  useEffect(() => {
+    onRunOpenedRef.current = onRunOpened;
+  }, [onRunOpened]);
+
   const openRun = useCallback(async () => {
-    runRef.current = await startCaptureRun(token, event.eventId);
+    const run = await startCaptureRun(token, event.eventId);
+    runRef.current = run;
     uploadedRef.current = Array(SHOT_COUNT).fill(null);
     idempotencyKeyRef.current = crypto.randomUUID();
+    onRunOpenedRef.current?.(run);
   }, [token, event.eventId]);
 
   /*
@@ -595,13 +642,17 @@ export function CaptureAndSend({
 
   const allTaken = nextEmpty < 0;
 
-  if (cameraState === "denied" || cameraState === "unsupported") {
+  // "error" 는 다른 앱이 카메라를 쥐고 있는 경우 등이다(NotReadableError). 안내 없이 두면 검은 화면과 꺼진
+  // 촬영 버튼만 남아, 카메라가 풀려도 새로고침 말고는 돌아올 길이 없었다(Codex 리뷰 #523).
+  if (cameraState === "denied" || cameraState === "unsupported" || cameraState === "error") {
     return (
       <section className="flex flex-col gap-3">
         <p role="alert" className="text-[15px]">
           {cameraState === "denied"
             ? "카메라를 쓸 수 있게 허용해 주세요. 브라우저 설정에서 이 사이트의 카메라 권한을 켠 뒤 다시 시도해 주세요."
-            : "이 브라우저에서는 카메라를 쓸 수 없어요. Safari나 Chrome에서 이 링크를 열어 주세요."}
+            : cameraState === "unsupported"
+              ? "이 브라우저에서는 카메라를 쓸 수 없어요. Safari나 Chrome에서 이 링크를 열어 주세요."
+              : "카메라를 켜지 못했어요. 다른 앱이 카메라를 쓰고 있다면 닫은 뒤 다시 시도해 주세요."}
         </p>
         <button type="button" onClick={() => void startCamera()} className="h-12 rounded-full border border-(--ev-border) text-[15px] font-bold">
           다시 시도

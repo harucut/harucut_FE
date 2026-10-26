@@ -58,15 +58,25 @@ export function forgetParticipant(eventId: string) {
   remove(`${PARTICIPANT_PREFIX}${eventId}`);
 }
 
+/**
+ * 저장소 쓰기가 막혀도(비공개 모드·용량 초과) 연결로 받은 기기 자격을 잃지 않게 메모리에도 둔다. 저장소만
+ * 원본으로 보면, 연결 API 가 성공해 토큰을 받아도 화면이 연결 화면에 그대로 남았다(Codex 리뷰 #523).
+ * 그 경우 새로고침하면 다시 연결해야 한다 — 저장소가 막힌 브라우저에서는 어쩔 수 없다.
+ */
+let boothDeviceInMemory: StoredBoothDevice | null = null;
+
 export function readBoothDevice(): StoredBoothDevice | null {
   const stored = read<StoredBoothDevice>(BOOTH_KEY);
-  return stored?.token ? stored : null;
+  if (stored?.token) return stored;
+  return boothDeviceInMemory;
 }
 
 export function saveBoothDevice(value: StoredBoothDevice) {
+  boothDeviceInMemory = value;
   write(BOOTH_KEY, value);
 }
 
 export function forgetBoothDevice() {
+  boothDeviceInMemory = null;
   remove(BOOTH_KEY);
 }

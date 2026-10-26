@@ -42,3 +42,16 @@ describe("행사 자격 보관", () => {
     expect(window.localStorage.getItem("harucut:theme-editor-draft:v2:u:classic-4")).toBe("{}");
   });
 });
+
+// Codex 리뷰(#523): 저장소 쓰기가 막히면 연결로 받은 기기 자격을 잃어 연결 화면에 남았다.
+it("저장소에 쓰지 못해도 이번 방문 동안은 받은 부스 자격을 돌려준다", () => {
+  const setItem = jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("quota", "QuotaExceededError");
+  });
+  try {
+    saveBoothDevice({ token: "b-mem", deviceId: "d-1", eventId: "evt-1" });
+    expect(readBoothDevice()?.token).toBe("b-mem");
+  } finally {
+    setItem.mockRestore();
+  }
+});

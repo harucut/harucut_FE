@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiRequestError } from "@/lib/clientApi";
-import { EventParticipation } from "@/components/participation/EventParticipation";
+import { RESULT_POLL_MS, EventParticipation } from "@/components/participation/EventParticipation";
 import type { PublicEvent } from "@/lib/event/types";
 
 const mockPush = jest.fn();
@@ -246,3 +246,35 @@ it("프레임이 여럿이면 서버가 준 목록만 순서대로 보여 준다
   expect(choices).toHaveLength(2);
   expect(choices[0]).toHaveAttribute("aria-pressed", "true");
 });
+
+describe("Codex 리뷰 반영(#523)", () => {
+  // 다른 앱이 카메라를 쥐고 있으면(NotReadableError) 안내 없이 검은 화면만 남았다.
+  it("카메라를 켜지 못한 일반 오류도 안내하고 다시 시도를 둔다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    mockCameraState = "error";
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+
+    expect(await screen.findByText(/카메라를 켜지 못했어요/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+  });
+
+  // 만드는 중이던 사진이 서버에서 완성돼도 새로고침 전에는 받을 길이 없었다.
+  it("만드는 중인 사진이 있으면 다시 물어 완성되면 저장을 보인다", async () => {
+    jest.useFakeTimers();
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([{ jobId: 9, status: "PENDING" }]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByText(/만드는 중/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+
+    api.listParticipantResults.mockResolvedValue([{ jobId: 9, status: "DONE" }]);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(RESULT_POLL_MS);
+    });
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+  });
+});
+
