@@ -1,5 +1,6 @@
 /**
- * 행사 참가·부스·결과 수령 API 의 응답 모양(ADR-0007, harucut/Harucut docs/api/p2a-openapi-draft.yaml).
+ * 행사 참가·부스·결과 수령 API 의 응답 모양(ADR-0007 · §12 구현 반영). 정본은 harucut/Harucut 의
+ * docs/api/openapi.generated.json 이다 — p2a 초안은 더 고치지 않는다(백엔드 fork #21).
  * 계약이 바뀌면 이 파일과 BFF(app/api/client/{public,participant,booth}/**)를 함께 고친다.
  */
 export type LayoutType = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
