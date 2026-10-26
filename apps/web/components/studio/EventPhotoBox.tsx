@@ -71,6 +71,9 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<Photo | null>(null);
   const refreshedAtRef = useRef(0);
+  // 목록 요청의 세대. 필터를 바꾸거나 첫 쪽을 다시 받으면 올린다 — 그 전에 시작한 응답(첫 쪽·더 보기)은 버린다.
+  // 안 그러면 BOOTH 로 받던 응답이 BYOD 로 바꾼 뒤 도착해 목록·커서를 덮는다(Codex #542).
+  const listGenerationRef = useRef(0);
 
   const permissions = new Set(access?.access.permissions ?? []);
   const canDownload = permissions.has("DOWNLOAD_PHOTOS");
@@ -80,16 +83,19 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
 
   const loadFirst = useCallback(
     async (nextFilter: PhotoFilter) => {
+      const generation = ++listGenerationRef.current;
       setLoading(true);
       try {
         const page = await listEventPhotos(eventId, nextFilter);
+        if (generation !== listGenerationRef.current) return;
         setItems(page.items);
         setNextCursor(page.nextCursor ?? null);
         setError(null);
       } catch (cause) {
+        if (generation !== listGenerationRef.current) return;
         setError(getUserFacingApiErrorMessage(cause, "사진을 불러오지 못했어요."));
       } finally {
-        setLoading(false);
+        if (generation === listGenerationRef.current) setLoading(false);
       }
     },
     [eventId],
@@ -111,15 +117,18 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
 
   const loadMore = async () => {
     if (!nextCursor) return;
+    const generation = listGenerationRef.current;
     setLoading(true);
     try {
       const page = await listEventPhotos(eventId, filter, nextCursor);
+      if (generation !== listGenerationRef.current) return;
       setItems((prev) => [...prev, ...page.items]);
       setNextCursor(page.nextCursor ?? null);
     } catch (cause) {
+      if (generation !== listGenerationRef.current) return;
       setNotice(getUserFacingApiErrorMessage(cause, "더 불러오지 못했어요."));
     } finally {
-      setLoading(false);
+      if (generation === listGenerationRef.current) setLoading(false);
     }
   };
 
@@ -240,10 +249,10 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
                   src={photo.thumbnailUrl}
                   alt={`${formatTime(photo.createdAt)} 사진`}
                   onError={onThumbnailError}
-                  className="aspect-[3/4] w-full rounded-xl object-cover"
+                  className="aspect-3/4 w-full rounded-xl object-cover"
                 />
               ) : (
-                <div className="flex aspect-[3/4] w-full items-center justify-center rounded-xl bg-(--hc-surface-well) px-2 text-center text-[13px] text-(--hc-muted)">
+                <div className="flex aspect-3/4 w-full items-center justify-center rounded-xl bg-(--hc-surface-well) px-2 text-center text-[13px] text-(--hc-muted)">
                   {photo.status === "PENDING"
                     ? "만드는 중"
                     : (photo.failure && FAILURE_LABEL[photo.failure.code]) || "만들지 못했어요"}

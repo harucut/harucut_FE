@@ -162,3 +162,24 @@ it("주최자 문구가 없는 화면은 기본 문구를 쓴다", async () => {
   render(<ResultReceiver />);
   expect(await screen.findByText("사진을 받을 수 있는 기간이 지났어요.")).toBeInTheDocument();
 });
+
+// Codex 리뷰(#523): 저장을 누른 뒤 다른 결과 링크로 바뀌면 이전 요청의 응답이 새 화면에 닿았다.
+it("결과 링크가 바뀐 뒤 도착한 이전 저장 응답은 쓰지 않는다", async () => {
+  window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+  mockGetResult.mockResolvedValue(done());
+  let resolveDownload: (v: unknown) => void = () => {};
+  mockGetResultDownload.mockImplementation(() => new Promise((resolve) => (resolveDownload = resolve)));
+  const open = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  render(<ResultReceiver />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 저장" }));
+
+  await act(async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_B}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await act(async () => {
+    resolveDownload({ url: "https://s3/old.jpg", expiresAt: "x" });
+  });
+  expect(open).not.toHaveBeenCalled();
+  open.mockRestore();
+});

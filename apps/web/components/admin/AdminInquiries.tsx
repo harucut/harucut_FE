@@ -42,11 +42,17 @@ export function AdminInquiries({ onStartContract }: { onStartContract: (inquiry:
     try {
       const updated = await updateInquiry(inquiry.inquiryId, patch);
       setItems((prev) => (prev ?? []).map((i) => (i.inquiryId === updated.inquiryId ? updated : i)));
-      setNotes((prev) => {
-        const next = { ...prev };
-        delete next[inquiry.inquiryId];
-        return next;
-      });
+      // 메모 초안은 「그 메모를 보냈고, 지금 초안이 보낸 값 그대로」일 때만 지운다. 상태만 바꿨거나 저장을 기다리는
+      // 사이 더 적었으면 초안을 그대로 둔다(Codex #546).
+      if (patch.assigneeNote !== undefined) {
+        const sent = patch.assigneeNote;
+        setNotes((prev) => {
+          if (prev[inquiry.inquiryId] !== sent) return prev;
+          const next = { ...prev };
+          delete next[inquiry.inquiryId];
+          return next;
+        });
+      }
     } catch (cause) {
       setNotice(adminErrorMessage(cause, "문의를 바꾸지 못했어요."));
     } finally {

@@ -216,7 +216,11 @@ type State = {
   exportJson: () => ThemeExportJson | null;
   importJson: (data: ThemeExportJson) => void;
   // localStorage WIP 초안을 에디터 상태로 복원(dataURL 사진은 File로 되살림).
-  hydrateDraft: (draft: EditorDraft) => void;
+  /**
+   * 초안을 편집기에 들인다. 로컬 초안은 숨김을 풀어 들인다(예전부터의 동작). 서버 초안은 다른 기기에서 숨긴
+   * 레이어가 그대로여야 해서 `preserveHidden` 으로 지킨다.
+   */
+  hydrateDraft: (draft: EditorDraft, options?: { preserveHidden?: boolean }) => void;
 
   // Konva 트랜스포머 업데이트 트리거용 키
   renderKey: number;
@@ -1136,7 +1140,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   // localStorage WIP 초안을 에디터 상태로 복원한다. dataURL 사진은 File로 되살려
   // 저장 시 finalizeAssetsForSave가 S3에 올릴 수 있게 한다.
-  hydrateDraft: (draft) => {
+  hydrateDraft: (draft, options) => {
     set(() => {
       const photoSrcs = Array.from(
         new Set(
@@ -1171,7 +1175,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           draft.components.map((c) => ({
             ...c,
             locked: Boolean(c.locked),
-            hidden: false,
+            hidden: options?.preserveHidden ? Boolean(c.hidden) : false,
           })) as EditorComponent[],
         ),
         activeId: null,

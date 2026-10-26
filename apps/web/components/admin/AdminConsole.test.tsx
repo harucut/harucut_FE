@@ -176,3 +176,18 @@ it("수동 이용권은 사유가 있어야 주고, 회수는 영향을 본 뒤 
   await waitFor(() => expect(api.revokeEntitlement).toHaveBeenCalledWith("En1", "계약 해지"));
   expect(await screen.findByText("회수됨")).toBeInTheDocument();
 });
+
+// Codex 리뷰(#546): 메모를 적고 저장 전에 상태를 바꿔도 적던 메모가 사라지면 안 된다.
+it("상태를 바꿔도 저장하지 않은 담당 메모는 그대로 둔다", async () => {
+  api.updateInquiry.mockImplementation(async (_id: string, patch: object) => ({ ...INQUIRY, ...patch }));
+  render(<AdminConsole />);
+  await screen.findByText("참가자 휴대폰 · 현장 부스");
+
+  fireEvent.change(screen.getByLabelText("담당 메모"), { target: { value: "견적 초안 작성 중" } });
+  fireEvent.change(screen.getByLabelText("상태"), { target: { value: "CONTACTED" } });
+  await waitFor(() => expect(api.updateInquiry).toHaveBeenCalledWith("Iq1", { status: "CONTACTED" }));
+
+  await waitFor(() => expect(screen.getByLabelText("상태")).toHaveValue("CONTACTED"));
+  expect(screen.getByLabelText("담당 메모")).toHaveValue("견적 초안 작성 중");
+  expect(screen.getByRole("button", { name: "메모 저장" })).toBeInTheDocument();
+});
