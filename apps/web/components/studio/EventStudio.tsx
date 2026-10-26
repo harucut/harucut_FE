@@ -197,8 +197,9 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [workspaceDefaults, setWorkspaceDefaults] = useState<BrandDefaults | null>(null);
   const [access, setAccess] = useState<Access>(undefined);
-  // 운영자 배정이 권한 행을 새로 만들거나 지우면 「행사 고객」 목록을 다시 받는다(Codex #554) — 두 칸이 같은 권한 행을 본다.
-  const [grantsVersion, setGrantsVersion] = useState(0);
+  // 「행사 고객」과 「행사 운영자」는 같은 권한 행을 본다(Codex #554). 한쪽이 행을 만들거나 지우면 다른 쪽을 다시 그려 목록을 새로 받는다.
+  const [customersVersion, setCustomersVersion] = useState(0);
+  const [operatorsVersion, setOperatorsVersion] = useState(0);
 
   const loadSources = useCallback(async () => {
     setSourcesReady(false);
@@ -729,7 +730,11 @@ export function EventStudio({ eventId }: { eventId: string }) {
             <p className="text-[13px] text-(--hc-muted)">
               신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 공간의 다른 행사는 보이지 않아요.
             </p>
-            <StudioEventCustomers key={grantsVersion} eventId={event.eventId} />
+            <StudioEventCustomers
+              key={customersVersion}
+              eventId={event.eventId}
+              onRemoved={() => setOperatorsVersion((v) => v + 1)}
+            />
           </section>
         ) : null}
 
@@ -742,9 +747,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
               운영 담당 멤버에게 이 행사만 맡겨요. 공간의 다른 행사는 보이지 않아요.
             </p>
             <StudioEventOperators
+              key={operatorsVersion}
               eventId={event.eventId}
               workspaceId={event.workspaceId}
-              onSaved={() => setGrantsVersion((v) => v + 1)}
+              onSaved={() => setCustomersVersion((v) => v + 1)}
             />
           </section>
         ) : null}

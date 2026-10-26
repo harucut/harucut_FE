@@ -52,7 +52,9 @@ jest.mock("@/lib/studio/accessApi", () => ({
   listMyEvents: (...a: unknown[]) => mockMyEvents(...a),
   listMembers: (...a: unknown[]) => mockMembers(...a),
   assignEventOperator: (...a: unknown[]) => mockAssign(...a),
+  removeEventGrant: (...a: unknown[]) => mockRemoveGrant(...a),
 }));
+const mockRemoveGrant = jest.fn();
 
 function myAccess(access: Record<string, unknown>) {
   mockMyEvents.mockResolvedValue([{ eventId: "Ev1", name: "", status: "DRAFT", access }]);
@@ -509,4 +511,27 @@ it("운영자를 처음 배정하면 행사 고객 목록을 다시 받아 새 �
   fireEvent.click(within(operators).getByRole("button", { name: "저장" }));
 
   expect(await within(customers).findByText("운영 지수")).toBeInTheDocument();
+});
+
+// 거꾸로, 「행사 고객」에서 운영자의 행을 회수하면 운영 권한도 함께 사라진다 — 운영자 칸이 지운 권한을 계속 보이면 안 된다(Codex #554).
+it("행사 고객에서 운영자의 행을 회수하면 운영자 칸을 다시 받는다", async () => {
+  mockMembers.mockResolvedValue([{ userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" }]);
+  const row = { grantId: 2, userId: "u-op", name: "운영 지수", permissions: ["VIEW_PHOTOS"], operations: ["MANAGE_BOOTH"], createdAt: "" };
+  mockGrants.mockResolvedValue([row]);
+  mockRemoveGrant.mockImplementation(async () => {
+    mockGrants.mockResolvedValue([]);
+  });
+  await renderStudio();
+
+  const customers = (await screen.findByRole("heading", { name: "행사 고객" })).closest("section")!;
+  const operators = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).toBeChecked());
+
+  fireEvent.click(await within(customers).findByRole("button", { name: "권한 회수" }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText(/운영 권한도 함께 빠져요/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "권한 회수" }));
+
+  await waitFor(() => expect(mockRemoveGrant).toHaveBeenCalledWith("Ev1", 2));
+  await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).not.toBeChecked());
 });
