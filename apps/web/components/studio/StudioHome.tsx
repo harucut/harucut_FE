@@ -188,7 +188,18 @@ export function StudioHome() {
               <h2 id="studio-members-title" className="text-[18px] font-bold">
                 멤버
               </h2>
-              <StudioMembers workspaceId={current.workspaceId} myRole={current.role} myUserId={myUserId} />
+              {/* 공간마다 새로 그린다 — 앞 공간에서 만든 초대 링크·확인 창이 다음 공간에 남지 않게. */}
+              <StudioMembers
+                key={current.workspaceId}
+                workspaceId={current.workspaceId}
+                myRole={current.role}
+                myUserId={myUserId}
+                onLeft={() => {
+                  // 같은 화면에 머무르므로 목록을 다시 받아 나간 공간을 지운다.
+                  router.replace("/studio");
+                  void reload();
+                }}
+              />
             </section>
 
             {current.role === "OWNER" || current.role === "ADMIN" ? (

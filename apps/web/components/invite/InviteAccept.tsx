@@ -64,6 +64,11 @@ export function InviteAccept() {
       setView({ kind: "preview", preview: await previewInvitation(token) });
     } catch (error) {
       const { code, status } = getApiErrorDetails(error);
+      // 세션이 끝났다(다른 탭에서 로그아웃 등). 초대의 실패가 아니다 — 토큰은 남기고 로그인으로 잇는다.
+      if (status === 401) {
+        setView({ kind: "need-login" });
+        return;
+      }
       if (code && DEAD_INVITE_CODES.has(code)) clearInviteToken();
       setView({
         kind: "error",
@@ -101,6 +106,10 @@ export function InviteAccept() {
       );
     } catch (error) {
       const { code, status } = getApiErrorDetails(error);
+      if (status === 401) {
+        setView({ kind: "need-login" });
+        return;
+      }
       const alreadyJoined = code === "MEMBER-003";
       // 이미 참여 중이면 토큰은 쓰이지 않았다(다른 사람에게 다시 건넬 수 있다) — 이 기기에서만 지운다.
       if (alreadyJoined || (code && DEAD_INVITE_CODES.has(code))) clearInviteToken();
