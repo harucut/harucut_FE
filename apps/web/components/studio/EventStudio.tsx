@@ -9,6 +9,7 @@ import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { useRouter } from "next/navigation";
 import { getFrameConfig, type FrameId } from "@/constants/frames";
 import { StudioBoothDevices } from "@/components/studio/StudioBoothDevices";
+import { StudioConsentItems, consentItemsOf, toConsentDrafts, type ConsentDraft } from "@/components/studio/StudioConsentItems";
 import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
 import { StudioEventOperators } from "@/components/studio/StudioEventOperators";
 import { CloneEventForm } from "@/components/studio/CloneEventForm";
@@ -40,7 +41,6 @@ import {
   publishViolations,
   runEventAction,
   updateEventSettings,
-  type ConsentItem,
   type EventAction,
   type EventKind,
   type EventLayout,
@@ -54,7 +54,6 @@ const LAYOUTS: EventLayout[] = ["CLASSIC", "WIDE", "GRID", "POLAROID"];
 /** 결과 보관 일수의 기본값. 확정된 상품 정책이 아니다 — 운영자가 정한다(R5 8절). */
 const DEFAULT_RETENTION_DAYS = 30;
 
-type ConsentDraft = Pick<ConsentItem, "code" | "title" | "body" | "required">;
 
 type Form = {
   name: string;
@@ -83,7 +82,7 @@ function formOf(settings: EventSettings): Form {
     byod: Boolean(settings.byodEnabled),
     booth: Boolean(settings.boothEnabled),
     layouts: LAYOUTS.filter((l) => settings.allowedLayouts?.includes(l)),
-    consents: (settings.consentItems ?? []).map(({ code, title, body, required }) => ({ code, title, body, required })),
+    consents: toConsentDrafts(settings.consentItems),
     frames: [...(settings.frames ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
     retentionDays: String(settings.resultRetentionDays ?? DEFAULT_RETENTION_DAYS),
     theme: parsePageTheme(settings.theme),
@@ -93,13 +92,9 @@ function formOf(settings: EventSettings): Form {
 
 /**
  * 폼 → PATCH 본문. 테마는 빈 값을 뺀 모양으로 보내고, 꾸민 것이 없으면 null(테마 없음)이다.
- *
- * 동의 항목의 version 은 **문구가 바뀌었을 때만** 올린다. 참가자 동의 기록은 「어느 버전의 문구」에
- * 대한 것이라, 같은 문구에 새 버전을 매기면 기록이 가리키는 문구가 흐려지고, 바꾼 문구에 옛 버전을
- * 남기면 예전 동의가 새 문구에 대한 것처럼 읽힌다.
+ * 동의 항목의 version 은 문구가 바뀌었을 때만 올린다(consentItemsOf).
  */
 function settingsOf(form: Form, saved: EventSettings): EventSettings {
-  const previous = new Map((saved.consentItems ?? []).map((item) => [item.code, item]));
   const retention = Number.parseInt(form.retentionDays, 10);
   return {
     name: form.name.trim(),
@@ -111,11 +106,7 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
     boothEnabled: form.booth,
     allowedLayouts: form.layouts,
     frames: form.frames,
-    consentItems: form.consents.map((c) => {
-      const before = previous.get(c.code);
-      const changed = !before || before.title !== c.title || before.body !== c.body;
-      return { ...c, version: before ? before.version + (changed ? 1 : 0) : 1 };
-    }),
+    consentItems: consentItemsOf(form.consents, saved.consentItems),
     resultRetentionDays: Number.isFinite(retention) && retention > 0 ? retention : null,
     theme: themeForSave(form.theme),
     projectId: form.projectId || null,
@@ -156,11 +147,6 @@ function sourceOf(fields: InheritableField[], sources: Record<string, SettingSou
   return [...found][0];
 }
 
-function newConsentCode(existing: ConsentDraft[]) {
-  let n = existing.length + 1;
-  while (existing.some((c) => c.code === `consent-${n}`)) n += 1;
-  return `consent-${n}`;
-}
 
 // 참가 링크는 이 화면의 오리진에 붙인다 — 서버는 프론트 도메인을 모른다(joinUrlPath 는 상대 경로).
 function subscribeNothing() {
@@ -628,55 +614,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
               aside={inheritAside(["consentItems"])}
               description="사진을 받는 주체, 목적, 보관 기간을 참가자가 촬영 전에 읽고 동의해요. 필수 항목이 하나 이상 있어야 게시할 수 있어요."
             >
-              {form.consents.map((consent, index) => (
-                <div key={consent.code} className="hc-surface-well flex flex-col gap-2 rounded-2xl p-3">
-                  <Field label="제목">
-                    <input
-                      className="hc-input h-11 rounded-xl border px-3 text-[14px]"
-                      value={consent.title}
-                      onChange={(e) =>
-                        update({ consents: form.consents.map((c, i) => (i === index ? { ...c, title: e.target.value } : c)) })
-                      }
-                    />
-                  </Field>
-                  <Field label="본문">
-                    <textarea
-                      className="hc-input min-h-24 rounded-xl border px-3 py-2 text-[14px]"
-                      value={consent.body}
-                      onChange={(e) =>
-                        update({ consents: form.consents.map((c, i) => (i === index ? { ...c, body: e.target.value } : c)) })
-                      }
-                    />
-                  </Field>
-                  <div className="flex items-center justify-between gap-2">
-                    <Check
-                      label="필수"
-                      checked={consent.required}
-                      onChange={(required) =>
-                        update({ consents: form.consents.map((c, i) => (i === index ? { ...c, required } : c)) })
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="h-11 rounded-full px-3 text-[13px] text-(--hc-danger)"
-                      onClick={() => update({ consents: form.consents.filter((_, i) => i !== index) })}
-                    >
-                      항목 지우기
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="hc-button-secondary h-11 self-start rounded-full px-4 text-[13px] font-semibold"
-                onClick={() =>
-                  update({
-                    consents: [...form.consents, { code: newConsentCode(form.consents), title: "", body: "", required: true }],
-                  })
-                }
-              >
-                동의 항목 추가
-              </button>
+              <StudioConsentItems value={form.consents} onChange={(consents) => update({ consents })} />
             </Section>
 
             <Section
