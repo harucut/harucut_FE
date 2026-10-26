@@ -42,6 +42,8 @@ const editorStoreState = {
   frameId: "classic",
   finalizeAssetsForSave: jest.fn().mockResolvedValue(undefined),
   hydrateDraft: jest.fn(),
+  undo: jest.fn(),
+  redo: jest.fn(),
 };
 
 function themeEditorStoreMock(selector: (s: typeof editorStoreState) => unknown) {
@@ -666,5 +668,36 @@ describe("ThemeEditorPage save flow", () => {
     await waitFor(() => {
       expect(view.container.textContent).toContain("요청한 정보를 찾을 수 없어요.");
     });
+  });
+});
+
+describe("ThemeEditorPage 되돌리기 단축키", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+  });
+
+  it.each([
+    ["Ctrl+Z", { key: "z", ctrlKey: true }, "undo"],
+    ["⌘+Z", { key: "z", metaKey: true }, "undo"],
+    ["Ctrl+Shift+Z", { key: "Z", ctrlKey: true, shiftKey: true }, "redo"],
+    ["Ctrl+Y", { key: "y", ctrlKey: true }, "redo"],
+  ] as const)("%s 는 %s", (_label, init, action) => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.keyDown(window, init);
+    expect(editorStoreState[action]).toHaveBeenCalledTimes(1);
+    expect(editorStoreState[action === "undo" ? "redo" : "undo"]).not.toHaveBeenCalled();
+  });
+
+  // 문구를 고치다 Ctrl+Z 를 눌렀는데 캔버스 레이어가 사라지면 안 된다.
+  it("글자 입력 칸에서는 브라우저의 입력 되돌리기를 그대로 둔다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+    expect(editorStoreState.undo).not.toHaveBeenCalled();
+    input.remove();
   });
 });

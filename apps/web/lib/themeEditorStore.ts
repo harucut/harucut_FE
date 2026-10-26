@@ -190,13 +190,14 @@ type State = {
   updateComponent: (id: string, patch: UpdatePatch) => void;
 
   remove: (id: string) => void;
-  // 방금 지운 요소를 되돌린다. 없으면 아무 일도 하지 않는다.
-  restoreRemoved: () => void;
-  canRestoreRemoved: boolean;
-  lastRemoved: EditorComponent | null;
-  /** 삭제 당시의 쌓임 순서(배열 인덱스). 되돌릴 때 그 자리에 다시 넣는다. */
-  lastRemovedIndex: number | null;
   duplicate: (id: string) => void;
+
+  /** 되돌리기 이력. 앞이 오래된 것이다. 편집 결과(문서)만 담는다 — 아래 EditorSnapshot. */
+  past: EditorSnapshot[];
+  /** 다시 하기 이력. 앞이 가장 최근에 되돌린 것이다. 새 편집이 들어오면 비운다. */
+  future: EditorSnapshot[];
+  undo: () => void;
+  redo: () => void;
 
   reset: () => void;
 
@@ -216,6 +217,110 @@ type State = {
   renderKey: number;
   bumpRenderKey: () => void;
 };
+
+/**
+ * 되돌리기 이력에 담는 편집 문서.
+ *
+ * 선택·탭·누끼 모드처럼 편집 결과가 아닌 것, 사진 자산 목록처럼 캔버스 밖의 것은 뺀다.
+ * 자산 목록을 되돌리면 지운 사진 원본(blob)이 다시 살아난 것처럼 보이지만 실제로는 이미
+ * 해제돼 있다.
+ */
+type EditorSnapshot = Pick<
+  State,
+  "components" | "background" | "backgroundColor" | "pendingBackgroundFile" | "cellCutouts"
+>;
+
+/** 이력 상한. 스냅샷은 레이어 배열과 배경 파일 참조뿐이라 가볍지만 끝없이 쌓지는 않는다. */
+export const EDITOR_HISTORY_LIMIT = 50;
+
+/**
+ * 같은 레이어의 같은 속성을 이 시간 안에 연달아 바꾸면 한 단계로 묶는다.
+ * 투명도 슬라이더나 글자 입력은 값이 바뀔 때마다 갱신되는데, 그대로 쌓으면 되돌리기를
+ * 수십 번 눌러야 한 번 움직이기 전으로 돌아간다.
+ */
+export const EDITOR_HISTORY_COALESCE_MS = 600;
+let lastCoalesce: { key: string; at: number } | null = null;
+
+function snapshotOf(s: State): EditorSnapshot {
+  return {
+    components: s.components,
+    background: s.background,
+    backgroundColor: s.backgroundColor,
+    pendingBackgroundFile: s.pendingBackgroundFile,
+    cellCutouts: s.cellCutouts,
+  };
+}
+
+/** 편집 직전 상태를 이력에 쌓는다. 새 편집이 들어오면 다시 하기 이력은 버린다. */
+function record(s: State, coalesceKey?: string): Pick<State, "past" | "future"> {
+  const now = Date.now();
+  if (
+    coalesceKey &&
+    lastCoalesce?.key === coalesceKey &&
+    now - lastCoalesce.at < EDITOR_HISTORY_COALESCE_MS
+  ) {
+    lastCoalesce = { key: coalesceKey, at: now };
+    return { past: s.past, future: [] };
+  }
+  lastCoalesce = coalesceKey ? { key: coalesceKey, at: now } : null;
+  return { past: [...s.past, snapshotOf(s)].slice(-EDITOR_HISTORY_LIMIT), future: [] };
+}
+
+function emptyHistory(): Pick<State, "past" | "future"> {
+  lastCoalesce = null;
+  return { past: [], future: [] };
+}
+
+/** 자산 교체(누끼·업로드)는 편집이 아니다. 이력 속 레이어도 같은 자산을 가리키게 바꾼다. */
+function mapHistory(
+  s: State,
+  map: (component: EditorComponent) => EditorComponent,
+): Pick<State, "past" | "future"> {
+  const remap = (snap: EditorSnapshot) => ({ ...snap, components: snap.components.map(map) });
+  return { past: s.past.map(remap), future: s.future.map(remap) };
+}
+
+function historyUses(s: State, uses: (component: EditorComponent) => boolean) {
+  return [...s.past, ...s.future].some((snap) => snap.components.some(uses));
+}
+
+/**
+ * 스냅샷을 현재 상태로 되살린다.
+ *
+ * 로컬 배경 이미지의 blob 주소는 배경을 바꿀 때 해제된다(setBackgroundImage 등). 그래서
+ * 스냅샷에 남은 주소는 이미 죽었을 수 있다. 파일이 같이 남아 있으면 주소를 새로 만든다.
+ * 지금 배경과 같은 파일이면 지금 주소를 그대로 쓴다 — 매번 새로 만들면 캔버스가 깜박인다.
+ */
+function restoreSnapshot(s: State, snap: EditorSnapshot): Partial<State> {
+  let background = snap.background;
+  const sameFile =
+    snap.pendingBackgroundFile !== null &&
+    snap.pendingBackgroundFile === s.pendingBackgroundFile &&
+    s.background.type === "IMAGE";
+  if (background.type === "IMAGE" && snap.pendingBackgroundFile) {
+    background = {
+      ...background,
+      url:
+        sameFile && s.background.type === "IMAGE"
+          ? s.background.url
+          : URL.createObjectURL(snap.pendingBackgroundFile),
+    };
+  }
+  if (!sameFile && s.background.type === "IMAGE" && s.pendingBackgroundFile && s.background.url) {
+    try {
+      URL.revokeObjectURL(s.background.url);
+    } catch {}
+  }
+  const ids = new Set(snap.components.map((c) => c.id));
+  return {
+    components: snap.components,
+    background,
+    backgroundColor: snap.backgroundColor,
+    pendingBackgroundFile: snap.pendingBackgroundFile,
+    cellCutouts: snap.cellCutouts,
+    activeId: s.activeId && ids.has(s.activeId) ? s.activeId : null,
+  };
+}
 
 // 프레임 변경/리셋 시 에디터 상태 초기화 (메모리 정리 포함)
 function resetEditorState(get: () => State) {
@@ -240,9 +345,7 @@ function resetEditorState(get: () => State) {
   return {
     tab: "PHOTO" as ComponentType,
     components: [],
-    lastRemoved: null,
-    lastRemovedIndex: null,
-    canRestoreRemoved: false,
+    ...emptyHistory(),
     activeId: null,
     cellCutouts: [false, false, false, false],
     assets: {
@@ -265,9 +368,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   components: [],
-  lastRemoved: null,
-  lastRemovedIndex: null,
-  canRestoreRemoved: false,
+  past: [],
+  future: [],
   activeId: null,
   background: {
     type: "COLOR",
@@ -301,7 +403,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       if (index < 0 || index > 3) return s;
       const next = [...s.cellCutouts];
       next[index] = !next[index];
-      return { cellCutouts: next };
+      return { ...record(s), cellCutouts: next };
     }),
   setCutMode: (on) => set({ cutMode: on }),
   setBackgroundColor: (color) =>
@@ -314,6 +416,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       }
       const normalized = normalizeHexColor(color);
       return {
+        // 색상 입력은 값이 바뀔 때마다 들어온다. 한 번 고르는 동안은 한 단계로 묶는다.
+        ...record(s, "background-color"),
         background: {
           type: "COLOR",
           value: normalized,
@@ -331,6 +435,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       }
       const url = URL.createObjectURL(file);
       return {
+        ...record(s),
         background: { type: "IMAGE", url },
         pendingBackgroundFile: file,
       };
@@ -355,6 +460,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         } catch {}
       }
       return {
+        ...record(s),
         background: { type: "COLOR", value: normalizeHexColor(s.backgroundColor) },
         pendingBackgroundFile: null,
       };
@@ -419,7 +525,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           const linked =
             component.source === previousSrc ||
             (Boolean(previousKey) && component.source === previousKey);
-          // 올려 둔 원본의 renderUrl도 버린다. 되돌리기 스냅샷 역시 같은 자산을 가리킨다.
+          // 올려 둔 원본의 renderUrl도 버린다. 되돌리기 이력 역시 같은 자산을 가리킨다.
           return linked
             ? { ...component, source: objectUrl, renderUrl: undefined }
             : component;
@@ -441,7 +547,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
             ),
           },
           components: current.components.map(replacePhoto),
-          lastRemoved: current.lastRemoved ? replacePhoto(current.lastRemoved) : null,
+          // 되돌리기 이력도 같은 자산을 가리킨다. 옛 blob 은 아래에서 해제된다.
+          ...mapHistory(current, replacePhoto),
         }));
 
         try {
@@ -467,12 +574,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     const inUse = state.components.some(usesAsset);
     if (inUse) return { ok: false as const, reason: "IN_USE" as const };
 
-    // 되돌리기용 스냅샷이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
+    // 되돌리기 이력이 이 사진을 가리키고 있는지 본다. 캔버스에서 사진 레이어를 지운 뒤
     // 사진 탭에서 그 원본까지 지우면, 여기서 blob URL 이 해제된다. 그 상태로 되돌리기를
     // 누르면 이미 죽은 blob: 을 가리키는 레이어가 살아나고, 저장 때 finalizeAssetsForSave
     // 가 원본 파일을 못 찾아 blob: 주소가 그대로 서버로 올라간다 — 깨진 프레임이 된다.
-    // 원본이 사라졌으면 되돌릴 수도 없으므로 스냅샷을 함께 버린다.
-    const snapshotUsesAsset = usesAsset(state.lastRemoved);
+    // 원본이 사라졌으면 그 이전으로는 되돌릴 수 없으므로 이력을 함께 버린다.
+    const historyUsesAsset = historyUses(state, usesAsset);
 
     try {
       URL.revokeObjectURL(asset.src);
@@ -483,9 +590,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         ...s.assets,
         photos: s.assets.photos.filter((p) => p.id !== assetId),
       },
-      ...(snapshotUsesAsset
-        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
-        : {}),
+      ...(historyUsesAsset ? emptyHistory() : {}),
     }));
 
     return { ok: true as const };
@@ -500,10 +605,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }
     set((s) => ({
       assets: { ...s.assets, photos: [] },
-      // 원본을 전부 버렸으므로 사진 레이어 스냅샷도 되살릴 수 없다(위 removePhotoAsset 참고).
-      ...(s.lastRemoved?.type === "PHOTO"
-        ? { lastRemoved: null, lastRemovedIndex: null, canRestoreRemoved: false }
-        : {}),
+      // 원본을 전부 버렸으므로 사진 레이어가 든 이력도 되살릴 수 없다(위 removePhotoAsset 참고).
+      ...(historyUses(s, (c) => c.type === "PHOTO") ? emptyHistory() : {}),
     }));
   },
 
@@ -615,16 +718,23 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
       if (uploaded.size === 0 && textKeys.size === 0) return;
 
+      // 올린 자산은 이력 속 레이어도 key 로 바꾼다. 안 바꾸면 되돌린 레이어가 blob 주소를
+      // 들고 있다가, 원본 삭제 판정(removePhotoAsset)이 그 연결을 놓친다. 글자의 구운 key 는
+      // 그 시점 문구에만 맞으므로 이력에는 옮기지 않는다 — 저장할 때마다 다시 굽는다.
+      const toUploaded = (c: EditorComponent): EditorComponent => {
+        if (c.type === "TEXT") return c;
+        const entry = uploaded.get(c.source);
+        return entry ? { ...c, source: entry.key, renderUrl: entry.url } : c;
+      };
       set((s) => ({
         components: s.components.map((c) => {
           if (c.type === "TEXT") {
             const renderedKey = textKeys.get(c.id);
             return renderedKey ? { ...c, renderedKey } : c;
           }
-
-          const entry = uploaded.get(c.source);
-          return entry ? { ...c, source: entry.key, renderUrl: entry.url } : c;
+          return toUploaded(c);
         }),
+        ...mapHistory(s, toUploaded),
         assets: {
           ...s.assets,
           photos: s.assets.photos.map((a) => {
@@ -681,6 +791,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           };
 
     set((s) => ({
+      ...record(s),
       components: normalizeZ([...s.components, draft]),
       activeId: id,
     }));
@@ -699,7 +810,11 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       w = h * ratio;
     }
 
-    get().updateComponent(id, { width: w, height: h });
+    // 원본 비율에 맞추는 것은 추가의 일부다. 이력을 따로 쌓으면 되돌리기 한 번이 「추가 전」이
+    // 아니라 「크기 맞추기 전」으로 간다.
+    set((s) => ({
+      components: s.components.map((c) => (c.id === id ? { ...c, width: w, height: h } : c)),
+    }));
   },
 
   // 기본 텍스트 컴포넌트 추가
@@ -742,6 +857,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     };
 
     set((s) => ({
+      ...record(s),
       components: normalizeZ([...s.components, c]),
       activeId: id,
       tab: "TEXT",
@@ -752,7 +868,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   // 컴포넌트 속성 업데이트 (TEXT와 IMAGE 분기)
   updateComponent: (id, patch) => {
+    const fields = [
+      ...Object.keys(patch).filter((key) => key !== "styleJson"),
+      ...Object.keys(patch.styleJson ?? {}).map((key) => `styleJson.${key}`),
+    ].sort();
     set((s) => ({
+      ...record(s, `update:${id}:${fields.join(",")}`),
       components: s.components.map((c) => {
         if (c.id !== id) return c;
 
@@ -775,43 +896,14 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     }));
   },
 
-  // 삭제는 되돌릴 수 있어야 한다. 스티커 하나를 놓기까지 든 시간이 클릭 한 번에 사라지면
-  // 사용자는 편집 자체를 조심스러워한다. 직전 삭제 한 건을 들고 있다가 복구한다.
+  // 삭제는 되돌리기(undo)로 원래 쌓임 순서 그대로 돌아온다 — 이력이 레이어 배열 전체를 든다.
   remove: (id) => {
     set((s) => {
-      const index = s.components.findIndex((c) => c.id === id);
-      const removed = index === -1 ? null : s.components[index];
+      if (!s.components.some((c) => c.id === id)) return s;
       return {
+        ...record(s),
         components: normalizeZ(s.components.filter((c) => c.id !== id)),
         activeId: s.activeId === id ? null : s.activeId,
-        lastRemoved: removed,
-        lastRemovedIndex: removed ? index : null,
-        canRestoreRemoved: Boolean(removed),
-      };
-    });
-  },
-
-  /**
-   * 삭제한 자리로 되돌린다.
-   *
-   * 예전에는 배열 끝에 붙이고 zIndex 를 다시 매겼다. 그래서 중간이나 맨 아래에 있던
-   * 요소를 지웠다 되돌리면 항상 맨 위로 올라왔고, 겹쳐 있던 스티커·사진의 합성 결과가
-   * 삭제 전과 달라졌다. "되돌리기"가 이전 상태로 돌아가지 않는 셈이었다.
-   * 삭제 당시의 자리(배열 인덱스 = 쌓임 순서)를 함께 들고 있다가 그 자리에 끼워 넣는다.
-   */
-  restoreRemoved: () => {
-    const removed = get().lastRemoved;
-    if (!removed) return;
-    set((s) => {
-      const next = [...s.components];
-      const at = Math.min(s.lastRemovedIndex ?? next.length, next.length);
-      next.splice(at, 0, removed);
-      return {
-        components: normalizeZ(next),
-        activeId: removed.id,
-        lastRemoved: null,
-        lastRemovedIndex: null,
-        canRestoreRemoved: false,
       };
     });
   },
@@ -829,6 +921,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     };
 
     set((s) => ({
+      ...record(s),
       components: normalizeZ([...s.components, copy]),
       activeId: copy.id,
     }));
@@ -848,7 +941,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
       const next = [...s.components];
       [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-      return { components: normalizeZ(next) };
+      return { ...record(s), components: normalizeZ(next) };
     });
   },
 
@@ -859,12 +952,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
       const next = [...s.components];
       [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]];
-      return { components: normalizeZ(next) };
+      return { ...record(s), components: normalizeZ(next) };
     });
   },
 
   toggleHidden: (id) => {
     set((s) => ({
+      ...record(s),
       components: s.components.map((c) =>
         c.id === id ? { ...c, hidden: !c.hidden } : c,
       ),
@@ -873,6 +967,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
 
   toggleLocked: (id) => {
     set((s) => ({
+      ...record(s),
       components: s.components.map((c) =>
         c.id === id ? { ...c, locked: !c.locked } : c,
       ),
@@ -934,12 +1029,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         tab: "PHOTO",
         components: normalizeZ(mapped),
         activeId: null,
-        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
-        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
-        // 끼어들어 그대로 저장된다.
-        lastRemoved: null,
-        lastRemovedIndex: null,
-        canRestoreRemoved: false,
+        // 다른 프레임을 열면 되돌리기 이력은 버린다. 남겨 두면 새 프레임에서 되돌리기를
+        // 눌렀을 때 이전 프레임의 요소가 지금 프레임에 끼어들어 그대로 저장된다.
+        ...emptyHistory(),
 
         cellCutouts: Array.isArray(data.cellCutouts)
           ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
@@ -1001,12 +1093,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
           })) as EditorComponent[],
         ),
         activeId: null,
-        // 다른 프레임을 열면 직전 삭제 기록은 버린다. 남겨 두면 새 프레임에서도
-        // "삭제 되돌리기"가 켜져 있고, 누르면 이전 프레임의 요소가 지금 프레임에
-        // 끼어들어 그대로 저장된다.
-        lastRemoved: null,
-        lastRemovedIndex: null,
-        canRestoreRemoved: false,
+        // 다른 프레임을 열면 되돌리기 이력은 버린다. 남겨 두면 새 프레임에서 되돌리기를
+        // 눌렀을 때 이전 프레임의 요소가 지금 프레임에 끼어들어 그대로 저장된다.
+        ...emptyHistory(),
         background: draft.background,
         backgroundColor:
           draft.background.type === "COLOR"
@@ -1018,6 +1107,30 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       };
     });
   },
+
+  undo: () =>
+    set((s) => {
+      const previous = s.past[s.past.length - 1];
+      if (!previous) return s;
+      lastCoalesce = null;
+      return {
+        ...restoreSnapshot(s, previous),
+        past: s.past.slice(0, -1),
+        future: [snapshotOf(s), ...s.future].slice(0, EDITOR_HISTORY_LIMIT),
+      };
+    }),
+
+  redo: () =>
+    set((s) => {
+      const next = s.future[0];
+      if (!next) return s;
+      lastCoalesce = null;
+      return {
+        ...restoreSnapshot(s, next),
+        past: [...s.past, snapshotOf(s)].slice(-EDITOR_HISTORY_LIMIT),
+        future: s.future.slice(1),
+      };
+    }),
 
   renderKey: 0,
 
