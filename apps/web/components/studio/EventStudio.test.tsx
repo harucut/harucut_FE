@@ -286,3 +286,19 @@ it("이용권이 없으면 사용량 자리에 문의를 두고, 디자인을 �
   fireEvent.change(screen.getByLabelText("글꼴"), { target: { value: "NANUM_MYEONGJO" } });
   expect(screen.getByText(/지금 이용권에는 행사 화면 디자인 기능이 없어요/)).toBeInTheDocument();
 });
+
+// ADR-0008 §7 — 보관 기간이 지나면 사진함에서도 지워진다. 이용권 상한이 있으면 그 안에서만 정한다.
+it("보관 일수 설명에 사진이 지워진다는 것과 이용권 상한을 알린다", async () => {
+  mockUsage.mockResolvedValue({
+    entitlement: { scope: "WORKSPACE", validFrom: "2026-10-01T00:00:00Z", validTo: "2026-12-31T00:00:00Z", features: [] },
+    composeQuota: 100,
+    used: 0,
+    reserved: 0,
+    remaining: 100,
+    retentionDays: 60,
+  });
+  await renderStudio();
+  const input = screen.getByLabelText("보관 일수");
+  await waitFor(() => expect(input).toHaveAttribute("max", "60"));
+  expect(input).toHaveAccessibleDescription(/지나면 사진이 지워져요.*지금 이용권으로는 60일까지/);
+});
