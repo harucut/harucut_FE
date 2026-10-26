@@ -20,6 +20,13 @@ function formatDate(iso: string) {
     : date.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
 }
 
+function formatDateTime(iso: string) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 /**
  * 이 행사에 적용된 이용권과 합성 사용량(ADR-0008 §6-3). 합성 1건 = 성공한 네컷 1장.
  * 금액 · 계약 내용은 싣지 않는다 — 행사 고객도 볼 수 있는 화면이다.
@@ -107,6 +114,20 @@ export function StudioEventUsage({
             증설·연장 문의
           </Link>
         </p>
+      ) : null}
+
+      {usage.alerts?.length ? (
+        <div className="flex flex-col gap-1 text-[13px]">
+          <p className="font-semibold">한도 알림</p>
+          <ul className="flex flex-col gap-0.5">
+            {usage.alerts.map((alert) => (
+              <li key={alert.threshold}>
+                완성 사진이 한도의 {alert.threshold}%에 닿았어요
+                <span className="text-(--hc-muted)"> · {formatDateTime(alert.reachedAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px]">

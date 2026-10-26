@@ -8,6 +8,10 @@ import type { PublishViolation } from "@/lib/studio/studioApi";
  * field 는 `frames[2]` · `theme.colors.bg` 처럼 첨자·하위 이름이 붙어 온다 — 앞 이름으로 묶는다.
  */
 const GROUPS: Array<{ key: string; message: string }> = [
+  {
+    key: "captureEndsAt",
+    message: "촬영 종료 시각을 확인해 주세요. 상시 캠페인은 종료 시각을 비워야 해요.",
+  },
   { key: "byodEnabled", message: "참가 방식을 하나 이상 켜 주세요. 개인 휴대폰이나 현장 부스예요." },
   { key: "allowedLayouts", message: "허용할 레이아웃을 하나 이상 고르고, 고른 레이아웃마다 프레임을 연결해 주세요." },
   { key: "frames", message: "제공 프레임을 확인해 주세요. 허용한 레이아웃마다 하나 이상, 기본 프레임은 하나여야 해요." },

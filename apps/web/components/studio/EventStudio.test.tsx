@@ -430,6 +430,41 @@ it("기본값 따르기를 고른 뒤 다시 고치면 따르기를 풀고 새 �
 });
 
 /*
+  상시 캠페인(ADR-0009 §4)은 종료 시각 없이 「촬영 종료」로 끝낸다. 종료 시각을 남기면 게시 검사(EVENT-003)에서 막히므로
+  상시로 바꾸는 순간 비운다. 행사 종류는 게시 전에만 바뀐다.
+*/
+it("상시 캠페인으로 바꾸면 종료 시각을 비우고 종류와 함께 저장한다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, captureEndsAt: "2026-11-01T18:00:00+09:00" } }));
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  expect(screen.getByLabelText("종료")).toHaveValue("2026-11-01T18:00");
+
+  fireEvent.change(screen.getByLabelText("행사 종류"), { target: { value: "ALWAYS_ON" } });
+  expect(screen.queryByLabelText("종료")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ kind: "ALWAYS_ON", captureEndsAt: null });
+});
+
+// 게시한 상시 행사에 종료 시각을 넣으면 서버가 GEN-002 로 막는다 — 남은 값은 지우기만 할 수 있게 한다.
+it("저장된 상시 캠페인에 종료 시각이 남아 있으면 지우기만 하고, 게시한 행사는 종류를 바꾸지 못한다", async () => {
+  await renderStudio(
+    event({ status: "LIVE", settings: { ...event().settings, kind: "ALWAYS_ON", captureEndsAt: "2026-11-01T18:00:00+09:00" } }),
+  );
+  mockUpdate.mockResolvedValue(event({ status: "LIVE", settingsVersion: 4 }));
+  expect(screen.getByLabelText("행사 종류")).toHaveValue("ALWAYS_ON");
+  expect(screen.getByLabelText("행사 종류")).toBeDisabled();
+  expect(screen.queryByLabelText("종료")).not.toBeInTheDocument();
+  // 종류는 바뀌지 않았으니 보내지 않는다.
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "종료 시각 지우기" }));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ captureEndsAt: null });
+});
+
+/*
   운영 담당(OPERATOR)은 받은 운영 권한의 칸만 쓴다(ADR-0009 §3, P3-2). 막힌 칸을 보여 주면 누를 때마다 403 이 난다.
 */
 it("운영 담당은 받은 운영 권한의 칸만 보고, 설정·게시·복제·운영자 배정·프로젝트 변경은 막힌다", async () => {

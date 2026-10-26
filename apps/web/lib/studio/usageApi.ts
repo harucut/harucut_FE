@@ -22,7 +22,11 @@ export type EventUsage = {
   remaining: number;
   retentionDays?: number | null;
   maxBoothDevices?: number | null;
+  /** 한도 알림(ADR-0009 §4) — 확정 사용량이 처음 넘은 비율과 그 시각. 넘은 것만, 오름차순. 옛 서버면 키가 없다. */
+  alerts?: UsageAlert[];
 };
+
+export type UsageAlert = { threshold: 80 | 95 | 100; reachedAt: string };
 
 export async function getEventUsage(eventId: string): Promise<EventUsage> {
   const res = await clientApi.get<ApiEnvelope<EventUsage>>(`/api/client/events/${encodeURIComponent(eventId)}/usage`);

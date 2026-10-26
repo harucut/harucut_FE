@@ -14,6 +14,16 @@ describe("게시 위반 묶기", () => {
     expect(groups[1].reasons).toEqual(["없는 프레임 발행본이다"]);
   });
 
+  // 상시 캠페인에 종료 시각이 남으면 captureEndsAt 위반(ADR-0009 §4). 화면에서 촬영 기간이 참가 방식보다 위다.
+  it("상시 캠페인의 종료 시각 위반은 촬영 기간 문구로 맨 앞에 둔다", () => {
+    const groups = groupViolations([
+      { field: "byodEnabled", reason: "개인 휴대폰·부스 중 하나 이상을 허용해야 한다" },
+      { field: "captureEndsAt", reason: "상시 캠페인은 종료 시각을 두지 않는다" },
+    ]);
+    expect(groups.map((g) => g.key)).toEqual(["captureEndsAt", "byodEnabled"]);
+    expect(groups[0].message).toContain("상시 캠페인은 종료 시각을 비워야 해요");
+  });
+
   it("모르는 field 는 일반 문구로 맨 뒤에 둔다", () => {
     const groups = groupViolations([
       { field: "somethingNew", reason: "x" },
