@@ -272,3 +272,37 @@ it("마지막 검색의 결과만 보여 준다", async () => {
   expect(within(form).queryByRole("button", { name: /A 웨딩홀/ })).not.toBeInTheDocument();
   expect(within(form).getByRole("button", { name: /B 웨딩홀/ })).toBeInTheDocument();
 });
+
+// Codex 리뷰(#546): 잘못 적은 금액을 빈칸처럼 빼고 보내면 입력 오류를 아무도 알리지 못한다.
+it("잘못 적은 금액·한도는 알리고 계약을 만들지 않는다", async () => {
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /계약자/, "하루컷 팬클럽");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /합성 한도/, "500");
+  fill(form, /금액/, "-1000");
+  expect(within(form).getAllByText("0 이상의 정수로 적어 주세요.").length).toBeGreaterThan(0);
+  expect(within(form).getByRole("button", { name: "초안으로 만들기" })).toBeDisabled();
+
+  fill(form, /금액/, "300000");
+  fill(form, /부스 기기 수/, "1.5");
+  expect(within(form).getByRole("button", { name: "초안으로 만들기" })).toBeDisabled();
+  fill(form, /부스 기기 수/, "2");
+  expect(within(form).getByRole("button", { name: "초안으로 만들기" })).toBeEnabled();
+});
+
+// Codex 리뷰(#546): 다른 탭을 보고 돌아와도 작성 중인 계약 초안이 남아야 한다.
+it("탭을 오가도 작성 중인 계약 초안을 지우지 않는다", async () => {
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  fill(screen.getByRole("form", { name: "새 계약" }), /계약자/, "작성 중 계약자");
+
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  expect(within(screen.getByRole("form", { name: "새 계약" })).getByLabelText(/계약자/)).toHaveValue("작성 중 계약자");
+});

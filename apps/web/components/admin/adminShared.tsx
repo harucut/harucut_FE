@@ -38,6 +38,18 @@ export function optionalInt(value: string): number | undefined {
   return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
 }
 
+/**
+ * 숫자 칸에 무언가 적었는데 0 이상의 정수가 아닌가(예: -1000, 1.5). 빈칸과 구분한다 — 빈칸은 「서버 기본값」이지만
+ * 잘못 적은 값을 빈칸처럼 빼고 보내면 입력 오류를 아무도 알리지 못한다(Codex #546).
+ */
+export function isInvalidNumber(value: string, min = 0): boolean {
+  if (!value.trim()) return false;
+  const n = optionalInt(value);
+  return n === undefined || n < min;
+}
+
+export const INVALID_NUMBER_MESSAGE = "0 이상의 정수로 적어 주세요.";
+
 export type TermsDraft = {
   composeQuota: string;
   retentionDays: string;
@@ -57,6 +69,14 @@ export const EMPTY_TERMS: TermsDraft = {
 export function termsOf(draft: TermsDraft): EntitlementTerms | null {
   const composeQuota = optionalInt(draft.composeQuota);
   if (composeQuota === undefined) return null;
+  // 선택 칸이라도 잘못 적었으면 빼고 보내지 않는다 — 조건을 만들지 않고 칸에 오류를 보인다.
+  if (
+    isInvalidNumber(draft.retentionDays, 1) ||
+    isInvalidNumber(draft.maxBoothDevices) ||
+    isInvalidNumber(draft.maxLiveEvents)
+  ) {
+    return null;
+  }
   const retentionDays = optionalInt(draft.retentionDays);
   const maxBoothDevices = optionalInt(draft.maxBoothDevices);
   const maxLiveEvents = optionalInt(draft.maxLiveEvents);
@@ -94,10 +114,14 @@ export function TermsFields({ value, onChange }: { value: TermsDraft; onChange: 
         min={min}
         inputMode="numeric"
         required={required}
+        aria-invalid={isInvalidNumber(value[key], min) || undefined}
         value={value[key]}
         onChange={(e) => onChange({ ...value, [key]: e.target.value })}
         className="hc-input h-11 rounded-xl border px-3 text-[14px]"
       />
+      {isInvalidNumber(value[key], min) ? (
+        <span className="text-[12px] text-(--hc-danger)">{min > 0 ? `${min} 이상의 정수로 적어 주세요.` : INVALID_NUMBER_MESSAGE}</span>
+      ) : null}
     </label>
   );
   return (
@@ -139,6 +163,7 @@ export function TextField({
   type = "text",
   maxLength,
   help,
+  error,
 }: {
   label: string;
   value: string;
@@ -147,6 +172,8 @@ export function TextField({
   type?: "text" | "datetime-local" | "number";
   maxLength?: number;
   help?: string;
+  /** 칸 아래에 보일 입력 오류. 있으면 aria-invalid 도 건다. */
+  error?: string;
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1 text-[13px]">
@@ -159,10 +186,12 @@ export function TextField({
         required={required}
         maxLength={maxLength}
         value={value}
+        aria-invalid={error ? true : undefined}
         onChange={(e) => onChange(e.target.value)}
         className="hc-input h-11 w-full rounded-xl border px-3 text-[14px]"
       />
       {help ? <span className="text-[12px] text-(--hc-muted)">{help}</span> : null}
+      {error ? <span className="text-[12px] text-(--hc-danger)">{error}</span> : null}
     </label>
   );
 }
