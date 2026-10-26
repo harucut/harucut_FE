@@ -185,3 +185,52 @@ export async function publishFrameVersion(frameId: number): Promise<{ frameVersi
   );
   return requireData(res.data, "발행본");
 }
+
+// ── 부스 기기 (백엔드 fork #19) ──
+
+export type BoothDeviceStatus = "PENDING_PAIRING" | "ACTIVE" | "REVOKED";
+
+export type BoothDevice = {
+  deviceId: string;
+  name: string;
+  status: BoothDeviceStatus;
+  /** 만들 때·재발급할 때만 실린다(XXXX-XXXX, 10분). 목록에는 없다 — 다시 보려면 재발급한다. */
+  pairingCode?: string;
+  pairingExpiresAt?: string;
+  lastSeenAt?: string | null;
+};
+
+/** 행사당 회수되지 않은 기기 상한(백엔드 설정 기본값). 넘으면 403 BOOTH-006. */
+export const MAX_BOOTH_DEVICES = 20;
+export const BOOTH_DEVICE_NAME_MAX = 50;
+
+export async function listBoothDevices(eventId: string): Promise<BoothDevice[]> {
+  const res = await clientApi.get<ApiEnvelope<BoothDevice[]>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/booth-devices`,
+  );
+  return res.data.data ?? [];
+}
+
+export async function createBoothDevice(eventId: string, name: string): Promise<BoothDevice> {
+  const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/booth-devices`,
+    { name },
+  );
+  return requireData(res.data, "부스 기기");
+}
+
+/** 새 연결 코드. 이전 코드는 닫히고, 이미 연결된 기기는 새 코드가 쓰이는 순간 끊긴다(기기 교체). */
+export async function reissuePairingCode(deviceId: string): Promise<BoothDevice> {
+  const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
+    `/api/client/booth-devices/${encodeURIComponent(deviceId)}/pairing-codes`,
+  );
+  return requireData(res.data, "연결 코드");
+}
+
+/** 되돌릴 수 없다 — 기기 토큰·열린 코드·진행 중 회차·그 기기의 손님 세션이 모두 닫힌다. */
+export async function revokeBoothDevice(deviceId: string): Promise<BoothDevice> {
+  const res = await clientApi.post<ApiEnvelope<BoothDevice>>(
+    `/api/client/booth-devices/${encodeURIComponent(deviceId)}/revoke`,
+  );
+  return requireData(res.data, "부스 기기");
+}

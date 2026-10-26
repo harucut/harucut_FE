@@ -24,6 +24,7 @@ jest.mock("@/lib/studio/studioApi", () => ({
   listPickableFrameVersions: (...args: unknown[]) => mockListVersions(...args),
   listWorkspaceFrames: (...args: unknown[]) => mockListFrames(...args),
   publishFrameVersion: (...args: unknown[]) => mockPublishFrame(...args),
+  listBoothDevices: async () => [],
 }));
 
 const VERSION_CLASSIC = {
@@ -240,4 +241,15 @@ it("공간 프레임을 발행하면 고르기 목록을 다시 받는다", asyn
   await waitFor(() => expect(mockPublishFrame).toHaveBeenCalledWith(7));
   await waitFor(() => expect(mockListVersions).toHaveBeenCalledTimes(2));
   expect(screen.getByText(/3번째 발행본을 만들었어요/)).toBeInTheDocument();
+});
+
+// 부스 관리는 저장된 설정에서 현장 부스를 켠 행사에만 보인다.
+it("현장 부스를 켠 행사에만 부스 기기 관리를 보여 준다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, boothEnabled: true } }));
+  expect(await screen.findByRole("heading", { name: "부스 기기" })).toBeInTheDocument();
+});
+
+it("현장 부스를 끈 행사에는 부스 기기 관리가 없다", async () => {
+  await renderStudio();
+  expect(screen.queryByRole("heading", { name: "부스 기기" })).not.toBeInTheDocument();
 });
