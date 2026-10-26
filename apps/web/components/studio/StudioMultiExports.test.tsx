@@ -148,3 +148,20 @@ it("운영 담당의 프로젝트 목록을 못 받으면 알리고 다시 받�
   await waitFor(() => expect(mockList).toHaveBeenCalledWith({ kind: "project", projectId: "Pj1" }));
   expect(screen.getByRole("checkbox", { name: "봄 웨딩 A" })).toBeInTheDocument();
 });
+
+// 공간을 바꾼 직후 부모가 앞 공간의 행사 목록을 잠시 들고 있어도, 다른 공간의 행사를 고르거나 보내지 않는다(Codex #558).
+it("다른 공간의 행사는 후보에 넣지 않는다", async () => {
+  const other = { ...ev("Ev9", "다른 공간 행사"), workspaceId: "Ws2" };
+  render(<StudioMultiExports workspaceId="Ws1" canUseWorkspace events={[...EVENTS, other]} />);
+  await screen.findByRole("checkbox", { name: "팝업 행사" });
+  expect(screen.queryByRole("checkbox", { name: "다른 공간 행사" })).not.toBeInTheDocument();
+});
+
+it("고른 행사가 지금 후보에서 사라지면 만들기를 막는다", async () => {
+  const { rerender } = render(<StudioMultiExports workspaceId="Ws1" canUseWorkspace events={EVENTS} />);
+  fireEvent.click(await screen.findByRole("checkbox", { name: "팝업 행사" }));
+  expect(screen.getByRole("button", { name: "고른 행사 사진 묶기 (1)" })).toBeEnabled();
+
+  rerender(<StudioMultiExports workspaceId="Ws1" canUseWorkspace events={EVENTS.slice(0, 2)} />);
+  expect(screen.getByRole("button", { name: "고른 행사 사진 묶기 (0)" })).toBeDisabled();
+});

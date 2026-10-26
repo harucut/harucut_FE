@@ -133,9 +133,11 @@ export function StudioMultiExports({
     );
   }
 
-  const candidates = scopeKey ? events.filter((e) => e.settings.projectId === scopeKey) : events;
+  // 공간을 바꾼 직후엔 부모가 아직 앞 공간의 행사 목록을 들고 있다 — 이 공간의 행사만 고르게 한다(Codex #558).
+  const ownEvents = events.filter((e) => e.workspaceId === workspaceId);
+  const candidates = scopeKey ? ownEvents.filter((e) => e.settings.projectId === scopeKey) : ownEvents;
   const nameOf = (eventId: string) =>
-    events.find((e) => e.eventId === eventId)?.settings.name || eventId;
+    ownEvents.find((e) => e.eventId === eventId)?.settings.name || eventId;
 
   const changeScope = (key: ScopeKey) => {
     listGenerationRef.current += 1;
@@ -148,13 +150,12 @@ export function StudioMultiExports({
 
   const create = async () => {
     const requested = scopeKey;
+    const eventIds = candidates.map((e) => e.eventId).filter((id) => picked.includes(id));
+    if (eventIds.length === 0) return;
     setBusy("create");
     setNotice(null);
     try {
-      const created = await createMultiExport(
-        scopeOf(workspaceId, requested),
-        candidates.map((e) => e.eventId).filter((id) => picked.includes(id)),
-      );
+      const created = await createMultiExport(scopeOf(workspaceId, requested), eventIds);
       if (scopeRef.current !== null && scopeRef.current !== requested) return;
       listGenerationRef.current += 1;
       setExports((prev) => [created, ...(prev ?? []).filter((e) => e.exportId !== created.exportId)]);
@@ -186,7 +187,9 @@ export function StudioMultiExports({
   };
 
   const allPicked = candidates.length > 0 && candidates.every((e) => picked.includes(e.eventId));
-  const tooManyEvents = picked.length > MAX_EXPORT_EVENTS;
+  // 보이는 후보 안에서 고른 것만 센다 — 목록이 바뀌어 사라진 선택이 버튼을 살리지 않게.
+  const pickedCount = candidates.filter((e) => picked.includes(e.eventId)).length;
+  const tooManyEvents = pickedCount > MAX_EXPORT_EVENTS;
 
   return (
     <div className="flex flex-col gap-3">
@@ -244,11 +247,11 @@ export function StudioMultiExports({
 
       <button
         type="button"
-        disabled={busy !== null || picked.length === 0 || tooManyEvents}
+        disabled={busy !== null || pickedCount === 0 || tooManyEvents}
         onClick={() => void create()}
         className="hc-button-secondary h-11 self-start rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
       >
-        {busy === "create" ? "만드는 중…" : `고른 행사 사진 묶기 (${picked.length})`}
+        {busy === "create" ? "만드는 중…" : `고른 행사 사진 묶기 (${pickedCount})`}
       </button>
       <p className="text-[12px] text-(--hc-muted)">
         고른 행사마다 보이는 완성 사진을 모두 담아요. 합쳐서 {MAX_EXPORT_PHOTOS.toLocaleString("ko-KR")}장까지,

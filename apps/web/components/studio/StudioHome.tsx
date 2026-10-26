@@ -192,7 +192,8 @@ export function StudioHome() {
             </section>
 
             {/* 여러 행사 묶음(P3-5) — 공간 범위는 OWNER·ADMIN, 프로젝트 범위는 그 프로젝트 멤버(운영 담당)도. */}
-            {events && events.length > 0 && ["OWNER", "ADMIN", "OPERATOR"].includes(current.role) ? (
+            {events?.some((e) => e.workspaceId === current.workspaceId) &&
+            ["OWNER", "ADMIN", "OPERATOR"].includes(current.role) ? (
               <section aria-labelledby="studio-multi-exports-title" className="flex flex-col gap-3">
                 <h2 id="studio-multi-exports-title" className="text-[18px] font-bold">
                   여러 행사 사진 묶기
