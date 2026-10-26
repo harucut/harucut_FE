@@ -18,6 +18,7 @@
 | harucut 앱 이름·설명과 vailen 운영 표기 | [release/store-listing-ko.md](./release/store-listing-ko.md) |
 | 웹·앱 출시 변경과 검증 범위 및 남은 조건 | [release/launch-status.md](./release/launch-status.md) |
 | 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
+| 고도화 구현 진행 상태 — 작업 목록·의존·사용자에게 필요한 것 | [plan-implementation-status.md](./plan-implementation-status.md) |
 | 고도화 기획서 코드 검수 — 최신 판정은 R5 (이전 회차는 기록용) | [R5 판정](./plan-review-r5-verdict-2026-10-26.md) · [R4 판정](./plan-review-r4-verdict-2026-10-26.md) · [R4](./plan-review-r4-2026-10-26.md) · [R3](./plan-review-r3-2026-10-26.md) · [R1](./plan-review-2026-10-25.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
 | 지난 계획 — **실행 기준 아님** | [archive/](./archive/) (각 문서 머리에 왜 보관인지 적혀 있다) |

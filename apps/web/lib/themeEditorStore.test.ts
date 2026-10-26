@@ -1,4 +1,9 @@
-import { ASSET_QUEUE_WAIT_LIMIT_MS, useThemeEditorStore } from "@/lib/themeEditorStore";
+import {
+  ASSET_QUEUE_WAIT_LIMIT_MS,
+  EDITOR_HISTORY_COALESCE_MS,
+  EDITOR_HISTORY_LIMIT,
+  useThemeEditorStore,
+} from "@/lib/themeEditorStore";
 import type { EditorComponent, ThemeExportJson } from "@/lib/types/themeEditor";
 
 const mockUpload = jest.fn();
@@ -42,39 +47,150 @@ function ids() {
   return useThemeEditorStore.getState().components.map((c) => c.id);
 }
 
-describe("themeEditorStore 삭제 되돌리기", () => {
+describe("themeEditorStore 되돌리기·다시 하기", () => {
+  const store = () => useThemeEditorStore.getState();
+
   beforeEach(() => {
-    useThemeEditorStore.getState().reset();
-    useThemeEditorStore.getState().importJson(makeJson(["a", "b", "c"]));
+    jest.useFakeTimers();
+    store().reset();
+    store().importJson(makeJson(["a", "b", "c"]));
   });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** 묶음 판정 시간을 넘긴다 — 사람이 편집 사이에 손을 떼는 간격이다. */
+  function pause() {
+    jest.advanceTimersByTime(EDITOR_HISTORY_COALESCE_MS + 1);
+  }
 
   // 되돌리기가 "이전 상태로 되돌리기"가 아니면 이름값을 못한다. 예전에는 지운 것을 배열
   // 끝에 붙여서, 중간 레이어가 항상 맨 위로 올라오며 합성 결과가 달라졌다.
   it("중간 레이어를 지웠다 되돌리면 원래 쌓임 순서로 돌아온다", () => {
-    useThemeEditorStore.getState().remove("b");
+    store().remove("b");
     expect(ids()).toEqual(["a", "c"]);
 
-    useThemeEditorStore.getState().restoreRemoved();
+    store().undo();
     expect(ids()).toEqual(["a", "b", "c"]);
-    expect(useThemeEditorStore.getState().components.map((c) => c.zIndex)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(store().components.map((c) => c.zIndex)).toEqual([1, 2, 3]);
   });
 
-  // 삭제 기록이 프레임을 넘어 살아 있으면, 다른 프레임에서 되돌리기를 눌렀을 때
+  // 기획 F16 — 여러 번 이동·크기 변경·삭제·추가 뒤 왕복해 원상태로 돌아와야 한다.
+  it("이동·크기·삭제·추가를 여러 번 한 뒤 끝까지 되돌리고 다시 하면 그대로 오간다", () => {
+    const initial = store().components;
+
+    store().updateComponent("a", { x: 400, y: 500 });
+    pause();
+    store().updateComponent("b", { width: 900, height: 300 });
+    pause();
+    store().remove("c");
+    pause();
+    store().addText({ text: "새 글자" });
+    pause();
+    store().moveLayerDown(ids()[ids().length - 1]);
+    const edited = store().components;
+
+    expect(store().past).toHaveLength(5);
+    for (let i = 0; i < 5; i += 1) store().undo();
+    expect(store().components).toEqual(initial);
+    expect(store().past).toHaveLength(0);
+
+    for (let i = 0; i < 5; i += 1) store().redo();
+    expect(store().components).toEqual(edited);
+    expect(store().future).toHaveLength(0);
+  });
+
+  it("되돌린 뒤 새로 편집하면 다시 하기 이력을 버린다", () => {
+    store().remove("a");
+    store().undo();
+    expect(store().future).toHaveLength(1);
+
+    store().toggleHidden("b");
+    expect(store().future).toHaveLength(0);
+    store().redo();
+    expect(ids()).toEqual(["a", "b", "c"]);
+  });
+
+  // 투명도 슬라이더는 값이 바뀔 때마다 갱신된다. 하나하나 쌓이면 되돌리기를 수십 번 눌러야 한다.
+  it("같은 레이어의 같은 속성을 연달아 바꾸면 한 단계로 묶는다", () => {
+    store().updateComponent("a", { styleJson: { opacity: 0.9 } });
+    store().updateComponent("a", { styleJson: { opacity: 0.7 } });
+    store().updateComponent("a", { styleJson: { opacity: 0.5 } });
+    expect(store().past).toHaveLength(1);
+
+    pause();
+    store().updateComponent("a", { styleJson: { opacity: 0.3 } });
+    expect(store().past).toHaveLength(2);
+
+    store().updateComponent("b", { styleJson: { opacity: 0.3 } });
+    expect(store().past).toHaveLength(3);
+  });
+
+  it("이력은 상한까지만 남긴다", () => {
+    for (let i = 0; i < EDITOR_HISTORY_LIMIT + 10; i += 1) {
+      store().toggleHidden("a");
+    }
+    expect(store().past).toHaveLength(EDITOR_HISTORY_LIMIT);
+  });
+
+  it("되돌리면 사라진 레이어의 선택을 푼다", () => {
+    store().addText({ text: "선택" });
+    expect(store().activeId).not.toBeNull();
+
+    store().undo();
+    expect(store().activeId).toBeNull();
+  });
+
+  // 이력이 프레임을 넘어 살아 있으면, 다른 프레임에서 되돌리기를 눌렀을 때
   // 이전 프레임의 요소가 지금 프레임에 끼어들어 그대로 저장된다.
-  it("다른 프레임을 열면 삭제 기록을 버린다", () => {
-    useThemeEditorStore.getState().remove("b");
-    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(true);
+  it("다른 프레임을 열면 이력을 버린다", () => {
+    store().remove("b");
+    expect(store().past).toHaveLength(1);
 
-    useThemeEditorStore.getState().importJson(makeJson(["x", "y"]));
+    store().importJson(makeJson(["x", "y"]));
+    expect(store().past).toHaveLength(0);
 
-    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(false);
-    expect(useThemeEditorStore.getState().lastRemoved).toBeNull();
-
-    // 혹시 눌리더라도 이전 프레임의 요소가 들어오지 않아야 한다.
-    useThemeEditorStore.getState().restoreRemoved();
+    store().undo();
     expect(ids()).toEqual(["x", "y"]);
+  });
+});
+
+describe("themeEditorStore 되돌리기와 배경 이미지", () => {
+  const store = () => useThemeEditorStore.getState();
+  let seq = 0;
+
+  beforeEach(() => {
+    seq = 0;
+    URL.createObjectURL = jest.fn(() => `blob:bg-${(seq += 1)}`);
+    URL.revokeObjectURL = jest.fn();
+    store().reset();
+    store().setFrameId("classic-4");
+  });
+
+  // 배경을 바꿀 때 이전 blob 주소는 해제된다. 되돌릴 때 그 죽은 주소를 다시 쓰면 빈 배경이 된다.
+  it("이전 배경 이미지로 되돌리면 파일로 주소를 다시 만든다", () => {
+    const first = new File(["a"], "a.png", { type: "image/png" });
+    const second = new File(["b"], "b.png", { type: "image/png" });
+    store().setBackgroundImage(first);
+    store().setBackgroundImage(second);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:bg-1");
+
+    store().undo();
+    const background = store().background;
+    expect(background.type).toBe("IMAGE");
+    expect(background.type === "IMAGE" && background.url).toBe("blob:bg-3");
+    expect(store().pendingBackgroundFile).toBe(first);
+  });
+
+  it("배경과 무관한 되돌리기는 배경 주소를 새로 만들지 않는다", () => {
+    store().setBackgroundImage(new File(["a"], "a.png", { type: "image/png" }));
+    store().addText({ text: "글자" });
+
+    store().undo();
+    const background = store().background;
+    expect(background.type === "IMAGE" && background.url).toBe("blob:bg-1");
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -426,18 +542,18 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     expect(useThemeEditorStore.getState().assets.photos).toHaveLength(1);
   });
 
-  it("업로드 key로 연결된 되돌리기 스냅샷도 원본 삭제 때 비운다", async () => {
+  it("업로드 key로 연결된 되돌리기 이력도 원본 삭제 때 비운다", async () => {
     const assetId = await placePhoto();
     await useThemeEditorStore.getState().finalizeAssetsForSave();
     useThemeEditorStore.getState().remove(PHOTO_LAYER_ID);
     expect(useThemeEditorStore.getState().removePhotoAsset(assetId).ok).toBe(true);
-    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(false);
-    useThemeEditorStore.getState().restoreRemoved();
+    expect(useThemeEditorStore.getState().past).toHaveLength(0);
+    useThemeEditorStore.getState().undo();
     expect(useThemeEditorStore.getState().components).toHaveLength(0);
   });
 
   it.each([false, true])(
-    "누끼 완료가 되돌리기 스냅샷도 갱신한다 (업로드: %s)",
+    "누끼 완료가 되돌리기 이력도 갱신한다 (업로드: %s)",
     async (uploaded) => {
       const assetId = await placePhoto();
       if (uploaded) await useThemeEditorStore.getState().finalizeAssetsForSave();
@@ -446,7 +562,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
         return new File(["cut"], "photo-cutout.png", { type: "image/png" });
       });
       await useThemeEditorStore.getState().removePhotoBackground(assetId);
-      useThemeEditorStore.getState().restoreRemoved();
+      useThemeEditorStore.getState().undo();
       expect(layer().source).toBe("blob:photo-cutout.png");
       expect(layer().renderUrl).toBeUndefined();
     },

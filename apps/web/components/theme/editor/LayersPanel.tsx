@@ -15,6 +15,8 @@ import {
   ChevronDown,
   Copy,
   Trash2,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 
 export function LayersPanel() {
@@ -28,8 +30,10 @@ export function LayersPanel() {
     moveLayerDown,
     toggleHidden,
     toggleLocked,
-    restoreRemoved,
-    canRestoreRemoved,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useThemeEditorStore(
     useShallow((s) => ({
       components: s.components,
@@ -41,8 +45,10 @@ export function LayersPanel() {
       moveLayerDown: s.moveLayerDown,
       toggleHidden: s.toggleHidden,
       toggleLocked: s.toggleLocked,
-      restoreRemoved: s.restoreRemoved,
-      canRestoreRemoved: s.canRestoreRemoved,
+      undo: s.undo,
+      redo: s.redo,
+      canUndo: s.past.length > 0,
+      canRedo: s.future.length > 0,
     })),
   );
 
@@ -52,18 +58,29 @@ export function LayersPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">레이어</p>
-        {/* 삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 없으면 편집을 조심스러워한다. */}
-        {canRestoreRemoved ? (
+        {/* 지운 걸 되돌릴 길이 없으면 편집을 조심스러워한다. 이동·크기·삭제·추가 모두 여러 단계로 오간다. */}
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={restoreRemoved}
-            className="rounded-full border border-(--hc-border-strong) px-3 py-1 text-[11px] font-semibold text-(--hc-text)"
+            onClick={undo}
+            disabled={!canUndo}
+            aria-label="되돌리기"
+            title="되돌리기 (Ctrl/⌘+Z)"
+            className="flex size-9 items-center justify-center rounded-full border border-(--hc-border-strong) text-(--hc-text) disabled:opacity-35"
           >
-            삭제 되돌리기
+            <Undo2 className="size-4" aria-hidden />
           </button>
-        ) : (
-          <p className="text-[12px] text-(--hc-muted)">눌러서 선택</p>
-        )}
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            aria-label="다시 하기"
+            title="다시 하기 (Ctrl/⌘+Shift+Z)"
+            className="flex size-9 items-center justify-center rounded-full border border-(--hc-border-strong) text-(--hc-text) disabled:opacity-35"
+          >
+            <Redo2 className="size-4" aria-hidden />
+          </button>
+        </div>
       </div>
 
       {list.length === 0 ? (
