@@ -77,7 +77,10 @@ export function StudioEventUsage({
   const quota = Math.max(0, usage.composeQuota);
   const usedRatio = quota > 0 ? Math.min(1, (usage.used + usage.reserved) / quota) : 1;
   const endsInDays = (new Date(entitlement.validTo).getTime() - now) / 86_400_000;
-  const lowRemaining = quota > 0 && usage.remaining <= Math.ceil(quota * LOW_REMAINING_RATIO);
+  // 배분을 받은 행사는 기업 총량이 먼저 끝나도 촬영이 마감된다.
+  const parentShort = usage.parent ? usage.parent.remaining < usage.remaining : false;
+  const available = usage.parent ? Math.min(usage.remaining, usage.parent.remaining) : usage.remaining;
+  const lowRemaining = quota > 0 && available <= Math.ceil(quota * LOW_REMAINING_RATIO);
   const endingSoon = Number.isFinite(endsInDays) && endsInDays >= 0 && endsInDays <= ENDING_SOON_DAYS;
   const ended = Number.isFinite(endsInDays) && endsInDays < 0;
 
@@ -116,6 +119,19 @@ export function StudioEventUsage({
         </p>
       ) : null}
 
+      {usage.parent ? (
+        <p className="text-[13px]">
+          기업 총량 남은 촬영{" "}
+          <strong className="tabular-nums">{usage.parent.remaining.toLocaleString("ko-KR")}</strong>
+          <span className="text-(--hc-muted)"> / {usage.parent.composeQuota.toLocaleString("ko-KR")}장</span>
+          {parentShort ? (
+            <span className="block text-[12px] text-(--hc-muted)">
+              기업 총량이 이 행사 배분보다 적게 남았어요. 총량을 다 쓰면 이 행사도 촬영이 마감돼요.
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+
       {usage.alerts?.length ? (
         <div className="flex flex-col gap-1 text-[13px]">
           <p className="font-semibold">한도 알림</p>
@@ -136,7 +152,7 @@ export function StudioEventUsage({
           {formatDate(entitlement.validFrom)} ~ {formatDate(entitlement.validTo)}
         </dd>
         <dt className="text-(--hc-muted)">적용 범위</dt>
-        <dd>{entitlement.scope === "EVENT" ? "이 행사" : "이 공간의 모든 행사"}</dd>
+        <dd>{usage.parent ? "기업 총량에서 이 행사에 배분" : entitlement.scope === "EVENT" ? "이 행사" : "이 공간의 모든 행사"}</dd>
         {usage.retentionDays ? (
           <>
             <dt className="text-(--hc-muted)">결과 보관</dt>
