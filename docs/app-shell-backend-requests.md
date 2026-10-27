@@ -389,8 +389,8 @@ jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `Compo
 ## 8. 합성이 실패하면 사유 문자열 말고 **에러 코드**도 주세요 (백엔드 진행 중 — 프론트는 받을 준비 끝)
 
 **진행(2026-10-27)**: 백엔드가 `ComposeJobResponse.failureCode`(FAILED 일 때만, SOURCE_MISSING · SOURCE_UNREADABLE · ASSET_MISSING ·
-ASSET_UNREADABLE · TIMED_OUT · RENDER_FAILED · UNKNOWN)를 더한다. 프론트는 `lib/composeFailure.ts` 로 문구를 고른다 — 키가 없거나
-UNKNOWN·RENDER_FAILED·모르는 값이면 지금 문구다. 합성 Lambda 배포 전에는 운영 실패가 TIMED_OUT·UNKNOWN 만 나온다.
+ASSET_UNREADABLE · TIMED_OUT · RENDER_FAILED · OUTPUT_CONFLICT · UNKNOWN)를 더한다. 프론트는 `lib/composeFailure.ts` 로 문구를 고른다 — 키가 없거나
+UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT(결과·썸네일 쌍 검증 실패, D09 — 출력 계약 2 이후)·모르는 값이면 지금 문구다. 합성 Lambda 배포 전에는 운영 실패가 TIMED_OUT·UNKNOWN 만 나온다.
 
 
 **무엇을**: `ComposeJobResponse` 에 실패 코드 한 필드(`failureCode` 같은 이름). 값은 우리가

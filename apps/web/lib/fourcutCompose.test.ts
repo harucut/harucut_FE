@@ -783,7 +783,7 @@ describe("describeComposeFailure", () => {
     error.mockRestore();
   });
 
-  // 합성 실패 코드(app-shell §8)가 있으면 할 일을 말한다. UNKNOWN·RENDER_FAILED·모르는 값은 기본 문구 그대로다.
+  // 합성 실패 코드(app-shell §8)가 있으면 할 일을 말한다. UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT·모르는 값은 기본 문구 그대로다.
   // 다시 시도할 수 있는 서버 확정 실패(TIMED_OUT)는 새 작업으로 다시 보낸다(newJobOnRetry).
   it.each([
     ["SOURCE_MISSING", "사진을 찾을 수 없어요. 다시 찍어 주세요.", false],
@@ -804,7 +804,7 @@ describe("describeComposeFailure", () => {
     });
   });
 
-  it.each(["UNKNOWN", "RENDER_FAILED", "SOMETHING_NEW"])("실패 코드 %s 는 기본 문구다", (code) => {
+  it.each(["UNKNOWN", "RENDER_FAILED", "OUTPUT_CONFLICT", "SOMETHING_NEW"])("실패 코드 %s 는 기본 문구다", (code) => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
     expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual({ message: FALLBACK, retryable: false });
     error.mockRestore();
