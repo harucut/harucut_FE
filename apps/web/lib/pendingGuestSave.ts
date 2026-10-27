@@ -655,6 +655,41 @@ function attachComposeKeyIfAbsent(
   });
 }
 
+/**
+ * 서버가 실패로 **확정한** 합성의 키를 보관물에서 뗀다 — 그 키가 아직 붙어 있을 때만(한 트랜잭션).
+ * 같은 키로 다시 보내면 서버는 실패한 작업을 그대로 돌려주므로, 다음 인계가 새 키로 새 작업을 접수하게 한다(Codex #565).
+ * 아직 결과를 모르는 폴링 시간 초과에는 부르지 않는다 — 그때는 같은 키로 이어받아야 두 벌이 안 생긴다.
+ * 떼었으면 true. 저장소를 못 열었거나 다른 키가 붙어 있으면 false.
+ */
+export async function dropPendingGuestSaveComposeKey(key: string): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const db = await openDatabase();
+  if (!db) return false;
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      let dropped = false;
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const read = store.get(RECORD_KEY);
+      read.onsuccess = () => {
+        const record = read.result as StoredRecord | undefined;
+        if (!record || record.composeIdempotencyKey !== key) return;
+        const { composeIdempotencyKey: _dropped, ...rest } = record;
+        void _dropped;
+        store.put(rest, RECORD_KEY);
+        dropped = true;
+      };
+      transaction.oncomplete = () => resolve(dropped);
+      transaction.onabort = () => reject(transaction.error ?? new Error("indexeddb transaction aborted"));
+      transaction.onerror = () => reject(transaction.error ?? new Error("indexeddb transaction failed"));
+    });
+  } catch {
+    return false;
+  } finally {
+    db.close();
+  }
+}
+
 export async function clearPendingGuestSaveIfUnchanged(
   isSame: (entry: PendingGuestSaveMeta) => boolean,
   now: number = Date.now(),

@@ -31,6 +31,7 @@ import type {
 } from "@/lib/event/types";
 import { useEventCamera } from "@/components/participation/useEventCamera";
 import { EventLogo, EventSurface, useEventCopy } from "@/components/participation/EventSurface";
+import { composeFailureCopy } from "@/lib/composeFailure";
 
 /**
  * 개인 휴대폰 참가 `/e/{slug}`(기획 R5 4절, ADR-0007 §5).
@@ -458,6 +459,10 @@ function HomeStep({
               <li key={job.jobId} className="flex items-center justify-between gap-2 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-3">
                 <span className="text-[14px]">
                   {index + 1}번째 사진 · {job.status === "DONE" ? "완성" : job.status === "PENDING" ? "만드는 중" : "실패"}
+                  {/* 실패 코드가 있으면 무엇을 하면 되는지 말해 준다(원본 없음 → 다시 찍기 등). */}
+                  {job.status === "FAILED" && composeFailureCopy(job.failureCode) ? (
+                    <span className="block text-[12px] text-(--ev-muted)">{composeFailureCopy(job.failureCode)?.message}</span>
+                  ) : null}
                 </span>
                 {job.status === "DONE" ? (
                   <span className="flex gap-2">

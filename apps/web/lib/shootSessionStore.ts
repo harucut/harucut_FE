@@ -171,6 +171,11 @@ export type ShootSessionState = {
     frameTheme?: ThemeExportJson | null,
   ) => string;
   noteRemoteFrameEdited: (remoteFrameId: number) => void;
+  /**
+   * 서버가 실패로 **확정한** 합성을 다시 시도할 때 부른다. 같은 키로 다시 보내면 서버는 그 실패한 작업을 그대로 돌려준다 —
+   * 키를 버려야 새 작업으로 접수된다. 아직 결과를 모르는 폴링 시간 초과에는 부르지 않는다(진행 중인 작업을 이어받아야 한다).
+   */
+  discardComposeIdempotency: () => void;
   clearResults: () => void;
   toggleSelect: (index: number) => void;
   clearSelection: () => void;
@@ -302,6 +307,8 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
 
     set({ composeIdempotency: null, imageResult: null });
   },
+
+  discardComposeIdempotency: () => set({ composeIdempotency: null }),
 
   clearResults: () =>
     set({
