@@ -315,6 +315,11 @@ export type ComposeFailure = {
   message: string;
   /** 같은 조건으로 다시 눌러 성공할 여지가 있는가. */
   retryable: boolean;
+  /**
+   * 서버가 실패로 확정한 작업이라 다시 시도는 **새 작업**이어야 하는가(새 멱등키). 같은 키로는 실패한 작업이 그대로 돌아온다(Codex #565).
+   * 아직 결과를 모르는 폴링 시간 초과는 false — 진행 중인 작업을 이어받는다.
+   */
+  newJobOnRetry?: boolean;
 };
 
 /**
@@ -362,7 +367,7 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
 
     // 실패 코드가 있으면 그것으로 고른다(원본·자산·시간 초과). 없거나 UNKNOWN·RENDER_FAILED 면 지금까지의 문구.
     const copy = composeFailureCopy(error.code);
-    if (copy) return copy;
+    if (copy) return { ...copy, newJobOnRetry: copy.retryable };
 
     return {
       message: "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",

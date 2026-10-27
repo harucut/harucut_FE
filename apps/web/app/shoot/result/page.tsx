@@ -189,6 +189,7 @@ export default function ShootResultPage() {
     imageResult,
     setImageResult,
     ensureComposeIdempotencyKey,
+    discardComposeIdempotency,
     clearResults,
     source,
   } = useShootSession();
@@ -206,6 +207,8 @@ export default function ShootResultPage() {
   // 다시 시도해서 달라질 수 있는 실패인지. 없는 프레임이나 서버가 못 읽는 스티커처럼
   // 몇 번을 눌러도 같은 결과인 실패에서는 재시도 버튼을 감춘다.
   const [isImageErrorRetryable, setIsImageErrorRetryable] = useState(true);
+  // 서버가 실패로 확정한 작업이면 다시 시도할 때 새 멱등키로 새 작업을 접수한다(describeComposeFailure.newJobOnRetry).
+  const [retryNeedsNewJob, setRetryNeedsNewJob] = useState(false);
   // 재시도 버튼이 실제로 다시 돌게 하는 값.
   // 실패했을 때 imageResult 는 이미 null 이라, 이 값을 안 바꾸면 아래 effect 의
   // 의존성이 하나도 안 변해 effect 가 다시 돌지 않는다 — 버튼을 눌러도 "대기 중"에서 멈췄다.
@@ -590,6 +593,7 @@ export default function ShootResultPage() {
         setImageState("error");
         setImageError(failure.message);
         setIsImageErrorRetryable(failure.retryable);
+        setRetryNeedsNewJob(Boolean(failure.newJobOnRetry));
       }
     }
 
@@ -958,6 +962,10 @@ export default function ShootResultPage() {
               }
               guestImageUrlRef.current = null;
               clearResults();
+              if (retryNeedsNewJob) {
+                discardComposeIdempotency();
+                setRetryNeedsNewJob(false);
+              }
               setImageState("idle");
               setImageError(null);
               // 실패했을 때 imageResult 는 이미 null 이라 clearResults() 만으로는

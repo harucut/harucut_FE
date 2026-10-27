@@ -42,6 +42,7 @@ type MockShootSessionState = {
     generationKey: string,
     frameTheme?: ThemeExportJson | null,
   ) => string;
+  discardComposeIdempotency: () => void;
   clearResults: () => void;
 };
 
@@ -57,6 +58,7 @@ const mockUseShootSession = create<MockShootSessionState>((set, get) => ({
   setImageResult: (imageResult) => set({ imageResult }),
   // 진짜 구현과 같은 규칙이다(lib/shootSessionStore.ts). 지문을 모르는 동안은 키를
   // 흔들지 않고, 알고 나서 달라졌을 때만 새 키를 잡으며 수정 전 결과를 버린다.
+  discardComposeIdempotency: () => set({ composeIdempotency: null }),
   ensureComposeIdempotencyKey: (generationKey, frameTheme = null) => {
     const frameContentKey = buildFrameContentKey(frameTheme);
     const current = get().composeIdempotency;
@@ -472,6 +474,27 @@ describe("ShootResultPage", () => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
     });
     expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).toBe(
+      mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
+    );
+  });
+
+  // 서버가 실패로 확정한 작업(FAILED·TIMED_OUT)은 같은 키로 다시 보내면 그 실패가 그대로 돌아온다(Codex #565).
+  it("서버가 실패로 확정한 작업을 다시 시도하면 새 멱등키로 새 작업을 접수한다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("server failed"));
+    mockDescribeComposeFailure.mockReturnValueOnce({
+      message: "사진을 만드는 데 시간이 너무 걸렸어요. 다시 시도해 주세요.",
+      retryable: true,
+      newJobOnRetry: true,
+    });
+
+    render(<ShootResultPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "다시 준비하기" }));
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+    expect(mockSaveFourcutToServer.mock.calls[1][0].idempotencyKey).not.toBe(
       mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey,
     );
   });
