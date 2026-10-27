@@ -78,9 +78,21 @@ describe("서버 푸시 기기", () => {
     jest.useRealTimers();
   });
 
-  it("화면이 열릴 때 맞추기는 한 번만 한다", async () => {
-    await syncPushDevice();
+  it("화면이 열릴 때 맞추기는 성공하면 한 번만, 동시에 불러도 한 번만 한다", async () => {
+    await Promise.all([syncPushDevice(), syncPushDevice()]);
     await syncPushDevice();
     expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  // Codex #567: 첫 등록이 실패하면 문서를 새로 열기 전까지 다시 시도하지 않았다.
+  it("등록이 실패하면 다음 맞추기에서 다시 시도한다", async () => {
+    mockPost.mockRejectedValueOnce(new Error("offline"));
+    await syncPushDevice();
+    expect(hasServerPush()).toBe(false);
+    await syncPushDevice();
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect(hasServerPush()).toBe(true);
+    await syncPushDevice();
+    expect(mockPost).toHaveBeenCalledTimes(2);
   });
 });

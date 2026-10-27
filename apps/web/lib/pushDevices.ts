@@ -74,15 +74,24 @@ export async function unregisterPushDevice() {
   }
 }
 
-let attempted = false;
+/** 등록에 성공했거나 지금 도는 중이면 그 약속. 실패하면 비워 다음 화면에서 다시 시도한다. */
+let sync: Promise<boolean> | null = null;
 
-/** 로그인한 화면이 열릴 때 한 번(AppNav). 이미 권한이 있으면 등록을 맞춘다 — 토큰이 바뀌었을 수 있어 늘 다시 보낸다(서버는 멱등). */
+/**
+ * 로그인한 화면이 열릴 때(AppNav). 이미 권한이 있으면 등록을 맞춘다 — 토큰이 바뀌었을 수 있어 문서마다 한 번은 다시
+ * 보낸다(서버는 멱등). 성공하면 이 문서에서는 더 보내지 않는다. 토큰을 못 받았거나 등록이 실패하면(오프라인·5xx)
+ * 다음에 AppNav 가 열릴 때 다시 시도한다 — 한 번 실패로 문서가 끝날 때까지 서버 알림을 못 받으면 안 된다(Codex #567).
+ */
 export async function syncPushDevice() {
-  if (attempted) return;
-  attempted = true;
-  await registerPushDevice();
+  if (!sync) {
+    sync = registerPushDevice().then((ok) => {
+      if (!ok) sync = null;
+      return ok;
+    });
+  }
+  await sync;
 }
 
 export function resetPushSyncForTest() {
-  attempted = false;
+  sync = null;
 }
