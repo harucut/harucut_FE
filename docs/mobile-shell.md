@@ -50,6 +50,7 @@
 |---|---|---|
 | 1 | 사진첩 저장 · 공유 · 햅틱 · 알림 · 상태바 색 | 없음 — 셸이면 그대로 보낸다 |
 | 2 | `camera-permission` | `nativeEnsureCameraPermission` 의 `CAMERA_PERMISSION_SHELL_VERSION` |
+| 3 | `iap-products` · `iap-purchase` · `iap-restore` · `iap-finish`(앱 구독, P4-B) | `supportsStorePurchase` 의 `STORE_PURCHASE_SHELL_VERSION`(`packages/shared/src/store-purchase.ts`). 모르는 셸이면 업데이트를 안내한다 — 웹 결제로 우회하지 않는다 |
 
 답을 기다리지 않는 메시지(`haptic`·`theme`)는 옛 셸이 흘려도 잃을 것이 없어 판 수를 보지 않는다.
 
@@ -66,6 +67,7 @@
 | **카메라 권한(안드로이드)** | 웹 권한이 아니라 앱 권한이다. 셸이 `CAMERA` 를 선언해 두었는데 런타임 권한이 없으면 WebView 가 파일 선택기에서 「사진 찍기」를 통째로 뺀다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
 | **구글 로그인(시스템 브라우저)** | 구글은 임베디드 WebView 의 OAuth 를 `disallowed_useragent` 로 막는다. 셸이 백엔드의 구글 로그인 시작을 가로채 PKCE challenge 를 붙여 ASWebAuthenticationSession·Custom Tabs 로 열고, `harucut://oauth2/callback?code=` 로 돌아오면 코드와 verifier 를 웹 교환 화면(`/oauth2/app-callback#…`)에 넘긴다. 교환은 WebView 안의 웹이 해야 쿠키가 이 WebView 에 남는다(`apps/mobile/lib/app-login.ts`, 규칙은 `packages/shared/src/app-login.ts`). 교환 화면은 **지금 WebView 안에서** 연다 — 새로 올리면 sessionStorage(로그인 뒤 돌아갈 곳·제공자)가 사라진다. 안드로이드는 콜백을 일반 링크로도 보내므로 `app/+native-intent.tsx` 가 라우터 이동을 막는다. 카카오·네이버는 WebView 안에서 그대로 된다 |
+| **앱 구독 결제(스토어)** | 개인 앱의 디지털 구독은 스토어 인앱 결제로만 판다(R5 12절). StoreKit·Play Billing 은 네이티브만 부를 수 있다. 셸은 상품 조회·구매·복원·거래 마치기만 하고(`apps/mobile/lib/store-purchase.ts`, `expo-iap`), 증빙의 서버 제출은 웹이 한다. 서버가 받아들인 뒤에만 거래를 마친다 — 제출이 실패한 구매는 스토어가 다시 보내고 「구매 복원」이 다시 제출한다. 화면에 여는지는 `STORE_PURCHASES_ENABLED`(사업 결정, 기본 꺼짐). **실기기·스토어 상품 미확인** |
 
 ## 셸이 WebView 를 부리는 길 — `ref`
 

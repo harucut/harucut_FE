@@ -14,7 +14,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ChevronRight, LogOut, PencilLine } from "lucide-react";
-import { getLoginPlatformLabel, josa, parseServerDateTime } from "@harucut/shared";
+import { getLoginPlatformLabel, josa, parseServerDateTime, subscriptionManageHint } from "@harucut/shared";
 import { PasswordChangeDialog } from "@/components/mypage/PasswordChangeDialog";
 import { SettingRow } from "@/components/mypage/SettingRow";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
@@ -25,6 +25,7 @@ import {
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { NativeNotificationSetting } from "@/components/mobile/NativeNotificationSetting";
+import { StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import { getPlanDisplayName } from "@/constants/plans";
@@ -725,7 +726,20 @@ export default function MyPage() {
             정기 결제가 실패했어요. 결제 수단을 확인해 주세요.
           </p>
         ) : null}
+        {/* 해지·변경은 결제한 곳에서만 된다(P4-B) — 어디서 관리하는지 말해 준다. */}
+        {subscriptionManageHint(subscription?.source) ? (
+          <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
+            {subscriptionManageHint(subscription?.source)}
+          </p>
+        ) : null}
       </div>
+
+      <StoreRestoreButton
+        onDone={(next) => {
+          setSubscription(next);
+          void refreshUser().catch(() => undefined);
+        }}
+      />
 
       <div className="flex flex-col gap-2">
         <label

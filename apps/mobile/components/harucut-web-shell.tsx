@@ -41,6 +41,12 @@ import {
   type BridgeResult,
 } from '@/lib/native-bridge';
 import { startAppLogin } from '@/lib/app-login';
+import {
+  finishPurchases,
+  purchaseSubscription,
+  restoreSubscriptions,
+  storeProducts,
+} from '@/lib/store-purchase';
 
 const WEB_ORIGIN = getWebOrigin();
 const START_URL = `${WEB_ORIGIN}/home`;
@@ -240,6 +246,19 @@ export function HarucutWebShell() {
         case 'theme':
           // 답을 기다리지 않는다 — 화면 밝기를 맞추는 일이라 실패할 것도 없다.
           setScheme(message.scheme === 'light' ? 'light' : 'dark');
+          return;
+        // 앱 구독(P4-B). 셸은 스토어만 부르고, 서버 제출은 웹이 한다(lib/store-purchase.ts).
+        case 'iap-products':
+          reply(askerUrl, message.id, await storeProducts(message.productIds));
+          return;
+        case 'iap-purchase':
+          reply(askerUrl, message.id, await purchaseSubscription(message.productId, message.accountToken));
+          return;
+        case 'iap-restore':
+          reply(askerUrl, message.id, await restoreSubscriptions());
+          return;
+        case 'iap-finish':
+          reply(askerUrl, message.id, await finishPurchases(message.proofs));
           return;
         default:
           return;
