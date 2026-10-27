@@ -1,11 +1,27 @@
 import { ApiRequestError } from "@/lib/clientApi";
-import { freeTextErrorMessage, freeTextLength, localFreeTextProblem } from "@/lib/event/freeText";
+import {
+  freeTextErrorMessage,
+  freeTextLength,
+  freeTextLines,
+  localFreeTextProblem,
+  normalizeFreeText,
+} from "@/lib/event/freeText";
 
 const limits = { maxLength: 5, maxLines: 2 };
 
 it("줄바꿈은 글자 수에 넣지 않고, 한글·이모지 한 자는 1로 센다", () => {
   expect(freeTextLength("가나\n다")).toBe(3);
   expect(freeTextLength("a🎉")).toBe(2);
+});
+
+it("서버와 같은 순서로 정리한다 — NFC, 줄바꿈 통일, 줄마다 앞뒤 공백, 앞뒤 빈 줄", () => {
+  const nfd = "\u1100\u1161"; // ㄱ + ㅏ (자모 분리 입력)
+  expect(normalizeFreeText(nfd)).toBe("가");
+  expect(normalizeFreeText("\r\n  축하 \r\n\r\n 해요  \n\n")).toBe("축하\n\n해요");
+  expect(freeTextLength(nfd)).toBe(1);
+  // 가운데 빈 줄은 줄 수에 든다.
+  expect(freeTextLines("축하\n\n해요")).toBe(3);
+  expect(freeTextLines("  \n ")).toBe(0);
 });
 
 it("빈 문구·글자 수·줄 수를 서버와 같은 문구로 미리 거른다", () => {

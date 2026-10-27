@@ -53,6 +53,17 @@ it("입력이 멈춘 뒤에만 미리보기를 부른다", async () => {
   expect(screen.getByAltText("미리보기: 축하")).toHaveStyle({ top: "90%", height: "10%" });
 });
 
+it("서버와 같은 규칙으로 정리한 문구를 보내, 서버가 정리해 돌려준 응답도 받아들인다", async () => {
+  mockPreview.mockImplementation(async (_t, _e, body: { text: string }) => rendered(body.text));
+  render(<Harness />);
+  fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "  축하해요  " } });
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(FREE_TEXT_PREVIEW_DELAY_MS);
+  });
+  expect(mockPreview.mock.calls[0][2].text).toBe("축하해요");
+  expect(screen.getByAltText("미리보기: 축하해요")).toBeInTheDocument();
+});
+
 it("늦게 온 옛 문구의 응답은 지금 미리보기를 덮지 않는다", async () => {
   // 서버가 요청과 다른 문구를 돌려준 경우(취소가 늦어 도착한 옛 응답)를 흉내 낸다.
   mockPreview.mockResolvedValueOnce(rendered("옛 문구"));

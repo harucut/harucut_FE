@@ -39,18 +39,35 @@ export type TextPreview = {
 export const FREE_TEXT_DEFAULT_MAX_LENGTH = 20;
 export const FREE_TEXT_LIMITS = { maxLength: [1, 30], maxLines: [1, 3] } as const;
 
-/** 줄바꿈을 빼고 센 글자 수(서버와 같이 코드 포인트로 센다 — 한글 한 자는 1). */
+/**
+ * 서버가 세기 전에 하는 정리와 같은 순서로 정리한다 — ① NFC ② \r\n·\r → \n ③ 줄마다 앞뒤 공백 제거
+ * ④ 앞뒤 빈 줄 제거(가운데 빈 줄은 남는다). 보낼 때도 이 값을 보낸다 — 미리보기 응답의 text 와 견줘
+ * 늦은 응답을 가르므로, 정리 전 값을 보내면 서버가 정리해 돌려준 text 와 어긋난다.
+ */
+export function normalizeFreeText(text: string) {
+  const lines = text
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim());
+  while (lines.length > 0 && lines[0] === "") lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return lines.join("\n");
+}
+
+/** 정리한 뒤 줄바꿈을 빼고 센 글자 수(서버와 같이 코드 포인트로 센다 — 한글 한 자는 1). */
 export function freeTextLength(text: string) {
-  return Array.from(text.replace(/\r?\n/g, "")).length;
+  return Array.from(normalizeFreeText(text).replace(/\n/g, "")).length;
 }
 
 export function freeTextLines(text: string) {
-  return text.split(/\r?\n/).length;
+  const normalized = normalizeFreeText(text);
+  return normalized === "" ? 0 : normalized.split("\n").length;
 }
 
 /** 보내기 전에 걸러 낼 수 있는 문제. 없으면 null. 문구는 서버 PART-008 과 같은 것을 쓴다. */
 export function localFreeTextProblem(text: string, limits: { maxLength: number; maxLines: number }): string | null {
-  if (text.trim() === "") return FREE_TEXT_REASON_COPY.EMPTY(limits);
+  if (normalizeFreeText(text) === "") return FREE_TEXT_REASON_COPY.EMPTY(limits);
   if (freeTextLength(text) > limits.maxLength) return FREE_TEXT_REASON_COPY.TOO_LONG(limits);
   if (freeTextLines(text) > limits.maxLines) return FREE_TEXT_REASON_COPY.TOO_MANY_LINES(limits);
   return null;

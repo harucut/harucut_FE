@@ -7,6 +7,7 @@ import {
   freeTextErrorMessage,
   freeTextLength,
   localFreeTextProblem,
+  normalizeFreeText,
   type PublicFreeText,
   type TextPreview,
 } from "@/lib/event/freeText";
@@ -39,10 +40,12 @@ export function FreeTextComposer({
   disabled?: boolean;
 }) {
   const id = useId();
-  const { text, styleId } = value;
-  const problem = text === "" ? null : localFreeTextProblem(text, config);
+  const { text: rawText, styleId } = value;
+  const problem = rawText === "" ? null : localFreeTextProblem(rawText, config);
+  // 서버와 같은 규칙으로 정리한 값을 보낸다(앞뒤 공백·빈 줄을 고치는 동안 미리보기를 다시 부르지도 않는다).
+  const text = normalizeFreeText(rawText);
   // 결과는 「어느 입력에 대한 것인지」와 함께 둔다. 지금 입력과 다른 결과는 보이지 않는다 — 늦은 응답도 여기서 걸러진다.
-  const wanted = text.trim() !== "" && !problem && styleId !== "";
+  const wanted = text !== "" && !problem && styleId !== "";
   const key = wanted ? JSON.stringify([frame.frameVersionId, styleId, text]) : null;
   const [result, setResult] = useState<{ key: string; preview?: TextPreview; error?: string } | null>(null);
   const current = result && result.key === key ? result : null;
@@ -90,7 +93,7 @@ export function FreeTextComposer({
           사진에 넣을 문구
         </h2>
         <span className="text-[12px] tabular-nums text-(--ev-muted)" aria-live="polite">
-          {freeTextLength(text)}/{config.maxLength}자
+          {freeTextLength(rawText)}/{config.maxLength}자
         </span>
       </div>
       <p className="text-[13px] text-(--ev-muted)">비워 두면 프레임에 있는 그대로 만들어요.</p>
@@ -100,7 +103,7 @@ export function FreeTextComposer({
           aria-describedby={help ? `${id}-help` : undefined}
           aria-invalid={Boolean(problem)}
           rows={config.maxLines}
-          value={text}
+          value={rawText}
           disabled={disabled}
           onChange={(e) => onChange({ text: e.target.value, styleId })}
           className={`${inputClass} py-2`}
@@ -112,7 +115,7 @@ export function FreeTextComposer({
           aria-labelledby={`${id}-title`}
           aria-describedby={help ? `${id}-help` : undefined}
           aria-invalid={Boolean(problem)}
-          value={text}
+          value={rawText}
           disabled={disabled}
           onChange={(e) => onChange({ text: e.target.value, styleId })}
           className={`${inputClass} h-12`}
@@ -136,7 +139,7 @@ export function FreeTextComposer({
                   className="size-4"
                   checked={styleId === style.id}
                   disabled={disabled}
-                  onChange={() => onChange({ text, styleId: style.id })}
+                  onChange={() => onChange({ text: rawText, styleId: style.id })}
                 />
                 <span
                   aria-hidden

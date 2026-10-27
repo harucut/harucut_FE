@@ -32,7 +32,7 @@ import type {
 import { useEventCamera } from "@/components/participation/useEventCamera";
 import { EventLogo, EventSurface, useEventCopy } from "@/components/participation/EventSurface";
 import { composeFailureCopy } from "@/lib/composeFailure";
-import { freeTextErrorMessage, localFreeTextProblem } from "@/lib/event/freeText";
+import { freeTextErrorMessage, localFreeTextProblem, normalizeFreeText } from "@/lib/event/freeText";
 import { FreeTextComposer, type FreeTextValue } from "@/components/participation/FreeTextComposer";
 
 /**
@@ -675,8 +675,10 @@ export function CaptureAndSend({
         });
       }
       onProgress("사진을 만드는 중");
-      // 비워 두면 싣지 않는다 — 서버는 프레임 그대로 만든다(공백만 보내면 PART-008 EMPTY).
-      const sentFreeText = event.freeText && freeText.text.trim() !== "" ? freeText : undefined;
+      // 비워 두면 싣지 않는다 — 서버는 프레임 그대로 만든다(공백만 보내면 PART-008 EMPTY). 서버와 같은 규칙으로 정리해 보낸다.
+      const freeTextToSend = normalizeFreeText(freeText.text);
+      const sentFreeText =
+        event.freeText && freeTextToSend !== "" ? { text: freeTextToSend, styleId: freeText.styleId } : undefined;
       const sentKey = JSON.stringify(sentFreeText ?? null);
       if (sentFreeTextRef.current !== null && sentFreeTextRef.current !== sentKey) {
         idempotencyKeyRef.current = crypto.randomUUID();
