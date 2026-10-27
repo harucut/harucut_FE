@@ -357,7 +357,12 @@ URL(`renderUrl`·`background.url`)은 뺀다 — 넣으면 내용이 그대로�
 
 ---
 
-## 7. 셀 누끼를 서버가 그리는지 알려 주세요 (답 대기)
+## 7. 셀 누끼를 서버가 그리는지 알려 주세요 (답 받음 — 서버는 그리지 않는다)
+
+**답(2026-10-27, 백엔드 fork 코드 확인)**: 서버·합성 Lambda 는 `cellCutouts` 로 아무것도 그리지 않는다(ComposeSpec 주석·렌더러 확인).
+**프론트가 원본 픽셀에 구워 올리는 지금 방식이 계약이다.** 두 번 그려질 일은 없고, 이 레포에서 끌 것도 없다.
+아래 「실측 기록」의 어두운 가장자리는 예전 브라우저 합성의 비네트 효과였고 지금은 걷어냈다(`lib/canvas/composeFrame.ts`).
+
 
 **무엇을**: `ComposeSpec.cellCutouts` 를 합성 Lambda 가 실제로 그리는가.
 
@@ -377,7 +382,12 @@ jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `Compo
 
 ---
 
-## 8. 합성이 실패하면 사유 문자열 말고 **에러 코드**도 주세요 (있으면 좋음)
+## 8. 합성이 실패하면 사유 문자열 말고 **에러 코드**도 주세요 (백엔드 진행 중 — 프론트는 받을 준비 끝)
+
+**진행(2026-10-27)**: 백엔드가 `ComposeJobResponse.failureCode`(FAILED 일 때만, SOURCE_MISSING · SOURCE_UNREADABLE · ASSET_MISSING ·
+ASSET_UNREADABLE · TIMED_OUT · RENDER_FAILED · UNKNOWN)를 더한다. 프론트는 `lib/composeFailure.ts` 로 문구를 고른다 — 키가 없거나
+UNKNOWN·RENDER_FAILED·모르는 값이면 지금 문구다. 합성 Lambda 배포 전에는 운영 실패가 TIMED_OUT·UNKNOWN 만 나온다.
+
 
 **무엇을**: `ComposeJobResponse` 에 실패 코드 한 필드(`failureCode` 같은 이름). 값은 우리가
 문구로 옮길 수 있는 **닫힌 집합**이면 된다 — 원본을 읽지 못함 / 프레임 자산을 읽지 못함 /

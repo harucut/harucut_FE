@@ -41,6 +41,8 @@ export type ComposeJob = {
   mediaId?: number | null;
   /** FAILED 일 때만 있다. */
   failureReason?: string | null;
+  /** FAILED 일 때만. 화면 문구는 이 값으로 고른다(lib/composeFailure.ts). */
+  failureCode?: string | null;
 };
 
 export type ComposeRequest = {
@@ -85,7 +87,10 @@ export async function getComposeJob(
 }
 
 export class ComposeFailedError extends Error {
-  constructor(readonly reason: string | null | undefined) {
+  constructor(
+    readonly reason: string | null | undefined,
+    readonly code?: string | null,
+  ) {
     super(reason ?? "합성에 실패했어요.");
     this.name = "ComposeFailedError";
   }
@@ -230,7 +235,7 @@ export async function waitForCompose(
     if (!job) continue;
 
     if (job.status === "DONE") return job;
-    if (job.status === "FAILED") throw new ComposeFailedError(job.failureReason);
+    if (job.status === "FAILED") throw new ComposeFailedError(job.failureReason, job.failureCode);
     if (elapsed >= timeoutMs) throw new ComposeTimeoutError();
 
     // 이 기다림에는 signal 을 걸지 않았다. 남는 지연은 최대 intervalMs 하나뿐이고
