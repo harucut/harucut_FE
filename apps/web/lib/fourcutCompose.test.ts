@@ -778,6 +778,15 @@ describe("describeComposeFailure", () => {
     error.mockRestore();
   });
 
+  // 자유 사진 칸 프레임은 합성 렌더가 열리기 전까지 409 FRAME-008 — 다시 눌러도 같으니 다른 프레임으로.
+  it("자유 칸 프레임이 아직 막혀 있으면(FRAME-008) 재시도 대신 그 문구를 보인다", () => {
+    const error = Object.assign(new Error("x"), { status: 409, code: "FRAME-008", data: { code: "FRAME-008" } });
+    expect(describeComposeFailure(error)).toEqual({
+      message: "이 프레임은 아직 촬영에 쓸 수 없어요. 곧 열릴 예정이에요.",
+      retryable: false,
+    });
+  });
+
   it.each(["UNKNOWN", "RENDER_FAILED", "SOMETHING_NEW"])("실패 코드 %s 는 기본 문구다", (code) => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
     expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual({ message: FALLBACK, retryable: false });

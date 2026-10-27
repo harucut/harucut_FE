@@ -52,6 +52,7 @@ function currentDocument() {
     backgroundColor: s.backgroundColor,
     background: s.background,
     cellCutouts: s.cellCutouts,
+    cells: s.cells,
     components: s.components,
     pendingBackgroundFile: s.pendingBackgroundFile,
   });
@@ -73,6 +74,7 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
     backgroundColor: doc.backgroundColor,
     background,
     cellCutouts: doc.cellCutouts,
+    cells: doc.cells ?? null,
     components: resolved.components as ServerEditorDocument["components"],
     savedAt: Date.now(),
   }, { preserveHidden: true });

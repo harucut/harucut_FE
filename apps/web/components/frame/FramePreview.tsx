@@ -39,7 +39,10 @@ export function FramePreview({
   const layout = FRAME_LAYOUTS[frameId];
 
   if (!layout) return null;
-  const { totalWidth, totalHeight, slots, full } = layout;
+  const { totalWidth, totalHeight, full } = layout;
+  // 자유 사진 칸(P5)이면 그 칸을, 아니면 고정 레이아웃 칸을 그린다. 칸마다 넣을 사진은 shotIndex 번째다.
+  const freeCells = theme && theme.frameId === frameId && theme.cells?.length === 4 ? theme.cells : null;
+  const slots = freeCells ?? layout.slots.map((slot, shotIndex) => ({ ...slot, rotation: 0, shotIndex, shape: null }));
   const previewFilter = getFourcutFilterCssValue(outputFilter);
 
   const outer = [
@@ -80,6 +83,18 @@ export function FramePreview({
           top: `${topPct}%`,
           width: `${widthPct}%`,
           height: `${heightPct}%`,
+          // 자유 칸: 칸 중심 회전(시계 방향 도)과 모양. 고정 레이아웃 칸은 rounded-md 그대로다.
+          ...(slot.shape
+            ? {
+                transform: slot.rotation ? `rotate(${slot.rotation}deg)` : undefined,
+                borderRadius:
+                  slot.shape.type === "ELLIPSE"
+                    ? "50%"
+                    : slot.shape.type === "RECT"
+                      ? `${(slot.shape.cornerRadius / slot.width) * 100}% / ${(slot.shape.cornerRadius / slot.height) * 100}%`
+                      : 0,
+              }
+            : {}),
         };
 
         const mediaStyle: CSSProperties = {
@@ -87,9 +102,10 @@ export function FramePreview({
           filter: previewFilter,
         };
 
+        const shot = slot.shotIndex;
         const mediaItem: FrameMedia | null =
-          media?.[idx] ??
-          (images && images[idx] ? { src: images[idx] as string } : null);
+          media?.[shot] ??
+          (images && images[shot] ? { src: images[shot] as string } : null);
 
         if (mediaItem) {
           return (

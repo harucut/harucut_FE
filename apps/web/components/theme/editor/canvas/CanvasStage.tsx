@@ -7,6 +7,7 @@ import {
   Rect,
   Group,
   Transformer,
+  Ellipse,
   Image as KonvaImage,
 } from "@/lib/reactKonva";
 import Konva from "konva";
@@ -15,6 +16,33 @@ import { useStageFit } from "@/hooks/useStageFit";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { EditableNode } from "./EditableNode";
+import { DEFAULT_CELL_RADIUS, type FreeCell } from "@/lib/frameCells";
+
+/** 칸 하나를 그릴 모양. 고정 레이아웃 칸도 회전 0·둥근 사각으로 같은 모양으로 다룬다. */
+type CellGeometry = Pick<FreeCell, "x" | "y" | "width" | "height" | "rotation" | "shape">;
+
+/**
+ * 칸 모양을 칸 중심 회전 좌표계에 그린다(자유 사진 칸, P5). 서버 렌더와 같은 기준 — 회전은 칸 중심 축, 시계 방향 도.
+ * `shapeProps` 는 안쪽 도형(Rect·Ellipse)에 그대로 넘긴다(채우기·테두리·탭 처리).
+ */
+function CellShape({ cell, shapeProps }: { cell: CellGeometry; shapeProps: Record<string, unknown> }) {
+  return (
+    <Group x={cell.x + cell.width / 2} y={cell.y + cell.height / 2} rotation={cell.rotation}>
+      {cell.shape.type === "ELLIPSE" ? (
+        <Ellipse x={0} y={0} radiusX={cell.width / 2} radiusY={cell.height / 2} {...shapeProps} />
+      ) : (
+        <Rect
+          x={-cell.width / 2}
+          y={-cell.height / 2}
+          width={cell.width}
+          height={cell.height}
+          cornerRadius={cell.shape.type === "RECT" ? cell.shape.cornerRadius : 0}
+          {...shapeProps}
+        />
+      )}
+    </Group>
+  );
+}
 
 /**
  * @param maxHeight 캔버스 세로 상한(px). 비우면 뷰포트 기준 기본값(useStageFit)을 쓴다.
@@ -64,6 +92,19 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
   const bumpRenderKey = useThemeEditorStore((s) => s.bumpRenderKey);
 
   const layout = frameId ? FRAME_LAYOUTS[frameId] : null;
+  const freeCells = useThemeEditorStore((s) => s.cells);
+  // 그릴 칸 — 자유 칸이면 그 모양, 아니면 고정 레이아웃 칸(회전 0, 둥근 사각). shotIndex 는 누끼 표시가 쓴다.
+  const cellShapes = useMemo(
+    () =>
+      freeCells ??
+      (layout?.slots.slice(0, 4).map((s, i) => ({
+        ...s,
+        rotation: 0,
+        shape: { type: "RECT" as const, cornerRadius: DEFAULT_CELL_RADIUS },
+        shotIndex: i,
+      })) ?? []),
+    [freeCells, layout],
+  );
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const trRef = useRef<Konva.Transformer | null>(null);
@@ -205,16 +246,8 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
                 })()
               : null}
 
-            {layout.slots.map((s, i) => (
-              <Rect
-                key={i}
-                x={s.x}
-                y={s.y}
-                width={s.width}
-                height={s.height}
-                cornerRadius={40}
-                fill="rgba(0,0,0,0.30)"
-              />
+            {cellShapes.map((cell, i) => (
+              <CellShape key={i} cell={cell} shapeProps={{ fill: "rgba(0,0,0,0.30)" }} />
             ))}
           </Layer>
 
@@ -313,17 +346,11 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
 
           {/* 3) 위: 프레임 오버레이(항상 보이게) */}
           <Layer listening={false}>
-            {layout.slots.map((s, i) => (
-              <Rect
+            {cellShapes.map((cell, i) => (
+              <CellShape
                 key={i}
-                x={s.x}
-                y={s.y}
-                width={s.width}
-                height={s.height}
-                cornerRadius={40}
-                stroke="rgba(255,255,255,0.28)"
-                strokeWidth={1.5}
-                strokeScaleEnabled={false}
+                cell={cell}
+                shapeProps={{ stroke: "rgba(255,255,255,0.28)", strokeWidth: 1.5, strokeScaleEnabled: false }}
               />
             ))}
           </Layer>
@@ -335,37 +362,28 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
               (`lib/canvas/personCutout.ts`) — 이 캔버스에는 촬영 사진이 없어서
               보여줄 결과 자체가 없다. 그래서 남는 것은 "이 칸이 켜졌다"는 선택 표시뿐이다. */}
           <Layer listening={cutMode}>
-            {layout.slots.slice(0, 4).map((s, i) => (
+            {/* 누끼는 **사진 순서**마다 굽는다(lib/canvas/personCutout.ts 가 원본 순서로 굽는다). 자유 칸이면 칸 순서와 사진 순서가 다를 수 있어 shotIndex 로 잇는다. */}
+            {cellShapes.map((cell, i) => (
               <Group key={i}>
-                {cellCutouts[i] ? (
-                  <Rect
-                    x={s.x}
-                    y={s.y}
-                    width={s.width}
-                    height={s.height}
-                    cornerRadius={40}
-                    listening={false}
-                    stroke="#1ED760"
-                    strokeWidth={2}
-                    strokeScaleEnabled={false}
-                    dash={[8, 6]}
+                {cellCutouts[cell.shotIndex] ? (
+                  <CellShape
+                    cell={cell}
+                    shapeProps={{ listening: false, stroke: "#1ED760", strokeWidth: 2, strokeScaleEnabled: false, dash: [8, 6] }}
                   />
                 ) : null}
                 {/* 셀 탭으로 누끼 토글 */}
-                <Rect
-                  x={s.x}
-                  y={s.y}
-                  width={s.width}
-                  height={s.height}
-                  cornerRadius={40}
-                  fill="rgba(0,0,0,0.001)"
-                  onMouseDown={(e) => {
-                    e.cancelBubble = true;
-                    toggleCellCutout(i);
-                  }}
-                  onTouchStart={(e) => {
-                    e.cancelBubble = true;
-                    toggleCellCutout(i);
+                <CellShape
+                  cell={cell}
+                  shapeProps={{
+                    fill: "rgba(0,0,0,0.001)",
+                    onMouseDown: (e: Konva.KonvaEventObject<MouseEvent>) => {
+                      e.cancelBubble = true;
+                      toggleCellCutout(cell.shotIndex);
+                    },
+                    onTouchStart: (e: Konva.KonvaEventObject<TouchEvent>) => {
+                      e.cancelBubble = true;
+                      toggleCellCutout(cell.shotIndex);
+                    },
                   }}
                 />
               </Group>

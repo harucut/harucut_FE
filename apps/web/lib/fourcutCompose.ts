@@ -386,6 +386,15 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
     };
   }
 
+  // 자유 사진 칸 프레임은 합성 렌더가 열리기 전까지 촬영에 못 쓴다(P5, 서버 스위치 off — 409 FRAME-008).
+  // 되풀이해도 같으니 다른 프레임을 고르게 한다. 문구는 서버 코드 문구(api-error-messages)를 쓴다.
+  if (code === "FRAME-008") {
+    return {
+      message: getUserFacingApiErrorMessage(error, "이 프레임은 아직 촬영에 쓸 수 없어요."),
+      retryable: false,
+    };
+  }
+
   // 없는 프레임이거나 남의 프레임(GEN-031). 링크로 받은 전용 프레임에서 잘 난다.
   if (code === "GEN-031" || status === 404) {
     return {

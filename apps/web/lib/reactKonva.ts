@@ -21,6 +21,7 @@ import {
   Transformer as RKTransformer,
   Image as RKImage,
   Text as RKText,
+  Ellipse as RKEllipse,
 } from "react-konva";
 
 type PointerEvt = Konva.KonvaEventObject<MouseEvent | TouchEvent>;
@@ -61,3 +62,4 @@ export const Group = RKGroup as unknown as KonvaComponent;
 export const Transformer = RKTransformer as unknown as KonvaComponent;
 export const Image = RKImage as unknown as KonvaComponent;
 export const Text = RKText as unknown as KonvaComponent;
+export const Ellipse = RKEllipse as unknown as KonvaComponent;

@@ -1,3 +1,4 @@
+import { FREE_CELL_COUNT, type FreeCell } from "@/lib/frameCells";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type {
@@ -26,6 +27,8 @@ export type CreateFrameRequest = {
    * 생략하면 서버가 전부 끈 것으로 본다.
    */
   cellCutouts?: boolean[];
+  /** 자유 사진 칸(P5). 없으면 frameType 의 고정 레이아웃. PUT 은 전체 교체라 빼면 고정 레이아웃으로 돌아간다. */
+  cells?: FreeCell[];
   components: Array<{
     id?: string;
     type: "PHOTO" | "STICKER" | "TEXT";
@@ -192,6 +195,7 @@ export function toCreateFrameRequest(
     background: toRequestBackground(json.background),
     // 4개가 아니면 서버가 거절하므로(minItems/maxItems 4) 온전할 때만 싣는다.
     ...(json.cellCutouts?.length === 4 ? { cellCutouts: [...json.cellCutouts] } : {}),
+    ...(json.cells?.length === FREE_CELL_COUNT ? { cells: json.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) } : {}),
     components: json.components
       .map((c) => ({
         type: c.type,
@@ -245,6 +249,8 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
       frame.cellCutouts?.length === 4
         ? [...frame.cellCutouts]
         : [false, false, false, false],
+    // 자유 칸 프레임일 때만 온다. 없으면 고정 레이아웃.
+    ...(frame.cells?.length === FREE_CELL_COUNT ? { cells: frame.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) } : {}),
     components: frame.components.map((component, index) => {
       // 응답은 그릴 값(`source`)과 순수 key(`key`)를 따로 준다.
       // 스웨거: "수정 요청을 다시 만들 때 `source` 자리에 이 `key` 값을 넣는다."

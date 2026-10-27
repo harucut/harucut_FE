@@ -92,3 +92,30 @@ it("배경 파일이 남아 있어도 이미 올려 key 가 있으면 문서를 
   });
   expect(built?.assetIds).toEqual(["AsBg"]);
 });
+
+// 자유 사진 칸(P5)도 서버 초안에 담긴다. 필드만 더했으므로 schemaVersion 은 그대로다.
+describe("자유 사진 칸 초안", () => {
+  const cells = [0, 1, 2, 3].map((i) => ({
+    x: 150,
+    y: 200 + i * 1280,
+    width: 1700,
+    height: 1200,
+    rotation: i * 2,
+    shape: { type: "RECT" as const, cornerRadius: 40 },
+    shotIndex: 3 - i,
+  }));
+
+  it("칸이 있으면 담고, 읽을 때 모양이 맞을 때만 받는다", () => {
+    const made = toServerDocument({ ...base, cells, components: [] });
+    expect(made?.document.cells).toEqual(cells);
+    expect(parseServerDocument(made?.document, "classic-4")?.cells).toEqual(cells);
+
+    // 다른 앱 버전이 쓴 이상한 값은 버린다(고정 레이아웃으로 연다).
+    const broken = { ...made!.document, cells: [{ x: "a" }] };
+    expect(parseServerDocument(broken, "classic-4")).not.toHaveProperty("cells");
+  });
+
+  it("고정 레이아웃이면 키를 넣지 않는다", () => {
+    expect(toServerDocument({ ...base, cells: null, components: [] })?.document).not.toHaveProperty("cells");
+  });
+});

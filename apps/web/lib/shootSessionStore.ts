@@ -123,6 +123,9 @@ export function buildFrameContentKey(
               opacity: theme.background.opacity ?? 1,
             },
     cellCutouts: theme.cellCutouts ?? null,
+    // 자유 사진 칸(P5)을 고치면 다른 네컷이다 — 지문이 달라야 새 멱등키가 잡힌다.
+    // 고정 레이아웃이면 키를 넣지 않는다 — 넣으면 배포 직후 진행 중이던 세션의 지문이 바뀐다.
+    ...(theme.cells ? { cells: theme.cells } : {}),
     components: withCanonicalLayerOrder(
       theme.components.filter((component) => !isBlankSourceComponent(component)),
     ).map((component) => ({

@@ -1,3 +1,4 @@
+import type { FreeCell } from "@/lib/frameCells";
 import type { FrameId } from "@/constants/frames";
 
 export type ComponentType = "PHOTO" | "STICKER" | "TEXT";
@@ -120,6 +121,8 @@ export type ThemeExportJson = {
   // 셀별 누끼(배경 제거) 상태. 서버 계약에도 `cellCutouts` 가 있어 그대로 저장된다
   // (boolean 4개 고정, 촬영 슬롯 순서). 생략하면 서버는 전부 끈 것으로 본다.
   cellCutouts?: boolean[];
+  /** 자유 사진 칸(P5). 없으면 frameId 의 고정 레이아웃(lib/frameCells.ts). */
+  cells?: FreeCell[];
   components: Array<{
     id: string;
     type: ComponentType;
