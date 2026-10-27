@@ -47,6 +47,9 @@ export function FramePreview({
 
   const outer = [
     "rounded-lg border bg-zinc-900/80 p-2",
+    // 회전한 자유 칸이 캔버스 밖으로 나오지 않게 경계에서 자른다 — 저장 미리보기 PNG(renderThemePreviewPng)와 같다.
+    // 칸은 이 상자의 안쪽(padding box) 기준으로 놓이므로 잘리는 선이 곧 캔버스 경계다.
+    freeCells ? "overflow-hidden" : "",
     full,
     className,
   ].join(" ");

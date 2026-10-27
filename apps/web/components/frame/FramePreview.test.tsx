@@ -73,4 +73,11 @@ it("자유 칸이면 칸의 회전·모양과 사진 순서를 따른다", () =>
   expect(imgs.map((img) => img.getAttribute("src"))).toEqual(["/d.png", "/c.png", "/b.png", "/a.png"]);
   expect(imgs[0].style.transform).toBe("rotate(10deg)");
   expect(imgs[1].style.borderRadius).toBe("50%");
+  // Codex #567: 회전한 칸이 프레임 밖으로 나오지 않게 경계에서 자른다(저장 미리보기 PNG 와 같게).
+  expect(container.firstElementChild).toHaveClass("overflow-hidden");
+});
+
+it("고정 레이아웃이면 바깥 상자를 자르지 않는다(예전 그대로)", () => {
+  const { container } = render(<FramePreview frameId="classic-4" images={["/a.png"]} />);
+  expect(container.firstElementChild).not.toHaveClass("overflow-hidden");
 });
