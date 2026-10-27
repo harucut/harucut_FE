@@ -33,6 +33,7 @@ import {
 } from "@/lib/presignedUploadApi";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getFrame, listAllFrames } from "@/lib/remoteFrameApi";
+import { composeFailureCopy } from "@/lib/composeFailure";
 import type { FrameLayout } from "@/lib/canvas/composeFrame";
 
 /**
@@ -358,6 +359,10 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
     if (error.reason?.trim() && process.env.NODE_ENV !== "production") {
       console.error(`[compose] 서버 합성 실패: ${error.reason}`);
     }
+
+    // 실패 코드가 있으면 그것으로 고른다(원본·자산·시간 초과). 없거나 UNKNOWN·RENDER_FAILED 면 지금까지의 문구.
+    const copy = composeFailureCopy(error.code);
+    if (copy) return copy;
 
     return {
       message: "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",

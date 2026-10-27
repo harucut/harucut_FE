@@ -766,6 +766,20 @@ describe("describeComposeFailure", () => {
     error.mockRestore();
   });
 
+  // 합성 실패 코드(app-shell §8)가 있으면 할 일을 말한다. UNKNOWN·RENDER_FAILED·모르는 값은 기본 문구 그대로다.
+  it.each([
+    ["SOURCE_MISSING", "사진을 찾을 수 없어요. 다시 찍어 주세요.", false],
+    ["ASSET_UNREADABLE", "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", false],
+    ["TIMED_OUT", "사진을 만드는 데 시간이 너무 걸렸어요. 다시 시도해 주세요.", true],
+    ["UNKNOWN", FALLBACK, false],
+    ["RENDER_FAILED", FALLBACK, false],
+    ["SOMETHING_NEW", FALLBACK, false],
+  ])("실패 코드 %s 이면 그에 맞는 문구를 쓴다", (code, message, retryable) => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual({ message, retryable });
+    error.mockRestore();
+  });
+
   it("사유는 버리되 콘솔에는 남긴다 — 원인 추적을 잃지 않게", () => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
 
