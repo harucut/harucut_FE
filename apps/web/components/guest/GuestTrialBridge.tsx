@@ -10,6 +10,7 @@ import { useGuestTrialStore, type GuestNoticeAction } from "@/lib/guestTrialStor
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import {
+  dropPendingGuestSaveComposeKey,
   ensurePendingGuestSaveComposeKey,
   readPendingGuestSave,
   clearPendingGuestSaveIfUnchanged,
@@ -477,6 +478,10 @@ export function GuestTrialBridge() {
         // 또 실패하는 무한 루프가 된다 — 예전에는 종류를 안 가리고 "새로고침하면
         // 다시 시도해요"라고만 안내했다.
         const failure = describeComposeFailure(error);
+        // 서버가 실패로 확정한 작업이면 다음 인계는 새 작업이어야 한다 — 같은 키로는 실패가 그대로 돌아온다(Codex #565).
+        if (failure.retryable && failure.newJobOnRetry) {
+          await dropPendingGuestSaveComposeKey(composeKey.key);
+        }
         if (!failure.retryable) {
           // 버리는 것도 **내가 올린 그 한 벌일 때만**이다(위 성공 자리와 같은 이유).
           // 못 지웠으면 남은 한 벌을 다음 회차에 다시 묻는다.

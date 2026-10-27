@@ -89,6 +89,8 @@ export type ComposeAccepted = {
 export type ParticipantJob = {
   jobId: number;
   status: JobStatus;
+  /** FAILED 일 때만(lib/composeFailure.ts). */
+  failureCode?: string | null;
 };
 
 export type DownloadUrl = { url: string; expiresAt: string };
