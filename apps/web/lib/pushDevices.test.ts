@@ -1,4 +1,11 @@
-import { hasServerPush, registerPushDevice, resetPushSyncForTest, syncPushDevice, unregisterPushDevice } from "@/lib/pushDevices";
+import {
+  PUSH_UNREGISTER_DEADLINE_MS,
+  hasServerPush,
+  registerPushDevice,
+  resetPushSyncForTest,
+  syncPushDevice,
+  unregisterPushDevice,
+} from "@/lib/pushDevices";
 
 const mockPost = jest.fn();
 const shell = { info: null as null | { version: number; platform: "ios" | "android" }, token: null as string | null };
@@ -41,8 +48,34 @@ describe("서버 푸시 기기", () => {
     await registerPushDevice();
     mockPost.mockRejectedValueOnce(new Error("offline"));
     await unregisterPushDevice();
-    expect(mockPost).toHaveBeenLastCalledWith("/api/client/devices/unregister", { token: "ExponentPushToken[abc]" });
+    expect(mockPost).toHaveBeenLastCalledWith(
+      "/api/client/devices/unregister",
+      { token: "ExponentPushToken[abc]" },
+      { signal: expect.any(AbortSignal) },
+    );
     expect(hasServerPush()).toBe(false);
+  });
+
+  // Codex #567: 해제가 응답 없이 걸리면 로그아웃이 끝나지 않았다. 상한이 지나면 요청을 끊고 넘어간다.
+  it("해제가 응답이 없으면 상한에서 요청을 끊고 끝난다", async () => {
+    await registerPushDevice();
+    jest.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    mockPost.mockImplementationOnce((_url: string, _body: unknown, options: { signal: AbortSignal }) => {
+      signal = options.signal;
+      return new Promise(() => {}); // 신호를 따르지 않는 최악의 경우
+    });
+    let done = false;
+    void unregisterPushDevice().then(() => {
+      done = true;
+    });
+    await jest.advanceTimersByTimeAsync(PUSH_UNREGISTER_DEADLINE_MS - 1);
+    expect(done).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(done).toBe(true);
+    expect(signal?.aborted).toBe(true);
+    expect(hasServerPush()).toBe(false);
+    jest.useRealTimers();
   });
 
   it("화면이 열릴 때 맞추기는 한 번만 한다", async () => {

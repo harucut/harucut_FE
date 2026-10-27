@@ -41,15 +41,33 @@ export async function registerPushDevice(): Promise<boolean> {
   }
 }
 
-/** 로그아웃 **전에** 부른다(쿠키가 있어야 한다). 실패해도 로그아웃은 진행 — 다른 계정이 같은 토큰을 등록하면 서버가 옮긴다. */
+/** 로그아웃이 해제를 기다리는 상한. 넘으면 해제를 버리고 로그아웃한다. */
+export const PUSH_UNREGISTER_DEADLINE_MS = 5_000;
+
+/**
+ * 로그아웃 **전에** 부른다(쿠키가 있어야 한다). 실패해도, 응답이 없어도 로그아웃은 진행한다 — 다른 계정이 같은 토큰을
+ * 등록하면 서버가 옮긴다. 상한을 여기 둔다: 해제가 걸리면 로그아웃의 요청 상한은 시작도 못 하고 버튼이 묶인다(Codex #567).
+ */
 export async function unregisterPushDevice() {
   const token = typeof window === "undefined" ? null : storedToken();
   if (!token) return;
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await clientApi.post("/api/client/devices/unregister", { token });
+    await Promise.race([
+      clientApi.post("/api/client/devices/unregister", { token }, { signal: controller.signal }),
+      // 신호를 못 따르는 경로가 있어도 기다리기는 여기서 끝난다.
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error("push unregister timed out"));
+        }, PUSH_UNREGISTER_DEADLINE_MS);
+      }),
+    ]);
   } catch {
     // 서버 규칙(다른 계정 등록 시 옮김)이 안전망이다.
   } finally {
+    clearTimeout(timer);
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {}
