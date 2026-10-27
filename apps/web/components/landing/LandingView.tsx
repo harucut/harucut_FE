@@ -221,12 +221,12 @@ export function LandingView() {
               행사 사진
             </span>
             <h2 className="text-[28px] font-extrabold leading-[1.2] tracking-[-1px] text-white lg:text-[38px]">
-              행사에서는 부스 대신 QR 한 장
+              행사에서는 링크 한 장, 부스 한 대
             </h2>
             <p className="text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
-              팬미팅·페스티벌·사내 행사용 QR을 만들어 드려요. 참가자 화면에 행사 이름이 뜨고,
-              행사에 맞춘 컷 구성으로 앱도 가입도 없이 자기 휴대폰에 남깁니다. 줄도,
-              인화 대기도 없어요.
+              팬미팅·페스티벌·사내 행사를 직접 만들어 운영해요. 참가자는 앱도 가입도 없이
+              QR을 찍거나 현장 부스 앞에서 행사 프레임으로 찍고, 결과 링크로 가져가요.
+              줄도, 인화 대기도 없어요.
             </p>
           </div>
           <Link
