@@ -29,6 +29,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
 import { getNativeSaveErrorMessage, nativeNotify } from "@/lib/nativeBridge";
+import { hasServerPush } from "@/lib/pushDevices";
 import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -160,6 +161,8 @@ function notifyServerComposeDone(idempotencyKey: string) {
   if (compose.notified || !compose.completed || compose.waiting > 0) return;
 
   compose.notified = true;
+  // 서버 푸시를 받는 기기면 서버가 알린다 — 같은 일을 두 번 알리지 않는다.
+  if (hasServerPush()) return;
   void nativeNotify({
     title: "네컷이 완성됐어요",
     /*

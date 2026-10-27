@@ -17,6 +17,7 @@ import {
   nativeSaveImageUrl,
   nativeSetColorScheme,
   nativeShare,
+  nativePushToken,
   nativeStoreFinish,
   nativeStoreProducts,
   nativeStorePurchase,
@@ -427,5 +428,32 @@ describe("앱 구독 브리지", () => {
     void nativeStoreFinish(["t1"]);
     await waitFor(() => posted.length > 0);
     expect(posted[0]).toMatchObject({ type: "iap-finish", proofs: ["t1"] });
+  });
+});
+
+// 서버 푸시 토큰(판 4). 구버전 셸에는 보내지 않고, 셸이 준 값은 문자열일 때만 믿는다.
+describe("푸시 토큰 브리지", () => {
+  afterEach(leaveShell);
+
+  it("판 4 셸에서만 묻고 토큰을 돌려준다", async () => {
+    const old = enterShell(3);
+    expect(await nativePushToken()).toBeNull();
+    expect(old).toHaveLength(0);
+    leaveShell();
+
+    const posted = enterShell(4);
+    const token = nativePushToken();
+    await waitFor(() => posted.length > 0);
+    expect(posted[0]).toMatchObject({ type: "push-token" });
+    replyTo(posted, "push-token", { ok: true, data: { token: "ExponentPushToken[x]" } });
+    expect(await token).toBe("ExponentPushToken[x]");
+  });
+
+  it("권한이 없어 실패하면 null", async () => {
+    const posted = enterShell(4);
+    const token = nativePushToken();
+    await waitFor(() => posted.length > 0);
+    replyTo(posted, "push-token", { ok: false });
+    expect(await token).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { FREE_CELL_COUNT, cellsFromLayout, clampCell, swapShotIndex, type FreeCell } from "@/lib/frameCells";
 import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -155,6 +156,16 @@ type State = {
   cellCutouts: boolean[];
   // 누끼 편집 모드: 켜져 있을 때만 캔버스 셀 탭으로 누끼를 토글한다.
   cutMode: boolean;
+  /**
+   * 자유 사진 칸(P5). null 이면 frameId 의 고정 레이아웃. 켜면 지금 고정 레이아웃에서 시작한다(lib/frameCells.ts).
+   */
+  cells: FreeCell[] | null;
+  /** 칸 자유 편집을 켜고 끈다. 끄면 고정 레이아웃으로 돌아간다. */
+  setFreeCells: (on: boolean) => void;
+  /** 한 칸의 위치·크기·회전·모양을 바꾼다. 저장할 수 있는 값으로 맞춘다(clampCell). */
+  updateCell: (index: number, patch: Partial<Omit<FreeCell, "shotIndex">>) => void;
+  /** 한 칸에 넣을 사진 순서를 바꾼다. 그 순서를 쓰던 칸과 맞바꾼다. */
+  setCellShot: (index: number, shotIndex: number) => void;
 
   setFrameId: (id: FrameId) => void;
   setTab: (t: ComponentType) => void;
@@ -236,7 +247,7 @@ type State = {
  */
 type EditorSnapshot = Pick<
   State,
-  "components" | "background" | "backgroundColor" | "pendingBackgroundFile" | "cellCutouts"
+  "components" | "background" | "backgroundColor" | "pendingBackgroundFile" | "cellCutouts" | "cells"
 >;
 
 /** 이력 상한. 스냅샷은 레이어 배열과 배경 파일 참조뿐이라 가볍지만 끝없이 쌓지는 않는다. */
@@ -257,6 +268,7 @@ function snapshotOf(s: State): EditorSnapshot {
     backgroundColor: s.backgroundColor,
     pendingBackgroundFile: s.pendingBackgroundFile,
     cellCutouts: s.cellCutouts,
+    cells: s.cells,
   };
 }
 
@@ -327,6 +339,7 @@ function restoreSnapshot(s: State, snap: EditorSnapshot): Partial<State> {
     backgroundColor: snap.backgroundColor,
     pendingBackgroundFile: snap.pendingBackgroundFile,
     cellCutouts: snap.cellCutouts,
+    cells: snap.cells,
     activeId: s.activeId && ids.has(s.activeId) ? s.activeId : null,
   };
 }
@@ -388,6 +401,7 @@ function resetEditorState(get: () => State) {
     ...emptyHistory(),
     activeId: null,
     cellCutouts: [false, false, false, false],
+    cells: null,
     assets: {
       photos: [],
     },
@@ -419,6 +433,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   pendingBackgroundFile: null,
   cellCutouts: [false, false, false, false],
   cutMode: false,
+  cells: null,
 
   // 프레임 변경 시 에디터 상태 초기화
   setFrameId: (id) =>
@@ -446,6 +461,27 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       return { ...record(s), cellCutouts: next };
     }),
   setCutMode: (on) => set({ cutMode: on }),
+  setFreeCells: (on) =>
+    set((s) => {
+      if (!s.frameId || on === (s.cells !== null)) return s;
+      return { ...record(s), cells: on ? cellsFromLayout(FRAME_LAYOUTS[s.frameId]) : null };
+    }),
+  updateCell: (index, patch) =>
+    set((s) => {
+      const current = s.cells?.[index];
+      if (!s.frameId || !s.cells || !current) return s;
+      const layout = FRAME_LAYOUTS[s.frameId];
+      const next = clampCell({ ...current, ...patch, shotIndex: current.shotIndex }, { width: layout.totalWidth, height: layout.totalHeight });
+      // 같은 칸의 같은 속성을 연달아 바꾸면(숫자 입력·드래그) 한 단계로 묶는다.
+      const coalesceKey = `cell:${index}:${Object.keys(patch).sort().join(",")}`;
+      return { ...record(s, coalesceKey), cells: s.cells.map((cell, i) => (i === index ? next : cell)) };
+    }),
+  setCellShot: (index, shotIndex) =>
+    set((s) => {
+      if (!s.cells) return s;
+      const next = swapShotIndex(s.cells, index, shotIndex);
+      return next === s.cells ? s : { ...record(s), cells: next };
+    }),
   setBackgroundColor: (color) =>
     set((s) => {
       // 색을 고르면 배경 이미지는 해제한다.
@@ -1056,7 +1092,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   },
 
   exportJson: () => {
-    const { frameId, components, backgroundColor, background, cellCutouts } = get();
+    const { frameId, components, backgroundColor, background, cellCutouts, cells } = get();
     if (!frameId) return null;
 
     const normalized = normalizeZ(components);
@@ -1072,6 +1108,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
       frameId,
       background: exportedBackground,
       cellCutouts: [...cellCutouts],
+      ...(cells ? { cells: cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) } : {}),
       components: normalized
         .filter((c) => !c.hidden)
         .map((c) => ({
@@ -1122,6 +1159,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         cellCutouts: Array.isArray(data.cellCutouts)
           ? [0, 1, 2, 3].map((i) => Boolean(data.cellCutouts?.[i]))
           : [false, false, false, false],
+        cells: data.cells?.length === FREE_CELL_COUNT ? data.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) : null,
         background: data.background ?? {
           type: "COLOR",
           value: "111827",
@@ -1189,6 +1227,8 @@ export const useThemeEditorStore = create<State>((set, get) => ({
             : normalizeHexColor(draft.backgroundColor),
         pendingBackgroundFile,
         cellCutouts: [0, 1, 2, 3].map((i) => Boolean(draft.cellCutouts?.[i])),
+        // 칸 자유 편집이 생기기 전 초안에는 키가 없다 — 고정 레이아웃.
+        cells: draft.cells?.length === FREE_CELL_COUNT ? draft.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) : null,
         assets: { photos },
       };
     });

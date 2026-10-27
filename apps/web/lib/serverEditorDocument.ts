@@ -1,3 +1,4 @@
+import { FREE_CELL_COUNT, type FreeCell } from "@/lib/frameCells";
 import { isFrameId, type FrameId } from "@/constants/frames";
 import type { EditorComponent, ThemeBackground } from "@/lib/types/themeEditor";
 
@@ -20,10 +21,30 @@ export type ServerEditorDocument = {
   backgroundColor: string;
   background: ThemeBackground;
   cellCutouts: boolean[];
+  /**
+   * 자유 사진 칸(P5). 고정 레이아웃이면 키가 없다. 필드만 더한 것이라 schemaVersion 은 그대로다 — 올리면 옛 앱이 문서를 통째로 버린다.
+   */
+  cells?: FreeCell[];
   components: EditorComponent[];
 };
 
-type EditorSnapshot = Omit<ServerEditorDocument, "schemaVersion"> & {
+/** 다른 기기·앱 버전이 쓴 칸 목록은 모양만 확인한다. 값의 범위는 저장할 때 서버가 다시 본다. */
+function isCellList(value: unknown): value is FreeCell[] {
+  return (
+    Array.isArray(value) &&
+    value.length === FREE_CELL_COUNT &&
+    value.every(
+      (cell) =>
+        isRecord(cell) &&
+        ["x", "y", "width", "height", "rotation", "shotIndex"].every((k) => typeof cell[k] === "number") &&
+        isRecord(cell.shape) &&
+        (cell.shape.type === "RECT" || cell.shape.type === "ELLIPSE"),
+    )
+  );
+}
+
+type EditorSnapshot = Omit<ServerEditorDocument, "schemaVersion" | "cells"> & {
+  cells?: FreeCell[] | null;
   /** 아직 안 올린 배경 파일. 있으면 문서를 만들 수 없다. */
   pendingBackgroundFile?: File | null;
 };
@@ -80,6 +101,7 @@ export function toServerDocument(
       backgroundColor: state.backgroundColor,
       background,
       cellCutouts: [...state.cellCutouts],
+      ...(state.cells ? { cells: state.cells } : {}),
       components,
     },
     assetIds: Array.from(assetIds),
@@ -110,6 +132,7 @@ export function parseServerDocument(raw: unknown, frameId: FrameId): ServerEdito
     backgroundColor: typeof raw.backgroundColor === "string" ? raw.backgroundColor : "111827",
     background: raw.background as ThemeBackground,
     cellCutouts: [0, 1, 2, 3].map((i) => Array.isArray(raw.cellCutouts) && raw.cellCutouts[i] === true),
+    ...(isCellList(raw.cells) ? { cells: raw.cells } : {}),
     components: raw.components as EditorComponent[],
   };
 }

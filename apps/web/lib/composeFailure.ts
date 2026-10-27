@@ -12,6 +12,8 @@ export type ComposeFailureCode =
   | "ASSET_UNREADABLE"
   | "TIMED_OUT"
   | "RENDER_FAILED"
+  /** 결과·썸네일 쌍이 검증되지 않아 공개하지 않은 최종 실패(D09). 서버 출력 계약 2 이후에만 나온다. RENDER_FAILED 와 같은 기본 문구다. */
+  | "OUTPUT_CONFLICT"
   | "UNKNOWN";
 
 type FailureCopy = {
@@ -20,7 +22,7 @@ type FailureCopy = {
   retryable: boolean;
 };
 
-const COPY: Record<Exclude<ComposeFailureCode, "UNKNOWN" | "RENDER_FAILED">, FailureCopy> = {
+const COPY: Record<Exclude<ComposeFailureCode, "UNKNOWN" | "RENDER_FAILED" | "OUTPUT_CONFLICT">, FailureCopy> = {
   SOURCE_MISSING: { message: "사진을 찾을 수 없어요. 다시 찍어 주세요.", retryable: false },
   SOURCE_UNREADABLE: { message: "사진 파일을 읽지 못했어요. 다시 찍어 주세요.", retryable: false },
   ASSET_MISSING: { message: "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", retryable: false },

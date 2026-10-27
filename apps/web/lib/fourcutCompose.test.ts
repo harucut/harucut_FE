@@ -13,6 +13,7 @@
  */
 import {
   composeFourcutOnServer,
+  SOURCE_REUSE_MS,
   describeComposeFailure,
   resolveComposeFrame,
   SystemFrameMissingError,
@@ -721,6 +722,22 @@ describe("composeFourcutOnServer — 같은 멱등키면 원본을 다시 올리
     );
   });
 
+  // 서버는 원본을 24시간 뒤에 지운다. 그 뒤에 같은 key 로 접수하면 SOURCE_MISSING 이다.
+  it("23시간이 지난 원본은 다시 쓰지 않고 새로 올린다", async () => {
+    const now = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    now.mockReturnValue(1_000_000 + SOURCE_REUSE_MS - 1);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    now.mockReturnValue(1_000_000 + SOURCE_REUSE_MS);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(8);
+    now.mockRestore();
+  });
+
   // 절반만 올라간 key 를 기억하면, 다음 재시도가 모자란 원본으로 합성을 접수한다.
   it("올리다 실패한 원본은 기억하지 않는다", async () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -766,7 +783,7 @@ describe("describeComposeFailure", () => {
     error.mockRestore();
   });
 
-  // 합성 실패 코드(app-shell §8)가 있으면 할 일을 말한다. UNKNOWN·RENDER_FAILED·모르는 값은 기본 문구 그대로다.
+  // 합성 실패 코드(app-shell §8)가 있으면 할 일을 말한다. UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT·모르는 값은 기본 문구 그대로다.
   // 다시 시도할 수 있는 서버 확정 실패(TIMED_OUT)는 새 작업으로 다시 보낸다(newJobOnRetry).
   it.each([
     ["SOURCE_MISSING", "사진을 찾을 수 없어요. 다시 찍어 주세요.", false],
@@ -778,7 +795,16 @@ describe("describeComposeFailure", () => {
     error.mockRestore();
   });
 
-  it.each(["UNKNOWN", "RENDER_FAILED", "SOMETHING_NEW"])("실패 코드 %s 는 기본 문구다", (code) => {
+  // 자유 사진 칸 프레임은 합성 렌더가 열리기 전까지 409 FRAME-008 — 다시 눌러도 같으니 다른 프레임으로.
+  it("자유 칸 프레임이 아직 막혀 있으면(FRAME-008) 재시도 대신 그 문구를 보인다", () => {
+    const error = Object.assign(new Error("x"), { status: 409, code: "FRAME-008", data: { code: "FRAME-008" } });
+    expect(describeComposeFailure(error)).toEqual({
+      message: "이 프레임은 아직 촬영에 쓸 수 없어요. 곧 열릴 예정이에요.",
+      retryable: false,
+    });
+  });
+
+  it.each(["UNKNOWN", "RENDER_FAILED", "OUTPUT_CONFLICT", "SOMETHING_NEW"])("실패 코드 %s 는 기본 문구다", (code) => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
     expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual({ message: FALLBACK, retryable: false });
     error.mockRestore();
@@ -794,5 +820,46 @@ describe("describeComposeFailure", () => {
     );
 
     error.mockRestore();
+  });
+});
+
+// Codex #567: 자유 칸 프레임의 원본을 고정 슬롯 비율로 자르면 서버가 칸 비율로 한 번 더 잘라 미리보기와 구도가 달라진다.
+describe("composeFourcutOnServer — 자유 사진 칸(P5)", () => {
+  const cell = (shotIndex: number, width: number, height: number) => ({
+    x: 0, y: 0, width, height, rotation: 0, shape: { type: "ELLIPSE" as const }, shotIndex,
+  });
+
+  function canvasSizes() {
+    const sizes: Array<[number, number]> = [];
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: unknown[]) {
+      sizes.push([this.width, this.height]);
+      return (original as (...a: unknown[]) => unknown).apply(this, args);
+    } as typeof HTMLCanvasElement.prototype.getContext;
+    return sizes;
+  }
+
+  it("원본 i 를 shotIndex 가 i 인 칸의 크기로 가공해 올린다", async () => {
+    mockGetFrame.mockResolvedValue({
+      frameId: 99,
+      frameType: "CLASSIC",
+      components: [],
+      cells: [cell(2, 800, 800), cell(0, 1000, 500), cell(3, 600, 900), cell(1, 1200, 1200)],
+    });
+    const sizes = canvasSizes();
+    await composeFourcutOnServer({ sources: SOURCES, layout, outputFilter: "NONE", frameId: "classic-4", remoteFrameId: 99 });
+    expect(sizes).toEqual([[1000, 500], [1200, 1200], [800, 800], [600, 900]]);
+  });
+
+  it("칸이 넷이 아니거나 순번이 어긋나면 고정 슬롯으로 자른다", async () => {
+    mockGetFrame.mockResolvedValue({
+      frameId: 99,
+      frameType: "CLASSIC",
+      components: [],
+      cells: [cell(0, 800, 800), cell(0, 1000, 500), cell(3, 600, 900), cell(1, 1200, 1200)],
+    });
+    const sizes = canvasSizes();
+    await composeFourcutOnServer({ sources: SOURCES, layout, outputFilter: "NONE", frameId: "classic-4", remoteFrameId: 99 });
+    expect(sizes).toEqual(Array(4).fill([1700, 1200]));
   });
 });

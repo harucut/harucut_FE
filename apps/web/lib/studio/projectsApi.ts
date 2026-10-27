@@ -22,6 +22,7 @@ export type BrandDefaults = Pick<
   | "frames"
   | "consentItems"
   | "theme"
+  | "freeText"
 >;
 
 /** 상속 가능한 최상위 필드. 행사 PATCH 에서 null 로 보내면 직접 값을 지우고 위 단계 값을 따른다. */
@@ -34,6 +35,7 @@ export const INHERITABLE_FIELDS = [
   "frames",
   "consentItems",
   "theme",
+  "freeText",
 ] as const satisfies ReadonlyArray<keyof BrandDefaults>;
 
 export type Project = {

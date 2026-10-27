@@ -3,6 +3,7 @@
  * docs/api/openapi.generated.json 이다 — p2a 초안은 더 고치지 않는다(백엔드 fork #21).
  * 계약이 바뀌면 이 파일과 BFF(app/api/client/{public,participant,booth}/**)를 함께 고친다.
  */
+import type { PublicFreeText } from "@/lib/event/freeText";
 import type { ResolvedPageTheme } from "@/lib/event/pageTheme";
 
 export type LayoutType = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
@@ -43,6 +44,8 @@ export type PublicEvent = {
   frames: EventFrameRef[];
   consentItems: ConsentItem[];
   theme?: EventTheme;
+  /** 참가자 자유 문구(D06). 없거나 null 이면 문구를 바꿀 수 없는 행사다. */
+  freeText?: PublicFreeText | null;
 };
 
 export type ParticipantSessionIssued = {

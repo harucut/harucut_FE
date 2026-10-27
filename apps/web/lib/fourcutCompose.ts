@@ -20,6 +20,7 @@ import {
   waitForCompose,
 } from "@/lib/composeApi";
 import { frameTypeFromFrameId } from "@/lib/frameApi";
+import { FREE_CELL_COUNT, type FreeCell } from "@/lib/frameCells";
 import { isAssetFrame } from "@/lib/serverAssets";
 import {
   applyFilterPixels,
@@ -254,7 +255,20 @@ export type ComposeFrameTarget = {
    * 굽는다. 개수·저장·렌더링 계약은 `docs/backend-contract.md` 가 갖는다.
    */
   cellCutouts: boolean[];
+  /**
+   * 자유 사진 칸(P5). 있으면 원본 i 는 `shotIndex === i` 인 칸의 크기로 가공해 올린다 — 고정 슬롯 비율로 자르면
+   * 서버가 칸 비율로 한 번 더 잘라, 화면 미리보기(FramePreview 가 칸에 바로 맞춤)와 구도가 달라진다(Codex #567).
+   */
+  cells?: FreeCell[];
 };
+
+/** 네 칸이 모두 있고 촬영 순번이 0~3 으로 하나씩일 때만 자유 칸으로 본다. 아니면 고정 슬롯. */
+function readFreeCells(frame: RemoteFrame | null): FreeCell[] | undefined {
+  const cells = frame?.cells;
+  if (!cells || cells.length !== FREE_CELL_COUNT) return undefined;
+  const order = new Set(cells.map((cell) => cell.shotIndex));
+  return order.size === FREE_CELL_COUNT && [0, 1, 2, 3].every((i) => order.has(i)) ? cells : undefined;
+}
 
 /**
  * 프레임이 들고 있는 누끼 토글을 읽는다.
@@ -295,7 +309,8 @@ export async function resolveComposeFrame(
       return null;
     });
 
-    return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame) };
+    const cells = readFreeCells(frame);
+    return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame), ...(cells ? { cells } : {}) };
   }
 
   if (!frameId) throw new SystemFrameMissingError();
@@ -382,6 +397,15 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
     return {
       message:
         "프레임에 넣은 스티커나 글자를 서버가 읽지 못했어요. 프레임 꾸미기에서 다시 저장한 뒤 시도해 주세요.",
+      retryable: false,
+    };
+  }
+
+  // 자유 사진 칸 프레임은 합성 렌더가 열리기 전까지 촬영에 못 쓴다(P5, 서버 스위치 off — 409 FRAME-008).
+  // 되풀이해도 같으니 다른 프레임을 고르게 한다. 문구는 서버 코드 문구(api-error-messages)를 쓴다.
+  if (code === "FRAME-008") {
+    return {
+      message: getUserFacingApiErrorMessage(error, "이 프레임은 아직 촬영에 쓸 수 없어요."),
       retryable: false,
     };
   }
@@ -509,17 +533,25 @@ async function uploadSources(files: File[]): Promise<string[]> {
  * 합성이 성공한 뒤에도 비우지 않는다. 성공하면 서버가 원본을 지우므로 여기 남은 key 는
  * 이미 없는 객체를 가리키지만, 같은 키로 다시 접수하면 서버는 끝난 작업을 재생할 뿐 key 를
  * 보지 않는다. 비워 두면 그 재접수가 아무도 안 쓸 4장을 새로 만든다.
+ *
+ * **23시간만 믿는다.** 서버는 원본을 발급 24시간 뒤에 지운다(app-shell §4). 그보다 오래 들고
+ * 같은 멱등키로 재시도하면 지워진 key 로 접수해 SOURCE_MISSING 으로 실패한다 — 그 전에 버리고
+ * 새로 올린다(접수된 작업이 있었다면 서버는 어차피 key 를 보지 않는다).
  */
 let lastUploadedSources: {
   idempotencyKey: string;
   sourceKeys: string[];
+  uploadedAt: number;
 } | null = null;
 
-/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없으면 null(= 새로 올린다). */
+export const SOURCE_REUSE_MS = 23 * 60 * 60 * 1000;
+
+/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없거나 오래됐으면 null(= 새로 올린다). */
 function reusableSourceKeys(idempotencyKey: string | undefined): string[] | null {
   if (!idempotencyKey) return null;
 
-  return lastUploadedSources?.idempotencyKey === idempotencyKey
+  return lastUploadedSources?.idempotencyKey === idempotencyKey &&
+    Date.now() - lastUploadedSources.uploadedAt < SOURCE_REUSE_MS
     ? lastUploadedSources.sourceKeys
     : null;
 }
@@ -537,7 +569,7 @@ function rememberUploadedSources(
 ) {
   if (!idempotencyKey) return;
 
-  lastUploadedSources = { idempotencyKey, sourceKeys };
+  lastUploadedSources = { idempotencyKey, sourceKeys, uploadedAt: Date.now() };
 }
 
 /**
@@ -582,7 +614,7 @@ export async function composeFourcutOnServer(args: {
   // 실패할 운명이어도 원본 4장은 이미 S3 로 나간 뒤라 쓰이지 않을 파일만 남았다
   // (합성이 성공해야 서버가 원본을 지운다). 몇백 ms 를 아끼자고 치르기엔 비싼 값이다.
   // 누끼 토글도 여기서 같이 받는다 — 굽기가 그 값을 봐야 한다.
-  const { frameId: composeFrameId, cellCutouts } = await resolveComposeFrame(
+  const { frameId: composeFrameId, cellCutouts, cells } = await resolveComposeFrame(
     args.frameId,
     args.remoteFrameId,
   );
@@ -606,7 +638,7 @@ export async function composeFourcutOnServer(args: {
         prepared.sources.map(async (src, index) => {
           const blob = await renderSourceForSlot(
             src,
-            layout.slots[index],
+            cells?.find((cell) => cell.shotIndex === index) ?? layout.slots[index],
             outputFilter,
           );
           return new File([blob], `source-${index + 1}.jpg`, {

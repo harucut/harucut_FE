@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import { appLoginProviderOf, canonicalOAuthCallbackUrl } from '@harucut/shared';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -30,6 +31,7 @@ import {
   ensureAndroidChannel,
   ensureCameraPermission,
   ensureNotificationPermission,
+  getPushToken,
   haptic,
   pushChunk,
   saveBase64Chunks,
@@ -146,6 +148,11 @@ export function HarucutWebShell() {
     다시 열 주소다 — 처음 올릴 때는 웹 첫 화면이다.
   */
   const [webViewSession, setWebViewSession] = useState({ key: 0, uri: START_URL });
+  /*
+    지금 문서가 다 떴는가. 뜨는 중에 넣은 스크립트는 곧 올라올 문서에 덮여 사라진다 — 앱이 꺼진 채 알림을 눌러
+    열리면 알림 응답이 첫 문서보다 먼저 와서, 이동을 넣어도 시작 화면(/home)이 그 위를 덮었다(Codex #567).
+  */
+  const documentReadyRef = useRef(false);
   // 시스템 브라우저 로그인이 떠 있는 동안 두 번째 시작을 막는다(두 번 누름·리다이렉트 반복).
   const appLoginPendingRef = useRef(false);
   /*
@@ -160,6 +167,46 @@ export function HarucutWebShell() {
   // 채널이 없으면 안드로이드 8+ 에서 알림이 조용히 버려진다. 한 번만 만든다.
   useEffect(() => {
     void ensureAndroidChannel();
+  }, []);
+
+  /*
+    서버 푸시를 눌렀을 때 갈 곳(푸시 data.type). 합성 완료·실패는 기록, 결제·구독 안내는 마이페이지.
+    알림이 셸을 연 경우(앱이 꺼져 있었음)와 켜져 있던 경우를 같이 받는다. 주소는 우리 웹 안으로만 연다.
+  */
+  useEffect(() => {
+    const route = (data: Record<string, unknown> | undefined) => {
+      const type = data?.type;
+      const path =
+        type === 'COMPOSE_DONE' || type === 'COMPOSE_FAILED'
+          ? '/history'
+          : type === 'PAYMENT_FAILED' || type === 'SUBSCRIPTION_EXPIRING'
+            ? '/mypage'
+            : null;
+      if (!path) return;
+      const url = `${WEB_ORIGIN}${path}`;
+      if (documentReadyRef.current && webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(url)}); true;`);
+        return;
+      }
+      // 아직 뜨는 중이면 그 문서를 버리고 목적지를 시작 주소로 새로 띄운다. 실패해도 「다시 시도」가 이 주소를 연다.
+      cancelTransfers();
+      currentUrlRef.current = null;
+      historyResetPendingRef.current = false;
+      canGoBackRef.current = false;
+      documentReadyRef.current = false;
+      setWebViewSession((session) => ({ key: session.key + 1, uri: url }));
+    };
+    // 처리한 응답은 지운다 — 남겨 두면 다음에 앱을 그냥 열어도(셸이 다시 마운트되면) 같은 알림으로 또 이동한다.
+    const handle = (response: Notifications.NotificationResponse | null) => {
+      if (!response) return;
+      Notifications.clearLastNotificationResponse();
+      route(response.notification.request.content.data as Record<string, unknown> | undefined);
+    };
+    void Notifications.getLastNotificationResponseAsync()
+      .then(handle)
+      .catch(() => undefined);
+    const subscription = Notifications.addNotificationResponseReceivedListener(handle);
+    return () => subscription.remove();
   }, []);
 
   const reply = useCallback((askerUrl: string, id: string, result: BridgeResult) => {
@@ -259,6 +306,9 @@ export function HarucutWebShell() {
           return;
         case 'iap-finish':
           reply(askerUrl, message.id, await finishPurchases(message.proofs));
+          return;
+        case 'push-token':
+          reply(askerUrl, message.id, await getPushToken());
           return;
         default:
           return;
@@ -460,6 +510,7 @@ export function HarucutWebShell() {
         onMessage={onMessage}
         onLoadEnd={() => {
           setIsLoading(false);
+          documentReadyRef.current = true;
           /*
             문서가 한 번 다 떴으면 그 뒤의 사망은 새 사건이다 — 되살리기 예산을 되돌린다
             (MAX_CONTENT_PROCESS_RELOADS 주석).
@@ -492,7 +543,10 @@ export function HarucutWebShell() {
           여기서 끊지 못한다 — 그래서 실패 경로의 정리는 onError 가 직접 한다.
         */
         onLoadStart={(event) => {
-          if (Platform.OS !== 'android' || event.nativeEvent.loading) cancelTransfers();
+          if (Platform.OS !== 'android' || event.nativeEvent.loading) {
+            cancelTransfers();
+            documentReadyRef.current = false;
+          }
         }}
         onNavigationStateChange={(state) => {
           handleNavigation(state.url, state.loading, state.canGoBack);

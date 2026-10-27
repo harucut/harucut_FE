@@ -26,6 +26,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { NativeNotificationSetting } from "@/components/mobile/NativeNotificationSetting";
 import { StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
+import { unregisterPushDevice } from "@/lib/pushDevices";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import { getPlanDisplayName } from "@/constants/plans";
@@ -324,6 +325,8 @@ export default function MyPage() {
     setIsSubmitting(true);
 
     try {
+      // 서버 푸시 해제는 로그아웃 **전에**(쿠키가 있어야 한다). 실패해도 로그아웃은 한다.
+      await unregisterPushDevice();
       await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/logout", { signal }));
       await clearLocalUserData();
       router.push("/login");

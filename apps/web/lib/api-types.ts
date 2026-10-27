@@ -1,4 +1,5 @@
 import type { SubscriptionSource } from "@harucut/shared";
+import type { FreeCell } from "@/lib/frameCells";
 /**
  * 모든 응답이 담기는 공통 봉투.
  *
@@ -128,6 +129,8 @@ export type RemoteFrame = {
   isSystem?: boolean;
   // 칸별 누끼(boolean 4개, 촬영 슬롯 순서). 서버가 저장·반환한다.
   cellCutouts?: boolean[];
+  /** 자유 사진 칸(P5) — 네 칸의 위치·크기·회전·모양·촬영 순번. 자유 칸 프레임일 때만 온다(lib/frameCells.ts). */
+  cells?: FreeCell[] | null;
   // frameType으로 서버가 고정하는 캔버스 크기(요청값은 저장되지 않는다).
   canvasWidth?: number;
   canvasHeight?: number;

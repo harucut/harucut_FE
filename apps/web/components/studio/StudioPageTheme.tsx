@@ -338,7 +338,9 @@ export function StudioPageTheme({
             <option value="ORGANIZER_LOGO">행사 로고 넣기</option>
           </select>
         </label>
-        <p className="text-[12px] text-(--hc-muted)">완성 사진에 로고를 넣는 기능은 준비 중이에요. 지금은 설정만 저장돼요.</p>
+        <p className="text-[12px] text-(--hc-muted)">
+          참가자가 받는 완성 사진의 오른쪽 아래에 위 로고를 넣어요. 로고를 올려야 게시할 수 있어요.
+        </p>
       </fieldset>
       ) : null}
     </div>

@@ -233,6 +233,10 @@ DELETE /api/auth/devices/{token}                                       // 해제
   프레임·테마·레이아웃·필터·색·원본 중 하나라도 바뀔 때다. 이때의 새 업로드는 옳다.
   다만 앞선 합성이 실패로 끝났다면 그 4장은 그대로 남는다.
 
+**서버가 이제 지운다(BE 원본 정리 배치).** 원본은 발급 24시간 뒤 삭제가 예약되고, 개인 합성 접수가 그 예약을
+회수한다. 그래서 캐시는 **23시간만** 믿는다(`SOURCE_REUSE_MS`) — 그보다 오래 들고 같은 멱등키로 재시도하면
+지워진 key 로 접수해 SOURCE_MISSING 으로 실패한다. 새 키로 다시 올리는 것은 이 규칙과 무관하다.
+
 접수 이후(`compose` 400/폴링 시간 초과) 실패로 남는 4장은 캐시와 무관하게 그대로다.
 캐시는 **같은 시도를 반복할 때 사본이 불어나는 것**을 막을 뿐, 한 번 올라간 것을
 없애지는 못한다.
@@ -385,8 +389,8 @@ jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `Compo
 ## 8. 합성이 실패하면 사유 문자열 말고 **에러 코드**도 주세요 (백엔드 진행 중 — 프론트는 받을 준비 끝)
 
 **진행(2026-10-27)**: 백엔드가 `ComposeJobResponse.failureCode`(FAILED 일 때만, SOURCE_MISSING · SOURCE_UNREADABLE · ASSET_MISSING ·
-ASSET_UNREADABLE · TIMED_OUT · RENDER_FAILED · UNKNOWN)를 더한다. 프론트는 `lib/composeFailure.ts` 로 문구를 고른다 — 키가 없거나
-UNKNOWN·RENDER_FAILED·모르는 값이면 지금 문구다. 합성 Lambda 배포 전에는 운영 실패가 TIMED_OUT·UNKNOWN 만 나온다.
+ASSET_UNREADABLE · TIMED_OUT · RENDER_FAILED · OUTPUT_CONFLICT · UNKNOWN)를 더한다. 프론트는 `lib/composeFailure.ts` 로 문구를 고른다 — 키가 없거나
+UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT(결과·썸네일 쌍 검증 실패, D09 — 출력 계약 2 이후)·모르는 값이면 지금 문구다. 합성 Lambda 배포 전에는 운영 실패가 TIMED_OUT·UNKNOWN 만 나온다.
 
 
 **무엇을**: `ComposeJobResponse` 에 실패 코드 한 필드(`failureCode` 같은 이름). 값은 우리가

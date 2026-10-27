@@ -55,6 +55,12 @@ jest.mock("@/lib/studio/accessApi", () => ({
   removeEventGrant: (...a: unknown[]) => mockRemoveGrant(...a),
 }));
 const mockRemoveGrant = jest.fn();
+jest.mock("@/lib/event/eventApi", () => ({
+  getTextStyles: async () => [
+    { id: "pretendard-bold-dark", label: "굵게 · 검정", weight: 700, color: "#111111" },
+    { id: "pretendard-bold-light", label: "굵게 · 흰색", weight: 700, color: "#FFFFFF" },
+  ],
+}));
 
 function myAccess(access: Record<string, unknown>) {
   mockMyEvents.mockResolvedValue([{ eventId: "Ev1", name: "", status: "DRAFT", access }]);
@@ -569,4 +575,60 @@ it("행사 고객에서 운영자의 행을 회수하면 운영자 칸을 다시
 
   await waitFor(() => expect(mockRemoveGrant).toHaveBeenCalledWith("Ev1", 2));
   await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).not.toBeChecked());
+});
+
+describe("참가자 문구(D06)", () => {
+  it("켜면 기본 칸·첫 글꼴로 freeText 만 보낸다", async () => {
+    await renderStudio();
+    mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+    const toggle = screen.getByRole("checkbox", { name: "참가자가 문구를 직접 써요" });
+    // 글꼴 목록이 오기 전에는 켤 수 없다 — 켜는 순간 첫 글꼴을 고르기 때문이다.
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    expect(screen.getByRole("checkbox", { name: /굵게 · 검정/ })).toBeChecked();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "최대 글자 수" }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const settings = mockUpdate.mock.calls[0][2];
+    expect(Object.keys(settings)).toEqual(["freeText"]);
+    expect(settings.freeText).toEqual({
+      enabled: true,
+      box: { x: 0.1, y: 0.86, width: 0.8, height: 0.08 },
+      styleIds: ["pretendard-bold-dark"],
+      maxLength: 12,
+      maxLines: 1,
+    });
+  });
+
+  // 기본값이 켠 문구를 이 행사만 끄려면 null(=상속)이 아니라 명시값을 보내야 한다.
+  it("상속받아 켜진 문구를 끄면 enabled:false 를 보낸다", async () => {
+    await renderStudio(
+      event({
+        settings: {
+          ...event().settings,
+          freeText: { enabled: true, box: { x: 0, y: 0.9, width: 1, height: 0.1 }, styleIds: ["pretendard-bold-dark"] },
+        },
+      }),
+    );
+    mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+    const toggle = screen.getByRole("checkbox", { name: "참가자가 문구를 직접 써요" });
+    expect(toggle).toBeChecked();
+    expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(mockUpdate.mock.calls[0][2]).toEqual({ freeText: { enabled: false } });
+  });
+
+  it("칸이 프레임 밖으로 나가면 알린다", async () => {
+    await renderStudio();
+    const toggle = screen.getByRole("checkbox", { name: "참가자가 문구를 직접 써요" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "너비(%)" }), { target: { value: "95" } });
+    expect(screen.getByText("문구 칸이 프레임 밖으로 나가요.")).toBeInTheDocument();
+  });
 });

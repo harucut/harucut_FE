@@ -1,5 +1,6 @@
 "use client";
 
+import type { FreeCell } from "@/lib/frameCells";
 import type { FrameId } from "@/constants/frames";
 import type { EditorComponent, ThemeBackground } from "@/lib/types/themeEditor";
 import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
@@ -60,6 +61,8 @@ export type EditorDraft = {
   backgroundColor: string;
   background: ThemeBackground;
   cellCutouts: boolean[];
+  /** 자유 사진 칸(P5). 없으면(옛 초안 포함) 고정 레이아웃. */
+  cells?: FreeCell[] | null;
   components: EditorComponent[];
   savedAt: number;
 };
@@ -129,6 +132,7 @@ export async function saveEditorDraft(input: {
   backgroundColor: string;
   background: ThemeBackground;
   cellCutouts: boolean[];
+  cells?: FreeCell[] | null;
   components: EditorComponent[];
   now: number;
 }): Promise<void> {
@@ -184,6 +188,7 @@ export async function saveEditorDraft(input: {
       backgroundColor: input.backgroundColor,
       background,
       cellCutouts: input.cellCutouts,
+      ...(input.cells ? { cells: input.cells } : {}),
       components,
       savedAt: input.now,
     };

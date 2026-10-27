@@ -32,6 +32,9 @@ import type {
 import { useEventCamera } from "@/components/participation/useEventCamera";
 import { EventLogo, EventSurface, useEventCopy } from "@/components/participation/EventSurface";
 import { composeFailureCopy } from "@/lib/composeFailure";
+import { freeTextErrorMessage, localFreeTextProblem, normalizeFreeText } from "@/lib/event/freeText";
+import { safeAssetUrl } from "@/lib/event/pageTheme";
+import { FreeTextComposer, type FreeTextValue } from "@/components/participation/FreeTextComposer";
 
 /**
  * 개인 휴대폰 참가 `/e/{slug}`(기획 R5 4절, ADR-0007 §5).
@@ -578,6 +581,11 @@ export function CaptureAndSend({
   const runRef = useRef<CaptureRun | null>(null);
   const uploadedRef = useRef<(string | null)[]>(Array(SHOT_COUNT).fill(null));
   const idempotencyKeyRef = useRef<string | null>(null);
+  // 자유 문구(D06). 같은 멱등키로 문구가 다르면 서버가 409 MEDIA-001 이라, 보낸 문구가 바뀌면 키를 새로 잡는다.
+  const [freeText, setFreeText] = useState<FreeTextValue>(() => ({ text: "", styleId: event.freeText?.styles[0]?.id ?? "" }));
+  const sentFreeTextRef = useRef<string | null>(null);
+  // 문구 미리보기는 회차에 고정된 행사 설정으로 그린다 — 회차가 바뀌면(PART-003 뒤 새 회차) 다시 그린다.
+  const [captureRunId, setCaptureRunId] = useState<string | null>(null);
 
   const onRunOpenedRef = useRef(onRunOpened);
   useEffect(() => {
@@ -587,8 +595,10 @@ export function CaptureAndSend({
   const openRun = useCallback(async () => {
     const run = await startCaptureRun(token, event.eventId);
     runRef.current = run;
+    setCaptureRunId(run.captureRunId);
     uploadedRef.current = Array(SHOT_COUNT).fill(null);
     idempotencyKeyRef.current = crypto.randomUUID();
+    sentFreeTextRef.current = null;
     // 요청한 손님의 자격도 함께 넘긴다 — 늦게 끝난 앞 손님의 회차가 다음 손님에게 붙지 않게(부스).
     onRunOpenedRef.current?.(run, token);
   }, [token, event.eventId]);
@@ -669,11 +679,21 @@ export function CaptureAndSend({
         });
       }
       onProgress("사진을 만드는 중");
+      // 비워 두면 싣지 않는다 — 서버는 프레임 그대로 만든다(공백만 보내면 PART-008 EMPTY). 서버와 같은 규칙으로 정리해 보낸다.
+      const freeTextToSend = normalizeFreeText(freeText.text);
+      const sentFreeText =
+        event.freeText && freeTextToSend !== "" ? { text: freeTextToSend, styleId: freeText.styleId } : undefined;
+      const sentKey = JSON.stringify(sentFreeText ?? null);
+      if (sentFreeTextRef.current !== null && sentFreeTextRef.current !== sentKey) {
+        idempotencyKeyRef.current = crypto.randomUUID();
+      }
+      sentFreeTextRef.current = sentKey;
       const accepted = await submitEventCompose(token, event.eventId, {
         captureRunId: run.captureRunId,
         frameVersionId: frame.frameVersionId,
         sourceAssetIds: uploadedRef.current as string[],
         idempotencyKey: idempotencyKeyRef.current!,
+        ...(sentFreeText ? { freeText: sentFreeText } : {}),
       });
       stopCamera();
       onDone(accepted.resultToken, run);
@@ -687,11 +707,14 @@ export function CaptureAndSend({
         runRef.current = null;
         return send(true);
       }
-      setError(getUserFacingApiErrorMessage(cause, "사진을 보내지 못했어요. 다시 시도해 주세요."));
+      setError(freeTextErrorMessage(cause) ?? getUserFacingApiErrorMessage(cause, "사진을 보내지 못했어요. 다시 시도해 주세요."));
     }
   };
 
   const allTaken = nextEmpty < 0;
+  // 문구를 썼는데 글자 수·줄 수를 넘으면 보내지 않는다(빈 문구는 프레임 그대로라 괜찮다).
+  const freeTextBlocked =
+    Boolean(event.freeText) && freeText.text !== "" && localFreeTextProblem(freeText.text, event.freeText!) !== null;
   const guide = useEventCopy("captureGuide", "");
 
   // "error" 는 다른 앱이 카메라를 쥐고 있는 경우 등이다(NotReadableError). 안내 없이 두면 검은 화면과 꺼진
@@ -743,6 +766,20 @@ export function CaptureAndSend({
         ))}
       </ol>
 
+      {allTaken && event.freeText ? (
+        <FreeTextComposer
+          config={event.freeText}
+          token={token}
+          eventId={event.eventId}
+          captureRunId={captureRunId}
+          frame={frame}
+          value={freeText}
+          onChange={setFreeText}
+          disabled={Boolean(sending)}
+          outputLogoUrl={event.theme?.branding?.outputLogo === "ORGANIZER_LOGO" ? safeAssetUrl(event.theme.logoUrl) : null}
+        />
+      ) : null}
+
       {error ? <p role="alert" className="text-[14px] text-(--ev-danger)">{error}</p> : null}
       {sending ? <p role="status" className="text-[15px] text-(--ev-muted)">{sending}</p> : null}
 
@@ -758,7 +795,7 @@ export function CaptureAndSend({
       ) : (
         <button
           type="button"
-          disabled={Boolean(sending)}
+          disabled={Boolean(sending) || freeTextBlocked}
           onClick={() => void send()}
           className="h-16 rounded-full bg-(--ev-accent) text-[18px] font-extrabold text-(--ev-accent-contrast) disabled:opacity-40"
         >

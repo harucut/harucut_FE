@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ImagePlus, Layers, Paintbrush, Scissors, SlidersHorizontal } from "lucide-react";
+import { ImagePlus, LayoutGrid, Layers, Paintbrush, Scissors, SlidersHorizontal } from "lucide-react";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
@@ -12,6 +12,7 @@ import { LayersPanel } from "@/components/theme/editor/LayersPanel";
 import { NUDGE_STEP, NUDGE_STEP_LARGE } from "@/constants/editorNudge";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
+import { CellsPanel } from "@/components/theme/editor/CellsPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
@@ -81,6 +82,7 @@ function buildEditorSignature(
   background: ReturnType<typeof useThemeEditorStore.getState>["background"],
   backgroundColor: string,
   cellCutouts: boolean[],
+  cells: ReturnType<typeof useThemeEditorStore.getState>["cells"],
 ) {
   return JSON.stringify({
     components,
@@ -94,6 +96,7 @@ function buildEditorSignature(
         : { type: "COLOR", value: background.value },
     backgroundColor,
     cellCutouts,
+    cells,
   });
 }
 
@@ -108,6 +111,7 @@ const MOBILE_TOOLS = [
   { id: "assets", label: "추가", Icon: ImagePlus },
   { id: "background", label: "배경", Icon: Paintbrush },
   { id: "cutout", label: "누끼", Icon: Scissors },
+  { id: "cells", label: "칸", Icon: LayoutGrid },
   { id: "layers", label: "레이어", Icon: Layers },
   { id: "inspector", label: "속성", Icon: SlidersHorizontal },
 ] as const;
@@ -155,6 +159,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const editorComponents = useThemeEditorStore((s) => s.components);
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
+  const cells = useThemeEditorStore((s) => s.cells);
   const undo = useThemeEditorStore((s) => s.undo);
   const redo = useThemeEditorStore((s) => s.redo);
   const nudge = useThemeEditorStore((s) => s.nudge);
@@ -222,8 +227,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   // 매번 이탈 경고가 떠서, 아무것도 고치지 않은 사용자까지 붙잡는다.
   const editorSignature = useMemo(
     () =>
-      buildEditorSignature(editorComponents, background, backgroundColor, cellCutouts),
-    [editorComponents, background, backgroundColor, cellCutouts],
+      buildEditorSignature(editorComponents, background, backgroundColor, cellCutouts, cells),
+    [editorComponents, background, backgroundColor, cellCutouts, cells],
   );
   // 기준은 프레임마다 새로 잡되, 스토어가 이 프레임 상태로 자리잡은 뒤에 잡는다.
   // 너무 일찍 잡으면 기준이 남의 상태가 된다.
@@ -468,7 +473,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       s.past.length === 0 &&
       s.components.length === 0 &&
       s.background.type === "COLOR" &&
-      !s.cellCutouts.some(Boolean);
+      !s.cellCutouts.some(Boolean) &&
+      !s.cells;
     if (!pristine) return;
     const draft = loadEditorDraft(draftOwnerId, frameId);
     if (draft) hydrateDraft(draft);
@@ -520,6 +526,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             backgroundColor: s.backgroundColor,
             background: s.background,
             cellCutouts: s.cellCutouts,
+            cells: s.cells,
             components: s.components,
             now: Date.now(),
           });
@@ -896,6 +903,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             </div>
             <div className={`lg:col-start-2 lg:row-start-5 ${mobileTool === "inspector" ? "" : "max-lg:hidden"}`}>
               <InspectorPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-6 ${mobileTool === "cells" ? "" : "max-lg:hidden"}`}>
+              <CellsPanel />
             </div>
           </div>
         </div>
