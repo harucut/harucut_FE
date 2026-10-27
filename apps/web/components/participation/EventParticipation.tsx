@@ -33,6 +33,7 @@ import { useEventCamera } from "@/components/participation/useEventCamera";
 import { EventLogo, EventSurface, useEventCopy } from "@/components/participation/EventSurface";
 import { composeFailureCopy } from "@/lib/composeFailure";
 import { freeTextErrorMessage, localFreeTextProblem, normalizeFreeText } from "@/lib/event/freeText";
+import { safeAssetUrl } from "@/lib/event/pageTheme";
 import { FreeTextComposer, type FreeTextValue } from "@/components/participation/FreeTextComposer";
 
 /**
@@ -771,6 +772,7 @@ export function CaptureAndSend({
           value={freeText}
           onChange={setFreeText}
           disabled={Boolean(sending)}
+          outputLogoUrl={event.theme?.branding?.outputLogo === "ORGANIZER_LOGO" ? safeAssetUrl(event.theme.logoUrl) : null}
         />
       ) : null}
 

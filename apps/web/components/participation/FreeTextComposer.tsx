@@ -12,6 +12,7 @@ import {
   type TextPreview,
 } from "@/lib/event/freeText";
 import type { EventFrameRef } from "@/lib/event/types";
+import { outputLogoRect } from "@/lib/event/outputLogo";
 
 export type FreeTextValue = { text: string; styleId: string };
 
@@ -30,6 +31,7 @@ export function FreeTextComposer({
   value,
   onChange,
   disabled,
+  outputLogoUrl,
 }: {
   config: PublicFreeText;
   token: string;
@@ -38,6 +40,8 @@ export function FreeTextComposer({
   value: FreeTextValue;
   onChange: (value: FreeTextValue) => void;
   disabled?: boolean;
+  /** 완성 사진에 행사 로고를 얹는 행사면 그 로고 — 미리보기도 결과와 같은 자리에 겹친다. */
+  outputLogoUrl?: string | null;
 }) {
   const id = useId();
   const { text: rawText, styleId } = value;
@@ -160,7 +164,7 @@ export function FreeTextComposer({
       ) : null}
 
       {preview ? (
-        <PreviewCanvas preview={preview} frameUrl={frame.previewUrl} />
+        <PreviewCanvas preview={preview} frameUrl={frame.previewUrl} logoUrl={outputLogoUrl ?? undefined} />
       ) : loading ? (
         <p role="status" className="text-[13px] text-(--ev-muted)">
           미리보기를 만드는 중…
@@ -171,8 +175,14 @@ export function FreeTextComposer({
 }
 
 /** 프레임 미리보기 위에 서버가 구운 문구 PNG 를 그 자리(캔버스 px → 비율)에 겹친다. 프레임 그림이 없으면 문구만. */
-function PreviewCanvas({ preview, frameUrl }: { preview: TextPreview; frameUrl?: string }) {
+function PreviewCanvas({ preview, frameUrl, logoUrl }: { preview: TextPreview; frameUrl?: string; logoUrl?: string }) {
   const pct = (v: number, total: number) => `${(v / total) * 100}%`;
+  // 로고 자리는 원본 비율에 달렸다 — 불러온 뒤에 잰다.
+  const [logoSize, setLogoSize] = useState<{ url: string; width: number; height: number } | null>(null);
+  const logoRect =
+    logoUrl && logoSize?.url === logoUrl
+      ? outputLogoRect({ width: preview.canvasWidth, height: preview.canvasHeight }, logoSize)
+      : null;
   if (!frameUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -198,6 +208,28 @@ function PreviewCanvas({ preview, frameUrl }: { preview: TextPreview; frameUrl?:
           height: pct(preview.height, preview.canvasHeight),
         }}
       />
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt=""
+          className={logoRect ? "absolute" : "absolute opacity-0"}
+          onLoad={(e) => {
+            const { naturalWidth, naturalHeight } = e.currentTarget;
+            if (naturalWidth > 0 && naturalHeight > 0) setLogoSize({ url: logoUrl, width: naturalWidth, height: naturalHeight });
+          }}
+          style={
+            logoRect
+              ? {
+                  left: pct(logoRect.x, preview.canvasWidth),
+                  top: pct(logoRect.y, preview.canvasHeight),
+                  width: pct(logoRect.width, preview.canvasWidth),
+                  height: pct(logoRect.height, preview.canvasHeight),
+                }
+              : undefined
+          }
+        />
+      ) : null}
     </div>
   );
 }

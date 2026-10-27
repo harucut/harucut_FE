@@ -12,10 +12,11 @@ const config = {
   styles: [{ id: "pretendard-bold-dark", label: "굵게 · 검정", weight: 700, color: "#111111" }],
 };
 
-function Harness() {
+function Harness({ logo }: { logo?: string }) {
   const [value, setValue] = useState<FreeTextValue>({ text: "", styleId: "pretendard-bold-dark" });
   return (
     <FreeTextComposer
+      outputLogoUrl={logo}
       config={config}
       token="p"
       eventId="evt-1"
@@ -74,4 +75,19 @@ it("늦게 온 옛 문구의 응답은 지금 미리보기를 덮지 않는다",
   });
   expect(mockPreview).toHaveBeenCalledTimes(1);
   expect(screen.queryByAltText(/미리보기:/)).not.toBeInTheDocument();
+});
+
+it("행사 로고를 얹는 행사면 서버와 같은 자리(오른쪽 아래)에 로고를 겹친다", async () => {
+  mockPreview.mockImplementation(async (_t, _e, body: { text: string }) => rendered(body.text));
+  const { container } = render(<Harness logo="https://cdn.example/logo.png" />);
+  fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "축하" } });
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(FREE_TEXT_PREVIEW_DELAY_MS);
+  });
+  const logo = container.querySelector('img[src="https://cdn.example/logo.png"]') as HTMLImageElement;
+  Object.defineProperty(logo, "naturalWidth", { value: 400 });
+  Object.defineProperty(logo, "naturalHeight", { value: 100 });
+  fireEvent.load(logo);
+  // 600×1000 캔버스: 여백 18, 너비 108, 높이 27 → x 474, y 955.
+  expect(logo).toHaveStyle({ left: "79%", top: "95.5%", width: "18%", height: "2.7%" });
 });

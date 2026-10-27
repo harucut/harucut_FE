@@ -30,7 +30,7 @@ export const PAGE_THEME_COPY_MAX = 200;
 export type PageThemeBranding = {
   /** 하루컷 UI 표시 숨김 — 이용권 기능 WHITE_LABEL 이 있어야 게시된다. */
   hideHarucutBranding?: boolean;
-  /** 완성 이미지 로고 정책. P2B 는 저장·발행만(합성 반영은 P5). */
+  /** 완성 이미지 로고 정책. ORGANIZER_LOGO 면 서버 합성이 로고를 오른쪽 아래에 얹는다(lib/event/outputLogo.ts). 로고가 없으면 게시 위반. */
   outputLogo?: "NONE" | "ORGANIZER_LOGO";
 };
 
