@@ -80,14 +80,16 @@ jobs:
         working-directory: apps/mobile/android
         run: |
           python3 - <<'PY_BUILD'
+          import re
           from pathlib import Path
           path = Path('app/build.gradle')
           source = path.read_text()
           offset = source.index('        release {')
-          marker = 'signingConfig signingConfigs.debug'
+          # expo-iap 의 config plugin 이 대입 문법(`signingConfig = signingConfigs.debug`)으로 바꿔 쓴다. 두 형태를 다 받는다.
+          marker = re.compile(r'signingConfig\s*(?:=\s*)?signingConfigs\.debug')
           release = source[offset:]
-          assert release.count(marker) == 1, 'Expo release signing template changed'
-          path.write_text(source[:offset] + release.replace(marker, 'signingConfig null', 1))
+          assert len(marker.findall(release)) == 1, 'Expo release signing template changed'
+          path.write_text(source[:offset] + marker.sub('signingConfig = null', release, count=1))
           PY_BUILD
           ./gradlew --no-daemon :app:bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
       - name: Verify unsigned bundle
