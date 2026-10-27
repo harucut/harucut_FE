@@ -128,11 +128,14 @@ export function submitEventCompose(
   );
 }
 
-/** 자유 문구 미리보기 — 최종 합성과 같은 서버 렌더. 늦은 응답은 text·styleId 로 가려 버린다. 분당 30회 넘으면 429 GEN-061. */
+/**
+ * 자유 문구 미리보기 — 최종 합성과 같은 서버 렌더. 회차를 실어 그 회차에 고정된 행사 설정으로 그린다(촬영 중에
+ * 다시 게시돼도 결과와 같게). 늦은 응답은 text·styleId 로 가려 버린다. 분당 30회 넘으면 429 GEN-061.
+ */
 export function previewFreeText(
   token: string,
   eventId: string,
-  input: { frameVersionId: number; text: string; styleId: string },
+  input: { captureRunId: string; frameVersionId: number; text: string; styleId: string },
   signal?: AbortSignal,
 ) {
   return sendEventRequest<TextPreview>(

@@ -425,7 +425,7 @@ describe("참가자 자유 문구(D06)", () => {
     expect(api.previewFreeText).toHaveBeenLastCalledWith(
       "p-token",
       "evt-1",
-      { frameVersionId: 31, text: "축하해요", styleId: "pretendard-regular-light" },
+      { captureRunId: "run-1", frameVersionId: 31, text: "축하해요", styleId: "pretendard-regular-light" },
       expect.anything(),
     );
 

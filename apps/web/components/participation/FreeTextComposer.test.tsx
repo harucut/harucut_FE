@@ -12,7 +12,7 @@ const config = {
   styles: [{ id: "pretendard-bold-dark", label: "굵게 · 검정", weight: 700, color: "#111111" }],
 };
 
-function Harness({ logo }: { logo?: string }) {
+function Harness({ logo, run = "run-1" }: { logo?: string; run?: string | null }) {
   const [value, setValue] = useState<FreeTextValue>({ text: "", styleId: "pretendard-bold-dark" });
   return (
     <FreeTextComposer
@@ -20,6 +20,7 @@ function Harness({ logo }: { logo?: string }) {
       config={config}
       token="p"
       eventId="evt-1"
+      captureRunId={run}
       frame={{ frameVersionId: 31, layoutType: "CLASSIC", sortOrder: 1, isDefault: true, previewUrl: "https://x/frame.png" }}
       value={value}
       onChange={setValue}
@@ -50,7 +51,12 @@ it("입력이 멈춘 뒤에만 미리보기를 부른다", async () => {
     await jest.advanceTimersByTimeAsync(FREE_TEXT_PREVIEW_DELAY_MS);
   });
   expect(mockPreview).toHaveBeenCalledTimes(1);
-  expect(mockPreview.mock.calls[0][2]).toEqual({ frameVersionId: 31, text: "축하", styleId: "pretendard-bold-dark" });
+  expect(mockPreview.mock.calls[0][2]).toEqual({
+    captureRunId: "run-1",
+    frameVersionId: 31,
+    text: "축하",
+    styleId: "pretendard-bold-dark",
+  });
   expect(screen.getByAltText("미리보기: 축하")).toHaveStyle({ top: "90%", height: "10%" });
 });
 
@@ -90,4 +96,13 @@ it("행사 로고를 얹는 행사면 서버와 같은 자리(오른쪽 아래)�
   fireEvent.load(logo);
   // 600×1000 캔버스: 여백 18, 너비 108, 높이 27 → x 474, y 955.
   expect(logo).toHaveStyle({ left: "79%", top: "95.5%", width: "18%", height: "2.7%" });
+});
+
+it("회차가 아직 없으면 미리보기를 부르지 않는다 — 서버는 회차에 고정된 설정으로 그린다", async () => {
+  render(<Harness run={null} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "축하" } });
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(FREE_TEXT_PREVIEW_DELAY_MS);
+  });
+  expect(mockPreview).not.toHaveBeenCalled();
 });

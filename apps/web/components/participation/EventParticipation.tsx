@@ -584,6 +584,8 @@ export function CaptureAndSend({
   // 자유 문구(D06). 같은 멱등키로 문구가 다르면 서버가 409 MEDIA-001 이라, 보낸 문구가 바뀌면 키를 새로 잡는다.
   const [freeText, setFreeText] = useState<FreeTextValue>(() => ({ text: "", styleId: event.freeText?.styles[0]?.id ?? "" }));
   const sentFreeTextRef = useRef<string | null>(null);
+  // 문구 미리보기는 회차에 고정된 행사 설정으로 그린다 — 회차가 바뀌면(PART-003 뒤 새 회차) 다시 그린다.
+  const [captureRunId, setCaptureRunId] = useState<string | null>(null);
 
   const onRunOpenedRef = useRef(onRunOpened);
   useEffect(() => {
@@ -593,6 +595,7 @@ export function CaptureAndSend({
   const openRun = useCallback(async () => {
     const run = await startCaptureRun(token, event.eventId);
     runRef.current = run;
+    setCaptureRunId(run.captureRunId);
     uploadedRef.current = Array(SHOT_COUNT).fill(null);
     idempotencyKeyRef.current = crypto.randomUUID();
     sentFreeTextRef.current = null;
@@ -768,6 +771,7 @@ export function CaptureAndSend({
           config={event.freeText}
           token={token}
           eventId={event.eventId}
+          captureRunId={captureRunId}
           frame={frame}
           value={freeText}
           onChange={setFreeText}

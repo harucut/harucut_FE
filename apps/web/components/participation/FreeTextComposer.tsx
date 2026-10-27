@@ -27,6 +27,7 @@ export function FreeTextComposer({
   config,
   token,
   eventId,
+  captureRunId,
   frame,
   value,
   onChange,
@@ -36,6 +37,8 @@ export function FreeTextComposer({
   config: PublicFreeText;
   token: string;
   eventId: string;
+  /** 지금 회차. 서버는 이 회차에 고정된 행사 설정으로 그린다. 아직 없으면 미리보기를 부르지 않는다. */
+  captureRunId: string | null;
   frame: EventFrameRef;
   value: FreeTextValue;
   onChange: (value: FreeTextValue) => void;
@@ -49,8 +52,8 @@ export function FreeTextComposer({
   // 서버와 같은 규칙으로 정리한 값을 보낸다(앞뒤 공백·빈 줄을 고치는 동안 미리보기를 다시 부르지도 않는다).
   const text = normalizeFreeText(rawText);
   // 결과는 「어느 입력에 대한 것인지」와 함께 둔다. 지금 입력과 다른 결과는 보이지 않는다 — 늦은 응답도 여기서 걸러진다.
-  const wanted = text !== "" && !problem && styleId !== "";
-  const key = wanted ? JSON.stringify([frame.frameVersionId, styleId, text]) : null;
+  const wanted = text !== "" && !problem && styleId !== "" && captureRunId !== null;
+  const key = wanted ? JSON.stringify([captureRunId, frame.frameVersionId, styleId, text]) : null;
   const [result, setResult] = useState<{ key: string; preview?: TextPreview; error?: string } | null>(null);
   const current = result && result.key === key ? result : null;
   const preview = current?.preview ?? null;
@@ -58,10 +61,15 @@ export function FreeTextComposer({
   const loading = key !== null && current === null;
 
   useEffect(() => {
-    if (key === null) return;
+    if (key === null || captureRunId === null) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      previewFreeText(token, eventId, { frameVersionId: frame.frameVersionId, text, styleId }, controller.signal)
+      previewFreeText(
+        token,
+        eventId,
+        { captureRunId, frameVersionId: frame.frameVersionId, text, styleId },
+        controller.signal,
+      )
         .then((rendered) => {
           // 서버가 돌려준 text·styleId 가 이 요청과 다르면 버린다(계약: 늦은 응답이 새 미리보기를 덮지 않게).
           if (rendered.text !== text || rendered.styleId !== styleId) return;
@@ -83,7 +91,7 @@ export function FreeTextComposer({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [key, token, eventId, frame.frameVersionId, text, styleId]);
+  }, [key, token, eventId, captureRunId, frame.frameVersionId, text, styleId]);
 
   const multiline = config.maxLines > 1;
   const inputClass =
