@@ -1,5 +1,7 @@
 "use client";
 
+import { STORE_PURCHASE_SHELL_VERSION } from "@harucut/shared";
+
 /**
  * 네이티브 셸(앱) 안에서 돌 때만 켜지는 다리.
  *
@@ -59,11 +61,17 @@ export type BridgeFailureCode =
   /** 설정에서 켜야 한다. 다시 물어도 대화상자가 뜨지 않으므로 재시도 안내는 거짓말이 된다. */
   | "photo-permission-blocked"
   /** 이번에 거절했다. 다음에 다시 물을 수 있다. */
-  | "photo-permission-denied";
+  | "photo-permission-denied"
+  /** 사용자가 스토어 결제 창을 닫았다. 아무 안내도 띄우지 않는다. */
+  | "purchase-cancelled"
+  /** 스토어에 닿지 못했거나 결제가 끝나지 않았다(승인 대기 포함). */
+  | "store-unavailable";
 
 const BRIDGE_FAILURE_CODES: readonly string[] = [
   "photo-permission-blocked",
   "photo-permission-denied",
+  "purchase-cancelled",
+  "store-unavailable",
 ];
 
 /**
@@ -80,6 +88,8 @@ type NativeResult = {
   ok: boolean;
   reason?: string;
   code?: BridgeFailureCode;
+  /** 값을 돌려주는 메시지(iap-*)만 싣는다. 모양을 믿지 않고 아래 함수들이 걸러 읽는다. */
+  data?: unknown;
 };
 
 /**
@@ -349,4 +359,78 @@ export async function nativeNotify(args: {
 export function nativeSetColorScheme(scheme: "light" | "dark") {
   if (!isNativeShell()) return;
   post({ type: "theme", scheme });
+}
+
+// ── 앱 구독 구매·복원(P4-B, R5 12절) ──
+
+/**
+ * 스토어 결과. 실패면 `message` 가 화면에 띄울 문구다(사용자가 닫았으면 null — 아무것도 띄우지 않는다).
+ * 셸 밖이거나 구버전 셸이면 이 함수들은 null 을 돌려준다 — 호출부가 업데이트 안내를 맡는다(웹 PG 로 우회하지 않는다).
+ */
+export type StoreResult<T> = { ok: true; value: T } | { ok: false; message: string | null };
+
+export type StoreProduct = { productId: string; displayPrice: string; title: string };
+export type StoreProof = { productId: string; proof: string };
+
+/** 구매·복원 메시지를 아는 셸인가. 셸 밖이면 false. */
+export function supportsStorePurchase() {
+  const shell = getNativeShell();
+  return Boolean(shell && shell.version >= STORE_PURCHASE_SHELL_VERSION);
+}
+
+const STORE_FALLBACK = "스토어에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.";
+
+function storeFailure(result: NativeResult): { ok: false; message: string | null } {
+  if (result.code === "purchase-cancelled") return { ok: false, message: null };
+  // 코드가 붙은 실패만 reason 을 믿는다(NativeSaveError 와 같은 규칙).
+  return { ok: false, message: isBridgeFailureCode(result.code) ? result.reason?.trim() || STORE_FALLBACK : STORE_FALLBACK };
+}
+
+function isProof(value: unknown): value is StoreProof {
+  const v = value as StoreProof | null;
+  return v !== null && typeof v === "object" && typeof v.productId === "string" && typeof v.proof === "string" && v.proof.length > 0;
+}
+
+export async function nativeStoreProducts(productIds: string[]): Promise<StoreResult<StoreProduct[]> | null> {
+  if (!supportsStorePurchase()) return null;
+  const result = await request({ type: "iap-products", productIds });
+  if (!result.ok) return storeFailure(result);
+  const list = Array.isArray(result.data) ? result.data : [];
+  return {
+    ok: true,
+    value: list.filter(
+      (p): p is StoreProduct =>
+        Boolean(p) && typeof p.productId === "string" && typeof p.displayPrice === "string",
+    ),
+  };
+}
+
+/** 결제 창이 떠 있는 동안 기다린다 — 사용자가 결제를 마치는 시간이라 넉넉히 둔다. */
+export async function nativeStorePurchase(productId: string, accountToken: string): Promise<StoreResult<StoreProof> | null> {
+  if (!supportsStorePurchase()) return null;
+  const result = await request({ type: "iap-purchase", productId, accountToken }, { timeoutMs: 15 * 60_000 });
+  if (!result.ok) return storeFailure(result);
+  return isProof(result.data) ? { ok: true, value: result.data } : { ok: false, message: STORE_FALLBACK };
+}
+
+/**
+ * sync: 사용자가 「구매 복원」을 눌렀을 때만 true — 셸이 스토어와 먼저 동기화한다(인증 창이 뜰 수 있어 자동 재시도에서는 false).
+ */
+export async function nativeStoreRestore({ sync = false }: { sync?: boolean } = {}): Promise<StoreResult<StoreProof[]> | null> {
+  if (!supportsStorePurchase()) return null;
+  const result = await request({ type: "iap-restore", sync }, { timeoutMs: sync ? 5 * 60_000 : 120_000 });
+  if (!result.ok) return storeFailure(result);
+  return { ok: true, value: (Array.isArray(result.data) ? result.data : []).filter(isProof) };
+}
+
+/**
+ * 서버가 받아들인 거래를 마친다. 마쳤으면 true. 실패·응답 없음이면 false — 구매는 서버에 이미 반영됐지만 스토어 거래는
+ * 미완료로 남는다(안드로이드는 3일 안에 마치지 않으면 환불된다). 부른 쪽이 알리고, 앱이 다시 열릴 때 이어서 마친다
+ * (lib/storePurchase.ts 의 resumeUnfinishedPurchases).
+ */
+export async function nativeStoreFinish(proofs: string[]): Promise<boolean> {
+  if (!supportsStorePurchase()) return false;
+  if (proofs.length === 0) return true;
+  const result = await request({ type: "iap-finish", proofs }, { timeoutMs: 60_000 });
+  return result.ok;
 }
