@@ -13,6 +13,7 @@
  */
 import {
   composeFourcutOnServer,
+  SOURCE_REUSE_MS,
   describeComposeFailure,
   resolveComposeFrame,
   SystemFrameMissingError,
@@ -719,6 +720,22 @@ describe("composeFourcutOnServer — 같은 멱등키면 원본을 다시 올리
     expect(mockRequestCompose).toHaveBeenLastCalledWith(
       expect.objectContaining({ idempotencyKey: "input-changed-after" }),
     );
+  });
+
+  // 서버는 원본을 24시간 뒤에 지운다. 그 뒤에 같은 key 로 접수하면 SOURCE_MISSING 이다.
+  it("23시간이 지난 원본은 다시 쓰지 않고 새로 올린다", async () => {
+    const now = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    now.mockReturnValue(1_000_000 + SOURCE_REUSE_MS - 1);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    now.mockReturnValue(1_000_000 + SOURCE_REUSE_MS);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(8);
+    now.mockRestore();
   });
 
   // 절반만 올라간 key 를 기억하면, 다음 재시도가 모자란 원본으로 합성을 접수한다.

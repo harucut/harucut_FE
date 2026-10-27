@@ -518,17 +518,25 @@ async function uploadSources(files: File[]): Promise<string[]> {
  * 합성이 성공한 뒤에도 비우지 않는다. 성공하면 서버가 원본을 지우므로 여기 남은 key 는
  * 이미 없는 객체를 가리키지만, 같은 키로 다시 접수하면 서버는 끝난 작업을 재생할 뿐 key 를
  * 보지 않는다. 비워 두면 그 재접수가 아무도 안 쓸 4장을 새로 만든다.
+ *
+ * **23시간만 믿는다.** 서버는 원본을 발급 24시간 뒤에 지운다(app-shell §4). 그보다 오래 들고
+ * 같은 멱등키로 재시도하면 지워진 key 로 접수해 SOURCE_MISSING 으로 실패한다 — 그 전에 버리고
+ * 새로 올린다(접수된 작업이 있었다면 서버는 어차피 key 를 보지 않는다).
  */
 let lastUploadedSources: {
   idempotencyKey: string;
   sourceKeys: string[];
+  uploadedAt: number;
 } | null = null;
 
-/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없으면 null(= 새로 올린다). */
+export const SOURCE_REUSE_MS = 23 * 60 * 60 * 1000;
+
+/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없거나 오래됐으면 null(= 새로 올린다). */
 function reusableSourceKeys(idempotencyKey: string | undefined): string[] | null {
   if (!idempotencyKey) return null;
 
-  return lastUploadedSources?.idempotencyKey === idempotencyKey
+  return lastUploadedSources?.idempotencyKey === idempotencyKey &&
+    Date.now() - lastUploadedSources.uploadedAt < SOURCE_REUSE_MS
     ? lastUploadedSources.sourceKeys
     : null;
 }
@@ -546,7 +554,7 @@ function rememberUploadedSources(
 ) {
   if (!idempotencyKey) return;
 
-  lastUploadedSources = { idempotencyKey, sourceKeys };
+  lastUploadedSources = { idempotencyKey, sourceKeys, uploadedAt: Date.now() };
 }
 
 /**
