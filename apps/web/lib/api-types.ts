@@ -1,3 +1,4 @@
+import type { SubscriptionSource } from "@harucut/shared";
 /**
  * 모든 응답이 담기는 공통 봉투.
  *
@@ -168,6 +169,10 @@ export type Subscription = {
   /** BASIC 이면 키 자체가 없다. */
   currentPeriodEnd?: string | null;
   autoRenew?: boolean;
+  /** 구독 출처(P4-B). 해지·변경은 이 출처에서만 된다. BASIC 이면 키가 없다. */
+  source?: SubscriptionSource;
+  /** 계정마다 고정인 UUID. 앱 구매 때 애플 appAccountToken·구글 obfuscatedAccountId 로 싣는다. */
+  storeAccountToken?: string;
 };
 
 // GET /api/auth/coupons 응답 한 건.

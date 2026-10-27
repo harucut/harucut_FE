@@ -86,3 +86,13 @@ export {
   clampFilenameBytes,
   safeNativeFilename,
 } from './native-filename';
+export {
+  STORE_PRODUCT_IDS,
+  STORE_PURCHASES_ENABLED,
+  STORE_PURCHASE_SHELL_VERSION,
+  storeConflictSource,
+  storePlatformOf,
+  subscriptionManageHint,
+  type StorePlatform,
+  type SubscriptionSource,
+} from './store-purchase';

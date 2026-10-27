@@ -35,8 +35,9 @@ import { PermissionsAndroid, Platform, Share } from 'react-native';
  *
  * - 1 — 저장·공유·햅틱·알림·테마
  * - 2 — `camera-permission` 추가
+ * - 3 — 앱 구독 `iap-products`·`iap-purchase`·`iap-restore`·`iap-finish` 추가(P4-B, lib/store-purchase.ts)
  */
-export const BRIDGE_VERSION = 2;
+export const BRIDGE_VERSION = 3;
 
 export type BridgeMessage =
   | { type: 'save-url'; id: string; url: string; filename: string }
@@ -48,7 +49,11 @@ export type BridgeMessage =
   | { type: 'save-chunk'; id: string; index: number; data: string }
   | { type: 'save-end'; id: string }
   | { type: 'share'; id: string; title?: string; message?: string; url: string }
-  | { type: 'haptic'; style?: 'light' | 'medium' | 'heavy' };
+  | { type: 'haptic'; style?: 'light' | 'medium' | 'heavy' }
+  | { type: 'iap-products'; id: string; productIds: string[] }
+  | { type: 'iap-purchase'; id: string; productId: string; accountToken: string }
+  | { type: 'iap-restore'; id: string; sync?: boolean }
+  | { type: 'iap-finish'; id: string; proofs: string[] };
 
 /**
  * 실패 사유 중 **사용자에게 그대로 보여도 되는** 것에만 붙는 표식.
@@ -66,12 +71,18 @@ export type BridgeFailureCode =
   /** 설정에서 켜야 한다. 다시 물어도 대화상자가 뜨지 않으므로 재시도 안내는 거짓말이 된다. */
   | 'photo-permission-blocked'
   /** 이번에 거절했다. 다음에 다시 물을 수 있다. */
-  | 'photo-permission-denied';
+  | 'photo-permission-denied'
+  /** 사용자가 스토어 결제 창을 닫았다. 웹은 아무 안내도 띄우지 않는다. */
+  | 'purchase-cancelled'
+  /** 스토어에 닿지 못했거나 결제가 끝나지 않았다(승인 대기 포함). reason 을 그대로 띄운다. */
+  | 'store-unavailable';
 
 export type BridgeResult = {
   ok: boolean;
   reason?: string;
   code?: BridgeFailureCode;
+  /** 값을 돌려주는 메시지(iap-*)만 싣는다. 모양은 lib/store-purchase.ts 의 각 함수 주석. */
+  data?: unknown;
 };
 
 /** 조각을 모으는 중인 저장 요청 하나. */

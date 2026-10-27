@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandMark } from "@/components/layout/BrandMark";
+import { resumeUnfinishedPurchases } from "@/lib/storePurchase";
 
 type AppNavProps = {
   // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
@@ -23,6 +25,10 @@ const NAV_LINKS: { href: string; label: string }[] = [
 // 큰 카드가 맡는다. 모바일은 그대로 하단 탭바 가운데 FAB가 담당한다 — 이 컴포넌트는
 // lg 미만에서 아예 렌더되지 않으므로 여기 변경은 모바일에 닿지 않는다.
 export function AppNav({ userInitial }: AppNavProps) {
+  // 로그인한 화면에서만 그려지므로 여기서 마치지 못한 스토어 거래를 이어서 마친다(앱 결제를 열었을 때만 동작).
+  useEffect(() => {
+    void resumeUnfinishedPurchases();
+  }, []);
   const pathname = usePathname();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
