@@ -2,6 +2,7 @@
 
 import {
   STORE_PRODUCT_IDS,
+  STORE_PURCHASES_ENABLED,
   storeConflictSource,
   storePlatformOf,
   subscriptionManageHint,
@@ -45,7 +46,8 @@ export async function restoreStorePurchases(platform: StorePlatform, items: Stor
 }
 
 export type StoreFlowResult =
-  | { kind: "done"; subscription: Subscription }
+  /** finishPending: 서버엔 반영됐지만 스토어 거래를 아직 마치지 못했다 — 앱을 다시 열면 이어서 마친다. */
+  | { kind: "done"; subscription: Subscription; finishPending?: boolean }
   /** 사용자가 결제 창을 닫았다 — 아무 안내도 하지 않는다. */
   | { kind: "cancelled" }
   /** 셸 밖이거나 구버전 셸 — 업데이트를 안내한다(웹 결제로 우회하지 않는다). */
@@ -79,8 +81,8 @@ export async function buyPlusInApp(): Promise<StoreFlowResult> {
 
   try {
     const subscription = await submitStorePurchase(storePlatformOf(shell.platform), productId, purchase.value.proof);
-    await nativeStoreFinish([purchase.value.proof]);
-    return { kind: "done", subscription };
+    const finished = await nativeStoreFinish([purchase.value.proof]);
+    return { kind: "done", subscription, finishPending: !finished };
   } catch (cause) {
     return {
       kind: "error",
@@ -104,9 +106,32 @@ export async function restoreInApp(): Promise<StoreFlowResult> {
 
   try {
     const subscription = await restoreStorePurchases(storePlatformOf(shell.platform), items);
-    await nativeStoreFinish(items.map((item) => item.proof));
-    return { kind: "done", subscription };
+    const finished = await nativeStoreFinish(items.map((item) => item.proof));
+    return { kind: "done", subscription, finishPending: !finished };
   } catch (cause) {
     return { kind: "error", message: storeErrorMessage(cause, "구독을 복원하지 못했어요. 잠시 뒤 다시 시도해 주세요.") };
   }
+}
+
+let resumed = false;
+
+/**
+ * 마치지 못한 스토어 거래를 앱이 열릴 때 조용히 이어서 마친다(Codex #566). 거래 마무리가 실패했거나 결제 창이 닫힌 뒤
+ * 제출 전에 앱이 끝났으면 거래가 미완료로 남는데, 스토어는 다시 보내도 듣는 쪽이 없고 안드로이드는 3일 뒤 환불한다.
+ * 복원과 같은 길(서버 재제출은 멱등)로 제출하고 마친다. 화면에는 아무것도 띄우지 않는다. 한 페이지 수명에 한 번만.
+ * 로그인한 화면에서만 부른다(components/layout/AppNav).
+ */
+export async function resumeUnfinishedPurchases() {
+  if (resumed || !STORE_PURCHASES_ENABLED || !supportsStorePurchase()) return;
+  resumed = true;
+  try {
+    await restoreInApp();
+  } catch {
+    // 조용히 넘긴다 — 다음에 앱을 열 때나 「구매 복원」이 다시 한다.
+  }
+}
+
+/** 테스트용 — 한 번만 도는 표식을 지운다. */
+export function resetResumeForTest() {
+  resumed = false;
 }

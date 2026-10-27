@@ -1,6 +1,6 @@
 import { storeConflictSource, storePlatformOf, subscriptionManageHint } from "@harucut/shared";
 import { ApiRequestError } from "@/lib/clientApi";
-import { buyPlusInApp, restoreInApp } from "@/lib/storePurchase";
+import { buyPlusInApp, resetResumeForTest, restoreInApp, resumeUnfinishedPurchases } from "@/lib/storePurchase";
 
 const mockPost = jest.fn();
 const mockSub = jest.fn();
@@ -16,6 +16,16 @@ jest.mock("@/lib/clientApi", () => ({
   clientApi: { post: (...a: unknown[]) => mockPost(...a) },
 }));
 jest.mock("@/lib/userApi", () => ({ getMySubscription: () => mockSub() }));
+const flags = { storeOpen: false };
+jest.mock("@harucut/shared", () => {
+  const actual = jest.requireActual("@harucut/shared");
+  return {
+    ...actual,
+    get STORE_PURCHASES_ENABLED() {
+      return flags.storeOpen;
+    },
+  };
+});
 jest.mock("@/lib/nativeBridge", () => ({
   getNativeShell: () => bridge.getNativeShell(),
   supportsStorePurchase: () => bridge.supportsStorePurchase(),
@@ -32,6 +42,9 @@ beforeEach(() => {
   bridge.supportsStorePurchase.mockReturnValue(true);
   mockSub.mockResolvedValue({ planTier: "BASIC", status: "ACTIVE", storeAccountToken: "acct-1" });
   mockPost.mockResolvedValue({ data: { data: SUB } });
+  bridge.nativeStoreFinish.mockResolvedValue(true);
+  flags.storeOpen = false;
+  resetResumeForTest();
 });
 
 describe("구독 출처 규칙", () => {
@@ -60,7 +73,14 @@ describe("앱에서 플러스 구독", () => {
       proof: "jws-1",
     });
     expect(bridge.nativeStoreFinish).toHaveBeenCalledWith(["jws-1"]);
-    expect(result).toEqual({ kind: "done", subscription: SUB });
+    expect(result).toEqual({ kind: "done", subscription: SUB, finishPending: false });
+  });
+
+  // 서버엔 반영됐지만 스토어 거래를 못 마쳤으면 그렇다고 알린다 — 안드로이드는 3일 안에 마치지 않으면 환불된다(Codex #566).
+  it("거래 마무리가 실패하면 완료 결과에 미완료를 싣는다", async () => {
+    bridge.nativeStorePurchase.mockResolvedValue({ ok: true, value: { productId: "harucut.plus.monthly", proof: "jws-1" } });
+    bridge.nativeStoreFinish.mockResolvedValue(false);
+    expect(await buyPlusInApp()).toEqual({ kind: "done", subscription: SUB, finishPending: true });
   });
 
   it("서버가 거절하면 거래를 마치지 않고, 다른 곳에서 구독 중이면(SUBS-009) 관리할 곳을 붙인다", async () => {
@@ -111,5 +131,22 @@ describe("구매 복원", () => {
     bridge.nativeStoreRestore.mockResolvedValue({ ok: true, value: [] });
     expect(await restoreInApp()).toEqual({ kind: "error", message: "이 스토어 계정에 복원할 구독이 없어요." });
     expect(mockPost).not.toHaveBeenCalled();
+  });
+});
+
+// 마치지 못한 거래는 앱이 열릴 때 조용히 이어서 마친다(Codex #566). 앱 결제를 열지 않았으면 아무것도 하지 않는다.
+describe("미완료 거래 이어서 마치기", () => {
+  it("앱 결제가 꺼져 있으면 스토어를 부르지 않는다", async () => {
+    await resumeUnfinishedPurchases();
+    expect(bridge.nativeStoreRestore).not.toHaveBeenCalled();
+  });
+
+  it("켜져 있으면 한 번만 복원 길로 제출하고 마친다", async () => {
+    flags.storeOpen = true;
+    bridge.nativeStoreRestore.mockResolvedValue({ ok: true, value: [{ productId: "harucut.plus.monthly", proof: "t9" }] });
+    await resumeUnfinishedPurchases();
+    await resumeUnfinishedPurchases();
+    expect(bridge.nativeStoreRestore).toHaveBeenCalledTimes(1);
+    expect(bridge.nativeStoreFinish).toHaveBeenCalledWith(["t9"]);
   });
 });

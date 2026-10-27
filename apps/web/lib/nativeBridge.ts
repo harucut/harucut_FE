@@ -420,8 +420,14 @@ export async function nativeStoreRestore(): Promise<StoreResult<StoreProof[]> | 
   return { ok: true, value: (Array.isArray(result.data) ? result.data : []).filter(isProof) };
 }
 
-/** 서버가 받아들인 거래를 마친다. 실패해도 구매는 서버에 이미 반영됐다 — 스토어가 다시 보내면 복원이 다시 제출한다. */
-export async function nativeStoreFinish(proofs: string[]) {
-  if (!supportsStorePurchase() || proofs.length === 0) return;
-  await request({ type: "iap-finish", proofs }, { timeoutMs: 60_000 });
+/**
+ * 서버가 받아들인 거래를 마친다. 마쳤으면 true. 실패·응답 없음이면 false — 구매는 서버에 이미 반영됐지만 스토어 거래는
+ * 미완료로 남는다(안드로이드는 3일 안에 마치지 않으면 환불된다). 부른 쪽이 알리고, 앱이 다시 열릴 때 이어서 마친다
+ * (lib/storePurchase.ts 의 resumeUnfinishedPurchases).
+ */
+export async function nativeStoreFinish(proofs: string[]): Promise<boolean> {
+  if (!supportsStorePurchase()) return false;
+  if (proofs.length === 0) return true;
+  const result = await request({ type: "iap-finish", proofs }, { timeoutMs: 60_000 });
+  return result.ok;
 }

@@ -29,7 +29,11 @@ function useStoreAction(run: () => Promise<StoreFlowResult>, done: string, onDon
     const result = await run();
     setBusy(false);
     if (result.kind === "done") {
-      setNotice({ kind: "ok", text: done });
+      setNotice({
+        kind: "ok",
+        // 서버엔 반영됐지만 스토어 거래를 아직 마치지 못했다 — 앱을 다시 열면 이어서 마친다(resumeUnfinishedPurchases).
+        text: result.finishPending ? `${done} 스토어 마무리가 아직 끝나지 않아 앱을 다시 열면 이어서 마칠게요.` : done,
+      });
       onDone?.(result.subscription);
     } else if (result.kind === "error") {
       setNotice({ kind: "error", text: result.message });
