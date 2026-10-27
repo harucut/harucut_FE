@@ -14,6 +14,7 @@
  */
 import {
   clearPendingGuestSave,
+  dropPendingGuestSaveComposeKey,
   ensurePendingGuestSaveComposeKey,
   getPendingGuestSave,
   PENDING_GUEST_SAVE_TTL_MS,
@@ -631,6 +632,22 @@ describe("pendingGuestSave", () => {
     // 보관물에 남았으므로 새로고침 뒤(= 다시 읽어도) 같은 값이다.
     expect((await getPendingGuestSave(NOW))?.composeIdempotencyKey).toBe(first?.key);
     expect(await ensurePendingGuestSaveComposeKey(NOW)).toEqual(first);
+  });
+
+  // 서버가 실패로 확정한 작업은 같은 키로 다시 보내면 실패가 그대로 돌아온다 — 그 키일 때만 떼어 다음 인계가 새 키를 잡게 한다(Codex #565).
+  it("실패로 확정된 합성의 키는 그 키일 때만 떼고, 원본은 남긴다", async () => {
+    await setPendingGuestSave(ENTRY, NOW);
+    const first = await ensureReadableComposeKey(NOW);
+
+    expect(await dropPendingGuestSaveComposeKey("다른-키")).toBe(false);
+    expect(storedRecord()?.composeIdempotencyKey).toBe(first?.key);
+
+    expect(await dropPendingGuestSaveComposeKey(first!.key)).toBe(true);
+    expect(storedRecord()?.composeIdempotencyKey).toBeUndefined();
+    expect((await getPendingGuestSave(NOW))?.sources).toHaveLength(4);
+
+    const next = await ensureReadableComposeKey(NOW);
+    expect(next?.key).not.toBe(first?.key);
   });
 
   /*

@@ -49,7 +49,9 @@ jest.mock("@/lib/pendingGuestSave", () => ({
   clearPendingGuestSave: (...args: unknown[]) => mockClearPending(...args),
   ensurePendingGuestSaveComposeKey: (...args: unknown[]) =>
     mockEnsureComposeKey(...args),
+  dropPendingGuestSaveComposeKey: (...args: unknown[]) => mockDropComposeKey(...args),
 }));
+const mockDropComposeKey = jest.fn<Promise<boolean>, unknown[]>(async () => true);
 
 const mockResolveMembership = jest.fn();
 
@@ -1260,6 +1262,24 @@ describe("GuestTrialBridge 비회원 결과 이관", () => {
       expect(mockReplace).toHaveBeenCalledWith("/home");
     });
     expect(mockSaveFourcutToServer).not.toHaveBeenCalled();
+  });
+
+  // 서버가 실패로 확정한 작업(TIMED_OUT)은 같은 키로 다시 보내면 그 실패가 돌아온다 — 보관물의 키를 떼어 다음 인계를 새 작업으로(Codex #565).
+  it("서버가 실패로 확정한 합성이면 보관물의 멱등키를 떼고 보관물은 둔다", async () => {
+    mockSaveFourcutToServer.mockRejectedValueOnce(new Error("timed out on server"));
+    mockDescribeComposeFailure.mockReturnValue({
+      message: "사진을 만드는 데 시간이 너무 걸렸어요. 다시 시도해 주세요.",
+      retryable: true,
+      newJobOnRetry: true,
+    });
+
+    render(<GuestTrialBridge />);
+    await screen.findByRole("button", { name: "이 계정에 저장하기" });
+    pressNoticeAction("이 계정에 저장하기");
+
+    await waitFor(() => expect(mockDropComposeKey).toHaveBeenCalled());
+    expect(mockDropComposeKey.mock.calls[0][0]).toBe(mockSaveFourcutToServer.mock.calls[0][0].idempotencyKey);
+    expect(mockClearPending).not.toHaveBeenCalled();
   });
 
   // 새로고침할 때마다 원본 4장을 S3 에 다시 올리고 또 실패하는 루프를 막는다.
