@@ -16,6 +16,7 @@ const api = {
   listParticipantResults: jest.fn(),
   reissueResultAccess: jest.fn(),
   getParticipantDownload: jest.fn(),
+  previewFreeText: jest.fn(),
 };
 jest.mock("@/lib/event/eventApi", () => ({
   getPublicEvent: (...a: unknown[]) => api.getPublicEvent(...a),
@@ -27,6 +28,7 @@ jest.mock("@/lib/event/eventApi", () => ({
   listParticipantResults: (...a: unknown[]) => api.listParticipantResults(...a),
   reissueResultAccess: (...a: unknown[]) => api.reissueResultAccess(...a),
   getParticipantDownload: (...a: unknown[]) => api.getParticipantDownload(...a),
+  previewFreeText: (...a: unknown[]) => api.previewFreeText(...a),
 }));
 
 const mockUpload = jest.fn();
@@ -368,3 +370,101 @@ describe("Codex 리뷰 반영(#523)", () => {
   });
 });
 
+
+describe("참가자 자유 문구(D06)", () => {
+  const freeText = {
+    box: { x: 0.1, y: 0.86, width: 0.8, height: 0.08 },
+    maxLength: 10,
+    maxLines: 1,
+    styles: [
+      { id: "pretendard-bold-dark", label: "굵게 · 검정", weight: 700, color: "#111111" },
+      { id: "pretendard-regular-light", label: "보통 · 흰색", weight: 400, color: "#FFFFFF" },
+    ],
+  };
+
+  async function readyToSend() {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.getPublicEvent.mockResolvedValue(publicEvent({ freeText }));
+    api.previewFreeText.mockImplementation(async (_t: string, _e: string, body: { text: string; styleId: string }) => ({
+      ...body,
+      image: "data:image/png;base64,AAAA",
+      x: 10, y: 400, width: 200, height: 40, canvasWidth: 600, canvasHeight: 1800,
+    }));
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+    await shootAll();
+  }
+
+  it("자유 문구 행사가 아니면 문구 칸이 없다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+    await shootAll();
+    expect(screen.queryByRole("textbox", { name: "사진에 넣을 문구" })).not.toBeInTheDocument();
+  });
+
+  it("비워 두면 문구를 싣지 않고 프레임 그대로 만든다", async () => {
+    await readyToSend();
+    expect(screen.getByRole("textbox", { name: "사진에 넣을 문구" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalled());
+    expect(api.submitEventCompose.mock.calls[0][2]).not.toHaveProperty("freeText");
+    expect(api.previewFreeText).not.toHaveBeenCalled();
+  });
+
+  it("쓴 문구와 고른 글꼴을 서버 미리보기로 보여 주고 합성에 싣는다", async () => {
+    await readyToSend();
+    fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "축하해요" } });
+    fireEvent.click(screen.getByRole("radio", { name: /보통 · 흰색/ }));
+
+    expect(await screen.findByAltText("미리보기: 축하해요")).toBeInTheDocument();
+    expect(api.previewFreeText).toHaveBeenLastCalledWith(
+      "p-token",
+      "evt-1",
+      { frameVersionId: 31, text: "축하해요", styleId: "pretendard-regular-light" },
+      expect.anything(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalled());
+    expect(api.submitEventCompose.mock.calls[0][2].freeText).toEqual({ text: "축하해요", styleId: "pretendard-regular-light" });
+  });
+
+  it("글자 수를 넘으면 보내지 않고 이유를 알린다", async () => {
+    await readyToSend();
+    fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "열한글자가넘는문구예요" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("10자까지 쓸 수 있어요.");
+    expect(screen.getByRole("button", { name: "이 사진으로 만들기" })).toBeDisabled();
+  });
+
+  it("서버가 문구를 거절하면(PART-008) 사유 문구를 보이고, 고친 문구는 새 멱등키로 보낸다", async () => {
+    let n = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { ...globalThis.crypto, randomUUID: () => `idem-${++n}` },
+      configurable: true,
+    });
+    api.submitEventCompose.mockRejectedValueOnce(
+      new ApiRequestError({
+        status: 400,
+        code: "PART-008",
+        data: { code: "PART-008", status: 400, data: { reason: "UNSUPPORTED_CHARACTER" } },
+      }),
+    );
+    await readyToSend();
+    const input = screen.getByRole("textbox", { name: "사진에 넣을 문구" });
+    fireEvent.change(input, { target: { value: "축하🎉" } });
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    expect(await screen.findByText(/쓸 수 없는 글자가 있어요/)).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "축하" } });
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+    const [first, second] = api.submitEventCompose.mock.calls.map((c) => c[2]);
+    expect(second.freeText.text).toBe("축하");
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+  });
+});

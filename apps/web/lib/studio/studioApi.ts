@@ -3,6 +3,7 @@
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope, RemoteFrame } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
+import type { FreeTextSettings } from "@/lib/event/freeText";
 
 /**
  * 고객용 Studio 의 운영자 API(ADR-0007 §3·§4, 백엔드 fork develop #15).
@@ -60,6 +61,11 @@ export type EventSettings = {
   resultRetentionDays?: number | null;
   /** 행사 화면 테마(ADR-0008 §5). 객체째 바꾸고, 그 안에서 빠진 키는 위 단계 값을 쓴다(ADR-0009 §2). */
   theme?: unknown;
+  /**
+   * 참가자 자유 문구(D06). {enabled:false} 는 이 단계에서 명시적으로 끔, null·키 없음은 상속(모든 단계가 비면 끔).
+   * 테마와 달리 객체째 대체된다(sources 경로도 "freeText" 하나).
+   */
+  freeText?: FreeTextSettings | null;
   /** 프로젝트(선택, ADR-0009 §2). 같은 공간의 것만. 보관된 프로젝트는 PROJECT-001, 게시한 행사의 변경은 PROJECT-002. */
   projectId?: string | null;
 };

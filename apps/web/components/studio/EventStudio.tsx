@@ -15,6 +15,9 @@ import { StudioEventOperators } from "@/components/studio/StudioEventOperators";
 import { CloneEventForm } from "@/components/studio/CloneEventForm";
 import { StudioFramePicker, normalizeFrameRefs } from "@/components/studio/StudioFramePicker";
 import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
+import { StudioFreeText } from "@/components/studio/StudioFreeText";
+import type { FreeTextSettings } from "@/lib/event/freeText";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { StudioEventUsage } from "@/components/studio/StudioEventUsage";
 import { getEventUsage, type EventUsage } from "@/lib/studio/usageApi";
 import {
@@ -68,6 +71,8 @@ type Form = {
   frames: FrameRef[];
   retentionDays: string;
   theme: PageTheme;
+  /** 자유 문구. 저장된 값이 없으면(어디에도 없음) 끈 것으로 본다 — 바꾸지 않으면 settingsPatch 가 보내지 않는다. */
+  freeText: FreeTextSettings;
   /** 프로젝트 public id. 빈 문자열이면 프로젝트 없음. */
   projectId: string;
 };
@@ -86,6 +91,7 @@ function formOf(settings: EventSettings): Form {
     frames: [...(settings.frames ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
     retentionDays: String(settings.resultRetentionDays ?? DEFAULT_RETENTION_DAYS),
     theme: parsePageTheme(settings.theme),
+    freeText: settings.freeText?.enabled ? settings.freeText : { enabled: false },
     projectId: settings.projectId ?? "",
   };
 }
@@ -109,6 +115,7 @@ function settingsOf(form: Form, saved: EventSettings): EventSettings {
     consentItems: consentItemsOf(form.consents, saved.consentItems),
     resultRetentionDays: Number.isFinite(retention) && retention > 0 ? retention : null,
     theme: themeForSave(form.theme),
+    freeText: form.freeText,
     projectId: form.projectId || null,
   };
 }
@@ -337,6 +344,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
     consents: ["consentItems"],
     retentionDays: ["resultRetentionDays"],
     theme: ["theme"],
+    freeText: ["freeText"],
   };
   const stopFollowing = (fields: InheritableField[]) =>
     setInherit((prev) => (fields.some((f) => prev.has(f)) ? new Set([...prev].filter((f) => !fields.includes(f))) : prev));
@@ -632,6 +640,22 @@ export function EventStudio({ eventId }: { eventId: string }) {
                   setForm((current) => (current ? { ...current, theme: apply(current.theme) } : current));
                   stopFollowing(["theme"]);
                 }}
+              />
+            </Section>
+
+            <Section
+              title="참가자 문구"
+              aside={inheritAside(["freeText"])}
+              description="참가자가 사진에 넣을 짧은 문구를 직접 써요. 정한 칸에 고른 글꼴로 서버가 그려서, 미리보기와 결과가 같아요."
+            >
+              <StudioFreeText
+                value={form.freeText}
+                onChange={(freeText) => update({ freeText })}
+                canvasAspect={(() => {
+                  const layout = FRAME_LAYOUTS[frameIdFromFrameType(form.layouts[0] ?? "CLASSIC")];
+                  return layout.totalWidth / layout.totalHeight;
+                })()}
+                disabled={!editable || busy !== null}
               />
             </Section>
 

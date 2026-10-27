@@ -1,6 +1,7 @@
 "use client";
 
 import { sendEventRequest, type EventCredential } from "@/lib/event/eventTransport";
+import type { TextPreview, TextStyle } from "@/lib/event/freeText";
 import type {
   BoothCurrentRun,
   BoothMe,
@@ -33,6 +34,11 @@ export function getPublicEvent(slug: string, signal?: AbortSignal) {
     signal,
     what: "행사 정보",
   });
+}
+
+/** 자유 문구 글꼴 목록(공개). Studio 가 행사에 줄 글꼴을 고를 때 쓴다. */
+export function getTextStyles(signal?: AbortSignal) {
+  return sendEventRequest<TextStyle[]>("GET", "/api/client/public/text-styles", { signal, what: "글꼴 목록" });
 }
 
 export function startByodSession(slug: string) {
@@ -106,12 +112,33 @@ export function completeCaptureUpload(token: string, assetId: string) {
 export function submitEventCompose(
   token: string,
   eventId: string,
-  input: { captureRunId: string; frameVersionId: number; sourceAssetIds: string[]; idempotencyKey: string },
+  input: {
+    captureRunId: string;
+    frameVersionId: number;
+    sourceAssetIds: string[];
+    idempotencyKey: string;
+    /** 자유 문구 행사에서 참가자가 쓴 문구. 없으면 프레임 그대로 합성한다. */
+    freeText?: { text: string; styleId: string };
+  },
 ) {
   return sendEventRequest<ComposeAccepted>(
     "POST",
     `/api/client/participant/events/${seg(eventId)}/compose-jobs`,
     { credential: participant(token), body: input, what: "합성 접수" },
+  );
+}
+
+/** 자유 문구 미리보기 — 최종 합성과 같은 서버 렌더. 늦은 응답은 text·styleId 로 가려 버린다. 분당 30회 넘으면 429 GEN-061. */
+export function previewFreeText(
+  token: string,
+  eventId: string,
+  input: { frameVersionId: number; text: string; styleId: string },
+  signal?: AbortSignal,
+) {
+  return sendEventRequest<TextPreview>(
+    "POST",
+    `/api/client/participant/events/${seg(eventId)}/text-preview`,
+    { credential: participant(token), body: input, signal, what: "문구 미리보기" },
   );
 }
 
