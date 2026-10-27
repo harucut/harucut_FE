@@ -52,7 +52,7 @@ export type BridgeMessage =
   | { type: 'haptic'; style?: 'light' | 'medium' | 'heavy' }
   | { type: 'iap-products'; id: string; productIds: string[] }
   | { type: 'iap-purchase'; id: string; productId: string; accountToken: string }
-  | { type: 'iap-restore'; id: string }
+  | { type: 'iap-restore'; id: string; sync?: boolean }
   | { type: 'iap-finish'; id: string; proofs: string[] };
 
 /**

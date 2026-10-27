@@ -30,7 +30,7 @@ jest.mock("@/lib/nativeBridge", () => ({
   getNativeShell: () => bridge.getNativeShell(),
   supportsStorePurchase: () => bridge.supportsStorePurchase(),
   nativeStorePurchase: (...a: unknown[]) => bridge.nativeStorePurchase(...a),
-  nativeStoreRestore: () => bridge.nativeStoreRestore(),
+  nativeStoreRestore: (...a: unknown[]) => bridge.nativeStoreRestore(...a),
   nativeStoreFinish: (...a: unknown[]) => bridge.nativeStoreFinish(...a),
 }));
 
@@ -147,6 +147,8 @@ describe("미완료 거래 이어서 마치기", () => {
     await resumeUnfinishedPurchases();
     await resumeUnfinishedPurchases();
     expect(bridge.nativeStoreRestore).toHaveBeenCalledTimes(1);
+    // 자동 재시도는 스토어 동기화를 하지 않는다 — 인증 창이 뜰 수 있다(Codex #566).
+    expect(bridge.nativeStoreRestore).toHaveBeenCalledWith({ sync: false });
     expect(bridge.nativeStoreFinish).toHaveBeenCalledWith(["t9"]);
   });
 });

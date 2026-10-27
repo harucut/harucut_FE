@@ -103,7 +103,8 @@ export function StoreBuyButton({
 /** 이 기기 스토어 계정의 구독을 다시 잇는다. 스토어로 파는 동안에는 반드시 있어야 한다(스토어 심사 기준). */
 export function StoreRestoreButton({ onDone }: { onDone?: (subscription: Subscription) => void }) {
   const shell = useShell();
-  const { busy, notice, start } = useStoreAction(restoreInApp, "구독을 복원했어요.", onDone);
+  // 사용자가 누른 복원이라 스토어와 먼저 동기화한다(iOS AppStore.sync()).
+  const { busy, notice, start } = useStoreAction(() => restoreInApp({ sync: true }), "구독을 복원했어요.", onDone);
   if (!STORE_PURCHASES_ENABLED || shell === null || shell === "browser") return null;
   if (shell === "outdated") return <p className="text-[12px] text-(--hc-muted)">{OUTDATED}</p>;
   return (

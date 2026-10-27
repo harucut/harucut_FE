@@ -91,11 +91,14 @@ export async function buyPlusInApp(): Promise<StoreFlowResult> {
   }
 }
 
-/** 이 기기 스토어 계정의 구독을 이 계정에 다시 잇는다. */
-export async function restoreInApp(): Promise<StoreFlowResult> {
+/**
+ * 이 기기 스토어 계정의 구독을 이 계정에 다시 잇는다. sync 는 사용자가 「구매 복원」을 눌렀을 때만 —
+ * 스토어와 먼저 동기화해 로컬에 빠진 거래도 찾는다(인증 창이 뜰 수 있어 자동 재시도는 false).
+ */
+export async function restoreInApp({ sync = false }: { sync?: boolean } = {}): Promise<StoreFlowResult> {
   const shell = getNativeShell();
   if (!shell || !supportsStorePurchase()) return { kind: "unsupported" };
-  const restored = await nativeStoreRestore();
+  const restored = await nativeStoreRestore({ sync });
   if (!restored) return { kind: "unsupported" };
   if (!restored.ok) return restored.message ? { kind: "error", message: restored.message } : { kind: "cancelled" };
   // 서버는 한 번에 20개까지 받는다. 우리가 파는 상품만 보낸다.

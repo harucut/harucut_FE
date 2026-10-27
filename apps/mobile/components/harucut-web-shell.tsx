@@ -255,7 +255,7 @@ export function HarucutWebShell() {
           reply(askerUrl, message.id, await purchaseSubscription(message.productId, message.accountToken));
           return;
         case 'iap-restore':
-          reply(askerUrl, message.id, await restoreSubscriptions());
+          reply(askerUrl, message.id, await restoreSubscriptions(message.sync === true));
           return;
         case 'iap-finish':
           reply(askerUrl, message.id, await finishPurchases(message.proofs));

@@ -417,10 +417,11 @@ describe("앱 구독 브리지", () => {
     expect(await products).toEqual({ ok: true, value: [{ productId: "a", displayPrice: "₩3,900", title: "플러스" }] });
 
     posted.length = 0;
-    const restored = nativeStoreRestore();
+    const restored = nativeStoreRestore({ sync: true });
     await waitFor(() => posted.length > 0);
     replyTo(posted, "iap-restore", { ok: true, data: [{ productId: "a", proof: "" }, { productId: "a", proof: "t1" }] });
     expect(await restored).toEqual({ ok: true, value: [{ productId: "a", proof: "t1" }] });
+    expect(posted[0]).toMatchObject({ type: "iap-restore", sync: true });
 
     posted.length = 0;
     void nativeStoreFinish(["t1"]);

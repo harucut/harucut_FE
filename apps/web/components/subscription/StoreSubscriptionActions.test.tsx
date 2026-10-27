@@ -15,7 +15,7 @@ jest.mock("@/lib/nativeBridge", () => ({
 }));
 jest.mock("@/lib/storePurchase", () => ({
   buyPlusInApp: () => mockBuy(),
-  restoreInApp: () => mockRestore(),
+  restoreInApp: (...a: unknown[]) => mockRestore(...a),
 }));
 
 beforeEach(() => {
@@ -64,4 +64,6 @@ it("결제 창을 닫으면 아무 안내도 없고, 복원이 실패하면 문�
   render(<StoreRestoreButton />);
   fireEvent.click(await screen.findByRole("button", { name: "구매 복원" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("이 스토어 계정에 복원할 구독이 없어요.");
+  // 사용자가 누른 복원은 스토어와 먼저 동기화한다(iOS AppStore.sync(), Codex #566).
+  expect(mockRestore).toHaveBeenCalledWith({ sync: true });
 });

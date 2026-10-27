@@ -98,10 +98,15 @@ export async function purchaseSubscription(productId: string, accountToken: stri
   });
 }
 
-/** 이 기기 스토어 계정의 활성 구매를 모은다. data: [{ productId, proof }]. */
-export async function restoreSubscriptions(): Promise<BridgeResult> {
+/**
+ * 이 기기 스토어 계정의 활성 구매를 모은다. data: [{ productId, proof }].
+ * sync: 사용자가 「구매 복원」을 눌렀을 때만 true — 스토어와 먼저 동기화한다(iOS AppStore.sync(), 로컬 거래 정보가 빠졌을 때 복구).
+ * 동기화는 인증 창을 띄울 수 있어, 앱이 열릴 때 도는 자동 재시도에서는 하지 않는다(Codex #566).
+ */
+export async function restoreSubscriptions(sync = false): Promise<BridgeResult> {
   if (!(await connect())) return { ok: false, reason: UNAVAILABLE, code: 'store-unavailable' };
   try {
+    if (sync) await IAP.restorePurchases();
     const purchases = (await IAP.getAvailablePurchases()) ?? [];
     const items = [];
     for (const purchase of purchases) {

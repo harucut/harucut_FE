@@ -413,9 +413,12 @@ export async function nativeStorePurchase(productId: string, accountToken: strin
   return isProof(result.data) ? { ok: true, value: result.data } : { ok: false, message: STORE_FALLBACK };
 }
 
-export async function nativeStoreRestore(): Promise<StoreResult<StoreProof[]> | null> {
+/**
+ * sync: 사용자가 「구매 복원」을 눌렀을 때만 true — 셸이 스토어와 먼저 동기화한다(인증 창이 뜰 수 있어 자동 재시도에서는 false).
+ */
+export async function nativeStoreRestore({ sync = false }: { sync?: boolean } = {}): Promise<StoreResult<StoreProof[]> | null> {
   if (!supportsStorePurchase()) return null;
-  const result = await request({ type: "iap-restore" }, { timeoutMs: 120_000 });
+  const result = await request({ type: "iap-restore", sync }, { timeoutMs: sync ? 5 * 60_000 : 120_000 });
   if (!result.ok) return storeFailure(result);
   return { ok: true, value: (Array.isArray(result.data) ? result.data : []).filter(isProof) };
 }
