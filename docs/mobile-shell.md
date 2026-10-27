@@ -51,6 +51,7 @@
 | 1 | 사진첩 저장 · 공유 · 햅틱 · 알림 · 상태바 색 | 없음 — 셸이면 그대로 보낸다 |
 | 2 | `camera-permission` | `nativeEnsureCameraPermission` 의 `CAMERA_PERMISSION_SHELL_VERSION` |
 | 3 | `iap-products` · `iap-purchase` · `iap-restore` · `iap-finish`(앱 구독, P4-B) | `supportsStorePurchase` 의 `STORE_PURCHASE_SHELL_VERSION`(`packages/shared/src/store-purchase.ts`). 모르는 셸이면 업데이트를 안내한다 — 웹 결제로 우회하지 않는다 |
+| 4 | `push-token`(서버 푸시 기기 등록) | `nativePushToken` 의 `PUSH_TOKEN_SHELL_VERSION`. 알림 권한이 있을 때만 토큰을 준다 — 권한은 묻지 않는다 |
 
 답을 기다리지 않는 메시지(`haptic`·`theme`)는 옛 셸이 흘려도 잃을 것이 없어 판 수를 보지 않는다.
 
@@ -404,25 +405,18 @@ URL 에 토큰도, 교환용 코드도 없다.
 
 ## 알림을 눌렀을 때
 
-**아무 데도 가지 않는다.** 앱이 앞으로 올 뿐 WebView 는 보고 있던 경로 그대로다.
+**서버 푸시는 갈 곳으로 간다**(P4 이후). 셸이 `addNotificationResponseReceivedListener`(앱이 꺼져 있었으면
+`getLastNotificationResponseAsync`)로 응답을 받아, 푸시 `data.type` 으로 우리 웹 안의 경로를 연다 —
+`COMPOSE_DONE`·`COMPOSE_FAILED` 는 `/history`, `PAYMENT_FAILED`·`SUBSCRIPTION_EXPIRING` 은 `/mypage`
+(`components/harucut-web-shell.tsx`). 브리지에 앱 → 웹 메시지를 새로 만들지 않고 지금 WebView 에서 주소만 연다.
 
-없는 것이 둘이다. 셸에 알림 응답 리스너가 없고(`apps/mobile/app/_layout.tsx` —
-"딥링크를 실제로 쓰게 되면 여기에 핸들러가 붙는다"), 브리지에 **들어오는 경로**를 웹으로
-넘길 메시지가 없다. `harucut://` 로 받는 것은 앱 로그인 콜백 하나뿐이고, 그것도 시스템 브라우저 세션이 직접 받는다
-— 알림이 열 주소를 받는 길은 아니다.
+**로컬 알림(`nativeNotify`)은 지금도 아무 데도 가지 않는다** — data 를 싣지 않는다. 그래서 그 본문은 「기록 화면에서 볼 수
+있어요」다(`apps/web/app/shoot/result/page.tsx` 의 `notifyServerComposeDone`). 서버 푸시를 등록한 기기(`lib/pushDevices.ts`
+`hasServerPush`)에서는 같은 일을 두 번 알리지 않게 로컬 알림을 띄우지 않는다.
 
-그래서 합성 완료 알림의 본문은 「눌러서 보러 가기」가 아니라 「기록 화면에서 볼 수
-있어요」다(`apps/web/app/shoot/result/page.tsx` 의 `notifyServerComposeDone`). **되는 것만
-적는다** — 안 되는 동작을 약속하면 사용자는 알림이 고장 난 것으로 읽는다.
-
-붙이려면 같은 커밋에서 셋을 함께 고쳐야 한다.
-
-1. 셸: `Notifications.addNotificationResponseReceivedListener` 로 응답을 받고, 알림에
-   실어 둔 경로를 꺼낸다.
-2. 브리지 한 쌍(`apps/web/lib/nativeBridge.ts` ↔ `apps/mobile/lib/native-bridge.ts`):
-   앱 → 웹 방향 메시지를 새로 만든다. 지금 브리지는 웹이 묻고 앱이 답하는 모양뿐이라
-   앱이 먼저 말을 거는 경로 자체가 없다.
-3. `nativeNotify` 에 목적지 경로를 실어 보내는 인자를 더한다.
+서버 푸시 등록: 마이페이지 「알림 켜기」로 권한을 받으면, 그리고 로그인한 화면(AppNav)이 열릴 때마다 Expo 푸시 토큰을
+`POST /api/client/devices` 로 등록한다. 로그아웃 전에 `…/devices/unregister`(본문에 토큰)로 해제한다.
+**실제 발송은 서버의 Expo Push 설정과 EAS 프로젝트의 FCM/APNs 자격이 있어야 간다 — 실연동 미확인.**
 
 ## 디자인/에셋으로 필요한 것
 

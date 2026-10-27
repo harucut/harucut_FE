@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { resumeUnfinishedPurchases } from "@/lib/storePurchase";
+import { syncPushDevice } from "@/lib/pushDevices";
 
 type AppNavProps = {
   // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
@@ -26,8 +27,10 @@ const NAV_LINKS: { href: string; label: string }[] = [
 // lg 미만에서 아예 렌더되지 않으므로 여기 변경은 모바일에 닿지 않는다.
 export function AppNav({ userInitial }: AppNavProps) {
   // 로그인한 화면에서만 그려지므로 여기서 마치지 못한 스토어 거래를 이어서 마친다(앱 결제를 열었을 때만 동작).
+  // 서버 푸시 기기 등록도 여기서 맞춘다(앱 셸·알림 권한이 있을 때만).
   useEffect(() => {
     void resumeUnfinishedPurchases();
+    void syncPushDevice();
   }, []);
   const pathname = usePathname();
   const isActive = (href: string) =>

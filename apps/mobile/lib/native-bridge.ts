@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 // SDK 57의 기본 export에 남은 saveToLibraryAsync는 런타임에서 던진다.
 // 저장 전용 권한과 기존 저장 API를 제공하는 공식 legacy 진입점을 사용한다.
 import * as MediaLibrary from 'expo-media-library/legacy';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { PermissionsAndroid, Platform, Share } from 'react-native';
 
@@ -36,8 +37,9 @@ import { PermissionsAndroid, Platform, Share } from 'react-native';
  * - 1 — 저장·공유·햅틱·알림·테마
  * - 2 — `camera-permission` 추가
  * - 3 — 앱 구독 `iap-products`·`iap-purchase`·`iap-restore`·`iap-finish` 추가(P4-B, lib/store-purchase.ts)
+ * - 4 — 서버 푸시 `push-token` 추가(Expo 푸시 토큰, 알림 권한이 있을 때만)
  */
-export const BRIDGE_VERSION = 3;
+export const BRIDGE_VERSION = 4;
 
 export type BridgeMessage =
   | { type: 'save-url'; id: string; url: string; filename: string }
@@ -53,7 +55,8 @@ export type BridgeMessage =
   | { type: 'iap-products'; id: string; productIds: string[] }
   | { type: 'iap-purchase'; id: string; productId: string; accountToken: string }
   | { type: 'iap-restore'; id: string; sync?: boolean }
-  | { type: 'iap-finish'; id: string; proofs: string[] };
+  | { type: 'iap-finish'; id: string; proofs: string[] }
+  | { type: 'push-token'; id: string };
 
 /**
  * 실패 사유 중 **사용자에게 그대로 보여도 되는** 것에만 붙는 표식.
@@ -481,6 +484,24 @@ Notifications.setNotificationHandler({
  * 묶인다. reason 은 사용자 화면에 그대로 나가므로(NativeNotificationSetting) 네이티브
  * 영문 메시지를 흘리지 않는다.
  */
+/**
+ * 서버 푸시용 Expo 푸시 토큰(data: { token }). **권한을 묻지 않는다** — 알림 권한은 웹이 이유를 말하는 자리에서 따로 묻는다
+ * (ensureNotificationPermission). 권한이 없으면 실패로 답하고 웹은 등록하지 않는다.
+ * EAS projectId(app.json extra.eas.projectId)가 있어야 토큰을 받는다. 실제 발송은 서버의 Expo Push 설정이 있어야 간다 — 실연동 미확인.
+ */
+export async function getPushToken(): Promise<BridgeResult> {
+  try {
+    const permission = await Notifications.getPermissionsAsync();
+    if (!permission.granted) return { ok: false };
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+    if (!projectId) return { ok: false };
+    const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    return { ok: true, data: { token: data } };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function ensureNotificationPermission(): Promise<BridgeResult> {
   try {
     const current = await Notifications.getPermissionsAsync();

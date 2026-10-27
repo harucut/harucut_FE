@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import { appLoginProviderOf, canonicalOAuthCallbackUrl } from '@harucut/shared';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -30,6 +31,7 @@ import {
   ensureAndroidChannel,
   ensureCameraPermission,
   ensureNotificationPermission,
+  getPushToken,
   haptic,
   pushChunk,
   saveBase64Chunks,
@@ -162,6 +164,36 @@ export function HarucutWebShell() {
     void ensureAndroidChannel();
   }, []);
 
+  /*
+    서버 푸시를 눌렀을 때 갈 곳(푸시 data.type). 합성 완료·실패는 기록, 결제·구독 안내는 마이페이지.
+    알림이 셸을 연 경우(앱이 꺼져 있었음)와 켜져 있던 경우를 같이 받는다. 주소는 우리 웹 안으로만 연다.
+  */
+  useEffect(() => {
+    const route = (data: Record<string, unknown> | undefined) => {
+      const type = data?.type;
+      const path =
+        type === 'COMPOSE_DONE' || type === 'COMPOSE_FAILED'
+          ? '/history'
+          : type === 'PAYMENT_FAILED' || type === 'SUBSCRIPTION_EXPIRING'
+            ? '/mypage'
+            : null;
+      if (!path) return;
+      const url = `${WEB_ORIGIN}${path}`;
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(url)}); true;`);
+      } else {
+        setWebViewSession((session) => ({ key: session.key + 1, uri: url }));
+      }
+    };
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => route(response?.notification.request.content.data as Record<string, unknown> | undefined))
+      .catch(() => undefined);
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) =>
+      route(response.notification.request.content.data as Record<string, unknown> | undefined),
+    );
+    return () => subscription.remove();
+  }, []);
+
   const reply = useCallback((askerUrl: string, id: string, result: BridgeResult) => {
     /*
       **물어본 문서**의 오리진으로 판정한다 — 지금 떠 있는 문서가 아니라.
@@ -259,6 +291,9 @@ export function HarucutWebShell() {
           return;
         case 'iap-finish':
           reply(askerUrl, message.id, await finishPurchases(message.proofs));
+          return;
+        case 'push-token':
+          reply(askerUrl, message.id, await getPushToken());
           return;
         default:
           return;

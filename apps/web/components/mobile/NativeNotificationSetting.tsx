@@ -5,6 +5,7 @@ import {
   isNativeShell,
   nativeRequestNotificationPermission,
 } from "@/lib/nativeBridge";
+import { registerPushDevice } from "@/lib/pushDevices";
 
 /**
  * 앱에서만 보이는 알림 설정.
@@ -41,9 +42,13 @@ export function NativeNotificationSetting() {
     setNotice(null);
     try {
       const result = await nativeRequestNotificationPermission();
+      // 권한을 받았으면 서버 푸시 기기도 등록한다 — 앱을 꺼 둬도 완성되면 알려 줄 수 있다.
+      const pushed = result?.ok ? await registerPushDevice() : false;
       setNotice(
         result?.ok
-          ? "알림을 켰어요. 앱을 켜 둔 동안 완성되면 알려드릴게요."
+          ? pushed
+            ? "알림을 켰어요. 사진이 완성되면 알려드릴게요."
+            : "알림을 켰어요. 앱을 켜 둔 동안 완성되면 알려드릴게요."
           : (result?.reason ?? "알림을 켜지 못했어요."),
       );
     } finally {

@@ -434,3 +434,17 @@ export async function nativeStoreFinish(proofs: string[]): Promise<boolean> {
   const result = await request({ type: "iap-finish", proofs }, { timeoutMs: 60_000 });
   return result.ok;
 }
+
+// ── 서버 푸시(브리지 판 4) ──
+
+/** `push-token` 을 처리하는 셸의 최소 판 수(native-bridge.ts 의 BRIDGE_VERSION). */
+const PUSH_TOKEN_SHELL_VERSION = 4;
+
+/** Expo 푸시 토큰. 셸 밖·구버전·알림 권한 없음이면 null(권한은 묻지 않는다). */
+export async function nativePushToken(): Promise<string | null> {
+  const shell = getNativeShell();
+  if (!shell || shell.version < PUSH_TOKEN_SHELL_VERSION) return null;
+  const result = await request({ type: "push-token" }, { timeoutMs: 30_000 });
+  const token = (result.data as { token?: unknown } | undefined)?.token;
+  return result.ok && typeof token === "string" && token.length > 0 ? token : null;
+}
