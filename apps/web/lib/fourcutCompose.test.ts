@@ -822,3 +822,44 @@ describe("describeComposeFailure", () => {
     error.mockRestore();
   });
 });
+
+// Codex #567: 자유 칸 프레임의 원본을 고정 슬롯 비율로 자르면 서버가 칸 비율로 한 번 더 잘라 미리보기와 구도가 달라진다.
+describe("composeFourcutOnServer — 자유 사진 칸(P5)", () => {
+  const cell = (shotIndex: number, width: number, height: number) => ({
+    x: 0, y: 0, width, height, rotation: 0, shape: { type: "ELLIPSE" as const }, shotIndex,
+  });
+
+  function canvasSizes() {
+    const sizes: Array<[number, number]> = [];
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: unknown[]) {
+      sizes.push([this.width, this.height]);
+      return (original as (...a: unknown[]) => unknown).apply(this, args);
+    } as typeof HTMLCanvasElement.prototype.getContext;
+    return sizes;
+  }
+
+  it("원본 i 를 shotIndex 가 i 인 칸의 크기로 가공해 올린다", async () => {
+    mockGetFrame.mockResolvedValue({
+      frameId: 99,
+      frameType: "CLASSIC",
+      components: [],
+      cells: [cell(2, 800, 800), cell(0, 1000, 500), cell(3, 600, 900), cell(1, 1200, 1200)],
+    });
+    const sizes = canvasSizes();
+    await composeFourcutOnServer({ sources: SOURCES, layout, outputFilter: "NONE", frameId: "classic-4", remoteFrameId: 99 });
+    expect(sizes).toEqual([[1000, 500], [1200, 1200], [800, 800], [600, 900]]);
+  });
+
+  it("칸이 넷이 아니거나 순번이 어긋나면 고정 슬롯으로 자른다", async () => {
+    mockGetFrame.mockResolvedValue({
+      frameId: 99,
+      frameType: "CLASSIC",
+      components: [],
+      cells: [cell(0, 800, 800), cell(0, 1000, 500), cell(3, 600, 900), cell(1, 1200, 1200)],
+    });
+    const sizes = canvasSizes();
+    await composeFourcutOnServer({ sources: SOURCES, layout, outputFilter: "NONE", frameId: "classic-4", remoteFrameId: 99 });
+    expect(sizes).toEqual(Array(4).fill([1700, 1200]));
+  });
+});
