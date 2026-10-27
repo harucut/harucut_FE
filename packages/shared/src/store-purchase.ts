@@ -9,10 +9,11 @@
  */
 
 /**
- * 앱 결제를 화면에 여는가. **사업 결정이다** — 스토어 상품·심사·가격이 준비되기 전에는 끈다(웹 결제 PAYMENTS_ENABLED 와 별개).
+ * 앱 결제를 화면에 여는가. **사업 결정이다**(웹 결제 PAYMENTS_ENABLED 와 별개). 2026-10-27 사용자 결정으로 연다.
  * 꺼져 있으면 구매·복원 버튼을 그리지 않는다. 구독 출처 안내는 이 값과 상관없이 보인다.
+ * 실제 결제는 스토어 콘솔 상품(harucut.plus.monthly)·서버 검증기(real)·새 앱 빌드가 있어야 된다 — 없으면 「구매할 수 없는 상품」으로 끝난다.
  */
-export const STORE_PURCHASES_ENABLED = false;
+export const STORE_PURCHASES_ENABLED = true;
 
 /** 구매·복원 메시지를 아는 셸의 브리지 판(apps/mobile/lib/native-bridge.ts 의 BRIDGE_VERSION). */
 export const STORE_PURCHASE_SHELL_VERSION = 3;
