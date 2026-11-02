@@ -120,7 +120,7 @@ describe("칸 다시 찍기", () => {
 
   async function armRetake(index: number) {
     fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진 다시 찍기` }));
-    fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진을 지우고 다시 찍기` }));
+    fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진, 한 번 더 누르면 다시 찍어요` }));
     await screen.findByRole("button", { name: "한 장 찍기" });
   }
 
@@ -148,6 +148,33 @@ describe("칸 다시 찍기", () => {
     fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
     await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
     expect(mockUpload).toHaveBeenCalledTimes(4);
+  });
+
+  // 인코딩 중에 돌아가면 뒤늦게 온 새 사진이 되살린 원본을 덮고, 그 원본의 미리보기 주소까지 해제한다(Codex #577).
+  it("셔터가 눌린 뒤에는 원래 사진으로 돌아갈 수 없다. 새 사진으로 끝난다", async () => {
+    await toReview();
+    await armRetake(4);
+    let finishCapture: (photo: Blob) => void = () => {};
+    mockCapture.mockReturnValueOnce(new Promise<Blob>((resolve) => { finishCapture = resolve; }));
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "한 장 찍기" }));
+    for (let tick = 0; tick < 4; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_000);
+      });
+    }
+    const back = screen.getByRole("button", { name: "그대로 둘게요" });
+    expect(back).toBeDisabled();
+    fireEvent.click(back);
+
+    await act(async () => {
+      finishCapture(new Blob(["new"], { type: "image/jpeg" }));
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    jest.useRealTimers();
+    expect(await screen.findByRole("button", { name: "이 사진으로 만들기" })).toBeInTheDocument();
+    // 원본 주소 하나만 해제한다. 되살렸다가 덮이지 않았다.
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
   });
 
   it("새 사진이 찍히면 원래 사진을 버린다", async () => {

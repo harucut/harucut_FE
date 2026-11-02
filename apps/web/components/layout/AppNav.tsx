@@ -88,7 +88,8 @@ export function AppNav({ userInitial }: AppNavProps) {
         <div className="ml-auto flex items-center gap-3">
           <Link
             href="/mypage"
-            aria-label="마이페이지"
+            // 보이는 글자가 이름에 들어 있어야 음성 조작으로 「MY」를 부를 수 있다(WCAG 2.5.3).
+            aria-label={`마이페이지 ${initial || "MY"}`}
             className="grid h-10.5 w-10.5 place-items-center rounded-full bg-(--hc-primary) text-[15px] font-extrabold text-(--hc-primary-contrast)"
           >
             {initial || "MY"}

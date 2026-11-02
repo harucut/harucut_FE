@@ -670,6 +670,7 @@ function BoothResultPhoto({ src }: { src: string }) {
 /**
  * 사진과 QR 을 함께 내미는 화면의 모양. 상태는 부모가 갖는다(Studio 미리보기도 이 모양을 쓴다).
  * 세로로 긴 프레임은 세로 태블릿에서도 나란히 둔다 — 위아래로 쌓으면 사진이 화면 폭의 2할로 줄어 QR 만 보인다.
+ * 휴대폰 폭에서는 나란히 두면 둘 다 작아져 위아래로 쌓는다.
  * 만들지 못했으면 받을 사진이 없으니 QR 을 내밀지 않는다.
  */
 export function BoothResultView({
@@ -708,18 +709,18 @@ export function BoothResultView({
   }
   return (
     <section
-      className={`ev-step flex flex-1 items-center justify-center gap-[clamp(1.25rem,3.5vmin,3.5rem)] pb-[max(clamp(1.25rem,3vmin,2.5rem),env(safe-area-inset-bottom))] landscape:flex-row ${tall ? "flex-row" : "flex-col"}`}
+      className={`ev-step flex flex-1 flex-col items-center justify-center gap-[clamp(1.25rem,3.5vmin,3.5rem)] pb-[max(clamp(1.25rem,3vmin,2.5rem),env(safe-area-inset-bottom))] landscape:flex-row ${tall ? "portrait:sm:flex-row" : ""}`}
     >
       <div
-        className={`flex min-h-0 items-center justify-center [container-type:size] landscape:h-[min(78dvh,46rem)] landscape:w-auto landscape:flex-1 ${
-          tall ? "h-[min(76dvh,60rem)] w-auto flex-1" : "h-[40dvh] w-full"
+        className={`flex h-[40dvh] min-h-0 w-full items-center justify-center [container-type:size] landscape:h-[min(78dvh,46rem)] landscape:w-auto landscape:flex-1 ${
+          tall ? "portrait:sm:h-[min(76dvh,60rem)] portrait:sm:w-auto portrait:sm:flex-1" : ""
         }`}
       >
         {photo ?? developing ?? <DevelopingPlaceholder />}
       </div>
       <div
-        className={`ev-readable flex max-w-xl flex-col items-center gap-[clamp(0.75rem,2vmin,1.5rem)] text-center landscape:w-[clamp(20rem,40vw,36rem)] ${
-          tall ? "w-[min(52vw,36rem)] shrink-0" : "w-full"
+        className={`ev-readable flex w-full max-w-xl flex-col items-center gap-[clamp(0.75rem,2vmin,1.5rem)] text-center landscape:w-[clamp(20rem,40vw,36rem)] ${
+          tall ? "portrait:sm:w-[min(52vw,36rem)] portrait:sm:shrink-0" : ""
         }`}
       >
         {/* QR 은 바탕을 행사 색에 맡기지 않는다. 흰 바탕이어야 어떤 테마에서도 스캐너가 읽는다. */}

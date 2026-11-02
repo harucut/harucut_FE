@@ -218,7 +218,9 @@ function PreviewCanvas({
       className={`relative mx-auto overflow-hidden rounded-lg border border-(--ev-border) ${tall ? "h-[min(40svh,24rem)]" : "w-full max-w-72"}`}
       style={{ aspectRatio: `${preview.canvasWidth} / ${preview.canvasHeight}` }}
     >
-      <FrameWithPhotos frame={frame} photos={photos} className="absolute inset-0 size-full" />
+      <div className="absolute inset-0">
+        <FrameWithPhotos frame={frame} photos={photos} className="size-full" />
+      </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={preview.image}

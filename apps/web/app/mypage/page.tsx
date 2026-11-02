@@ -1013,15 +1013,14 @@ export default function MyPage() {
                       onClick={() =>
                         setOpenMobile((prev) => (prev === id ? null : id))
                       }
-                      // 헤딩의 이름은 제목만. 부제까지 한 이름으로 읽히면 「계정 정보이메일, 닉네임…」이 된다.
-                      aria-label={meta.title}
-                      aria-describedby={`${bodyId}-sub`}
                       className="flex w-full items-center gap-3.5 px-5 py-4 text-left"
                     >
+                      {/* 이름은 보이는 글자 그대로다(WCAG 2.5.3). 쉼표가 없으면 「계정 정보이메일, 닉네임…」으로 붙어 읽힌다. */}
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15px] font-bold">
                           {meta.title}
                         </span>
+                        <span className="sr-only">, </span>
                         <span
                           id={`${bodyId}-sub`}
                           className="block truncate text-[12px] font-normal text-(--hc-muted)"

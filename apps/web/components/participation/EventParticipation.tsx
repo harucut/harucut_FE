@@ -1267,8 +1267,9 @@ export function CaptureAndSend({
 
   const leave = () => {
     // 다시 찍다 마음을 바꾸면 찍어 둔 네 장으로 돌아간다. 행사를 떠나는 것이 아니다.
+    // 셔터가 눌린 뒤에는 새 사진이 곧 들어온다. 그때 돌아가면 되살린 원본을 새 사진이 덮는다.
     if (retaking) {
-      cancelRetake();
+      if (!capturing) cancelRetake();
       return;
     }
     if (hasShots && !leaveArmed) {
@@ -1287,7 +1288,7 @@ export function CaptureAndSend({
         state={cameraState}
         booth={booth}
         onRetry={() => void startCamera()}
-        onLeave={onLeave ? leave : undefined}
+        onLeave={onLeave || retaking ? leave : undefined}
         leaveLabel={retaking ? "찍어 둔 사진으로 돌아가기" : leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
       />
     );
@@ -1311,11 +1312,12 @@ export function CaptureAndSend({
     >
       {allTaken ? null : (
         <div className={CAPTURE_TOP_BAR_CLASS}>
-          {onLeave ? (
+          {onLeave || retaking ? (
             <button
               type="button"
               onClick={leave}
-              className={`-ml-1 flex h-11 shrink-0 items-center gap-1 rounded-full pr-3 font-semibold text-(--ev-muted) ${booth ? "text-[clamp(1rem,2.2vmin,1.25rem)]" : "text-[14px]"}`}
+              disabled={Boolean(retaking) && capturing}
+              className={`-ml-1 flex h-11 shrink-0 items-center gap-1 rounded-full pr-3 font-semibold text-(--ev-muted) disabled:opacity-50 ${booth ? "text-[clamp(1rem,2.2vmin,1.25rem)]" : "text-[14px]"}`}
             >
               <ChevronLeft aria-hidden className="size-5" />
               {retaking ? "그대로 둘게요" : leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
@@ -1364,7 +1366,7 @@ export function CaptureAndSend({
                     disabled={Boolean(sending)}
                     onClick={() => (retakeArmed === index ? retake(index) : setRetakeArmed(index))}
                     onBlur={() => setRetakeArmed((armed) => (armed === index ? null : armed))}
-                    aria-label={retakeArmed === index ? `${index + 1}번째 사진을 지우고 다시 찍기` : `${index + 1}번째 사진 다시 찍기`}
+                    aria-label={retakeArmed === index ? `${index + 1}번째 사진, 한 번 더 누르면 다시 찍어요` : `${index + 1}번째 사진 다시 찍기`}
                     className="relative block w-full touch-manipulation overflow-hidden rounded-xl bg-black"
                     style={{ aspectRatio: String(ratio) }}
                   >
