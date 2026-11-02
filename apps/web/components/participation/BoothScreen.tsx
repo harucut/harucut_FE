@@ -12,6 +12,7 @@ import {
   sortedFrames,
 } from "@/components/participation/EventParticipation";
 import { useEventCamera } from "@/components/participation/useEventCamera";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
   forgetBoothDevice,
@@ -492,14 +493,20 @@ function useBoothCameraIssue(active: boolean): string | null {
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
+    let status: PermissionStatus | null = null;
+    // 운영자가 설정에서 권한을 풀면 새로고침 없이 바로 손님을 받는다.
+    const apply = () => {
+      if (!cancelled && status) setIssue(status.state === "denied" ? "카메라 권한이 막혀 있어요. 담당자에게 알려 주세요." : null);
+    };
     const check = async () => {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
         setIssue("이 기기나 브라우저에서는 카메라를 쓸 수 없어요. 담당자에게 알려 주세요.");
         return;
       }
       try {
-        const status = await navigator.permissions.query({ name: "camera" as PermissionName });
-        if (!cancelled) setIssue(status.state === "denied" ? "카메라 권한이 막혀 있어요. 담당자에게 알려 주세요." : null);
+        status = await navigator.permissions.query({ name: "camera" as PermissionName });
+        status.addEventListener("change", apply);
+        apply();
       } catch {
         // 권한 조회를 못 하는 브라우저(Safari 일부). 막혔다고 단정하지 않는다.
         if (!cancelled) setIssue(null);
@@ -508,6 +515,7 @@ function useBoothCameraIssue(active: boolean): string | null {
     void check();
     return () => {
       cancelled = true;
+      status?.removeEventListener("change", apply);
     };
   }, [active]);
   return active ? issue : null;
@@ -701,6 +709,11 @@ function BoothCameraCheck() {
 
 function BoothCameraPreview({ onClose }: { onClose: () => void }) {
   const { videoRef, state, start, stop } = useEventCamera(3 / 4);
+  const close = useCallback(() => {
+    stop();
+    onClose();
+  }, [stop, onClose]);
+  const dialogRef = useModalDialog(true, close);
   const startRef = useRef(start);
   useEffect(() => {
     startRef.current = start;
@@ -719,7 +732,7 @@ function BoothCameraPreview({ onClose }: { onClose: () => void }) {
             ? "손님 눈높이에서 얼굴이 잘 보이는지 확인해 주세요."
             : "카메라를 켜고 있어요. 권한을 물으면 허용해 주세요…";
   return (
-    <div role="dialog" aria-modal="true" aria-label="카메라 점검" className="ev-stage fixed inset-0 z-50 flex flex-col items-center gap-4 p-[clamp(1rem,3vmin,2.5rem)]">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="카메라 점검" tabIndex={-1} className="ev-stage fixed inset-0 z-50 flex flex-col items-center gap-4 p-[clamp(1rem,3vmin,2.5rem)]">
       <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <video ref={videoRef} playsInline muted className="max-h-full max-w-full -scale-x-100 rounded-2xl bg-[#18181a]" />
       </div>
@@ -727,10 +740,7 @@ function BoothCameraPreview({ onClose }: { onClose: () => void }) {
       <EventButton
         size="xl"
         className="max-w-md"
-        onClick={() => {
-          stop();
-          onClose();
-        }}
+        onClick={close}
       >
         이대로 시작
       </EventButton>

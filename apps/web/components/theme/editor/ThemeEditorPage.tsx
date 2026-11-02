@@ -570,6 +570,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       idle = ric ? ric(() => run(), { timeout: 2000 }) : window.setTimeout(run, 0);
     };
 
+    let editedThisSession = false;
     const schedule = () => {
       cancelScheduled();
       timer = window.setTimeout(() => {
@@ -578,8 +579,17 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           if (stopped) return;
           const s = useThemeEditorStore.getState();
           if (!s.frameId) return;
+          // 복구를 묻는 동안에는 남은 복구본을 건드리지 않는다.
+          if (remoteFrameId && recoveryPendingRef.current) return;
           // 저장본은 불러오기와 배경 주소 주입도 스토어를 바꾼다. 손댄 것이 있을 때만 쓴다 — 안 그러면 안 고친 프레임을 열 때마다 복구를 묻는다.
-          if (remoteFrameId && (s.past.length === 0 || recoveryPendingRef.current)) return;
+          // 이번에 손댔다가 되돌리기로 원본에 돌아왔으면 앞서 남긴 복구본을 지운다 — 남기면 새로고침 뒤 되돌린 편집이 되살아난다.
+          // 손대기 전에는 지우지 않는다. 불러오는 동안의 변경이 지난번 복구본을 지워 버리면 안 된다.
+          if (remoteFrameId && s.past.length === 0) {
+            if (editedThisSession && savedScope) discardEditorDraft(draftOwnerId, s.frameId, savedScope);
+            editedThisSession = false;
+            return;
+          }
+          if (remoteFrameId) editedThisSession = true;
           // 레이어가 없어도 배경색·칸별 설정은 편집 내용이다. 함께 보관한다.
           void saveEditorDraft({
             ownerId: draftOwnerId,

@@ -150,7 +150,9 @@ export function StudioHome() {
   }, [events]);
 
   const sortedEvents = useMemo(() => (events ? sortEvents(events) : null), [events]);
-  const sharedUsage = Object.values(usageById).find((usage) => usage.entitlement?.scope === "WORKSPACE") ?? null;
+  // 지금 공간의 행사에서만 찾는다. 다른 공간을 보고 돌아오면 그 공간의 수치가 캐시에 남아 있다.
+  const sharedUsage =
+    sortedEvents?.map((event) => usageById[event.eventId]).find((usage) => usage?.entitlement?.scope === "WORKSPACE") ?? null;
   const canCreate = current?.role === "OWNER" || current?.role === "ADMIN";
   const noEvents = events !== null && events.length === 0;
   // 행사가 없으면 만들 수밖에 없다. 버튼을 한 번 더 누르게 하지 않고 폼을 바로 편다.

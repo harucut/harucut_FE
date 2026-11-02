@@ -161,6 +161,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
       const page = await listEventPhotos(eventId, filter, nextCursor);
       if (generation !== listGenerationRef.current) return;
       setItems((prev) => [...prev, ...page.items]);
+      setSeenFrames((prev) => mergeFrames(prev, page.items));
       setNextCursor(page.nextCursor ?? null);
     } catch (cause) {
       if (generation !== listGenerationRef.current) return;
