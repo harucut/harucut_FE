@@ -52,6 +52,23 @@ it("둘 다 실패하면 저장하지 않는다 — 다음 화면에서 다시 �
   expect(screen.getByText("없음")).toBeInTheDocument();
 });
 
+it("한쪽 조회만 실패하면 없다고 기억하지 않는다 — 복구되면 다음 화면에서 입구가 나타난다", async () => {
+  mockWorkspaces.mockRejectedValue(new Error("일시 실패"));
+  render(<Probe />);
+  await waitFor(() => expect(mockEvents).toHaveBeenCalled());
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(window.sessionStorage.length).toBe(0);
+});
+
+it("한쪽 조회만 실패해도 다른 쪽에서 확인되면 입구를 연다", async () => {
+  mockWorkspaces.mockRejectedValue(new Error("일시 실패"));
+  mockEvents.mockResolvedValue([{ eventId: "E1" }]);
+  render(<Probe />);
+  expect(await screen.findByText("있음")).toBeInTheDocument();
+});
+
 it("공간을 만들거나 초대를 받으면 바로 열고, 로그아웃하면 지운다", async () => {
   mockWorkspaces.mockResolvedValue([{ type: "PERSONAL" }]);
   render(<Probe />);

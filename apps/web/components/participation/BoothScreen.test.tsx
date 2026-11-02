@@ -296,3 +296,31 @@ it("카메라를 쓸 수 없는 기기면 손님을 받기 전에 알리고 시�
   expect(await screen.findByRole("alert")).toHaveTextContent("카메라를 쓸 수 없어요");
   expect(screen.getByRole("button", { name: "촬영 시작" })).toBeDisabled();
 });
+
+it("연결 코드가 든 주소를 받으면 코드를 채우고 주소에서 지운다. 열린 탭에서 해시만 바뀌어도 받는다", async () => {
+  render(<BoothScreen />);
+  const input = screen.getByPlaceholderText("XXXX-XXXX");
+  expect(input).toHaveValue("");
+
+  await act(async () => {
+    window.history.replaceState({}, "", "/booth#pair=K7QM-3XRP");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+
+  expect(screen.getByPlaceholderText("XXXX-XXXX")).toHaveValue("K7QM-3XRP");
+  expect(window.location.hash).toBe("");
+});
+
+it("이미 연결된 기기가 새 코드를 받으면 말없이 옮기지 않고 묻는다", async () => {
+  pairDevice();
+  render(<BoothScreen />);
+  await screen.findByRole("button", { name: "촬영 시작" });
+
+  await act(async () => {
+    window.history.replaceState({}, "", "/booth#pair=K7QM-3XRP");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+
+  expect(screen.getByText(/새 연결 코드를 받았어요/)).toBeInTheDocument();
+  expect(api.redeemBoothPairing).not.toHaveBeenCalled();
+});

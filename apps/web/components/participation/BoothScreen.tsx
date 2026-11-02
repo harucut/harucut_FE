@@ -114,6 +114,9 @@ export function BoothScreen() {
       window.history.replaceState(window.history.state, "", window.location.pathname);
     };
     readPairCode();
+    // 이미 열린 부스 탭에 새 주소를 넣으면 문서를 다시 읽지 않고 해시만 바뀐다.
+    window.addEventListener("hashchange", readPairCode);
+    return () => window.removeEventListener("hashchange", readPairCode);
   }, []);
 
   const frames = useMemo(() => (event ? sortedFrames(event) : []), [event]);
@@ -200,8 +203,8 @@ export function BoothScreen() {
   }, [waitingForEvent, device]);
 
   // 유휴 종료: 손님 단계에서 손을 떼고 시간이 지나면 안내 뒤 처음으로.
-  const inGuestFlow =
-    phase.kind === "consent" || phase.kind === "frame" || phase.kind === "capture" || phase.kind === "sending" || phase.kind === "result";
+  // 전송 중에는 세지 않는다. 손을 떼고 기다리는 것이 정상이고, 멈춘 요청은 전송 상한에서 오류로 끝나 촬영 화면으로 돌아온다.
+  const inGuestFlow = phase.kind === "consent" || phase.kind === "frame" || phase.kind === "capture" || phase.kind === "result";
   useEffect(() => {
     if (!inGuestFlow) return;
     const bump = () => {
@@ -434,11 +437,7 @@ export function BoothScreen() {
             token={guest.token}
             frame={frame}
             sending={phase.kind === "sending" ? phase.progress : null}
-            onProgress={(progress) => {
-              // 올리는 동안은 손을 떼고 있어도 진행 중이다. 멈춘 요청은 전송 상한에서 오류로 끝나고, 그때부터 유휴로 센다.
-              lastActivityRef.current = Date.now();
-              setPhase(progress ? { kind: "sending", progress } : { kind: "capture" });
-            }}
+            onProgress={(progress) => setPhase(progress ? { kind: "sending", progress } : { kind: "capture" })}
             onLeave={() => void finishGuest()}
             leaveLabel="처음으로"
             onRunOpened={(run, runToken) =>

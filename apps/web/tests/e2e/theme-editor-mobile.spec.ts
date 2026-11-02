@@ -44,7 +44,7 @@ test("모바일에서는 도구를 하나씩 하단 시트로 열고 캔버스�
   await page.screenshot({ path: testInfo.outputPath("editor-mobile-assets.png") });
 
   await tools.getByRole("button", { name: "배경" }).click();
-  await expect(page.getByRole("button", { name: "스튜디오 그린", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "스튜디오 라임", exact: true })).toBeVisible();
   await expect(page.getByText("아직 업로드한 사진이 없어요.")).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath("editor-mobile-background.png") });
 });

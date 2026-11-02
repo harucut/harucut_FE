@@ -51,11 +51,15 @@ export function forgetStudioAccess() {
 
 async function fetchAccess() {
   const [workspaces, events] = await Promise.allSettled([listWorkspaces(), listMyEvents()]);
-  if (workspaces.status === "rejected" && events.status === "rejected") return;
   const has =
     (workspaces.status === "fulfilled" && workspaces.value.some((w) => w.type === "ORGANIZATION")) ||
     (events.status === "fulfilled" && events.value.length > 0);
-  writeCache(has ? "yes" : "no");
+  if (has) {
+    writeCache("yes");
+    return;
+  }
+  // 없다는 답은 둘 다 성공했을 때만 믿는다. 하나가 일시 실패한 채 「없음」을 기억하면, 복구돼도 이 탭에서는 입구가 사라진 채 남는다.
+  if (workspaces.status === "fulfilled" && events.status === "fulfilled") writeCache("no");
 }
 
 export function useStudioAccess(): boolean {
