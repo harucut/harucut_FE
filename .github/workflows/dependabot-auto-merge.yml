@@ -8,9 +8,9 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+    # main 은 넣지 않는다. 봇 PR 이 main 으로 머지되면 운영 배포가 된다(사용자 지시 2026-11-02).
     branches:
       - develop
-      - main
 
 permissions:
   contents: write
