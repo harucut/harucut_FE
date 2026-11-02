@@ -123,6 +123,12 @@ docker compose down && docker compose up -d
 docker logs harucut-app 2>&1 | grep "Started HarucutApplication"
 ```
 
+**대역을 붙였는데 SQS 호출이 실제 AWS 로 나간다 (2026-11-02 겪음)**
+
+백엔드를 직접 띄울 때 `AWS_ENDPOINT_URL_*` 환경변수를 줘도 먹지 않았다. SQS 소비자가 기동하자마자 실제 AWS 로 `ReceiveMessage` 를 보냈다. 그때는 가짜 자격이라 전부 403 으로 끝났지만, `.env` 의 실제 자격이었으면 운영 큐를 읽는다.
+
+대역으로 돌릴 때는 `.env` 의 AWS 값을 읽지 말고, 없는 리전(`AWS_REGION=qa-local-1`)과 가짜 자격을 주고, 기동 직후 로그에 `amazonaws.com` 이 없는지 먼저 본다. 합성 대역 전체를 돌리려면 AWS SDK 클라이언트의 엔드포인트를 코드에서 바꾸는 층이 필요하다.
+
 ## 쿠키
 
 로컬에서 백엔드가 내려주는 형식(실측):
