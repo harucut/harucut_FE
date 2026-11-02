@@ -345,8 +345,8 @@ describe("ThemeEditorPage save flow", () => {
       await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "WsOrg" })));
       expect(mockUsage).not.toHaveBeenCalled();
       await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/studio/events/Ev1"));
-      // 공간의 새 프레임은 서버 초안을 쓰지 않는다(목록이 공간을 가리지 않는다).
-      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(expect.objectContaining({ ownerId: null }));
+      // 공간의 새 프레임 초안은 공간별로 가른다 — 개인 새 프레임 초안을 복구하지 않게.
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceId: "WsOrg" }));
     } finally {
       mockWorkspaceId = null;
       mockReturnTo = null;

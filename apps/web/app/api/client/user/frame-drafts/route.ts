@@ -1,4 +1,4 @@
-import { proxyJson, validateResourceId } from "@/app/api/client/_proxy";
+import { proxyJson, validatePublicId, validateResourceId } from "@/app/api/client/_proxy";
 
 export const runtime = "edge";
 
@@ -11,7 +11,15 @@ export async function GET(req: Request) {
     const invalidId = validateResourceId(frameId);
     if (invalidId) return invalidId;
   }
-  const query = frameId === null ? "" : `?frameId=${encodeURIComponent(frameId)}`;
+  const workspaceId = new URL(req.url).searchParams.get("workspaceId");
+  if (workspaceId !== null) {
+    const invalidWorkspace = validatePublicId(workspaceId);
+    if (invalidWorkspace) return invalidWorkspace;
+  }
+  const params = new URLSearchParams();
+  if (frameId !== null) params.set("frameId", frameId);
+  if (workspaceId !== null) params.set("workspaceId", workspaceId);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
 
   return proxyJson(req, {
     method: "GET",

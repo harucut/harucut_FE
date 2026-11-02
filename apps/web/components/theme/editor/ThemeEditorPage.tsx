@@ -469,11 +469,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
   // 다른 기기에서 이어 편집하는 서버 초안(F1-5). 같은 기기의 새로고침 복구는 아래 로컬 초안이 맡는다.
   const serverDraft = useServerFrameDraft({
-    // 공간의 새 프레임은 서버 초안을 쓰지 않는다. 목록이 공간을 가리지 않아 개인 새 프레임 초안과
-    // 섞인다. 저장본(공간 프레임 포함)은 frameId 로 가려지므로 쓴다.
-    ownerId: workspaceId && !remoteFrameId ? null : draftOwnerId,
+    ownerId: draftOwnerId,
     frameId,
     remoteFrameId,
+    workspaceId,
     savedScope,
     ready: remoteFrameId ? isRemoteFrameSettled && !loadError : true,
   });
