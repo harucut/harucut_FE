@@ -23,8 +23,10 @@ const PHONE_SCREENS: Array<{ id: EventPreviewScreen; label: string }> = [
   { id: "capture", label: "촬영" },
   { id: "composing", label: "만드는 중" },
   { id: "done", label: "완성" },
+  { id: "revisit", label: "다시 방문" },
   { id: "closed", label: "촬영 시간 아님" },
-  { id: "error", label: "오류" },
+  { id: "camera-error", label: "카메라 오류" },
+  { id: "error", label: "합성 오류" },
   { id: "expired", label: "기간 지남" },
 ];
 
@@ -34,6 +36,7 @@ const BOOTH_SCREENS: Array<{ id: EventPreviewScreen; label: string }> = [
   { id: "booth-frame", label: "프레임" },
   { id: "booth-capture", label: "촬영" },
   { id: "booth-result", label: "QR 받기" },
+  { id: "booth-closed", label: "촬영 시간 아님" },
 ];
 
 const MAX_HEIGHT = 560;

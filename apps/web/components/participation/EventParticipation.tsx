@@ -43,7 +43,9 @@ import {
 } from "@/components/participation/EventSurface";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { stashResultHandoff } from "@/lib/event/resultHandoff";
-import { saveImageFromSignedUrl, saveImageMessage } from "@/lib/share";
+import { copyText, saveImageFromSignedUrl, saveImageMessage } from "@/lib/share";
+import { detectInAppBrowser, openInExternalBrowser } from "@/lib/externalBrowser";
+import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { composeFailureCopy } from "@/lib/composeFailure";
 import { freeTextErrorMessage, localFreeTextProblem, normalizeFreeText } from "@/lib/event/freeText";
 import { safeAssetUrl } from "@/lib/event/pageTheme";
@@ -83,11 +85,25 @@ export function participantErrorMessage(cause: unknown, fallback: string) {
   return getUserFacingApiErrorMessage(cause, fallback);
 }
 
+const NOT_READY_MESSAGE = "이 행사는 아직 촬영 준비 중이에요. 행사 담당자에게 문의해 주세요.";
+
+/** 자격이 없을 때의 첫 화면. 부스 전용이거나, 촬영 시간인데 고를 프레임이 없으면 들어갈 수 없다. */
+function firstStepOf(event: PublicEvent): Step {
+  if (!event.byodEnabled) return { kind: "unavailable", message: "이 행사는 현장 부스에서만 참여할 수 있어요." };
+  if (event.captureOpen && sortedFrames(event).length === 0) return { kind: "unavailable", message: NOT_READY_MESSAGE };
+  return { kind: "intro" };
+}
+
 export function sortedFrames(event: PublicEvent): EventFrameRef[] {
   const allowed = new Set(event.allowedLayouts);
   return [...event.frames]
     .filter((frame) => allowed.has(frame.layoutType))
     .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function defaultFrameOf(event: PublicEvent) {
+  const list = sortedFrames(event);
+  return list.find((f) => f.isDefault) ?? list[0] ?? null;
 }
 
 export function slotAspectOf(frame: EventFrameRef | null) {
@@ -100,16 +116,17 @@ export function slotAspectOf(frame: EventFrameRef | null) {
 export const RESULT_POLL_MS = 5_000;
 const RESULT_POLL_LIMIT = 24;
 
-export function EventParticipation({ slug }: { slug: string }) {
+export function EventParticipation({ slug, initialEvent = null }: { slug: string; initialEvent?: PublicEvent | null }) {
   const router = useRouter();
-  const [event, setEvent] = useState<PublicEvent | null>(null);
-  const [step, setStep] = useState<Step>({ kind: "loading" });
+  // 서버가 받아 둔 행사가 있으면 첫 화면부터 그 행사의 모습이다. 저장된 자격이 있는지는 브라우저에서만 안다.
+  const [event, setEvent] = useState<PublicEvent | null>(initialEvent);
+  const [step, setStep] = useState<Step>(() => (initialEvent ? firstStepOf(initialEvent) : { kind: "loading" }));
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // 서버를 기다리는 동안 버튼이 말없이 있으면 연타한다.
   const [busy, setBusy] = useState(false);
-  const [frame, setFrame] = useState<EventFrameRef | null>(null);
+  const [frame, setFrame] = useState<EventFrameRef | null>(() => (initialEvent ? defaultFrameOf(initialEvent) : null));
   const [results, setResults] = useState<ParticipantJob[]>([]);
   // 결과 목록 응답이 늦게 오면 그사이 자격이 바뀌었을 수 있다(401 뒤 새 참여). 요청 당시 자격이 지금 것일 때만 반영한다.
   const sessionTokenRef = useRef<string | null>(null);
@@ -180,32 +197,38 @@ export function EventParticipation({ slug }: { slug: string }) {
     }
   }, []);
 
-  // 행사 정보 → 저장된 자격이 있으면 세션 복원.
+  // 행사 정보 → 저장된 자격이 있으면 세션 복원. 서버가 받아 둔 행사가 있으면 다시 묻지 않는다.
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       let loaded: PublicEvent;
-      try {
-        loaded = await getPublicEvent(slug, controller.signal);
-      } catch (cause) {
+      if (initialEvent) {
+        loaded = initialEvent;
+      } else {
+        try {
+          loaded = await getPublicEvent(slug, controller.signal);
+        } catch (cause) {
+          if (controller.signal.aborted) return;
+          showUnavailable(cause, "행사를 찾을 수 없어요. 받은 링크를 다시 확인해 주세요.");
+          return;
+        }
         if (controller.signal.aborted) return;
-        showUnavailable(cause, "행사를 찾을 수 없어요. 받은 링크를 다시 확인해 주세요.");
-        return;
+        setEvent(loaded);
+        setFrame(defaultFrameOf(loaded));
       }
-      if (controller.signal.aborted) return;
-      setEvent(loaded);
-      const defaultFrame = sortedFrames(loaded).find((f) => f.isDefault) ?? sortedFrames(loaded)[0] ?? null;
-      setFrame(defaultFrame);
-      if (!loaded.byodEnabled) {
-        setStep({ kind: "unavailable", message: "이 행사는 현장 부스에서만 참여할 수 있어요." });
+      const first = firstStepOf(loaded);
+      if (first.kind === "unavailable") {
+        setStep(first);
         return;
       }
 
       const stored = readParticipant(loaded.eventId);
       if (!stored) {
-        setStep({ kind: "intro" });
+        setStep(first);
         return;
       }
+      // 이어 갈 자격이 있다. 확인이 끝나기 전에 「참여하기」를 눌러 새 참가자가 생기지 않게 한다.
+      setStep({ kind: "loading" });
       try {
         const state = await getParticipantSession(stored.token, controller.signal);
         if (controller.signal.aborted) return;
@@ -224,7 +247,28 @@ export function EventParticipation({ slug }: { slug: string }) {
       }
     })();
     return () => controller.abort();
-  }, [slug, showUnavailable, resetSession, loadResults]);
+  }, [slug, initialEvent, showUnavailable, resetSession, loadResults]);
+
+  /**
+   * 주최자가 다시 게시했다. 받아 둔 테마·프레임·동의를 새로 받는다. 고른 프레임이 빠졌으면 다시 고르게 한다.
+   * 못 받으면 지금 값을 둔다 — 서버가 접수에서 다시 본다.
+   */
+  const refreshEvent = useCallback(
+    async (options: { reselectIfMissing?: boolean } = {}) => {
+      try {
+        const latest = await getPublicEvent(slug);
+        setEvent(latest);
+        const list = sortedFrames(latest);
+        const kept = list.find((f) => f.frameVersionId === frame?.frameVersionId) ?? null;
+        setFrame(kept ?? defaultFrameOf(latest));
+        if (options.reselectIfMissing && !kept && list.length > 1) setStep({ kind: "frame" });
+        return latest;
+      } catch {
+        return null;
+      }
+    },
+    [slug, frame],
+  );
 
   useEffect(() => {
     if (event) document.title = event.name;
@@ -252,7 +296,21 @@ export function EventParticipation({ slug }: { slug: string }) {
 
   const onStartShooting = () => {
     setError(null);
+    setNotice(null);
     setStep(frames.length > 1 ? { kind: "frame" } : { kind: "capture" });
+  };
+
+  const onWithdrawConsent = async (item: ConsentItem) => {
+    if (!event || !session) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await submitConsents(session.token, event.eventId, [{ code: item.code, version: item.version, decision: "WITHDRAWN" }]);
+      setNotice(`「${item.title}」 동의를 철회했어요.`);
+    } catch (cause) {
+      if (getApiErrorDetails(cause).status === 400) void refreshEvent();
+      setError(getUserFacingApiErrorMessage(cause, "철회하지 못했어요. 잠시 후 다시 시도해 주세요."));
+    }
   };
 
   const onConsent = async (decisions: Record<string, boolean>) => {
@@ -278,8 +336,13 @@ export function EventParticipation({ slug }: { slug: string }) {
       if (event.captureOpen && (!list || list.length === 0)) onStartShooting();
       else setStep({ kind: "home" });
     } catch (cause) {
-      if (getApiErrorDetails(cause).status === 401) resetSession(event.eventId);
-      else setError(getUserFacingApiErrorMessage(cause, "동의를 저장하지 못했어요. 잠시 후 다시 시도해 주세요."));
+      const { status } = getApiErrorDetails(cause);
+      if (status === 401) resetSession(event.eventId);
+      else if (status === 400) {
+        // 동의 문구의 판이 바뀌었다(재게시). 옛 문구로는 받지 않으니 새 문구를 보여 주고 다시 묻는다.
+        await refreshEvent();
+        setError("안내가 바뀌었어요. 다시 확인해 주세요.");
+      } else setError(getUserFacingApiErrorMessage(cause, "동의를 저장하지 못했어요. 잠시 후 다시 시도해 주세요."));
     } finally {
       setBusy(false);
     }
@@ -311,10 +374,9 @@ export function EventParticipation({ slug }: { slug: string }) {
     try {
       const { url } = await getParticipantDownload(session.token, jobId);
       const saved = await saveImageFromSignedUrl(url, `${event?.name ?? "행사 사진"}.jpg`);
-      if (saved === "failed") setError("사진을 저장하지 못했어요. 다시 눌러 주세요.");
-      else setNotice(saveImageMessage(saved));
+      setNotice(saveImageMessage(saved));
     } catch (cause) {
-      setError(getUserFacingApiErrorMessage(cause, "사진을 내려받지 못했어요."));
+      setError(getNativeSaveErrorMessage(cause) ?? getUserFacingApiErrorMessage(cause, "사진을 내려받지 못했어요."));
     }
   };
 
@@ -360,7 +422,13 @@ export function EventParticipation({ slug }: { slug: string }) {
         ) : null}
 
         {step.kind === "consent" && event ? (
-          <ConsentStep items={event.consentItems} busy={busy} onSubmit={(decisions) => void onConsent(decisions)} />
+          <ConsentStep
+            // 재게시로 문구가 바뀌면 앞서 고른 체크를 비운다. 새 문구에 대한 동의가 아니다.
+            key={event.experienceVersion}
+            items={event.consentItems}
+            busy={busy}
+            onSubmit={(decisions) => void onConsent(decisions)}
+          />
         ) : null}
 
         {step.kind === "home" && event ? (
@@ -371,6 +439,7 @@ export function EventParticipation({ slug }: { slug: string }) {
             onStart={onStartShooting}
             onShare={(jobId) => void onShareResult(jobId)}
             onDownload={(jobId) => void onDownloadResult(jobId)}
+            onWithdraw={(item) => void onWithdrawConsent(item)}
             onRefresh={() => {
               if (!session) return;
               setError(null);
@@ -407,12 +476,20 @@ export function EventParticipation({ slug }: { slug: string }) {
             }}
             leaveLabel="뒤로"
             onSessionEnded={() => resetSession(event.eventId)}
+            onRunOpened={(run) => {
+              // 받아 둔 행사보다 새 판으로 회차가 열렸다. 테마·프레임을 맞춘다.
+              if (run.experienceVersion !== event.experienceVersion) void refreshEvent({ reselectIfMissing: true });
+            }}
             onConsentRequired={() => {
               // 재게시로 새 필수 동의가 생겼다. 최신 동의 항목을 받아 다시 묻는다. 못 받으면 있는 항목으로 묻고 서버가 다시 본다.
-              void getPublicEvent(slug)
-                .then(setEvent)
-                .catch(() => {})
-                .finally(() => setStep({ kind: "consent" }));
+              void refreshEvent().finally(() => setStep({ kind: "consent" }));
+            }}
+            onFrameRejected={() => {
+              // 고른 프레임이 게시본에서 빠졌다. 찍은 사진은 그 프레임 칸에 맞춘 것이라 새로 찍는다.
+              void refreshEvent().finally(() => {
+                setError("프레임이 바뀌었어요. 다시 골라 찍어 주세요.");
+                setStep(frames.length > 1 ? { kind: "frame" } : { kind: "home" });
+              });
             }}
             onUnavailable={(cause) => {
               // 촬영 한도(ENT-002)는 새 촬영만 막는다 — 이미 만든 사진은 받을 수 있어야 하니 홈으로 돌아가 알린다(Codex #545).
@@ -477,7 +554,8 @@ function ConsentSummary({ items }: { items: ConsentItem[] }) {
 
 export function IntroStep({ event, frames, busy, onJoin }: { event: PublicEvent; frames: EventFrameRef[]; busy: boolean; onJoin: () => void }) {
   const welcome = useEventCopy("welcome", "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.");
-  const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요. 받은 사진은 그대로 다시 받을 수 있어요.");
+  // 촬영 시간이 아니면 새 참가자는 할 일이 없다(EVENT-001). 이미 찍은 사람이 사진을 찾는 길을 말한다.
+  const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요. 찍은 사진은 그때 받은 결과 링크로 다시 받을 수 있어요.");
   return (
     <section className="ev-step flex flex-1 flex-col gap-4">
       <FrameShowcase frames={frames} />
@@ -486,9 +564,16 @@ export function IntroStep({ event, frames, busy, onJoin }: { event: PublicEvent;
         <p className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">{event.captureOpen ? welcome : closed}</p>
       </div>
       <EventActionBar>
-        <EventButton onClick={onJoin} disabled={busy} aria-busy={busy}>
-          {busy ? "잠시만요…" : "참여하기"}
-        </EventButton>
+        {event.captureOpen ? (
+          <EventButton onClick={onJoin} disabled={busy} aria-busy={busy}>
+            {busy ? "잠시만요…" : "참여하기"}
+          </EventButton>
+        ) : null}
+        {event.captureOpen ? (
+          <p className="break-keep text-center text-[12px] leading-relaxed text-(--ev-muted)">
+            이 기기에서 찍은 사진은 이 브라우저로 다시 들어오면 볼 수 있어요. 결과 링크를 저장해 두면 다른 기기에서도 받아요.
+          </p>
+        ) : null}
         <ConsentSummary items={event.consentItems} />
       </EventActionBar>
     </section>
@@ -551,13 +636,14 @@ export function ConsentStep({
   );
 }
 
-function HomeStep({
+export function HomeStep({
   event,
   frames,
   results,
   onStart,
   onShare,
   onDownload,
+  onWithdraw,
   onRefresh,
 }: {
   event: PublicEvent;
@@ -566,8 +652,11 @@ function HomeStep({
   onStart: () => void;
   onShare: (jobId: number) => void;
   onDownload: (jobId: number) => void;
+  /** 선택 동의를 거두는 길(R5 645줄). 필수 동의는 촬영의 조건이라 여기 없다. */
+  onWithdraw: (item: ConsentItem) => void;
   onRefresh: () => void;
 }) {
+  const optionalItems = event.consentItems.filter((item) => !item.required);
   const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요.");
   const welcome = useEventCopy("welcome", "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.");
   const hasResults = results.length > 0;
@@ -610,6 +699,21 @@ function HomeStep({
             ))}
           </ul>
         </div>
+      ) : null}
+      {optionalItems.length > 0 ? (
+        <details className="text-[13px] text-(--ev-muted)">
+          <summary className="flex min-h-11 cursor-pointer items-center font-semibold underline underline-offset-4">선택 동의 철회</summary>
+          <ul className="flex flex-col gap-2 pb-2">
+            {optionalItems.map((item) => (
+              <li key={item.code} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 break-keep">{item.title}</span>
+                <button type="button" onClick={() => onWithdraw(item)} className="h-11 shrink-0 rounded-full border border-(--ev-border) px-4 font-bold">
+                  철회
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
       {event.captureOpen ? (
         <EventActionBar>
@@ -701,6 +805,79 @@ export function FrameStep({
   );
 }
 
+/**
+ * 카메라를 못 쓸 때. 갤러리로 우회시키지 않는다(R5 — 촬영 전용). 할 수 있는 일을 버튼으로 준다: 다시 시도,
+ * 인앱 브라우저면 밖으로 나가기, 주소 복사, 앞 단계로.
+ */
+export function CameraProblem({
+  state,
+  booth,
+  onRetry,
+  onLeave,
+  leaveLabel,
+}: {
+  state: "denied" | "unsupported" | "error";
+  booth: boolean;
+  onRetry: () => void;
+  onLeave?: () => void;
+  leaveLabel?: string;
+}) {
+  const [copied, setCopied] = useState<boolean | null>(null);
+  // 부스는 공용 기기다. 다른 브라우저로 나가거나 주소를 복사할 사람은 손님이 아니라 담당자다.
+  const inApp = !booth && typeof navigator !== "undefined" ? detectInAppBrowser() : null;
+  const copyLink = async () => {
+    try {
+      await copyText(window.location.href);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <section className="ev-step flex flex-1 flex-col justify-center gap-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <p role="alert" className="ev-readable break-keep text-[18px] font-bold leading-relaxed">
+        {state === "denied"
+          ? "카메라를 쓸 수 있게 허용해 주세요. 브라우저 설정에서 이 사이트의 카메라 권한을 켠 뒤 다시 시도해 주세요."
+          : state === "unsupported"
+            ? "이 브라우저에서는 카메라를 쓸 수 없어요. Safari나 Chrome에서 이 링크를 열어 주세요."
+            : "카메라를 켜지 못했어요. 다른 앱이 카메라를 쓰고 있다면 닫은 뒤 다시 시도해 주세요."}
+      </p>
+      {state === "denied" ? (
+        <ul className="ev-readable flex list-disc flex-col gap-1.5 pl-5 text-[14px] leading-relaxed text-(--ev-muted)">
+          <li>아이폰: 설정 앱의 Safari에서 카메라를 「허용」으로 바꿔요.</li>
+          <li>안드로이드: 주소창 왼쪽 아이콘을 눌러 권한에서 카메라를 켜요.</li>
+          <li>도움이 필요하면 현장 담당자에게 알려 주세요.</li>
+        </ul>
+      ) : null}
+      <EventButton size={booth ? "booth" : "lg"} onClick={onRetry}>
+        다시 시도
+      </EventButton>
+      {inApp ? (
+        <EventButton
+          tone="quiet"
+          size="md"
+          onClick={() => {
+            if (!openInExternalBrowser(window.location.href)) void copyLink();
+          }}
+        >
+          다른 브라우저로 열기
+        </EventButton>
+      ) : null}
+      {booth ? null : (
+        <EventButton tone="quiet" size="md" onClick={() => void copyLink()}>
+          {copied ? "링크를 복사했어요. Safari나 Chrome에 붙여 넣어 주세요" : "링크 복사"}
+        </EventButton>
+      )}
+      {copied === false ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)">복사하지 못했어요. 주소창의 주소를 길게 눌러 복사해 주세요.</p> : null}
+      {onLeave ? (
+        <EventButton tone="quiet" size="md" onClick={onLeave}>
+          {leaveLabel ?? "뒤로"}
+        </EventButton>
+      ) : null}
+    </section>
+  );
+}
+
 /** 촬영 무대의 배치. 실제 촬영과 Studio 미리보기가 같은 값을 쓴다. */
 export function captureStageClass(booth: boolean, wide: boolean) {
   // 찍는 동안은 뷰파인더가 화면의 전부다. 큰 배경 그림도 깔지 않는다(R5 18절 — 미리보기를 끊지 않게).
@@ -779,6 +956,7 @@ export function CaptureAndSend({
   onSessionEnded,
   onUnavailable,
   onConsentRequired,
+  onFrameRejected,
   onLeave,
   leaveLabel,
   variant = "phone",
@@ -799,6 +977,8 @@ export function CaptureAndSend({
   onUnavailable: (cause: unknown) => void;
   /** 서버가 새 필수 동의를 요구한다(PART-002 — 촬영 중 재게시). 찍던 것을 멈추고 동의부터 받는다. */
   onConsentRequired?: () => void;
+  /** 고른 프레임이 게시본에서 빠졌다(PART-004 — 촬영 중 재게시). */
+  onFrameRejected?: () => void;
   /** 촬영을 그만두고 앞 단계로. 찍은 사진이 있으면 한 번 더 눌러야 나간다(실수로 사진을 잃지 않게). */
   onLeave?: () => void;
   leaveLabel?: string;
@@ -954,12 +1134,22 @@ export function CaptureAndSend({
     if (cameraState !== "ready") void startCamera();
   };
 
+  // 전송 중에 화면을 떠났으면 남은 칸을 올리지 않고, 떠난 뒤의 응답으로 다음 화면을 움직이지 않는다.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
   const send = async (retriedForNewRun = false) => {
     setError(null);
     try {
       if (!runRef.current) await openRun();
       const run = runRef.current!;
       for (let slot = 0; slot < SHOT_COUNT; slot += 1) {
+        if (!aliveRef.current) return;
         if (uploadedRef.current[slot]) continue;
         onProgress(`사진 올리는 중 (${slot + 1}/${SHOT_COUNT})`);
         uploadedRef.current[slot] = await uploadCaptureInput({
@@ -970,6 +1160,7 @@ export function CaptureAndSend({
           photo: shots[slot]!,
         });
       }
+      if (!aliveRef.current) return;
       onProgress("사진을 만드는 중");
       // 비워 두면 싣지 않는다 — 서버는 프레임 그대로 만든다(공백만 보내면 PART-008 EMPTY). 서버와 같은 규칙으로 정리해 보낸다.
       const freeTextToSend = normalizeFreeText(freeText.text);
@@ -987,13 +1178,16 @@ export function CaptureAndSend({
         idempotencyKey: idempotencyKeyRef.current!,
         ...(sentFreeText ? { freeText: sentFreeText } : {}),
       });
+      if (!aliveRef.current) return;
       stopCamera();
       onDone(accepted.resultToken, run);
     } catch (cause) {
+      if (!aliveRef.current) return;
       onProgress(null);
       const { status, code } = getApiErrorDetails(cause);
       if (status === 401) return onSessionEnded();
       if (code === "PART-002" && onConsentRequired) return onConsentRequired();
+      if (code === "PART-004" && onFrameRejected) return onFrameRejected();
       if (code === "EVENT-001" || code === "ENT-002" || code === "ENT-004") return onUnavailable(cause);
       if (code === "PART-003" && !retriedForNewRun) {
         // 회차가 끝났다(유효시간 초과 등). 새 회차를 열고 같은 사진을 처음부터 올린다.
@@ -1034,25 +1228,13 @@ export function CaptureAndSend({
   // 촬영 버튼만 남아, 카메라가 풀려도 새로고침 말고는 돌아올 길이 없었다(Codex 리뷰 #523).
   if (cameraState === "denied" || cameraState === "unsupported" || cameraState === "error") {
     return (
-      <section className="ev-step flex flex-1 flex-col justify-center gap-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <p role="alert" className="break-keep text-[18px] font-bold leading-relaxed">
-          {cameraState === "denied"
-            ? "카메라를 쓸 수 있게 허용해 주세요. 브라우저 설정에서 이 사이트의 카메라 권한을 켠 뒤 다시 시도해 주세요."
-            : cameraState === "unsupported"
-              ? "이 브라우저에서는 카메라를 쓸 수 없어요. Safari나 Chrome에서 이 링크를 열어 주세요."
-              : "카메라를 켜지 못했어요. 다른 앱이 카메라를 쓰고 있다면 닫은 뒤 다시 시도해 주세요."}
-        </p>
-        {cameraState === "denied" ? (
-          <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[14px] leading-relaxed text-(--ev-muted)">
-            <li>아이폰: 설정 앱의 Safari에서 카메라를 「허용」으로 바꿔요.</li>
-            <li>안드로이드: 주소창 왼쪽 아이콘을 눌러 권한에서 카메라를 켜요.</li>
-            <li>도움이 필요하면 현장 담당자에게 알려 주세요.</li>
-          </ul>
-        ) : null}
-        <EventButton size={booth ? "booth" : "lg"} onClick={() => void startCamera()}>
-          다시 시도
-        </EventButton>
-      </section>
+      <CameraProblem
+        state={cameraState}
+        booth={booth}
+        onRetry={() => void startCamera()}
+        onLeave={onLeave ? leave : undefined}
+        leaveLabel={leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
+      />
     );
   }
 
@@ -1172,6 +1354,12 @@ export function CaptureAndSend({
               <EventButton size={booth ? "booth" : "xl"} disabled={Boolean(sending) || freeTextBlocked} aria-busy={Boolean(sending)} onClick={() => void send()}>
                 이 사진으로 만들기
               </EventButton>
+              {/* 회선이 멈춰도 나갈 길이 있다. 찍은 사진을 잃으니 한 번 더 눌러야 나간다. */}
+              {onLeave ? (
+                <button type="button" onClick={leave} className="mx-auto flex min-h-11 items-center px-3 text-[14px] font-semibold text-(--ev-muted)">
+                  {leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
+                </button>
+              ) : null}
             </EventActionBar>
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { nativeSaveImageUrl, nativeShare } from "@/lib/nativeBridge";
+import { NativeSaveError, nativeSaveImageUrl, nativeShare } from "@/lib/nativeBridge";
 
 type ShareLinkArgs = {
   title: string;
@@ -29,7 +29,7 @@ export function isCopyFailedError(error: unknown): error is CopyFailedError {
   return error instanceof CopyFailedError;
 }
 
-async function copyText(value: string) {
+export async function copyText(value: string) {
   let clipboardError: unknown;
 
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
@@ -117,7 +117,7 @@ export async function shareOrCopyLink(args: ShareLinkArgs): Promise<ShareLinkRes
 }
 
 /** 어떻게 끝났는지. 호출부가 그에 맞는 안내를 고른다(「저장했다」고 단정할 수 없는 경로가 있다). */
-export type SaveImageResult = "saved" | "shared" | "downloaded" | "cancelled" | "failed";
+export type SaveImageResult = "saved" | "shared" | "downloaded" | "cancelled";
 
 function clickDownloadLink(href: string, filename: string) {
   const link = document.createElement("a");
@@ -149,7 +149,11 @@ export async function sharePhotoFile(file: File): Promise<SaveImageResult | null
  */
 export async function saveImageFromSignedUrl(url: string, filename: string): Promise<SaveImageResult> {
   const native = await nativeSaveImageUrl(url, filename);
-  if (native) return native.ok ? "saved" : "failed";
+  if (native) {
+    if (native.ok) return "saved";
+    // 사진첩 권한 거절 등. 네이티브가 준 사유를 호출부가 그대로 보여 준다(getNativeSaveErrorMessage).
+    throw new NativeSaveError(native);
+  }
   try {
     const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer" });
     if (response.ok) {
@@ -177,7 +181,8 @@ export function saveImageMessage(result: SaveImageResult): string | null {
     case "shared":
       return "저장을 골랐다면 사진첩이나 「파일」 앱에서 볼 수 있어요.";
     case "downloaded":
-      return "내려받았어요. 사진첩이나 「파일」, 다운로드 폴더에서 볼 수 있어요.";
+      // 브라우저가 실제로 저장했는지는 알 수 없다(인앱 브라우저는 삼키기도 한다). 안 보일 때 할 일까지 말한다.
+      return "내려받기를 시작했어요. 사진첩이나 「파일」, 다운로드 폴더를 확인해 주세요. 없으면 사진을 길게 눌러 저장해 주세요.";
     default:
       return null;
   }

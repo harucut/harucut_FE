@@ -27,6 +27,9 @@ const CREDENTIAL_HEADER: Record<EventCredential["kind"], string> = {
   result: "Authorization",
 };
 
+/** 행사 API 한 번을 기다리는 상한. 사진 바이트는 저장소로 바로 가므로(captureUpload) 여기는 짧은 요청뿐이다. */
+const EVENT_REQUEST_TIMEOUT_MS = 30_000;
+
 export async function sendEventRequest<T>(
   method: "GET" | "POST",
   path: string,
@@ -48,6 +51,21 @@ export async function sendEventRequest<T>(
     );
   }
 
+  // 행사장 회선은 멈추기도 한다. 응답을 영원히 기다리면 버튼이 안 돌아온다. 호출부의 취소와 구별해 「회선 문제」로 알린다.
+  const deadline = new AbortController();
+  const onCallerAbort = () => deadline.abort();
+  options.signal?.addEventListener("abort", onCallerAbort, { once: true });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    deadline.abort();
+  }, EVENT_REQUEST_TIMEOUT_MS);
+  const rethrow = (error: unknown): never => {
+    // 호출부의 취소는 그대로 던진다. 시간이 다 된 것은 회선 문제로 알린다.
+    if (!timedOut && error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiRequestError({ code: CLIENT_NETWORK_UNREACHABLE_CODE, apiMessage: null });
+  };
+
   let res: Response;
   try {
     res = await fetch(path, {
@@ -56,19 +74,22 @@ export async function sendEventRequest<T>(
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       credentials: "omit",
       cache: "no-store",
-      signal: options.signal,
+      signal: deadline.signal,
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new ApiRequestError({ code: CLIENT_NETWORK_UNREACHABLE_CODE, apiMessage: null });
+    clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onCallerAbort);
+    return rethrow(error);
   }
 
   let text = "";
   try {
     text = await res.text();
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new ApiRequestError({ code: CLIENT_NETWORK_UNREACHABLE_CODE, apiMessage: null });
+    return rethrow(error);
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onCallerAbort);
   }
   let data: unknown = null;
   if (text) {

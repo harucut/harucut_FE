@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { eventFontClassName } from "@/lib/event/eventFonts";
+import { nativeSetColorScheme } from "@/lib/nativeBridge";
 import {
   contrastRatio,
   isHexColor,
@@ -52,6 +53,11 @@ export function EventSurface({
   // 어두운 테마에서 네이티브 입력·스크롤바가 밝게 뜨지 않게 한다.
   const dark = isHexColor(bg) && (contrastRatio(bg, "#FFFFFF") ?? 0) > (contrastRatio(bg, "#000000") ?? 0);
   useMetaThemeColor(isHexColor(bg) ? bg : null);
+  // 앱 셸의 상태바 글자색도 행사 색에 맞춘다(브라우저에서는 아무 일도 하지 않는다).
+  const scheme = dark ? "dark" : "light";
+  useEffect(() => {
+    nativeSetColorScheme(scheme);
+  }, [scheme]);
   return (
     <EventThemeContext.Provider value={theme ?? null}>
       <main

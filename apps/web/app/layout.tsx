@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   */
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
+      // /favicon.ico 는 행사 화면에서도 브라우저가 직접 묻는 주소라 중립 그림이다. 하루컷 화면은 아래 브랜드 파일을 명시한다.
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],

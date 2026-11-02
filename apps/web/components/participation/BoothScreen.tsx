@@ -102,6 +102,19 @@ export function BoothScreen() {
   // 첫 손님이 시작하면 운영자 도구(전체화면·카메라 점검)를 치운다. 손님이 끌 버튼이 아니다.
   const [guestsStarted, setGuestsStarted] = useState(false);
   const lastActivityRef = useRef(0);
+  // 지금 손님. 떠난 손님의 늦은 응답(전송 완료 등)이 다음 화면을 움직이지 않게 견준다.
+  const guestTokenRef = useRef<string | null>(null);
+  // Studio QR 로 받은 연결 코드(#pair=). 주소에는 남기지 않는다.
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  useEffect(() => {
+    const readPairCode = () => {
+      const match = window.location.hash.match(/^#pair=([A-Za-z0-9-]{4,16})$/);
+      if (!match) return;
+      setPairCode(match[1].toUpperCase());
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+    };
+    readPairCode();
+  }, []);
 
   const frames = useMemo(() => (event ? sortedFrames(event) : []), [event]);
   const defaultFrame = useMemo(() => frames.find((f) => f.isDefault) ?? frames[0] ?? null, [frames]);
@@ -116,6 +129,7 @@ export function BoothScreen() {
   /** 한 팀이 끝났다. 회차를 닫고(서버가 그 손님 세션도 회수) 이 화면의 손님 상태를 전부 버린다. */
   const finishGuest = useCallback(async () => {
     const current = guest;
+    guestTokenRef.current = null;
     setGuest(null);
     setFrame(null);
     setError(null);
@@ -162,10 +176,10 @@ export function BoothScreen() {
   /*
     대기 · 이용 불가 화면에서는 행사 상태를 다시 묻는다. 촬영 전에 부스를 켜 두면 「촬영 시간이 아님」이나 「배정된
     행사 없음」에서 시작하는데, 운영자가 게시하거나 촬영을 열어도 새로고침 전에는 그대로 멈춰 있었다
-    (Codex 리뷰 #523). 이전 손님의 회차를 닫는 일은 처음 한 번만 한다 — 여기서는 행사 정보만 바꾼다.
+    (Codex 리뷰 #523). 촬영 시간에도 묻는다 — 재게시한 테마·프레임·동의가 대기 화면에 바로 반영돼야 한다(R5 301줄).
+    이전 손님의 회차를 닫는 일은 처음 한 번만 한다 — 여기서는 행사 정보만 바꾼다.
   */
-  const waitingForEvent =
-    Boolean(device) && (phase.kind === "unavailable" || (phase.kind === "idle" && !event?.captureOpen));
+  const waitingForEvent = Boolean(device) && (phase.kind === "unavailable" || phase.kind === "idle");
   useEffect(() => {
     if (!waitingForEvent || !device) return;
     // 대기 화면을 떠난 뒤(손님이 촬영을 시작함) 도착한 응답은 버린다 — 촬영 화면을 대기로 되돌리지 않게.
@@ -186,7 +200,8 @@ export function BoothScreen() {
   }, [waitingForEvent, device]);
 
   // 유휴 종료: 손님 단계에서 손을 떼고 시간이 지나면 안내 뒤 처음으로.
-  const inGuestFlow = phase.kind === "consent" || phase.kind === "frame" || phase.kind === "capture" || phase.kind === "result";
+  const inGuestFlow =
+    phase.kind === "consent" || phase.kind === "frame" || phase.kind === "capture" || phase.kind === "sending" || phase.kind === "result";
   useEffect(() => {
     if (!inGuestFlow) return;
     const bump = () => {
@@ -208,6 +223,21 @@ export function BoothScreen() {
     };
   }, [inGuestFlow, finishGuest]);
 
+  // 뒤로 가기·앱 복원으로 이전 손님의 화면이 그대로 되살아나지 않게 한다(R5 210줄).
+  const finishGuestRef = useRef(finishGuest);
+  useEffect(() => {
+    finishGuestRef.current = finishGuest;
+  }, [finishGuest]);
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void finishGuestRef.current();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  const cameraIssue = useBoothCameraIssue(phase.kind === "idle" && Boolean(event?.captureOpen));
+
   const onPair = async (code: string) => {
     setError(null);
     setBusy(true);
@@ -227,8 +257,30 @@ export function BoothScreen() {
     setError(null);
     setBusy(true);
     try {
-      const issued = await startBoothGuest(device.token);
+      // 대기하는 사이 다시 게시됐을 수 있다. 손님을 받기 전에 최신 행사로 맞춘다(옛 동의로는 서버가 받지 않는다).
+      const me = await getBoothMe(device.token);
+      if (!me.event) {
+        setPhase({ kind: "unavailable", message: "이 기기에 배정된 행사가 없어요. 담당자에게 문의해 주세요." });
+        return;
+      }
+      setEvent(me.event);
+      if (!me.event.captureOpen) return;
+      if (sortedFrames(me.event).length === 0) {
+        setPhase({ kind: "unavailable", message: "이 행사는 아직 촬영 준비 중이에요. 담당자에게 문의해 주세요." });
+        return;
+      }
+      let issued;
+      try {
+        issued = await startBoothGuest(device.token);
+      } catch (cause) {
+        if (getApiErrorDetails(cause).code !== "BOOTH-004") throw cause;
+        // 앞 손님의 회차가 닫히지 못하고 남았다(닫기 실패, 회차 응답 전에 떠남). 그대로 두면 만료까지 다음 손님이 못 찍는다.
+        const current = await getBoothCurrentRun(device.token, 0);
+        if (current?.captureRunId) await closeBoothRun(device.token, current.captureRunId, current.stateVersion).catch(() => {});
+        issued = await startBoothGuest(device.token);
+      }
       setGuestsStarted(true);
+      guestTokenRef.current = issued.participantToken;
       setGuest({ token: issued.participantToken, run: null });
       setPhase({ kind: "consent" });
     } catch (cause) {
@@ -239,6 +291,20 @@ export function BoothScreen() {
       setBusy(false);
     }
   };
+
+  /** 이 손님을 더 받을 수 없다(마감·회수 등). 회차를 닫아 두어야 조건이 풀렸을 때 다음 손님이 찍을 수 있다. */
+  const endGuestUnavailable = useCallback(
+    (cause: unknown) => {
+      const current = guest;
+      guestTokenRef.current = null;
+      setGuest(null);
+      setFrame(null);
+      setWarning(false);
+      setPhase({ kind: "unavailable", message: participantErrorMessage(cause, "지금은 촬영할 수 없어요.") });
+      if (device && current?.run) void closeBoothRun(device.token, current.run.captureRunId, current.run.stateVersion).catch(() => {});
+    },
+    [device, guest],
+  );
 
   const onConsent = async (decisions: Record<string, boolean>) => {
     if (!event || !guest) return;
@@ -260,7 +326,14 @@ export function BoothScreen() {
       }
       setPhase(frames.length > 1 ? { kind: "frame" } : { kind: "capture" });
     } catch (cause) {
-      setError(getUserFacingApiErrorMessage(cause, "동의를 저장하지 못했어요. 처음부터 다시 시작해 주세요."));
+      if (getApiErrorDetails(cause).status === 400 && device) {
+        // 동의 문구의 판이 바뀌었다(재게시). 새 문구를 받아 이 손님에게 다시 묻는다.
+        const me = await getBoothMe(device.token).catch(() => null);
+        if (me?.event) setEvent(me.event);
+        setError("안내가 바뀌었어요. 다시 확인해 주세요.");
+      } else {
+        setError(getUserFacingApiErrorMessage(cause, "동의를 저장하지 못했어요. 처음부터 다시 시작해 주세요."));
+      }
     } finally {
       setBusy(false);
     }
@@ -317,15 +390,36 @@ export function BoothScreen() {
           </p>
         ) : null}
 
-        {phase.kind === "pairing" ? <PairingForm busy={busy} onSubmit={(code) => void onPair(code)} /> : null}
+        {phase.kind === "pairing" ? <PairingForm key={pairCode ?? ""} initialCode={pairCode ?? ""} busy={busy} onSubmit={(code) => void onPair(code)} /> : null}
+
+        {/* 이미 연결된 기기에서 새 연결 코드 QR 을 찍었다. 말없이 옮기지 않고 묻는다. 손님 앞에서는 묻지 않는다. */}
+        {pairCode && device && operatorScreen && phase.kind !== "pairing" ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-4">
+            <p className="break-keep text-[15px] font-semibold">새 연결 코드를 받았어요. 이 기기를 그 행사로 옮길까요?</p>
+            <div className="flex shrink-0 gap-2">
+              <button type="button" onClick={() => setPairCode(null)} className="h-11 rounded-full border border-(--ev-border) px-4 text-[14px] font-bold">
+                그대로 두기
+              </button>
+              <button type="button" onClick={toPairing} className="h-11 rounded-full bg-(--ev-accent) px-4 text-[14px] font-bold text-(--ev-accent-contrast)">
+                옮기기
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {phase.kind === "idle" && event ? (
-          <BoothIdleView event={event} frames={frames} busy={busy} onStart={() => void onStartGuest()} />
+          <BoothIdleView event={event} frames={frames} busy={busy} blocked={cameraIssue} onStart={() => void onStartGuest()} />
         ) : null}
 
         {phase.kind === "consent" && event ? (
           <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
-            <ConsentStep variant="booth" busy={busy} items={event.consentItems} onSubmit={(decisions) => void onConsent(decisions)} />
+            <ConsentStep
+              key={event.experienceVersion}
+              variant="booth"
+              busy={busy}
+              items={event.consentItems}
+              onSubmit={(decisions) => void onConsent(decisions)}
+            />
           </div>
         ) : null}
 
@@ -340,7 +434,11 @@ export function BoothScreen() {
             token={guest.token}
             frame={frame}
             sending={phase.kind === "sending" ? phase.progress : null}
-            onProgress={(progress) => setPhase(progress ? { kind: "sending", progress } : { kind: "capture" })}
+            onProgress={(progress) => {
+              // 올리는 동안은 손을 떼고 있어도 진행 중이다. 멈춘 요청은 전송 상한에서 오류로 끝나고, 그때부터 유휴로 센다.
+              lastActivityRef.current = Date.now();
+              setPhase(progress ? { kind: "sending", progress } : { kind: "capture" });
+            }}
             onLeave={() => void finishGuest()}
             leaveLabel="처음으로"
             onRunOpened={(run, runToken) =>
@@ -348,6 +446,11 @@ export function BoothScreen() {
               setGuest((current) => (current && current.token === runToken ? { ...current, run } : current))
             }
             onDone={(resultToken, run) => {
+              // 전송이 끝나기 전에 유휴로 넘어갔으면 이 결과는 떠난 손님의 것이다. 다음 손님에게 QR 을 띄우지 않는다.
+              if (guestTokenRef.current !== guest.token) {
+                if (device) void closeBoothRun(device.token, run.captureRunId, run.stateVersion).catch(() => {});
+                return;
+              }
               setGuest((current) => (current ? { ...current, run } : current));
               setPhase({ kind: "result", resultToken });
             }}
@@ -362,9 +465,8 @@ export function BoothScreen() {
                 .catch(() => {})
                 .finally(() => setPhase({ kind: "consent" }));
             }}
-            onUnavailable={(cause) =>
-              setPhase({ kind: "unavailable", message: participantErrorMessage(cause, "지금은 촬영할 수 없어요.") })
-            }
+            onFrameRejected={() => void finishGuest()}
+            onUnavailable={endGuestUnavailable}
           />
         ) : null}
 
@@ -382,16 +484,49 @@ export function BoothScreen() {
   );
 }
 
+/**
+ * 대기 화면의 자동 점검(R5 230줄). 권한 창을 띄우지 않고 알 수 있는 것만 본다 — 카메라를 못 쓰는 브라우저, 이미 막힌 권한.
+ * 나머지는 운영자가 「카메라 점검」으로 확인한다.
+ */
+function useBoothCameraIssue(active: boolean): string | null {
+  const [issue, setIssue] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const check = async () => {
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        setIssue("이 기기나 브라우저에서는 카메라를 쓸 수 없어요. 담당자에게 알려 주세요.");
+        return;
+      }
+      try {
+        const status = await navigator.permissions.query({ name: "camera" as PermissionName });
+        if (!cancelled) setIssue(status.state === "denied" ? "카메라 권한이 막혀 있어요. 담당자에게 알려 주세요." : null);
+      } catch {
+        // 권한 조회를 못 하는 브라우저(Safari 일부). 막혔다고 단정하지 않는다.
+        if (!cancelled) setIssue(null);
+      }
+    };
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
+  return active ? issue : null;
+}
+
 /** 부스 대기 화면. 지나가는 사람도 멀리서 읽게 행사 이름을 크게 둔다. */
 export function BoothIdleView({
   event,
   frames,
   busy,
+  blocked = null,
   onStart,
 }: {
   event: PublicEvent;
   frames: EventFrameRef[];
   busy: boolean;
+  /** 손님을 받기 전에 알 수 있는 문제. 있으면 시작을 막는다 — 손님이 동의까지 한 뒤에 실패를 만나지 않게. */
+  blocked?: string | null;
   onStart: () => void;
 }) {
   return (
@@ -406,7 +541,8 @@ export function BoothIdleView({
                 {pageThemeCopy(event.theme, "welcome", "")}
               </p>
             ) : null}
-            <EventButton size="booth" disabled={busy} aria-busy={busy} onClick={onStart}>
+            {blocked ? <p role="alert" className="break-keep text-[clamp(1rem,2.4vmin,1.5rem)] font-semibold text-(--ev-danger)">{blocked}</p> : null}
+            <EventButton size="booth" disabled={busy || Boolean(blocked)} aria-busy={busy} onClick={onStart}>
               {busy ? "잠시만요…" : "촬영 시작"}
             </EventButton>
           </>
@@ -603,18 +739,8 @@ function BoothCameraPreview({ onClose }: { onClose: () => void }) {
   );
 }
 
-function PairingForm({ busy, onSubmit }: { busy: boolean; onSubmit: (code: string) => void }) {
-  const [code, setCode] = useState("");
-  // Studio 의 QR 은 코드를 주소 끝(#pair=)에 싣는다. 태블릿에서 코드를 다시 치지 않게 채워 둔다. 주소에는 남기지 않는다.
-  useEffect(() => {
-    const fillFromHash = () => {
-      const match = window.location.hash.match(/^#pair=([A-Za-z0-9-]{4,16})$/);
-      if (!match) return;
-      setCode(match[1].toUpperCase());
-      window.history.replaceState(window.history.state, "", window.location.pathname);
-    };
-    fillFromHash();
-  }, []);
+function PairingForm({ initialCode, busy, onSubmit }: { initialCode: string; busy: boolean; onSubmit: (code: string) => void }) {
+  const [code, setCode] = useState(initialCode);
   return (
     <form
       className="ev-step mx-auto flex w-full max-w-lg flex-1 flex-col justify-center gap-5 pb-[20vh]"
@@ -626,6 +752,7 @@ function PairingForm({ busy, onSubmit }: { busy: boolean; onSubmit: (code: strin
       <label className="flex flex-col gap-3 text-center">
         <span className="break-keep text-[clamp(1.25rem,3.2vmin,2rem)] font-extrabold">담당자에게 받은 연결 코드를 넣어 주세요</span>
         <input
+          name="pairingCode"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           autoComplete="off"
@@ -639,7 +766,57 @@ function PairingForm({ busy, onSubmit }: { busy: boolean; onSubmit: (code: strin
       <EventButton type="submit" size="xl" disabled={code.trim().length < 8 || busy} aria-busy={busy}>
         {busy ? "잠시만요…" : "연결"}
       </EventButton>
+      <PersonalSessionNotice />
     </form>
+  );
+}
+
+/**
+ * 공용 기기에 개인 계정이 로그인돼 있으면 알린다(R5 186줄 — 부스에 운영자의 장기 자격을 남기지 않는다). 말없이 로그아웃하지 않는다 —
+ * 담당자가 자기 노트북에서 시험할 때 Studio 가 끊긴다.
+ */
+function PersonalSessionNotice() {
+  const [signedIn, setSignedIn] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const response = await fetch("/api/auth/status", { cache: "no-store" });
+        if (!cancelled && response.ok) setSignedIn(true);
+      } catch {
+        // 알 수 없으면 묻지 않는다. 연결은 그대로 된다.
+      }
+    };
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!signedIn) return message ? <p role="status" className="text-center text-[14px] font-semibold">{message}</p> : null;
+  return (
+    <div className="flex flex-col items-center gap-2 text-center">
+      {message ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)">{message}</p> : null}
+      <p className="break-keep text-[14px] text-(--ev-muted)">이 기기에 개인 계정이 로그인돼 있어요. 손님이 쓰는 기기라면 로그아웃해 주세요.</p>
+      <button
+        type="button"
+        onClick={() => {
+          const logout = async () => {
+            try {
+              const response = await fetch("/api/client/logout", { method: "DELETE" });
+              setSignedIn(!response.ok);
+              setMessage(response.ok ? "로그아웃했어요." : null);
+            } catch {
+              setMessage("로그아웃하지 못했어요. 잠시 후 다시 눌러 주세요.");
+            }
+          };
+          void logout();
+        }}
+        className="h-11 rounded-full border border-(--ev-border) px-4 text-[14px] font-bold"
+      >
+        로그아웃
+      </button>
+    </div>
   );
 }
 

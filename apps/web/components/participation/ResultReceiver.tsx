@@ -14,7 +14,9 @@ import {
 import { getResult, getResultDownload } from "@/lib/event/eventApi";
 import { takeResultHandoff } from "@/lib/event/resultHandoff";
 import type { ResultStatus } from "@/lib/event/types";
-import { saveImageFromSignedUrl, saveImageMessage, sharePhotoFile, shareOrCopyLink } from "@/lib/share";
+import { getNativeSaveErrorMessage, NativeSaveError } from "@/lib/nativeBridge";
+import { detectInAppBrowser } from "@/lib/externalBrowser";
+import { copyText, saveImageFromSignedUrl, saveImageMessage, sharePhotoFile, shareOrCopyLink } from "@/lib/share";
 
 /** 결과 토큰 문법(32바이트 base64url 이 43자). 그 밖의 fragment 는 토큰으로 보내지 않는다. */
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -58,6 +60,7 @@ export function ResultReceiver() {
   const [downloadingFor, setDownloadingFor] = useState<string | null>(null);
   const downloading = downloadingFor !== null && downloadingFor === token;
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   // 방금 촬영에서 넘어온 사람만 돌아갈 곳이 있다. 링크로 받은 사람에게는 행사 주소를 알리지 않는다.
   const [eventPath, setEventPath] = useState<string | null>(null);
@@ -82,7 +85,11 @@ export function ResultReceiver() {
       setToken(next);
       setSaveNotice(null);
       setPollGaveUp(false);
+      setCopied(false);
+      setCopyFailed(false);
       preparedFileRef.current = null;
+      // 토큰이 없거나 바뀌면 앞 행사의 이름을 탭 제목에 남기지 않는다.
+      document.title = "사진 받기";
       // 방금 촬영에서 넘어왔으면 서버를 기다리지 않고 그 행사의 모습으로 「만드는 중」을 바로 보여 준다.
       const handoff = next ? takeResultHandoff(next) : null;
       setEventPath(handoff?.eventPath ?? null);
@@ -196,9 +203,14 @@ export function ResultReceiver() {
       if (currentTokenRef.current !== requested) return;
       const saved = await saveImageFromSignedUrl(url, `${readyEventName || "행사 사진"}.jpg`);
       if (currentTokenRef.current !== requested) return;
-      setSaveNotice(saved === "failed" ? "사진을 저장하지 못했어요. 다시 눌러 주세요." : saveImageMessage(saved));
+      setSaveNotice(saveImageMessage(saved));
     } catch (error) {
       if (currentTokenRef.current !== requested) return;
+      // 앱 사진첩 저장 실패(권한 거절 등)는 사진이 없어진 게 아니다. 화면을 그대로 두고 사유만 알린다.
+      if (error instanceof NativeSaveError) {
+        setSaveNotice(getNativeSaveErrorMessage(error) ?? "사진을 저장하지 못했어요. 다시 눌러 주세요.");
+        return;
+      }
       setView({
         kind: "error",
         message: getUserFacingApiErrorMessage(error, "사진을 내려받지 못했어요. 잠시 후 다시 시도해 주세요."),
@@ -216,10 +228,12 @@ export function ResultReceiver() {
   const onCopy = async () => {
     try {
       // 전체 주소(fragment 포함)를 복사한다. 이 링크 자체가 사진을 받는 권한이다.
-      await navigator.clipboard.writeText(window.location.href);
+      await copyText(window.location.href);
       setCopied(true);
+      setCopyFailed(false);
     } catch {
       setCopied(false);
+      setCopyFailed(true);
     }
   };
 
@@ -234,6 +248,7 @@ export function ResultReceiver() {
   };
 
   const showTitle = view.kind !== "reading" && view.kind !== "loading";
+  const inApp = typeof navigator !== "undefined" ? detectInAppBrowser() : null;
 
   return (
     <EventSurface
@@ -282,6 +297,14 @@ export function ResultReceiver() {
             <p className="break-keep text-[13px] leading-relaxed text-(--ev-muted)">
               이 링크를 가진 사람은 이 사진을 받을 수 있어요. 나중에 다시 받으려면 링크를 저장해 두세요.
             </p>
+            {inApp ? (
+              <p className="break-keep text-[13px] leading-relaxed text-(--ev-muted)">
+                이 앱 안에서는 저장이 안 될 수 있어요. 안 되면 사진을 길게 눌러 저장하거나, 링크를 복사해 Safari나 Chrome에서 열어 주세요.
+              </p>
+            ) : null}
+            {copyFailed ? (
+              <p role="alert" className="text-[13px] font-semibold text-(--ev-danger)">복사하지 못했어요. 주소창의 주소를 길게 눌러 복사해 주세요.</p>
+            ) : null}
             <div className="flex gap-2">
               {canShare ? (
                 <EventButton tone="quiet" size="md" className="flex-1" onClick={() => void onShare()}>

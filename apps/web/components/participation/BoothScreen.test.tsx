@@ -77,6 +77,9 @@ function pairDevice() {
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
+  // 대기 화면의 카메라 점검이 통과하는 환경. 카메라 자체는 CaptureAndSend 목으로 대신한다.
+  Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+  Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia: jest.fn() }, configurable: true });
   api.getBoothMe.mockResolvedValue({ deviceId: "d-1", status: "ACTIVE", event: eventInfo() });
   // 활성 회차가 없으면 서버는 data 키를 싣지 않는다.
   api.getBoothCurrentRun.mockResolvedValue(undefined);
@@ -252,4 +255,44 @@ describe("Codex 리뷰 반영(#541)", () => {
     expect(screen.getByRole("button", { name: "동의하고 계속" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "촬영 시작" })).not.toBeInTheDocument();
   });
+});
+
+// R5 O27·O28: 앞 손님의 회차가 닫히지 못하고 남아도 다음 손님이 막히지 않는다.
+it("남은 회차 때문에 손님을 못 받으면(BOOTH-004) 그 회차를 닫고 다시 시작한다", async () => {
+  pairDevice();
+  render(<BoothScreen />);
+  const start = await screen.findByRole("button", { name: "촬영 시작" });
+  api.startBoothGuest.mockRejectedValueOnce(new ApiRequestError({ status: 409, code: "BOOTH-004" }));
+  api.getBoothCurrentRun.mockResolvedValueOnce({ captureRunId: "run-left", stateVersion: 7 });
+
+  fireEvent.click(start);
+
+  expect(await screen.findByRole("checkbox", { name: /사진 수집/ })).toBeInTheDocument();
+  expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-left", 7);
+  expect(api.startBoothGuest).toHaveBeenCalledTimes(2);
+});
+
+// R5 301줄: 다시 게시한 내용은 다음 손님부터 적용된다.
+it("손님을 받기 전에 행사를 다시 읽어 새 동의 문구로 묻는다", async () => {
+  pairDevice();
+  render(<BoothScreen />);
+  const start = await screen.findByRole("button", { name: "촬영 시작" });
+  api.getBoothMe.mockResolvedValueOnce({
+    deviceId: "d-1",
+    status: "ACTIVE",
+    event: { ...eventInfo(), consentItems: [{ code: "photo", version: 2, title: "새 사진 안내", required: true }] },
+  });
+
+  fireEvent.click(start);
+
+  expect(await screen.findByRole("checkbox", { name: /새 사진 안내/ })).toBeInTheDocument();
+});
+
+it("카메라를 쓸 수 없는 기기면 손님을 받기 전에 알리고 시작을 막는다", async () => {
+  Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
+  pairDevice();
+  render(<BoothScreen />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("카메라를 쓸 수 없어요");
+  expect(screen.getByRole("button", { name: "촬영 시작" })).toBeDisabled();
 });

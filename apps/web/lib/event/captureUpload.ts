@@ -6,6 +6,8 @@ import { completeCaptureUpload, createCaptureUploadIntent } from "@/lib/event/ev
 
 /** 브라우저가 스스로 정하는 헤더. 서명에 들어 있어도 직접 넣지 않는다(넣으면 무시되거나 요청이 깨진다). */
 const BROWSER_MANAGED = new Set(["host", "content-length"]);
+/** 사진 한 장을 올리는 상한. 멈춘 회선에서 버튼이 영원히 잠기지 않게 한다. 넘으면 다시 시도할 수 있다. */
+const UPLOAD_TIMEOUT_MS = 90_000;
 /** 검증 대기(ASSET-006, 503)일 때 같은 complete 를 다시 부르는 간격과 횟수. */
 const COMPLETE_RETRY_MS = [1_500, 3_000, 6_000];
 
@@ -20,6 +22,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  *    검증하게 둔다(기획 R5 16절). 조건 헤더를 빼고 다시 보내는 우회는 하지 않는다.
  *  - 쿠키·회원 Authorization 을 S3 로 보내지 않는다(credentials: "omit").
  */
+
 export async function uploadCaptureInput(args: {
   token: string;
   eventId: string;
@@ -45,6 +48,7 @@ export async function uploadCaptureInput(args: {
       headers,
       body: args.photo,
       credentials: "omit",
+      signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
     });
   } catch {
     throw new ApiRequestError({ code: "CLIENT-004", apiMessage: null });

@@ -7,9 +7,11 @@ import { BoothIdleView, BoothResultView } from "@/components/participation/Booth
 import {
   CAPTURE_GUIDE_DEFAULT,
   CAPTURE_TOP_BAR_CLASS,
+  CameraProblem,
   CaptureGauge,
   ConsentStep,
   FrameStep,
+  HomeStep,
   IntroStep,
   captureBandClass,
   captureRailClass,
@@ -46,11 +48,14 @@ export type EventPreviewScreen =
   | "error"
   | "expired"
   | "closed"
+  | "revisit"
+  | "camera-error"
   | "booth-idle"
   | "booth-consent"
   | "booth-frame"
   | "booth-capture"
-  | "booth-result";
+  | "booth-result"
+  | "booth-closed";
 
 export type EventPreviewData = {
   name: string;
@@ -205,6 +210,22 @@ function PreviewBody({ data, screen }: { data: EventPreviewData; screen: EventPr
       return phoneShell(<IntroStep event={open} frames={data.frames} busy={false} onJoin={noop} />, false);
     case "closed":
       return phoneShell(<IntroStep event={closed} frames={data.frames} busy={false} onJoin={noop} />, false);
+    case "revisit":
+      return phoneShell(
+        <HomeStep
+          event={open}
+          frames={data.frames}
+          results={[{ jobId: 1, status: "DONE" }, { jobId: 2, status: "PENDING" }]}
+          onStart={noop}
+          onShare={noop}
+          onDownload={noop}
+          onWithdraw={noop}
+          onRefresh={noop}
+        />,
+        false,
+      );
+    case "camera-error":
+      return phoneShell(<CameraProblem state="denied" booth={false} onRetry={noop} onLeave={noop} leaveLabel="뒤로" />);
     case "consent":
       return phoneShell(<ConsentStep items={data.consentItems} onSubmit={noop} />);
     case "frame":
@@ -218,6 +239,8 @@ function PreviewBody({ data, screen }: { data: EventPreviewData; screen: EventPr
       return <ResultPreview data={data} kind={screen} />;
     case "booth-idle":
       return boothShell(<BoothIdleView event={open} frames={data.frames} busy={false} onStart={noop} />, false);
+    case "booth-closed":
+      return boothShell(<BoothIdleView event={closed} frames={data.frames} busy={false} onStart={noop} />, false);
     case "booth-consent":
       return boothShell(
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">

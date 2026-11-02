@@ -469,3 +469,84 @@ describe("참가자 자유 문구(D06)", () => {
     expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
   });
 });
+
+it("서버가 받아 둔 행사가 있으면 다시 묻지 않고 첫 화면부터 그 행사를 그린다", async () => {
+  render(<EventParticipation slug="wedding-1027" initialEvent={publicEvent({ name: "서버 행사" })} />);
+
+  expect(screen.getByRole("heading", { name: "서버 행사" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "참여하기" })).toBeInTheDocument();
+  await waitFor(() => expect(api.getPublicEvent).not.toHaveBeenCalled());
+});
+
+it("촬영 시간이 아니면 새 참가자에게 참여 버튼을 내밀지 않고, 사진 찾는 길을 말한다", async () => {
+  api.getPublicEvent.mockResolvedValue(publicEvent({ captureOpen: false }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByText(/결과 링크로 다시 받을 수 있어요/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "참여하기" })).not.toBeInTheDocument();
+});
+
+it("촬영 시간인데 고를 프레임이 없으면 빈 촬영 화면 대신 준비 중이라고 알린다", async () => {
+  api.getPublicEvent.mockResolvedValue(publicEvent({ frames: [] }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("아직 촬영 준비 중");
+});
+
+// R5 301줄: 게시본이 바뀌면 옛 동의로는 서버가 받지 않는다.
+it("동의 문구 판이 바뀌었으면(400) 새 문구를 받아 다시 묻는다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "RESTRICTED" });
+  api.submitConsents.mockRejectedValueOnce(new ApiRequestError({ status: 400, code: "GEN-001" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
+  api.getPublicEvent.mockResolvedValue(
+    publicEvent({ experienceVersion: 9, consentItems: [{ code: "photo-collection", version: 3, title: "바뀐 사진 안내", required: true }] }),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
+
+  expect(await screen.findByRole("checkbox", { name: /바뀐 사진 안내/ })).not.toBeChecked();
+  expect(screen.getByRole("alert")).toHaveTextContent("안내가 바뀌었어요");
+});
+
+it("회차가 새 게시본으로 열리면 행사를 다시 읽어 맞춘다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun.mockResolvedValue({ captureRunId: "run-1", experienceVersion: 99, stateVersion: 1, expiresAt: "x" });
+  render(<EventParticipation slug="wedding-1027" />);
+  await screen.findByRole("button", { name: "촬영 시작" });
+  api.getPublicEvent.mockClear();
+
+  fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+
+  await waitFor(() => expect(api.getPublicEvent).toHaveBeenCalledWith("wedding-1027"));
+});
+
+it("기능 권한이 회수되면(ENT-004) 하루컷을 꺼내지 않고 담당자 문의로 안내한다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 403, code: "ENT-004" }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("행사 담당자에게 문의");
+  expect(alert).not.toHaveTextContent("하루컷");
+});
+
+it("선택 동의를 철회할 수 있다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+  render(<EventParticipation slug="wedding-1027" />);
+  await screen.findByRole("button", { name: "촬영 시작" });
+
+  fireEvent.click(screen.getByRole("button", { name: "철회" }));
+
+  await waitFor(() =>
+    expect(api.submitConsents).toHaveBeenCalledWith("p-token", "evt-1", [{ code: "marketing", version: 1, decision: "WITHDRAWN" }]),
+  );
+  expect(await screen.findByText(/동의를 철회했어요/)).toBeInTheDocument();
+});

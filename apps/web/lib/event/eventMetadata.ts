@@ -17,7 +17,7 @@ export function neutralEventMetadata(title: string): Metadata {
     creator: null,
     publisher: null,
     manifest: null,
-    icons: { icon: "/event-neutral.svg", apple: "/event-neutral.svg" },
+    icons: { icon: "/event-neutral.svg", apple: "/event-neutral-180.png" },
     openGraph: { title, type: "website" },
     twitter: { card: "summary", title },
     // 결과 링크와 참가 화면은 검색에 올리지 않는다. robots.txt 로 막지 않는 이유는 next.config.ts 참고.
