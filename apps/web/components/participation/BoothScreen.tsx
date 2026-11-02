@@ -13,7 +13,10 @@ import {
 } from "@/components/participation/EventParticipation";
 import { useEventCamera } from "@/components/participation/useEventCamera";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { forgetStudioAccess } from "@/hooks/useStudioAccess";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { unregisterPushDevice } from "@/lib/pushDevices";
+import { withRequestDeadline } from "@/lib/requestDeadline";
 import {
   forgetBoothDevice,
   readBoothDevice,
@@ -787,6 +790,7 @@ function PairingForm({ initialCode, busy, onSubmit }: { initialCode: string; bus
 function PersonalSessionNotice() {
   const [signedIn, setSignedIn] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
@@ -809,21 +813,40 @@ function PersonalSessionNotice() {
       <p className="break-keep text-[14px] text-(--ev-muted)">이 기기에 개인 계정이 로그인돼 있어요. 손님이 쓰는 기기라면 로그아웃해 주세요.</p>
       <button
         type="button"
+        disabled={leaving}
         onClick={() => {
           const logout = async () => {
+            setLeaving(true);
+            setMessage(null);
             try {
-              const response = await fetch("/api/client/logout", { method: "DELETE" });
-              setSignedIn(!response.ok);
-              setMessage(response.ok ? "로그아웃했어요." : null);
+              forgetStudioAccess();
+              // 마이페이지 로그아웃과 같은 순서다. 푸시 해제는 쿠키가 있을 때 해야 하고, 실패해도 로그아웃은 한다.
+              await unregisterPushDevice();
+              const response = await withRequestDeadline(30_000, (signal) =>
+                fetch("/api/client/logout", { method: "DELETE", signal }),
+              );
+              // 이미 끊긴 세션(401)도 나간 것이다. 쿠키가 남았으면 여기서 멈춘다 — 이 기기는 아직 그 계정이다.
+              if (!response.ok && response.status !== 401) {
+                setMessage("로그아웃하지 못했어요. 잠시 후 다시 눌러 주세요.");
+                return;
+              }
+              // 손님이 쓰는 기기다. 촬영 보관물에는 계정 구분이 없어 남기면 다음 계정이 앞사람 사진을 이어받는다. 다 지운 뒤에 끝났다고 말한다.
+              // 부스는 편집기를 쓰지 않는다. 그 스토어까지 끌고 오지 않게 쓸 때만 불러온다.
+              const { clearLocalUserData } = await import("@/lib/localUserData");
+              await clearLocalUserData();
+              setSignedIn(false);
+              setMessage("로그아웃했어요.");
             } catch {
               setMessage("로그아웃하지 못했어요. 잠시 후 다시 눌러 주세요.");
+            } finally {
+              setLeaving(false);
             }
           };
           void logout();
         }}
-        className="h-11 rounded-full border border-(--ev-border) px-4 text-[14px] font-bold"
+        className="h-11 rounded-full border border-(--ev-border) px-4 text-[14px] font-bold disabled:opacity-60"
       >
-        로그아웃
+        {leaving ? "로그아웃 중…" : "로그아웃"}
       </button>
     </div>
   );

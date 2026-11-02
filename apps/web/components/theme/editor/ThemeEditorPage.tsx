@@ -320,6 +320,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   useEffect(() => {
     recoveryPendingRef.current = localRecovery !== null;
   }, [localRecovery]);
+  // 「이어서 편집」으로 되살린 상태인가. 되살리면 이력이 비워지므로, 이력이 비었다고 저장본으로 돌아온 것이 아니다.
+  const recoveredLocalDraftRef = useRef(false);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -371,6 +373,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         );
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
+        recoveredLocalDraftRef.current = false;
         setSavedScope({ remoteFrameId, version: frameVersionRef.current });
         // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
         // 기다리면, 그 사이 사용자가 고친 내용이 기준으로 잡혀 이탈 경고가 안 뜬다
@@ -495,6 +498,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   };
 
   const dropLocalRecovery = () => {
+    recoveredLocalDraftRef.current = false;
     setLocalRecovery(null);
     discardLocalDraft();
   };
@@ -514,6 +518,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       draft.background.type === "IMAGE" && draft.background.key
         ? { ...draft.background, url: (await getImageUrlByKey(draft.background.key)) ?? draft.background.url }
         : draft.background;
+    recoveredLocalDraftRef.current = true;
     hydrateDraft({ ...draft, background, components: resolved.components as EditorDraft["components"] }, { preserveHidden: true });
   };
 
@@ -584,7 +589,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           // 저장본은 불러오기와 배경 주소 주입도 스토어를 바꾼다. 손댄 것이 있을 때만 쓴다 — 안 그러면 안 고친 프레임을 열 때마다 복구를 묻는다.
           // 이번에 손댔다가 되돌리기로 원본에 돌아왔으면 앞서 남긴 복구본을 지운다 — 남기면 새로고침 뒤 되돌린 편집이 되살아난다.
           // 손대기 전에는 지우지 않는다. 불러오는 동안의 변경이 지난번 복구본을 지워 버리면 안 된다.
-          if (remoteFrameId && s.past.length === 0) {
+          // 되살린 편집까지 되돌아왔으면 저장본이 아니다. 지우지 않고 아래에서 지금 모습을 남긴다 — 저장 안 한 내용이 아직 화면에 있다.
+          if (remoteFrameId && s.past.length === 0 && (!editedThisSession || !recoveredLocalDraftRef.current)) {
             if (editedThisSession && savedScope) discardEditorDraft(draftOwnerId, s.frameId, savedScope);
             editedThisSession = false;
             return;

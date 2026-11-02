@@ -14,6 +14,9 @@ import {
   submitTermsConsents,
   type MyTermsConsent,
 } from "@/lib/termsApi";
+import { unregisterPushDevice } from "@/lib/pushDevices";
+
+const LOCAL_CLEAR_DEADLINE_MS = 3_000;
 
 type Props = {
   consents: MyTermsConsent[];
@@ -227,6 +230,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
     if (isSubmitting || isLoggingOut) return;
     setIsLoggingOut(true);
     setError(null);
+    // 푸시 해제는 쿠키가 있을 때 해야 한다(마이페이지와 같은 순서). 기한이 있고 실패를 삼키므로 출구를 막지 않는다.
+    await unregisterPushDevice();
     try {
       await clientApi.delete("/api/client/logout");
     } catch (err) {
@@ -242,6 +247,13 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         return;
       }
     }
+    // 공용 기기에 앞사람의 사진과 편집 초안을 남기지 않는다. 다만 이 화면의 유일한 출구라 저장소가 멈춰도 나가는 길은 막지 않는다.
+    // 지우기는 삭제 표식을 먼저 남기므로, 끝까지 못 기다려도 다음 문서가 사진을 되살리지 않는다.
+    // 이 대화상자는 모든 화면에 깔린다. 편집기 스토어까지 끌고 오지 않게 쓸 때만 불러온다.
+    await Promise.race([
+      import("@/lib/localUserData").then(({ clearLocalUserData }) => clearLocalUserData()).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, LOCAL_CLEAR_DEADLINE_MS)),
+    ]);
     // 이동을 시작하면 잠금을 풀지 않는다. 떠나는 동안 한 번 더 눌리지 않게 한다.
     // 클라이언트 전환이 아니라 문서를 새로 받는다 — 로그아웃 직후라 쿠키가 바뀌었고,
     // 스토어에 남은 세션 캐시와 RSC 캐시를 통째로 버려야 한다(app/oauth2/callback 주석 참고).

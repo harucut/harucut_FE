@@ -544,6 +544,42 @@ describe("ThemeEditorPage save flow", () => {
       expect(editorStoreState.hydrateDraft.mock.calls[0][0]).toMatchObject({ backgroundColor: "abcdef" });
     });
 
+    // 되살리면 이력이 비워진다. 그 뒤 이력이 다시 비었다는 것은 저장본이 아니라 되살린 편집으로 돌아왔다는 뜻이다.
+    it("되살린 편집 위에서 고쳤다 되돌려도 복구본을 지우지 않는다", async () => {
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
+      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
+      await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      // 한 번 고쳐 자동 저장이 돈 뒤
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      // 그 수정만 되돌린다.
+      editorStoreState.past = [];
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull();
+    });
+
+    it("되살리지 않고 고쳤다 되돌리면 저장본으로 돌아온 것이라 복구본을 지운다", async () => {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull(), { timeout: 3000 });
+
+      editorStoreState.past = [];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull(), { timeout: 3000 });
+    });
+
     it("저장본 유지를 고르면 묻지 않고 지운다", async () => {
       await seedDraft();
       render(<ThemeEditorPage frameId="classic-4" />);

@@ -55,6 +55,16 @@ jest.mock("@/components/qr/QrCode", () => ({
   QrCode: ({ value, label }: { value: string; label: string }) => <div role="img" aria-label={label} data-value={value} />,
 }));
 
+const mockClearLocalUserData = jest.fn();
+jest.mock("@/lib/localUserData", () => ({
+  clearLocalUserData: () => mockClearLocalUserData(),
+}));
+
+const mockUnregisterPushDevice = jest.fn();
+jest.mock("@/lib/pushDevices", () => ({
+  unregisterPushDevice: () => mockUnregisterPushDevice(),
+}));
+
 function eventInfo(): PublicEvent {
   return {
     eventId: "evt-1",
@@ -309,6 +319,67 @@ it("연결 코드가 든 주소를 받으면 코드를 채우고 주소에서 �
 
   expect(screen.getByPlaceholderText("XXXX-XXXX")).toHaveValue("K7QM-3XRP");
   expect(window.location.hash).toBe("");
+});
+
+describe("연결 화면의 개인 계정 로그아웃", () => {
+  const originalFetch = global.fetch;
+  /** 세션 확인은 통과, 로그아웃은 주어진 상태로 답한다. */
+  function serve(logoutStatus: number) {
+    const fetchMock = jest.fn(async (url: string) => {
+      const status = url === "/api/auth/status" ? 200 : logoutStatus;
+      return { ok: status >= 200 && status < 300, status };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  beforeEach(() => {
+    mockClearLocalUserData.mockResolvedValue(undefined);
+    mockUnregisterPushDevice.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  // 촬영 보관물에는 계정 구분이 없다. 남기면 다음 계정이 /shoot/select 에서 앞사람 사진을 이어받는다.
+  it("로그아웃하면 이 기기의 개인 사진까지 지운 뒤에 끝났다고 말한다", async () => {
+    const fetchMock = serve(200);
+    let finishClear = () => {};
+    mockClearLocalUserData.mockReturnValue(new Promise<void>((resolve) => { finishClear = resolve; }));
+    render(<BoothScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+    await waitFor(() => expect(mockClearLocalUserData).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("로그아웃했어요.")).not.toBeInTheDocument();
+
+    await act(async () => finishClear());
+    expect(screen.getByRole("status")).toHaveTextContent("로그아웃했어요.");
+    expect(screen.queryByRole("button", { name: "로그아웃" })).not.toBeInTheDocument();
+    // 푸시 해제는 쿠키가 있을 때, 곧 로그아웃보다 먼저 해야 한다.
+    const logoutCall = fetchMock.mock.calls.findIndex(([url]) => url === "/api/client/logout");
+    expect(mockUnregisterPushDevice.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[logoutCall]);
+  });
+
+  it("로그아웃이 실패하면 사진을 지우지 않고 다시 누르게 둔다", async () => {
+    serve(502);
+    render(<BoothScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("로그아웃하지 못했어요");
+    expect(mockClearLocalUserData).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "로그아웃" })).toBeEnabled();
+  });
+
+  it("이미 끊긴 세션(401)이어도 개인 사진은 지운다", async () => {
+    serve(401);
+    render(<BoothScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("로그아웃했어요.");
+    expect(mockClearLocalUserData).toHaveBeenCalledTimes(1);
+  });
 });
 
 it("이미 연결된 기기가 새 코드를 받으면 말없이 옮기지 않고 묻는다", async () => {
