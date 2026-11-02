@@ -9,6 +9,7 @@ import {
 import {
   ApiRequestError,
   clientApi,
+  registerAccountBlockedHandler,
   registerDeletionRequestedHandler,
   registerSessionExpiredHandler,
   registerTermsConsentRequiredHandler,
@@ -42,6 +43,37 @@ function urlOf(input: RequestInfo | URL) {
 function flushAsync() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+describe("clientApi — 정지 계정(AUTH-042) 감지", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    registerAccountBlockedHandler(null);
+    global.fetch = originalFetch;
+  });
+
+  it("403 AUTH-042 면 핸들러를 부르고 오류는 그대로 올린다", async () => {
+    const onBlocked = jest.fn();
+    registerAccountBlockedHandler(onBlocked);
+    global.fetch = jest.fn(async () =>
+      new Response(JSON.stringify({ code: "AUTH-042", status: 403, message: "This account is blocked." }), { status: 403 }),
+    ) as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/events/Ev1")).rejects.toMatchObject({ status: 403, code: "AUTH-042" });
+    expect(onBlocked).toHaveBeenCalledTimes(1);
+  });
+
+  it("다른 403 에는 부르지 않는다", async () => {
+    const onBlocked = jest.fn();
+    registerAccountBlockedHandler(onBlocked);
+    global.fetch = jest.fn(async () =>
+      new Response(JSON.stringify({ code: "PHOTO-001", status: 403, message: "x" }), { status: 403 }),
+    ) as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/events/Ev1/photos")).rejects.toMatchObject({ status: 403 });
+    expect(onBlocked).not.toHaveBeenCalled();
+  });
+});
 
 describe("clientApi — 탈퇴요청(GEN-021) 감지", () => {
   const originalFetch = global.fetch;

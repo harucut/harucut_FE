@@ -55,10 +55,10 @@ describe("resolveMembership", () => {
   });
 
   /*
-    `/api/auth/status` 는 탈퇴요청·탈퇴·차단 계정에도 200 을 준다(복구 진입로를 열어 둔
+    `/api/auth/status` 는 탈퇴요청·탈퇴 계정에도 200 을 준다(복구 진입로를 열어 둔
     예외다). 그 200 을 회원으로 읽으면 아무것도 못 하는 화면으로 보내게 된다.
   */
-  it.each(["DELETED_REQUESTED", "DELETED", "BLOCKED"])(
+  it.each(["DELETED_REQUESTED", "DELETED"])(
     "%s 는 200 이어도 회원이 아니다",
     async (userStatus) => {
       routeFetch({ status: [() => statusOk(userStatus)] });
@@ -66,6 +66,13 @@ describe("resolveMembership", () => {
       await expect(resolveMembership()).resolves.toBe("guest");
     },
   );
+
+  // 정지 계정은 세션이 멀쩡하고 마이페이지와 탈퇴를 쓴다. 게스트로 읽으면 그 길이 막힌다.
+  it("BLOCKED 는 회원이다", async () => {
+    routeFetch({ status: [() => statusOk("BLOCKED")] });
+
+    await expect(resolveMembership()).resolves.toBe("member");
+  });
 
   // 액세스만 만료된 회원. 재발급이 되면 그대로 회원이다.
   it("401 뒤 재발급에 성공하면 회원이다", async () => {

@@ -380,11 +380,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               </button>
             </div>
           ) : (
-            <p className="text-[14px] text-(--hc-muted)">
-              {access?.access.photosFrom
-                ? "초대를 받은 뒤에 찍은 사진이 아직 없어요. 이전 사진이 필요하면 행사 담당자에게 요청해 주세요."
-                : "아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요."}
-            </p>
+            <p className="text-[14px] text-(--hc-muted)">아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요.</p>
           )
         ) : null}
 

@@ -8,6 +8,7 @@ import {
 import {
   isGuestAllowedPath,
   isGuestMemberOnlyPath,
+  isBlockedAccountPath,
   isProtectedPath,
 } from "@/lib/protectedPaths";
 
@@ -58,20 +59,24 @@ function hasAuthCookie(req: NextRequest) {
  * 실제 집행은 백엔드가 한다 — 백엔드에 비회원 개념이 없어 인증 API 가 401 이다.
  */
 function hasLiveAccessToken(req: NextRequest) {
+  return isLiveAccess(readAccessClaims(req));
+}
+
+function readAccessClaims(req: NextRequest): { exp?: unknown; status?: unknown } | null {
   const payload = req.cookies.get("accessToken")?.value.split(".")[1];
-  if (!payload) return false;
+  if (!payload) return null;
 
   try {
     // JWT 는 base64url 이라 표준 base64 문자로 바꿔서 읽는다.
-    const claims = JSON.parse(
-      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
-    ) as { exp?: unknown };
-
-    return typeof claims.exp === "number" && claims.exp * 1000 > Date.now();
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: unknown; status?: unknown };
   } catch {
     // 우리가 아는 모양이 아니면 로그인했다고 볼 근거가 없다.
-    return false;
+    return null;
   }
+}
+
+function isLiveAccess(claims: { exp?: unknown } | null) {
+  return typeof claims?.exp === "number" && claims.exp * 1000 > Date.now();
 }
 
 function hasGuestTrialCookie(req: NextRequest) {
@@ -147,6 +152,16 @@ export async function proxy(req: NextRequest) {
 
   if (!isProtectedPath(pathname)) {
     return NextResponse.next();
+  }
+
+  /*
+    정지 계정은 마이페이지만 쓴다. 다른 화면은 API 가 전부 403 AUTH-042 라 빈 화면만 남으니 미리 돌려보낸다.
+    위 hasLiveAccessToken 과 같은 이유로 서명은 보지 않는다 — 인가가 아니라 길 안내이고, 집행은 백엔드가 한다.
+    정지 전에 받은 토큰은 여기를 지나치고, 막힌 API 를 부르는 순간 AccountRecoveryBridge 가 같은 곳으로 보낸다.
+  */
+  const accessClaims = readAccessClaims(req);
+  if (isLiveAccess(accessClaims) && accessClaims?.status === "BLOCKED" && !isBlockedAccountPath(pathname)) {
+    return NextResponse.redirect(new URL("/mypage", req.url));
   }
 
   /*

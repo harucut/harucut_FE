@@ -74,7 +74,7 @@ it("정지는 이유를 받아 보내고, 상태와 버튼을 바꾼다", async 
   fireEvent.click(await screen.findByRole("button", { name: "정지" }));
 
   const dialog = await screen.findByRole("dialog", { name: "이 계정을 정지할까요?" });
-  expect(within(dialog).getByText(/모든 기기에서 로그아웃되고/)).toBeInTheDocument();
+  expect(within(dialog).getByText(/다시 로그인해도 마이페이지에서 로그아웃과 탈퇴만 할 수 있어요/)).toBeInTheDocument();
   const submit = within(dialog).getByRole("button", { name: "정지" });
   expect(submit).toBeDisabled();
 

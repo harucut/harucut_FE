@@ -134,7 +134,7 @@ function LoginPageContent() {
           return;
         }
       } else if (isUnusableUserStatus(loginData?.userStatus ?? null)) {
-        // 차단·탈퇴 계정 — 쿠키는 받았어도 일반 API 가 전부 막힌다. 들여보내면 아무것도 못 하는
+        // 탈퇴 계정 — 쿠키는 받았어도 일반 API 가 전부 막힌다. 들여보내면 아무것도 못 하는
         // 홈에 갇히므로 받은 세션을 지우고 이 화면에서 이유와 문의처를 말한다.
         await clientApi.delete("/api/client/logout").catch(() => undefined);
         setErrors({ common: RESTRICTED_ACCOUNT_MESSAGE, support: true });

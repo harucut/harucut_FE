@@ -310,13 +310,3 @@ describe("보낸 링크 끊기", () => {
     expect(viewer.queryByRole("button", { name: "보낸 링크 끊기" })).not.toBeInTheDocument();
   });
 });
-
-// 받은 뒤 사진만 보는 사람의 빈 화면을 「아직 찍은 사진이 없어요」로 두면 행사에 사진이 없는 줄 안다.
-it("사진 범위가 제한된 고객의 빈 사진함은 이유와 다음 행동을 말한다", async () => {
-  mockList.mockResolvedValue({ items: [], nextCursor: null });
-  mockMyEvents.mockResolvedValue([
-    { eventId: "Ev1", name: "민지 ♥ 준호", status: "LIVE", access: { permissions: ["VIEW_PHOTOS"], photosFrom: "2026-11-02T10:00:00+09:00" } },
-  ]);
-  render(<EventPhotoBox eventId="Ev1" />);
-  expect(await screen.findByText(/초대를 받은 뒤에 찍은 사진이 아직 없어요/)).toBeInTheDocument();
-});

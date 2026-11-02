@@ -55,8 +55,6 @@ export type InvitationPreview = {
   permissions?: EventPermission[];
   invitedByName: string;
   expiresAt: string;
-  /** 행사 고객 초대가 이미 찍은 사진까지 보여 주는지. false 면 수락한 뒤 사진만. 옛 서버면 키가 없다. */
-  includePast?: boolean;
 };
 
 export type InvitationAccepted = {
@@ -94,8 +92,6 @@ export type EventGrant = {
   permissions: EventPermission[];
   operations?: EventOperation[];
   createdAt: string;
-  /** 이 시각 뒤에 찍은 사진만 본다. 없거나 null 이면 제한 없음. */
-  photosFrom?: string | null;
 };
 
 export type MyEvent = {
@@ -114,8 +110,6 @@ export type MyEvent = {
     operations?: EventAccessOperation[];
     /** OPERATOR 만 — 권한마다 행사 배정(EVENT)·프로젝트 멤버(PROJECT)·둘 다(BOTH). */
     sources?: Record<string, "EVENT" | "PROJECT" | "BOTH">;
-    /** 행사 고객의 사진 범위. 이 시각 뒤에 찍은 사진만 본다. 없거나 null 이면 제한 없음. */
-    photosFrom?: string | null;
   };
 };
 
@@ -160,12 +154,10 @@ export async function removeMember(workspaceId: string, userId: string | "me") {
   await clientApi.delete(`${ws(workspaceId)}/members/${encodeURIComponent(userId)}`);
 }
 
-/** includePast 를 켜지 않으면 받는 사람은 수락한 뒤에 찍은 사진만 본다. */
-export async function inviteEventCustomer(eventId: string, permissions: EventPermission[], note?: string, includePast = false) {
+export async function inviteEventCustomer(eventId: string, permissions: EventPermission[], note?: string) {
   const res = await clientApi.post<ApiEnvelope<InvitationIssued>>(`${ev(eventId)}/invitations`, {
     permissions,
     ...(note ? { note } : {}),
-    ...(includePast ? { includePast: true } : {}),
   });
   return requireData(res.data, "초대");
 }
@@ -175,12 +167,9 @@ export async function listEventGrants(eventId: string): Promise<EventGrant[]> {
   return res.data.data ?? [];
 }
 
-/** 권한 집합을 통째로 바꾼다. includePast 를 함께 주면 이미 찍은 사진까지 볼 수 있게 넓힌다(감사 로그에 남는다). */
-export async function updateEventGrant(eventId: string, grantId: number, permissions: EventPermission[], includePast = false) {
-  const res = await clientApi.patch<ApiEnvelope<EventGrant>>(`${ev(eventId)}/grants/${grantId}`, {
-    permissions,
-    ...(includePast ? { includePast: true } : {}),
-  });
+/** 권한 집합을 통째로 바꾼다. */
+export async function updateEventGrant(eventId: string, grantId: number, permissions: EventPermission[]) {
+  const res = await clientApi.patch<ApiEnvelope<EventGrant>>(`${ev(eventId)}/grants/${grantId}`, { permissions });
   return requireData(res.data, "권한");
 }
 
