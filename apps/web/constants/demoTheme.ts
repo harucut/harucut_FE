@@ -8,27 +8,27 @@ export const DEMO_DECORATED_THEME: ThemeExportJson = {
   frameId: "grid-4",
   components: [
     {
-      // 우상단 — 첫 컷 모서리를 물고 얹히는 스티커(원본 비율 982:753)
+      // 우상단 — 첫 컷 모서리를 물고 얹히는 스티커(원본 비율 1024:774)
       id: "demo-sticker-corner",
       type: "STICKER",
-      source: "/stickers/03-hearts.png",
+      source: "/stickers/22-hearts.png",
       x: 2760,
       y: 60,
       width: 1100,
-      height: 843,
+      height: 831,
       scale: 1,
       rotation: -9,
       zIndex: 6,
     },
     {
-      // 아래쪽 두 컷 사이 이음새에 걸치는 스티커(원본 비율 892:713)
+      // 아래쪽 두 컷 사이 이음새에 걸치는 스티커(원본 비율 1024:851)
       id: "demo-sticker-seam",
       type: "STICKER",
-      source: "/stickers/08-chalkak.png",
+      source: "/stickers/09-chalkak.png",
       x: 1500,
       y: 4400,
       width: 1000,
-      height: 799,
+      height: 831,
       scale: 1,
       rotation: 13,
       zIndex: 7,
@@ -48,7 +48,7 @@ export const DEMO_DECORATED_THEME: ThemeExportJson = {
       styleJson: {
         fontFamily: "Pretendard",
         fontSize: 320,
-        color: "#1ED760",
+        color: "#C8F135",
         textAlign: "center",
       },
     },
@@ -63,11 +63,11 @@ export const DEMO_WEDDING_THEME: ThemeExportJson = {
     {
       id: "demo-wedding-sticker",
       type: "STICKER",
-      source: "/stickers/13-wedding.png",
-      x: 1570,
-      y: 5265,
-      width: 860,
-      height: 628,
+      source: "/stickers/18-wedding.png",
+      x: 1300,
+      y: 5330,
+      width: 1400,
+      height: 536,
       scale: 1,
       rotation: 0,
       zIndex: 1,

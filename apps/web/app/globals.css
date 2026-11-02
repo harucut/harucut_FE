@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* STUDIO 디자인 — 라이트: 웜 오프화이트 + 그린(#16B454). 그린은 채움/보더용,
-   그 위 글자는 어둡게(#06140A). 본문 텍스트/보조는 AA 통과 값으로 둔다. */
+/* STUDIO 디자인 — 라이트: 웜 오프화이트 + 라임(#BDE528). 라임은 채움/보더용,
+   그 위 글자는 어둡게(#141803). 본문 텍스트/보조는 AA 통과 값으로 둔다. */
 :root {
   color-scheme: light;
   --hc-motion-state: 180ms;
@@ -9,24 +9,26 @@
   --hc-pressed-opacity: 0.68;
   --background: #fafaf7;
   --foreground: #14140f;
-  --hc-primary: #16b454;
-  /* 라이트에서 초록 "글자"는 전부 이 값을 쓴다. --hc-primary(#16b454)는 흰 배경 2.7:1이라 글자로 못 쓴다.
+  --hc-primary: #bde528;
+  /* 라이트에서 라임 "글자"는 전부 이 값을 쓴다. --hc-primary(#bde528)는 흰 배경 2.7:1이라 글자로 못 쓴다.
      accent-soft 배경(#dbebdf) 위에서도 4.5:1을 넘도록 #0e7e39(4.18)에서 한 단계 더 내렸다. */
-  --hc-primary-strong: #0b6b30;
+  --hc-primary-strong: #4c5f00;
   /* 위험/오류. zinc 별칭과 달리 red-* 는 테마 재매핑이 없어서, 라이트에서 그대로 쓰면
      되돌릴 수 없는 "삭제" 버튼이 1.29:1 로 거의 안 보였다. 토큰으로 승격한다. */
   --hc-danger: #b42318;
   --hc-danger-border: rgba(180, 35, 24, 0.34);
   --hc-danger-soft-bg: rgba(180, 35, 24, 0.08);
-  --hc-primary-hover: #129a47;
-  --hc-primary-contrast: #06140a;
+  --hc-primary-hover: #aed41c;
+  /* 선택 테두리 등 선으로 쓰는 강조색. 라이트의 라임은 바탕과 1.4:1 이라 선으로 안 보인다. */
+  --hc-primary-line: #4c5f00;
+  --hc-primary-contrast: #141803;
   --hc-background-tint: #f1f1ee;
   --hc-text: #14140f;
   --hc-muted: #5c5c57;
   --hc-muted-soft: #94948d;
   --hc-border: rgba(20, 20, 15, 0.16);
   --hc-border-subtle: rgba(20, 20, 15, 0.1);
-  --hc-border-strong: rgba(22, 180, 84, 0.34);
+  --hc-border-strong: rgba(76, 95, 0, 0.34);
   --hc-surface: #ffffff;
   /* 모바일 탭바 등 backdrop-blur 위에 얹는 반투명 카드 배경. 정의가 없어 탭바가 투명해지던 버그 수정. */
   --hc-card: rgba(255, 255, 255, 0.9);
@@ -40,9 +42,9 @@
   --hc-input-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   --hc-icon-button-bg: #ffffff;
   --hc-icon-button-hover: #f1f1ee;
-  --hc-accent-soft-bg: rgba(22, 180, 84, 0.1);
-  --hc-accent-soft-border: rgba(22, 180, 84, 0.16);
-  --hc-accent-soft-text: #0b6b30;
+  --hc-accent-soft-bg: rgba(189, 229, 40, 0.24);
+  --hc-accent-soft-border: rgba(76, 95, 0, 0.16);
+  --hc-accent-soft-text: #4c5f00;
   --hc-soft-shadow: 0 10px 24px rgba(20, 20, 15, 0.08);
   --hc-shadow: rgba(20, 20, 15, 0.14);
   --hc-card-shadow: 0 18px 40px rgba(20, 20, 15, 0.1);
@@ -56,7 +58,7 @@
   --hc-ink-button-bg: #14140f;
   --hc-ink-button-hover: #2b2b25;
   --hc-ink-button-text: #fafaf7;
-  --hc-theme-toggle-active-bg: rgba(22, 180, 84, 0.12);
+  --hc-theme-toggle-active-bg: rgba(76, 95, 0, 0.12);
   --hc-theme-toggle-active-text: #0e7e39;
   /* 소셜 로그인 — 각 사 공식 규격값이라 우리가 고르는 색이 아니다. 근거는 socialMarks.tsx 주석 참고.
      구글 Light: Fill #FFFFFF / Stroke #747775 1px inside / Font #1F1F1F
@@ -75,8 +77,8 @@
   --hc-frame-picker-preview-inner: #f4f7fb;
   --hc-page-gradient-app: #fafaf7;
   --hc-page-gradient-landing: #fafaf7;
-  --hc-scrollbar-thumb: rgba(22, 180, 84, 0.42);
-  --hc-scrollbar-thumb-hover: rgba(22, 180, 84, 0.64);
+  --hc-scrollbar-thumb: rgba(76, 95, 0, 0.42);
+  --hc-scrollbar-thumb-hover: rgba(76, 95, 0, 0.64);
   --hc-zinc-950: #f1f1ee;
   --hc-zinc-900: #e8e8e4;
   --hc-zinc-800: #deded9;
@@ -92,7 +94,7 @@
   --hc-zinc-50: #14140f;
 }
 
-/* STUDIO 디자인 — 다크: 딥다크 무대(#0B0B0C) + 비비드 그린(#1ED760).
+/* STUDIO 디자인 — 다크: 딥다크 무대(#0B0B0C) + 형광 라임(#C8F135).
 
    `.hc-stage-dark` 는 사용자 테마와 무관하게 딥다크로 고정되는 **공개 마케팅 무대**다 —
    랜딩·기능·행사·요금제·FAQ·약관·개인정보의 비로그인 화면. 예전에는 랜딩·기능만 하드코딩으로
@@ -105,13 +107,14 @@ body:has(.hc-stage-dark) .hc-modal {
   color-scheme: dark;
   --background: #0b0b0c;
   --foreground: #ffffff;
-  --hc-primary: #1ed760;
-  --hc-primary-strong: #56dd86;
+  --hc-primary: #c8f135;
+  --hc-primary-strong: #d6f565;
   --hc-danger: #ffb4ab;
   --hc-danger-border: rgba(255, 140, 130, 0.35);
   --hc-danger-soft-bg: rgba(255, 90, 80, 0.12);
-  --hc-primary-hover: #1fe267;
-  --hc-primary-contrast: #06140a;
+  --hc-primary-hover: #d4f74f;
+  --hc-primary-line: #c8f135;
+  --hc-primary-contrast: #141803;
   --hc-background-tint: #161617;
   --hc-text: #ffffff;
   --hc-muted: #b3b3b3;
@@ -134,9 +137,9 @@ body:has(.hc-stage-dark) .hc-modal {
   --hc-input-shadow: none;
   --hc-icon-button-bg: #232325;
   --hc-icon-button-hover: #2e2e31;
-  --hc-accent-soft-bg: rgba(30, 215, 96, 0.16);
-  --hc-accent-soft-border: rgba(30, 215, 96, 0.3);
-  --hc-accent-soft-text: #7beaa6;
+  --hc-accent-soft-bg: rgba(200, 241, 53, 0.16);
+  --hc-accent-soft-border: rgba(200, 241, 53, 0.3);
+  --hc-accent-soft-text: #ddf78f;
   --hc-soft-shadow: none;
   --hc-shadow: rgba(0, 0, 0, 0.6);
   --hc-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
@@ -150,8 +153,8 @@ body:has(.hc-stage-dark) .hc-modal {
   --hc-ink-button-bg: #ffffff;
   --hc-ink-button-hover: #f1f1ee;
   --hc-ink-button-text: #0b0b0c;
-  --hc-theme-toggle-active-bg: rgba(30, 215, 96, 0.16);
-  --hc-theme-toggle-active-text: #7beaa6;
+  --hc-theme-toggle-active-bg: rgba(200, 241, 53, 0.16);
+  --hc-theme-toggle-active-text: #ddf78f;
   /* 구글만 공식 Dark 렌디션(Fill #131314 / Stroke #8E918F / Font #E3E3E3)이 있어 테마를 따른다.
      카카오는 테마별 변형 자체가 없다 — #FEE500 고정이고 다른 색은 금지다.
      네이버는 다크 렌디션 #05AC4F 가 있지만 흰 글자 대비가 2.99:1 로 비텍스트 3:1 문턱에도 못 미친다.
@@ -170,7 +173,7 @@ body:has(.hc-stage-dark) .hc-modal {
   --hc-page-gradient-app: #0b0b0c;
   --hc-page-gradient-landing: #0b0b0c;
   --hc-scrollbar-thumb: rgba(111, 111, 115, 0.5);
-  --hc-scrollbar-thumb-hover: rgba(30, 215, 96, 0.6);
+  --hc-scrollbar-thumb-hover: rgba(200, 241, 53, 0.6);
   --hc-zinc-950: #0b0b0c;
   --hc-zinc-900: #161617;
   --hc-zinc-800: #232325;
@@ -330,7 +333,7 @@ body {
    게시된 행사 테마가 이 값을 덮어쓴다(P2B-4, components/participation/EventSurface.tsx). 테마가 없거나 못 읽었을 때
    보이는 것은 이 중립 값이다 — lib/event/pageTheme.ts · 백엔드 ThemeResolver.DEFAULT_COLORS 와 같아야 한다.
    개인 색 테마(data-theme)와 무관하다 — 행사 화면에서는 부트스트랩이 data-theme 을 심지 않는다. */
-/* 네이티브 체크박스·라디오·슬라이더는 무채색이다. 브라우저 기본 파랑도, 여러 개 깔리는 초록도 아니다 — 초록은 주 동작 하나만 갖는다(DESIGN.md). */
+/* 네이티브 체크박스·라디오·슬라이더는 무채색이다. 브라우저 기본 파랑도, 여러 개 깔리는 라임도 아니다 — 라임은 주 동작 하나만 갖는다(DESIGN.md). */
 :root {
   accent-color: var(--hc-text);
 }
@@ -518,7 +521,7 @@ body {
 
 /*
   잉크 버튼 — 초록을 쓸 수 없는 자리의 주 CTA. 로그인·회원가입은 바로 아래 네이버 버튼이
-  브랜드 초록(#03A94D, 가이드가 색을 못박는다)이라, 우리 초록(#16B454)을 나란히 두면 라이트에서
+  브랜드 초록(#03A94D, 가이드가 색을 못박는다)이라, 우리 초록(#BDE528)을 나란히 두면 라이트에서
   같은 버튼 둘로 읽혔다. 라이트에서는 잉크(#14140F), 다크에서는 흰색 — 그 테마에서 가장 강한 무채색.
 */
 .hc-button-ink {
@@ -577,7 +580,7 @@ body {
     var(--hc-social-shadow-hover);
 }
 
-/* 포커스 링은 버튼 바깥에 그린다 — 흰색·노랑·초록 어느 면 위에서도 같은 두께로 보여야 한다. */
+/* 포커스 링은 버튼 바깥에 그린다 — 흰색·노랑·라임 어느 면 위에서도 같은 두께로 보여야 한다. */
 .hc-social-button:focus-visible {
   outline: 2px solid var(--hc-text);
   outline-offset: 2px;
@@ -674,7 +677,7 @@ body {
   color: var(--hc-primary-strong);
 }
 
-/* hover 에 --hc-primary 를 쓰면 라이트에서 2.6:1 로 떨어진다(글자 초록은 -strong 하나). 색 대신 밑줄로 반응한다. */
+/* hover 에 --hc-primary 를 쓰면 라이트에서 2.6:1 로 떨어진다(글자 라임은 -strong 하나). 색 대신 밑줄로 반응한다. */
 .hc-link-accent:hover {
   color: var(--hc-primary-strong);
   text-decoration: underline;
@@ -740,7 +743,7 @@ body {
 
   소리는 행사장 소음에 묻히고, 폰을 거치대에 올리면 햅틱은 아무에게도 안 간다. 남는 것이
   게이지 한 칸뿐이라 "지금 찍혔다"가 약하다. 전면 플래시는 카메라의 오래된 관습이고
-  초록을 쓰지 않는다. **기본 opacity 는 0** 이라 모션을 끈 기기에서 흰 화면이 남지 않는다.
+  라임을 쓰지 않는다. **기본 opacity 는 0** 이라 모션을 끈 기기에서 흰 화면이 남지 않는다.
 */
 @keyframes hc-capture-flash {
   from {
@@ -793,7 +796,7 @@ body {
   }
 }
 
-/* 앱 화면(Studio·운영 관리·편집기)의 체크박스·슬라이더는 무채색이다. 한 화면에 체크가 여럿이면 초록이 흩어져 주 동작을 못 찾는다(DESIGN.md 한 화면 한 초록). */
+/* 앱 화면(Studio·운영 관리·편집기)의 체크박스·슬라이더는 무채색이다. 한 화면에 체크가 여럿이면 라임이 흩어져 주 동작을 못 찾는다(DESIGN.md 한 화면 한 라임). */
 .hc-page-app {
   accent-color: var(--hc-text);
 }

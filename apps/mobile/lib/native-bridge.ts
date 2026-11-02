@@ -37,7 +37,8 @@ import { PermissionsAndroid, Platform, Share } from 'react-native';
  * - 1 — 저장·공유·햅틱·알림·테마
  * - 2 — `camera-permission` 추가
  * - 3 — 앱 구독 `iap-products`·`iap-purchase`·`iap-restore`·`iap-finish` 추가(P4-B, lib/store-purchase.ts)
- * - 4 — 서버 푸시 `push-token` 추가(Expo 푸시 토큰, 알림 권한이 있을 때만)
+ * - 4 — 서버 푸시 `push-token` 추가(Expo 푸시 토큰, 알림 권한이 있을 때만). 구글 로그인을 시스템 브라우저로 가로채는
+ *   셸(lib/app-login.ts)이 들어 있다고 보장되는 첫 판이기도 하다 — 웹은 이 판부터 구글 버튼을 보인다.
  */
 export const BRIDGE_VERSION = 4;
 
@@ -605,6 +606,6 @@ export async function ensureAndroidChannel() {
   await Notifications.setNotificationChannelAsync('default', {
     name: '기본',
     importance: Notifications.AndroidImportance.DEFAULT,
-    lightColor: '#1ED760',
+    lightColor: '#C8F135',
   }).catch(() => undefined);
 }

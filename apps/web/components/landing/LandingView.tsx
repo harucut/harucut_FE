@@ -12,7 +12,7 @@ import type { FrameId } from "@/constants/frames";
 import { DEMO_PHOTOS, DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
-const GREEN = "#1ED760";
+const ACCENT = "#C8F135";
 
 // 랜딩 미리보기는 한 변이 200px 남짓인데 원본은 900x1200 PNG(1.2MB)였다. 같은 파일이
 // 화면에 20 번 들어가 첫 로드를 그대로 잡아먹었다. 표시 크기에 맞춘 webp(30KB)를 쓴다.
@@ -255,11 +255,11 @@ export function LandingView() {
           // 모바일에서 좌우 40px 패딩이 제목에 254px 밖에 안 남겨, 30px 글자가 억지로
           // 두 줄로 접혔다(그 바람에 "네 컷"이 갈라졌다). 좁은 화면에선 패딩과 글자를 함께 줄인다.
           className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-6 py-8 sm:px-10 sm:py-9"
-          style={{ background: GREEN }}
+          style={{ background: ACCENT }}
         >
           <h2
             className="text-[24px] font-extrabold tracking-[-1px] sm:text-[30px]"
-            style={{ color: "#06140A" }}
+            style={{ color: "#141803" }}
           >
             하루를 네 컷으로 남겨볼까요?
           </h2>

@@ -228,7 +228,7 @@ function LoginPageContent() {
         {/* 아래 소셜 버튼과 같은 h-12 알약이다. 예전에는 이쪽만 py-2.5(약 38px)·text-xs 라
             같은 화면에서 버튼 높이와 글자 크기가 두 종류로 갈렸다.
             색은 초록이 아니라 잉크다 — 바로 아래 네이버 버튼이 브랜드 초록이라, 라이트에서 우리 초록
-            (#16B454)과 같은 버튼 둘로 읽혔다(globals.css .hc-button-ink). */}
+            (#BDE528)과 같은 버튼 둘로 읽혔다(globals.css .hc-button-ink). */}
         <button
           type="submit"
           disabled={isSubmitting}

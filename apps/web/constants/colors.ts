@@ -1,5 +1,5 @@
 export const BORDER_COLORS = [
-  { id: "studio", label: "스튜디오 그린", value: "#1ed760" },
+  { id: "studio", label: "스튜디오 라임", value: "#c8f135" },
   { id: "ink", label: "잉크 차콜", value: "#18181a" },
   { id: "ivory", label: "소프트 아이보리", value: "#fafaf7" },
   { id: "slate", label: "뮤트 슬레이트", value: "#66758c" },

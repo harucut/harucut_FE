@@ -64,7 +64,7 @@ function TabButton({
       className={[
         "rounded-full border px-3 py-1 text-xs",
         active
-          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+          ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
           : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
       ].join(" ")}
     >
@@ -221,7 +221,7 @@ function PhotoTab() {
               aspect-square w-24 shrink-0
               snap-start overflow-hidden rounded-xl
               border border-dashed border-(--hc-border) bg-(--hc-surface-strong)
-              hover:border-(--hc-primary) hover:bg-(--hc-accent-soft-bg) disabled:opacity-50
+              hover:border-(--hc-primary-line) hover:bg-(--hc-accent-soft-bg) disabled:opacity-50
             "
             title="사진 업로드"
           >

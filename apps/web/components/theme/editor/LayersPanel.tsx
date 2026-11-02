@@ -206,7 +206,7 @@ function LayerRow({
       className={[
         "rounded-xl border p-2 flex items-center gap-2",
         active
-          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-[0_14px_32px_var(--hc-shadow)]"
+          ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) shadow-[0_14px_32px_var(--hc-shadow)]"
           : "border-(--hc-border) bg-(--hc-surface-strong)",
         c.hidden ? "opacity-60" : "",
       ].join(" ")}

@@ -708,8 +708,8 @@ export function HarucutWebShell() {
       />
       {isLoading ? (
         <View style={[styles.loading, { backgroundColor: stage }]} pointerEvents="none">
-          {/* 라이트 무대에서 #1ED760 은 2.6:1 이라 잘 안 보인다. 웹의 라이트 초록과 같은 값. */}
-          <ActivityIndicator color={scheme === 'light' ? '#16B454' : '#1ED760'} size="large" />
+          {/* 라이트 무대에서 #C8F135 은 2.6:1 이라 잘 안 보인다. 웹의 라이트 초록과 같은 값. */}
+          <ActivityIndicator color={scheme === 'light' ? '#BDE528' : '#C8F135'} size="large" />
         </View>
       ) : null}
     </View>
@@ -761,11 +761,11 @@ const styles = StyleSheet.create({
   fallbackTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   fallbackBody: { color: '#B3B3B3', fontSize: 14, textAlign: 'center' },
   retryButton: {
-    backgroundColor: '#1ED760',
+    backgroundColor: '#C8F135',
     borderRadius: 999,
     marginTop: 10,
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  retryLabel: { color: '#06140A', fontSize: 15, fontWeight: '800' },
+  retryLabel: { color: '#141803', fontSize: 15, fontWeight: '800' },
 });

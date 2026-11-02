@@ -8,18 +8,18 @@ import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 랜딩과 같은 딥다크 고정.
-const GREEN = "#1ED760";
+const ACCENT = "#C8F135";
 
 // 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
 const DEMO_IMAGES = DEMO_PHOTOS;
 
 // 스티커 실물 — 30종 중 성격이 다른 것들만 골라 노출(에셋 자체가 브랜드 언어).
 const SHOWCASE_STICKERS = [
-  "03-hearts",
-  "08-chalkak",
-  "05-camera",
-  "12-birthday",
-  "24-blossom",
+  "22-hearts",
+  "09-chalkak",
+  "08-camera",
+  "10-oneulne",
+  "23-sparkle",
 ];
 
 // 부스에서 못 하는 것 = 하루컷이 파는 것. 요금제 유료 행과 1:1로 맞춘 세 축.
@@ -72,13 +72,13 @@ function AxisVisual({ index }: { index: number }) {
           <div
             key={row.t}
             className="flex items-center gap-5 rounded-[10px] border border-white/8 bg-[#0E0E0F] px-6 py-6"
-            style={{ borderColor: i ? undefined : "rgba(30,215,96,.28)" }}
+            style={{ borderColor: i ? undefined : "rgba(200, 241, 53,.28)" }}
           >
             <span
               aria-hidden
               className="h-8.5 w-0.75 shrink-0 rounded-full"
               style={{
-                background: i ? "rgba(255,255,255,.14)" : GREEN,
+                background: i ? "rgba(255,255,255,.14)" : ACCENT,
               }}
             />
             <div className="min-w-0">
@@ -142,7 +142,7 @@ function AxisVisual({ index }: { index: number }) {
               <span
                 className="text-[12px] font-semibold"
                 style={{
-                  color: row.dim ? "rgba(255,255,255,.5)" : GREEN,
+                  color: row.dim ? "rgba(255,255,255,.5)" : ACCENT,
                 }}
               >
                 {row.plan}
@@ -158,7 +158,7 @@ function AxisVisual({ index }: { index: number }) {
                 className="h-full rounded-full"
                 style={{
                   width: `${row.pct}%`,
-                  background: row.dim ? "rgba(255,255,255,.22)" : GREEN,
+                  background: row.dim ? "rgba(255,255,255,.22)" : ACCENT,
                 }}
               />
             </div>
@@ -268,11 +268,11 @@ export function FeaturesView() {
       <section className="mx-auto max-w-290 px-7 pb-22.5 pt-14">
         <div
           className="flex flex-wrap items-center justify-between gap-5 rounded-3xl px-10 py-9"
-          style={{ background: GREEN }}
+          style={{ background: ACCENT }}
         >
           <h2
             className="text-[30px] font-extrabold tracking-[-1px]"
-            style={{ color: "#06140A" }}
+            style={{ color: "#141803" }}
           >
             오늘 하루, 네 컷으로 남겨볼까요?
           </h2>
