@@ -8,27 +8,27 @@ export const DEMO_DECORATED_THEME: ThemeExportJson = {
   frameId: "grid-4",
   components: [
     {
-      // 우상단 — 첫 컷 모서리를 물고 얹히는 스티커
+      // 우상단 — 첫 컷 모서리를 물고 얹히는 스티커(원본 비율 982:753)
       id: "demo-sticker-corner",
       type: "STICKER",
-      source: "/stickers/sticker-003.png",
-      x: 2640,
-      y: 40,
-      width: 1250,
-      height: 740,
+      source: "/stickers/03-hearts.png",
+      x: 2760,
+      y: 60,
+      width: 1100,
+      height: 843,
       scale: 1,
       rotation: -9,
       zIndex: 6,
     },
     {
-      // 아래쪽 두 컷 사이 이음새에 걸치는 스티커
+      // 아래쪽 두 컷 사이 이음새에 걸치는 스티커(원본 비율 892:713)
       id: "demo-sticker-seam",
       type: "STICKER",
-      source: "/stickers/sticker-012.png",
+      source: "/stickers/08-chalkak.png",
       x: 1500,
-      y: 4460,
+      y: 4400,
       width: 1000,
-      height: 790,
+      height: 799,
       scale: 1,
       rotation: 13,
       zIndex: 7,
@@ -51,6 +51,26 @@ export const DEMO_DECORATED_THEME: ThemeExportJson = {
         color: "#1ED760",
         textAlign: "center",
       },
+    },
+  ],
+};
+
+// 행사 쪽 화면(/enterprise, 랜딩 행사 절)의 결혼식 네 컷. 아래 여백에 스티커 한 장만 얹어 사진을 가리지 않는다.
+// grid-4 아래 여백은 y 5200~6000 이다. 스티커 원본 비율 964:704.
+export const DEMO_WEDDING_THEME: ThemeExportJson = {
+  frameId: "grid-4",
+  components: [
+    {
+      id: "demo-wedding-sticker",
+      type: "STICKER",
+      source: "/stickers/13-wedding.png",
+      x: 1570,
+      y: 5265,
+      width: 860,
+      height: 628,
+      scale: 1,
+      rotation: 0,
+      zIndex: 1,
     },
   ],
 };

@@ -12,6 +12,51 @@ const OUTPUT_FILE = path.join(
 // 허용할 이미지 확장자
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".svg"];
 
+// 파일 이름(번호-영문)에 붙일 한국어 이름. 고르는 화면의 툴팁과 스크린리더가 이 이름을 읽는다.
+// 파일을 새로 넣었는데 여기 없으면 빌드에서 알려 준다 — 「스티커 12」로 조용히 나가지 않게.
+const LABELS = {
+  ribbon: "리본",
+  heart: "하트",
+  hearts: "하트 둘",
+  sparkles: "반짝이",
+  camera: "필름 카메라",
+  instant: "즉석 사진",
+  filmstrip: "필름",
+  chalkak: "찰칵",
+  oneulne: "오늘도 네 컷",
+  choigo: "최고야",
+  saranghae: "사랑해",
+  birthday: "생일 축하해",
+  wedding: "결혼 축하해요",
+  grad: "졸업 축하해",
+  uri: "우리 오늘",
+  bestday: "BEST DAY",
+  rings: "반지",
+  bouquet: "부케",
+  champagne: "샴페인",
+  cake: "케이크",
+  gradcap: "졸업 모자",
+  lightstick: "응원봉",
+  ticket: "티켓",
+  blossom: "벚꽃",
+  clover: "네잎클로버",
+  cloud: "구름과 무지개",
+  crown: "왕관",
+  kitten: "고양이",
+  puppy: "강아지",
+  strawberry: "딸기 우유",
+};
+
+function labelOf(file) {
+  const slug = path.basename(file, path.extname(file)).replace(/^\d+-/, "");
+  const label = LABELS[slug];
+  if (!label) {
+    console.error(`❌ ${file} 의 한국어 이름이 없습니다. scripts/generate-stickers.mjs 의 LABELS 에 넣어 주세요.`);
+    process.exit(1);
+  }
+  return label;
+}
+
 function main() {
   if (!fs.existsSync(STICKERS_DIR)) {
     console.error("❌ public/stickers 폴더가 없습니다.");
@@ -30,7 +75,7 @@ function main() {
     return {
       id,
       src: `/stickers/${file}`,
-      name: file.replace(path.extname(file), ""),
+      name: labelOf(file),
     };
   });
 
