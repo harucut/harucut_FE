@@ -12,6 +12,8 @@ jest.mock("@/lib/canvas/loaders", () => ({
 }));
 
 type PaintLog = {
+  /** fill() 을 부른 순간의 합성 방식. 칸은 칠하지 않고 뚫어야 한다. */
+  fills: string[];
   /** ctx.scale(x, y) 로 들어온 값. 첫 번째가 캔버스 축소 배율이다. */
   scales: Array<[number, number]>;
   /**
@@ -24,15 +26,21 @@ type PaintLog = {
 };
 
 function stubCanvas(): PaintLog {
-  const log: PaintLog = { scales: [], arcs: [], drawImages: [] };
+  const log: PaintLog = { fills: [], scales: [], arcs: [], drawImages: [] };
 
+  const composite: string[] = [];
   const ctx = {
+    globalCompositeOperation: "source-over",
     globalAlpha: 1,
     lineWidth: 1,
     fillStyle: "",
     strokeStyle: "",
-    save() {},
-    restore() {},
+    save() {
+      composite.push(ctx.globalCompositeOperation);
+    },
+    restore() {
+      ctx.globalCompositeOperation = composite.pop() ?? "source-over";
+    },
     beginPath() {},
     closePath() {},
     moveTo() {},
@@ -45,7 +53,9 @@ function stubCanvas(): PaintLog {
     scale(x: number, y: number) {
       log.scales.push([x, y]);
     },
-    fill() {},
+    fill() {
+      log.fills.push(ctx.globalCompositeOperation);
+    },
     stroke() {},
     drawImage(_img: unknown, dx: number, dy: number, dw: number, dh: number) {
       log.drawImages.push([dx, dy, dw, dh]);
@@ -69,6 +79,14 @@ function stubCanvas(): PaintLog {
 
 afterEach(() => {
   jest.restoreAllMocks();
+});
+
+// 칸을 회색으로 구우면 첫 화면이 빈 와이어프레임처럼 보이고, 아래에 사진을 깔아도 가려진다.
+it("칸은 네 개 모두 뚫는다. 칸을 칠하지 않는다", async () => {
+  const log = stubCanvas();
+  await renderThemePreviewPng({ frameId: "classic-4", background: { type: "COLOR", value: "ffffff" }, components: [] } as unknown as ThemeExportJson);
+  expect(log.fills.filter((op) => op === "destination-out")).toHaveLength(4);
+  expect(log.fills.filter((op) => op === "source-over")).toHaveLength(1);
 });
 
 /*

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiRequestError } from "@/lib/clientApi";
 import { ResultReceiver, RESULT_POLL_MS } from "@/components/participation/ResultReceiver";
+import { stashResultHandoff } from "@/lib/event/resultHandoff";
 
 const mockGetResult = jest.fn();
 const mockGetResultDownload = jest.fn();
@@ -29,6 +30,65 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+});
+
+describe("합성 실패와 대기", () => {
+  const failed = { status: "FAILED", eventName: "민지·현우 결혼식", thumbnailUrl: null, expiresAt: "2026-11-30T00:00:00Z" };
+  const pending = { status: "PENDING", eventName: "민지·현우 결혼식", thumbnailUrl: null, expiresAt: "" };
+  const frame = { frameVersionId: 31, layoutType: "CLASSIC" as const, sortOrder: 1, isDefault: true, previewUrl: "https://bucket/frame.png" };
+  const shots = [new Blob(["1"]), new Blob(["2"]), new Blob(["3"]), new Blob(["4"])];
+
+  function handoff(extra: Partial<Parameters<typeof stashResultHandoff>[0]> = {}) {
+    stashResultHandoff({ token: TOKEN_A, eventName: "민지·현우 결혼식", eventPath: "/e/wedding-1027", ...extra });
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+  }
+
+  beforeEach(() => {
+    URL.createObjectURL = jest.fn((blob: Blob) => `blob:${shots.indexOf(blob) + 1}`);
+    URL.revokeObjectURL = jest.fn();
+  });
+
+  // 네 장을 찍은 사람을 문장 하나로 끝내면 빈손으로 돌아간다.
+  it("방금 찍은 사람은 합성에 실패하면 행사로 돌아가 다시 찍는다", async () => {
+    handoff();
+    mockGetResult.mockResolvedValue(failed);
+    render(<ResultReceiver />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("한 번 더 찍어 주세요");
+    expect(screen.getByRole("link", { name: "다시 찍기" })).toHaveAttribute("href", "/e/wedding-1027");
+  });
+
+  it("링크로 받은 사람에게는 행사 주소를 알리지 않고 다시 확인할 길을 둔다", async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+    mockGetResult.mockResolvedValue(failed);
+    render(<ResultReceiver />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("행사장에서 QR을 다시 찍어");
+    expect(screen.queryByRole("link", { name: "다시 찍기" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "다시 확인" }));
+    await waitFor(() => expect(mockGetResult).toHaveBeenCalledTimes(2));
+  });
+
+  // 사진이 이미 내 손에 있는데 빈 카드를 보여 주면 사진을 잃은 줄 안다.
+  it("합성을 기다리는 동안 방금 찍은 네 장을 프레임에 넣어 보여 주고, 끝나면 주소를 해제한다", async () => {
+    handoff({ photos: shots, frame });
+    mockGetResult.mockResolvedValue(pending);
+    const { container, unmount } = render(<ResultReceiver />);
+    await waitFor(() => expect(container.querySelector('img[src="blob:1"]')).not.toBeNull());
+    ["blob:1", "blob:2", "blob:3", "blob:4", "https://bucket/frame.png"].forEach((src) => {
+      expect(container.querySelector(`img[src="${src}"]`)).not.toBeNull();
+    });
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:1");
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:4");
+  });
+
+  it("넘겨받은 사진이 없으면(새로고침·링크) 칸 모양의 자리만 보여 준다", async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+    mockGetResult.mockResolvedValue(pending);
+    const { container } = render(<ResultReceiver />);
+    await screen.findByRole("status");
+    await waitFor(() => expect(container.querySelector(".ev-developing")).not.toBeNull());
+    expect(container.querySelector('img[src^="blob:"]')).toBeNull();
+  });
 });
 
 it("토큰이 없으면 요청하지 않고 링크를 다시 열라고 안내한다", async () => {

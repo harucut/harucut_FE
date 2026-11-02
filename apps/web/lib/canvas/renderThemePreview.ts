@@ -119,14 +119,18 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
       ? theme.cells
       : layout.slots.map((slot) => ({ ...slot, rotation: 0, shape: { type: "RECT", cornerRadius: DEFAULT_CELL_RADIUS } }));
 
-  // CanvasStage와 동일한 슬롯 음영 레이어
-  ctx.fillStyle = "rgba(0,0,0,0.30)";
+  // 칸은 뚫어 둔다. 보여 주는 쪽이 그 아래에 사진(예시·참가자 본인)을 깔면 합성과 같은 순서가 된다 —
+  // 칸 위 글자·스티커가 사진 위에 남는다. 회색으로 칠해 구우면 첫 화면이 빈 와이어프레임처럼 보였다.
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = "#000";
   cells.forEach((cell) =>
     withCell(ctx, cell, (local) => {
       traceCellShape(ctx, local, cell.shape);
       ctx.fill();
     }),
   );
+  ctx.restore();
 
   const sources = Array.from(
     new Set(
@@ -174,16 +178,6 @@ export async function renderThemePreviewPng(theme: ThemeExportJson) {
     }
     ctx.restore();
   });
-
-  // CanvasStage와 동일한 프레임/슬롯 라인 오버레이
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
-  cells.forEach((cell) =>
-    withCell(ctx, cell, (local) => {
-      traceCellShape(ctx, local, cell.shape);
-      ctx.stroke();
-    }),
-  );
 
   // 썸네일에는 누끼를 그리지 않는다. 여기는 사진이 없는 **프레임 테마** 미리보기고,
   // 실제 배경 제거는 촬영 사진 픽셀에 구워진다(`lib/canvas/personCutout.ts`).

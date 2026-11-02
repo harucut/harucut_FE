@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
+import { FrameWithPhotos, frameFitStyle } from "@/components/participation/FrameWithPhotos";
 import { WorkspaceFrameList, layoutName } from "@/components/studio/StudioWorkspaceFrames";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
@@ -136,14 +138,14 @@ export function StudioFramePicker({
                   return (
                     <li key={version.frameVersionId} className="hc-surface-well flex items-center gap-3 rounded-2xl p-2">
                       {version.previewUrl ? (
-                        // 서명 URL 이라 next/image 최적화를 거치지 않는다.
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={version.previewUrl}
-                          alt=""
-                          loading="lazy"
-                          className="h-24 w-16 shrink-0 rounded-md object-contain"
-                        />
+                        <span aria-hidden className="flex h-24 w-16 shrink-0 items-center justify-center [container-type:size]">
+                          <FrameWithPhotos
+                            frame={{ layoutType: version.frameType, previewUrl: version.previewUrl }}
+                            photos={DEMO_PHOTOS}
+                            className="rounded-[3px]"
+                            style={frameFitStyle(version.frameType)}
+                          />
+                        </span>
                       ) : (
                         <span aria-hidden className="h-24 w-16 shrink-0 rounded-md bg-(--hc-border)" />
                       )}

@@ -3,17 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { DevelopingPhoto } from "@/components/participation/DevelopingPhoto";
 import {
   EventActionBar,
   EventButton,
+  EventLinkButton,
   EventLogo,
   EventSurface,
   EventTitle,
   useEventCopy,
 } from "@/components/participation/EventSurface";
 import { getResult, getResultDownload } from "@/lib/event/eventApi";
+import { RESULT_FAILED_LINK_COPY, RESULT_FAILED_RETAKE_COPY } from "@/lib/event/pageTheme";
 import { takeResultHandoff } from "@/lib/event/resultHandoff";
-import type { ResultStatus } from "@/lib/event/types";
+import type { EventFrameRef, ResultStatus } from "@/lib/event/types";
 import { getNativeSaveErrorMessage, NativeSaveError } from "@/lib/nativeBridge";
 import { detectInAppBrowser } from "@/lib/externalBrowser";
 import { copyText, saveImageFromSignedUrl, saveImageMessage, sharePhotoFile, shareOrCopyLink } from "@/lib/share";
@@ -64,6 +67,8 @@ export function ResultReceiver() {
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   // 방금 촬영에서 넘어온 사람만 돌아갈 곳이 있다. 링크로 받은 사람에게는 행사 주소를 알리지 않는다.
   const [eventPath, setEventPath] = useState<string | null>(null);
+  // 방금 찍은 네 장. 합성을 기다리는 동안만 쓴다. 링크로 받은 사람과 새로고침에는 없다.
+  const [justTaken, setJustTaken] = useState<{ photos?: Blob[]; frame?: EventFrameRef } | null>(null);
   // 자동 확인을 멈춘 뒤에만 사람에게 다시 확인하라고 한다. 돌고 있는 동안의 버튼은 누를 이유가 없다.
   const [pollGaveUp, setPollGaveUp] = useState(false);
   // 공유 시트는 누른 직후에만 열린다. 받아 두지 않으면 서명 URL 왕복 뒤 브라우저가 거절한다.
@@ -93,6 +98,7 @@ export function ResultReceiver() {
       // 방금 촬영에서 넘어왔으면 서버를 기다리지 않고 그 행사의 모습으로 「만드는 중」을 바로 보여 준다.
       const handoff = next ? takeResultHandoff(next) : null;
       setEventPath(handoff?.eventPath ?? null);
+      setJustTaken(handoff ? { photos: handoff.photos, frame: handoff.frame } : null);
       if (handoff) {
         setView({
           kind: "ready",
@@ -290,7 +296,7 @@ export function ResultReceiver() {
           </div>
         ) : null}
 
-        {view.kind === "ready" ? <ResultBody result={view.result} /> : null}
+        {view.kind === "ready" ? <ResultBody result={view.result} canRetake={Boolean(eventPath)} justTaken={justTaken} /> : null}
 
         {view.kind === "ready" && view.result.status !== "EXPIRED" && view.result.status !== "FAILED" ? (
           <div className="flex flex-col gap-2.5 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-4">
@@ -337,6 +343,19 @@ export function ResultReceiver() {
           </EventActionBar>
         ) : null}
 
+        {/* 만들지 못했으면 네 장을 찍은 사람을 빈손으로 두지 않는다. 방금 찍은 사람은 행사로 돌아가고, 링크로 온 사람은 다시 확인한다. */}
+        {view.kind === "ready" && view.result.status === "FAILED" ? (
+          <EventActionBar>
+            {eventPath ? (
+              <EventLinkButton href={eventPath}>다시 찍기</EventLinkButton>
+            ) : token ? (
+              <EventButton tone="quiet" size="md" onClick={() => load(token)}>
+                다시 확인
+              </EventButton>
+            ) : null}
+          </EventActionBar>
+        ) : null}
+
         {view.kind === "ready" && view.result.status === "PENDING" && pollGaveUp && token ? (
           <EventActionBar>
             <EventButton
@@ -361,9 +380,17 @@ export function ResultReceiver() {
   );
 }
 
-function ResultBody({ result }: { result: ResultStatus }) {
+function ResultBody({
+  result,
+  canRetake,
+  justTaken,
+}: {
+  result: ResultStatus;
+  canRetake: boolean;
+  justTaken: { photos?: Blob[]; frame?: EventFrameRef } | null;
+}) {
   const expired = useEventCopy("expired", "사진을 받을 수 있는 기간이 지났어요.");
-  const failed = useEventCopy("error", "사진을 만들지 못했어요. 행사 담당자에게 문의해 주세요.");
+  const failed = useEventCopy("error", canRetake ? RESULT_FAILED_RETAKE_COPY : RESULT_FAILED_LINK_COPY);
   const composing = useEventCopy("composing", "사진을 만들고 있어요. 이 화면을 열어 두면 준비되는 대로 보여 드려요.");
   const done = useEventCopy("done", "사진이 완성됐어요.");
   // 이 화면에서 기다린 사람에게만 사진이 현상되듯 나타난다. 다시 열어 본 사람은 바로 본다.
@@ -391,7 +418,9 @@ function ResultBody({ result }: { result: ResultStatus }) {
   if (result.status === "PENDING") {
     return (
       <div className="flex flex-col items-center gap-4">
-        <div aria-hidden className="ev-developing aspect-2/3 w-full max-w-60 rounded-2xl border border-(--ev-border) bg-(--ev-card)" />
+        <div aria-hidden className="flex h-[52svh] w-full items-center justify-center [container-type:size]">
+          <DevelopingPhoto frame={justTaken?.frame} photos={justTaken?.photos} />
+        </div>
         <p role="status" className="break-keep text-center text-[15px] leading-relaxed text-(--ev-muted)">
           {composing}
         </p>

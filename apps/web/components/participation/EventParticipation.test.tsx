@@ -107,6 +107,65 @@ async function shootAll() {
   jest.useRealTimers();
 }
 
+describe("칸 다시 찍기", () => {
+  async function toReview() {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+    await shootAll();
+    await screen.findByRole("button", { name: "이 사진으로 만들기" });
+  }
+
+  async function armRetake(index: number) {
+    fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진 다시 찍기` }));
+    fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진을 지우고 다시 찍기` }));
+    await screen.findByRole("button", { name: "한 장 찍기" });
+  }
+
+  // 「한 장 찍기」 위에 네 장을 찍는다고 쓰면 무엇이 찍히는지 모른다.
+  it("다시 찍는 동안에는 그 칸만 찍는다고 말한다", async () => {
+    await toReview();
+    await armRetake(2);
+    expect(screen.getByText("버튼을 누르면 3초 뒤에 2번째 사진을 다시 찍어요.")).toBeInTheDocument();
+  });
+
+  // 새 사진을 찍기 전에 원본을 버리면 마음을 바꿀 수 없다.
+  it("찍기 전에 마음을 바꾸면 원래 사진으로 돌아가고, 이미 올린 칸을 다시 올리지 않는다", async () => {
+    await toReview();
+    // 올린 뒤의 재시도를 만든다. 접수만 실패한다.
+    api.submitEventCompose.mockRejectedValueOnce(new ApiRequestError({ status: 500, code: "GEN-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await screen.findByRole("alert");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    await armRetake(3);
+    fireEvent.click(screen.getByRole("button", { name: "그대로 둘게요" }));
+    await screen.findByRole("button", { name: "이 사진으로 만들기" });
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+  });
+
+  it("새 사진이 찍히면 원래 사진을 버린다", async () => {
+    await toReview();
+    await armRetake(1);
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "한 장 찍기" }));
+    for (let tick = 0; tick < 5; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_000);
+      });
+    }
+    jest.useRealTimers();
+    expect(await screen.findByRole("button", { name: "이 사진으로 만들기" })).toBeInTheDocument();
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+});
+
 it("없는 행사면 링크를 다시 확인하라고 안내한다", async () => {
   api.getPublicEvent.mockRejectedValue(new ApiRequestError({ status: 404, code: "GEN-031" }));
   render(<EventParticipation slug="nope-123" />);
