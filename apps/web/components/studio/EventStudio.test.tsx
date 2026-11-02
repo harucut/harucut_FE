@@ -211,6 +211,27 @@ it("동의문의 일수가 보관 일수와 다르면 경고한다", async () =>
   expect(screen.getByText(/동의문에는 90일이라고 적혀 있는데, 결과 보관 일수는 30일이에요/)).toBeInTheDocument();
 });
 
+// 참가자는 동의문을 믿고 동의한다. 90일이라고 읽었는데 30일에 지워지면 안 된다.
+it("동의문 일수가 다르면 확인하기 전에는 게시하지 못한다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, consentItems: [{ code: "photo", title: "사진", body: "결과 링크로 90일 동안 받아요.", required: true, version: 1 }] } }));
+  fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
+  const dialog = await screen.findByRole("dialog", { name: "이대로 게시할까요?" });
+  expect(within(dialog).getByRole("button", { name: "이대로 게시" })).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: /보관 기간과 다른 내용이에요/ }));
+  expect(within(dialog).getByRole("button", { name: "이대로 게시" })).toBeEnabled();
+});
+
+it("적힌 일수가 하나면 보관 일수로 고쳐 준다. 게시 확인은 이때 사라진다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "결과 링크로 90일 동안 받아요. 행사 7일 전까지 철회해요." } });
+  // 일수가 둘이면 어느 쪽이 보관 기간인지 사람만 안다.
+  expect(screen.queryByRole("button", { name: /동의문을 \d+일로 고치기/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "결과 링크로 90일 동안 받아요." } });
+  fireEvent.click(screen.getByRole("button", { name: "동의문을 30일로 고치기" }));
+  expect(screen.getAllByLabelText("본문")[0]).toHaveValue("결과 링크로 30일 동안 받아요.");
+  expect(screen.queryByText(/동의문에는/)).not.toBeInTheDocument();
+});
+
 it("참가 주소 형식이 틀리면 칸에서 바로 알린다", async () => {
   await renderStudio();
   const input = screen.getByLabelText("참가 주소");

@@ -49,6 +49,10 @@ const ACTION_LABEL: Record<string, string> = {
   BOOTH_PAIRED: "부스 기기를 연결했어요",
   BOOTH_PAIRING_LOCKED: "틀린 시도가 많아 부스 연결 코드를 잠갔어요",
   CONTRACT_CREATED: "계약을 만들었어요",
+  CONTRACT_DRAFT: "계약을 초안으로 되돌렸어요",
+  CONTRACT_ACTIVE: "계약을 시작했어요",
+  CONTRACT_ENDED: "계약을 끝냈어요",
+  CONTRACT_CANCELLED: "계약을 취소했어요",
   CONTRACT_PAYMENT_VERIFIED: "계약 결제를 확인했어요",
   ENTITLEMENT_GRANTED: "이용권을 열었어요",
   ENTITLEMENT_ALLOCATED: "행사에 사용량을 배분했어요",
@@ -64,7 +68,7 @@ function formatTime(iso: string) {
     : date.toLocaleString("ko-KR", { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-/** 모르는 행동은 코드 그대로 보인다 — 기록을 숨기는 것보다 낫다. 계약 상태 전이(CONTRACT_*)처럼 뒤가 바뀌는 코드도 여기로 온다. */
+/** 모르는 행동은 코드 그대로 보인다 — 기록을 숨기는 것보다 낫다. */
 function actionLabel(action: string) {
   return ACTION_LABEL[action] ?? action;
 }
@@ -77,10 +81,13 @@ export function AuditLogList({
   load,
   errorMessage,
   emptyCopy = "아직 기록이 없어요.",
+  eventNames,
 }: {
   load: (cursor: string | null) => Promise<AuditLogPage>;
   errorMessage: (cause: unknown) => string;
   emptyCopy?: string;
+  /** 행사 id → 이름. 아는 행사는 이름으로 보여 준다. 모르는 행사(지운 행사 등)는 id 그대로다. */
+  eventNames?: ReadonlyMap<string, string>;
 }) {
   const [items, setItems] = useState<AuditLogItem[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -156,9 +163,13 @@ export function AuditLogList({
                 {" · "}
                 {item.actorName?.trim() || "시스템"}
                 {item.eventId ? (
-                  <>
-                    {" · "}행사 <span className="font-mono">{item.eventId}</span>
-                  </>
+                  eventNames?.get(item.eventId) ? (
+                    <>{` · ${eventNames.get(item.eventId)}`}</>
+                  ) : (
+                    <>
+                      {" · "}행사 <span className="font-mono">{item.eventId}</span>
+                    </>
+                  )
                 ) : null}
               </p>
               {item.detail ? (

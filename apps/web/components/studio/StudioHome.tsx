@@ -463,7 +463,7 @@ export function StudioHome() {
                     </section>
                   ) : null}
 
-                  {canCreate ? <WorkspaceActivity key={current.workspaceId} workspaceId={current.workspaceId} /> : null}
+                  {canCreate ? <WorkspaceActivity key={current.workspaceId} workspaceId={current.workspaceId} events={events ?? []} /> : null}
 
                   {/* 운영 담당은 멤버 목록을 보지 못한다(서버 403) — 맡은 행사만 운영한다(ADR-0009 §3). */}
                   {current.role === "OPERATOR" ? null : (
@@ -498,13 +498,14 @@ export function StudioHome() {
 const activityErrorMessage = (cause: unknown) => getUserFacingApiErrorMessage(cause, "활동 기록을 불러오지 못했어요.");
 
 /** 이 공간에서 누가 언제 무엇을 했나. 펼칠 때 받는다 — 접힌 채로 묻지 않는다. */
-function WorkspaceActivity({ workspaceId }: { workspaceId: string }) {
+function WorkspaceActivity({ workspaceId, events }: { workspaceId: string; events: StudioEvent[] }) {
   const [open, setOpen] = useState(false);
+  const eventNames = useMemo(() => new Map(events.map((event) => [event.eventId, event.settings.name || "이름 없는 행사"])), [events]);
   const load = useCallback((cursor: string | null) => listWorkspaceAuditLogs(workspaceId, cursor), [workspaceId]);
   return (
     <details onToggle={(e) => setOpen(e.currentTarget.open)} className="flex flex-col gap-3">
       <summary className="flex h-11 cursor-pointer items-center text-[18px] font-bold">활동 기록</summary>
-      {open ? <AuditLogList load={load} errorMessage={activityErrorMessage} /> : null}
+      {open ? <AuditLogList load={load} errorMessage={activityErrorMessage} eventNames={eventNames} /> : null}
     </details>
   );
 }

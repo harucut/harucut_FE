@@ -853,26 +853,6 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             }
           />
         </div>
-        {/*
-          삭제는 헤더에 같이 두지 않는다. 처음 뗀 이유는 겹침이었다 — 그때 PageHeader 는 제목
-          좌우로 7rem(112px)만 비웠고 `삭제`+`수정 저장`은 152px 이라 320px 에서 48px 겹쳤다.
-          그 원인은 이제 PageHeader 쪽에서 없앴다(칸이 실제 내용 폭을 갖는다). 그래도 떼어 둔
-          채로 두는 것은 아래 이유 때문이다.
-          한 줄 내려서 고정 바 밖에 두는 이유 — 되돌릴 수 없는 동작이라 캔버스 위에 붙박이로
-          띄워 둘 것이 아니고, 고정 바가 76px 그대로라 좁은 화면에서 캔버스도 안 뺏긴다.
-        */}
-        {remoteFrameId ? (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={isDeleting || isSaving}
-              className="inline-flex h-11 items-center rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger) hover:bg-(--hc-danger-soft-bg) disabled:opacity-50"
-            >
-              {isDeleting ? "삭제 중…" : "삭제"}
-            </button>
-          </div>
-        ) : null}
         {loadError || actionError ? (
           <p role="alert" className="text-[12px] text-(--hc-danger)">
             {loadError ?? actionError}
@@ -1017,6 +997,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             </div>
           </div>
         </div>
+        {/* 되돌릴 수 없는 동작이다. 저장 옆에 두면 잘못 누른다. 하던 일을 다 지나간 맨 아래에 둔다. */}
+        {remoteFrameId ? (
+          <div className="flex justify-end border-t border-(--hc-border) pt-4">
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isDeleting || isSaving}
+              className="inline-flex h-11 items-center rounded-full px-4 text-[13px] font-semibold text-(--hc-danger) transition hover:bg-(--hc-surface-well) disabled:opacity-50"
+            >
+              {isDeleting ? "삭제 중…" : "이 프레임 삭제"}
+            </button>
+          </div>
+        ) : null}
         <nav
           aria-label="편집 도구"
           className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-(--hc-border) bg-(--hc-card) pb-[env(safe-area-inset-bottom)] lg:hidden"

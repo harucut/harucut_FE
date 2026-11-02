@@ -962,7 +962,7 @@ describe("ThemeEditorPage save flow", () => {
 
     const view = await renderLoadedEditor();
 
-    fireEvent.click(getButtonByText(view.container, "삭제"));
+    fireEvent.click(getButtonByText(view.container, "이 프레임 삭제"));
     fireEvent.click(getButtonByText(view.container, "지우기"));
 
     await waitFor(() => {

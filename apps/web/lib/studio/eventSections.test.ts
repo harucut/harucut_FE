@@ -1,3 +1,4 @@
+import { replaceRetentionDays } from "@/lib/studio/eventSections";
 import { DEFAULT_RETENTION_DAYS, defaultConsentTemplate, draftChecklist, retentionMismatch } from "@/lib/studio/eventSections";
 
 const READY = {
@@ -53,5 +54,17 @@ describe("동의문과 보관 일수", () => {
 
   it("미리 넣는 동의 문구는 기본 보관 일수와 맞는다", () => {
     expect(retentionMismatch([defaultConsentTemplate("라온웨딩홀").body], DEFAULT_RETENTION_DAYS)).toEqual([]);
+  });
+});
+
+describe("replaceRetentionDays", () => {
+  it("적힌 보관 일수만 바꾸고 다른 일수와 숫자는 그대로 둔다", () => {
+    expect(replaceRetentionDays("90일 보관해요. 행사 7일 전에 안내해요. 90 일 뒤 지워요. 2026년", 90, 30)).toBe(
+      "30일 보관해요. 행사 7일 전에 안내해요. 30 일 뒤 지워요. 2026년",
+    );
+  });
+
+  it("일수의 일부로 들어간 숫자는 바꾸지 않는다", () => {
+    expect(replaceRetentionDays("190일 보관", 90, 30)).toBe("190일 보관");
   });
 });

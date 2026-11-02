@@ -15,6 +15,7 @@ import {
   DEFAULT_RETENTION_DAYS,
   STUDIO_SECTION_LABEL,
   draftChecklist,
+  replaceRetentionDays,
   retentionMismatch,
   type StudioSectionId,
 } from "@/lib/studio/eventSections";
@@ -217,6 +218,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [customersVersion, setCustomersVersion] = useState(0);
   const [operatorsVersion, setOperatorsVersion] = useState(0);
   const [publishConfirm, setPublishConfirm] = useState(false);
+  const [mismatchAcknowledged, setMismatchAcknowledged] = useState(false);
   const [publishedSheet, setPublishedSheet] = useState(false);
   // 저장 안 한 변경이 있을 때 나가려던 곳. 확인을 받으면 그리로 간다.
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
@@ -504,6 +506,17 @@ export function EventStudio({ eventId }: { eventId: string }) {
     mismatchedDays.length > 0
       ? `동의문에는 ${mismatchedDays.join("·")}일이라고 적혀 있는데, 결과 보관 일수는 ${retentionNumber}일이에요. 둘을 맞춰 주세요.`
       : null;
+  // 일수가 하나만 적혀 있으면 그 숫자를 보관 일수로 바꿔 준다. 여럿이면 어느 것이 보관 기간인지 사람만 안다.
+  const fixConsentDays =
+    mismatchedDays.length === 1
+      ? () =>
+          update({
+            consents: form.consents.map((consent) => ({
+              ...consent,
+              body: replaceRetentionDays(consent.body, mismatchedDays[0], retentionNumber),
+            })),
+          })
+      : null;
   const noEntitlement = usage !== undefined && !usage.entitlement && !usageError;
   const slugInvalid = !slugLocked && !SLUG_PATTERN.test(form.slug);
 
@@ -511,6 +524,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const attention = new Set<StudioSectionId>([
     ...(event.status === "DRAFT" ? checklist.filter((row) => row.state === "todo").map((row) => row.anchor) : []),
     ...violations.flatMap((group) => (group.anchor ? [group.anchor] : [])),
+    ...(mismatchCopy ? (["consent"] as const) : []),
   ]);
   const showBooth = Boolean(event.settings.boothEnabled) && can("MANAGE_BOOTH");
   const showPeople = can("INVITE_CUSTOMERS") || (access !== undefined && isAdmin);
@@ -652,7 +666,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
                 // 행사 설정이 그대로여도 공간·프로젝트 기본값이 바뀌었으면 새 판이 필요하다. 눌러 두되 강조하지 않는다.
                 disabled={dirty}
                 primary={!dirty && !inSync}
-                onRun={() => setPublishConfirm(true)}
+                onRun={() => {
+                  setMismatchAcknowledged(false);
+                  setPublishConfirm(true);
+                }}
               >
                 {event.status === "DRAFT" ? "게시하기" : inSync ? "다시 게시" : "바뀐 설정 게시"}
               </RunButton>
@@ -967,9 +984,18 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     />
                   </Field>
                   {mismatchCopy ? (
-                    <p role="status" className="max-w-[65ch] rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
-                      {mismatchCopy}
-                    </p>
+                    <div role="status" className="flex max-w-[65ch] flex-col items-start gap-2 rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
+                      <p>{mismatchCopy}</p>
+                      {fixConsentDays ? (
+                        <button
+                          type="button"
+                          onClick={fixConsentDays}
+                          className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold"
+                        >
+                          동의문을 {retentionNumber}일로 고치기
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </Section>
               </Group>
@@ -1111,7 +1137,21 @@ export function EventStudio({ eventId }: { eventId: string }) {
             </dd>
           </dl>
           {event.status === "DRAFT" ? <p className="text-[13px] font-semibold">주소는 게시한 뒤에 바꿀 수 없어요.</p> : null}
-          {mismatchCopy ? <p className="rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">{mismatchCopy}</p> : null}
+          {/* 참가자는 동의문을 믿고 동의한다. 일수가 어긋나면 그냥 지나가지 못한다. 「14일 안에 철회」처럼 보관 기간이 아닌 일수일 수 있어 확인하면 보낸다. */}
+          {mismatchCopy ? (
+            <div className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
+              <p>{mismatchCopy}</p>
+              <label className="flex min-h-11 items-center gap-2 font-semibold">
+                <input
+                  type="checkbox"
+                  className="size-5 shrink-0"
+                  checked={mismatchAcknowledged}
+                  onChange={(e) => setMismatchAcknowledged(e.target.checked)}
+                />
+                보관 기간과 다른 내용이에요. 이대로 게시할게요.
+              </label>
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <button
               type="button"
@@ -1123,7 +1163,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
             </button>
             <button
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || (mismatchCopy !== null && !mismatchAcknowledged)}
               onClick={() => void act("publish")}
               className="hc-button-primary h-11 flex-1 rounded-full text-[14px] font-semibold disabled:opacity-50"
             >

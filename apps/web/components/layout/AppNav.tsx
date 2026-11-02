@@ -38,15 +38,20 @@ export function AppNav({ userInitial }: AppNavProps) {
     pathname === href || pathname.startsWith(`${href}/`);
   // 행사를 맡은 계정에게만 보인다. 개인 사용자에게는 할 일이 없는 메뉴다.
   const studioAccess = useStudioAccess();
-  const links = studioAccess
-    ? [...NAV_LINKS.slice(0, 3), { href: "/studio", label: "행사 운영" }, ...NAV_LINKS.slice(3)]
-    : NAV_LINKS;
+  // 행사 운영과 플랫폼 관리는 개인 앱과 하는 일이 다르다. 주최자에게 기록·요금제를 내밀지 않고, 본문과 같은 넓은 폭을 쓴다.
+  // 개인 화면으로는 로고로 돌아간다.
+  const workSurface = isActive("/studio") ? { href: "/studio", label: "행사 운영" } : isActive("/admin") ? { href: "/admin", label: "운영 관리" } : null;
+  const links = workSurface
+    ? [workSurface]
+    : studioAccess
+      ? [...NAV_LINKS.slice(0, 3), { href: "/studio", label: "행사 운영" }, ...NAV_LINKS.slice(3)]
+      : NAV_LINKS;
 
   const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-(--hc-border) bg-(--hc-surface-soft) backdrop-blur-xl lg:block">
-      <div className="mx-auto flex h-17 w-full max-w-5xl items-center gap-9 px-7">
+      <div className={`mx-auto flex h-17 w-full items-center gap-9 ${workSurface ? "max-w-350 px-4" : "max-w-5xl px-7"}`}>
         <BrandMark href="/home" />
 
         <nav className="flex gap-2">

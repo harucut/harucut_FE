@@ -55,6 +55,11 @@ export function retentionMismatch(bodies: string[], retentionDays: number): numb
   return [...mentioned];
 }
 
+/** 동의문의 「from일」을 「to일」로 바꾼다. 다른 일수(「7일 전에 안내」 등)는 건드리지 않는다. */
+export function replaceRetentionDays(body: string, from: number, to: number): string {
+  return body.replace(/(\d{1,4})(\s*일)/g, (whole, days: string, unit: string) => (Number(days) === from ? `${to}${unit}` : whole));
+}
+
 export type ChecklistState = "done" | "todo" | "optional";
 
 export type ChecklistRow = {
