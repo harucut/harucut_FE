@@ -53,6 +53,8 @@ export type ContractRequest = {
 
 export type Contract = ContractRequest & {
   contractId: string;
+  /** 공간 이름. 서버가 아직 안 주면 비어 있고, 화면은 ID 를 쓴다. */
+  workspaceName?: string | null;
   status: ContractStatus;
   createdAt: string;
   /** 결제 근거(PORTONE)를 PortOne 조회로 대조해 확인한 시각. 없으면 아직 확인 전. */
@@ -85,6 +87,8 @@ export type Entitlement = {
   entitlementId: string;
   scope: EntitlementScope;
   workspaceId: string;
+  /** 공간 이름. 서버가 아직 안 주면 비어 있고, 화면은 ID 를 쓴다. */
+  workspaceName?: string | null;
   eventId?: string | null;
   source: "CONTRACT" | "MANUAL";
   contractId?: string | null;

@@ -13,13 +13,13 @@ const GREEN = "#1ED760";
 // 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
 const DEMO_IMAGES = DEMO_PHOTOS;
 
-// 스티커 실물 — 39종 중 성격이 다른 것들만 골라 노출(에셋 자체가 브랜드 언어).
+// 스티커 실물 — 30종 중 성격이 다른 것들만 골라 노출(에셋 자체가 브랜드 언어).
 const SHOWCASE_STICKERS = [
-  "sticker-003",
-  "sticker-012",
-  "sticker-021",
-  "sticker-030",
-  "sticker-036",
+  "03-hearts",
+  "08-chalkak",
+  "05-camera",
+  "12-birthday",
+  "24-blossom",
 ];
 
 // 부스에서 못 하는 것 = 하루컷이 파는 것. 요금제 유료 행과 1:1로 맞춘 세 축.
@@ -41,7 +41,7 @@ const AXES = [
     body: "사진이 프레임에 박히면 끝이 아니에요. 그 위에 스티커를 붙이고, 글씨를 얹고, 배경을 깎아내요. 어느 게 위로 올라올지 순서까지 직접 잡을 수 있어요.",
     booth: "정해둔 프레임 중에서만 고를 수 있어요.",
     facts: [
-      ["스티커", "39종 · 크기·각도 자유"],
+      ["스티커", "30종 · 크기·각도 자유"],
       ["텍스트", "글꼴·색·정렬"],
       ["누끼", "셀 단위 배경 제거"],
       ["레이어", "순서·잠금·숨김"],
@@ -115,7 +115,7 @@ function AxisVisual({ index }: { index: number }) {
               src={`/stickers/${name}.png`}
               alt=""
               aria-hidden
-              className="h-11 w-auto object-contain drop-shadow-lg sm:h-12"
+              className="h-14 w-auto object-contain drop-shadow-lg sm:h-16"
               style={{ transform: `rotate(${(i - 2) * 6}deg)` }}
             />
           ))}

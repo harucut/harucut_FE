@@ -4,12 +4,12 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
+import { DEMO_DECORATED_THEME, DEMO_WEDDING_THEME } from "@/constants/demoTheme";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
-import { DEMO_PHOTOS } from "@/constants/demoPhotos";
+import { DEMO_PHOTOS, DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const GREEN = "#1ED760";
@@ -215,26 +215,37 @@ export function LandingView() {
         찾을 자리가 없었다. 제품이 파는 두 축 중 하나가 화면에 아예 없던 셈이다.
       */}
       <section id="event" className="border-y border-white/10 bg-black">
-        <div className="mx-auto flex max-w-290 flex-col gap-7 px-7 py-20 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex max-w-140 flex-col gap-4">
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-[11px] font-extrabold tracking-[1px] text-white/70">
-              행사 사진
-            </span>
-            <h2 className="text-[28px] font-extrabold leading-[1.2] tracking-[-1px] text-white lg:text-[38px]">
-              행사에서는 링크 한 장, 부스 한 대
+        <div className="mx-auto grid max-w-290 items-center gap-12 px-7 py-20 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-20">
+          <div className="flex max-w-140 flex-col items-start gap-5">
+            <h2 className="break-keep text-[28px] font-extrabold leading-[1.2] tracking-[-1px] text-white lg:text-[38px]">
+              행사에서는 <br className="lg:hidden" />
+              링크 한 장, 부스 한 대
             </h2>
-            <p className="text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
+            <p className="break-keep text-[15px] leading-[1.75] text-white/70 lg:text-[16px]">
               팬미팅·페스티벌·사내 행사를 직접 만들어 운영해요. 참가자는 앱도 가입도 없이
               QR을 찍거나 현장 부스 앞에서 행사 프레임으로 찍고, 결과 링크로 가져가요.
               줄도, 인화 대기도 없어요.
             </p>
+            <Link
+              href="/enterprise"
+              className="hc-button-neutral mt-1 inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold w-fit"
+            >
+              행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-          <Link
-            href="/enterprise"
-            className="hc-button-neutral inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold w-fit"
-          >
-            행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
-          </Link>
+          {/* 실제 고객 사례처럼 읽히지 않게 예시라고 적는다(constants/demoPhotos.ts). */}
+          <figure className="flex flex-col items-center gap-4">
+            <div className="h-[clamp(300px,92vw,400px)] rotate-2 drop-shadow-2xl">
+              <FramePreview
+                frameId="grid-4"
+                images={DEMO_WEDDING_PHOTOS}
+                theme={DEMO_WEDDING_THEME}
+                borderColor="#fafaf7"
+                className="h-full! w-auto!"
+              />
+            </div>
+            <figcaption className="text-[12px] text-white/60">AI로 만든 예시 이미지예요.</figcaption>
+          </figure>
         </div>
       </section>
 

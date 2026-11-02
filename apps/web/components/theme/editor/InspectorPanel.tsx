@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
+import { COMPONENT_TYPE_LABEL } from "@/components/theme/editor/LayersPanel";
 import { NUDGE_STEP } from "@/constants/editorNudge";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent, TextStyleJson } from "@/lib/types/themeEditor";
@@ -52,7 +53,7 @@ export function InspectorPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">속성</p>
-        <span className="text-[11px] text-(--hc-muted)">{active.type}</span>
+        <span className="text-[11px] text-(--hc-muted)">{COMPONENT_TYPE_LABEL[active.type]}</span>
       </div>
 
       {/* 공통 */}

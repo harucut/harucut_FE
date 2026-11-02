@@ -352,17 +352,16 @@ function StickerTab() {
                 snap-start overflow-hidden rounded-xl
                 border border-zinc-800 bg-zinc-950
               "
-              title={sticker.name ?? "sticker"}
-              aria-label={`기본 스티커 ${index + 1}`}
+              title={sticker.name}
+              aria-label={sticker.name ?? `기본 스티커 ${index + 1}`}
             >
               {/*
-                72px 타일에 원본 PNG(최대 2MB, 39장 합계 40MB)를 그대로 내려받고 있었다.
-                next/image 로 바꾸면 같은 파일이 3KB대로 줄고 화면 밖 타일은 늦게 받는다.
+                72px 타일에 원본 PNG 를 그대로 내려받지 않는다. next/image 로 작게 받고 화면 밖 타일은 늦게 받는다.
                 캔버스에 얹을 때는 원본(sticker.src)을 그대로 쓴다.
               */}
               <Image
                 src={sticker.src}
-                alt={sticker.name ?? "스티커"}
+                alt=""
                 width={72}
                 height={72}
                 sizes="72px"

@@ -15,6 +15,7 @@ import {
   isInvalidNumber,
   optionalInt,
   termsOf,
+  workspaceLabel,
   type TermsDraft,
 } from "@/components/admin/adminShared";
 import {
@@ -37,6 +38,12 @@ const STATUS_LABEL: Record<ContractStatus, string> = {
   CANCELLED: "취소",
 };
 
+const EVIDENCE_LABEL: Record<PaymentEvidence["kind"], string> = {
+  BANK_TRANSFER: "계좌 입금",
+  PORTONE: "PortOne 결제",
+  OTHER: "기타",
+};
+
 /** 상태마다 고를 수 있는 다음 상태(백엔드 전이 규칙과 같다 — 그 밖은 409 ENT-003). */
 const TRANSITIONS: Record<ContractStatus, Array<{ to: ContractStatus; label: string; title: string; description: string; destructive?: boolean }>> = {
   DRAFT: [
@@ -53,14 +60,14 @@ const TRANSITIONS: Record<ContractStatus, Array<{ to: ContractStatus; label: str
       to: "ENDED",
       label: "종료",
       title: "이 계약을 지금 끝낼까요?",
-      description: "이용권이 지금 끝나 새 게시·촬영을 받지 않아요. 이미 접수된 합성은 그대로 마무리돼요. 되돌릴 수 없어요.",
+      description: "계약을 다 이행해 마칠 때 골라요. 이용권이 지금 끝나 새 게시·촬영을 받지 않아요. 이미 접수된 합성은 그대로 마무리돼요. 되돌릴 수 없어요.",
       destructive: true,
     },
     {
       to: "CANCELLED",
       label: "취소",
       title: "이 계약을 취소할까요?",
-      description: "이용권이 지금 끝나 새 게시·촬영을 받지 않아요. 이미 접수된 합성은 그대로 마무리돼요. 되돌릴 수 없어요.",
+      description: "잘못 만들었거나 무효가 된 계약일 때 골라요. 이용권이 지금 끝나 새 게시·촬영을 받지 않아요. 이미 접수된 합성은 그대로 마무리돼요. 되돌릴 수 없어요.",
       destructive: true,
     },
   ],
@@ -271,6 +278,8 @@ export function AdminContracts({
               value={draft.amount}
               onChange={(v) => set({ amount: v })}
               error={amountInvalid ? INVALID_NUMBER_MESSAGE : undefined}
+              // 숫자 칸은 쉼표를 받지 않는다. 자릿수를 잘못 읽기 쉬운 값이라 읽기 좋은 꼴을 바로 아래에 보여 준다.
+              help={!amountInvalid && optionalInt(draft.amount) !== undefined ? `${optionalInt(draft.amount)!.toLocaleString("ko-KR")}원` : undefined}
             />
           </div>
           <fieldset className="flex flex-col gap-1">
@@ -308,16 +317,20 @@ export function AdminContracts({
           <fieldset className="grid gap-3 sm:grid-cols-2">
             <legend className="mb-1 text-[14px] font-semibold">결제·입금 근거</legend>
             <label className="flex flex-col gap-1 text-[13px]">
-              종류<span className="text-(--hc-muted)">(선택)</span>
+              <span>
+                종류<span className="ml-1 text-(--hc-muted)">(선택)</span>
+              </span>
               <select
                 value={draft.evidenceKind}
                 onChange={(e) => set({ evidenceKind: e.target.value as Draft["evidenceKind"] })}
                 className="hc-input h-11 rounded-xl border px-2 text-[14px]"
               >
                 <option value="">없음</option>
-                <option value="BANK_TRANSFER">계좌 입금</option>
-                <option value="PORTONE">PortOne 결제</option>
-                <option value="OTHER">기타</option>
+                {(Object.keys(EVIDENCE_LABEL) as PaymentEvidence["kind"][]).map((kind) => (
+                  <option key={kind} value={kind}>
+                    {EVIDENCE_LABEL[kind]}
+                  </option>
+                ))}
               </select>
             </label>
             <TextField label="참조(입금자명·결제 번호 등)" value={draft.evidenceReference} onChange={(v) => set({ evidenceReference: v })} maxLength={200} />
@@ -364,7 +377,7 @@ export function AdminContracts({
                 <span className="rounded-full bg-(--hc-surface-well) px-3 py-1 text-[12px] font-semibold">{STATUS_LABEL[contract.status]}</span>
               </div>
               <p className="text-(--hc-muted)">
-                공간 {contract.workspaceId}
+                공간 {workspaceLabel(contract)}
                 {contract.scope === "EVENT" ? ` · 행사 ${(contract.eventIds ?? []).join(", ")}` : " · 공간 전체"}
               </p>
               <p>
@@ -374,7 +387,7 @@ export function AdminContracts({
               <p>{describeTerms(contract.entitlement)}</p>
               {contract.paymentEvidence ? (
                 <p className="text-(--hc-muted)">
-                  근거: {contract.paymentEvidence.kind} · {contract.paymentEvidence.reference}
+                  결제·입금 근거: {EVIDENCE_LABEL[contract.paymentEvidence.kind] ?? contract.paymentEvidence.kind} · {contract.paymentEvidence.reference}
                   {contract.paymentEvidence.kind === "PORTONE"
                     ? contract.paymentVerifiedAt
                       ? ` · 결제 확인됨(${formatDateTime(contract.paymentVerifiedAt)})`
@@ -408,6 +421,12 @@ export function AdminContracts({
                       {t.label}
                     </button>
                   ))}
+                  {/* 두 버튼의 결과가 같아 보여서 고를 기준을 적는다. 다른 것은 기록에 남는 이유다. */}
+                  {contract.status === "ACTIVE" ? (
+                    <p className="w-full text-[12px] text-(--hc-muted)">
+                      둘 다 이용권을 지금 끝내요. 다 이행해 마쳤으면 종료, 잘못 만들었거나 무효가 됐으면 취소를 골라요.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </li>

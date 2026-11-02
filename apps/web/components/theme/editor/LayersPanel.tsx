@@ -17,7 +17,15 @@ import {
   Trash2,
   Undo2,
   Redo2,
+  Type,
 } from "lucide-react";
+
+/** 요소 종류를 부르는 말. 화면에 코드값(TEXT·STICKER)을 그대로 보이지 않는다. */
+export const COMPONENT_TYPE_LABEL: Record<EditorComponent["type"], string> = {
+  TEXT: "글자",
+  STICKER: "스티커",
+  PHOTO: "사진",
+};
 
 export function LayersPanel() {
   const {
@@ -136,10 +144,9 @@ function LayerRow({
   onToggleHidden: () => void;
   onToggleLocked: () => void;
 }) {
-  const title =
-    c.type === "TEXT"
-      ? `TEXT: ${c.source.slice(0, 10)}${c.source.length > 10 ? "…" : ""}`
-      : c.type;
+  const label = COMPONENT_TYPE_LABEL[c.type];
+  // 글자는 내용으로 알아본다. 스티커·사진은 옆의 그림으로 알아본다.
+  const title = c.type === "TEXT" ? `${c.source.slice(0, 14)}${c.source.length > 14 ? "…" : ""}` : label;
 
   // 레이어 제어 액션 목록
   const actions: {
@@ -209,30 +216,26 @@ function LayerRow({
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 min-w-0"
       >
-        <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200">
-          {c.type}
-        </span>
-
         {c.type !== "TEXT" ? (
           <div className="h-8 w-8 overflow-hidden rounded-lg border border-zinc-800 bg-(--hc-surface-muted)">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={componentImageSrc(c)}
               crossOrigin="anonymous"
-              alt={c.type}
-              className="h-full w-full object-cover"
+              alt=""
+              className="h-full w-full object-contain"
               draggable={false}
             />
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-(--hc-surface-muted) flex items-center justify-center text-[11px] text-zinc-300">
-            T
+          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-(--hc-surface-muted) flex items-center justify-center text-zinc-300">
+            <Type aria-hidden size={14} />
           </div>
         )}
 
-        <div className="min-w-0">
+        <div className="min-w-0 text-left">
           <p className="text-xs text-zinc-200 truncate">{title}</p>
-          <p className="text-[11px] text-(--hc-muted)">zIndex {c.zIndex}</p>
+          {c.type === "TEXT" ? <p className="text-[11px] text-(--hc-muted)">{label}</p> : null}
         </div>
       </button>
 

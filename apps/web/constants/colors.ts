@@ -14,3 +14,6 @@ export const BACKGROUND_COLORS = (
   const color = BORDER_COLORS.find((candidate) => candidate.id === id)!;
   return { ...color, value: color.value.slice(1) };
 });
+
+/** 편집기를 처음 열었을 때의 배경. 스와치에 있는 색이라 고른 상태로 보인다. */
+export const DEFAULT_EDITOR_BACKGROUND_COLOR = "18181a";

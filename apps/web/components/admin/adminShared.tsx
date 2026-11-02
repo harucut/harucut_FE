@@ -19,6 +19,11 @@ export function adminErrorMessage(cause: unknown, fallback: string) {
   return getUserFacingApiErrorMessage(cause, fallback);
 }
 
+/** 공간을 부르는 말. 서버가 이름을 주면 이름, 없으면 ID 다. */
+export function workspaceLabel(item: { workspaceId: string; workspaceName?: string | null }) {
+  return item.workspaceName?.trim() || item.workspaceId;
+}
+
 export function formatDateTime(iso?: string | null) {
   if (!iso) return "-";
   const date = new Date(iso);

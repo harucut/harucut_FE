@@ -14,8 +14,7 @@ type Props = {
   icon?: "lock";
 };
 
-// 사진은 추후 교체될 placeholder.
-// 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts 주석 참고).
+// 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts).
 const COLLAGE = DEMO_PHOTOS;
 
 export function AuthPageShell({ title, description, children, footer, icon }: Props) {

@@ -109,7 +109,10 @@ export function EditableNode({
         c={c}
         common={common}
         outline={outline}
-        onAutoSize={(size) => onCommit(size)}
+        // 가운데 정렬 글자는 폭이 바뀌어도 가운데를 지킨다. 왼쪽 끝을 고정하면 글자를 고칠 때마다 옆으로 밀린다.
+        onAutoSize={(size) =>
+          onCommit(c.styleJson?.textAlign === "center" ? { ...size, x: c.x + (c.width - size.width) / 2 } : size)
+        }
       />
     );
   }

@@ -44,7 +44,8 @@ export function AdminConsole() {
               }}
               className={
                 tab === t.key
-                  ? "hc-button-primary h-11 rounded-full px-5 text-[14px] font-semibold"
+                  // 고른 탭은 무채색이다. 초록은 「적용하기」 같은 주 동작이 쓴다.
+                  ? "hc-button-ink h-11 rounded-full px-5 text-[14px] font-semibold"
                   : "h-11 rounded-full border border-(--hc-border) px-5 text-[14px] font-semibold"
               }
             >

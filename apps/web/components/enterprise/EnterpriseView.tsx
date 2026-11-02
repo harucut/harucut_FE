@@ -1,36 +1,61 @@
+import Image from "next/image";
 import Link from "next/link";
-import { QrCode } from "lucide-react";
 import { EnterpriseInquiryForm } from "@/components/enterprise/EnterpriseInquiryForm";
+import { FramePreview } from "@/components/frame/FramePreview";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { COMPANY } from "@/constants/company";
+import { DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
+import { DEMO_WEDDING_THEME } from "@/constants/demoTheme";
 
 // 행사에서 실제로 일어나는 순서. 주최자가 하는 일과 참가자가 하는 일을 갈라서 적는다 —
 // "누가 무엇을 하는지"가 섞이면 도입을 검토하는 쪽이 자기 일을 가늠할 수 없다.
-const FLOW = [
+// 번호는 두 줄기를 이어서 센다. 주최자가 끝나야 참가자가 시작하니 순서가 곧 정보다.
+const HOST_STEPS: FlowStepCopy[] = [
   {
-    who: "주최자",
+    n: 1,
     title: "행사를 만들고 꾸며요",
     body: "Studio 에서 행사 이름, 참가 방식, 제공할 프레임, 참가 동의 문구, 행사 화면의 색과 로고를 정하고 게시해요.",
-    // 조건을 1000px 아래에 두면 팔고 난 뒤에 읽힌다. 약속하는 카드 안에서 바로 말한다.
+    // 조건을 1000px 아래에 두면 팔고 난 뒤에 읽힌다. 약속하는 자리에서 바로 말한다.
     note: "게시하려면 이용권이 필요해요. 문의를 주시면 계약에 맞춰 열어 드려요.",
   },
   {
-    who: "주최자",
+    n: 2,
     title: "참가 링크·QR과 현장 부스를 준비해요",
     body: "게시하면 그 행사의 참가 링크와 QR이 생겨요. 현장에 태블릿을 두면 연결 코드 하나로 부스 기기가 돼요.",
   },
+];
+
+const GUEST_STEPS: FlowStepCopy[] = [
   {
-    who: "참가자",
+    n: 3,
     title: "자기 휴대폰이나 부스로 바로 찍어요",
     body: "앱을 받을 필요도, 가입할 필요도 없어요. QR을 찍거나 부스 앞에 서서 동의하면 그 행사의 프레임으로 촬영 화면이 열려요.",
   },
   {
-    who: "참가자",
+    n: 4,
     title: "결과 링크로 가져가요",
-    body: "완성된 네 컷을 바로 내려받고, 개인 결과 링크로 보관 기간 안에 다시 받을 수 있어요. 줄 서서 인화를 기다리지 않아도 돼요.",
+    body: "완성된 네 컷을 바로 내려받고, 개인 결과 링크로 보관 기간 안에 다시 받을 수 있어요. 줄 서서 인화를 기다리지 않아도 돼요.",
   },
-] as const;
+];
+
+type FlowStepCopy = { n: number; title: string; body: string; note?: string };
+
+function FlowStep({ n, title, body, note }: FlowStepCopy) {
+  return (
+    <li className="flex flex-col gap-2">
+      <span aria-hidden className="font-mono text-[12px] font-bold tabular-nums text-(--hc-muted)">
+        {String(n).padStart(2, "0")}
+      </span>
+      <h4 className="break-keep text-[16px] font-extrabold tracking-tight">{title}</h4>
+      <p className="break-keep text-[14px] leading-[1.7] text-(--hc-muted)">{body}</p>
+      {note ? <p className="break-keep text-[12px] leading-[1.6] text-(--hc-muted)">{note}</p> : null}
+    </li>
+  );
+}
+
+// 사람이 나오는 예시 그림은 실제 고객·행사처럼 읽히면 안 된다(constants/demoPhotos.ts).
+const EXAMPLE_CAPTION = "AI로 만든 예시 이미지예요.";
 
 // 부스 대여와 비교했을 때 무엇이 달라지는지. 숫자와 사실만 적는다.
 const COMPARISON = [
@@ -49,74 +74,100 @@ export function EnterpriseView() {
 
       <main className="mx-auto flex w-full max-w-290 flex-col gap-20 px-5 pb-24 pt-10 sm:px-8 lg:gap-28 lg:pt-16">
         {/* 히어로 */}
-        <section className="min-w-0 flex flex-col gap-6">
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) px-3.5 py-1.5 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
-            <QrCode aria-hidden className="h-3.5 w-3.5" />
-            행사·팬미팅용
-          </span>
-          {/*
-            DESIGN.md 의 display-sm. 34→58px 사이를 매끈하게 오간다.
-            브레이크포인트마다 34/46/58 로 계단을 밟던 것을 클램프 하나로 바꿨다 —
-            중간 폭(예: 900px)에서 글자만 덩그러니 작게 남던 구간이 사라진다.
-          */}
-          <h1 className="max-w-[15ch] text-[clamp(2.125rem,5vw,3.625rem)] font-extrabold leading-[1.14] tracking-[-1px]">
-            링크와 부스로 행사 네 컷을 운영해요
-          </h1>
-          <p className="max-w-[52ch] text-[16px] leading-[1.75] text-(--hc-muted) lg:text-[18px]">
-            주최자는 Studio 에서 행사를 만들어 게시해요. 참가자는 앱을 받지도, 가입하지도
-            않고 자기 휴대폰이나 현장 부스로 찍어 결과 링크로 가져갑니다.
-          </p>
-          <div className="flex flex-col gap-2.5 sm:flex-row">
-            <a
-              href="#inquiry"
-              className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold"
-            >
-              도입 문의하기
-            </a>
-            <Link
-              href="/features"
-              className="hc-button-secondary inline-flex h-12 items-center justify-center rounded-full border px-7 text-[15px] font-semibold"
-            >
-              먼저 서비스 둘러보기
-            </Link>
+        <section className="grid min-w-0 items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-14">
+          <div className="flex min-w-0 flex-col gap-6">
+            {/*
+              DESIGN.md 의 display-sm. 34→58px 사이를 매끈하게 오간다.
+              브레이크포인트마다 34/46/58 로 계단을 밟던 것을 클램프 하나로 바꿨다 —
+              중간 폭(예: 900px)에서 글자만 덩그러니 작게 남던 구간이 사라진다.
+            */}
+            <h1 className="max-w-[15ch] break-keep text-[clamp(2.125rem,5vw,3.625rem)] font-extrabold leading-[1.14] tracking-[-1px]">
+              링크와 부스로 행사 네 컷을 운영해요
+            </h1>
+            <p className="max-w-[52ch] break-keep text-[16px] leading-[1.75] text-(--hc-muted) lg:text-[18px]">
+              주최자는 Studio 에서 행사를 만들어 게시해요. 참가자는 앱을 받지도, 가입하지도
+              않고 자기 휴대폰이나 현장 부스로 찍어 결과 링크로 가져갑니다.
+            </p>
+            <div className="flex flex-col gap-2.5 sm:flex-row">
+              <a
+                href="#inquiry"
+                className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-7 text-[15px] font-extrabold"
+              >
+                도입 문의하기
+              </a>
+              <Link
+                href="/features"
+                className="hc-button-secondary inline-flex h-12 items-center justify-center rounded-full border px-7 text-[15px] font-semibold"
+              >
+                먼저 서비스 둘러보기
+              </Link>
+            </div>
           </div>
+          <figure className="min-w-0">
+            <div className="relative">
+              <div className="relative aspect-3/2 overflow-hidden rounded-[28px]">
+                <Image
+                  src="/demo/booth-wedding.webp"
+                  alt="결혼식 로비에 세워 둔 태블릿 부스 앞에서 두 사람이 사진을 찍는 모습"
+                  fill
+                  priority
+                  sizes="(min-width: 1160px) 610px, (min-width: 1024px) 53vw, 100vw"
+                  className="object-cover"
+                />
+              </div>
+              {/* 부스에서 나오는 결과물. 왼쪽 아래에 걸쳐 얼굴과 태블릿을 가리지 않는다. */}
+              <div className="absolute -bottom-7 -left-2 h-[60%] -rotate-[4deg] drop-shadow-2xl sm:left-3 lg:-left-8">
+                <FramePreview
+                  frameId="grid-4"
+                  images={DEMO_WEDDING_PHOTOS}
+                  theme={DEMO_WEDDING_THEME}
+                  borderColor="#fafaf7"
+                  imageLoading="eager"
+                  className="h-full! w-auto!"
+                />
+              </div>
+            </div>
+            <figcaption className="mt-3 text-right text-[12px] text-(--hc-muted)">{EXAMPLE_CAPTION}</figcaption>
+          </figure>
         </section>
 
         {/* 흐름 */}
-        <section className="min-w-0 flex flex-col gap-7">
+        <section className="flex min-w-0 flex-col gap-8">
           <h2 className="text-[24px] font-extrabold tracking-tight lg:text-[30px]">
             행사에서는 이렇게 돌아가요
           </h2>
-          <ol className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {FLOW.map((step, index) => (
-              <li
-                key={step.title}
-                className="hc-surface-card flex flex-col gap-2.5 rounded-[20px] border p-6"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] font-bold text-(--hc-primary-strong)">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <span className="rounded-full border border-(--hc-border) px-2 py-0.5 text-[11px] font-bold text-(--hc-muted)">
-                    {step.who}
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-extrabold tracking-tight">
-                  {step.title}
-                </h3>
-                <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
-                  {step.body}
-                </p>
-                {"note" in step && step.note ? (
-                  // opacity 로 흐리면 대비가 같이 죽는다(흰 카드 위 4.13:1 로 AA 미달이었다).
-                  // 위계는 크기로만 낮추고 색은 토큰 그대로 쓴다.
-                  <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-                    {step.note}
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ol>
+          <div className="flex flex-col">
+            <div className="grid gap-6 border-t border-(--hc-border) py-8 lg:grid-cols-[6rem_minmax(0,1fr)] lg:gap-8">
+              <h3 className="text-[15px] font-extrabold">주최자</h3>
+              <ol className="grid gap-8 sm:grid-cols-2">
+                {HOST_STEPS.map((step) => (
+                  <FlowStep key={step.n} {...step} />
+                ))}
+              </ol>
+            </div>
+            <div className="grid gap-6 border-t border-(--hc-border) pt-8 lg:grid-cols-[6rem_minmax(0,1fr)] lg:gap-8">
+              <h3 className="text-[15px] font-extrabold">참가자</h3>
+              <div className="grid items-center gap-8 sm:grid-cols-2">
+                <ol start={3} className="flex flex-col gap-8 sm:order-2">
+                  {GUEST_STEPS.map((step) => (
+                    <FlowStep key={step.n} {...step} />
+                  ))}
+                </ol>
+                <figure className="min-w-0 sm:order-1">
+                  <div className="relative aspect-3/2 overflow-hidden rounded-[20px]">
+                    <Image
+                      src="/demo/guest-selfie.webp"
+                      alt="행사장에서 두 참가자가 휴대폰을 높이 들고 함께 사진을 찍는 뒷모습"
+                      fill
+                      sizes="(min-width: 1160px) 500px, (min-width: 640px) 46vw, 100vw"
+                      className="object-cover"
+                    />
+                  </div>
+                  <figcaption className="mt-2 text-[12px] text-(--hc-muted)">{EXAMPLE_CAPTION}</figcaption>
+                </figure>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* 부스와의 비교 */}
@@ -137,7 +188,7 @@ export function EnterpriseView() {
                 key={label}
                 className="hc-surface-card rounded-2xl border p-4"
               >
-                <p className="font-mono text-[11px] tracking-[1.2px] text-(--hc-muted)">
+                <p className="text-[12px] font-bold text-(--hc-muted)">
                   {label}
                 </p>
                 <p className="mt-2 text-[14px] font-semibold leading-[1.6]">
@@ -206,7 +257,7 @@ export function EnterpriseView() {
             문의를 남기면 행사 규모와 기간에 맞춰 계약하고, 촬영 한도·보관 기간·쓸 수 있는 기능을
             담은 이용권을 열어 드려요. 그다음부터는 Studio 에서 직접 행사를 만들고 게시하고
             운영해요. 함께 운영할 사람을 초대하고, 신랑신부처럼 사진만 볼 분에게는 그 행사 사진
-            권한만 줄 수 있어요. 첫 행사라면 세팅을 함께 도와 드려요 —{" "}
+            권한만 줄 수 있어요. 첫 행사라면 세팅을 함께 도와 드려요.{" "}
             <b className="font-bold text-(--hc-text)">
               행사 2주 전까지
             </b>{" "}
@@ -217,7 +268,7 @@ export function EnterpriseView() {
             촬영 한도를 다 쓰면 참가자 화면이 촬영 마감으로 바뀐다(ENT-002).
           */}
           <p className="max-w-[62ch] text-[13px] leading-[1.8] text-(--hc-muted)">
-            <b className="font-bold text-(--hc-text)">미리 알아 두실 것</b> — 행사 화면에서 하루컷
+            <b className="font-bold text-(--hc-text)">미리 알아 두실 것.</b> 행사 화면에서 하루컷
             표시를 숨기려면 화이트라벨 이용권이 필요해요. 촬영 한도를 다 쓰면 참가자 화면이 촬영
             마감으로 바뀌니, 한도는 예상 참가 인원보다 넉넉히 잡아 주세요.
           </p>
