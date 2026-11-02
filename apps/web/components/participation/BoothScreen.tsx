@@ -557,7 +557,7 @@ export function BoothIdleView({
             ) : null}
             {blocked ? <p role="alert" className="break-keep text-[clamp(1rem,2.4vmin,1.5rem)] font-semibold text-(--ev-danger)">{blocked}</p> : null}
             <EventButton size="booth" disabled={busy || Boolean(blocked)} aria-busy={busy} onClick={onStart}>
-              {busy ? "잠시만요…" : "촬영 시작"}
+              {busy ? "잠시만요…" : "사진 찍기"}
             </EventButton>
           </>
         ) : (

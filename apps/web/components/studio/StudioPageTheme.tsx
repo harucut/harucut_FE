@@ -271,7 +271,7 @@ export function StudioPageTheme({
           </p>
           <div className="rounded-xl border border-(--ev-border) bg-(--ev-card) p-3 text-[13px]">사진을 받는 곳과 쓰는 목적</div>
           <span className="flex h-12 items-center justify-center rounded-full bg-(--ev-accent) text-[15px] font-extrabold text-(--ev-accent-contrast)">
-            촬영 시작
+            사진 찍기
           </span>
         </div>
       ) : null}

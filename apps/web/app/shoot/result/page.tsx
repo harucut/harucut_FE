@@ -195,7 +195,7 @@ export default function ShootResultPage() {
     clearResults,
     source,
   } = useShootSession();
-  // 갤러리에서 온 사진이면 "다시 촬영"이라고 말하면 안 된다 — 찍은 적이 없다.
+  // 갤러리에서 온 사진이면 "다시 찍기"이라고 말하면 안 된다 — 찍은 적이 없다.
   const fromUpload = source === "upload";
   const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
   const accessMode = useGuestTrialStore((state) => state.accessMode);
@@ -898,7 +898,7 @@ export default function ShootResultPage() {
         }
         className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition"
       >
-        {guestMode && !fromUpload ? "다시 촬영하기" : "사진 다시 고르기"}
+        {guestMode && !fromUpload ? "다시 찍기" : "사진 다시 고르기"}
       </Link>
       {guestMode ? (
         <button

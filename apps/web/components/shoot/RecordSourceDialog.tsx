@@ -54,7 +54,7 @@ export function RecordSourceDialog({ open, onClose }: Props) {
               <Camera className="h-5.5 w-5.5 text-(--hc-primary-strong)" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-extrabold">촬영하기</span>
+              <span className="block text-[15px] font-extrabold">사진 찍기</span>
               <span className="mt-0.5 block text-[12px] font-medium opacity-75">
                 카메라로 8장 찍고 네 컷 고르기
               </span>

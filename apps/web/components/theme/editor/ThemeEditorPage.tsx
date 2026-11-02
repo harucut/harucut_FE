@@ -952,8 +952,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           </section>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 pb-[calc(30dvh+5rem)] lg:gap-6 lg:pb-0 lg:grid-cols-[380px_minmax(0,1fr)] lg:auto-rows-min">
-          <div className="lg:col-start-1 lg:row-start-1 lg:row-span-3">
+        <div className="grid grid-cols-1 gap-4 pb-[calc(30dvh+5rem)] lg:gap-6 lg:pb-0 lg:grid-cols-[minmax(420px,1fr)_minmax(0,1fr)] lg:auto-rows-min">
+          {/* 도구를 내려가며 만져도 결과가 보이게 캔버스를 붙들어 둔다. */}
+          <div className="lg:sticky lg:top-6 lg:col-start-1 lg:row-span-6 lg:row-start-1 lg:self-start">
             {/* 모바일은 캔버스 자리가 모자라 카드 테두리·제목 줄을 걷는다. */}
             <section className="flex flex-col gap-3 lg:rounded-2xl lg:border lg:border-zinc-800 lg:bg-zinc-900/60 lg:p-4">
               <div className="flex items-center justify-between max-lg:hidden">

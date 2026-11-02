@@ -13,7 +13,7 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/");
   await page.getByRole("link", { name: "가입 없이 체험하기", exact: true }).first().click();
-  await expect(page.getByRole("button", { name: "촬영 시작하기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "이 프레임으로 찍기" })).toBeVisible();
   expect(apiRequests).toEqual([]);
   await expect(page.getByText("BEST", { exact: true })).toHaveCount(0);
 

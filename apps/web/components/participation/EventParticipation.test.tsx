@@ -112,7 +112,7 @@ describe("칸 다시 찍기", () => {
     storeSession();
     api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
     render(<EventParticipation slug="wedding-1027" />);
-    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
     await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
     await shootAll();
     await screen.findByRole("button", { name: "이 사진으로 만들기" });
@@ -265,7 +265,7 @@ it("참여하면 이 행사에만 자격을 보관하고, 필수 동의 전에�
 
   // 받을 사진이 없으면 버튼 하나뿐인 화면을 건너뛰고 바로 촬영으로 간다.
   expect(await screen.findByRole("button", { name: "찍기 시작" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "촬영 시작" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "사진 찍기" })).not.toBeInTheDocument();
   expect(api.submitConsents).toHaveBeenCalledWith("p-new", "evt-1", [
     { code: "photo-collection", version: 2, decision: "AGREED" },
     { code: "marketing", version: 1, decision: "DECLINED" },
@@ -289,7 +289,7 @@ it("프레임이 하나면 고르는 단계 없이 촬영으로 가고, 네 장�
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
   render(<EventParticipation slug="wedding-1027" />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   expect(screen.queryByText("프레임을 골라 주세요")).not.toBeInTheDocument();
   await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalledWith("p-token", "evt-1"));
 
@@ -316,7 +316,7 @@ it("전송이 중간에 실패하면 다시 보낼 때 이미 올린 칸은 다�
     return `asset-${slotIndex}`;
   });
   render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
   await shootAll();
 
@@ -338,7 +338,7 @@ it("회차가 끝났으면(PART-003) 새 회차를 열고 처음부터 다시 �
     .mockRejectedValueOnce(new ApiRequestError({ status: 409, code: "PART-003" }))
     .mockResolvedValueOnce({ jobId: 9, status: "PENDING", resultToken: "R".repeat(43), resultExpiresAt: "x" });
   render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalledTimes(1));
   await shootAll();
 
@@ -357,7 +357,7 @@ it("카메라가 거부되면 권한 안내만 하고 파일 선택을 두지 �
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
   mockCameraState = "denied";
   const { container } = render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
   expect(await screen.findByText(/카메라를 쓸 수 있게 허용해 주세요/)).toBeInTheDocument();
   expect(container.querySelector('input[type="file"]')).toBeNull();
@@ -377,7 +377,7 @@ it("프레임이 여럿이면 서버가 준 목록만 순서대로 보여 준다
     }),
   );
   render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
   expect(await screen.findByText("프레임을 골라 주세요")).toBeInTheDocument();
   const choices = screen.getAllByRole("button", { pressed: undefined }).filter((b) => b.hasAttribute("aria-pressed"));
@@ -392,7 +392,7 @@ it("회차 시작이 한도로 막히면(ENT-002) 촬영 화면 대신 마감 �
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
   api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
   render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
   expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "찍기 시작" })).not.toBeInTheDocument();
@@ -405,7 +405,7 @@ it("촬영 한도에 걸리면 이미 만든 사진 목록으로 돌아가 받�
   api.listParticipantResults.mockResolvedValue([{ jobId: 8, status: "DONE" }]);
   api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
   render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
   expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
   expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
@@ -416,7 +416,7 @@ it("합성 접수가 한도로 막혀도(ENT-002) 다시 보내지 않고 마감
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
   api.submitEventCompose.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
   render(<EventParticipation slug="wedding-1027" />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
   await shootAll();
 
@@ -432,7 +432,7 @@ describe("Codex 리뷰 반영(#523)", () => {
     api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
     mockCameraState = "error";
     render(<EventParticipation slug="wedding-1027" />);
-    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
     expect(await screen.findByText(/카메라를 켜지 못했어요/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
@@ -495,7 +495,7 @@ describe("Codex 리뷰 반영(#523)", () => {
     api.startByodSession.mockResolvedValue({ participantToken: "p-new", participantId: "p-9", status: "RESTRICTED", expiresAt: "2999-01-01T00:00:00Z" });
     api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
     api.listParticipantResults.mockResolvedValue([]);
-    fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "사진 찍기" }));
     fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
@@ -529,7 +529,7 @@ describe("참가자 자유 문구(D06)", () => {
       x: 10, y: 400, width: 200, height: 40, canvasWidth: 600, canvasHeight: 1800,
     }));
     render(<EventParticipation slug="wedding-1027" />);
-    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
     await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
     await shootAll();
   }
@@ -538,7 +538,7 @@ describe("참가자 자유 문구(D06)", () => {
     storeSession();
     api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
     render(<EventParticipation slug="wedding-1027" />);
-    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
     await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
     await shootAll();
     expect(screen.queryByRole("textbox", { name: "사진에 넣을 문구" })).not.toBeInTheDocument();
@@ -651,10 +651,10 @@ it("회차가 새 게시본으로 열리면 행사를 다시 읽어 맞춘다", 
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
   api.startCaptureRun.mockResolvedValue({ captureRunId: "run-1", experienceVersion: 99, stateVersion: 1, expiresAt: "x" });
   render(<EventParticipation slug="wedding-1027" />);
-  await screen.findByRole("button", { name: "촬영 시작" });
+  await screen.findByRole("button", { name: "사진 찍기" });
   api.getPublicEvent.mockClear();
 
-  fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(screen.getByRole("button", { name: "사진 찍기" }));
 
   await waitFor(() => expect(api.getPublicEvent).toHaveBeenCalledWith("wedding-1027"));
 });
@@ -665,7 +665,7 @@ it("기능 권한이 회수되면(ENT-004) 하루컷을 꺼내지 않고 담당�
   api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 403, code: "ENT-004" }));
   render(<EventParticipation slug="wedding-1027" />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("행사 담당자에게 문의");
@@ -677,7 +677,7 @@ it("선택 동의를 철회할 수 있다", async () => {
   api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
   api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
   render(<EventParticipation slug="wedding-1027" />);
-  await screen.findByRole("button", { name: "촬영 시작" });
+  await screen.findByRole("button", { name: "사진 찍기" });
 
   fireEvent.click(screen.getByRole("button", { name: "철회" }));
 

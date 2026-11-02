@@ -15,10 +15,10 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
   });
   await page.goto("/");
   await page.getByRole("link", { name: "가입 없이 체험하기", exact: true }).first().click();
-  await page.getByRole("button", { name: "촬영 시작하기", exact: true }).click();
+  await page.getByRole("button", { name: "이 프레임으로 찍기", exact: true }).click();
   await page.getByRole("button", { name: "카메라 켜기", exact: true }).click();
-  await page.getByRole("button", { name: "촬영 시작", exact: true }).click();
-  await page.getByRole("button", { name: "바로 촬영", exact: true }).click();
+  await page.getByRole("button", { name: "찍기 시작", exact: true }).click();
+  await page.getByRole("button", { name: "바로 찍기", exact: true }).click();
   await expect(page.getByLabel(/8컷 중 [1-8]컷 촬영됨/)).toBeVisible();
 
   // 실제 카메라 결과를 저장했는지 기다린다. 테스트가 스토어나 보관물을 만들어 넣지 않는다.
@@ -51,7 +51,7 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
   const count = async () => Number((await page.getByLabel(/8컷 중 \d+컷 촬영됨/).getAttribute("aria-label"))?.match(/중 (\d+)컷/)?.[1]);
   while (await count() < 4) {
     const previous = await count();
-    await page.getByRole("button", { name: "바로 촬영", exact: true }).click();
+    await page.getByRole("button", { name: "바로 찍기", exact: true }).click();
     await expect.poll(count).toBeGreaterThan(previous);
   }
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));

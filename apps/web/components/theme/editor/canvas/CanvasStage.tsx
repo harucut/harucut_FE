@@ -13,7 +13,10 @@ import {
 import Konva from "konva";
 
 import { useStageFit } from "@/hooks/useStageFit";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { traceCellShape } from "@/lib/canvas/draw";
+import { loadImage } from "@/lib/canvas/loaders";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { EditableNode } from "./EditableNode";
 import { DEFAULT_CELL_RADIUS, type FreeCell } from "@/lib/frameCells";
@@ -40,6 +43,34 @@ function CellShape({ cell, shapeProps }: { cell: CellGeometry; shapeProps: Recor
           {...shapeProps}
         />
       )}
+    </Group>
+  );
+}
+
+/**
+ * 칸에 예시 사진을 넣는다. 회색 칸으로는 글자·스티커가 사진과 어떻게 겹치는지 알 수 없어 시험 촬영에서야 들켰다.
+ * 칸 모양대로 자르고, 저장할 그림에는 들어가지 않는다 — 저장은 이 스테이지가 아니라 renderThemePreviewPng 가 그린다.
+ */
+function CellSamplePhoto({ cell, image }: { cell: CellGeometry; image: HTMLImageElement }) {
+  const imageWidth = image.naturalWidth || image.width || 1;
+  const imageHeight = image.naturalHeight || image.height || 1;
+  const scale = Math.max(cell.width / imageWidth, cell.height / imageHeight);
+  const cropWidth = cell.width / scale;
+  const cropHeight = cell.height / scale;
+  const local = { x: -cell.width / 2, y: -cell.height / 2, width: cell.width, height: cell.height };
+  return (
+    <Group
+      x={cell.x + cell.width / 2}
+      y={cell.y + cell.height / 2}
+      rotation={cell.rotation}
+      clipFunc={(ctx: Konva.Context) => traceCellShape(ctx as unknown as CanvasRenderingContext2D, local, cell.shape)}
+    >
+      <KonvaImage
+        image={image}
+        {...local}
+        // 예시 사진은 세로로 찍혔고 얼굴이 위쪽에 있다. 가로로 긴 칸에서는 위를 남긴다.
+        crop={{ x: (imageWidth - cropWidth) / 2, y: (imageHeight - cropHeight) * 0.25, width: cropWidth, height: cropHeight }}
+      />
     </Group>
   );
 }
@@ -86,6 +117,21 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
       active = false;
     };
   }, [backgroundImageUrl]);
+
+  const [showSamples, setShowSamples] = useState(true);
+  const [samplePhotos, setSamplePhotos] = useState<HTMLImageElement[]>([]);
+  useEffect(() => {
+    let active = true;
+    // 예시 사진을 못 받아도 편집은 된다. 칸은 회색으로 남는다.
+    void Promise.all(DEMO_PHOTOS.map((src) => loadImage(src)))
+      .then((images) => {
+        if (active) setSamplePhotos(images);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const setActive = useThemeEditorStore((s) => s.setActive);
   const update = useThemeEditorStore((s) => s.updateComponent);
@@ -177,7 +223,15 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
 
   // touch-none: 스티커를 끌 때 페이지가 같이 스크롤되지 않게. 캔버스 밖을 잡으면 그대로 스크롤된다.
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        aria-pressed={showSamples}
+        onClick={() => setShowSamples((shown) => !shown)}
+        className="absolute right-0 top-0 z-10 flex min-h-11 items-center rounded-full bg-black/65 px-3 text-[12px] font-semibold text-white"
+      >
+        {showSamples ? "예시 사진 끄기" : "예시 사진 켜기"}
+      </button>
       <div className="flex justify-center">
         {ready ? (
         <Stage
@@ -249,6 +303,11 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
             {cellShapes.map((cell, i) => (
               <CellShape key={i} cell={cell} shapeProps={{ fill: "rgba(0,0,0,0.30)" }} />
             ))}
+            {showSamples && samplePhotos.length > 0
+              ? cellShapes.map((cell, i) => (
+                  <CellSamplePhoto key={i} cell={cell} image={samplePhotos[cell.shotIndex % samplePhotos.length]} />
+                ))
+              : null}
           </Layer>
 
           {/* 2) 가운데: 오브젝트들 (사진/스티커/텍스트) */}

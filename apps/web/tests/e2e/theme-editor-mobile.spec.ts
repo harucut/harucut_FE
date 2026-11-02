@@ -20,6 +20,14 @@ test.beforeEach(async ({ page, baseURL }) => {
   await expect(page).toHaveURL(/\/theme\/sticker$/);
 });
 
+// 칸이 회색이면 글자·스티커가 사진과 어떻게 겹치는지 시험 촬영 전에는 알 수 없다.
+test("캔버스 칸에 예시 사진을 넣고 끌 수 있다", async ({ page }) => {
+  const toggle = page.getByRole("button", { name: "예시 사진 끄기" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await toggle.click();
+  await expect(page.getByRole("button", { name: "예시 사진 켜기" })).toHaveAttribute("aria-pressed", "false");
+});
+
 test("모바일에서는 도구를 하나씩 하단 시트로 열고 캔버스를 가리지 않는다", async ({ page }, testInfo) => {
   const isMobile = (page.viewportSize()?.width ?? 0) < 1024;
   const canvas = page.locator("canvas").first();

@@ -75,7 +75,7 @@ export default function ShootSelectPage() {
         <PageHeader
           title="사진 선택"
           backHref={sourceHref}
-          backLabel={fromUpload ? "사진 다시 고르기" : "다시 촬영"}
+          backLabel={fromUpload ? "사진 다시 고르기" : "다시 찍기"}
         />
 
 
@@ -106,7 +106,7 @@ export default function ShootSelectPage() {
           emptyStateText={
             fromUpload
               ? "불러온 사진이 없어요. 사진을 다시 골라 주세요."
-              : "촬영한 사진이 없어요. 다시 촬영해 주세요."
+              : "찍은 사진이 없어요. 다시 찍어 주세요."
           }
           incompleteButtonLabel="4장을 골라 주세요"
           nextButtonLabel="다음 단계로"

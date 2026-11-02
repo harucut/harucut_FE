@@ -144,7 +144,7 @@ function ShootPageContent() {
           isLoading={isLoading}
           error={error}
           onRefresh={refresh}
-          confirmLabel={source === "upload" ? "사진 고르러 가기" : "촬영 시작하기"}
+          confirmLabel={source === "upload" ? "사진 고르러 가기" : "이 프레임으로 찍기"}
           // 비회원은 프레임 조회 자체가 인증이 필요해 목록을 볼 수 없다.
           hideSavedFrames={accessMode !== "member"}
           onConfirm={(choice) => confirmFrame(choice)}
@@ -159,9 +159,9 @@ function ShootPageContent() {
           }
         />
         {pendingFrame ? <ConfirmDialog
-          title="새 비율로 다시 촬영할까요?"
-          description="선택한 프레임은 사진 비율이 달라요. 다시 촬영하면 현재 사진이 이 기기에서 지워져요. 사진을 남기려면 취소하고 같은 비율의 프레임을 골라 주세요."
-          confirmLabel="사진 지우고 다시 촬영" destructive running={false}
+          title="새 비율로 다시 찍을까요?"
+          description="선택한 프레임은 사진 비율이 달라요. 다시 찍으면 현재 사진이 이 기기에서 지워져요. 사진을 남기려면 취소하고 같은 비율의 프레임을 골라 주세요."
+          confirmLabel="사진 지우고 다시 찍기" destructive running={false}
           onClose={() => setPendingFrame(null)}
           onConfirm={() => { const choice = pendingFrame; setPendingFrame(null); confirmFrame(choice, true); }}
         /> : null}

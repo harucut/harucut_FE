@@ -84,7 +84,7 @@ test("keeps the chosen frame when going back to frame selection", async ({ page 
   await page.goto("/shoot/start");
   await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
 
-  await page.getByRole("button", { name: "촬영 시작하기" }).click();
+  await page.getByRole("button", { name: "이 프레임으로 찍기" }).click();
   await page.waitForURL("**/shoot/capture");
 
   await page.getByRole("link", { name: "프레임 다시 선택" }).click();
