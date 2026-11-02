@@ -50,7 +50,7 @@ test("배경색만 바꾼 초안도 새로고침 후 복원한다", async ({ pag
   await page.getByRole("button", { name: "스튜디오 라임", exact: true }).click();
   await expect
     .poll(() => page.evaluate(readDraftBackground, DRAFT_PREFIX))
-    .toBe("1ed760");
+    .toBe("c8f135");
 
   page.on("dialog", (dialog) => dialog.accept());
   await page.reload();
