@@ -77,6 +77,7 @@
 - 이슈·PR 제목: **`<type>: <한국어 요약>`** — 스코프 없이.
 - `<type>` 은 `feat` `fix` `refactor` `docs` `chore` `ci` `test` `perf` 중 하나.
 - `main`, `develop`, `develop_loop` 에는 직접 commit/push 하지 않는다.
+- `main` 은 `develop` 릴리스 PR 로만 받는다. 봇 PR 도 예외가 아니다 — Dependabot 보안 업데이트는 `target-branch` 를 무시하고 `main` 으로 열리므로, 보이면 닫고 패치는 `develop` 에 넣는다.
 - `자동 생성`, `auto-generated` 같은 일반 제목은 금지한다.
 
 **훅은 지금 꺼져 있다.** `git config core.hooksPath` 가 빈 값이라 `.git/hooks` 를 본다.
