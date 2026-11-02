@@ -47,7 +47,7 @@ export function StudioEventCustomers({
   const [permissions, setPermissions] = useState<EventPermission[]>(DEFAULT_PERMISSIONS);
   const [note, setNote] = useState("");
   const [includePast, setIncludePast] = useState(false);
-  const [issuedLink, setIssuedLink] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ link: string; includePast: boolean } | null>(null);
   const [confirm, setConfirm] = useState<EventGrant | null>(null);
   const [widenTarget, setWidenTarget] = useState<EventGrant | null>(null);
 
@@ -208,8 +208,8 @@ export function StudioEventCustomers({
             void run(
               "invite",
               async () => {
-                const issued = await inviteEventCustomer(eventId, permissions, note.trim() || undefined, includePast);
-                setIssuedLink(inviteLink(window.location.origin, issued.inviteToken));
+                const result = await inviteEventCustomer(eventId, permissions, note.trim() || undefined, includePast);
+                setIssued({ link: inviteLink(window.location.origin, result.inviteToken), includePast });
                 setNote("");
                 setIncludePast(false);
               },
@@ -220,15 +220,18 @@ export function StudioEventCustomers({
         >
           {busy === "invite" ? "만드는 중…" : "고객 초대 링크 만들기"}
         </button>
-        {issuedLink ? (
+        {issued ? (
           <div className="hc-surface-well flex flex-col gap-2 rounded-2xl p-3 text-[13px]">
-            <p>이 링크는 지금 한 번만 보여요. 7일 동안 한 사람이 한 번 쓸 수 있어요. 받은 분은 이 행사 사진만 봐요.</p>
-            <p className="break-all font-mono text-[12px]">{issuedLink}</p>
+            <p>
+              이 링크는 지금 한 번만 보여요. 7일 동안 한 사람이 한 번 쓸 수 있어요. 받은 분은 이 행사 사진만 보고,{" "}
+              {issued.includePast ? "이미 찍은 사진도 볼 수 있어요." : "받은 뒤에 찍은 사진만 볼 수 있어요."}
+            </p>
+            <p className="break-all font-mono text-[12px]">{issued.link}</p>
             <button
               type="button"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(issuedLink);
+                  await navigator.clipboard.writeText(issued.link);
                   setNotice("링크를 복사했어요. 초대할 분께 직접 보내 주세요.");
                 } catch {
                   setNotice("복사하지 못했어요. 링크를 길게 눌러 복사해 주세요.");

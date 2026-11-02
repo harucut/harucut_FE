@@ -46,6 +46,7 @@ it("고객 초대는 고른 권한과 메모로 링크를 만들어 한 번 보�
   fireEvent.change(await screen.findByLabelText("메모 (선택)"), { target: { value: "신랑 측" } });
   fireEvent.click(screen.getByRole("button", { name: "고객 초대 링크 만들기" }));
   await waitFor(() => expect(mockInvite).toHaveBeenCalledWith("Ev1", ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"], "신랑 측", false));
+  expect(await screen.findByText(/받은 뒤에 찍은 사진만 볼 수 있어요/)).toBeInTheDocument();
   expect(screen.getByText(`${window.location.origin}/invite#tok_customer_abcdefghijklmn`)).toBeInTheDocument();
 });
 
@@ -62,6 +63,8 @@ it("이미 찍은 사진은 체크해야 보여 주고, 링크를 만들면 체�
 
   await waitFor(() => expect(mockInvite).toHaveBeenCalledWith("Ev1", ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"], undefined, true));
   await waitFor(() => expect(past.checked).toBe(false));
+  // 체크를 되돌려도 방금 만든 링크가 무엇을 보여 주는지는 그대로 말한다.
+  expect(screen.getByText(/이미 찍은 사진도 볼 수 있어요/)).toBeInTheDocument();
 });
 
 it("사진 범위가 제한된 행에 시각을 보여 주고, 확인을 거쳐서만 넓힌다", async () => {

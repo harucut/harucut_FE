@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { createPortal } from "react-dom";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
@@ -30,12 +30,15 @@ export function FrameVersionManager({
   revoke,
   restore,
   onChanged,
+  revision,
 }: {
   load: () => Promise<ManagedFrameVersion[]>;
   revoke: (version: ManagedFrameVersion, reason: string) => Promise<unknown>;
   restore: (version: ManagedFrameVersion) => Promise<unknown>;
   /** 회수·복구 뒤. 고르기 목록을 다시 받게 한다. */
   onChanged?: () => Promise<void> | void;
+  /** 새 발행본이 나오면 바뀐다. 펴 둔 목록을 다시 받는다. */
+  revision?: number;
 }) {
   // 프레임마다 하나씩 있다. 연 것만 내용을 그리고 불러온다.
   const [opened, setOpened] = useState(false);
@@ -45,14 +48,31 @@ export function FrameVersionManager({
   const [target, setTarget] = useState<ManagedFrameVersion | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
 
+  // 부모가 그릴 때마다 새 함수를 준다. 이걸 의존성에 넣으면 조회가 끝나지 않는다.
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+  // 먼저 보낸 요청이 나중에 끝나도 새 목록을 덮지 않는다.
+  const latestRequest = useRef(0);
+
   const reload = useCallback(async () => {
+    const request = ++latestRequest.current;
     try {
-      setVersions(await load());
+      const next = await loadRef.current();
+      if (request !== latestRequest.current) return;
+      setVersions(next);
       setError(null);
     } catch (cause) {
+      if (request !== latestRequest.current) return;
       setError(getUserFacingApiErrorMessage(cause, "발행본을 불러오지 못했어요."));
     }
-  }, [load]);
+  }, []);
+
+  // 펼 때마다, 그리고 펴 둔 채 새 발행본이 나오면 받는다. 접혀 있는 동안 발행한 것을 놓치지 않는다.
+  useEffect(() => {
+    if (opened) void reload();
+  }, [opened, revision, reload]);
 
   const submitRevoke = async (version: ManagedFrameVersion, reason: string) => {
     setBusy(version.frameVersionId);
@@ -86,11 +106,7 @@ export function FrameVersionManager({
   return (
     <details
       className="group w-full text-[13px]"
-      onToggle={(event) => {
-        const open = event.currentTarget.open;
-        setOpened(open);
-        if (open && versions === null) void reload();
-      }}
+      onToggle={(event) => setOpened(event.currentTarget.open)}
     >
       <summary className="flex h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-(--hc-muted) transition hover:text-(--hc-text) [&::-webkit-details-marker]:hidden">
         <ChevronRight aria-hidden className="size-4 transition-transform group-open:rotate-90" />

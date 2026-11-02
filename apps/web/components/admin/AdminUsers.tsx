@@ -12,6 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "사용 중",
   BLOCKED: "정지됨",
   DELETED_REQUESTED: "탈퇴 요청",
+  DELETED: "탈퇴함",
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -109,6 +110,8 @@ export function AdminUsers() {
         <ul className="flex flex-col divide-y divide-(--hc-border)">
           {users.map((user) => {
             const blocked = user.userStatus === "BLOCKED";
+            // 탈퇴 요청 중이면 서버가 정지를 막는다(AUTH-005). 정지로 덮으면 삭제 배치가 건너뛴다.
+            const canBlock = user.userStatus === "ACTIVE";
             return (
               <li key={user.userId} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
@@ -125,20 +128,22 @@ export function AdminUsers() {
                       .join(" · ")}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDialogError(null);
-                    setPending({ user, action: blocked ? "unblock" : "block" });
-                  }}
-                  className={
-                    blocked
-                      ? "h-11 shrink-0 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
-                      : "h-11 shrink-0 rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger)"
-                  }
-                >
-                  {blocked ? "정지 풀기" : "정지"}
-                </button>
+                {blocked || canBlock ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDialogError(null);
+                      setPending({ user, action: blocked ? "unblock" : "block" });
+                    }}
+                    className={
+                      blocked
+                        ? "h-11 shrink-0 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+                        : "h-11 shrink-0 rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger)"
+                    }
+                  >
+                    {blocked ? "정지 풀기" : "정지"}
+                  </button>
+                ) : null}
               </li>
             );
           })}

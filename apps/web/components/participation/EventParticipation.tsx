@@ -701,6 +701,12 @@ export function HomeStep({
   const welcome = useEventCopy("welcome", "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.");
   const hasResults = results.length > 0;
   const [revokeArmed, setRevokeArmed] = useState<number | null>(null);
+  // 한 번 눌러 둔 끊기는 잠시 뒤 풀린다. iOS 는 버튼에 포커스를 주지 않아 blur 만으로는 풀리지 않는다.
+  useEffect(() => {
+    if (revokeArmed === null) return;
+    const timer = window.setTimeout(() => setRevokeArmed(null), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [revokeArmed]);
   return (
     <section className="ev-step flex flex-1 flex-col gap-4">
       {/* 받을 사진이 있으면 그 목록이 이 화면의 주인공이다. */}

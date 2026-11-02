@@ -111,3 +111,21 @@ it("찾기가 실패하면 알리고 앞선 결과를 남기지 않는다", asyn
   expect(await screen.findByRole("alert")).toHaveTextContent("플랫폼 관리자만 쓸 수 있어요");
   expect(screen.queryByRole("button", { name: "정지" })).not.toBeInTheDocument();
 });
+
+// 정지로 덮으면 삭제 배치가 건너뛴다. 서버도 AUTH-005 로 막는다.
+it("탈퇴 요청 중인 계정에는 정지 버튼이 없다", async () => {
+  mockSearch.mockResolvedValue([{ ...ACTIVE, userStatus: "DELETED_REQUESTED" }]);
+  render(<AdminUsers />);
+  await findUsers();
+  expect(await screen.findByText(/탈퇴 요청/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "정지" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "정지 풀기" })).not.toBeInTheDocument();
+});
+
+it("찾는 동안에는 다시 찾지 못한다", async () => {
+  mockSearch.mockImplementation(() => new Promise(() => {}));
+  render(<AdminUsers />);
+  fireEvent.change(screen.getByLabelText("이메일"), { target: { value: "minji@example.com" } });
+  fireEvent.click(screen.getByRole("button", { name: "찾기" }));
+  expect(await screen.findByRole("button", { name: "찾는 중…" })).toBeDisabled();
+});

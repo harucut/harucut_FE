@@ -35,18 +35,21 @@ beforeEach(() => {
   restore.mockResolvedValue(undefined);
 });
 
-it("평소에는 접어 두고 열 때 한 번만 불러온다", async () => {
+it("평소에는 접어 두고, 펼 때마다 다시 받는다", async () => {
   const { container } = setup();
   expect(load).not.toHaveBeenCalled();
   open(container);
   expect(await screen.findByText("2번째 발행본")).toBeInTheDocument();
   expect(screen.getByText("1번째 발행본 · 회수됨")).toBeInTheDocument();
   expect(screen.getByText(/저작권 문의/)).toBeInTheDocument();
+  // 접혀 있는 동안 발행한 것을 놓치지 않는다.
+  load.mockResolvedValue([{ ...LIVE_VERSION, frameVersionId: 42, versionNo: 3 }, LIVE_VERSION]);
   close(container);
   await settle();
-  open(container);
-  await settle();
   expect(load).toHaveBeenCalledTimes(1);
+  open(container);
+  expect(await screen.findByText("3번째 발행본")).toBeInTheDocument();
+  expect(load).toHaveBeenCalledTimes(2);
 });
 
 it("회수는 이유를 받아 보내고, 목록을 다시 받아 알린다", async () => {
@@ -121,4 +124,43 @@ it("바깥 폼을 건드리지 않는다", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "회수" }));
   await waitFor(() => expect(revoke).toHaveBeenCalled());
   expect(onOuterSubmit).not.toHaveBeenCalled();
+});
+
+// 펴 둔 채 새 버전을 발행하면 방금 만든 발행본을 바로 회수할 수 있어야 한다(Codex #580).
+it("펴 둔 채 새 발행본이 나오면 목록을 다시 받는다", async () => {
+  load.mockResolvedValue([]);
+  const props = { load, revoke, restore };
+  const { container, rerender } = render(<FrameVersionManager {...props} revision={undefined} />);
+  open(container);
+  expect(await screen.findByText("아직 발행본이 없어요.")).toBeInTheDocument();
+
+  load.mockResolvedValue([LIVE_VERSION]);
+  rerender(<FrameVersionManager {...props} revision={2} />);
+  expect(await screen.findByText("2번째 발행본")).toBeInTheDocument();
+  expect(screen.queryByText("아직 발행본이 없어요.")).not.toBeInTheDocument();
+});
+
+it("접혀 있으면 새 발행본이 나와도 부르지 않는다", async () => {
+  const props = { load, revoke, restore };
+  const { rerender } = render(<FrameVersionManager {...props} revision={1} />);
+  rerender(<FrameVersionManager {...props} revision={2} />);
+  await settle();
+  expect(load).not.toHaveBeenCalled();
+});
+
+it("먼저 보낸 요청이 나중에 끝나도 새 목록을 덮지 않는다", async () => {
+  let finishFirst: (versions: unknown[]) => void = () => {};
+  load.mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)));
+  load.mockResolvedValue([LIVE_VERSION]);
+  const props = { load, revoke, restore };
+  const { container, rerender } = render(<FrameVersionManager {...props} revision={1} />);
+  open(container);
+  await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+
+  rerender(<FrameVersionManager {...props} revision={2} />);
+  expect(await screen.findByText("2번째 발행본")).toBeInTheDocument();
+
+  await act(async () => finishFirst([]));
+  expect(screen.getByText("2번째 발행본")).toBeInTheDocument();
+  expect(screen.queryByText("아직 발행본이 없어요.")).not.toBeInTheDocument();
 });

@@ -136,6 +136,7 @@ export function WorkspaceFrameList({
                     revoke={(version, reason) => revokeFrameVersion(frame.frameId, version.versionNo, reason)}
                     restore={(version) => restoreFrameVersion(frame.frameId, version.versionNo)}
                     onChanged={onPublished}
+                    revision={latest?.versionNo}
                   />
                 )}
               </li>

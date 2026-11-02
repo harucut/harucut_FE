@@ -727,6 +727,20 @@ describe("보낸 링크 끊기", () => {
     expect(api.revokeResultAccess).not.toHaveBeenCalled();
   });
 
+  // iOS 는 버튼에 포커스를 주지 않아 blur 가 없다. 며칠 뒤 눌러도 바로 끊기면 안 된다.
+  it("한 번 눌러 둔 것은 잠시 뒤 풀린다", async () => {
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+    const button = await screen.findByRole("button", { name: "보낸 링크 끊기" });
+    jest.useFakeTimers();
+    fireEvent.click(button);
+    expect(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" })).toBeInTheDocument();
+    act(() => {
+      jest.advanceTimersByTime(4_000);
+    });
+    expect(screen.getByRole("button", { name: "보낸 링크 끊기" })).toBeInTheDocument();
+    expect(api.revokeResultAccess).not.toHaveBeenCalled();
+  });
+
   it("실패하면 알리고 입력은 그대로 둔다", async () => {
     api.revokeResultAccess.mockRejectedValue(new Error("down"));
     home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);

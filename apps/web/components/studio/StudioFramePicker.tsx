@@ -189,7 +189,7 @@ export function StudioFramePicker({
         <div className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) p-3 text-[13px]">
           <p>
             지금 고를 수 없는 발행본이 연결돼 있어요. 허용하지 않은 판형이거나, 더 새 발행본이 나왔거나
-            원본 프레임이 지워졌을 수 있어요. 위에서 다시 고른 뒤 빼 주세요.
+            회수됐거나 원본 프레임이 지워졌을 수 있어요. 위에서 다시 고른 뒤 빼 주세요.
           </p>
           <ul className="flex flex-col gap-1">
             {unknownRefs.map((ref) => (
