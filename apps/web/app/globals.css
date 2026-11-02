@@ -217,8 +217,9 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   word-break: keep-all;
-  /* 공백 없는 긴 문자열(행사 이름 등)이 화면 밖으로 나가지 않게. 넘칠 때만 끊는다. */
-  overflow-wrap: anywhere;
+  /* 공백 없는 긴 문자열(행사 이름 등)이 화면 밖으로 나가지 않게. 넘칠 때만 끊는다.
+     anywhere 는 쓰지 않는다 — 최소 폭까지 줄여 좁은 칸의 「저장」 버튼 글자가 세로로 쪼개졌다. */
+  overflow-wrap: break-word;
 }
 
 ::selection {

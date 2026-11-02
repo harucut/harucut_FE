@@ -57,7 +57,7 @@ export function FrameOutputOptionsPanel({
                     className={[
                       "inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[12px]",
                       borderColor === color.value
-                        ? "border-(--hc-primary) text-(--hc-primary-strong)"
+                        ? "border-(--hc-primary-line) text-(--hc-primary-strong)"
                         : "border-zinc-700 text-zinc-300",
                     ].join(" ")}
                   >
@@ -112,7 +112,7 @@ export function FrameOutputOptionsPanel({
                 className={[
                   "min-h-11 rounded-2xl border px-3 py-2.5 text-left transition-colors",
                   outputFilter === filter.id
-                    ? "border-(--hc-primary) bg-(--hc-accent-soft-bg)"
+                    ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg)"
                     : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
                 ].join(" ")}
               >

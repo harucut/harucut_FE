@@ -130,8 +130,9 @@ function ShootPageContent() {
   }
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
+    <main className="hc-page-app flex min-h-dvh flex-col px-2 pb-0 pt-6 text-(--hc-text) sm:px-4 md:pb-6 lg:px-8 lg:py-10">
+      {/* 주 버튼이 화면 아래에 붙도록 안쪽이 남은 높이를 채운다(FramePickerConfirm). */}
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 md:max-w-3xl lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref={accessMode === "guest" ? "/" : "/home"}
           backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}

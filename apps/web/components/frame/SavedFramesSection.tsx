@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { RotateCcw } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 import { useMemo } from "react";
 import type { FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
@@ -67,15 +67,15 @@ export function SavedFramesSection({
   // 남은 보관 여유는 상단 FrameCapacityMeter가 서버 사용량 기준으로 보여준다.
 
   return (
-    <section className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4">
+    <section className="min-w-0">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-[15px] font-bold">{title}</h2>
         <button
           type="button"
           onClick={onRefresh}
           aria-label="새로고침"
           title="새로고침"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-(--hc-border) text-(--hc-muted) transition hover:border-(--hc-border-strong) hover:text-(--hc-text)"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text)"
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </button>
@@ -114,66 +114,53 @@ export function SavedFramesSection({
       ) : matchingFrames.length === 0 ? (
         <p className="mt-2 text-[12px] text-(--hc-muted)">{emptyText}</p>
       ) : (
-        <div className="mt-2 grid grid-cols-1 gap-3">
+        // 폰에서는 한 줄로 넘긴다. 세로로 쌓으면 프레임 몇 개만으로 위의 큰 카드와 아래 버튼이 멀어진다.
+        <div className="-mx-2 mt-1 flex gap-2.5 overflow-x-auto px-2 pb-1 scrollbar-none [-ms-overflow-style:none] sm:-mx-4 sm:px-4 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 lg:grid-cols-6 [&::-webkit-scrollbar]:hidden">
           {matchingFrames.map((frame) => {
             const isSelected = selectedRemoteFrameId === frame.frameId;
             const previewFrameId = frameIdFromFrameType(frame.frameType);
+            const name = frame.title || `프레임 #${frame.frameId}`;
 
             return (
-              <article
-                key={frame.frameId}
-                className={[
-                  "rounded-2xl border bg-(--hc-card) p-3 transition",
-                  isSelected
-                    ? "border-(--hc-primary)"
-                    : "border-(--hc-border) hover:border-(--hc-border-strong)",
-                ].join(" ")}
-              >
-                <div className="flex gap-3">
+              <article key={frame.frameId} className="flex w-27 shrink-0 flex-col gap-1.5 md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => onSelectRemoteFrame(frame)}
+                  aria-pressed={isSelected}
+                  className="flex min-w-0 flex-col gap-1.5 text-left"
+                >
+                  <span
+                    className={[
+                      "relative grid aspect-3/4 w-full place-items-center overflow-hidden rounded-xl border bg-(--hc-surface) transition",
+                      isSelected
+                        ? "border-(--hc-primary-line) shadow-[0_0_0_1px_var(--hc-primary-line)]"
+                        : "border-(--hc-border) hover:border-(--hc-border-strong)",
+                    ].join(" ")}
+                  >
+                    {frame.source ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={frame.source} alt="" loading="lazy" className="h-full w-full object-contain p-1.5" />
+                    ) : (
+                      <FramePreview frameId={previewFrameId} className="max-h-full max-w-full" />
+                    )}
+                    {isSelected ? (
+                      <span aria-hidden className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-(--hc-primary) text-(--hc-primary-contrast)">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="truncate text-[13px] font-semibold text-(--hc-text)">{name}</span>
+                </button>
+
+                {onAction ? (
                   <button
                     type="button"
-                    onClick={() => onSelectRemoteFrame(frame)}
-                    className="flex min-w-0 flex-1 gap-3 text-left"
+                    onClick={() => onAction(frame)}
+                    className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-3 text-[12px] font-semibold"
                   >
-                    <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-xl border border-(--hc-border) bg-(--hc-surface)">
-                      {frame.source ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={frame.source}
-                          alt={frame.title || `프레임 #${frame.frameId}`}
-                          className="h-full w-full object-contain p-1"
-                        />
-                      ) : (
-                        <FramePreview frameId={previewFrameId} />
-                      )}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-                      <div>
-                        <p className="truncate text-sm font-semibold text-(--hc-text)">
-                          {frame.title || `프레임 #${frame.frameId}`}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-[12px] text-(--hc-muted)">
-                          {frame.description || "저장한 프레임을 다음 단계에서 바로 적용할 수 있어요."}
-                        </p>
-                      </div>
-                      <span className="text-[12px] text-(--hc-muted)">
-                        {isSelected ? "선택됨" : "눌러서 선택"}
-                      </span>
-                    </div>
+                    {actionLabel}
                   </button>
-
-                  {onAction ? (
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => onAction(frame)}
-                        className="hc-button-secondary rounded-full border px-3.5 py-1.5 text-[12px] font-semibold"
-                      >
-                        {actionLabel}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+                ) : null}
               </article>
             );
           })}

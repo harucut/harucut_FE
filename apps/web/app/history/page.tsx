@@ -121,6 +121,13 @@ function monthLabel(key: string) {
   return `${prefix}${MONTH_KO[(month ?? 1) - 1]}`;
 }
 
+/** 사진 아래의 날짜 — "11.02". 값이라 모노로 세운다. */
+function stripDate(item: UserMedia) {
+  const date = parseServerDateTime(item.createdAt);
+  if (!date) return null;
+  return `${`${date.getMonth() + 1}`.padStart(2, "0")}.${`${date.getDate()}`.padStart(2, "0")}`;
+}
+
 /** createdAt 기준 월별 그룹. 날짜 없는 항목은 '기타'로 마지막에 묶는다. */
 function groupByMonth(items: UserMedia[]) {
   const map = new Map<string, UserMedia[]>();
@@ -149,24 +156,47 @@ function MediaThumb({
 }) {
   const previewUrl = getUserMediaPreviewUrl(item);
 
-  const shellClassName = bare
-    ? "relative grid h-full w-full place-items-center overflow-hidden"
-    : "hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)";
+  if (bare) {
+    return (
+      <div className="relative grid h-full w-full place-items-center overflow-hidden">
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={getUserMediaTitle(item)}
+            className="absolute inset-0 h-full w-full object-contain p-1"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-(--hc-muted)">
+            미리보기를 준비하는 중이에요.
+          </div>
+        )}
+      </div>
+    );
+  }
 
+  /*
+    사진을 칸 안에 인화물처럼 놓는다. 칸은 3:4 로 고정해 사진이 늦게 와도 목록이 밀리지 않고(#media- 스크롤이 어긋나지 않는다),
+    사진은 자르지도 늘이지도 않아 세로 띠는 띠로, 가로 사진은 가로로 보인다. 칸에 테두리를 두르지 않는다 — 이 화면의 주인공은 사진이다.
+  */
   return (
-    <div className={shellClassName}>
-      {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={previewUrl}
-          alt={getUserMediaTitle(item)}
-          className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
-        />
-      ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-(--hc-muted)">
-          미리보기를 준비하는 중이에요.
-        </div>
-      )}
+    <div className="relative aspect-3/4">
+      {/* 안쪽을 띄워 둔다 — 그냥 두면 큰 사진이 칸을 키워(aspect-ratio 의 min-height:auto) 줄이 어긋난다. */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={getUserMediaTitle(item)}
+            loading="lazy"
+            className="max-h-full max-w-full rounded-md object-contain shadow-[0_10px_24px_rgba(0,0,0,0.28)]"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center rounded-xl bg-(--hc-surface-muted) px-2 text-center text-[11px] text-(--hc-muted)">
+            미리보기를 준비하는 중이에요.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -463,7 +493,7 @@ export default function HistoryPage() {
           {/* 부제는 두지 않는다 — 개수는 달마다 붙은 「N컷」이 이미 말하고, 보관 기간은
               정작 필요한 자리(기록이 없을 때)에서 따로 안내한다. 늘 떠 있으면 자기
               사진을 보러 온 화면 맨 위에서 요금제부터 읽게 된다. */}
-          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+          <h1 className="text-[34px] font-extrabold leading-tight tracking-[-0.03em]">
             기록
           </h1>
 
@@ -570,10 +600,10 @@ export default function HistoryPage() {
             {groups.map((group) => (
               <section key={group.key} className="flex flex-col gap-4">
                 <div className="flex items-baseline gap-2.5">
-                  <h2 className="text-[19px] font-extrabold tracking-tight">
+                  <h2 className="text-[18px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[13px] text-(--hc-muted)">
+                  <span className="font-mono text-[12px] tabular-nums text-(--hc-muted)">
                     {group.items.length}컷
                   </span>
                 </div>
@@ -611,13 +641,8 @@ export default function HistoryPage() {
                               <PencilLine className="h-3.5 w-3.5" />
                             </button>
                           </div>
-                          <p className="text-[11px] text-(--hc-muted)">
-                            {parseServerDateTime(item.createdAt)
-                              ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
-                                  "ko-KR",
-                                  { month: "long", day: "numeric" },
-                                )
-                              : "날짜 없음"}
+                          <p className="font-mono text-[11px] tabular-nums text-(--hc-muted)">
+                            {stripDate(item) ?? "날짜 없음"}
                           </p>
                         </div>
 
@@ -758,7 +783,7 @@ function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <b className="min-w-30 text-center text-[20px] tracking-tight">
+          <b className="min-w-30 text-center text-[18px] tracking-tight">
             {year}년 {month}월
           </b>
           <button

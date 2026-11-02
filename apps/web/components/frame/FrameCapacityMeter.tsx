@@ -152,7 +152,7 @@ function GaugeDot({ state }: { state: GaugeDotState }) {
   const className = [
     "inline-grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border-[1.5px]",
     state === "filled"
-      ? "border-(--hc-primary) bg-(--hc-primary)"
+      ? "border-(--hc-primary-line) bg-(--hc-primary)"
       : state === "empty"
         ? "border-(--hc-border-strong) bg-transparent"
         : "border-(--hc-border-subtle) bg-transparent",
