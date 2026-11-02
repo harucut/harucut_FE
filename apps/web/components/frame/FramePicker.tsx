@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, type KeyboardEvent, type Ref } from "react";
 import { Check } from "lucide-react";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
@@ -167,7 +167,7 @@ function FramePickerCard({
   onClick,
   mode = "grid",
 }: {
-  ref?: React.Ref<HTMLButtonElement>;
+  ref?: Ref<HTMLButtonElement>;
   frameId: FrameId;
   frameName: string;
   selected: boolean;

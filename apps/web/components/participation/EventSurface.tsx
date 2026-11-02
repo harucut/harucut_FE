@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import Link from "next/link";
 import { eventFontClassName } from "@/lib/event/eventFonts";
 import { nativeSetColorScheme } from "@/lib/nativeBridge";
 import {
@@ -114,6 +115,19 @@ const BUTTON_SIZE = {
   booth: "h-[clamp(5rem,11vmin,7.5rem)] px-8 text-[clamp(1.5rem,3.8vmin,2.5rem)]",
 } as const;
 
+function useEventButtonClass(tone: keyof typeof BUTTON_TONE, size: keyof typeof BUTTON_SIZE, className?: string) {
+  const font = useEventFont();
+  return [
+    "inline-flex w-full shrink-0 touch-manipulation items-center justify-center gap-2 rounded-full transition-opacity duration-150 enabled:hover:opacity-90 disabled:opacity-40",
+    BUTTON_TONE[tone],
+    BUTTON_SIZE[size],
+    tone === "primary" ? font : null,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** 행사 화면의 버튼. 색은 전부 행사 테마 토큰이라 주최자 색을 따른다. 누를 것은 알약이다. */
 export function EventButton({
   tone = "primary",
@@ -125,21 +139,27 @@ export function EventButton({
   tone?: keyof typeof BUTTON_TONE;
   size?: keyof typeof BUTTON_SIZE;
 }) {
-  const font = useEventFont();
+  return <button type={type} className={useEventButtonClass(tone, size, className)} {...rest} />;
+}
+
+/** 다른 화면으로 가는 주 동작. 모양은 EventButton 과 같다. */
+export function EventLinkButton({
+  href,
+  tone = "primary",
+  size = "lg",
+  className,
+  children,
+}: {
+  href: string;
+  tone?: keyof typeof BUTTON_TONE;
+  size?: keyof typeof BUTTON_SIZE;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <button
-      type={type}
-      className={[
-        "inline-flex w-full shrink-0 touch-manipulation items-center justify-center gap-2 rounded-full transition-opacity duration-150 enabled:hover:opacity-90 disabled:opacity-40",
-        BUTTON_TONE[tone],
-        BUTTON_SIZE[size],
-        tone === "primary" ? font : null,
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      {...rest}
-    />
+    <Link href={href} className={useEventButtonClass(tone, size, className)}>
+      {children}
+    </Link>
   );
 }
 

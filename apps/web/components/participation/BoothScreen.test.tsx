@@ -33,7 +33,7 @@ jest.mock("@/components/participation/EventParticipation", () => {
       onRunOpened,
     }: {
       token: string;
-      onDone: (token: string, run: unknown) => void;
+      onDone: (token: string, run: unknown, photos: Blob[]) => void;
       onRunOpened?: (run: unknown, token: string) => void;
     }) => (
       <>
@@ -43,7 +43,7 @@ jest.mock("@/components/participation/EventParticipation", () => {
         <button type="button" onClick={() => onRunOpened?.({ captureRunId: "run-old", stateVersion: 1 }, "guest-old")}>
           앞 손님 회차 열림
         </button>
-        <button type="button" onClick={() => onDone("R".repeat(43), { captureRunId: "run-7", stateVersion: 4 })}>
+        <button type="button" onClick={() => onDone("R".repeat(43), { captureRunId: "run-7", stateVersion: 4 }, [])}>
           전송 끝
         </button>
       </>
@@ -319,6 +319,22 @@ it("연결 코드가 든 주소를 받으면 코드를 채우고 주소에서 �
 
   expect(screen.getByPlaceholderText("XXXX-XXXX")).toHaveValue("K7QM-3XRP");
   expect(window.location.hash).toBe("");
+});
+
+// 받을 사진이 없는데 QR 을 내밀면 손님이 빈 링크를 들고 간다.
+it("합성에 실패하면 QR 을 치우고 다시 찍으라고 하며, 한 번에 처음으로 돌아간다", async () => {
+  api.getResult.mockResolvedValue({ status: "FAILED", eventName: "행사", thumbnailUrl: null, expiresAt: "2999-01-01T00:00:00Z" });
+  pairDevice();
+  render(<BoothScreen />);
+  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: /동의하고 계속/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "전송 끝" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("한 번 더 찍어 주세요");
+  expect(screen.queryByRole("img", { name: "사진 받기 QR" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "처음으로" }));
+  expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
 });
 
 describe("연결 화면의 개인 계정 로그아웃", () => {

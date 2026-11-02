@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { DevelopingPhoto, DevelopingPlaceholder } from "@/components/participation/DevelopingPhoto";
 import { EventButton, EventLogo, EventSurface, EventTitle } from "@/components/participation/EventSurface";
+import { frameIsTall } from "@/components/participation/FrameWithPhotos";
 import { QrCode } from "@/components/qr/QrCode";
 import {
   CaptureAndSend,
@@ -32,7 +34,7 @@ import {
   startBoothGuest,
   submitConsents,
 } from "@/lib/event/eventApi";
-import { pageThemeCopy } from "@/lib/event/pageTheme";
+import { RESULT_FAILED_RETAKE_COPY, pageThemeCopy } from "@/lib/event/pageTheme";
 import type { CaptureRun, EventFrameRef, PublicEvent, ResultStatus } from "@/lib/event/types";
 
 /**
@@ -54,7 +56,7 @@ type Phase =
   | { kind: "frame" }
   | { kind: "capture" }
   | { kind: "sending"; progress: string }
-  | { kind: "result"; resultToken: string }
+  | { kind: "result"; resultToken: string; photos: Blob[] }
   | { kind: "unavailable"; message: string };
 
 type Guest = { token: string; run: CaptureRun | null };
@@ -448,14 +450,14 @@ export function BoothScreen() {
               // 앞 손님의 회차 열림 응답이 다음 손님 뒤에 도착할 수 있다(유휴 종료 뒤). 그 손님의 것일 때만 반영한다.
               setGuest((current) => (current && current.token === runToken ? { ...current, run } : current))
             }
-            onDone={(resultToken, run) => {
+            onDone={(resultToken, run, photos) => {
               // 전송이 끝나기 전에 유휴로 넘어갔으면 이 결과는 떠난 손님의 것이다. 다음 손님에게 QR 을 띄우지 않는다.
               if (guestTokenRef.current !== guest.token) {
                 if (device) void closeBoothRun(device.token, run.captureRunId, run.stateVersion).catch(() => {});
                 return;
               }
               setGuest((current) => (current ? { ...current, run } : current));
-              setPhase({ kind: "result", resultToken });
+              setPhase({ kind: "result", resultToken, photos });
             }}
             onSessionEnded={() => void finishGuest()}
             onConsentRequired={() => {
@@ -479,6 +481,8 @@ export function BoothScreen() {
             event={event}
             resultToken={phase.resultToken}
             resultLink={resultLink}
+            frame={frame ?? undefined}
+            photos={phase.photos}
             onNext={() => void finishGuest()}
           />
         ) : null}
@@ -579,11 +583,16 @@ function BoothResult({
   event,
   resultToken,
   resultLink,
+  frame,
+  photos,
   onNext,
 }: {
   event: PublicEvent | null;
   resultToken: string;
   resultLink: string;
+  frame?: EventFrameRef;
+  /** 방금 찍은 네 장. 합성을 기다리는 동안 보여 주고, 손님을 넘기면 함께 사라진다. */
+  photos: Blob[];
   onNext: () => void;
 }) {
   const [result, setResult] = useState<ResultStatus | null>(null);
@@ -624,17 +633,21 @@ function BoothResult({
     status === "DONE"
       ? pageThemeCopy(event?.theme, "done", "사진이 완성됐어요.")
       : status === "FAILED"
-        ? pageThemeCopy(event?.theme, "error", "사진을 만들지 못했어요. 담당자에게 알려 주세요.")
+        ? pageThemeCopy(event?.theme, "error", RESULT_FAILED_RETAKE_COPY)
         : pageThemeCopy(event?.theme, "composing", "사진을 만들고 있어요. 링크는 지금 받아 가도 돼요.");
 
   return (
     <BoothResultView
       photo={photo ? <BoothResultPhoto src={photo} /> : null}
+      developing={<DevelopingPhoto frame={frame} photos={photos} />}
+      tall={frame ? frameIsTall(frame.layoutType) : true}
+      failed={status === "FAILED"}
       resultLink={resultLink}
       message={message}
       armed={armed}
       onNext={() => {
-        if (armed) onNext();
+        // 받아 갈 QR 이 없으면 놓칠 것도 없다. 바로 넘어간다.
+        if (armed || status === "FAILED") onNext();
         else setArmed(true);
       }}
     />
@@ -649,31 +662,67 @@ function BoothResultPhoto({ src }: { src: string }) {
       src={src}
       alt="완성된 사진"
       referrerPolicy="no-referrer"
-      className="ev-develop max-h-[38dvh] w-auto max-w-full rounded-xl object-contain shadow-[0_18px_44px_rgba(0,0,0,0.22)] landscape:max-h-full"
+      className="ev-develop max-h-full w-auto max-w-full rounded-xl object-contain shadow-[0_18px_44px_rgba(0,0,0,0.22)]"
     />
   );
 }
 
-/** 사진과 QR 을 함께 내미는 화면의 모양. 상태는 부모가 갖는다(Studio 미리보기도 이 모양을 쓴다). */
+/**
+ * 사진과 QR 을 함께 내미는 화면의 모양. 상태는 부모가 갖는다(Studio 미리보기도 이 모양을 쓴다).
+ * 세로로 긴 프레임은 세로 태블릿에서도 나란히 둔다 — 위아래로 쌓으면 사진이 화면 폭의 2할로 줄어 QR 만 보인다.
+ * 휴대폰 폭에서는 나란히 두면 둘 다 작아져 위아래로 쌓는다.
+ * 만들지 못했으면 받을 사진이 없으니 QR 을 내밀지 않는다.
+ */
 export function BoothResultView({
   photo,
+  developing,
+  tall = true,
+  failed = false,
   resultLink,
   message,
   armed,
   onNext,
 }: {
   photo: React.ReactNode;
+  /** 사진이 나오기 전의 자리. */
+  developing?: React.ReactNode;
+  tall?: boolean;
+  failed?: boolean;
   resultLink: string;
   message: string;
   armed: boolean;
   onNext: () => void;
 }) {
+  if (failed) {
+    return (
+      <section className="ev-step flex flex-1 flex-col items-center justify-center gap-[clamp(1.5rem,4vmin,3.5rem)] pb-[max(clamp(1.25rem,3vmin,2.5rem),env(safe-area-inset-bottom))]">
+        <div className="ev-readable flex w-full max-w-2xl flex-col items-center gap-[clamp(1.25rem,3.5vmin,2.5rem)] text-center">
+          <p role="alert" className="break-keep text-[clamp(1.5rem,4.2vmin,2.75rem)] font-extrabold leading-tight tracking-[-0.02em]">
+            {message}
+          </p>
+          <EventButton size="booth" onClick={onNext}>
+            처음으로
+          </EventButton>
+        </div>
+      </section>
+    );
+  }
   return (
-    <section className="ev-step flex flex-1 flex-col items-center justify-center gap-[clamp(1.25rem,3.5vmin,3.5rem)] pb-[max(clamp(1.25rem,3vmin,2.5rem),env(safe-area-inset-bottom))] landscape:flex-row">
-      <div className="flex min-h-0 w-full items-center justify-center landscape:h-[min(78dvh,46rem)] landscape:w-auto landscape:flex-1">
-        {photo ?? <div aria-hidden className="ev-developing aspect-2/3 h-[34dvh] rounded-2xl border border-(--ev-border) bg-(--ev-card) landscape:h-full" />}
+    <section
+      className={`ev-step flex flex-1 flex-col items-center justify-center gap-[clamp(1.25rem,3.5vmin,3.5rem)] pb-[max(clamp(1.25rem,3vmin,2.5rem),env(safe-area-inset-bottom))] landscape:flex-row ${tall ? "portrait:sm:flex-row" : ""}`}
+    >
+      <div
+        className={`flex h-[40dvh] min-h-0 w-full items-center justify-center [container-type:size] landscape:h-[min(78dvh,46rem)] landscape:w-auto landscape:flex-1 ${
+          tall ? "portrait:sm:h-[min(76dvh,60rem)] portrait:sm:w-auto portrait:sm:flex-1" : ""
+        }`}
+      >
+        {photo ?? developing ?? <DevelopingPlaceholder />}
       </div>
-      <div className="ev-readable flex w-full max-w-xl flex-col items-center gap-[clamp(0.75rem,2vmin,1.5rem)] text-center landscape:w-[clamp(20rem,40vw,36rem)]">
+      <div
+        className={`ev-readable flex w-full max-w-xl flex-col items-center gap-[clamp(0.75rem,2vmin,1.5rem)] text-center landscape:w-[clamp(20rem,40vw,36rem)] ${
+          tall ? "portrait:sm:w-[min(52vw,36rem)] portrait:sm:shrink-0" : ""
+        }`}
+      >
         {/* QR 은 바탕을 행사 색에 맡기지 않는다. 흰 바탕이어야 어떤 테마에서도 스캐너가 읽는다. */}
         <div className="shrink-0 rounded-[clamp(1.25rem,3vmin,2.5rem)] bg-white p-[clamp(0.5rem,1.5vmin,1.25rem)] shadow-[0_18px_44px_rgba(0,0,0,0.18)]">
           <QrCode value={resultLink} size={280} label="사진 받기 QR" className="size-[clamp(12rem,38vmin,26rem)]" />

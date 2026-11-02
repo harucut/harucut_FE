@@ -213,3 +213,7 @@ export function compactPageTheme(theme: PageTheme): PageTheme | null {
   if (Object.keys(branding).length) out.branding = branding;
   return Object.keys(out).length > 1 ? out : null;
 }
+
+/** 합성에 실패했을 때. 방금 찍은 사람은 그 자리에서 다시 찍을 수 있고, 링크로 받은 사람은 행사장으로 돌아가야 한다. */
+export const RESULT_FAILED_RETAKE_COPY = "사진을 만들지 못했어요. 한 번 더 찍어 주세요.";
+export const RESULT_FAILED_LINK_COPY = "사진을 만들지 못했어요. 행사장에서 QR을 다시 찍어 새로 찍거나, 행사 담당자에게 문의해 주세요.";

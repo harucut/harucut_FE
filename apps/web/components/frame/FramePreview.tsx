@@ -126,7 +126,9 @@ export function FramePreview({
               alt=""
               aria-hidden
               className="absolute rounded-md object-cover"
-              style={mediaStyle}
+              // 예시 사진은 세로로 찍혔다. 가로로 긴 칸에 넣으면 위아래가 잘리니 얼굴이 있는 위를 남긴다.
+              // 사용자 사진은 서버 합성과 같게 가운데를 쓴다.
+              style={mediaItem.src.startsWith("/demo/") ? { ...mediaStyle, objectPosition: "50% 25%" } : mediaStyle}
             />
           );
         }

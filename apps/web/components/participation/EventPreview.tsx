@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import { DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { BoothIdleView, BoothResultView } from "@/components/participation/BoothScreen";
 import {
   CAPTURE_GUIDE_DEFAULT,
@@ -29,9 +28,10 @@ import {
   EventTitle,
   useEventCopy,
 } from "@/components/participation/EventSurface";
-import { frameIdFromFrameType } from "@/lib/frameApi";
+import { DevelopingPlaceholder } from "@/components/participation/DevelopingPhoto";
+import { FrameWithPhotos, frameFitStyle, frameIsTall } from "@/components/participation/FrameWithPhotos";
 import type { ResolvedPageTheme } from "@/lib/event/pageTheme";
-import { pageThemeCopy } from "@/lib/event/pageTheme";
+import { RESULT_FAILED_RETAKE_COPY, pageThemeCopy } from "@/lib/event/pageTheme";
 import type { ConsentItem, EventFrameRef, PublicEvent } from "@/lib/event/types";
 
 /** Studio → iframe 메시지. 같은 출처에서만 받는다. */
@@ -84,37 +84,17 @@ function toEvent(data: EventPreviewData, captureOpen: boolean): PublicEvent {
 }
 
 /**
- * 프레임 그림 위에 시험 사진을 칸마다 놓은 완성 예시. 실제 참가자 사진을 쓰지 않는다(기획 R5 — 미리보기에는 시험 사진).
- * 서버가 합성한 결과와 칸 위 장식의 겹침까지 같지는 않다. 그 비교는 시험 촬영으로 한다.
+ * 프레임 칸에 시험 사진을 넣은 완성 예시. 실제 참가자 사진을 쓰지 않는다(기획 R5 — 미리보기에는 시험 사진).
+ * 칸 위 글자·스티커가 사진과 어떻게 겹치는지 여기서 보인다. 마지막 확인은 시험 촬영으로 한다.
  */
 function SamplePhoto({ frame, className }: { frame: EventFrameRef | null; className?: string }) {
-  const layout = FRAME_LAYOUTS[frameIdFromFrameType(frame?.layoutType ?? "CLASSIC")];
-  const pct = (value: number, total: number) => `${(value / total) * 100}%`;
   return (
-    <div
-      className={`relative overflow-hidden rounded-xl bg-white shadow-[0_14px_34px_rgba(0,0,0,0.18)] ${className ?? ""}`}
-      style={{ aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}` }}
-    >
-      {frame?.previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={frame.previewUrl} alt="" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" />
-      ) : null}
-      {layout.slots.map((slot, index) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={index}
-          src={DEMO_WEDDING_PHOTOS[index % DEMO_WEDDING_PHOTOS.length]}
-          alt=""
-          className="absolute object-cover"
-          style={{
-            left: pct(slot.x, layout.totalWidth),
-            top: pct(slot.y, layout.totalHeight),
-            width: pct(slot.width, layout.totalWidth),
-            height: pct(slot.height, layout.totalHeight),
-          }}
-        />
-      ))}
-    </div>
+    <FrameWithPhotos
+      frame={frame ?? { layoutType: "CLASSIC" }}
+      photos={DEMO_PHOTOS}
+      className={`rounded-xl bg-white shadow-[0_14px_34px_rgba(0,0,0,0.18)] ${className ?? ""}`}
+      style={frameFitStyle(frame?.layoutType ?? "CLASSIC")}
+    />
   );
 }
 
@@ -128,12 +108,12 @@ function CapturePreview({ frame, booth }: { frame: EventFrameRef | null; booth: 
         <span className={`font-semibold text-(--ev-muted) ${booth ? "text-[clamp(1rem,2.2vmin,1.25rem)]" : "text-[14px]"}`}>
           {booth ? "처음으로" : "뒤로"}
         </span>
-        <CaptureGauge previews={[DEMO_WEDDING_PHOTOS[0], null, null, null]} nextEmpty={1} ratio={ratio} booth={booth} />
+        <CaptureGauge previews={[DEMO_PHOTOS[0], null, null, null]} nextEmpty={1} ratio={ratio} booth={booth} />
       </div>
       <div className={viewfinderWrapClass(wide)}>
         <div className={viewfinderClass(wide)} style={viewfinderStyle(ratio)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={DEMO_WEDDING_PHOTOS[1]} alt="" className="size-full object-cover" />
+          <img src={DEMO_PHOTOS[1]} alt="" className="size-full object-cover" />
         </div>
       </div>
       <div className={captureRailClass(wide)}>
@@ -149,7 +129,7 @@ function CapturePreview({ frame, booth }: { frame: EventFrameRef | null; booth: 
 function ResultPreview({ data, kind }: { data: EventPreviewData; kind: "composing" | "done" | "error" | "expired" }) {
   const done = useEventCopy("done", "사진이 완성됐어요.");
   const composing = useEventCopy("composing", "사진을 만들고 있어요. 이 화면을 열어 두면 준비되는 대로 보여 드려요.");
-  const failed = useEventCopy("error", "사진을 만들지 못했어요. 행사 담당자에게 문의해 주세요.");
+  const failed = useEventCopy("error", RESULT_FAILED_RETAKE_COPY);
   const expired = useEventCopy("expired", "사진을 받을 수 있는 기간이 지났어요.");
   const frame = data.frames.find((f) => f.isDefault) ?? data.frames[0] ?? null;
   return (
@@ -160,20 +140,40 @@ function ResultPreview({ data, kind }: { data: EventPreviewData; kind: "composin
       </div>
       {kind === "composing" ? (
         <div className="flex flex-col items-center gap-4">
-          <div aria-hidden className="ev-developing aspect-2/3 w-full max-w-60 rounded-2xl border border-(--ev-border) bg-(--ev-card)" />
+          <div aria-hidden className="flex h-[52svh] w-full items-center justify-center [container-type:size]">
+            {frame?.previewUrl ? (
+              <FrameWithPhotos
+                frame={frame}
+                photos={DEMO_PHOTOS}
+                className="ev-developing rounded-xl shadow-[0_14px_34px_rgba(0,0,0,0.18)]"
+                style={frameFitStyle(frame.layoutType)}
+              />
+            ) : (
+              <DevelopingPlaceholder />
+            )}
+          </div>
           <p className="break-keep text-center text-[15px] leading-relaxed text-(--ev-muted)">{composing}</p>
         </div>
       ) : null}
       {kind === "done" ? (
         <>
           <p className="ev-readable break-keep text-[16px] leading-relaxed">{done}</p>
-          <SamplePhoto frame={frame} className="mx-auto h-[56svh]" />
+          <div className="flex h-[56svh] items-center justify-center [container-type:size]">
+            <SamplePhoto frame={frame} />
+          </div>
           <EventActionBar>
             <EventButton>사진 저장</EventButton>
           </EventActionBar>
         </>
       ) : null}
-      {kind === "error" ? <p className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">{failed}</p> : null}
+      {kind === "error" ? (
+        <>
+          <p className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">{failed}</p>
+          <EventActionBar>
+            <EventButton>다시 찍기</EventButton>
+          </EventActionBar>
+        </>
+      ) : null}
       {kind === "expired" ? <p className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">{expired}</p> : null}
     </div>
   );
@@ -254,7 +254,8 @@ function PreviewBody({ data, screen }: { data: EventPreviewData; screen: EventPr
     case "booth-result":
       return boothShell(
         <BoothResultView
-          photo={<SamplePhoto frame={frame} className="h-[38dvh] landscape:h-full" />}
+          photo={<SamplePhoto frame={frame} />}
+          tall={frame ? frameIsTall(frame.layoutType) : true}
           resultLink="미리보기 화면의 예시 QR 입니다"
           message={pageThemeCopy(data.theme, "done", "사진이 완성됐어요.")}
           armed={false}

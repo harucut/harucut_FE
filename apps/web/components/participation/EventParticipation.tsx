@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, Pause, RotateCcw } from "lucide-react";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { frameIdFromFrameType } from "@/lib/frameApi";
@@ -50,6 +51,7 @@ import { composeFailureCopy } from "@/lib/composeFailure";
 import { freeTextErrorMessage, localFreeTextProblem, normalizeFreeText } from "@/lib/event/freeText";
 import { safeAssetUrl } from "@/lib/event/pageTheme";
 import { FreeTextComposer, type FreeTextValue } from "@/components/participation/FreeTextComposer";
+import { FrameWithPhotos, frameFitStyle, rotatedPhotos } from "@/components/participation/FrameWithPhotos";
 
 /**
  * 개인 휴대폰 참가 `/e/{slug}`(기획 R5 4절, ADR-0007 §5).
@@ -349,12 +351,22 @@ export function EventParticipation({ slug, initialEvent = null }: { slug: string
   };
 
   const goToResult = useCallback(
-    (resultToken: string) => {
-      if (event) stashResultHandoff({ token: resultToken, eventName: event.name, theme: event.theme, eventPath: `/e/${slug}` });
+    (resultToken: string, _run?: CaptureRun, photos?: Blob[]) => {
+      if (event) {
+        stashResultHandoff({
+          token: resultToken,
+          eventName: event.name,
+          theme: event.theme,
+          eventPath: `/e/${slug}`,
+          // 합성을 기다리는 동안 방금 찍은 네 장을 프레임에 넣어 보여 준다. 메모리로만 넘긴다.
+          photos,
+          frame: frame ?? undefined,
+        });
+      }
       // 결과 링크는 fragment 로만 옮긴다(경로·쿼리에 싣지 않는다).
       router.push(`/r#${resultToken}`);
     },
-    [router, event, slug],
+    [router, event, slug, frame],
   );
 
   const onShareResult = async (jobId: number) => {
@@ -510,27 +522,34 @@ export function EventParticipation({ slug, initialEvent = null }: { slug: string
 
 /**
  * 첫 화면의 그림. 지금 참가자가 받게 될 프레임을 실물처럼 놓는다 — 행사가 고른 프레임이 곧 이 행사의 얼굴이다.
+ * 칸에는 예시 사진을 넣어 찍으면 무엇이 나오는지 바로 보이게 한다. 빈 칸은 불러오다 실패한 화면처럼 보인다.
  * 둘 이상이면 두 장을 겹쳐 고를 수 있다는 것까지 보여 준다. 프레임 그림이 없으면 자리를 비워 글자가 내려온다.
- * 장식이라 스크린리더에는 숨긴다(프레임 이름은 고르는 단계에서 읽힌다).
+ * 그림은 장식이라 스크린리더에는 숨긴다(프레임 이름은 고르는 단계에서 읽힌다).
  */
 export function FrameShowcase({ frames, className = "min-h-[38svh] flex-1" }: { frames: EventFrameRef[]; className?: string }) {
   const shown = frames.filter((frame) => frame.previewUrl).slice(0, 2);
   if (shown.length === 0) return <div aria-hidden className="flex-1" />;
   return (
-    <div aria-hidden className={`relative ${className}`}>
+    <div className={`relative ${className}`}>
       {shown.map((frame, index) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <div
           key={frame.frameVersionId}
-          src={frame.previewUrl}
-          alt=""
-          referrerPolicy="no-referrer"
-          fetchPriority="high"
-          className={`absolute inset-y-3 h-[calc(100%-1.5rem)] object-contain drop-shadow-[0_18px_28px_rgba(0,0,0,0.22)] ${
-            shown.length === 1 ? "left-0 w-full" : index === 0 ? "left-0 w-[56%] -rotate-[5deg]" : "right-0 w-[56%] rotate-[4deg]"
+          aria-hidden
+          className={`absolute inset-y-3 flex items-center justify-center [container-type:size] ${
+            shown.length === 1 ? "inset-x-0" : index === 0 ? "left-0 w-[56%] -rotate-[5deg]" : "right-0 w-[56%] rotate-[4deg]"
           }`}
-        />
+        >
+          <FrameWithPhotos
+            frame={frame}
+            photos={rotatedPhotos(DEMO_PHOTOS, index * 2)}
+            className="drop-shadow-[0_18px_28px_rgba(0,0,0,0.22)]"
+            style={frameFitStyle(frame.layoutType)}
+          />
+        </div>
       ))}
+      <p className="absolute bottom-0 left-0 rounded-full bg-black/65 px-2.5 py-1 text-[clamp(0.6875rem,1.5vmin,0.875rem)] font-medium leading-none text-white">
+        예시 사진
+      </p>
     </div>
   );
 }
@@ -738,10 +757,10 @@ export function HomeStep({
 }
 
 const LAYOUT_LABEL: Record<LayoutType, string> = {
-  CLASSIC: "세로 네 컷",
-  WIDE: "가로 네 컷",
-  GRID: "격자 네 컷",
-  POLAROID: "폴라로이드",
+  CLASSIC: "세로 4컷",
+  WIDE: "가로 4컷",
+  GRID: "네모 4컷",
+  POLAROID: "즉석사진 4컷",
 };
 
 /** 같은 레이아웃이 여럿이면 번호를 붙여 구별한다 — 화면의 이름이자 스크린리더가 읽는 이름이다. */
@@ -787,13 +806,9 @@ export function FrameStep({
               className="relative flex touch-manipulation flex-col items-center gap-2 rounded-2xl border-2 border-(--ev-border) bg-(--ev-card) p-3 transition-colors duration-150 aria-pressed:border-(--ev-accent)"
             >
               {frame.previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={frame.previewUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className={`w-full object-contain ${booth ? "h-[clamp(14rem,44vmin,30rem)]" : "h-[clamp(11rem,30svh,16rem)]"}`}
-                />
+                <span className={`flex w-full items-center justify-center [container-type:size] ${booth ? "h-[clamp(14rem,44vmin,30rem)]" : "h-[clamp(11rem,30svh,16rem)]"}`}>
+                  <FrameWithPhotos frame={frame} photos={DEMO_PHOTOS} style={frameFitStyle(frame.layoutType)} />
+                </span>
               ) : (
                 <span aria-hidden className={`w-full rounded-lg bg-(--ev-bg) ${booth ? "h-[clamp(14rem,44vmin,30rem)]" : "h-[clamp(11rem,30svh,16rem)]"}`} />
               )}
@@ -808,6 +823,7 @@ export function FrameStep({
         })}
       </div>
       <EventActionBar>
+        <p className={`text-center text-(--ev-muted) ${booth ? "text-[clamp(0.875rem,1.8vmin,1.125rem)]" : "text-[12px]"}`}>칸 안의 사진은 예시예요.</p>
         <EventButton size={booth ? "booth" : "lg"} disabled={!selected} onClick={onNext}>
           이 프레임으로 찍기
         </EventButton>
@@ -977,8 +993,8 @@ export function CaptureAndSend({
   frame: EventFrameRef;
   sending: string | null;
   onProgress: (progress: string | null) => void;
-  /** 접수가 끝났다. 부스는 회차를 닫으려고 회차 정보도 받는다. */
-  onDone: (resultToken: string, run: CaptureRun) => void;
+  /** 접수가 끝났다. 부스는 회차를 닫으려고 회차 정보도 받는다. 찍은 네 장은 합성을 기다리는 화면이 쓴다. */
+  onDone: (resultToken: string, run: CaptureRun, photos: Blob[]) => void;
   /**
    * 서버가 회차를 열었다. 부스는 손님이 전송 전에 떠나도(유휴 종료) 이 회차를 닫아야 한다 — 접수가 끝난 뒤에야
    * 회차를 알면, 그 전에 끝난 손님의 회차와 참가자 세션이 서버에 열린 채 남는다(Codex 리뷰 #523).
@@ -1012,15 +1028,17 @@ export function CaptureAndSend({
   const [running, setRunning] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [leaveArmed, setLeaveArmed] = useState(false);
-  // 확인 단계에서 칸을 잘못 건드려 그 포즈를 잃지 않게, 한 번 더 눌러야 지운다.
+  // 확인 단계에서 칸을 잘못 건드려 그 포즈를 잃지 않게, 한 번 더 눌러야 다시 찍는다.
   const [retakeArmed, setRetakeArmed] = useState<number | null>(null);
+  // 다시 찍는 동안 원래 사진을 쥐고 있다. 새 사진이 찍혀야 버린다 — 마음을 바꾸면 그대로 돌아간다.
+  const [retaking, setRetaking] = useState<{ index: number; shot: Blob; preview: string | null; uploaded: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const runRef = useRef<CaptureRun | null>(null);
   const uploadedRef = useRef<(string | null)[]>(Array(SHOT_COUNT).fill(null));
   const idempotencyKeyRef = useRef<string | null>(null);
-  // 자유 문구(D06). 같은 멱등키로 문구가 다르면 서버가 409 MEDIA-001 이라, 보낸 문구가 바뀌면 키를 새로 잡는다.
+  // 같은 멱등키로 입력이나 문구가 다르면 서버가 409 MEDIA-001 이다. 보낸 사진이나 자유 문구(D06)가 바뀌면 키를 새로 잡는다.
   const [freeText, setFreeText] = useState<FreeTextValue>(() => ({ text: "", styleId: event.freeText?.styles[0]?.id ?? "" }));
-  const sentFreeTextRef = useRef<string | null>(null);
+  const sentInputRef = useRef<string | null>(null);
   // 문구 미리보기는 회차에 고정된 행사 설정으로 그린다 — 회차가 바뀌면(PART-003 뒤 새 회차) 다시 그린다.
   const [captureRunId, setCaptureRunId] = useState<string | null>(null);
 
@@ -1035,7 +1053,7 @@ export function CaptureAndSend({
     setCaptureRunId(run.captureRunId);
     uploadedRef.current = Array(SHOT_COUNT).fill(null);
     idempotencyKeyRef.current = crypto.randomUUID();
-    sentFreeTextRef.current = null;
+    sentInputRef.current = null;
     // 요청한 손님의 자격도 함께 넘긴다 — 늦게 끝난 앞 손님의 회차가 다음 손님에게 붙지 않게(부스).
     onRunOpenedRef.current?.(run, token);
   }, [token, event.eventId]);
@@ -1064,13 +1082,21 @@ export function CaptureAndSend({
     return () => stop();
   }, []);
 
-  // 미리보기 주소는 화면을 떠날 때 해제한다. 다시 찍은 칸은 retake 가 그때 해제한다. 칸이 바뀔 때마다 전부 해제하면
-  // 아직 쓰는 주소까지 죽어, 다음에 그리는 <img> 가 깨진다.
+  // 미리보기 주소는 화면을 떠날 때 해제한다. 다시 찍은 칸은 새 사진이 찍힐 때 해제한다. 칸이 바뀔 때마다 전부 해제하면
+  // 아직 쓰는 주소까지 죽어, 다음에 그리는 사진이 깨진다.
   const previewsRef = useRef(previews);
+  const retakingRef = useRef(retaking);
   useEffect(() => {
     previewsRef.current = previews;
-  }, [previews]);
-  useEffect(() => () => previewsRef.current.forEach((url) => url && URL.revokeObjectURL(url)), []);
+    retakingRef.current = retaking;
+  }, [previews, retaking]);
+  useEffect(
+    () => () => {
+      previewsRef.current.forEach((url) => url && URL.revokeObjectURL(url));
+      if (retakingRef.current?.preview) URL.revokeObjectURL(retakingRef.current.preview);
+    },
+    [],
+  );
 
   const nextEmpty = shots.findIndex((shot) => shot === null);
   const hasShots = shots.some(Boolean);
@@ -1092,13 +1118,17 @@ export function CaptureAndSend({
       setShots((prev) => prev.map((shot, i) => (i === nextEmpty ? photo : shot)));
       setPreviews((prev) => prev.map((url, i) => (i === nextEmpty ? URL.createObjectURL(photo) : url)));
       uploadedRef.current[nextEmpty] = null;
+      if (retaking?.index === nextEmpty) {
+        if (retaking.preview) URL.revokeObjectURL(retaking.preview);
+        setRetaking(null);
+      }
     } catch {
       setError("사진을 찍지 못했어요. 다시 시도해 주세요.");
       setRunning(false);
     } finally {
       setCapturing(false);
     }
-  }, [captureFrame, nextEmpty]);
+  }, [captureFrame, nextEmpty, retaking]);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -1136,13 +1166,22 @@ export function CaptureAndSend({
 
   const retake = (index: number) => {
     setRetakeArmed(null);
-    const previous = previews[index];
-    if (previous) URL.revokeObjectURL(previous);
-    setShots((prev) => prev.map((shot, i) => (i === index ? null : shot)));
+    const shot = shots[index];
+    if (shot) setRetaking({ index, shot, preview: previews[index], uploaded: uploadedRef.current[index] });
+    setShots((prev) => prev.map((value, i) => (i === index ? null : value)));
     setPreviews((prev) => prev.map((url, i) => (i === index ? null : url)));
     uploadedRef.current[index] = null;
     // 확인 단계에서는 카메라를 꺼 둔다. 다시 찍으려면 켠다.
     if (cameraState !== "ready") void startCamera();
+  };
+
+  const cancelRetake = () => {
+    if (!retaking) return;
+    pauseShooting();
+    setShots((prev) => prev.map((value, i) => (i === retaking.index ? retaking.shot : value)));
+    setPreviews((prev) => prev.map((url, i) => (i === retaking.index ? retaking.preview : url)));
+    uploadedRef.current[retaking.index] = retaking.uploaded;
+    setRetaking(null);
   };
 
   // 전송 중에 화면을 떠났으면 남은 칸을 올리지 않고, 떠난 뒤의 응답으로 다음 화면을 움직이지 않는다.
@@ -1177,11 +1216,11 @@ export function CaptureAndSend({
       const freeTextToSend = normalizeFreeText(freeText.text);
       const sentFreeText =
         event.freeText && freeTextToSend !== "" ? { text: freeTextToSend, styleId: freeText.styleId } : undefined;
-      const sentKey = JSON.stringify(sentFreeText ?? null);
-      if (sentFreeTextRef.current !== null && sentFreeTextRef.current !== sentKey) {
+      const sentKey = JSON.stringify({ sources: uploadedRef.current, freeText: sentFreeText ?? null });
+      if (sentInputRef.current !== null && sentInputRef.current !== sentKey) {
         idempotencyKeyRef.current = crypto.randomUUID();
       }
-      sentFreeTextRef.current = sentKey;
+      sentInputRef.current = sentKey;
       const accepted = await submitEventCompose(token, event.eventId, {
         captureRunId: run.captureRunId,
         frameVersionId: frame.frameVersionId,
@@ -1191,7 +1230,7 @@ export function CaptureAndSend({
       });
       if (!aliveRef.current) return;
       stopCamera();
-      onDone(accepted.resultToken, run);
+      onDone(accepted.resultToken, run, shots as Blob[]);
     } catch (cause) {
       if (!aliveRef.current) return;
       onProgress(null);
@@ -1227,6 +1266,12 @@ export function CaptureAndSend({
   }, [leaveArmed]);
 
   const leave = () => {
+    // 다시 찍다 마음을 바꾸면 찍어 둔 네 장으로 돌아간다. 행사를 떠나는 것이 아니다.
+    // 셔터가 눌린 뒤에는 새 사진이 곧 들어온다. 그때 돌아가면 되살린 원본을 새 사진이 덮는다.
+    if (retaking) {
+      if (!capturing) cancelRetake();
+      return;
+    }
     if (hasShots && !leaveArmed) {
       setLeaveArmed(true);
       return;
@@ -1243,14 +1288,19 @@ export function CaptureAndSend({
         state={cameraState}
         booth={booth}
         onRetry={() => void startCamera()}
-        onLeave={onLeave ? leave : undefined}
-        leaveLabel={leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
+        onLeave={onLeave || retaking ? leave : undefined}
+        leaveLabel={retaking ? "찍어 둔 사진으로 돌아가기" : leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
       />
     );
   }
 
-  // 남은 칸 수에 따라 버튼이 하는 일을 그대로 말한다.
+  // 남은 칸 수에 따라 버튼이 하는 일을 그대로 말한다. 안내도 같은 말을 한다 — 「한 장 찍기」 위에 네 장을 찍는다고 쓰면 안 된다.
   const shootLabel = emptyCount === SHOT_COUNT ? "찍기 시작" : emptyCount === 1 ? "한 장 찍기" : "이어서 찍기";
+  const stageGuide = retaking
+    ? `버튼을 누르면 ${COUNTDOWN_SECONDS}초 뒤에 ${retaking.index + 1}번째 사진을 다시 찍어요.`
+    : emptyCount === SHOT_COUNT
+      ? guide
+      : `버튼을 누르면 남은 ${emptyCount}장을 이어서 찍어요.`;
 
   return (
     <section
@@ -1262,14 +1312,15 @@ export function CaptureAndSend({
     >
       {allTaken ? null : (
         <div className={CAPTURE_TOP_BAR_CLASS}>
-          {onLeave ? (
+          {onLeave || retaking ? (
             <button
               type="button"
               onClick={leave}
-              className={`-ml-1 flex h-11 shrink-0 items-center gap-1 rounded-full pr-3 font-semibold text-(--ev-muted) ${booth ? "text-[clamp(1rem,2.2vmin,1.25rem)]" : "text-[14px]"}`}
+              disabled={Boolean(retaking) && capturing}
+              className={`-ml-1 flex h-11 shrink-0 items-center gap-1 rounded-full pr-3 font-semibold text-(--ev-muted) disabled:opacity-50 ${booth ? "text-[clamp(1rem,2.2vmin,1.25rem)]" : "text-[14px]"}`}
             >
               <ChevronLeft aria-hidden className="size-5" />
-              {leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
+              {retaking ? "그대로 둘게요" : leaveArmed ? "한 번 더 누르면 나가요" : (leaveLabel ?? "뒤로")}
             </button>
           ) : (
             <span />
@@ -1315,7 +1366,7 @@ export function CaptureAndSend({
                     disabled={Boolean(sending)}
                     onClick={() => (retakeArmed === index ? retake(index) : setRetakeArmed(index))}
                     onBlur={() => setRetakeArmed((armed) => (armed === index ? null : armed))}
-                    aria-label={retakeArmed === index ? `${index + 1}번째 사진을 지우고 다시 찍기` : `${index + 1}번째 사진 다시 찍기`}
+                    aria-label={retakeArmed === index ? `${index + 1}번째 사진, 한 번 더 누르면 다시 찍어요` : `${index + 1}번째 사진 다시 찍기`}
                     className="relative block w-full touch-manipulation overflow-hidden rounded-xl bg-black"
                     style={{ aspectRatio: String(ratio) }}
                   >
@@ -1351,6 +1402,7 @@ export function CaptureAndSend({
                     eventId={event.eventId}
                     captureRunId={captureRunId}
                     frame={frame}
+                    photos={previews}
                     value={freeText}
                     onChange={setFreeText}
                     disabled={Boolean(sending)}
@@ -1393,8 +1445,8 @@ export function CaptureAndSend({
               <span className={`font-bold tabular-nums ${booth ? "text-[clamp(1.5rem,4vmin,2.5rem)]" : "text-[18px]"}`}>
                 {SHOT_COUNT - emptyCount} / {SHOT_COUNT}
               </span>
-            ) : guide ? (
-              <p className={`break-keep text-(--ev-muted) ${booth ? "text-[clamp(1.125rem,3vmin,1.75rem)]" : "text-[14px]"}`}>{guide}</p>
+            ) : stageGuide ? (
+              <p className={`break-keep text-(--ev-muted) ${booth ? "text-[clamp(1.125rem,3vmin,1.75rem)]" : "text-[14px]"}`}>{stageGuide}</p>
             ) : null}
           </div>
           <p aria-live="polite" className="sr-only">

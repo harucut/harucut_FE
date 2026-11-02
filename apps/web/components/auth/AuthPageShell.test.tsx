@@ -12,7 +12,7 @@ describe("AuthPageShell", () => {
     expect(screen.getByRole("heading", { name: "로그인" })).toBeInTheDocument();
     expect(screen.getByText("content")).toBeInTheDocument();
 
-    const homeLinks = screen.getAllByRole("link", { name: /Harucut home/i });
+    const homeLinks = screen.getAllByRole("link", { name: "하루컷 홈" });
     expect(homeLinks.length).toBeGreaterThan(0);
     homeLinks.forEach((link) => expect(link).toHaveAttribute("href", "/"));
   });

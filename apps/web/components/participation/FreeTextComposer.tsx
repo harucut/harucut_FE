@@ -13,6 +13,7 @@ import {
 } from "@/lib/event/freeText";
 import type { EventFrameRef } from "@/lib/event/types";
 import { outputLogoRect } from "@/lib/event/outputLogo";
+import { FrameWithPhotos } from "@/components/participation/FrameWithPhotos";
 
 export type FreeTextValue = { text: string; styleId: string };
 
@@ -29,6 +30,7 @@ export function FreeTextComposer({
   eventId,
   captureRunId,
   frame,
+  photos,
   value,
   onChange,
   disabled,
@@ -40,6 +42,8 @@ export function FreeTextComposer({
   /** 지금 회차. 서버는 이 회차에 고정된 행사 설정으로 그린다. 아직 없으면 미리보기를 부르지 않는다. */
   captureRunId: string | null;
   frame: EventFrameRef;
+  /** 방금 찍은 사진. 미리보기가 빈 칸이 아니라 내 사진으로 보이게 프레임 아래에 깐다. */
+  photos?: readonly (string | null)[];
   value: FreeTextValue;
   onChange: (value: FreeTextValue) => void;
   disabled?: boolean;
@@ -172,7 +176,7 @@ export function FreeTextComposer({
       ) : null}
 
       {preview ? (
-        <PreviewCanvas preview={preview} frameUrl={frame.previewUrl} logoUrl={outputLogoUrl ?? undefined} />
+        <PreviewCanvas preview={preview} frame={frame} photos={photos} logoUrl={outputLogoUrl ?? undefined} />
       ) : loading ? (
         <p role="status" className="text-[13px] text-(--ev-muted)">
           미리보기를 만드는 중…
@@ -183,7 +187,17 @@ export function FreeTextComposer({
 }
 
 /** 프레임 미리보기 위에 서버가 구운 문구 PNG 를 그 자리(캔버스 px → 비율)에 겹친다. 프레임 그림이 없으면 문구만. */
-function PreviewCanvas({ preview, frameUrl, logoUrl }: { preview: TextPreview; frameUrl?: string; logoUrl?: string }) {
+function PreviewCanvas({
+  preview,
+  frame,
+  photos = [],
+  logoUrl,
+}: {
+  preview: TextPreview;
+  frame: EventFrameRef;
+  photos?: readonly (string | null)[];
+  logoUrl?: string;
+}) {
   const pct = (v: number, total: number) => `${(v / total) * 100}%`;
   // 로고 자리는 원본 비율에 달렸다 — 불러온 뒤에 잰다.
   const [logoSize, setLogoSize] = useState<{ url: string; width: number; height: number } | null>(null);
@@ -191,7 +205,7 @@ function PreviewCanvas({ preview, frameUrl, logoUrl }: { preview: TextPreview; f
     logoUrl && logoSize?.url === logoUrl
       ? outputLogoRect({ width: preview.canvasWidth, height: preview.canvasHeight }, logoSize)
       : null;
-  if (!frameUrl) {
+  if (!frame.previewUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={preview.image} alt={`미리보기: ${preview.text}`} className="max-h-40 self-center rounded-lg bg-(--ev-card)" />
@@ -204,8 +218,9 @@ function PreviewCanvas({ preview, frameUrl, logoUrl }: { preview: TextPreview; f
       className={`relative mx-auto overflow-hidden rounded-lg border border-(--ev-border) ${tall ? "h-[min(40svh,24rem)]" : "w-full max-w-72"}`}
       style={{ aspectRatio: `${preview.canvasWidth} / ${preview.canvasHeight}` }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={frameUrl} alt="" className="absolute inset-0 size-full object-cover" />
+      <div className="absolute inset-0">
+        <FrameWithPhotos frame={frame} photos={photos} className="size-full" />
+      </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={preview.image}

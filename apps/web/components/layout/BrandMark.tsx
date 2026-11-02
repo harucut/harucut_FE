@@ -42,7 +42,7 @@ export function BrandMark({
   return (
     <Link
       href={href}
-      aria-label="Harucut home"
+      aria-label="하루컷 홈"
       className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-90"
     >
       <HieutMark size={30} />
