@@ -41,7 +41,7 @@ import { resolvePlanInfo } from "@/constants/planLimits";
 import type { MyCoupon,
   Subscription,
   SubscriptionUsage } from "@/lib/api-types";
-import { clientApi } from "@/lib/clientApi";
+import { clientApi, reissueAccessToken } from "@/lib/clientApi";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
@@ -173,6 +173,14 @@ export default function MyPage() {
   const refreshUser = async () => {
     await loadUser();
   };
+
+  // 프록시는 토큰의 상태만 본다. 정지가 풀린 뒤에도 옛 토큰을 들고 있으면 access 가 끝날 때까지 계속 여기로 돌려보내므로,
+  // 돌려보내진 사람인데(표시) 실제로는 풀려 있으면 새 토큰을 받는다. 서버는 이 토큰으로도 이미 정상으로 답한다.
+  useEffect(() => {
+    if (!user || user.userStatus === "BLOCKED") return;
+    if (!new URLSearchParams(window.location.search).has("restricted")) return;
+    void reissueAccessToken().finally(() => router.replace("/mypage"));
+  }, [user, router]);
 
   // 스탯 3셀은 우리 실제 데이터(기록 미디어 / 이번 달 / 보관 프레임)로 매핑한다.
   // 조회에 실패하면 0이 아니라 statsError로 구분해 '기록이 사라진 것처럼' 보이지 않게 한다.

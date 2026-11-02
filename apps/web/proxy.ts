@@ -161,7 +161,8 @@ export async function proxy(req: NextRequest) {
   */
   const accessClaims = readAccessClaims(req);
   if (isLiveAccess(accessClaims) && accessClaims?.status === "BLOCKED" && !isBlockedAccountPath(pathname)) {
-    return NextResponse.redirect(new URL("/mypage", req.url));
+    // 표시를 붙여 둔다. 그새 해제됐으면 토큰만 낡은 것이라 마이페이지가 새 토큰을 받는다(app/mypage/page.tsx).
+    return NextResponse.redirect(new URL("/mypage?restricted=1", req.url));
   }
 
   /*

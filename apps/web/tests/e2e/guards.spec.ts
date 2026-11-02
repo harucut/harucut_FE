@@ -189,7 +189,7 @@ test.describe("정지 계정", () => {
     test(`${route} 는 마이페이지로 돌아간다`, async ({ page }) => {
       await signIn(page, "BLOCKED");
       await page.goto(route);
-      await expect(page).toHaveURL(/\/mypage$/);
+      await expect(page).toHaveURL(/\/mypage\?restricted=1$/);
     });
   }
 

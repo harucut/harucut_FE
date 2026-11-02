@@ -262,7 +262,7 @@ function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
  * 회전 두 개, 곧 이 단일화가 막으려던 그 경쟁이다. 멈춘 왕복이 탭을 영영 막는 문제는
  * 이제 왕복 자체의 상한(`REISSUE_DEADLINE_MS`)이 맡는다.
  */
-function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
+export function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
   if (!pendingReissue) {
     pendingReissue = requestReissue().finally(() => {
       pendingReissue = null;
