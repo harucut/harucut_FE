@@ -17,6 +17,9 @@ const api = {
   searchWorkspaces: jest.fn(),
   searchEvents: jest.fn(),
   verifyContractPayment: jest.fn(),
+  listSystemFrames: jest.fn(),
+  publishSystemFrame: jest.fn(),
+  listAuditLogs: jest.fn(),
 };
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
 jest.mock("@/lib/admin/cmsApi", () => ({
@@ -35,6 +38,9 @@ jest.mock("@/lib/admin/cmsApi", () => ({
   revokeEntitlement: (...a: unknown[]) => api.revokeEntitlement(...a),
   allocateEntitlement: (...a: unknown[]) => api.allocateEntitlement(...a),
   resizeAllocation: (...a: unknown[]) => api.resizeAllocation(...a),
+  listSystemFrames: (...a: unknown[]) => api.listSystemFrames(...a),
+  publishSystemFrame: (...a: unknown[]) => api.publishSystemFrame(...a),
+  listAuditLogs: (...a: unknown[]) => api.listAuditLogs(...a),
 }));
 
 const INQUIRY = {
@@ -410,4 +416,61 @@ it("기업 총량에서 행사에 배분하고, 배분량을 바꾸며, 넘치�
 
   await waitFor(() => expect(api.resizeAllocation).toHaveBeenCalledWith("En7", 900));
   expect(await screen.findByRole("alert")).toHaveTextContent("행사 배분 합계가 계약 총량을 넘어요.");
+});
+
+// 시스템 프레임은 발행해야 행사에서 고를 수 있는데 그 화면이 없었다(재대조 항목).
+it("시스템 프레임을 발행하고, 소재 항목은 발행 대상에서 뺀다", async () => {
+  api.listSystemFrames.mockResolvedValue([
+    { frameId: 3, title: "기본 세로", frameType: "CLASSIC", isSystem: true },
+    { frameId: 4, title: "[스티커] 하트", frameType: "CLASSIC", isSystem: true },
+  ]);
+  api.publishSystemFrame.mockResolvedValue({ frameVersionId: 31, versionNo: 2 });
+  render(<AdminConsole />);
+  expect(api.listSystemFrames).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("tab", { name: "시스템 프레임" }));
+  expect(await screen.findByText("기본 세로")).toBeInTheDocument();
+  expect(screen.queryByText("[스티커] 하트")).not.toBeInTheDocument();
+  expect(screen.getByText(/소재 1개는 발행 대상이 아니라/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "발행" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("2번째 발행본을 만들었어요.");
+  expect(api.publishSystemFrame).toHaveBeenCalledWith(3);
+});
+
+it("감사 로그를 사람 말로 보여 주고 다음 쪽을 잇는다", async () => {
+  api.listAuditLogs
+    .mockResolvedValueOnce({
+      items: [
+        { action: "EVENT_PUBLISHED", actorName: "박서연", eventId: "Ev1", createdAt: "2026-11-02T10:00:00+09:00" },
+        { action: "SOMETHING_NEW", createdAt: "2026-11-02T09:00:00+09:00", detail: "{\"a\":1}" },
+      ],
+      nextCursor: "c2",
+    })
+    .mockResolvedValueOnce({ items: [{ action: "BOOTH_PAIRED", createdAt: "2026-11-01T09:00:00+09:00" }] });
+  render(<AdminConsole />);
+
+  fireEvent.click(screen.getByRole("tab", { name: "감사 로그" }));
+  expect(await screen.findByText("행사를 게시했어요")).toBeInTheDocument();
+  expect(screen.getByText(/박서연/)).toBeInTheDocument();
+  // 모르는 코드는 숨기지 않고 그대로 보인다. 행동한 사람이 없으면 시스템이다.
+  expect(screen.getByText("SOMETHING_NEW")).toBeInTheDocument();
+  expect(within(screen.getByRole("tabpanel", { name: "감사 로그" })).getByText(/시스템/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+  expect(await screen.findByText("부스 기기를 연결했어요")).toBeInTheDocument();
+  expect(api.listAuditLogs).toHaveBeenLastCalledWith("c2");
+  expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
+});
+
+it("감사 로그 권한이 없으면 플랫폼 관리자만이라고 알리고 다시 시도할 수 있다", async () => {
+  api.listAuditLogs.mockRejectedValueOnce(new ApiRequestError({ status: 403, code: "GEN-021", apiMessage: "x" }));
+  api.listAuditLogs.mockResolvedValueOnce({ items: [] });
+  render(<AdminConsole />);
+
+  fireEvent.click(screen.getByRole("tab", { name: "감사 로그" }));
+  const panel = await screen.findByRole("tabpanel", { name: "감사 로그" });
+  expect(await within(panel).findByRole("alert")).toHaveTextContent("플랫폼 관리자만");
+  fireEvent.click(within(panel).getByRole("button", { name: "다시 시도" }));
+  expect(await within(panel).findByText("아직 기록이 없어요.")).toBeInTheDocument();
 });

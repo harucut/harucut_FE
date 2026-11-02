@@ -1,22 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
-import { getFrameConfig } from "@/constants/frames";
+import { WorkspaceFrameList, layoutName } from "@/components/studio/StudioWorkspaceFrames";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
-import { frameIdFromFrameType } from "@/lib/frameApi";
 import {
   listPickableFrameVersions,
   listWorkspaceFrames,
-  publishFrameVersion,
   type EventLayout,
   type FrameRef,
   type PickableFrameVersion,
 } from "@/lib/studio/studioApi";
 
-export function layoutName(layout: EventLayout) {
-  return getFrameConfig(frameIdFromFrameType(layout)).name;
-}
+export { layoutName };
 
 /**
  * 고른 발행본 목록을 서버 규칙에 맞춘다 — 순서는 고른 순서, 기본은 전체에서 정확히 하나.
@@ -64,8 +60,6 @@ export function StudioFramePicker({
   const manage = Boolean(onEditFrame && onCreateFrame);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [publishing, setPublishing] = useState<number | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -92,7 +86,6 @@ export function StudioFramePicker({
   const unknownRefs = catalog
     ? value.filter((r) => !known.has(r.frameVersionId) || !layouts.includes(r.layoutType))
     : [];
-  const latestByFrame = new Map(catalog?.versions.map((v) => [v.frameId, v]) ?? []);
 
   const toggle = (version: PickableFrameVersion, on: boolean) => {
     const next = on
@@ -103,25 +96,6 @@ export function StudioFramePicker({
 
   const makeDefault = (frameVersionId: number) =>
     onChange(normalizeFrameRefs(value.map((r) => ({ ...r, isDefault: r.frameVersionId === frameVersionId }))));
-
-  const publish = async (frame: RemoteFrame) => {
-    setPublishing(frame.frameId);
-    setNotice(null);
-    try {
-      const published = await publishFrameVersion(frame.frameId);
-      setNotice(`「${frame.title}」 ${published.versionNo}번째 발행본을 만들었어요. 위 목록에서 골라 저장해야 행사에 쓰여요.`);
-      await load();
-    } catch (cause) {
-      setNotice(
-        getUserFacingApiErrorMessage(
-          cause,
-          "발행하지 못했어요. 편집기에서 프레임을 한 번 다시 저장한 뒤 발행해 주세요.",
-        ),
-      );
-    } finally {
-      setPublishing(null);
-    }
-  };
 
   if (error) {
     return (
@@ -247,61 +221,15 @@ export function StudioFramePicker({
           {editLocked ? (
             <p className="text-[12px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 프레임을 만들거나 고칠 수 있어요.</p>
           ) : null}
-          {notice ? (
-            <p role="status" className="text-[13px]">
-              {notice}
-            </p>
-          ) : null}
-          {catalog.frames.length > 0 ? (
-            <ul className="flex flex-col gap-2">
-              {catalog.frames.map((frame) => {
-                const latest = latestByFrame.get(frame.frameId);
-                return (
-                  <li key={frame.frameId} className="flex flex-wrap items-center justify-between gap-2 text-[14px]">
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">{frame.title || "이름 없는 프레임"}</span>
-                      <span className="block text-[12px] text-(--hc-muted)">
-                        {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "아직 발행 안 함"}
-                      </span>
-                    </span>
-                    <span className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={editLocked}
-                        onClick={() => onEditFrame?.(frame)}
-                        className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold disabled:opacity-50"
-                      >
-                        고치기
-                      </button>
-                      <button
-                        type="button"
-                        disabled={publishing !== null}
-                        onClick={() => void publish(frame)}
-                        className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold disabled:opacity-50"
-                      >
-                        {publishing === frame.frameId ? "발행하는 중…" : latest ? "새 버전 발행" : "발행하기"}
-                      </button>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-[13px] text-(--hc-muted)">아직 이 공간에 만든 프레임이 없어요.</p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {(layouts.length > 0 ? layouts : (["CLASSIC", "WIDE", "GRID", "POLAROID"] as EventLayout[])).map((layout) => (
-              <button
-                key={layout}
-                type="button"
-                disabled={editLocked}
-                onClick={() => onCreateFrame?.(layout)}
-                className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
-              >
-                {layoutName(layout)} 만들기
-              </button>
-            ))}
-          </div>
+          <WorkspaceFrameList
+            frames={catalog.frames}
+            versions={catalog.versions}
+            layouts={layouts}
+            editLocked={editLocked}
+            onEditFrame={onEditFrame}
+            onCreateFrame={onCreateFrame}
+            onPublished={load}
+          />
         </section>
       ) : null}
     </div>

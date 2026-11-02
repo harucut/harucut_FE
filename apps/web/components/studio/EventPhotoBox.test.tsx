@@ -230,3 +230,32 @@ it("필터를 바꾼 뒤 첫 쪽이 실패하면 이전 목록과 커서를 남�
   expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
 });
+
+// 재대조 항목(R5 L326): 서버가 지원하는 기간 필터. 서울 날짜 하루 전체를 보낸다(to 는 미포함).
+it("기간을 고르면 서울 날짜의 시작과 다음 날 0시로 다시 받고, 조건을 지우면 비운다", async () => {
+  render(<EventPhotoBox eventId="Ev1" />);
+  await screen.findAllByRole("listitem");
+  mockList.mockResolvedValue({ items: [], nextCursor: null });
+
+  fireEvent.change(screen.getByLabelText("시작일"), { target: { value: "2026-11-14" } });
+  await waitFor(() => expect(mockList).toHaveBeenLastCalledWith("Ev1", { from: "2026-11-14T00:00:00+09:00", to: undefined }));
+
+  fireEvent.change(screen.getByLabelText("종료일"), { target: { value: "2026-11-14" } });
+  await waitFor(() =>
+    expect(mockList).toHaveBeenLastCalledWith("Ev1", {
+      from: "2026-11-14T00:00:00+09:00",
+      to: new Date("2026-11-15T00:00:00+09:00").toISOString(),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "조건 지우기" }));
+  await waitFor(() => expect(mockList).toHaveBeenLastCalledWith("Ev1", {}));
+  expect(screen.getByLabelText("시작일")).toHaveValue("");
+});
+
+it("프레임이 둘 이상이면 프레임으로 거를 수 있다", async () => {
+  mockList.mockResolvedValue({ items: [{ ...DONE, frameVersionId: 31 }, { ...DONE, photoId: 99, frameVersionId: 32 }], nextCursor: null });
+  render(<EventPhotoBox eventId="Ev1" />);
+  fireEvent.change(await screen.findByLabelText("프레임"), { target: { value: "32" } });
+  await waitFor(() => expect(mockList).toHaveBeenLastCalledWith("Ev1", { frameVersionId: 32 }));
+});

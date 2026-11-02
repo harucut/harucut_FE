@@ -194,8 +194,9 @@ it("게시는 내용을 확인한 뒤에 보내고, 끝나면 QR 을 건넨다",
   expect(within(done).getByRole("img", { name: "행사 참가 링크 QR" })).toHaveAttribute("width", "240");
   fireEvent.click(within(done).getByRole("button", { name: "닫기" }));
 
-  // 저장본이 게시본과 같으면 다시 게시할 것이 없다.
-  expect(screen.getByRole("button", { name: "게시됨" })).toBeDisabled();
+  // 행사 설정은 게시본과 같아도 위 단계 기본값이 바뀌었을 수 있다. 다시 게시할 길은 열어 두되 강조하지 않는다.
+  expect(screen.getByRole("button", { name: "다시 게시" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "다시 게시" })).not.toHaveClass("hc-button-primary");
 });
 
 it("게시 뒤에 설정을 저장하면 아직 게시 안 함을 알리고 다시 게시할 수 있다", async () => {

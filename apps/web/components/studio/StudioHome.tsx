@@ -25,7 +25,9 @@ import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { LeaveWorkspaceButton, StudioMembers } from "@/components/studio/StudioMembers";
 import { StudioMultiExports } from "@/components/studio/StudioMultiExports";
 import { StudioProjects } from "@/components/studio/StudioProjects";
-import { PERMISSION_LABEL, listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
+import { StudioWorkspaceFrames } from "@/components/studio/StudioWorkspaceFrames";
+import { AuditLogList } from "@/components/audit/AuditLogList";
+import { PERMISSION_LABEL, listMyEvents, listWorkspaceAuditLogs, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
 
 /** 행사는 조직 공간에만 만든다 — 개인 공간은 회원 탈퇴 때 통째로 지워진다(백엔드 fork #15, R5 14절). */
@@ -88,6 +90,9 @@ export function StudioHome() {
   const requested = searchParams.get("workspace");
   const current = organizations.find((w) => w.workspaceId === requested) ?? organizations[0] ?? null;
   const currentId = current?.workspaceId ?? null;
+  // 행사 목록은 운영 역할만 부를 수 있다(서버 403). 디자이너·보기 전용에게는 오류가 아니라 프레임 작업 자리를 보인다.
+  const worksOnEvents = current?.role === "OWNER" || current?.role === "ADMIN" || current?.role === "OPERATOR";
+  const framesOnly = current !== null && !worksOnEvents;
 
   const reload = useCallback(async () => {
     try {
@@ -110,7 +115,7 @@ export function StudioHome() {
   }, [reload]);
 
   useEffect(() => {
-    if (!currentId) return;
+    if (!currentId || !worksOnEvents) return;
     let cancelled = false;
     listEvents(currentId)
       .then((list) => {
@@ -126,7 +131,7 @@ export function StudioHome() {
     return () => {
       cancelled = true;
     };
-  }, [currentId, eventsAttempt]);
+  }, [currentId, worksOnEvents, eventsAttempt]);
 
   // 행사마다 얼마나 찍었는지. 못 받으면 그 행만 숫자를 뺀다 — 목록을 막을 이유가 아니다.
   useEffect(() => {
@@ -162,11 +167,17 @@ export function StudioHome() {
         </div>
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
-            <h1 className="text-[30px] font-extrabold tracking-tight">{customerOnly ? "내 행사 사진" : "행사 운영"}</h1>
+            <h1 className="text-[30px] font-extrabold tracking-tight">
+              {customerOnly ? "내 행사 사진" : framesOnly ? "공간 프레임" : "행사 운영"}
+            </h1>
             <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
               {customerOnly
                 ? "초대받은 행사의 사진을 보고 받을 수 있어요."
-                : "행사 참가 링크와 QR, 촬영 기간, 참가 동의를 정하고 게시해요."}
+                : current?.role === "DESIGNER"
+                  ? "이 공간의 행사에 쓸 프레임을 만들고 발행해요. 행사에 고르는 일은 관리자가 해요."
+                  : current?.role === "VIEWER"
+                    ? "이 공간의 프레임을 볼 수 있어요. 만들거나 고치려면 관리자에게 디자이너 권한을 요청해 주세요."
+                    : "행사 참가 링크와 QR, 촬영 기간, 참가 동의를 정하고 게시해요."}
             </p>
           </div>
           {canCreate && !noEvents && events ? (
@@ -271,124 +282,132 @@ export function StudioHome() {
               />
             ) : null}
 
-            <section aria-labelledby="studio-events-title" className="flex flex-col gap-3">
-              <h2 id="studio-events-title" className="text-[18px] font-bold">
-                행사
-              </h2>
-              {eventsError ? (
-                <div className="flex flex-col items-start gap-3">
-                  <p role="alert" className="text-[14px] text-(--hc-danger)">
-                    {eventsError}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEventsError(null);
-                      setEventsAttempt((n) => n + 1);
-                    }}
-                    className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold"
-                  >
-                    다시 시도
-                  </button>
-                </div>
-              ) : null}
-              {events === null && !eventsError ? (
-                <p role="status" className="text-[14px] text-(--hc-muted)">
-                  행사를 불러오는 중…
-                </p>
-              ) : null}
-              {noEvents ? (
-                <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
-                  {canCreate
-                    ? "아직 만든 행사가 없어요. 위에서 이름과 주소를 정하면 시작할 수 있어요."
-                    : "아직 볼 수 있는 행사가 없어요."}
-                </p>
-              ) : null}
-              {sharedUsage ? (
-                <p className="text-[13px] text-(--hc-muted)">
-                  공간 이용권{" "}
-                  <span className="font-mono tabular-nums">
-                    {sharedUsage.used.toLocaleString("ko-KR")}/{sharedUsage.composeQuota.toLocaleString("ko-KR")}
-                  </span>
-                  장 사용
-                </p>
-              ) : null}
-              {sortedEvents && sortedEvents.length > 0 ? (
-                <ul className="flex flex-col gap-2">
-                  {sortedEvents.map((event) => {
-                    const usage = usageById[event.eventId];
-                    return (
-                      <li key={event.eventId} className="flex flex-col gap-2">
-                        <div className="hc-surface-card flex items-center rounded-2xl border transition hover:border-(--hc-border-strong)">
-                          <Link
-                            href={`/studio/events/${encodeURIComponent(event.eventId)}`}
-                            className="flex min-h-16 min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl py-3 pl-4 pr-2"
-                          >
-                            <span className="flex min-w-0 flex-col gap-0.5">
-                              <span className="break-words text-[15px] font-semibold">
-                                {event.settings.name || "이름 없는 행사"}
-                              </span>
-                              <span className="text-[12px] text-(--hc-muted)">
-                                {eventDateCopy(event)} · {channelCopy(event)}
-                                {/* 공간 이용권은 행사들이 나눠 쓴다. 행마다 같은 숫자를 보이면 그 행사가 쓴 양처럼 읽힌다. 위에 한 번만 적는다. */}
-                                {usage?.entitlement?.scope === "EVENT" ? (
-                                  <>
-                                    {" · "}
-                                    <span className="font-mono tabular-nums">
-                                      {usage.used.toLocaleString("ko-KR")}/{usage.composeQuota.toLocaleString("ko-KR")}
-                                    </span>
-                                    장
-                                  </>
-                                ) : null}
-                              </span>
-                            </span>
-                            <EventStatusBadge event={event} />
-                          </Link>
-                          {canCreate ? (
-                            <button
-                              type="button"
-                              aria-label={`${event.settings.name || "이름 없는 행사"} 복제`}
-                              aria-expanded={cloning === event.eventId}
-                              onClick={() => setCloning((open) => (open === event.eventId ? null : event.eventId))}
-                              className="mr-2 h-11 shrink-0 rounded-full px-3 text-[13px] font-semibold text-(--hc-muted) transition hover:text-(--hc-text)"
-                            >
-                              복제
-                            </button>
-                          ) : null}
-                        </div>
-                        {cloning === event.eventId ? (
-                          <CloneEventForm
-                            eventId={event.eventId}
-                            defaultName={`${event.settings.name ?? "행사"} 복사본`}
-                            onCancel={() => setCloning(null)}
-                            onCloned={(next) => router.push(`/studio/events/${encodeURIComponent(next.eventId)}`)}
-                          />
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </section>
+            {framesOnly ? (
+              <section aria-label="공간 프레임 목록" className="flex flex-col gap-3">
+                <StudioWorkspaceFrames
+                  key={current.workspaceId}
+                  workspaceId={current.workspaceId}
+                  readOnly={current.role === "VIEWER"}
+                />
+              </section>
+            ) : null}
 
-            {!canCreate ? (
-              current.role === "OPERATOR" ? (
-                <div className="flex flex-col gap-2">
-                  <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-                    운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요.
+            {worksOnEvents ? (
+              <section aria-labelledby="studio-events-title" className="flex flex-col gap-3">
+                <h2 id="studio-events-title" className="text-[18px] font-bold">
+                  행사
+                </h2>
+                {eventsError ? (
+                  <div className="flex flex-col items-start gap-3">
+                    <p role="alert" className="text-[14px] text-(--hc-danger)">
+                      {eventsError}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEventsError(null);
+                        setEventsAttempt((n) => n + 1);
+                      }}
+                      className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                ) : null}
+                {events === null && !eventsError ? (
+                  <p role="status" className="text-[14px] text-(--hc-muted)">
+                    행사를 불러오는 중…
                   </p>
-                  <LeaveWorkspaceButton
-                    key={current.workspaceId}
-                    workspaceId={current.workspaceId}
-                    onLeft={() => {
-                      router.replace("/studio");
-                      void reload();
-                    }}
-                  />
-                </div>
-              ) : (
-                <p className="text-[13px] text-(--hc-muted)">행사를 만들고 게시하려면 이 공간의 관리자 권한이 필요해요.</p>
-              )
+                ) : null}
+                {noEvents ? (
+                  <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
+                    {canCreate
+                      ? "아직 만든 행사가 없어요. 위에서 이름과 주소를 정하면 시작할 수 있어요."
+                      : "아직 볼 수 있는 행사가 없어요."}
+                  </p>
+                ) : null}
+                {sharedUsage ? (
+                  <p className="text-[13px] text-(--hc-muted)">
+                    공간 이용권{" "}
+                    <span className="font-mono tabular-nums">
+                      {sharedUsage.used.toLocaleString("ko-KR")}/{sharedUsage.composeQuota.toLocaleString("ko-KR")}
+                    </span>
+                    장 사용
+                  </p>
+                ) : null}
+                {sortedEvents && sortedEvents.length > 0 ? (
+                  <ul className="flex flex-col gap-2">
+                    {sortedEvents.map((event) => {
+                      const usage = usageById[event.eventId];
+                      return (
+                        <li key={event.eventId} className="flex flex-col gap-2">
+                          <div className="hc-surface-card flex items-center rounded-2xl border transition hover:border-(--hc-border-strong)">
+                            <Link
+                              href={`/studio/events/${encodeURIComponent(event.eventId)}`}
+                              className="flex min-h-16 min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl py-3 pl-4 pr-2"
+                            >
+                              <span className="flex min-w-0 flex-col gap-0.5">
+                                <span className="break-words text-[15px] font-semibold">
+                                  {event.settings.name || "이름 없는 행사"}
+                                </span>
+                                <span className="text-[12px] text-(--hc-muted)">
+                                  {eventDateCopy(event)} · {channelCopy(event)}
+                                  {/* 공간 이용권은 행사들이 나눠 쓴다. 행마다 같은 숫자를 보이면 그 행사가 쓴 양처럼 읽힌다. 위에 한 번만 적는다. */}
+                                  {usage?.entitlement?.scope === "EVENT" ? (
+                                    <>
+                                      {" · "}
+                                      <span className="font-mono tabular-nums">
+                                        {usage.used.toLocaleString("ko-KR")}/{usage.composeQuota.toLocaleString("ko-KR")}
+                                      </span>
+                                      장
+                                    </>
+                                  ) : null}
+                                </span>
+                              </span>
+                              <EventStatusBadge event={event} />
+                            </Link>
+                            {canCreate ? (
+                              <button
+                                type="button"
+                                aria-label={`${event.settings.name || "이름 없는 행사"} 복제`}
+                                aria-expanded={cloning === event.eventId}
+                                onClick={() => setCloning((open) => (open === event.eventId ? null : event.eventId))}
+                                className="mr-2 h-11 shrink-0 rounded-full px-3 text-[13px] font-semibold text-(--hc-muted) transition hover:text-(--hc-text)"
+                              >
+                                복제
+                              </button>
+                            ) : null}
+                          </div>
+                          {cloning === event.eventId ? (
+                            <CloneEventForm
+                              eventId={event.eventId}
+                              defaultName={`${event.settings.name ?? "행사"} 복사본`}
+                              onCancel={() => setCloning(null)}
+                              onCloned={(next) => router.push(`/studio/events/${encodeURIComponent(next.eventId)}`)}
+                            />
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </section>
+            ) : null}
+
+            {current.role === "OPERATOR" ? (
+              <div className="flex flex-col gap-2">
+                <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
+                  운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요.
+                </p>
+                <LeaveWorkspaceButton
+                  key={current.workspaceId}
+                  workspaceId={current.workspaceId}
+                  onLeft={() => {
+                    router.replace("/studio");
+                    void reload();
+                  }}
+                />
+              </div>
             ) : null}
 
             {/*
@@ -418,6 +437,15 @@ export function StudioHome() {
                     </section>
                   ) : null}
 
+                  {canCreate ? (
+                    <section aria-labelledby="studio-frames-title" className="flex flex-col gap-3">
+                      <h2 id="studio-frames-title" className="text-[18px] font-bold">
+                        공간 프레임
+                      </h2>
+                      <StudioWorkspaceFrames key={current.workspaceId} workspaceId={current.workspaceId} />
+                    </section>
+                  ) : null}
+
                   {current.role === "OWNER" || current.role === "ADMIN" ? (
                     <section aria-labelledby="studio-projects-title" className="flex flex-col gap-3">
                       <h2 id="studio-projects-title" className="text-[18px] font-bold">
@@ -427,6 +455,8 @@ export function StudioHome() {
                       <StudioProjects key={current.workspaceId} workspaceId={current.workspaceId} />
                     </section>
                   ) : null}
+
+                  {canCreate ? <WorkspaceActivity key={current.workspaceId} workspaceId={current.workspaceId} /> : null}
 
                   {/* 운영 담당은 멤버 목록을 보지 못한다(서버 403) — 맡은 행사만 운영한다(ADR-0009 §3). */}
                   {current.role === "OPERATOR" ? null : (
@@ -455,6 +485,20 @@ export function StudioHome() {
         ) : null}
       </div>
     </main>
+  );
+}
+
+const activityErrorMessage = (cause: unknown) => getUserFacingApiErrorMessage(cause, "활동 기록을 불러오지 못했어요.");
+
+/** 이 공간에서 누가 언제 무엇을 했나. 펼칠 때 받는다 — 접힌 채로 묻지 않는다. */
+function WorkspaceActivity({ workspaceId }: { workspaceId: string }) {
+  const [open, setOpen] = useState(false);
+  const load = useCallback((cursor: string | null) => listWorkspaceAuditLogs(workspaceId, cursor), [workspaceId]);
+  return (
+    <details onToggle={(e) => setOpen(e.currentTarget.open)} className="flex flex-col gap-3">
+      <summary className="flex h-11 cursor-pointer items-center text-[18px] font-bold">활동 기록</summary>
+      {open ? <AuditLogList load={load} errorMessage={activityErrorMessage} /> : null}
+    </details>
   );
 }
 

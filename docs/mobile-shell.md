@@ -23,8 +23,8 @@
 운영 백엔드가 `https://harucut.com/oauth2/callback`으로 돌려보내면 해당 경로만 같은 WebView의
 `https://www.harucut.com/oauth2/callback`으로 옮긴다. apex 전체를 브리지 허용 목록에 넣지 않는다.
 이 경로는 백엔드 세션 쿠키가 `.harucut.com`에 발급되는 기존 구성에 의존하므로 출시 전 실계정으로 확인한다.
-구글은 WebView 로그인 정책이 별개이므로 이 수정만으로 구글 로그인이 지원되는 것은 아니다.
-앱에서는 구글 버튼을 표시하지 않고 웹 브라우저 이용을 안내한다. 일반 웹의 구글 버튼은 유지한다.
+구글은 WebView 로그인 정책이 별개라 이 경로를 타지 않는다. 셸이 구글 시작을 가로채 시스템 브라우저로 인증한다(아래 표).
+웹은 브리지 판 4 이상의 셸에서만 구글 버튼을 보이고, 옛 셸에는 업데이트를 안내한다(`supportsGoogleLogin`).
 근거는 [Google OAuth의 보안 브라우저 정책](https://developers.google.com/identity/protocols/oauth2/policies#secure-browsers)이다.
 
 **앱에 web 타깃은 없다.** Expo 프로젝트라 `expo start --web` 이 있을 법하지만 이 앱에서는

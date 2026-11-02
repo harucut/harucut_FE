@@ -38,7 +38,12 @@ jest.mock("@/lib/studio/studioApi", () => ({
   createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
   listEvents: (...args: unknown[]) => mockListEvents(...args),
   createEvent: (...args: unknown[]) => mockCreateEvent(...args),
+  listWorkspaceFrames: () => mockListFrames(),
+  listPickableFrameVersions: async () => [],
+  publishFrameVersion: (...args: unknown[]) => mockPublish(...args),
 }));
+const mockListFrames = jest.fn();
+const mockPublish = jest.fn();
 
 const PERSONAL = { workspaceId: "WsMe", name: "내 공간", type: "PERSONAL", role: "OWNER" };
 const ORG = { workspaceId: "WsOrg", name: "하루컷 웨딩팀", type: "ORGANIZATION", role: "OWNER" };
@@ -47,6 +52,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = "";
   mockListEvents.mockResolvedValue([]);
+  mockListFrames.mockResolvedValue([]);
   mockListMyEvents.mockResolvedValue([]);
   mockListMembers.mockResolvedValue([]);
 });
@@ -151,7 +157,7 @@ it("행사가 있으면 폼을 접어 두고 「새 행사」로 편다. 행에�
 it("관리자가 아니면 행사 만들기를 보여 주지 않는다", async () => {
   mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "DESIGNER" }]);
   render(<StudioHome />);
-  expect(await screen.findByText(/관리자 권한이 필요해요/)).toBeInTheDocument();
+  expect(await screen.findByText(/행사에 고르는 일은 관리자가 해요/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "행사 만들기" })).not.toBeInTheDocument();
 });
 
@@ -230,4 +236,28 @@ it("운영 담당은 멤버 목록 없이도 이 공간에서 나갈 수 있다"
   await waitFor(() => expect(mockRemoveMember).toHaveBeenCalledWith("WsOrg", "me"));
   expect(mockReplace).toHaveBeenCalledWith("/studio");
   await waitFor(() => expect(mockListWorkspaces).toHaveBeenCalledTimes(2));
+});
+
+// 재대조 항목: 초대 기본 역할이 디자이너인데 행사 목록은 403 이고 프레임 입구는 행사 화면 안에만 있었다.
+it("디자이너에게는 행사 목록을 부르지 않고 공간 프레임 작업 자리를 보인다", async () => {
+  mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "DESIGNER" }]);
+  mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 아이보리", frameType: "CLASSIC" }]);
+  render(<StudioHome />);
+
+  expect(await screen.findByRole("heading", { name: "공간 프레임" })).toBeInTheDocument();
+  expect(await screen.findByText("웨딩 아이보리")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "발행하기" })).toBeInTheDocument();
+  expect(mockListEvents).not.toHaveBeenCalled();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("보기 전용은 프레임을 볼 수만 있다", async () => {
+  mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "VIEWER" }]);
+  mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 아이보리", frameType: "CLASSIC" }]);
+  render(<StudioHome />);
+
+  expect(await screen.findByText("웨딩 아이보리")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "고치기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "발행하기" })).not.toBeInTheDocument();
+  expect(mockListEvents).not.toHaveBeenCalled();
 });

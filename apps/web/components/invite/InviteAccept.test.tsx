@@ -131,3 +131,13 @@ it("수락 중 인증이 끝나도(401) 로그인 안내로 간다", async () =>
   expect(await screen.findByRole("link", { name: "로그인하고 초대 받기" })).toBeInTheDocument();
   expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
 });
+
+// 재대조 항목: 갓 가입한 초대 고객은 필수 약관 동의 전이라 서버가 TERMS-004 로 막는다. 막다른 길이면 안 된다.
+it("필수 약관에 막혀 실패하면 다시 확인할 수 있고, 동의 뒤에는 이어 간다", async () => {
+  window.history.replaceState(null, "", `/invite#${TOKEN}`);
+  mockPreview.mockRejectedValueOnce(new ApiRequestError({ status: 403, code: "TERMS-004", apiMessage: "x" }));
+  render(<InviteAccept />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "다시 확인" }));
+  expect(await screen.findByRole("button", { name: "초대 받기" })).toBeInTheDocument();
+});

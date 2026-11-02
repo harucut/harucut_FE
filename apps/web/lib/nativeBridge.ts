@@ -155,6 +155,19 @@ export function isNativeShell() {
   return getNativeShell() !== null;
 }
 
+/**
+ * 구글 로그인 시작을 시스템 브라우저로 가로채는 셸의 최소 판 수. 메시지가 아니라 셸의 탐색 가로채기라 판 수를 따로 올리지
+ * 않았다 — 이 기능은 판 3과 판 4 사이에 들어갔으므로, 들어 있다고 보장되는 첫 판이 4 다. 옛 셸에서 버튼을 누르면 WebView
+ * 안에서 구글로 넘어가 `disallowed_useragent` 로 막힌다.
+ */
+const APP_LOGIN_SHELL_VERSION = 4;
+
+/** 앱 안에서 구글 로그인을 시작해도 되는가. 셸 밖(일반 웹)이면 true — 평범한 OAuth 다. */
+export function supportsGoogleLogin() {
+  const shell = getNativeShell();
+  return !shell || (typeof shell.version === "number" && shell.version >= APP_LOGIN_SHELL_VERSION);
+}
+
 const pending = new Map<string, (result: NativeResult) => void>();
 
 function ensureResolver() {
@@ -443,7 +456,8 @@ const PUSH_TOKEN_SHELL_VERSION = 4;
 /** Expo 푸시 토큰. 셸 밖·구버전·알림 권한 없음이면 null(권한은 묻지 않는다). */
 export async function nativePushToken(): Promise<string | null> {
   const shell = getNativeShell();
-  if (!shell || shell.version < PUSH_TOKEN_SHELL_VERSION) return null;
+  // 판 수를 안 실은 셸도 이 메시지를 모르는 셸이다(`undefined < 4` 는 false 라 그냥 비교하면 통과한다).
+  if (!shell || typeof shell.version !== "number" || shell.version < PUSH_TOKEN_SHELL_VERSION) return null;
   const result = await request({ type: "push-token" }, { timeoutMs: 30_000 });
   const token = (result.data as { token?: unknown } | undefined)?.token;
   return result.ok && typeof token === "string" && token.length > 0 ? token : null;

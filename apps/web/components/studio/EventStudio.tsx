@@ -676,11 +676,12 @@ export function EventStudio({ eventId }: { eventId: string }) {
               <RunButton
                 busy={busy}
                 action="publish"
-                disabled={dirty || inSync}
+                // 행사 설정이 그대로여도 공간·프로젝트 기본값이 바뀌었으면 새 판이 필요하다. 눌러 두되 강조하지 않는다.
+                disabled={dirty}
                 primary={!dirty && !inSync}
                 onRun={() => setPublishConfirm(true)}
               >
-                {event.status === "DRAFT" ? "게시하기" : inSync ? "게시됨" : "바뀐 설정 게시"}
+                {event.status === "DRAFT" ? "게시하기" : inSync ? "다시 게시" : "바뀐 설정 게시"}
               </RunButton>
             ) : null}
           </div>
@@ -720,13 +721,16 @@ export function EventStudio({ eventId }: { eventId: string }) {
               </span>
             </header>
             <div className="flex flex-wrap gap-2">
-              <Link
-                href={photosHref}
-                onClick={(e) => guardLeave(e, photosHref)}
-                className="hc-button-secondary flex h-11 items-center rounded-full px-4 text-[13px] font-semibold"
-              >
-                사진함
-              </Link>
+              {/* 사진은 공간 역할이 아니라 행사 권한으로 본다. 권한이 없는 담당자에게 막다른 링크를 보이지 않는다. */}
+              {access === null || access?.permissions?.includes("VIEW_PHOTOS") ? (
+                <Link
+                  href={photosHref}
+                  onClick={(e) => guardLeave(e, photosHref)}
+                  className="hc-button-secondary flex h-11 items-center rounded-full px-4 text-[13px] font-semibold"
+                >
+                  사진함
+                </Link>
+              ) : null}
               {canClone ? (
                 <button
                   type="button"
@@ -1102,11 +1106,13 @@ export function EventStudio({ eventId }: { eventId: string }) {
 
       {publishConfirm ? (
         <StudioSheet
-          title={event.status === "DRAFT" ? "이대로 게시할까요?" : "바뀐 설정을 게시할까요?"}
+          title={event.status === "DRAFT" ? "이대로 게시할까요?" : inSync ? "다시 게시할까요?" : "바뀐 설정을 게시할까요?"}
           description={
             event.status === "DRAFT"
               ? "게시하면 참가 링크가 열리고 참가자가 들어올 수 있어요."
-              : "이미 촬영을 시작한 손님은 받았던 설정으로 끝내고, 새 손님부터 바뀐 설정을 써요."
+              : inSync
+                ? "이 행사 설정은 그대로예요. 공간·프로젝트 기본값을 바꿨다면 다시 게시해야 반영돼요. 새 손님부터 적용돼요."
+                : "이미 촬영을 시작한 손님은 받았던 설정으로 끝내고, 새 손님부터 바뀐 설정을 써요."
           }
           closable={busy === null}
           onClose={() => setPublishConfirm(false)}

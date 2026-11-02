@@ -22,15 +22,24 @@ function useShell(): Shell | null {
 
 const OUTDATED = "앱을 업데이트하면 앱에서 구독하고 복원할 수 있어요.";
 
-function useStoreAction(run: () => Promise<StoreFlowResult>, done: string, onDone?: (s: Subscription) => void) {
+function useStoreAction(
+  run: (confirmed: boolean) => Promise<StoreFlowResult>,
+  done: string,
+  onDone?: (s: Subscription) => void,
+) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const start = async () => {
+  // 결제 창을 열기 전에 확인받을 것.
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const start = async (confirmed = false) => {
     setBusy(true);
     setNotice(null);
-    const result = await run();
+    setConfirm(null);
+    const result = await run(confirmed);
     setBusy(false);
-    if (result.kind === "done") {
+    if (result.kind === "confirm") {
+      setConfirm(result.message);
+    } else if (result.kind === "done") {
       setNotice({
         kind: "ok",
         // 서버엔 반영됐지만 스토어 거래를 아직 마치지 못했다 — 앱을 다시 열면 이어서 마친다(resumeUnfinishedPurchases).
@@ -43,7 +52,7 @@ function useStoreAction(run: () => Promise<StoreFlowResult>, done: string, onDon
       setNotice({ kind: "error", text: OUTDATED });
     }
   };
-  return { busy, notice, start };
+  return { busy, notice, confirm, cancelConfirm: () => setConfirm(null), start };
 }
 
 function Notice({ notice }: { notice: { kind: "ok" | "error"; text: string } | null }) {
@@ -72,7 +81,11 @@ export function StoreBuyButton({
 }) {
   const shell = useShell();
   const [price, setPrice] = useState<string | null>(null);
-  const { busy, notice, start } = useStoreAction(buyPlusInApp, "플러스를 시작했어요.", onDone);
+  const { busy, notice, confirm, cancelConfirm, start } = useStoreAction(
+    (confirmed) => buyPlusInApp({ confirmed }),
+    "플러스를 시작했어요.",
+    onDone,
+  );
 
   useEffect(() => {
     if (shell !== "ready" || !STORE_PURCHASES_ENABLED) return;
@@ -87,6 +100,30 @@ export function StoreBuyButton({
 
   if (!STORE_PURCHASES_ENABLED || shell === null || shell === "browser") return <>{fallback}</>;
   if (shell === "outdated") return <p className="mt-5 text-center text-[13px] text-(--hc-muted)">{OUTDATED}</p>;
+  if (confirm) {
+    return (
+      <div className="mt-5 flex flex-col gap-2">
+        <p role="status" className="text-[13px] leading-[1.6]">
+          {confirm}
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void start(true)}
+          className="hc-button-primary flex h-12.5 w-full items-center justify-center rounded-full text-[15px] font-extrabold disabled:opacity-50"
+        >
+          그래도 구독하기
+        </button>
+        <button
+          type="button"
+          onClick={cancelConfirm}
+          className="flex h-11 w-full items-center justify-center rounded-full text-[14px] font-semibold text-(--hc-muted)"
+        >
+          그만두기
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="mt-5 flex flex-col gap-2">
       <button

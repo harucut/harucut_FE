@@ -21,10 +21,10 @@ export async function getMyUserInfo() {
 }
 
 /** 구독 사용량(프레임 보관 한도·사용량) 조회 */
-export async function getSubscriptionUsage() {
+export async function getSubscriptionUsage({ skipTermsGate = false }: { skipTermsGate?: boolean } = {}) {
   const res = await withRequestDeadline(30_000, (signal) => clientApi.get<ApiEnvelope<SubscriptionUsage>>(
     "/api/client/user/subscription/usage",
-    { cache: "no-store", signal },
+    { cache: "no-store", signal, skipTermsGate },
   ));
 
   return requireData(res.data, "구독 사용량");

@@ -25,6 +25,18 @@ import { registerTermsConsentRequiredHandler } from "@/lib/clientApi";
 import { TermsReconsentDialog } from "@/components/terms/TermsReconsentDialog";
 
 /**
+ * 먼저 막지는 않지만, 서버가 TERMS-004 로 막으면 그 자리에서 동의를 받는 화면.
+ *
+ * 요금제는 읽을 수 있어야 하고 초대는 로그인 전에도 열리므로 보호 경로가 아니다. 그런데 여기서 누른 동작(초대 받기,
+ * 앱 구독)은 서버가 필수 약관을 요구한다. 브리지가 돌지 않으면 갓 가입한 초대 고객은 403 만 받고 갈 곳이 없다.
+ */
+const TERMS_ON_DEMAND_PATHS = ["/invite", "/pricing"];
+
+function isTermsOnDemandPath(pathname: string) {
+  return TERMS_ON_DEMAND_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+/**
  * 약관 동의를 서버 장부에 맞춘다. 두 가지 일을 한다.
  *
  *  1. **가입 화면에서 받은 동의를 기록한다.** 동의 API 는 인증이 필요해 가입 시점엔 부를 수
@@ -49,6 +61,9 @@ export function TermsConsentBridge() {
   const checkedRef = useRef(false);
   const [retryNeeded, setRetryNeeded] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  // 위 화면들에서 서버가 약관을 요구했다 — 그 뒤로는 이 화면도 보호 화면처럼 다룬다.
+  const [serverBlocked, setServerBlocked] = useState(false);
+  const gated = isProtectedPath(pathname) || (serverBlocked && isTermsOnDemandPath(pathname));
   const autoRetriedRef = useRef(false);
   // POST는 응답을 못 받아도 서버에 기록됐을 수 있다. 조회 재시도와 분리해 한 번만 보낸다.
   const handoffAttemptedRef = useRef(false);
@@ -162,7 +177,7 @@ export function TermsConsentBridge() {
   useEffect(() => {
     if (DEV_AUTH_BYPASS || !hydrated || accessMode === "guest") return;
     if (checkedRef.current || runningRef.current) return;
-    if (!isProtectedPath(pathname)) return;
+    if (!gated) return;
     runningRef.current = true;
     void (async () => {
       let failed = true;
@@ -184,7 +199,7 @@ export function TermsConsentBridge() {
         }
       }
     })();
-  }, [accessMode, hydrated, pathname, retryNonce, runCheck, settleWaiters]);
+  }, [accessMode, gated, hydrated, pathname, retryNonce, runCheck, settleWaiters]);
 
   /*
     서버가 필수 약관 미동의(TERMS-004)로 API 를 막으면 다시 묻는다.
@@ -204,9 +219,11 @@ export function TermsConsentBridge() {
       }
       // 검사가 돌지 않을 자리면 기다릴 것이 없다 — 오류를 그대로 돌려준다.
       const gate = gateRef.current;
-      if (DEV_AUTH_BYPASS || !gate.hydrated || gate.accessMode === "guest" || !isProtectedPath(gate.pathname)) {
+      const onDemand = isTermsOnDemandPath(gate.pathname);
+      if (DEV_AUTH_BYPASS || !gate.hydrated || gate.accessMode === "guest" || !(isProtectedPath(gate.pathname) || onDemand)) {
         return Promise.resolve(false);
       }
+      if (onDemand) setServerBlocked(true);
       return new Promise<boolean>((resolve) => {
         waitersRef.current.push(resolve);
       });
@@ -218,14 +235,14 @@ export function TermsConsentBridge() {
   }, [settleWaiters]);
 
   useEffect(() => {
-    if (!hydrated || accessMode === "guest" || !retryNeeded || autoRetriedRef.current || !isProtectedPath(pathname)) return;
+    if (!hydrated || accessMode === "guest" || !retryNeeded || autoRetriedRef.current || !gated) return;
     // 같은 화면에서도 일시 장애를 한 번 복구한다. 계속 실패하면 다음 화면 이동 때 묻는다.
     const timer = window.setTimeout(() => {
       autoRetriedRef.current = true;
       setRetryNonce((nonce) => nonce + 1);
     }, 30_000);
     return () => window.clearTimeout(timer);
-  }, [accessMode, hydrated, pathname, retryNeeded]);
+  }, [accessMode, gated, hydrated, pathname, retryNeeded]);
 
   /*
     **보호 화면에서만 막는다 — 결과를 버리지는 않는다.**
@@ -240,7 +257,7 @@ export function TermsConsentBridge() {
     묻지 않으므로, 검사 도중 공개 화면을 한 번 들르는 것만으로 필수 재동의를 영영 피할 수
     있다. 상태에는 남기고 **그리는 것만** 경로로 가른다 — 보호 화면으로 돌아오면 그때 뜬다.
   */
-  if (!hydrated || accessMode === "guest" || !pending || pending.length === 0 || !isProtectedPath(pathname)) return null;
+  if (!hydrated || accessMode === "guest" || !pending || pending.length === 0 || !gated) return null;
 
   return (
     <TermsReconsentDialog

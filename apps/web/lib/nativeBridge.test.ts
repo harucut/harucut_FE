@@ -22,6 +22,7 @@ import {
   nativeStoreProducts,
   nativeStorePurchase,
   nativeStoreRestore,
+  supportsGoogleLogin,
   supportsStorePurchase,
   type BridgeFailureCode,
 } from "@/lib/nativeBridge";
@@ -455,5 +456,29 @@ describe("푸시 토큰 브리지", () => {
     await waitFor(() => posted.length > 0);
     replyTo(posted, "push-token", { ok: false });
     expect(await token).toBeNull();
+  });
+});
+
+describe("판 수로 가르는 기능", () => {
+  const plantShell = (version: unknown) => {
+    (window as unknown as { __HARUCUT_NATIVE__: unknown }).__HARUCUT_NATIVE__ = { version, platform: "android" };
+    window.ReactNativeWebView = { postMessage: jest.fn() };
+  };
+
+  it("판 수를 안 실은 셸에는 푸시 토큰을 묻지 않는다(묻으면 답이 오지 않는다)", async () => {
+    plantShell(undefined);
+    expect(await nativePushToken()).toBeNull();
+    expect(window.ReactNativeWebView?.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("구글 로그인은 셸 밖과 판 4 이상에서 연다. 옛 셸과 판 수 없는 셸은 막는다", () => {
+    delete window.__HARUCUT_NATIVE__;
+    expect(supportsGoogleLogin()).toBe(true);
+    plantShell(3);
+    expect(supportsGoogleLogin()).toBe(false);
+    plantShell(undefined);
+    expect(supportsGoogleLogin()).toBe(false);
+    plantShell(4);
+    expect(supportsGoogleLogin()).toBe(true);
   });
 });

@@ -17,7 +17,7 @@ export function EventNeutralState({
   return (
     <main className="ev-surface flex min-h-dvh flex-col items-center justify-center px-6">
       <div role="alert" className="flex w-full max-w-md flex-col gap-3">
-        <h1 className="break-keep text-[24px] font-extrabold leading-[1.25] tracking-[-0.02em]">{title}</h1>
+        <h1 className="break-keep text-[24px] font-extrabold leading-tight tracking-[-0.02em]">{title}</h1>
         <p className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">{message}</p>
         {actionLabel && onAction ? (
           <button

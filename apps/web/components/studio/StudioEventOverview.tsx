@@ -162,7 +162,14 @@ function LiveInstrument({
   const ratio = quota > 0 ? Math.min(1, spent / quota) : 0;
   return (
     <div className="hc-surface-card flex flex-col gap-4 rounded-[20px] p-5">
-      <p className="text-[14px]">{liveCopy(event)}</p>
+      <div className="flex flex-col gap-0.5">
+        <p className="text-[14px]">{liveCopy(event)}</p>
+        {event.currentExperienceVersion ? (
+          <p className="text-[12px] text-(--hc-muted)">
+            지금 적용 중인 게시본: <span className="font-mono tabular-nums">{event.currentExperienceVersion}</span>번째
+          </p>
+        ) : null}
+      </div>
       {usage?.entitlement ? (
         <div className="flex flex-col gap-3">
           <p className="flex items-baseline gap-2">

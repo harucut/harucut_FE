@@ -13,7 +13,8 @@ import { isFreshSavedAt } from "@/lib/pendingStorageTtl";
 //  - 계정: 예전에는 키가 하나라, 명시적으로 로그아웃하지 않은 공용 기기에서 다음 사람이 앞
 //    사람의 사진이 든 초안을 그대로 복원했다. 주인이 다른 초안은 복원하지 않고 저장할 때 지운다.
 //  - 프레임 종류: 클래식을 꾸미다 그리드를 열면 클래식 초안이 덮였다.
-//  - 저장본 수정(remoteFrameId)은 서버 버전 비교가 생길 때까지 자동 저장하지 않는다(F1-5).
+//  - 저장본 수정(remoteFrameId)은 그 프레임 × 버전으로 따로 둔다. 다른 기기가 먼저 저장해 버전이 바뀌면 옛 편집을
+//    새 저장본 위에 되살리지 않는다(SavedFrameScope).
 const DRAFT_PREFIX = "harucut:theme-editor-draft:";
 const DRAFT_V2_PREFIX = `${DRAFT_PREFIX}v2:`;
 /** 주인을 모르는 옛 초안. 누구 것인지 가릴 수 없으므로 복원하지 않고 지운다. */
@@ -21,8 +22,14 @@ const LEGACY_DRAFT_KEY = `${DRAFT_PREFIX}v1`;
 // localStorage 용량(보통 ~5MB)을 넘기지 않게 한 초안과 **모든 초안의 합**을 함께 묶는다.
 const MAX_DRAFT_BYTES = 4_500_000;
 
-function draftKey(ownerId: string, frameId: FrameId) {
-  return `${DRAFT_V2_PREFIX}${encodeURIComponent(ownerId)}:${frameId}`;
+/** 저장본 수정 초안의 범위. 같은 프레임이어도 버전이 다르면 다른 초안이다. */
+export type SavedFrameScope = { remoteFrameId: number; version: number | null };
+
+function draftKey(ownerId: string, frameId: FrameId, saved?: SavedFrameScope) {
+  const owner = encodeURIComponent(ownerId);
+  return saved
+    ? `${DRAFT_V2_PREFIX}${owner}:saved:${saved.remoteFrameId}:${saved.version ?? "none"}`
+    : `${DRAFT_V2_PREFIX}${owner}:${frameId}`;
 }
 
 /** 공간 프레임 초안은 계정 뒤에 공간을 붙인 값을 주인으로 쓴다. 계정과 공간을 가르는 문자다. */
@@ -57,6 +64,8 @@ function storedDraftKeys(): string[] {
 export type EditorDraft = {
   /** 초안을 만든 계정의 공개 식별자(UserInfo.id). */
   ownerId: string;
+  /** 저장본을 고치던 초안이면 그 프레임과 버전. 없으면 새 프레임 초안. */
+  saved?: SavedFrameScope;
   frameId: FrameId;
   backgroundColor: string;
   background: ThemeBackground;
@@ -128,6 +137,7 @@ export function dataUrlToFile(dataUrl: string, name: string): File {
 // 편집 중 상태를 저장(베스트 에포트). 용량 초과/직렬화 실패 시 조용히 건너뛴다.
 export async function saveEditorDraft(input: {
   ownerId: string;
+  saved?: SavedFrameScope;
   frameId: FrameId;
   backgroundColor: string;
   background: ThemeBackground;
@@ -184,6 +194,7 @@ export async function saveEditorDraft(input: {
     if (revision !== saveRevision) return;
     const draft: EditorDraft = {
       ownerId: input.ownerId,
+      ...(input.saved ? { saved: input.saved } : {}),
       frameId: input.frameId,
       backgroundColor: input.backgroundColor,
       background,
@@ -193,7 +204,7 @@ export async function saveEditorDraft(input: {
       savedAt: input.now,
     };
 
-    const key = draftKey(input.ownerId, input.frameId);
+    const key = draftKey(input.ownerId, input.frameId, input.saved);
     const json = JSON.stringify(draft);
     if (json.length > MAX_DRAFT_BYTES) {
       // 이미지가 너무 커서 보관 불가 — 이 프레임의 이전 초안만 비운다.
@@ -256,17 +267,21 @@ function makeRoomFor(ownerId: string, key: string, bytes: number) {
 }
 
 /** 이 계정·프레임의 초안을 읽는다. 주인이 다르거나 하루가 지난 초안은 돌려주지 않는다. */
-export function loadEditorDraft(ownerId: string, frameId: FrameId): EditorDraft | null {
+export function loadEditorDraft(ownerId: string, frameId: FrameId, saved?: SavedFrameScope): EditorDraft | null {
   if (typeof window === "undefined") return null;
   removeStoredDraft(LEGACY_DRAFT_KEY);
-  const key = draftKey(ownerId, frameId);
+  const key = draftKey(ownerId, frameId, saved);
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as EditorDraft;
     if (!parsed?.frameId || !Array.isArray(parsed.components)) return null;
     // 키가 같아도 본문의 주인·프레임이 다르면 쓰지 않는다(손으로 고친 값 등).
-    if (parsed.ownerId !== ownerId || parsed.frameId !== frameId) {
+    // 저장본 초안은 판형을 저장본이 정하므로 프레임 번호와 버전으로 본다.
+    const sameTarget = saved
+      ? parsed.saved?.remoteFrameId === saved.remoteFrameId && parsed.saved?.version === saved.version
+      : parsed.frameId === frameId && !parsed.saved;
+    if (parsed.ownerId !== ownerId || !sameTarget) {
       removeStoredDraft(key);
       return null;
     }
@@ -293,10 +308,10 @@ function removeStoredDraft(key: string): void {
  * 이 계정·프레임의 초안만 버린다 — 서버에 저장했거나 사용자가 편집을 버리고 나갔을 때.
  * 같은 계정의 다른 프레임 초안은 남긴다. 늦게 끝난 저장이 되살리지 않게 순번도 올린다.
  */
-export function discardEditorDraft(ownerId: string, frameId: FrameId): void {
+export function discardEditorDraft(ownerId: string, frameId: FrameId, saved?: SavedFrameScope): void {
   saveRevision += 1;
   if (typeof window === "undefined") return;
-  removeStoredDraft(draftKey(ownerId, frameId));
+  removeStoredDraft(draftKey(ownerId, frameId, saved));
   // 편집 세션이 끝났다. 캐시는 아래 clearEditorDraft 와 같은 이유로 비운다.
   dataUrlCache.clear();
 }

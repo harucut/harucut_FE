@@ -43,11 +43,11 @@ it("고른 사진으로 묶음을 만들고, 다 될 때까지 다시 물어 받
   expect(screen.getByRole("button", { name: "받기" })).toBeInTheDocument();
 });
 
-it("고른 사진이 없으면 전체(지금 참가 방식 필터)로만 만든다", async () => {
+it("고른 사진이 없으면 전체(지금 사진함 조건)로만 만든다", async () => {
   mockCreate.mockResolvedValue(PENDING);
-  render(<StudioPhotoExports eventId="Ev1" selectedIds={[]} channel="BOOTH" onCreated={jest.fn()} />);
+  render(<StudioPhotoExports eventId="Ev1" selectedIds={[]} filter={{ channel: "BOOTH" }} onCreated={jest.fn()} />);
   expect(screen.getByRole("button", { name: "고른 사진 묶어 받기 (0)" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "이 참가 방식 전체 묶어 받기" }));
+  fireEvent.click(screen.getByRole("button", { name: "이 조건의 사진 전체 묶어 받기" }));
   await waitFor(() => expect(mockCreate).toHaveBeenCalledWith("Ev1", { filter: { channel: "BOOTH" } }));
 });
 

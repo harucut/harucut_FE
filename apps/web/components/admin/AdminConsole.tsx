@@ -2,15 +2,23 @@
 
 import { useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
+import { AuditLogList } from "@/components/audit/AuditLogList";
+import { adminErrorMessage } from "@/components/admin/adminShared";
 import { AdminContracts } from "@/components/admin/AdminContracts";
 import { AdminEntitlements } from "@/components/admin/AdminEntitlements";
+import { AdminFrames } from "@/components/admin/AdminFrames";
 import { AdminInquiries } from "@/components/admin/AdminInquiries";
+import { listAuditLogs } from "@/lib/admin/cmsApi";
 
 const TABS = [
   { key: "inquiries", label: "문의" },
   { key: "contracts", label: "계약" },
   { key: "entitlements", label: "이용권" },
+  { key: "frames", label: "시스템 프레임" },
+  { key: "audit", label: "감사 로그" },
 ] as const;
+
+const auditErrorMessage = (cause: unknown) => adminErrorMessage(cause, "감사 로그를 불러오지 못했어요.");
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -28,7 +36,7 @@ export function AdminConsole() {
       <AppNav />
       <div className="mx-auto flex w-full max-w-200 flex-col gap-5 px-4 py-5 sm:py-6 lg:py-8">
         <h1 className="text-[30px] font-extrabold tracking-tight">운영 관리</h1>
-        <div role="tablist" aria-label="운영 관리" className="flex gap-2">
+        <div role="tablist" aria-label="운영 관리" className="flex flex-wrap gap-2">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -68,6 +76,17 @@ export function AdminConsole() {
         <section role="tabpanel" id="admin-panel-entitlements" aria-labelledby="admin-tab-entitlements" hidden={tab !== "entitlements"}>
           <AdminEntitlements reloadKey={entitlementsVersion} />
         </section>
+        {/* 아래 둘은 쓰던 초안이 없다. 열 때만 그려 안 보는 동안 서버에 묻지 않는다. */}
+        {tab === "frames" ? (
+          <section role="tabpanel" id="admin-panel-frames" aria-labelledby="admin-tab-frames">
+            <AdminFrames />
+          </section>
+        ) : null}
+        {tab === "audit" ? (
+          <section role="tabpanel" id="admin-panel-audit" aria-labelledby="admin-tab-audit">
+            <AuditLogList load={listAuditLogs} errorMessage={auditErrorMessage} />
+          </section>
+        ) : null}
       </div>
     </main>
   );

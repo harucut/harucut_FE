@@ -23,6 +23,11 @@ type ApiOptions = {
   headers?: HeadersInit;
   cache?: RequestCache;
   signal?: AbortSignal;
+  /**
+   * 약관 미동의(TERMS-004)여도 재동의 창을 열지 않고 오류만 돌려준다. 사람이 누르지 않은 조회용이다 —
+   * 요금제 화면을 읽는 사람을 현재 플랜 조회 하나 때문에 창으로 막지 않는다.
+   */
+  skipTermsGate?: boolean;
 };
 
 export function extractEnvelopeLike(value: unknown): ApiEnvelopeLike | null {
@@ -381,7 +386,7 @@ async function request<T>(
     }
 
     if (res.status === 403 && envelope?.code === TERMS_CONSENT_REQUIRED_CODE) {
-      const settled = onTermsConsentRequired?.();
+      const settled = options.skipTermsGate ? null : onTermsConsentRequired?.();
       if (settled && !afterTermsConsent && (await settledOrAborted(settled, options.signal))) {
         return request<T>(method, path, body, options, true);
       }

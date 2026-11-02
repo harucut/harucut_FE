@@ -9,6 +9,14 @@ import type { FrameLayout } from "@/constants/frameLayouts";
  * 좌표는 프레임 캔버스(px) 기준이고, 회전은 칸 중심을 축으로 도(degree) 단위다.
  */
 
+/**
+ * 사진 칸 자유 편집을 열어 뒀는가. 합성 렌더가 서버 스위치(compose.free-cells.enabled)로 닫혀 있는 동안 칸을 옮긴 프레임은
+ * 저장은 돼도 촬영·게시에서 FRAME-008 로 막힌다. 서버와 함께 켠다(NEXT_PUBLIC_FREE_CELLS_ENABLED=true). 기본은 꺼짐.
+ */
+export function freeCellsEnabled() {
+  return process.env.NEXT_PUBLIC_FREE_CELLS_ENABLED === "true";
+}
+
 export const FREE_CELL_COUNT = 4;
 /** 칸 한 변의 최소 길이(px). 너무 작은 칸은 사진이 알아볼 수 없게 줄어든다. */
 export const MIN_CELL_SIZE = 100;

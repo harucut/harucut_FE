@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EventPhotoViewer } from "@/components/studio/EventPhotoViewer";
 import { StudioPhotoExports } from "@/components/studio/StudioPhotoExports";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { dayEndToServer, dayStartToServer } from "@/lib/studio/eventTime";
 import { NativeSaveError, getNativeSaveErrorMessage, nativeSaveImageUrl } from "@/lib/nativeBridge";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
@@ -64,6 +65,15 @@ function formatTime(iso: string) {
     : date.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/** 목록에 나온 프레임을 처음 본 순서대로 모은다. */
+function mergeFrames(known: number[], photos: Photo[]) {
+  const merged = [...known];
+  for (const photo of photos) {
+    if (photo.frameVersionId && !merged.includes(photo.frameVersionId)) merged.push(photo.frameVersionId);
+  }
+  return merged;
+}
+
 /**
  * 행사 사진함(R5 8·9절, ADR-0008 §3). 운영자와 행사 고객이 같이 쓴다 — 무엇을 할 수 있는지는 그 행사의 사진
  * 권한(보기 · 내려받기 · 지우기)이 정한다. 권한이 없는 동작은 버튼을 두지 않고, 서버도 다시 막는다.
@@ -71,6 +81,10 @@ function formatTime(iso: string) {
 export function EventPhotoBox({ eventId }: { eventId: string }) {
   const [access, setAccess] = useState<MyEvent | null>(null);
   const [filter, setFilter] = useState<PhotoFilter>({});
+  // 날짜 칸의 값(YYYY-MM-DD). 서버로는 그날의 시작·끝 시각으로 보낸다.
+  const [days, setDays] = useState<{ from: string; to: string }>({ from: "", to: "" });
+  // 지금까지 본 프레임. 필터로 목록이 좁아져도 다른 프레임으로 바꿀 수 있게 지우지 않는다.
+  const [seenFrames, setSeenFrames] = useState<number[]>([]);
   const [items, setItems] = useState<Photo[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +114,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
         if (generation !== listGenerationRef.current) return;
         setItems(page.items);
         setNextCursor(page.nextCursor ?? null);
+        setSeenFrames((prev) => mergeFrames(prev, page.items));
         setError(null);
       } catch (cause) {
         if (generation !== listGenerationRef.current) return;
@@ -118,6 +133,16 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
       .then((list) => setAccess(list.find((e) => e.eventId === eventId) ?? null))
       .catch(() => {});
   }, [eventId, loadFirst]);
+
+  const changeDays = (next: { from: string; to: string }) => {
+    setDays(next);
+    changeFilter({ ...filter, from: dayStartToServer(next.from), to: dayEndToServer(next.to) });
+  };
+
+  const clearFilter = () => {
+    setDays({ from: "", to: "" });
+    changeFilter({});
+  };
 
   const changeFilter = (next: PhotoFilter) => {
     setFilter(next);
@@ -201,7 +226,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
   const backLabel = access?.access.role ? "행사 설정" : "행사 목록";
   const viewable = items.filter((p) => p.status === "DONE" && p.thumbnailUrl);
   const viewingIndex = viewingId === null ? -1 : viewable.findIndex((p) => p.photoId === viewingId);
-  const hasFilter = Boolean(filter.status || filter.channel);
+  const hasFilter = Boolean(filter.status || filter.channel || filter.from || filter.to || filter.frameVersionId);
   const photoLabel = (photo: Photo) => `${formatTime(photo.createdAt)} 사진`;
 
   return (
@@ -255,6 +280,46 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               ))}
             </select>
           </label>
+          {seenFrames.length > 1 ? (
+            <label className="flex items-center gap-2 text-[13px] font-semibold">
+              프레임
+              <select
+                name="photoFrame"
+                className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+                value={filter.frameVersionId ?? ""}
+                onChange={(e) => changeFilter({ ...filter, frameVersionId: e.target.value ? Number(e.target.value) : undefined })}
+              >
+                <option value="">모든 프레임</option>
+                {seenFrames.map((frameVersionId, index) => (
+                  <option key={frameVersionId} value={frameVersionId}>
+                    프레임 {index + 1}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
+            시작일
+            <input
+              type="date"
+              name="photoFromDay"
+              className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+              value={days.from}
+              max={days.to || undefined}
+              onChange={(e) => changeDays({ ...days, from: e.target.value })}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
+            종료일
+            <input
+              type="date"
+              name="photoToDay"
+              className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+              value={days.to}
+              min={days.from || undefined}
+              onChange={(e) => changeDays({ ...days, to: e.target.value })}
+            />
+          </label>
         </div>
 
         {error ? (
@@ -289,7 +354,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               <p className="text-[14px] text-(--hc-muted)">이 조건에 맞는 사진이 없어요.</p>
               <button
                 type="button"
-                onClick={() => changeFilter({})}
+                onClick={clearFilter}
                 className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold transition hover:border-(--hc-border-strong)"
               >
                 조건 지우기
@@ -369,7 +434,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
           <StudioPhotoExports
             eventId={eventId}
             selectedIds={selected}
-            channel={filter.channel}
+            filter={{ channel: filter.channel, from: filter.from, to: filter.to, frameVersionId: filter.frameVersionId }}
             onCreated={() => setSelected([])}
             onClearSelection={() => setSelected([])}
           />

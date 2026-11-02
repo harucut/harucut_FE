@@ -14,7 +14,7 @@ jest.mock("@/lib/nativeBridge", () => ({
   nativeStoreProducts: (...a: unknown[]) => mockProducts(...a),
 }));
 jest.mock("@/lib/storePurchase", () => ({
-  buyPlusInApp: () => mockBuy(),
+  buyPlusInApp: (...a: unknown[]) => mockBuy(...a),
   restoreInApp: (...a: unknown[]) => mockRestore(...a),
 }));
 
@@ -83,4 +83,20 @@ it("결제 창을 닫으면 아무 안내도 없고, 복원이 실패하면 문�
   expect(await screen.findByRole("alert")).toHaveTextContent("이 스토어 계정에 복원할 구독이 없어요.");
   // 사용자가 누른 복원은 스토어와 먼저 동기화한다(iOS AppStore.sync(), Codex #566).
   expect(mockRestore).toHaveBeenCalledWith({ sync: true });
+});
+
+it("사기 전에 알릴 것이 있으면 결제 창 대신 안내를 보이고, 확인하면 다시 부른다", async () => {
+  shell.native = true;
+  shell.supports = true;
+  mockBuy.mockResolvedValueOnce({ kind: "confirm", message: "쿠폰 혜택이 바뀌어요." });
+  mockBuy.mockResolvedValueOnce({ kind: "cancelled" });
+  render(<StoreBuyButton />);
+
+  fireEvent.click(await screen.findByRole("button", { name: /앱에서 구독하기/ }));
+  expect(await screen.findByText("쿠폰 혜택이 바뀌어요.")).toBeInTheDocument();
+  expect(mockBuy).toHaveBeenLastCalledWith({ confirmed: false });
+
+  fireEvent.click(screen.getByRole("button", { name: "그래도 구독하기" }));
+  await waitFor(() => expect(mockBuy).toHaveBeenLastCalledWith({ confirmed: true }));
+  expect(await screen.findByRole("button", { name: /앱에서 구독하기/ })).toBeInTheDocument();
 });

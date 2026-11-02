@@ -236,6 +236,26 @@ describe("초안은 계정 × 프레임 종류마다 따로 둔다", () => {
     expect(loadEditorDraft(OWNER, "grid-4")).not.toBeNull();
   });
 
+  // R5 5절: 계정·공간·프레임·버전별로 분리. 다른 기기가 먼저 저장한 뒤 옛 편집을 새 저장본 위에 되살리면 안 된다.
+  it("저장본 초안은 프레임·버전별로 따로 두고, 같은 판형의 새 프레임 초안과 섞이지 않는다", async () => {
+    const { saveEditorDraft, loadEditorDraft, discardEditorDraft } = await loadModule();
+    const saved = { remoteFrameId: 7, version: 3 };
+    await saveEditorDraft({ ...saveInput([]), backgroundColor: "111111" });
+    await saveEditorDraft({ ...saveInput([]), backgroundColor: "222222", saved });
+
+    expect(loadEditorDraft(OWNER, "classic-4")?.backgroundColor).toBe("111111");
+    expect(loadEditorDraft(OWNER, "classic-4", saved)?.backgroundColor).toBe("222222");
+    // 판형이 다르게 열려도 같은 저장본이면 찾는다(판형은 저장본이 정한다).
+    expect(loadEditorDraft(OWNER, "grid-4", saved)?.backgroundColor).toBe("222222");
+    // 버전이 바뀌었거나 다른 프레임이면 없다.
+    expect(loadEditorDraft(OWNER, "classic-4", { remoteFrameId: 7, version: 4 })).toBeNull();
+    expect(loadEditorDraft(OWNER, "classic-4", { remoteFrameId: 8, version: 3 })).toBeNull();
+
+    discardEditorDraft(OWNER, "classic-4", saved);
+    expect(loadEditorDraft(OWNER, "classic-4", saved)).toBeNull();
+    expect(loadEditorDraft(OWNER, "classic-4")?.backgroundColor).toBe("111111");
+  });
+
   it("로그아웃 정리(clearEditorDraft)는 모든 계정의 초안을 지운다", async () => {
     const { saveEditorDraft, loadEditorDraft, clearEditorDraft } = await loadModule();
     await saveEditorDraft(saveInput([]));

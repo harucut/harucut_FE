@@ -52,6 +52,8 @@ export type StoreFlowResult =
   | { kind: "cancelled" }
   /** 셸 밖이거나 구버전 셸 — 업데이트를 안내한다(웹 결제로 우회하지 않는다). */
   | { kind: "unsupported" }
+  /** 사기 전에 알려야 할 것이 있다 — 안내한 뒤 `confirmed` 로 다시 부른다. 아직 결제 창을 열지 않았다. */
+  | { kind: "confirm"; message: string }
   | { kind: "error"; message: string };
 
 /** 서버 거절 문구. 다른 출처로 구독 중(SUBS-009)이면 어디서 관리하는지 붙인다. */
@@ -62,17 +64,40 @@ export function storeErrorMessage(cause: unknown, fallback: string) {
   return hint ? `${base} ${hint}` : base;
 }
 
-/** 플러스를 스토어로 산다. */
-export async function buyPlusInApp(): Promise<StoreFlowResult> {
+/** 쿠폰 혜택이 스토어 구매로 바뀐다는 안내. 서버는 쿠폰 부여를 스토어 구매로 대신한다(StoreSubscriptionService). */
+function couponReplacedCopy(planTier: Subscription["planTier"]) {
+  return planTier === "PRO"
+    ? "지금은 쿠폰으로 프로를 쓰고 있어요. 플러스를 구독하면 쿠폰 혜택이 끝나고 플러스로 내려가요."
+    : "지금은 쿠폰으로 유료 등급을 쓰고 있어요. 플러스를 구독하면 쿠폰 혜택이 끝나고 구독으로 바뀌어요.";
+}
+
+/**
+ * 플러스를 스토어로 산다.
+ *
+ * 다른 채널의 유효 구독은 **돈을 받기 전에** 안내한다(R5 12절). 웹·다른 스토어로 구독 중이면 서버가 어차피 SUBS-009 로
+ * 거절하는데, 그때는 이미 스토어에서 결제된 뒤다. 쿠폰은 막지 않지만 혜택이 바뀌므로 한 번 확인받는다(`confirmed`).
+ */
+export async function buyPlusInApp({ confirmed = false }: { confirmed?: boolean } = {}): Promise<StoreFlowResult> {
   const shell = getNativeShell();
   if (!shell || !supportsStorePurchase()) return { kind: "unsupported" };
-  let accountToken: string | undefined;
+  let subscription: Awaited<ReturnType<typeof getMySubscription>>;
   try {
-    accountToken = (await getMySubscription())?.storeAccountToken;
+    subscription = await getMySubscription();
   } catch (cause) {
     return { kind: "error", message: getUserFacingApiErrorMessage(cause, "구독 정보를 불러오지 못했어요.") };
   }
+  const accountToken = subscription?.storeAccountToken;
   if (!accountToken) return { kind: "error", message: "구독 정보를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요." };
+
+  // 무료 등급이면 출처가 남아 있어도 지금 혜택을 주는 곳이 없다.
+  const activeSource = subscription?.planTier === "BASIC" ? undefined : subscription?.source;
+  if (activeSource && activeSource !== "COUPON" && activeSource !== storePlatformOf(shell.platform)) {
+    const hint = subscriptionManageHint(activeSource);
+    return { kind: "error", message: `이미 구독 중이라 새로 구독할 수 없어요.${hint ? ` ${hint}` : ""}` };
+  }
+  if (activeSource === "COUPON" && !confirmed && subscription) {
+    return { kind: "confirm", message: couponReplacedCopy(subscription.planTier) };
+  }
 
   const productId = STORE_PRODUCT_IDS.plus;
   const purchase = await nativeStorePurchase(productId, accountToken);

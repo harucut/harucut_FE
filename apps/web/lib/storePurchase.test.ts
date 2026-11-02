@@ -161,3 +161,32 @@ describe("미완료 거래 이어서 마치기", () => {
     expect(bridge.nativeStoreFinish).toHaveBeenCalledWith(["t9"]);
   });
 });
+
+// R5 12절: 다른 채널의 유효 구독은 추가 구매 전에 안내한다. 결제 창을 열기 전에 끝나야 한다.
+describe("구매 전 안내", () => {
+  it("웹으로 구독 중이면 결제 창을 열지 않고 어디서 관리하는지 알린다", async () => {
+    mockSub.mockResolvedValue({ planTier: "PLUS", status: "ACTIVE", source: "WEB", storeAccountToken: "acct-1" });
+    const result = await buyPlusInApp();
+    expect(result).toEqual({ kind: "error", message: expect.stringContaining("하루컷 웹에서 결제한 구독") });
+    expect(bridge.nativeStorePurchase).not.toHaveBeenCalled();
+  });
+
+  it("쿠폰이면 한 번 확인받고, 확인하면 결제 창을 연다", async () => {
+    mockSub.mockResolvedValue({ planTier: "PRO", status: "GRANTED", source: "COUPON", storeAccountToken: "acct-1" });
+    expect(await buyPlusInApp()).toEqual({ kind: "confirm", message: expect.stringContaining("플러스로 내려가요") });
+    expect(bridge.nativeStorePurchase).not.toHaveBeenCalled();
+
+    bridge.nativeStorePurchase.mockResolvedValue({ ok: false, message: null });
+    expect(await buyPlusInApp({ confirmed: true })).toEqual({ kind: "cancelled" });
+    expect(bridge.nativeStorePurchase).toHaveBeenCalledTimes(1);
+  });
+
+  it("같은 스토어 구독이나 무료 등급에는 안내하지 않는다", async () => {
+    bridge.nativeStorePurchase.mockResolvedValue({ ok: false, message: null });
+    mockSub.mockResolvedValue({ planTier: "PLUS", status: "ACTIVE", source: "APP_STORE", storeAccountToken: "acct-1" });
+    expect(await buyPlusInApp()).toEqual({ kind: "cancelled" });
+    // 무료로 내려온 행에 옛 출처가 남아 있어도 지금 혜택을 주는 곳이 없다.
+    mockSub.mockResolvedValue({ planTier: "BASIC", status: "EXPIRED", source: "WEB", storeAccountToken: "acct-1" });
+    expect(await buyPlusInApp()).toEqual({ kind: "cancelled" });
+  });
+});

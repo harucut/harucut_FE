@@ -70,7 +70,7 @@ export function StudioSectionNav({ items, header }: { items: StudioSectionNavIte
       {header ? <div className="hidden lg:block">{header}</div> : null}
       <ul
         ref={listRef}
-        className="relative flex gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] lg:flex-col lg:gap-0.5 lg:overflow-visible lg:p-0 [&::-webkit-scrollbar]:hidden"
+        className="relative flex gap-1 overflow-x-auto px-4 py-1.5 scrollbar-none lg:flex-col lg:gap-0.5 lg:overflow-visible lg:p-0 [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item) => (
           <li key={item.id} className="shrink-0">

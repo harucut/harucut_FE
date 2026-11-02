@@ -3,6 +3,7 @@
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
+import type { AuditLogPage } from "@/components/audit/AuditLogList";
 import type { WorkspaceRole } from "@/lib/studio/studioApi";
 
 /**
@@ -186,4 +187,13 @@ export async function acceptInvitation(token: string): Promise<InvitationAccepte
 /** 초대 링크. 토큰은 fragment 에 둔다 — 서버 접근 로그·리퍼러에 남지 않는다. */
 export function inviteLink(origin: string, token: string) {
   return `${origin}/invite#${token}`;
+}
+
+/** 공간 감사 로그(OWNER·ADMIN). 최신순 50개씩. */
+export async function listWorkspaceAuditLogs(workspaceId: string, cursor: string | null): Promise<AuditLogPage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
+  const res = await clientApi.get<ApiEnvelope<AuditLogPage>>(
+    `/api/client/workspaces/${encodeURIComponent(workspaceId)}/audit-logs${query}`,
+  );
+  return res.data.data ?? { items: [] };
 }

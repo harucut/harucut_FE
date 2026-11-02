@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { LayoutGrid } from "lucide-react";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
-import { FREE_CELL_COUNT, validateCells, type FreeCell, type FreeCellShape } from "@/lib/frameCells";
+import { FREE_CELL_COUNT, freeCellsEnabled, validateCells, type FreeCell, type FreeCellShape } from "@/lib/frameCells";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 
 const FIELDS: Array<{ key: "x" | "y" | "width" | "height" | "rotation"; label: string; unit: string }> = [
@@ -27,6 +27,9 @@ export function CellsPanel() {
   const [open, setOpen] = useState(0);
 
   if (!frameId) return null;
+  const enabled = freeCellsEnabled();
+  // 합성이 아직 자유 칸을 그리지 못하는 동안에는 새로 켜지 못하게 숨긴다. 이미 칸을 옮겨 둔 프레임은 되돌릴 길을 남긴다.
+  if (!enabled && cells === null) return null;
   const layout = FRAME_LAYOUTS[frameId];
   const violations = cells ? validateCells(cells, { width: layout.totalWidth, height: layout.totalHeight }) : [];
 
@@ -51,13 +54,19 @@ export function CellsPanel() {
           onChange={(e) => setFreeCells(e.target.checked)}
         />
       </label>
-      <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-        {cells
-          ? "칸마다 위치·크기·회전·모양과 넣을 사진 순서를 정해요. 이 프레임은 자유 칸 촬영이 열리면 쓸 수 있어요."
-          : "켜면 지금 칸 모양에서 시작해요. 끄면 원래 칸으로 돌아가요."}
-      </p>
+      {enabled ? (
+        <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
+          {cells
+            ? "칸마다 위치·크기·회전·모양과 넣을 사진 순서를 정해요. 이 프레임은 자유 칸 촬영이 열리면 쓸 수 있어요."
+            : "켜면 지금 칸 모양에서 시작해요. 끄면 원래 칸으로 돌아가요."}
+        </p>
+      ) : (
+        <p role="status" className="text-[12px] leading-[1.6] text-(--hc-danger)">
+          칸을 옮긴 프레임이에요. 지금은 이 모양으로 사진을 만들 수 없어서 촬영과 게시에 쓸 수 없어요. 끄면 원래 칸으로 돌아가요.
+        </p>
+      )}
 
-      {cells ? (
+      {cells && enabled ? (
         <>
           <div role="tablist" aria-label="고칠 칸" className="grid grid-cols-4 gap-1">
             {cells.map((_, i) => (
@@ -69,7 +78,7 @@ export function CellsPanel() {
                 onClick={() => setOpen(i)}
                 className={`h-11 rounded-xl border text-[13px] font-semibold ${
                   open === i
-                    ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+                    ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
                     : "border-(--hc-border) text-(--hc-muted)"
                 }`}
               >
