@@ -173,6 +173,16 @@ function LoginPageContent() {
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {searchParams.get("joined") === "1" && !errors.common ? (
+          <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
+            가입이 끝났어요. 방금 만든 계정으로 로그인해 주세요.
+          </p>
+        ) : null}
+        {searchParams.get("passwordChanged") === "1" && !errors.common ? (
+          <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
+            비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요.
+          </p>
+        ) : null}
         {errors.common ? (
           <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
             {errors.common}

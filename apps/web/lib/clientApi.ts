@@ -85,10 +85,28 @@ export function registerDeletionRequestedHandler(handler: (() => void) | null) {
 // 서버가 필수 약관 미동의(TERMS-004)로 API 를 막았을 때 호출되는 핸들러.
 // 재동의 화면을 다시 띄우는 것은 TermsConsentBridge 가 맡는다. 탈퇴요청과 달리 상태를 다시
 // 묻지 않는다 — 이 코드는 그 뜻 하나로만 온다.
-let onTermsConsentRequired: (() => void) | null = null;
+//
+// 핸들러가 약속을 돌려주면 동의가 정리될 때까지 기다렸다가 true 면 그 요청을 한 번만 다시 보낸다.
+// 가입 직후 첫 로그인은 브리지가 동의를 서버에 보내는 동안 화면이 먼저 데이터를 불러 이 응답을 받는다 —
+// 방금 동의한 사람에게 「약관에 동의하면 계속 이용할 수 있어요」를 보여 주면 안 된다.
+// 재시도는 안전하다: 이 응답은 서버가 요청을 처리하기 전에 막은 것이다.
+type TermsConsentRequiredHandler = () => Promise<boolean> | void;
+let onTermsConsentRequired: TermsConsentRequiredHandler | null = null;
 
-export function registerTermsConsentRequiredHandler(handler: (() => void) | null) {
+export function registerTermsConsentRequiredHandler(handler: TermsConsentRequiredHandler | null) {
   onTermsConsentRequired = handler;
+}
+
+/** 기다리기를 끊을 수 있게 — 호출부의 시간 제한이 약관 창에 묶여 끝나지 않으면 안 된다. */
+function settledOrAborted(settled: Promise<boolean>, signal?: AbortSignal): Promise<boolean> {
+  if (!signal) return settled;
+  if (signal.aborted) return Promise.resolve(false);
+  return Promise.race([
+    settled,
+    new Promise<boolean>((resolve) => {
+      signal.addEventListener("abort", () => resolve(false), { once: true });
+    }),
+  ]);
 }
 
 // 재발급까지 실패해 세션이 끊긴 것으로 판정됐을 때 호출되는 핸들러.
@@ -260,6 +278,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   options: ApiOptions = {},
+  afterTermsConsent = false,
 ): Promise<ApiResult<T>> {
   const headers = new Headers(options.headers);
   const hasBody = body !== undefined;
@@ -362,7 +381,10 @@ async function request<T>(
     }
 
     if (res.status === 403 && envelope?.code === TERMS_CONSENT_REQUIRED_CODE) {
-      onTermsConsentRequired?.();
+      const settled = onTermsConsentRequired?.();
+      if (settled && !afterTermsConsent && (await settledOrAborted(settled, options.signal))) {
+        return request<T>(method, path, body, options, true);
+      }
     }
 
     throw new ApiRequestError<T>({

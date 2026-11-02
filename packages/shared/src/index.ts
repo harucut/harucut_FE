@@ -89,6 +89,7 @@ export {
 export {
   STORE_PRODUCT_IDS,
   STORE_PURCHASES_ENABLED,
+  storePurchasesOpenOn,
   STORE_PURCHASE_SHELL_VERSION,
   storeConflictSource,
   storePlatformOf,

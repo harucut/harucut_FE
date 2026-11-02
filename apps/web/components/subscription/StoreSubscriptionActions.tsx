@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { STORE_PRODUCT_IDS, STORE_PURCHASES_ENABLED } from "@harucut/shared";
+import { STORE_PRODUCT_IDS, STORE_PURCHASES_ENABLED, storePurchasesOpenOn } from "@harucut/shared";
 import type { Subscription } from "@/lib/api-types";
-import { isNativeShell, nativeStoreProducts, supportsStorePurchase } from "@/lib/nativeBridge";
+import { getNativeShell, nativeStoreProducts, supportsStorePurchase } from "@/lib/nativeBridge";
 import { buyPlusInApp, restoreInApp, type StoreFlowResult } from "@/lib/storePurchase";
 
 /** 앱 안에서 스토어 결제를 열 수 있는 상태인가. 서버 렌더와 어긋나지 않게 마운트 뒤에 읽는다. */
@@ -12,8 +12,10 @@ type Shell = "browser" | "outdated" | "ready";
 function useShell(): Shell | null {
   const [shell, setShell] = useState<Shell | null>(null);
   useEffect(() => {
+    const native = getNativeShell();
+    // 팔지 않는 플랫폼(storePurchasesOpenOn)은 브라우저와 같게 다룬다 — 사도 권한을 줄 수 없는 결제를 열지 않는다.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 셸 표식은 브라우저에서만 읽는다
-    setShell(!isNativeShell() ? "browser" : supportsStorePurchase() ? "ready" : "outdated");
+    setShell(!native || !storePurchasesOpenOn(native.platform) ? "browser" : supportsStorePurchase() ? "ready" : "outdated");
   }, []);
   return shell;
 }

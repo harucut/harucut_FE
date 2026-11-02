@@ -61,6 +61,19 @@ export function TermsConsentBridge() {
   // 이번 회차에 **내가 읽은** 보관물. 재동의 화면을 통과했을 때 지울 대상을 이것으로
   // 못 박는다 — 아래 `onDone` 주석 참고.
   const stashedRef = useRef<PendingTermsConsent | null>(null);
+  // TERMS-004 로 막힌 요청들이 동의가 정리되기를 기다리는 자리(clientApi 가 재시도한다). true 면 다시 보낸다.
+  const waitersRef = useRef<Array<(consented: boolean) => void>>([]);
+  // 필수 약관이 남아 재동의 화면을 띄웠는가 — 그동안은 기다리는 요청을 풀지 않는다.
+  const requiredOpenRef = useRef(false);
+  const gateRef = useRef({ pathname, hydrated, accessMode });
+  useEffect(() => {
+    gateRef.current = { pathname, hydrated, accessMode };
+  }, [pathname, hydrated, accessMode]);
+  const settleWaiters = useCallback((consented: boolean) => {
+    const waiters = waitersRef.current;
+    waitersRef.current = [];
+    waiters.forEach((resolve) => resolve(consented));
+  }, []);
 
   const runCheck = useCallback(async () => {
     /*
@@ -134,6 +147,7 @@ export function TermsConsentBridge() {
       const consents = await fetchMyTermsConsents();
       const required = pendingRequiredConsents(consents);
       checkedRef.current = true;
+      requiredOpenRef.current = required.length > 0;
       if (required.length > 0) {
         setAll(consents);
         setPending(required);
@@ -151,20 +165,26 @@ export function TermsConsentBridge() {
     if (!isProtectedPath(pathname)) return;
     runningRef.current = true;
     void (async () => {
+      let failed = true;
       try {
-        setRetryNeeded(await runCheck());
+        failed = await runCheck();
+        setRetryNeeded(failed);
       } catch {
         setRetryNeeded(true);
       } finally {
         runningRef.current = false;
         if (recheckRequestedRef.current) {
+          // 끝난 뒤 한 번 더 돈다 — 기다리는 요청은 그 결과를 본다.
           recheckRequestedRef.current = false;
           checkedRef.current = false;
           setRetryNonce((nonce) => nonce + 1);
+        } else if (!requiredOpenRef.current || failed) {
+          // 재동의 화면이 떠 있으면 그 화면을 통과할 때(onDone) 푼다.
+          settleWaiters(!failed);
         }
       }
     })();
-  }, [accessMode, hydrated, pathname, retryNonce, runCheck]);
+  }, [accessMode, hydrated, pathname, retryNonce, runCheck, settleWaiters]);
 
   /*
     서버가 필수 약관 미동의(TERMS-004)로 API 를 막으면 다시 묻는다.
@@ -178,13 +198,24 @@ export function TermsConsentBridge() {
     registerTermsConsentRequiredHandler(() => {
       if (runningRef.current) {
         recheckRequestedRef.current = true;
-        return;
+      } else {
+        checkedRef.current = false;
+        setRetryNonce((nonce) => nonce + 1);
       }
-      checkedRef.current = false;
-      setRetryNonce((nonce) => nonce + 1);
+      // 검사가 돌지 않을 자리면 기다릴 것이 없다 — 오류를 그대로 돌려준다.
+      const gate = gateRef.current;
+      if (DEV_AUTH_BYPASS || !gate.hydrated || gate.accessMode === "guest" || !isProtectedPath(gate.pathname)) {
+        return Promise.resolve(false);
+      }
+      return new Promise<boolean>((resolve) => {
+        waitersRef.current.push(resolve);
+      });
     });
-    return () => registerTermsConsentRequiredHandler(null);
-  }, []);
+    return () => {
+      registerTermsConsentRequiredHandler(null);
+      settleWaiters(false);
+    };
+  }, [settleWaiters]);
 
   useEffect(() => {
     if (!hydrated || accessMode === "guest" || !retryNeeded || autoRetriedRef.current || !isProtectedPath(pathname)) return;
@@ -236,6 +267,9 @@ export function TermsConsentBridge() {
           clearPendingTermsConsentIfUnchanged(stashedRef.current);
         }
         setPending(null);
+        requiredOpenRef.current = false;
+        // 동의 전에 막혔던 화면의 요청을 이어 간다 — 다시 시도를 누르게 하지 않는다.
+        settleWaiters(true);
       }}
       contentHref={termsContentHref}
     />

@@ -2,7 +2,7 @@
 
 import {
   STORE_PRODUCT_IDS,
-  STORE_PURCHASES_ENABLED,
+  storePurchasesOpenOn,
   storeConflictSource,
   storePlatformOf,
   subscriptionManageHint,
@@ -125,7 +125,8 @@ let resumed = false;
  * 로그인한 화면에서만 부른다(components/layout/AppNav).
  */
 export async function resumeUnfinishedPurchases() {
-  if (resumed || !STORE_PURCHASES_ENABLED || !supportsStorePurchase()) return;
+  const shell = getNativeShell();
+  if (resumed || !shell || !storePurchasesOpenOn(shell.platform) || !supportsStorePurchase()) return;
   resumed = true;
   try {
     await restoreInApp();

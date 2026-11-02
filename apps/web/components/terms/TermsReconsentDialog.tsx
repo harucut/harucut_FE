@@ -250,7 +250,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-130 flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-130 flex items-end justify-center bg-black/60 px-4 py-6 sm:items-center">
       {/*
         목록은 서버 약관 수만큼 늘어나고 전문을 펼치면 더 늘어난다. 패널이 뷰포트를 넘으면
         제출·로그아웃 버튼이 화면 밖으로 잘리는데, 이 다이얼로그는 닫을 수도 없다.

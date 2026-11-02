@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StoreBuyButton, StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
 
-const shell = { native: false, supports: false };
+const shell = { native: false, supports: false, platform: "ios" };
 const mockBuy = jest.fn();
 const mockRestore = jest.fn();
 const mockProducts = jest.fn();
@@ -9,7 +9,7 @@ const mockProducts = jest.fn();
 // 앱 결제를 연 상태로 본다(기본값은 사업 결정 전이라 꺼져 있다).
 jest.mock("@harucut/shared", () => ({ ...jest.requireActual("@harucut/shared"), STORE_PURCHASES_ENABLED: true }));
 jest.mock("@/lib/nativeBridge", () => ({
-  isNativeShell: () => shell.native,
+  getNativeShell: () => (shell.native ? { version: 3, platform: shell.platform } : null),
   supportsStorePurchase: () => shell.supports,
   nativeStoreProducts: (...a: unknown[]) => mockProducts(...a),
 }));
@@ -22,6 +22,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   shell.native = false;
   shell.supports = false;
+  shell.platform = "ios";
   mockProducts.mockResolvedValue({ ok: true, value: [{ productId: "harucut.plus.monthly", displayPrice: "₩3,900", title: "플러스" }] });
 });
 
@@ -35,6 +36,22 @@ it("브라우저에서는 대체 내용을, 구버전 셸에서는 업데이트 
   render(<StoreBuyButton fallback={<p>결제 준비 중</p>} />);
   expect(await screen.findByText(/앱을 업데이트하면/)).toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
+});
+
+// 서버에 Google Play 검증이 없는 동안 Android 는 돈만 나가고 권한을 못 준다. 버튼을 그리지 않는다.
+it("안드로이드 앱에서는 구매·복원 버튼 없이 대체 내용만 보인다", async () => {
+  shell.native = true;
+  shell.supports = true;
+  shell.platform = "android";
+  render(
+    <>
+      <StoreBuyButton fallback={<p>결제 준비 중</p>} />
+      <StoreRestoreButton />
+    </>,
+  );
+  expect(await screen.findByText("결제 준비 중")).toBeInTheDocument();
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  expect(mockProducts).not.toHaveBeenCalled();
 });
 
 it("앱에서는 스토어 가격으로 구독 버튼을 보이고, 마치면 알린다", async () => {

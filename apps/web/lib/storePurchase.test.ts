@@ -24,6 +24,7 @@ jest.mock("@harucut/shared", () => {
     get STORE_PURCHASES_ENABLED() {
       return flags.storeOpen;
     },
+    storePurchasesOpenOn: (platform: string) => flags.storeOpen && platform === "ios",
   };
 });
 jest.mock("@/lib/nativeBridge", () => ({
@@ -137,6 +138,14 @@ describe("구매 복원", () => {
 // 마치지 못한 거래는 앱이 열릴 때 조용히 이어서 마친다(Codex #566). 앱 결제를 열지 않았으면 아무것도 하지 않는다.
 describe("미완료 거래 이어서 마치기", () => {
   it("앱 결제가 꺼져 있으면 스토어를 부르지 않는다", async () => {
+    await resumeUnfinishedPurchases();
+    expect(bridge.nativeStoreRestore).not.toHaveBeenCalled();
+  });
+
+  // Google Play 서버 검증이 없는 동안 Android 는 팔지 않는다(storePurchasesOpenOn).
+  it("닫힌 플랫폼에서는 이어서 마치지 않는다", async () => {
+    flags.storeOpen = true;
+    bridge.getNativeShell.mockReturnValue({ version: 3, platform: "android" });
     await resumeUnfinishedPurchases();
     expect(bridge.nativeStoreRestore).not.toHaveBeenCalled();
   });

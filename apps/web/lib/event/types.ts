@@ -124,6 +124,8 @@ export type ResultStatus = {
   status: JobStatus | "EXPIRED";
   eventName: string;
   thumbnailUrl: string | null;
+  /** 화면에 띄울 결과 원본(짧은 서명 URL). DONE 일 때만 온다. 없으면 썸네일로 대신한다(옛 서버). */
+  imageUrl?: string | null;
   expiresAt: string;
   theme?: EventTheme;
 };

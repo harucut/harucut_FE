@@ -14,6 +14,8 @@ export type ComposeFailureCode =
   | "RENDER_FAILED"
   /** 결과·썸네일 쌍이 검증되지 않아 공개하지 않은 최종 실패(D09). 서버 출력 계약 2 이후에만 나온다. RENDER_FAILED 와 같은 기본 문구다. */
   | "OUTPUT_CONFLICT"
+  /** 앱 재접수 횟수·총 기한을 넘긴 일시 장애. 최종 실패라 원본이 지워지므로 다시 찍어야 한다. */
+  | "DISPATCH_EXHAUSTED"
   | "UNKNOWN";
 
 type FailureCopy = {
@@ -28,6 +30,7 @@ const COPY: Record<Exclude<ComposeFailureCode, "UNKNOWN" | "RENDER_FAILED" | "OU
   ASSET_MISSING: { message: "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", retryable: false },
   ASSET_UNREADABLE: { message: "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", retryable: false },
   TIMED_OUT: { message: "사진을 만드는 데 시간이 너무 걸렸어요. 다시 시도해 주세요.", retryable: true },
+  DISPATCH_EXHAUSTED: { message: "사진을 만들지 못했어요. 다시 찍어 주세요.", retryable: false },
 };
 
 /** 코드가 없거나 모르면 null — 부른 쪽이 지금까지의 기본 문구를 쓴다. */
