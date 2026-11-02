@@ -673,8 +673,13 @@ export function HomeStep({
           <h2 className="text-[16px] font-bold">이 행사에서 만든 사진</h2>
           <ul className="flex flex-col gap-2.5">
             {results.map((job, index) => (
-              <li key={job.jobId} className="flex items-center justify-between gap-3 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-3 pl-4">
-                <span className="min-w-0 text-[14px] font-semibold">
+              <li key={job.jobId} className="flex items-center gap-3 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-3">
+                {job.thumbnailUrl ? (
+                  // 짧은 서명 URL 이라 next/image 로 보내지 않는다. Referer 도 보내지 않는다.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={job.thumbnailUrl} alt="" referrerPolicy="no-referrer" loading="lazy" className="size-14 shrink-0 rounded-lg object-cover" />
+                ) : null}
+                <span className="min-w-0 flex-1 text-[14px] font-semibold">
                   {index + 1}번째 사진 · {job.status === "DONE" ? "완성" : job.status === "PENDING" ? "만드는 중" : "실패"}
                   {/* 실패 코드가 있으면 무엇을 하면 되는지 말해 준다(원본 없음 → 다시 찍기 등). */}
                   {job.status === "FAILED" && composeFailureCopy(job.failureCode) ? (

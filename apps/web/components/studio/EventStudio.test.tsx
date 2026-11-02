@@ -176,7 +176,7 @@ it("이용권이 없으면 맨 위에서 먼저 알린다", async () => {
 // 게시는 주소가 잠기고 참가자에게 열리는 일이라 한 번 더 보여 주고 묻는다.
 it("게시는 내용을 확인한 뒤에 보내고, 끝나면 QR 을 건넨다", async () => {
   await renderStudio();
-  mockRun.mockResolvedValueOnce(event({ status: "LIVE", captureOpen: true, settingsVersion: 7 }));
+  mockRun.mockResolvedValueOnce(event({ status: "LIVE", captureOpen: true, settingsVersion: 7, hasUnpublishedChanges: false }));
 
   fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
   expect(mockRun).not.toHaveBeenCalled();
@@ -200,8 +200,7 @@ it("게시는 내용을 확인한 뒤에 보내고, 끝나면 QR 을 건넨다",
 });
 
 it("게시 뒤에 설정을 저장하면 아직 게시 안 함을 알리고 다시 게시할 수 있다", async () => {
-  window.localStorage.setItem("harucut:studio:published-settings:Ev1", "2");
-  await renderStudio(event({ status: "LIVE", captureOpen: true, settingsVersion: 3 }));
+  await renderStudio(event({ status: "LIVE", captureOpen: true, settingsVersion: 3, hasUnpublishedChanges: true }));
   expect(screen.getByText("저장했지만 아직 게시 안 함")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "바뀐 설정 게시" })).toBeEnabled();
 });

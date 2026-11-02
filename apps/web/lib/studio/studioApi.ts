@@ -81,6 +81,8 @@ export type StudioEvent = {
   captureOpen: boolean;
   /** PATCH 에 그대로 보낼 낙관적 잠금 값. */
   settingsVersion: number;
+  /** 저장본(상위 기본값 포함)이 게시본과 다른가. 게시 전이면 키가 없다. */
+  hasUnpublishedChanges?: boolean;
   settings: EventSettings;
   /** 게시 전이면 null. */
   currentExperienceVersion: number | null;

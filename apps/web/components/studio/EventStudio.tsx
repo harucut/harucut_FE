@@ -76,30 +76,6 @@ const SLUG_PATTERN = /^[a-z0-9-]{3,40}$/;
 /** 저장·게시 알림이 바에 머무는 시간. 실패 알림은 다음 동작까지 남는다. */
 const OK_NOTICE_MS = 6_000;
 
-/**
- * 이 브라우저에서 마지막으로 게시한 때의 settingsVersion. 서버는 「저장본이 게시본과 같은가」를 알려 주지 않아서,
- * 여기서 게시했을 때의 값과 견준다. 모르면(다른 기기에서 게시함) 비교하지 않고 게시를 그대로 열어 둔다.
- */
-function publishedMarkerKey(eventId: string) {
-  return `harucut:studio:published-settings:${eventId}`;
-}
-function readPublishedMarker(eventId: string): number | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(publishedMarkerKey(eventId));
-    return raw === null ? null : Number(raw);
-  } catch {
-    return null;
-  }
-}
-function writePublishedMarker(eventId: string, settingsVersion: number) {
-  try {
-    window.localStorage.setItem(publishedMarkerKey(eventId), String(settingsVersion));
-  } catch {
-    // 저장소를 못 쓰면 다음에 비교하지 못할 뿐이다.
-  }
-}
-
 
 type Form = {
   name: string;
@@ -242,7 +218,6 @@ export function EventStudio({ eventId }: { eventId: string }) {
   const [operatorsVersion, setOperatorsVersion] = useState(0);
   const [publishConfirm, setPublishConfirm] = useState(false);
   const [publishedSheet, setPublishedSheet] = useState(false);
-  const [publishedMarker, setPublishedMarker] = useState<number | null>(() => readPublishedMarker(eventId));
   // 저장 안 한 변경이 있을 때 나가려던 곳. 확인을 받으면 그리로 간다.
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
   // 연결된 부스 기기 수. 권한이 없거나 못 받으면 null — 계기판에서 그 칸을 뺀다.
@@ -466,8 +441,6 @@ export function EventStudio({ eventId }: { eventId: string }) {
       const result = await runEventAction(event.eventId, action);
       accept(result);
       if (action === "publish") {
-        writePublishedMarker(event.eventId, result.settingsVersion);
-        setPublishedMarker(result.settingsVersion);
         setPublishedSheet(true);
       } else {
         setNotice({ kind: "ok", text: ACTION_DONE[action] });
@@ -497,10 +470,10 @@ export function EventStudio({ eventId }: { eventId: string }) {
     setLeaveTo(href);
   };
 
-  // 저장본과 게시본 비교(publishedMarker 주석). LIVE 에서만 뜻이 있다.
+  // 저장본과 게시본 비교는 서버가 답한다(상위 기본값이 바뀐 경우까지). LIVE 에서만 뜻이 있다.
   const isLive = event.status === "LIVE";
-  const inSync = isLive && publishedMarker === event.settingsVersion;
-  const savedNotPublished = isLive && publishedMarker !== null && publishedMarker !== event.settingsVersion;
+  const inSync = isLive && event.hasUnpublishedChanges === false;
+  const savedNotPublished = isLive && event.hasUnpublishedChanges === true;
   const canPublish = can("MANAGE_EVENT") && (event.status === "DRAFT" || isLive);
   const canSave = !dirty || busy !== null || themeUploading || !sourcesReady;
   const trySave = () => {

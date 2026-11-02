@@ -92,6 +92,8 @@ export type MyEvent = {
   eventId: string;
   name: string;
   status: "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
+  /** 완성 사진 수. 삭제·보관 종료 제외. 옛 서버면 키가 없다. */
+  completedPhotoCount?: number;
   /** role 이 있으면 공간 멤버로서 운영하는 행사, 없으면 고객으로 권한만 받은 행사. */
   access: {
     role?: WorkspaceRole;

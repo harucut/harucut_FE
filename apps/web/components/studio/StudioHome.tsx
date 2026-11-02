@@ -230,6 +230,11 @@ export function StudioHome() {
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="break-words text-[15px] font-semibold">{event.name || "이름 없는 행사"}</span>
                       <span className="text-[12px] text-(--hc-muted)">
+                        {event.completedPhotoCount !== undefined ? (
+                          <>
+                            사진 <span className="font-mono tabular-nums">{event.completedPhotoCount.toLocaleString("ko-KR")}</span>장 ·{" "}
+                          </>
+                        ) : null}
                         {event.access.permissions.map((p) => PERMISSION_LABEL[p]).join(" · ")}
                       </span>
                     </span>

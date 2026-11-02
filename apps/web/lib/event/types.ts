@@ -92,6 +92,8 @@ export type ComposeAccepted = {
 export type ParticipantJob = {
   jobId: number;
   status: JobStatus;
+  /** DONE 일 때만. 짧은 서명 URL. */
+  thumbnailUrl?: string | null;
   /** FAILED 일 때만(lib/composeFailure.ts). */
   failureCode?: string | null;
 };
