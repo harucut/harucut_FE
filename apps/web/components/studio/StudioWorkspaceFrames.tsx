@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FrameWithPhotos, frameFitStyle } from "@/components/participation/FrameWithPhotos";
+import { FrameVersionManager } from "@/components/studio/FrameVersionManager";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { getFrameConfig } from "@/constants/frames";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import {
+  listFrameVersions,
+  restoreFrameVersion,
+  revokeFrameVersion,
   listPickableFrameVersions,
   listWorkspaceFrames,
   publishFrameVersion,
@@ -101,7 +105,7 @@ export function WorkspaceFrameList({
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{frame.title || "이름 없는 프레임"}</span>
                     <span className="block text-[12px] text-(--hc-muted)">
-                      {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "아직 발행 안 함"}
+                      {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "고를 수 있는 발행본 없음"}
                     </span>
                   </span>
                 </span>
@@ -124,6 +128,15 @@ export function WorkspaceFrameList({
                       {publishing === frame.frameId ? "발행하는 중…" : latest ? "새 버전 발행" : "발행하기"}
                     </button>
                   </span>
+                )}
+                {/* 보기 전용 멤버는 회수하지 못한다. 고를 수 있는 발행본이 없어도 둔다 — 전부 회수한 프레임을 되돌리는 길이 여기뿐이다. */}
+                {readOnly ? null : (
+                  <FrameVersionManager
+                    load={() => listFrameVersions(frame.frameId)}
+                    revoke={(version, reason) => revokeFrameVersion(frame.frameId, version.versionNo, reason)}
+                    restore={(version) => restoreFrameVersion(frame.frameId, version.versionNo)}
+                    onChanged={onPublished}
+                  />
                 )}
               </li>
             );

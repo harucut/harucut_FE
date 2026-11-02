@@ -55,6 +55,8 @@ export type InvitationPreview = {
   permissions?: EventPermission[];
   invitedByName: string;
   expiresAt: string;
+  /** 행사 고객 초대가 이미 찍은 사진까지 보여 주는지. false 면 수락한 뒤 사진만. 옛 서버면 키가 없다. */
+  includePast?: boolean;
 };
 
 export type InvitationAccepted = {
@@ -78,6 +80,12 @@ export const OPERATION_LABEL: Record<EventOperation, string> = {
   INVITE_CUSTOMERS: "고객 초대·사진 권한",
 };
 
+/**
+ * 공간 디자이너가 받는 권한. 행사의 꾸미기와 프레임 고르기만 고치고 게시는 못 한다. 역할에서 자동으로 오므로
+ * 행마다 배정하는 목록(EVENT_OPERATIONS)에는 넣지 않는다.
+ */
+export type EventAccessOperation = EventOperation | "EDIT_THEME";
+
 /** 행사 고객은 operations 가 빈 목록이다. 운영자 배정 행은 사진 권한 없이 운영 권한만 가질 수 있다. */
 export type EventGrant = {
   grantId: number;
@@ -86,24 +94,36 @@ export type EventGrant = {
   permissions: EventPermission[];
   operations?: EventOperation[];
   createdAt: string;
+  /** 이 시각 뒤에 찍은 사진만 본다. 없거나 null 이면 제한 없음. */
+  photosFrom?: string | null;
 };
 
 export type MyEvent = {
   eventId: string;
   name: string;
   status: "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
-  /** 완성 사진 수. 삭제·보관 종료 제외. 옛 서버면 키가 없다. */
+  /** 완성 사진 수. 삭제·보관 종료 제외. 옛 서버면 키가 없고, 디자이너 행에도 없다. */
   completedPhotoCount?: number;
+  /** 이 행사가 속한 공간. 옛 서버면 키가 없다. */
+  workspaceId?: string;
   /** role 이 있으면 공간 멤버로서 운영하는 행사, 없으면 고객으로 권한만 받은 행사. */
   access: {
     role?: WorkspaceRole;
     permissions: EventPermission[];
-    /** 운영 권한. OWNER·ADMIN 은 셋 다, 고객은 빈 목록(옛 서버면 키가 없다). */
-    operations?: EventOperation[];
+    /** 운영 권한. OWNER·ADMIN 은 전부, DESIGNER 는 EDIT_THEME 만, 고객은 빈 목록(옛 서버면 키가 없다). */
+    operations?: EventAccessOperation[];
     /** OPERATOR 만 — 권한마다 행사 배정(EVENT)·프로젝트 멤버(PROJECT)·둘 다(BOTH). */
     sources?: Record<string, "EVENT" | "PROJECT" | "BOTH">;
+    /** 행사 고객의 사진 범위. 이 시각 뒤에 찍은 사진만 본다. 없거나 null 이면 제한 없음. */
+    photosFrom?: string | null;
   };
 };
+
+/** 꾸미기와 프레임 고르기만 고치는 사람(공간 디자이너). 서버와 같은 판정이다 — EDIT_THEME 이 있고 MANAGE_EVENT 가 없다. */
+export function isThemeOnlyAccess(access: Pick<MyEvent["access"], "operations"> | null | undefined) {
+  const operations = access?.operations ?? [];
+  return operations.includes("EDIT_THEME") && !operations.includes("MANAGE_EVENT");
+}
 
 const ws = (workspaceId: string) => `/api/client/workspaces/${encodeURIComponent(workspaceId)}`;
 const ev = (eventId: string) => `/api/client/events/${encodeURIComponent(eventId)}`;
@@ -140,10 +160,12 @@ export async function removeMember(workspaceId: string, userId: string | "me") {
   await clientApi.delete(`${ws(workspaceId)}/members/${encodeURIComponent(userId)}`);
 }
 
-export async function inviteEventCustomer(eventId: string, permissions: EventPermission[], note?: string) {
+/** includePast 를 켜지 않으면 받는 사람은 수락한 뒤에 찍은 사진만 본다. */
+export async function inviteEventCustomer(eventId: string, permissions: EventPermission[], note?: string, includePast = false) {
   const res = await clientApi.post<ApiEnvelope<InvitationIssued>>(`${ev(eventId)}/invitations`, {
     permissions,
     ...(note ? { note } : {}),
+    ...(includePast ? { includePast: true } : {}),
   });
   return requireData(res.data, "초대");
 }
@@ -153,9 +175,12 @@ export async function listEventGrants(eventId: string): Promise<EventGrant[]> {
   return res.data.data ?? [];
 }
 
-/** 권한 집합을 통째로 바꾼다. */
-export async function updateEventGrant(eventId: string, grantId: number, permissions: EventPermission[]) {
-  const res = await clientApi.patch<ApiEnvelope<EventGrant>>(`${ev(eventId)}/grants/${grantId}`, { permissions });
+/** 권한 집합을 통째로 바꾼다. includePast 를 함께 주면 이미 찍은 사진까지 볼 수 있게 넓힌다(감사 로그에 남는다). */
+export async function updateEventGrant(eventId: string, grantId: number, permissions: EventPermission[], includePast = false) {
+  const res = await clientApi.patch<ApiEnvelope<EventGrant>>(`${ev(eventId)}/grants/${grantId}`, {
+    permissions,
+    ...(includePast ? { includePast: true } : {}),
+  });
   return requireData(res.data, "권한");
 }
 

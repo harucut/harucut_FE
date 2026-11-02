@@ -2,9 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adminErrorMessage, formatDateTime } from "@/components/admin/adminShared";
+import { FrameVersionManager } from "@/components/studio/FrameVersionManager";
 import { getFrameConfig } from "@/constants/frames";
 import { frameIdFromFrameType } from "@/lib/frameApi";
-import { listSystemFrames, publishSystemFrame, type SystemFrame } from "@/lib/admin/cmsApi";
+import {
+  listSystemFrames,
+  listSystemFrameVersions,
+  publishSystemFrame,
+  restoreSystemFrameVersion,
+  revokeSystemFrameVersion,
+  type SystemFrame,
+} from "@/lib/admin/cmsApi";
 import { parseAssetTitle } from "@/lib/serverAssets";
 
 /**
@@ -101,6 +109,11 @@ export function AdminFrames() {
                   {busy === frame.frameId ? "발행하는 중…" : "발행"}
                 </button>
               </div>
+              <FrameVersionManager
+                load={() => listSystemFrameVersions(frame.frameId)}
+                revoke={(version, reason) => revokeSystemFrameVersion(version.frameVersionId, reason)}
+                restore={(version) => restoreSystemFrameVersion(version.frameVersionId)}
+              />
               {notice ? (
                 <p role={notice.kind === "ok" ? "status" : "alert"} className={notice.kind === "ok" ? "text-[13px]" : "text-[13px] text-(--hc-danger)"}>
                   {notice.text}

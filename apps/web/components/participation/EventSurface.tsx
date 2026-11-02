@@ -94,6 +94,16 @@ export function useEventCopy(key: PageThemeCopyKey, fallback: string) {
   return pageThemeCopy(useContext(EventThemeContext), key, fallback);
 }
 
+/**
+ * 행사 문의처. 주최자가 적었을 때만 나온다. 사진을 못 받은 사람이 「담당자」가 누군지 몰라 막히지 않게
+ * 실패·기간 지남·촬영 시간 아님 화면에 둔다. 일반 텍스트다.
+ */
+export function EventContact({ className }: { className?: string }) {
+  const contact = useEventCopy("contact", "").trim();
+  if (!contact) return null;
+  return <p className={["break-keep text-[13px] leading-relaxed text-(--ev-muted)", className].filter(Boolean).join(" ")}>문의: {contact}</p>;
+}
+
 /** 주최자 로고. 없으면 아무것도 그리지 않는다. 서명 URL 이라 Referer 를 보내지 않는다. */
 export function EventLogo({ className = "h-10 w-auto max-w-[60%] self-start object-contain" }: { className?: string }) {
   const url = safeAssetUrl(useContext(EventThemeContext)?.logoUrl);

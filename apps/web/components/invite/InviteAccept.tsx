@@ -235,6 +235,12 @@ function InvitePreviewText({ preview }: { preview: InvitationPreview }) {
               ))}
             </ul>
           ) : null}
+          {/* 옛 서버는 키가 없다. 그때는 범위를 단정하지 않는다. */}
+          {preview.includePast === true ? (
+            <p className="text-[13px] text-(--hc-muted)">이미 찍은 사진도 볼 수 있어요.</p>
+          ) : preview.includePast === false ? (
+            <p className="text-[13px] text-(--hc-muted)">초대를 받은 뒤에 찍은 사진만 볼 수 있어요.</p>
+          ) : null}
         </>
       )}
       {expires ? <p className="text-[12px] text-(--hc-muted)">{expires}까지 받을 수 있어요.</p> : null}

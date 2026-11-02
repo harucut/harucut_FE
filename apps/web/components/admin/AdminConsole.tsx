@@ -8,6 +8,7 @@ import { AdminContracts } from "@/components/admin/AdminContracts";
 import { AdminEntitlements } from "@/components/admin/AdminEntitlements";
 import { AdminFrames } from "@/components/admin/AdminFrames";
 import { AdminInquiries } from "@/components/admin/AdminInquiries";
+import { AdminUsers } from "@/components/admin/AdminUsers";
 import { listAuditLogs } from "@/lib/admin/cmsApi";
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
   { key: "contracts", label: "계약" },
   { key: "entitlements", label: "이용권" },
   { key: "frames", label: "시스템 프레임" },
+  { key: "users", label: "계정" },
   { key: "audit", label: "감사 로그" },
 ] as const;
 
@@ -76,10 +78,15 @@ export function AdminConsole() {
         <section role="tabpanel" id="admin-panel-entitlements" aria-labelledby="admin-tab-entitlements" hidden={tab !== "entitlements"}>
           <AdminEntitlements reloadKey={entitlementsVersion} />
         </section>
-        {/* 아래 둘은 쓰던 초안이 없다. 열 때만 그려 안 보는 동안 서버에 묻지 않는다. */}
+        {/* 아래는 쓰던 초안이 없다. 열 때만 그려 안 보는 동안 서버에 묻지 않는다. */}
         {tab === "frames" ? (
           <section role="tabpanel" id="admin-panel-frames" aria-labelledby="admin-tab-frames">
             <AdminFrames />
+          </section>
+        ) : null}
+        {tab === "users" ? (
+          <section role="tabpanel" id="admin-panel-users" aria-labelledby="admin-tab-users">
+            <AdminUsers />
           </section>
         ) : null}
         {tab === "audit" ? (

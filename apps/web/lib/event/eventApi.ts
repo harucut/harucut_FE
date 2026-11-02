@@ -168,6 +168,15 @@ export function reissueResultAccess(token: string, jobId: number) {
   );
 }
 
+/** 이 사진의 결과 링크를 전부 끊는다. 사진은 남고, 새 링크는 reissueResultAccess 로 다시 받는다. */
+export function revokeResultAccess(token: string, jobId: number) {
+  return sendEventRequest<{ revokedCount: number }>(
+    "POST",
+    `/api/client/participant/compose-jobs/${jobId}/result-access/revoke`,
+    { credential: participant(token), what: "결과 링크 끊기" },
+  );
+}
+
 export function listParticipantResults(token: string, eventId: string) {
   return sendEventRequest<ParticipantJob[]>(
     "GET",

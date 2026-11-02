@@ -13,6 +13,12 @@ type Props = {
   /** 지금 값. 입력창의 초깃값이다. */
   initialValue: string;
   maxLength?: number;
+  /** 값을 저장하는 게 아니라 동작일 때(회수·정지) 무슨 일이 일어나는지. */
+  description?: string;
+  submitLabel?: string;
+  submittingLabel?: string;
+  /** 되돌리기 어렵거나 다른 사람에게 영향을 주는 동작. ConfirmDialog 의 위험 버튼과 같은 모양이다. */
+  destructive?: boolean;
   saving: boolean;
   /** 저장에 실패했을 때만. 다이얼로그를 닫지 않고 여기에 보여 준다. */
   error: string | null;
@@ -42,6 +48,10 @@ export function SingleFieldDialog({
   placeholder,
   initialValue,
   maxLength = 100,
+  description,
+  submitLabel = "저장",
+  submittingLabel = "저장 중",
+  destructive = false,
   saving,
   error,
   onClose,
@@ -91,10 +101,13 @@ export function SingleFieldDialog({
         <h2 id="single-field-dialog-title" className="text-[18px] font-extrabold">
           {title}
         </h2>
+        {description ? <p className="mt-2 text-[13px] leading-relaxed text-(--hc-muted)">{description}</p> : null}
 
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            // 여는 쪽이 다른 폼 안일 수 있다(행사 설정). React 이벤트는 포털을 지나도 올라가므로 여기서 끊는다.
+            event.stopPropagation();
             if (!canSave) return;
             onSubmit(trimmed);
           }}
@@ -147,9 +160,11 @@ export function SingleFieldDialog({
             <button
               type="submit"
               disabled={!canSave}
-              className="hc-button-primary flex-1 rounded-full px-5 py-3 text-[13px] font-semibold disabled:opacity-50"
+              className={`flex-1 rounded-full px-5 py-3 text-[13px] font-semibold disabled:opacity-50 ${
+                destructive ? "border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) text-(--hc-danger)" : "hc-button-primary"
+              }`}
             >
-              {saving ? "저장 중" : "저장"}
+              {saving ? submittingLabel : submitLabel}
             </button>
           </div>
         </form>

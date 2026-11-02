@@ -15,6 +15,7 @@ const api = {
   submitEventCompose: jest.fn(),
   listParticipantResults: jest.fn(),
   reissueResultAccess: jest.fn(),
+  revokeResultAccess: jest.fn(),
   getParticipantDownload: jest.fn(),
   previewFreeText: jest.fn(),
 };
@@ -27,6 +28,7 @@ jest.mock("@/lib/event/eventApi", () => ({
   submitEventCompose: (...a: unknown[]) => api.submitEventCompose(...a),
   listParticipantResults: (...a: unknown[]) => api.listParticipantResults(...a),
   reissueResultAccess: (...a: unknown[]) => api.reissueResultAccess(...a),
+  revokeResultAccess: (...a: unknown[]) => api.revokeResultAccess(...a),
   getParticipantDownload: (...a: unknown[]) => api.getParticipantDownload(...a),
   previewFreeText: (...a: unknown[]) => api.previewFreeText(...a),
 }));
@@ -695,4 +697,50 @@ it("보관 기한이 지난 사진은 저장 버튼 대신 기간이 지났다�
 
   expect(await screen.findByText(/받을 수 있는 기간이 지났어요/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+});
+
+describe("보낸 링크 끊기", () => {
+  function home(results: unknown[]) {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValue(results);
+    render(<EventParticipation slug="wedding-1027" />);
+  }
+
+  it("한 번 더 눌러야 끊고, 끊은 뒤 다시 보내는 길을 알려 준다", async () => {
+    api.revokeResultAccess.mockResolvedValue({ revokedCount: 2 });
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "보낸 링크 끊기" }));
+    expect(api.revokeResultAccess).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" }));
+    await waitFor(() => expect(api.revokeResultAccess).toHaveBeenCalledWith("p-token", 9));
+    expect(await screen.findByText(/링크를 모두 끊었어요/)).toBeInTheDocument();
+  });
+
+  it("다른 곳을 누르면 처음으로 돌아간다", async () => {
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+    fireEvent.click(await screen.findByRole("button", { name: "보낸 링크 끊기" }));
+    fireEvent.blur(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" }));
+    expect(screen.getByRole("button", { name: "보낸 링크 끊기" })).toBeInTheDocument();
+    expect(api.revokeResultAccess).not.toHaveBeenCalled();
+  });
+
+  it("실패하면 알리고 입력은 그대로 둔다", async () => {
+    api.revokeResultAccess.mockRejectedValue(new Error("down"));
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+    fireEvent.click(await screen.findByRole("button", { name: "보낸 링크 끊기" }));
+    fireEvent.click(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" }));
+    expect(await screen.findByText(/링크를 끊지 못했어요/)).toBeInTheDocument();
+  });
+
+  it("기간이 지났거나 아직 완성되지 않은 사진에는 없다", async () => {
+    home([
+      { jobId: 1, status: "DONE", expiresAt: "2000-01-01T00:00:00Z" },
+      { jobId: 2, status: "PENDING" },
+    ]);
+    await screen.findByText(/받을 수 있는 기간이 지났어요/);
+    expect(screen.queryByRole("button", { name: "보낸 링크 끊기" })).not.toBeInTheDocument();
+  });
 });

@@ -195,6 +195,28 @@ export async function listPickableFrameVersions(workspaceId: string): Promise<Pi
 }
 
 /** 지금 저장된 프레임을 발행본으로 고정한다. 정적 스티커·구운 PNG 없는 글자가 남아 있으면 400 GEN-002. */
+export type FrameVersionState = {
+  frameVersionId: number;
+  versionNo: number;
+  createdAt?: string | null;
+  revokedAt?: string | null;
+  revokedReason?: string | null;
+};
+
+/** 이 프레임의 발행본. 고르기 목록과 달리 회수된 것도 함께 온다. */
+export async function listFrameVersions(frameId: number): Promise<FrameVersionState[]> {
+  const res = await clientApi.get<ApiEnvelope<FrameVersionState[]>>(`/api/client/user/frame/${frameId}/versions`);
+  return res.data.data ?? [];
+}
+
+export async function revokeFrameVersion(frameId: number, versionNo: number, reason: string) {
+  await clientApi.post(`/api/client/user/frame/${frameId}/versions/${versionNo}/revoke`, { reason });
+}
+
+export async function restoreFrameVersion(frameId: number, versionNo: number) {
+  await clientApi.post(`/api/client/user/frame/${frameId}/versions/${versionNo}/restore`);
+}
+
 export async function publishFrameVersion(frameId: number): Promise<{ frameVersionId: number; versionNo: number }> {
   const res = await clientApi.post<ApiEnvelope<{ frameVersionId: number; versionNo: number }>>(
     `/api/client/user/frame/${frameId}/versions`,

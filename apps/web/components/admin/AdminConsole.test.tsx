@@ -20,12 +20,14 @@ const api = {
   listSystemFrames: jest.fn(),
   publishSystemFrame: jest.fn(),
   listAuditLogs: jest.fn(),
+  searchUsers: jest.fn(),
 };
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
 jest.mock("@/lib/admin/cmsApi", () => ({
   ...jest.requireActual("@/lib/admin/cmsApi"),
   searchWorkspaces: (...a: unknown[]) => api.searchWorkspaces(...a),
   searchEvents: (...a: unknown[]) => api.searchEvents(...a),
+  searchUsers: (...a: unknown[]) => api.searchUsers(...a),
   verifyContractPayment: (...a: unknown[]) => api.verifyContractPayment(...a),
   listInquiries: (...a: unknown[]) => api.listInquiries(...a),
   updateInquiry: (...a: unknown[]) => api.updateInquiry(...a),
@@ -473,4 +475,14 @@ it("감사 로그 권한이 없으면 플랫폼 관리자만이라고 알리고 
   expect(await within(panel).findByRole("alert")).toHaveTextContent("플랫폼 관리자만");
   fireEvent.click(within(panel).getByRole("button", { name: "다시 시도" }));
   expect(await within(panel).findByText("아직 기록이 없어요.")).toBeInTheDocument();
+});
+
+it("계정 탭을 열면 이메일로 계정을 찾는다", async () => {
+  api.searchUsers.mockResolvedValue([{ userId: "UsAAAA", email: "a@example.com", userStatus: "ACTIVE" }]);
+  render(<AdminConsole />);
+  fireEvent.click(await screen.findByRole("tab", { name: "계정" }));
+  fireEvent.change(await screen.findByLabelText("이메일"), { target: { value: "a@example.com" } });
+  fireEvent.click(screen.getByRole("button", { name: "찾기" }));
+  await waitFor(() => expect(api.searchUsers).toHaveBeenCalledWith("a@example.com"));
+  expect(await screen.findByRole("button", { name: "정지" })).toBeInTheDocument();
 });

@@ -141,3 +141,36 @@ it("필수 약관에 막혀 실패하면 다시 확인할 수 있고, 동의 뒤
   fireEvent.click(await screen.findByRole("button", { name: "다시 확인" }));
   expect(await screen.findByRole("button", { name: "초대 받기" })).toBeInTheDocument();
 });
+
+describe("행사 고객 초대의 사진 범위", () => {
+  const EVENT_PREVIEW = {
+    kind: "EVENT",
+    workspaceName: "하루컷 웨딩팀",
+    eventName: "민지 ♥ 준호",
+    permissions: ["VIEW_PHOTOS"],
+    invitedByName: "민지",
+    expiresAt: "2026-11-02T10:00:00+09:00",
+  };
+
+  it("수락한 뒤 사진만 받는 초대면 그 사실을 수락 전에 알린다", async () => {
+    mockPreview.mockResolvedValue({ ...EVENT_PREVIEW, includePast: false });
+    window.history.replaceState(null, "", `/invite#${TOKEN}`);
+    render(<InviteAccept />);
+    expect(await screen.findByText("초대를 받은 뒤에 찍은 사진만 볼 수 있어요.")).toBeInTheDocument();
+  });
+
+  it("이미 찍은 사진까지 받는 초대면 그렇게 말한다", async () => {
+    mockPreview.mockResolvedValue({ ...EVENT_PREVIEW, includePast: true });
+    window.history.replaceState(null, "", `/invite#${TOKEN}`);
+    render(<InviteAccept />);
+    expect(await screen.findByText("이미 찍은 사진도 볼 수 있어요.")).toBeInTheDocument();
+  });
+
+  it("옛 서버처럼 값이 없으면 범위를 단정하지 않는다", async () => {
+    mockPreview.mockResolvedValue(EVENT_PREVIEW);
+    window.history.replaceState(null, "", `/invite#${TOKEN}`);
+    render(<InviteAccept />);
+    await screen.findByText(/행사의 사진을 볼 수 있게/);
+    expect(screen.queryByText(/찍은 사진/)).not.toBeInTheDocument();
+  });
+});

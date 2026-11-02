@@ -27,6 +27,7 @@ export function EventPhotoViewer({
   onClose,
   onDownload,
   onDelete,
+  onRevokeLinks,
 }: {
   eventId: string;
   /** 볼 수 있는 사진(완성본)만. */
@@ -41,6 +42,8 @@ export function EventPhotoViewer({
   onClose: () => void;
   onDownload: (photo: Photo) => void;
   onDelete: (photo: Photo) => void;
+  /** 잘못 보낸 결과 링크를 거둔다. 사진은 남는다. 지울 권한이 있는 사람만 한다. */
+  onRevokeLinks: (photo: Photo) => void;
 }) {
   const photo = photos[index];
   const photoId = photo?.photoId;
@@ -178,6 +181,16 @@ export function EventPhotoViewer({
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {canDelete ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRevokeLinks(photo)}
+              className="flex min-h-11 items-center px-3 text-[13px] font-semibold text-white/80 underline underline-offset-4 disabled:opacity-50"
+            >
+              보낸 링크 끊기
+            </button>
           ) : null}
         </footer>
       </div>

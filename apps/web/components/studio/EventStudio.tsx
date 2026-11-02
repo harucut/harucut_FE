@@ -45,7 +45,7 @@ import {
   type SettingSource,
 } from "@/lib/studio/projectsApi";
 import { settingsPatch } from "@/lib/studio/settingsPatch";
-import { EVENT_OPERATIONS, listMyEvents, type EventOperation, type MyEvent } from "@/lib/studio/accessApi";
+import { EVENT_OPERATIONS, isThemeOnlyAccess, listMyEvents, type EventAccessOperation, type MyEvent } from "@/lib/studio/accessApi";
 import { compactPageTheme, parsePageTheme, type PageTheme } from "@/lib/event/pageTheme";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -354,13 +354,17 @@ export function EventStudio({ eventId }: { eventId: string }) {
 
   const event = load.event;
   // 옛 서버는 operations 키가 없다 — 그때는 지금처럼 다 보인다.
-  const can = (op: EventOperation) =>
+  const can = (op: EventAccessOperation) =>
     access === null || (access !== undefined && (access.operations ?? EVENT_OPERATIONS).includes(op));
+  // 공간 디자이너. 꾸미기와 프레임 고르기만 저장하고 게시하지 않는다(서버도 다른 키를 403 으로 막는다). 그 밖의 칸은 아예 보이지 않는다.
+  const themeOnly = isThemeOnlyAccess(access);
   const isAdmin = access === null || access?.role === "OWNER" || access?.role === "ADMIN";
+  // 공간 프레임을 만들고 고치고 회수하는 일은 OWNER·ADMIN·DESIGNER 만 한다(서버도 같다). 운영 담당은 발행본을 고르기만 한다.
+  const canManageFrames = isAdmin || access?.role === "DESIGNER";
   // 운영 담당의 복제는 MANAGE_EVENT 를 받은 프로젝트 안에서만 된다(원본 프로젝트로 복제).
   const canClone =
     isAdmin || (Boolean(event.settings.projectId) && ["PROJECT", "BOTH"].includes(access?.sources?.MANAGE_EVENT ?? ""));
-  const editable = (event.status === "DRAFT" || event.status === "LIVE") && can("MANAGE_EVENT");
+  const editable = (event.status === "DRAFT" || event.status === "LIVE") && (can("MANAGE_EVENT") || themeOnly);
   const slugLocked = event.status !== "DRAFT";
   const next = settingsOf(form, event.settings);
   // 저장 본문은 바뀐 필드만 — 상속받은 값을 행사 직접 값으로 굳히지 않는다(settingsPatch).
@@ -528,17 +532,19 @@ export function EventStudio({ eventId }: { eventId: string }) {
   ]);
   const showBooth = Boolean(event.settings.boothEnabled) && can("MANAGE_BOOTH");
   const showPeople = can("INVITE_CUSTOMERS") || (access !== undefined && isAdmin);
-  const sections: StudioSectionId[] = [
-    "overview",
-    "basics",
-    "participation",
-    "frames",
-    "consent",
-    "design",
-    ...(showBooth ? (["booth"] as const) : []),
-    ...(showPeople ? (["people"] as const) : []),
-    "entitlement",
-  ];
+  const sections: StudioSectionId[] = themeOnly
+    ? ["frames", "design"]
+    : [
+        "overview",
+        "basics",
+        "participation",
+        "frames",
+        "consent",
+        "design",
+        ...(showBooth ? (["booth"] as const) : []),
+        ...(showPeople ? (["people"] as const) : []),
+        "entitlement",
+      ];
   const navItems: StudioSectionNavItem[] = sections.map((id) => ({
     id,
     label: STUDIO_SECTION_LABEL[id],
@@ -742,7 +748,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
                 }}
               />
             ) : null}
-            {noEntitlement ? (
+            {noEntitlement && !themeOnly ? (
               <p role="status" className="rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
                 이용권이 없어 아직 게시할 수 없어요. 설정은 먼저 해 둘 수 있어요.{" "}
                 <a
@@ -754,25 +760,32 @@ export function EventStudio({ eventId }: { eventId: string }) {
                 </a>
               </p>
             ) : null}
-            {access !== undefined && !can("MANAGE_EVENT") ? (
+            {themeOnly ? (
+              <p className="max-w-[65ch] text-[13px] leading-relaxed text-(--hc-muted)">
+                이 행사의 꾸미기와 프레임을 고칠 수 있어요. 저장해도 참가자 화면은 그대로이고, 운영 담당이 게시하면 반영돼요.
+                {event.status === "CAPTURE_CLOSED" || event.status === "ARCHIVED" ? " 촬영이 끝난 행사라 지금은 볼 수만 있어요." : ""}
+              </p>
+            ) : access !== undefined && !can("MANAGE_EVENT") ? (
               <p className="text-[13px] text-(--hc-muted)">행사 설정과 게시는 「행사 설정·게시」 권한이 있어야 바꿀 수 있어요.</p>
             ) : null}
           </div>
 
-          <Group id="overview" first hideTitle>
-            <StudioEventOverview
-              event={event}
-              usage={usage}
-              deviceCount={showBooth ? deviceCount : null}
-              checklist={checklist}
-              violations={violations}
-              canManage={can("MANAGE_EVENT")}
-              busy={busy}
-              joinUrl={origin ? joinUrl : ""}
-              onRun={(action) => void act(action)}
-              onRequestClose={() => setConfirmClose(true)}
-            />
-          </Group>
+          {themeOnly ? null : (
+            <Group id="overview" first hideTitle>
+              <StudioEventOverview
+                event={event}
+                usage={usage}
+                deviceCount={showBooth ? deviceCount : null}
+                checklist={checklist}
+                violations={violations}
+                canManage={can("MANAGE_EVENT")}
+                busy={busy}
+                joinUrl={origin ? joinUrl : ""}
+                onRun={(action) => void act(action)}
+                onRequestClose={() => setConfirmClose(true)}
+              />
+            </Group>
+          )}
 
           <form
             className="flex flex-col gap-8"
@@ -782,160 +795,166 @@ export function EventStudio({ eventId }: { eventId: string }) {
             }}
           >
             <fieldset disabled={!editable || busy !== null} className="flex min-w-0 flex-col gap-8">
-              <Group id="basics" reasons={reasonsOf("basics")}>
-                <Section title="기본 정보">
-                  <Field label="행사 이름">
-                    <input
-                      name="eventName"
-                      autoComplete="off"
-                      className="hc-input h-11 rounded-xl border px-3 text-[14px]"
-                      value={form.name}
-                      maxLength={100}
-                      onChange={(e) => update({ name: e.target.value })}
-                    />
-                  </Field>
-                  <Field
-                    label="참가 주소"
-                    help={slugLocked ? "게시한 뒤에는 바꿀 수 없어요." : "영문 소문자·숫자·하이픈 3~40자."}
-                    invalid={slugInvalid}
-                  >
-                    <input
-                      name="eventSlug"
-                      autoComplete="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      translate="no"
-                      className="hc-input h-11 rounded-xl border px-3 text-[14px]"
-                      value={form.slug}
-                      maxLength={40}
-                      disabled={slugLocked}
-                      aria-invalid={slugInvalid || undefined}
-                      onChange={(e) => update({ slug: e.target.value.toLowerCase() })}
-                    />
-                  </Field>
-                  {projects.length > 0 || form.projectId ? (
+              {themeOnly ? null : (
+                <Group id="basics" reasons={reasonsOf("basics")}>
+                  <Section title="기본 정보">
+                    <Field label="행사 이름">
+                      <input
+                        name="eventName"
+                        autoComplete="off"
+                        className="hc-input h-11 rounded-xl border px-3 text-[14px]"
+                        value={form.name}
+                        maxLength={100}
+                        onChange={(e) => update({ name: e.target.value })}
+                      />
+                    </Field>
                     <Field
-                      label="프로젝트"
-                      help={
-                        event.status !== "DRAFT"
-                          ? "게시한 행사는 프로젝트를 바꿀 수 없어요."
-                          : !isAdmin
-                            ? "프로젝트는 공간 관리자만 바꿀 수 있어요."
-                            : "고르면 그 프로젝트의 기본값(참가 방식·프레임·동의·꾸미기 등)을 따라요. 저장하면 반영돼요."
-                      }
+                      label="참가 주소"
+                      help={slugLocked ? "게시한 뒤에는 바꿀 수 없어요." : "영문 소문자·숫자·하이픈 3~40자."}
+                      invalid={slugInvalid}
                     >
-                      <select
-                        name="eventProject"
-                        className="hc-input h-11 rounded-xl border px-2 text-[14px]"
-                        value={form.projectId}
-                        disabled={event.status !== "DRAFT" || !isAdmin}
-                        onChange={(e) => update({ projectId: e.target.value })}
+                      <input
+                        name="eventSlug"
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        translate="no"
+                        className="hc-input h-11 rounded-xl border px-3 text-[14px]"
+                        value={form.slug}
+                        maxLength={40}
+                        disabled={slugLocked}
+                        aria-invalid={slugInvalid || undefined}
+                        onChange={(e) => update({ slug: e.target.value.toLowerCase() })}
+                      />
+                    </Field>
+                    {projects.length > 0 || form.projectId ? (
+                      <Field
+                        label="프로젝트"
+                        help={
+                          event.status !== "DRAFT"
+                            ? "게시한 행사는 프로젝트를 바꿀 수 없어요."
+                            : !isAdmin
+                              ? "프로젝트는 공간 관리자만 바꿀 수 있어요."
+                              : "고르면 그 프로젝트의 기본값(참가 방식·프레임·동의·꾸미기 등)을 따라요. 저장하면 반영돼요."
+                        }
                       >
-                        <option value="">프로젝트 없음</option>
-                        {/* 운영 담당은 멤버인 프로젝트만 받는다 — 목록에 없는 현재 프로젝트도 비어 보이지 않게 남긴다. */}
-                        {form.projectId && !projects.some((p) => p.projectId === form.projectId) ? (
-                          <option value={form.projectId}>다른 프로젝트</option>
-                        ) : null}
-                        {projects
-                          .filter((p) => !p.archived || p.projectId === form.projectId)
-                          .map((p) => (
-                            <option key={p.projectId} value={p.projectId}>
-                              {p.archived ? `${p.name} (보관됨)` : p.name}
-                            </option>
-                          ))}
+                        <select
+                          name="eventProject"
+                          className="hc-input h-11 rounded-xl border px-2 text-[14px]"
+                          value={form.projectId}
+                          disabled={event.status !== "DRAFT" || !isAdmin}
+                          onChange={(e) => update({ projectId: e.target.value })}
+                        >
+                          <option value="">프로젝트 없음</option>
+                          {/* 운영 담당은 멤버인 프로젝트만 받는다 — 목록에 없는 현재 프로젝트도 비어 보이지 않게 남긴다. */}
+                          {form.projectId && !projects.some((p) => p.projectId === form.projectId) ? (
+                            <option value={form.projectId}>다른 프로젝트</option>
+                          ) : null}
+                          {projects
+                            .filter((p) => !p.archived || p.projectId === form.projectId)
+                            .map((p) => (
+                              <option key={p.projectId} value={p.projectId}>
+                                {p.archived ? `${p.name} (보관됨)` : p.name}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                    ) : null}
+                  </Section>
+
+                  <Section
+                    title="촬영 기간"
+                    description={
+                      form.kind === "ALWAYS_ON"
+                        ? "상시 캠페인은 끝나는 시각 없이 「촬영 종료」를 누를 때까지 열려 있어요. 이용권 기간과 한도는 그대로 적용돼요."
+                        : "비워 두면 게시하는 즉시 시작하고, 「촬영 종료」를 누를 때까지 열려 있어요. 시각은 한국 시간이에요."
+                    }
+                  >
+                    <Field label="행사 종류" help={slugLocked ? "게시한 뒤에는 바꿀 수 없어요." : undefined}>
+                      <select
+                        name="eventKind"
+                        className="hc-input h-11 rounded-xl border px-2 text-[14px]"
+                        value={form.kind}
+                        disabled={slugLocked}
+                        // 상시로 바꾸면 종료 시각을 비운다 — 남겨 두면 게시 검사에서 막힌다.
+                        onChange={(e) => {
+                          const kind = e.target.value as EventKind;
+                          update(kind === "ALWAYS_ON" ? { kind, endsAt: "" } : { kind });
+                        }}
+                      >
+                        <option value="SCHEDULED">정해진 기간의 행사</option>
+                        <option value="ALWAYS_ON">상시 캠페인</option>
                       </select>
                     </Field>
-                  ) : null}
-                </Section>
-
-                <Section
-                  title="촬영 기간"
-                  description={
-                    form.kind === "ALWAYS_ON"
-                      ? "상시 캠페인은 끝나는 시각 없이 「촬영 종료」를 누를 때까지 열려 있어요. 이용권 기간과 한도는 그대로 적용돼요."
-                      : "비워 두면 게시하는 즉시 시작하고, 「촬영 종료」를 누를 때까지 열려 있어요. 시각은 한국 시간이에요."
-                  }
-                >
-                  <Field label="행사 종류" help={slugLocked ? "게시한 뒤에는 바꿀 수 없어요." : undefined}>
-                    <select
-                      name="eventKind"
-                      className="hc-input h-11 rounded-xl border px-2 text-[14px]"
-                      value={form.kind}
-                      disabled={slugLocked}
-                      // 상시로 바꾸면 종료 시각을 비운다 — 남겨 두면 게시 검사에서 막힌다.
-                      onChange={(e) => {
-                        const kind = e.target.value as EventKind;
-                        update(kind === "ALWAYS_ON" ? { kind, endsAt: "" } : { kind });
-                      }}
-                    >
-                      <option value="SCHEDULED">정해진 기간의 행사</option>
-                      <option value="ALWAYS_ON">상시 캠페인</option>
-                    </select>
-                  </Field>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="시작">
-                      <input
-                        name="captureStartsAt"
-                        type="datetime-local"
-                        className="hc-input h-11 rounded-xl border px-3 text-[14px]"
-                        value={form.startsAt}
-                        onChange={(e) => update({ startsAt: e.target.value })}
-                      />
-                    </Field>
-                    {form.kind === "SCHEDULED" ? (
-                      <Field label="종료">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="시작">
                         <input
-                          name="captureEndsAt"
+                          name="captureStartsAt"
                           type="datetime-local"
                           className="hc-input h-11 rounded-xl border px-3 text-[14px]"
-                          value={form.endsAt}
-                          onChange={(e) => update({ endsAt: e.target.value })}
+                          value={form.startsAt}
+                          onChange={(e) => update({ startsAt: e.target.value })}
                         />
                       </Field>
-                    ) : form.endsAt ? (
-                      // 상시 캠페인에는 종료 시각이 없다. 저장된 값이 남았으면 지우기만 한다 — 게시한 상시 행사에 값을 넣으면 서버가 GEN-002 로 막는다.
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-[13px] font-semibold">종료</p>
-                        <p className="text-[14px]">{form.endsAt.replace("T", " ")}</p>
-                        <button
-                          type="button"
-                          onClick={() => update({ endsAt: "" })}
-                          className="h-11 self-start rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
-                        >
-                          종료 시각 지우기
-                        </button>
-                        <p className="text-[12px] text-(--hc-muted)">상시 캠페인은 종료 시각을 비워야 게시할 수 있어요.</p>
-                      </div>
-                    ) : null}
-                  </div>
-                </Section>
-              </Group>
+                      {form.kind === "SCHEDULED" ? (
+                        <Field label="종료">
+                          <input
+                            name="captureEndsAt"
+                            type="datetime-local"
+                            className="hc-input h-11 rounded-xl border px-3 text-[14px]"
+                            value={form.endsAt}
+                            onChange={(e) => update({ endsAt: e.target.value })}
+                          />
+                        </Field>
+                      ) : form.endsAt ? (
+                        // 상시 캠페인에는 종료 시각이 없다. 저장된 값이 남았으면 지우기만 한다 — 게시한 상시 행사에 값을 넣으면 서버가 GEN-002 로 막는다.
+                        <div className="flex flex-col gap-1.5">
+                          <p className="text-[13px] font-semibold">종료</p>
+                          <p className="text-[14px]">{form.endsAt.replace("T", " ")}</p>
+                          <button
+                            type="button"
+                            onClick={() => update({ endsAt: "" })}
+                            className="h-11 self-start rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+                          >
+                            종료 시각 지우기
+                          </button>
+                          <p className="text-[12px] text-(--hc-muted)">상시 캠페인은 종료 시각을 비워야 게시할 수 있어요.</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </Section>
+                </Group>
+              )}
 
-              <Group id="participation" aside={inheritAside(["byodEnabled", "boothEnabled"])} reasons={reasonsOf("participation")}>
-                <div className="flex flex-col">
-                  <Check name="byodEnabled" label="개인 휴대폰 (링크·QR)" checked={form.byod} onChange={(byod) => update({ byod })} />
-                  <Check name="boothEnabled" label="현장 부스" checked={form.booth} onChange={(booth) => update({ booth })} />
-                </div>
-              </Group>
-
-              <Group id="frames" reasons={reasonsOf("frames")}>
-                <Section title="허용 레이아웃" aside={inheritAside(["allowedLayouts"])} description="참가자가 고를 수 있는 컷 구성이에요. 고른 레이아웃마다 제공 프레임이 하나 이상 있어야 게시할 수 있어요.">
-                  <div className="grid gap-x-2 sm:grid-cols-2">
-                    {LAYOUTS.map((layout) => (
-                      <Check
-                        key={layout}
-                        name={`allowedLayout-${layout}`}
-                        label={getFrameConfig(frameIdFromFrameType(layout)).name}
-                        checked={form.layouts.includes(layout)}
-                        onChange={(on) => {
-                          const layouts = LAYOUTS.filter((l) => (l === layout ? on : form.layouts.includes(l)));
-                          // 뺀 판형의 프레임도 같이 뺀다 — 남기면 게시 검사가 「허용하지 않은 레이아웃의 프레임」으로 막는다.
-                          update({ layouts, frames: normalizeFrameRefs(form.frames.filter((f) => layouts.includes(f.layoutType))) });
-                        }}
-                      />
-                    ))}
+              {themeOnly ? null : (
+                <Group id="participation" aside={inheritAside(["byodEnabled", "boothEnabled"])} reasons={reasonsOf("participation")}>
+                  <div className="flex flex-col">
+                    <Check name="byodEnabled" label="개인 휴대폰 (링크·QR)" checked={form.byod} onChange={(byod) => update({ byod })} />
+                    <Check name="boothEnabled" label="현장 부스" checked={form.booth} onChange={(booth) => update({ booth })} />
                   </div>
-                </Section>
+                </Group>
+              )}
+
+              <Group id="frames" first={themeOnly} reasons={reasonsOf("frames")}>
+                {themeOnly ? null : (
+                  <Section title="허용 레이아웃" aside={inheritAside(["allowedLayouts"])} description="참가자가 고를 수 있는 컷 구성이에요. 고른 레이아웃마다 제공 프레임이 하나 이상 있어야 게시할 수 있어요.">
+                    <div className="grid gap-x-2 sm:grid-cols-2">
+                      {LAYOUTS.map((layout) => (
+                        <Check
+                          key={layout}
+                          name={`allowedLayout-${layout}`}
+                          label={getFrameConfig(frameIdFromFrameType(layout)).name}
+                          checked={form.layouts.includes(layout)}
+                          onChange={(on) => {
+                            const layouts = LAYOUTS.filter((l) => (l === layout ? on : form.layouts.includes(l)));
+                            // 뺀 판형의 프레임도 같이 뺀다 — 남기면 게시 검사가 「허용하지 않은 레이아웃의 프레임」으로 막는다.
+                            update({ layouts, frames: normalizeFrameRefs(form.frames.filter((f) => layouts.includes(f.layoutType))) });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </Section>
+                )}
 
                 <Section
                   title="제공 프레임"
@@ -949,56 +968,58 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     onChange={(frames) => update({ frames })}
                     disabled={!editable || busy !== null}
                     editLocked={dirty}
-                    onEditFrame={(frame) => openEditor(frameIdFromFrameType(frame.frameType), frame.frameId)}
-                    onCreateFrame={(layout) => openEditor(frameIdFromFrameType(layout), null)}
+                    onEditFrame={canManageFrames ? (frame) => openEditor(frameIdFromFrameType(frame.frameType), frame.frameId) : undefined}
+                    onCreateFrame={canManageFrames ? (layout) => openEditor(frameIdFromFrameType(layout), null) : undefined}
                     onCatalog={setPickable}
                   />
                 </Section>
               </Group>
 
-              <Group id="consent" reasons={reasonsOf("consent")}>
-                <Section
-                  title="참가 동의"
-                  aside={inheritAside(["consentItems"])}
-                  description="사진을 받는 주체, 목적, 보관 기간을 참가자가 촬영 전에 읽고 동의해요. 필수 항목이 하나 이상 있어야 게시할 수 있어요."
-                >
-                  <StudioConsentItems value={form.consents} onChange={(consents) => update({ consents })} />
-                </Section>
-
-                <Section title="결과 보관" aside={inheritAside(["resultRetentionDays"])}>
-                  <Field
-                    label="보관 일수"
-                    help={`사진을 만든 날부터 이 기간 동안 참가자가 결과 링크로 다시 받고, 사진함에도 남아요. 지나면 사진이 지워지니 필요한 사진은 미리 받아 두세요.${
-                      usage?.retentionDays ? ` 지금 이용권으로는 ${usage.retentionDays}일까지 정할 수 있어요.` : ""
-                    }`}
+              {themeOnly ? null : (
+                <Group id="consent" reasons={reasonsOf("consent")}>
+                  <Section
+                    title="참가 동의"
+                    aside={inheritAside(["consentItems"])}
+                    description="사진을 받는 주체, 목적, 보관 기간을 참가자가 촬영 전에 읽고 동의해요. 필수 항목이 하나 이상 있어야 게시할 수 있어요."
                   >
-                    <input
-                      name="resultRetentionDays"
-                      type="number"
-                      min={1}
-                      max={usage?.retentionDays ?? undefined}
-                      inputMode="numeric"
-                      className="hc-input h-11 w-32 rounded-xl border px-3 text-[14px]"
-                      value={form.retentionDays}
-                      onChange={(e) => update({ retentionDays: e.target.value })}
-                    />
-                  </Field>
-                  {mismatchCopy ? (
-                    <div role="status" className="flex max-w-[65ch] flex-col items-start gap-2 rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
-                      <p>{mismatchCopy}</p>
-                      {fixConsentDays ? (
-                        <button
-                          type="button"
-                          onClick={fixConsentDays}
-                          className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold"
-                        >
-                          동의문을 {retentionNumber}일로 고치기
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </Section>
-              </Group>
+                    <StudioConsentItems value={form.consents} onChange={(consents) => update({ consents })} />
+                  </Section>
+
+                  <Section title="결과 보관" aside={inheritAside(["resultRetentionDays"])}>
+                    <Field
+                      label="보관 일수"
+                      help={`사진을 만든 날부터 이 기간 동안 참가자가 결과 링크로 다시 받고, 사진함에도 남아요. 지나면 사진이 지워지니 필요한 사진은 미리 받아 두세요.${
+                        usage?.retentionDays ? ` 지금 이용권으로는 ${usage.retentionDays}일까지 정할 수 있어요.` : ""
+                      }`}
+                    >
+                      <input
+                        name="resultRetentionDays"
+                        type="number"
+                        min={1}
+                        max={usage?.retentionDays ?? undefined}
+                        inputMode="numeric"
+                        className="hc-input h-11 w-32 rounded-xl border px-3 text-[14px]"
+                        value={form.retentionDays}
+                        onChange={(e) => update({ retentionDays: e.target.value })}
+                      />
+                    </Field>
+                    {mismatchCopy ? (
+                      <div role="status" className="flex max-w-[65ch] flex-col items-start gap-2 rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
+                        <p>{mismatchCopy}</p>
+                        {fixConsentDays ? (
+                          <button
+                            type="button"
+                            onClick={fixConsentDays}
+                            className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold"
+                          >
+                            동의문을 {retentionNumber}일로 고치기
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </Section>
+                </Group>
+              )}
 
               <Group id="design" reasons={reasonsOf("design")}>
                 <details
@@ -1028,19 +1049,21 @@ export function EventStudio({ eventId }: { eventId: string }) {
                   />
                 </Section>
 
-                <Section
-                  title="참가자 문구"
-                  aside={inheritAside(["freeText"])}
-                  description="참가자가 사진에 넣을 짧은 문구를 직접 써요. 정한 칸에 고른 글꼴로 서버가 그려서, 미리보기와 결과가 같아요."
-                >
-                  <StudioFreeText
-                    value={form.freeText}
-                    onChange={(freeText) => update({ freeText })}
-                    canvasAspect={freeTextLayout.totalWidth / freeTextLayout.totalHeight}
-                    frameUrl={freeTextFrameUrl}
-                    disabled={!editable || busy !== null}
-                  />
-                </Section>
+                {themeOnly ? null : (
+                  <Section
+                    title="참가자 문구"
+                    aside={inheritAside(["freeText"])}
+                    description="참가자가 사진에 넣을 짧은 문구를 직접 써요. 정한 칸에 고른 글꼴로 서버가 그려서, 미리보기와 결과가 같아요."
+                  >
+                    <StudioFreeText
+                      value={form.freeText}
+                      onChange={(freeText) => update({ freeText })}
+                      canvasAspect={freeTextLayout.totalWidth / freeTextLayout.totalHeight}
+                      frameUrl={freeTextFrameUrl}
+                      disabled={!editable || busy !== null}
+                    />
+                  </Section>
+                )}
               </Group>
             </fieldset>
           </form>
@@ -1093,9 +1116,11 @@ export function EventStudio({ eventId }: { eventId: string }) {
             </Group>
           ) : null}
 
-          <Group id="entitlement" reasons={reasonsOf("entitlement")}>
-            <StudioEventUsage usage={usage} error={usageError} now={now} onRefresh={() => void loadUsage()} />
-          </Group>
+          {themeOnly ? null : (
+            <Group id="entitlement" reasons={reasonsOf("entitlement")}>
+              <StudioEventUsage usage={usage} error={usageError} now={now} onRefresh={() => void loadUsage()} />
+            </Group>
+          )}
         </div>
 
         {previewPanel ? (

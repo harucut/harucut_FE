@@ -10,6 +10,18 @@ type RouteContext = {
   }>;
 };
 
+/** 시스템 프레임의 발행본 목록(ADMIN). 회수된 것도 함께 온다. */
+export async function GET(req: Request, context: RouteContext) {
+  const { frameId } = await context.params;
+  const invalidId = validateResourceId(frameId);
+  if (invalidId) return invalidId;
+
+  return proxyJson(req, {
+    method: "GET",
+    url: `${BASE_URL}/api/admin/frames/${encodeURIComponent(frameId)}/versions`,
+  });
+}
+
 /** 시스템 프레임 발행(ADMIN). 발행해야 행사에서 고를 수 있다. */
 export async function POST(req: Request, context: RouteContext) {
   const { frameId } = await context.params;
