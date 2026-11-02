@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { forgetStudioAccess } from "@/hooks/useStudioAccess";
 import { COMPANY } from "@harucut/shared";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
@@ -37,6 +38,10 @@ type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
 
 function LoginPageContent() {
   const searchParams = useSearchParams();
+  // 로그인 화면에 왔으면 앞 계정의 답은 믿지 않는다(세션 만료 뒤 다른 계정으로 들어오는 길도 여기를 지난다).
+  useEffect(() => {
+    forgetStudioAccess();
+  }, []);
   const redirectTo = getSafeRedirectPath(searchParams.get("redirectTo"));
   const redirectTarget = resolveRedirectTarget(redirectTo);
   const signupHref = buildPathWithRedirect("/signup", redirectTo);

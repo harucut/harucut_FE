@@ -550,3 +550,13 @@ it("선택 동의를 철회할 수 있다", async () => {
   );
   expect(await screen.findByText(/동의를 철회했어요/)).toBeInTheDocument();
 });
+
+it("보관 기한이 지난 사진은 저장 버튼 대신 기간이 지났다고 알린다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.listParticipantResults.mockResolvedValue([{ jobId: 1, status: "DONE", expiresAt: "2000-01-01T00:00:00Z" }]);
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByText(/받을 수 있는 기간이 지났어요/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+});

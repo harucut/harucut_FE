@@ -657,6 +657,8 @@ export function HomeStep({
   onRefresh: () => void;
 }) {
   const optionalItems = event.consentItems.filter((item) => !item.required);
+  // 화면을 연 때를 기준으로 본다. 그려질 때마다 시계를 읽으면 같은 입력에 다른 화면이 나온다.
+  const [openedAt] = useState(() => Date.now());
   const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요.");
   const welcome = useEventCopy("welcome", "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.");
   const hasResults = results.length > 0;
@@ -672,7 +674,10 @@ export function HomeStep({
         <div className="flex flex-col gap-2.5">
           <h2 className="text-[16px] font-bold">이 행사에서 만든 사진</h2>
           <ul className="flex flex-col gap-2.5">
-            {results.map((job, index) => (
+            {results.map((job, index) => {
+              // 기한이 지난 사진은 받을 수 없다. 누르면 실패할 버튼을 두지 않고 지났다고 말한다.
+              const expired = job.status === "DONE" && Boolean(job.expiresAt) && new Date(job.expiresAt!).getTime() <= openedAt;
+              return (
               <li key={job.jobId} className="flex items-center gap-3 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-3">
                 {job.thumbnailUrl ? (
                   // 짧은 서명 URL 이라 next/image 로 보내지 않는다. Referer 도 보내지 않는다.
@@ -680,13 +685,13 @@ export function HomeStep({
                   <img src={job.thumbnailUrl} alt="" referrerPolicy="no-referrer" loading="lazy" className="size-14 shrink-0 rounded-lg object-cover" />
                 ) : null}
                 <span className="min-w-0 flex-1 text-[14px] font-semibold">
-                  {index + 1}번째 사진 · {job.status === "DONE" ? "완성" : job.status === "PENDING" ? "만드는 중" : "실패"}
+                  {index + 1}번째 사진 · {expired ? "받을 수 있는 기간이 지났어요" : job.status === "DONE" ? "완성" : job.status === "PENDING" ? "만드는 중" : "실패"}
                   {/* 실패 코드가 있으면 무엇을 하면 되는지 말해 준다(원본 없음 → 다시 찍기 등). */}
                   {job.status === "FAILED" && composeFailureCopy(job.failureCode) ? (
                     <span className="block text-[12px] font-normal text-(--ev-muted)">{composeFailureCopy(job.failureCode)?.message}</span>
                   ) : null}
                 </span>
-                {job.status === "DONE" ? (
+                {expired ? null : job.status === "DONE" ? (
                   <span className="flex shrink-0 gap-2">
                     <button type="button" onClick={() => onDownload(job.jobId)} className="h-11 rounded-full bg-(--ev-accent) px-4 text-[13px] font-bold text-(--ev-accent-contrast)">
                       저장
@@ -701,7 +706,8 @@ export function HomeStep({
                   </button>
                 ) : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       ) : null}

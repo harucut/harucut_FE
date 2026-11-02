@@ -2,6 +2,40 @@
 
 import { useRef, useState } from "react";
 import { QrCode } from "@/components/qr/QrCode";
+import { isNativeShell, nativeSaveImageBlob } from "@/lib/nativeBridge";
+
+
+/** 화면의 QR 을 흰 여백까지 넣은 1024px PNG 로 굽는다. SVG 파일은 사진첩·인쇄소에서 열리지 않는 곳이 많다. */
+async function qrSvgToPng(svg: SVGSVGElement): Promise<Blob> {
+  const SIZE = 1024;
+  const copy = svg.cloneNode(true) as SVGSVGElement;
+  copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  copy.setAttribute("width", String(SIZE));
+  copy.setAttribute("height", String(SIZE));
+  copy.removeAttribute("class");
+  const source = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)], { type: "image/svg+xml" }));
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("QR 을 그리지 못했어요."));
+      image.src = source;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("QR 을 그리지 못했어요.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, SIZE, SIZE);
+    context.drawImage(image, 0, 0, SIZE, SIZE);
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("QR 을 그리지 못했어요."))), "image/png");
+    });
+  } finally {
+    URL.revokeObjectURL(source);
+  }
+}
 
 /**
  * 참가 링크와 QR. 주최자는 이걸 식장 테이블에 올리거나 단체 대화방에 붙인다 — 화면 캡처로 넘기게 두지 않는다.
@@ -23,23 +57,30 @@ export function StudioJoinLink({
   const holderRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const saveQr = () => {
+  const saveQr = async () => {
     const svg = holderRef.current?.querySelector("svg");
     if (!svg) return;
-    const copy = svg.cloneNode(true) as SVGSVGElement;
-    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    copy.setAttribute("width", "1024");
-    copy.setAttribute("height", "1024");
-    const blob = new Blob([new XMLSerializer().serializeToString(copy)], { type: "image/svg+xml" });
-    const href = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = `${fileName}-qr.svg`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(href);
-    setNotice("QR 을 저장했어요.");
+    try {
+      const blob = await qrSvgToPng(svg);
+      const filename = `${fileName}-qr.png`;
+      // 앱 웹뷰에는 내려받기가 없다(<a download> 가 아무 일도 하지 않는다). 사진첩 저장 브리지로 넘긴다.
+      if (isNativeShell()) {
+        const saved = await nativeSaveImageBlob(blob, filename);
+        setNotice(saved?.ok ? "QR 을 사진첩에 저장했어요." : (saved?.reason ?? "QR 을 저장하지 못했어요. 다시 눌러 주세요."));
+        return;
+      }
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
+      setNotice("QR 을 내려받았어요.");
+    } catch {
+      setNotice("QR 을 저장하지 못했어요. 다시 눌러 주세요.");
+    }
   };
 
   const copyLink = async () => {
@@ -62,7 +103,7 @@ export function StudioJoinLink({
           {url}
         </p>
         <div className={`flex flex-wrap gap-2 ${stacked ? "justify-center" : ""}`}>
-          <button type="button" onClick={saveQr} className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold">
+          <button type="button" onClick={() => void saveQr()} className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold">
             QR 저장
           </button>
           <button

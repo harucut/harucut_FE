@@ -814,12 +814,13 @@ body {
 .studio-print-card {
   display: none;
 }
+@page studio-card {
+  size: A6 portrait;
+  margin: 8mm;
+}
+/* 카드가 있는 화면(행사 설정)에서만 본문을 숨긴다. 약관·개인정보 같은 다른 화면의 인쇄와 용지는 그대로다. */
 @media print {
-  @page {
-    size: A6 portrait;
-    margin: 8mm;
-  }
-  body * {
+  body:has(.studio-print-card) * {
     visibility: hidden;
   }
   .studio-print-card,
@@ -827,6 +828,7 @@ body {
     visibility: visible;
   }
   .studio-print-card {
+    page: studio-card;
     position: fixed;
     inset: 0;
     display: flex;
