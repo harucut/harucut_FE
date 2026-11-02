@@ -28,11 +28,14 @@ export function FrameWithPhotos({
   photos,
   className,
   style,
+  loading,
 }: {
   frame: Pick<EventFrameRef, "layoutType" | "previewUrl">;
   photos: readonly (string | null)[];
   className?: string;
   style?: CSSProperties;
+  /** 목록처럼 화면 밖에도 많이 놓일 때 "lazy". */
+  loading?: "lazy" | "eager";
 }) {
   const layout = layoutOf(frame.layoutType);
   const pct = (value: number, total: number) => `${(value / total) * 100}%`;
@@ -51,7 +54,7 @@ export function FrameWithPhotos({
         const photo = photos[index];
         return photo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={index} src={photo} alt="" decoding="async" draggable={false} className="absolute object-cover object-[50%_25%]" style={position} />
+          <img key={index} src={photo} alt="" loading={loading} decoding="async" draggable={false} className="absolute object-cover object-[50%_25%]" style={position} />
         ) : (
           <span key={index} aria-hidden className="absolute bg-black/25" style={position} />
         );
@@ -59,7 +62,7 @@ export function FrameWithPhotos({
       {frame.previewUrl ? (
         // 서명 URL 이라 next/image 로 보내지 않고 Referer 도 보내지 않는다.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={frame.previewUrl} alt="" referrerPolicy="no-referrer" draggable={false} className="absolute inset-0 size-full" />
+        <img src={frame.previewUrl} alt="" loading={loading} referrerPolicy="no-referrer" draggable={false} className="absolute inset-0 size-full" />
       ) : null}
     </div>
   );

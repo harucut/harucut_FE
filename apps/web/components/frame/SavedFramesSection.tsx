@@ -4,6 +4,8 @@ import { Check, RotateCcw } from "lucide-react";
 import { useMemo } from "react";
 import type { FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { FrameWithPhotos, frameFitStyle } from "@/components/participation/FrameWithPhotos";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType, matchesFrameType } from "@/lib/frameApi";
 
@@ -138,8 +140,15 @@ export function SavedFramesSection({
                     ].join(" ")}
                   >
                     {frame.source ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={frame.source} alt="" loading="lazy" className="h-full w-full object-contain p-1.5" />
+                      // 저장본 그림은 칸이 뚫려 있다. 예시 사진을 깔아 칸이 빈 프레임처럼 보이지 않게 한다.
+                      <span aria-hidden className="absolute inset-1.5 flex items-center justify-center [container-type:size]">
+                        <FrameWithPhotos
+                          frame={{ layoutType: frame.frameType, previewUrl: frame.source }}
+                          photos={DEMO_PHOTOS}
+                          loading="lazy"
+                          style={frameFitStyle(frame.frameType)}
+                        />
+                      </span>
                     ) : (
                       <FramePreview frameId={previewFrameId} className="max-h-full max-w-full" />
                     )}

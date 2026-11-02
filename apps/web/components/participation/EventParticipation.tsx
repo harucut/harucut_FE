@@ -747,7 +747,7 @@ export function HomeStep({
       ) : null}
       {event.captureOpen ? (
         <EventActionBar>
-          <EventButton onClick={onStart}>촬영 시작</EventButton>
+          <EventButton onClick={onStart}>사진 찍기</EventButton>
         </EventActionBar>
       ) : (
         <div className="pb-[max(1rem,env(safe-area-inset-bottom))]" />

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FrameWithPhotos, frameFitStyle } from "@/components/participation/FrameWithPhotos";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { getFrameConfig } from "@/constants/frames";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -80,11 +82,27 @@ export function WorkspaceFrameList({
           {frames.map((frame) => {
             const latest = latestByFrame.get(frame.frameId);
             return (
-              <li key={frame.frameId} className="flex flex-wrap items-center justify-between gap-2 text-[14px]">
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold">{frame.title || "이름 없는 프레임"}</span>
-                  <span className="block text-[12px] text-(--hc-muted)">
-                    {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "아직 발행 안 함"}
+              <li key={frame.frameId} className="flex flex-wrap items-center justify-between gap-3 text-[14px]">
+                <span className="flex min-w-0 items-center gap-3">
+                  {/* 이름만으로는 어느 프레임인지 모른다. 행사에 고를 때와 같은 모습으로 보여 준다. */}
+                  <span aria-hidden className="flex h-20 w-14 shrink-0 items-center justify-center [container-type:size]">
+                    {frame.source ? (
+                      <FrameWithPhotos
+                        frame={{ layoutType: frame.frameType, previewUrl: frame.source }}
+                        photos={DEMO_PHOTOS}
+                        loading="lazy"
+                        className="rounded-[3px]"
+                        style={frameFitStyle(frame.frameType)}
+                      />
+                    ) : (
+                      <span className="block size-full rounded-md bg-(--hc-border)" />
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{frame.title || "이름 없는 프레임"}</span>
+                    <span className="block text-[12px] text-(--hc-muted)">
+                      {layoutName(frame.frameType)} · {latest ? `${latest.versionNo}번째까지 발행` : "아직 발행 안 함"}
+                    </span>
                   </span>
                 </span>
                 {readOnly ? null : (

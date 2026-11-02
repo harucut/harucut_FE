@@ -20,7 +20,7 @@ jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
 }));
 
-const CONFIRM_LABEL = "촬영 시작하기";
+const CONFIRM_LABEL = "이 프레임으로 찍기";
 const LOADING_NOTICE = "링크에 담긴 프레임을 불러오는 중이에요.";
 
 function frame(over: Partial<RemoteFrame> = {}): RemoteFrame {

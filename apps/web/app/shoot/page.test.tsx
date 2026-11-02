@@ -84,7 +84,7 @@ describe("프레임을 다시 고를 때 들고 온 사진", () => {
     renderWithKeptShots("camera");
     expect(useShootSession.getState().shots).toEqual(SHOTS);
     expect(mockPush).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "사진 지우고 다시 촬영" }));
+    fireEvent.click(screen.getByRole("button", { name: "사진 지우고 다시 찍기" }));
     expect(useShootSession.getState().shots).toEqual([]);
     expect(mockPush).toHaveBeenCalledWith("/shoot/capture");
   });

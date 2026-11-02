@@ -324,7 +324,7 @@ export default function CapturePage() {
               type="button"
               onClick={handleShootNow}
               // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다. 화면에서 글자가 빠져도 보조기술에는 남는다.
-              aria-label="바로 촬영"
+              aria-label="바로 찍기"
               // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
               className="grid h-18 w-18 place-items-center rounded-full border-4 border-(--hc-text) transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >
@@ -336,7 +336,7 @@ export default function CapturePage() {
               onClick={() => shots.length ? setConfirmRestart(true) : startShooting()}
               className="hc-button-primary inline-flex h-12 items-center rounded-full px-8 text-[15px] font-extrabold"
             >
-              {shots.length ? "처음부터 다시 촬영" : "촬영 시작"}
+              {shots.length ? "처음부터 다시 찍기" : "찍기 시작"}
             </button>
           ) : (
             <button
@@ -351,7 +351,7 @@ export default function CapturePage() {
         </div>
       </div>
       {confirmRestart ? <ConfirmDialog title="처음부터 다시 찍을까요?" description={`찍어 둔 사진 ${shots.length}장을 지우고 새로 촬영해요.`}
-        confirmLabel="지우고 다시 촬영" running={false} destructive
+        confirmLabel="지우고 다시 찍기" running={false} destructive
         onClose={() => setConfirmRestart(false)} onConfirm={() => { setConfirmRestart(false); startShooting(); }} /> : null}
     </main>
   );

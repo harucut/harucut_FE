@@ -109,7 +109,7 @@ it("기기 자격이 없으면 연결 코드를 받아 기기 자격만 보관�
   fireEvent.click(screen.getByRole("button", { name: "연결" }));
 
   await waitFor(() => expect(api.redeemBoothPairing).toHaveBeenCalledWith("K7QM-3XRP"));
-  expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "사진 찍기" })).toBeInTheDocument();
   expect(JSON.parse(window.localStorage.getItem("harucut:event:booth-device")!).token).toBe("b-new");
 });
 
@@ -119,7 +119,7 @@ it("켜질 때 남아 있는 회차가 있으면 닫기만 하고 대기 화면�
   api.getBoothCurrentRun.mockResolvedValue({ captureRunId: "run-old", stateVersion: 9, status: "ACTIVE", job: { jobId: 1, status: "DONE" } });
   render(<BoothScreen />);
 
-  expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "사진 찍기" })).toBeInTheDocument();
   expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-old", 9);
   expect(screen.queryByRole("img", { name: "사진 받기 QR" })).not.toBeInTheDocument();
 });
@@ -128,7 +128,7 @@ it("손님마다 새 세션을 열고, 결과 QR 은 그 손님의 토큰으로�
   pairDevice();
   render(<BoothScreen />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집/ }));
   fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
   fireEvent.click(await screen.findByRole("button", { name: "전송 끝" }));
@@ -142,7 +142,7 @@ it("손님마다 새 세션을 열고, 결과 QR 은 그 손님의 토큰으로�
   fireEvent.click(screen.getByRole("button", { name: "다음 손님" }));
   expect(screen.getByRole("img", { name: "사진 받기 QR" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /한 번 더 누르면 넘어가요/ }));
-  expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "사진 찍기" })).toBeInTheDocument();
   expect(screen.queryByRole("img", { name: "사진 받기 QR" })).not.toBeInTheDocument();
   await waitFor(() => expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-7", 4));
   // 손님 자격은 저장하지 않는다.
@@ -154,7 +154,7 @@ it("손을 떼고 시간이 지나면 안내 뒤 처음 화면으로 돌아간�
   jest.useFakeTimers();
   pairDevice();
   render(<BoothScreen />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   await screen.findByRole("button", { name: "동의하고 계속" });
 
   await act(async () => {
@@ -164,7 +164,7 @@ it("손을 떼고 시간이 지나면 안내 뒤 처음 화면으로 돌아간�
   await act(async () => {
     await jest.advanceTimersByTimeAsync(11_000);
   });
-  expect(screen.getByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "사진 찍기" })).toBeInTheDocument();
 });
 
 it("회수된 기기(BOOTH-003)는 자격을 버리고 연결 화면으로 간다", async () => {
@@ -194,7 +194,7 @@ describe("Codex 리뷰 반영(#523)", () => {
     jest.useFakeTimers();
     pairDevice();
     render(<BoothScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집/ }));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
     fireEvent.click(await screen.findByRole("button", { name: "회차 열림" }));
@@ -217,7 +217,7 @@ describe("Codex 리뷰 반영(#523)", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(BOOTH_STATUS_POLL_MS);
     });
-    expect(screen.getByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "사진 찍기" })).toBeInTheDocument();
   });
 
 });
@@ -228,7 +228,7 @@ describe("Codex 리뷰 반영(#541)", () => {
     jest.useFakeTimers();
     pairDevice();
     render(<BoothScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집/ }));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
     fireEvent.click(await screen.findByRole("button", { name: "회차 열림" }));
@@ -258,12 +258,12 @@ describe("Codex 리뷰 반영(#541)", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(BOOTH_STATUS_POLL_MS * 2);
     });
-    fireEvent.click(screen.getByRole("button", { name: "촬영 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "사진 찍기" }));
     expect(await screen.findByRole("button", { name: "동의하고 계속" })).toBeInTheDocument();
 
     await act(async () => releaseSlow(open));
     expect(screen.getByRole("button", { name: "동의하고 계속" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "촬영 시작" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "사진 찍기" })).not.toBeInTheDocument();
   });
 });
 
@@ -271,7 +271,7 @@ describe("Codex 리뷰 반영(#541)", () => {
 it("남은 회차 때문에 손님을 못 받으면(BOOTH-004) 그 회차를 닫고 다시 시작한다", async () => {
   pairDevice();
   render(<BoothScreen />);
-  const start = await screen.findByRole("button", { name: "촬영 시작" });
+  const start = await screen.findByRole("button", { name: "사진 찍기" });
   api.startBoothGuest.mockRejectedValueOnce(new ApiRequestError({ status: 409, code: "BOOTH-004" }));
   api.getBoothCurrentRun.mockResolvedValueOnce({ captureRunId: "run-left", stateVersion: 7 });
 
@@ -286,7 +286,7 @@ it("남은 회차 때문에 손님을 못 받으면(BOOTH-004) 그 회차를 닫
 it("손님을 받기 전에 행사를 다시 읽어 새 동의 문구로 묻는다", async () => {
   pairDevice();
   render(<BoothScreen />);
-  const start = await screen.findByRole("button", { name: "촬영 시작" });
+  const start = await screen.findByRole("button", { name: "사진 찍기" });
   api.getBoothMe.mockResolvedValueOnce({
     deviceId: "d-1",
     status: "ACTIVE",
@@ -304,7 +304,7 @@ it("카메라를 쓸 수 없는 기기면 손님을 받기 전에 알리고 시�
   render(<BoothScreen />);
 
   expect(await screen.findByRole("alert")).toHaveTextContent("카메라를 쓸 수 없어요");
-  expect(screen.getByRole("button", { name: "촬영 시작" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "사진 찍기" })).toBeDisabled();
 });
 
 it("연결 코드가 든 주소를 받으면 코드를 채우고 주소에서 지운다. 열린 탭에서 해시만 바뀌어도 받는다", async () => {
@@ -326,7 +326,7 @@ it("합성에 실패하면 QR 을 치우고 다시 찍으라고 하며, 한 번�
   api.getResult.mockResolvedValue({ status: "FAILED", eventName: "행사", thumbnailUrl: null, expiresAt: "2999-01-01T00:00:00Z" });
   pairDevice();
   render(<BoothScreen />);
-  fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
   fireEvent.click(await screen.findByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: /동의하고 계속/ }));
   fireEvent.click(await screen.findByRole("button", { name: "전송 끝" }));
@@ -334,7 +334,7 @@ it("합성에 실패하면 QR 을 치우고 다시 찍으라고 하며, 한 번�
   expect(await screen.findByRole("alert")).toHaveTextContent("한 번 더 찍어 주세요");
   expect(screen.queryByRole("img", { name: "사진 받기 QR" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "처음으로" }));
-  expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "사진 찍기" })).toBeInTheDocument();
 });
 
 describe("연결 화면의 개인 계정 로그아웃", () => {
@@ -401,7 +401,7 @@ describe("연결 화면의 개인 계정 로그아웃", () => {
 it("이미 연결된 기기가 새 코드를 받으면 말없이 옮기지 않고 묻는다", async () => {
   pairDevice();
   render(<BoothScreen />);
-  await screen.findByRole("button", { name: "촬영 시작" });
+  await screen.findByRole("button", { name: "사진 찍기" });
 
   await act(async () => {
     window.history.replaceState({}, "", "/booth#pair=K7QM-3XRP");
