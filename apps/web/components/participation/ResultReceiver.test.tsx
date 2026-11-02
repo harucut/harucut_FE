@@ -184,7 +184,7 @@ it("잘못된 토큰(RESULT-001)은 서버 문구로 안내하고 다시 확인�
   window.history.replaceState({}, "", `/r#${TOKEN_A}`);
   mockGetResult.mockRejectedValue(new ApiRequestError({ status: 401, code: "RESULT-001", apiMessage: "x" }));
   render(<ResultReceiver />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("결과 링크가 올바르지 않아요.");
+  expect(await screen.findByRole("alert")).toHaveTextContent("이 링크는 열 수 없어요.");
   expect(screen.queryByRole("button", { name: "다시 확인" })).not.toBeInTheDocument();
 });
 

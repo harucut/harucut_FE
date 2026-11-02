@@ -120,7 +120,7 @@ export function AdminUsers() {
                     {[
                       user.email,
                       user.provider ? (PROVIDER_LABEL[user.provider] ?? user.provider) : null,
-                      user.userRole === "ADMIN" ? "플랫폼 관리자" : null,
+                      user.userRole === "ROLE_ADMIN" ? "플랫폼 관리자" : null,
                       STATUS_LABEL[user.userStatus] ?? user.userStatus,
                       user.createdAt ? `${formatDateTime(user.createdAt)} 가입` : null,
                     ]

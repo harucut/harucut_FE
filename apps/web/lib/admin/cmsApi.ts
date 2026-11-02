@@ -275,6 +275,7 @@ export type AdminUser = {
   email?: string | null;
   username?: string | null;
   provider?: string | null;
+  /** `ROLE_USER` · `ROLE_ADMIN`. */
   userRole?: string | null;
   userStatus: string;
   createdAt?: string | null;

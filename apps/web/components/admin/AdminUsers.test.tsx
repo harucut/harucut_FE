@@ -18,7 +18,7 @@ const ACTIVE = {
   email: "minji@example.com",
   username: "민지",
   provider: "KAKAO",
-  userRole: "USER",
+  userRole: "ROLE_USER",
   userStatus: "ACTIVE",
   createdAt: "2026-10-01T10:00:00",
 };
@@ -43,6 +43,21 @@ it("같은 이메일의 계정을 가입 경로와 상태로 나눠 보여 준�
   expect(screen.getByText(/구글 · 정지됨/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "정지" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "정지 풀기" })).toBeInTheDocument();
+});
+
+it("플랫폼 관리자는 그렇게 표시한다", async () => {
+  mockSearch.mockResolvedValue([{ ...ACTIVE, userRole: "ROLE_ADMIN" }]);
+  render(<AdminUsers />);
+  await findUsers();
+  expect(await screen.findByText(/플랫폼 관리자/)).toBeInTheDocument();
+});
+
+it("일반 계정에는 역할을 적지 않는다", async () => {
+  render(<AdminUsers />);
+  await findUsers();
+  await screen.findByRole("button", { name: "정지" });
+  expect(screen.queryByText(/플랫폼 관리자/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/ROLE_/)).not.toBeInTheDocument();
 });
 
 it("없는 이메일이면 없다고 말한다", async () => {
