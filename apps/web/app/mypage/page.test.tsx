@@ -174,7 +174,7 @@ describe("정지 계정", () => {
   // 프록시는 토큰의 상태만 본다. 풀린 뒤에도 옛 토큰이면 access 가 끝날 때까지 여기로 돌려보낸다.
   it("돌려보내졌는데 이미 풀려 있으면 새 토큰을 받는다", async () => {
     window.history.replaceState(null, "", "/mypage?restricted=1");
-    const fetchMock = jest.fn(async (_input: RequestInfo | URL) => ({ ok: true, status: 200, text: async () => "{}" }));
+    const fetchMock = jest.fn<Promise<unknown>, [RequestInfo | URL]>(async () => ({ ok: true, status: 200, text: async () => "{}" }));
     global.fetch = fetchMock as unknown as typeof fetch;
     await renderWithPlanTier("BASIC");
     await waitFor(() =>
@@ -185,7 +185,7 @@ describe("정지 계정", () => {
 
   it("돌려보내졌고 아직 정지면 토큰을 다시 받지 않는다", async () => {
     window.history.replaceState(null, "", "/mypage?restricted=1");
-    const fetchMock = jest.fn(async (_input: RequestInfo | URL) => ({ ok: true, status: 200, text: async () => "{}" }));
+    const fetchMock = jest.fn<Promise<unknown>, [RequestInfo | URL]>(async () => ({ ok: true, status: 200, text: async () => "{}" }));
     global.fetch = fetchMock as unknown as typeof fetch;
     await renderBlocked();
     expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/client/reissue")).toBe(false);
