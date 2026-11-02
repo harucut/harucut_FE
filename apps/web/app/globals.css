@@ -214,6 +214,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   word-break: keep-all;
+  /* 공백 없는 긴 문자열(행사 이름 등)이 화면 밖으로 나가지 않게. 넘칠 때만 끊는다. */
+  overflow-wrap: anywhere;
 }
 
 ::selection {
@@ -328,8 +330,17 @@ body {
    게시된 행사 테마가 이 값을 덮어쓴다(P2B-4, components/participation/EventSurface.tsx). 테마가 없거나 못 읽었을 때
    보이는 것은 이 중립 값이다 — lib/event/pageTheme.ts · 백엔드 ThemeResolver.DEFAULT_COLORS 와 같아야 한다.
    개인 색 테마(data-theme)와 무관하다 — 행사 화면에서는 부트스트랩이 data-theme 을 심지 않는다. */
+/* 네이티브 체크박스·라디오·슬라이더는 무채색이다. 브라우저 기본 파랑도, 여러 개 깔리는 초록도 아니다 — 초록은 주 동작 하나만 갖는다(DESIGN.md). */
+:root {
+  accent-color: var(--hc-text);
+}
+
 .ev-surface {
+  /* 행사 화면은 게시된 테마의 강조색을 따른다. */
+  accent-color: var(--ev-accent);
   color-scheme: light;
+  /* 한 굵기뿐인 제목체를 브라우저가 억지로 두껍게 만들어 획이 뭉개지지 않게 한다. */
+  font-synthesis: none;
   --ev-bg: #f6f6f4;
   --ev-text: #1b1b1b;
   --ev-muted: #5e5e5e;
@@ -340,6 +351,105 @@ body {
   --ev-danger: #b42318;
   background: var(--ev-bg);
   color: var(--ev-text);
+}
+
+/* 브라우저가 그리는 것도 행사 색을 따른다 — 포커스 링·선택 영역이 하루컷 색으로 남지 않게. */
+.ev-surface :where(button, a[href], input, textarea, select, [tabindex], summary):focus-visible {
+  outline-color: var(--ev-text);
+}
+/* 배경 그림 위에 놓이는 글. 그림이 없으면 아무 일도 하지 않는다. */
+.ev-surface[data-has-bg] .ev-readable {
+  background: color-mix(in srgb, var(--ev-card) 92%, transparent);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+/*
+  촬영 무대. 카메라 앱처럼 행사 색과 무관하게 어둡다 — 밝은 면 위의 프리뷰는 액자처럼 보이고, 셔터와 게이지가
+  사진보다 밝아진다(DESIGN.md 「사진이 제일 밝다」, 기획 R5 18절이 허용한 의미 토큰). 토큰을 덮어쓰므로 안의
+  버튼과 글자는 그대로 쓴다. 행사마다 강조색이 어두워도 셔터가 보인다.
+*/
+.ev-stage {
+  --ev-bg: #0b0b0c;
+  --ev-text: #ffffff;
+  --ev-muted: rgba(255, 255, 255, 0.72);
+  --ev-card: #18181a;
+  --ev-border: rgba(255, 255, 255, 0.24);
+  --ev-accent: #ffffff;
+  --ev-accent-contrast: #0b0b0c;
+  --ev-danger: #ff8a7a;
+  background: var(--ev-bg);
+  color: var(--ev-text);
+  color-scheme: dark;
+}
+.ev-surface ::selection {
+  background: color-mix(in srgb, var(--ev-accent) 22%, transparent);
+}
+.ev-surface input::placeholder,
+.ev-surface textarea::placeholder {
+  color: var(--ev-muted);
+}
+
+/*
+  결과를 기다리는 동안의 자리. 진행률을 지어내지 않는다 — 살아 있다는 것만 알린다.
+  동작 줄이기에서는 멈춘 자리로 남는다(아래 reduced-motion 블록).
+*/
+.ev-developing {
+  position: relative;
+  overflow: hidden;
+}
+.ev-developing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    color-mix(in srgb, var(--ev-text) 9%, transparent) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: ev-sheen 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes ev-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* 기다린 사진이 나오는 순간. 즉석 사진이 현상되듯 번짐이 걷힌다. 이 화면의 유일한 연출이다. */
+.ev-develop {
+  animation: ev-develop 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes ev-develop {
+  from {
+    filter: blur(14px) saturate(0.4) brightness(1.3);
+  }
+  to {
+    filter: none;
+  }
+}
+
+/* 단계가 바뀔 때 화면이 뚝 끊기지 않게. 처음부터 읽히는 값에서 짧게 움직인다. */
+.ev-step {
+  animation: ev-step-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes ev-step-in {
+  from {
+    opacity: 0.4;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ev-developing::after,
+  .ev-develop,
+  .ev-step {
+    animation: none;
+  }
 }
 
 .hc-page-app {
@@ -680,5 +790,65 @@ body {
   }
   @starting-style {
     .hc-modal > [role="dialog"] { opacity: 0; transform: translateY(12px); }
+  }
+}
+
+/* 앱 화면(Studio·운영 관리·편집기)의 체크박스·슬라이더는 무채색이다. 한 화면에 체크가 여럿이면 초록이 흩어져 주 동작을 못 찾는다(DESIGN.md 한 화면 한 초록). */
+.hc-page-app {
+  accent-color: var(--hc-text);
+}
+
+/* ── Studio(주최자 화면) ── */
+
+/* 앱 화면과 어두운 무대는 각자의 글자색을 따른다(:root 값은 상속되며 그 자리의 토큰을 다시 읽지 않는다). */
+.hc-page-app,
+.hc-stage-dark {
+  accent-color: var(--hc-text);
+}
+
+/* 인쇄용 참가 카드(StudioPrintCard). 화면에는 없고, 인쇄할 때 이 카드만 A6 한 장으로 나온다. */
+.studio-print-card {
+  display: none;
+}
+@media print {
+  @page {
+    size: A6 portrait;
+    margin: 8mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .studio-print-card,
+  .studio-print-card * {
+    visibility: visible;
+  }
+  .studio-print-card {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5mm;
+    background: #ffffff;
+    color: #000000;
+    text-align: center;
+  }
+  .studio-print-card svg {
+    width: 62mm;
+    height: 62mm;
+  }
+  .studio-print-card-name {
+    font-size: 16pt;
+    font-weight: 800;
+    word-break: keep-all;
+  }
+  .studio-print-card-guide {
+    font-size: 11pt;
+    word-break: keep-all;
+  }
+  .studio-print-card-url {
+    font-size: 8pt;
+    overflow-wrap: anywhere;
   }
 }
