@@ -13,6 +13,19 @@ export function toServerDateTime(localValue: string): string | null {
   return `${localValue}:00${SEOUL_OFFSET}`;
 }
 
+/** `2026-10-27`(서울 날짜) → 그날 0시. 비었거나 형식이 틀리면 undefined. */
+export function dayStartToServer(day: string): string | undefined {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? `${day}T00:00:00${SEOUL_OFFSET}` : undefined;
+}
+
+/** `2026-10-27`(서울 날짜) → 다음 날 0시. 서버의 `to` 는 미포함이라 그날 전체가 들어간다. */
+export function dayEndToServer(day: string): string | undefined {
+  const start = dayStartToServer(day);
+  if (!start) return undefined;
+  const next = new Date(new Date(start).getTime() + 24 * 60 * 60 * 1000);
+  return Number.isNaN(next.getTime()) ? undefined : next.toISOString();
+}
+
 /** 서버 값 → 서울 기준 `YYYY-MM-DDTHH:mm`. 읽을 수 없으면 빈 문자열. */
 export function toLocalInputValue(serverValue: string | null | undefined): string {
   if (!serverValue) return "";

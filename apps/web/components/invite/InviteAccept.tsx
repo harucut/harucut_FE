@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { rememberStudioAccess } from "@/hooks/useStudioAccess";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { resolveMembership } from "@/lib/authSession";
 import { clearInviteToken, isInviteToken, readInviteToken, stashInviteToken } from "@/lib/invite/pendingInvite";
@@ -73,7 +74,8 @@ export function InviteAccept() {
       setView({
         kind: "error",
         message: getUserFacingApiErrorMessage(error, "초대를 확인하지 못했어요."),
-        retryable: !code || status === undefined || status >= 500,
+        // 필수 약관(TERMS-004)은 재동의 창을 통과하면 풀린다. 창이 뜨지 못했어도 다시 눌러 볼 길을 둔다.
+        retryable: !code || code === "TERMS-004" || status === undefined || status >= 500,
       });
     }
   }, []);
@@ -99,10 +101,14 @@ export function InviteAccept() {
     try {
       const accepted = await acceptInvitation(token);
       clearInviteToken();
+      rememberStudioAccess();
+      // 행사 고객(신랑신부 등)에게는 사진함이 제품의 전부다 — 운영 화면을 거치지 않고 바로 간다.
       router.replace(
         accepted.kind === "WORKSPACE" && accepted.workspaceId
           ? `/studio?workspace=${encodeURIComponent(accepted.workspaceId)}`
-          : "/studio",
+          : accepted.kind === "EVENT" && accepted.eventId
+            ? `/studio/events/${encodeURIComponent(accepted.eventId)}/photos`
+            : "/studio",
       );
     } catch (error) {
       const { code, status } = getApiErrorDetails(error);
@@ -116,7 +122,7 @@ export function InviteAccept() {
       setView({
         kind: "error",
         message: getUserFacingApiErrorMessage(error, "초대를 받지 못했어요."),
-        retryable: !alreadyJoined && (!code || status === undefined || status >= 500),
+        retryable: !alreadyJoined && (!code || code === "TERMS-004" || status === undefined || status >= 500),
         alreadyJoined,
       });
     }

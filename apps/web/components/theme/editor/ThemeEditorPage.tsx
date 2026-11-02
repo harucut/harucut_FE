@@ -13,6 +13,7 @@ import { NUDGE_STEP, NUDGE_STEP_LARGE } from "@/constants/editorNudge";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
 import { CellsPanel } from "@/components/theme/editor/CellsPanel";
+import { freeCellsEnabled } from "@/lib/frameCells";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
@@ -30,12 +31,15 @@ import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
   discardEditorDraft,
   loadEditorDraft,
   saveEditorDraft,
+  type EditorDraft,
+  type SavedFrameScope,
   draftOwnerKey,
 } from "@/lib/themeEditorDraft";
 import { getMyUserInfo } from "@/lib/userApi";
@@ -305,6 +309,19 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   // 바꾸면 저장본을 다시 받는다(버전 충돌 뒤 「저장본 다시 불러오기」).
   const [remoteReloadNonce, setRemoteReloadNonce] = useState(0);
   const [versionConflict, setVersionConflict] = useState<{ currentVersion: number | null } | null>(null);
+  /*
+    저장본 수정의 로컬 복구(R5 5절 「계정·공간·프레임·버전별로 분리」). 회선이 끊긴 채 고치다 창을 닫아도 이 기기에는 남는다.
+    범위에 버전이 들어가므로, 다른 기기가 먼저 저장했으면 옛 편집을 새 저장본 위에 되살리지 않는다.
+  */
+  const [savedScope, setSavedScope] = useState<SavedFrameScope | null>(null);
+  // 복구를 묻는 중인 초안. 답하기 전에는 자동 저장으로 덮지 않는다 — 되살릴 것이 사라진다.
+  const [localRecovery, setLocalRecovery] = useState<EditorDraft | null>(null);
+  const recoveryPendingRef = useRef(false);
+  useEffect(() => {
+    recoveryPendingRef.current = localRecovery !== null;
+  }, [localRecovery]);
+  // 「이어서 편집」으로 되살린 상태인가. 되살리면 이력이 비워지므로, 이력이 비었다고 저장본으로 돌아온 것이 아니다.
+  const recoveredLocalDraftRef = useRef(false);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -356,6 +373,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         );
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
+        recoveredLocalDraftRef.current = false;
+        setSavedScope({ remoteFrameId, version: frameVersionRef.current });
         // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
         // 기다리면, 그 사이 사용자가 고친 내용이 기준으로 잡혀 이탈 경고가 안 뜬다
         // (해석을 기다리는 동안에도 에디터는 조작 가능하다). 지문은 url을 안 보므로
@@ -413,6 +432,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const [syncedRemoteFrameId, setSyncedRemoteFrameId] = useState(remoteFrameId);
   if (syncedRemoteFrameId !== remoteFrameId) {
     setSyncedRemoteFrameId(remoteFrameId);
+    setSavedScope(null);
+    setLocalRecovery(null);
     if (!remoteFrameId) {
       setTitle(DEFAULT_FRAME_TITLE);
       setDescription(DEFAULT_FRAME_DESCRIPTION);
@@ -451,13 +472,55 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
   // 다른 기기에서 이어 편집하는 서버 초안(F1-5). 같은 기기의 새로고침 복구는 아래 로컬 초안이 맡는다.
   const serverDraft = useServerFrameDraft({
-    // 공간의 새 프레임은 서버 초안을 쓰지 않는다. 목록이 공간을 가리지 않아 개인 새 프레임 초안과
-    // 섞인다. 저장본(공간 프레임 포함)은 frameId 로 가려지므로 쓴다.
-    ownerId: workspaceId && !remoteFrameId ? null : draftOwnerId,
+    ownerId: draftOwnerId,
     frameId,
     remoteFrameId,
+    workspaceId,
+    savedScope,
     ready: remoteFrameId ? isRemoteFrameSettled && !loadError : true,
   });
+
+  // 이 기기에 남은 저장본 편집이 있으면 묻는다. 저장본을 불러온 뒤라야 무엇 위에 되살리는지 알 수 있다.
+  useEffect(() => {
+    if (!remoteFrameId || !draftOwnerId || savedScope?.remoteFrameId !== remoteFrameId) return;
+    // 그사이 이미 고치기 시작했으면 묻지 않는다. 다음 자동 저장이 지금 편집으로 바꾼다.
+    if (useThemeEditorStore.getState().past.length > 0) return;
+    const draft = loadEditorDraft(draftOwnerId, frameId, savedScope);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 저장소는 브라우저에서만 읽는다
+    if (draft) setLocalRecovery(draft);
+  }, [remoteFrameId, draftOwnerId, savedScope, frameId]);
+
+  const discardLocalDraft = () => {
+    if (!draftOwnerId) return;
+    // 새 프레임 초안과 저장본 초안은 다른 칸이다. 저장본을 고치다 나가도 같은 판형의 새 프레임 초안은 남는다.
+    if (!remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
+    else if (savedScope) discardEditorDraft(draftOwnerId, frameId, savedScope);
+  };
+
+  const dropLocalRecovery = () => {
+    recoveredLocalDraftRef.current = false;
+    setLocalRecovery(null);
+    discardLocalDraft();
+  };
+
+  const restoreLocalRecovery = async () => {
+    const draft = localRecovery;
+    if (!draft) return;
+    setLocalRecovery(null);
+    // 저장본의 이미지 주소는 서명 URL 이라 하루 뒤면 죽는다. key 로 새로 받는다. 이 기기의 로컬 이미지(data:)는 그대로다.
+    const resolved = await resolveThemeAssetUrls({
+      frameId: draft.frameId,
+      components: draft.components.map((c) =>
+        c.renderUrl?.startsWith("http") ? { ...c, renderUrl: undefined } : c,
+      ) as ThemeExportJson["components"],
+    });
+    const background =
+      draft.background.type === "IMAGE" && draft.background.key
+        ? { ...draft.background, url: (await getImageUrlByKey(draft.background.key)) ?? draft.background.url }
+        : draft.background;
+    recoveredLocalDraftRef.current = true;
+    hydrateDraft({ ...draft, background, components: resolved.components as EditorDraft["components"] }, { preserveHidden: true });
+  };
 
   // 새 프레임 작업 시: 새로고침/이탈로 남은 WIP 초안(localStorage)이 있으면 복원한다.
   // 원격 프레임 수정 중에는 저장본을 불러오므로 초안 복원을 하지 않는다.
@@ -483,7 +546,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const stopDraftAutosaveRef = useRef<(() => void) | null>(null);
   // 편집 중 상태를 localStorage에 자동 저장(디바운스). S3 temp 업로드 대신 로컬 보관.
   useEffect(() => {
-    if (remoteFrameId || !draftOwnerId) return;
+    // 저장본은 불러오기가 끝나 범위(버전)를 안 뒤에 시작한다. 불러오지 못했으면 지킬 기준이 없다.
+    if (!draftOwnerId || (remoteFrameId && !savedScope)) return;
     let timer: number | undefined;
     let idle: number | undefined;
     let stopped = false;
@@ -511,6 +575,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       idle = ric ? ric(() => run(), { timeout: 2000 }) : window.setTimeout(run, 0);
     };
 
+    let editedThisSession = false;
     const schedule = () => {
       cancelScheduled();
       timer = window.setTimeout(() => {
@@ -519,9 +584,22 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           if (stopped) return;
           const s = useThemeEditorStore.getState();
           if (!s.frameId) return;
+          // 복구를 묻는 동안에는 남은 복구본을 건드리지 않는다.
+          if (remoteFrameId && recoveryPendingRef.current) return;
+          // 저장본은 불러오기와 배경 주소 주입도 스토어를 바꾼다. 손댄 것이 있을 때만 쓴다 — 안 그러면 안 고친 프레임을 열 때마다 복구를 묻는다.
+          // 이번에 손댔다가 되돌리기로 원본에 돌아왔으면 앞서 남긴 복구본을 지운다 — 남기면 새로고침 뒤 되돌린 편집이 되살아난다.
+          // 손대기 전에는 지우지 않는다. 불러오는 동안의 변경이 지난번 복구본을 지워 버리면 안 된다.
+          // 되살린 편집까지 되돌아왔으면 저장본이 아니다. 지우지 않고 아래에서 지금 모습을 남긴다 — 저장 안 한 내용이 아직 화면에 있다.
+          if (remoteFrameId && s.past.length === 0 && (!editedThisSession || !recoveredLocalDraftRef.current)) {
+            if (editedThisSession && savedScope) discardEditorDraft(draftOwnerId, s.frameId, savedScope);
+            editedThisSession = false;
+            return;
+          }
+          if (remoteFrameId) editedThisSession = true;
           // 레이어가 없어도 배경색·칸별 설정은 편집 내용이다. 함께 보관한다.
           void saveEditorDraft({
             ownerId: draftOwnerId,
+            ...(remoteFrameId && savedScope ? { saved: savedScope } : {}),
             frameId: s.frameId,
             backgroundColor: s.backgroundColor,
             background: s.background,
@@ -543,7 +621,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
     stopDraftAutosaveRef.current = stop;
     return stop;
-  }, [remoteFrameId, draftOwnerId]);
+  }, [remoteFrameId, draftOwnerId, savedScope]);
 
   const openSaveDialog = () => {
     setDraftTitle(title);
@@ -654,8 +732,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       }
 
       stopDraftAutosaveRef.current?.();
-      // 로컬 초안은 새 프레임 것이다. 저장본을 고치다 지우면 같은 판형의 새 프레임 초안이 사라진다.
-      if (draftOwnerId && !remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
+      discardLocalDraft();
       void serverDraft.finish();
       // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
       // /theme로 나가는 길에도 경고가 뜬다.
@@ -709,6 +786,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     setIsDeleting(true);
     try {
       await deleteFrame(remoteFrameId);
+      stopDraftAutosaveRef.current?.();
+      discardLocalDraft();
       setIsDeleteConfirmOpen(false);
       router.push(exitTo);
     } catch (error) {
@@ -759,7 +838,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             onBackClick={() => {
               stopDraftAutosaveRef.current?.();
               useThemeEditorStore.getState().reset();
-              if (draftOwnerId && !remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
+              discardLocalDraft();
               void serverDraft.finish();
             }}
             rightSlot={
@@ -818,10 +897,39 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               </button>
               <button
                 type="button"
-                onClick={() => void serverDraft.restoreOffer()}
+                onClick={() => {
+                  // 서버 초안을 고르면 이 기기의 더 오래된 편집은 묻지 않는다.
+                  dropLocalRecovery();
+                  void serverDraft.restoreOffer();
+                }}
                 className="hc-button-primary h-11 rounded-full px-4 text-[13px] font-semibold"
               >
                 초안 불러오기
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {localRecovery && !serverDraft.offer ? (
+          <section
+            aria-label="이 기기의 저장 안 한 편집"
+            className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-card) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p>이 기기에 {formatDraftTime(new Date(localRecovery.savedAt).toISOString())}에 저장하지 않은 편집이 있어요.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={dropLocalRecovery}
+                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+              >
+                저장본 유지
+              </button>
+              <button
+                type="button"
+                onClick={() => void restoreLocalRecovery()}
+                className="hc-button-primary h-11 rounded-full px-4 text-[13px] font-semibold"
+              >
+                이어서 편집
               </button>
             </div>
           </section>
@@ -913,7 +1021,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           aria-label="편집 도구"
           className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-(--hc-border) bg-(--hc-card) pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
-          {MOBILE_TOOLS.map(({ id, label, Icon }) => (
+          {MOBILE_TOOLS.filter(({ id }) => id !== "cells" || freeCellsEnabled() || cells !== null).map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
@@ -1010,6 +1118,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                           새로고침하지 않고 그 자리에서 저장본을 다시 받는다. 판형·저장본 id 는 메모리 세션이라
                           새로고침하면 사라져 프레임 목록으로 튕긴다(Codex 리뷰 #524).
                         */
+                        // 저장본을 고른 것이다. 이 편집을 다시 묻지 않는다.
+                        discardLocalDraft();
                         setVersionConflict(null);
                         setIsSaveDialogOpen(false);
                         setRemoteReloadNonce((n) => n + 1);

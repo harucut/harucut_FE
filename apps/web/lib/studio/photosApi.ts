@@ -27,7 +27,15 @@ export type Photo = {
 
 export type PhotoPage = { items: Photo[]; nextCursor?: string | null };
 
-export type PhotoFilter = { status?: PhotoStatus; channel?: PhotoChannel };
+export type PhotoFilter = {
+  status?: PhotoStatus;
+  channel?: PhotoChannel;
+  /** 이 시각 이후(포함). offset 붙은 ISO-8601. */
+  from?: string;
+  /** 이 시각 이전(미포함). */
+  to?: string;
+  frameVersionId?: number;
+};
 
 export const PHOTO_PAGE_SIZE = 30;
 
@@ -36,6 +44,9 @@ export async function listEventPhotos(eventId: string, filter: PhotoFilter, curs
   if (cursor) query.set("cursor", cursor);
   if (filter.status) query.set("status", filter.status);
   if (filter.channel) query.set("channel", filter.channel);
+  if (filter.from) query.set("from", filter.from);
+  if (filter.to) query.set("to", filter.to);
+  if (filter.frameVersionId) query.set("frameVersionId", String(filter.frameVersionId));
   const res = await clientApi.get<ApiEnvelope<PhotoPage>>(
     `/api/client/events/${encodeURIComponent(eventId)}/photos?${query.toString()}`,
   );
@@ -83,7 +94,7 @@ export const MAX_EXPORT_PHOTOS = 2000;
 /** 고른 사진(photoIds) 또는 필터. 둘 다 없으면 완성 사진 전부. */
 export async function createPhotoExport(
   eventId: string,
-  target: { photoIds: number[] } | { filter: { channel?: PhotoChannel } },
+  target: { photoIds: number[] } | { filter: Pick<PhotoFilter, "channel" | "from" | "to" | "frameVersionId"> },
 ): Promise<PhotoExport> {
   const res = await clientApi.post<ApiEnvelope<PhotoExport>>(
     `/api/client/events/${encodeURIComponent(eventId)}/exports`,

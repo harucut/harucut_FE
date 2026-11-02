@@ -156,6 +156,48 @@ describe("clientApi — 필수 약관 미동의(TERMS-004) 감지", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("핸들러가 동의 완료를 알리면 한 번만 다시 보낸다", async () => {
+    registerTermsConsentRequiredHandler(() => Promise.resolve(true));
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(termsRequired())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "GEN-000", status: 200, data: 1 }), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("다시 보내도 막히면 더 돌지 않고 오류를 던진다", async () => {
+    registerTermsConsentRequiredHandler(() => Promise.resolve(true));
+    const fetchMock = jest.fn(async () => termsRequired());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({ code: "TERMS-004" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("동의가 정리되지 않았으면 다시 보내지 않는다", async () => {
+    registerTermsConsentRequiredHandler(() => Promise.resolve(false));
+    const fetchMock = jest.fn(async () => termsRequired());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({ code: "TERMS-004" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("호출부가 시간 제한으로 끊으면 약관 창을 기다리지 않고 끝난다", async () => {
+    registerTermsConsentRequiredHandler(() => new Promise<boolean>(() => {}));
+    global.fetch = jest.fn(async () => termsRequired()) as unknown as typeof fetch;
+    const controller = new AbortController();
+
+    const pending = clientApi.get("/api/client/user/frame", { signal: controller.signal });
+    await flushAsync();
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: "TERMS-004" });
+  });
+
   it("다른 403 에는 재동의 핸들러를 부르지 않는다", async () => {
     const onTermsConsentRequired = jest.fn();
     registerTermsConsentRequiredHandler(onTermsConsentRequired);

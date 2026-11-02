@@ -633,12 +633,120 @@ it("확인한 뒤에도 서버가 TERMS-004 로 막으면 다시 묻고 재동�
         latestVersion: 2,
       },
     ]);
-    await act(async () => {
-      await clientApi.get("/api/client/user/frame").catch(() => undefined);
+    // 재동의 창을 통과할 때까지 요청은 기다린다 — 그래서 끝나기를 기다리지 않는다.
+    act(() => {
+      void clientApi.get("/api/client/user/frame").catch(() => undefined);
     });
 
     await waitFor(() => expect(mockFetchMine).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+/*
+  초대·요금제는 보호 화면이 아니라 브리지가 돌지 않았다. 갓 가입한 초대 고객은 「초대 받기」에서 403 만 받고 갈 곳이 없었다.
+  그렇다고 먼저 막지는 않는다 — 서버가 막았을 때만 그 자리에서 묻는다.
+*/
+it("초대·요금제 화면은 먼저 막지 않고, 서버가 TERMS-004 로 막으면 그 자리에서 재동의를 띄운다", async () => {
+  mockPathname = "/invite";
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn(async () => ({
+    status: 403,
+    ok: false,
+    text: async () => JSON.stringify({ code: "TERMS-004", status: 403, message: "…" }),
+  })) as unknown as typeof fetch;
+  mockFetchMine.mockResolvedValue([
+    { code: "tos", title: "서비스 이용약관", required: true, status: "NOT_AGREED", agreedVersion: null, latestVersion: 1 },
+  ]);
+
+  try {
+    render(<TermsConsentBridge />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockFetchMine).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    act(() => {
+      void clientApi.get("/api/client/invitations/preview").catch(() => undefined);
+    });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  } finally {
+    global.fetch = originalFetch;
+    mockPathname = "/home";
+  }
+});
+
+it("skipTermsGate 요청은 약관에 막혀도 재동의 창을 열지 않고 오류만 돌려준다", async () => {
+  mockPathname = "/pricing";
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn(async () => ({
+    status: 403,
+    ok: false,
+    text: async () => JSON.stringify({ code: "TERMS-004", status: 403, message: "…" }),
+  })) as unknown as typeof fetch;
+
+  try {
+    render(<TermsConsentBridge />);
+    await expect(clientApi.get("/api/client/user/subscription/usage", { skipTermsGate: true })).rejects.toMatchObject({
+      code: "TERMS-004",
+    });
+    expect(mockFetchMine).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  } finally {
+    global.fetch = originalFetch;
+    mockPathname = "/home";
+  }
+});
+
+/*
+  가입 직후 첫 로그인(실제 브라우저에서 재현): 브리지가 보관한 동의를 서버에 보내는 동안 홈이 먼저 데이터를 불러
+  TERMS-004 를 받았고, 방금 동의한 사람의 홈에 「필수 약관에 동의하면 계속 이용할 수 있어요」가 떴다.
+*/
+it("동의를 보내는 동안 막힌 요청은 기다렸다가 다시 보내 성공한다", async () => {
+  const originalFetch = global.fetch;
+  let consented = false;
+  const fetchMock = jest.fn(async () =>
+    consented
+      ? { status: 200, ok: true, text: async () => JSON.stringify({ code: "GEN-000", status: 200, data: { ok: 1 } }) }
+      : { status: 403, ok: false, text: async () => JSON.stringify({ code: "TERMS-004", status: 403, message: "…" }) },
+  );
+  global.fetch = fetchMock as unknown as typeof fetch;
+  mockGetPending.mockReturnValue({ items: [{ code: "tos", agreed: true }], email: "a@b.test" });
+  mockGetMyUserInfo.mockResolvedValue({ email: "a@b.test" });
+  let finishSubmit: () => void = () => {};
+  mockSubmit.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finishSubmit = () => {
+          consented = true;
+          resolve();
+        };
+      }),
+  );
+
+  try {
+    render(<TermsConsentBridge />);
+    await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
+
+    let result: unknown;
+    act(() => {
+      void clientApi.get("/api/client/user/media").then((res) => {
+        result = res.data;
+      });
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(result).toBeUndefined();
+
+    await act(async () => {
+      finishSubmit();
+    });
+
+    await waitFor(() => expect(result).toEqual({ code: "GEN-000", status: 200, data: { ok: 1 } }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   } finally {
     global.fetch = originalFetch;
   }

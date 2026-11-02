@@ -167,9 +167,18 @@ export async function forward(
     값은 호스팅 엣지가 채운 것을 그대로 옮긴다 — 브라우저가 보낸 값을 믿을지는 백엔드의 신뢰
     프록시 설정이 정한다(그 설정 없이 운영하면 위조로 제한을 피할 수 있다. 진행 상태 문서 「운영 반영 조건」).
   */
-  if (options.eventCredential) {
-    const clientIp = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip");
-    if (clientIp) headers["x-forwarded-for"] = clientIp;
+  const clientIp = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip");
+  if (options.eventCredential && clientIp) headers["x-forwarded-for"] = clientIp;
+  /*
+    사용자 IP 는 BFF 비밀과 함께 전용 헤더로도 넘긴다(모든 경로 — 로그인·메일·문의도 IP 로 제한한다).
+    X-Forwarded-For 는 백엔드 앞단(nginx·RemoteIpValve)이 고칠 수 있어 믿을 수 없다. 백엔드는 비밀이 맞을 때만 이 값을
+    쓰고, 틀리거나 없으면 접속 IP 로 판정한다. 값은 위 headers 에 여기서 직접 쓴다 — 브라우저가 보낸 같은 이름의 헤더는
+    옮기지 않으므로 위조할 수 없다. 비밀은 서버 전용 env 다(NEXT_PUBLIC_ 금지).
+  */
+  const bffSecret = process.env.BFF_SHARED_SECRET;
+  if (bffSecret && clientIp) {
+    headers["x-harucut-bff-secret"] = bffSecret;
+    headers["x-harucut-client-ip"] = clientIp;
   }
 
   let upstream: Response;

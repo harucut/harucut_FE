@@ -77,7 +77,7 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
               aria-pressed={selected}
               className={`flex min-w-16 flex-col items-center gap-1 rounded-lg border p-1 text-[12px] ${
                 selected
-                  ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+                  ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
                   : "border-(--hc-border) text-(--hc-muted)"
               }`}
             >
@@ -121,7 +121,7 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <div className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-text) hover:border-(--hc-primary)">
+        <div className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-text) hover:border-(--hc-primary-line)">
           <button
             type="button"
             className="h-full"
@@ -194,7 +194,7 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
               backgroundGenerationRef.current += 1;
               clearBackgroundImage();
             }}
-            className="h-11 rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-muted) hover:border-(--hc-primary)"
+            className="h-11 rounded-lg border border-(--hc-border) px-3 text-[12px] font-semibold text-(--hc-muted) hover:border-(--hc-primary-line)"
           >
             이미지 제거
           </button>

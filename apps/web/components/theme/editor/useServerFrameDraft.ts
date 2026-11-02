@@ -16,7 +16,7 @@ import {
 } from "@/lib/frameDraftApi";
 import { getImageUrlByKey } from "@/lib/presignedUploadApi";
 import { parseServerDocument, toServerDocument, type ServerEditorDocument } from "@/lib/serverEditorDocument";
-import { loadEditorDraft } from "@/lib/themeEditorDraft";
+import { loadEditorDraft, type SavedFrameScope } from "@/lib/themeEditorDraft";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
@@ -95,10 +95,18 @@ export function useServerFrameDraft(options: {
   ownerId: string | null;
   frameId: FrameId;
   remoteFrameId: number | null;
+  /** 공간 프레임을 편집 중이면 그 공간. 초안을 공간별로 가른다. */
+  workspaceId?: string | null;
+  /** 저장본 수정이면 그 범위(프레임·버전) — 이 기기의 로컬 복구본과 견줄 때 쓴다. */
+  savedScope?: SavedFrameScope | null;
   /** 저장본을 다 불러온 뒤에 true. 그 전에 찾으면 불러온 저장본이 복원을 덮는다. */
   ready: boolean;
 }) {
-  const { ownerId, frameId, remoteFrameId, ready } = options;
+  const { ownerId, frameId, remoteFrameId, ready, savedScope = null, workspaceId = null } = options;
+  const savedScopeRef = useRef(savedScope);
+  useEffect(() => {
+    savedScopeRef.current = savedScope;
+  }, [savedScope]);
   const [status, setStatus] = useState<ServerDraftStatus>("idle");
   const [offer, setOffer] = useState<{ updatedAt: string } | null>(null);
   const [conflict, setConflict] = useState<{ revision: number | null } | null>(null);
@@ -147,6 +155,7 @@ export function useServerFrameDraft(options: {
           })
         : await createFrameDraft({
             ...(remoteFrameId ? { frameId: remoteFrameId } : {}),
+            ...(workspaceId ? { workspaceId } : {}),
             document: built.document,
             assetIds: built.assetIds,
           });
@@ -181,7 +190,7 @@ export function useServerFrameDraft(options: {
         void syncRef.current();
       }
     }
-  }, [ownerId, remoteFrameId]);
+  }, [ownerId, remoteFrameId, workspaceId]);
 
   useEffect(() => {
     syncRef.current = sync;
@@ -194,7 +203,7 @@ export function useServerFrameDraft(options: {
     discoveredRef.current = false;
     (async () => {
       try {
-        const summaries = (await listFrameDrafts(remoteFrameId ?? "new")).sort(newestFirst);
+        const summaries = (await listFrameDrafts(remoteFrameId ?? "new", workspaceId)).sort(newestFirst);
         for (const summary of summaries.slice(0, DRAFTS_TO_INSPECT)) {
           const draft = await getFrameDraft(summary.draftId);
           const document = parseServerDocument(draft.document, frameId);
@@ -208,9 +217,14 @@ export function useServerFrameDraft(options: {
             lastSentRef.current = JSON.stringify(document);
             break;
           }
-          // 새 프레임은 이 기기의 로컬 초안이 더 새로우면 묻지 않는다(같은 기기가 쓴 것이다).
-          // 저장본 수정은 로컬 자동 저장이 없고, 서버 초안은 저장하면 지워지므로 남아 있으면 묻는다.
-          const localSavedAt = remoteFrameId ? null : (loadEditorDraft(ownerId, frameId)?.savedAt ?? null);
+          // 이 기기의 로컬 초안이 더 새로우면 묻지 않는다(같은 기기가 쓴 것이다). 로컬 복구본이 없는 저장본 수정은
+          // 서버 초안이 저장하면 지워지므로 남아 있으면 묻는다.
+          const scope = savedScopeRef.current;
+          const localSavedAt = remoteFrameId
+            ? scope
+              ? (loadEditorDraft(ownerId, frameId, scope)?.savedAt ?? null)
+              : null
+            : (loadEditorDraft(ownerId, frameId)?.savedAt ?? null);
           if (localSavedAt === null || Date.parse(draft.updatedAt) > localSavedAt + SAME_DEVICE_SLACK_MS) {
             blockedRef.current = true;
             setOffer({ updatedAt: draft.updatedAt });
@@ -229,7 +243,7 @@ export function useServerFrameDraft(options: {
     return () => {
       cancelled = true;
     };
-  }, [ownerId, ready, frameId, remoteFrameId]);
+  }, [ownerId, ready, frameId, remoteFrameId, workspaceId]);
 
   // 편집이 멈추면 쓴다.
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { DEFAULT_EDITOR_BACKGROUND_COLOR } from "@/constants/colors";
 import { FREE_CELL_COUNT, type FreeCell } from "@/lib/frameCells";
 import { isFrameId, type FrameId } from "@/constants/frames";
 import type { EditorComponent, ThemeBackground } from "@/lib/types/themeEditor";
@@ -129,7 +130,7 @@ export function parseServerDocument(raw: unknown, frameId: FrameId): ServerEdito
   return {
     schemaVersion: SERVER_DOCUMENT_SCHEMA_VERSION,
     frameId: raw.frameId,
-    backgroundColor: typeof raw.backgroundColor === "string" ? raw.backgroundColor : "111827",
+    backgroundColor: typeof raw.backgroundColor === "string" ? raw.backgroundColor : DEFAULT_EDITOR_BACKGROUND_COLOR,
     background: raw.background as ThemeBackground,
     cellCutouts: [0, 1, 2, 3].map((i) => Array.isArray(raw.cellCutouts) && raw.cellCutouts[i] === true),
     ...(isCellList(raw.cells) ? { cells: raw.cells } : {}),

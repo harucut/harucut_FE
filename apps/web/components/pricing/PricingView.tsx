@@ -59,9 +59,9 @@ function PlanCard({
     <div
       className={`relative flex flex-col rounded-[20px] border p-6 ${
         current
-          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow) ring-2 ring-(--hc-primary)"
+          ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow) ring-2 ring-(--hc-primary)"
           : hot
-            ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow)"
+            ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow)"
             : "hc-surface-card"
       }`}
     >
@@ -138,7 +138,7 @@ function PlanCard({
         지금 실제로 할 수 있는 것은 비회원이 무료로 가입하는 것 하나뿐이다.
       */}
       {current ? (
-        <span className="mt-5 flex h-12.5 w-full items-center justify-center rounded-full border border-(--hc-primary) text-[15px] font-extrabold text-(--hc-primary-strong)">
+        <span className="mt-5 flex h-12.5 w-full items-center justify-center rounded-full border border-(--hc-primary-line) text-[15px] font-extrabold text-(--hc-primary-strong)">
           현재 이용 중
         </span>
       ) : authed && plan.id === "plus" ? (
@@ -203,7 +203,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
     if (!authed) return;
     let cancelled = false;
 
-    getSubscriptionUsage()
+    // 읽으러 온 사람을 조회 하나로 약관 창에 막지 않는다. 약관은 구독을 누를 때 묻는다.
+    getSubscriptionUsage({ skipTermsGate: true })
       .then((current) => {
         if (!cancelled) {
           setUsage(current);

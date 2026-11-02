@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { isNativeShell } from "@/lib/nativeBridge";
 import { DISPLAY_NAME_MAX_LENGTH, type GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 
@@ -8,8 +9,7 @@ import { DISPLAY_NAME_MAX_LENGTH, type GeneratedFourcutAsset } from "@/lib/fourc
 // 기다려도 풀리지 않는 실패다. 그래서 왕복하기 전에 입력창에서 막는다.
 
 type GeneratedAssetDownloadCardProps = {
-  title: string;
-  description: string;
+  description?: string;
   asset: GeneratedFourcutAsset;
   draftName: string;
   onChangeName: (value: string) => void;
@@ -21,10 +21,18 @@ type GeneratedAssetDownloadCardProps = {
   isSharing?: boolean;
   localDownload?: { href: string; filename: string };
   shareLabel?: string;
+  /** 보조 줄에 함께 놓을 것(사진 다시 고르기 등). 주 버튼은 언제나 맨 아래다. */
+  extraActions?: ReactNode;
 };
 
+/**
+ * 완성 사진으로 할 일.
+ *
+ * 카드로 묶지 않고 화면 흐름에 그대로 놓는다(`contents`). 주 버튼이 페이지 높이를 기준으로 화면 아래에 붙으려면,
+ * 카드 안에 갇히면 안 된다 — sticky 는 부모 상자 안에서만 붙는다. 사진을 보는 동안에도 저장은 엄지 아래에 있다.
+ * 파일 이름은 대부분 건드리지 않으므로 접어 둔다.
+ */
 export function GeneratedAssetDownloadCard({
-  title,
   description,
   asset,
   draftName,
@@ -37,18 +45,33 @@ export function GeneratedAssetDownloadCard({
   isSharing = false,
   localDownload,
   shareLabel = "공유 링크 만들기",
+  extraActions,
 }: GeneratedAssetDownloadCardProps) {
+  const primaryClass =
+    "hc-button-primary inline-flex h-14 w-full items-center justify-center rounded-full px-5 text-[16px] font-extrabold";
   return (
-    <section className="hc-surface-card rounded-[28px] border p-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-(--hc-text)">{title}</h2>
-            <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">{description}</p>
-          </div>
-        </div>
+    <div className="contents">
+      {description ? <p className="text-center text-[13px] leading-[1.6] text-(--hc-muted)">{description}</p> : null}
 
-        <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {onShare ? (
+          <button
+            type="button"
+            onClick={onShare}
+            disabled={isSharing}
+            className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isSharing ? "공유 준비 중…" : shareLabel}
+          </button>
+        ) : null}
+        {extraActions}
+      </div>
+
+      <details className="group text-[13px]">
+        <summary className="mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center px-3 font-semibold text-(--hc-muted) underline underline-offset-4 group-open:no-underline">
+          파일 이름 바꾸기
+        </summary>
+        <div className="flex flex-col gap-2 pt-1">
           <label htmlFor="fourcut-file-name" className="text-[12px] text-(--hc-muted)">
             파일 이름
           </label>
@@ -68,13 +91,15 @@ export function GeneratedAssetDownloadCard({
               type="button"
               onClick={onSaveName}
               disabled={isSavingName}
-              className="hc-button-secondary inline-flex h-11 shrink-0 items-center rounded-full border px-4 text-[13px] font-semibold disabled:opacity-40"
+              className="hc-button-secondary inline-flex h-11 shrink-0 items-center rounded-full border px-4 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isSavingName ? "저장 중…" : "파일명 수정"}
             </button>
           </div>
         </div>
+      </details>
 
+      <div className="sticky bottom-0 z-10 -mx-4 mt-auto bg-linear-to-t from-(--background) from-75% to-transparent px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-6 lg:-mx-8 lg:px-8">
         {localDownload ? (
           <a
             href={localDownload.href}
@@ -92,32 +117,16 @@ export function GeneratedAssetDownloadCard({
                 void onDownload();
               }
             }}
-            className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold aria-disabled:opacity-40"
+            className={`${primaryClass} aria-disabled:cursor-not-allowed aria-disabled:opacity-40`}
           >
-            {isDownloading ? "다운로드 중…" : "다운로드"}
+            {isDownloading ? "저장 중…" : "사진 저장"}
           </a>
         ) : (
-          <button
-            type="button"
-            onClick={onDownload}
-            disabled={isDownloading}
-            className="hc-button-primary inline-flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold disabled:opacity-40"
-          >
-            {isDownloading ? "다운로드 중…" : "다운로드"}
+          <button type="button" onClick={onDownload} disabled={isDownloading} className={`${primaryClass} disabled:cursor-not-allowed disabled:opacity-40`}>
+            {isDownloading ? "저장 중…" : "사진 저장"}
           </button>
         )}
-
-        {onShare ? (
-          <button
-            type="button"
-            onClick={onShare}
-            disabled={isSharing}
-            className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-[13px] font-semibold disabled:opacity-40"
-          >
-            {isSharing ? "공유 준비 중…" : shareLabel}
-          </button>
-        ) : null}
       </div>
-    </section>
+    </div>
   );
 }

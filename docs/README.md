@@ -17,7 +17,7 @@
 | 앱 QA 수동 확인 | [mobile-qa-checklist.md](./mobile-qa-checklist.md) |
 | harucut 앱 이름·설명과 vailen 운영 표기 | [release/store-listing-ko.md](./release/store-listing-ko.md) |
 | 웹·앱 출시 변경과 검증 범위 및 남은 조건 | [release/launch-status.md](./release/launch-status.md) |
-| 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
+| 디자인 검수 — 어떻게 봤고 무엇이 남았나 | [2026-11-02(행사·Studio)](./design-audit-2026-11-02.md) · [2026-09-06(개인)](./design-audit-2026-09-06.md) |
 | 고도화 구현 진행 상태 — 작업 목록·의존·사용자에게 필요한 것 | [plan-implementation-status.md](./plan-implementation-status.md) |
 | 고도화 기획서 코드 검수 — 최신 판정은 R5 (이전 회차는 기록용) | [R5 판정](./plan-review-r5-verdict-2026-10-26.md) · [R4 판정](./plan-review-r4-verdict-2026-10-26.md) · [R4](./plan-review-r4-2026-10-26.md) · [R3](./plan-review-r3-2026-10-26.md) · [R1](./plan-review-2026-10-25.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
@@ -304,7 +304,7 @@ BASIC 계정으로 프레임 저장 성공(200), jar 의 `PlanTier` enum 이 세
 
 | 무엇 | 누가 | 왜 막혔나 |
 |---|---|---|
-| 앱 구글 로그인 | **백엔드** | 구글이 임베디드 WebView 를 막는다(여기서 **재현은 못 했다** — 실기기와 구글 왕복이 필요하다). 외부 브라우저로 열면 쿠키가 브라우저에 남아 앱은 로그아웃 상태 — 일회용 코드 교환이 필요하다 |
+| 앱 구글 로그인 실기기 확인 | **사용자** | 구현은 됐다 — 셸이 구글 시작을 시스템 브라우저로 가로채고 코드를 WebView 에서 교환한다(`apps/mobile/lib/app-login.ts`). 웹은 브리지 판 4 이상에서만 버튼을 보인다. 실기기 왕복과 구글 콘솔 리디렉션 URI 는 아직 확인하지 못했다 |
 | 비회원 서버 합성 | **백엔드** | 합성·업로드가 전부 인증 경로 아래. 행사 참가자 판매 문구와 어긋난다 |
 | 서버 발신 알림 | **백엔드** | 기기 토큰 등록 엔드포인트 0건. 로컬 알림만 넣었다 |
 | 요금제 정책 | **백엔드** | 위 "요금제" 절 |

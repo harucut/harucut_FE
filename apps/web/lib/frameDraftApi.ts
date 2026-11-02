@@ -28,9 +28,11 @@ export const DRAFT_CONFLICT_CODE = "DRAFT-001";
 export const DRAFT_TOO_LARGE_CODE = "DRAFT-002";
 
 /** 저장본 수정이면 그 프레임 id, 새 프레임이면 `new`. 목록은 최근 것이 앞이라고 가정하지 않는다. */
-export async function listFrameDrafts(frameId: number | "new"): Promise<FrameDraftSummary[]> {
+export async function listFrameDrafts(frameId: number | "new", workspaceId?: string | null): Promise<FrameDraftSummary[]> {
+  // 공간을 주면 그 공간의 초안만 온다 — 공간의 새 프레임이 개인 새 프레임 초안을 복구하지 않게.
+  const workspace = workspaceId ? `&workspaceId=${encodeURIComponent(workspaceId)}` : "";
   const res = await clientApi.get<ApiEnvelope<FrameDraftSummary[]>>(
-    `/api/client/user/frame-drafts?frameId=${frameId}`,
+    `/api/client/user/frame-drafts?frameId=${frameId}${workspace}`,
   );
   return res.data.data ?? [];
 }
@@ -44,6 +46,8 @@ export async function getFrameDraft(draftId: string): Promise<FrameDraft> {
 
 export async function createFrameDraft(body: {
   frameId?: number;
+  /** 공간 프레임의 초안이면 그 공간. 없으면 개인 공간이다. */
+  workspaceId?: string;
   document: unknown;
   assetIds: string[];
 }): Promise<FrameDraft> {

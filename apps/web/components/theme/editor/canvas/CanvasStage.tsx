@@ -270,10 +270,10 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
               ref={trRef}
               anchorSize={24}
               anchorCornerRadius={12}
-              anchorStroke="#1ED760"
+              anchorStroke="#C8F135"
               anchorStrokeWidth={2}
-              anchorFill="#06140A"
-              borderStroke="#1ED760"
+              anchorFill="#141803"
+              borderStroke="#C8F135"
               borderStrokeWidth={2}
               rotateAnchorOffset={40}
               ignoreStroke
@@ -368,7 +368,7 @@ export function CanvasStage({ maxHeight }: { maxHeight?: number } = {}) {
                 {cellCutouts[cell.shotIndex] ? (
                   <CellShape
                     cell={cell}
-                    shapeProps={{ listening: false, stroke: "#1ED760", strokeWidth: 2, strokeScaleEnabled: false, dash: [8, 6] }}
+                    shapeProps={{ listening: false, stroke: "#C8F135", strokeWidth: 2, strokeScaleEnabled: false, dash: [8, 6] }}
                   />
                 ) : null}
                 {/* 셀 탭으로 누끼 토글 */}

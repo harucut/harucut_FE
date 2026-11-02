@@ -10,8 +10,10 @@ const api = {
   closeBoothRun: jest.fn(),
   startBoothGuest: jest.fn(),
   submitConsents: jest.fn(),
+  getResult: jest.fn(),
 };
 jest.mock("@/lib/event/eventApi", () => ({
+  getResult: (...a: unknown[]) => api.getResult(...a),
   redeemBoothPairing: (...a: unknown[]) => api.redeemBoothPairing(...a),
   getBoothMe: (...a: unknown[]) => api.getBoothMe(...a),
   getBoothCurrentRun: (...a: unknown[]) => api.getBoothCurrentRun(...a),
@@ -53,6 +55,16 @@ jest.mock("@/components/qr/QrCode", () => ({
   QrCode: ({ value, label }: { value: string; label: string }) => <div role="img" aria-label={label} data-value={value} />,
 }));
 
+const mockClearLocalUserData = jest.fn();
+jest.mock("@/lib/localUserData", () => ({
+  clearLocalUserData: () => mockClearLocalUserData(),
+}));
+
+const mockUnregisterPushDevice = jest.fn();
+jest.mock("@/lib/pushDevices", () => ({
+  unregisterPushDevice: () => mockUnregisterPushDevice(),
+}));
+
 function eventInfo(): PublicEvent {
   return {
     eventId: "evt-1",
@@ -75,12 +87,16 @@ function pairDevice() {
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
+  // 대기 화면의 카메라 점검이 통과하는 환경. 카메라 자체는 CaptureAndSend 목으로 대신한다.
+  Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+  Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia: jest.fn() }, configurable: true });
   api.getBoothMe.mockResolvedValue({ deviceId: "d-1", status: "ACTIVE", event: eventInfo() });
   // 활성 회차가 없으면 서버는 data 키를 싣지 않는다.
   api.getBoothCurrentRun.mockResolvedValue(undefined);
   api.closeBoothRun.mockResolvedValue({});
   api.startBoothGuest.mockResolvedValue({ participantToken: "guest-1", participantId: "p-1", expiresAt: "x" });
   api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+  api.getResult.mockResolvedValue({ status: "PENDING", eventName: "행사", thumbnailUrl: null, expiresAt: "2999-01-01T00:00:00Z" });
 });
 
 afterEach(() => jest.useRealTimers());
@@ -120,8 +136,12 @@ it("손님마다 새 세션을 열고, 결과 QR 은 그 손님의 토큰으로�
   const qr = await screen.findByRole("img", { name: "사진 받기 QR" });
   expect(qr.getAttribute("data-value")).toBe(`${window.location.origin}/r#${"R".repeat(43)}`);
   expect(api.submitConsents).toHaveBeenCalledWith("guest-1", "evt-1", [{ code: "photo", version: 1, decision: "AGREED" }]);
+  expect(api.getResult).toHaveBeenCalledWith("R".repeat(43), expect.anything());
 
+  // QR 은 넘기면 다시 볼 수 없다. 한 번 눌러서는 넘어가지 않는다.
   fireEvent.click(screen.getByRole("button", { name: "다음 손님" }));
+  expect(screen.getByRole("img", { name: "사진 받기 QR" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /한 번 더 누르면 넘어가요/ }));
   expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
   expect(screen.queryByRole("img", { name: "사진 받기 QR" })).not.toBeInTheDocument();
   await waitFor(() => expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-7", 4));
@@ -245,4 +265,133 @@ describe("Codex 리뷰 반영(#541)", () => {
     expect(screen.getByRole("button", { name: "동의하고 계속" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "촬영 시작" })).not.toBeInTheDocument();
   });
+});
+
+// R5 O27·O28: 앞 손님의 회차가 닫히지 못하고 남아도 다음 손님이 막히지 않는다.
+it("남은 회차 때문에 손님을 못 받으면(BOOTH-004) 그 회차를 닫고 다시 시작한다", async () => {
+  pairDevice();
+  render(<BoothScreen />);
+  const start = await screen.findByRole("button", { name: "촬영 시작" });
+  api.startBoothGuest.mockRejectedValueOnce(new ApiRequestError({ status: 409, code: "BOOTH-004" }));
+  api.getBoothCurrentRun.mockResolvedValueOnce({ captureRunId: "run-left", stateVersion: 7 });
+
+  fireEvent.click(start);
+
+  expect(await screen.findByRole("checkbox", { name: /사진 수집/ })).toBeInTheDocument();
+  expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-left", 7);
+  expect(api.startBoothGuest).toHaveBeenCalledTimes(2);
+});
+
+// R5 301줄: 다시 게시한 내용은 다음 손님부터 적용된다.
+it("손님을 받기 전에 행사를 다시 읽어 새 동의 문구로 묻는다", async () => {
+  pairDevice();
+  render(<BoothScreen />);
+  const start = await screen.findByRole("button", { name: "촬영 시작" });
+  api.getBoothMe.mockResolvedValueOnce({
+    deviceId: "d-1",
+    status: "ACTIVE",
+    event: { ...eventInfo(), consentItems: [{ code: "photo", version: 2, title: "새 사진 안내", required: true }] },
+  });
+
+  fireEvent.click(start);
+
+  expect(await screen.findByRole("checkbox", { name: /새 사진 안내/ })).toBeInTheDocument();
+});
+
+it("카메라를 쓸 수 없는 기기면 손님을 받기 전에 알리고 시작을 막는다", async () => {
+  Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
+  pairDevice();
+  render(<BoothScreen />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("카메라를 쓸 수 없어요");
+  expect(screen.getByRole("button", { name: "촬영 시작" })).toBeDisabled();
+});
+
+it("연결 코드가 든 주소를 받으면 코드를 채우고 주소에서 지운다. 열린 탭에서 해시만 바뀌어도 받는다", async () => {
+  render(<BoothScreen />);
+  const input = screen.getByPlaceholderText("XXXX-XXXX");
+  expect(input).toHaveValue("");
+
+  await act(async () => {
+    window.history.replaceState({}, "", "/booth#pair=K7QM-3XRP");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+
+  expect(screen.getByPlaceholderText("XXXX-XXXX")).toHaveValue("K7QM-3XRP");
+  expect(window.location.hash).toBe("");
+});
+
+describe("연결 화면의 개인 계정 로그아웃", () => {
+  const originalFetch = global.fetch;
+  /** 세션 확인은 통과, 로그아웃은 주어진 상태로 답한다. */
+  function serve(logoutStatus: number) {
+    const fetchMock = jest.fn(async (url: string) => {
+      const status = url === "/api/auth/status" ? 200 : logoutStatus;
+      return { ok: status >= 200 && status < 300, status };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  beforeEach(() => {
+    mockClearLocalUserData.mockResolvedValue(undefined);
+    mockUnregisterPushDevice.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  // 촬영 보관물에는 계정 구분이 없다. 남기면 다음 계정이 /shoot/select 에서 앞사람 사진을 이어받는다.
+  it("로그아웃하면 이 기기의 개인 사진까지 지운 뒤에 끝났다고 말한다", async () => {
+    const fetchMock = serve(200);
+    let finishClear = () => {};
+    mockClearLocalUserData.mockReturnValue(new Promise<void>((resolve) => { finishClear = resolve; }));
+    render(<BoothScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+    await waitFor(() => expect(mockClearLocalUserData).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("로그아웃했어요.")).not.toBeInTheDocument();
+
+    await act(async () => finishClear());
+    expect(screen.getByRole("status")).toHaveTextContent("로그아웃했어요.");
+    expect(screen.queryByRole("button", { name: "로그아웃" })).not.toBeInTheDocument();
+    // 푸시 해제는 쿠키가 있을 때, 곧 로그아웃보다 먼저 해야 한다.
+    const logoutCall = fetchMock.mock.calls.findIndex(([url]) => url === "/api/client/logout");
+    expect(mockUnregisterPushDevice.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[logoutCall]);
+  });
+
+  it("로그아웃이 실패하면 사진을 지우지 않고 다시 누르게 둔다", async () => {
+    serve(502);
+    render(<BoothScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("로그아웃하지 못했어요");
+    expect(mockClearLocalUserData).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "로그아웃" })).toBeEnabled();
+  });
+
+  it("이미 끊긴 세션(401)이어도 개인 사진은 지운다", async () => {
+    serve(401);
+    render(<BoothScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("로그아웃했어요.");
+    expect(mockClearLocalUserData).toHaveBeenCalledTimes(1);
+  });
+});
+
+it("이미 연결된 기기가 새 코드를 받으면 말없이 옮기지 않고 묻는다", async () => {
+  pairDevice();
+  render(<BoothScreen />);
+  await screen.findByRole("button", { name: "촬영 시작" });
+
+  await act(async () => {
+    window.history.replaceState({}, "", "/booth#pair=K7QM-3XRP");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+
+  expect(screen.getByText(/새 연결 코드를 받았어요/)).toBeInTheDocument();
+  expect(api.redeemBoothPairing).not.toHaveBeenCalled();
 });

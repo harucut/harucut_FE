@@ -73,6 +73,16 @@ it("받으면 토큰을 지우고 그 공간으로 간다", async () => {
   expect(window.sessionStorage.getItem(KEY)).toBeNull();
 });
 
+// 행사 고객에게 운영 화면은 할 일이 없다. 받자마자 사진함으로 간다.
+it("행사 초대를 받으면 그 행사 사진함으로 바로 간다", async () => {
+  window.sessionStorage.setItem(KEY, TOKEN);
+  mockAccept.mockResolvedValue({ kind: "EVENT", eventId: "Ev9", permissions: ["VIEW_PHOTOS"] });
+  render(<InviteAccept />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/studio/events/Ev9/photos"));
+});
+
 it("기한이 지난 초대(MEMBER-001)는 안내하고 토큰을 지운다", async () => {
   window.sessionStorage.setItem(KEY, TOKEN);
   mockPreview.mockRejectedValue(new ApiRequestError({ status: 410, code: "MEMBER-001", apiMessage: "x" }));
@@ -120,4 +130,14 @@ it("수락 중 인증이 끝나도(401) 로그인 안내로 간다", async () =>
   fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
   expect(await screen.findByRole("link", { name: "로그인하고 초대 받기" })).toBeInTheDocument();
   expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
+});
+
+// 재대조 항목: 갓 가입한 초대 고객은 필수 약관 동의 전이라 서버가 TERMS-004 로 막는다. 막다른 길이면 안 된다.
+it("필수 약관에 막혀 실패하면 다시 확인할 수 있고, 동의 뒤에는 이어 간다", async () => {
+  window.history.replaceState(null, "", `/invite#${TOKEN}`);
+  mockPreview.mockRejectedValueOnce(new ApiRequestError({ status: 403, code: "TERMS-004", apiMessage: "x" }));
+  render(<InviteAccept />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "다시 확인" }));
+  expect(await screen.findByRole("button", { name: "초대 받기" })).toBeInTheDocument();
 });

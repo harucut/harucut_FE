@@ -437,6 +437,46 @@ describe("행사 경로의 자격 전달(eventCredential)", () => {
     expect(sentHeaders(fetchMock)["x-forwarded-for"]).toBe("203.0.113.7, 10.0.0.1");
   });
 
+  // 백엔드의 IP 빈도 제한이 참가자가 아니라 BFF 출구 IP 로 묶이던 문제. 비밀이 맞을 때만 백엔드가 이 값을 믿는다.
+  it("BFF 비밀이 있으면 사용자 IP 를 전용 헤더로 넘기고, 브라우저가 보낸 같은 이름은 옮기지 않는다", async () => {
+    process.env.BFF_SHARED_SECRET = "server-only";
+    try {
+      const fetchMock = jest.fn(async () => new Response("{}", { status: 200 }));
+      global.fetch = fetchMock as unknown as typeof fetch;
+      const req = new Request("http://localhost/api/client/login", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+          "x-harucut-client-ip": "198.51.100.9",
+          "x-harucut-bff-secret": "forged",
+        },
+        body: "{}",
+      });
+      await forward(req, { method: "POST", url: "http://backend.test/api/harucut/login" });
+
+      const headers = sentHeaders(fetchMock);
+      expect(headers["x-harucut-bff-secret"]).toBe("server-only");
+      expect(headers["x-harucut-client-ip"]).toBe("203.0.113.7, 10.0.0.1");
+    } finally {
+      delete process.env.BFF_SHARED_SECRET;
+    }
+  });
+
+  it("BFF 비밀이 없으면 전용 헤더를 싣지 않는다", async () => {
+    delete process.env.BFF_SHARED_SECRET;
+    const fetchMock = jest.fn(async () => new Response("{}", { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const req = new Request("http://localhost/api/client/login", {
+      method: "POST",
+      headers: { "x-forwarded-for": "203.0.113.7", "x-harucut-bff-secret": "forged" },
+      body: "{}",
+    });
+    await forward(req, { method: "POST", url: "http://backend.test/api/harucut/login" });
+
+    expect(sentHeaders(fetchMock)["x-harucut-bff-secret"]).toBeUndefined();
+    expect(sentHeaders(fetchMock)["x-harucut-client-ip"]).toBeUndefined();
+  });
+
   it("x-forwarded-for 가 없으면 x-real-ip 를 쓰고, 둘 다 없으면 싣지 않는다", async () => {
     const fetchMock = upstream();
     global.fetch = fetchMock;

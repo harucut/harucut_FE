@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { resumeUnfinishedPurchases } from "@/lib/storePurchase";
 import { syncPushDevice } from "@/lib/pushDevices";
+import { useStudioAccess } from "@/hooks/useStudioAccess";
 
 type AppNavProps = {
   // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
@@ -35,6 +36,11 @@ export function AppNav({ userInitial }: AppNavProps) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
+  // 행사를 맡은 계정에게만 보인다. 개인 사용자에게는 할 일이 없는 메뉴다.
+  const studioAccess = useStudioAccess();
+  const links = studioAccess
+    ? [...NAV_LINKS.slice(0, 3), { href: "/studio", label: "행사 운영" }, ...NAV_LINKS.slice(3)]
+    : NAV_LINKS;
 
   const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
 
@@ -44,7 +50,7 @@ export function AppNav({ userInitial }: AppNavProps) {
         <BrandMark href="/home" />
 
         <nav className="flex gap-2">
-          {NAV_LINKS.map(({ href, label }) => {
+          {links.map(({ href, label }) => {
             const active = isActive(href);
             return (
               <Link

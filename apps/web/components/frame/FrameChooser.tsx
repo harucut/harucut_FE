@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { parseFrameIdQuery, type FrameId } from "@/constants/frames";
-import { FramePicker } from "@/components/frame/FramePicker";
+import { FramePicker, FramePickerConfirm } from "@/components/frame/FramePicker";
 import { SavedFramesSection } from "@/components/frame/SavedFramesSection";
 import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
@@ -162,9 +162,6 @@ export function FrameChooser({
           setManualFrameId(nextFrameId);
           setSelectedRemoteFrameId(null);
         }}
-        onConfirm={handleConfirm}
-        confirmDisabled={confirmDisabled || remoteFrameLookupPending}
-        confirmLabel={confirmLabel}
       />
 
       {belowPicker}
@@ -187,6 +184,13 @@ export function FrameChooser({
           actionLabel={savedFrameAction?.label}
         />
       )}
+
+      {/* 맨 끝에 둔다 — 그래야 저장 목록이 길어도 화면 아래에 붙어 있다. */}
+      <FramePickerConfirm
+        onConfirm={handleConfirm}
+        confirmDisabled={confirmDisabled || remoteFrameLookupPending}
+        confirmLabel={confirmLabel}
+      />
     </>
   );
 }

@@ -32,6 +32,35 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+it("받은 코드에는 그 기기로 찍을 연결 QR 이 있고, 연결된 기기는 마지막 접속을 보여 준다", async () => {
+  mockCreate.mockResolvedValue({
+    deviceId: "d1",
+    name: "입구 부스",
+    status: "PENDING_PAIRING",
+    pairingCode: "K7QM-3XPA",
+    pairingExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+  });
+  mockList.mockResolvedValue([
+    { deviceId: "d2", name: "출구 부스", status: "ACTIVE", lastSeenAt: new Date(Date.now() - 3 * 60_000).toISOString() },
+  ]);
+  renderDevices();
+
+  expect(await screen.findByText(/마지막 접속 3분 전/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("기기 이름"), { target: { value: "입구 부스" } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "기기 추가" }));
+  });
+  expect(screen.getByRole("img", { name: "입구 부스 연결 QR" })).toBeInTheDocument();
+
+  const writeText = jest.fn(async () => {});
+  Object.assign(navigator, { clipboard: { writeText } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "주소 복사" }));
+  });
+  expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/booth#pair=K7QM-3XPA"));
+  expect(screen.getByRole("button", { name: "주소를 복사했어요" })).toBeInTheDocument();
+});
+
 it("기기를 추가하면 받은 연결 코드와 남은 시간을 보여 준다", async () => {
   mockCreate.mockResolvedValue({ deviceId: "d1", name: "입구 부스", status: "PENDING_PAIRING", pairingCode: "K7QM-3XPA", pairingExpiresAt: in10min });
   renderDevices();

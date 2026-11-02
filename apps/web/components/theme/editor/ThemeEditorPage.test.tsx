@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
 import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "@/lib/themeEditorDraft";
 
@@ -345,8 +345,8 @@ describe("ThemeEditorPage save flow", () => {
       await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "WsOrg" })));
       expect(mockUsage).not.toHaveBeenCalled();
       await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/studio/events/Ev1"));
-      // 공간의 새 프레임은 서버 초안을 쓰지 않는다(목록이 공간을 가리지 않는다).
-      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(expect.objectContaining({ ownerId: null }));
+      // 공간의 새 프레임 초안은 공간별로 가른다 — 개인 새 프레임 초안을 복구하지 않게.
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceId: "WsOrg" }));
     } finally {
       mockWorkspaceId = null;
       mockReturnTo = null;
@@ -500,6 +500,120 @@ describe("ThemeEditorPage save flow", () => {
       mockImportJson.mockReset();
       Object.assign(editorStoreState, before);
     }
+  });
+
+  // R5 5절: 저장본 수정도 이 기기에 복구 계층을 둔다. 회선이 끊긴 채 창을 닫아도 남고, 버전이 바뀌면 되살리지 않는다.
+  describe("저장본 수정의 로컬 복구", () => {
+    const SCOPE = { remoteFrameId: 7, version: 3 };
+    const seedDraft = (saved = SCOPE) =>
+      saveEditorDraft({
+        ownerId: DRAFT_OWNER,
+        saved,
+        frameId: "classic-4",
+        backgroundColor: "abcdef",
+        background: { type: "COLOR", value: "abcdef" },
+        cellCutouts: [false, false, false, false],
+        components: [],
+        now: Date.now(),
+      });
+
+    beforeEach(() => {
+      mockRemoteFrameId = 7;
+      editorStoreState.past = [];
+      mockGetFrame.mockResolvedValue({
+        frameId: 7,
+        version: 3,
+        title: "saved",
+        frameType: "CLASSIC",
+        background: { type: "COLOR", value: "111827" },
+        components: [],
+      });
+    });
+    afterEach(() => {
+      editorStoreState.past = [];
+    });
+
+    it("남은 편집이 있으면 묻고, 이어서 편집하면 되살린다", async () => {
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+
+      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
+      await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+      expect(editorStoreState.hydrateDraft.mock.calls[0][0]).toMatchObject({ backgroundColor: "abcdef" });
+    });
+
+    // 되살리면 이력이 비워진다. 그 뒤 이력이 다시 비었다는 것은 저장본이 아니라 되살린 편집으로 돌아왔다는 뜻이다.
+    it("되살린 편집 위에서 고쳤다 되돌려도 복구본을 지우지 않는다", async () => {
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
+      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
+      await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      // 한 번 고쳐 자동 저장이 돈 뒤
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      // 그 수정만 되돌린다.
+      editorStoreState.past = [];
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull();
+    });
+
+    it("되살리지 않고 고쳤다 되돌리면 저장본으로 돌아온 것이라 복구본을 지운다", async () => {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull(), { timeout: 3000 });
+
+      editorStoreState.past = [];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull(), { timeout: 3000 });
+    });
+
+    it("저장본 유지를 고르면 묻지 않고 지운다", async () => {
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
+      fireEvent.click(within(section).getByRole("button", { name: "저장본 유지" }));
+      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
+      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull();
+    });
+
+    it("다른 기기가 먼저 저장해 버전이 바뀌었으면 묻지 않는다", async () => {
+      await seedDraft({ remoteFrameId: 7, version: 2 });
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
+    });
+
+    it("손댄 뒤에만 자동 저장하고, 저장하면 지운다", async () => {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      // 불러오기와 배경 주소 주입도 스토어를 바꾼다. 손댄 것이 없으면 쓰지 않는다.
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull();
+
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull(), { timeout: 3000 });
+
+      confirmSave(container);
+      await waitFor(() => expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object)));
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull());
+    });
   });
 
   it("updates a remote frame without touching local drafts", async () => {

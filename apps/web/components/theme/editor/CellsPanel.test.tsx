@@ -5,6 +5,7 @@ import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { RemoteFrame } from "@/lib/api-types";
 
 beforeEach(() => {
+  process.env.NEXT_PUBLIC_FREE_CELLS_ENABLED = "true";
   const store = useThemeEditorStore.getState();
   useThemeEditorStore.setState({ frameId: null });
   store.setFrameId("classic-4");
@@ -74,4 +75,30 @@ describe("사진 칸 자유 편집", () => {
 it("자유 칸이 아니면 칸 탭이 없다", () => {
   render(<CellsPanel />);
   expect(within(screen.getByRole("region", { name: "사진 칸" })).queryByRole("tab")).not.toBeInTheDocument();
+});
+
+// 합성이 자유 칸을 그리지 못하는 동안(서버 스위치 꺼짐) 켜 두면 저장한 프레임이 촬영에서 FRAME-008 로 막힌다.
+describe("자유 칸 스위치가 꺼져 있으면", () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_FREE_CELLS_ENABLED = "false";
+  });
+  afterEach(() => {
+    useThemeEditorStore.getState().setFreeCells(false);
+    process.env.NEXT_PUBLIC_FREE_CELLS_ENABLED = "true";
+  });
+
+  it("새로 켜는 자리를 보이지 않는다", () => {
+    useThemeEditorStore.getState().setFreeCells(false);
+    const { container } = render(<CellsPanel />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("이미 칸을 옮긴 프레임에는 왜 못 쓰는지 알리고 되돌릴 길만 남긴다", () => {
+    useThemeEditorStore.getState().setFreeCells(true);
+    render(<CellsPanel />);
+    expect(screen.getByRole("status")).toHaveTextContent("촬영과 게시에 쓸 수 없어요");
+    expect(screen.queryByRole("tablist", { name: "고칠 칸" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "칸 자유 편집" }));
+    expect(useThemeEditorStore.getState().cells).toBeNull();
+  });
 });

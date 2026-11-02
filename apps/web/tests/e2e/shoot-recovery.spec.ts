@@ -61,7 +61,7 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
     await page.getByRole("button", { name: `${index}번 사진 선택`, exact: true }).click();
   }
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  const downloadButton = page.getByRole("link", { name: "다운로드", exact: true });
+  const downloadButton = page.getByRole("link", { name: "사진 저장", exact: true });
   await expect(downloadButton).toBeVisible({ timeout: 15_000 });
   const completed = page.waitForEvent("download");
   await downloadButton.click();

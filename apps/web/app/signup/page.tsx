@@ -167,7 +167,8 @@ function SignupPageContent() {
         );
       }
 
-      router.push(loginHref);
+      // 말없이 로그인 화면으로 돌려보내면 가입이 됐는지 알 수 없다 — 다 됐다고 말해 준다.
+      router.push(`${loginHref}${loginHref.includes("?") ? "&" : "?"}joined=1`);
     } catch (error) {
       console.error(error);
 

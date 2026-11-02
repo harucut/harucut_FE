@@ -59,7 +59,7 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
   });
 
   await page.goto("/shoot/result");
-  const link = page.getByRole("link", { name: "다운로드", exact: true });
+  const link = page.getByRole("link", { name: "사진 저장", exact: true });
   await expect(link).toBeVisible();
   await expect(page.getByText("비회원 체험 결과 안내")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /공유|사진에 저장/ })).toHaveCount(0);

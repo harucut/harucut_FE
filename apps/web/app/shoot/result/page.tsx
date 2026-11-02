@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
-import { PageHeader } from "@/components/layout/PageHeader";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -876,40 +875,75 @@ export default function ShootResultPage() {
     }
   };
 
-  return (
-    <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text) lg:px-8 lg:py-10">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
-        <PageHeader
-          title={fromUpload ? "네컷 결과" : "촬영 결과"}
-          description={
-            guestMode
-              ? "이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요."
-              : imageResult?.localBlob
-                ? "완성된 네 컷을 지금 기기에 내려받아 주세요."
-                : "완성된 네 컷을 저장하거나 링크로 공유해 보세요."
-          }
-        />
+  // 세로로 긴 사진은 폭으로 맞추면 화면 두 개 높이가 된다. 높이로 묶어 사진과 저장 버튼을 한 화면에 둔다.
+  const tallLayout = layout.totalHeight > layout.totalWidth;
+  const photoSizeClass = tallLayout ? "h-[min(62svh,680px)] w-auto max-w-full" : "h-auto w-full";
 
+  const heading = imageResult
+    ? "네 컷 완성"
+    : imageState === "error"
+      ? "네 컷을 만들지 못했어요"
+      : "네 컷을 만들고 있어요";
+
+  // 다음에 할 일. 저장 버튼보다 낮은 무게로 같은 줄에 놓는다.
+  const nextSteps = (
+    <>
+      <Link
+        href={
+          guestMode
+            ? fromUpload
+              ? "/shoot/upload"
+              : "/shoot/capture"
+            : "/shoot/select"
+        }
+        className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition"
+      >
+        {guestMode && !fromUpload ? "다시 촬영하기" : "사진 다시 고르기"}
+      </Link>
+      {guestMode ? (
+        <button
+          type="button"
+          onClick={handleGuestLogin}
+          disabled={isHandingOffToLogin}
+          className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition disabled:opacity-40"
+        >
+          {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 저장하기"}
+        </button>
+      ) : (
+        <Link
+          href="/home"
+          className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition"
+        >
+          홈으로 가기
+        </Link>
+      )}
+    </>
+  );
+
+  return (
+    <main className="hc-page-app flex min-h-dvh flex-col px-4 pb-0 pt-6 text-(--hc-text) lg:px-8 lg:pt-10">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 lg:max-w-3xl">
+        <header className="text-center">
+          <h1 className="text-[34px] font-extrabold leading-tight tracking-[-0.03em]">{heading}</h1>
+          {guestMode ? (
+            <p className="mx-auto mt-1 max-w-[46ch] break-keep text-[13px] leading-[1.6] text-(--hc-muted)">
+              이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요.
+            </p>
+          ) : null}
+        </header>
 
         {/*
-          준비 중일 때만 상태 카드를 둔다. 예전에는 다 된 뒤에도 "결과 준비 완료 / 마음에 드는 결과를
-          저장하거나…" 카드가 헤더 설명과 같은 말을 한 번 더 했고, 옆의 '이미지' 초록 칩은 아무
-          정보가 없었다. 완성되면 그림과 다운로드 카드가 곧 상태다.
+          준비 중일 때만 상태를 둔다. 완성되면 그림과 저장 버튼이 곧 상태다.
         */}
         {isPreparing ? (
-          <section
+          <p
             role="status"
             aria-live="polite"
-            className="rounded-[28px] border border-(--hc-border) bg-(--hc-surface) p-4"
+            className="flex items-center justify-center gap-1.5 text-[13px] text-(--hc-muted)"
           >
-            <p className="text-sm font-semibold text-(--hc-text)">결과 준비 중</p>
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-(--hc-border) bg-(--hc-surface-strong) px-3.5 py-2.5 text-[12px]">
-              <span className="text-(--hc-text)">이미지</span>
-              <span className="text-(--hc-muted)">
-                {imageState === "processing" ? "생성 중…" : "대기 중"}
-              </span>
-            </div>
-          </section>
+            <span className="font-semibold text-(--hc-text)">결과 준비 중</span>
+            <span>{imageState === "processing" ? "생성 중…" : "대기 중"}</span>
+          </p>
         ) : null}
 
         {/*
@@ -927,7 +961,7 @@ export default function ShootResultPage() {
 
           아직 만들어지는 중이거나 완성본을 못 불러왔을 때만 미리보기가 자리를 지킨다.
         */}
-        <section className="mx-auto w-full max-w-md">
+        <section className="flex w-full justify-center">
           {resultImageSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -939,7 +973,7 @@ export default function ShootResultPage() {
               style={{
                 aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
               }}
-              className="w-full rounded-lg border border-(--hc-border) bg-(--hc-surface-strong) object-contain"
+              className={`${photoSizeClass} rounded-lg bg-(--hc-surface-strong) object-contain shadow-[0_18px_40px_rgba(0,0,0,0.35)]`}
               onError={() => setIsResultImageBroken(true)}
             />
           ) : (
@@ -949,11 +983,12 @@ export default function ShootResultPage() {
               borderColor={effectiveBorderColor}
               outputFilter={outputFilter}
               theme={themeData}
+              className={tallLayout ? "h-[min(62svh,680px)]! w-auto!" : "w-full!"}
             />
           )}
         </section>
 
-        {imageError ? <p className="text-[11px] text-(--hc-danger)">{imageError}</p> : null}
+        {imageError ? <p className="text-center text-[13px] text-(--hc-danger)">{imageError}</p> : null}
 
         {imageState === "error" && isImageErrorRetryable ? (
           <button
@@ -975,7 +1010,7 @@ export default function ShootResultPage() {
               // effect 의존성이 하나도 안 바뀐다. 이 값을 올려야 실제로 다시 돈다.
               setRetryNonce((nonce) => nonce + 1);
             }}
-            className="hc-button-secondary rounded-full border px-4 py-2 text-xs font-semibold transition"
+            className="hc-button-secondary mx-auto inline-flex h-11 items-center rounded-full border px-5 text-[13px] font-semibold transition"
           >
             다시 준비하기
           </button>
@@ -986,7 +1021,7 @@ export default function ShootResultPage() {
           <button
             type="button"
             onClick={handleReselectFrame}
-            className="hc-button-secondary inline-flex w-fit rounded-full border px-4 py-2 text-xs font-semibold transition"
+            className="hc-button-secondary mx-auto inline-flex h-11 w-fit items-center rounded-full border px-5 text-[13px] font-semibold transition"
           >
             프레임 다시 고르기
           </button>
@@ -1000,11 +1035,10 @@ export default function ShootResultPage() {
 
         {imageResult ? (
           <GeneratedAssetDownloadCard
-            title="이미지 다운로드"
             description={
               imageResult.localBlob
                 ? "다운로드한 이미지는 파일 앱의 다운로드 폴더에서 찾을 수 있어요."
-                : "기록으로 저장될 파일 이름을 수정하고 이미지를 내려받을 수 있어요."
+                : undefined
             }
             asset={imageResult}
             draftName={imageNameDraft}
@@ -1019,40 +1053,11 @@ export default function ShootResultPage() {
             isSavingName={isSavingImageName}
             isDownloading={isDownloadingImage}
             isSharing={isSharingImage}
+            extraActions={nextSteps}
           />
-        ) : null}
-
-        <div className="flex gap-2">
-          <Link
-            href={
-              guestMode
-                ? fromUpload
-                  ? "/shoot/upload"
-                  : "/shoot/capture"
-                : "/shoot/select"
-            }
-            className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition"
-          >
-            {guestMode && !fromUpload ? "다시 촬영하기" : "사진 다시 고르기"}
-          </Link>
-          {guestMode ? (
-            <button
-              type="button"
-              onClick={handleGuestLogin}
-              disabled={isHandingOffToLogin}
-              className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition disabled:opacity-40"
-            >
-              {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 저장하기"}
-            </button>
-          ) : (
-            <Link
-              href="/home"
-              className="hc-button-secondary inline-flex h-11 flex-1 items-center justify-center rounded-full border px-4 text-center text-[13px] font-semibold transition"
-            >
-              홈으로 가기
-            </Link>
-          )}
-        </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">{nextSteps}</div>
+        )}
 
         <canvas ref={canvasRef} className="hidden" />
       </div>

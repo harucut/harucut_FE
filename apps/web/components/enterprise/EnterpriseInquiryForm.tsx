@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Check, Copy, Mail, Send } from "lucide-react";
 import { withJosa } from "@harucut/shared";
@@ -137,6 +138,13 @@ export function EnterpriseInquiryForm() {
         <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
           {COMPANY.hours} 안에 {values.email.trim()} 로 연락드릴게요. 접수 번호는 {sent} 이에요.
         </p>
+        <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
+          계약이 끝나면{" "}
+          <Link href="/studio" className="font-semibold text-(--hc-text) underline underline-offset-4">
+            Studio
+          </Link>
+          에서 회사·팀 이름을 정하고 행사를 만들 수 있어요.
+        </p>
       </div>
     );
   }
@@ -271,7 +279,7 @@ export function EnterpriseInquiryForm() {
         <button
           type="submit"
           disabled={!canSend || sending}
-          className="hc-button-primary inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-extrabold transition disabled:opacity-40"
+          className="hc-button-primary inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-extrabold transition disabled:opacity-40 sm:flex-1"
         >
           <Send aria-hidden className="h-4 w-4" />
           {sending ? "보내는 중…" : "문의 남기기"}

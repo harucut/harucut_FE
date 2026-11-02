@@ -197,9 +197,11 @@ function PreviewCanvas({ preview, frameUrl, logoUrl }: { preview: TextPreview; f
       <img src={preview.image} alt={`미리보기: ${preview.text}`} className="max-h-40 self-center rounded-lg bg-(--ev-card)" />
     );
   }
+  // 세로 긴 프레임은 폭으로 맞추면 화면 두 개 높이가 된다. 문구와 미리보기를 한 화면에 보게 높이로 묶는다.
+  const tall = preview.canvasHeight > preview.canvasWidth;
   return (
     <div
-      className="relative mx-auto w-full max-w-60 overflow-hidden rounded-lg border border-(--ev-border)"
+      className={`relative mx-auto overflow-hidden rounded-lg border border-(--ev-border) ${tall ? "h-[min(40svh,24rem)]" : "w-full max-w-72"}`}
       style={{ aspectRatio: `${preview.canvasWidth} / ${preview.canvasHeight}` }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EventPhotoViewer } from "@/components/studio/EventPhotoViewer";
 import { StudioPhotoExports } from "@/components/studio/StudioPhotoExports";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { dayEndToServer, dayStartToServer } from "@/lib/studio/eventTime";
 import { NativeSaveError, getNativeSaveErrorMessage, nativeSaveImageUrl } from "@/lib/nativeBridge";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
@@ -61,6 +65,15 @@ function formatTime(iso: string) {
     : date.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/** 목록에 나온 프레임을 처음 본 순서대로 모은다. */
+function mergeFrames(known: number[], photos: Photo[]) {
+  const merged = [...known];
+  for (const photo of photos) {
+    if (photo.frameVersionId && !merged.includes(photo.frameVersionId)) merged.push(photo.frameVersionId);
+  }
+  return merged;
+}
+
 /**
  * 행사 사진함(R5 8·9절, ADR-0008 §3). 운영자와 행사 고객이 같이 쓴다 — 무엇을 할 수 있는지는 그 행사의 사진
  * 권한(보기 · 내려받기 · 지우기)이 정한다. 권한이 없는 동작은 버튼을 두지 않고, 서버도 다시 막는다.
@@ -68,6 +81,10 @@ function formatTime(iso: string) {
 export function EventPhotoBox({ eventId }: { eventId: string }) {
   const [access, setAccess] = useState<MyEvent | null>(null);
   const [filter, setFilter] = useState<PhotoFilter>({});
+  // 날짜 칸의 값(YYYY-MM-DD). 서버로는 그날의 시작·끝 시각으로 보낸다.
+  const [days, setDays] = useState<{ from: string; to: string }>({ from: "", to: "" });
+  // 지금까지 본 프레임. 필터로 목록이 좁아져도 다른 프레임으로 바꿀 수 있게 지우지 않는다.
+  const [seenFrames, setSeenFrames] = useState<number[]>([]);
   const [items, setItems] = useState<Photo[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,6 +92,8 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<Photo | null>(null);
+  // 크게 보는 사진. 목록이 바뀌어도 그 사진을 따라가게 번호가 아니라 id 로 기억한다.
+  const [viewingId, setViewingId] = useState<number | null>(null);
   const refreshedAtRef = useRef(0);
   // 목록 요청의 세대. 필터를 바꾸거나 첫 쪽을 다시 받으면 올린다 — 그 전에 시작한 응답(첫 쪽·더 보기)은 버린다.
   // 안 그러면 BOOTH 로 받던 응답이 BYOD 로 바꾼 뒤 도착해 목록·커서를 덮는다(Codex #542).
@@ -95,6 +114,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
         if (generation !== listGenerationRef.current) return;
         setItems(page.items);
         setNextCursor(page.nextCursor ?? null);
+        setSeenFrames((prev) => mergeFrames(prev, page.items));
         setError(null);
       } catch (cause) {
         if (generation !== listGenerationRef.current) return;
@@ -114,6 +134,16 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
       .catch(() => {});
   }, [eventId, loadFirst]);
 
+  const changeDays = (next: { from: string; to: string }) => {
+    setDays(next);
+    changeFilter({ ...filter, from: dayStartToServer(next.from), to: dayEndToServer(next.to) });
+  };
+
+  const clearFilter = () => {
+    setDays({ from: "", to: "" });
+    changeFilter({});
+  };
+
   const changeFilter = (next: PhotoFilter) => {
     setFilter(next);
     setSelected([]);
@@ -131,10 +161,11 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
       const page = await listEventPhotos(eventId, filter, nextCursor);
       if (generation !== listGenerationRef.current) return;
       setItems((prev) => [...prev, ...page.items]);
+      setSeenFrames((prev) => mergeFrames(prev, page.items));
       setNextCursor(page.nextCursor ?? null);
     } catch (cause) {
       if (generation !== listGenerationRef.current) return;
-      setNotice(getUserFacingApiErrorMessage(cause, "더 불러오지 못했어요."));
+      setNotice(getUserFacingApiErrorMessage(cause, "더 불러오지 못했어요. 「더 보기」를 다시 눌러 주세요."));
     } finally {
       if (generation === listGenerationRef.current) setLoading(false);
     }
@@ -165,7 +196,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
       setNotice(
         cause instanceof NativeSaveError
           ? (getNativeSaveErrorMessage(cause) ?? "사진첩에 저장하지 못했어요.")
-          : getUserFacingApiErrorMessage(cause, "사진을 내려받지 못했어요."),
+          : getUserFacingApiErrorMessage(cause, "사진을 내려받지 못했어요. 잠시 뒤 다시 눌러 주세요."),
       );
     } finally {
       setBusy(null);
@@ -177,36 +208,53 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
     setNotice(null);
     try {
       await withRequestDeadline(DELETE_DEADLINE_MS, (signal) => deleteEventPhoto(eventId, photo.photoId, signal));
+      // 크게 보던 사진을 지웠으면 다음 사진으로 넘어간다. 마지막 장이면 그 앞으로, 남은 게 없으면 닫는다.
+      const viewable = items.filter((p) => p.status === "DONE" && p.thumbnailUrl);
+      const at = viewable.findIndex((p) => p.photoId === photo.photoId);
+      const neighbor = viewable[at + 1] ?? viewable[at - 1] ?? null;
+      setViewingId((current) => (current === photo.photoId ? (neighbor?.photoId ?? null) : current));
       setItems((prev) => prev.filter((p) => p.photoId !== photo.photoId));
       setSelected((prev) => prev.filter((id) => id !== photo.photoId));
     } catch (cause) {
-      setNotice(getUserFacingApiErrorMessage(cause, "사진을 지우지 못했어요."));
+      setNotice(getUserFacingApiErrorMessage(cause, "사진을 지우지 못했어요. 잠시 뒤 다시 눌러 주세요."));
     } finally {
       setBusy(null);
       setConfirm(null);
     }
   };
 
+  const backHref = access?.access.role ? `/studio/events/${encodeURIComponent(eventId)}` : "/studio";
+  const backLabel = access?.access.role ? "행사 설정" : "행사 목록";
+  const viewable = items.filter((p) => p.status === "DONE" && p.thumbnailUrl);
+  const viewingIndex = viewingId === null ? -1 : viewable.findIndex((p) => p.photoId === viewingId);
+  const hasFilter = Boolean(filter.status || filter.channel || filter.from || filter.to || filter.frameVersionId);
+  const photoLabel = (photo: Photo) => `${formatTime(photo.createdAt)} 사진`;
+
   return (
-    <main className="hc-page-app min-h-dvh pb-16 text-(--hc-text)">
+    <main className={`hc-page-app min-h-dvh text-(--hc-text) ${selected.length > 0 ? "pb-28" : "pb-16"}`}>
       <AppNav />
-      <div className="mx-auto flex w-full max-w-200 flex-col gap-5 px-4 py-5 sm:py-6 lg:py-8">
+      <div className="mx-auto flex w-full max-w-250 flex-col gap-5 px-4 py-5 sm:py-6 lg:py-8">
+        <div className="lg:hidden">
+          <PageHeader backHref={backHref} backLabel={backLabel} />
+        </div>
         <Link
-          href={access?.access.role ? `/studio/events/${encodeURIComponent(eventId)}` : "/studio"}
-          className="text-[13px] text-(--hc-muted)"
+          href={backHref}
+          className="hidden h-11 w-fit items-center gap-1 text-[13px] font-semibold text-(--hc-muted) transition hover:text-(--hc-text) lg:flex"
         >
-          ← {access?.access.role ? "행사 설정" : "행사 목록"}
+          <ChevronLeft aria-hidden className="size-4" />
+          {backLabel}
         </Link>
-        <h1 className="text-[30px] font-extrabold tracking-tight">{access?.name ? `${access.name} 사진함` : "사진함"}</h1>
+        <h1 className="break-words text-[30px] font-extrabold tracking-tight">{access?.name ? `${access.name} 사진함` : "사진함"}</h1>
         {/* 보관 종료 배치(ADR-0008 §7)가 기한이 지난 결과를 지운다 — 사진함에서도 빠진다. */}
-        <p className="text-[13px] text-(--hc-muted)">
+        <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
           사진은 만든 날부터 행사의 보관 기간이 지나면 지워져요. 필요한 사진은 미리 받아 두세요.
         </p>
 
-        <div className="flex flex-wrap gap-2">
-          <label className="flex flex-col gap-1 text-[13px] font-semibold">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
             상태
             <select
+              name="photoStatus"
               className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
               value={filter.status ?? ""}
               onChange={(e) => changeFilter({ ...filter, status: (e.target.value || undefined) as PhotoStatus | undefined })}
@@ -218,9 +266,10 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-[13px] font-semibold">
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
             참가 방식
             <select
+              name="photoChannel"
               className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
               value={filter.channel ?? ""}
               onChange={(e) => changeFilter({ ...filter, channel: (e.target.value || undefined) as PhotoChannel | undefined })}
@@ -232,54 +281,126 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               ))}
             </select>
           </label>
+          {seenFrames.length > 1 ? (
+            <label className="flex items-center gap-2 text-[13px] font-semibold">
+              프레임
+              <select
+                name="photoFrame"
+                className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+                value={filter.frameVersionId ?? ""}
+                onChange={(e) => changeFilter({ ...filter, frameVersionId: e.target.value ? Number(e.target.value) : undefined })}
+              >
+                <option value="">모든 프레임</option>
+                {seenFrames.map((frameVersionId, index) => (
+                  <option key={frameVersionId} value={frameVersionId}>
+                    프레임 {index + 1}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
+            시작일
+            <input
+              type="date"
+              name="photoFromDay"
+              className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+              value={days.from}
+              max={days.to || undefined}
+              onChange={(e) => changeDays({ ...days, from: e.target.value })}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
+            종료일
+            <input
+              type="date"
+              name="photoToDay"
+              className="hc-input h-11 rounded-xl border px-2 text-[14px] font-normal"
+              value={days.to}
+              min={days.from || undefined}
+              onChange={(e) => changeDays({ ...days, to: e.target.value })}
+            />
+          </label>
         </div>
 
         {error ? (
-          <p role="alert" className="text-[14px] text-(--hc-danger)">
-            {error}
-          </p>
+          <div className="flex flex-col items-start gap-3">
+            <p role="alert" className="text-[14px] text-(--hc-danger)">
+              {error}
+            </p>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void loadFirst(filter)}
+              className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
+            >
+              다시 시도
+            </button>
+          </div>
         ) : null}
-        {notice ? (
+        {notice && viewingIndex < 0 ? (
           <p role="status" className="text-[13px]">
             {notice}
           </p>
         ) : null}
 
+        {!error && loading && items.length === 0 ? (
+          <p role="status" className="text-[14px] text-(--hc-muted)">
+            사진을 불러오는 중…
+          </p>
+        ) : null}
         {!error && !loading && items.length === 0 ? (
-          <p className="text-[14px] text-(--hc-muted)">아직 사진이 없어요.</p>
+          hasFilter ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-[14px] text-(--hc-muted)">이 조건에 맞는 사진이 없어요.</p>
+              <button
+                type="button"
+                onClick={clearFilter}
+                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold transition hover:border-(--hc-border-strong)"
+              >
+                조건 지우기
+              </button>
+            </div>
+          ) : (
+            <p className="text-[14px] text-(--hc-muted)">아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요.</p>
+          )
         ) : null}
 
-        {canBulk ? (
-          <StudioPhotoExports
-            eventId={eventId}
-            selectedIds={selected}
-            channel={filter.channel}
-            onCreated={() => setSelected([])}
-          />
-        ) : null}
-
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((photo) => (
-            <li key={photo.photoId} className="hc-surface-card flex flex-col gap-2 rounded-2xl p-2">
+            <li key={photo.photoId} className="relative flex flex-col gap-1.5">
               {photo.status === "DONE" && photo.thumbnailUrl ? (
-                // 서명 URL 이라 next/image 최적화를 거치지 않는다.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={photo.thumbnailUrl}
-                  alt={`${formatTime(photo.createdAt)} 사진`}
-                  onError={onThumbnailError}
-                  className="aspect-3/4 w-full rounded-xl object-cover"
-                />
+                <button
+                  type="button"
+                  aria-label={`${photoLabel(photo)} 크게 보기`}
+                  onClick={() => setViewingId(photo.photoId)}
+                  className="block w-full overflow-hidden rounded-2xl border border-(--hc-border) bg-(--hc-surface-well) transition hover:border-(--hc-border-strong)"
+                >
+                  {/*
+                    사진을 자르지 않는다. 세로 네 컷도 한 장 전체가 보여야 어떤 사진인지 안다.
+                    서명 URL 이라 next/image 최적화를 거치지 않는다.
+                  */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.thumbnailUrl}
+                    alt={photoLabel(photo)}
+                    loading="lazy"
+                    onError={onThumbnailError}
+                    className="aspect-3/4 w-full object-contain"
+                  />
+                </button>
               ) : (
-                <div className="flex aspect-3/4 w-full items-center justify-center rounded-xl bg-(--hc-surface-well) px-2 text-center text-[13px] text-(--hc-muted)">
+                <div className="flex aspect-3/4 w-full items-center justify-center rounded-2xl border border-(--hc-border) bg-(--hc-surface-well) px-2 text-center text-[13px] text-(--hc-muted)">
                   {photo.status === "PENDING"
                     ? "만드는 중"
                     : (photo.failure && FAILURE_LABEL[photo.failure.code]) || "만들지 못했어요"}
                 </div>
               )}
-              <span className="flex items-center justify-between gap-2 text-[12px] text-(--hc-muted)">
+              <span className="text-[12px] text-(--hc-muted)">
                 {formatTime(photo.createdAt)} · {photo.channel === "BOOTH" ? "부스" : "휴대폰"}
-                {canBulk && photo.status === "DONE" ? (
+              </span>
+              {canBulk && photo.status === "DONE" ? (
+                <label className="absolute left-0 top-0 grid size-11 cursor-pointer place-items-center">
                   <input
                     type="checkbox"
                     className="size-5"
@@ -293,31 +414,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
                       )
                     }
                   />
-                ) : null}
-              </span>
-              {photo.status === "DONE" && (canDownload || canDelete) ? (
-                <span className="flex gap-2">
-                  {canDownload ? (
-                    <button
-                      type="button"
-                      disabled={busy !== null}
-                      onClick={() => void download(photo)}
-                      className="h-11 flex-1 rounded-full border border-(--hc-border) text-[13px] font-semibold disabled:opacity-50"
-                    >
-                      저장
-                    </button>
-                  ) : null}
-                  {canDelete ? (
-                    <button
-                      type="button"
-                      disabled={busy !== null}
-                      onClick={() => setConfirm(photo)}
-                      className="h-11 rounded-full px-3 text-[13px] text-(--hc-danger) disabled:opacity-50"
-                    >
-                      지우기
-                    </button>
-                  ) : null}
-                </span>
+                </label>
               ) : null}
             </li>
           ))}
@@ -333,7 +430,34 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
             {loading ? "불러오는 중…" : "더 보기"}
           </button>
         ) : null}
+
+        {canBulk ? (
+          <StudioPhotoExports
+            eventId={eventId}
+            selectedIds={selected}
+            filter={{ channel: filter.channel, from: filter.from, to: filter.to, frameVersionId: filter.frameVersionId }}
+            onCreated={() => setSelected([])}
+            onClearSelection={() => setSelected([])}
+          />
+        ) : null}
       </div>
+
+      {viewingIndex >= 0 ? (
+        <EventPhotoViewer
+          eventId={eventId}
+          photos={viewable}
+          index={viewingIndex}
+          canDownload={canDownload}
+          canDelete={canDelete}
+          busy={busy !== null}
+          notice={notice}
+          label={photoLabel}
+          onIndexChange={(index) => setViewingId(viewable[index]?.photoId ?? null)}
+          onClose={() => setViewingId(null)}
+          onDownload={(photo) => void download(photo)}
+          onDelete={(photo) => setConfirm(photo)}
+        />
+      ) : null}
 
       {confirm ? (
         <ConfirmDialog

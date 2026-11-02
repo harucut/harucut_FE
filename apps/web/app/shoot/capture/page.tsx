@@ -85,6 +85,9 @@ export default function CapturePage() {
     ready: stageReady,
   } = useStageFit(stageBase, { fitToContainerHeight: true });
 
+  // 가로로 긴 칸은 폭에 묶여 화면이 남는다. 프리뷰를 렌즈 가까이 올리고 남는 자리를 숫자에 준다. 세로 칸은 프리뷰가 높이를 다 쓴다.
+  const wideSlot = currentSlot ? currentSlot.width >= currentSlot.height : false;
+
   const backToFrameHref = (() => {
     const params = new URLSearchParams();
     if (frameId) params.set("frame", frameId);
@@ -122,8 +125,8 @@ export default function CapturePage() {
 
         {/*
           8컷 게이지. 몇 장을 찍는지·몇 장 찍었는지가 늘 보인다(DESIGN.md 「필름의 리듬」).
-          찍은 칸은 초록 면, 지금 찍는 칸은 초록 테두리. 숫자 라벨은 두지 않는다 — 칸이 곧 숫자다.
-          게이지의 초록은 DESIGN.md 가 '진행 게이지' 용도로 허용한 것이라 한 화면 한 초록 규칙과
+          찍은 칸은 라임 면, 지금 찍는 칸은 라임 테두리. 숫자 라벨은 두지 않는다 — 칸이 곧 숫자다.
+          게이지의 라임은 DESIGN.md 가 '진행 게이지' 용도로 허용한 것이라 한 화면 한 라임 규칙과
           부딪히지 않는다.
         */}
         <div
@@ -139,9 +142,9 @@ export default function CapturePage() {
                 key={index}
                 className={`h-7.5 w-5.5 rounded-[5px] border-[1.5px] transition-colors ${
                   done
-                    ? "border-(--hc-primary) bg-(--hc-primary)"
+                    ? "border-(--hc-primary-line) bg-(--hc-primary)"
                     : current
-                      ? "border-(--hc-primary) bg-transparent shadow-[0_0_0_3px_color-mix(in_srgb,var(--hc-primary)_22%,transparent)]"
+                      ? "border-(--hc-primary-line) bg-transparent shadow-[0_0_0_3px_color-mix(in_srgb,var(--hc-primary)_22%,transparent)]"
                       : "border-(--hc-stage-line) bg-(--hc-stage-fill)"
                 }`}
               />
@@ -152,7 +155,7 @@ export default function CapturePage() {
         {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
         <div
           ref={stageRef}
-          className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center"
+          className={`relative mx-auto flex min-h-0 w-full flex-1 justify-center ${wideSlot ? "items-start" : "items-center"}`}
         >
           <canvas ref={canvasRef} className="hidden" />
 
@@ -239,15 +242,15 @@ export default function CapturePage() {
             - 대비가 보장된다. 무대 배경(`--background`, 기본 #0B0B0C) 위라 뒤에 뭐가 찍히든 글자가 읽힌다.
               얼굴 위에 있을 때는 밝은 하늘 앞에서 1.4:1 까지 떨어졌고, 그걸 가리려고 화면을
               30% 어둡게 덮어야 했다 — 그 스크림도 같이 사라졌다.
-            - 초록이 하나로 돌아온다. 진행 초록은 위 8컷 게이지가 혼자 갖는다.
+            - 라임이 하나로 돌아온다. 진행 표시는 위 8컷 게이지가 혼자 갖는다.
           높이를 72px 로 고정해 두 상태가 같은 자리를 쓴다 — 시작해도 아래 띠가 움직이지 않는다.
         */}
-        <div className="flex h-18 shrink-0 items-center justify-center gap-2">
+        <div className={`flex shrink-0 items-center justify-center gap-2 ${wideSlot ? "h-[clamp(4.5rem,18svh,9rem)]" : "h-18"}`}>
           {isShooting ? (
             // key 로 매 초 애니메이션을 새로 재생한다 — 링의 연속 스윕을 대신하는 메트로놈.
             <span
               key={countdown ?? 0}
-              className="hc-count-tick text-[56px] font-extrabold leading-none tabular-nums text-(--hc-text)"
+              className={`hc-count-tick font-extrabold leading-none tabular-nums text-(--hc-text) ${wideSlot ? "text-[clamp(3.5rem,15svh,7.5rem)]" : "text-[56px]"}`}
             >
               {countdown}
             </span>

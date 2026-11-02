@@ -52,7 +52,7 @@ export function EditableNode({
         height={c.height}
         // 화면 픽셀 고정(strokeScaleEnabled=false). 논리 6px 은 폰에서 0.45px 로 사라졌다.
         // 색은 브랜드 초록 하나 — 선택 상태·핸들·누끼 표시가 같은 색을 쓴다.
-        stroke="#1ED760"
+        stroke="#C8F135"
         strokeWidth={2}
         strokeScaleEnabled={false}
         cornerRadius={24}
@@ -109,7 +109,10 @@ export function EditableNode({
         c={c}
         common={common}
         outline={outline}
-        onAutoSize={(size) => onCommit(size)}
+        // 가운데 정렬 글자는 폭이 바뀌어도 가운데를 지킨다. 왼쪽 끝을 고정하면 글자를 고칠 때마다 옆으로 밀린다.
+        onAutoSize={(size) =>
+          onCommit(c.styleJson?.textAlign === "center" ? { ...size, x: c.x + (c.width - size.width) / 2 } : size)
+        }
       />
     );
   }

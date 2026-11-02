@@ -32,12 +32,18 @@ jest.mock("@/lib/studio/projectsApi", () => ({
   listProjects: async () => [],
   getWorkspaceBrandDefaults: async () => ({}),
 }));
+jest.mock("@/lib/studio/usageApi", () => ({ getEventUsage: async () => ({ composeQuota: 0, used: 0, reserved: 0, remaining: 0 }) }));
 jest.mock("@/lib/studio/studioApi", () => ({
   listWorkspaces: () => mockListWorkspaces(),
   createWorkspace: (...args: unknown[]) => mockCreateWorkspace(...args),
   listEvents: (...args: unknown[]) => mockListEvents(...args),
   createEvent: (...args: unknown[]) => mockCreateEvent(...args),
+  listWorkspaceFrames: () => mockListFrames(),
+  listPickableFrameVersions: async () => [],
+  publishFrameVersion: (...args: unknown[]) => mockPublish(...args),
 }));
+const mockListFrames = jest.fn();
+const mockPublish = jest.fn();
 
 const PERSONAL = { workspaceId: "WsMe", name: "내 공간", type: "PERSONAL", role: "OWNER" };
 const ORG = { workspaceId: "WsOrg", name: "하루컷 웨딩팀", type: "ORGANIZATION", role: "OWNER" };
@@ -46,6 +52,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = "";
   mockListEvents.mockResolvedValue([]);
+  mockListFrames.mockResolvedValue([]);
   mockListMyEvents.mockResolvedValue([]);
   mockListMembers.mockResolvedValue([]);
 });
@@ -56,8 +63,9 @@ it("운영 공간이 없으면 개인 공간이 있어도 공간 만들기부터
   mockCreateWorkspace.mockResolvedValue(ORG);
   render(<StudioHome />);
 
-  fireEvent.change(await screen.findByLabelText("공간 이름"), { target: { value: "하루컷 웨딩팀" } });
-  fireEvent.click(screen.getByRole("button", { name: "공간 만들기" }));
+  expect(await screen.findByRole("heading", { name: "먼저 회사·팀 이름을 알려 주세요" })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("회사·팀 이름"), { target: { value: "하루컷 웨딩팀" } });
+  fireEvent.click(screen.getByRole("button", { name: "시작하기" }));
 
   await waitFor(() => expect(mockCreateWorkspace).toHaveBeenCalledWith("하루컷 웨딩팀"));
   expect(mockReplace).toHaveBeenCalledWith("/studio?workspace=WsOrg");
@@ -102,11 +110,54 @@ it("참가 주소 규칙에 맞아야 행사를 만들고, 초안은 개인 휴�
   expect(mockPush).toHaveBeenCalledWith("/studio/events/EvNew");
 });
 
+// 받는 곳·목적·보관 기간을 백지에서 쓰지 않게 초안을 넣는다. 공간 기본값이 있으면 그 값을 따른다.
+it("새 행사에 동의 초안을 넣되, 공간 기본값에 동의가 있으면 넣지 않는다", async () => {
+  mockListWorkspaces.mockResolvedValue([ORG]);
+  mockCreateEvent.mockResolvedValue({ eventId: "EvNew" });
+  render(<StudioHome />);
+  fireEvent.change(await screen.findByLabelText("행사 이름"), { target: { value: "졸업식" } });
+  fireEvent.change(screen.getByLabelText("참가 주소"), { target: { value: "grad-2026" } });
+  fireEvent.click(screen.getByRole("button", { name: "행사 만들기" }));
+  await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled());
+  const settings = mockCreateEvent.mock.calls[0][1];
+  expect(settings.consentItems).toHaveLength(1);
+  expect(settings.consentItems[0].required).toBe(true);
+  expect(settings.consentItems[0].body).toContain("하루컷 웨딩팀");
+});
+
+it("행사가 있으면 폼을 접어 두고 「새 행사」로 편다. 행에서 복제할 수 있다", async () => {
+  mockListWorkspaces.mockResolvedValue([ORG]);
+  mockListEvents.mockResolvedValue([
+    {
+      eventId: "Ev1",
+      workspaceId: "WsOrg",
+      status: "LIVE",
+      paused: false,
+      captureOpen: true,
+      settingsVersion: 1,
+      joinUrlPath: "/e/a",
+      currentExperienceVersion: 1,
+      settings: { name: "민지 결혼식", captureStartsAt: "2026-11-14T11:00:00+09:00", byodEnabled: true, boothEnabled: true },
+    },
+  ]);
+  render(<StudioHome />);
+  const link = await screen.findByRole("link", { name: /민지 결혼식/ });
+  expect(link).toHaveTextContent("11월 14일");
+  expect(link).toHaveTextContent("휴대폰·부스");
+  expect(screen.queryByRole("button", { name: "행사 만들기" })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "새 행사" }));
+  expect(screen.getByRole("button", { name: "행사 만들기" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "민지 결혼식 복제" }));
+  expect(screen.getByDisplayValue("민지 결혼식 복사본")).toBeInTheDocument();
+});
+
 // 버튼을 숨긴다고 권한이 생기지 않지만, 쓸 수 없는 버튼을 보여 주지도 않는다.
 it("관리자가 아니면 행사 만들기를 보여 주지 않는다", async () => {
   mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "DESIGNER" }]);
   render(<StudioHome />);
-  expect(await screen.findByText(/관리자 권한이 필요해요/)).toBeInTheDocument();
+  expect(await screen.findByText(/행사에 고르는 일은 관리자가 해요/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "행사 만들기" })).not.toBeInTheDocument();
 });
 
@@ -122,6 +173,17 @@ it("고객으로 받은 행사를 권한과 함께 보여 준다", async () => {
   expect(screen.getByText("사진 보기 · 사진 내려받기")).toBeInTheDocument();
   // 멤버로 운영하는 행사는 공간의 행사 목록에 나온다.
   expect(screen.queryByText("운영하는 행사")).not.toBeInTheDocument();
+  // 공간이 없는 고객에게 공간 만들기를 권하지 않는다. 이 사람에게 이 화면은 사진함 입구다.
+  expect(screen.getByRole("heading", { name: "내 행사 사진" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "시작하기" })).not.toBeInTheDocument();
+});
+
+it("공간 목록을 받지 못하면 다시 시도할 수 있다", async () => {
+  mockListWorkspaces.mockRejectedValueOnce(new Error("down"));
+  render(<StudioHome />);
+  mockListWorkspaces.mockResolvedValue([ORG]);
+  fireEvent.click(await screen.findByRole("button", { name: "다시 시도" }));
+  expect(await screen.findByText("하루컷 웨딩팀")).toBeInTheDocument();
 });
 
 const ORG_B = { workspaceId: "WsB", name: "두 번째 팀", type: "ORGANIZATION", role: "OWNER" };
@@ -174,4 +236,28 @@ it("운영 담당은 멤버 목록 없이도 이 공간에서 나갈 수 있다"
   await waitFor(() => expect(mockRemoveMember).toHaveBeenCalledWith("WsOrg", "me"));
   expect(mockReplace).toHaveBeenCalledWith("/studio");
   await waitFor(() => expect(mockListWorkspaces).toHaveBeenCalledTimes(2));
+});
+
+// 재대조 항목: 초대 기본 역할이 디자이너인데 행사 목록은 403 이고 프레임 입구는 행사 화면 안에만 있었다.
+it("디자이너에게는 행사 목록을 부르지 않고 공간 프레임 작업 자리를 보인다", async () => {
+  mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "DESIGNER" }]);
+  mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 아이보리", frameType: "CLASSIC" }]);
+  render(<StudioHome />);
+
+  expect(await screen.findByRole("heading", { name: "공간 프레임" })).toBeInTheDocument();
+  expect(await screen.findByText("웨딩 아이보리")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "발행하기" })).toBeInTheDocument();
+  expect(mockListEvents).not.toHaveBeenCalled();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("보기 전용은 프레임을 볼 수만 있다", async () => {
+  mockListWorkspaces.mockResolvedValue([{ ...ORG, role: "VIEWER" }]);
+  mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 아이보리", frameType: "CLASSIC" }]);
+  render(<StudioHome />);
+
+  expect(await screen.findByText("웨딩 아이보리")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "고치기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "발행하기" })).not.toBeInTheDocument();
+  expect(mockListEvents).not.toHaveBeenCalled();
 });

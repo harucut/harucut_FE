@@ -2,7 +2,7 @@
 
 import { SOCIAL_LABELS, SOCIAL_PROVIDER_ORDER, type SocialProvider } from "@harucut/shared";
 import { useSyncExternalStore } from "react";
-import { isNativeShell } from "@/lib/nativeBridge";
+import { supportsGoogleLogin } from "@/lib/nativeBridge";
 import { startSocialLogin } from "@/lib/authLogin";
 import { GoogleMark, KakaoMark, NaverMark } from "./socialMarks";
 
@@ -12,7 +12,7 @@ type Props = {
 };
 
 const subscribe = () => () => {};
-const serverSnapshot = () => false;
+const serverSnapshot = () => true;
 
 /**
  * 세 버튼은 색만 다르고 나머지는 전부 같다.
@@ -35,7 +35,7 @@ const serverSnapshot = () => false;
  */
 export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
   const dividerLabel = mode === "signup" ? "간편가입" : "또는";
-  const inShell = useSyncExternalStore(subscribe, isNativeShell, serverSnapshot);
+  const googleAvailable = useSyncExternalStore(subscribe, supportsGoogleLogin, serverSnapshot);
 
   return (
     <section className="flex flex-col gap-3">
@@ -48,9 +48,9 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
       {/* 순서·문구·마크 크기는 모두 shared 에서 온다. 예전에는 웹이 구글부터, 앱이 카카오부터였다. */}
       <div className="flex flex-col gap-2">
         {SOCIAL_PROVIDER_ORDER.map((provider) => {
-          // Google OAuth는 제어 가능한 WebView를 허용하지 않는다.
-          // 시스템 브라우저에서 인증한 세션을 안전하게 인계하기 전까지 앱에서는 제공하지 않는다.
-          if (inShell && provider === "google") return null;
+          // Google OAuth는 제어 가능한 WebView를 허용하지 않는다. 지금 셸은 이 버튼이 여는 주소를 가로채 시스템
+          // 브라우저로 인증하고 코드를 WebView 로 돌려받는다(apps/mobile/lib/app-login.ts). 옛 셸에는 그 길이 없다.
+          if (!googleAvailable && provider === "google") return null;
           const Mark = MARK[provider];
           return (
             <button
@@ -70,11 +70,11 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
           );
         })}
       </div>
-      {inShell ? (
+      {googleAvailable ? null : (
         <p className="text-[12px] leading-relaxed text-(--hc-muted)">
-          앱에서는 카카오·네이버 또는 이메일로 로그인할 수 있어요. 구글 계정은 웹 브라우저에서 이용해 주세요.
+          구글 로그인은 앱을 업데이트하면 쓸 수 있어요. 지금은 카카오·네이버 또는 이메일로 로그인해 주세요.
         </p>
-      ) : null}
+      )}
     </section>
   );
 }

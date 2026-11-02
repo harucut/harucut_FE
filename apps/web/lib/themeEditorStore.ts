@@ -3,6 +3,8 @@
 import { FREE_CELL_COUNT, cellsFromLayout, clampCell, swapShotIndex, type FreeCell } from "@/lib/frameCells";
 import { create } from "zustand";
 import type { FrameId } from "@/constants/frames";
+import { DEFAULT_EDITOR_BACKGROUND_COLOR } from "@/constants/colors";
+import { readableTextColorOn } from "@/lib/themeBackground";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { removeImageBackground } from "@/lib/backgroundRemoval";
 import { needsUpload } from "@/lib/canvas/componentSource";
@@ -407,7 +409,7 @@ function resetEditorState(get: () => State) {
     },
     background: {
       type: "COLOR" as const,
-      value: "111827",
+      value: DEFAULT_EDITOR_BACKGROUND_COLOR,
     },
     pendingBackgroundFile: null,
   };
@@ -427,9 +429,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   activeId: null,
   background: {
     type: "COLOR",
-    value: "111827",
+    value: DEFAULT_EDITOR_BACKGROUND_COLOR,
   },
-  backgroundColor: "111827",
+  backgroundColor: DEFAULT_EDITOR_BACKGROUND_COLOR,
   pendingBackgroundFile: null,
   cellCutouts: [false, false, false, false],
   cutMode: false,
@@ -446,9 +448,9 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         ...resetEditorState(() => s),
         background: {
           type: "COLOR",
-          value: "111827",
+          value: DEFAULT_EDITOR_BACKGROUND_COLOR,
         },
-        backgroundColor: "111827",
+        backgroundColor: DEFAULT_EDITOR_BACKGROUND_COLOR,
       };
     }),
 
@@ -862,8 +864,13 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     if (!frameId) return;
 
     const layout = FRAME_LAYOUTS[frameId];
-    const baseX = layout.totalWidth / 2;
-    const baseY = layout.totalHeight / 2;
+    // x·y 는 왼쪽 위다. 캔버스 한가운데에 놓으려면 크기의 절반만큼 물러난다.
+    const placed = (width: number, height: number) => ({
+      x: (layout.totalWidth - width) / 2,
+      y: (layout.totalHeight - height) / 2,
+      width,
+      height,
+    });
 
     const id = uid(type === "PHOTO" ? "photo" : "sticker");
 
@@ -873,10 +880,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
             id,
             type: "PHOTO",
             source: src,
-            x: baseX,
-            y: baseY,
-            width: 700,
-            height: 500,
+            ...placed(700, 500),
             scale: 1,
             rotation: 0,
             zIndex: 0,
@@ -888,10 +892,7 @@ export const useThemeEditorStore = create<State>((set, get) => ({
             id,
             type: "STICKER",
             source: src,
-            x: baseX,
-            y: baseY,
-            width: 600,
-            height: 600,
+            ...placed(600, 600),
             scale: 1,
             rotation: 0,
             zIndex: 0,
@@ -923,13 +924,16 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     // 원본 비율에 맞추는 것은 추가의 일부다. 이력을 따로 쌓으면 되돌리기 한 번이 「추가 전」이
     // 아니라 「크기 맞추기 전」으로 간다.
     set((s) => ({
-      components: s.components.map((c) => (c.id === id ? { ...c, width: w, height: h } : c)),
+      // 크기가 바뀌어도 가운데는 그대로다.
+      components: s.components.map((c) =>
+        c.id === id ? { ...c, x: c.x + (c.width - w) / 2, y: c.y + (c.height - h) / 2, width: w, height: h } : c,
+      ),
     }));
   },
 
   // 기본 텍스트 컴포넌트 추가
   addText: (options) => {
-    const { frameId } = get();
+    const { frameId, cells, background, backgroundColor } = get();
     if (!frameId) return;
 
     const text = options?.text?.trim() ? options.text.trim() : "하루컷";
@@ -945,19 +949,28 @@ export const useThemeEditorStore = create<State>((set, get) => ({
     const style: TextStyleJson = {
       fontFamily: "Pretendard",
       fontSize,
-      color: "#ffffff",
+      // 글자는 사진 칸 아래 여백, 곧 배경 위에 놓인다. 흰색 고정이면 밝은 배경에서 사라진다.
+      color: readableTextColorOn(background.type === "COLOR" ? backgroundColor : null),
       textAlign: "center",
       opacity: 1,
     };
+
+    // 폭은 임시값이다. 캔버스가 실제 글자 폭을 재서 바꾸고, 가운데 정렬 글자는 가운데를 지킨다(EditableNode).
+    const width = 1200;
+    const height = fontSize;
+    // 사진 칸 아래 여백에 들어가면 거기에, 아니면 캔버스 한가운데에 둔다. 사진 위에 얹는 것보다 먼저 보인다.
+    const cellsBottom = Math.max(...(cells ?? layout.slots).map((cell) => cell.y + cell.height));
+    const band = layout.totalHeight - cellsBottom;
+    const y = band >= height ? cellsBottom + (band - height) / 2 : (layout.totalHeight - height) / 2;
 
     const c: TextComponent = {
       id,
       type: "TEXT",
       source: text,
-      x: layout.totalWidth / 2,
-      y: 300,
-      width: 1200,
-      height: 140,
+      x: (layout.totalWidth - width) / 2,
+      y,
+      width,
+      height,
       scale: 1,
       rotation: 0,
       zIndex: 0,
@@ -1162,12 +1175,12 @@ export const useThemeEditorStore = create<State>((set, get) => ({
         cells: data.cells?.length === FREE_CELL_COUNT ? data.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) : null,
         background: data.background ?? {
           type: "COLOR",
-          value: "111827",
+          value: DEFAULT_EDITOR_BACKGROUND_COLOR,
         },
         backgroundColor:
           data.background?.type === "COLOR"
             ? normalizeHexColor(data.background.value)
-            : "111827",
+            : DEFAULT_EDITOR_BACKGROUND_COLOR,
         pendingBackgroundFile: null,
         assets: {
           photos: [],

@@ -8,6 +8,7 @@ import {
   TextField,
   adminErrorMessage,
   describeTerms,
+  workspaceLabel,
   formatDateTime,
   termsOf,
   type TermsDraft,
@@ -247,7 +248,7 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
               <li key={e.entitlementId} className="hc-surface-card flex flex-col gap-2 rounded-2xl p-4 text-[13px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-[15px] font-bold">
-                    {e.scope === "EVENT" ? `행사 ${e.eventId}` : `공간 ${e.workspaceId}`}
+                    {e.scope === "EVENT" ? `행사 ${e.eventId}` : `공간 ${workspaceLabel(e)}`}
                     <span className="ml-2 text-[12px] font-normal text-(--hc-muted)">
                       {isChild
                         ? `기업 총량 ${e.parentEntitlementId}에서 배분`

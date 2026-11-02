@@ -40,7 +40,7 @@ export function CutoutPanel() {
         className={[
           "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
           cutMode
-            ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+            ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
             : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
         ].join(" ")}
         aria-pressed={cutMode}
@@ -60,7 +60,7 @@ export function CutoutPanel() {
               className={[
                 "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
                 on
-                  ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+                  ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
                   : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
               ].join(" ")}
               aria-pressed={on}

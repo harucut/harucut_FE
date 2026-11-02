@@ -1,6 +1,7 @@
 import type { ApiEnvelope } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
 import { clientApi } from "@/lib/clientApi";
+import type { AuditLogPage } from "@/components/audit/AuditLogList";
 import type { EntitlementFeature } from "@/lib/studio/usageApi";
 
 /**
@@ -53,6 +54,8 @@ export type ContractRequest = {
 
 export type Contract = ContractRequest & {
   contractId: string;
+  /** 공간 이름. 서버가 아직 안 주면 비어 있고, 화면은 ID 를 쓴다. */
+  workspaceName?: string | null;
   status: ContractStatus;
   createdAt: string;
   /** 결제 근거(PORTONE)를 PortOne 조회로 대조해 확인한 시각. 없으면 아직 확인 전. */
@@ -85,6 +88,8 @@ export type Entitlement = {
   entitlementId: string;
   scope: EntitlementScope;
   workspaceId: string;
+  /** 공간 이름. 서버가 아직 안 주면 비어 있고, 화면은 ID 를 쓴다. */
+  workspaceName?: string | null;
   eventId?: string | null;
   source: "CONTRACT" | "MANUAL";
   contractId?: string | null;
@@ -220,4 +225,32 @@ export async function searchEvents(query: string): Promise<AdminEventItem[]> {
     `/api/client/admin/events?query=${encodeURIComponent(query)}`,
   );
   return res.data.data ?? [];
+}
+
+// ── 시스템 프레임 · 감사 로그 ──
+
+export type SystemFrame = {
+  frameId: number;
+  title?: string | null;
+  frameType: "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
+  updatedAt?: string | null;
+};
+
+export async function listSystemFrames(): Promise<SystemFrame[]> {
+  const res = await clientApi.get<ApiEnvelope<SystemFrame[]>>("/api/client/admin/frames");
+  return res.data.data ?? [];
+}
+
+/** 시스템 프레임을 발행한다. 발행해야 행사에서 고를 수 있다. */
+export async function publishSystemFrame(frameId: number): Promise<{ frameVersionId: number; versionNo: number }> {
+  const res = await clientApi.post<ApiEnvelope<{ frameVersionId: number; versionNo: number }>>(
+    `/api/client/admin/frames/${frameId}/versions`,
+  );
+  return requireData(res.data, "발행본");
+}
+
+export async function listAuditLogs(cursor: string | null): Promise<AuditLogPage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
+  const res = await clientApi.get<ApiEnvelope<AuditLogPage>>(`/api/client/admin/audit-logs${query}`);
+  return res.data.data ?? { items: [] };
 }

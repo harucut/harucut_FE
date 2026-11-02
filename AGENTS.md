@@ -39,9 +39,9 @@
   `roots` 로 끌어다 돌린다.
 - `docs/`: 진입점은 [`docs/README.md`](docs/README.md).
 - `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
-  `check_backend_contract_test.py` 셋이다. 나머지 둘은 검증이 아니다 —
+  `check_backend_contract_test.py` 셋이다. 나머지는 검증이 아니다 —
   `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지)와
-  `gen-notification-icon.mjs`(알림 아이콘 생성기).
+  `gen-brand-icons.mjs`(웹·앱 아이콘 생성기), `gen-notification-icon.mjs`(알림 아이콘 생성기).
   웹 전용 검사 하나가 더 있다 — `apps/web/scripts/check-canonical-classes.mjs`
   (`pnpm check:classes:web`). 임의값 Tailwind 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을
   막는다. 추측이 아니라 후보를 실제로 컴파일해 값으로 비교한다.

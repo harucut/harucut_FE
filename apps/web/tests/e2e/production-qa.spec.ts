@@ -21,11 +21,12 @@ test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운�
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
   for (const n of [4, 2, 3, 1]) await page.getByRole("button", { name: `${n}번 사진 선택`, exact: true }).click();
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  const downloadLink = page.getByRole("link", { name: "다운로드", exact: true });
+  const downloadLink = page.getByRole("link", { name: "사진 저장", exact: true });
   await expect(downloadLink).toBeVisible();
   await expect(page.getByRole("status")).toContainText("계정 기록에 보관할 수 없어요");
   await expect(page.getByRole("button", { name: "공유 링크 만들기" })).toHaveCount(0);
-  await page.getByLabel("파일 이름").fill("POC-기기저장");
+  await page.getByText("파일 이름 바꾸기").click();
+  await page.getByLabel("파일 이름", { exact: true }).fill("POC-기기저장");
   await page.getByRole("button", { name: "파일명 수정" }).click();
   const completed = page.waitForEvent("download");
   await downloadLink.click();

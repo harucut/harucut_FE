@@ -140,7 +140,7 @@ export function FrameSelectPanel({
                     className={[
                       "group relative overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
-                        ? "border-(--hc-primary) ring-2 ring-(--hc-accent-soft-border)"
+                        ? "border-(--hc-primary-line) ring-2 ring-(--hc-accent-soft-border)"
                         : isFull
                           ? "border-(--hc-border) opacity-45"
                           : "border-(--hc-border) hover:border-(--hc-border-strong)",

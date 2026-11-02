@@ -47,10 +47,10 @@ test.beforeEach(async ({ page, baseURL }) => {
 
 test("배경색만 바꾼 초안도 새로고침 후 복원한다", async ({ page }, testInfo) => {
   await openBackgroundTool(page);
-  await page.getByRole("button", { name: "스튜디오 그린", exact: true }).click();
+  await page.getByRole("button", { name: "스튜디오 라임", exact: true }).click();
   await expect
     .poll(() => page.evaluate(readDraftBackground, DRAFT_PREFIX))
-    .toBe("1ed760");
+    .toBe("c8f135");
 
   page.on("dialog", (dialog) => dialog.accept());
   await page.reload();
@@ -60,7 +60,7 @@ test("배경색만 바꾼 초안도 새로고침 후 복원한다", async ({ pag
   await expect(page).toHaveURL(/\/theme\/sticker$/);
   await openBackgroundTool(page);
   await expect(
-    page.getByRole("button", { name: "스튜디오 그린", exact: true }),
+    page.getByRole("button", { name: "스튜디오 라임", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await page.screenshot({
     path: testInfo.outputPath("draft-restored.png"),
@@ -89,7 +89,7 @@ test("저장 실패는 안내하고 다시 저장한 뒤에는 초안이 남지 
     );
   });
   await openBackgroundTool(page);
-  await page.getByRole("button", { name: "스튜디오 그린", exact: true }).click();
+  await page.getByRole("button", { name: "스튜디오 라임", exact: true }).click();
   await page
     .locator("header")
     .getByRole("button", { name: "저장", exact: true })

@@ -99,7 +99,7 @@ export function StudioEventUsage({
           aria-valuenow={usage.used + usage.reserved}
           className="h-2 overflow-hidden rounded-full bg-(--hc-surface-well)"
         >
-          <div className="h-full rounded-full bg-(--hc-primary)" style={{ width: `${usedRatio * 100}%` }} />
+          <div className="h-full rounded-full bg-(--hc-text)" style={{ width: `${usedRatio * 100}%` }} />
         </div>
         <p className="text-[12px] text-(--hc-muted)">
           완성 {usage.used.toLocaleString("ko-KR")}장 · 만드는 중 {usage.reserved.toLocaleString("ko-KR")}장. 만들지 못한 사진은 세지 않아요.

@@ -9,44 +9,36 @@ import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listRecentMedia } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
 import {
-  getUserMediaDateLabel,
+  getUserMediaDate,
   getUserMediaPreviewUrl,
   getUserMediaTitle,
 } from "@/lib/userMediaPreview";
+import { FramePreview } from "@/components/frame/FramePreview";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
+import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
+import { useStudioAccess } from "@/hooks/useStudioAccess";
 
-/** 홈에 보여 줄 최근 기록 수. 조회도 딱 이만큼만 받는다. */
-const RECENT_LIMIT = 4;
+/** 가장 최근 한 장은 큰 카드에, 나머지는 아래 줄에 놓는다. 조회도 딱 이만큼만 받는다. */
+const RECENT_LIMIT = 7;
 
-/**
- * 홈 카드 한 장의 규격.
- *
- * 둘이 서로 다른 패딩·최소높이를 쓰고 있어서 크기가 제각각이었다. 크기 차이는 중요도
- * 차이로 읽히는데, 이 둘은 나란한 선택지다. 강조는 색이 맡는다.
- * 화면 크기에 따라 달라지는 것은 여백과 글자 크기뿐이다.
- */
-const HOME_CARD =
-  "flex min-h-19.5 items-center gap-3.5 rounded-2xl p-4 transition lg:min-h-27 lg:p-5.5";
+/** 큰 카드 아래의 낮은 줄. 첫 화면의 주인공은 사진과 「지금 찍기」 하나다. */
+const THEME_ACTION = {
+  id: "theme",
+  title: "프레임 꾸미기",
+  description: "만들어두면 촬영할 때 골라 써요",
+  href: "/theme",
+};
 
-/** 제목·설명은 여기 한 벌만 둔다. 화면 크기가 문구를 바꾸지 않는다. */
-const HOME_ACTIONS = [
-  {
-    id: "shoot",
-    title: "기록 남기기",
-    description: "찍거나 갖고 있는 사진으로 네 컷을 만들어요",
-    href: null as string | null,
-    primary: true,
-  },
-  {
-    id: "theme",
-    title: "프레임 꾸미기",
-    description: "만들어두면 촬영할 때 골라 써요",
-    href: "/theme" as string | null,
-    primary: false,
-  },
-];
+/** 행사를 맡은 계정에게만 보인다(hooks/useStudioAccess). */
+const STUDIO_ACTION = {
+  id: "studio",
+  title: "행사 운영",
+  description: "내 행사와 사진함을 봐요",
+  href: "/studio",
+};
 
 const WEEKDAY_KO = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -59,12 +51,19 @@ function getCurrentDateKey() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// 인사 헤딩용 — "6.27 토요일"(연도·0 패딩 없이). 날짜 키를 받아 표기만 바꾼다 —
+// 제목 위 작은 날짜 — "11월 2일 월요일". 날짜 키를 받아 표기만 바꾼다 —
 // 자정 갱신은 useCurrentDateKey 가 맡는다.
 function formatHeadingDate(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(year, month - 1, day);
-  return `${month}.${day} ${WEEKDAY_KO[date.getDay()]}`;
+  return `${month}월 ${day}일 ${WEEKDAY_KO[date.getDay()]}`;
+}
+
+/** 줄 아래의 날짜 — "11.02". 값이라 모노로 세운다. */
+function formatStripDate(item: UserMedia) {
+  const date = getUserMediaDate(item);
+  if (!date) return null;
+  return `${`${date.getMonth() + 1}`.padStart(2, "0")}.${`${date.getDate()}`.padStart(2, "0")}`;
 }
 
 function getNextDateRefreshDelay() {
@@ -101,6 +100,7 @@ function useCurrentDateKey() {
 
 
 export default function HomePage() {
+  const studioAccess = useStudioAccess();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
@@ -163,203 +163,191 @@ export default function HomePage() {
   }, [reloadKey]);
 
   const currentDateKey = useCurrentDateKey();
-  // 헤딩 날짜는 자정에 갱신되는 날짜 키에서 파생된다(별도 타이머 불필요).
+  // 날짜는 자정에 갱신되는 날짜 키에서 파생된다(별도 타이머 불필요). 서버 렌더에서는 비운다.
   const currentHeadingDate = useMemo(
-    () => currentDateKey ? formatHeadingDate(currentDateKey) : "오늘의 하루컷",
+    () => (currentDateKey ? formatHeadingDate(currentDateKey) : ""),
     [currentDateKey],
   );
 
+  const latest = recentMedia[0] ?? null;
+  // 큰 카드에 올린 한 장은 아래 줄에서 뺀다. 한 장뿐이면 줄이 비지 않게 그대로 둔다.
+  const stripMedia = recentMedia.length > 1 ? recentMedia.slice(1) : recentMedia;
+  const actions = studioAccess ? [STUDIO_ACTION, THEME_ACTION] : [THEME_ACTION];
+
   return (
-    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
+    <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-12">
       <AppNav userInitial={user?.username} />
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:py-6 lg:gap-9 lg:py-8">
-        {/* 인사 — 오늘 날짜 기반 헤딩("6.27 토요일의 / 기록을 남겨보세요.") */}
-        <header className="pt-1 lg:pt-0">
-          <h1 className="text-[25px] font-bold leading-normal tracking-tight lg:text-[34px] lg:leading-[1.4]">
-            <span className="text-(--hc-primary-strong)">{currentHeadingDate}</span>의
-            <br />
-            기록을 남겨보세요.
-          </h1>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-start lg:gap-x-8 lg:gap-y-6 lg:py-8">
+        <header className="pt-1 lg:col-span-2 lg:pt-0">
+          <p className="min-h-5 text-[13px] font-semibold text-(--hc-muted)">{currentHeadingDate}</p>
+          <h1 className="mt-0.5 text-[34px] font-extrabold leading-tight tracking-[-0.03em]">오늘의 네 컷</h1>
         </header>
 
         {/*
-          카드 두 장. **한 벌만 쓴다.**
-
-          예전에는 폰용(lg:hidden)과 데스크톱용(hidden lg:grid) 블록이 따로 있어서, 같은
-          카드인데 제목과 설명이 갈렸다("프레임 보기 / 4가지 테마" vs "프레임 꾸미기 /
-          만들어두면 촬영할 때 골라 써요"). 화면 크기가 문구를 바꿀 이유는 없다 —
-          달라져야 하는 것은 배치뿐이라 반응형 클래스로 처리한다.
+          첫 화면의 주인공은 내 사진이다(DESIGN.md 「사진이 제일 밝다」). 예전에는 글자 카드 둘과 빈 상자가 먼저 보였고,
+          사진은 스크롤 아래 작은 칸이었다. 가장 최근 네 컷을 크게 놓고 바로 다음 한 장을 찍는 버튼을 그 아래 둔다.
+          라임은 이 버튼 하나다 — 같은 일을 하는 탭바 버튼은 이 화면에서 무채색으로 물러난다(quietShoot).
         */}
-        <section className="grid gap-3.5 lg:grid-cols-2">
-          {HOME_ACTIONS.map((action) => {
-            const body = (
-              <>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-extrabold lg:text-[19px]">
-                    {action.title}
-                  </span>
-                  <span
-                    className={`mt-0.5 block text-[13px] lg:mt-1 ${
-                      action.primary
-                        ? "font-medium opacity-75"
-                        : "text-(--hc-muted)"
-                    }`}
-                  >
-                    {action.description}
-                  </span>
-                </span>
-                <ArrowRight
-                  className={`h-4.5 w-4.5 shrink-0 transition ${
-                    action.primary ? "" : "text-(--hc-muted)"
-                  }`}
-                />
-              </>
-            );
+        <section aria-label="가장 최근 사진" className="hc-surface-card flex flex-col gap-4 rounded-[20px] border p-4 lg:sticky lg:top-24">
+          <HeroPhoto loading={loading} item={latest} />
+          <button
+            type="button"
+            onClick={() => setSourceDialogOpen(true)}
+            className="hc-button-primary inline-flex h-14 w-full items-center justify-center rounded-full text-[16px] font-extrabold"
+          >
+            지금 찍기
+          </button>
+        </section>
 
-            /*
-              주 카드는 중립(흰 면·검은 글자)이다. 예전에는 초록이었는데 탭바의 촬영 버튼이 같은
-              다이얼로그를 여는 같은 초록이라 첫 화면에 같은 행동이 두 번 초록으로 놓였다
-              (DESIGN.md 「한 화면 한 초록」). 탭바는 모든 탭에 상주하는 전역 진입로라 초록을 거기
-              남기고, 카드는 크기·굵기·그림자로 무게를 갖는다. 보조 카드는 한 단 낮춘다.
-            */
-            const className = `group ${HOME_CARD} ${
-              action.primary
-                ? "bg-(--hc-neutral-button-bg) text-left text-(--hc-neutral-button-text) shadow-(--hc-neutral-button-shadow) hover:bg-(--hc-neutral-button-hover)"
-                : "hc-surface-well border hover:border-(--hc-border-strong)"
-            }`;
-
-            return action.href ? (
+        <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
+          <nav aria-label="다른 할 일" className="flex flex-col gap-2.5">
+            {actions.map((action) => (
               <Link
                 key={action.id}
                 href={action.href}
-                className={className}
+                className="hc-surface-well group flex min-h-16 items-center gap-3 rounded-2xl border px-4 py-3 transition hover:border-(--hc-border-strong)"
               >
-                {body}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-bold">{action.title}</span>
+                  <span className="mt-0.5 block text-[13px] text-(--hc-muted)">{action.description}</span>
+                </span>
+                <ArrowRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
               </Link>
-            ) : (
-              <button
-                key={action.id}
-                type="button"
-                onClick={() => setSourceDialogOpen(true)}
-                className={`${className} w-full`}
+            ))}
+          </nav>
+
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[18px] font-extrabold tracking-tight">최근 기록</h2>
+              <Link
+                href="/history"
+                className="hc-link-accent inline-flex min-h-11 items-center gap-1 px-1 text-[13px] font-semibold"
               >
-                {body}
-              </button>
-            );
-          })}
-        </section>
+                전체보기
+                <ArrowRight aria-hidden className="hidden h-3.5 w-3.5 lg:inline" />
+              </Link>
+            </div>
 
-        {/* 최근 기록 */}
-        <section className="flex flex-col gap-4">
-          <div className="flex items-end justify-between">
-            <h2 className="text-[17px] font-extrabold tracking-tight lg:text-[22px]">
-              최근 기록
-            </h2>
-            <Link
-              href="/history"
-              className="hc-link-accent inline-flex min-h-11 items-center gap-1 px-1 text-[13px] font-semibold"
-            >
-              전체보기
-              <ArrowRight className="hidden h-3.5 w-3.5 lg:inline" />
-            </Link>
-          </div>
-
-          {/*
-            폰에서는 좌우로 넘긴다. 2열로 아래에 쌓으면 최근 기록만으로 한 화면을 다 써서
-            그 아래 내용이 스크롤 밖으로 밀려난다. 화면 밖으로 살짝 걸치게 둬서
-            "옆에 더 있다"는 것이 보이게 한다(-mx-4 로 화면 가장자리까지 흘린다).
-            md 이상은 자리가 넉넉하니 그대로 4열 그리드.
-
-            실패·빈 상태는 넘길 것이 없으므로 스크롤러가 아니라 한 칸을 채우는 카드다.
-          */}
-          <div
-            className={
-              loading || recentMedia.length > 0
-                ? "-mx-4 flex snap-x scroll-px-4 gap-3.5 overflow-x-auto px-4 pb-1 scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0"
-                : "grid grid-cols-1 gap-3.5 sm:gap-4"
-            }
-          >
-            {loading ? (
-              Array.from({ length: 4 }, (_, index) => (
-                <div
-                  key={index}
-                  className="aspect-3/4 w-[42vw] shrink-0 animate-pulse rounded-[18px] bg-(--hc-surface-muted) sm:w-[30vw] md:w-auto"
-                />
-              ))
+            {/*
+              폰에서는 좌우로 넘긴다. 화면 밖으로 살짝 걸치게 둬서 "옆에 더 있다"는 것이 보이게 한다
+              (-mx-4 로 화면 가장자리까지 흘린다). 넓은 화면은 격자.
+              실패·빈 상태는 넘길 것이 없으므로 스크롤러가 아니라 한 칸을 채우는 카드다.
+            */}
+            {loading || stripMedia.length > 0 ? (
+              <div className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0">
+                {loading
+                  ? Array.from({ length: 3 }, (_, index) => (
+                      <div key={index} className="aspect-3/4 w-28 shrink-0 animate-pulse rounded-xl bg-(--hc-surface-muted) lg:w-auto" />
+                    ))
+                  : stripMedia.map((item) => <RecentStrip key={item.mediaId} item={item} />)}
+              </div>
             ) : loadError ? (
               // 실패를 빈 상태로 위장하지 않는다. 문구 + 다시 시도.
               <div className="hc-surface-well flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center">
-                <p className="text-[13px] text-(--hc-muted)">
-                  {loadError}
-                </p>
+                <p className="text-[13px] text-(--hc-muted)">{loadError}</p>
                 <button
                   type="button"
                   onClick={() => setReloadKey((prev) => prev + 1)}
-                  className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
+                  className="hc-button-secondary min-h-11 rounded-full border px-5 text-[13px] font-semibold"
                 >
                   다시 시도
                 </button>
               </div>
-            ) : recentMedia.length > 0 ? (
-              recentMedia.map((item) => {
-                const previewUrl = getUserMediaPreviewUrl(item);
-
-                return (
-                  <Link
-                    key={item.mediaId}
-                    // 넉 장이 전부 목록 맨 위로만 갔다. 누른 그 기록으로 데려간다.
-                    href={`/history#media-${item.mediaId}`}
-                    className="group flex w-[42vw] shrink-0 snap-start flex-col gap-2 sm:w-[30vw] md:w-auto"
-                  >
-                    <div className="hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)">
-                      {previewUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={previewUrl}
-                          alt={getUserMediaTitle(item)}
-                          className="absolute inset-0 h-full w-full object-contain p-3"
-                        />
-                      ) : (
-                        <div className="h-full w-full bg-(--hc-surface-muted)" />
-                      )}
-                    </div>
-                    <p className="truncate text-[13px] font-bold tracking-tight">
-                      {getUserMediaTitle(item)}
-                    </p>
-                    {/* 언제 찍은 것인지가 기록에서 가장 먼저 알고 싶은 정보다. */}
-                    {getUserMediaDateLabel(item) ? (
-                      <p className="-mt-1.5 text-[11px] text-(--hc-muted)">
-                        {getUserMediaDateLabel(item)}
-                      </p>
-                    ) : null}
-                  </Link>
-                );
-              })
             ) : (
-              <div className="hc-surface-well flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center">
-                <p className="text-[13px] text-(--hc-muted)">
-                  아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
-                </p>
-                {/* 위 큰 카드와 같은 것을 연다. 여기만 카메라로 직행하면 같은 뜻의
-                    버튼 둘이 다르게 동작한다. */}
-                <button
-                  type="button"
-                  onClick={() => setSourceDialogOpen(true)}
-                  className="hc-button-primary rounded-full px-5 py-2 text-[13px] font-semibold"
-                >
-                  기록 남기기
-                </button>
-              </div>
+              <p className="hc-surface-well rounded-[18px] border border-dashed p-6 text-center text-[13px] text-(--hc-muted)">
+                아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
+              </p>
             )}
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
-      <MobileTabBar />
+      <MobileTabBar quietShoot />
       <RecordSourceDialog
         open={sourceDialogOpen}
         onClose={() => setSourceDialogOpen(false)}
       />
     </main>
+  );
+}
+
+/**
+ * 큰 카드의 사진. 기록이 있으면 가장 최근 것, 없으면 예시 프레임이다.
+ * 예시는 진짜 기록처럼 보이면 안 되므로 예시라고 적는다. 칸 높이를 고정해 사진이 늦게 와도 버튼이 밀리지 않는다.
+ */
+function HeroPhoto({ loading, item }: { loading: boolean; item: UserMedia | null }) {
+  // 세로로 긴 스트립만 살짝 기울인다. 실물처럼 보이는 것은 긴 띠뿐이고, 가로 사진을 기울이면 삐뚤게만 보인다.
+  const [isStrip, setIsStrip] = useState(false);
+  const previewUrl = item ? getUserMediaPreviewUrl(item) : null;
+
+  const box = "relative flex h-[min(46svh,400px)] items-center justify-center lg:h-[min(58svh,520px)]";
+
+  if (loading) {
+    return (
+      <div className={box}>
+        <div className="aspect-2/3 h-full animate-pulse rounded-lg bg-(--hc-surface-muted)" />
+      </div>
+    );
+  }
+
+  if (item && previewUrl) {
+    const title = getUserMediaTitle(item);
+    return (
+      // 넉 장이 전부 목록 맨 위로만 갔다. 누른 그 기록으로 데려간다.
+      <Link href={`/history#media-${item.mediaId}`} aria-label={`기록에서 보기: ${title}`} className={box}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={previewUrl}
+          alt={title}
+          fetchPriority="high"
+          onLoad={(e) => setIsStrip(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth * 1.6)}
+          className={`max-h-full max-w-full rounded-md object-contain shadow-[0_18px_36px_rgba(0,0,0,0.35)] transition-transform ${isStrip ? "rotate-[3deg]" : ""}`}
+        />
+      </Link>
+    );
+  }
+
+  return (
+    <div className={`${box} flex-col gap-2.5`}>
+      <div aria-hidden className="min-h-0 flex-1 -rotate-2 drop-shadow-2xl">
+        <FramePreview
+          frameId="grid-4"
+          images={DEMO_PHOTOS}
+          theme={DEMO_DECORATED_THEME}
+          borderColor="#141416"
+          imageLoading="eager"
+          className="h-full! w-auto!"
+        />
+      </div>
+      <p className="shrink-0 text-[12px] text-(--hc-muted)">이렇게 남아요. 예시 사진이에요.</p>
+    </div>
+  );
+}
+
+/** 아래 줄의 작은 기록 한 장. 사진을 자르지 않는다. */
+function RecentStrip({ item }: { item: UserMedia }) {
+  const previewUrl = getUserMediaPreviewUrl(item);
+  const date = formatStripDate(item);
+  return (
+    <Link
+      href={`/history#media-${item.mediaId}`}
+      className="group flex w-28 shrink-0 snap-start flex-col gap-1.5 lg:w-auto"
+    >
+      <div className="hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-xl border bg-(--hc-surface-inset) transition group-hover:border-(--hc-border-strong)">
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={getUserMediaTitle(item)}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-contain p-1.5"
+          />
+        ) : (
+          <div className="h-full w-full bg-(--hc-surface-muted)" />
+        )}
+      </div>
+      {/* 언제 찍은 것인지가 기록에서 가장 먼저 알고 싶은 정보다. */}
+      {date ? <p className="text-center font-mono text-[11px] tabular-nums text-(--hc-muted)">{date}</p> : null}
+    </Link>
   );
 }

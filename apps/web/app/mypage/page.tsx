@@ -13,6 +13,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Camera, ChevronRight, LogOut, PencilLine } from "lucide-react";
 import { getLoginPlatformLabel, josa, parseServerDateTime, subscriptionManageHint } from "@harucut/shared";
 import { PasswordChangeDialog } from "@/components/mypage/PasswordChangeDialog";
@@ -23,12 +24,14 @@ import {
   resolveFrameCapacity,
 } from "@/components/frame/FrameCapacityMeter";
 import { AppNav } from "@/components/layout/AppNav";
+import { forgetStudioAccess, useStudioAccess } from "@/hooks/useStudioAccess";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { NativeNotificationSetting } from "@/components/mobile/NativeNotificationSetting";
 import { StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
 import { unregisterPushDevice } from "@/lib/pushDevices";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
+import { PAYMENTS_ENABLED } from "@/constants/company";
 import { getPlanDisplayName } from "@/constants/plans";
 import { UploadValidationError } from "@/lib/presignedUploadApi";
 import { listMyCoupons, redeemCoupon } from "@/lib/couponApi";
@@ -89,12 +92,14 @@ const SECTION_META: Record<SectionId, { title: string; sub: string }> = {
 const SECTIONS: SectionId[] = ["account", "plan", "notif", "frames", "pref"];
 
 export default function MyPage() {
+  const studioAccess = useStudioAccess();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
+  const [logoutAllOpen, setLogoutAllOpen] = useState(false);
 
   // 비밀번호는 이메일(HARUCUT) 가입 계정에만 있다.
   // 아직 user 를 못 읽었으면 폼도 안내문도 띄우지 않는다 — 소셜 계정에 폼이 잠깐 보였다
@@ -261,7 +266,13 @@ export default function MyPage() {
     try {
       await clientApi.patch("/api/client/auth/password/change", values);
       setPasswordOpen(false);
-      setNotice({ kind: "ok", text: "비밀번호를 바꿨어요." });
+      // 서버는 비밀번호가 바뀌면 이 기기까지 모든 세션을 끊는다. 그대로 두면 잠시 뒤 재발급이 실패해 「세션 만료」 창이 뜬다.
+      // 바꾼 사람에게는 왜 다시 로그인하는지 말하고 로그인으로 보낸다.
+      forgetStudioAccess();
+      await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/logout", { signal })).catch(() => {});
+      await clearLocalUserData();
+      router.push("/login?passwordChanged=1");
+      router.refresh();
     } catch (error) {
       console.error(error);
       setPasswordError(
@@ -320,14 +331,17 @@ export default function MyPage() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (scope: "device" | "all" = "device") => {
+    forgetStudioAccess();
     setNotice(null);
     setIsSubmitting(true);
 
     try {
       // 서버 푸시 해제는 로그아웃 **전에**(쿠키가 있어야 한다). 실패해도 로그아웃은 한다.
       await unregisterPushDevice();
-      await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/logout", { signal }));
+      // 기본은 이 기기 세션만 끊는다. 잃어버린 폰처럼 다른 기기까지 끊어야 할 때를 위해 전체 로그아웃을 따로 둔다.
+      const path = scope === "all" ? "/api/client/logout/all" : "/api/client/logout";
+      await withRequestDeadline(30_000, (signal) => clientApi.delete(path, { signal }));
       await clearLocalUserData();
       router.push("/login");
       router.refresh();
@@ -336,6 +350,7 @@ export default function MyPage() {
       setNotice({ kind: "error", text: "로그아웃에 실패했어요." });
     } finally {
       setIsSubmitting(false);
+      setLogoutAllOpen(false);
     }
   };
 
@@ -367,6 +382,8 @@ export default function MyPage() {
   }, [notice]);
 
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
+  // 프로필 이미지를 못 받으면(만료·삭제) 대체 글자가 원 안에 크게 넘치지 않게 이니셜로 돌아간다.
+  const [failedProfileUrl, setFailedProfileUrl] = useState<string | null>(null);
 
   /*
     서버 등급(BASIC/PLUS/PRO) 대신 사람이 읽는 이름(무료/베이직/프로)으로 보여준다.
@@ -393,7 +410,7 @@ export default function MyPage() {
     [user?.planTier, usage, stats?.frames],
   );
   const frameCapacityText = frameCapacity.unlimited
-    ? `보관한 프레임 ${frameCapacity.used}개 · 무제한`
+    ? `보관한 프레임 ${frameCapacity.used}개 · ${PAYMENTS_ENABLED ? "무제한" : "지금은 한도 없음"}`
     : `보관한 프레임 ${frameCapacity.used}/${frameCapacity.plan.limit}개`;
 
   const statCells = useMemo(
@@ -441,11 +458,12 @@ export default function MyPage() {
           className="grid h-full w-full place-items-center overflow-hidden rounded-full border border-(--hc-border) bg-(--hc-surface-highlight) font-extrabold text-(--hc-text)"
           style={{ fontSize: font }}
         >
-          {user?.profileUrl ? (
+          {user?.profileUrl && failedProfileUrl !== user.profileUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={user.profileUrl}
-              alt="프로필 이미지"
+              alt=""
+              onError={() => setFailedProfileUrl(user.profileUrl)}
               className="h-full w-full object-cover"
             />
           ) : (
@@ -490,7 +508,7 @@ export default function MyPage() {
           <div
             role="status"
             aria-label="프로필 이미지 올리는 중"
-            className="absolute inset-0 grid place-items-center rounded-full bg-[rgba(10,24,45,0.55)]"
+            className="absolute inset-0 grid place-items-center rounded-full bg-black/55"
           >
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white" />
           </div>
@@ -507,7 +525,7 @@ export default function MyPage() {
             key={cell.l}
             className={`flex-1 text-center ${i ? "border-l border-(--hc-border-subtle)" : ""}`}
           >
-            <div className="text-[21px] font-semibold tabular-nums">{cell.n}</div>
+            <div className="text-[24px] font-semibold tabular-nums">{cell.n}</div>
             <div className="mt-0.5 text-[12px] text-(--hc-muted)">
               {cell.l}
             </div>
@@ -843,12 +861,20 @@ export default function MyPage() {
     <>
       <button
         type="button"
-        onClick={handleLogout}
+        onClick={() => void handleLogout()}
         disabled={isSubmitting}
         className="hc-button-secondary flex h-11 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-semibold disabled:opacity-50"
       >
         <LogOut className="h-4 w-4" />
         로그아웃
+      </button>
+      <button
+        type="button"
+        onClick={() => setLogoutAllOpen(true)}
+        disabled={isSubmitting}
+        className="mx-auto mt-1 flex min-h-11 w-fit items-center px-2 text-[13px] text-(--hc-muted) underline underline-offset-4"
+      >
+        모든 기기에서 로그아웃
       </button>
       <button
         type="button"
@@ -869,7 +895,7 @@ export default function MyPage() {
           그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
           한 줄로 읽히지 않는다. */}
       <div className="mx-auto w-full max-w-170 px-4 py-5 sm:py-6 lg:py-8">
-        <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+        <h1 className="text-[30px] font-extrabold tracking-tight lg:text-[34px]">
           마이페이지
         </h1>
 
@@ -945,6 +971,19 @@ export default function MyPage() {
             {/* 섹션끼리는 바깥 간격보다 좁게 둔다. 프로필·스탯과 같은 20px 를 주면
                 다섯 장이 각자 떠 있는 것처럼 보여 한 목록으로 읽히지 않았다. */}
             <div className="flex flex-col gap-3">
+            {/* 행사를 맡은 계정의 입구. 개인 설정보다 먼저 찾는 곳이라 첫 줄에 둔다. */}
+            {studioAccess ? (
+              <Link
+                href="/studio"
+                className="hc-surface-card flex items-center gap-3.5 rounded-[20px] border px-5 py-4 transition hover:border-(--hc-border-strong)"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-bold">행사 운영</span>
+                  <span className="block truncate text-[12px] text-(--hc-muted)">내 행사와 사진함</span>
+                </span>
+                <ChevronRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
+              </Link>
+            ) : null}
             {SECTIONS.map((id) => {
               const meta = SECTION_META[id];
               const body = sectionBody[id];
@@ -962,7 +1001,7 @@ export default function MyPage() {
                     첫 렌더에 항상 false 라, JS 로 정하면 데스크톱에서 접힌 채 한 번
                     그려졌다 펴지는 깜빡임이 생긴다.
                   */}
-                  <h2 className="hidden px-5 pt-5 text-[17px] font-extrabold lg:block">
+                  <h2 className="hidden px-5 pt-5 text-[16px] font-extrabold lg:block">
                     {meta.title}
                   </h2>
 
@@ -1021,6 +1060,18 @@ export default function MyPage() {
         )}
       </div>
       <MobileTabBar />
+
+      {logoutAllOpen ? (
+        <ConfirmDialog
+          title="모든 기기에서 로그아웃할까요?"
+          description="이 기기를 포함해 로그인한 모든 휴대폰과 PC 에서 로그아웃돼요. 다시 쓰려면 기기마다 로그인해야 해요."
+          confirmLabel="모두 로그아웃"
+          runningLabel="로그아웃하는 중…"
+          running={isSubmitting}
+          onClose={() => setLogoutAllOpen(false)}
+          onConfirm={() => void handleLogout("all")}
+        />
+      ) : null}
 
       {exitOpen ? (
         <ConfirmDialog

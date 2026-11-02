@@ -3,6 +3,7 @@
 import { clientApi } from "@/lib/clientApi";
 import type { ApiEnvelope } from "@/lib/api-types";
 import { requireData } from "@/lib/apiEnvelope";
+import type { AuditLogPage } from "@/components/audit/AuditLogList";
 import type { WorkspaceRole } from "@/lib/studio/studioApi";
 
 /**
@@ -91,6 +92,8 @@ export type MyEvent = {
   eventId: string;
   name: string;
   status: "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
+  /** 완성 사진 수. 삭제·보관 종료 제외. 옛 서버면 키가 없다. */
+  completedPhotoCount?: number;
   /** role 이 있으면 공간 멤버로서 운영하는 행사, 없으면 고객으로 권한만 받은 행사. */
   access: {
     role?: WorkspaceRole;
@@ -186,4 +189,13 @@ export async function acceptInvitation(token: string): Promise<InvitationAccepte
 /** 초대 링크. 토큰은 fragment 에 둔다 — 서버 접근 로그·리퍼러에 남지 않는다. */
 export function inviteLink(origin: string, token: string) {
   return `${origin}/invite#${token}`;
+}
+
+/** 공간 감사 로그(OWNER·ADMIN). 최신순 50개씩. */
+export async function listWorkspaceAuditLogs(workspaceId: string, cursor: string | null): Promise<AuditLogPage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
+  const res = await clientApi.get<ApiEnvelope<AuditLogPage>>(
+    `/api/client/workspaces/${encodeURIComponent(workspaceId)}/audit-logs${query}`,
+  );
+  return res.data.data ?? { items: [] };
 }

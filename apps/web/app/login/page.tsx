@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { forgetStudioAccess } from "@/hooks/useStudioAccess";
 import { COMPANY } from "@harucut/shared";
 import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
@@ -37,6 +38,10 @@ type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
 
 function LoginPageContent() {
   const searchParams = useSearchParams();
+  // 로그인 화면에 왔으면 앞 계정의 답은 믿지 않는다(세션 만료 뒤 다른 계정으로 들어오는 길도 여기를 지난다).
+  useEffect(() => {
+    forgetStudioAccess();
+  }, []);
   const redirectTo = getSafeRedirectPath(searchParams.get("redirectTo"));
   const redirectTarget = resolveRedirectTarget(redirectTo);
   const signupHref = buildPathWithRedirect("/signup", redirectTo);
@@ -173,6 +178,16 @@ function LoginPageContent() {
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {searchParams.get("joined") === "1" && !errors.common ? (
+          <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
+            가입이 끝났어요. 방금 만든 계정으로 로그인해 주세요.
+          </p>
+        ) : null}
+        {searchParams.get("passwordChanged") === "1" && !errors.common ? (
+          <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
+            비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요.
+          </p>
+        ) : null}
         {errors.common ? (
           <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
             {errors.common}
@@ -218,7 +233,7 @@ function LoginPageContent() {
         {/* 아래 소셜 버튼과 같은 h-12 알약이다. 예전에는 이쪽만 py-2.5(약 38px)·text-xs 라
             같은 화면에서 버튼 높이와 글자 크기가 두 종류로 갈렸다.
             색은 초록이 아니라 잉크다 — 바로 아래 네이버 버튼이 브랜드 초록이라, 라이트에서 우리 초록
-            (#16B454)과 같은 버튼 둘로 읽혔다(globals.css .hc-button-ink). */}
+            (#BDE528)과 같은 버튼 둘로 읽혔다(globals.css .hc-button-ink). */}
         <button
           type="submit"
           disabled={isSubmitting}

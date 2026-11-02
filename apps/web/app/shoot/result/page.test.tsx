@@ -102,10 +102,12 @@ jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
     onDownload,
     onShare,
     shareLabel,
+    extraActions,
   }: {
     onDownload: () => void;
     onShare?: () => void;
     shareLabel?: string;
+    extraActions?: React.ReactNode;
   }) => (
     <div data-testid="generated-asset-card">
       <button type="button" onClick={onDownload}>
@@ -116,6 +118,7 @@ jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
           {shareLabel ?? "공유 링크 만들기"}
         </button>
       ) : null}
+      {extraActions}
     </div>
   ),
 }));

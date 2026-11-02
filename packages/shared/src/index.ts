@@ -43,11 +43,10 @@ export {
   GUEST_TRIAL_CTA_LABEL,
 } from './guest-trial';
 export {
-  BRAND_MARK_BAR,
-  BRAND_MARK_BAR_SHADES,
   BRAND_MARK_BODY,
+  BRAND_MARK_COLORS,
+  BRAND_MARK_GLYPH,
   BRAND_MARK_VIEWBOX,
-  brandMarkBarRect,
   brandMarkToSvg,
 } from './brand-mark';
 export {
@@ -89,6 +88,7 @@ export {
 export {
   STORE_PRODUCT_IDS,
   STORE_PURCHASES_ENABLED,
+  storePurchasesOpenOn,
   STORE_PURCHASE_SHELL_VERSION,
   storeConflictSource,
   storePlatformOf,

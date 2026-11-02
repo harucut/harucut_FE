@@ -92,6 +92,10 @@ export type ComposeAccepted = {
 export type ParticipantJob = {
   jobId: number;
   status: JobStatus;
+  /** DONE 이고 보관 기한 안일 때만. 짧은 서명 URL. */
+  thumbnailUrl?: string | null;
+  /** 받을 수 있는 기한. 지나면 상태는 DONE 인 채 내려받기가 410 RESULT-002 다. */
+  expiresAt?: string | null;
   /** FAILED 일 때만(lib/composeFailure.ts). */
   failureCode?: string | null;
 };
@@ -124,6 +128,8 @@ export type ResultStatus = {
   status: JobStatus | "EXPIRED";
   eventName: string;
   thumbnailUrl: string | null;
+  /** 화면에 띄울 결과 원본(짧은 서명 URL). DONE 일 때만 온다. 없으면 썸네일로 대신한다(옛 서버). */
+  imageUrl?: string | null;
   expiresAt: string;
   theme?: EventTheme;
 };

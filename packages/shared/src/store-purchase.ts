@@ -15,6 +15,15 @@
  */
 export const STORE_PURCHASES_ENABLED = true;
 
+/**
+ * 플랫폼별로 지금 팔아도 되는가. **Android 는 닫아 둔다** — 서버에 Google Play 구매 검증이 아직 없어
+ * (백엔드 `UnavailablePlayStoreVerifier`: 전부 SUBS-007) Play 결제는 돈이 나가는데 권한을 줄 수 없다.
+ * 검증기가 들어오면 여기서 연다. 닫힌 플랫폼은 브라우저처럼 「결제 준비 중」을 보여 주고 구매·복원 버튼을 그리지 않는다.
+ */
+export function storePurchasesOpenOn(platform: 'ios' | 'android'): boolean {
+  return STORE_PURCHASES_ENABLED && platform === 'ios';
+}
+
 /** 구매·복원 메시지를 아는 셸의 브리지 판(apps/mobile/lib/native-bridge.ts 의 BRIDGE_VERSION). */
 export const STORE_PURCHASE_SHELL_VERSION = 3;
 
