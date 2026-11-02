@@ -29,7 +29,18 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@harucut/shared"],
   async headers() {
     return [
-      { source: "/:path*", headers: SECURITY_HEADERS },
+      // Studio 의 행사 화면 미리보기만 같은 출처의 iframe 에 뜰 수 있다. 데이터 없이, 부모가 보낸 값만 그린다.
+      { source: "/:path((?!booth/preview).*)", headers: SECURITY_HEADERS },
+      {
+        source: "/booth/preview",
+        headers: SECURITY_HEADERS.map((header) =>
+          header.key === "X-Frame-Options"
+            ? { key: "X-Frame-Options", value: "SAMEORIGIN" }
+            : header.key === "Content-Security-Policy"
+              ? { key: "Content-Security-Policy", value: "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" }
+              : header,
+        ),
+      },
       /*
         결과 수령 화면. 같은 키는 뒤 규칙이 이긴다(설치된 Next 문서 next-config-js/headers.md:47) —
         전역의 strict-origin-when-cross-origin 을 no-referrer 로 덮는다(기획 R5 16절).
@@ -56,7 +67,7 @@ const nextConfig: NextConfig = {
         ],
       },
       // public/ 의 정적 자산에는 캐시 정책이 없어 매 방문마다 다시 받아왔다.
-      // 스티커 PNG 39장·OG 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
+      // 스티커 PNG 30장·OG 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
       // 영구 immutable 은 못 주지만, 하루 캐시 + 하루 stale-while-revalidate 로
       // 재방문의 왕복을 없앤다(바꾸면 최대 하루 뒤 반영된다).
       {
@@ -70,8 +81,6 @@ const nextConfig: NextConfig = {
       },
       {
         // 소셜 로고 PNG 세 개가 여기 있었다. 이제 인라인 SVG 라 공개 파일이 아니다.
-        // 히어로 이미지(.webp·.png)도 빠졌다 — .png 는 데모 컷을 굽는 원본이라 공개하지 않고
-        // assets-src/ 에 둔다.
         source: "/:file(og-image.png|shutter.mp3)",
         headers: [
           {

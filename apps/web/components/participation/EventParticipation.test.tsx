@@ -96,14 +96,13 @@ function storeSession() {
 
 async function shootAll() {
   jest.useFakeTimers();
-  for (let i = 1; i <= 4; i += 1) {
-    fireEvent.click(screen.getByRole("button", { name: `${i}번째 사진 찍기` }));
-    // 카운트다운은 초마다 렌더가 다음 타이머를 건다. 한 act 에 3초를 몰아 보내면 첫 1초만 지난다.
-    for (let tick = 0; tick < 3; tick += 1) {
-      await act(async () => {
-        await jest.advanceTimersByTimeAsync(1_000);
-      });
-    }
+  // 한 번 누르면 네 장을 이어서 찍는다.
+  fireEvent.click(screen.getByRole("button", { name: "찍기 시작" }));
+  // 카운트다운은 초마다 렌더가 다음 타이머를 건다. 한 act 에 몰아 보내면 첫 1초만 지난다. 다음 칸으로 넘어가는 타이머(0ms)도 함께 돈다.
+  for (let tick = 0; tick < 4 * 4; tick += 1) {
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1_000);
+    });
   }
   jest.useRealTimers();
 }
@@ -128,7 +127,9 @@ it("참여하면 이 행사에만 자격을 보관하고, 필수 동의 전에�
   fireEvent.click(screen.getByRole("checkbox", { name: /사진 수집·이용/ }));
   fireEvent.click(submit);
 
-  expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+  // 받을 사진이 없으면 버튼 하나뿐인 화면을 건너뛰고 바로 촬영으로 간다.
+  expect(await screen.findByRole("button", { name: "찍기 시작" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "촬영 시작" })).not.toBeInTheDocument();
   expect(api.submitConsents).toHaveBeenCalledWith("p-new", "evt-1", [
     { code: "photo-collection", version: 2, decision: "AGREED" },
     { code: "marketing", version: 1, decision: "DECLINED" },
@@ -258,7 +259,7 @@ it("회차 시작이 한도로 막히면(ENT-002) 촬영 화면 대신 마감 �
   fireEvent.click(await screen.findByRole("button", { name: "촬영 시작" }));
 
   expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "1번째 사진 찍기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "찍기 시작" })).not.toBeInTheDocument();
 });
 
 // Codex 리뷰(#545): 한도에 걸려도 이미 만든 사진은 받을 수 있어야 한다 — 홈(사진 목록)으로 돌아간다.
@@ -362,7 +363,7 @@ describe("Codex 리뷰 반영(#523)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
-    expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "찍기 시작" })).toBeInTheDocument();
 
     await act(async () => releaseOld([{ jobId: 9, status: "DONE" }]));
     expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();

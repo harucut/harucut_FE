@@ -10,8 +10,10 @@ const api = {
   closeBoothRun: jest.fn(),
   startBoothGuest: jest.fn(),
   submitConsents: jest.fn(),
+  getResult: jest.fn(),
 };
 jest.mock("@/lib/event/eventApi", () => ({
+  getResult: (...a: unknown[]) => api.getResult(...a),
   redeemBoothPairing: (...a: unknown[]) => api.redeemBoothPairing(...a),
   getBoothMe: (...a: unknown[]) => api.getBoothMe(...a),
   getBoothCurrentRun: (...a: unknown[]) => api.getBoothCurrentRun(...a),
@@ -81,6 +83,7 @@ beforeEach(() => {
   api.closeBoothRun.mockResolvedValue({});
   api.startBoothGuest.mockResolvedValue({ participantToken: "guest-1", participantId: "p-1", expiresAt: "x" });
   api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+  api.getResult.mockResolvedValue({ status: "PENDING", eventName: "행사", thumbnailUrl: null, expiresAt: "2999-01-01T00:00:00Z" });
 });
 
 afterEach(() => jest.useRealTimers());
@@ -120,8 +123,12 @@ it("손님마다 새 세션을 열고, 결과 QR 은 그 손님의 토큰으로�
   const qr = await screen.findByRole("img", { name: "사진 받기 QR" });
   expect(qr.getAttribute("data-value")).toBe(`${window.location.origin}/r#${"R".repeat(43)}`);
   expect(api.submitConsents).toHaveBeenCalledWith("guest-1", "evt-1", [{ code: "photo", version: 1, decision: "AGREED" }]);
+  expect(api.getResult).toHaveBeenCalledWith("R".repeat(43), expect.anything());
 
+  // QR 은 넘기면 다시 볼 수 없다. 한 번 눌러서는 넘어가지 않는다.
   fireEvent.click(screen.getByRole("button", { name: "다음 손님" }));
+  expect(screen.getByRole("img", { name: "사진 받기 QR" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /한 번 더 누르면 넘어가요/ }));
   expect(await screen.findByRole("button", { name: "촬영 시작" })).toBeInTheDocument();
   expect(screen.queryByRole("img", { name: "사진 받기 QR" })).not.toBeInTheDocument();
   await waitFor(() => expect(api.closeBoothRun).toHaveBeenCalledWith("b-token", "run-7", 4));
