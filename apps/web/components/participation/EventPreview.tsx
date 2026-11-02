@@ -23,6 +23,7 @@ import {
 import {
   EventActionBar,
   EventButton,
+  EventContact,
   EventLogo,
   EventSurface,
   EventTitle,
@@ -169,12 +170,18 @@ function ResultPreview({ data, kind }: { data: EventPreviewData; kind: "composin
       {kind === "error" ? (
         <>
           <p className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">{failed}</p>
+          <EventContact />
           <EventActionBar>
             <EventButton>다시 찍기</EventButton>
           </EventActionBar>
         </>
       ) : null}
-      {kind === "expired" ? <p className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">{expired}</p> : null}
+      {kind === "expired" ? (
+        <>
+          <p className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">{expired}</p>
+          <EventContact />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -219,6 +226,7 @@ function PreviewBody({ data, screen }: { data: EventPreviewData; screen: EventPr
           onStart={noop}
           onShare={noop}
           onDownload={noop}
+          onRevoke={noop}
           onWithdraw={noop}
           onRefresh={noop}
         />,

@@ -48,6 +48,7 @@ const COPY_LABEL: Record<PageThemeCopyKey, string> = {
   expired: "받을 기간이 지났을 때",
   closed: "촬영 시간이 아닐 때",
   error: "사진을 만들지 못했을 때",
+  contact: "문의처(사진을 못 받았을 때 보여요)",
 };
 
 /** 칸을 비워 두면 참가 화면이 쓰는 기본 문구. 비운 칸이 무슨 뜻인지 바로 보이게 한다. */
@@ -59,7 +60,8 @@ const COPY_PLACEHOLDER: Record<PageThemeCopyKey, string> = {
   done: "사진이 완성됐어요.",
   expired: "사진을 받을 수 있는 기간이 지났어요.",
   closed: "지금은 촬영 시간이 아니에요.",
-  error: "사진을 만들지 못했어요. 행사 담당자에게 문의해 주세요.",
+  error: "사진을 만들지 못했어요. 한 번 더 찍어 주세요.",
+  contact: "예: 라온웨딩홀 안내 데스크 02-000-0000",
 };
 
 type Preset = { id: string; label: string; colors: Record<PageThemeColorKey, string>; font: PageThemeFont };

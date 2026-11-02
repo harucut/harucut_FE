@@ -14,6 +14,12 @@ describe("게시 위반 묶기", () => {
     expect(groups[1].reasons).toEqual(["지금은 없는 프레임이 들어 있어요. 빼고 다시 골라 주세요."]);
   });
 
+  it("회수된 프레임은 빼고 다시 고르라고 말한다", () => {
+    const groups = groupViolations([{ field: "frames[0]", reason: "긴급 회수된 발행본이다" }]);
+    expect(groups[0].anchor).toBe("frames");
+    expect(groups[0].reasons).toEqual(["회수된 프레임이 들어 있어요. 빼고 다른 프레임을 골라 주세요."]);
+  });
+
   // 상시 캠페인에 종료 시각이 남으면 captureEndsAt 위반(ADR-0009 §4). 화면에서 촬영 기간이 참가 방식보다 위다.
   it("상시 캠페인의 종료 시각 위반은 촬영 기간 문구로 맨 앞에 둔다", () => {
     const groups = groupViolations([

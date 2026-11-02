@@ -754,3 +754,17 @@ EOF
 - 결과 재진입은 동일 `mediaId`를 재생한다. 이름 PATCH는 조회와 분리하고, 게스트 인계의 최초 이름 지정만 서버 기본 이름인 경우 수행한다. 사용자가 바꾼 이름은 보존한다.
 - 미디어의 `createdAt: 2026-10-18T23:24:59.641949`는 실제 KST 생성 시각과 같았다. `userMediaApi`에서 시간대 없는 미디어 시각만 `+09:00`으로 정규화한다. 명시된 `Z`/오프셋과 다른 API의 UTC 계약은 변경하지 않는다. 서버가 오프셋을 명시하면 이 보정 없이도 동일하게 동작한다.
 - BASIC 사용량은 한도 `-1`, 무제한 `true`였고 커스텀 프레임 저장이 성공했다. 가격표는 현재 사용량 조회와 도입 예정 기준을 구분한다. 보관 기간은 사용량 응답에 없으므로 빈 기록을 기간 만료로 단정하지 않는다.
+
+## 2026-11-02 출시 전 범위
+
+경로·필드의 원본은 백엔드 develop 의 `docs/api/openapi.generated.json` 이다. 여기에는 거기서 읽히지 않는 약속만 적는다.
+
+- **사유:** 운영자 링크 회수, 프레임 회수, 계정 정지·해제는 `reason` 필수(1~500자). 어기면 400 `GEN-003`. 참가자 본인의 링크 회수는 사유가 없다.
+- **결과 링크 회수:** 작업의 링크를 전부 끊는다. 고를 수 없다(서버가 토큰 원문을 모른다). 응답은 `{ revokedCount }`. 끊긴 링크는 기존 401 `RESULT-001`.
+- **프레임 회수:** `FrameVersionResponse` 에 `revokedAt`·`revokedReason` 이 붙는다. 회수되지 않았으면 키가 없다. 발행본 목록(`.../versions`)에는 회수본도 오고, 고르기 목록에서는 빠진다. 최신 발행본이 회수되면 프레임이 고르기 목록에서 빠지고 이전 발행본으로 내려가지 않는다. 공개 행사 `frames` 에 `isDefault` 항목이 없을 수 있어 `find(isDefault) ?? list[0]` 으로 읽는다.
+- **계정 정지:** `GET /api/admin/users?email=` 은 배열이다(없으면 `[]`, 소셜 계정 때문에 같은 이메일이 여러 행일 수 있다). 자기 자신과 마지막 ADMIN 은 403 `GEN-021` 이라 화면이 그 사정을 따로 말한다. 탈퇴 요청 중인 계정은 400 `AUTH-005` 다(정지로 덮으면 삭제 배치가 건너뛴다). 그래서 화면에 정지 버튼이 없다.
+- **정지 계정:** 로그인·재발급·앱 코드 교환·탈퇴 요청은 403 `AUTH-042`. 소셜 로그인은 리다이렉트라 본문을 줄 수 없어, 상태 조회만 되는 access 쿠키를 주고 refresh 세션을 만들지 않는다. 콜백 화면이 `/api/auth/status` 의 `BLOCKED` 를 읽어 문구를 보여 준다. 정지된 사람의 개인정보 삭제 요청은 지금 문의로만 처리된다.
+- **과거 사진 제한:** 초대·권한 수정의 `includePast` 는 기본 `false`. 수정에서 `true` 면 제한을 풀고, `false`·생략은 그대로 둔다. 초대 미리보기는 수락 시각을 모르므로 `photosFrom` 이 아니라 `includePast` 를 준다. `EventGrantView.photosFrom` 이 없거나 null 이면 제한 없음. `me/events` 의 `access.photosFrom` 도 같고, 이때 `completedPhotoCount` 는 그 시각 뒤 사진만 센다. 제한된 수신자의 `events/{id}/usage` 는 403 `GEN-021` 이다(숨긴 사진 수를 짐작할 수 있어서). 권한 수정과 초대 수락은 결과 범위가 행위자(초대면 초대한 사람)의 지금 범위 밖이면 403 `GEN-021` 이고, 초대 토큰은 쓰이지 않은 채 남는다. 수령 때 묶음에 범위 밖 사진이 있으면 묶음이 무효가 되어 410 `EXPORT-002`.
+- **디자이너:** `me/events` 행에서 `operations` 에 `EDIT_THEME` 이 있고 `MANAGE_EVENT` 가 없으면 꾸미기만 고치는 사람이다(`isThemeOnlyAccess`). OWNER·ADMIN 의 `operations` 는 `EDIT_THEME` 까지 넷이다. `PATCH` 는 `theme`·`frames` 만 받고 나머지는 403 `GEN-021`(`theme: null` 은 받는다). 게시는 `MANAGE_EVENT` 그대로다. 디자이너에게 200: 행사 조회, `effective-settings`, 공간 `frames`·`frame-versions`. 403: `usage`, `projects`, `brand-defaults` — 화면은 이 셋 없이 돈다.
+- **게시 위반:** 회수된 발행본은 `field: frames[n]`, `reason: 긴급 회수된 발행본이다`.
+- **문의처:** `copy.contact` 는 다른 문구처럼 200자 제한이고 공간·프로젝트 기본값에서 상속된다.

@@ -27,7 +27,7 @@ import { StudioMultiExports } from "@/components/studio/StudioMultiExports";
 import { StudioProjects } from "@/components/studio/StudioProjects";
 import { StudioWorkspaceFrames } from "@/components/studio/StudioWorkspaceFrames";
 import { AuditLogList } from "@/components/audit/AuditLogList";
-import { PERMISSION_LABEL, listMyEvents, listWorkspaceAuditLogs, type MyEvent } from "@/lib/studio/accessApi";
+import { PERMISSION_LABEL, isThemeOnlyAccess, listMyEvents, listWorkspaceAuditLogs, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
 
 /** 행사는 조직 공간에만 만든다 — 개인 공간은 회원 탈퇴 때 통째로 지워진다(백엔드 fork #15, R5 14절). */
@@ -70,14 +70,21 @@ function sortEvents(events: StudioEvent[]) {
   return [...events].sort((a, b) => finished(a) - finished(b) || when(a) - when(b));
 }
 
+/** 디자이너 목록의 상태. 이 응답에는 중지·촬영 기간이 없어 「운영 중」을 단정하지 않는다. */
+const THEME_EVENT_STATUS: Record<MyEvent["status"], string> = {
+  DRAFT: "초안",
+  LIVE: "게시됨",
+  CAPTURE_CLOSED: "촬영 종료",
+  ARCHIVED: "보관 종료",
+};
+
 export function StudioHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [events, setEvents] = useState<StudioEvent[] | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  // 행사 고객으로 사진 권한만 받은 행사(공간 멤버가 아니다). 고객에게는 이 목록이 Studio 의 시작점이다.
-  const [customerEvents, setCustomerEvents] = useState<MyEvent[]>([]);
+  const [myEvents, setMyEvents] = useState<MyEvent[]>([]);
   const [customerLoaded, setCustomerLoaded] = useState(false);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -93,6 +100,18 @@ export function StudioHome() {
   // 행사 목록은 운영 역할만 부를 수 있다(서버 403). 디자이너·보기 전용에게는 오류가 아니라 프레임 작업 자리를 보인다.
   const worksOnEvents = current?.role === "OWNER" || current?.role === "ADMIN" || current?.role === "OPERATOR";
   const framesOnly = current !== null && !worksOnEvents;
+  // 행사 고객으로 사진 권한만 받은 행사(공간 멤버가 아니다). 고객에게는 이 목록이 Studio 의 시작점이다.
+  const customerEvents = myEvents.filter((e) => !e.access.role);
+  // 디자이너가 꾸미는 행사. 행사 목록 API 는 운영 역할만 열려 me/events 에서 고른다. 끝난 행사는 고칠 수 없어 뺀다.
+  const themeEvents =
+    current?.role === "DESIGNER"
+      ? myEvents.filter(
+          (e) =>
+            isThemeOnlyAccess(e.access) &&
+            (e.status === "DRAFT" || e.status === "LIVE") &&
+            (!e.workspaceId || e.workspaceId === currentId),
+        )
+      : [];
 
   const reload = useCallback(async () => {
     try {
@@ -106,7 +125,7 @@ export function StudioHome() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
     void reload();
     listMyEvents()
-      .then((list) => setCustomerEvents(list.filter((e) => !e.access.role)))
+      .then(setMyEvents)
       .catch(() => {})
       .finally(() => setCustomerLoaded(true));
     getMyUserInfo()
@@ -170,13 +189,13 @@ export function StudioHome() {
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
             <h1 className="text-[30px] font-extrabold tracking-tight">
-              {customerOnly ? "내 행사 사진" : framesOnly ? "공간 프레임" : "행사 운영"}
+              {customerOnly ? "내 행사 사진" : current?.role === "DESIGNER" ? "디자인 작업" : framesOnly ? "공간 프레임" : "행사 운영"}
             </h1>
             <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
               {customerOnly
                 ? "초대받은 행사의 사진을 보고 받을 수 있어요."
                 : current?.role === "DESIGNER"
-                  ? "이 공간의 행사에 쓸 프레임을 만들고 발행해요. 행사에 고르는 일은 관리자가 해요."
+                  ? "이 공간의 프레임을 만들고, 행사의 꾸미기와 프레임을 고쳐요. 게시는 운영 담당이 해요."
                   : current?.role === "VIEWER"
                     ? "이 공간의 프레임을 볼 수 있어요. 만들거나 고치려면 관리자에게 디자이너 권한을 요청해 주세요."
                     : "행사 참가 링크와 QR, 촬영 기간, 참가 동의를 정하고 게시해요."}
@@ -289,8 +308,33 @@ export function StudioHome() {
               />
             ) : null}
 
+            {themeEvents.length > 0 ? (
+              <section aria-labelledby="studio-theme-events" className="flex flex-col gap-3">
+                <h2 id="studio-theme-events" className="text-[18px] font-bold">
+                  꾸밀 행사
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {themeEvents.map((event) => (
+                    <li key={event.eventId}>
+                      <Link
+                        href={`/studio/events/${encodeURIComponent(event.eventId)}`}
+                        className="hc-surface-card flex min-h-14 items-center gap-3 rounded-2xl border px-4 py-3 transition hover:border-(--hc-border-strong)"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-1">
+                          <span className="break-words text-[15px] font-semibold">{event.name || "이름 없는 행사"}</span>
+                          <span className="text-[12px] text-(--hc-muted)">{THEME_EVENT_STATUS[event.status]}</span>
+                        </span>
+                        <ChevronRight aria-hidden className="size-4 shrink-0 text-(--hc-muted)" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             {framesOnly ? (
               <section aria-label="공간 프레임 목록" className="flex flex-col gap-3">
+                {current.role === "DESIGNER" ? <h2 className="text-[18px] font-bold">공간 프레임</h2> : null}
                 <StudioWorkspaceFrames
                   key={current.workspaceId}
                   workspaceId={current.workspaceId}

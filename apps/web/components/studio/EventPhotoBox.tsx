@@ -7,6 +7,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EventPhotoViewer } from "@/components/studio/EventPhotoViewer";
+import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { StudioPhotoExports } from "@/components/studio/StudioPhotoExports";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { dayEndToServer, dayStartToServer } from "@/lib/studio/eventTime";
@@ -15,6 +16,7 @@ import { withRequestDeadline } from "@/lib/requestDeadline";
 import { listMyEvents, type MyEvent } from "@/lib/studio/accessApi";
 import {
   deleteEventPhoto,
+  revokeEventPhotoResultAccess,
   getEventPhotoDownload,
   listEventPhotos,
   type Photo,
@@ -92,6 +94,8 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<Photo | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<Photo | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   // 크게 보는 사진. 목록이 바뀌어도 그 사진을 따라가게 번호가 아니라 id 로 기억한다.
   const [viewingId, setViewingId] = useState<number | null>(null);
   const refreshedAtRef = useRef(0);
@@ -220,6 +224,20 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
     } finally {
       setBusy(null);
       setConfirm(null);
+    }
+  };
+
+  const revokeLinks = async (photo: Photo, reason: string) => {
+    setBusy(photo.photoId);
+    setRevokeError(null);
+    try {
+      const { revokedCount } = await revokeEventPhotoResultAccess(eventId, photo.photoId, reason);
+      setNotice(revokedCount > 0 ? `이 사진의 결과 링크 ${revokedCount}개를 끊었어요. 사진은 그대로예요.` : "끊을 결과 링크가 없어요.");
+      setRevokeTarget(null);
+    } catch (cause) {
+      setRevokeError(getUserFacingApiErrorMessage(cause, "링크를 끊지 못했어요. 잠시 뒤 다시 눌러 주세요."));
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -362,7 +380,11 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               </button>
             </div>
           ) : (
-            <p className="text-[14px] text-(--hc-muted)">아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요.</p>
+            <p className="text-[14px] text-(--hc-muted)">
+              {access?.access.photosFrom
+                ? "초대를 받은 뒤에 찍은 사진이 아직 없어요. 이전 사진이 필요하면 행사 담당자에게 요청해 주세요."
+                : "아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요."}
+            </p>
           )
         ) : null}
 
@@ -456,6 +478,28 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
           onClose={() => setViewingId(null)}
           onDownload={(photo) => void download(photo)}
           onDelete={(photo) => setConfirm(photo)}
+          onRevokeLinks={(photo) => {
+            setRevokeError(null);
+            setRevokeTarget(photo);
+          }}
+        />
+      ) : null}
+
+      {revokeTarget ? (
+        <SingleFieldDialog
+          title="보낸 링크를 끊을까요?"
+          description="이 사진으로 보낸 링크가 모두 열리지 않아요. 사진은 지워지지 않고, 필요하면 새 링크를 만들 수 있어요."
+          label="끊는 이유"
+          placeholder="예: 다른 분께 잘못 보냈어요"
+          initialValue=""
+          maxLength={200}
+          submitLabel="링크 끊기"
+          submittingLabel="끊는 중"
+          destructive
+          saving={busy === revokeTarget.photoId}
+          error={revokeError}
+          onClose={() => setRevokeTarget(null)}
+          onSubmit={(reason) => void revokeLinks(revokeTarget, reason)}
         />
       ) : null}
 

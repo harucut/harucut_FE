@@ -28,6 +28,13 @@ it("주최자 문구가 비었으면 기본 문구, 길면 200자에서 자른�
   expect(pageThemeCopy(null, "done", "기본")).toBe("기본");
 });
 
+// 문의처는 기본 문구가 없다. 주최자가 적지 않으면 아무것도 보이지 않아야 한다.
+it("문의처는 적은 것만 돌려주고 200자에서 자른다", () => {
+  expect(pageThemeCopy({ copy: {} }, "contact", "")).toBe("");
+  expect(pageThemeCopy({ copy: { contact: " 안내 데스크 " } }, "contact", "")).toBe("안내 데스크");
+  expect(pageThemeCopy({ copy: { contact: "가".repeat(250) } }, "contact", "")).toHaveLength(200);
+});
+
 it("대비율을 계산하고 모자란 짝만 알린다", () => {
   expect(contrastRatio("#000000", "#FFFFFF")).toBeCloseTo(21);
   expect(contrastRatio("#FFFFFF", "#FFFFFF")).toBeCloseTo(1);

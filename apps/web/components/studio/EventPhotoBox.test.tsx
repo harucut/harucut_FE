@@ -6,6 +6,7 @@ const mockList = jest.fn();
 const mockDownload = jest.fn();
 const mockDelete = jest.fn();
 const mockMyEvents = jest.fn();
+const mockRevokeLinks = jest.fn();
 
 jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
 jest.mock("@/lib/studio/photosApi", () => ({
@@ -13,6 +14,7 @@ jest.mock("@/lib/studio/photosApi", () => ({
   listEventPhotos: (...a: unknown[]) => mockList(...a),
   getEventPhotoDownload: (...a: unknown[]) => mockDownload(...a),
   deleteEventPhoto: (...a: unknown[]) => mockDelete(...a),
+  revokeEventPhotoResultAccess: (...a: unknown[]) => mockRevokeLinks(...a),
   listPhotoExports: () => Promise.resolve([]),
 }));
 const mockNativeSave = jest.fn();
@@ -258,4 +260,63 @@ it("프레임이 둘 이상이면 프레임으로 거를 수 있다", async () =
   render(<EventPhotoBox eventId="Ev1" />);
   fireEvent.change(await screen.findByLabelText("프레임"), { target: { value: "32" } });
   await waitFor(() => expect(mockList).toHaveBeenLastCalledWith("Ev1", { frameVersionId: 32 }));
+});
+
+describe("보낸 링크 끊기", () => {
+  async function openRevokeDialog() {
+    render(<EventPhotoBox eventId="Ev1" />);
+    const viewer = await openViewer();
+    fireEvent.click(viewer.getByRole("button", { name: "보낸 링크 끊기" }));
+    return await screen.findByRole("dialog", { name: "보낸 링크를 끊을까요?" });
+  }
+
+  it("이유를 적어야 끊고, 끊은 수를 알린다. 사진은 지우지 않는다", async () => {
+    mockRevokeLinks.mockResolvedValue({ revokedCount: 2 });
+    const dialog = await openRevokeDialog();
+    const submit = within(dialog).getByRole("button", { name: "링크 끊기" });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText("끊는 이유"), { target: { value: "오발송" } });
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(mockRevokeLinks).toHaveBeenCalledWith("Ev1", 11, "오발송"));
+    expect(await screen.findByText(/결과 링크 2개를 끊었어요/)).toBeInTheDocument();
+    expect(mockDelete).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "보낸 링크를 끊을까요?" })).not.toBeInTheDocument();
+  });
+
+  it("끊을 링크가 없으면 없다고 말한다", async () => {
+    mockRevokeLinks.mockResolvedValue({ revokedCount: 0 });
+    const dialog = await openRevokeDialog();
+    fireEvent.change(within(dialog).getByLabelText("끊는 이유"), { target: { value: "오발송" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "링크 끊기" }));
+    expect(await screen.findByText("끊을 결과 링크가 없어요.")).toBeInTheDocument();
+  });
+
+  it("실패하면 입력을 잃지 않고 대화상자 안에서 알린다", async () => {
+    mockRevokeLinks.mockRejectedValue(new Error("down"));
+    const dialog = await openRevokeDialog();
+    fireEvent.change(within(dialog).getByLabelText("끊는 이유"), { target: { value: "오발송" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "링크 끊기" }));
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("끊는 이유")).toHaveValue("오발송");
+  });
+
+  it("지울 권한이 없으면 버튼이 없다", async () => {
+    mockMyEvents.mockResolvedValue(access(["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"]));
+    render(<EventPhotoBox eventId="Ev1" />);
+    const viewer = await openViewer();
+    await viewer.findByRole("button", { name: "저장" });
+    expect(viewer.queryByRole("button", { name: "보낸 링크 끊기" })).not.toBeInTheDocument();
+  });
+});
+
+// 받은 뒤 사진만 보는 사람의 빈 화면을 「아직 찍은 사진이 없어요」로 두면 행사에 사진이 없는 줄 안다.
+it("사진 범위가 제한된 고객의 빈 사진함은 이유와 다음 행동을 말한다", async () => {
+  mockList.mockResolvedValue({ items: [], nextCursor: null });
+  mockMyEvents.mockResolvedValue([
+    { eventId: "Ev1", name: "민지 ♥ 준호", status: "LIVE", access: { permissions: ["VIEW_PHOTOS"], photosFrom: "2026-11-02T10:00:00+09:00" } },
+  ]);
+  render(<EventPhotoBox eventId="Ev1" />);
+  expect(await screen.findByText(/초대를 받은 뒤에 찍은 사진이 아직 없어요/)).toBeInTheDocument();
 });

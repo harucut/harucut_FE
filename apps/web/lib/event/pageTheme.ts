@@ -22,6 +22,7 @@ export const PAGE_THEME_COPY_KEYS = [
   "expired",
   "closed",
   "error",
+  "contact",
 ] as const;
 export type PageThemeCopyKey = (typeof PAGE_THEME_COPY_KEYS)[number];
 export type PageThemeCopy = Partial<Record<PageThemeCopyKey, string>>;

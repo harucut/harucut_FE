@@ -141,3 +141,50 @@ it("필수 약관에 막혀 실패하면 다시 확인할 수 있고, 동의 뒤
   fireEvent.click(await screen.findByRole("button", { name: "다시 확인" }));
   expect(await screen.findByRole("button", { name: "초대 받기" })).toBeInTheDocument();
 });
+
+describe("행사 고객 초대의 사진 범위", () => {
+  const EVENT_PREVIEW = {
+    kind: "EVENT",
+    workspaceName: "하루컷 웨딩팀",
+    eventName: "민지 ♥ 준호",
+    permissions: ["VIEW_PHOTOS"],
+    invitedByName: "민지",
+    expiresAt: "2026-11-02T10:00:00+09:00",
+  };
+
+  it("수락한 뒤 사진만 받는 초대면 그 사실을 수락 전에 알린다", async () => {
+    mockPreview.mockResolvedValue({ ...EVENT_PREVIEW, includePast: false });
+    window.history.replaceState(null, "", `/invite#${TOKEN}`);
+    render(<InviteAccept />);
+    expect(await screen.findByText("초대를 받은 뒤에 찍은 사진만 볼 수 있어요.")).toBeInTheDocument();
+  });
+
+  it("이미 찍은 사진까지 받는 초대면 그렇게 말한다", async () => {
+    mockPreview.mockResolvedValue({ ...EVENT_PREVIEW, includePast: true });
+    window.history.replaceState(null, "", `/invite#${TOKEN}`);
+    render(<InviteAccept />);
+    expect(await screen.findByText("이미 찍은 사진도 볼 수 있어요.")).toBeInTheDocument();
+  });
+
+  it("옛 서버처럼 값이 없으면 범위를 단정하지 않는다", async () => {
+    mockPreview.mockResolvedValue(EVENT_PREVIEW);
+    window.history.replaceState(null, "", `/invite#${TOKEN}`);
+    render(<InviteAccept />);
+    await screen.findByText(/행사의 사진을 볼 수 있게/);
+    expect(screen.queryByText(/찍은 사진/)).not.toBeInTheDocument();
+  });
+});
+
+// 받을 범위가 초대한 분의 지금 범위보다 넓으면 서버가 막는다. 토큰은 쓰이지 않아 그분의 권한이 돌아오면 다시 받을 수 있다.
+it("초대한 분의 권한이 바뀌어 막히면 이유를 말하고 토큰을 남긴다", async () => {
+  mockPreview.mockResolvedValue({ ...WORKSPACE_PREVIEW, kind: "EVENT", eventName: "민지 ♥ 준호", permissions: ["VIEW_PHOTOS"], includePast: true });
+  mockAccept.mockRejectedValue(new ApiRequestError({ status: 403, code: "GEN-021", apiMessage: "x" }));
+  window.history.replaceState(null, "", `/invite#${TOKEN}`);
+  render(<InviteAccept />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("초대한 분의 권한이 바뀌어");
+  expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
+  expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+});

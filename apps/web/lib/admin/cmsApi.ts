@@ -249,6 +249,59 @@ export async function publishSystemFrame(frameId: number): Promise<{ frameVersio
   return requireData(res.data, "발행본");
 }
 
+export type SystemFrameVersion = {
+  frameVersionId: number;
+  versionNo: number;
+  createdAt?: string | null;
+  revokedAt?: string | null;
+  revokedReason?: string | null;
+};
+
+export async function listSystemFrameVersions(frameId: number): Promise<SystemFrameVersion[]> {
+  const res = await clientApi.get<ApiEnvelope<SystemFrameVersion[]>>(`/api/client/admin/frames/${frameId}/versions`);
+  return res.data.data ?? [];
+}
+
+export async function revokeSystemFrameVersion(frameVersionId: number, reason: string) {
+  await clientApi.post(`/api/client/admin/frame-versions/${frameVersionId}/revoke`, { reason });
+}
+
+export async function restoreSystemFrameVersion(frameVersionId: number) {
+  await clientApi.post(`/api/client/admin/frame-versions/${frameVersionId}/restore`);
+}
+
+export type AdminUser = {
+  userId: string;
+  email?: string | null;
+  username?: string | null;
+  provider?: string | null;
+  userRole?: string | null;
+  userStatus: string;
+  createdAt?: string | null;
+};
+
+/** 이메일이 정확히 같은 계정. 없으면 빈 목록이다. 소셜 계정 때문에 같은 이메일이 여러 행일 수 있다. */
+export async function searchUsers(email: string): Promise<AdminUser[]> {
+  const res = await clientApi.get<ApiEnvelope<AdminUser[]>>(`/api/client/admin/users?${new URLSearchParams({ email }).toString()}`);
+  return res.data.data ?? [];
+}
+
+export async function blockUser(userId: string, reason: string): Promise<{ userId: string; userStatus: string }> {
+  const res = await clientApi.post<ApiEnvelope<{ userId: string; userStatus: string }>>(
+    `/api/client/admin/users/${encodeURIComponent(userId)}/block`,
+    { reason },
+  );
+  return requireData(res.data, "계정 정지");
+}
+
+export async function unblockUser(userId: string, reason: string): Promise<{ userId: string; userStatus: string }> {
+  const res = await clientApi.post<ApiEnvelope<{ userId: string; userStatus: string }>>(
+    `/api/client/admin/users/${encodeURIComponent(userId)}/unblock`,
+    { reason },
+  );
+  return requireData(res.data, "정지 해제");
+}
+
 export async function listAuditLogs(cursor: string | null): Promise<AuditLogPage> {
   const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
   const res = await clientApi.get<ApiEnvelope<AuditLogPage>>(`/api/client/admin/audit-logs${query}`);

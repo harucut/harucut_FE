@@ -53,6 +53,15 @@ export async function listEventPhotos(eventId: string, filter: PhotoFilter, curs
   return res.data.data ?? { items: [] };
 }
 
+/** 이 사진의 결과 링크를 전부 끊는다(권한 DELETE_PHOTOS). 사진은 남는다. 사유는 감사 로그에 남는다. */
+export async function revokeEventPhotoResultAccess(eventId: string, photoId: number, reason: string): Promise<{ revokedCount: number }> {
+  const res = await clientApi.post<ApiEnvelope<{ revokedCount: number }>>(
+    `/api/client/events/${encodeURIComponent(eventId)}/photos/${photoId}/result-access/revoke`,
+    { reason },
+  );
+  return requireData(res.data, "결과 링크 끊기");
+}
+
 /** 5분짜리 내려받기 주소. 파일 이름(「{행사명}-{photoId}.jpg」)은 서버가 붙인다. */
 export async function getEventPhotoDownload(eventId: string, photoId: number): Promise<{ url: string; expiresAt: string }> {
   const res = await clientApi.post<ApiEnvelope<{ url: string; expiresAt: string }>>(

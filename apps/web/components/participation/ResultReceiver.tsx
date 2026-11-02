@@ -7,6 +7,7 @@ import { DevelopingPhoto } from "@/components/participation/DevelopingPhoto";
 import {
   EventActionBar,
   EventButton,
+  EventContact,
   EventLinkButton,
   EventLogo,
   EventSurface,
@@ -403,16 +404,22 @@ function ResultBody({
 
   if (result.status === "EXPIRED") {
     return (
-      <p role="status" className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">
-        {expired}
-      </p>
+      <div className="flex flex-col gap-2">
+        <p role="status" className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">
+          {expired}
+        </p>
+        <EventContact />
+      </div>
     );
   }
   if (result.status === "FAILED") {
     return (
-      <p role="alert" className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">
-        {failed}
-      </p>
+      <div className="flex flex-col gap-2">
+        <p role="alert" className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">
+          {failed}
+        </p>
+        <EventContact />
+      </div>
     );
   }
   if (result.status === "PENDING") {

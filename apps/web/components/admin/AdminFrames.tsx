@@ -2,9 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adminErrorMessage, formatDateTime } from "@/components/admin/adminShared";
+import { FrameVersionManager } from "@/components/studio/FrameVersionManager";
 import { getFrameConfig } from "@/constants/frames";
 import { frameIdFromFrameType } from "@/lib/frameApi";
-import { listSystemFrames, publishSystemFrame, type SystemFrame } from "@/lib/admin/cmsApi";
+import {
+  listSystemFrames,
+  listSystemFrameVersions,
+  publishSystemFrame,
+  restoreSystemFrameVersion,
+  revokeSystemFrameVersion,
+  type SystemFrame,
+} from "@/lib/admin/cmsApi";
 import { parseAssetTitle } from "@/lib/serverAssets";
 
 /**
@@ -16,6 +24,8 @@ export function AdminFrames() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [notices, setNotices] = useState<Record<number, { kind: "ok" | "error"; text: string }>>({});
+  // 방금 발행한 판. 펴 둔 회수 목록이 이걸 보고 다시 받는다.
+  const [published, setPublished] = useState<Record<number, number>>({});
 
   const load = useCallback(async () => {
     try {
@@ -39,6 +49,7 @@ export function AdminFrames() {
     });
     try {
       const { versionNo } = await publishSystemFrame(frame.frameId);
+      setPublished((prev) => ({ ...prev, [frame.frameId]: versionNo }));
       setNotices((prev) => ({ ...prev, [frame.frameId]: { kind: "ok", text: `${versionNo}번째 발행본을 만들었어요.` } }));
     } catch (cause) {
       setNotices((prev) => ({
@@ -101,6 +112,12 @@ export function AdminFrames() {
                   {busy === frame.frameId ? "발행하는 중…" : "발행"}
                 </button>
               </div>
+              <FrameVersionManager
+                load={() => listSystemFrameVersions(frame.frameId)}
+                revoke={(version, reason) => revokeSystemFrameVersion(version.frameVersionId, reason)}
+                restore={(version) => restoreSystemFrameVersion(version.frameVersionId)}
+                revision={published[frame.frameId]}
+              />
               {notice ? (
                 <p role={notice.kind === "ok" ? "status" : "alert"} className={notice.kind === "ok" ? "text-[13px]" : "text-[13px] text-(--hc-danger)"}>
                   {notice.text}

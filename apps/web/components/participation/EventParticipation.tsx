@@ -19,6 +19,7 @@ import {
   getPublicEvent,
   listParticipantResults,
   reissueResultAccess,
+  revokeResultAccess,
   startByodSession,
   startCaptureRun,
   submitConsents,
@@ -36,6 +37,7 @@ import { useEventCamera } from "@/components/participation/useEventCamera";
 import {
   EventActionBar,
   EventButton,
+  EventContact,
   EventLogo,
   EventSurface,
   EventTitle,
@@ -379,6 +381,18 @@ export function EventParticipation({ slug, initialEvent = null }: { slug: string
     }
   };
 
+  const onRevokeResult = async (jobId: number) => {
+    if (!session) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await revokeResultAccess(session.token, jobId);
+      setNotice("이 사진의 링크를 모두 끊었어요. 받은 사람은 더 볼 수 없어요. 다시 보내려면 「보기」로 새 링크를 만들어 주세요.");
+    } catch (cause) {
+      setError(getUserFacingApiErrorMessage(cause, "링크를 끊지 못했어요. 잠시 후 다시 눌러 주세요."));
+    }
+  };
+
   const onDownloadResult = async (jobId: number) => {
     if (!session) return;
     setError(null);
@@ -451,6 +465,7 @@ export function EventParticipation({ slug, initialEvent = null }: { slug: string
             onStart={onStartShooting}
             onShare={(jobId) => void onShareResult(jobId)}
             onDownload={(jobId) => void onDownloadResult(jobId)}
+            onRevoke={(jobId) => void onRevokeResult(jobId)}
             onWithdraw={(item) => void onWithdrawConsent(item)}
             onRefresh={() => {
               if (!session) return;
@@ -581,6 +596,7 @@ export function IntroStep({ event, frames, busy, onJoin }: { event: PublicEvent;
       <div className="ev-readable flex flex-col gap-2">
         <EventTitle>{event.name}</EventTitle>
         <p className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">{event.captureOpen ? welcome : closed}</p>
+        {event.captureOpen ? null : <EventContact />}
       </div>
       <EventActionBar>
         {event.captureOpen ? (
@@ -662,6 +678,7 @@ export function HomeStep({
   onStart,
   onShare,
   onDownload,
+  onRevoke,
   onWithdraw,
   onRefresh,
 }: {
@@ -671,6 +688,8 @@ export function HomeStep({
   onStart: () => void;
   onShare: (jobId: number) => void;
   onDownload: (jobId: number) => void;
+  /** 잘못 보낸 링크를 거두는 길(R5 206줄). 한 번 더 눌러야 끊는다. */
+  onRevoke: (jobId: number) => void;
   /** 선택 동의를 거두는 길(R5 645줄). 필수 동의는 촬영의 조건이라 여기 없다. */
   onWithdraw: (item: ConsentItem) => void;
   onRefresh: () => void;
@@ -681,6 +700,13 @@ export function HomeStep({
   const closed = useEventCopy("closed", "지금은 촬영 시간이 아니에요.");
   const welcome = useEventCopy("welcome", "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.");
   const hasResults = results.length > 0;
+  const [revokeArmed, setRevokeArmed] = useState<number | null>(null);
+  // 한 번 눌러 둔 끊기는 잠시 뒤 풀린다. iOS 는 버튼에 포커스를 주지 않아 blur 만으로는 풀리지 않는다.
+  useEffect(() => {
+    if (revokeArmed === null) return;
+    const timer = window.setTimeout(() => setRevokeArmed(null), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [revokeArmed]);
   return (
     <section className="ev-step flex flex-1 flex-col gap-4">
       {/* 받을 사진이 있으면 그 목록이 이 화면의 주인공이다. */}
@@ -697,7 +723,8 @@ export function HomeStep({
               // 기한이 지난 사진은 받을 수 없다. 누르면 실패할 버튼을 두지 않고 지났다고 말한다.
               const expired = job.status === "DONE" && Boolean(job.expiresAt) && new Date(job.expiresAt!).getTime() <= openedAt;
               return (
-              <li key={job.jobId} className="flex items-center gap-3 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-3">
+              <li key={job.jobId} className="flex flex-col gap-1 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-3">
+                <span className="flex items-center gap-3">
                 {job.thumbnailUrl ? (
                   // 짧은 서명 URL 이라 next/image 로 보내지 않는다. Referer 도 보내지 않는다.
                   // eslint-disable-next-line @next/next/no-img-element
@@ -722,6 +749,24 @@ export function HomeStep({
                 ) : job.status === "PENDING" ? (
                   <button type="button" onClick={onRefresh} className="h-11 shrink-0 rounded-full border border-(--ev-border) px-4 text-[13px] font-bold">
                     다시 확인
+                  </button>
+                ) : null}
+                </span>
+                {job.status === "DONE" && !expired ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (revokeArmed !== job.jobId) {
+                        setRevokeArmed(job.jobId);
+                        return;
+                      }
+                      setRevokeArmed(null);
+                      onRevoke(job.jobId);
+                    }}
+                    onBlur={() => setRevokeArmed((armed) => (armed === job.jobId ? null : armed))}
+                    className="flex min-h-11 items-center self-end px-1 text-[12px] font-semibold text-(--ev-muted) underline underline-offset-4"
+                  >
+                    {revokeArmed === job.jobId ? "한 번 더 누르면 링크를 끊어요" : "보낸 링크 끊기"}
                   </button>
                 ) : null}
               </li>

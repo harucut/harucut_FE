@@ -243,3 +243,37 @@ it("결과 링크가 바뀐 뒤 도착한 이전 저장 응답은 쓰지 않는�
   expect(open).not.toHaveBeenCalled();
   open.mockRestore();
 });
+
+describe("행사 문의처", () => {
+  const theme = { schemaVersion: 1, copy: { contact: "안내 데스크 02-000-0000" } };
+
+  it("주최자가 적었으면 합성 실패 화면에 보인다", async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+    mockGetResult.mockResolvedValue({ status: "FAILED", eventName: "행사", thumbnailUrl: null, expiresAt: "", theme });
+    render(<ResultReceiver />);
+    expect(await screen.findByText("문의: 안내 데스크 02-000-0000")).toBeInTheDocument();
+  });
+
+  it("기간이 지난 화면에도 보인다", async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+    mockGetResult.mockResolvedValue({ status: "EXPIRED", eventName: "행사", thumbnailUrl: null, expiresAt: "", theme });
+    render(<ResultReceiver />);
+    expect(await screen.findByText("문의: 안내 데스크 02-000-0000")).toBeInTheDocument();
+  });
+
+  it("적지 않았으면 빈 줄을 두지 않는다", async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+    mockGetResult.mockResolvedValue({ status: "FAILED", eventName: "행사", thumbnailUrl: null, expiresAt: "" });
+    render(<ResultReceiver />);
+    await screen.findByRole("alert");
+    expect(screen.queryByText(/^문의:/)).not.toBeInTheDocument();
+  });
+
+  it("사진을 받은 화면에는 나오지 않는다", async () => {
+    window.history.replaceState({}, "", `/r#${TOKEN_A}`);
+    mockGetResult.mockResolvedValue({ ...done(), theme });
+    render(<ResultReceiver />);
+    await screen.findByRole("img");
+    expect(screen.queryByText(/^문의:/)).not.toBeInTheDocument();
+  });
+});

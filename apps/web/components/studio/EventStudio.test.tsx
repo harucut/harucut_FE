@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { EventStudio } from "@/components/studio/EventStudio";
+import { ApiRequestError } from "@/lib/clientApi";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import type { StudioEvent } from "@/lib/studio/studioApi";
 
@@ -626,6 +627,16 @@ it("운영 담당이 프로젝트에서 행사 설정 권한을 받았으면 설
   expect(screen.queryByRole("heading", { name: "행사 고객" })).not.toBeInTheDocument();
 });
 
+// 프레임을 만들고 고치고 회수하는 일은 서버가 OWNER·ADMIN·DESIGNER 에게만 연다. 누르면 403 이 날 칸을 보이지 않는다.
+it("운영 담당은 발행본을 고르기만 하고, 공간 프레임 관리 칸은 보지 않는다", async () => {
+  myAccess({ role: "OPERATOR", permissions: [], operations: ["MANAGE_EVENT"], sources: { MANAGE_EVENT: "EVENT" } });
+  await renderStudio();
+  await waitFor(() => expect(screen.getByLabelText("행사 이름")).toBeEnabled());
+  expect(await screen.findByText("웨딩 세로", { exact: false })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "공간 프레임" })).not.toBeInTheDocument();
+  expect(screen.queryByText("발행본 회수")).not.toBeInTheDocument();
+});
+
 it("관리자는 운영 담당에게 이 행사의 운영 권한을 정해 저장한다", async () => {
   mockMembers.mockResolvedValue([
     { userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" },
@@ -756,4 +767,76 @@ describe("참가자 문구(D06)", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "너비(%)" }), { target: { value: "95" } });
     expect(screen.getByText("문구 칸이 프레임 밖으로 나가요.")).toBeInTheDocument();
   });
+});
+
+// 디자이너는 꾸미기와 프레임만 고치고 게시하지 않는다. 다른 칸은 서버가 403 으로 막으니 아예 보이지 않는다.
+describe("디자이너(EDIT_THEME)", () => {
+  const live = () => event({ status: "LIVE", captureOpen: true, hasUnpublishedChanges: false });
+
+  beforeEach(() => {
+    myAccess({ role: "DESIGNER", permissions: [], operations: ["EDIT_THEME"] });
+  });
+
+  it("프레임과 꾸미기만 보이고 게시·복제·이용권은 없다", async () => {
+    await renderStudio(live());
+
+    expect(await screen.findByText(/운영 담당이 게시하면 반영돼요/)).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "행사 설정 목차" });
+    expect(within(nav).getByRole("link", { name: /프레임/ })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /디자인/ })).toBeInTheDocument();
+    for (const name of ["개요", "기본·일정", "참가 방식", "동의", "부스", "사람", "이용권"]) {
+      expect(within(nav).queryByRole("link", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByLabelText("행사 이름")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "허용 레이아웃" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "참가 동의" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "참가자 문구" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "게시와 운영" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /게시/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "행사 복제" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "사진함" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "제공 프레임" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "행사 화면 꾸미기" })).toBeInTheDocument();
+  });
+
+  it("저장 본문에는 고친 테마만 실린다", async () => {
+    const initial = live();
+    mockUpdate.mockResolvedValue(initial);
+    await renderStudio(initial);
+
+    fireEvent.change(await screen.findByLabelText("문의처(사진을 못 받았을 때 보여요)"), { target: { value: "안내 데스크" } });
+    fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const patch = mockUpdate.mock.calls[0][2];
+    expect(Object.keys(patch)).toEqual(["theme"]);
+    expect(patch.theme.copy.contact).toBe("안내 데스크");
+  });
+
+  it("사용량을 받지 못해도(403) 화면이 막히지 않는다", async () => {
+    mockUsage.mockRejectedValue(new ApiRequestError({ status: 403, code: "GEN-021" }));
+    await renderStudio(live());
+    expect(await screen.findByRole("heading", { name: "행사 화면 꾸미기" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("촬영이 끝난 행사는 볼 수만 있다", async () => {
+    await renderStudio(event({ status: "CAPTURE_CLOSED" }));
+    expect(await screen.findByText(/지금은 볼 수만 있어요/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "설정 저장" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("문의처(사진을 못 받았을 때 보여요)")).toBeDisabled();
+  });
+
+  it("사진 권한을 따로 받은 디자이너는 사진함으로 갈 수 있다", async () => {
+    myAccess({ role: "DESIGNER", permissions: ["VIEW_PHOTOS"], operations: ["EDIT_THEME"] });
+    await renderStudio(live());
+    expect(await screen.findByRole("link", { name: "사진함" })).toHaveAttribute("href", "/studio/events/Ev1/photos");
+  });
+});
+
+it("관리자의 운영 권한에 EDIT_THEME 이 더 있어도 전체 설정을 그대로 쓴다", async () => {
+  myAccess({ role: "OWNER", permissions: [], operations: ["MANAGE_EVENT", "MANAGE_BOOTH", "INVITE_CUSTOMERS", "EDIT_THEME"] });
+  await renderStudio();
+  expect(await screen.findByRole("heading", { name: "게시와 운영" })).toBeInTheDocument();
+  expect(screen.getByLabelText("행사 이름")).toBeEnabled();
 });
