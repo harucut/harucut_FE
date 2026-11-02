@@ -1036,9 +1036,9 @@ export function CaptureAndSend({
   const runRef = useRef<CaptureRun | null>(null);
   const uploadedRef = useRef<(string | null)[]>(Array(SHOT_COUNT).fill(null));
   const idempotencyKeyRef = useRef<string | null>(null);
-  // 자유 문구(D06). 같은 멱등키로 문구가 다르면 서버가 409 MEDIA-001 이라, 보낸 문구가 바뀌면 키를 새로 잡는다.
+  // 같은 멱등키로 입력이나 문구가 다르면 서버가 409 MEDIA-001 이다. 보낸 사진이나 자유 문구(D06)가 바뀌면 키를 새로 잡는다.
   const [freeText, setFreeText] = useState<FreeTextValue>(() => ({ text: "", styleId: event.freeText?.styles[0]?.id ?? "" }));
-  const sentFreeTextRef = useRef<string | null>(null);
+  const sentInputRef = useRef<string | null>(null);
   // 문구 미리보기는 회차에 고정된 행사 설정으로 그린다 — 회차가 바뀌면(PART-003 뒤 새 회차) 다시 그린다.
   const [captureRunId, setCaptureRunId] = useState<string | null>(null);
 
@@ -1053,7 +1053,7 @@ export function CaptureAndSend({
     setCaptureRunId(run.captureRunId);
     uploadedRef.current = Array(SHOT_COUNT).fill(null);
     idempotencyKeyRef.current = crypto.randomUUID();
-    sentFreeTextRef.current = null;
+    sentInputRef.current = null;
     // 요청한 손님의 자격도 함께 넘긴다 — 늦게 끝난 앞 손님의 회차가 다음 손님에게 붙지 않게(부스).
     onRunOpenedRef.current?.(run, token);
   }, [token, event.eventId]);
@@ -1216,11 +1216,11 @@ export function CaptureAndSend({
       const freeTextToSend = normalizeFreeText(freeText.text);
       const sentFreeText =
         event.freeText && freeTextToSend !== "" ? { text: freeTextToSend, styleId: freeText.styleId } : undefined;
-      const sentKey = JSON.stringify(sentFreeText ?? null);
-      if (sentFreeTextRef.current !== null && sentFreeTextRef.current !== sentKey) {
+      const sentKey = JSON.stringify({ sources: uploadedRef.current, freeText: sentFreeText ?? null });
+      if (sentInputRef.current !== null && sentInputRef.current !== sentKey) {
         idempotencyKeyRef.current = crypto.randomUUID();
       }
-      sentFreeTextRef.current = sentKey;
+      sentInputRef.current = sentKey;
       const accepted = await submitEventCompose(token, event.eventId, {
         captureRunId: run.captureRunId,
         frameVersionId: frame.frameVersionId,

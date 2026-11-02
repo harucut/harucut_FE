@@ -177,6 +177,56 @@ describe("칸 다시 찍기", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
   });
 
+  // 접수 응답을 잃은 뒤 칸을 바꿔 다시 보내면 같은 키에 다른 입력이라 서버가 409 MEDIA-001 로 막는다.
+  it("보낸 뒤에 다시 찍은 사진은 그 칸만 올리고 새 멱등키로 보낸다", async () => {
+    let n = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { ...globalThis.crypto, randomUUID: () => `idem-${++n}` },
+      configurable: true,
+    });
+    // 올릴 때마다 서버는 새 자산 id 를 준다.
+    let uploads = 0;
+    mockUpload.mockImplementation(async () => `asset-${++uploads}`);
+    await toReview();
+    api.submitEventCompose.mockRejectedValueOnce(new ApiRequestError({ status: 500, code: "GEN-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await screen.findByRole("alert");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    await armRetake(1);
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "한 장 찍기" }));
+    for (let tick = 0; tick < 5; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_000);
+      });
+    }
+    jest.useRealTimers();
+    fireEvent.click(await screen.findByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+
+    expect(mockUpload).toHaveBeenCalledTimes(5);
+    const [first, second] = api.submitEventCompose.mock.calls.map((call) => call[2]);
+    expect(second.sourceAssetIds).toEqual(["asset-5", "asset-2", "asset-3", "asset-4"]);
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+  });
+
+  it("같은 사진을 그대로 다시 보내면 같은 멱등키를 쓴다", async () => {
+    let n = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { ...globalThis.crypto, randomUUID: () => `idem-${++n}` },
+      configurable: true,
+    });
+    await toReview();
+    api.submitEventCompose.mockRejectedValueOnce(new ApiRequestError({ status: 500, code: "GEN-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+    const [first, second] = api.submitEventCompose.mock.calls.map((call) => call[2]);
+    expect(second.idempotencyKey).toBe(first.idempotencyKey);
+  });
+
   it("새 사진이 찍히면 원래 사진을 버린다", async () => {
     await toReview();
     await armRetake(1);
