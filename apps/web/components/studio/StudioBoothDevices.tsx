@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { QrCode } from "@/components/qr/QrCode";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { withRequestDeadline } from "@/lib/requestDeadline";
@@ -40,6 +41,18 @@ type IssuedCode = {
   pending: boolean;
 };
 
+/** 마지막 접속. 분 단위면 충분하다 — 운영자는 「지금 켜져 있나」만 본다. */
+function lastSeenText(lastSeenAt: string | null | undefined, now: number) {
+  if (!lastSeenAt) return null;
+  const at = Date.parse(lastSeenAt);
+  if (Number.isNaN(at)) return null;
+  const minutes = Math.floor(Math.max(0, now - at) / 60_000);
+  if (minutes < 1) return "방금 접속";
+  if (minutes < 60) return `마지막 접속 ${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `마지막 접속 ${hours}시간 전` : `마지막 접속 ${Math.floor(hours / 24)}일 전`;
+}
+
 function remainingText(expiresAt: number, now: number) {
   const seconds = Math.max(0, Math.round((expiresAt - now) / 1000));
   if (seconds === 0) return "만료됐어요";
@@ -60,11 +73,13 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
   const [codes, setCodes] = useState<Record<string, IssuedCode>>({});
   const [confirm, setConfirm] = useState<null | { kind: "revoke" | "replace"; device: BoothDevice }>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [copiedDevice, setCopiedDevice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const list = await listBoothDevices(eventId);
       setDevices(list);
+      setNow(Date.now());
       // 연결 대기일 때 받은 코드는 기기가 연결되면(다른 상태가 되면) 더 쓸 데가 없다.
       setCodes((prev) => {
         const next = { ...prev };
@@ -75,7 +90,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
       });
       setError(null);
     } catch (cause) {
-      setError(getUserFacingApiErrorMessage(cause, "부스 기기 목록을 불러오지 못했어요."));
+      setError(getUserFacingApiErrorMessage(cause, "부스 기기 목록을 불러오지 못했어요. 아래에서 다시 불러와 주세요."));
     }
   }, [eventId]);
 
@@ -147,7 +162,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
         remember(device);
         setName("");
       },
-      "부스 기기를 추가하지 못했어요.",
+      "부스 기기를 추가하지 못했어요. 잠시 뒤 다시 눌러 주세요.",
     );
 
   const reissue = (device: BoothDevice) =>
@@ -158,8 +173,17 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
         replaceInList(next);
         remember(next);
       },
-      "연결 코드를 다시 받지 못했어요.",
+      "연결 코드를 다시 받지 못했어요. 잠시 뒤 다시 눌러 주세요.",
     );
+
+  const copyPairingLink = async (deviceId: string, link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedDevice(deviceId);
+    } catch {
+      setNotice("복사하지 못했어요. 주소를 길게 눌러 복사해 주세요.");
+    }
+  };
 
   const revoke = (device: BoothDevice) =>
     run(
@@ -172,7 +196,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
           return next;
         });
       },
-      "기기를 해제하지 못했어요.",
+      "기기를 해제하지 못했어요. 잠시 뒤 다시 눌러 주세요.",
     );
 
   if (error) {
@@ -194,19 +218,23 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-[65ch] flex-1 basis-60 text-[13px] text-(--hc-muted)">
+          부스로 쓸 태블릿이나 PC 에서{" "}
+          <span translate="no" className="break-all font-semibold text-(--hc-text)">
+            {boothUrl}
+          </span>{" "}
+          를 열고 연결 코드를 입력하거나, 코드 옆 QR 을 그 기기로 찍어요. 코드는 10분 동안 한 번만 쓸 수 있고, 참가자에게 나눠 주는
+          링크가 아니에요.
+        </p>
         <button
           type="button"
           onClick={() => void load()}
-          className="h-11 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold"
+          className="h-11 shrink-0 rounded-full border border-(--hc-border) px-3 text-[13px] font-semibold transition hover:border-(--hc-border-strong)"
         >
-          새로고침
+          기기 상태 새로고침
         </button>
       </div>
-      <p className="text-[13px] text-(--hc-muted)">
-        부스로 쓸 태블릿이나 PC 에서 <span className="font-semibold text-(--hc-text)">{boothUrl}</span> 를 열고 아래 연결
-        코드를 입력해요. 코드는 10분 동안 한 번만 쓸 수 있고, 참가자에게 나눠 주는 링크가 아니에요.
-      </p>
 
       {notice ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
@@ -224,7 +252,12 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="min-w-0">
                     <span className="block truncate text-[14px] font-semibold">{device.name}</span>
-                    <span className="block text-[12px] text-(--hc-muted)">{STATUS_LABEL[device.status]}</span>
+                    <span className="block text-[12px] text-(--hc-muted)">
+                      {STATUS_LABEL[device.status]}
+                      {device.status === "ACTIVE" && lastSeenText(device.lastSeenAt, now)
+                        ? ` · ${lastSeenText(device.lastSeenAt, now)}`
+                        : ""}
+                    </span>
                   </span>
                   {revoked ? null : (
                     <span className="flex gap-2">
@@ -250,10 +283,27 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
                   )}
                 </div>
                 {issued && !revoked ? (
-                  <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1" aria-live="polite">
-                    <span className="font-mono text-[24px] font-extrabold tracking-[0.2em]">{issued.code}</span>
-                    <span className="text-[12px] text-(--hc-muted)">{remainingText(issued.expiresAt, now)}</span>
-                  </p>
+                  <div className="flex flex-wrap items-center gap-4">
+                    {/* 코드를 태블릿에 손으로 옮겨 치지 않게, 그 기기로 찍으면 바로 연결 화면이 열린다. 코드는 fragment 라 서버 로그에 남지 않는다. */}
+                    <span className="shrink-0 overflow-hidden rounded-xl bg-white p-1.5">
+                      <QrCode value={`${boothUrl}#pair=${issued.code}`} size={120} label={`${device.name} 연결 QR`} />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-1.5">
+                      <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1" aria-live="polite">
+                        <span translate="no" className="font-mono text-[24px] font-extrabold tracking-[0.2em]">
+                          {issued.code}
+                        </span>
+                        <span className="text-[12px] text-(--hc-muted)">{remainingText(issued.expiresAt, now)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void copyPairingLink(device.deviceId, `${boothUrl}#pair=${issued.code}`)}
+                        className="h-11 self-start rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold transition hover:border-(--hc-border-strong)"
+                      >
+                        {copiedDevice === device.deviceId ? "주소를 복사했어요" : "주소 복사"}
+                      </button>
+                    </span>
+                  </div>
                 ) : null}
               </li>
             );
@@ -277,6 +327,8 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
             </label>
             <input
               id="studio-booth-name"
+              name="boothDeviceName"
+              autoComplete="off"
               className="hc-input h-11 rounded-xl border px-3 text-[14px]"
               value={name}
               maxLength={BOOTH_DEVICE_NAME_MAX}
@@ -291,6 +343,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
           >
             {busy === "add" ? "추가하는 중…" : "기기 추가"}
           </button>
+          {!nameOk ? <p className="w-full text-[12px] text-(--hc-muted)">기기 이름을 적으면 추가할 수 있어요.</p> : null}
         </form>
       ) : (
         <p className="text-[13px] text-(--hc-muted)">

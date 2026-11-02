@@ -116,6 +116,7 @@ async function renderStudio(initial = event()) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  window.localStorage.clear();
   mockListVersions.mockResolvedValue([VERSION_CLASSIC, VERSION_SYSTEM]);
   mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 세로", frameType: "CLASSIC", components: [] }]);
   useThemeSession.getState().reset();
@@ -128,10 +129,106 @@ beforeEach(() => {
   mockGrants.mockResolvedValue([]);
 });
 
-it("참가 링크를 이 화면의 오리진에 붙여 QR 과 함께 보여 준다", async () => {
-  await renderStudio();
+it("게시한 행사는 참가 링크를 이 화면의 오리진에 붙여 QR 과 함께 보여 준다", async () => {
+  await renderStudio(event({ status: "LIVE", captureOpen: true }));
   expect(screen.getByText(`${window.location.origin}/e/wedding-1027`)).toBeInTheDocument();
   expect(screen.getByRole("img", { name: "행사 참가 링크 QR" })).toBeInTheDocument();
+});
+
+// 초안에는 아직 참가할 수 없다 — 나눠 줄 QR 대신 게시까지 남은 일을 보여 준다.
+it("초안은 QR 대신 체크리스트를 보여 주고, 줄을 누르면 그 구역으로 간다", async () => {
+  await renderStudio();
+  expect(screen.queryByRole("img", { name: "행사 참가 링크 QR" })).not.toBeInTheDocument();
+  expect(screen.getByText(`${window.location.origin}/e/wedding-1027`)).toBeInTheDocument();
+  // 프레임이 없고 이용권이 없다.
+  expect(screen.getByText("고른 레이아웃마다 프레임을 하나 이상 골라 주세요")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /프레임 해야 해요/ })).toHaveAttribute("href", "#frames");
+  expect(document.getElementById("frames")).not.toBeNull();
+});
+
+it("목차는 고칠 구역에 표시를 달고, 권한이 있는 구역만 싣는다", async () => {
+  await renderStudio();
+  const nav = screen.getByRole("navigation", { name: "행사 설정 목차" });
+  expect(within(nav).getByRole("link", { name: /프레임.*확인이 필요해요/ })).toHaveAttribute("href", "#frames");
+  expect(within(nav).queryByRole("link", { name: /^부스/ })).not.toBeInTheDocument();
+  expect(within(nav).getByRole("link", { name: "개요" })).toBeInTheDocument();
+});
+
+it("운영 중이면 계기판에 남은 촬영과 진행 수를 보여 준다", async () => {
+  mockUsage.mockResolvedValue({
+    entitlement: { scope: "EVENT", validFrom: "2026-01-01T00:00:00Z", validTo: "2999-01-01T00:00:00Z" },
+    composeQuota: 500,
+    used: 12,
+    reserved: 3,
+    remaining: 485,
+  });
+  await renderStudio(event({ status: "LIVE", captureOpen: true }));
+  const meter = await screen.findByRole("meter", { name: "촬영 한도 사용량" });
+  expect(meter).toHaveAttribute("aria-valuenow", "15");
+  expect(screen.getByText("지금 이 링크로 참가자가 촬영할 수 있어요.")).toBeInTheDocument();
+});
+
+it("이용권이 없으면 맨 위에서 먼저 알린다", async () => {
+  await renderStudio();
+  expect(await screen.findByText(/이용권이 없어 아직 게시할 수 없어요/)).toBeInTheDocument();
+});
+
+// 게시는 주소가 잠기고 참가자에게 열리는 일이라 한 번 더 보여 주고 묻는다.
+it("게시는 내용을 확인한 뒤에 보내고, 끝나면 QR 을 건넨다", async () => {
+  await renderStudio();
+  mockRun.mockResolvedValueOnce(event({ status: "LIVE", captureOpen: true, settingsVersion: 7 }));
+
+  fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
+  expect(mockRun).not.toHaveBeenCalled();
+  const dialog = await screen.findByRole("dialog", { name: "이대로 게시할까요?" });
+  expect(within(dialog).getByText("주소는 게시한 뒤에 바꿀 수 없어요.")).toBeInTheDocument();
+  expect(within(dialog).getByText("개인 휴대폰")).toBeInTheDocument();
+
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: "이대로 게시" }));
+  });
+  expect(mockRun).toHaveBeenCalledWith("Ev1", "publish");
+  const done = await screen.findByRole("dialog", { name: "게시했어요" });
+  expect(within(done).getByRole("button", { name: "QR 저장" })).toBeInTheDocument();
+  expect(within(done).getByRole("button", { name: "링크 복사" })).toBeInTheDocument();
+  expect(within(done).getByRole("img", { name: "행사 참가 링크 QR" })).toHaveAttribute("width", "240");
+  fireEvent.click(within(done).getByRole("button", { name: "닫기" }));
+
+  // 저장본이 게시본과 같으면 다시 게시할 것이 없다.
+  expect(screen.getByRole("button", { name: "게시됨" })).toBeDisabled();
+});
+
+it("게시 뒤에 설정을 저장하면 아직 게시 안 함을 알리고 다시 게시할 수 있다", async () => {
+  window.localStorage.setItem("harucut:studio:published-settings:Ev1", "2");
+  await renderStudio(event({ status: "LIVE", captureOpen: true, settingsVersion: 3 }));
+  expect(screen.getByText("저장했지만 아직 게시 안 함")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "바뀐 설정 게시" })).toBeEnabled();
+});
+
+it("동의문의 일수가 보관 일수와 다르면 경고한다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "결과 링크로 90일 동안 받을 수 있어요." } });
+  expect(screen.getByText(/동의문에는 90일이라고 적혀 있는데, 결과 보관 일수는 30일이에요/)).toBeInTheDocument();
+});
+
+it("참가 주소 형식이 틀리면 칸에서 바로 알린다", async () => {
+  await renderStudio();
+  const input = screen.getByLabelText("참가 주소");
+  fireEvent.change(input, { target: { value: "ab" } });
+  expect(input).toHaveAttribute("aria-invalid", "true");
+});
+
+// 뒤로 가면 저장 안 한 입력이 사라진다. 묻지 않으면 조용히 잃는다.
+it("저장하지 않은 변경이 있으면 목록으로 나가기 전에 묻는다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText("행사 이름"), { target: { value: "바뀐 이름" } });
+
+  // 넓은 화면(목차)과 좁은 화면(뒤로) 링크가 함께 그려진다. 둘 다 같은 확인을 거친다.
+  fireEvent.click(screen.getAllByRole("link", { name: "행사 목록" })[0]);
+  const dialog = await screen.findByRole("dialog", { name: "저장하지 않고 나갈까요?" });
+  expect(mockPush).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "저장하지 않고 나가기" }));
+  expect(mockPush).toHaveBeenCalledWith("/studio?workspace=Ws1");
 });
 
 /*
@@ -182,11 +279,18 @@ it("게시 검증에 걸리면(EVENT-003) 할 일을 설정 묶음별로 보여 
   );
 
   fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "이대로 게시" }));
 
   expect(await screen.findByText("게시하려면 아래를 고쳐 주세요.")).toBeInTheDocument();
   expect(screen.getByText(/허용할 레이아웃을 하나 이상 고르고/)).toBeInTheDocument();
   expect(screen.getByText(/제공 프레임을 확인해 주세요/)).toBeInTheDocument();
-  expect(screen.getByText("CLASSIC 에 연결된 프레임이 없다")).toBeInTheDocument();
+  // 서버 사유는 번역해서 고칠 칸 옆에 둔다. 개발자 말투나 판형 코드를 그대로 내보내지 않는다.
+  const frames = document.getElementById("frames")!;
+  expect(within(frames).getByText("세로 4컷에 연결된 프레임이 없어요.")).toBeInTheDocument();
+  expect(screen.queryByText(/CLASSIC/)).not.toBeInTheDocument();
+  const fix = screen.getAllByRole("link", { name: "고치러 가기" });
+  expect(fix.map((link) => link.getAttribute("href"))).toEqual(["#frames", "#frames"]);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
 // 저장 안 한 설정이 있는 채로 게시하면 운영자가 본 화면과 게시본이 다르다.
@@ -230,7 +334,7 @@ it("처음 고른 프레임이 기본이 되고, 저장하면 고른 발행본�
 
   fireEvent.click(await screen.findByRole("checkbox", { name: /웨딩 세로/ }));
   fireEvent.click(screen.getByRole("checkbox", { name: /기본 세로/ }));
-  expect(screen.getAllByRole("radio", { name: "기본" })[0]).toBeChecked();
+  expect(screen.getByRole("radio", { name: "웨딩 세로 기본 프레임으로 정하기" })).toBeChecked();
 
   fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
   await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
@@ -341,7 +445,7 @@ it("보관 일수 설명에 사진이 지워진다는 것과 이용권 상한을
   await renderStudio();
   const input = screen.getByLabelText("보관 일수");
   await waitFor(() => expect(input).toHaveAttribute("max", "60"));
-  expect(input).toHaveAccessibleDescription(/지나면 사진이 지워져요.*지금 이용권으로는 60일까지/);
+  expect(input).toHaveAccessibleDescription(/지나면 사진이 지워지니.*지금 이용권으로는 60일까지/);
 });
 
 // Codex 리뷰(#544): 업로드 중 저장하면 저장 응답이 업로드 결과(자산 ID)를 덮어 이미지가 사라진다.

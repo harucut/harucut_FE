@@ -28,6 +28,12 @@ jest.mock("@/lib/studio/accessApi", () => ({
 const DONE = { photoId: 11, status: "DONE", createdAt: "2026-10-26T10:00:00+09:00", channel: "BYOD", frameVersionId: 41, thumbnailUrl: "https://s3/t11" };
 const FAILED = { photoId: 12, status: "FAILED", createdAt: "2026-10-26T10:01:00+09:00", channel: "BOOTH", frameVersionId: 41, failure: { code: "INPUT_MISSING", retryable: false } };
 
+/** 저장·지우기는 크게 보기 안에 있다. */
+async function openViewer() {
+  fireEvent.click(await screen.findByRole("button", { name: /크게 보기$/ }));
+  return within(await screen.findByRole("dialog"));
+}
+
 function access(permissions: string[], role?: string) {
   return [{ eventId: "Ev1", name: "민지 ♥ 준호", status: "LIVE", access: { role, permissions } }];
 }
@@ -37,6 +43,8 @@ beforeEach(() => {
   // 기본은 일반 브라우저(앱 셸 아님).
   mockNativeSave.mockResolvedValue(null);
   mockList.mockResolvedValue({ items: [DONE, FAILED], nextCursor: null });
+  mockDownload.mockReset();
+  mockDownload.mockResolvedValue({ url: "https://s3/full.jpg", expiresAt: "x" });
   mockMyEvents.mockResolvedValue(access(["VIEW_PHOTOS", "DOWNLOAD_PHOTOS", "DELETE_PHOTOS"]));
 });
 
@@ -68,22 +76,53 @@ it("다음 쪽이 있으면 더 보기로 이어 받는다", async () => {
 // 썸네일은 5분짜리 서명 URL 이다. 깨지면 새 주소를 받는다.
 it("썸네일이 깨지면 목록을 다시 받는다(여러 장이어도 한 번)", async () => {
   render(<EventPhotoBox eventId="Ev1" />);
-  const img = await screen.findByRole("img");
+  const img = await screen.findByRole("img", { name: /사진$/ });
   fireEvent.error(img);
   fireEvent.error(img);
   await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
 });
 
-it("지우기는 확인 뒤에 하고 목록에서 뺀다", async () => {
+it("지우기는 크게 보기에서 확인 뒤에 하고, 남은 사진이 없으면 닫고 목록에서 뺀다", async () => {
   mockDelete.mockResolvedValue(undefined);
+  mockDownload.mockResolvedValue({ url: "https://s3/full11.jpg", expiresAt: "x" });
   render(<EventPhotoBox eventId="Ev1" />);
-  fireEvent.click(await screen.findByRole("button", { name: "지우기" }));
+  const viewer = await openViewer();
+  fireEvent.click(viewer.getByRole("button", { name: "지우기" }));
   expect(mockDelete).not.toHaveBeenCalled();
+  const confirm = await screen.findByRole("dialog", { name: "이 사진을 지울까요?" });
   await act(async () => {
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "지우기" }));
+    fireEvent.click(within(confirm).getByRole("button", { name: "지우기" }));
   });
   expect(mockDelete).toHaveBeenCalledWith("Ev1", 11, expect.any(AbortSignal));
   expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+// 썸네일은 긴 변 512px 라 크게 보면 흐리다. 내려받기 권한이 있으면 원본으로 바꾼다.
+it("크게 보기는 원본으로 바꾸고, 다음 사진으로 넘길 수 있다", async () => {
+  const SECOND = { ...DONE, photoId: 13, thumbnailUrl: "https://s3/thumb13.jpg" };
+  mockList.mockResolvedValue({ items: [DONE, SECOND], nextCursor: null });
+  mockDownload.mockImplementation(async (_e: string, id: number) => ({ url: `https://s3/full${id}.jpg`, expiresAt: "x" }));
+  render(<EventPhotoBox eventId="Ev1" />);
+  fireEvent.click((await screen.findAllByRole("button", { name: /크게 보기$/ }))[0]);
+  const viewer = within(await screen.findByRole("dialog"));
+  await waitFor(() => expect(viewer.getByRole("img")).toHaveAttribute("src", "https://s3/full11.jpg"));
+
+  expect(viewer.getByRole("button", { name: "이전 사진" })).toBeDisabled();
+  fireEvent.click(viewer.getByRole("button", { name: "다음 사진" }));
+  await waitFor(() => expect(mockDownload).toHaveBeenCalledWith("Ev1", 13));
+  expect(viewer.getByText("2/2")).toBeInTheDocument();
+  expect(viewer.getByRole("button", { name: "다음 사진" })).toBeDisabled();
+});
+
+it("필터 결과가 없으면 조건을 지울 수 있고, 처음부터 없으면 안내만 한다", async () => {
+  mockList.mockResolvedValue({ items: [], nextCursor: null });
+  render(<EventPhotoBox eventId="Ev1" />);
+  expect(await screen.findByText(/아직 찍은 사진이 없어요/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("참가 방식"), { target: { value: "BOOTH" } });
+  fireEvent.click(await screen.findByRole("button", { name: "조건 지우기" }));
+  expect(await screen.findByText(/아직 찍은 사진이 없어요/)).toBeInTheDocument();
+  expect(mockList).toHaveBeenLastCalledWith("Ev1", {});
 });
 
 it("서버가 권한으로 막으면(PHOTO-001) 그 문구를 보여 준다", async () => {
@@ -106,7 +145,7 @@ it("한꺼번에 받기 권한이 있을 때만 완성 사진에 고르기를 �
 
 it("한꺼번에 받기 권한이 없으면 고르기와 묶음 영역이 없다", async () => {
   render(<EventPhotoBox eventId="Ev1" />);
-  await screen.findByRole("button", { name: "저장" });
+  await screen.findByRole("button", { name: /크게 보기$/ });
   expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "한꺼번에 받기" })).not.toBeInTheDocument();
 });
@@ -138,7 +177,8 @@ it("앱 안에서는 저장을 네이티브 사진첩 저장으로 보내고 링
   mockDownload.mockResolvedValue({ url: "https://s3/full11.jpg", expiresAt: "x" });
   const click = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   render(<EventPhotoBox eventId="Ev1" />);
-  fireEvent.click(await screen.findByRole("button", { name: "저장" }));
+  const viewer = await openViewer();
+  fireEvent.click(viewer.getByRole("button", { name: "저장" }));
   expect(await screen.findByText("사진첩에 저장했어요.")).toBeInTheDocument();
   expect(mockNativeSave).toHaveBeenCalledWith("https://s3/full11.jpg", "harucut-11.jpg");
   expect(click).not.toHaveBeenCalled();
@@ -153,12 +193,13 @@ it("지우기 요청이 멈추면 상한 뒤 확인 창을 풀고 알린다", as
       new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
   );
   render(<EventPhotoBox eventId="Ev1" />);
-  fireEvent.click(await screen.findByRole("button", { name: "지우기" }));
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "지우기" }));
+  const viewer = await openViewer();
+  fireEvent.click(viewer.getByRole("button", { name: "지우기" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "이 사진을 지울까요?" })).getByRole("button", { name: "지우기" }));
   await act(async () => {
     await jest.advanceTimersByTimeAsync(30_000);
   });
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.queryByRole("dialog", { name: "이 사진을 지울까요?" })).not.toBeInTheDocument();
   expect(screen.getByText(/지우지 못했어요|요청/)).toBeInTheDocument();
   jest.useRealTimers();
 });

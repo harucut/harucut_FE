@@ -16,6 +16,7 @@ import {
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
+import { useStudioAccess } from "@/hooks/useStudioAccess";
 
 /** 홈에 보여 줄 최근 기록 수. 조회도 딱 이만큼만 받는다. */
 const RECENT_LIMIT = 4;
@@ -47,6 +48,15 @@ const HOME_ACTIONS = [
     primary: false,
   },
 ];
+
+/** 행사를 맡은 계정에게만 두 번째 자리에 놓는다(hooks/useStudioAccess). */
+const STUDIO_ACTION = {
+  id: "studio",
+  title: "행사 운영",
+  description: "내 행사와 사진함을 봐요",
+  href: "/studio" as string | null,
+  primary: false,
+};
 
 const WEEKDAY_KO = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -101,6 +111,7 @@ function useCurrentDateKey() {
 
 
 export default function HomePage() {
+  const studioAccess = useStudioAccess();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
@@ -191,8 +202,8 @@ export default function HomePage() {
           만들어두면 촬영할 때 골라 써요"). 화면 크기가 문구를 바꿀 이유는 없다 —
           달라져야 하는 것은 배치뿐이라 반응형 클래스로 처리한다.
         */}
-        <section className="grid gap-3.5 lg:grid-cols-2">
-          {HOME_ACTIONS.map((action) => {
+        <section className={`grid gap-3.5 ${studioAccess ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+          {(studioAccess ? [HOME_ACTIONS[0], STUDIO_ACTION, ...HOME_ACTIONS.slice(1)] : HOME_ACTIONS).map((action) => {
             const body = (
               <>
                 <span className="min-w-0 flex-1">

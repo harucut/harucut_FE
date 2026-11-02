@@ -52,6 +52,8 @@ export function StudioConsentItems({
             </label>
             <input
               id={`${id}-${consent.code}-title`}
+              name={`consentTitle-${consent.code}`}
+              autoComplete="off"
               className="hc-input h-11 rounded-xl border px-3 text-[14px]"
               value={consent.title}
               onChange={(e) => patch(index, { title: e.target.value })}
@@ -63,6 +65,7 @@ export function StudioConsentItems({
             </label>
             <textarea
               id={`${id}-${consent.code}-body`}
+              name={`consentBody-${consent.code}`}
               className="hc-input min-h-24 rounded-xl border px-3 py-2 text-[14px]"
               value={consent.body}
               onChange={(e) => patch(index, { body: e.target.value })}
@@ -72,6 +75,7 @@ export function StudioConsentItems({
             <label className="flex min-h-11 items-center gap-2 text-[14px]">
               <input
                 type="checkbox"
+                name={`consentRequired-${consent.code}`}
                 className="size-5"
                 checked={consent.required}
                 onChange={(e) => patch(index, { required: e.target.checked })}

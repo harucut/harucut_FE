@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { rememberStudioAccess } from "@/hooks/useStudioAccess";
 import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { resolveMembership } from "@/lib/authSession";
 import { clearInviteToken, isInviteToken, readInviteToken, stashInviteToken } from "@/lib/invite/pendingInvite";
@@ -99,10 +100,14 @@ export function InviteAccept() {
     try {
       const accepted = await acceptInvitation(token);
       clearInviteToken();
+      rememberStudioAccess();
+      // 행사 고객(신랑신부 등)에게는 사진함이 제품의 전부다 — 운영 화면을 거치지 않고 바로 간다.
       router.replace(
         accepted.kind === "WORKSPACE" && accepted.workspaceId
           ? `/studio?workspace=${encodeURIComponent(accepted.workspaceId)}`
-          : "/studio",
+          : accepted.kind === "EVENT" && accepted.eventId
+            ? `/studio/events/${encodeURIComponent(accepted.eventId)}/photos`
+            : "/studio",
       );
     } catch (error) {
       const { code, status } = getApiErrorDetails(error);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { StudioPageTheme } from "@/components/studio/StudioPageTheme";
+import { PAGE_THEME_PRESETS, StudioPageTheme } from "@/components/studio/StudioPageTheme";
+import { lowContrastPairs } from "@/lib/event/pageTheme";
 import type { PageTheme } from "@/lib/event/pageTheme";
 
 const mockUpload = jest.fn();
@@ -127,4 +128,48 @@ it("테마의 자산 ID 가 바뀌면 미리보기도 그 ID 로 바꾸고, 빠�
   rerender(<Harness value={{ schemaVersion: 1 }} />);
   await waitFor(() => expect(screen.queryByAltText("고른 배경 이미지")).not.toBeInTheDocument());
   expect(screen.getByLabelText("행사 화면 미리보기").style.backgroundImage).toBe("");
+});
+
+describe("프리셋", () => {
+  it("모든 프리셋의 글자 짝이 읽힌다", () => {
+    for (const preset of PAGE_THEME_PRESETS) {
+      expect(lowContrastPairs(preset.colors)).toEqual([]);
+    }
+  });
+
+  it("프리셋은 색과 글꼴을 한 번에 넣고, 한 번은 되돌릴 수 있다", () => {
+    render(<Harness initial={{ schemaVersion: 1, colors: { bg: "#123456" } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "웨딩 아이보리" }));
+    expect(latest?.colors?.accent).toBe("#7A5F2E");
+    expect(latest?.font).toBe("NANUM_MYEONGJO");
+    expect(screen.getByRole("button", { name: "웨딩 아이보리" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+    expect(latest?.colors).toEqual({ bg: "#123456" });
+    expect(screen.queryByRole("button", { name: "되돌리기" })).not.toBeInTheDocument();
+  });
+
+  it("「기본 색으로」도 되돌릴 수 있다", () => {
+    render(<Harness initial={{ schemaVersion: 1, colors: { bg: "#123456" } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "기본 색으로" }));
+    expect(latest?.colors).toEqual({});
+    fireEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+    expect(latest?.colors).toEqual({ bg: "#123456" });
+  });
+
+  it("색 값 형식이 틀리면 칸에서 알린다", () => {
+    render(<Harness />);
+    const input = screen.getByLabelText("바탕 색 값");
+    fireEvent.change(input, { target: { value: "#12" } });
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("#RRGGBB 로 적어 주세요.")).toBeInTheDocument();
+  });
+
+  it("문구 칸은 비웠을 때 쓰일 기본 문구를 보여 준다", () => {
+    render(<Harness />);
+    expect(screen.getByLabelText("처음 화면 · 부스 대기 화면")).toHaveAttribute(
+      "placeholder",
+      "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.",
+    );
+  });
 });

@@ -73,6 +73,16 @@ it("받으면 토큰을 지우고 그 공간으로 간다", async () => {
   expect(window.sessionStorage.getItem(KEY)).toBeNull();
 });
 
+// 행사 고객에게 운영 화면은 할 일이 없다. 받자마자 사진함으로 간다.
+it("행사 초대를 받으면 그 행사 사진함으로 바로 간다", async () => {
+  window.sessionStorage.setItem(KEY, TOKEN);
+  mockAccept.mockResolvedValue({ kind: "EVENT", eventId: "Ev9", permissions: ["VIEW_PHOTOS"] });
+  render(<InviteAccept />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/studio/events/Ev9/photos"));
+});
+
 it("기한이 지난 초대(MEMBER-001)는 안내하고 토큰을 지운다", async () => {
   window.sessionStorage.setItem(KEY, TOKEN);
   mockPreview.mockRejectedValue(new ApiRequestError({ status: 410, code: "MEMBER-001", apiMessage: "x" }));

@@ -44,6 +44,7 @@ export function StudioFramePicker({
   editLocked,
   onEditFrame,
   onCreateFrame,
+  onCatalog,
 }: {
   workspaceId: string;
   /** 허용 레이아웃. 여기 없는 판형의 발행본은 고를 수 없다(게시 검사와 같다). */
@@ -56,6 +57,8 @@ export function StudioFramePicker({
   /** 둘 다 없으면 고르기만 한다 — 공간·프로젝트 기본값처럼 편집기로 떠날 수 없는 자리. 「공간 프레임」 관리 칸을 그리지 않는다. */
   onEditFrame?: (frame: RemoteFrame) => void;
   onCreateFrame?: (layout: EventLayout) => void;
+  /** 받은 발행본 목록을 알려 준다 — 참가자 문구 칸을 실제 프레임 위에서 잡을 때 쓴다. */
+  onCatalog?: (versions: PickableFrameVersion[]) => void;
 }) {
   const radioName = useId();
   const manage = Boolean(onEditFrame && onCreateFrame);
@@ -71,11 +74,12 @@ export function StudioFramePicker({
         listWorkspaceFrames(workspaceId),
       ]);
       setCatalog({ versions, frames });
+      onCatalog?.(versions);
       setError(null);
     } catch (cause) {
-      setError(getUserFacingApiErrorMessage(cause, "프레임 목록을 불러오지 못했어요."));
+      setError(getUserFacingApiErrorMessage(cause, "프레임 목록을 불러오지 못했어요. 아래에서 다시 불러와 주세요."));
     }
-  }, [workspaceId]);
+  }, [workspaceId, onCatalog]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
@@ -105,7 +109,7 @@ export function StudioFramePicker({
     setNotice(null);
     try {
       const published = await publishFrameVersion(frame.frameId);
-      setNotice(`「${frame.title}」 ${published.versionNo}번째 발행본을 만들었어요. 아래에서 골라 저장해야 행사에 쓰여요.`);
+      setNotice(`「${frame.title}」 ${published.versionNo}번째 발행본을 만들었어요. 위 목록에서 골라 저장해야 행사에 쓰여요.`);
       await load();
     } catch (cause) {
       setNotice(
@@ -160,9 +164,14 @@ export function StudioFramePicker({
                       {version.previewUrl ? (
                         // 서명 URL 이라 next/image 최적화를 거치지 않는다.
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={version.previewUrl} alt="" className="h-16 w-12 shrink-0 rounded-md object-cover" />
+                        <img
+                          src={version.previewUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-24 w-16 shrink-0 rounded-md object-contain"
+                        />
                       ) : (
-                        <span aria-hidden className="h-16 w-12 shrink-0 rounded-md bg-(--hc-border)" />
+                        <span aria-hidden className="h-24 w-16 shrink-0 rounded-md bg-(--hc-border)" />
                       )}
                       <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-[14px]">
                         <input
@@ -184,6 +193,7 @@ export function StudioFramePicker({
                             type="radio"
                             name={radioName}
                             className="size-4"
+                            aria-label={`${version.title || "이름 없는 프레임"} 기본 프레임으로 정하기`}
                             checked={Boolean(ref?.isDefault)}
                             onChange={() => makeDefault(version.frameVersionId)}
                           />

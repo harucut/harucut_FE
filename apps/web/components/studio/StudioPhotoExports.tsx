@@ -46,6 +46,7 @@ export function StudioPhotoExports({
   selectedIds,
   channel,
   onCreated,
+  onClearSelection,
 }: {
   eventId: string;
   /** 고른 사진. 비어 있으면 「전체」만 할 수 있다. */
@@ -53,6 +54,8 @@ export function StudioPhotoExports({
   /** 지금 사진함 필터의 참가 방식 — 「전체 묶어 받기」에 그대로 쓴다. */
   channel?: PhotoChannel;
   onCreated: () => void;
+  /** 고른 사진 비우기. 고른 동안 화면 아래 바에 둔다. */
+  onClearSelection?: () => void;
 }) {
   const [exports, setExports] = useState<PhotoExport[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -130,29 +133,56 @@ export function StudioPhotoExports({
   };
 
   const tooMany = selectedIds.length > MAX_EXPORT_PHOTOS;
+  const selecting = selectedIds.length > 0;
 
   return (
     <section aria-labelledby="studio-exports-title" className="flex flex-col gap-3">
       <h2 id="studio-exports-title" className="text-[18px] font-bold">
         한꺼번에 받기
       </h2>
-      <div className="flex flex-wrap gap-2">
+      {/*
+        사진을 고르는 동안 받기 버튼을 찾으러 내려가지 않게, 고른 사진이 생기면 이 줄이 화면 아래로 붙는다.
+        같은 요소가 자리만 바꾼다 — 고른 것을 묶는 버튼은 하나뿐이다.
+      */}
+      <div
+        className={
+          selecting
+            ? "fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-center gap-2 border-t border-(--hc-border) bg-(--hc-surface-soft) px-4 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur-xl"
+            : "flex flex-wrap gap-2"
+        }
+      >
+        {selecting ? (
+          <span className="mr-auto text-[13px] font-semibold">
+            <span className="font-mono tabular-nums">{selectedIds.length}</span>장 골랐어요
+          </span>
+        ) : null}
+        {selecting && onClearSelection ? (
+          <button
+            type="button"
+            onClick={onClearSelection}
+            className="h-11 rounded-full px-3 text-[13px] font-semibold text-(--hc-muted) transition hover:text-(--hc-text)"
+          >
+            고르기 취소
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={busy !== null || selectedIds.length === 0 || tooMany}
           onClick={() => void create({ photoIds: selectedIds }, "selected")}
-          className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
+          className={`h-11 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50 ${selecting ? "hc-button-primary" : "hc-button-secondary"}`}
         >
           고른 사진 묶어 받기 ({selectedIds.length})
         </button>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => void create({ filter: channel ? { channel } : {} }, "all")}
-          className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold disabled:opacity-50"
-        >
-          {channel ? "이 참가 방식 전체 묶어 받기" : "완성된 사진 전체 묶어 받기"}
-        </button>
+        {selecting ? null : (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void create({ filter: channel ? { channel } : {} }, "all")}
+            className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold transition enabled:hover:border-(--hc-border-strong) disabled:opacity-50"
+          >
+            {channel ? "이 참가 방식 전체 묶어 받기" : "완성된 사진 전체 묶어 받기"}
+          </button>
+        )}
       </div>
       <p className="text-[12px] text-(--hc-muted)">
         한 번에 {MAX_EXPORT_PHOTOS.toLocaleString("ko-KR")}장까지 묶어요. 다 된 묶음은 24시간 동안 받을 수 있어요.

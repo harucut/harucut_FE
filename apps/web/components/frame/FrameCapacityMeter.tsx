@@ -1,5 +1,6 @@
 "use client";
 
+import { PAYMENTS_ENABLED } from "@/constants/company";
 import { Lock, Sparkles } from "lucide-react";
 import { buildGaugeDots, type GaugeDotState, type PlanInfo } from "@/constants/planLimits";
 import type { SubscriptionUsage } from "@/lib/api-types";
@@ -108,7 +109,9 @@ export function FrameCapacityMeter({
             </p>
             <p className="mt-0.5 text-[11px] text-(--hc-muted)">
               {unlimited
-                ? "무제한으로 저장할 수 있어요"
+                ? PAYMENTS_ENABLED
+                  ? "무제한으로 저장할 수 있어요"
+                  : "지금은 한도 없이 저장할 수 있어요"
                 : noCapacity
                   ? "지금 요금제로는 프레임을 저장할 수 없어요"
                   : overCapacity
