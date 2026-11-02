@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
   EVENT_PERMISSIONS,
   PERMISSION_LABEL,
@@ -71,7 +71,12 @@ export function StudioEventCustomers({
     try {
       await task();
     } catch (cause) {
-      setNotice(getUserFacingApiErrorMessage(cause, fallback));
+      // 내 사진 범위를 넘는 권한을 주면 서버가 막는다. 「권한이 없어요」로는 왜 막혔는지 모른다.
+      setNotice(
+        getApiErrorDetails(cause).code === "GEN-021"
+          ? "처리할 수 없어요. 내가 볼 수 있는 사진 범위를 넘거나 내 권한이 바뀌었을 수 있어요."
+          : getUserFacingApiErrorMessage(cause, fallback),
+      );
     } finally {
       setBusy(null);
     }

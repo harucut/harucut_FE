@@ -117,6 +117,15 @@ export function InviteAccept() {
         return;
       }
       const alreadyJoined = code === "MEMBER-003";
+      // 받을 사진 범위가 초대한 분의 지금 범위보다 넓으면 서버가 막는다. 토큰은 쓰이지 않았고, 그분의 권한이 돌아오면 다시 받을 수 있다.
+      if (code === "GEN-021") {
+        setView({
+          kind: "error",
+          message: "초대한 분의 권한이 바뀌어 이 초대를 받을 수 없어요. 초대한 분께 새 링크를 요청해 주세요.",
+          retryable: true,
+        });
+        return;
+      }
       // 이미 참여 중이면 토큰은 쓰이지 않았다(다른 사람에게 다시 건넬 수 있다) — 이 기기에서만 지운다.
       if (alreadyJoined || (code && DEAD_INVITE_CODES.has(code))) clearInviteToken();
       setView({

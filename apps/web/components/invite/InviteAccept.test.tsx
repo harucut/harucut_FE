@@ -174,3 +174,17 @@ describe("행사 고객 초대의 사진 범위", () => {
     expect(screen.queryByText(/찍은 사진/)).not.toBeInTheDocument();
   });
 });
+
+// 받을 범위가 초대한 분의 지금 범위보다 넓으면 서버가 막는다. 토큰은 쓰이지 않아 그분의 권한이 돌아오면 다시 받을 수 있다.
+it("초대한 분의 권한이 바뀌어 막히면 이유를 말하고 토큰을 남긴다", async () => {
+  mockPreview.mockResolvedValue({ ...WORKSPACE_PREVIEW, kind: "EVENT", eventName: "민지 ♥ 준호", permissions: ["VIEW_PHOTOS"], includePast: true });
+  mockAccept.mockRejectedValue(new ApiRequestError({ status: 403, code: "GEN-021", apiMessage: "x" }));
+  window.history.replaceState(null, "", `/invite#${TOKEN}`);
+  render(<InviteAccept />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("초대한 분의 권한이 바뀌어");
+  expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
+  expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+});

@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StudioEventCustomers } from "@/components/studio/StudioEventCustomers";
+import { ApiRequestError } from "@/lib/clientApi";
 
 const mockList = jest.fn();
 const mockUpdate = jest.fn();
@@ -91,4 +92,15 @@ it("권한을 바꿔도 사진 범위는 넓히지 않는다", async () => {
     fireEvent.click(fieldset.querySelectorAll("input")[2]);
   });
   expect(mockUpdate).toHaveBeenCalledWith("Ev1", 3, ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS", "BULK_DOWNLOAD"]);
+});
+
+// 범위가 제한된 운영 담당이 자기 범위를 넘는 권한을 주면 서버가 막는다.
+it("내 사진 범위를 넘어 막히면 왜 막혔는지 말한다", async () => {
+  mockUpdate.mockRejectedValue(new ApiRequestError({ status: 403, code: "GEN-021" }));
+  render(<StudioEventCustomers eventId="Ev1" />);
+  const fieldset = await screen.findByRole("group", { name: "신부 권한" });
+  await act(async () => {
+    fireEvent.click(fieldset.querySelectorAll("input")[2]);
+  });
+  expect(await screen.findByRole("status")).toHaveTextContent("내가 볼 수 있는 사진 범위를 넘거나");
 });
