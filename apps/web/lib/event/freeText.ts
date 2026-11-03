@@ -85,7 +85,6 @@ const FREE_TEXT_REASON_COPY: Record<string, (limits: Limits) => string> = {
 };
 
 export const FREE_TEXT_INVALID_CODE = "PART-008";
-export const FREE_TEXT_NOT_ALLOWED_CODE = "PART-007";
 
 /** 400 PART-008 이면 data.reason 에 맞는 문구. 다른 오류면 null — 호출부가 일반 문구를 고른다. */
 export function freeTextErrorMessage(error: unknown): string | null {

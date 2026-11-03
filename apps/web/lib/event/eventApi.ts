@@ -78,19 +78,6 @@ export function startCaptureRun(token: string, eventId: string) {
   );
 }
 
-export function getEventFrameVersion(
-  token: string,
-  eventId: string,
-  frameVersionId: number,
-  captureRunId: string,
-) {
-  return sendEventRequest<unknown>(
-    "GET",
-    `/api/client/participant/events/${seg(eventId)}/frame-versions/${frameVersionId}?captureRunId=${seg(captureRunId)}`,
-    { credential: participant(token), what: "행사 프레임" },
-  );
-}
-
 export function createCaptureUploadIntent(
   token: string,
   eventId: string,
@@ -143,14 +130,6 @@ export function previewFreeText(
     `/api/client/participant/events/${seg(eventId)}/text-preview`,
     { credential: participant(token), body: input, signal, what: "문구 미리보기" },
   );
-}
-
-export function getParticipantJob(token: string, jobId: number, signal?: AbortSignal) {
-  return sendEventRequest<ParticipantJob>("GET", `/api/client/participant/compose-jobs/${jobId}`, {
-    credential: participant(token),
-    signal,
-    what: "합성 상태",
-  });
 }
 
 export function getParticipantDownload(token: string, jobId: number) {
