@@ -156,9 +156,11 @@ export default function MyPage() {
       const nextUser = await getMyUserInfo();
       setUser(nextUser);
       setLoadError(null);
+      return nextUser;
     } catch (error) {
       console.error(error);
       setLoadError("내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -230,10 +232,12 @@ export default function MyPage() {
 
   // 최초 진입은 초기 상태(loading=true, loadError=null, statsError=null)와 같아
   // 별도 setState 없이 바로 조회한다. setState는 응답이 온 뒤에만 일어난다.
+  // 정지 계정 화면은 통계를 보여 주지 않고 이 조회들은 403 으로 막히므로, 내 정보로 상태를 본 뒤에 부른다.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
-    void loadUser();
-    void loadStats();
+    void loadUser().then((nextUser) => {
+      if (nextUser?.userStatus !== "BLOCKED") void loadStats();
+    });
   }, []);
 
   const closeNickname = useCallback(() => {

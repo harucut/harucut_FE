@@ -10,6 +10,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MyPage from "@/app/mypage/page";
 import type { UserInfo } from "@/lib/api-types";
+import { listMyMedia } from "@/lib/userMediaApi";
 
 const mockGetMyUserInfo = jest.fn();
 
@@ -150,6 +151,19 @@ describe("정지 계정", () => {
     expect(document.getElementById("mypage-section-plan")).toBeNull();
     expect(screen.queryByText("비밀번호")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /닉네임/ })).not.toBeInTheDocument();
+  });
+
+  it("보여 주지 않을 통계는 부르지 않는다", async () => {
+    jest.mocked(listMyMedia).mockClear();
+    await renderBlocked();
+    await act(async () => {});
+    expect(listMyMedia).not.toHaveBeenCalled();
+  });
+
+  it("정지되지 않은 계정은 통계를 부른다", async () => {
+    jest.mocked(listMyMedia).mockClear();
+    await renderWithPlanTier("BASIC");
+    await waitFor(() => expect(listMyMedia).toHaveBeenCalledTimes(1));
   });
 
   it("탈퇴 확인창이 복구해도 제한이 남는다고 말한다", async () => {
