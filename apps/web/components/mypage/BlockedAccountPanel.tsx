@@ -22,6 +22,10 @@ export function BlockedAccountPanel({ user }: { user: UserInfo }) {
         <p className="max-w-[60ch] text-[14px] leading-relaxed">
           촬영, 프레임, 기록, 행사 운영을 쓸 수 없어요. 여기서는 로그아웃과 회원 탈퇴만 할 수 있어요.
         </p>
+        {/* 서버는 스토어 청구를 끊을 수 없고, 정지 계정은 구독 조회가 막혀 구독 여부를 모른다. */}
+        <p className="max-w-[60ch] text-[14px] leading-relaxed">
+          App Store 에서 구독 중이면 결제가 자동으로 멈추지 않아요. iPhone 설정 &gt; Apple 계정 &gt; 구독에서 해지해 주세요.
+        </p>
         <p className="text-[14px] leading-relaxed">
           궁금한 점은{" "}
           <a href={`mailto:${COMPANY.email}`} className="break-all font-semibold underline underline-offset-4">
