@@ -11,11 +11,32 @@ jest.mock("@/lib/clientApi", () => ({
 import {
   PRESIGNED_UPLOAD_TYPES,
   UploadValidationError,
+  getImageUrlByKey,
   isSupportedUploadFile,
   resolveUpload,
   resolveUploadContentType,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
+
+/** presign 발급 응답(봉투째). */
+function presigned(key: string, file: string) {
+  return {
+    data: {
+      code: "GEN-000",
+      status: 200,
+      message: null,
+      data: {
+        key,
+        uploadUrl: `https://example.com/upload/${file}?sig=1`,
+        contentType: "image/png",
+        expiresIn: "PT24H",
+      },
+    },
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+  };
+}
 
 describe("presigned upload flow", () => {
   beforeEach(() => {
@@ -68,85 +89,8 @@ describe("presigned upload flow", () => {
     ).toBe(true);
   });
 
-  it("uses the presigned-img URL string after image upload", async () => {
-    const key = "temp/users/u/components/test-image.png";
-    // 실제 계약은 Response<String> — data가 URL 문자열 그 자체다(객체 아님).
-    const downloadUrl = "https://example.com/test-image.png?sig=2";
-
-    mockPost.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: {
-          key,
-          uploadUrl: "https://example.com/upload/test-image.png?sig=1",
-          contentType: "image/png",
-          expiresIn: "PT24H",
-        },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
-    mockGet.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: downloadUrl,
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-    });
-
-    const result = await uploadToS3WithPresigned({
-      file: new File(["x"], "test-image.png", { type: "image/png" }),
-      type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-    });
-
-    expect(mockGet).toHaveBeenCalledWith(
-      `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
-    );
-    expect(result).toEqual({
-      key,
-      objectUrl: "https://example.com/test-image.png?sig=2",
-      downloadUrl: "https://example.com/test-image.png?sig=2",
-    });
-  });
-
   it("sends the presigned content type as the S3 PUT header", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: {
-          key: "uploads/users/u/photo.png",
-          uploadUrl: "https://example.com/upload/photo.png?sig=1",
-          contentType: "image/png",
-          expiresIn: "PT24H",
-        },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
-    mockGet.mockResolvedValueOnce({
-      data: { code: "GEN-000", status: 200, message: null, data: "https://example.com/photo.png?sig=2" },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
+    mockPost.mockResolvedValueOnce(presigned("uploads/users/u/photo.png", "photo.png"));
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
 
     await uploadToS3WithPresigned({
@@ -173,90 +117,19 @@ describe("presigned upload flow", () => {
     });
   });
 
-  /*
-    조회가 실패해도 업로드는 이미 끝난 뒤다. 여기서 던지면 파일은 S3 에 올라간 채
-    저장만 죽어서 사용자는 처음부터 다시 올려야 한다. 저장에 필요한 값은 key 하나뿐이고
-    (프레임 저장은 source 에 key 를 싣는다) 해석한 URL 은 렌더 전용이다.
-
-    대신 서명 쿼리만 뗀 업로드 주소를 objectUrl 로 내주면 안 된다. 서명이 있어야 읽히는
-    버킷에서는 열리지 않는 주소인데, themeEditorStore 가 그걸 renderUrl 에 실으면
-    renderThemePreviewPng 이 로드 실패를 삼켜 사진·스티커가 빠진 썸네일이 저장된다.
-    비워서 돌려줘야 호출부가 이번 세션의 로컬 src 로 그린다.
-  */
-  it("조회가 실패하면 그릴 주소를 비우고 key 만 돌려준다", async () => {
-    const key = "temp/users/u/components/resolve-fail.png";
-
-    mockPost.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: {
-          key,
-          uploadUrl: "https://example.com/upload/resolve-fail.png?sig=1",
-          contentType: "image/png",
-          expiresIn: "PT24H",
-        },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
-    // 401·5xx·네트워크 — clientApi 가 던지는 경우 전부를 대표한다.
-    mockGet.mockRejectedValueOnce(new Error("Request failed with status code 500"));
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
-
-    const result = await uploadToS3WithPresigned({
-      file: new File(["x"], "resolve-fail.png", { type: "image/png" }),
-      type: PRESIGNED_UPLOAD_TYPES.FRAME_COMPONENT,
-    });
-
-    expect(mockGet).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({
-      key,
-      objectUrl: undefined,
-      downloadUrl: undefined,
-    });
-
-    // themeEditorStore.finalizeAssetsForSave() 가 renderUrl 을 고르는 규칙 그대로.
-    // 빈 objectUrl 이면 편집 중 쓰던 blob URL 이 살아남아야 썸네일에 사진이 남는다.
-    const localSrc = "blob:https://harucut.app/9f0c-photo";
-    expect(result.objectUrl || localSrc).toBe(localSrc);
-  });
-
-  // key 만 필요한 업로드는 조회 왕복 자체를 하지 않는다(합성 원본은 4장이면 4번이었다).
-  it("skipUrlResolve 면 presigned-img 를 부르지 않는다", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: {
-          key: "temp/users/u/fourcut/source-1.png",
-          uploadUrl: "https://example.com/upload/source-1.png?sig=1",
-          contentType: "image/png",
-          expiresIn: "PT24H",
-        },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
+  // 부르는 곳(프레임 미리보기·합성 원본·프로필)이 전부 key 만 쓴다. 조회용 URL 을 만들려고
+  // presigned-img 를 장마다 한 번 더 부르지 않는다(합성 원본은 4장이면 4번이었다).
+  it("업로드는 presigned-img 를 부르지 않고 key 만 돌려준다", async () => {
+    mockPost.mockResolvedValueOnce(presigned("temp/users/u/fourcut/source-1.png", "source-1.png"));
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
 
     const result = await uploadToS3WithPresigned({
       file: new File(["x"], "source-1.png", { type: "image/png" }),
       type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
-      skipUrlResolve: true,
     });
 
     expect(mockGet).not.toHaveBeenCalled();
-    expect(result.key).toBe("temp/users/u/fourcut/source-1.png");
-    // 조회를 건너뛴 쪽도 그릴 주소는 없다 — 업로드 주소에서 서명만 뗀 값은 읽히지 않는다.
-    expect(result.objectUrl).toBeUndefined();
+    expect(result).toEqual({ key: "temp/users/u/fourcut/source-1.png" });
   });
 
   /*
@@ -285,34 +158,49 @@ describe("presigned upload flow", () => {
 
   // 하한을 한 칸 어긋나게 잡으면 1바이트가 막힌다. 서버가 받아 주는 최솟값은 통과해야 한다.
   it("1바이트 파일은 그대로 발급 요청한다", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: {
-        code: "GEN-000",
-        status: 200,
-        message: null,
-        data: {
-          key: "uploads/users/u/profile/one-byte.png",
-          uploadUrl: "https://example.com/upload/one-byte.png?sig=1",
-          contentType: "image/png",
-          expiresIn: "PT24H",
-        },
-      },
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    });
-
+    mockPost.mockResolvedValueOnce(presigned("uploads/users/u/profile/one-byte.png", "one-byte.png"));
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
 
     await uploadToS3WithPresigned({
       file: new File(["x"], "one-byte.png", { type: "image/png" }),
       type: PRESIGNED_UPLOAD_TYPES.PROFILE,
-      skipUrlResolve: true,
     });
 
     expect(mockPost).toHaveBeenCalledWith(
       "/api/client/user/files/presigned-upload",
       expect.objectContaining({ fileSize: 1 }),
     );
+  });
+});
+
+describe("getImageUrlByKey", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // 서버 계약은 Response<String> — data 가 URL 문자열 그 자체다.
+  it("서버가 준 URL 문자열을 쓴다", async () => {
+    mockGet.mockResolvedValueOnce({ data: { code: "GEN-000", status: 200, message: null, data: " https://example.com/a.png?sig=2 " } });
+
+    expect(await getImageUrlByKey("uploads/a.png")).toBe("https://example.com/a.png?sig=2");
+    expect(mockGet).toHaveBeenCalledWith(
+      `/api/client/user/files/presigned-img?key=${encodeURIComponent("uploads/a.png")}`,
+    );
+  });
+
+  it("문자열이 아니거나 비어 있으면 null", async () => {
+    mockGet.mockResolvedValueOnce({ data: { data: { url: "https://example.com/x.png" } } });
+    expect(await getImageUrlByKey("k")).toBeNull();
+
+    mockGet.mockResolvedValueOnce({ data: { data: "   " } });
+    expect(await getImageUrlByKey("k")).toBeNull();
+  });
+
+  it("조회가 실패하면 null 이다 — 호출부가 색으로 채운다", async () => {
+    mockGet.mockRejectedValueOnce(new Error("Request failed with status code 500"));
+    expect(await getImageUrlByKey("k")).toBeNull();
+  });
+
+  it("key 가 없으면 부르지 않는다", async () => {
+    expect(await getImageUrlByKey("")).toBeNull();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });

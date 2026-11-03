@@ -685,12 +685,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       const previewFile = new File([previewBlob], `theme-preview-${Date.now()}.png`, {
         type: "image/png",
       });
-      // 미리보기 PNG 는 저장 요청에 previewKey 로만 실린다 — 올린 뒤 이 화면에서
-      // 다시 그리지 않으므로 조회용 URL 해석(왕복 1회)을 건너뛴다.
+      // 미리보기 PNG 는 저장 요청에 previewKey 로만 실린다.
       const { key: previewKey } = await uploadToS3WithPresigned({
         file: previewFile,
         type: PRESIGNED_UPLOAD_TYPES.FRAME,
-        skipUrlResolve: true,
       });
 
       const body = toCreateFrameRequest(themeJson, {

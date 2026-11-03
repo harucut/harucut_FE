@@ -360,10 +360,9 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
-      // 미리보기는 key 로만 저장 요청에 실린다 — 조회용 URL 을 얻는 왕복은 낭비라
-      // 건너뛴다. 빠지면 저장 한 번에 쓸모없는 요청이 하나 더 나간다.
+      // 미리보기는 key 로만 저장 요청에 실린다.
       expect(mockUploadPresigned).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "FRAME", skipUrlResolve: true }),
+        expect.objectContaining({ type: "FRAME" }),
       );
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
@@ -397,7 +396,6 @@ describe("ThemeEditorPage save flow", () => {
     );
     expect(mockSetBackgroundImageKey).toHaveBeenCalledWith("background-key", "AsBg");
     expect(mockUploadPresigned).toHaveBeenCalledTimes(1);
-    expect(mockUploadPresigned.mock.calls[0][0]).toMatchObject({ skipUrlResolve: true });
   });
 
   // F16 — 두 기기 편집은 version 으로 검사한다. 불러온 버전을 보내고, 충돌하면 사용자가 고른다.
