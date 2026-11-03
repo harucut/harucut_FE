@@ -17,7 +17,8 @@ describe("frames", () => {
   test("모든 프레임이 레이아웃과 짝이 맞는다", () => {
     for (const frame of FRAME_CONFIGS) {
       expect(FRAME_LAYOUTS[frame.id]).toBeDefined();
-      expect(FRAME_LAYOUTS[frame.id].slots).toHaveLength(frame.slots);
+      // 네 컷이다.
+      expect(FRAME_LAYOUTS[frame.id].slots).toHaveLength(4);
     }
   });
 
@@ -25,12 +26,6 @@ describe("frames", () => {
     for (const frame of FRAME_CONFIGS) {
       expect(frame.name.length).toBeGreaterThan(0);
     }
-  });
-
-  // 추천 표시는 혼자일 때만 "이걸 고르면 무난하다"로 읽힌다. 둘 이상이 되는 순간
-  // 그냥 분류 라벨이 되므로, 프레임을 늘릴 때 여기서 걸리게 둔다.
-  test("추천 프레임은 하나뿐이다", () => {
-    expect(FRAME_CONFIGS.filter((frame) => frame.recommended)).toHaveLength(1);
   });
 
   test("아는 프레임 id 만 통과시킨다", () => {

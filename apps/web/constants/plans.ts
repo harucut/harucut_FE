@@ -21,23 +21,10 @@ export type PlanId = SharedPlanId;
 export type PlanFeature = SharedPlanFeature;
 
 export type Plan = PlanFacts & {
-  /** 카드 버튼에 쓰는 라벨. 결제가 닫혀 있으면 PricingView 가 상태 표시로 갈아친다. */
-  cta: string;
   badge?: string;
 };
 
-const CTA_BY_ID: Record<PlanId, string> = {
-  basic: "무료로 시작하기",
-  plus: "베이직 시작하기",
-  // 가격표에 카드가 없어 실제로 쓰이지 않지만, PlanId 를 모두 채워 둬야
-  // 나중에 PRO 카드를 되살릴 때 라벨이 빠진 채로 나가지 않는다.
-  pro: "프로 시작하기",
-};
-
-export const PLANS: Plan[] = PLAN_FACTS.map((plan) => ({
-  ...plan,
-  cta: CTA_BY_ID[plan.id],
-}));
+export const PLANS: Plan[] = [...PLAN_FACTS];
 
 export const ENTERPRISE_TEASER = ENTERPRISE_FACTS;
 

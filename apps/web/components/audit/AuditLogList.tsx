@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatDateTime } from "@/components/admin/adminShared";
 
 /** 서버 AuditLogPage.Item. 시스템·탈퇴 사용자가 한 일이면 actorName 키가 없다. */
 export type AuditLogItem = {
@@ -61,13 +62,6 @@ const ACTION_LABEL: Record<string, string> = {
   ENTITLEMENT_USAGE_ALERT: "이용권 사용량이 알림 기준을 넘었어요",
 };
 
-function formatTime(iso: string) {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? "-"
-    : date.toLocaleString("ko-KR", { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
 /** 모르는 행동은 코드 그대로 보인다 — 기록을 숨기는 것보다 낫다. */
 function actionLabel(action: string) {
   return ACTION_LABEL[action] ?? action;
@@ -80,12 +74,10 @@ function actionLabel(action: string) {
 export function AuditLogList({
   load,
   errorMessage,
-  emptyCopy = "아직 기록이 없어요.",
   eventNames,
 }: {
   load: (cursor: string | null) => Promise<AuditLogPage>;
   errorMessage: (cause: unknown) => string;
-  emptyCopy?: string;
   /** 행사 id → 이름. 아는 행사는 이름으로 보여 준다. 모르는 행사(지운 행사 등)는 id 그대로다. */
   eventNames?: ReadonlyMap<string, string>;
 }) {
@@ -152,14 +144,14 @@ export function AuditLogList({
           기록을 불러오는 중…
         </p>
       ) : null}
-      {items?.length === 0 ? <p className="text-[14px] text-(--hc-muted)">{emptyCopy}</p> : null}
+      {items?.length === 0 ? <p className="text-[14px] text-(--hc-muted)">아직 기록이 없어요.</p> : null}
       {items && items.length > 0 ? (
         <ol className="flex flex-col divide-y divide-(--hc-border)">
           {items.map((item, index) => (
             <li key={`${item.createdAt}:${item.action}:${index}`} className="flex flex-col gap-0.5 py-3">
               <p className="text-[14px] font-semibold">{actionLabel(item.action)}</p>
               <p className="text-[12px] text-(--hc-muted)">
-                <span className="font-mono tabular-nums">{formatTime(item.createdAt)}</span>
+                <span className="font-mono tabular-nums">{formatDateTime(item.createdAt)}</span>
                 {" · "}
                 {item.actorName?.trim() || "시스템"}
                 {item.eventId ? (
