@@ -57,6 +57,19 @@ beforeEach(() => {
   mockListMembers.mockResolvedValue([]);
 });
 
+it("업체 공간이면 사진을 멤버가 받지 않는다고 안내한다", async () => {
+  mockListWorkspaces.mockResolvedValue([{ ...ORG, kind: "ENTERPRISE" }]);
+  render(<StudioHome />);
+  expect(await screen.findByText(/행사 사진은 멤버가 받지 않고/)).toBeInTheDocument();
+});
+
+it("주최자 공간이면 그 안내가 없다", async () => {
+  mockListWorkspaces.mockResolvedValue([ORG]);
+  render(<StudioHome />);
+  await screen.findByRole("heading", { name: "행사 운영" });
+  expect(screen.queryByText(/행사 사진은 멤버가 받지 않고/)).not.toBeInTheDocument();
+});
+
 // 행사는 조직 공간에만 만든다 — 개인 공간은 탈퇴 때 통째로 지워진다.
 it("운영 공간이 없으면 개인 공간이 있어도 공간 만들기부터 보여 준다", async () => {
   mockListWorkspaces.mockResolvedValue([PERSONAL]);

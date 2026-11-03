@@ -19,6 +19,8 @@ export type Workspace = {
   name: string;
   type: "PERSONAL" | "ORGANIZATION";
   role: WorkspaceRole;
+  /** 업체(ENTERPRISE) 공간이면 멤버는 행사 사진을 받지 않고 초대한 고객이 받는다. 개인 공간은 늘 HOST. 옛 서버면 키가 없다. */
+  kind?: "HOST" | "ENTERPRISE";
 };
 
 export type EventLayout = "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
