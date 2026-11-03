@@ -67,6 +67,8 @@ export type AdminWorkspaceItem = {
   workspaceId: string;
   name: string;
   type: "PERSONAL" | "ORGANIZATION";
+  /** 업체(ENTERPRISE) 공간이면 멤버가 사진을 받지 않는다. 개인 공간은 늘 HOST. 옛 서버면 키가 없다. */
+  kind?: "HOST" | "ENTERPRISE";
   ownerEmails: string[];
   createdAt: string;
 };
@@ -218,6 +220,21 @@ export async function searchWorkspaces(query: string): Promise<AdminWorkspaceIte
     `/api/client/admin/workspaces?query=${encodeURIComponent(query)}`,
   );
   return res.data.data ?? [];
+}
+
+export type WorkspaceKind = "HOST" | "ENTERPRISE";
+
+/** 공간을 업체(ENTERPRISE)·주최자(HOST)로 바꾼다. 조직 공간만 된다. 사유는 감사 로그에 남는다. */
+export async function setWorkspaceKind(
+  workspaceId: string,
+  kind: WorkspaceKind,
+  reason: string,
+): Promise<{ workspaceId: string; kind: WorkspaceKind }> {
+  const res = await clientApi.patch<ApiEnvelope<{ workspaceId: string; kind: WorkspaceKind }>>(
+    `/api/client/admin/workspaces/${encodeURIComponent(workspaceId)}/kind`,
+    { kind, reason },
+  );
+  return requireData(res.data, "공간 종류");
 }
 
 export async function searchEvents(query: string): Promise<AdminEventItem[]> {

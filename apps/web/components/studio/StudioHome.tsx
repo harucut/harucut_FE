@@ -213,6 +213,12 @@ export function StudioHome() {
           ) : null}
         </header>
 
+        {current?.kind === "ENTERPRISE" && worksOnEvents ? (
+          <p className="rounded-2xl border border-(--hc-border) bg-(--hc-surface-soft) px-4 py-3 text-[13px] leading-relaxed text-(--hc-muted)">
+            이 공간은 업체 공간이에요. 행사 사진은 멤버가 받지 않고, 링크를 받은 고객이 받아요. 찍은 수와 사용량은 여기서 관리할 수 있어요.
+          </p>
+        ) : null}
+
         {load.state === "loading" ? (
           <p role="status" className="text-[14px] text-(--hc-muted)">
             불러오는 중…

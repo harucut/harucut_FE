@@ -5,6 +5,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { adminErrorMessage } from "@/components/admin/adminShared";
 import { AdminContracts } from "@/components/admin/AdminContracts";
+import { AdminWorkspaceKind } from "@/components/admin/AdminWorkspaceKind";
 import { AdminEntitlements } from "@/components/admin/AdminEntitlements";
 import { AdminFrames } from "@/components/admin/AdminFrames";
 import { AdminInquiries } from "@/components/admin/AdminInquiries";
@@ -72,7 +73,8 @@ export function AdminConsole() {
             }}
           />
         </section>
-        <section role="tabpanel" id="admin-panel-contracts" aria-labelledby="admin-tab-contracts" hidden={tab !== "contracts"}>
+        <section role="tabpanel" id="admin-panel-contracts" aria-labelledby="admin-tab-contracts" hidden={tab !== "contracts"} className="flex flex-col gap-4">
+          <AdminWorkspaceKind />
           <AdminContracts prefill={prefill} onContractChanged={() => setEntitlementsVersion((v) => v + 1)} />
         </section>
         <section role="tabpanel" id="admin-panel-entitlements" aria-labelledby="admin-tab-entitlements" hidden={tab !== "entitlements"}>
