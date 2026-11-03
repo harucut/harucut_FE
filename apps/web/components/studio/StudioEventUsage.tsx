@@ -1,13 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { EntitlementFeature, EventUsage } from "@/lib/studio/usageApi";
-
-const FEATURE_LABEL: Record<EntitlementFeature, string> = {
-  CUSTOM_THEME: "행사 화면 디자인",
-  WHITE_LABEL: "하루컷 표시 숨기기",
-  BULK_DOWNLOAD: "사진 묶음 받기",
-};
+import { FEATURE_LABEL } from "@/components/admin/adminShared";
+import type { EventUsage } from "@/lib/studio/usageApi";
 
 /** 남은 합성이 이 비율 아래면, 이용권이 이 날수 안에 끝나면 미리 알린다(R5 「만료 전 안내」). */
 const LOW_REMAINING_RATIO = 0.1;

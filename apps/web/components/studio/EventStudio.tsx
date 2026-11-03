@@ -563,8 +563,8 @@ export function EventStudio({ eventId }: { eventId: string }) {
     : undefined;
 
   /*
-    실제 참가 화면 미리보기(StudioExperiencePreview)가 들어갈 자리. 값이 생기면 xl 에서 오른쪽 340px 칸이 열리고
-    화면 폭 상한도 함께 넓어진다. 비어 있으면 칸을 비워 두지 않는다.
+    실제 참가 화면 미리보기(StudioExperiencePreview). xl 에서는 오른쪽 340px 칸에 늘 붙어 있고,
+    좁은 화면은 「미리보기」로 펼친다.
   */
   const previewData: EventPreviewData = {
     name: form.name.trim() || "이름 없는 행사",
@@ -599,7 +599,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
         요소는 하나고 배치만 바뀐다. 알림도 이 안에 뜬다 — 예전에는 누른 자리에서 수천 픽셀 위에 떠서 아무 일도 없는 것처럼 보였다.
       */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-(--hc-border) bg-(--hc-surface-soft) backdrop-blur-xl lg:sticky lg:bottom-auto lg:top-17 lg:border-b lg:border-t-0">
-        <div className={`mx-auto flex w-full flex-col gap-2 px-4 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 lg:pb-2.5 ${previewPanel ? "max-w-350" : "max-w-250"}`}>
+        <div className={`mx-auto flex w-full flex-col gap-2 px-4 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 lg:pb-2.5 max-w-350`}>
           {notice ? (
             <p
               role={notice.kind === "ok" ? "status" : "alert"}
@@ -685,11 +685,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
       </div>
 
       <div
-        className={`mx-auto grid w-full grid-cols-[minmax(0,1fr)] gap-x-10 px-4 lg:py-8 ${
-          previewPanel
-            ? "max-w-350 lg:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[176px_minmax(0,1fr)_340px]"
-            : "max-w-250 lg:grid-cols-[176px_minmax(0,1fr)]"
-        }`}
+        className="mx-auto grid w-full max-w-350 grid-cols-[minmax(0,1fr)] gap-x-10 px-4 lg:grid-cols-[176px_minmax(0,1fr)] lg:py-8 xl:grid-cols-[176px_minmax(0,1fr)_340px]"
       >
         <StudioSectionNav
           items={navItems}
@@ -1123,9 +1119,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
           )}
         </div>
 
-        {previewPanel ? (
-          <aside className="hidden max-h-[calc(100dvh-9.5rem)] overflow-y-auto xl:sticky xl:top-36 xl:block xl:self-start">{previewPanel}</aside>
-        ) : null}
+        <aside className="hidden max-h-[calc(100dvh-9.5rem)] overflow-y-auto xl:sticky xl:top-36 xl:block xl:self-start">{previewPanel}</aside>
       </div>
 
       {publishConfirm ? (
