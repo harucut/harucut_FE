@@ -488,7 +488,6 @@ async function uploadSources(files: File[]): Promise<string[]> {
       uploadToS3WithPresigned({
         file,
         type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
-        skipUrlResolve: true,
       }),
     ),
   );

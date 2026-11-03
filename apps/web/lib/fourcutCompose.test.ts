@@ -316,8 +316,6 @@ describe("composeFourcutOnServer", () => {
       expect(args.type).toBe("FOURCUT_SOURCE");
       // 원본은 사진이라 JPEG 으로 굽는다(PNG 면 10MB 제한에 걸린다).
       expect(args.file.type).toBe("image/jpeg");
-      // 합성 원본은 곧 서버가 지우므로 조회 URL 을 따로 받지 않는다.
-      expect(args.skipUrlResolve).toBe(true);
     }
 
     expect(mockRequestCompose).toHaveBeenCalledWith({

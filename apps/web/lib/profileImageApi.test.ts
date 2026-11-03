@@ -87,7 +87,6 @@ describe("uploadProfileImage", () => {
     expect(mockUpload).toHaveBeenCalledWith({
       file,
       type: "PROFILE",
-      skipUrlResolve: true,
     });
     expect(mockPatch).toHaveBeenCalledWith(
       "/api/client/user/change/profile-image",
