@@ -127,3 +127,73 @@ describe("등급 이름을 못 읽어도 화면은 뜬다", () => {
     expect(screen.getByRole("button", { name: "요금제 보기" })).toBeInTheDocument();
   });
 });
+
+// 정지 계정은 쓰지는 못하고 계정을 확인한 뒤 로그아웃하거나 탈퇴만 한다.
+describe("정지 계정", () => {
+  const originalFetch = global.fetch;
+
+  async function renderBlocked() {
+    mockGetMyUserInfo.mockResolvedValue({ ...BASE_USER, userStatus: "BLOCKED" } as unknown as UserInfo);
+    render(<MyPage />);
+    await screen.findByRole("heading", { name: "이용이 제한된 계정이에요" });
+  }
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("안내와 문의처, 로그아웃과 탈퇴만 보여 준다", async () => {
+    await renderBlocked();
+    expect(screen.getByText(BASE_USER.username)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회원 탈퇴" })).toBeInTheDocument();
+    expect(document.getElementById("mypage-section-plan")).toBeNull();
+    expect(screen.queryByText("비밀번호")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /닉네임/ })).not.toBeInTheDocument();
+  });
+
+  it("탈퇴 확인창이 복구해도 제한이 남는다고 말한다", async () => {
+    await renderBlocked();
+    fireEvent.click(screen.getByRole("button", { name: "회원 탈퇴" }));
+    expect(screen.getByRole("dialog", { name: "회원 탈퇴를 신청할까요?" })).toHaveTextContent("복구해도 이용 제한은 그대로예요.");
+  });
+
+  // 평소에는 소유자를 넘기면 되지만 정지 계정은 Studio 에 들어가지 못해 넘길 수 없다.
+  it("공간의 마지막 소유자면 문의하라고 말한다", async () => {
+    await renderBlocked();
+    global.fetch = jest.fn(async () => ({
+      ok: false,
+      status: 409,
+      text: async () => JSON.stringify({ code: "MEMBER-004", status: 409, message: "x" }),
+    })) as unknown as typeof fetch;
+    fireEvent.click(screen.getByRole("button", { name: "회원 탈퇴" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "탈퇴 신청" }));
+    expect(await screen.findByText(/마지막 소유자라 바로 탈퇴할 수 없어요/)).toBeInTheDocument();
+  });
+
+  // 프록시는 토큰의 상태만 본다. 풀린 뒤에도 옛 토큰이면 access 가 끝날 때까지 여기로 돌려보낸다.
+  it("돌려보내졌는데 이미 풀려 있으면 새 토큰을 받는다", async () => {
+    window.history.replaceState(null, "", "/mypage?restricted=1");
+    const fetchMock = jest.fn<Promise<unknown>, [RequestInfo | URL]>(async () => ({ ok: true, status: 200, text: async () => "{}" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    await renderWithPlanTier("BASIC");
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/client/reissue")).toBe(true),
+    );
+    window.history.replaceState(null, "", "/mypage");
+  });
+
+  it("돌려보내졌고 아직 정지면 토큰을 다시 받지 않는다", async () => {
+    window.history.replaceState(null, "", "/mypage?restricted=1");
+    const fetchMock = jest.fn<Promise<unknown>, [RequestInfo | URL]>(async () => ({ ok: true, status: 200, text: async () => "{}" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    await renderBlocked();
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/client/reissue")).toBe(false);
+    window.history.replaceState(null, "", "/mypage");
+  });
+
+  it("정지 계정이 아니면 이 안내가 없다", async () => {
+    await renderWithPlanTier("BASIC");
+    expect(screen.queryByRole("heading", { name: "이용이 제한된 계정이에요" })).not.toBeInTheDocument();
+  });
+});

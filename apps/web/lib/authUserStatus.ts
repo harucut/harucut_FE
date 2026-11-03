@@ -1,17 +1,20 @@
 /*
   「인증됐다」와 「앱을 쓸 수 있다」는 다르다.
 
-  백엔드의 `/api/auth/status` 는 탈퇴요청(DELETED_REQUESTED)·탈퇴(DELETED)·차단(BLOCKED)
+  백엔드의 `/api/auth/status` 는 탈퇴요청(DELETED_REQUESTED)·탈퇴(DELETED)
   계정에도 **200 으로 통과한다** — 복구 안내로 갈 수 있게 서버가 일부러 열어 둔 예외다
   (docs/backend-contract.md 「탈퇴 요청 → 복구 생애주기」). 그런데 일반 API 는 전부
   403(GEN-021)이라, 200 을 곧 「회원」으로 읽으면 그 사람은 아무것도 못 하는 화면으로 간다.
 
   그 판정을 여기 하나에 둔다. 예전에는 `app/api/auth/session/route.ts` 안에만 있어서,
   `/api/auth/status` 를 직접 부르는 쪽은 이 예외를 모른 채 200 을 회원으로 읽었다.
+
+  정지(BLOCKED)는 여기 없다. 정지 계정은 로그인해 마이페이지에서 로그아웃과 탈퇴만 한다
+  (2026-11-02 사용자 결정). 세션은 멀쩡하고, 다른 화면은 프록시가 마이페이지로 돌려보낸다.
 */
 
 /** 인증은 됐지만 앱을 쓸 수 없는 상태들. */
-const UNUSABLE_USER_STATUSES = new Set(["DELETED_REQUESTED", "DELETED", "BLOCKED"]);
+const UNUSABLE_USER_STATUSES = new Set(["DELETED_REQUESTED", "DELETED"]);
 
 /** `/api/auth/status` 응답 본문에서 `data.userStatus` 를 꺼낸다. 못 읽으면 null. */
 export function readUserStatus(body: unknown): string | null {
@@ -42,7 +45,7 @@ export function isUnusableUserStatus(userStatus: string | null): boolean {
 }
 
 /**
- * 차단(BLOCKED)·탈퇴(DELETED) 계정에게 하는 말. 이메일 로그인과 소셜 콜백이 같이 쓴다.
+ * 탈퇴(DELETED) 계정에게 하는 말. 이메일 로그인과 소셜 콜백이 같이 쓴다.
  * 탈퇴요청(DELETED_REQUESTED)은 여기 오지 않는다 — 복구 절차가 따로 있다.
  */
 export const RESTRICTED_ACCOUNT_MESSAGE =

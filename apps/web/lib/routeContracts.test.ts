@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   PROTECTED_PATHS,
   isGuestAllowedPath,
+  isBlockedAccountPath,
   isProtectedPath,
 } from "@/lib/protectedPaths";
 
@@ -36,6 +37,16 @@ describe("route protection contract", () => {
     ]) {
       expect(proxySource).toContain(matcher);
     }
+  });
+
+  test("정지 계정은 마이페이지 말고는 보호 경로에 들어가지 못한다", () => {
+    expect(isBlockedAccountPath("/mypage")).toBe(true);
+    expect(isBlockedAccountPath("/mypage.segments/_tree.segment")).toBe(true);
+    expect(isBlockedAccountPath("/mypages")).toBe(false);
+    expect(isBlockedAccountPath("/home")).toBe(false);
+    expect(isBlockedAccountPath("/studio/events/Ev1")).toBe(false);
+    expect(isBlockedAccountPath("/admin")).toBe(false);
+    expect(proxySource).toContain("isBlockedAccountPath(pathname)");
   });
 
   test("recognizes protected routes and subroutes", () => {

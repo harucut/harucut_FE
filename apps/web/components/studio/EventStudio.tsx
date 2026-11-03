@@ -1087,7 +1087,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     행사 고객
                   </h3>
                   <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-                    신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 공간의 다른 행사는 보이지 않아요.
+                    신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 이미 찍은 사진도 모두 보이고, 공간의 다른 행사는 보이지 않아요.
                   </p>
                   <StudioEventCustomers
                     key={customersVersion}

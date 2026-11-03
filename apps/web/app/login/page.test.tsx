@@ -186,7 +186,19 @@ describe("LoginPage 막힌 계정", () => {
     useGuestTrialStore.setState({ accessMode: "member" });
   });
 
-  it.each(["BLOCKED", "DELETED"])(
+  // 정지 계정은 세션을 그대로 둔다. 어디로 가든 프록시가 마이페이지로 돌려보내고, 거기서 로그아웃과 탈퇴를 한다.
+  it("BLOCKED 계정은 세션을 지우지 않고 로그인을 마친다", async () => {
+    mockLoginWithEmail.mockResolvedValue({ userStatus: "BLOCKED" });
+    useGuestTrialStore.setState({ accessMode: "guest" });
+
+    submitLogin({ email: LOGIN_EMAIL, password: LONG_PASSWORD });
+
+    await waitFor(() => expect(useGuestTrialStore.getState().accessMode).toBe("member"));
+    expect(mockDelete).not.toHaveBeenCalledWith("/api/client/logout");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it.each(["DELETED"])(
     "%s 계정은 받은 세션을 지우고 이 화면에서 이유와 문의처를 말한다",
     async (userStatus) => {
       mockLoginWithEmail.mockResolvedValue({ userStatus });

@@ -172,3 +172,44 @@ test("scrolls to the linked record after the history list loads", async ({
   });
   expect(inView).toBe(true);
 });
+
+// 정지 계정은 마이페이지에서 로그아웃과 탈퇴만 한다. 판정은 access 토큰의 status 클레임이고, 집행은 백엔드다.
+test.describe("정지 계정", () => {
+  function accessToken(status: string) {
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    return `${encode({ alg: "none" })}.${encode({ exp: Math.floor(Date.now() / 1000) + 3600, status })}.e2e`;
+  }
+
+  async function signIn(page: Page, status: string) {
+    await stubAuthenticatedApi(page);
+    await page.context().addCookies([{ name: "accessToken", value: accessToken(status), url: baseURL }]);
+  }
+
+  for (const route of ["/home", "/shoot", "/history", "/theme", "/studio", "/admin"]) {
+    test(`${route} 는 마이페이지로 돌아간다`, async ({ page }) => {
+      await signIn(page, "BLOCKED");
+      await page.goto(route);
+      await expect(page).toHaveURL(/\/mypage\?restricted=1$/);
+    });
+  }
+
+  test("마이페이지는 제한 안내와 로그아웃·탈퇴만 보여 준다", async ({ page }) => {
+    await signIn(page, "BLOCKED");
+    await page.route("**/api/client/user-info", (route) =>
+      route.fulfill({
+        json: { code: "GEN-000", status: 200, data: { id: "UsE2E", email: "blocked@example.com", username: "정지 계정", profileUrl: null, userStatus: "BLOCKED" } },
+      }),
+    );
+    await page.goto("/mypage");
+    await expect(page.getByRole("heading", { name: "이용이 제한된 계정이에요" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "로그아웃", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "회원 탈퇴" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "행사 운영" })).toHaveCount(0);
+  });
+
+  test("활성 계정은 돌려보내지 않는다", async ({ page }) => {
+    await signIn(page, "ACTIVE");
+    await page.goto("/history");
+    await expect(page).toHaveURL(/\/history$/);
+  });
+});

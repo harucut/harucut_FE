@@ -392,7 +392,10 @@ SocialLoginSection 버튼 onClick (components/auth/SocialLoginSection.tsx)
 2. `UserStatus`별 분기
    - `ACTIVE`: 복귀 경로(없으면 `/home`)로 이동
    - `DELETED_REQUESTED`: 아래 별도 절
-   - `BLOCKED` / `DELETED`: 들여보내지 않는다 — 상태 조회는 200 이어도 일반 API 가 전부 막혀
+   - `BLOCKED`: 세션을 그대로 두고 들여보낸다. 프록시가 access 토큰의 `status` 를 읽어 `/mypage` 말고 보호 경로를
+     모두 마이페이지로 돌려보낸다(`isBlockedAccountPath`). 마이페이지는 안내와 문의처, 로그아웃, 탈퇴만 보여 준다.
+     정지 전에 받은 토큰은 프록시를 지나치고, 막힌 API 의 403 `AUTH-042` 를 받는 순간 `AccountRecoveryBridge` 가 보낸다.
+   - `DELETED`: 들여보내지 않는다 — 상태 조회는 200 이어도 일반 API 가 전부 막혀
      아무것도 못 하는 홈에 갇힌다. `DELETE /api/client/logout`(실패 무시) 뒤
      「이용이 제한된 계정이에요」 + 고객센터 메일(`COMPANY.email`) + 로그인으로 돌아가기.
      이메일 로그인(`app/login/page.tsx`)도 같은 문구와 메일을 폼 위에 띄운다

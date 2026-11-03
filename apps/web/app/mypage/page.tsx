@@ -16,6 +16,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Camera, ChevronRight, LogOut, PencilLine } from "lucide-react";
 import { getLoginPlatformLabel, josa, parseServerDateTime, subscriptionManageHint } from "@harucut/shared";
+import { COMPANY } from "@harucut/shared";
+import { BlockedAccountPanel } from "@/components/mypage/BlockedAccountPanel";
 import { PasswordChangeDialog } from "@/components/mypage/PasswordChangeDialog";
 import { SettingRow } from "@/components/mypage/SettingRow";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
@@ -39,8 +41,8 @@ import { resolvePlanInfo } from "@/constants/planLimits";
 import type { MyCoupon,
   Subscription,
   SubscriptionUsage } from "@/lib/api-types";
-import { clientApi } from "@/lib/clientApi";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { clientApi, reissueAccessToken } from "@/lib/clientApi";
+import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import {
@@ -97,6 +99,7 @@ export default function MyPage() {
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
+  const blocked = user?.userStatus === "BLOCKED";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [logoutAllOpen, setLogoutAllOpen] = useState(false);
@@ -170,6 +173,14 @@ export default function MyPage() {
   const refreshUser = async () => {
     await loadUser();
   };
+
+  // 프록시는 토큰의 상태만 본다. 정지가 풀린 뒤에도 옛 토큰을 들고 있으면 access 가 끝날 때까지 계속 여기로 돌려보내므로,
+  // 돌려보내진 사람인데(표시) 실제로는 풀려 있으면 새 토큰을 받는다. 서버는 이 토큰으로도 이미 정상으로 답한다.
+  useEffect(() => {
+    if (!user || user.userStatus === "BLOCKED") return;
+    if (!new URLSearchParams(window.location.search).has("restricted")) return;
+    void reissueAccessToken().finally(() => router.replace("/mypage"));
+  }, [user, router]);
 
   // 스탯 3셀은 우리 실제 데이터(기록 미디어 / 이번 달 / 보관 프레임)로 매핑한다.
   // 조회에 실패하면 0이 아니라 statsError로 구분해 '기록이 사라진 것처럼' 보이지 않게 한다.
@@ -365,7 +376,14 @@ export default function MyPage() {
       router.refresh();
     } catch (error) {
       console.error(error);
-      setNotice({ kind: "error", text: "회원 탈퇴에 실패했어요." });
+      setNotice({
+        kind: "error",
+        // 공간의 마지막 소유자는 탈퇴하지 못한다. 평소에는 소유자를 넘기면 되지만 정지 계정은 넘길 수 없다.
+        text:
+          blocked && getApiErrorDetails(error).code === "MEMBER-004"
+            ? `운영 중인 공간의 마지막 소유자라 바로 탈퇴할 수 없어요. ${COMPANY.email} 로 문의해 주세요.`
+            : getUserFacingApiErrorMessage(error, "회원 탈퇴에 실패했어요."),
+      });
       setExitOpen(false);
     } finally {
       setIsSubmitting(false);
@@ -889,7 +907,8 @@ export default function MyPage() {
 
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
-      <AppNav userInitial={user?.username} />
+      {/* 정지 계정은 갈 곳이 여기뿐이다. 눌러도 돌아오는 메뉴를 두지 않는다. */}
+      {blocked ? null : <AppNav userInitial={user?.username} />}
 
       {/* 한 칸이므로 폭을 좁힌다. 예전 1000px 는 좌우 두 칸이 나눠 쓰던 폭이라,
           그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
@@ -949,6 +968,11 @@ export default function MyPage() {
               내 정보를 불러오지 못했어요.
             </p>
           </div>
+        ) : blocked ? (
+          <>
+            <BlockedAccountPanel user={user} />
+            <div className="mt-5">{logoutAndExit}</div>
+          </>
         ) : (
           <div className="mt-5 flex flex-col gap-5">
             {/* 프로필 — 아바타·이름·이메일 한 줄 */}
@@ -1058,7 +1082,7 @@ export default function MyPage() {
           </div>
         )}
       </div>
-      <MobileTabBar />
+      {blocked ? null : <MobileTabBar />}
 
       {logoutAllOpen ? (
         <ConfirmDialog
@@ -1075,7 +1099,9 @@ export default function MyPage() {
       {exitOpen ? (
         <ConfirmDialog
           title="회원 탈퇴를 신청할까요?"
-          description="탈퇴 신청일부터 7일 안에 다시 로그인하면 계정을 복구할 수 있어요. 7일이 지나면 사진과 프레임이 모두 삭제돼요."
+          description={`탈퇴 신청일부터 7일 안에 다시 로그인하면 계정을 복구할 수 있어요. 7일이 지나면 사진과 프레임이 모두 삭제돼요.${
+            blocked ? " 복구해도 이용 제한은 그대로예요." : ""
+          }`}
           confirmLabel="탈퇴 신청"
           runningLabel="탈퇴 신청 중…"
           destructive

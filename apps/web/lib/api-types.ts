@@ -31,6 +31,8 @@ export type UserInfo = {
   email: string;
   username: string;
   profileUrl: string | null;
+  /** BLOCKED 면 마이페이지에서 로그아웃과 탈퇴만 할 수 있다. */
+  userStatus?: UserStatus | null;
   // 서버 Provider enum 5종. 구글/애플 로그인도 실제로 내려온다.
   loginPlatform?: "GOOGLE" | "KAKAO" | "NAVER" | "APPLE" | "HARUCUT" | null;
   /**

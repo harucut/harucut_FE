@@ -10,7 +10,7 @@
  * 갈아 끼울 수 없어(configurable:false) 목적지를 읽을 방법이 없다. 대신 세션을 지웠는지,
  * 돌아갈 곳을 몇 번 꺼냈는지로 같은 회귀를 잡는다.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { COMPANY, CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
 import OAuthCallbackPage from "@/app/oauth2/callback/page";
 import { ApiRequestError } from "@/lib/clientApi";
@@ -164,8 +164,20 @@ describe("제공자가 실패로 돌려보낸 경우(?error=)", () => {
   });
 });
 
-// 상태 조회는 차단·탈퇴 계정에도 200 이다. 그대로 들여보내면 일반 API 가 전부 막힌 홈에 갇힌다.
-it.each(["BLOCKED", "DELETED"])(
+// 정지 계정은 세션을 그대로 둔다. 어디로 가든 프록시가 마이페이지로 돌려보낸다.
+it("BLOCKED 계정은 세션을 지우지 않고 들여보낸다", async () => {
+  mockGet.mockResolvedValue(statusOf("BLOCKED"));
+
+  render(<OAuthCallbackPage />);
+
+  await waitFor(() => expect(mockGet).toHaveBeenCalled());
+  await act(async () => {});
+  expect(mockDelete).not.toHaveBeenCalled();
+  expect(screen.queryByRole("heading", { name: "로그인하지 못했어요" })).not.toBeInTheDocument();
+});
+
+// 상태 조회는 탈퇴 계정에도 200 이다. 그대로 들여보내면 일반 API 가 전부 막힌 홈에 갇힌다.
+it.each(["DELETED"])(
   "%s 계정은 들여보내지 않고 세션을 지운 뒤 문의처를 보여 준다",
   async (userStatus) => {
     mockGet.mockResolvedValue(statusOf(userStatus));

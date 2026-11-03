@@ -42,6 +42,14 @@ function hasPrefix(pathname: string, prefix: string) {
 }
 
 /**
+ * 정지 계정이 들어갈 수 있는 보호 경로. 쓰지는 못하고 마이페이지에서 로그아웃과 탈퇴만 한다.
+ * 나머지 보호 경로는 프록시가 여기로 돌려보내고, 실제 집행은 백엔드가 403 AUTH-042 로 한다.
+ */
+export function isBlockedAccountPath(pathname: string) {
+  return hasPrefix(toRoutePath(pathname), "/mypage");
+}
+
+/**
  * 같은 페이지를 가리키는 여러 주소 모양을 한 갈래로 되돌린다.
  *
  * App Router 는 한 라우트를 사람이 치는 주소로만 부르지 않는다. 세그먼트 프리페치는

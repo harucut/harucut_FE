@@ -25,7 +25,8 @@ const PROVIDER_LABEL: Record<string, string> = {
 
 /**
  * 계정 찾기와 정지(R5 381줄). 이메일이 정확히 같은 계정만 찾는다 — 목록을 훑어 볼 화면이 아니다.
- * 정지하면 모든 세션이 끊기고 로그인할 수 없다. 사유는 감사 로그에 남는다. 자기 자신과 마지막 관리자는 서버가 막는다.
+ * 정지하면 모든 세션이 끊기고, 다시 로그인해도 마이페이지에서 로그아웃과 탈퇴만 할 수 있다. 사유는 감사 로그에 남는다.
+ * 자기 자신과 마지막 관리자는 서버가 막는다.
  */
 export function AdminUsers() {
   const [email, setEmail] = useState("");
@@ -60,7 +61,7 @@ export function AdminUsers() {
     try {
       const saved = action === "block" ? await blockUser(user.userId, reason) : await unblockUser(user.userId, reason);
       setUsers((prev) => prev?.map((u) => (u.userId === user.userId ? { ...u, userStatus: saved.userStatus } : u)) ?? prev);
-      setNotice(action === "block" ? "계정을 정지했어요. 모든 기기에서 로그아웃돼요." : "정지를 풀었어요. 다시 로그인할 수 있어요.");
+      setNotice(action === "block" ? "계정을 정지했어요. 모든 기기에서 로그아웃돼요." : "정지를 풀었어요. 다시 로그인하면 모두 쓸 수 있어요.");
       setPending(null);
     } catch (cause) {
       // 이 화면까지 온 관리자에게 403 은 대개 자기 자신이나 마지막 관리자를 정지하려 한 것이다. 「관리자만 쓸 수 있어요」는 맞지 않는다.
@@ -154,8 +155,8 @@ export function AdminUsers() {
           title={pending.action === "block" ? "이 계정을 정지할까요?" : "정지를 풀까요?"}
           description={
             pending.action === "block"
-              ? "모든 기기에서 로그아웃되고 다시 로그인할 수 없어요. 이유는 감사 로그에 남아요."
-              : "다시 로그인할 수 있어요. 이유는 감사 로그에 남아요."
+              ? "모든 기기에서 로그아웃돼요. 다시 로그인해도 마이페이지에서 로그아웃과 탈퇴만 할 수 있어요. 이유는 감사 로그에 남아요."
+              : "다시 로그인하면 모두 쓸 수 있어요. 이유는 감사 로그에 남아요."
           }
           submitLabel={pending.action === "block" ? "정지" : "정지 풀기"}
           submittingLabel="처리하는 중"

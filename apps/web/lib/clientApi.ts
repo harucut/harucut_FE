@@ -79,6 +79,13 @@ const SESSION_REFRESH_EXEMPT_PATHS = new Set<string>([
   "/api/client/logout",
 ]);
 
+// 정지 계정이 막힌 API 를 불렀을 때(403 AUTH-042) 호출되는 핸들러. 정지 계정의 자리는 마이페이지다.
+let onAccountBlocked: (() => void) | null = null;
+
+export function registerAccountBlockedHandler(handler: (() => void) | null) {
+  onAccountBlocked = handler;
+}
+
 // 탈퇴요청(DELETED_REQUESTED) 상태로 판정됐을 때 호출되는 핸들러.
 // 세션 만료와 **다르다** — 토큰은 멀쩡하고 계정 상태만 막힌 것이라 로그아웃시키면 안 된다.
 let onDeletionRequested: (() => void) | null = null;
@@ -138,6 +145,7 @@ type ReissueResult = "ok" | "expired" | "unavailable";
  * 탈퇴요청인지 알 수 없다. 그래서 /api/auth/status 로 상태를 한 번 더 확인한다.
  */
 const ACCESS_DENIED_CODE = "GEN-021";
+const ACCOUNT_BLOCKED_CODE = "AUTH-042";
 
 // 로그인한 계정이 현재 필수 약관에 동의하지 않아 서버가 막았다는 코드.
 // 약관 조회·동의 제출·상태 조회 등 재동의에 필요한 경로는 서버가 이 검사에서 뺀다.
@@ -254,7 +262,7 @@ function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
  * 회전 두 개, 곧 이 단일화가 막으려던 그 경쟁이다. 멈춘 왕복이 탭을 영영 막는 문제는
  * 이제 왕복 자체의 상한(`REISSUE_DEADLINE_MS`)이 맡는다.
  */
-function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
+export function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
   if (!pendingReissue) {
     pendingReissue = requestReissue().finally(() => {
       pendingReissue = null;
@@ -383,6 +391,10 @@ async function request<T>(
       !DELETION_CHECK_EXEMPT_PATHS.has(path)
     ) {
       void checkDeletionRequested();
+    }
+
+    if (res.status === 403 && envelope?.code === ACCOUNT_BLOCKED_CODE) {
+      onAccountBlocked?.();
     }
 
     if (res.status === 403 && envelope?.code === TERMS_CONSENT_REQUIRED_CODE) {
