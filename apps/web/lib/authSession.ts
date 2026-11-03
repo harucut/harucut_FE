@@ -19,7 +19,7 @@ import { isUnusableUserStatus, readUserStatus } from "@/lib/authUserStatus";
 export type Membership =
   /** 서버가 확인해 줬다. */
   | "member"
-  /** 서버가 확인해 줬는데 앱을 쓸 수 없다 — 세션이 끊겼거나 탈퇴요청·차단 계정이다. */
+  /** 서버가 확인해 줬는데 앱을 쓸 수 없다 — 세션이 끊겼거나 탈퇴요청·탈퇴 계정이다. */
   | "guest"
   /** 못 물어봤다 — 회선이 끊겼거나 서버가 5xx 이거나 재발급 서버가 잠깐 못 답했다. */
   | "unknown";
@@ -35,7 +35,7 @@ export type Membership =
  * 받아 주지 않는다 — docs/backend-contract.md), 생 `fetch` 는 그 401 을 그대로 받아 「비회원」
  * 이 된다. `clientApi` 는 401 에서 한 번 재발급하고 원 요청을 다시 보낸다.
  *
- * ② **200 이라고 앱을 쓸 수 있는 것은 아니다.** `/api/auth/status` 는 탈퇴요청·탈퇴·차단
+ * ② **200 이라고 앱을 쓸 수 있는 것은 아니다.** `/api/auth/status` 는 탈퇴요청·탈퇴
  * 계정에도 200 을 준다(복구 진입로를 열어 둔 예외다). 그래서 본문의 `userStatus` 를 함께
  * 본다. 판정의 소유자는 `lib/authUserStatus.ts` 이고 `/api/auth/session` 라우트도 같은 것을 쓴다.
  *

@@ -146,6 +146,7 @@ describe("정지 계정", () => {
   it("안내와 문의처, 로그아웃과 탈퇴만 보여 준다", async () => {
     await renderBlocked();
     expect(screen.getByText(BASE_USER.username)).toBeInTheDocument();
+    expect(screen.getByText(/App Store 에서 구독 중이면 결제가 자동으로 멈추지 않아요/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "회원 탈퇴" })).toBeInTheDocument();
     expect(document.getElementById("mypage-section-plan")).toBeNull();

@@ -130,7 +130,7 @@ export default function OAuthCallbackPage() {
           // 복구는 됐지만 지금 쿠키로는 아무것도 못 한다 — 토큰에 status=DELETED_REQUESTED 가
           // 박혀 있고 reactivate 는 새 쿠키를 주지 않은 채 서버의 refresh 토큰까지 지운다.
           // 이메일 로그인과 달리 여기엔 다시 쓸 자격증명이 없으므로, 들어온 소셜 인가를
-          // 한 번 더 태워 ACTIVE 토큰을 받는다. 계정은 이미 복구됐으니 이번엔 그대로 통과한다.
+          // 한 번 더 태워 지금 상태의 토큰을 받는다(정지 중이었다면 BLOCKED). 계정은 이미 복구됐으니 이번엔 그대로 통과한다.
           // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
           const provider = readSocialLoginProvider();
           if (cancelled) return;
