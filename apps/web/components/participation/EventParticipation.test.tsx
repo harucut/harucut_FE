@@ -624,6 +624,16 @@ it("촬영 시간이 아니면 새 참가자에게 참여 버튼을 내밀지 �
   expect(screen.queryByRole("button", { name: "참여하기" })).not.toBeInTheDocument();
 });
 
+it("소유자가 모두 정지돼 참여가 막히면(EVENT-006) 참여 불가 화면으로 간다", async () => {
+  api.startByodSession.mockRejectedValue(new ApiRequestError({ status: 409, code: "EVENT-006" }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+  // 되돌아가 다시 시도하는 오류가 아니라 참여 불가 화면으로 바뀐다 — 참여하기 버튼이 사라진다.
+  await waitFor(() => expect(screen.queryByRole("button", { name: "참여하기" })).not.toBeInTheDocument());
+  expect(screen.getByRole("alert")).toBeInTheDocument();
+});
+
 it("촬영 시간인데 고를 프레임이 없으면 빈 촬영 화면 대신 준비 중이라고 알린다", async () => {
   api.getPublicEvent.mockResolvedValue(publicEvent({ frames: [] }));
   render(<EventParticipation slug="wedding-1027" />);

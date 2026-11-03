@@ -291,7 +291,8 @@ export function EventParticipation({ slug, initialEvent = null }: { slug: string
       setStep({ kind: "consent" });
     } catch (cause) {
       const { code } = getApiErrorDetails(cause);
-      if (code === "EVENT-001" || code === "EVENT-002" || code === "ENT-004") showUnavailable(cause, "지금은 참여할 수 없어요.");
+      // EVENT-006: 공간 소유자가 모두 정지돼 이 행사가 참여를 받지 않는다(서버가 captureOpen=false 로도 알린다).
+      if (code === "EVENT-001" || code === "EVENT-002" || code === "EVENT-006" || code === "ENT-004") showUnavailable(cause, "지금은 참여할 수 없어요.");
       else setError(getUserFacingApiErrorMessage(cause, "참여를 시작하지 못했어요. 잠시 후 다시 시도해 주세요."));
     } finally {
       setBusy(false);
@@ -1121,7 +1122,7 @@ export function CaptureAndSend({
       if (status === 401) handlersRef.current.onSessionEnded();
       else if (code === "PART-002" && handlersRef.current.onConsentRequired) handlersRef.current.onConsentRequired();
       // ENT-002: 이 행사의 촬영 한도를 다 썼거나 이용권이 끝났다. ENT-004: 기능 권한이 회수됐다. 찍기 전에 막는다(접수에서도 다시 본다).
-      else if (code === "EVENT-001" || code === "ENT-002" || code === "ENT-004") handlersRef.current.onUnavailable(cause);
+      else if (code === "EVENT-001" || code === "EVENT-006" || code === "ENT-002" || code === "ENT-004") handlersRef.current.onUnavailable(cause);
       else setError(participantErrorMessage(cause, "촬영을 시작하지 못했어요. 잠시 후 다시 시도해 주세요."));
     });
     return () => stop();
@@ -1283,7 +1284,7 @@ export function CaptureAndSend({
       if (status === 401) return onSessionEnded();
       if (code === "PART-002" && onConsentRequired) return onConsentRequired();
       if (code === "PART-004" && onFrameRejected) return onFrameRejected();
-      if (code === "EVENT-001" || code === "ENT-002" || code === "ENT-004") return onUnavailable(cause);
+      if (code === "EVENT-001" || code === "EVENT-006" || code === "ENT-002" || code === "ENT-004") return onUnavailable(cause);
       if (code === "PART-003" && !retriedForNewRun) {
         // 회차가 끝났다(유효시간 초과 등). 새 회차를 열고 같은 사진을 처음부터 올린다.
         runRef.current = null;
