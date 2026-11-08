@@ -15,7 +15,7 @@
  *  - 공유 실패를 한 문구로 묶지는 않는가. 링크를 못 만든 것과 만들어 놓고 복사만 막힌 것은
  *    사용자가 할 일이 다르다(lib/share.ts 의 CopyFailedError).
  */
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import HistoryPage from "@/app/history/page";
 // 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 로 펼쳐 둔 것을 가져온다.
 import { CopyFailedError } from "@/lib/share";
@@ -66,6 +66,14 @@ const ITEM = {
   displayName: "바다에서",
   createdAt: "2026-08-14T18:00:00",
 };
+/**
+ * 목록 카드 버튼의 이름 — 카드 글자(이름 + 날짜)가 그대로 이름이다.
+ * 날짜가 15일인 것은 오프셋 없는 값을 UTC 로 읽고(userMediaApi 의 KST 정규화는 여기서 목으로
+ * 빠진다) 테스트가 서울 시간대에서 돌기 때문이다(jest.config.mjs) — 8월 15일 03시.
+ */
+const CARD = "바다에서 08.15";
+/** 지우기 확인 창의 이름(ConfirmDialog 의 제목). 보기 화면도 dialog 라 이름으로 가른다. */
+const CONFIRM_TITLE = "이 사진을 지울까요?";
 
 /** 배너 자동 소멸 시간(page.tsx)보다 넉넉히 넘긴다. */
 const PAST_AUTO_DISMISS_MS = 4000;
@@ -125,7 +133,21 @@ function okFetch() {
 async function renderHistory() {
   render(<HistoryPage />);
   await act(async () => {});
-  return screen.getByRole("button", { name: "삭제: 바다에서" });
+  return screen.getByRole("button", { name: CARD });
+}
+
+/** 카드를 눌러 크게 본다. 저장·공유·지우기는 이 화면에만 있다. */
+async function openViewer() {
+  fireEvent.click(await renderHistory());
+  return screen.getByRole("dialog", { name: "바다에서" });
+}
+
+/** 보기 화면 → ⋯ → 지우기 → 확인 창이 뜬 데까지. */
+async function askDelete() {
+  const viewer = await openViewer();
+  fireEvent.click(within(viewer).getByRole("button", { name: "더보기" }));
+  fireEvent.click(within(viewer).getByRole("button", { name: "지우기" }));
+  return screen.getByRole("dialog", { name: CONFIRM_TITLE });
 }
 
 /**
@@ -142,19 +164,20 @@ async function renderEmptyHistory() {
   return screen.getByText("저장한 기록이 아직 없어요.");
 }
 
-/** 삭제 버튼 → 확인 창 → "지우기" 까지. */
+/** 확인 창의 "지우기" 까지. */
 async function confirmDelete() {
-  const deleteButton = await renderHistory();
-  fireEvent.click(deleteButton);
+  const confirm = await askDelete();
 
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: "지우기" }));
+    fireEvent.click(within(confirm).getByRole("button", { name: "지우기" }));
   });
 }
 
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  // 크게 보는 사진은 주소(?photo=)에 남는다. 앞 테스트의 주소로 시작하지 않게 되돌린다.
+  window.history.replaceState(null, "", "/history");
   mockListMyMedia.mockResolvedValue([ITEM]);
   mockGetMyUserInfo.mockResolvedValue({ planTier: "BASIC" });
   mockGetImageUrlByKey.mockResolvedValue("https://cdn.example.com/media/7.png");
@@ -172,18 +195,20 @@ afterEach(() => {
 });
 
 describe("기록 화면의 실패 알림", () => {
-  it("삭제에 실패하면 확인 창을 닫고 사유를 화면에 남긴다", async () => {
+  it("삭제에 실패하면 확인 창을 닫고 사유를 보던 사진 화면에 남긴다", async () => {
     mockDeleteMedia.mockRejectedValue(new Error("boom"));
 
     await confirmDelete();
 
-    // 확인 창이 남아 있으면 배너를 가린다.
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText("사진을 지우지 못했어요.")).toBeInTheDocument();
-    // 지우지 못했으니 목록에도 그대로 있어야 한다.
+    // 확인 창이 남아 있으면 문구를 가린다.
     expect(
-      screen.getByRole("button", { name: "삭제: 바다에서" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("dialog", { name: CONFIRM_TITLE }),
+    ).not.toBeInTheDocument();
+    // 목록 위 띠는 보기 화면에 가려 보이지 않는다 — 사유는 보기 화면 안에서 말한다.
+    const viewer = screen.getByRole("dialog", { name: "바다에서" });
+    expect(within(viewer).getByText("사진을 지우지 못했어요.")).toBeInTheDocument();
+    // 지우지 못했으니 목록에도 그대로 있어야 한다.
+    expect(screen.getByRole("button", { name: CARD })).toBeInTheDocument();
   });
 
   it("실패 문구는 시간이 지나도 지워지지 않는다", async () => {
@@ -202,12 +227,14 @@ describe("기록 화면의 실패 알림", () => {
     jsdom 은 배치를 계산하지 않으니 "뷰포트 안인가"는 여기서 못 본다. 걸 수 있는 최대치는
     배너를 감싼 띠가 붙어 있는 상자인가 하나다 — 그 클래스가 사라지면 결과가 다시 화면
     밖으로 나간다(390×844 실측으로 맨 아래 카드 삭제 실패 시 배너 top 이 -3,917px 이었다).
+    지금 목록 위 띠에 오는 결과는 지운 뒤의 것이다 — 지운 사진의 보기 화면은 닫힌다.
   */
-  it("실패 문구는 목록이 길어도 화면에 붙어 있는다", async () => {
-    mockDeleteMedia.mockRejectedValue(new Error("nope"));
+  it("지우면 보기 화면을 닫고 결과를 목록 위 띠에 붙여 말한다", async () => {
+    mockDeleteMedia.mockResolvedValue(undefined);
     await confirmDelete();
 
-    const banner = screen.getByText("사진을 지우지 못했어요.");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const banner = screen.getByText("사진을 지웠어요.");
     expect(banner.parentElement).toHaveClass("sticky");
   });
 
@@ -239,16 +266,20 @@ describe("기록 화면의 실패 알림", () => {
       await confirmDelete();
 
       // 상한 전에는 그대로 막혀 있어야 한다 — 여기까지는 예전 판단 그대로다.
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: CONFIRM_TITLE })).toBeInTheDocument();
       fireEvent.keyDown(document, { key: "Escape" });
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: CONFIRM_TITLE })).toBeInTheDocument();
+      // Escape 는 맨 위 창(확인 창) 것이다. 아래 깔린 보기 화면이 대신 닫히지도 않는다.
+      expect(screen.getByRole("dialog", { name: "바다에서" })).toBeInTheDocument();
 
       await act(async () => {
         jest.advanceTimersByTime(PAST_DELETE_DEADLINE_MS);
       });
       await act(async () => {});
 
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("dialog", { name: CONFIRM_TITLE }),
+      ).not.toBeInTheDocument();
       expect(screen.getByText(DELETE_STALLED_TEXT)).toBeInTheDocument();
 
       /*
@@ -256,9 +287,7 @@ describe("기록 화면의 실패 알림", () => {
         끊긴 쪽에서는 요청이 서버까지 갔는지 알 수 없다. 지워졌는데 남아 있다고 하거나
         안 지워졌는데 지웠다고 하거나, 어느 쪽이든 화면이 거짓말을 하게 된다.
       */
-      expect(
-        screen.getByRole("button", { name: "삭제: 바다에서" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: CARD })).toBeInTheDocument();
     });
 
     /*
@@ -273,9 +302,7 @@ describe("기록 화면의 실패 알림", () => {
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(screen.getByText("사진을 지웠어요.")).toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: "삭제: 바다에서" }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: CARD })).not.toBeInTheDocument();
 
       // 이미 끝난 요청의 상한이 뒤늦게 깨어나 실패 문구를 덮어쓰지 않는다.
       await act(async () => {
@@ -312,9 +339,8 @@ describe("기록 화면의 실패 알림", () => {
       ) as unknown as typeof fetch;
       mockDeleteMedia.mockImplementation(realDeleteMedia);
 
-      const deleteButton = await renderHistory();
-      fireEvent.click(deleteButton);
-      fireEvent.click(screen.getByRole("button", { name: "지우기" }));
+      const confirm = await askDelete();
+      fireEvent.click(within(confirm).getByRole("button", { name: "지우기" }));
 
       // 상한에 닿기 직전까지 기다린다. 여기서 끊기면 상한이 너무 짧은 것이다.
       await act(async () => {
@@ -356,9 +382,9 @@ describe("기록 화면의 공유 실패 안내", () => {
   it("복사만 막혔으면 링크는 만들었다고 말한다", async () => {
     mockShareOrCopyLink.mockRejectedValue(new CopyFailedError());
 
-    await renderHistory();
+    const viewer = await openViewer();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "공유" }));
+      fireEvent.click(within(viewer).getByRole("button", { name: "공유" }));
     });
 
     expect(
@@ -371,9 +397,9 @@ describe("기록 화면의 공유 실패 안내", () => {
   it("링크를 못 만들었으면 준비 실패로 말한다", async () => {
     mockGetImageUrlByKey.mockRejectedValue(new Error("presign failed"));
 
-    await renderHistory();
+    const viewer = await openViewer();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "공유" }));
+      fireEvent.click(within(viewer).getByRole("button", { name: "공유" }));
     });
 
     expect(
@@ -389,4 +415,87 @@ it("빈 기록에서 확인되지 않은 보관 기간을 단정하지 않는다
   await renderEmptyHistory();
   expect(screen.queryByText(/기록만 보여요/)).not.toBeInTheDocument();
   expect(mockGetMyUserInfo).not.toHaveBeenCalled();
+});
+
+/*
+  카드는 사진·이름·날짜뿐이고, 누르면 크게 본다(기록 카드 시안 C안).
+  저장·공유·지우기·이름 바꾸기는 보기 화면에만 있다 — 카드마다 버튼 세 개가 줄을 채웠었다.
+*/
+describe("기록을 크게 보는 화면", () => {
+  const OLDER = {
+    mediaId: 6,
+    s3Key: "media/6.png",
+    displayName: "산에서",
+    createdAt: "2026-08-10T10:00:00",
+  };
+
+  it("목록 카드에는 버튼이 없고, 누르면 크게 보고, 닫으면 목록으로 돌아간다", async () => {
+    await renderHistory();
+    expect(screen.queryByRole("button", { name: "공유" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /사진 저장/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: CARD }));
+
+    const viewer = screen.getByRole("dialog", { name: "바다에서" });
+    expect(within(viewer).getByText("2026년 8월 15일 토요일")).toBeInTheDocument();
+    expect(within(viewer).getByRole("button", { name: "사진 저장" })).toBeInTheDocument();
+    // 뒤로가기(앱의 하드웨어 버튼 포함)가 보기 화면을 닫도록 주소에 남긴다.
+    expect(window.location.search).toBe("?photo=7");
+
+    fireEvent.click(within(viewer).getByRole("button", { name: "닫기" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("옆 사진으로 넘기면 주소를 바꿔 끼운다 — 뒤로 한 번이면 목록이다", async () => {
+    mockListMyMedia.mockResolvedValue([ITEM, OLDER]);
+    await renderHistory();
+    fireEvent.click(screen.getByRole("button", { name: CARD }));
+    const pushedLength = window.history.length;
+
+    let viewer = screen.getByRole("dialog", { name: "바다에서" });
+    expect(within(viewer).getByText("1 / 2")).toBeInTheDocument();
+    expect(within(viewer).getByRole("button", { name: "이전 사진" })).toBeDisabled();
+
+    fireEvent.keyDown(document, { key: "ArrowRight" });
+    viewer = screen.getByRole("dialog", { name: "산에서" });
+    expect(within(viewer).getByText("2 / 2")).toBeInTheDocument();
+    expect(window.location.search).toBe("?photo=6");
+    expect(window.history.length).toBe(pushedLength);
+
+    fireEvent.click(within(viewer).getByRole("button", { name: "이전 사진" }));
+    expect(screen.getByRole("dialog", { name: "바다에서" })).toBeInTheDocument();
+  });
+
+  it("?photo= 주소로 들어오면 목록이 온 뒤 그 사진을 열고, 닫을 때는 주소만 지운다", async () => {
+    window.history.replaceState(null, "", "/history?photo=7");
+    const back = jest.spyOn(window.history, "back");
+
+    await renderHistory();
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+
+    // 앞 기록은 이 화면이 쌓은 것이 아니다 — 되돌리면 기록 화면을 떠난다.
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("이름 바꾸기 창에서 화살표 키는 사진을 넘기지 않는다", async () => {
+    mockListMyMedia.mockResolvedValue([ITEM, OLDER]);
+    const viewer = await openViewer();
+    fireEvent.click(within(viewer).getByRole("button", { name: "더보기" }));
+    fireEvent.click(within(viewer).getByRole("button", { name: "이름 바꾸기" }));
+
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "기록 이름" }), { key: "ArrowRight" });
+
+    expect(screen.getByRole("dialog", { name: "바다에서" })).toBeInTheDocument();
+  });
+
+  it("달력에서 기록 있는 날을 누르면 그날 사진을 크게 본다", async () => {
+    await renderHistory();
+    fireEvent.click(screen.getByRole("button", { name: "달력" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일 기록 1컷" }));
+
+    expect(screen.getByRole("dialog", { name: "바다에서" })).toBeInTheDocument();
+  });
 });
