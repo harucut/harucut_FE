@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText } from "lucide-react";
+import { ChevronRight, FileText } from "lucide-react";
+import { TermsFullText } from "@/components/terms/TermsFullText";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { clientApi } from "@/lib/clientApi";
 import {
@@ -293,49 +294,59 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             const href = contentHref(item.code);
             return (
               <div key={item.code} className="flex flex-col gap-1">
-                <label className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
-                  <input
-                    type="checkbox"
-                    checked={checked[item.code] ?? false}
-                    // 읽을 수 없는 약관은 **새로 체크하는 것만** 막는다. 이 화면을 띄운
-                    // 김에 예전 동의를 거두는 길까지 잠그지 않는다(TermsConsentPanel 과
-                    // 같은 규칙).
-                    disabled={
-                      isSubmitting ||
-                      (isUnreadable(item.code) && !checked[item.code])
-                    }
-                    onChange={(e) => {
-                      setChecked((current) => ({
-                        ...current,
-                        [item.code]: e.target.checked,
-                      }));
-                      setTouched((current) => ({ ...current, [item.code]: true }));
-                    }}
-                    className="h-4 w-4 accent-(--hc-primary)"
-                  />
-                  <span>
-                    <span
-                      className={
-                        item.required
-                          ? "text-(--hc-primary-strong)"
-                          : "text-(--hc-muted)"
-                      }
-                    >
-                      {item.required ? "[필수]" : "[선택]"}
-                    </span>{" "}
-                    {item.title}
-                  </span>
-                  {href ? (
-                    <Link
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-auto shrink-0 text-[11px] text-(--hc-muted) underline underline-offset-4"
-                    >
-                      보기
-                    </Link>
-                  ) : null}
-                </label>
+                {/* 정적 링크가 없는 약관은 서버가 준 전문을 줄 오른쪽 끝 아이콘으로 그 자리에서 펼친다. */}
+                <TermsFullText title={item.title} content={href ? null : contentByCode[item.code]}>
+                  {(fullTextToggle) => (
+                    <div className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
+                      <label className="flex min-w-0 flex-1 items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked[item.code] ?? false}
+                          // 읽을 수 없는 약관은 **새로 체크하는 것만** 막는다. 이 화면을 띄운
+                          // 김에 예전 동의를 거두는 길까지 잠그지 않는다(TermsConsentPanel 과
+                          // 같은 규칙).
+                          disabled={
+                            isSubmitting ||
+                            (isUnreadable(item.code) && !checked[item.code])
+                          }
+                          onChange={(e) => {
+                            setChecked((current) => ({
+                              ...current,
+                              [item.code]: e.target.checked,
+                            }));
+                            setTouched((current) => ({ ...current, [item.code]: true }));
+                          }}
+                          className="h-4 w-4 accent-(--hc-primary)"
+                        />
+                        <span>
+                          <span
+                            className={
+                              item.required
+                                ? "text-(--hc-primary-strong)"
+                                : "text-(--hc-muted)"
+                            }
+                          >
+                            {item.required ? "[필수]" : "[선택]"}
+                          </span>{" "}
+                          {item.title}
+                        </span>
+                      </label>
+                      {href ? (
+                        <Link
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`${item.title} 전문 보기`}
+                          className="-my-3 -mr-2 ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-full text-(--hc-muted) hover:text-(--hc-text)"
+                        >
+                          <ChevronRight aria-hidden className="h-4 w-4" />
+                        </Link>
+                      ) : (
+                        fullTextToggle
+                      )}
+                    </div>
+                  )}
+                </TermsFullText>
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
                   <p className="ml-6 text-[11px] text-(--hc-muted)">
@@ -343,17 +354,6 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       ? "약관 본문을 불러오는 중이에요."
                       : "약관 본문을 불러오지 못했어요."}
                   </p>
-                ) : null}
-                {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
-                {!href && contentByCode[item.code] ? (
-                  <details className="ml-6">
-                    <summary className="cursor-pointer text-[11px] text-(--hc-muted) underline underline-offset-4">
-                      전문 보기
-                    </summary>
-                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-(--hc-surface-muted) p-2 text-[11px] leading-5 text-(--hc-muted)">
-                      {contentByCode[item.code]}
-                    </p>
-                  </details>
                 ) : null}
               </div>
             );

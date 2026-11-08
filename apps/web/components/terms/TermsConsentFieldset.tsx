@@ -1,7 +1,9 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
+import { TermsFullText } from "./TermsFullText";
 import type { ConsentChoice } from "@/hooks/useActiveTerms";
 
 type Props = {
@@ -36,55 +38,51 @@ export function TermsConsentFieldset({
         <div key={item.code} className="flex flex-col gap-1">
           {/*
             한 줄이 44px 다. 예전에는 16px 체크박스·17px 줄·11px '보기' 가 26px 간격으로 붙어
-            손가락으로 고르기 어려웠다. '보기' 는 label 안에 있으면 어느 쪽을 누른 건지 애매해서
-            형제로 뺀다 — label 은 체크박스만, 링크는 약관만 연다.
+            손가락으로 고르기 어려웠다. 전문 아이콘은 label 안에 있으면 어느 쪽을 누른 건지 애매해서
+            형제로 뺀다 — label 은 체크박스만, 오른쪽 끝 아이콘은 약관 전문만 연다(TermsFullText).
           */}
-          <div className="flex min-h-11 items-center gap-2">
-            <label className="flex min-w-0 flex-1 items-center gap-3 py-2 text-[13px] text-(--hc-text)">
-              <input
-                type="checkbox"
-                checked={checked[item.code] ?? false}
-                disabled={disabled}
-                aria-invalid={Boolean(error && item.required && !checked[item.code])}
-                aria-describedby={error ? errorId : undefined}
-                onChange={(e) => onToggle(item.code, e.target.checked)}
-                className="h-5 w-5 shrink-0 accent-(--hc-primary)"
-              />
-              <span>
-                <span
-                  className={
-                    item.required
-                      ? "text-(--hc-primary-strong)"
-                      : "text-(--hc-muted)"
-                  }
-                >
-                  {item.required ? "[필수]" : "[선택]"}
-                </span>{" "}
-                {item.title}
-              </span>
-            </label>
-            {item.href ? (
-              <Link
-                href={item.href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`${item.title} 전문 보기`}
-                className="inline-flex min-h-11 shrink-0 items-center px-2 text-[12px] text-(--hc-muted) underline underline-offset-4 hover:text-(--hc-text)"
-              >
-                보기
-              </Link>
-            ) : null}
-          </div>
-          {item.content ? (
-            <details className="ml-6">
-              <summary className="cursor-pointer text-[11px] text-(--hc-muted) underline underline-offset-4">
-                전문 보기
-              </summary>
-              <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-(--hc-surface-muted) p-2 text-[11px] leading-5 text-(--hc-muted)">
-                {item.content}
-              </p>
-            </details>
-          ) : null}
+          <TermsFullText title={item.title} content={item.href ? null : item.content}>
+            {(fullTextToggle) => (
+              <div className="flex min-h-11 items-center gap-2">
+                <label className="flex min-w-0 flex-1 items-center gap-3 py-2 text-[13px] text-(--hc-text)">
+                  <input
+                    type="checkbox"
+                    checked={checked[item.code] ?? false}
+                    disabled={disabled}
+                    aria-invalid={Boolean(error && item.required && !checked[item.code])}
+                    aria-describedby={error ? errorId : undefined}
+                    onChange={(e) => onToggle(item.code, e.target.checked)}
+                    className="h-5 w-5 shrink-0 accent-(--hc-primary)"
+                  />
+                  <span>
+                    <span
+                      className={
+                        item.required
+                          ? "text-(--hc-primary-strong)"
+                          : "text-(--hc-muted)"
+                      }
+                    >
+                      {item.required ? "[필수]" : "[선택]"}
+                    </span>{" "}
+                    {item.title}
+                  </span>
+                </label>
+                {item.href ? (
+                  <Link
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`${item.title} 전문 보기`}
+                    className="-my-3 -mr-2 ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-full text-(--hc-muted) hover:text-(--hc-text)"
+                  >
+                    <ChevronRight aria-hidden className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  fullTextToggle
+                )}
+              </div>
+            )}
+          </TermsFullText>
         </div>
       ))}
       {error ? (
