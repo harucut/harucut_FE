@@ -106,7 +106,7 @@ describe("TermsConsentPanel", () => {
 
     render(<TermsConsentPanel />);
 
-    expect(await screen.findByText("전문 보기")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "환불 정책 동의 전문 보기" })).toBeInTheDocument();
     expect(
       screen.getByText("환불은 결제일로부터 7일 이내에 가능합니다."),
     ).toBeInTheDocument();

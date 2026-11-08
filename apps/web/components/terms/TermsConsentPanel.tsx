@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { TermsFullText } from "@/components/terms/TermsFullText";
 import { useTermsContent } from "@/components/terms/TermsReconsentDialog";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import {
@@ -178,49 +180,57 @@ export function TermsConsentPanel() {
                     글자: 다크에서 zinc-500 이 --hc-muted-soft(#6f6f73) 로 풀려 11~13px 이
                     3.6:1 이었다 — DESIGN.md 가 본문에 쓰지 말라고 못박은 값이다.
                     같은 두 겹이 TermsReconsentDialog·TermsConsentFieldset 에도 있어 함께 고쳤다. */}
-                <div className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
-                  <input
-                    type="checkbox"
-                    checked={agreed}
-                    // 필수 약관은 서버가 철회를 거부한다. 눌리는 척하지 않는다.
-                    // 본문을 못 읽는 약관은 새 동의만 막는다 — 이미 한 동의를 거두는 것은
-                    // 본문 없이도 언제나 할 수 있어야 한다.
-                    disabled={
-                      item.required ||
-                      pendingCodes.has(item.code) ||
-                      (isUnreadable(item.code) && !agreed)
-                    }
-                    onChange={(e) => void toggle(item, e.target.checked)}
-                    className="h-4 w-4 accent-(--hc-primary) disabled:opacity-50"
-                  />
-                  <span>
-                    <span
-                      className={
-                        item.required
-                          ? "text-(--hc-primary-strong)"
-                          : "text-(--hc-muted)"
-                      }
-                    >
-                      {item.required ? "[필수]" : "[선택]"}
-                    </span>{" "}
-                    {item.title}
-                    {item.status === "NEEDS_RECONSENT" ? (
-                      <span className="ml-1 text-[11px] text-(--hc-danger)">
-                        개정됨 · 재동의 필요
+                {/* 정적 링크가 없는 약관은 서버가 준 전문을 줄 오른쪽 끝 아이콘으로 그 자리에서 펼친다. */}
+                <TermsFullText title={item.title} content={href ? null : contentByCode[item.code]}>
+                  {(fullTextToggle) => (
+                    <div className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
+                      <input
+                        type="checkbox"
+                        checked={agreed}
+                        // 필수 약관은 서버가 철회를 거부한다. 눌리는 척하지 않는다.
+                        // 본문을 못 읽는 약관은 새 동의만 막는다 — 이미 한 동의를 거두는 것은
+                        // 본문 없이도 언제나 할 수 있어야 한다.
+                        disabled={
+                          item.required ||
+                          pendingCodes.has(item.code) ||
+                          (isUnreadable(item.code) && !agreed)
+                        }
+                        onChange={(e) => void toggle(item, e.target.checked)}
+                        className="h-4 w-4 accent-(--hc-primary) disabled:opacity-50"
+                      />
+                      <span>
+                        <span
+                          className={
+                            item.required
+                              ? "text-(--hc-primary-strong)"
+                              : "text-(--hc-muted)"
+                          }
+                        >
+                          {item.required ? "[필수]" : "[선택]"}
+                        </span>{" "}
+                        {item.title}
+                        {item.status === "NEEDS_RECONSENT" ? (
+                          <span className="ml-1 text-[11px] text-(--hc-danger)">
+                            개정됨 · 재동의 필요
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
-                  </span>
-                  {href ? (
-                    <Link
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-auto shrink-0 text-[11px] text-(--hc-muted) underline underline-offset-4"
-                    >
-                      보기
-                    </Link>
-                  ) : null}
-                </div>
+                      {href ? (
+                        <Link
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`${item.title} 전문 보기`}
+                          className="-my-3 -mr-2 ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-full text-(--hc-muted) hover:text-(--hc-text)"
+                        >
+                          <ChevronRight aria-hidden className="h-4 w-4" />
+                        </Link>
+                      ) : (
+                        fullTextToggle
+                      )}
+                    </div>
+                  )}
+                </TermsFullText>
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
                   <p className="ml-6 text-[11px] text-(--hc-muted)">
@@ -228,17 +238,6 @@ export function TermsConsentPanel() {
                       ? "약관 본문을 불러오는 중이에요."
                       : "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."}
                   </p>
-                ) : null}
-                {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
-                {!href && contentByCode[item.code] ? (
-                  <details className="ml-6">
-                    <summary className="cursor-pointer text-[11px] text-(--hc-muted) underline underline-offset-4">
-                      전문 보기
-                    </summary>
-                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-(--hc-surface-muted) p-2 text-[11px] leading-5 text-(--hc-muted)">
-                      {contentByCode[item.code]}
-                    </p>
-                  </details>
                 ) : null}
               </div>
             );

@@ -155,7 +155,7 @@ describe("TermsReconsentDialog", () => {
 
     renderDialog([refundPolicy]);
 
-    expect(await screen.findByText("전문 보기")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "환불 정책 동의 전문 보기" })).toBeInTheDocument();
     expect(
       screen.getByText("환불은 결제일로부터 7일 이내에 가능합니다."),
     ).toBeInTheDocument();
@@ -204,7 +204,7 @@ describe("TermsReconsentDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "약관 본문 다시 불러오기" }));
 
     await waitFor(() => expect(screen.getByRole("checkbox")).toBeEnabled());
-    expect(screen.getByText("전문 보기")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "환불 정책 동의 전문 보기" })).toBeInTheDocument();
   });
 
   // 포커스를 쥔 요소가 disabled 로 바뀌면 브라우저가 포커스를 body 로 내려놓는다.
