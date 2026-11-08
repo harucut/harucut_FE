@@ -14,6 +14,25 @@ export const DEMO_PHOTOS: string[] = [
   "/demo/cut-4.webp",
 ];
 
+/**
+ * 랜딩 첫 화면 뒤쪽 두 프레임의 사진. 세 프레임에 같은 넉 장이 들어가 같은 사진이 세 번 보였다.
+ * 뒤쪽은 다른 사람들로 채운다 — 커플(겨울 저녁 데이트)과 여행(제주, 친구 셋). 비율은 위와 같고 크기는 400×576 이다.
+ * 뒤쪽 프레임 칸은 가장 커도 66×93px 안팎이라 3배 화면에서도 이것으로 충분하다. 첫 화면에서 바로 불러오므로 줄였다.
+ */
+export const DEMO_COUPLE_PHOTOS: string[] = [
+  "/demo/couple-1.webp",
+  "/demo/couple-2.webp",
+  "/demo/couple-3.webp",
+  "/demo/couple-4.webp",
+];
+
+export const DEMO_TRAVEL_PHOTOS: string[] = [
+  "/demo/travel-1.webp",
+  "/demo/travel-2.webp",
+  "/demo/travel-3.webp",
+  "/demo/travel-4.webp",
+];
+
 /** 행사 쪽 화면(/enterprise)의 결혼식 네 컷 예시. */
 export const DEMO_WEDDING_PHOTOS: string[] = [
   "/demo/wedding-1.webp",
