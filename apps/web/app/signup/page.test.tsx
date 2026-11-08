@@ -13,6 +13,7 @@ import type { ActiveTermsState } from "@/hooks/useActiveTerms";
 
 const mockPush = jest.fn();
 const mockSignupWithEmail = jest.fn();
+const mockLoginWithEmail = jest.fn();
 const mockSetPending = jest.fn();
 const mockReset = jest.fn();
 
@@ -55,6 +56,7 @@ jest.mock("@/hooks/useActiveTerms", () => ({
 
 jest.mock("@/lib/auth/authApi", () => ({
   signupWithEmail: (...args: unknown[]) => mockSignupWithEmail(...args),
+  loginWithEmail: (...args: unknown[]) => mockLoginWithEmail(...args),
   sendEmailAuthCode: jest.fn(),
   verifyEmailAuthCode: jest.fn(),
 }));
@@ -109,6 +111,7 @@ beforeEach(() => {
     reload: jest.fn(),
   };
   mockSignupWithEmail.mockResolvedValue(undefined);
+  mockLoginWithEmail.mockResolvedValue({ userStatus: "ACTIVE" });
 });
 
 /** 가입 버튼을 누를 수 있는 상태까지 폼을 채운다. 선택 약관은 체크하지 않는다. */
@@ -146,7 +149,7 @@ describe("SignupPage 약관 동의 보관", () => {
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: "회원가입" }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    await waitFor(() => expect(mockLoginWithEmail).toHaveBeenCalled());
     expect(mockSetPending).toHaveBeenCalledWith(
       [
         { code: "tos", agreed: true },
@@ -154,6 +157,28 @@ describe("SignupPage 약관 동의 보관", () => {
       ],
       SIGNUP_EMAIL,
     );
+  });
+
+  // 가입했으면 바로 들인다 — 방금 만든 비밀번호를 곧바로 다시 치게 하지 않는다.
+  it("가입하면 같은 이메일·비밀번호로 바로 로그인하고, 로그인 화면으로 보내지 않는다", async () => {
+    // 성공하면 window.location.href 로 문서째 이동한다. jsdom 은 이동 대신 console.error 를 흘린다.
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    render(<SignupPage />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "회원가입" }));
+
+    await waitFor(() => expect(mockLoginWithEmail).toHaveBeenCalledWith(SIGNUP_EMAIL, "harucut1234"));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("자동 로그인이 안 되면 예전처럼 로그인 화면에서 가입이 끝났다고 알린다", async () => {
+    mockLoginWithEmail.mockRejectedValueOnce(new Error("network"));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    render(<SignupPage />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "회원가입" }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/login?joined=1"));
   });
 
   // 여기서 보관하면 실패한 가입의 선택이 다음 로그인 계정에 붙는다.
