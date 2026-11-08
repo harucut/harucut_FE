@@ -188,6 +188,10 @@ function SignupPageContent() {
         emailVerification.reset();
         showErrors({ email: VERIFICATION_EXPIRED_MESSAGE });
       } else if (code === "AUTH-030") {
+        // 「인증 완료」 옆에 「이미 사용 중」이 같이 보이면 앞뒤가 안 맞는다. 보통은 코드를 보낼 때 서버가
+        // 막는다(가입된 이메일이면 코드를 안 보내고 AUTH-030). 인증과 가입 사이에 그 이메일로 가입이
+        // 끝난 드문 경우만 여기 온다 — 인증 상태를 풀고 이메일 칸에서 말한다.
+        emailVerification.reset();
         showErrors({ email: message });
       } else {
         showErrors({ common: message });
@@ -269,7 +273,6 @@ function SignupPageContent() {
             isVerifying={emailVerification.isVerifyingCode}
             isVerified={emailVerification.isEmailVerified}
             codeExpiresAt={emailVerification.codeExpiresAt}
-            verifiedExpiresAt={emailVerification.verifiedExpiresAt}
             emailError={errors.email ?? emailVerification.emailError}
             codeError={emailVerification.codeError}
             onSend={emailVerification.sendCode}
