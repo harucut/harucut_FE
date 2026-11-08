@@ -17,7 +17,11 @@ import {
   validatePassword,
   validateUsername,
 } from "@/lib/authValidation";
-import { signupWithEmail } from "@/lib/auth/authApi";
+import { loginWithEmail, signupWithEmail } from "@/lib/auth/authApi";
+import { isUnusableUserStatus } from "@/lib/authUserStatus";
+import { clientApi } from "@/lib/clientApi";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { forgetStudioAccess } from "@/hooks/useStudioAccess";
 import {
   getApiErrorDetails,
   getUserFacingApiErrorMessage,
@@ -64,6 +68,32 @@ function SignupPageContent() {
   const [consents, setConsents] = useState<Record<string, boolean>>({});
 
   const emailVerification = useEmailVerification();
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
+
+  /**
+   * 가입했으면 바로 들인다(2026-11-09). 방금 만든 비밀번호를 곧바로 다시 치게 하지 않는다.
+   *
+   * 이메일은 가입 전에 인증을 마쳤으니 로그인이 된다. 성공하면 로그인 화면과 같은 일을 한다 —
+   * 이전 계정의 행사 운영 기억을 지우고, 비회원 체험을 끝내고, 돌아갈 곳으로 문서째 이동한다.
+   * 새 계정이라 탈퇴 요청·탈퇴 상태일 수 없지만, 그렇게 오거나 로그인이 실패하면 false 를 돌려
+   * 예전처럼 로그인 화면에서 「가입이 끝났어요」를 말하게 한다.
+   */
+  const signInRightAfterSignup = async (signupEmail: string, signupPassword: string) => {
+    try {
+      const loginData = await loginWithEmail(signupEmail, signupPassword);
+      if (isUnusableUserStatus(loginData?.userStatus ?? null)) {
+        await clientApi.delete("/api/client/logout").catch(() => undefined);
+        return false;
+      }
+      forgetStudioAccess();
+      exitGuestMode();
+      window.location.href = redirectTarget;
+      return true;
+    } catch (error) {
+      console.error(error);
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -148,9 +178,9 @@ function SignupPageContent() {
       });
 
       // 동의를 여기서 바로 보낼 수는 없다. `POST /api/auth/terms/consents` 는 인증이
-      // 필요한데 우리 가입은 계정만 만들고 로그인시키지 않는다. 그래서 사용자가 고른 값을
-      // 가입 이메일과 함께 보관해 두고, 로그인 직후 TermsConsentBridge 가 계정을 대조한
-      // 뒤 서버 장부에 기록한다.
+      // 필요한데 가입 요청은 계정만 만들고 세션을 주지 않는다(로그인은 아래에서 따로 한다).
+      // 그래서 사용자가 고른 값을 가입 이메일과 함께 보관해 두고, 로그인 직후
+      // TermsConsentBridge 가 계정을 대조한 뒤 서버 장부에 기록한다.
       //
       // 보관은 **가입이 성공한 뒤에만** 한다. 요청보다 앞서 남기면 가입이 깨졌을 때 선택만
       // 기기에 남고, 다음에 이 기기에서 로그인한 다른 계정의 법적 이력으로 붙는다.
@@ -167,7 +197,10 @@ function SignupPageContent() {
         );
       }
 
-      // 말없이 로그인 화면으로 돌려보내면 가입이 됐는지 알 수 없다 — 다 됐다고 말해 준다.
+      // 보관한 동의는 들어간 화면에서 TermsConsentBridge 가 기록한다(로그인 화면을 거칠 때와 같다).
+      if (await signInRightAfterSignup(signupEmail, password)) return;
+
+      // 자동 로그인이 안 됐으면 로그인 화면으로 보낸다. 말없이 보내면 가입이 됐는지 알 수 없다 — 다 됐다고 말해 준다.
       router.push(`${loginHref}${loginHref.includes("?") ? "&" : "?"}joined=1`);
     } catch (error) {
       console.error(error);
