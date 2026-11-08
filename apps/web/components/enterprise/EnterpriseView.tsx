@@ -54,9 +54,6 @@ function FlowStep({ n, title, body, note }: FlowStepCopy) {
   );
 }
 
-// 사람이 나오는 예시 그림은 실제 고객·행사처럼 읽히면 안 된다(constants/demoPhotos.ts).
-const EXAMPLE_CAPTION = "AI로 만든 예시 이미지예요.";
-
 // 부스 대여와 비교했을 때 무엇이 달라지는지. 숫자와 사실만 적는다.
 const COMPARISON = [
   ["설치", "QR 한 장, 부스가 필요하면 태블릿만", "장비 반입·설치·철수"],
@@ -127,7 +124,6 @@ export function EnterpriseView() {
                 />
               </div>
             </div>
-            <figcaption className="mt-3 text-right text-[12px] text-(--hc-muted)">{EXAMPLE_CAPTION}</figcaption>
           </figure>
         </section>
 
@@ -163,7 +159,6 @@ export function EnterpriseView() {
                       className="object-cover"
                     />
                   </div>
-                  <figcaption className="mt-2 text-[12px] text-(--hc-muted)">{EXAMPLE_CAPTION}</figcaption>
                 </figure>
               </div>
             </div>

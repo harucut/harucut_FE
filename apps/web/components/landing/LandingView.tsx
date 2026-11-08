@@ -233,8 +233,7 @@ export function LandingView() {
               행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          {/* 실제 고객 사례처럼 읽히지 않게 예시라고 적는다(constants/demoPhotos.ts). */}
-          <figure className="flex flex-col items-center gap-4">
+          <figure className="flex flex-col items-center">
             <div className="h-[clamp(300px,92vw,400px)] rotate-2 drop-shadow-2xl">
               <FramePreview
                 frameId="grid-4"
@@ -244,7 +243,6 @@ export function LandingView() {
                 className="h-full! w-auto!"
               />
             </div>
-            <figcaption className="text-[12px] text-white/60">AI로 만든 예시 이미지예요.</figcaption>
           </figure>
         </div>
       </section>
