@@ -9,7 +9,7 @@ import { FramePreview } from "@/components/frame/FramePreview";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import type { FrameId } from "@/constants/frames";
-import { DEMO_PHOTOS, DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
+import { DEMO_COUPLE_PHOTOS, DEMO_PHOTOS, DEMO_TRAVEL_PHOTOS, DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
 
 // STUDIO 마케팅 스테이지는 딥다크 고정(핸드오프 디자인 그대로).
 const ACCENT = "#C8F135";
@@ -32,15 +32,17 @@ const STEPS = [
 
 function ShowcaseFrame({
   id,
+  images = HERO_IMAGES,
   className = "",
 }: {
   id: FrameId;
+  images?: string[];
   className?: string;
 }) {
   return (
     <FramePreview
       frameId={id}
-      images={HERO_IMAGES}
+      images={images}
       borderColor="#0B0B0C"
       className={className}
       // 첫 화면의 그림이다 — lazy 면 LCP 가 스크롤 판정을 기다린다.
@@ -104,7 +106,7 @@ function HeroEditorial() {
         </Link>
       </div>
 
-      {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감 */}
+      {/* 흩뿌린 폴라로이드 콜라주 — 하단 마감. 뒤쪽 두 장은 다른 사람들의 사진이다(같은 넉 장이 세 번 보였다). */}
       <div
         className="min-w-0 relative mt-12 flex w-full items-end justify-center sm:mt-14"
       >
@@ -112,7 +114,7 @@ function HeroEditorial() {
           className="-mr-8 h-37.5 drop-shadow-2xl sm:-mr-10 sm:h-49 lg:h-58"
           style={{ transform: "rotate(-12deg) translateY(10px)", zIndex: 1 }}
         >
-          <ShowcaseFrame id="classic-4" className="h-full! w-auto!" />
+          <ShowcaseFrame id="classic-4" images={DEMO_TRAVEL_PHOTOS} className="h-full! w-auto!" />
         </div>
         <div
           className="h-47 drop-shadow-2xl sm:h-61 lg:h-72.5"
@@ -124,7 +126,7 @@ function HeroEditorial() {
           className="-ml-8 h-37.5 drop-shadow-2xl sm:-ml-10 sm:h-49 lg:h-58"
           style={{ transform: "rotate(12deg) translateY(10px)", zIndex: 2 }}
         >
-          <ShowcaseFrame id="polaroid-4" className="h-full! w-auto!" />
+          <ShowcaseFrame id="polaroid-4" images={DEMO_COUPLE_PHOTOS} className="h-full! w-auto!" />
         </div>
       </div>
     </section>
@@ -233,8 +235,7 @@ export function LandingView() {
               행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          {/* 실제 고객 사례처럼 읽히지 않게 예시라고 적는다(constants/demoPhotos.ts). */}
-          <figure className="flex flex-col items-center gap-4">
+          <figure className="flex flex-col items-center">
             <div className="h-[clamp(300px,92vw,400px)] rotate-2 drop-shadow-2xl">
               <FramePreview
                 frameId="grid-4"
@@ -244,7 +245,6 @@ export function LandingView() {
                 className="h-full! w-auto!"
               />
             </div>
-            <figcaption className="text-[12px] text-white/60">AI로 만든 예시 이미지예요.</figcaption>
           </figure>
         </div>
       </section>
