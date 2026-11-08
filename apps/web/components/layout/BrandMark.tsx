@@ -46,8 +46,9 @@ export function BrandMark({
       className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-90"
     >
       <HieutMark size={30} />
+      {/* 폰(640px 미만)에서는 언제나 마크만 둔다(2026-11-09). 이름은 링크의 aria-label 이 읽는다. */}
       <span
-        className="text-lg font-extrabold tracking-tight"
+        className="text-lg font-extrabold tracking-tight max-sm:hidden"
         style={{ color: labelColor }}
       >
         하루컷
