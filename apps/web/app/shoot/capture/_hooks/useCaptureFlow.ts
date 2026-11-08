@@ -155,8 +155,6 @@ export function useCaptureFlow() {
       if (!navigator.mediaDevices?.getUserMedia) {
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "CAMERA ACCESS",
-          icon: "camera",
           message:
             "현재 브라우저에서는 카메라를 쓸 수 없어요. 최신 브라우저에서 다시 시도해 주세요.",
           title: "카메라를 사용할 수 없어요",
@@ -233,8 +231,6 @@ export function useCaptureFlow() {
       console.error(err);
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-        eyebrow: "CAMERA ACCESS",
-        icon: "camera",
         message:
           "카메라 접근이 거부됐거나 오류가 났어요. 브라우저 권한을 확인한 뒤 다시 시도해 주세요.",
         title: "카메라 접근이 필요해요",
@@ -441,8 +437,6 @@ export function useCaptureFlow() {
         setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "CAPTURE",
-          icon: "camera",
           message:
             "사진을 저장하지 못해 촬영을 멈췄어요. 다른 앱을 닫은 뒤 다시 시작해 주세요.",
           title: "촬영을 이어가지 못했어요",
@@ -478,8 +472,6 @@ export function useCaptureFlow() {
     if (!isCameraReady) {
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-        eyebrow: "CAMERA READY",
-        icon: "camera",
         message: "촬영을 시작하기 전에 먼저 카메라를 켜 주세요.",
         title: "카메라 준비가 필요해요",
       });

@@ -1,32 +1,10 @@
 "use client";
 
-import { Camera, CheckCircle2, Lock, Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
-function NoticeIcon({ icon }: { icon?: "camera" | "check" | "lock" | "sparkles" }) {
-  const Icon = useMemo(() => {
-    switch (icon) {
-      case "camera":
-        return Camera;
-      case "check":
-        return CheckCircle2;
-      case "lock":
-        return Lock;
-      case "sparkles":
-      default:
-        return Sparkles;
-    }
-  }, [icon]);
-
-  return (
-    <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border shadow-(--hc-card-shadow)">
-      <Icon className="h-5 w-5" />
-    </span>
-  );
-}
 
 export function GuestTrialOverlay() {
   const router = useRouter();
@@ -110,17 +88,12 @@ export function GuestTrialOverlay() {
         </button>
 
         <div className="flex flex-col gap-4">
-          {notice.icon ? <NoticeIcon icon={notice.icon} /> : null}
-          {notice.eyebrow ? (
-            <span className="hc-accent-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-medium">
-              {notice.eyebrow}
-            </span>
-          ) : null}
-
+          {/* 칩(NOTICE 등)과 큰 아이콘은 뺐다(2026-11-09). 제목과 문장, 버튼만 둔다. */}
           <div className="space-y-2">
             <h2
               id="guest-notice-title"
-              className="text-[22px] font-semibold tracking-tight text-(--hc-text)"
+              // 칩이 빠져 제목이 맨 위로 왔다. 오른쪽 위 닫기(X, 36px + 16px)와 겹치지 않게 비운다.
+              className="pr-10 text-[22px] font-semibold tracking-tight text-(--hc-text)"
             >
               {notice.title}
             </h2>

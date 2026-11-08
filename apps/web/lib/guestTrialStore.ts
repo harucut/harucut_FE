@@ -39,8 +39,6 @@ export type GuestNoticeAction = {
 
 export type GuestNoticeState = {
   actions: GuestNoticeAction[];
-  eyebrow?: string;
-  icon?: "camera" | "check" | "lock" | "sparkles";
   message: string;
   title: string;
 };
@@ -125,8 +123,6 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
           { id: "go-login", label: "로그인하기" },
           { id: "go-shoot", label: "촬영 계속하기", variant: "secondary" },
         ],
-        eyebrow: "GUEST MODE",
-        icon: "lock",
         message: `${GUEST_ALLOWED_SCOPE} ${GUEST_MEMBER_ONLY_SCOPE}`,
         title: "지금은 체험 기능만 이용할 수 있어요",
       },

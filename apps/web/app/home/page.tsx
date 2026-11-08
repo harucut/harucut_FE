@@ -24,15 +24,10 @@ import { useStudioAccess } from "@/hooks/useStudioAccess";
 /** 가장 최근 한 장은 큰 카드에, 나머지는 아래 줄에 놓는다. 조회도 딱 이만큼만 받는다. */
 const RECENT_LIMIT = 7;
 
-/** 큰 카드 아래의 낮은 줄. 첫 화면의 주인공은 사진과 「지금 찍기」 하나다. */
-const THEME_ACTION = {
-  id: "theme",
-  title: "프레임 꾸미기",
-  description: "만들어두면 촬영할 때 골라 써요",
-  href: "/theme",
-};
-
-/** 행사를 맡은 계정에게만 보인다(hooks/useStudioAccess). */
+/**
+ * 큰 카드 아래의 낮은 줄. 첫 화면의 주인공은 사진과 「지금 찍기」 하나다. 행사를 맡은 계정에게만 보인다(hooks/useStudioAccess).
+ * 「프레임 꾸미기」는 뺐다(2026-11-09) — 하단 탭의 「프레임」 화면에서 바로 만든다. 같은 길을 홈에 한 번 더 두지 않는다.
+ */
 const STUDIO_ACTION = {
   id: "studio",
   title: "행사 운영",
@@ -172,7 +167,7 @@ export default function HomePage() {
   const latest = recentMedia[0] ?? null;
   // 큰 카드에 올린 한 장은 아래 줄에서 뺀다. 한 장뿐이면 줄이 비지 않게 그대로 둔다.
   const stripMedia = recentMedia.length > 1 ? recentMedia.slice(1) : recentMedia;
-  const actions = studioAccess ? [STUDIO_ACTION, THEME_ACTION] : [THEME_ACTION];
+  const actions = studioAccess ? [STUDIO_ACTION] : [];
 
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-12">
@@ -201,6 +196,7 @@ export default function HomePage() {
         </section>
 
         <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
+          {actions.length > 0 ? (
           <nav aria-label="다른 할 일" className="flex flex-col gap-2.5">
             {actions.map((action) => (
               <Link
@@ -216,6 +212,7 @@ export default function HomePage() {
               </Link>
             ))}
           </nav>
+          ) : null}
 
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">

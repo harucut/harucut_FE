@@ -13,7 +13,7 @@ import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
 import { useRedirectIfAuthenticated } from "@/hooks/useRedirectIfAuthenticated";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { SOCIAL_LOGIN_FAILED_MESSAGE } from "@/lib/authLogin";
 import {
   RESTRICTED_ACCOUNT_MESSAGE,
@@ -34,6 +34,8 @@ type LoginErrors = Partial<Record<LoginFieldName, string | null>> & {
   common?: string | null;
   /** 막힌 계정이라 문의처를 같이 보여 준다. */
   support?: boolean;
+  /** 이메일과 비밀번호 중 어느 쪽이 틀렸는지 서버가 말하지 않는다. 두 칸을 다 빨갛게 한다. */
+  credentials?: boolean;
 };
 
 function LoginPageContent() {
@@ -148,12 +150,19 @@ function LoginPageContent() {
       // 실패 원인은 하나가 아니다 — 가입되지 않은 계정(AUTH-020), 이메일 미인증(AUTH-004),
       // 네트워크 장애까지 전부 "비밀번호가 틀렸다"로 말하면
       // 사용자는 맞는 비밀번호를 계속 다시 친다. 서버 코드에 맞는 문구를 쓴다.
-      setErrors({
-        common: getUserFacingApiErrorMessage(
-          error,
-          "이메일 또는 비밀번호가 올바르지 않아요.",
-        ),
-      });
+      const message = getUserFacingApiErrorMessage(error, "이메일 또는 비밀번호가 올바르지 않아요.");
+      // 칸에서 생긴 오류는 그 칸을 빨갛게 하고 문장도 칸 아래에 둔다. 위쪽 상자는 칸과 상관없는 것(서버 연결 등)만 쓴다.
+      switch (getApiErrorDetails(error).code) {
+        case "AUTH-001":
+          setErrors({ password: message, credentials: true });
+          break;
+        case "AUTH-004":
+        case "AUTH-020":
+          setErrors({ email: message });
+          break;
+        default:
+          setErrors({ common: message });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -216,6 +225,7 @@ function LoginPageContent() {
             placeholder={field.placeholder}
             required
             error={errors[field.name as LoginFieldName]}
+            invalid={Boolean(errors.credentials)}
           />
         ))}
 

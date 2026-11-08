@@ -237,8 +237,6 @@ export default function ShootResultPage() {
   const showStatusNotice = (title: string, message: string) => {
     setNotice({
       actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-      eyebrow: guestMode ? "GUEST MODE" : "NOTICE",
-      icon: guestMode ? "lock" : "sparkles",
       message,
       title,
     });

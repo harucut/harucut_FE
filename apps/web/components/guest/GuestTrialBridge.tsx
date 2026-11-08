@@ -244,8 +244,6 @@ export function GuestTrialBridge() {
       handoffPromptedRef.current = false;
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-        eyebrow: "NOTICE",
-        icon: "lock",
         message: result === "changed"
           ? "확인하는 사이 이 기기의 보관물이 다른 네컷으로 바뀌었어요. 버리겠다고 하신 것과 다른 사진이라 그대로 뒀어요. 새로 만든 것이라면 다시 물어볼게요."
           : "이 기기의 보관물을 확인하지 못해 버리지 않았어요. 다른 하루컷 탭을 닫고 이 화면을 새로고침한 뒤 다시 시도해 주세요.",
@@ -287,8 +285,6 @@ export function GuestTrialBridge() {
               },
               { id: "dismiss", label: "보관물 유지", variant: "secondary" },
             ],
-            eyebrow: "NOTICE",
-            icon: "lock",
             message: `"${promptedEntry.displayName}"의 이 기기 보관본을 버리면 기록으로 옮길 수 없고 되돌릴 수도 없어요. 이미 내려받은 사진과 계정 기록은 그대로 남아요.`,
             title: "이 보관물을 버릴까요?",
           }),
@@ -306,8 +302,6 @@ export function GuestTrialBridge() {
           : "이 기기의 사진 보관함을 확인하지 못했어요. 보관물이 있는지 아직 알 수 없어 기록으로 옮기지 않았어요.";
       setNotice({
         actions,
-        eyebrow: "NOTICE",
-        icon: "lock",
         message: `${message} ${exhausted
           ? "같은 문제가 반복되고 있어요. 다른 하루컷 탭을 닫고 앱이나 브라우저를 다시 열어 주세요. 원본 사진이 있다면 촬영 화면에서 다시 불러올 수도 있어요."
           : "다시 시도해 주세요. 같은 문제가 반복되면 다른 하루컷 탭을 닫고 앱이나 브라우저를 다시 열어 주세요."}`,
@@ -334,8 +328,6 @@ export function GuestTrialBridge() {
       handoffSavingRef.current = true;
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-        eyebrow: "SAVING",
-        icon: "sparkles",
         message:
           "비회원 때 만든 네컷을 기록으로 옮기고 있어요. 사진을 다시 올려 서버가 그리는 중이라 조금 걸릴 수 있어요 — 이 안내를 닫아도 계속 진행돼요.",
         title: "기록에 옮기고 있어요",
@@ -386,8 +378,6 @@ export function GuestTrialBridge() {
         // 사라진 보관물은 이미 지워졌고, 새로 들어온 한 벌은 우리가 지울 것이 아니다.
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "NOTICE",
-          icon: "lock",
           message: composeKey
             ? "확인하는 사이 이 기기의 보관물이 다른 네컷으로 바뀌었어요. 물어본 것과 다른 사진을 계정에 저장하지 않으려고 여기서 멈췄어요."
             : "확인하는 사이 이 기기의 보관물이 사라졌어요. 비회원 보관물은 24시간만 남아 있어요 — 기록에는 아무것도 옮기지 않았어요.",
@@ -446,8 +436,6 @@ export function GuestTrialBridge() {
         stripResumeParam();
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "SAVED",
-          icon: "check",
           message:
             "비회원 때 만든 네컷을 기록에 저장했어요. 기록 화면에서 다시 보거나 내려받을 수 있어요.",
           title: "기록에 저장됐어요",
@@ -461,8 +449,6 @@ export function GuestTrialBridge() {
         if (getApiErrorDetails(error).status === 401) {
           setNotice({
             actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-            eyebrow: "NOTICE",
-            icon: "lock",
             // 이쪽도 「다시 하면 이어서」를 약속한다. 키를 못 남긴 기기에서는 그 약속이
             // 중복 한 벌을 뜻하므로(아래 재시도 자리와 같은 이유) 여기서도 갈라 말한다 —
             // 서버 합성이 끝난 뒤 이름·URL 조회에서 401 이 날 수 있어서, 다음 로그인의
@@ -493,8 +479,6 @@ export function GuestTrialBridge() {
 
         setNotice({
           actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
-          eyebrow: "NOTICE",
-          icon: "lock",
           message: failure.retryable
             ? `${failure.message} 이 화면을 새로고침하면 다시 시도해요.${DUPLICATE_RISK_SUFFIX(composeKey)}`
             : `${failure.message} 비회원 때 만든 결과는 기록에 옮기지 못했어요.`,
@@ -633,8 +617,6 @@ export function GuestTrialBridge() {
             onSelect: () => void discardPendingSave(pending),
           },
         ],
-        eyebrow: "NOTICE",
-        icon: "check",
         message: `이 기기에 비회원으로 만든 "${pending.displayName}"${josa(pending.displayName, "이/가")} 남아 있어요. 지금 로그인한 계정 기록에 저장할까요? 내가 만든 것이 아니면 버려 주세요.`,
         title: "비회원 때 만든 네컷이 남아 있어요",
       });

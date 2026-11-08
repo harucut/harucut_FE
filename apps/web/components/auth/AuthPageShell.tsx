@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Lock } from "lucide-react";
 import { BrandMark } from "../layout/BrandMark";
 import { FramePreview } from "../frame/FramePreview";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
@@ -11,13 +10,12 @@ type Props = {
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  icon?: "lock";
 };
 
 // 슬롯 넉 장에 서로 다른 사진이 들어간다(constants/demoPhotos.ts).
 const COLLAGE = DEMO_PHOTOS;
 
-export function AuthPageShell({ title, description, children, footer, icon }: Props) {
+export function AuthPageShell({ title, description, children, footer }: Props) {
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       {/* 브랜드 패널 — 데스크톱(lg+)에서만, handoff web 분할 레이아웃의 다크 스테이지.
@@ -87,11 +85,6 @@ export function AuthPageShell({ title, description, children, footer, icon }: Pr
           <div className="mb-8 lg:hidden">
             <BrandMark href="/" />
           </div>
-          {icon === "lock" ? (
-            <div className="mb-5 grid h-15 w-15 place-items-center rounded-[18px] bg-(--hc-accent-soft-bg)">
-              <Lock size={28} className="text-(--hc-primary-strong)" />
-            </div>
-          ) : null}
           <h1 className="text-[28px] font-extrabold tracking-tight text-(--hc-text)">
             {title}
           </h1>
