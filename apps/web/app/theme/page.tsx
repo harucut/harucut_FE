@@ -124,15 +124,15 @@ function ThemePageContent() {
           // 늦게 오는 날에는 아무 반응 없는 버튼이 됐다. 상태와 라벨을 맞춘다.
           confirmDisabled={isLoading || isAtCapacity}
           confirmLabel={isLoading ? "불러오는 중…" : isAtCapacity ? "저장 공간을 확인해 주세요" : "새 프레임 만들기"}
-          // 확인은 **언제나 새 프레임**이다. 목록에서 고른 것은 컷 구성만 따라가고,
-          // 그 프레임을 이어서 고치는 길은 아래 "수정하기"다.
+          // 확인은 **언제나 새 프레임**이다. 저장한 프레임은 고르는 대상이 아니라 눌러서 여는
+          // 대상이다 — 카드를 누르면 바로 편집기로 간다(onOpenSavedFrame).
           onConfirm={({ frameId }) => {
             if (isLoading || isAtCapacity) return;
             setFrameId(frameId);
             setRemoteFrameId(null);
             router.push("/theme/sticker");
           }}
-          savedFrameAction={{ label: "수정하기", onAction: handleOpenRemoteFrame }}
+          onOpenSavedFrame={handleOpenRemoteFrame}
           belowPicker={
             /*
               몇 개까지 되는지는 **만들기 전에** 알아야 한다 — 만든 뒤에 알면 늦다.
