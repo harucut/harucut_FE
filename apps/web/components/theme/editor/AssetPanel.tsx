@@ -3,7 +3,7 @@
 import Image from "next/image";
 
 import React, { useRef, useState } from "react";
-import { ImagePlus, Scissors, X } from "lucide-react";
+import { ImagePlus, Scissors, Sticker, Type, X, type LucideIcon } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import {
   EMPTY_UPLOAD_MESSAGE,
@@ -20,40 +20,46 @@ import { fetchServerAssetFile } from "@/lib/serverAssetFile";
 import { blobToDataUrl } from "@/lib/canvas/loaders";
 import { STICKERS } from "@/constants/stickers.generated";
 
+/**
+ * 프레임 위에 얹을 것을 고른다.
+ *
+ * 사진과 스티커는 한 탭이다(2026-11-09). 쓰는 사람에게는 둘 다 프레임 위에 얹는 그림이라 나눌 까닭이
+ * 없다. 구분은 우리 쪽에만 남는다 — 내 사진은 PHOTO, 스티커는 STICKER 층으로 얹혀 저장·누끼가 따로
+ * 돈다. 스토어의 `tab` 은 세 값 그대로 두고 PHOTO·STICKER 를 같은 탭으로 읽는다.
+ */
 export function AssetPanel() {
   const tab = useThemeEditorStore((state) => state.tab);
   const setTab = useThemeEditorStore((state) => state.setTab);
+  const textTab = tab === "TEXT";
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold">소재</p>
-        <div className="flex gap-2">
-          <TabButton active={tab === "PHOTO"} onClick={() => setTab("PHOTO")}>
-            사진
-          </TabButton>
-          <TabButton active={tab === "STICKER"} onClick={() => setTab("STICKER")}>
+        {/* 기록 화면의 그리드·달력 전환과 같은 모양이다. */}
+        <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
+          <SegmentButton active={!textTab} onClick={() => setTab("STICKER")} Icon={Sticker}>
             스티커
-          </TabButton>
-          <TabButton active={tab === "TEXT"} onClick={() => setTab("TEXT")}>
+          </SegmentButton>
+          <SegmentButton active={textTab} onClick={() => setTab("TEXT")} Icon={Type}>
             텍스트
-          </TabButton>
+          </SegmentButton>
         </div>
       </div>
 
-      {tab === "PHOTO" ? <PhotoTab /> : null}
-      {tab === "STICKER" ? <StickerTab /> : null}
-      {tab === "TEXT" ? <TextTab /> : null}
+      {textTab ? <TextTab /> : <PictureTab />}
     </section>
   );
 }
 
-function TabButton({
+function SegmentButton({
   active,
+  Icon,
   children,
   onClick,
 }: {
   active: boolean;
+  Icon: LucideIcon;
   children: React.ReactNode;
   onClick: () => void;
 }) {
@@ -61,19 +67,25 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={[
-        "rounded-full border px-3 py-1 text-xs",
-        active
-          ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
-          : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
-      ].join(" ")}
+      aria-pressed={active}
+      className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
+        active ? "bg-white text-[#0B0B0C]" : "text-(--hc-muted)"
+      }`}
     >
+      <Icon aria-hidden className="h-3.75 w-3.75" />
       {children}
     </button>
   );
 }
 
-function PhotoTab() {
+/**
+ * 내 사진과 스티커를 한 칸에 둔다. 맨 앞 칸이 내 사진 올리기다.
+ *
+ * 줄을 바꿔 가며 놓는다. 기본 스티커만 서른 개라 한 줄로 옆으로 넘기면 끝까지 가기 어렵다.
+ * 설명 문구는 두지 않는다 — 올리기 칸과 사진 위 「누끼」 단추가 스스로 말하고, 누끼가 오래 걸릴 때는
+ * 그 사진 위에 「누끼를 정리하는 중이에요」가 뜬다.
+ */
+function PictureTab() {
   const photos = useThemeEditorStore((state) => state.assets.photos);
   const addAssets = useThemeEditorStore((state) => state.addPhotoAssets);
   const addComponent = useThemeEditorStore((state) => state.addComponentFromAsset);
@@ -82,7 +94,7 @@ function PhotoTab() {
     (state) => state.removePhotoBackground,
   );
 
-  const [isDraggingTiles, setIsDraggingTiles] = useState(false);
+  const serverAssets = useServerAssets();
   const [isUploading, setIsUploading] = useState(false);
   // 실패·제외 안내는 화면 안에서 말한다. window.alert 는 이 디자인의 것이 아니고 모바일에서 탭을 멈춘다.
   const [notice, setNotice] = useState<string | null>(null);
@@ -91,14 +103,6 @@ function PhotoTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[13px] leading-[1.65] text-zinc-400">
-          업로드한 사진은 여러 번 사용할 수 있고, 필요한 사진은 누끼를 딴 버전으로
-          바로 바꿔 쓸 수 있어요. 첫 실행은 모델 다운로드 때문에 조금 오래 걸릴 수
-          있어요.
-        </p>
-      </div>
-
       <input
         ref={fileRef}
         type="file"
@@ -197,181 +201,138 @@ function PhotoTab() {
         </p>
       ) : null}
 
-      {photos.length === 0 ? (
-        <div className="rounded-xl border border-(--hc-border) bg-(--hc-surface-strong) p-3 text-[12px] text-(--hc-muted)">
-          아직 업로드한 사진이 없어요. 아래 추가 버튼으로 사진을 넣어보세요.
-        </div>
-      ) : null}
+      {/* 칸 크기는 폭에 맞춰 정한다 — 폰은 네 칸, 넓은 화면은 그 이상. 넓은 화면에서는 아래 패널이 밀려나지 않게 높이를 묶는다. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-2 lg:max-h-80 lg:overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={isUploading}
+          className="
+            group flex aspect-square flex-col items-center justify-center gap-1 rounded-xl
+            border border-dashed border-(--hc-border-strong) bg-(--hc-surface-strong) text-(--hc-text)
+            hover:border-(--hc-primary-line) hover:bg-(--hc-accent-soft-bg) disabled:opacity-50
+          "
+          title="사진 올리기"
+        >
+          <ImagePlus aria-hidden className="size-5" />
+          <span className="text-[12px] font-semibold">
+            {isUploading ? "올리는 중" : "내 사진"}
+          </span>
+        </button>
 
-      <div
-        className="
-          flex gap-2 overflow-x-auto pb-2
-          snap-x snap-mandatory
-          [-webkit-overflow-scrolling:touch]
-          scrollbar-none [&::-webkit-scrollbar]:hidden
-        "
-      >
-        <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={isUploading}
-            className="
-              group relative
-              aspect-square w-24 shrink-0
-              snap-start overflow-hidden rounded-xl
-              border border-dashed border-(--hc-border) bg-(--hc-surface-strong)
-              hover:border-(--hc-primary-line) hover:bg-(--hc-accent-soft-bg) disabled:opacity-50
-            "
-            title="사진 업로드"
-          >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-(--hc-muted) group-hover:text-(--hc-primary-strong)">
-              <ImagePlus size={18} />
-              <span className="text-[11px]">
-                {isUploading ? "업로드 중" : "추가"}
-              </span>
-            </div>
-          </button>
+        {photos.map((photo) => {
+          const isProcessing = processingAssetId === photo.id;
 
-          {photos.map((photo) => {
-            const isProcessing = processingAssetId === photo.id;
-
-            return (
-              <div
-                key={photo.id}
-                className="relative aspect-square w-24 shrink-0 snap-start overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+          return (
+            <div
+              key={photo.id}
+              className="relative aspect-square overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (isProcessing) return;
+                  addComponent("PHOTO", photo.src);
+                }}
+                className="h-full w-full"
+                title={photo.name ?? "photo"}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photo.src}
+                  alt={photo.name ?? "photo"}
+                  className={`h-full w-full object-cover transition ${
+                    isProcessing ? "opacity-60" : "hover:opacity-85"
+                  }`}
+                  draggable={false}
+                />
+              </button>
+
+              {isProcessing ? (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[11px] font-medium text-white">
+                  누끼를 정리하는 중이에요.
+                </div>
+              ) : null}
+
+              <div className="absolute inset-x-1 bottom-1 flex gap-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (isDraggingTiles || isProcessing) return;
-                    addComponent("PHOTO", photo.src);
+                  onClick={async (event) => {
+                    event.stopPropagation();
+                    // 지난 안내를 먼저 지운다. 같은 실패가 다시 나면 문구가 그대로라
+                    // 눌린 건지 알 수 없었다 — 비웠다가 결과가 나오면 다시 세운다.
+                    setNotice(null);
+                    setProcessingAssetId(photo.id);
+                    const result = await removePhotoBackground(photo.id);
+                    setProcessingAssetId(null);
+
+                    if (!result.ok && result.reason === "PROCESS_FAILED") {
+                      setNotice("누끼 제거에 실패했어요.");
+                    }
                   }}
-                  className="h-full w-full"
-                  title={photo.name ?? "photo"}
+                  disabled={isProcessing}
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[11px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
+                  title="누끼 제거"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.src}
-                    alt={photo.name ?? "photo"}
-                    className={`h-full w-full object-cover transition ${
-                      isProcessing ? "opacity-60" : "hover:opacity-85"
-                    }`}
-                    draggable={false}
-                  />
+                  <Scissors className="h-3 w-3" />
+                  <span>{isProcessing ? "처리 중" : "누끼"}</span>
                 </button>
 
-                {isProcessing ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(6,20,10,0.5)] px-2 text-center text-[11px] font-medium text-white">
-                    누끼를 정리하는 중이에요.
-                  </div>
-                ) : null}
-
-                <div className="absolute inset-x-1 bottom-1 flex gap-1">
-                  <button
-                    type="button"
-                    onClick={async (event) => {
-                      event.stopPropagation();
-                      // 지난 안내를 먼저 지운다. 같은 실패가 다시 나면 문구가 그대로라
-                      // 눌린 건지 알 수 없었다 — 비웠다가 결과가 나오면 다시 세운다.
-                      setNotice(null);
-                      setProcessingAssetId(photo.id);
-                      const result = await removePhotoBackground(photo.id);
-                      setProcessingAssetId(null);
-
-                      if (!result.ok && result.reason === "PROCESS_FAILED") {
-                        setNotice("누끼 제거에 실패했어요.");
-                      }
-                    }}
-                    disabled={isProcessing}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] px-2 py-1 text-[11px] font-medium text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)] disabled:opacity-50"
-                    title="누끼 제거"
-                  >
-                    <Scissors className="h-3 w-3" />
-                    <span>{isProcessing ? "처리 중" : "누끼"}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      const result = removePhotoAsset(photo.id);
-                      if (!result.ok && result.reason === "IN_USE") {
-                        setNotice("프레임에 사용 중인 사진은 삭제할 수 없어요.");
-                      }
-                    }}
-                    className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] p-1.5 text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)]"
-                    title="사진 삭제"
-                    aria-label="사진 삭제"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const result = removePhotoAsset(photo.id);
+                    if (!result.ok && result.reason === "IN_USE") {
+                      setNotice("프레임에 사용 중인 사진은 삭제할 수 없어요.");
+                    }
+                  }}
+                  className="flex items-center justify-center rounded-lg border border-[rgba(255,255,255,0.24)] bg-[rgba(6,20,10,0.72)] p-1.5 text-white backdrop-blur hover:bg-[rgba(6,20,10,0.82)]"
+                  title="사진 삭제"
+                  aria-label="사진 삭제"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
-            );
-          })}
-        </HorizontalScroller>
-      </div>
-    </div>
-  );
-}
+            </div>
+          );
+        })}
 
-function StickerTab() {
-  const [isDraggingTiles, setIsDraggingTiles] = useState(false);
-  const stickers = STICKERS;
-  const serverAssets = useServerAssets();
-  const addComponent = useThemeEditorStore((state) => state.addComponentFromAsset);
-
-  return (
-    <div className="flex flex-col gap-3">
-      <ServerAssetPicker assets={serverAssets.stickers} onSelect={async (asset) => {
-        if (!asset.imageUrl) return;
-        const file = await fetchServerAssetFile(asset.imageUrl);
-        await addComponent("STICKER", await blobToDataUrl(file));
-      }} />
-      <p className="text-sm text-(--hc-muted)">기본 스티커</p>
-      <div
-        className="
-          flex gap-2 overflow-x-auto pb-2
-          snap-x snap-mandatory
-          [-webkit-overflow-scrolling:touch]
-          scrollbar-none [&::-webkit-scrollbar]:hidden
-        "
-      >
-        <HorizontalScroller onDragStateChange={setIsDraggingTiles}>
-          {stickers.map((sticker, index) => (
-            <button
-              key={sticker.id}
-              type="button"
-              onClick={() => {
-                if (isDraggingTiles) return;
-                addComponent("STICKER", sticker.src);
-              }}
-              className="
-                group relative aspect-square w-18 shrink-0
-                snap-start overflow-hidden rounded-xl
-                border border-zinc-800 bg-zinc-950
-              "
-              title={sticker.name}
-              aria-label={sticker.name ?? `기본 스티커 ${index + 1}`}
-            >
-              {/*
-                72px 타일에 원본 PNG 를 그대로 내려받지 않는다. next/image 로 작게 받고 화면 밖 타일은 늦게 받는다.
-                캔버스에 얹을 때는 원본(sticker.src)을 그대로 쓴다.
-              */}
-              <Image
-                src={sticker.src}
-                alt=""
-                width={72}
-                height={72}
-                sizes="72px"
-                className="h-full w-full object-contain p-2"
-                draggable={false}
-              />
-            </button>
-          ))}
-        </HorizontalScroller>
+        {STICKERS.map((sticker, index) => (
+          <button
+            key={sticker.id}
+            type="button"
+            onClick={() => addComponent("STICKER", sticker.src)}
+            className="aspect-square overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 transition hover:border-(--hc-border-strong)"
+            title={sticker.name}
+            aria-label={sticker.name ?? `기본 스티커 ${index + 1}`}
+          >
+            {/*
+              작은 칸에 원본 PNG 를 그대로 내려받지 않는다. next/image 로 작게 받고 화면 밖 칸은 늦게 받는다.
+              캔버스에 얹을 때는 원본(sticker.src)을 그대로 쓴다.
+            */}
+            <Image
+              src={sticker.src}
+              alt=""
+              width={96}
+              height={96}
+              sizes="96px"
+              className="h-full w-full object-contain p-2"
+              draggable={false}
+            />
+          </button>
+        ))}
       </div>
+
+      {/* 운영에서 올린 스티커. 없으면 아무것도 그리지 않는다. */}
+      <ServerAssetPicker
+        assets={serverAssets.stickers}
+        onSelect={async (asset) => {
+          if (!asset.imageUrl) return;
+          const file = await fetchServerAssetFile(asset.imageUrl);
+          await addComponent("STICKER", await blobToDataUrl(file));
+        }}
+      />
     </div>
   );
 }
@@ -416,84 +377,6 @@ function TextTab() {
       <div className="text-[12px] text-zinc-400">
         추가한 뒤 속성 패널에서 글꼴, 크기, 정렬을 바꿀 수 있어요.
       </div>
-    </div>
-  );
-}
-
-export function HorizontalScroller({
-  children,
-  onDragStateChange,
-}: {
-  children: React.ReactNode;
-  onDragStateChange?: (isDraggingOrJustDragged: boolean) => void;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const isDragging = useRef(false);
-  const startX = useRef(0);
-  const startScrollLeft = useRef(0);
-  const didDrag = useRef(false);
-
-  const DRAG_THRESHOLD = 6;
-
-  const endDrag = () => {
-    const element = ref.current;
-    if (element) {
-      element.classList.add("snap-x", "snap-mandatory");
-      element.classList.remove("cursor-grabbing");
-    }
-    isDragging.current = false;
-
-    if (didDrag.current) {
-      onDragStateChange?.(true);
-      window.setTimeout(() => {
-        onDragStateChange?.(false);
-        didDrag.current = false;
-      }, 0);
-    } else {
-      onDragStateChange?.(false);
-    }
-  };
-
-  return (
-    <div
-      ref={ref}
-      onMouseDown={(event) => {
-        const element = ref.current;
-        if (!element) return;
-
-        isDragging.current = true;
-        didDrag.current = false;
-        startX.current = event.clientX;
-        startScrollLeft.current = element.scrollLeft;
-
-        element.classList.remove("snap-x", "snap-mandatory");
-        element.classList.add("cursor-grabbing");
-      }}
-      onMouseMove={(event) => {
-        if (!isDragging.current) return;
-        const element = ref.current;
-        if (!element) return;
-
-        const delta = event.clientX - startX.current;
-        if (Math.abs(delta) > DRAG_THRESHOLD) {
-          didDrag.current = true;
-          onDragStateChange?.(true);
-        }
-
-        event.preventDefault();
-        element.scrollLeft = startScrollLeft.current - delta;
-      }}
-      onMouseUp={endDrag}
-      onMouseLeave={endDrag}
-      onDragStart={(event) => event.preventDefault()}
-      className="
-        flex gap-2 overflow-x-auto pb-2
-        cursor-grab select-none
-        snap-x snap-mandatory
-        scrollbar-none [&::-webkit-scrollbar]:hidden
-      "
-    >
-      {children}
     </div>
   );
 }
