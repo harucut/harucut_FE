@@ -48,15 +48,14 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
   // 여행 중 통신이 끊겨도 촬영을 이어 가고, 연결이 돌아오면 결과를 저장한다.
   await page.context().setOffline(true);
   await resume.click();
-  const count = async () => Number((await page.getByLabel(/8컷 중 \d+컷 촬영됨/).getAttribute("aria-label"))?.match(/중 (\d+)컷/)?.[1]);
-  while (await count() < 4) {
-    const previous = await count();
-    await page.getByRole("button", { name: "바로 찍기", exact: true }).click();
-    await expect.poll(count).toBeGreaterThan(previous);
-  }
-  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+  // 다 찍으면 사진 고르기 화면으로 넘어간다. 고르기는 그 화면에서만 한다 — 촬영 화면에는 고르기 단추가 없다.
+  await expect(async () => {
+    if (!/\/shoot\/select$/.test(page.url())) {
+      await page.getByRole("button", { name: "바로 찍기", exact: true }).click({ timeout: 1_000 });
+    }
+    expect(page.url()).toMatch(/\/shoot\/select$/);
+  }).toPass({ timeout: 60_000 });
   await page.context().setOffline(false);
-  await page.getByRole("button", { name: "찍은 사진 고르기", exact: true }).click();
   for (let index = 1; index <= 4; index++) {
     await page.getByRole("button", { name: `${index}번 사진 선택`, exact: true }).click();
   }
