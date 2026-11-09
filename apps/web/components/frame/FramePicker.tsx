@@ -204,15 +204,18 @@ function FramePickerCard({
         />
       </div>
 
-      {/* 이름과 선택 표시만 남긴다. 설명·추천 태그는 위 미리보기가 이미 보여주는 것을
-          말로 옮긴 것이라 걷어냈다(constants/frames.ts 주석). */}
-      <span className={`flex items-center gap-2 text-[15px] ${selected ? "font-extrabold text-(--hc-text)" : "font-semibold text-(--hc-muted)"}`}>
+      {/* 고른 표시는 카드 오른쪽 위에 둔다 — 저장한 프레임 카드와 같은 자리다(2026-11-09).
+          이름 옆에 두면 이름 길이에 따라 자리가 흔들렸다. 폰의 넘기기에서는 가운데 온 카드가 곧 고른 것이라 두지 않는다. */}
+      {selected && !carousel ? (
+        <span aria-hidden className="absolute right-3 top-3 grid size-6 place-items-center rounded-full bg-(--hc-primary) text-(--hc-primary-contrast)">
+          <Check className="h-3.5 w-3.5" />
+        </span>
+      ) : null}
+
+      {/* 이름만 남긴다. 설명·추천 태그는 위 미리보기가 이미 보여주는 것을 말로 옮긴 것이라
+          걷어냈다(constants/frames.ts 주석). */}
+      <span className={`text-[15px] ${selected ? "font-extrabold text-(--hc-text)" : "font-semibold text-(--hc-muted)"}`}>
         {frameName}
-        {selected && !carousel ? (
-          <span aria-hidden className="grid size-5 place-items-center rounded-full bg-(--hc-primary) text-(--hc-primary-contrast)">
-            <Check className="h-3 w-3" />
-          </span>
-        ) : null}
       </span>
     </button>
   );
