@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SwitchCamera, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -16,7 +15,6 @@ import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 const subscribeNever = () => () => undefined;
 
 export default function CapturePage() {
-  const router = useRouter();
   const [confirmRestart, setConfirmRestart] = useState(false);
   const {
     videoRef,
@@ -286,25 +284,19 @@ export default function CapturePage() {
         </p>
 
         {/*
-          아래 띠. 가운데 자리 하나가 **카메라 켜기 → 촬영 시작 → 셔터**로 바뀐다. 켜고 → 시작하고
-          → 찍는 이어지는 한 동작이라 같은 자리여야 한다(apple-design 공간 일관성). 예전에는
-          시작 알약이 프리뷰 한가운데 서고 셔터는 아래에서 회색으로 죽어 있어, 시작 동작이
-          두 자리에서 경쟁했다.
+          아래 띠. 가운데 자리 하나가 **카메라 켜기 → 셔터**로 바뀐다. 켜고 → 찍는 이어지는 한 동작이라
+          같은 자리여야 한다(apple-design 공간 일관성).
 
-          촬영 중 셔터는 "기다리지 않고 지금 한 컷"이다(#404). 중단 버튼은 두지 않는다 —
-          헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인 인코딩을 정리한다),
-          전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
+          카메라가 켜지면 그 자리는 끝까지 **같은 셔터**다(2026-11-09). 예전에는 시작 전에만 「찍기 시작」
+          알약이었다가 찍는 동안 셔터로 바뀌었고, 멈추면 그 위에 「찍은 사진 고르기」·「이어서 찍기」,
+          가운데에 「처음부터 다시 찍기」가 섰다. 고르기는 다 찍고 넘어간 다음 화면(/shoot/select)이
+          하고, 찍는 동안 처음부터 다시 찍는 길은 두지 않는다. 셔터가 하는 일만 상황에 따라 다르다 —
+          시작 · 지금 한 컷(#404) · 멈췄던 데서 이어 찍기. 사진 고르기 화면의 「다시 찍기」로 돌아와
+          다 찍은 사진이 남아 있을 때만 셔터가 새로 찍기를 묻는다(지우는 일이라 확인한다).
+
+          중단 버튼은 두지 않는다 — 헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인
+          인코딩을 정리한다), 전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
         */}
-        {!isShooting && shots.length > 0 ? (
-          <div className="flex shrink-0 justify-center gap-3">
-            {shots.length >= 4 ? <button type="button" className="hc-button-primary rounded-full px-5 py-3 text-sm" onClick={() => router.push("/shoot/select")}>
-              찍은 사진 고르기
-            </button> : null}
-            {shots.length < MAX_SHOTS && isCameraReady ? <button type="button" className="hc-button-ghost rounded-full border px-5 py-3 text-sm" onClick={resumeShooting}>
-              이어서 찍기
-            </button> : null}
-          </div>
-        ) : null}
         <div className="relative flex h-22 shrink-0 items-center justify-center [@media(max-height:700px)]:h-18">
           {canFlipCamera ? (
             <button
@@ -319,24 +311,32 @@ export default function CapturePage() {
             </button>
           ) : null}
 
-          {isShooting ? (
+          {isShooting || isCameraReady ? (
             <button
               type="button"
-              onClick={handleShootNow}
-              // 이 버튼이 하는 일은 하나뿐이라 이름도 하나다. 화면에서 글자가 빠져도 보조기술에는 남는다.
-              aria-label="바로 찍기"
+              onClick={
+                isShooting
+                  ? handleShootNow
+                  : shots.length === 0
+                    ? () => startShooting()
+                    : shots.length < MAX_SHOTS
+                      ? resumeShooting
+                      : () => setConfirmRestart(true)
+              }
+              // 모양은 하나지만 하는 일은 상황마다 다르다. 화면에 글자가 없으니 보조기술에는 그 일을 말한다.
+              aria-label={
+                isShooting
+                  ? "바로 찍기"
+                  : shots.length === 0
+                    ? "찍기 시작"
+                    : shots.length < MAX_SHOTS
+                      ? "이어서 찍기"
+                      : "새로 찍기"
+              }
               // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
               className="grid h-18 w-18 place-items-center rounded-full border-4 border-(--hc-text) transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >
               <span className="h-13.5 w-13.5 rounded-full bg-(--hc-primary) [@media(max-height:700px)]:h-11 [@media(max-height:700px)]:w-11" />
-            </button>
-          ) : isCameraReady ? (
-            <button
-              type="button"
-              onClick={() => shots.length ? setConfirmRestart(true) : startShooting()}
-              className="hc-button-primary inline-flex h-12 items-center rounded-full px-8 text-[15px] font-extrabold"
-            >
-              {shots.length ? "처음부터 다시 찍기" : "찍기 시작"}
             </button>
           ) : (
             <button
