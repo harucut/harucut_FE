@@ -104,4 +104,37 @@ describe("SavedFramesSection", () => {
     expect(screen.getByText(/컷 구성이 달라요/)).toBeInTheDocument();
     expect(screen.queryByText(EMPTY)).not.toBeInTheDocument();
   });
+
+  /*
+    꾸미기는 저장한 프레임을 고르지 않고 연다(2026-11-09). 예전에는 카드를 누르면 체크만 붙고,
+    주 버튼 「새 프레임 만들기」를 누르면 고치려던 프레임 대신 빈 새 프레임이 열렸다.
+  */
+  describe("눌러서 여는 목록(꾸미기)", () => {
+    it("누르면 그 프레임을 열고, 고른 표시나 따로 된 「수정하기」 단추는 없다", () => {
+      const onOpen = jest.fn();
+      const onSelectRemoteFrame = jest.fn();
+      const saved = frame({ frameId: 7, title: "크리스마스 4컷" });
+      renderSection({ frames: [saved], onOpen, onSelectRemoteFrame });
+
+      const card = screen.getByRole("button", { name: "크리스마스 4컷 수정하기" });
+      expect(card).not.toHaveAttribute("aria-pressed");
+      expect(screen.getAllByRole("button", { name: /수정하기/ })).toHaveLength(1);
+
+      fireEvent.click(card);
+      expect(onOpen).toHaveBeenCalledWith(saved);
+      expect(onSelectRemoteFrame).not.toHaveBeenCalled();
+    });
+
+    it("위에서 새 프레임의 컷 구성을 바꿔도 고칠 프레임을 거르지 않는다", () => {
+      renderSection({
+        frames: [frame({ frameType: "GRID", title: "네모 프레임" })],
+        selectedFrameId: "classic-4",
+        onOpen: jest.fn(),
+      });
+
+      expect(screen.getByText("네모 프레임")).toBeInTheDocument();
+      expect(screen.queryByText(/컷 구성이 달라요/)).not.toBeInTheDocument();
+    });
+  });
 });
+

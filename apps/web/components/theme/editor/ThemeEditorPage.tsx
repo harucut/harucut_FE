@@ -955,12 +955,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           <div className="lg:sticky lg:top-6 lg:col-start-1 lg:row-span-6 lg:row-start-1 lg:self-start">
             {/* 모바일은 캔버스 자리가 모자라 카드 테두리·제목 줄을 걷는다. */}
             <section className="flex flex-col gap-3 lg:rounded-2xl lg:border lg:border-zinc-800 lg:bg-zinc-900/60 lg:p-4">
-              <div className="flex items-center justify-between max-lg:hidden">
-                <p className="text-sm font-semibold">미리보기</p>
-                <p className="text-[12px] text-(--hc-muted)">
-                  스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.
-                </p>
-              </div>
+              <p className="text-sm font-semibold max-lg:hidden">미리보기</p>
 
               {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
               <div className="flex items-center justify-center lg:min-h-82.5">

@@ -27,8 +27,8 @@ type Props = {
 
   /** 비회원처럼 저장한 프레임을 볼 수 없는 경우. */
   hideSavedFrames?: boolean;
-  /** 저장한 프레임에 붙는 부가 동작(예: 꾸미기의 "수정하기"). */
-  savedFrameAction?: { label: string; onAction: (frame: RemoteFrame) => void };
+  /** 저장한 프레임을 고르지 않고 눌러서 바로 연다(꾸미기). 주면 컷 구성으로 거르지도 않는다(SavedFramesSection). */
+  onOpenSavedFrame?: (frame: RemoteFrame) => void;
 
   /**
    * 주소에 담긴 저장 프레임 번호를 못 불러왔을 때 보여 줄 안내.
@@ -65,7 +65,7 @@ export function FrameChooser({
   confirmDisabled,
   onConfirm,
   hideSavedFrames,
-  savedFrameAction,
+  onOpenSavedFrame,
   missingRemoteFrameNotice,
   children,
   belowPicker,
@@ -180,8 +180,7 @@ export function FrameChooser({
             setSelectedRemoteFrameId(frame.frameId);
           }}
           onRefresh={onRefresh}
-          onAction={savedFrameAction?.onAction}
-          actionLabel={savedFrameAction?.label}
+          onOpen={onOpenSavedFrame}
         />
       )}
 
