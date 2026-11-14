@@ -1077,7 +1077,7 @@ export default function ShootResultPage() {
               disabled={isHandingOffToLogin}
               className="hc-button-secondary flex h-12 w-full items-center justify-center rounded-full border text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 기록에 보관"}
+              {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 보관하기"}
             </button>
           ) : null}
 

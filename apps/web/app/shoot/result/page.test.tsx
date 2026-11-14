@@ -342,7 +342,7 @@ describe("ShootResultPage", () => {
     await screen.findByRole("link", { name: "사진 저장" });
 
     expect(screen.getByRole("link", { name: "하루컷 처음으로" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("button", { name: "로그인하고 기록에 보관" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "로그인하고 보관하기" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "더보기" })).toBeNull();
   });
 
@@ -618,7 +618,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 기록에 보관",
+      name: "로그인하고 보관하기",
     });
     fireEvent.click(loginButton);
 
@@ -657,7 +657,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 기록에 보관",
+      name: "로그인하고 보관하기",
     });
     fireEvent.click(loginButton);
 
@@ -682,7 +682,7 @@ describe("ShootResultPage", () => {
     render(<ShootResultPage />);
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 기록에 보관",
+      name: "로그인하고 보관하기",
     });
     expect(mockUseShootSession.getState().imageResult).toBeNull();
 
@@ -718,7 +718,7 @@ describe("ShootResultPage", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "로그인하고 기록에 보관" }),
+      screen.getByRole("button", { name: "로그인하고 보관하기" }),
     );
 
     await waitFor(() => {
