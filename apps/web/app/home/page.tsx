@@ -243,7 +243,7 @@ export default function HomePage() {
             ) : loadError ? (
               // 실패를 빈 상태로 위장하지 않는다. 문구 + 다시 시도.
               <div className="hc-surface-well flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center">
-                <p className="text-[13px] text-(--hc-muted)">{loadError}</p>
+                <p className="text-[13px] text-(--hc-muted)"><Sentences text={loadError} /></p>
                 <button
                   type="button"
                   onClick={() => setReloadKey((prev) => prev + 1)}

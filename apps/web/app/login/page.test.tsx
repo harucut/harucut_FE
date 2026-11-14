@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { COMPANY } from "@harucut/shared";
 import LoginPage from "@/app/login/page";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { sentenceText } from "@/tests/sentenceText";
 
 const mockLoginWithEmail = jest.fn();
 const mockReactivateAccount = jest.fn();
@@ -299,7 +300,7 @@ describe("LoginPage 탈퇴 대기 계정", () => {
     render(<LoginPage />);
     fireEvent.click(await screen.findByRole("button", { name: "탈퇴 취소하기" }));
 
-    expect(await screen.findByText("탈퇴를 취소했어요. 다시 로그인해 주세요.")).toBeInTheDocument();
+    expect(await screen.findByText(sentenceText("탈퇴를 취소했어요. 다시 로그인해 주세요."))).toBeInTheDocument();
     expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
     // 지금 토큰은 옛 상태라 쓸 수 없다 — 지우고 다시 로그인하게 한다.
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");

@@ -19,6 +19,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import HistoryPage from "@/app/history/page";
 // 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 로 펼쳐 둔 것을 가져온다.
 import { CopyFailedError } from "@/lib/share";
+import { sentenceText } from "@/tests/sentenceText";
 
 const mockListMyMedia = jest.fn();
 const mockGetMyUserInfo = jest.fn();
@@ -280,7 +281,7 @@ describe("기록 화면의 실패 알림", () => {
       expect(
         screen.queryByRole("dialog", { name: CONFIRM_TITLE }),
       ).not.toBeInTheDocument();
-      expect(screen.getByText(DELETE_STALLED_TEXT)).toBeInTheDocument();
+      expect(screen.getByText(sentenceText(DELETE_STALLED_TEXT))).toBeInTheDocument();
 
       /*
         문구가 "지우지 못했어요"가 아닌 이유, 목록에서 빼지 않는 이유는 같다 —
@@ -389,7 +390,7 @@ describe("기록 화면의 공유 실패 안내", () => {
 
     expect(
       screen.getByText(
-        "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요.",
+        sentenceText("링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."),
       ),
     ).toBeInTheDocument();
   });

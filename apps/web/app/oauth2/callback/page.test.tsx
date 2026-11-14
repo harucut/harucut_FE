@@ -14,6 +14,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { COMPANY, CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
 import OAuthCallbackPage from "@/app/oauth2/callback/page";
 import { ApiRequestError } from "@/lib/clientApi";
+import { sentenceText } from "@/tests/sentenceText";
 
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
@@ -92,7 +93,7 @@ it("일시적인 실패에서는 세션을 지우지 않고 사유와 다시 시
 
   expect(
     await screen.findByText(
-      "일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      sentenceText("일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요."),
     ),
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
@@ -193,7 +194,7 @@ it.each(["DELETED"])(
     render(<OAuthCallbackPage />);
 
     expect(
-      await screen.findByText("이용이 제한된 계정이에요. 고객센터로 문의해 주세요."),
+      await screen.findByText(sentenceText("이용이 제한된 계정이에요. 고객센터로 문의해 주세요.")),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "로그인하지 못했어요" }),
@@ -275,7 +276,7 @@ describe("탈퇴요청 계정", () => {
     fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
 
     expect(
-      await screen.findByText("탈퇴를 취소했어요. 다시 로그인해 주세요."),
+      await screen.findByText(sentenceText("탈퇴를 취소했어요. 다시 로그인해 주세요.")),
     ).toBeInTheDocument();
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
     expect(mockStartSocialLogin).not.toHaveBeenCalled();
@@ -295,7 +296,7 @@ describe("탈퇴요청 계정", () => {
     fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
 
     expect(
-      await screen.findByText("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요."),
+      await screen.findByText(sentenceText("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.")),
     ).toBeInTheDocument();
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
     expect(mockStartSocialLogin).not.toHaveBeenCalled();

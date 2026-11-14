@@ -263,15 +263,18 @@ function SignupPageContent() {
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
           {/* 로그인 페이지의 대응 문구와 같은 토큰을 쓴다. 하드코딩 text-zinc-500 은 다크에서 어긋났다. */}
           <p className="mt-2 text-center text-[13px] leading-6 text-(--hc-muted)">
-            소셜 계정으로도 가입할 수 있어요.{" "}
-            <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-              서비스 이용약관
-            </Link>
-            과{" "}
-            <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-              개인정보 처리방침
-            </Link>
-            을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
+            {/* 문장마다 줄을 나눈다 — 링크가 들어 있어 Sentences 대신 같은 모양(문장 블록 + 사이 빈칸)을 직접 둔다. */}
+            <span className="block text-balance">소셜 계정으로도 가입할 수 있어요.</span>{" "}
+            <span className="block text-balance">
+              <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                서비스 이용약관
+              </Link>
+              과{" "}
+              <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                개인정보 처리방침
+              </Link>
+              을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
+            </span>
           </p>
           <p className="mt-2 text-center text-[14px] text-(--hc-muted)">
             이미 계정이 있으신가요?{" "}

@@ -5,11 +5,14 @@ import { Fragment } from "react";
  *
  * 모달·안내 띠처럼 폭이 좁은 자리에 두 문장을 이어 쓰면 문장 중간에서 줄이 넘어갔다
  * (「…하루컷을 쓸 / 수 있어요.」). 문장 끝(. ! ? 뒤 공백)에서 나눠 문장마다 새 줄에서 시작한다.
- * 한 문장이 길면 그 안에서는 평소처럼 단어 단위로 감긴다(globals.css 의 keep-all·pretty).
  *
- * 문장 사이에는 빈칸을 남기고 그 뒤에 줄바꿈을 둔다. 글자만 읽는 쪽(화면 낭독기, 접근성 이름,
- * 시험의 텍스트 비교)은 원래 문장 그대로 「…했어요. 다시…」로 읽고, 줄 끝 빈칸은 화면에 보이지 않는다.
- * 문장마다 블록으로 감싸면 그 빈칸이 사라져 「…했어요.다시…」로 붙어 읽혔다.
+ * 문장마다 블록으로 감싸고 text-wrap: balance 를 건다 — 한 문장이 두 줄이 되면 두 줄 길이를 맞춰
+ * 「…사용할 / 수 없거나」 같은 끊김을 줄인다. <br> 로만 나누면 크롬은 첫 문장만 고르게 나누고
+ * 그 뒤 문장은 그대로 감았다(실측).
+ *
+ * 블록 사이에는 빈칸 글자를 둔다. 글자만 읽는 쪽(화면 낭독기·접근성 설명)이 원래 문장 그대로
+ * 「…했어요. 다시…」로 읽고, 블록 사이 빈칸은 화면에 보이지 않는다. 시험에서 한 덩어리 문장으로
+ * 찾을 때는 tests/sentenceText 를 쓴다 — 기본 getByText 는 요소의 직접 글자만 본다.
  *
  * 약관·설명 본문처럼 넓은 자리의 긴 글에는 쓰지 않는다 — 문단이 짧은 줄로 조각난다.
  */
@@ -31,14 +34,8 @@ export function Sentences({ text }: { text: string | null | undefined }) {
     <>
       {sentences.map((sentence, index) => (
         <Fragment key={index}>
-          {index > 0 && (
-            <>
-              {" "}
-              {/* 이 표시가 있는 문단은 globals.css 가 text-wrap: balance 로 고르게 나눈다. */}
-              <br data-sentence-break="" />
-            </>
-          )}
-          {sentence}
+          {index > 0 ? " " : null}
+          <span className="block text-balance">{sentence}</span>
         </Fragment>
       ))}
     </>

@@ -1,7 +1,7 @@
 /**
  * 짧은 안내 글을 문장마다 새 줄에서 시작하게 나누는지 지킨다(2026-11-14).
  *
- * 화면에서는 줄이 나뉘고, 글자만 읽는 쪽(화면 낭독기·접근성 설명)에서는 원래 문장이
+ * 화면에서는 문장마다 줄이 나뉘고, 글자만 읽는 쪽(화면 낭독기·접근성 설명)에서는 원래 문장이
  * 빈칸까지 그대로 남아야 한다 — 「…했어요.다시…」처럼 붙어 읽히면 안 된다.
  */
 import { render, screen } from "@testing-library/react";
@@ -34,7 +34,7 @@ describe("splitSentences", () => {
 });
 
 describe("Sentences", () => {
-  it("문장 사이에 줄바꿈을 두되 글자는 원래 문장 그대로다", () => {
+  it("문장마다 줄을 나누되 글자는 원래 문장 그대로다", () => {
     const { container } = render(
       <p>
         <Sentences text="로그인을 마치지 못했어요. 다시 시도해 주세요." />
@@ -42,26 +42,28 @@ describe("Sentences", () => {
     );
     const paragraph = container.querySelector("p")!;
 
-    expect(paragraph.querySelectorAll("br")).toHaveLength(1);
-    // globals.css 가 이 표시를 보고 문단을 고르게 나눈다(text-wrap: balance).
-    expect(paragraph.querySelector("br")).toHaveAttribute("data-sentence-break");
+    // 문장마다 블록이고, 긴 문장은 두 줄 길이를 맞춘다(text-balance).
+    const blocks = paragraph.querySelectorAll("span.block");
+    expect([...blocks].map((block) => block.textContent)).toEqual(["로그인을 마치지 못했어요.", "다시 시도해 주세요."]);
+    for (const block of blocks) expect(block).toHaveClass("text-balance");
+    // 블록 사이 빈칸이 남아 글자로는 원래 문장 그대로다.
     expect(paragraph.textContent).toBe("로그인을 마치지 못했어요. 다시 시도해 주세요.");
   });
 
-  it("한 문장이면 줄바꿈을 넣지 않는다", () => {
+  it("한 문장이면 나누지 않는다", () => {
     const { container } = render(
       <p>
         <Sentences text="사진을 저장했어요." />
       </p>,
     );
 
-    expect(container.querySelector("br")).toBeNull();
+    expect(container.querySelector("span.block")).toBeNull();
     expect(container.textContent).toBe("사진을 저장했어요.");
   });
 });
 
 describe("ConfirmDialog 설명", () => {
-  it("두 문장 설명은 화면에서 두 줄이고, 다이얼로그 설명으로는 한 문장처럼 이어 읽힌다", () => {
+  it("두 문장 설명은 화면에서 두 줄이고, 다이얼로그 설명으로는 원래 문장 그대로 읽힌다", () => {
     render(
       <ConfirmDialog
         title="탈퇴를 취소할까요?"
@@ -77,6 +79,6 @@ describe("ConfirmDialog 설명", () => {
     expect(dialog).toHaveAccessibleDescription(
       "탈퇴를 신청한 계정이에요. 취소하면 지금처럼 하루컷을 쓸 수 있어요.",
     );
-    expect(dialog.querySelector("#confirm-dialog-desc br")).not.toBeNull();
+    expect(dialog.querySelectorAll("#confirm-dialog-desc span.block")).toHaveLength(2);
   });
 });
