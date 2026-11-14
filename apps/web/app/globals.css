@@ -797,6 +797,46 @@ body {
   }
 }
 
+/*
+  가입 약관 체크칸(TermsConsentFieldset). 기본 체크박스는 테두리 색을 바꿀 수 없어서, 빠진 필수 약관을
+  칸 테두리로 빨갛게 보이려고 직접 그린다(2026-11-14). 체크한 색은 예전처럼 라임이다.
+  빈 칸 테두리는 --hc-muted 다 — 옅은 테두리 토큰은 바탕과 대비가 3:1 에 못 미쳐 칸이 안 보인다(WCAG 1.4.11).
+*/
+.hc-checkbox {
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  border: 1.5px solid var(--hc-muted);
+  /* 누르는 것은 둥글다(DESIGN.md rounded.chip) — 국내 약관 동의 화면의 둥근 체크와도 같다. */
+  border-radius: 9999px;
+  background: var(--hc-surface) center / 0.875rem 0.875rem no-repeat;
+  cursor: pointer;
+}
+.hc-checkbox:checked {
+  border-color: var(--hc-primary);
+  background-color: var(--hc-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='%23141803' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7.4l2.6 2.6L11 4.4'/%3E%3C/svg%3E");
+}
+.hc-checkbox[aria-invalid="true"]:not(:checked) {
+  border-color: var(--hc-danger);
+  border-width: 2px;
+}
+.hc-checkbox:focus-visible {
+  outline: 2px solid var(--hc-text);
+  outline-offset: 2px;
+}
+.hc-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hc-checkbox {
+    transition: background-color var(--hc-motion-state) var(--hc-motion-ease), border-color var(--hc-motion-state) var(--hc-motion-ease);
+  }
+}
+
 /* 앱 화면(Studio·운영 관리·편집기)의 체크박스·슬라이더는 무채색이다. 한 화면에 체크가 여럿이면 라임이 흩어져 주 동작을 못 찾는다(DESIGN.md 한 화면 한 라임). */
 .hc-page-app {
   accent-color: var(--hc-text);

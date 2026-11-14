@@ -157,9 +157,8 @@ function SignupPageContent() {
       (item) => item.required && !consents[item.code],
     );
     if (missingRequired.length > 0) {
-      nextErrors.consent = `${missingRequired
-        .map((item) => item.title)
-        .join(", ")}에 동의해야 가입할 수 있어요.`;
+      // 어느 약관인지는 그 체크칸이 빨갛게 말한다. 문장은 할 일 하나만(2026-11-14).
+      nextErrors.consent = "필수 약관에 동의해 주세요.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
