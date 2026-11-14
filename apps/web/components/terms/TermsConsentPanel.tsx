@@ -197,7 +197,8 @@ export function TermsConsentPanel() {
                           (isUnreadable(item.code) && !agreed)
                         }
                         onChange={(e) => void toggle(item, e.target.checked)}
-                        className="h-4 w-4 accent-(--hc-primary) disabled:opacity-50"
+                        // 가입 화면과 같은 둥근 체크칸(globals.css .hc-checkbox). 잠긴 칸은 그 클래스가 흐리게 그린다.
+                        className="hc-checkbox"
                       />
                       <span>
                         <span

@@ -297,7 +297,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                 <TermsFullText title={item.title} content={href ? null : contentByCode[item.code]}>
                   {(fullTextToggle) => (
                     <div className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
-                      <label className="flex min-w-0 flex-1 items-center gap-2">
+                      <label className="flex min-w-0 flex-1 items-center gap-3">
                         <input
                           type="checkbox"
                           checked={checked[item.code] ?? false}
@@ -315,7 +315,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                             }));
                             setTouched((current) => ({ ...current, [item.code]: true }));
                           }}
-                          className="h-4 w-4 accent-(--hc-primary)"
+                          // 가입 화면과 같은 둥근 체크칸(globals.css .hc-checkbox, 2026-11-14).
+                          className="hc-checkbox"
                         />
                         <span>
                           <span
