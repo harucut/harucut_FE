@@ -75,9 +75,10 @@ test("treats the retired event QR address as a plain protected shoot route", asy
 });
 
 /**
- * 촬영 화면에서 "프레임 다시 선택"으로 돌아와도 고른 컷 구성이 살아 있어야 한다.
+ * 촬영 화면에서 뒤로가기로 돌아와도 고른 컷 구성이 살아 있어야 한다.
  *
- * 돌아오는 주소에 프레임 쿼리가 없으면 세션이 초기화되면서 컷 구성이 사라진다.
+ * 촬영 화면에는 뒤로가기 단추가 없다(2026-11-15) — 기기·브라우저의 뒤로가기다. 돌아오는 주소에 프레임
+ * 쿼리가 없으면 세션이 초기화되면서 컷 구성이 사라진다. 그래서 /shoot 이 떠나기 전에 주소에 적어 둔다.
  */
 test("keeps the chosen frame when going back to frame selection", async ({ page }) => {
   // 랜딩의 「가입 없이 체험하기」와 같은 진입이다 — 체험 쿠키를 받고 /shoot 으로 간다.
@@ -87,7 +88,8 @@ test("keeps the chosen frame when going back to frame selection", async ({ page 
   await page.getByRole("button", { name: "이 프레임으로 찍기" }).click();
   await page.waitForURL("**/shoot/capture");
 
-  await page.getByRole("link", { name: "프레임 다시 선택" }).click();
+  await expect(page.getByRole("link", { name: "프레임 다시 선택" })).toHaveCount(0);
+  await page.goBack();
   // `**/shoot**` 로 기다리면 아직 /shoot/capture 인 상태에서 바로 통과한다.
   await page.waitForURL((url) => new URL(url).pathname === "/shoot");
   await expect(page.getByRole("heading", { name: "프레임 선택" })).toBeVisible();

@@ -108,6 +108,11 @@ function ShootPageContent() {
       router.push(`/shoot/upload?${next.toString()}`);
       return;
     }
+    // 촬영 화면에는 뒤로가기 단추가 없다(2026-11-15). 기기·브라우저의 뒤로가기로 돌아와도 고른 레이아웃이 남게
+    // 이 화면 주소에 적어 둔다 — 예전 단추가 `/shoot?frame=` 로 보내던 것과 같은 자리로 돌아온다.
+    const here = new URLSearchParams(searchParams.toString());
+    here.set("frame", frameId);
+    window.history.replaceState(null, "", `?${here.toString()}`);
     router.push("/shoot/capture");
   };
 

@@ -2,7 +2,6 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 import { SwitchCamera, Timer } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { isNativeShell } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -84,13 +83,6 @@ export default function CapturePage() {
   // 가로로 긴 칸은 폭에 묶여 화면이 남는다. 프리뷰를 렌즈 가까이 올리고 남는 자리를 숫자에 준다. 세로 칸은 프리뷰가 높이를 다 쓴다.
   const wideSlot = currentSlot ? currentSlot.width >= currentSlot.height : false;
 
-  const backToFrameHref = (() => {
-    const params = new URLSearchParams();
-    if (frameId) params.set("frame", frameId);
-    const query = params.toString();
-    return query ? `/shoot?${query}` : "/shoot";
-  })();
-
   return (
     /*
       촬영 화면은 스크롤하지 않는다. 프리뷰와 셔터가 한 화면에 같이 보여야 하는데,
@@ -101,7 +93,7 @@ export default function CapturePage() {
       세로 4컷은 슬롯이 가로라 카드의 위아래 절반이 "빈 카드"로 읽혔다. 카드를 걷어내고
       검은 면 하나로 두면 남는 공간이 카메라의 어두운 면이 된다 — 카메라 앱이 그렇다.
       테마와 무관하게 어둡다(hc-stage-dark): 밝은 면 위의 프리뷰는 액자처럼 보이고,
-      셔터와 게이지가 사진보다 밝아진다.
+      셔터와 숫자가 사진보다 밝아진다.
     */
     <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text)">
       <audio
@@ -111,42 +103,28 @@ export default function CapturePage() {
         className="hidden"
       />
       <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-3">
-        <PageHeader
-          title="사진 촬영"
-          // 고른 컷 구성을 들고 돌아간다. 맨 주소로 보내면 초기화된다.
-          backHref={backToFrameHref}
-          backLabel="프레임 다시 선택"
-        />
-
+        {/*
+          제목과 뒤로가기는 두지 않는다(2026-11-15). 찍기 시작하면 다 찍을 때까지 이 화면이고, 찍기 전에 프레임을
+          바꾸려면 기기·브라우저의 뒤로가기로 돌아간다 — 고른 프레임은 /shoot 이 주소에 적어 두어 그대로 남는다.
+          화면 이름은 보조기술에만 둔다.
+        */}
+        <h1 className="sr-only">사진 촬영</h1>
 
         {/*
-          8컷 게이지. 몇 장을 찍는지·몇 장 찍었는지가 늘 보인다(DESIGN.md 「필름의 리듬」).
-          찍은 칸은 라임 면, 지금 찍는 칸은 라임 테두리. 숫자 라벨은 두지 않는다 — 칸이 곧 숫자다.
-          게이지의 라임은 DESIGN.md 가 '진행 게이지' 용도로 허용한 것이라 한 화면 한 라임 규칙과
-          부딪히지 않는다.
+          찍은 장수는 숫자 하나 — 「3/8」(2026-11-15). 필름 카메라의 컷 카운터처럼.
+
+          예전에는 8칸 게이지였다. 몇 장째인지 알려면 칸을 세어야 했고, 폰을 세워 두고 떨어져서 보면 칸이 작아
+          셀 수도 없었다. 지금 찍는 칸에 두른 라임 테두리와 빛 번짐은 다른 칸보다 굵은 줄로 보였다. 숫자는
+          라임을 쓰지 않는다 — 이 화면의 라임은 셔터 하나다.
         */}
-        <div
+        <p
           role="img"
           aria-label={`${MAX_SHOTS}컷 중 ${shotCount}컷 촬영됨`}
-          className="flex shrink-0 items-center justify-center gap-1.5"
+          className="shrink-0 text-center font-mono text-[18px] font-bold tabular-nums"
         >
-          {Array.from({ length: MAX_SHOTS }, (_, index) => {
-            const done = index < shotCount;
-            const current = isShooting && index === shotCount;
-            return (
-              <span
-                key={index}
-                className={`h-7.5 w-5.5 rounded-[5px] border-[1.5px] transition-colors ${
-                  done
-                    ? "border-(--hc-primary-line) bg-(--hc-primary)"
-                    : current
-                      ? "border-(--hc-primary-line) bg-transparent shadow-[0_0_0_3px_color-mix(in_srgb,var(--hc-primary)_22%,transparent)]"
-                      : "border-(--hc-stage-line) bg-(--hc-stage-fill)"
-                }`}
-              />
-            );
-          })}
-        </div>
+          {shotCount}
+          <span className="text-(--hc-muted)">/{MAX_SHOTS}</span>
+        </p>
 
         {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
         <div
@@ -238,7 +216,7 @@ export default function CapturePage() {
             - 대비가 보장된다. 무대 배경(`--background`, 기본 #0B0B0C) 위라 뒤에 뭐가 찍히든 글자가 읽힌다.
               얼굴 위에 있을 때는 밝은 하늘 앞에서 1.4:1 까지 떨어졌고, 그걸 가리려고 화면을
               30% 어둡게 덮어야 했다 — 그 스크림도 같이 사라졌다.
-            - 라임이 하나로 돌아온다. 진행 표시는 위 8컷 게이지가 혼자 갖는다.
+            - 라임이 하나로 돌아온다. 몇 장째인지는 위 장수(3/8)가 말한다.
           높이를 72px 로 고정해 두 상태가 같은 자리를 쓴다 — 시작해도 아래 띠가 움직이지 않는다.
         */}
         <div className={`flex shrink-0 items-center justify-center gap-2 ${wideSlot ? "h-[clamp(4.5rem,18svh,9rem)]" : "h-18"}`}>
@@ -292,18 +270,18 @@ export default function CapturePage() {
           시작 · 지금 한 컷(#404) · 멈췄던 데서 이어 찍기. 다 찍은 채로는 이 화면에 머물지 않는다 —
           고르기 화면으로 넘어간다(useCaptureFlow). 다시 찍는 길은 고르기 화면의 「다시 찍기」다.
 
-          중단 버튼은 두지 않는다 — 헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인
-          인코딩을 정리한다), 전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
+          중단 버튼은 두지 않는다 — 찍기 시작하면 다 찍을 때까지다. 기기·브라우저의 뒤로가기로 떠나면 언마운트가
+          스트림과 진행 중인 인코딩을 정리한다. 카메라 전환도 찍기 전에만 둔다(2026-11-15) — 찍는 동안에는
+          잠가 둔 단추였을 뿐이다. 전환은 아이콘만이고 따로 떠 있어서, 있든 없든 셔터는 정중앙이다.
         */}
         <div className="relative flex h-22 shrink-0 items-center justify-center [@media(max-height:700px)]:h-18">
-          {canFlipCamera ? (
+          {canFlipCamera && !isShooting && shots.length === 0 ? (
             <button
               type="button"
               onClick={() => void switchCamera()}
-              disabled={isShooting}
               aria-label="카메라 전환"
               title="카메라 전환"
-              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45"
+              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border"
             >
               <SwitchCamera className="h-5 w-5" />
             </button>

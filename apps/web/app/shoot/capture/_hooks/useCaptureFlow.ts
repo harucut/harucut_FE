@@ -81,7 +81,7 @@ export function useCaptureFlow() {
   /**
    * 촬영 회차 번호.
    *
-   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 화면을 떠나면(헤더의 뒤로 가기)
+   * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 화면을 떠나면(기기·브라우저의 뒤로 가기)
    * 언마운트 뒤에 결과가 돌아온다. 그대로 두면 떠난 세션에 사진이 얹히고, 마지막 컷을
    * 인코딩하던 중이었다면 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다.
    * 시작·언마운트 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
@@ -286,8 +286,8 @@ export function useCaptureFlow() {
     };
   }, [frameId, isCameraReady, startCamera]);
 
-  // 언마운트 시 정리. 촬영을 멈추는 길은 이것 하나다 — 화면에 중단 버튼은 없고 헤더의 뒤로 가기가
-  // 그 역할이라, 스트림을 닫고 진행 중인 인코딩의 결과를 무효로 만든다(shootGenerationRef 주석).
+  // 언마운트 시 정리. 촬영을 멈추는 길은 이것 하나다 — 화면에 중단 버튼도 뒤로가기 단추도 없고, 기기·브라우저의
+  // 뒤로가기로 떠날 때 스트림을 닫고 진행 중인 인코딩의 결과를 무효로 만든다(shootGenerationRef 주석).
   useEffect(() => {
     return () => {
       stopStream();
@@ -457,7 +457,7 @@ export function useCaptureFlow() {
 
       // **타이머를 다시 건다.** 되돌리기만 하면 바뀌는 상태가 없어서 카운트다운 effect 가
       // 다시 돌지 않는다(그 effect 는 countdown 이 1 이하면 값을 내리지 않는다).
-      // 화면은 "1" 에서 멎고 게이지도 그대로라, 사람은 무엇이 잘못됐는지 알 수 없다.
+      // 화면은 "1" 에서 멎고 장수도 그대로라, 사람은 무엇이 잘못됐는지 알 수 없다.
       setShooting((s) => ({ ...s, countdown: timerSeconds, cycle: s.cycle + 1 }));
       return;
     }
