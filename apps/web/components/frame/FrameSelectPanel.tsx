@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { SLOT_COLORS } from "@/constants/colors";
 import type { FrameId } from "@/constants/frames";
 import type { FourcutFilterId } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
@@ -105,6 +106,7 @@ export function FrameSelectPanel({
                 theme={themeData}
                 borderColor={borderColor}
                 outputFilter={outputFilter}
+                markSlots
                 className="max-h-full w-auto max-w-full"
               />
             </div>
@@ -122,13 +124,15 @@ export function FrameSelectPanel({
                 const slotIndex = selectedIndexes.indexOf(index);
                 const isSelected = slotIndex !== -1;
                 const order = slotIndex + 1;
+                // 들어간 칸의 색. 미리보기의 그 칸과 같은 색이라 어느 칸에 들어갔는지 이어진다.
+                const slotColor = isSelected ? SLOT_COLORS[slotIndex % SLOT_COLORS.length] : null;
 
                 return (
                   <button
                     key={index}
                     type="button"
                     onClick={() => handleToggle(index, isSelected)}
-                    style={{ aspectRatio }}
+                    style={slotColor ? { aspectRatio, borderColor: slotColor, boxShadow: `0 0 0 2px ${slotColor}` } : { aspectRatio }}
                     aria-pressed={isSelected}
                     aria-label={
                       isSelected
@@ -140,7 +144,7 @@ export function FrameSelectPanel({
                     className={[
                       "group relative overflow-hidden rounded-xl border bg-black text-left transition",
                       isSelected
-                        ? "border-(--hc-primary-line) ring-2 ring-(--hc-accent-soft-border)"
+                        ? ""
                         : isFull
                           ? "border-(--hc-border) opacity-45"
                           : "border-(--hc-border) hover:border-(--hc-border-strong)",
@@ -153,10 +157,13 @@ export function FrameSelectPanel({
                       className="h-full w-full object-cover"
                     />
 
-                    {/* 배지는 선택 순서 하나만. 원본 순번(#n)은 고를 때 쓰는 정보가 아니고,
+                    {/* 배지는 들어간 칸 번호 하나만, 그 칸의 색으로. 원본 순번(#n)은 고를 때 쓰는 정보가 아니고,
                         aria-label 이 이미 두 정보를 다 말한다. 미선택 타일은 사진만 남는다. */}
-                    {isSelected ? (
-                      <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-(--hc-primary) font-mono text-[12px] font-bold tabular-nums text-(--hc-primary-contrast) shadow-sm">
+                    {slotColor ? (
+                      <span
+                        className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full font-mono text-[12px] font-bold tabular-nums text-[#14140F] shadow-sm"
+                        style={{ backgroundColor: slotColor }}
+                      >
                         {order}
                       </span>
                     ) : null}
@@ -218,6 +225,7 @@ export function FrameSelectPanel({
                 theme={themeData}
                 borderColor={borderColor}
                 outputFilter={outputFilter}
+                markSlots
                 className="w-full max-w-60"
               />
             </div>

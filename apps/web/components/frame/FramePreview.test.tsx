@@ -81,3 +81,32 @@ it("고정 레이아웃이면 바깥 상자를 자르지 않는다(예전 그대
   const { container } = render(<FramePreview frameId="classic-4" images={["/a.png"]} />);
   expect(container.firstElementChild).not.toHaveClass("overflow-hidden");
 });
+
+/*
+  사진 고르기에서는 칸마다 다른 색과 번호를 그린다(2026-11-14). 예전에는 빈 칸이 진회색이라 어두운
+  프레임 위에서 보이지 않았고, 다음 사진이 어느 칸에 들어갈지 알 수 없었다.
+*/
+describe("칸 표시(markSlots)", () => {
+  it("빈 칸은 칸 색으로 옅게 칠하고 번호를 쓰고, 찬 칸은 그 색 테두리와 번호를 단다", () => {
+    const { container } = render(
+      <FramePreview frameId="classic-4" media={[{ src: "/one.png" }, null, null, null]} markSlots />,
+    );
+
+    const text = container.textContent ?? "";
+    for (const number of ["1", "2", "3", "4"]) expect(text).toContain(number);
+
+    const empty = Array.from(container.querySelectorAll<HTMLElement>("div.border-dashed"));
+    expect(empty).toHaveLength(3);
+    // 칸마다 색이 다르다.
+    expect(new Set(empty.map((node) => node.style.borderColor)).size).toBe(3);
+
+    const filledFrame = container.querySelector<HTMLElement>("span[aria-hidden].z-10");
+    expect(filledFrame?.style.boxShadow).toContain("inset");
+  });
+
+  it("다른 곳의 미리보기는 칸 표시 없이 예전 그대로다", () => {
+    const { container } = render(<FramePreview frameId="classic-4" media={[null, null, null, null]} />);
+    expect(container.querySelectorAll("div.border-dashed")).toHaveLength(0);
+    expect(container.textContent).toBe("");
+  });
+});
