@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Check, Copy, Mail, Send } from "lucide-react";
+import { Mail, Send } from "lucide-react";
 import { withJosa } from "@harucut/shared";
 import { COMPANY } from "@/constants/company";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
@@ -59,7 +58,6 @@ export function EnterpriseInquiryForm() {
   const [date, setDate] = useState("");
   const [people, setPeople] = useState("");
   const [memo, setMemo] = useState("");
-  const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -120,30 +118,12 @@ export function EnterpriseInquiryForm() {
     }
   };
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(`받는 사람: ${COMPANY.email}\n제목: ${subject}\n\n${mailBody}`);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2400);
-    } catch {
-      // 클립보드가 막힌 환경에서는 아래 메일 주소를 직접 쓰면 된다.
-      setCopied(false);
-    }
-  };
-
   if (sent) {
     return (
       <div role="status" className="flex flex-col gap-2">
         <p className="text-[18px] font-extrabold">문의를 받았어요.</p>
         <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
           {COMPANY.hours} 안에 {values.email.trim()} 로 연락드릴게요. 접수 번호는 {sent} 이에요.
-        </p>
-        <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
-          계약이 끝나면{" "}
-          <Link href="/studio" className="font-semibold text-(--hc-text) underline underline-offset-4">
-            Studio
-          </Link>
-          에서 회사·팀 이름을 정하고 행사를 만들 수 있어요.
         </p>
       </div>
     );
@@ -298,14 +278,6 @@ export function EnterpriseInquiryForm() {
           <Mail aria-hidden className="h-4 w-4" />
           메일로 보내기
         </a>
-        <button
-          type="button"
-          onClick={() => void handleCopy()}
-          className="hc-button-secondary inline-flex h-12 items-center justify-center gap-2 rounded-full border px-6 text-[14px] font-semibold transition"
-        >
-          {copied ? <Check aria-hidden className="h-4 w-4" /> : <Copy aria-hidden className="h-4 w-4" />}
-          {copied ? "복사했어요" : "내용 복사"}
-        </button>
       </div>
 
       <p role="status" className="text-[12px] leading-[1.6] text-(--hc-muted)">
