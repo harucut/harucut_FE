@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Camera, ChevronRight, ImagePlus } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 
 type Props = {
@@ -39,7 +39,8 @@ export function RecordSourceDialog({ open, onClose }: Props) {
         aria-labelledby="record-source-title"
         className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-(--hc-card-shadow)"
       >
-        {/* 부제는 두지 않는다 — 아래 두 카드가 이미 각자 무엇인지 말한다. */}
+        {/* 부제는 두지 않는다 — 아래 두 카드가 이미 각자 무엇인지 말한다. 카드 앞 아이콘 타일(카메라·사진)도
+            같은 까닭으로 뺐다(2026-11-14). 고를 것은 제목과 한 줄 설명으로 충분하고, 찍기는 라임 카드 하나로 구분된다. */}
         <h2 id="record-source-title" className="text-[18px] font-extrabold">
           어떻게 남길까요?
         </h2>
@@ -50,9 +51,6 @@ export function RecordSourceDialog({ open, onClose }: Props) {
             onClick={onClose}
             className="flex items-center gap-3.5 rounded-2xl bg-(--hc-primary) p-4 text-(--hc-primary-contrast) shadow-(--hc-button-shadow)"
           >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-(--hc-primary-contrast)">
-              <Camera className="h-5.5 w-5.5 text-(--hc-primary-strong)" />
-            </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-extrabold">사진 찍기</span>
               <span className="mt-0.5 block text-[12px] font-medium opacity-75">
@@ -67,9 +65,6 @@ export function RecordSourceDialog({ open, onClose }: Props) {
             onClick={onClose}
             className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 transition hover:border-(--hc-border-strong)"
           >
-            <span className="hc-accent-chip grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border">
-              <ImagePlus className="h-5.5 w-5.5" />
-            </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-extrabold">사진 불러오기</span>
               <span className="mt-0.5 block text-[12px] text-(--hc-muted)">

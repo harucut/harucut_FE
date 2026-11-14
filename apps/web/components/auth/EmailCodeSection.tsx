@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Clock3, Mail } from "lucide-react";
+import { BadgeCheck, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { EMAIL_FIELD } from "@/components/auth/authFields";
@@ -127,23 +127,16 @@ export function EmailCodeSection({
               }`}
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Clock3
-                    size={14}
-                    className={
-                      isExpired ? "text-(--hc-danger)" : "text-(--hc-primary-strong)"
-                    }
-                  />
-                  <p
-                    className={`text-[11px] ${
-                      isExpired ? "text-(--hc-danger)" : "text-(--hc-text)"
-                    }`}
-                  >
-                    <Sentences text={isExpired
-                      ? "인증 시간이 만료되었어요. 코드를 다시 보내 주세요."
-                      : "인증 코드가 전송되었어요. 5분 안에 입력해 주세요."} />
-                  </p>
-                </div>
+                {/* 문장 앞 시계 아이콘은 뺐다(2026-11-14) — 남은 시간은 오른쪽 숫자가 말한다. */}
+                <p
+                  className={`text-[11px] ${
+                    isExpired ? "text-(--hc-danger)" : "text-(--hc-text)"
+                  }`}
+                >
+                  <Sentences text={isExpired
+                    ? "인증 시간이 만료되었어요. 코드를 다시 보내 주세요."
+                    : "인증 코드가 전송되었어요. 5분 안에 입력해 주세요."} />
+                </p>
                 {!isExpired ? (
                   <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[11px] font-medium">
                     {formatRemainingTime(remainingSeconds)}

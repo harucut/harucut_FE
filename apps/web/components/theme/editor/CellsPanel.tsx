@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid } from "lucide-react";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { FREE_CELL_COUNT, freeCellsEnabled, validateCells, type FreeCell, type FreeCellShape } from "@/lib/frameCells";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
@@ -36,14 +35,10 @@ export function CellsPanel() {
 
   return (
     <section aria-labelledby="theme-cells-title" className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <div className="flex items-center justify-between">
-        <p id="theme-cells-title" className="text-sm font-semibold">
-          사진 칸
-        </p>
-        <span className="inline-flex items-center gap-1 text-[12px] text-(--hc-muted)">
-          <LayoutGrid size={13} aria-hidden /> 네 칸
-        </span>
-      </div>
+      {/* 오른쪽의 「▦ 네 칸」은 뺐다(2026-11-14) — 프레임은 늘 네 칸이고 아래 칸 단추가 넷이다. */}
+      <p id="theme-cells-title" className="text-sm font-semibold">
+        사진 칸
+      </p>
 
       <label className="flex min-h-11 items-center justify-between gap-2 text-[13px] font-semibold">
         칸 자유 편집

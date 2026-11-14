@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Image as ImageIcon,
   LayoutGrid,
 } from "lucide-react";
 import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
@@ -630,7 +629,7 @@ export default function HistoryPage() {
           />
         ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <ImageIcon className="h-7 w-7 text-(--hc-muted-soft)" />
+            {/* 빈 화면의 큰 그림 아이콘은 뺐다(2026-11-14) — 문장과 버튼이 할 일을 말한다. */}
             <p className="text-[13px] text-(--hc-muted)">
               저장한 기록이 아직 없어요.
             </p>
@@ -768,7 +767,6 @@ function CalendarView({
   if (!activeMonth) {
     return (
       <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-        <CalendarDays className="h-7 w-7 text-(--hc-muted-soft)" />
         <p className="text-[13px] text-(--hc-muted)">
           달력으로 볼 기록이 아직 없어요.
         </p>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { TermsFullText } from "@/components/terms/TermsFullText";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { clientApi } from "@/lib/clientApi";
@@ -278,10 +278,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         aria-labelledby="terms-reconsent-title"
         className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-(--hc-card-shadow)"
       >
-        <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
-          <FileText className="h-5 w-5" />
-        </span>
-        <h2 id="terms-reconsent-title" className="mt-4 text-[18px] font-extrabold">
+        {/* 제목 위 문서 아이콘 타일은 뺐다(2026-11-14) — 제목이 이미 무슨 창인지 말한다. */}
+        <h2 id="terms-reconsent-title" className="text-[18px] font-extrabold">
           {revised ? "약관이 개정되었어요" : "약관 동의가 필요해요"}
         </h2>
         <p className="mt-1.5 text-[13px] leading-6 text-(--hc-muted)">

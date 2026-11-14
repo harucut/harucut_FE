@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { Scissors } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { Sentences } from "@/components/ui/Sentences";
 
@@ -25,9 +24,7 @@ export function CutoutPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">누끼</p>
-        <span className="inline-flex items-center gap-1 text-[12px] text-(--hc-muted)">
-          <Scissors size={13} /> 배경 제거
-        </span>
+        <span className="text-[12px] text-(--hc-muted)">배경 제거</span>
       </div>
 
       <p className="text-[13px] leading-[1.65] text-zinc-400">
