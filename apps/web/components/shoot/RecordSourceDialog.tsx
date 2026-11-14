@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 
 type Props = {
@@ -39,39 +38,29 @@ export function RecordSourceDialog({ open, onClose }: Props) {
         aria-labelledby="record-source-title"
         className="hc-surface-card relative w-full max-w-sm rounded-3xl border p-5 shadow-(--hc-card-shadow)"
       >
-        {/* 부제는 두지 않는다 — 아래 두 카드가 이미 각자 무엇인지 말한다. 카드 앞 아이콘 타일(카메라·사진)도
-            같은 까닭으로 뺐다(2026-11-14). 고를 것은 제목과 한 줄 설명으로 충분하고, 찍기는 라임 카드 하나로 구분된다. */}
+        {/*
+          제목 아래는 단추 둘뿐이다(2026-11-14). 예전에는 카드마다 아이콘 타일과 설명 한 줄(「카메라로 8장 찍고 네 컷
+          고르기」·「갤러리에서 골라 네 컷 만들기」)이 붙었다 — 「사진 찍기」「사진 불러오기」가 이미 그 말이고, 몇 장
+          찍는지는 촬영 화면이 말한다. 부제도 두지 않는다. 다른 확인 창과 같은 모양(라임 주 단추 + 테두리 단추)이다.
+        */}
         <h2 id="record-source-title" className="text-[18px] font-extrabold">
           어떻게 남길까요?
         </h2>
 
-        <div className="mt-4 flex flex-col gap-2.5">
+        <div className="mt-4 flex flex-col gap-2">
           <Link
             href="/shoot"
             onClick={onClose}
-            className="flex items-center gap-3.5 rounded-2xl bg-(--hc-primary) p-4 text-(--hc-primary-contrast) shadow-(--hc-button-shadow)"
+            className="hc-button-primary flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold"
           >
-            <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-extrabold">사진 찍기</span>
-              <span className="mt-0.5 block text-[12px] font-medium opacity-75">
-                카메라로 8장 찍고 네 컷 고르기
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0" />
+            사진 찍기
           </Link>
-
           <Link
             href="/shoot?source=upload"
             onClick={onClose}
-            className="hc-surface-card flex items-center gap-3.5 rounded-2xl border p-4 transition hover:border-(--hc-border-strong)"
+            className="hc-button-secondary flex h-12 items-center justify-center rounded-full border px-5 text-[15px] font-extrabold"
           >
-            <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-extrabold">사진 불러오기</span>
-              <span className="mt-0.5 block text-[12px] text-(--hc-muted)">
-                갤러리에서 골라 네 컷 만들기
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-(--hc-muted)" />
+            사진 불러오기
           </Link>
         </div>
       </div>
