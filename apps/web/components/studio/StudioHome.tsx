@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { AccountLink } from "@/components/layout/AccountLink";
 import { rememberStudioAccess } from "@/hooks/useStudioAccess";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { defaultConsentTemplate } from "@/lib/studio/eventSections";
@@ -185,7 +186,9 @@ export function StudioHome() {
       <AppNav />
       <div className="mx-auto flex w-full max-w-200 flex-col gap-6 px-4 py-5 sm:py-6 lg:py-8">
         <div className="lg:hidden">
-          <PageHeader backHref="/home" backLabel="홈" />
+          {/* 행사 운영의 첫 화면이라 뒤로 갈 곳이 없다. 예전 「<」는 개인 홈으로 갔다 — 개인 화면과 섞지 않는다(2026-11-14).
+              계정(로그아웃·개인 화면)은 데스크톱과 같은 사람 아이콘으로 간다. */}
+          <PageHeader rightSlot={<AccountLink />} />
         </div>
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">

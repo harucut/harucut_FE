@@ -3,11 +3,10 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { resumeUnfinishedPurchases } from "@/lib/storePurchase";
 import { syncPushDevice } from "@/lib/pushDevices";
-import { useStudioAccess } from "@/hooks/useStudioAccess";
+import { AccountLink } from "@/components/layout/AccountLink";
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/home", label: "홈" },
@@ -32,21 +31,18 @@ export function AppNav() {
   const pathname = usePathname();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
-  // 행사를 맡은 계정에게만 보인다. 개인 사용자에게는 할 일이 없는 메뉴다.
-  const studioAccess = useStudioAccess();
-  // 행사 운영과 플랫폼 관리는 개인 앱과 하는 일이 다르다. 주최자에게 기록·요금제를 내밀지 않고, 본문과 같은 넓은 폭을 쓴다.
-  // 개인 화면으로는 로고로 돌아간다.
+  /*
+    개인 화면과 행사 운영은 서로 섞지 않는다(2026-11-14). 행사 운영·플랫폼 관리 화면에서는 기록·요금제를 내밀지 않고
+    로고도 그 화면의 첫 화면으로 간다. 개인 화면의 메뉴에는 행사 운영을 두지 않는다 — 행사를 맡은 계정도
+    개인 화면은 그대로이고, 행사 운영으로 가는 길은 MY 의 「행사 운영」 하나다. 돌아오는 길은 오른쪽 사람 아이콘이다.
+  */
   const workSurface = isActive("/studio") ? { href: "/studio", label: "행사 운영" } : isActive("/admin") ? { href: "/admin", label: "운영 관리" } : null;
-  const links = workSurface
-    ? [workSurface]
-    : studioAccess
-      ? [...NAV_LINKS.slice(0, 3), { href: "/studio", label: "행사 운영" }, ...NAV_LINKS.slice(3)]
-      : NAV_LINKS;
+  const links = workSurface ? [workSurface] : NAV_LINKS;
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-(--hc-border) bg-(--hc-surface-soft) backdrop-blur-xl lg:block">
       <div className={`mx-auto flex h-17 w-full items-center gap-9 ${workSurface ? "max-w-350 px-4" : "max-w-5xl px-7"}`}>
-        <BrandMark href="/home" />
+        <BrandMark href={workSurface?.href ?? "/home"} label={workSurface ? `하루컷 ${workSurface.label}` : undefined} />
 
         <nav className="flex gap-2">
           {links.map(({ href, label }) => {
@@ -85,13 +81,7 @@ export function AppNav() {
             예전에는 이름 첫 글자를 라임 원에 넣었는데, 한국 이름은 성이 먼저라 대부분 「김」「이」「박」으로
             보였고, 이름을 넘기지 않는 화면에서는 「MY」로 달라졌다. 라임도 뺐다 — 한 화면의 라임은 촬영 버튼 하나다.
           */}
-          <Link
-            href="/mypage"
-            aria-label="마이페이지"
-            className="grid h-10.5 w-10.5 place-items-center rounded-full border border-(--hc-border) bg-(--hc-surface) text-(--hc-text) transition hover:border-(--hc-border-strong)"
-          >
-            <User aria-hidden className="h-5 w-5" />
-          </Link>
+          <AccountLink />
         </div>
       </div>
     </header>

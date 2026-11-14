@@ -17,22 +17,16 @@ import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
-import { useStudioAccess } from "@/hooks/useStudioAccess";
 import { Sentences } from "@/components/ui/Sentences";
 
 /** 가장 최근 한 장은 큰 카드에, 나머지는 아래 줄에 놓는다. 조회도 딱 이만큼만 받는다. */
 const RECENT_LIMIT = 7;
 
-/**
- * 큰 카드 아래의 낮은 줄. 첫 화면의 주인공은 사진과 「지금 찍기」 하나다. 행사를 맡은 계정에게만 보인다(hooks/useStudioAccess).
- * 「프레임 꾸미기」는 뺐다(2026-11-09) — 하단 탭의 「프레임」 화면에서 바로 만든다. 같은 길을 홈에 한 번 더 두지 않는다.
- */
-const STUDIO_ACTION = {
-  id: "studio",
-  title: "행사 운영",
-  description: "내 행사와 사진함을 봐요",
-  href: "/studio",
-};
+/*
+  큰 카드 아래에 있던 「행사 운영」 줄은 뺐다(2026-11-14). 개인 화면과 행사 운영은 섞지 않는다 — 행사를 맡은 계정도
+  홈은 다른 사람과 같고, 행사 운영으로 가는 길은 MY 의 「행사 운영」 하나다. 「프레임 꾸미기」 줄은 그 전에
+  뺐다(2026-11-09) — 하단 탭의 「프레임」 화면에서 바로 만든다.
+*/
 
 const WEEKDAY_KO = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -94,7 +88,6 @@ function useCurrentDateKey() {
 
 
 export default function HomePage() {
-  const studioAccess = useStudioAccess();
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,7 +156,6 @@ export default function HomePage() {
   // 예전에는 줄이 비지 않게 그 한 장을 아래에 한 번 더 보여서, 같은 사진이 한 화면에 두 번 나왔다(2026-11-14).
   const stripMedia = recentMedia.slice(1);
   const showRecent = loading || Boolean(loadError) || recentMedia.length !== 1;
-  const actions = studioAccess ? [STUDIO_ACTION] : [];
 
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-12">
@@ -192,24 +184,6 @@ export default function HomePage() {
         </section>
 
         <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
-          {actions.length > 0 ? (
-          <nav aria-label="다른 할 일" className="flex flex-col gap-2.5">
-            {actions.map((action) => (
-              <Link
-                key={action.id}
-                href={action.href}
-                className="hc-surface-well group flex min-h-16 items-center gap-3 rounded-2xl border px-4 py-3 transition hover:border-(--hc-border-strong)"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] font-bold">{action.title}</span>
-                  <span className="mt-0.5 block text-[13px] text-(--hc-muted)">{action.description}</span>
-                </span>
-                <ArrowRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
-              </Link>
-            ))}
-          </nav>
-          ) : null}
-
           {showRecent ? (
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
