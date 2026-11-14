@@ -29,12 +29,11 @@ export default function ShootSelectPage() {
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
   const fromUpload = source === "upload";
   const sourceHref = fromUpload ? "/shoot/upload" : "/shoot/capture";
-  // 성공·실패·조회 중을 따로 받는다. 못 읽은 것을 "꾸민 프레임이 아니다"로 뭉개면
-  // 잠겨야 할 배경색 고르기가 열린다.
+  // 성공과 실패를 따로 받는다. 못 읽은 것을 "꾸민 프레임이 아니다"로 뭉개면
+  // 잠겨야 할 테두리 색 고르기가 열린다.
   const {
     data: themeData,
     error: themeError,
-    isLoading: themeLoading,
     reload: reloadTheme,
   } = useRemoteFrameThemeState(remoteFrameId, frameId);
   // 아직 저장 전인 촬영본이 있으면 새로고침/이탈 시 유실 경고를 띄운다.
@@ -56,10 +55,11 @@ export default function ShootSelectPage() {
   // 잠금은 내용이 아니라 "꾸민 프레임인가"로 가른다. 서버 합성은 remoteFrameId 만 보고
   // 프레임에 저장된 배경을 쓰며 보낸 색은 버린다(lib/fourcutCompose.ts 의 usesStoredBackground).
   // 내용을 못 읽었다고 고르기를 열어 주면, 고른 색은 저장될 때 조용히 사라진다.
+  // 꾸민 프레임이면 꾸미기에 테두리 고르기가 아예 없다. 못 읽었으면 그 사실은 아래 배너가 말한다.
   const hasCustomFrame = remoteFrameId != null;
-  // 잠긴 이유는 둘이다 — "프레임이 배경을 정해 뒀다"와 "그 내용을 못 읽었다".
-  // 조회가 끝난 뒤에만 뒤쪽으로 본다. 조회 중에 단정하면 곧 뒤집힌다.
-  const themeUnavailable = hasCustomFrame && !themeLoading && !themeData;
+  // 보정 견본에는 내 사진을 깐다 — 고른 첫 장, 아직 안 골랐으면 찍은 첫 장.
+  const firstSelected = selectedIndexes.find((index) => index != null);
+  const samplePhoto = shots[firstSelected ?? 0] ?? null;
   // 고른 색이 곧 저장본의 색이다 — 서버 합성에 그 색을 실어 보낸다. 꾸민 프레임일 때만
   // 프레임에 저장된 배경을 쓴다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
   // 내용을 못 읽었으면 미리보기는 마지막으로 고른 색으로 그리는데 저장본은 프레임에 저장된
@@ -92,7 +92,7 @@ export default function ShootSelectPage() {
         />
 
 
-        {/* 조회가 실패해도 배경색은 잠긴 채다. 왜 잠겼는지와 되살릴 길을 같이 준다. */}
+        {/* 조회가 실패해도 테두리 색은 잠긴 채다. 왜 못 바꾸는지와 되살릴 길을 같이 준다. */}
         {themeError ? (
           <div
             role="status"
@@ -136,7 +136,7 @@ export default function ShootSelectPage() {
               outputFilter={outputFilter}
               onOutputFilterChange={setOutputFilter}
               hasCustomFrame={hasCustomFrame}
-              themeUnavailable={themeUnavailable}
+              samplePhoto={samplePhoto}
             />
           )}
         />

@@ -39,6 +39,7 @@ import {
 } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
 import { Sentences } from "@/components/ui/Sentences";
+import { SegmentButton } from "@/components/ui/SegmentButton";
 
 type ViewMode = "grid" | "calendar";
 
@@ -561,19 +562,9 @@ export default function HistoryPage() {
                   { id: "calendar", label: "달력", Icon: CalendarDays },
                 ] as const
               ).map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setView(id)}
-                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
-                    view === id
-                      ? "bg-white text-[#0B0B0C]"
-                      : "text-(--hc-muted)"
-                  }`}
-                >
-                  <Icon className="h-3.75 w-3.75" />
+                <SegmentButton key={id} active={view === id} onClick={() => setView(id)} Icon={Icon}>
                   {label}
-                </button>
+                </SegmentButton>
               ))}
             </div>
           </div>

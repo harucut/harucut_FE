@@ -34,11 +34,11 @@ const mockShootSession = {
   remoteFrameId: null as number | null,
   shots: ["/shot-1.png"],
   selectedIndexes: [0, null, null, null] as Array<number | null>,
-  borderColor: "#23262d",
+  borderColor: "#18181a",
   outputFilter: "NONE" as const,
   toggleSelect: noop,
   clearSelection: noop,
-  setBorderColor: noop,
+  setBorderColor: jest.fn(),
   setOutputFilter: noop,
   source: "capture" as "capture" | "upload",
   resetShots: jest.fn(),
@@ -70,7 +70,7 @@ jest.mock("@/components/layout/PageHeader", () => ({
   ),
 }));
 
-// 사진 고르기 판은 대역으로 두되 **출력 옵션은 진짜를 그린다** — 잠기는지 아닌지가 전부다.
+// 사진 고르기 판은 대역으로 두되 **꾸미기 쪽은 진짜를 그린다** — 잠기는지 아닌지가 전부다.
 jest.mock("@/components/frame/FrameSelectPanel", () => ({
   FrameSelectPanel: ({
     renderExtraControls,
@@ -87,8 +87,8 @@ jest.mock("@/lib/shootSessionStore", () => ({
   useShootSession: () => mockShootSession,
 }));
 
-/** 색 고르기가 열려 있는지는 HEX 입력 한 칸으로 본다(잠기면 통째로 사라진다). */
-const colorPicker = () => screen.queryByLabelText("배경색 고르기");
+/** 테두리 색 견본 묶음. 꾸민 프레임이면 통째로 없다. */
+const colorPicker = () => screen.queryByRole("group", { name: "테두리 색" });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -96,17 +96,15 @@ beforeEach(() => {
   Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null, source: "capture" });
 });
 
-test("꾸민 프레임의 조회가 실패해도 배경색 고르기는 잠긴 채다", () => {
+test("꾸민 프레임의 조회가 실패해도 테두리 색 고르기는 잠긴 채다", () => {
   mockShootSession.remoteFrameId = 7;
   Object.assign(mockThemeState, { error: new Error("boom") });
 
   render(<ShootSelectPage />);
 
   expect(colorPicker()).toBeNull();
-  // 잠금 사유가 갈려야 한다 — "프레임이 배경을 정해 뒀다"가 아니라 "못 읽었다"다.
-  expect(
-    screen.getByText(/프레임 내용을 확인하지 못했어요/),
-  ).toBeInTheDocument();
+  // 못 바꾸는 까닭은 화면 위 배너 하나가 사실대로 말한다(다음 시험). 꾸미기 안에서 다시 말하지 않는다.
+  expect(screen.getAllByRole("status")).toHaveLength(1);
 });
 
 test("조회에 실패하면 사실대로 말하고 다시 부를 길을 준다", () => {
@@ -132,12 +130,11 @@ test("조회 중에는 열어 두지 않는다 — 곧 뒤집힐 판정이다", 
   expect(colorPicker()).toBeNull();
   // 아직 실패가 아니라 조회 중이다. 실패 배너를 미리 띄우지 않는다.
   expect(screen.queryByRole("status")).toBeNull();
-  expect(
-    screen.getByText(/꾸민 프레임을 선택해서 배경 색상은/),
-  ).toBeInTheDocument();
+  // 보정은 꾸민 프레임에서도 고른다.
+  expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
 });
 
-test("꾸민 프레임을 읽어 왔으면 프레임이 배경을 정한다고 말한다", () => {
+test("꾸민 프레임을 읽어 왔으면 테두리는 프레임이 정한다 — 고르기를 두지 않는다", () => {
   mockShootSession.remoteFrameId = 7;
   Object.assign(mockThemeState, { data: theme });
 
@@ -145,16 +142,21 @@ test("꾸민 프레임을 읽어 왔으면 프레임이 배경을 정한다고 �
 
   expect(colorPicker()).toBeNull();
   expect(screen.queryByRole("status")).toBeNull();
-  expect(
-    screen.getByText(/꾸민 프레임을 선택해서 배경 색상은/),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
 });
 
-test("꾸민 프레임을 안 쓰면 배경색을 고를 수 있다", () => {
+test("꾸민 프레임을 안 쓰면 테두리 색을 고를 수 있다", () => {
   render(<ShootSelectPage />);
 
   expect(colorPicker()).not.toBeNull();
   expect(screen.queryByRole("status")).toBeNull();
+});
+
+test("견본을 누르면 세션에 '#rrggbb' 로 넣는다", () => {
+  render(<ShootSelectPage />);
+
+  fireEvent.click(screen.getByRole("button", { name: "블러시 핑크" }));
+  expect(mockShootSession.setBorderColor).toHaveBeenCalledWith("#f4c6d0");
 });
 
 /*

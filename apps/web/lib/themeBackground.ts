@@ -2,7 +2,12 @@
 
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
-export const DEFAULT_FRAME_BACKGROUND_COLOR = "#23262d";
+/**
+ * 꾸미지 않은 프레임의 기본 테두리 색. 편집기의 기본 배경(잉크 차콜, DEFAULT_EDITOR_BACKGROUND_COLOR)과 같다.
+ * 예전 값 #23262d 는 견본에 없는 색이라, 사진 고르기가 편집기와 같은 견본을 쓰면서(2026-11-14) 처음부터
+ * 「다른 색」을 고른 것처럼 보였다.
+ */
+export const DEFAULT_FRAME_BACKGROUND_COLOR = "#18181a";
 
 export function normalizeHexColor(
   input?: string | null,

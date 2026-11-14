@@ -1,0 +1,63 @@
+/**
+ * 사진 고르기의 「꾸미기」(2026-11-14, 시안 B).
+ *
+ * 테두리 색은 편집기와 같은 동그란 견본(+ 「다른 색」)으로 고르고, 보정은 설명 문구 없이 내 사진에 그 보정을
+ * 입힌 견본으로 고른다. 꾸민 프레임은 테두리를 프레임이 정하므로 고르기가 아예 없다 — 서버 합성이 보낸 색을
+ * 버려, 고르게 두면 고른 색이 저장될 때 조용히 사라진다.
+ */
+import { fireEvent, render, screen } from "@testing-library/react";
+import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
+
+function renderPanel(overrides: Partial<Parameters<typeof FrameOutputOptionsPanel>[0]> = {}) {
+  const props = {
+    borderColor: "#18181a",
+    onBorderColorChange: jest.fn(),
+    outputFilter: "NONE" as const,
+    onOutputFilterChange: jest.fn(),
+    hasCustomFrame: false,
+    samplePhoto: "/shot-1.png",
+    ...overrides,
+  };
+  render(<FrameOutputOptionsPanel {...props} />);
+  return props;
+}
+
+describe("FrameOutputOptionsPanel", () => {
+  it("지금 테두리 색 견본에만 고른 표시가 붙고, 견본을 누르면 '#rrggbb' 로 넘긴다", () => {
+    const props = renderPanel();
+
+    expect(screen.getByRole("button", { name: "잉크 차콜" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "민트" })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "민트" }));
+    expect(props.onBorderColorChange).toHaveBeenCalledWith("#cde9d8");
+  });
+
+  it("목록에 없는 색은 「다른 색」으로 고르고, 색 코드 입력칸은 없다", () => {
+    const props = renderPanel();
+
+    fireEvent.change(screen.getByLabelText("다른 색 고르기"), { target: { value: "#123456" } });
+    expect(props.onBorderColorChange).toHaveBeenCalledWith("#123456");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("꾸민 프레임이면 테두리 고르기가 없고 보정만 고른다", () => {
+    renderPanel({ hasCustomFrame: true });
+
+    expect(screen.queryByRole("group", { name: "테두리 색" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
+  });
+
+  it("보정은 내 사진에 그 보정을 입힌 견본이고, 설명 문구 없이 이름만 둔다", () => {
+    const props = renderPanel({ outputFilter: "B&W" });
+
+    const blackAndWhite = screen.getByRole("button", { name: "흑백" });
+    expect(blackAndWhite).toHaveAttribute("aria-pressed", "true");
+    expect(blackAndWhite.querySelector("img")).toHaveAttribute("src", "/shot-1.png");
+    expect(blackAndWhite.querySelector("img")?.style.filter).toContain("grayscale");
+    expect(screen.queryByText("차분한 필름 톤")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "뽀샤시" }));
+    expect(props.onOutputFilterChange).toHaveBeenCalledWith("SOFT");
+  });
+});

@@ -3,7 +3,7 @@
 import Image from "next/image";
 
 import React, { useRef, useState } from "react";
-import { ImagePlus, Scissors, Sticker, Type, X, type LucideIcon } from "lucide-react";
+import { ImagePlus, Scissors, Sticker, Type, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import {
   EMPTY_UPLOAD_MESSAGE,
@@ -20,6 +20,7 @@ import { fetchServerAssetFile } from "@/lib/serverAssetFile";
 import { blobToDataUrl } from "@/lib/canvas/loaders";
 import { STICKERS } from "@/constants/stickers.generated";
 import { Sentences } from "@/components/ui/Sentences";
+import { SegmentButton } from "@/components/ui/SegmentButton";
 
 /**
  * 프레임 위에 얹을 것을 고른다.
@@ -53,31 +54,6 @@ export function AssetPanel() {
   );
 }
 
-function SegmentButton({
-  active,
-  Icon,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  Icon: LucideIcon;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
-        active ? "bg-white text-[#0B0B0C]" : "text-(--hc-muted)"
-      }`}
-    >
-      <Icon aria-hidden className="h-3.75 w-3.75" />
-      {children}
-    </button>
-  );
-}
 
 /**
  * 내 사진과 스티커를 한 칸에 둔다. 맨 앞 칸이 내 사진 올리기다.
