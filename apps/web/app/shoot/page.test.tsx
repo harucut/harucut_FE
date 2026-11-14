@@ -302,6 +302,20 @@ describe("기존 촬영 복구", () => {
     fireEvent.click(screen.getByRole("button", { name: "이어서 만들기" }));
     expect(mockPush).toHaveBeenCalledWith("/shoot/select");
   });
+  // 완성본이 나온 촬영은 끝났다(2026-11-15) — 이어 만들면 같은 사진을 다시 고르게 된다.
+  it("완성된 촬영은 이어 만들지 않고 새 촬영으로 시작한다", () => {
+    useShootSession.setState({ completed: true });
+    render(<ShootPage />);
+    expect(screen.queryByRole("button", { name: "이어서 만들기" })).toBeNull();
+    expect(useShootSession.getState().shots).toEqual([]);
+    expect(useShootSession.getState().completed).toBe(false);
+  });
+  it("완성된 촬영은 keepShots 로 와도 사진을 들고 가지 않는다", () => {
+    mockQuery = "keepShots=1";
+    useShootSession.setState({ completed: true });
+    render(<ShootPage />);
+    expect(useShootSession.getState().shots).toEqual([]);
+  });
   it("새 촬영은 삭제를 확인한 뒤에만 사진을 비운다", () => {
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "새로 시작하기" }));

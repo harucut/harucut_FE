@@ -66,8 +66,11 @@ export default function ShootSelectPage() {
   // 배경으로 나온다 — 그래서 아래 배너로 못 읽었다는 사실을 말한다.
   const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 
+  // 고르기 화면 기록을 완성 화면으로 바꿔 낀다(2026-11-15). 완성된 뒤에는 다시 고르지 않는데, 기록에 이 화면이
+  // 남아 있으면 뒤로가기가 여기 들렀다가 완성 화면으로 되돌려져(ShootSessionBoundary) 먹지 않는 것처럼 보인다.
+  // 촬영 화면이 다 찍고 여기로 올 때 replace 하는 것과 같은 까닭이다.
   const handleNext = () => {
-    router.push("/shoot/result");
+    router.replace("/shoot/result");
   };
 
   return (

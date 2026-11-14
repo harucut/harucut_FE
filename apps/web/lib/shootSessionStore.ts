@@ -162,6 +162,15 @@ export type ShootSessionState = {
   outputFilter: FourcutFilterId;
   imageResult: GeneratedFourcutAsset | null;
   composeIdempotency: ComposeIdempotency | null;
+  /**
+   * 완성본이 한 번 나왔다(2026-11-15). 그 뒤로 이 촬영은 끝이다 — 사진을 다시 고르거나 이어 찍지 않는다.
+   *
+   * 사용자 결정: 「최종적으로 완성되었을땐 다시 고르기를 막아야해」. 완성 화면의 「사진 다시 고르기」만
+   * 빼면 기기 뒤로가기와 /shoot 의 「이어서 만들기」로 여전히 돌아갔다. 그래서 길이 아니라 세션에 표시한다 —
+   * 촬영 단계 화면은 이 값을 보고 완성 화면으로 보내고(ShootSessionBoundary), /shoot 은 새 촬영으로 시작한다.
+   * 새로고침 뒤에도 막혀야 하므로 임시 보관에 같이 싣는다. 새 촬영(reset·resetShots)에서 풀린다.
+   */
+  completed: boolean;
 
   setFrameId: (id: FrameId) => void;
   setSource: (source: ShootSource) => void;
@@ -209,6 +218,7 @@ const initialState: Pick<
   | "outputFilter"
   | "imageResult"
   | "composeIdempotency"
+  | "completed"
 > = {
   frameId: null,
   remoteFrameId: null,
@@ -220,6 +230,7 @@ const initialState: Pick<
   outputFilter: DEFAULT_FOURCUT_FILTER,
   imageResult: null,
   composeIdempotency: null,
+  completed: false,
 };
 
 export const useShootSession = create<ShootSessionState>((set, get) => ({
@@ -249,7 +260,8 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       imageResult: null,
     }),
 
-  setImageResult: (imageResult) => set({ imageResult }),
+  // 완성본이 들어오는 순간 이 촬영은 끝난다(completed 주석). 비울 때는 표시를 건드리지 않는다 — 끝난 촬영을 다시 열지 않는다.
+  setImageResult: (imageResult) => set(imageResult ? { imageResult, completed: true } : { imageResult }),
 
   /**
    * 이번 합성이 쓸 멱등키를 돌려준다. 같은 입력이면 이미 잡아 둔 키를 그대로 준다.
@@ -356,6 +368,7 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       shotsFrameId: null,
       selectedIndexes: createEmptySlots(),
       imageResult: null,
+      completed: false,
     })),
 
   resetFrameSelection: () =>

@@ -9,6 +9,7 @@
  */
 import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 
 function component(
   overrides: Partial<ThemeExportJson["components"][number]> = {},
@@ -138,6 +139,35 @@ describe("buildFrameContentKey", () => {
   사진은 두고 프레임만 바꾼다는 뜻으로 읽히는데 실제로는 사진이 먼저 사라졌고,
   /shoot/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
 */
+// 「최종적으로 완성되었을땐 다시 고르기를 막아야해」(2026-11-15). 완성본이 한 번 나오면 그 촬영은 끝이다.
+describe("완성 표시", () => {
+  const initial = useShootSession.getState();
+  const asset = { mediaId: 7, displayName: "harucut_a", objectUrl: "blob:a" } as unknown as GeneratedFourcutAsset;
+
+  afterEach(() => {
+    useShootSession.setState(initial, true);
+  });
+
+  it("완성본이 들어오면 켜지고, 결과를 비워도 꺼지지 않는다", () => {
+    useShootSession.getState().setImageResult(asset);
+    expect(useShootSession.getState().completed).toBe(true);
+
+    useShootSession.getState().clearResults();
+    useShootSession.getState().setImageResult(null);
+    expect(useShootSession.getState().completed).toBe(true);
+  });
+
+  it("새 촬영(사진 비우기·처음부터)에서만 꺼진다", () => {
+    useShootSession.getState().setImageResult(asset);
+    useShootSession.getState().resetShots();
+    expect(useShootSession.getState().completed).toBe(false);
+
+    useShootSession.getState().setImageResult(asset);
+    useShootSession.getState().reset();
+    expect(useShootSession.getState().completed).toBe(false);
+  });
+});
+
 describe("프레임만 다시 고르기", () => {
   const initial = useShootSession.getState();
 

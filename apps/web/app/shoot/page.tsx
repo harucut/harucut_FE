@@ -45,7 +45,11 @@ function ShootPageContent() {
     아래 reset() 을 지나며 8장을 통째로 지웠다("다른 프레임을 골라 주세요" 라고 안내해 놓고).
   */
   const keepShots = searchParams.get("keepShots") === "1";
-  const [resumeAvailable, setResumeAvailable] = useState(() => !keepShots && useShootSession.getState().shots.length > 0);
+  // 끝난 촬영(완성본이 나온 촬영)은 이어 가지 않는다 — 새 촬영으로 시작한다(shootSessionStore 의 completed).
+  const [resumeAvailable, setResumeAvailable] = useState(() => {
+    const session = useShootSession.getState();
+    return !keepShots && session.shots.length > 0 && !session.completed;
+  });
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [pendingFrame, setPendingFrame] = useState<FrameChoice | null>(null);
   // 촬영으로 갈지 불러오기로 갈지는 **주소가 들고 있다.** 상태가 아니라 "다음 단계가
@@ -58,7 +62,8 @@ function ShootPageContent() {
   useEffect(() => {
     // `keepShots` 없는 진입은 **새 촬영**이다. 이어 가는 진입은 찍은 사진만 두고 프레임을 다시 고른다.
     if (resumeAvailable) return;
-    if (keepShots) resetFrameSelection();
+    // 끝난 촬영은 `keepShots` 로 와도 사진을 들고 가지 않는다 — 같은 사진으로 다시 만드는 길이 된다.
+    if (keepShots && !useShootSession.getState().completed) resetFrameSelection();
     else reset();
     // reset 이 출처를 기본값으로 되돌린다. 주소가 진실이므로 다시 심는다.
     setSource(source);
