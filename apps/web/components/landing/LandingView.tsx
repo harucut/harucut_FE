@@ -229,10 +229,10 @@ export function LandingView() {
               줄도, 인화 대기도 없어요.
             </p>
             <Link
-              href="/enterprise"
+              href="/enterprise#inquiry"
               className="hc-button-neutral mt-1 inline-flex h-12 shrink-0 items-center gap-2 rounded-full px-7 text-[15px] font-extrabold w-fit"
             >
-              행사 도입 알아보기 <ArrowRight className="h-4 w-4" />
+              문의하기 <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <figure className="flex flex-col items-center">
