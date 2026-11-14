@@ -40,9 +40,16 @@ jest.mock("@/lib/clientApi", () => ({
   clientApi: { delete: (...args: unknown[]) => mockDelete(...args) },
 }));
 
-// 세션 조회는 이 테스트의 관심사가 아니다.
+// 세션 조회 결과만 흉내 낸다. 쓸 수 없는 세션(탈퇴 대기 등)이면 실제 훅처럼 마운트 뒤 그 상태를 알린다.
+let mockSessionStatus: string | null = null;
 jest.mock("@/hooks/useRedirectIfAuthenticated", () => ({
-  useRedirectIfAuthenticated: () => {},
+  useRedirectIfAuthenticated: (_target: string, onUnusable?: (status: string) => void) => {
+    const { useEffect } = jest.requireActual<typeof import("react")>("react");
+    useEffect(() => {
+      if (mockSessionStatus) onUnusable?.(mockSessionStatus);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+  },
 }));
 
 // 브랜드 패널은 캔버스(FramePreview)를 그린다. 폼만 필요하다.
@@ -72,6 +79,7 @@ jest.mock("@/lib/auth/authApi", () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSessionStatus = null;
   mockSearchParams = new URLSearchParams();
   mockLoginWithEmail.mockResolvedValue({ userStatus: "ACTIVE" });
   mockDelete.mockResolvedValue(undefined);
@@ -238,3 +246,65 @@ describe("LoginPage 소셜 로그인 실패 안내", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+/*
+  탈퇴 대기 계정은 로그인한 뒤 모달로 탈퇴를 취소할지 묻는다(2026-11-14). 예전에는 브라우저 확인창이었고,
+  거절하면 「탈퇴 취소 후 다시 로그인할 수 있어요」를 띄웠다. 소셜로 들어온 계정은 묻는 자리가 없었다.
+*/
+describe("LoginPage 탈퇴 대기 계정", () => {
+  const recoveryDialog = () => screen.findByRole("dialog", { name: "탈퇴를 취소할까요?" });
+
+  it("이메일로 로그인하면 모달로 묻고, 브라우저 확인창은 쓰지 않는다", async () => {
+    const confirmSpy = jest.spyOn(window, "confirm");
+    mockLoginWithEmail.mockResolvedValue({ userStatus: "DELETED_REQUESTED" });
+
+    submitLogin({ email: LOGIN_EMAIL, password: LONG_PASSWORD });
+
+    expect(await recoveryDialog()).toBeInTheDocument();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    // 아직 아무것도 고르지 않았다 — 세션을 지우지 않는다.
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("탈퇴 취소하기를 누르면 복구하고 조용히 다시 로그인해 들어간다", async () => {
+    mockLoginWithEmail.mockResolvedValueOnce({ userStatus: "DELETED_REQUESTED" }).mockResolvedValueOnce({ userStatus: "ACTIVE" });
+    mockReactivateAccount.mockResolvedValue(undefined);
+    useGuestTrialStore.setState({ accessMode: "guest" });
+
+    submitLogin({ email: LOGIN_EMAIL, password: LONG_PASSWORD });
+    fireEvent.click(await screen.findByRole("button", { name: "탈퇴 취소하기" }));
+
+    await waitFor(() => expect(useGuestTrialStore.getState().accessMode).toBe("member"));
+    expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
+    expect(mockLoginWithEmail).toHaveBeenNthCalledWith(2, LOGIN_EMAIL, LONG_PASSWORD);
+    useGuestTrialStore.setState({ accessMode: "member" });
+  });
+
+  it("로그아웃을 고르면 세션만 지우고 아무 문구도 남기지 않는다", async () => {
+    mockLoginWithEmail.mockResolvedValue({ userStatus: "DELETED_REQUESTED" });
+
+    submitLogin({ email: LOGIN_EMAIL, password: LONG_PASSWORD });
+    fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/탈퇴 취소 후 다시 로그인할 수 있어요/)).not.toBeInTheDocument();
+    expect(mockReactivateAccount).not.toHaveBeenCalled();
+  });
+
+  it("소셜 등으로 이미 탈퇴 대기 세션이 있으면 화면을 열자마자 묻고, 복구 뒤 다시 로그인해 달라고 한다", async () => {
+    mockSessionStatus = "DELETED_REQUESTED";
+    mockReactivateAccount.mockResolvedValue(undefined);
+
+    render(<LoginPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "탈퇴 취소하기" }));
+
+    expect(await screen.findByText("탈퇴를 취소했어요. 다시 로그인해 주세요.")).toBeInTheDocument();
+    expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
+    // 지금 토큰은 옛 상태라 쓸 수 없다 — 지우고 다시 로그인하게 한다.
+    expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+    expect(mockLoginWithEmail).not.toHaveBeenCalled();
+  });
+});
+

@@ -15,6 +15,8 @@ type Props = {
   running: boolean;
   /** 되돌릴 수 없는 동작이면 실행 버튼을 위험색으로 그린다. */
   destructive?: boolean;
+  /** 닫기 버튼 문구. 실행 문구에도 「취소」가 들어가면(「탈퇴 취소하기」) 헷갈리니 하는 일을 적는다. */
+  cancelLabel?: string;
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -36,6 +38,7 @@ export function ConfirmDialog({
   runningLabel,
   running,
   destructive = false,
+  cancelLabel = "취소",
   onClose,
   onConfirm,
 }: Props) {
@@ -138,7 +141,7 @@ export function ConfirmDialog({
             aria-disabled={running}
             className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           >
-            취소
+            {cancelLabel}
           </button>
           <button
             type="button"
