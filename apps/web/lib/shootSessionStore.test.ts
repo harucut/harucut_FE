@@ -150,21 +150,27 @@ describe("완성 표시", () => {
 
   it("완성본이 들어오면 켜지고, 결과를 비워도 꺼지지 않는다", () => {
     useShootSession.getState().setImageResult(asset);
-    expect(useShootSession.getState().completed).toBe(true);
+    expect(useShootSession.getState().completed).toBe("account");
 
     useShootSession.getState().clearResults();
     useShootSession.getState().setImageResult(null);
-    expect(useShootSession.getState().completed).toBe(true);
+    expect(useShootSession.getState().completed).toBe("account");
+  });
+
+  // 비회원·기본 프레임이 없는 회원은 이 기기에서 그린다. 그 사진은 기록에 없어 세션을 지우면 사라진다.
+  it("기기에서 그린 완성본이면 이 기기에만 있다고 남긴다", () => {
+    useShootSession.getState().setImageResult({ ...asset, localBlob: new Blob(["jpeg"], { type: "image/jpeg" }) } as GeneratedFourcutAsset);
+    expect(useShootSession.getState().completed).toBe("device");
   });
 
   it("새 촬영(사진 비우기·처음부터)에서만 꺼진다", () => {
     useShootSession.getState().setImageResult(asset);
     useShootSession.getState().resetShots();
-    expect(useShootSession.getState().completed).toBe(false);
+    expect(useShootSession.getState().completed).toBeNull();
 
     useShootSession.getState().setImageResult(asset);
     useShootSession.getState().reset();
-    expect(useShootSession.getState().completed).toBe(false);
+    expect(useShootSession.getState().completed).toBeNull();
   });
 });
 

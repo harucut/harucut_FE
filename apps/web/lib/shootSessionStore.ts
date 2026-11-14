@@ -143,6 +143,9 @@ export function buildFrameContentKey(
   });
 }
 
+/** 완성본이 있는 곳 — 계정 기록(서버 합성) 또는 이 기기(기기 합성). completed 주석 참고. */
+export type ShootCompletion = "account" | "device";
+
 export type ShootSessionState = {
   frameId: FrameId | null;
   remoteFrameId: number | null;
@@ -163,14 +166,20 @@ export type ShootSessionState = {
   imageResult: GeneratedFourcutAsset | null;
   composeIdempotency: ComposeIdempotency | null;
   /**
-   * 완성본이 한 번 나왔다(2026-11-15). 그 뒤로 이 촬영은 끝이다 — 사진을 다시 고르거나 이어 찍지 않는다.
+   * 완성본이 나왔고 그것이 어디에 있는가(2026-11-15). null 이면 아직 안 끝난 촬영이다.
    *
-   * 사용자 결정: 「최종적으로 완성되었을땐 다시 고르기를 막아야해」. 완성 화면의 「사진 다시 고르기」만
-   * 빼면 기기 뒤로가기와 /shoot 의 「이어서 만들기」로 여전히 돌아갔다. 그래서 길이 아니라 세션에 표시한다 —
-   * 촬영 단계 화면은 이 값을 보고 완성 화면으로 보내고(ShootSessionBoundary), /shoot 은 새 촬영으로 시작한다.
+   * 끝난 촬영은 사진을 다시 고르거나 이어 찍지 않는다 — 사용자 결정: 「최종적으로 완성되었을땐 다시 고르기를
+   * 막아야해」. 완성 화면의 「사진 다시 고르기」만 빼면 기기 뒤로가기와 /shoot 의 「이어서 만들기」로 여전히
+   * 돌아갔다. 그래서 길이 아니라 세션에 표시한다 — 촬영 단계 화면은 이 값을 보고 완성 화면으로 보낸다
+   * (ShootSessionBoundary).
+   *
+   * - `account`: 계정 기록에 남았다(서버 합성). /shoot 은 새 촬영으로 시작한다 — 사진은 기록에서 본다.
+   * - `device`: 이 기기에서만 만들었다(비회원, 기본 프레임이 없는 회원). 세션을 지우면 사진이 사라지므로
+   *   /shoot 이 「완성한 사진이 있어요」로 다시 보게 한다(「비회원은 … 로컬에 저장되도록」, 2026-11-15).
+   *
    * 새로고침 뒤에도 막혀야 하므로 임시 보관에 같이 싣는다. 새 촬영(reset·resetShots)에서 풀린다.
    */
-  completed: boolean;
+  completed: ShootCompletion | null;
 
   setFrameId: (id: FrameId) => void;
   setSource: (source: ShootSource) => void;
@@ -230,7 +239,7 @@ const initialState: Pick<
   outputFilter: DEFAULT_FOURCUT_FILTER,
   imageResult: null,
   composeIdempotency: null,
-  completed: false,
+  completed: null,
 };
 
 export const useShootSession = create<ShootSessionState>((set, get) => ({
@@ -261,7 +270,8 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
     }),
 
   // 완성본이 들어오는 순간 이 촬영은 끝난다(completed 주석). 비울 때는 표시를 건드리지 않는다 — 끝난 촬영을 다시 열지 않는다.
-  setImageResult: (imageResult) => set(imageResult ? { imageResult, completed: true } : { imageResult }),
+  setImageResult: (imageResult) =>
+    set(imageResult ? { imageResult, completed: imageResult.localBlob ? "device" : "account" } : { imageResult }),
 
   /**
    * 이번 합성이 쓸 멱등키를 돌려준다. 같은 입력이면 이미 잡아 둔 키를 그대로 준다.
@@ -368,7 +378,7 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       shotsFrameId: null,
       selectedIndexes: createEmptySlots(),
       imageResult: null,
-      completed: false,
+      completed: null,
     })),
 
   resetFrameSelection: () =>

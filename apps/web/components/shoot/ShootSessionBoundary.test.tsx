@@ -30,9 +30,15 @@ describe("끝난 촬영", () => {
     useShootSession.setState(initial, true);
   });
 
-  it.each(["/shoot/capture", "/shoot/upload", "/shoot/select"])("%s 에 오면 그리지 않고 완성 화면으로 보낸다", (path) => {
+  // 완성본이 어디에 있든(계정 기록·이 기기) 끝난 촬영이다.
+  it.each([
+    ["/shoot/capture", "account"],
+    ["/shoot/upload", "device"],
+    ["/shoot/select", "account"],
+    ["/shoot/select", "device"],
+  ] as const)("%s 에 오면(%s) 그리지 않고 완성 화면으로 보낸다", (path, completed) => {
     mockPath = path;
-    useShootSession.setState({ completed: true });
+    useShootSession.setState({ completed });
     render(<ShootSessionBoundary><p>단계 화면</p></ShootSessionBoundary>);
 
     expect(screen.queryByText("단계 화면")).toBeNull();
@@ -41,7 +47,7 @@ describe("끝난 촬영", () => {
 
   it.each(["/shoot/result", "/shoot"])("%s 는 그대로 그린다", (path) => {
     mockPath = path;
-    useShootSession.setState({ completed: true });
+    useShootSession.setState({ completed: "device" });
     render(<ShootSessionBoundary><p>화면</p></ShootSessionBoundary>);
 
     expect(screen.getByText("화면")).toBeInTheDocument();

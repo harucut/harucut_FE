@@ -51,7 +51,7 @@ function validMeta(value: unknown, now: number): value is StoredDraft {
     meta.selectedIndexes.every((index) => index === null || (Number.isInteger(index) && index >= 0 && index < meta.shotKeys.length)) &&
     typeof meta.borderColor === "string" && /^#?[a-f\d]{6}$/i.test(meta.borderColor) &&
     // 완성 표시는 2026-11-15 에 생겼다. 그 전에 보관한 초안에는 없다 — 없으면 아직 안 끝난 촬영이다.
-    (meta.completed === undefined || typeof meta.completed === "boolean") &&
+    (meta.completed === undefined || meta.completed === null || meta.completed === "account" || meta.completed === "device") &&
     // 옛 `eventName` 필드는 보지 않는다. 그 검사를 남기면 필드가 든 옛 초안이 「무효」가 되어
     // 사진째 지워진다(기획 R5 D01 「무관한 개인 초안을 통째로 지우지 않는다」).
     FOURCUT_FILTERS.some((filter) => filter.id === meta.outputFilter);
@@ -94,7 +94,7 @@ export async function readShootDraft(now = Date.now()): Promise<ShootDraft | nul
       frameId: meta.frameId, remoteFrameId: meta.remoteFrameId, source: meta.source,
       shots, shotsFrameId: meta.shotsFrameId, selectedIndexes: meta.selectedIndexes,
       borderColor: meta.borderColor, outputFilter: meta.outputFilter,
-      composeIdempotency: composition, completed: meta.completed === true,
+      composeIdempotency: composition, completed: meta.completed ?? null,
     };
   } finally { db.close(); }
 }

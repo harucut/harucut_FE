@@ -303,18 +303,39 @@ describe("기존 촬영 복구", () => {
     expect(mockPush).toHaveBeenCalledWith("/shoot/select");
   });
   // 완성본이 나온 촬영은 끝났다(2026-11-15) — 이어 만들면 같은 사진을 다시 고르게 된다.
-  it("완성된 촬영은 이어 만들지 않고 새 촬영으로 시작한다", () => {
-    useShootSession.setState({ completed: true });
+  it("기록에 남은 완성 사진은 이어 만들지 않고 새 촬영으로 시작한다", () => {
+    useShootSession.setState({ completed: "account" });
     render(<ShootPage />);
     expect(screen.queryByRole("button", { name: "이어서 만들기" })).toBeNull();
     expect(useShootSession.getState().shots).toEqual([]);
-    expect(useShootSession.getState().completed).toBe(false);
+    expect(useShootSession.getState().completed).toBeNull();
   });
-  it("완성된 촬영은 keepShots 로 와도 사진을 들고 가지 않는다", () => {
+  it("기록에 남은 완성 사진은 keepShots 로 와도 사진을 들고 가지 않는다", () => {
     mockQuery = "keepShots=1";
-    useShootSession.setState({ completed: true });
+    useShootSession.setState({ completed: "account" });
     render(<ShootPage />);
     expect(useShootSession.getState().shots).toEqual([]);
+  });
+  // 「비회원은 … 로컬에서만 돌리는거니깐 로컬에 저장되도록」(2026-11-15). 이 기기에만 있는 사진은 지우면 사라진다.
+  it("이 기기에만 있는 완성 사진은 남겨 두고 그 완성 화면을 다시 연다", () => {
+    useShootSession.setState({ completed: "device" });
+    render(<ShootPage />);
+    expect(screen.getByRole("heading", { name: "완성한 사진이 있어요" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "이어서 만들기" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "사진 보기" }));
+    expect(mockPush).toHaveBeenCalledWith("/shoot/result");
+    expect(useShootSession.getState().shots).toEqual(SHOTS);
+  });
+  it("이 기기에만 있는 완성 사진도 지우겠다고 확인하면 새 촬영으로 시작한다", () => {
+    mockQuery = "keepShots=1";
+    useShootSession.setState({ completed: "device" });
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "새로 시작하기" }));
+    expect(screen.getByText("완성한 사진이 이 기기에서 지워져요.")).toBeInTheDocument();
+    expect(useShootSession.getState().shots).toEqual(SHOTS);
+    fireEvent.click(screen.getByRole("button", { name: "사진 지우고 시작" }));
+    expect(useShootSession.getState().shots).toEqual([]);
+    expect(useShootSession.getState().completed).toBeNull();
   });
   it("새 촬영은 삭제를 확인한 뒤에만 사진을 비운다", () => {
     render(<ShootPage />);

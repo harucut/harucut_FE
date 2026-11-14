@@ -45,10 +45,16 @@ function ShootPageContent() {
     아래 reset() 을 지나며 8장을 통째로 지웠다("다른 프레임을 골라 주세요" 라고 안내해 놓고).
   */
   const keepShots = searchParams.get("keepShots") === "1";
-  // 끝난 촬영(완성본이 나온 촬영)은 이어 가지 않는다 — 새 촬영으로 시작한다(shootSessionStore 의 completed).
+  /*
+    들고 있는 사진이 있으면 먼저 묻는다. 끝난 촬영(shootSessionStore 의 completed)은 어디에 남았는지로 가른다 —
+    계정 기록에 남은 사진은 기록에서 보면 되니 새 촬영으로 시작하고, 이 기기에만 있는 완성 사진(비회원 등)은
+    지우면 사라지므로 「완성한 사진이 있어요」로 다시 보게 한다. 끝난 촬영은 `keepShots` 로 와도 이어 고르지 않는다.
+  */
   const [resumeAvailable, setResumeAvailable] = useState(() => {
     const session = useShootSession.getState();
-    return !keepShots && session.shots.length > 0 && !session.completed;
+    if (session.shots.length === 0) return false;
+    if (session.completed) return session.completed === "device";
+    return !keepShots;
   });
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [pendingFrame, setPendingFrame] = useState<FrameChoice | null>(null);
@@ -123,19 +129,30 @@ function ShootPageContent() {
 
   if (resumeAvailable) {
     const session = useShootSession.getState();
-    const resumePath = session.frameId
-      ? session.shots.length >= 4 ? "/shoot/select" : session.source === "upload" ? "/shoot/upload" : "/shoot/capture"
-      : "/shoot?keepShots=1";
+    // 이 기기에만 있는 완성 사진. 다시 고르는 것이 아니라 그 완성 화면을 다시 연다(기기에서 다시 그린다).
+    const finished = session.completed === "device";
+    const resumePath = finished
+      ? "/shoot/result"
+      : session.frameId
+        ? session.shots.length >= 4 ? "/shoot/select" : session.source === "upload" ? "/shoot/upload" : "/shoot/capture"
+        : "/shoot?keepShots=1";
+    const homeHref = accessMode === "guest" ? "/" : "/home";
     return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">
       <div className="mx-auto flex max-w-md flex-col gap-4">
-        <PageHeader title="촬영하던 사진이 있어요" backHref="/home" backLabel="홈으로" />
-        <p><Sentences text={`${session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.`} /></p>
+        <PageHeader
+          title={finished ? "완성한 사진이 있어요" : "촬영하던 사진이 있어요"}
+          backHref={homeHref}
+          backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
+        />
+        <p><Sentences text={finished
+          ? "이 기기에만 있는 사진이에요. 마지막 작업부터 24시간이 지나면 지워져요."
+          : `${session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.`} /></p>
         <button type="button" className="hc-pressable min-h-11 rounded-xl bg-(--hc-primary) px-4 py-3 font-semibold text-(--hc-primary-contrast)" onClick={() => {
           if (session.frameId) router.push(resumePath);
           else { router.replace(resumePath); setResumeAvailable(false); }
-        }}>이어서 만들기</button>
+        }}>{finished ? "사진 보기" : "이어서 만들기"}</button>
         <button type="button" className="hc-pressable min-h-11 rounded-xl border border-(--hc-border) px-4 py-3" onClick={() => setConfirmRestart(true)}>새로 시작하기</button>
-        {confirmRestart && <ConfirmDialog running={false} title="새로 시작할까요?" description={`임시 보관한 사진 ${session.shots.length}장이 이 기기에서 지워져요.`} confirmLabel="사진 지우고 시작" destructive onClose={() => setConfirmRestart(false)} onConfirm={() => { reset(); setConfirmRestart(false); setResumeAvailable(false); }} />}
+        {confirmRestart && <ConfirmDialog running={false} title="새로 시작할까요?" description={finished ? "완성한 사진이 이 기기에서 지워져요." : `임시 보관한 사진 ${session.shots.length}장이 이 기기에서 지워져요.`} confirmLabel="사진 지우고 시작" destructive onClose={() => setConfirmRestart(false)} onConfirm={() => { reset(); setConfirmRestart(false); setResumeAvailable(false); }} />}
       </div>
     </main>;
   }

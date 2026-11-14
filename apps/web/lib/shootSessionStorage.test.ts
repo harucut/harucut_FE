@@ -123,13 +123,13 @@ test("옛 eventName 필드가 남은 보관물도 사진을 지우지 않고 복
 
 // 완성 표시(2026-11-15)도 새로고침을 건넌다 — 안 그러면 새로고침 한 번으로 끝난 촬영을 다시 고를 수 있다.
 test("완성 표시는 새로고침 뒤에도 남고, 표시가 생기기 전 초안은 안 끝난 촬영으로 읽는다", async () => {
-  await writeShootDraft({ ...draft(), completed: true }, now);
-  expect((await readShootDraft(now))?.completed).toBe(true);
+  await writeShootDraft({ ...draft(), completed: "device" }, now);
+  expect((await readShootDraft(now))?.completed).toBe("device");
 
   // 표시가 없던 시절의 초안 — 지우지 않고 그대로 읽는다.
   const meta = mockData.get("meta") as Record<string, unknown>;
   delete meta.completed;
   const restored = await readShootDraft(now);
   expect(restored?.shots).toEqual(shots);
-  expect(restored?.completed).toBe(false);
+  expect(restored?.completed).toBeNull();
 });
