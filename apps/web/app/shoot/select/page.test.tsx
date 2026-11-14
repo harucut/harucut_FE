@@ -10,6 +10,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import ShootSelectPage from "@/app/shoot/select/page";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import type { RemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
@@ -35,10 +36,10 @@ const mockShootSession = {
   shots: ["/shot-1.png"],
   selectedIndexes: [0, null, null, null] as Array<number | null>,
   borderColor: "#18181a",
-  outputFilter: "NONE" as const,
+  outputFilter: "NONE" as string,
   toggleSelect: noop,
   setBorderColor: jest.fn(),
-  setOutputFilter: noop,
+  setOutputFilter: jest.fn(),
   source: "capture" as "capture" | "upload",
   resetShots: jest.fn(),
 };
@@ -92,7 +93,9 @@ const colorPicker = () => screen.queryByRole("group", { name: "테두리 색" })
 beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(mockThemeState, { data: null, error: null, isLoading: false });
-  Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null, source: "capture" });
+  Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null, source: "capture", outputFilter: "NONE" });
+  // 기본은 쿠키를 읽은 회원이다. 비회원 시험은 따로 바꾼다.
+  useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
 });
 
 test("꾸민 프레임의 조회가 실패해도 테두리 색 고르기는 잠긴 채다", () => {
@@ -185,3 +188,22 @@ test("불러온 사진은 비우지 않고 불러오기 화면이 다시 고르�
   expect(mockShootSession.resetShots).not.toHaveBeenCalled();
 });
 
+// 「비회원이면 보정은 선택 못하도록 해」(2026-11-15). 견본은 잠긴 채 보이고, 남아 있던 보정은 기본으로 되돌린다.
+test("비회원은 보정을 고를 수 없고, 고른 보정이 남아 있으면 기본으로 되돌린다", () => {
+  useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+  mockShootSession.outputFilter = "B&W";
+  render(<ShootSelectPage />);
+
+  expect(screen.getByText("회원 전용")).toBeInTheDocument();
+  expect(mockShootSession.setOutputFilter).toHaveBeenCalledWith("NONE");
+  // 테두리 색은 비회원도 고른다.
+  expect(colorPicker()).not.toBeNull();
+});
+
+test("회원은 보정을 그대로 고른다", () => {
+  mockShootSession.outputFilter = "B&W";
+  render(<ShootSelectPage />);
+
+  expect(screen.queryByText("회원 전용")).toBeNull();
+  expect(mockShootSession.setOutputFilter).not.toHaveBeenCalled();
+});

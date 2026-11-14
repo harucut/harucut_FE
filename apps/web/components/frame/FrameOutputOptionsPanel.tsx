@@ -13,6 +13,11 @@ type FrameOutputOptionsPanelProps = {
   hasCustomFrame: boolean;
   /** 보정 견본에 깔 사진 — 고른 첫 장, 아직 안 골랐으면 찍은 첫 장. */
   samplePhoto?: string | null;
+  /**
+   * 보정을 고를 수 없다 — 비회원(2026-11-15 「비회원이면 보정은 선택 못하도록 해」). 견본은 보이되 잠기고
+   * 「회원 전용」이 붙는다. 고른 값은 부른 쪽이 기본으로 되돌린다.
+   */
+  filtersLocked?: boolean;
 };
 
 /**
@@ -34,6 +39,7 @@ export function FrameOutputOptionsPanel({
   onOutputFilterChange,
   hasCustomFrame,
   samplePhoto = null,
+  filtersLocked = false,
 }: FrameOutputOptionsPanelProps) {
   return (
     <div className="flex flex-col gap-5">
@@ -50,7 +56,10 @@ export function FrameOutputOptionsPanel({
       )}
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="text-[14px] font-extrabold text-(--hc-text)">보정</h2>
+        <h2 className="flex items-baseline gap-2 text-[14px] font-extrabold text-(--hc-text)">
+          보정
+          {filtersLocked ? <span className="text-[12px] font-semibold text-(--hc-muted)">회원 전용</span> : null}
+        </h2>
         <div role="group" aria-label="보정" className="flex flex-wrap gap-3">
           {FOURCUT_FILTERS.map((filter) => {
             const selected = outputFilter === filter.id;
@@ -59,8 +68,9 @@ export function FrameOutputOptionsPanel({
                 key={filter.id}
                 type="button"
                 aria-pressed={selected}
+                disabled={filtersLocked}
                 onClick={() => onOutputFilterChange(filter.id)}
-                className="flex flex-col items-center gap-1.5"
+                className="flex flex-col items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <span
                   className={`block size-16 overflow-hidden rounded-2xl border border-(--hc-border) bg-(--hc-surface-muted) ${

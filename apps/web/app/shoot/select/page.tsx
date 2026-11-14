@@ -7,6 +7,8 @@ import { FrameSelectPanel } from "@/components/frame/FrameSelectPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useRemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { DEFAULT_FOURCUT_FILTER } from "@/lib/frameFilters";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { RetryButton } from "@/components/ui/LoadFailed";
@@ -28,6 +30,18 @@ export default function ShootSelectPage() {
   } = useShootSession();
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
   const fromUpload = source === "upload";
+  /*
+    비회원은 보정을 고르지 못한다(2026-11-15 「비회원이면 보정은 선택 못하도록 해」). 견본은 잠근 채 보여 준다.
+    쿠키를 읽기 전(첫 렌더)에는 누구인지 몰라 잠가 둔다 — 꾸미기는 처음에 접혀 있어 회원이 그 순간을 볼 일은 없다.
+    비회원으로 확정되면 고른 보정도 기본으로 되돌린다(예전 세션에 남은 값).
+  */
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const guestHydrated = useGuestTrialStore((state) => state.hydrated);
+  const isGuest = guestHydrated && accessMode === "guest";
+  const filtersLocked = !guestHydrated || isGuest;
+  useEffect(() => {
+    if (isGuest && outputFilter !== DEFAULT_FOURCUT_FILTER) setOutputFilter(DEFAULT_FOURCUT_FILTER);
+  }, [isGuest, outputFilter, setOutputFilter]);
   const sourceHref = fromUpload ? "/shoot/upload" : "/shoot/capture";
   // 성공과 실패를 따로 받는다. 못 읽은 것을 "꾸민 프레임이 아니다"로 뭉개면
   // 잠겨야 할 테두리 색 고르기가 열린다.
@@ -133,6 +147,7 @@ export default function ShootSelectPage() {
               onOutputFilterChange={setOutputFilter}
               hasCustomFrame={hasCustomFrame}
               samplePhoto={samplePhoto}
+              filtersLocked={filtersLocked}
             />
           )}
         />

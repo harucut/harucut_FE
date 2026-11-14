@@ -60,4 +60,18 @@ describe("FrameOutputOptionsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "뽀샤시" }));
     expect(props.onOutputFilterChange).toHaveBeenCalledWith("SOFT");
   });
+
+  // 「비회원이면 보정은 선택 못하도록 해」(2026-11-15). 견본은 보이되 잠기고 「회원 전용」이 붙는다.
+  it("보정이 잠기면 견본을 누를 수 없고 「회원 전용」이 붙는다", () => {
+    const props = renderPanel({ filtersLocked: true });
+
+    expect(screen.getByText("회원 전용")).toBeInTheDocument();
+    const chips = screen.getAllByRole("button").filter((button) => button.closest('[aria-label="보정"]'));
+    expect(chips.length).toBeGreaterThan(1);
+    chips.forEach((chip) => expect(chip).toBeDisabled());
+    fireEvent.click(chips[1]);
+    expect(props.onOutputFilterChange).not.toHaveBeenCalled();
+    // 테두리 색은 그대로 고른다.
+    expect(screen.getByRole("group", { name: "테두리 색" })).toBeInTheDocument();
+  });
 });
