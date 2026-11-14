@@ -21,7 +21,6 @@ export default function ShootSelectPage() {
     borderColor,
     outputFilter,
     toggleSelect,
-    clearSelection,
     setBorderColor,
     setOutputFilter,
     source,
@@ -119,7 +118,6 @@ export default function ShootSelectPage() {
           incompleteButtonLabel="4장을 골라 주세요"
           nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}
-          onReset={clearSelection}
           onNext={handleNext}
           themeData={themeData}
           borderColor={effectiveBorderColor}

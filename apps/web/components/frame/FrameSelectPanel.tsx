@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LayoutGrid, RotateCcw, WandSparkles } from "lucide-react";
+import { LayoutGrid, WandSparkles } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { SLOT_COLORS } from "@/constants/colors";
@@ -22,7 +22,6 @@ type FrameSelectPanelProps = {
   incompleteButtonLabel?: string;
   nextButtonLabel: string;
   onToggleSelect: (index: number) => void;
-  onReset: () => void;
   onNext: () => void;
   /** 「꾸미기」 쪽 내용. 주면 미리보기 아래에 [사진 | 꾸미기] 전환이 생긴다. */
   renderExtraControls?: () => ReactNode;
@@ -41,7 +40,6 @@ export function FrameSelectPanel({
   incompleteButtonLabel,
   nextButtonLabel,
   onToggleSelect,
-  onReset,
   onNext,
   renderExtraControls,
   themeData = null,
@@ -89,6 +87,13 @@ export function FrameSelectPanel({
     [],
   );
 
+  // 다섯 번째를 눌러 뜬 안내는 사진 목록 얘기다. 꾸미기로 넘어가면 바로 거둔다 — 2.6초를 다 채우면 보정 칸 위에
+  // 남아 그 칸을 가렸다(2026-11-15 캡처).
+  const switchTab = (next: "photos" | "decorate") => {
+    setLimitNotice(false);
+    setTab(next);
+  };
+
   const handleToggle = useCallback(
     (index: number, alreadySelected: boolean) => {
       if (isFull && !alreadySelected) {
@@ -128,10 +133,10 @@ export function FrameSelectPanel({
         {renderExtraControls ? (
           <div className="flex justify-center lg:justify-start">
             <div className="hc-surface-well inline-flex items-center gap-1 rounded-full p-1">
-              <SegmentButton active={!decorating} onClick={() => setTab("photos")} Icon={LayoutGrid}>
+              <SegmentButton active={!decorating} onClick={() => switchTab("photos")} Icon={LayoutGrid}>
                 사진
               </SegmentButton>
-              <SegmentButton active={decorating} onClick={() => setTab("decorate")} Icon={WandSparkles}>
+              <SegmentButton active={decorating} onClick={() => switchTab("decorate")} Icon={WandSparkles}>
                 꾸미기
               </SegmentButton>
             </div>
@@ -226,18 +231,10 @@ export function FrameSelectPanel({
               </span>
             ) : null}
           </p>
-          {/* 초기화는 아이콘 하나다(시안 B). 고른 사진이 없으면 할 일이 없어 잠근다. */}
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={selectedCount === 0}
-            aria-label="선택 초기화"
-            title="선택 초기화"
-            className="grid size-12 shrink-0 place-items-center rounded-full border border-(--hc-border) text-(--hc-muted) transition hover:border-(--hc-border-strong) hover:text-(--hc-text) disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RotateCcw aria-hidden className="h-4.5 w-4.5" />
-          </button>
-
+          {/*
+            「선택 초기화」 단추는 뺐다(2026-11-15). 새로고침처럼 생겨 무엇을 하는지 알 수 없었고, 담은 사진은 다시
+            누르면 빠진다 — 같은 일을 하는 길이 둘이었다. 다 담은 뒤 다섯 번째를 누르면 위 안내가 그 길을 말한다.
+          */}
           <button
             type="button"
             disabled={!canProceed}

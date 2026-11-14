@@ -37,7 +37,6 @@ const mockShootSession = {
   borderColor: "#18181a",
   outputFilter: "NONE" as const,
   toggleSelect: noop,
-  clearSelection: noop,
   setBorderColor: jest.fn(),
   setOutputFilter: noop,
   source: "capture" as "capture" | "upload",

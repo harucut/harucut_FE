@@ -13,7 +13,6 @@ describe("FrameSelectPanel", () => {
     maxSelect: 4,
     nextButtonLabel: "다음 단계",
     onToggleSelect: jest.fn(),
-    onReset: jest.fn(),
     onNext: jest.fn(),
   };
 
@@ -61,7 +60,6 @@ it("고른 사진마다 들어간 칸의 색으로 테두리와 번호를 단다
       maxSelect={4}
       nextButtonLabel="다음 단계"
       onToggleSelect={jest.fn()}
-      onReset={jest.fn()}
       onNext={jest.fn()}
       selectedIndexes={[2, 0, null, null]}
     />,
@@ -88,7 +86,6 @@ describe("사진 · 꾸미기 전환", () => {
         nextButtonLabel="다음 단계"
         incompleteButtonLabel="4장을 골라 주세요"
         onToggleSelect={jest.fn()}
-        onReset={jest.fn()}
         onNext={jest.fn()}
         selectedIndexes={selectedIndexes}
         renderExtraControls={() => <p>꾸미기 내용</p>}
@@ -122,7 +119,6 @@ describe("사진 · 꾸미기 전환", () => {
         maxSelect={4}
         nextButtonLabel="다음 단계"
         onToggleSelect={jest.fn()}
-        onReset={jest.fn()}
         onNext={jest.fn()}
         selectedIndexes={[null, null, null, null]}
       />,
@@ -131,16 +127,10 @@ describe("사진 · 꾸미기 전환", () => {
     expect(screen.queryByRole("button", { name: "꾸미기" })).not.toBeInTheDocument();
   });
 
-  it("초기화는 아이콘 하나이고, 고른 사진이 없으면 잠긴다", () => {
-    const { unmount } = renderPanel([null, null, null, null]);
-    expect(screen.getByRole("button", { name: "선택 초기화" })).toBeDisabled();
-    unmount();
-
+  // 새로고침처럼 생긴 「선택 초기화」는 뺐다(2026-11-15). 담은 사진은 다시 눌러 뺀다.
+  it("초기화 단추는 없다", () => {
     renderPanel([0, null, null, null]);
-    const reset = screen.getByRole("button", { name: "선택 초기화" });
-    expect(reset).toBeEnabled();
-    // 글자 없이 아이콘만 — 이름은 읽기 프로그램에만 간다.
-    expect(reset).toHaveTextContent("");
+    expect(screen.queryByRole("button", { name: "선택 초기화" })).not.toBeInTheDocument();
   });
 });
 
@@ -154,7 +144,6 @@ it("네 장을 다 고른 뒤 다섯 번째를 누르면 담지 않고 까닭을
       maxSelect={4}
       nextButtonLabel="다음 단계"
       onToggleSelect={onToggleSelect}
-      onReset={jest.fn()}
       onNext={jest.fn()}
       selectedIndexes={[0, 1, 2, 3]}
     />,
@@ -167,4 +156,25 @@ it("네 장을 다 고른 뒤 다섯 번째를 누르면 담지 않고 까닭을
   expect(screen.getByRole("status").textContent).toBe(
     "4장까지만 담을 수 있어요. 바꾸려면 담은 사진을 먼저 눌러 빼 주세요.",
   );
+});
+
+it("꾸미기로 넘어가면 다섯 번째 안내를 바로 거둔다", () => {
+  render(
+    <FrameSelectPanel
+      frameId="classic-4"
+      media={[{ src: "/1.png" }, { src: "/2.png" }, { src: "/3.png" }, { src: "/4.png" }, { src: "/5.png" }]}
+      maxSelect={4}
+      nextButtonLabel="다음 단계"
+      onToggleSelect={jest.fn()}
+      onNext={jest.fn()}
+      selectedIndexes={[0, 1, 2, 3]}
+      renderExtraControls={() => <p>꾸미기 내용</p>}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "5번 사진 — 4장을 다 골라 더 선택할 수 없어요" }));
+  expect(screen.getByRole("status").textContent).not.toBe("");
+
+  fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+  expect(screen.getByRole("status")).toHaveTextContent("");
 });
