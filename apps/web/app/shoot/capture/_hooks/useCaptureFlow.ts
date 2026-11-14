@@ -130,6 +130,17 @@ export function useCaptureFlow() {
     if (!frameId) router.replace("/shoot");
   }, [frameId, router]);
 
+  /*
+    다 찍었으면 이 화면에 머물 일이 없다 — 고르기 화면으로 넘긴다(2026-11-14).
+
+    다 찍는 순간에도 넘기지만(finishSingleShot), 새로고침·「이어서 만들기」로 다 찍은 채 들어와도
+    같은 자리로 보낸다. 예전에는 그때 셔터가 「처음부터 다시 찍을까요?」를 물었다 — 다 찍은 뒤에는
+    고르기만 남았고, 다시 찍는 길은 고르기 화면의 「다시 찍기」 하나다.
+  */
+  useEffect(() => {
+    if (!shooting.isShooting && shots.length >= MAX_SHOTS) router.replace("/shoot/select");
+  }, [shooting.isShooting, shots.length, router]);
+
   useEffect(() => {
     router.prefetch("/shoot/select");
     router.prefetch("/shoot/result");
@@ -464,7 +475,9 @@ export function useCaptureFlow() {
 
     isShootingRef.current = false;
     setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
-    router.push("/shoot/select");
+    // 촬영 화면 기록을 고르기 화면으로 바꿔 낀다. 쌓으면 고르기 화면에서 뒤로 갈 때 다 찍은 촬영
+    // 화면에 들렀다가(위 effect) 곧장 되돌아와, 뒤로가기가 먹지 않는 것처럼 보인다.
+    router.replace("/shoot/select");
   }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, setNotice, router]);
 
   // 전체 자동 촬영 시작
