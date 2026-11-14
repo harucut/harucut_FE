@@ -410,7 +410,7 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
     };
   }
 
-  // 없는 프레임이거나 남의 프레임(GEN-031). 링크로 받은 전용 프레임에서 잘 난다.
+  // 없는 프레임이거나 남의 프레임(GEN-031). 고른 뒤 다른 기기에서 지운 프레임에서 난다.
   if (code === "GEN-031" || status === 404) {
     return {
       message: "고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요.",

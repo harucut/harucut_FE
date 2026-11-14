@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import { resolveFrameCapacity } from "@/components/frame/FrameCapacityMeter";
 import { FrameChooser } from "@/components/frame/FrameChooser";
@@ -15,8 +15,6 @@ import { Sentences } from "@/components/ui/Sentences";
 
 function ThemePageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
   const { setFrameId, setRemoteFrameId, reset } = useThemeSession();
   const { frames, isLoading, error, refresh } = useMyFrames();
 
@@ -54,29 +52,6 @@ function ThemePageContent() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!Number.isFinite(queriedRemoteFrameId) || queriedRemoteFrameId <= 0) return;
-    if (isLoading) return;
-
-    const targetIndex = frames.findIndex(
-      (frame) => frame.frameId === queriedRemoteFrameId,
-    );
-    if (targetIndex === -1) return;
-
-    const targetFrame = frames[targetIndex];
-
-    setFrameId(frameIdFromFrameType(targetFrame.frameType));
-    setRemoteFrameId(targetFrame.frameId);
-    router.push("/theme/sticker");
-  }, [
-    frames,
-    isLoading,
-    queriedRemoteFrameId,
-    router,
-    setFrameId,
-    setRemoteFrameId,
-  ]);
 
   // 서버가 한도 도달을 확인한 경우만 신규 진입을 막는다. 기존 프레임 수정은 계속 가능하다.
   const isAtCapacity = usage !== null && capacity.atCapacity;

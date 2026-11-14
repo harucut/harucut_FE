@@ -149,14 +149,6 @@ function ShootPageContent() {
           // 비회원은 프레임 조회 자체가 인증이 필요해 목록을 볼 수 없다.
           hideSavedFrames={accessMode !== "member"}
           onConfirm={(choice) => confirmFrame(choice)}
-          missingRemoteFrameNotice={
-            <p
-              role="status"
-              className="rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-3 text-[12px] leading-[1.6] text-(--hc-danger)"
-            >
-              <Sentences text="링크에 담긴 전용 프레임을 불러오지 못했어요. 아래에서 컷 구성을 고르면 만드는 것은 그대로 할 수 있어요." />
-            </p>
-          }
         />
         {pendingFrame ? <ConfirmDialog
           title="새 비율로 다시 찍을까요?"
