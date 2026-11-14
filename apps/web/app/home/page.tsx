@@ -18,6 +18,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 import { Sentences } from "@/components/ui/Sentences";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 /** 가장 최근 한 장은 큰 카드에, 나머지는 아래 줄에 놓는다. 조회도 딱 이만큼만 받는다. */
 const RECENT_LIMIT = 7;
@@ -212,16 +213,7 @@ export default function HomePage() {
               </div>
             ) : loadError ? (
               // 실패를 빈 상태로 위장하지 않는다. 문구 + 다시 시도.
-              <div className="hc-surface-well flex flex-col items-center gap-3 rounded-[18px] border border-dashed p-6 text-center">
-                <p className="text-[13px] text-(--hc-muted)"><Sentences text={loadError} /></p>
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((prev) => prev + 1)}
-                  className="hc-button-secondary min-h-11 rounded-full border px-5 text-[13px] font-semibold"
-                >
-                  다시 시도
-                </button>
-              </div>
+              <LoadFailed message={loadError} onRetry={() => setReloadKey((prev) => prev + 1)} />
             ) : (
               <p className="hc-surface-well rounded-[18px] border border-dashed p-6 text-center text-[13px] text-(--hc-muted)">
                 <Sentences text="아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요." />

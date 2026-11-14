@@ -38,8 +38,8 @@ import {
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
-import { Sentences } from "@/components/ui/Sentences";
 import { SegmentButton } from "@/components/ui/SegmentButton";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type ViewMode = "grid" | "calendar";
 
@@ -599,17 +599,8 @@ export default function HistoryPage() {
             ))}
           </div>
         ) : error ? (
-          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
-          <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p role="alert" className="text-[13px] text-(--hc-muted)"><Sentences text={error} /></p>
-            <button
-              type="button"
-              onClick={() => setReloadKey((prev) => prev + 1)}
-              className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
-            >
-              다시 시도
-            </button>
-          </div>
+          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼(홈·저장한 프레임과 같은 모양).
+          <LoadFailed message={error} onRetry={() => setReloadKey((prev) => prev + 1)} />
         ) : view === "calendar" ? (
           <CalendarView
             items={items}

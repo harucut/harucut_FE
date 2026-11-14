@@ -9,6 +9,7 @@ import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType, matchesFrameType } from "@/lib/frameApi";
 import { Sentences } from "@/components/ui/Sentences";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type SavedFramesSectionProps = {
   title: string;
@@ -80,15 +81,18 @@ export function SavedFramesSection({
     <section className="min-w-0">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-bold">{title}</h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          aria-label="새로고침"
-          title="새로고침"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text)"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
+        {/* 못 불러왔으면 아래 「다시 시도」가 같은 일을 한다 — 같은 길을 두 번 두지 않는다. */}
+        {failedWithNothing ? null : (
+          <button
+            type="button"
+            onClick={onRefresh}
+            aria-label="새로고침"
+            title="새로고침"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text)"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* 목록은 남아 있는데 새로고침만 실패한 경우. 목록을 지우지 않고 위에만 알린다. */}
@@ -101,20 +105,9 @@ export function SavedFramesSection({
       {isLoading ? (
         <p className="mt-3 text-[12px] text-(--hc-muted)">불러오는 중…</p>
       ) : failedWithNothing ? (
-        <div role="alert" className="mt-3 flex flex-col items-start gap-2">
-          <p className="text-[12px] text-(--hc-danger)">{error}</p>
-          {/* 실패를 사라짐으로 읽지 않게 못 박는다. 이 문장이 없으면 사용자는 공들여
-              꾸민 프레임이 날아간 줄 안다. */}
-          <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
-            <Sentences text="저장한 프레임이 사라진 것은 아니에요. 잠시 후 다시 시도해 주세요." />
-          </p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="hc-button-secondary rounded-full border px-3 py-1 text-[11px] font-medium"
-          >
-            다시 시도
-          </button>
+        // 「불러오지 못했어요」 한 줄과 다시 시도 — 홈·기록의 실패와 같은 모양이다(2026-11-14).
+        <div className="mt-3">
+          <LoadFailed message={error ?? ""} onRetry={onRefresh} />
         </div>
       ) : hiddenByFilter ? (
         <p className="mt-2 text-[12px] leading-[1.6] text-(--hc-muted)">

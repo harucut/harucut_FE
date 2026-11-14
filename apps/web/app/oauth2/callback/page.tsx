@@ -36,6 +36,7 @@ import {
   readSocialLoginProvider,
 } from "@/lib/socialLoginRedirect";
 import { Sentences } from "@/components/ui/Sentences";
+import { RetryButton } from "@/components/ui/LoadFailed";
 
 const CHECKING_MESSAGE = "소셜 로그인 상태를 확인하는 중이에요.";
 
@@ -228,17 +229,14 @@ export default function OAuthCallbackPage() {
           </a>
         ) : null}
         {canRetry ? (
-          <button
-            type="button"
+          <RetryButton
+            className="self-start"
             onClick={() => {
               setCanRetry(false);
               setMessage(CHECKING_MESSAGE);
               setRetryKey((prev) => prev + 1);
             }}
-            className="hc-button-secondary self-start rounded-full border px-5 py-2 text-[13px] font-semibold"
-          >
-            다시 시도
-          </button>
+          />
         ) : null}
         {/* <Link> 가 아니다 — 머리말의 이유 그대로 문서를 새로 받는다(막힌 계정은 방금 쿠키를 지웠다). */}
         {deadEnd ? (

@@ -9,6 +9,7 @@ import { useRemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
+import { RetryButton } from "@/components/ui/LoadFailed";
 
 export default function ShootSelectPage() {
   const router = useRouter();
@@ -101,13 +102,7 @@ export default function ShootSelectPage() {
             <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
               프레임을 불러오지 못해 배경색을 바꿀 수 없어요.
             </p>
-            <button
-              type="button"
-              onClick={reloadTheme}
-              className="inline-flex h-11 items-center rounded-full border border-(--hc-border) px-4 text-[12px] text-(--hc-text)"
-            >
-              다시 불러오기
-            </button>
+            <RetryButton onClick={reloadTheme} />
           </div>
         ) : null}
 

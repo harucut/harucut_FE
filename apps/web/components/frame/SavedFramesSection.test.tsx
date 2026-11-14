@@ -53,12 +53,10 @@ describe("SavedFramesSection", () => {
   it("불러오지 못했으면 없다고 말하지 않는다", () => {
     renderSection({ error: ERROR, frames: [] });
 
-    expect(screen.getByText(ERROR)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR);
     expect(screen.queryByText(EMPTY)).not.toBeInTheDocument();
-    // 사라진 게 아니라는 것까지 말해 준다.
-    expect(
-      screen.getByText(/저장한 프레임이 사라진 것은 아니에요/),
-    ).toBeInTheDocument();
+    // 「불러오지 못했어요」가 이미 없어진 것이 아니라는 말이다. 덧붙이던 문장은 뺐다(2026-11-14).
+    expect(screen.queryByText(/사라진 것은 아니에요/)).not.toBeInTheDocument();
   });
 
   it("불러오지 못했으면 다시 시도할 자리를 준다", () => {
@@ -138,3 +136,23 @@ describe("SavedFramesSection", () => {
   });
 });
 
+
+// 못 불러왔을 때 다시 부르는 길은 「다시 시도」 하나다(2026-11-14) — 제목 옆 새로고침 아이콘을 함께 두지 않는다.
+it("못 불러왔을 때는 제목 옆 새로고침 아이콘을 숨긴다", () => {
+  render(
+    <SavedFramesSection
+      title="저장한 프레임"
+      emptyText="저장한 프레임이 없어요."
+      selectedFrameId={null}
+      frames={[]}
+      isLoading={false}
+      error="저장한 프레임을 불러오지 못했어요."
+      selectedRemoteFrameId={null}
+      onSelectRemoteFrame={jest.fn()}
+      onRefresh={jest.fn()}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "새로고침" })).not.toBeInTheDocument();
+});

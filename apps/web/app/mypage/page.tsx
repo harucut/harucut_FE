@@ -2,6 +2,7 @@
 
 import { clearLocalUserData } from "@/lib/localUserData";
 import { Sentences } from "@/components/ui/Sentences";
+import { RetryButton } from "@/components/ui/LoadFailed";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -566,13 +567,7 @@ export default function MyPage() {
           <p className="text-center text-[11px] text-(--hc-muted)">
             {statsError}
           </p>
-          <button
-            type="button"
-            onClick={() => void fetchStats()}
-            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11px] font-semibold"
-          >
-            다시 시도
-          </button>
+          <RetryButton onClick={() => void fetchStats()} />
         </div>
       ) : null}
     </div>

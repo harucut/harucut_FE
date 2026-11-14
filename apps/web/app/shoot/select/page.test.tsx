@@ -117,7 +117,7 @@ test("조회에 실패하면 사실대로 말하고 다시 부를 길을 준다"
     "프레임을 불러오지 못해 배경색을 바꿀 수 없어요.",
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "다시 불러오기" }));
+  fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
   expect(mockReload).toHaveBeenCalledTimes(1);
 });
 
