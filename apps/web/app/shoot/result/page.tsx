@@ -231,6 +231,10 @@ export default function ShootResultPage() {
   const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
   // 완성본 주소가 열리지 않는가(만료된 조회 URL·오프라인). 참이면 미리보기로 되돌아간다.
   const [isResultImageBroken, setIsResultImageBroken] = useState(false);
+  // 이 화면에서 만드는 것을 기다렸는가. 기다린 사람에게만 완성본이 현상되듯 나타난다(행사 결과 화면과 같다).
+  // 이미 다 된 결과로 돌아온 사람은 바로 본다.
+  const [waited, setWaited] = useState(false);
+  if (!imageResult && imageState !== "error" && !waited) setWaited(true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const guestImageUrlRef = useRef<string | null>(null);
   const imageGenerationKeyRef = useRef<string | null>(null);
@@ -801,8 +805,8 @@ export default function ShootResultPage() {
     화면에서 누른 사람만 로그인 뒤에 이어받을 것이 하나도 없었다.
   */
   const handleGuestLogin = async () => {
-    // 보관에 실패했을 때 무엇을 하라고 할지. 아직 완성본이 없으면 "내려받으라"고 할 수 없다 —
-    // 「사진 저장」이 아직 「만드는 중…」으로 잠겨 있다.
+    // 보관에 실패했을 때 무엇을 하라고 할지. 아직 완성본이 없으면(합성이 실패한 화면) "내려받으라"고 할 수 없다 —
+    // 내려받을 사진이 없다. 만드는 동안에는 이 단추가 없다(로딩 화면).
     const retryHint = imageResult
       ? "먼저 이미지를 내려받아 주세요."
       : "결과가 다 만들어진 뒤에 다시 눌러 주세요.";
@@ -928,8 +932,11 @@ export default function ShootResultPage() {
 
   /*
     아래 단추 줄은 기록에서 사진을 열었을 때와 같다 — [사진 저장 · 공유 · ⋯](components/history/HistoryPhotoViewer).
-    주 버튼 한 자리가 상태를 말한다: 만드는 중이면 잠긴 「만드는 중…」, 다 되면 「사진 저장」, 실패하면 그다음 할 일.
-    같은 자리라 다 만들어져도 화면이 움직이지 않는다.
+    다 되면 「사진 저장」, 실패하면 그다음 할 일(다시 시도·프레임 다시 고르기)이 주 버튼이다.
+
+    만드는 동안에는 단추가 없다(2026-11-15 「완성되어야 넘어가도록 … 중간에 로딩 페이지든 생성을 안내해주는 게」).
+    서버 합성은 원본을 올리고 다 그릴 때까지 몇 초 걸린다 — 그동안 고른 네 장을 프레임에 넣어 빛이 지나가게 하고
+    (행사 결과 화면의 ev-developing) 「네 컷을 만들고 있어요」만 둔다. 다 되면 그 자리에서 현상되듯 나타난다.
   */
   const localBlob = imageResult?.localBlob ?? null;
   const primaryClass =
@@ -988,11 +995,7 @@ export default function ShootResultPage() {
       </button>
     );
   } else {
-    primary = (
-      <button type="button" disabled className={primaryClass}>
-        만드는 중…
-      </button>
-    );
+    primary = null;
   }
 
   // 화면의 글은 이 한 줄뿐이다 — 실패한 까닭, 또는 기록에 남지 않는 사진이라는 것(기기에만 저장된다).
@@ -1016,7 +1019,7 @@ export default function ShootResultPage() {
         </header>
         <h1 className="sr-only">{heading}</h1>
         <p role="status" aria-live="polite" className="sr-only">
-          {isPreparing ? "네 컷을 만들고 있어요." : imageResult ? "네 컷이 완성됐어요." : ""}
+          {imageResult ? "네 컷이 완성됐어요." : ""}
         </p>
 
         {/*
@@ -1046,7 +1049,7 @@ export default function ShootResultPage() {
               style={{
                 aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
               }}
-              className={`${photoSizeClass} rounded-lg bg-(--hc-surface-strong) object-contain shadow-[0_18px_40px_rgba(0,0,0,0.35)]`}
+              className={`${photoSizeClass} rounded-lg bg-(--hc-surface-strong) object-contain shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${waited ? "ev-develop" : ""}`}
               onError={() => setIsResultImageBroken(true)}
             />
           ) : (
@@ -1056,21 +1059,28 @@ export default function ShootResultPage() {
               borderColor={effectiveBorderColor}
               outputFilter={outputFilter}
               theme={themeData}
-              className={tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"}
+              // 만드는 동안 빛이 지나간다. 어두운 프레임과 사진 위라 밝은 빛이어야 보인다(globals.css 의 ev-developing).
+              className={`${tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"} ${isPreparing ? "ev-developing [--developing-sheen:rgba(255,255,255,0.3)]" : ""}`}
             />
           )}
         </section>
 
         {/* 주 버튼이 페이지 높이를 기준으로 화면 아래에 붙는다 — 사진을 보는 동안에도 저장은 엄지 아래다. */}
         <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2.5 bg-linear-to-t from-(--background) from-75% to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 lg:-mx-8 lg:px-8">
+          {/* 만드는 동안은 단추 대신 이 한 줄. 단추 줄과 같은 높이라 다 되어도 사진이 밀리지 않는다. */}
+          {isPreparing ? (
+            <p role="status" className="flex h-13 items-center justify-center text-[15px] font-semibold text-(--hc-muted)">
+              네 컷을 만들고 있어요
+            </p>
+          ) : null}
           {message ? (
             <p className={`text-center text-[13px] leading-[1.6] ${message.danger ? "text-(--hc-danger)" : "text-(--hc-muted)"}`}>
               <Sentences text={message.text} />
             </p>
           ) : null}
 
-          {/* 비회원은 공유·⋯ 대신 이 한 줄 — 보관하는 것은 재료라 만드는 중이어도 실패한 뒤여도 된다(handleGuestLogin). */}
-          {guestMode ? (
+          {/* 비회원은 공유·⋯ 대신 이 한 줄 — 보관하는 것은 재료라 실패한 뒤여도 된다(handleGuestLogin). */}
+          {guestMode && !isPreparing ? (
             <button
               type="button"
               onClick={() => void handleGuestLogin()}
@@ -1081,61 +1091,63 @@ export default function ShootResultPage() {
             </button>
           ) : null}
 
-          <div className="flex gap-2.5">
-            {primary}
-            {!guestMode && imageState !== "error" ? (
-              <>
-                {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}
-                {!localBlob ? (
-                  <button
-                    type="button"
-                    aria-label="공유"
-                    aria-busy={isSharingImage || undefined}
-                    onClick={() => void handleShareImage()}
-                    disabled={!imageResult || isSharingImage}
-                    className={roundButton}
-                  >
-                    <Share2 aria-hidden className="size-5" />
-                  </button>
-                ) : null}
-                <div ref={menuBoxRef} className="relative">
-                  <button
-                    ref={moreButtonRef}
-                    type="button"
-                    aria-label="더보기"
-                    aria-expanded={menuOpen}
-                    aria-controls={menuOpen ? menuId : undefined}
-                    onClick={() => setMenuOpen((open) => !open)}
-                    disabled={!imageResult}
-                    className={roundButton}
-                  >
-                    <Ellipsis aria-hidden className="size-5" />
-                  </button>
-                  {menuOpen ? (
-                    <div
-                      id={menuId}
-                      className="hc-surface-card absolute bottom-full right-0 mb-2 flex w-44 flex-col rounded-2xl border p-1.5"
+          {primary ? (
+            <div className="flex gap-2.5">
+              {primary}
+              {!guestMode && imageResult ? (
+                <>
+                  {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}
+                  {!localBlob ? (
+                    <button
+                      type="button"
+                      aria-label="공유"
+                      aria-busy={isSharingImage || undefined}
+                      onClick={() => void handleShareImage()}
+                      disabled={!imageResult || isSharingImage}
+                      className={roundButton}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          // 창을 닫으면 포커스가 ⋯ 로 돌아오게, 열기 전에 거기 둔다(메뉴 줄은 곧 사라진다).
-                          moreButtonRef.current?.focus();
-                          setRenameError(null);
-                          setRenameOpen(true);
-                        }}
-                        className={menuItem}
-                      >
-                        <PencilLine aria-hidden className="size-4.5" />
-                        이름 바꾸기
-                      </button>
-                    </div>
+                      <Share2 aria-hidden className="size-5" />
+                    </button>
                   ) : null}
-                </div>
-              </>
-            ) : null}
-          </div>
+                  <div ref={menuBoxRef} className="relative">
+                    <button
+                      ref={moreButtonRef}
+                      type="button"
+                      aria-label="더보기"
+                      aria-expanded={menuOpen}
+                      aria-controls={menuOpen ? menuId : undefined}
+                      onClick={() => setMenuOpen((open) => !open)}
+                      disabled={!imageResult}
+                      className={roundButton}
+                    >
+                      <Ellipsis aria-hidden className="size-5" />
+                    </button>
+                    {menuOpen ? (
+                      <div
+                        id={menuId}
+                        className="hc-surface-card absolute bottom-full right-0 mb-2 flex w-44 flex-col rounded-2xl border p-1.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            // 창을 닫으면 포커스가 ⋯ 로 돌아오게, 열기 전에 거기 둔다(메뉴 줄은 곧 사라진다).
+                            moreButtonRef.current?.focus();
+                            setRenameError(null);
+                            setRenameOpen(true);
+                          }}
+                          className={menuItem}
+                        >
+                          <PencilLine aria-hidden className="size-4.5" />
+                          이름 바꾸기
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <canvas ref={canvasRef} className="hidden" />

@@ -396,6 +396,9 @@ body {
 /*
   결과를 기다리는 동안의 자리. 진행률을 지어내지 않는다 — 살아 있다는 것만 알린다.
   동작 줄이기에서는 멈춘 자리로 남는다(아래 reduced-motion 블록).
+  개인 촬영의 완성 화면도 같은 연출을 쓴다(2026-11-15) — 행사 밖에는 --ev-text 가 없어 --hc-text 로 받는다.
+  빛의 색은 --developing-sheen 으로 바꿀 수 있다. 어두운 프레임에 사진이 든 미리보기 위에서는 글자색 9% 가 묻혀
+  멈춘 화면처럼 보였다(2026-11-15 캡처) — 그 자리는 밝은 빛을 쓴다.
 */
 .ev-developing {
   position: relative;
@@ -408,7 +411,7 @@ body {
   background: linear-gradient(
     105deg,
     transparent 30%,
-    color-mix(in srgb, var(--ev-text) 9%, transparent) 50%,
+    var(--developing-sheen, color-mix(in srgb, var(--ev-text, var(--hc-text)) 9%, transparent)) 50%,
     transparent 70%
   );
   transform: translateX(-100%);

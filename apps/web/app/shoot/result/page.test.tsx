@@ -346,13 +346,14 @@ describe("ShootResultPage", () => {
     expect(screen.queryByRole("button", { name: "더보기" })).toBeNull();
   });
 
-  it("만드는 동안 저장·공유·⋯ 는 같은 자리에서 잠겨 있다", async () => {
+  // 「완성되어야 넘어가도록 … 중간에 로딩 페이지든 생성을 안내해주는 게」(2026-11-15). 만드는 동안은 단추 없이 안내 한 줄이다.
+  it("만드는 동안에는 단추 없이 「네 컷을 만들고 있어요」만 보인다", async () => {
     mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
     render(<ShootResultPage />);
 
-    expect(await screen.findByRole("button", { name: "만드는 중…" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "공유" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "더보기" })).toBeDisabled();
+    expect(screen.getByText("네 컷을 만들고 있어요", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /사진 저장|공유|더보기|다시 시도/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: "사진 저장" })).toBeNull();
   });
 
   it("이름 바꾸기는 ⋯ 안에서 기록과 같은 창으로 고친다", async () => {
@@ -670,41 +671,19 @@ describe("ShootResultPage", () => {
   });
 
   /*
-    보관하는 것은 완성본이 아니라 **원본 4장과 만드는 방법**이다(lib/pendingGuestSave.ts).
-    그래서 완성본이 아직 없어도 만들어진다 — 예전에는 완성본이 없으면 보관을 건너뛰고
-    로그인으로 보내서, 결과를 기다리다 누른 사람은 로그인 뒤에 이어받을 것이 없었다.
+    만드는 동안은 로딩 화면이라 「로그인하고 보관하기」도 없다(2026-11-15). 비회원 합성은 기기에서 금방 끝난다.
+    보관은 완성본이 아니라 원본 4장과 만드는 방법이라(lib/pendingGuestSave.ts) 합성이 실패한 뒤에도 된다 —
+    그 경우는 「게스트 합성이 실패한 뒤에 눌러도 원본 4장을 보관한다」가 지킨다.
   */
-  it("게스트가 합성이 끝나기 전에 눌러도 원본 4장을 보관한다", async () => {
+  it("게스트도 만드는 동안에는 로그인 단추 없이 안내만 본다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
-    // 아직 그리는 중인 순간을 붙잡아 둔다.
     mockComposeFramePng.mockReturnValue(new Promise(() => {}));
-
     render(<ShootResultPage />);
 
-    const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 보관하기",
-    });
-    expect(mockUseShootSession.getState().imageResult).toBeNull();
-
-    fireEvent.click(loginButton);
-
-    await waitFor(() => {
-      expect(mockSetPendingGuestSave).toHaveBeenCalledTimes(1);
-    });
-    expect(mockSetPendingGuestSave.mock.calls[0][0]).toMatchObject({
-      sources: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
-      frameId: "classic-4",
-      backgroundColor: "#111827",
-    });
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith(
-        "/login?redirectTo=%2Fhome%3FresumeSave%3D1",
-      );
-    });
+    expect(await screen.findByText("네 컷을 만들고 있어요", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "로그인하고 보관하기" })).toBeNull();
   });
 
-  // 합성이 실패해도 재료는 그대로다. 여기서 보관을 건너뛰면 실패 화면에서 로그인한
-  // 사람만 사진을 통째로 잃는다.
   it("게스트 합성이 실패한 뒤에 눌러도 원본 4장을 보관한다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
     mockComposeFramePng.mockRejectedValue(new Error("compose failed"));
@@ -742,7 +721,7 @@ describe("ShootResultPage", () => {
     mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
 
     render(<ShootResultPage />);
-    await screen.findByRole("button", { name: "만드는 중…" });
+    await screen.findByText("네 컷을 만들고 있어요", { selector: "p" });
 
     const pending = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(pending);
@@ -1118,7 +1097,7 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByRole("button", { name: "만드는 중…" })).toBeDisabled();
+    expect(screen.getByText("네 컷을 만들고 있어요", { selector: "p" })).toBeInTheDocument();
 
     // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다.
     act(() => {
@@ -1140,7 +1119,7 @@ describe("ShootResultPage", () => {
       "src",
       "https://example.com/a.png",
     );
-    expect(screen.queryByRole("button", { name: "만드는 중…" })).not.toBeInTheDocument();
+    expect(screen.queryByText("네 컷을 만들고 있어요", { selector: "p" })).not.toBeInTheDocument();
     // 이어받히며 끊긴 첫 실행도 완료를 기다리고 있었다. 그 실행이 `cancelled` 를 "떠났다"로
     // 읽고 알리면, 결과를 보고 있는 사람에게 "완성됐어요" 가 뜬다.
     expect(mockNativeNotify).not.toHaveBeenCalled();
