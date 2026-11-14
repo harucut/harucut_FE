@@ -1115,6 +1115,19 @@ describe("ThemeEditorPage 방향키 이동", () => {
     expect(editorStoreState.nudge).not.toHaveBeenCalled();
     input.remove();
   });
+
+  // 창은 열 때 자기 자신에 포커스를 둔다(useModalDialog). 그 상태의 방향키가 뒤 레이어를 움직이면 안 된다.
+  it("창이 떠 있으면 방향키로 뒤 레이어를 움직이지 않는다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.tabIndex = -1;
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(dialog, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+    dialog.remove();
+  });
 });
 
 describe("ThemeEditorPage 모바일 도구 시트", () => {

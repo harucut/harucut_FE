@@ -783,6 +783,13 @@ body {
   outline: 2px solid var(--hc-text);
   outline-offset: 3px;
 }
+/*
+  창을 열면 포커스는 창 자체가 받는다(useModalDialog). 누르는 것이 아니라 테두리를 그리지 않는다 —
+  창 전체에 검은 테두리가 둘리면 안 된다. Tab 으로 들어간 컨트롤에는 위 테두리가 그대로 그려진다.
+*/
+[role="dialog"][tabindex="-1"]:focus-visible {
+  outline: none;
+}
 
 .hc-modal {
   background: rgba(0, 0, 0, 0.5);

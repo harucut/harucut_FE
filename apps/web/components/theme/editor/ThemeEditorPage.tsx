@@ -198,6 +198,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       ) {
         return;
       }
+      // 창(저장·지우기 확인)이 떠 있으면 뒤 캔버스를 움직이지 않는다. 창은 열 때 자기 자신에 포커스를
+      // 두므로(useModalDialog) 버튼 검사만으로는 방향키·되돌리기가 뒤 레이어로 샌다.
+      if (target instanceof Element && target.closest('[aria-modal="true"]')) return;
       // 방향키: 고른 레이어를 움직인다. 버튼·링크에 포커스가 있으면 그 조작을 가로채지 않는다.
       const arrow = ARROWS[event.key];
       if (arrow && !event.metaKey && !event.ctrlKey && !event.altKey) {
