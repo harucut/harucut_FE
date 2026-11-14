@@ -3,15 +3,11 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { User } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { resumeUnfinishedPurchases } from "@/lib/storePurchase";
 import { syncPushDevice } from "@/lib/pushDevices";
 import { useStudioAccess } from "@/hooks/useStudioAccess";
-
-type AppNavProps = {
-  // 프로필 원형에 표시할 사용자 이니셜(없으면 아이콘 대체).
-  userInitial?: string | null;
-};
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/home", label: "홈" },
@@ -26,7 +22,7 @@ const NAV_LINKS: { href: string; label: string }[] = [
 // 촬영 CTA는 여기 두지 않는다. 데스크톱 상단은 네비게이션 자리이고, 촬영 진입은 홈의
 // 큰 카드가 맡는다. 모바일은 그대로 하단 탭바 가운데 FAB가 담당한다 — 이 컴포넌트는
 // lg 미만에서 아예 렌더되지 않으므로 여기 변경은 모바일에 닿지 않는다.
-export function AppNav({ userInitial }: AppNavProps) {
+export function AppNav() {
   // 로그인한 화면에서만 그려지므로 여기서 마치지 못한 스토어 거래를 이어서 마친다(앱 결제를 열었을 때만 동작).
   // 서버 푸시 기기 등록도 여기서 맞춘다(앱 셸·알림 권한이 있을 때만).
   useEffect(() => {
@@ -46,8 +42,6 @@ export function AppNav({ userInitial }: AppNavProps) {
     : studioAccess
       ? [...NAV_LINKS.slice(0, 3), { href: "/studio", label: "행사 운영" }, ...NAV_LINKS.slice(3)]
       : NAV_LINKS;
-
-  const initial = userInitial?.trim()?.[0]?.toUpperCase() ?? "";
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-(--hc-border) bg-(--hc-surface-soft) backdrop-blur-xl lg:block">
@@ -71,7 +65,7 @@ export function AppNav({ userInitial }: AppNavProps) {
                   대신 이 시스템의 주된 위계 장치인 굵기 대비(800 ↔ 500)에 색을 얹는다.
                   hover 는 색만 올리고 굵기는 그대로 둔다 — 굵기를 같이 올리면 hover 가
                   활성과 구별되지 않고(예전엔 실제로 그랬다), 글자 폭이 변해 흔들린다.
-                  초록은 쓰지 않는다. 이 화면의 초록은 촬영 CTA 와 프로필 원이 이미 갖고 있다.
+                  초록은 쓰지 않는다. 이 화면의 초록은 촬영 CTA 가 갖고 있다.
                 */
                 className={`whitespace-nowrap px-3.5 py-2 text-[15px] transition ${
                   active
@@ -86,13 +80,17 @@ export function AppNav({ userInitial }: AppNavProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
+          {/*
+            사람 아이콘이다 — 폰 하단 탭의 「MY」와 같은 아이콘(MobileTabBar)(2026-11-14).
+            예전에는 이름 첫 글자를 라임 원에 넣었는데, 한국 이름은 성이 먼저라 대부분 「김」「이」「박」으로
+            보였고, 이름을 넘기지 않는 화면에서는 「MY」로 달라졌다. 라임도 뺐다 — 한 화면의 라임은 촬영 버튼 하나다.
+          */}
           <Link
             href="/mypage"
-            // 보이는 글자가 이름에 들어 있어야 음성 조작으로 「MY」를 부를 수 있다(WCAG 2.5.3). 이니셜 한 글자는 부를 말이 아니라 넣지 않는다.
-            aria-label={initial ? "마이페이지" : "마이페이지 MY"}
-            className="grid h-10.5 w-10.5 place-items-center rounded-full bg-(--hc-primary) text-[15px] font-extrabold text-(--hc-primary-contrast)"
+            aria-label="마이페이지"
+            className="grid h-10.5 w-10.5 place-items-center rounded-full border border-(--hc-border) bg-(--hc-surface) text-(--hc-text) transition hover:border-(--hc-border-strong)"
           >
-            {initial || "MY"}
+            <User aria-hidden className="h-5 w-5" />
           </Link>
         </div>
       </div>

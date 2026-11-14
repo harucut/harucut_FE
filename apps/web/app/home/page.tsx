@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowRight } from "lucide-react";
 import { serverDateTimeToMillis } from "@harucut/shared";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
-import { getMyUserInfo, type UserInfo } from "@/lib/userApi";
 import { listRecentMedia } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
 import {
@@ -14,7 +13,6 @@ import {
   getUserMediaTitle,
 } from "@/lib/userMediaPreview";
 import { FramePreview } from "@/components/frame/FramePreview";
-import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { DEMO_DECORATED_THEME } from "@/constants/demoTheme";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
@@ -97,7 +95,6 @@ function useCurrentDateKey() {
 
 export default function HomePage() {
   const studioAccess = useStudioAccess();
-  const [user, setUser] = useState<UserInfo | null>(null);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [recentMedia, setRecentMedia] = useState<UserMedia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,17 +110,13 @@ export default function HomePage() {
 
       try {
         // 기록 조회 실패는 빈 상태로 삼키지 않고 에러 상태로 구분한다.
-        const [nextUser, mediaResult] = await Promise.all([
-          getMyUserInfo().catch(() => null),
-          listRecentMedia(RECENT_LIMIT).then(
-            (media) => ({ ok: true as const, media }),
-            (error: unknown) => ({ ok: false as const, error }),
-          ),
-        ]);
+        // 내 정보는 더 받지 않는다 — 머리의 이름 첫 글자를 사람 아이콘으로 바꿔 쓸 데가 없다(2026-11-14).
+        const mediaResult = await listRecentMedia(RECENT_LIMIT).then(
+          (media) => ({ ok: true as const, media }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
 
         if (cancelled) return;
-
-        setUser(nextUser);
 
         if (!mediaResult.ok) {
           console.error(mediaResult.error);
@@ -166,13 +159,15 @@ export default function HomePage() {
   );
 
   const latest = recentMedia[0] ?? null;
-  // 큰 카드에 올린 한 장은 아래 줄에서 뺀다. 한 장뿐이면 줄이 비지 않게 그대로 둔다.
-  const stripMedia = recentMedia.length > 1 ? recentMedia.slice(1) : recentMedia;
+  // 큰 카드에 올린 한 장은 아래 줄에서 뺀다. 한 장뿐이면 「최근 기록」을 아예 두지 않는다 —
+  // 예전에는 줄이 비지 않게 그 한 장을 아래에 한 번 더 보여서, 같은 사진이 한 화면에 두 번 나왔다(2026-11-14).
+  const stripMedia = recentMedia.slice(1);
+  const showRecent = loading || Boolean(loadError) || recentMedia.length !== 1;
   const actions = studioAccess ? [STUDIO_ACTION] : [];
 
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-12">
-      <AppNav userInitial={user?.username} />
+      <AppNav />
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:py-6 lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-start lg:gap-x-8 lg:gap-y-6 lg:py-8">
         <header className="pt-1 lg:col-span-2 lg:pt-0">
@@ -215,6 +210,7 @@ export default function HomePage() {
           </nav>
           ) : null}
 
+          {showRecent ? (
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <h2 className="text-[18px] font-extrabold tracking-tight">최근 기록</h2>
@@ -258,6 +254,7 @@ export default function HomePage() {
               </p>
             )}
           </section>
+          ) : null}
         </div>
       </div>
       <MobileTabBar quietShoot />
@@ -270,8 +267,11 @@ export default function HomePage() {
 }
 
 /**
- * 큰 카드의 사진. 기록이 있으면 가장 최근 것, 없으면 예시 프레임이다.
- * 예시는 진짜 기록처럼 보이면 안 되므로 예시라고 적는다. 칸 높이를 고정해 사진이 늦게 와도 버튼이 밀리지 않는다.
+ * 큰 카드의 사진. 기록이 있으면 가장 최근 것, 없으면 사진 칸이 빈 프레임이다.
+ * 칸 높이를 고정해 사진이 늦게 오거나 모양(세로·가로·네모 4컷)이 달라도 버튼이 밀리지 않는다 — 사진은 자르지 않고 칸 안에 맞춘다.
+ *
+ * 빈 프레임에는 사람을 넣지 않는다(2026-11-14). 예전에는 데모 인물 사진을 채우고 「예시 사진이에요」라고 적었는데,
+ * 내 첫 화면 한가운데에 모르는 사람이 서 있었다. 빈 칸은 「여기에 내 네 컷이 들어간다」로 읽힌다.
  */
 function HeroPhoto({ loading, item }: { loading: boolean; item: UserMedia | null }) {
   // 세로로 긴 스트립만 살짝 기울인다. 실물처럼 보이는 것은 긴 띠뿐이고, 가로 사진을 기울이면 삐뚤게만 보인다.
@@ -306,18 +306,16 @@ function HeroPhoto({ loading, item }: { loading: boolean; item: UserMedia | null
   }
 
   return (
-    <div className={`${box} flex-col gap-2.5`}>
-      <div aria-hidden className="min-h-0 flex-1 -rotate-2 drop-shadow-2xl">
+    <div className={box}>
+      <div aria-hidden className="h-full -rotate-2 drop-shadow-2xl">
         <FramePreview
           frameId="grid-4"
-          images={DEMO_PHOTOS}
           theme={DEMO_DECORATED_THEME}
           borderColor="#141416"
-          imageLoading="eager"
+          slotColor="rgba(255,255,255,0.14)"
           className="h-full! w-auto!"
         />
       </div>
-      <p className="shrink-0 text-[12px] text-(--hc-muted)">이렇게 남아요. 예시 사진이에요.</p>
     </div>
   );
 }

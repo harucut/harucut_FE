@@ -913,7 +913,7 @@ export default function MyPage() {
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       {/* 정지 계정은 갈 곳이 여기뿐이다. 눌러도 돌아오는 메뉴를 두지 않는다. */}
-      {blocked ? null : <AppNav userInitial={user?.username} />}
+      {blocked ? null : <AppNav />}
 
       {/* 한 칸이므로 폭을 좁힌다. 예전 1000px 는 좌우 두 칸이 나눠 쓰던 폭이라,
           그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
