@@ -236,7 +236,7 @@ function SignupPageContent() {
 
   if (!activeTerms.fromServer) {
     return (
-      <AuthPageShell title="회원가입" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
+      <AuthPageShell title="회원가입" backHref={loginHref} backLabel="로그인으로" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
         <div className="flex flex-col gap-4">
           <p role="status" className="text-sm leading-relaxed text-(--hc-text)">
             {activeTerms.status === "loading"
@@ -255,6 +255,8 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
+      backHref={loginHref}
+      backLabel="로그인으로"
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />

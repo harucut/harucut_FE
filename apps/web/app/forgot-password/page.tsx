@@ -20,6 +20,8 @@ function ForgotPasswordPageContent() {
   return (
     <AuthPageShell
       title="비밀번호 찾기"
+      backHref={loginHref}
+      backLabel="로그인으로"
       description={flow.description}
       footer={
         // 메일이 늦거나 스팸함으로 가면 여기서 멈춘다. 코드를 보낸 뒤(인증 전)에만 일러 둔다.
