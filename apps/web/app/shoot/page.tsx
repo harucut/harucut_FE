@@ -12,6 +12,7 @@ import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
 import { Sentences } from "@/components/ui/Sentences";
+import { checkSavedFrame } from "@/lib/savedFrameCheck";
 
 /**
  * 두 프레임이 **같은 촬영본을 쓸 수 있는가**.
@@ -96,7 +97,29 @@ function ShootPageContent() {
     })();
   }, [accessMode, checkSession, enterGuestMode, hydrated]);
 
-  const confirmFrame = ({ frameId, remoteFrameId }: FrameChoice, allowReset = false) => {
+  /*
+    저장한 프레임은 **찍기 전에** 쓸 수 있는지 본다(2026-11-15 「프레임에 문제가 있던 거면 촬영 전에부터 말해주는
+    게 맞지 않을까?」, lib/savedFrameCheck.ts). 예전에는 다 찍고 고른 뒤 합성에서야 「프레임을 불러오지 못했어요」가
+    떴다. 문제가 있으면 확인 단추 바로 위에 까닭을 말하고 이 화면에 둔다. 다른 프레임을 고르면 안내는 거둔다.
+    기본 레이아웃은 확인할 것이 없다(서버의 기본 프레임이 없으면 기기 합성으로 넘어간다).
+  */
+  const [checkingFrame, setCheckingFrame] = useState(false);
+  const [frameProblem, setFrameProblem] = useState<string | null>(null);
+  const confirmFrame = async (choice: FrameChoice, allowReset = false) => {
+    if (choice.remoteFrameId != null && !allowReset) {
+      setCheckingFrame(true);
+      setFrameProblem(null);
+      const problem = await checkSavedFrame(choice.remoteFrameId);
+      setCheckingFrame(false);
+      if (problem) {
+        setFrameProblem(problem);
+        return;
+      }
+    }
+    proceedWithFrame(choice, allowReset);
+  };
+
+  const proceedWithFrame = ({ frameId, remoteFrameId }: FrameChoice, allowReset: boolean) => {
     const session = useShootSession.getState();
     // 갤러리 사진은 원본이고, 촬영본만 이전 슬롯 비율로 이미 잘려 있다.
     const reusable = source === "upload" ||
@@ -175,14 +198,17 @@ function ShootPageContent() {
           confirmLabel={source === "upload" ? "사진 고르러 가기" : "이 프레임으로 찍기"}
           // 비회원은 프레임 조회 자체가 인증이 필요해 목록을 볼 수 없다.
           hideSavedFrames={accessMode !== "member"}
-          onConfirm={(choice) => confirmFrame(choice)}
+          onConfirm={(choice) => void confirmFrame(choice)}
+          confirmNotice={frameProblem}
+          confirmBusy={checkingFrame}
+          onSelectionChange={() => setFrameProblem(null)}
         />
         {pendingFrame ? <ConfirmDialog
           title="새 비율로 다시 찍을까요?"
           description="선택한 프레임은 사진 비율이 달라요. 다시 찍으면 현재 사진이 이 기기에서 지워져요. 사진을 남기려면 취소하고 같은 비율의 프레임을 골라 주세요."
           confirmLabel="사진 지우고 다시 찍기" destructive running={false}
           onClose={() => setPendingFrame(null)}
-          onConfirm={() => { const choice = pendingFrame; setPendingFrame(null); confirmFrame(choice, true); }}
+          onConfirm={() => { const choice = pendingFrame; setPendingFrame(null); void confirmFrame(choice, true); }}
         /> : null}
       </div>
     </main>

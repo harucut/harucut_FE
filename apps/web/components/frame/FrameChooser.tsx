@@ -24,6 +24,12 @@ type Props = {
   confirmLabel: string;
   confirmDisabled?: boolean;
   onConfirm: (choice: FrameChoice) => void;
+  /** 고른 프레임을 쓸 수 없는 까닭 — 확인 단추 바로 위 한 줄(촬영 전 확인, app/shoot). */
+  confirmNotice?: string | null;
+  /** 고른 프레임을 확인하는 중. 확인 단추가 「프레임 확인 중…」으로 잠긴다. */
+  confirmBusy?: boolean;
+  /** 고른 것이 바뀌었다 — 앞서 고른 프레임의 안내를 거둘 때 쓴다. */
+  onSelectionChange?: () => void;
 
   /** 비회원처럼 저장한 프레임을 볼 수 없는 경우. */
   hideSavedFrames?: boolean;
@@ -56,6 +62,9 @@ export function FrameChooser({
   confirmLabel,
   confirmDisabled,
   onConfirm,
+  confirmNotice,
+  confirmBusy,
+  onSelectionChange,
   hideSavedFrames,
   onOpenSavedFrame,
   children,
@@ -111,6 +120,7 @@ export function FrameChooser({
         onChangeSelected={(nextFrameId) => {
           setManualFrameId(nextFrameId);
           setSelectedRemoteFrameId(null);
+          onSelectionChange?.();
         }}
       />
 
@@ -128,6 +138,7 @@ export function FrameChooser({
           onSelectRemoteFrame={(frame) => {
             setManualFrameId(frameIdFromFrameType(frame.frameType));
             setSelectedRemoteFrameId(frame.frameId);
+            onSelectionChange?.();
           }}
           onRefresh={onRefresh}
           onOpen={onOpenSavedFrame}
@@ -139,6 +150,8 @@ export function FrameChooser({
         onConfirm={handleConfirm}
         confirmDisabled={confirmDisabled}
         confirmLabel={confirmLabel}
+        notice={confirmNotice}
+        busy={confirmBusy}
       />
     </>
   );

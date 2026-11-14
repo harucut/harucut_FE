@@ -8,6 +8,12 @@ import type { FrameId } from "@/constants/frames";
 const mockPush = jest.fn();
 let mockQuery = "";
 let mockChosenFrameId: FrameId = "grid-4";
+let mockChosenRemoteFrameId: number | null = null;
+const mockCheckSavedFrame = jest.fn();
+
+jest.mock("@/lib/savedFrameCheck", () => ({
+  checkSavedFrame: (...args: unknown[]) => mockCheckSavedFrame(...args),
+}));
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
@@ -31,15 +37,26 @@ jest.mock("@/components/frame/FrameChooser", () => ({
   FrameChooser: ({
     onConfirm,
     children,
+    confirmNotice,
+    confirmBusy,
+    onSelectionChange,
   }: {
     onConfirm: (choice: { frameId: FrameId; remoteFrameId: number | null }) => void;
     children?: React.ReactNode;
+    confirmNotice?: string | null;
+    confirmBusy?: boolean;
+    onSelectionChange?: () => void;
   }) => (
     <div>
       {children}
+      {confirmNotice ? <p role="alert">{confirmNotice}</p> : null}
+      <button type="button" onClick={() => onSelectionChange?.()}>
+        다른 프레임
+      </button>
       <button
         type="button"
-        onClick={() => onConfirm({ frameId: mockChosenFrameId, remoteFrameId: null })}
+        disabled={confirmBusy}
+        onClick={() => onConfirm({ frameId: mockChosenFrameId, remoteFrameId: mockChosenRemoteFrameId })}
       >
         확인
       </button>
@@ -343,5 +360,55 @@ describe("기존 촬영 복구", () => {
     expect(useShootSession.getState().shots).toEqual(SHOTS);
     fireEvent.click(screen.getByRole("button", { name: "사진 지우고 시작" }));
     expect(useShootSession.getState().shots).toEqual([]);
+  });
+});
+
+/*
+  저장한 프레임은 찍기 전에 쓸 수 있는지 본다(2026-11-15 「프레임에 문제가 있던 거면 촬영 전에부터 말해주는 게
+  맞지 않을까?」). 문제가 있으면 이 화면에 두고 까닭을 말한다 — 다 찍고 나서 알게 하지 않는다.
+*/
+describe("저장한 프레임의 촬영 전 확인", () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    mockCheckSavedFrame.mockReset();
+    mockQuery = "";
+    mockChosenFrameId = "classic-4";
+    mockChosenRemoteFrameId = 7;
+    useShootSession.getState().reset();
+  });
+  afterAll(() => {
+    mockChosenRemoteFrameId = null;
+  });
+
+  it("문제가 있으면 찍으러 가지 않고 까닭을 말한다", async () => {
+    mockCheckSavedFrame.mockResolvedValue("프레임 그림을 불러오지 못했어요. 다시 누르거나 다른 프레임을 골라 주세요.");
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("프레임 그림을 불러오지 못했어요.");
+    expect(mockCheckSavedFrame).toHaveBeenCalledWith(7);
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // 다른 프레임을 고르면 안내를 거둔다.
+    fireEvent.click(screen.getByRole("button", { name: "다른 프레임" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("문제가 없으면 그대로 찍으러 간다", async () => {
+    mockCheckSavedFrame.mockResolvedValue(null);
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/capture"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("기본 레이아웃은 확인하지 않는다", async () => {
+    mockChosenRemoteFrameId = null;
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/capture"));
+    expect(mockCheckSavedFrame).not.toHaveBeenCalled();
   });
 });

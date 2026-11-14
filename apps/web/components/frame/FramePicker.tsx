@@ -6,6 +6,7 @@ import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
 import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
+import { Sentences } from "@/components/ui/Sentences";
 
 type FramePickerLayoutMode = "carousel" | "grid";
 
@@ -144,20 +145,31 @@ export function FramePickerConfirm({
   onConfirm,
   confirmDisabled = false,
   confirmLabel = "선택한 프레임으로 진행하기",
+  notice,
+  busy = false,
 }: {
   onConfirm: () => void;
   confirmDisabled?: boolean;
   confirmLabel?: string;
+  /** 고른 프레임을 쓸 수 없는 까닭(촬영 전 확인, app/shoot). 단추 바로 위 한 줄이다. */
+  notice?: string | null;
+  /** 고른 프레임을 확인하는 중 — 단추가 「프레임 확인 중…」으로 잠긴다. */
+  busy?: boolean;
 }) {
   return (
-    <div className="sticky bottom-0 z-20 -mx-2 mt-auto bg-linear-to-t from-(--background) from-70% to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-6 sm:-mx-4 sm:px-4 md:static md:mx-0 md:flex md:justify-end md:bg-none md:p-0">
+    <div className="sticky bottom-0 z-20 -mx-2 mt-auto bg-linear-to-t from-(--background) from-70% to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-6 sm:-mx-4 sm:px-4 md:static md:mx-0 md:flex md:flex-col md:items-end md:bg-none md:p-0">
+      {notice ? (
+        <p role="alert" className="mb-3 text-center text-[13px] leading-[1.6] text-(--hc-danger) md:text-right">
+          <Sentences text={notice} />
+        </p>
+      ) : null}
       <button
         type="button"
-        disabled={confirmDisabled}
+        disabled={confirmDisabled || busy}
         onClick={onConfirm}
         className="hc-button-primary inline-flex h-14 w-full items-center justify-center rounded-full px-5 text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-50 md:h-12 md:w-auto md:min-w-50 md:px-6 md:text-[15px]"
       >
-        {confirmLabel}
+        {busy ? "프레임 확인 중…" : confirmLabel}
       </button>
     </div>
   );
