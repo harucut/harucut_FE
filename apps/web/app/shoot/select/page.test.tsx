@@ -40,7 +40,8 @@ const mockShootSession = {
   clearSelection: noop,
   setBorderColor: noop,
   setOutputFilter: noop,
-  source: "capture" as const,
+  source: "capture" as "capture" | "upload",
+  resetShots: jest.fn(),
 };
 
 jest.mock("next/navigation", () => ({
@@ -48,7 +49,25 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/components/layout/PageHeader", () => ({
-  PageHeader: ({ title }: { title: ReactNode }) => <div>{title}</div>,
+  PageHeader: ({
+    title,
+    backHref,
+    backLabel,
+    onBackClick,
+  }: {
+    title: ReactNode;
+    backHref?: string;
+    backLabel?: string;
+    onBackClick?: (event: { preventDefault: () => void }) => void;
+  }) => (
+    <div>
+      {title}
+      {/* 이동은 진짜 Link 가 한다. 여기서는 눌렀을 때 함께 하는 일만 본다. */}
+      {backHref ? (
+        <button type="button" aria-label={backLabel} onClick={(event) => onBackClick?.(event)} />
+      ) : null}
+    </div>
+  ),
 }));
 
 // 사진 고르기 판은 대역으로 두되 **출력 옵션은 진짜를 그린다** — 잠기는지 아닌지가 전부다.
@@ -74,7 +93,7 @@ const colorPicker = () => screen.queryByLabelText("배경색 고르기");
 beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(mockThemeState, { data: null, error: null, isLoading: false });
-  Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null });
+  Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null, source: "capture" });
 });
 
 test("꾸민 프레임의 조회가 실패해도 배경색 고르기는 잠긴 채다", () => {
@@ -137,3 +156,21 @@ test("꾸민 프레임을 안 쓰면 배경색을 고를 수 있다", () => {
   expect(colorPicker()).not.toBeNull();
   expect(screen.queryByRole("status")).toBeNull();
 });
+
+/*
+  「다시 찍기」는 처음부터 새로 찍는다(2026-11-14). 찍은 사진을 들고 가면 촬영 화면이 다 찍은 것으로
+  보고 이 화면으로 되돌린다 — 다시 찍을 길이 막힌다.
+*/
+test("다시 찍기는 찍은 사진을 비우고 촬영으로 간다", () => {
+  render(<ShootSelectPage />);
+  fireEvent.click(screen.getByRole("button", { name: "다시 찍기" }));
+  expect(mockShootSession.resetShots).toHaveBeenCalledTimes(1);
+});
+
+test("불러온 사진은 비우지 않고 불러오기 화면이 다시 고르게 둔다", () => {
+  mockShootSession.source = "upload";
+  render(<ShootSelectPage />);
+  fireEvent.click(screen.getByRole("button", { name: "사진 다시 고르기" }));
+  expect(mockShootSession.resetShots).not.toHaveBeenCalled();
+});
+

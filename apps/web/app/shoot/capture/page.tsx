@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useMemo, useSyncExternalStore } from "react";
 import { SwitchCamera, Timer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -15,7 +14,6 @@ import { useCaptureFlow } from "./_hooks/useCaptureFlow";
 const subscribeNever = () => () => undefined;
 
 export default function CapturePage() {
-  const [confirmRestart, setConfirmRestart] = useState(false);
   const {
     videoRef,
     canvasRef,
@@ -291,8 +289,8 @@ export default function CapturePage() {
           알약이었다가 찍는 동안 셔터로 바뀌었고, 멈추면 그 위에 「찍은 사진 고르기」·「이어서 찍기」,
           가운데에 「처음부터 다시 찍기」가 섰다. 고르기는 다 찍고 넘어간 다음 화면(/shoot/select)이
           하고, 찍는 동안 처음부터 다시 찍는 길은 두지 않는다. 셔터가 하는 일만 상황에 따라 다르다 —
-          시작 · 지금 한 컷(#404) · 멈췄던 데서 이어 찍기. 사진 고르기 화면의 「다시 찍기」로 돌아와
-          다 찍은 사진이 남아 있을 때만 셔터가 새로 찍기를 묻는다(지우는 일이라 확인한다).
+          시작 · 지금 한 컷(#404) · 멈췄던 데서 이어 찍기. 다 찍은 채로는 이 화면에 머물지 않는다 —
+          고르기 화면으로 넘어간다(useCaptureFlow). 다시 찍는 길은 고르기 화면의 「다시 찍기」다.
 
           중단 버튼은 두지 않는다 — 헤더의 뒤로가기가 그 역할이고(언마운트가 스트림과 진행 중인
           인코딩을 정리한다), 전환은 아이콘만이라 셔터가 항상 정중앙에 온다.
@@ -314,25 +312,9 @@ export default function CapturePage() {
           {isShooting || isCameraReady ? (
             <button
               type="button"
-              onClick={
-                isShooting
-                  ? handleShootNow
-                  : shots.length === 0
-                    ? () => startShooting()
-                    : shots.length < MAX_SHOTS
-                      ? resumeShooting
-                      : () => setConfirmRestart(true)
-              }
+              onClick={isShooting ? handleShootNow : shots.length === 0 ? () => startShooting() : resumeShooting}
               // 모양은 하나지만 하는 일은 상황마다 다르다. 화면에 글자가 없으니 보조기술에는 그 일을 말한다.
-              aria-label={
-                isShooting
-                  ? "바로 찍기"
-                  : shots.length === 0
-                    ? "찍기 시작"
-                    : shots.length < MAX_SHOTS
-                      ? "이어서 찍기"
-                      : "새로 찍기"
-              }
+              aria-label={isShooting ? "바로 찍기" : shots.length === 0 ? "찍기 시작" : "이어서 찍기"}
               // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
               className="grid h-18 w-18 place-items-center rounded-full border-4 border-(--hc-text) transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >
@@ -350,9 +332,6 @@ export default function CapturePage() {
           )}
         </div>
       </div>
-      {confirmRestart ? <ConfirmDialog title="처음부터 다시 찍을까요?" description={`찍어 둔 사진 ${shots.length}장을 지우고 새로 촬영해요.`}
-        confirmLabel="지우고 다시 찍기" running={false} destructive
-        onClose={() => setConfirmRestart(false)} onConfirm={() => { setConfirmRestart(false); startShooting(); }} /> : null}
     </main>
   );
 }

@@ -182,6 +182,23 @@ it("촬영 화면에 돌아와도 사진을 지우지 않고 남은 컷부터 �
   expect(mockResetShots).not.toHaveBeenCalled();
 });
 
+/*
+  다 찍었으면 촬영 화면에 머물지 않는다 — 고르기 화면으로 넘긴다(2026-11-14). 예전에는 셔터가
+  「처음부터 다시 찍을까요?」를 물었다. 다시 찍는 길은 고르기 화면의 「다시 찍기」 하나다.
+*/
+it("다 찍은 채 들어오면 고르기 화면으로 넘긴다", () => {
+  mockShots = Array.from({ length: 8 }, (_, index) => `shot-${index}`);
+  renderHook(() => useCaptureFlow());
+  expect(mockReplace).toHaveBeenCalledWith("/shoot/select");
+  expect(mockResetShots).not.toHaveBeenCalled();
+});
+
+it("덜 찍었으면 촬영 화면에 남는다", () => {
+  mockShots = ["one", "two", "three"];
+  renderHook(() => useCaptureFlow());
+  expect(mockReplace).not.toHaveBeenCalledWith("/shoot/select");
+});
+
 describe("useCaptureFlow 촬영본 크기", () => {
   const frameIds = Object.keys(FRAME_LAYOUTS) as FrameId[];
 

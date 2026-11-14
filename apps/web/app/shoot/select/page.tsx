@@ -24,6 +24,7 @@ export default function ShootSelectPage() {
     setBorderColor,
     setOutputFilter,
     source,
+    resetShots,
   } = useShootSession();
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
   const fromUpload = source === "upload";
@@ -76,6 +77,9 @@ export default function ShootSelectPage() {
           title="사진 선택"
           backHref={sourceHref}
           backLabel={fromUpload ? "사진 다시 고르기" : "다시 찍기"}
+          // 다시 찍기는 처음부터 새로 찍는다. 찍은 사진을 들고 가면 촬영 화면이 다 찍은 것으로 보고
+          // 이 화면으로 되돌린다(useCaptureFlow). 불러온 사진은 불러오기 화면이 다시 고르게 둔다.
+          onBackClick={fromUpload ? undefined : () => resetShots()}
         />
 
 
