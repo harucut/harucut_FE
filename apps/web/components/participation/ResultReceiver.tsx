@@ -21,6 +21,7 @@ import type { EventFrameRef, ResultStatus } from "@/lib/event/types";
 import { getNativeSaveErrorMessage, NativeSaveError } from "@/lib/nativeBridge";
 import { detectInAppBrowser } from "@/lib/externalBrowser";
 import { copyText, saveImageFromSignedUrl, saveImageMessage, sharePhotoFile, shareOrCopyLink } from "@/lib/share";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 결과 토큰 문법(32바이트 base64url 이 43자). 그 밖의 fragment 는 토큰으로 보내지 않는다. */
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -280,14 +281,14 @@ export function ResultReceiver() {
 
         {view.kind === "no-token" ? (
           <p role="alert" className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">
-            받은 링크를 다시 열어 주세요. 링크 끝부분이 빠지면 사진을 찾을 수 없어요. 그래도 안 되면 행사 담당자에게 문의해 주세요.
+            <Sentences text="받은 링크를 다시 열어 주세요. 링크 끝부분이 빠지면 사진을 찾을 수 없어요. 그래도 안 되면 행사 담당자에게 문의해 주세요." />
           </p>
         ) : null}
 
         {view.kind === "error" ? (
           <div className="flex flex-col gap-3">
             <p role="alert" className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">
-              {view.message}
+              <Sentences text={view.message} />
             </p>
             {view.retryable && token ? (
               <EventButton tone="quiet" size="md" onClick={() => load(token)}>
@@ -302,15 +303,15 @@ export function ResultReceiver() {
         {view.kind === "ready" && view.result.status !== "EXPIRED" && view.result.status !== "FAILED" ? (
           <div className="flex flex-col gap-2.5 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-4">
             <p className="break-keep text-[13px] leading-relaxed text-(--ev-muted)">
-              이 링크를 가진 사람은 이 사진을 받을 수 있어요. 나중에 다시 받으려면 링크를 저장해 두세요.
+              <Sentences text="이 링크를 가진 사람은 이 사진을 받을 수 있어요. 나중에 다시 받으려면 링크를 저장해 두세요." />
             </p>
             {inApp ? (
               <p className="break-keep text-[13px] leading-relaxed text-(--ev-muted)">
-                이 앱 안에서는 저장이 안 될 수 있어요. 안 되면 사진을 길게 눌러 저장하거나, 링크를 복사해 Safari나 Chrome에서 열어 주세요.
+                <Sentences text="이 앱 안에서는 저장이 안 될 수 있어요. 안 되면 사진을 길게 눌러 저장하거나, 링크를 복사해 Safari나 Chrome에서 열어 주세요." />
               </p>
             ) : null}
             {copyFailed ? (
-              <p role="alert" className="text-[13px] font-semibold text-(--ev-danger)">복사하지 못했어요. 주소창의 주소를 길게 눌러 복사해 주세요.</p>
+              <p role="alert" className="text-[13px] font-semibold text-(--ev-danger)"><Sentences text="복사하지 못했어요. 주소창의 주소를 길게 눌러 복사해 주세요." /></p>
             ) : null}
             <div className="flex gap-2">
               {canShare ? (
@@ -335,7 +336,7 @@ export function ResultReceiver() {
           <EventActionBar>
             {saveNotice ? (
               <p role="status" className="break-keep text-center text-[14px] font-semibold">
-                {saveNotice}
+                <Sentences text={saveNotice} />
               </p>
             ) : null}
             <EventButton onClick={() => void onDownload()} disabled={downloading} aria-busy={downloading}>
@@ -406,7 +407,7 @@ function ResultBody({
     return (
       <div className="flex flex-col gap-2">
         <p role="status" className="break-keep text-[16px] leading-relaxed text-(--ev-muted)">
-          {expired}
+          <Sentences text={expired} />
         </p>
         <EventContact />
       </div>
@@ -416,7 +417,7 @@ function ResultBody({
     return (
       <div className="flex flex-col gap-2">
         <p role="alert" className="break-keep text-[16px] font-semibold leading-relaxed text-(--ev-danger)">
-          {failed}
+          <Sentences text={failed} />
         </p>
         <EventContact />
       </div>
@@ -429,7 +430,7 @@ function ResultBody({
           <DevelopingPhoto frame={justTaken?.frame} photos={justTaken?.photos} />
         </div>
         <p role="status" className="break-keep text-center text-[15px] leading-relaxed text-(--ev-muted)">
-          {composing}
+          <Sentences text={composing} />
         </p>
       </div>
     );

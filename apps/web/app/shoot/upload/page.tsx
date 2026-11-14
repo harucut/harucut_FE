@@ -12,6 +12,7 @@ import { importPhotoFiles } from "@/lib/photoImport";
 import { resolveMembership } from "@/lib/authSession";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 칸 수를 모를 때(프레임 없이 들어온 순간)의 기본값. 그 상태는 아래 effect 가 곧
@@ -350,8 +351,7 @@ export default function ShootUploadPage() {
             className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-3 text-[12px] leading-[1.6] text-(--hc-danger)"
           >
             <p>
-              회원인지 확인하지 못했어요. 갤러리 불러오기는 회원만 쓸 수 있어서 잠시
-              잠가 뒀어요.
+              <Sentences text="회원인지 확인하지 못했어요. 갤러리 불러오기는 회원만 쓸 수 있어서 잠시 잠가 뒀어요." />
             </p>
             <button
               type="button"
@@ -369,7 +369,7 @@ export default function ShootUploadPage() {
         {notice ? (
           // 제외 안내는 오류가 아니라 알림이다 — 위험색(빨강)을 쓰지 않는다.
           <p role="status" className="text-[12px] leading-[1.6] text-(--hc-muted)">
-            {notice}
+            <Sentences text={notice} />
           </p>
         ) : null}
 

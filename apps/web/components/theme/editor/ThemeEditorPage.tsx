@@ -47,6 +47,7 @@ import {
   useServerFrameDraft,
   type ServerDraftStatus,
 } from "@/components/theme/editor/useServerFrameDraft";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 서버 초안 상태 줄. 빈 문자열이면 아무것도 띄우지 않는다. */
 const SERVER_DRAFT_STATUS_TEXT: Record<ServerDraftStatus, string> = {
@@ -853,7 +854,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         </div>
         {loadError || actionError ? (
           <p role="alert" className="text-[12px] text-(--hc-danger)">
-            {loadError ?? actionError}
+            <Sentences text={loadError ?? actionError} />
           </p>
         ) : null}
 
@@ -918,7 +919,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             aria-label="초안 충돌"
             className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
           >
-            <p>다른 기기에서 이 초안을 먼저 고쳤어요. 어느 쪽을 남길까요?</p>
+            <p><Sentences text="다른 기기에서 이 초안을 먼저 고쳤어요. 어느 쪽을 남길까요?" /></p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -940,7 +941,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
         {SERVER_DRAFT_STATUS_TEXT[serverDraft.status] ? (
           <p role="status" className="text-[12px] text-(--hc-muted)">
-            {SERVER_DRAFT_STATUS_TEXT[serverDraft.status]}
+            <Sentences text={SERVER_DRAFT_STATUS_TEXT[serverDraft.status]} />
           </p>
         ) : null}
 
@@ -1095,7 +1096,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               ) : null}
               {versionConflict ? (
                 <div className="flex flex-col gap-2 rounded-xl border border-(--hc-danger-border) p-3 text-[12px]">
-                  <p>다른 기기에서 이 프레임을 먼저 저장했어요. 어떻게 할까요?</p>
+                  <p><Sentences text="다른 기기에서 이 프레임을 먼저 저장했어요. 어떻게 할까요?" /></p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

@@ -2,6 +2,7 @@
 
 import { Eye, EyeOff } from "lucide-react";
 import { useId, useMemo, useState, type InputHTMLAttributes } from "react";
+import { Sentences } from "@/components/ui/Sentences";
 
 type AuthFieldProps = {
   label: string;
@@ -68,7 +69,7 @@ export function AuthField({
       </div>
 
       {error ? (
-        <p id={errorId} role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)">{error}</p>
+        <p id={errorId} role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)"><Sentences text={error} /></p>
       ) : null}
     </div>
   );

@@ -5,6 +5,7 @@ import { AdminSearchField } from "@/components/admin/AdminSearchField";
 import { adminErrorMessage } from "@/components/admin/adminShared";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { setWorkspaceKind, type AdminWorkspaceItem, type WorkspaceKind } from "@/lib/admin/cmsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const KIND_LABEL: Record<WorkspaceKind, string> = { HOST: "주최자", ENTERPRISE: "업체" };
 
@@ -50,8 +51,7 @@ export function AdminWorkspaceKind() {
       <div>
         <h3 className="text-[15px] font-bold">공간 종류</h3>
         <p className="mt-1 max-w-[65ch] text-[13px] text-(--hc-muted)">
-          업체 공간은 멤버(직원)가 행사 사진을 받지 않고, 링크를 받은 고객이 받아요. 주최자 공간은 행사를 연 분이
-          사진을 받아요. 찍은 수·사용량 관리는 둘 다 돼요.
+          <Sentences text="업체 공간은 멤버(직원)가 행사 사진을 받지 않고, 링크를 받은 고객이 받아요. 주최자 공간은 행사를 연 분이 사진을 받아요. 찍은 수·사용량 관리는 둘 다 돼요." />
         </p>
       </div>
       <AdminSearchField
@@ -87,7 +87,7 @@ export function AdminWorkspaceKind() {
       ) : null}
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       {confirming && picked ? (

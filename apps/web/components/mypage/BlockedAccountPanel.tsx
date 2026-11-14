@@ -1,5 +1,6 @@
 import { COMPANY } from "@harucut/shared";
 import type { UserInfo } from "@/lib/api-types";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 정지 계정의 마이페이지. 쓰지는 못하고 계정을 확인한 뒤 로그아웃하거나 탈퇴만 한다.
@@ -20,7 +21,7 @@ export function BlockedAccountPanel({ user }: { user: UserInfo }) {
           이용이 제한된 계정이에요
         </h2>
         <p className="max-w-[60ch] text-[14px] leading-relaxed">
-          촬영, 프레임, 기록, 행사 운영을 쓸 수 없어요. 여기서는 로그아웃과 회원 탈퇴만 할 수 있어요.
+          <Sentences text="촬영, 프레임, 기록, 행사 운영을 쓸 수 없어요. 여기서는 로그아웃과 회원 탈퇴만 할 수 있어요." />
         </p>
         {/* 서버는 스토어 청구를 끊을 수 없고, 정지 계정은 구독 조회가 막혀 구독 여부를 모른다. */}
         <p className="max-w-[60ch] text-[14px] leading-relaxed">

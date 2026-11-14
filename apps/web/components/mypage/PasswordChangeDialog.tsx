@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   saving: boolean;
@@ -186,7 +187,7 @@ export function PasswordChangeDialog({
               role="alert"
               className="text-[12px] font-medium text-(--hc-danger)"
             >
-              {error}
+              <Sentences text={error} />
             </p>
           ) : null}
 

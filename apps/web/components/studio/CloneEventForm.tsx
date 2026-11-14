@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { cloneEvent } from "@/lib/studio/photosApi";
 import type { StudioEvent } from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const SLUG_PATTERN = /^[a-z0-9-]{3,40}$/;
 
@@ -47,7 +48,7 @@ export function CloneEventForm({
     >
       <h2 className="text-[18px] font-bold">행사 복제</h2>
       <p className="text-[13px] text-(--hc-muted)">
-        설정 · 테마 · 제공 프레임만 새 초안으로 옮겨요. 사진 · 참가자 · 고객 · 부스와 촬영 일정은 옮기지 않아요.
+        <Sentences text="설정 · 테마 · 제공 프레임만 새 초안으로 옮겨요. 사진 · 참가자 · 고객 · 부스와 촬영 일정은 옮기지 않아요." />
       </p>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="studio-clone-name" className="text-[13px] font-semibold">
@@ -75,12 +76,12 @@ export function CloneEventForm({
           placeholder="wedding-1103"
         />
         <p id="studio-clone-slug-help" className="text-[12px] text-(--hc-muted)">
-          영문 소문자·숫자·하이픈 3~40자. 앞 행사와 다른 주소여야 해요.
+          <Sentences text="영문 소문자·숫자·하이픈 3~40자. 앞 행사와 다른 주소여야 해요." />
         </p>
       </div>
       {error ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
       <div className="flex gap-2">

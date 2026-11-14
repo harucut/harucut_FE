@@ -8,6 +8,7 @@ import { FrameWithPhotos, frameFitStyle } from "@/components/participation/Frame
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType, matchesFrameType } from "@/lib/frameApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 type SavedFramesSectionProps = {
   title: string;
@@ -93,7 +94,7 @@ export function SavedFramesSection({
       {/* 목록은 남아 있는데 새로고침만 실패한 경우. 목록을 지우지 않고 위에만 알린다. */}
       {error && !failedWithNothing ? (
         <p role="alert" className="mt-3 text-[11px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
 
@@ -105,7 +106,7 @@ export function SavedFramesSection({
           {/* 실패를 사라짐으로 읽지 않게 못 박는다. 이 문장이 없으면 사용자는 공들여
               꾸민 프레임이 날아간 줄 안다. */}
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
-            저장한 프레임이 사라진 것은 아니에요. 잠시 후 다시 시도해 주세요.
+            <Sentences text="저장한 프레임이 사라진 것은 아니에요. 잠시 후 다시 시도해 주세요." />
           </p>
           <button
             type="button"
@@ -117,11 +118,10 @@ export function SavedFramesSection({
         </div>
       ) : hiddenByFilter ? (
         <p className="mt-2 text-[12px] leading-[1.6] text-(--hc-muted)">
-          보관 중인 프레임 {frames.length}개는 지금 고른 것과 컷 구성이 달라요. 위에서 같은
-          구성을 고르면 바로 나타나요.
+          <Sentences text={`보관 중인 프레임 ${frames.length}개는 지금 고른 것과 컷 구성이 달라요. 위에서 같은 구성을 고르면 바로 나타나요.`} />
         </p>
       ) : matchingFrames.length === 0 ? (
-        <p className="mt-2 text-[12px] text-(--hc-muted)">{emptyText}</p>
+        <p className="mt-2 text-[12px] text-(--hc-muted)"><Sentences text={emptyText} /></p>
       ) : (
         // 폰에서는 한 줄로 넘긴다. 세로로 쌓으면 프레임 몇 개만으로 위의 큰 카드와 아래 버튼이 멀어진다.
         <div className="-mx-2 mt-1 flex gap-2.5 overflow-x-auto px-2 pb-1 scrollbar-none [-ms-overflow-style:none] sm:-mx-4 sm:px-4 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 lg:grid-cols-6 [&::-webkit-scrollbar]:hidden">

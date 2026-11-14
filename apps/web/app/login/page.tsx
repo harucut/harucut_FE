@@ -10,6 +10,7 @@ import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Sentences } from "@/components/ui/Sentences";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
@@ -226,22 +227,22 @@ function LoginPageContent() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {searchParams.get("joined") === "1" && !errors.common ? (
           <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
-            가입이 끝났어요. 방금 만든 계정으로 로그인해 주세요.
+            <Sentences text="가입이 끝났어요. 방금 만든 계정으로 로그인해 주세요." />
           </p>
         ) : null}
         {searchParams.get("passwordChanged") === "1" && !errors.common ? (
           <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
-            비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요.
+            <Sentences text="비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요." />
           </p>
         ) : null}
         {recoveredNotice && !errors.common ? (
           <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
-            탈퇴를 취소했어요. 다시 로그인해 주세요.
+            <Sentences text="탈퇴를 취소했어요. 다시 로그인해 주세요." />
           </p>
         ) : null}
         {errors.common ? (
           <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
-            {errors.common}
+            <Sentences text={errors.common} />
             {errors.support ? (
               <>
                 {" "}

@@ -14,6 +14,7 @@ import {
   revokeBoothDevice,
   type BoothDevice,
 } from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const STATUS_LABEL: Record<BoothDevice["status"], string> = {
   PENDING_PAIRING: "연결 대기",
@@ -203,7 +204,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
     return (
       <div className="flex flex-col gap-2">
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
         <button type="button" onClick={() => void load()} className="hc-button-secondary h-11 self-start rounded-full px-4 text-[13px] font-semibold">
           다시 불러오기
@@ -238,7 +239,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
 
       {notice ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
 
@@ -347,7 +348,7 @@ export function StudioBoothDevices({ eventId, boothUrl }: { eventId: string; boo
         </form>
       ) : (
         <p className="text-[13px] text-(--hc-muted)">
-          이 행사에는 부스 기기를 {MAX_BOOTH_DEVICES}대까지 연결할 수 있어요. 쓰지 않는 기기를 해제하면 자리가 나요.
+          <Sentences text={`이 행사에는 부스 기기를 ${MAX_BOOTH_DEVICES}대까지 연결할 수 있어요. 쓰지 않는 기기를 해제하면 자리가 나요.`} />
         </p>
       )}
 

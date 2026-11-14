@@ -18,6 +18,7 @@ import {
   UPLOAD_TOO_LARGE_MESSAGE,
   UploadValidationError,
 } from "@/lib/presignedUploadApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 고른 견본의 테두리. 견본과 사이를 띄워 밝은 색·어두운 색 어디서나 보인다. */
 const SELECTED_RING = "outline-2 outline-offset-2 outline-(--hc-text)";
@@ -226,7 +227,7 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
       />
       {backgroundError ? (
         <p role="alert" className="text-sm leading-5 text-(--hc-danger)">
-          {backgroundError}
+          <Sentences text={backgroundError} />
         </p>
       ) : null}
     </section>

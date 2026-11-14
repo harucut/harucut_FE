@@ -326,6 +326,17 @@ body {
   span {
     text-wrap: pretty;
   }
+
+  /*
+    문장마다 줄을 나눈 짧은 안내(components/ui/Sentences.tsx)는 고르게 나눈다(2026-11-14).
+    pretty 는 끝줄에 한 낱말만 남는 것만 막아서, 긴 문장 하나가 「…잠시 이용할 / 수 없어요.」처럼
+    짧은 꼬리를 남겼다. balance 는 <br> 로 나뉜 문장마다 따로 줄 길이를 맞춘다(크롬에서 실측).
+    :has() 의 특이도(br + 속성)가 위 p 규칙을 이기고, 클래스로 직접 준 text-wrap 유틸리티는
+    레이어 순서로 이것을 이긴다.
+  */
+  :where(p, div, span, li, label):has(> br[data-sentence-break]) {
+    text-wrap: balance;
+  }
 }
 
 /* 행사 화면(lib/eventSurface.ts — /e·/r·/booth)의 기본 토큰.

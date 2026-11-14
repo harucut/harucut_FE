@@ -20,6 +20,7 @@ import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
 import { useStudioAccess } from "@/hooks/useStudioAccess";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 가장 최근 한 장은 큰 카드에, 나머지는 아래 줄에 놓는다. 조회도 딱 이만큼만 받는다. */
 const RECENT_LIMIT = 7;
@@ -253,7 +254,7 @@ export default function HomePage() {
               </div>
             ) : (
               <p className="hc-surface-well rounded-[18px] border border-dashed p-6 text-center text-[13px] text-(--hc-muted)">
-                아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요.
+                <Sentences text="아직 저장한 기록이 없어요. 첫 네 컷을 남겨보세요." />
               </p>
             )}
           </section>

@@ -4,6 +4,7 @@ import { BadgeCheck, Clock3, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { EMAIL_FIELD } from "@/components/auth/authFields";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   email: string;
@@ -138,9 +139,9 @@ export function EmailCodeSection({
                       isExpired ? "text-(--hc-danger)" : "text-(--hc-text)"
                     }`}
                   >
-                    {isExpired
+                    <Sentences text={isExpired
                       ? "인증 시간이 만료되었어요. 코드를 다시 보내 주세요."
-                      : "인증 코드가 전송되었어요. 5분 안에 입력해 주세요."}
+                      : "인증 코드가 전송되었어요. 5분 안에 입력해 주세요."} />
                   </p>
                 </div>
                 {!isExpired ? (
@@ -206,7 +207,7 @@ export function EmailCodeSection({
 
           {codeError ? (
             <p id="email-code-error" role="alert" className="text-[12px] text-(--hc-danger)">
-              {codeError}
+              <Sentences text={codeError} />
             </p>
           ) : null}
         </>

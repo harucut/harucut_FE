@@ -11,6 +11,7 @@ import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
 import { frameIdFromFrameType } from "@/lib/frameApi";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 function ThemePageContent() {
   const router = useRouter();
@@ -141,9 +142,9 @@ function ThemePageContent() {
             */
             isLoading ? null : isAtCapacity ? (
               <p className="-mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
-                {capacity.plan.limit <= 0 && !capacity.unlimited
+                <Sentences text={capacity.plan.limit <= 0 && !capacity.unlimited
                   ? "지금은 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해요."
-                  : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."}
+                  : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."} />
               </p>
             ) : null
           }

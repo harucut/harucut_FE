@@ -5,6 +5,7 @@ import { STORE_PRODUCT_IDS, STORE_PURCHASES_ENABLED, storePurchasesOpenOn } from
 import type { Subscription } from "@/lib/api-types";
 import { getNativeShell, nativeStoreProducts, supportsStorePurchase } from "@/lib/nativeBridge";
 import { buyPlusInApp, restoreInApp, type StoreFlowResult } from "@/lib/storePurchase";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 앱 안에서 스토어 결제를 열 수 있는 상태인가. 서버 렌더와 어긋나지 않게 마운트 뒤에 읽는다. */
 type Shell = "browser" | "outdated" | "ready";
@@ -104,7 +105,7 @@ export function StoreBuyButton({
     return (
       <div className="mt-5 flex flex-col gap-2">
         <p role="status" className="text-[13px] leading-[1.6]">
-          {confirm}
+          <Sentences text={confirm} />
         </p>
         <button
           type="button"

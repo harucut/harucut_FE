@@ -6,6 +6,7 @@ import { COMPONENT_TYPE_LABEL } from "@/components/theme/editor/LayersPanel";
 import { NUDGE_STEP } from "@/constants/editorNudge";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent, TextStyleJson } from "@/lib/types/themeEditor";
+import { Sentences } from "@/components/ui/Sentences";
 
 type OpacityStyle = { opacity?: number };
 
@@ -180,7 +181,7 @@ function TextInspector({
         </Row>
         {isBlank ? (
           <p id={blankHintId} className="pl-[4.25rem] text-[11px] text-amber-300">
-            글자가 비어 있어요. 이 레이어는 저장되지 않아요.
+            <Sentences text="글자가 비어 있어요. 이 레이어는 저장되지 않아요." />
           </p>
         ) : null}
       </div>

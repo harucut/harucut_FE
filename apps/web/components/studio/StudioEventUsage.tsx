@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FEATURE_LABEL } from "@/components/admin/adminShared";
 import type { EventUsage } from "@/lib/studio/usageApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 남은 합성이 이 비율 아래면, 이용권이 이 날수 안에 끝나면 미리 알린다(R5 「만료 전 안내」). */
 const LOW_REMAINING_RATIO = 0.1;
@@ -42,7 +43,7 @@ export function StudioEventUsage({
     return (
       <div className="flex flex-col gap-2">
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
         <button
           type="button"
@@ -60,7 +61,7 @@ export function StudioEventUsage({
     return (
       <div role="status" className="hc-surface-well flex flex-col gap-2 rounded-2xl p-4 text-[13px]">
         <p className="text-[14px] font-semibold">아직 이 행사에 적용된 이용권이 없어요.</p>
-        <p className="text-(--hc-muted)">이용권이 있어야 게시하고 촬영을 받을 수 있어요. 설정은 먼저 해 둘 수 있어요.</p>
+        <p className="text-(--hc-muted)"><Sentences text="이용권이 있어야 게시하고 촬영을 받을 수 있어요. 설정은 먼저 해 둘 수 있어요." /></p>
         <Link href="/enterprise#inquiry" className="hc-button-secondary inline-flex h-11 items-center self-start rounded-full px-4 font-semibold">
           도입 문의하기
         </Link>
@@ -97,7 +98,7 @@ export function StudioEventUsage({
           <div className="h-full rounded-full bg-(--hc-text)" style={{ width: `${usedRatio * 100}%` }} />
         </div>
         <p className="text-[12px] text-(--hc-muted)">
-          완성 {usage.used.toLocaleString("ko-KR")}장 · 만드는 중 {usage.reserved.toLocaleString("ko-KR")}장. 만들지 못한 사진은 세지 않아요.
+          <Sentences text={`완성 ${usage.used.toLocaleString("ko-KR")}장 · 만드는 중 ${usage.reserved.toLocaleString("ko-KR")}장. 만들지 못한 사진은 세지 않아요.`} />
         </p>
       </div>
 
@@ -121,7 +122,7 @@ export function StudioEventUsage({
           <span className="text-(--hc-muted)"> / {usage.parent.composeQuota.toLocaleString("ko-KR")}장</span>
           {parentShort ? (
             <span className="block text-[12px] text-(--hc-muted)">
-              기업 총량이 이 행사 배분보다 적게 남았어요. 총량을 다 쓰면 이 행사도 촬영이 마감돼요.
+              <Sentences text="기업 총량이 이 행사 배분보다 적게 남았어요. 총량을 다 쓰면 이 행사도 촬영이 마감돼요." />
             </span>
           ) : null}
         </p>

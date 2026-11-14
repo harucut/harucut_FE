@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { createPortal } from "react-dom";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { Sentences } from "@/components/ui/Sentences";
 
 export type ManagedFrameVersion = {
   frameVersionId: number;
@@ -115,11 +116,11 @@ export function FrameVersionManager({
       {opened ? (
         <div className="flex flex-col gap-2 pb-2">
           <p className="max-w-[65ch] text-[12px] leading-relaxed text-(--hc-muted)">
-            회수하면 고르는 목록과 참가 화면, 새 촬영에서 빠져요. 이미 만든 사진은 그대로고, 다른 프레임으로 저절로 바뀌지 않아요. 최신 발행본을 회수하면 이전 발행본으로 내려가지 않고 프레임이 목록에서 빠져요.
+            <Sentences text="회수하면 고르는 목록과 참가 화면, 새 촬영에서 빠져요. 이미 만든 사진은 그대로고, 다른 프레임으로 저절로 바뀌지 않아요. 최신 발행본을 회수하면 이전 발행본으로 내려가지 않고 프레임이 목록에서 빠져요." />
           </p>
           {error ? (
             <p role="alert" className="text-(--hc-danger)">
-              {error}
+              <Sentences text={error} />
             </p>
           ) : null}
           {versions === null && !error ? <p role="status">불러오는 중…</p> : null}

@@ -19,6 +19,7 @@ import { ServerAssetPicker } from "@/components/theme/editor/ServerAssetPicker";
 import { fetchServerAssetFile } from "@/lib/serverAssetFile";
 import { blobToDataUrl } from "@/lib/canvas/loaders";
 import { STICKERS } from "@/constants/stickers.generated";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 프레임 위에 얹을 것을 고른다.
@@ -197,7 +198,7 @@ function PictureTab() {
 
       {notice ? (
         <p role="status" className="text-[12px] leading-5 text-(--hc-danger)">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
 

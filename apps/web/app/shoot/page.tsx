@@ -11,6 +11,7 @@ import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 두 프레임이 **같은 촬영본을 쓸 수 있는가**.
@@ -118,7 +119,7 @@ function ShootPageContent() {
     return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">
       <div className="mx-auto flex max-w-md flex-col gap-4">
         <PageHeader title="촬영하던 사진이 있어요" backHref="/home" backLabel="홈으로" />
-        <p>{session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.</p>
+        <p><Sentences text={`${session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.`} /></p>
         <button type="button" className="hc-pressable min-h-11 rounded-xl bg-(--hc-primary) px-4 py-3 font-semibold text-(--hc-primary-contrast)" onClick={() => {
           if (session.frameId) router.push(resumePath);
           else { router.replace(resumePath); setResumeAvailable(false); }
@@ -153,8 +154,7 @@ function ShootPageContent() {
               role="status"
               className="rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-3 text-[12px] leading-[1.6] text-(--hc-danger)"
             >
-              링크에 담긴 전용 프레임을 불러오지 못했어요. 아래에서 컷 구성을 고르면
-              만드는 것은 그대로 할 수 있어요.
+              <Sentences text="링크에 담긴 전용 프레임을 불러오지 못했어요. 아래에서 컷 구성을 고르면 만드는 것은 그대로 할 수 있어요." />
             </p>
           }
         />

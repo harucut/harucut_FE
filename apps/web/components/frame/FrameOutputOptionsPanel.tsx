@@ -6,6 +6,7 @@ import {
   type FourcutFilterId,
 } from "@/lib/frameFilters";
 import { normalizeHexColor } from "@/lib/themeBackground";
+import { Sentences } from "@/components/ui/Sentences";
 
 type FrameOutputOptionsPanelProps = {
   borderColor: string;
@@ -42,9 +43,9 @@ export function FrameOutputOptionsPanel({
 
           {backgroundLocked ? (
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] text-zinc-400">
-              {themeUnavailable
+              <Sentences text={themeUnavailable
                 ? "프레임 내용을 확인하지 못했어요. 배경 색상은 프레임에 저장된 색으로 저장돼요."
-                : "꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요."}
+                : "꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요."} />
             </div>
           ) : (
             <div className="flex flex-col gap-3">

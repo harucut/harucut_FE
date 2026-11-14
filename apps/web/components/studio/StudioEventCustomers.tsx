@@ -14,6 +14,7 @@ import {
   type EventGrant,
   type EventPermission,
 } from "@/lib/studio/accessApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 고객에게 처음 줄 권한. 보기·내려받기 — 지우기와 한꺼번에 받기는 운영자가 골라서 준다. */
 const DEFAULT_PERMISSIONS: EventPermission[] = ["VIEW_PHOTOS", "DOWNLOAD_PHOTOS"];
@@ -74,7 +75,7 @@ export function StudioEventCustomers({
   if (error) {
     return (
       <p role="alert" className="text-[13px] text-(--hc-danger)">
-        {error}
+        <Sentences text={error} />
       </p>
     );
   }
@@ -84,7 +85,7 @@ export function StudioEventCustomers({
     <div className="flex flex-col gap-3">
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
 
@@ -184,7 +185,7 @@ export function StudioEventCustomers({
         </button>
         {issuedLink ? (
           <div className="hc-surface-well flex flex-col gap-2 rounded-2xl p-3 text-[13px]">
-            <p>이 링크는 지금 한 번만 보여요. 7일 동안 한 사람이 한 번 쓸 수 있어요. 받은 분은 이 행사 사진을 이미 찍은 것까지 모두 봐요.</p>
+            <p><Sentences text="이 링크는 지금 한 번만 보여요. 7일 동안 한 사람이 한 번 쓸 수 있어요. 받은 분은 이 행사 사진을 이미 찍은 것까지 모두 봐요." /></p>
             <p className="break-all font-mono text-[12px]">{issuedLink}</p>
             <button
               type="button"

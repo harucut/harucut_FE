@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ChevronRight, Download, Ellipsis, PencilLine, Share2, Trash2 } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 import { getUserMediaDate, getUserMediaPreviewUrl, getUserMediaTitle } from "@/lib/userMediaPreview";
 import type { UserMedia } from "@/lib/api-types";
 
@@ -26,7 +27,7 @@ export function HistoryNotice({ notice }: { notice: HistoryNoticeValue }) {
           : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
       }
     >
-      {notice.text}
+      <Sentences text={notice.text} />
     </div>
   );
 }

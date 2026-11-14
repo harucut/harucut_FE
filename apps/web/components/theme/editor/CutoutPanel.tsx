@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Scissors } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
+import { Sentences } from "@/components/ui/Sentences";
 
 // 누끼(셀별 배경 제거) 패널.
 // 핸드오프 app-decorate "누끼" 탭과 동일한 개념: 칸을 선택하면 인물만 남기고
@@ -30,8 +31,7 @@ export function CutoutPanel() {
       </div>
 
       <p className="text-[13px] leading-[1.65] text-zinc-400">
-        아래 버튼으로 칸을 골라 인물만 남기고 배경을 지워요. 다시 누르면 원래대로
-        돌아와요. 미리보기에서 칸을 바로 누르고 싶으면 아래 스위치를 켜세요.
+        <Sentences text="아래 버튼으로 칸을 골라 인물만 남기고 배경을 지워요. 다시 누르면 원래대로 돌아와요. 미리보기에서 칸을 바로 누르고 싶으면 아래 스위치를 켜세요." />
       </p>
 
       <button

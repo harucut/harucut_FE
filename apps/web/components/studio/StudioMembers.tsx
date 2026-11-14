@@ -16,6 +16,7 @@ import {
   type Member,
 } from "@/lib/studio/accessApi";
 import type { WorkspaceRole } from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const ROLES: WorkspaceRole[] = ["OWNER", "ADMIN", "OPERATOR", "DESIGNER", "VIEWER"];
 
@@ -105,7 +106,7 @@ export function StudioMembers({
   if (error) {
     return (
       <p role="alert" className="text-[13px] text-(--hc-danger)">
-        {error}
+        <Sentences text={error} />
       </p>
     );
   }
@@ -115,7 +116,7 @@ export function StudioMembers({
     <div className="flex flex-col gap-3">
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
 
@@ -246,7 +247,7 @@ export function StudioMembers({
           {issuedLink ? (
             <div className="hc-surface-well flex flex-col gap-2 rounded-2xl p-3 text-[13px]">
               <p>
-                이 링크는 지금 한 번만 보여요. 7일 동안 한 사람이 한 번 쓸 수 있어요. 메일로 보내지 않으니 직접 전해 주세요.
+                <Sentences text="이 링크는 지금 한 번만 보여요. 7일 동안 한 사람이 한 번 쓸 수 있어요. 메일로 보내지 않으니 직접 전해 주세요." />
               </p>
               <p className="break-all font-mono text-[12px]">{issuedLink}</p>
               <button
@@ -313,7 +314,7 @@ export function LeaveWorkspaceButton({ workspaceId, onLeft }: { workspaceId: str
       </button>
       {error ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
       {confirming ? (

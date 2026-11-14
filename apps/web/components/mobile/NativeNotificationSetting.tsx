@@ -6,6 +6,7 @@ import {
   nativeRequestNotificationPermission,
 } from "@/lib/nativeBridge";
 import { registerPushDevice } from "@/lib/pushDevices";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 앱에서만 보이는 알림 설정.
@@ -60,8 +61,7 @@ export function NativeNotificationSetting() {
     <div className="flex flex-col gap-2">
       <p className="text-[13px] font-bold">알림</p>
       <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-        네컷 합성은 최대 1분 넘게 걸려요. 앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때
-        알려드려요.
+        <Sentences text="네컷 합성은 최대 1분 넘게 걸려요. 앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때 알려드려요." />
       </p>
       <button
         type="button"

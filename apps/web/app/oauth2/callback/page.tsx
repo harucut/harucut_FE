@@ -34,6 +34,7 @@ import {
   markSocialLoginReactivated,
   readSocialLoginProvider,
 } from "@/lib/socialLoginRedirect";
+import { Sentences } from "@/components/ui/Sentences";
 
 const CHECKING_MESSAGE = "소셜 로그인 상태를 확인하는 중이에요.";
 
@@ -209,7 +210,7 @@ export default function OAuthCallbackPage() {
         <h1 className="text-base font-semibold">
           {deadEnd ? "로그인하지 못했어요" : "로그인 처리 중"}
         </h1>
-        <p aria-live="polite" className="text-sm text-zinc-400">{message}</p>
+        <p aria-live="polite" className="text-sm text-zinc-400"><Sentences text={message} /></p>
         {deadEnd?.showSupport ? (
           <a
             href={`mailto:${COMPANY.email}`}

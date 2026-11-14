@@ -36,6 +36,7 @@ import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
+import { Sentences } from "@/components/ui/Sentences";
 
 // 비회원이 로그인으로 넘어갈 때 쓰는 경로. 로그인 후 /home에서 보관해 둔 결과물을 자동 저장한다.
 const GUEST_LOGIN_HANDOFF_PATH = buildPathWithRedirect(
@@ -925,7 +926,7 @@ export default function ShootResultPage() {
           <h1 className="text-[34px] font-extrabold leading-tight tracking-[-0.03em]">{heading}</h1>
           {guestMode ? (
             <p className="mx-auto mt-1 max-w-[46ch] break-keep text-[13px] leading-[1.6] text-(--hc-muted)">
-              이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요.
+              <Sentences text="이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요." />
             </p>
           ) : null}
         </header>
@@ -1027,7 +1028,7 @@ export default function ShootResultPage() {
 
         {!guestMode && imageResult?.localBlob ? (
           <p role="status" className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4 text-sm leading-relaxed text-(--hc-text)">
-            지금은 이 프레임의 결과를 계정 기록에 보관할 수 없어요. 사진은 완성됐으니 아래에서 기기에 내려받아 주세요. 링크 공유는 계정에 보관된 사진에서 사용할 수 있어요.
+            <Sentences text="지금은 이 프레임의 결과를 계정 기록에 보관할 수 없어요. 사진은 완성됐으니 아래에서 기기에 내려받아 주세요. 링크 공유는 계정에 보관된 사진에서 사용할 수 있어요." />
           </p>
         ) : null}
 

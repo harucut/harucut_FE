@@ -14,6 +14,7 @@ import {
   previewInvitation,
   type InvitationPreview,
 } from "@/lib/studio/accessApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 type View =
   | { kind: "loading" }
@@ -141,12 +142,12 @@ export function InviteAccept() {
         {view.kind === "loading" ? <p className="text-[14px] text-(--hc-muted)">초대를 확인하는 중…</p> : null}
 
         {view.kind === "no-token" ? (
-          <p className="text-[14px] text-(--hc-muted)">초대 링크를 다시 열어 주세요. 링크 전체가 열리지 않았을 수 있어요.</p>
+          <p className="text-[14px] text-(--hc-muted)"><Sentences text="초대 링크를 다시 열어 주세요. 링크 전체가 열리지 않았을 수 있어요." /></p>
         ) : null}
 
         {view.kind === "need-login" ? (
           <>
-            <p className="text-[14px]">초대를 받으려면 먼저 로그인해 주세요. 로그인한 뒤 이 화면으로 돌아와요.</p>
+            <p className="text-[14px]"><Sentences text="초대를 받으려면 먼저 로그인해 주세요. 로그인한 뒤 이 화면으로 돌아와요." /></p>
             <Link
               href={`/login?redirectTo=${encodeURIComponent("/invite")}`}
               className="hc-button-primary flex h-11 items-center justify-center rounded-full text-[14px] font-semibold"
@@ -183,7 +184,7 @@ export function InviteAccept() {
         {view.kind === "error" ? (
           <>
             <p role="alert" className="text-[14px] text-(--hc-danger)">
-              {view.message}
+              <Sentences text={view.message} />
             </p>
             {view.retryable ? (
               <button

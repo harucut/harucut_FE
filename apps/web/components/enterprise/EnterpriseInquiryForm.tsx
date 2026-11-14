@@ -6,6 +6,7 @@ import { withJosa } from "@harucut/shared";
 import { COMPANY } from "@/constants/company";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { INQUIRY_MESSAGE_MAX, submitInquiry, type InquiryRequest } from "@/lib/inquiryApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const TEXT_FIELDS = [
   { id: "org", label: "단체·회사 이름", placeholder: "예: 하루컷 팬미팅 준비위원회", required: true, maxLength: 100, type: "text" },
@@ -123,7 +124,7 @@ export function EnterpriseInquiryForm() {
       <div role="status" className="flex flex-col gap-2">
         <p className="text-[18px] font-extrabold">문의를 받았어요.</p>
         <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
-          {COMPANY.hours} 안에 {values.email.trim()} 로 연락드릴게요. 접수 번호는 {sent} 이에요.
+          <Sentences text={`${COMPANY.hours} 안에 ${values.email.trim()} 로 연락드릴게요. 접수 번호는 ${sent} 이에요.`} />
         </p>
       </div>
     );
@@ -251,7 +252,7 @@ export function EnterpriseInquiryForm() {
 
       {error ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
 
@@ -281,11 +282,11 @@ export function EnterpriseInquiryForm() {
       </div>
 
       <p role="status" className="text-[12px] leading-[1.6] text-(--hc-muted)">
-        {emailInvalid
+        <Sentences text={emailInvalid
           ? "이메일 주소를 확인해 주세요."
           : canSend
             ? `${COMPANY.hours} 안에 연락드려요. 메일이 편하면 ${COMPANY.email} 로 보내 주셔도 돼요.`
-            : `${withJosa(missing.join(", "), "을/를")} 채우면 문의를 남길 수 있어요.`}
+            : `${withJosa(missing.join(", "), "을/를")} 채우면 문의를 남길 수 있어요.`} />
       </p>
     </form>
   );

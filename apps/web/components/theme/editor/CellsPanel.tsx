@@ -5,6 +5,7 @@ import { LayoutGrid } from "lucide-react";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { FREE_CELL_COUNT, freeCellsEnabled, validateCells, type FreeCell, type FreeCellShape } from "@/lib/frameCells";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
+import { Sentences } from "@/components/ui/Sentences";
 
 const FIELDS: Array<{ key: "x" | "y" | "width" | "height" | "rotation"; label: string; unit: string }> = [
   { key: "x", label: "가로 위치", unit: "px" },
@@ -56,13 +57,13 @@ export function CellsPanel() {
       </label>
       {enabled ? (
         <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-          {cells
+          <Sentences text={cells
             ? "칸마다 위치·크기·회전·모양과 넣을 사진 순서를 정해요. 이 프레임은 자유 칸 촬영이 열리면 쓸 수 있어요."
-            : "켜면 지금 칸 모양에서 시작해요. 끄면 원래 칸으로 돌아가요."}
+            : "켜면 지금 칸 모양에서 시작해요. 끄면 원래 칸으로 돌아가요."} />
         </p>
       ) : (
         <p role="status" className="text-[12px] leading-[1.6] text-(--hc-danger)">
-          칸을 옮긴 프레임이에요. 지금은 이 모양으로 사진을 만들 수 없어서 촬영과 게시에 쓸 수 없어요. 끄면 원래 칸으로 돌아가요.
+          <Sentences text="칸을 옮긴 프레임이에요. 지금은 이 모양으로 사진을 만들 수 없어서 촬영과 게시에 쓸 수 없어요. 끄면 원래 칸으로 돌아가요." />
         </p>
       )}
 

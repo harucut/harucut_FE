@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { TermsFullText } from "./TermsFullText";
 import type { ConsentChoice } from "@/hooks/useActiveTerms";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   items: ConsentChoice[];
@@ -96,7 +97,7 @@ export function TermsConsentFieldset({
         다 체크하면 줄 표시와 함께 문장도 거둔다.
       */}
       {error && items.some((item) => item.required && !checked[item.code]) ? (
-        <p id={errorId} role="alert" className="sr-only">{error}</p>
+        <p id={errorId} role="alert" className="sr-only"><Sentences text={error} /></p>
       ) : null}
     </fieldset>
   );

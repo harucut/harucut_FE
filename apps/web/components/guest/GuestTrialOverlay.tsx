@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
 
@@ -98,7 +99,7 @@ export function GuestTrialOverlay() {
               {notice.title}
             </h2>
             <p className="text-[13px] leading-6 text-(--hc-muted)">
-              {notice.message}
+              <Sentences text={notice.message} />
             </p>
           </div>
 

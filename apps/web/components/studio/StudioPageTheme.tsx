@@ -20,6 +20,7 @@ import {
   type PageThemeFont,
 } from "@/lib/event/pageTheme";
 import type { EntitlementFeature } from "@/lib/studio/usageApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const COLOR_LABEL: Record<PageThemeColorKey, string> = {
   bg: "바탕",
@@ -250,8 +251,7 @@ export function StudioPageTheme({
     <div className="flex flex-col gap-5">
       {designBlocked ? (
         <p role="status" className="rounded-2xl border border-(--hc-danger-border) p-3 text-[13px]">
-          지금 이용권에는 행사 화면 디자인 기능이 없어요. 색 · 글꼴 · 로고 · 배경을 바꾸면 게시할 수 없어요. 화면 문구는 그대로
-          쓸 수 있어요.
+          <Sentences text="지금 이용권에는 행사 화면 디자인 기능이 없어요. 색 · 글꼴 · 로고 · 배경을 바꾸면 게시할 수 없어요. 화면 문구는 그대로 쓸 수 있어요." />
         </p>
       ) : null}
       {showSample ? (
@@ -436,13 +436,13 @@ export function StudioPageTheme({
       </div>
       {notice ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
 
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-1 text-[14px] font-semibold">화면 문구</legend>
-        <p className="text-[12px] text-(--hc-muted)">비워 두면 칸에 보이는 기본 문구를 써요. 화면마다 {PAGE_THEME_COPY_MAX}자까지예요.</p>
+        <p className="text-[12px] text-(--hc-muted)"><Sentences text={`비워 두면 칸에 보이는 기본 문구를 써요. 화면마다 ${PAGE_THEME_COPY_MAX}자까지예요.`} /></p>
         {PAGE_THEME_COPY_KEYS.map((key) => (
           <label key={key} className="flex flex-col gap-1 text-[13px]">
             {COPY_LABEL[key]}
@@ -476,9 +476,9 @@ export function StudioPageTheme({
           하루컷 표시 숨기기
         </label>
         <p className={whiteLabelBlocked ? "text-[12px] text-(--hc-danger)" : "text-[12px] text-(--hc-muted)"}>
-          {whiteLabelBlocked
+          <Sentences text={whiteLabelBlocked
             ? "지금 이용권에는 이 기능이 없어요. 켜 두면 게시할 수 없어요."
-            : "화이트라벨 이용권이 있어야 게시할 수 있어요."}
+            : "화이트라벨 이용권이 있어야 게시할 수 있어요."} />
         </p>
         <label className="flex flex-col gap-1 text-[14px] font-semibold">
           완성 사진의 로고
@@ -496,7 +496,7 @@ export function StudioPageTheme({
           </select>
         </label>
         <p className="text-[12px] text-(--hc-muted)">
-          참가자가 받는 완성 사진의 오른쪽 아래에 위 로고를 넣어요. 로고를 올려야 게시할 수 있어요.
+          <Sentences text="참가자가 받는 완성 사진의 오른쪽 아래에 위 로고를 넣어요. 로고를 올려야 게시할 수 있어요." />
         </p>
       </fieldset>
       ) : null}

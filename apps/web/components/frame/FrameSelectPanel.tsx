@@ -9,6 +9,7 @@ import { SLOT_COLORS } from "@/constants/colors";
 import type { FrameId } from "@/constants/frames";
 import type { FourcutFilterId } from "@/lib/frameFilters";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import { Sentences } from "@/components/ui/Sentences";
 
 type FrameSelectPanelProps = {
   frameId: FrameId | null;
@@ -116,7 +117,7 @@ export function FrameSelectPanel({
         <section className="space-y-2">
           {baseItems.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-(--hc-border) bg-(--hc-surface) p-4 text-center text-[12px] text-(--hc-muted)">
-              {emptyStateText}
+              <Sentences text={emptyStateText} />
             </div>
           ) : (
             <div className={`grid gap-2 ${aspectRatio > 1 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-4"} lg:grid-cols-5`}>
@@ -188,9 +189,9 @@ export function FrameSelectPanel({
               : "text-(--hc-muted) opacity-0",
           ].join(" ")}
         >
-          {limitNotice
+          <Sentences text={limitNotice
             ? `${maxSelect}장까지만 담을 수 있어요. 바꾸려면 담은 사진을 먼저 눌러 빼 주세요.`
-            : ""}
+            : ""} />
         </p>
 
         {/* 흐름의 주 CTA 는 업로드 화면(h-12 · 15px · 800)과 같은 크기다. 화면마다 달랐다. */}

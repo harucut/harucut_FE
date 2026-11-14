@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { exchangeAppLoginCode } from "@/lib/auth/authApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const FALLBACK = "로그인을 마치지 못했어요. 다시 로그인해 주세요.";
 
@@ -47,7 +48,7 @@ export default function AppLoginCallbackPage() {
       {error ? (
         <>
           <p role="alert" className="text-center text-[15px]">
-            {error}
+            <Sentences text={error} />
           </p>
           <a href="/login" className="hc-button-primary flex h-11 items-center rounded-full px-5 text-[14px] font-semibold">
             로그인으로 돌아가기

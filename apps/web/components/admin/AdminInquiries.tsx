@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { adminErrorMessage, formatDateTime } from "@/components/admin/adminShared";
 import { listInquiries, updateInquiry, type Inquiry, type InquiryStatus } from "@/lib/admin/cmsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const STATUS_LABEL: Record<InquiryStatus, string> = {
   NEW: "새 문의",
@@ -63,7 +64,7 @@ export function AdminInquiries({ onStartContract }: { onStartContract: (inquiry:
   if (error) {
     return (
       <p role="alert" className="text-[14px] text-(--hc-danger)">
-        {error}
+        <Sentences text={error} />
       </p>
     );
   }
@@ -74,7 +75,7 @@ export function AdminInquiries({ onStartContract }: { onStartContract: (inquiry:
     <div className="flex flex-col gap-3">
       {notice ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       <ul className="flex flex-col gap-3">

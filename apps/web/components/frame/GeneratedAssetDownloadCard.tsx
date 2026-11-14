@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { isNativeShell } from "@/lib/nativeBridge";
 import { DISPLAY_NAME_MAX_LENGTH, type GeneratedFourcutAsset } from "@/lib/fourcutOutput";
+import { Sentences } from "@/components/ui/Sentences";
 
 // 서버가 받는 파일명은 최대 255자다(2026-09-07 로컬 /v3/api-docs 의 DisplayNameUpdateRequest).
 // 넘겨 보내면 400 이 오는데 사유가 영문이라 안내가 「잠시 후 다시 시도해 주세요」로 뭉개진다 —
@@ -51,7 +52,7 @@ export function GeneratedAssetDownloadCard({
     "hc-button-primary inline-flex h-14 w-full items-center justify-center rounded-full px-5 text-[16px] font-extrabold";
   return (
     <div className="contents">
-      {description ? <p className="text-center text-[13px] leading-[1.6] text-(--hc-muted)">{description}</p> : null}
+      {description ? <p className="text-center text-[13px] leading-[1.6] text-(--hc-muted)"><Sentences text={description} /></p> : null}
 
       <div className="flex flex-wrap items-center justify-center gap-2">
         {onShare ? (

@@ -15,6 +15,7 @@ import {
 } from "@/lib/studio/photosApi";
 import { listProjects, type Project } from "@/lib/studio/projectsApi";
 import type { StudioEvent } from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 「공간 전체」는 빈 문자열, 프로젝트는 그 id. */
 type ScopeKey = string;
@@ -254,8 +255,7 @@ export function StudioMultiExports({
         {busy === "create" ? "만드는 중…" : `고른 행사 사진 묶기 (${pickedCount})`}
       </button>
       <p className="text-[12px] text-(--hc-muted)">
-        고른 행사마다 보이는 완성 사진을 모두 담아요. 합쳐서 {MAX_EXPORT_PHOTOS.toLocaleString("ko-KR")}장까지,
-        행사마다 폴더로 나뉘고, 다 된 묶음은 24시간 동안 받을 수 있어요. 사진 묶음 권한이 있는 행사만 담을 수 있어요.
+        <Sentences text={`고른 행사마다 보이는 완성 사진을 모두 담아요. 합쳐서 ${MAX_EXPORT_PHOTOS.toLocaleString("ko-KR")}장까지, 행사마다 폴더로 나뉘고, 다 된 묶음은 24시간 동안 받을 수 있어요. 사진 묶음 권한이 있는 행사만 담을 수 있어요.`} />
       </p>
 
       {tooManyEvents ? (

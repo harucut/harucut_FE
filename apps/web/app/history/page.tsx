@@ -39,6 +39,7 @@ import {
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
+import { Sentences } from "@/components/ui/Sentences";
 
 type ViewMode = "grid" | "calendar";
 
@@ -610,7 +611,7 @@ export default function HistoryPage() {
         ) : error ? (
           // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p role="alert" className="text-[13px] text-(--hc-muted)">{error}</p>
+            <p role="alert" className="text-[13px] text-(--hc-muted)"><Sentences text={error} /></p>
             <button
               type="button"
               onClick={() => setReloadKey((prev) => prev + 1)}

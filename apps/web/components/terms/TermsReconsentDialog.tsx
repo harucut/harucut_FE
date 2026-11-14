@@ -16,6 +16,7 @@ import {
   type MyTermsConsent,
 } from "@/lib/termsApi";
 import { unregisterPushDevice } from "@/lib/pushDevices";
+import { Sentences } from "@/components/ui/Sentences";
 
 const LOCAL_CLEAR_DEADLINE_MS = 3_000;
 
@@ -374,7 +375,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         {/* 저장 실패는 알려야 한다 — 다이얼로그 안에 있는 스크린리더 사용자에게도. */}
         {error ? (
           <p role="alert" className="mt-3 text-[12px] text-(--hc-danger)">
-            {error}
+            <Sentences text={error} />
           </p>
         ) : null}
 

@@ -12,6 +12,7 @@ import {
 } from "@/lib/event/pageTheme";
 import type { BrandDefaults } from "@/lib/studio/projectsApi";
 import type { ConsentItem, EventLayout, FrameRef } from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const LAYOUTS: EventLayout[] = ["CLASSIC", "WIDE", "GRID", "POLAROID"];
 
@@ -174,8 +175,7 @@ export function StudioBrandDefaults({
       {/* 저장 중에는 편집·업로드를 잠근다 — 응답이 그사이 바꾼 입력을 저장 시점 값으로 덮지 않게(Codex #553). */}
       <fieldset disabled={busy} className="flex flex-col gap-5">
         <p className="text-[13px] text-(--hc-muted)">
-          정한 것만 이 {scopeLabel}의 행사로 내려가요. 행사에서 직접 정한 값이 이기고,
-          게시한 행사는 다시 게시하기 전까지 그대로예요.
+          <Sentences text={`정한 것만 이 ${scopeLabel}의 행사로 내려가요. 행사에서 직접 정한 값이 이기고, 게시한 행사는 다시 게시하기 전까지 그대로예요.`} />
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {triSelect("개인 휴대폰 참가", "byod")}
@@ -318,7 +318,7 @@ export function StudioBrandDefaults({
             </label>
           </div>
           <p className="text-[12px] text-(--hc-muted)">
-            하루컷 표시 숨기기는 화이트라벨 이용권이 있어야 게시돼요. 완성 사진 로고는 준비 중이라 지금은 설정만 저장돼요.
+            <Sentences text="하루컷 표시 숨기기는 화이트라벨 이용권이 있어야 게시돼요. 완성 사진 로고는 준비 중이라 지금은 설정만 저장돼요." />
           </p>
         </fieldset>
       </fieldset>

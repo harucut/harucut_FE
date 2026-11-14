@@ -1,6 +1,7 @@
 "use client";
 
 import { clearLocalUserData } from "@/lib/localUserData";
+import { Sentences } from "@/components/ui/Sentences";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -751,7 +752,7 @@ export default function MyPage() {
             "무기한"처럼 읽힐 빈 값을 두지 않는다. */}
         {periodEnd ? (
           <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
-            {subscription?.autoRenew === false || subscription?.status === "CANCELED"
+            <Sentences text={subscription?.autoRenew === false || subscription?.status === "CANCELED"
               ? `${periodEnd.toLocaleDateString("ko-KR", {
                   year: "numeric",
                   month: "long",
@@ -761,12 +762,12 @@ export default function MyPage() {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
-                })}에 갱신돼요.`}
+                })}에 갱신돼요.`} />
           </p>
         ) : null}
         {subscription?.status === "PAST_DUE" ? (
           <p className="mt-1 text-[12px] font-medium text-(--hc-danger)">
-            정기 결제가 실패했어요. 결제 수단을 확인해 주세요.
+            <Sentences text="정기 결제가 실패했어요. 결제 수단을 확인해 주세요." />
           </p>
         ) : null}
         {/* 해지·변경은 결제한 곳에서만 된다(P4-B) — 어디서 관리하는지 말해 준다. */}
@@ -814,7 +815,7 @@ export default function MyPage() {
         </div>
         {couponError ? (
           <p role="alert" className="text-[12px] font-medium text-(--hc-danger)">
-            {couponError}
+            <Sentences text={couponError} />
           </p>
         ) : null}
         {couponNotice ? (
@@ -946,7 +947,7 @@ export default function MyPage() {
                   : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
               }
             >
-              {notice.text}
+              <Sentences text={notice.text} />
             </div>
           </div>
         ) : null}
@@ -956,7 +957,7 @@ export default function MyPage() {
             role="alert"
             className="mt-3 text-[12px] text-(--hc-danger)"
           >
-            {loadError}
+            <Sentences text={loadError} />
           </p>
         ) : null}
 

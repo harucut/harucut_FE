@@ -8,6 +8,7 @@ import type { ChecklistRow } from "@/lib/studio/eventSections";
 import type { ViolationGroup } from "@/lib/studio/publishViolations";
 import type { EventAction, StudioEvent } from "@/lib/studio/studioApi";
 import type { EventUsage } from "@/lib/studio/usageApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 export type StudioBusy = null | "save" | EventAction;
 
@@ -261,7 +262,7 @@ export function StudioEventOverview({
       {event.status === "DRAFT" ? (
         <>
           <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
-            아래를 확인하고 게시하면 참가 링크가 열려요. 게시 전에는 참가자가 들어올 수 없어요.
+            <Sentences text="아래를 확인하고 게시하면 참가 링크가 열려요. 게시 전에는 참가자가 들어올 수 없어요." />
           </p>
           <DraftChecklist rows={checklist} />
           {joinUrl ? (
@@ -292,7 +293,7 @@ export function StudioEventOverview({
 
       {event.status === "CAPTURE_CLOSED" || event.status === "ARCHIVED" ? (
         <div className="hc-surface-card flex flex-col gap-3 rounded-[20px] p-5">
-          <p className="text-[14px]">촬영이 끝난 행사예요. 참가자는 결과 링크로 사진을 계속 받을 수 있어요.</p>
+          <p className="text-[14px]"><Sentences text="촬영이 끝난 행사예요. 참가자는 결과 링크로 사진을 계속 받을 수 있어요." /></p>
           {usage ? (
             <p className="text-[13px] text-(--hc-muted)">
               완성한 사진 <span className="font-mono font-semibold tabular-nums text-(--hc-text)">{usage.used.toLocaleString("ko-KR")}</span>장

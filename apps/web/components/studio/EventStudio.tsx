@@ -5,6 +5,7 @@ import { cloneElement, useCallback, useEffect, useId, useState, useSyncExternalS
 import { AppNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Sentences } from "@/components/ui/Sentences";
 import { EventStatusBadge } from "@/components/studio/EventStatusBadge";
 import { RunButton, StudioEventOverview, type StudioBusy } from "@/components/studio/StudioEventOverview";
 import { StudioJoinLink, StudioPrintCard } from "@/components/studio/StudioJoinLink";
@@ -332,7 +333,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
           {load.state === "error" ? (
             <div className="flex flex-col items-start gap-3">
               <p role="alert" className="text-[14px] text-(--hc-danger)">
-                {load.message}
+                <Sentences text={load.message} />
               </p>
               <button
                 type="button"
@@ -609,12 +610,12 @@ export function EventStudio({ eventId }: { eventId: string }) {
                   : "rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3 py-2 text-[13px] text-(--hc-danger)"
               }
             >
-              {notice.text}
+              <Sentences text={notice.text} />
             </p>
           ) : null}
           {conflict ? (
             <div role="alert" className="flex flex-col gap-2 rounded-xl border border-(--hc-danger-border) p-3 text-[13px]">
-              <p>다른 곳에서 이 행사 설정을 먼저 바꿨어요. 어떻게 할까요?</p>
+              <p><Sentences text="다른 곳에서 이 행사 설정을 먼저 바꿨어요. 어떻게 할까요?" /></p>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -758,8 +759,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
             ) : null}
             {themeOnly ? (
               <p className="max-w-[65ch] text-[13px] leading-relaxed text-(--hc-muted)">
-                이 행사의 꾸미기와 프레임을 고칠 수 있어요. 저장해도 참가자 화면은 그대로이고, 운영 담당이 게시하면 반영돼요.
-                {event.status === "CAPTURE_CLOSED" || event.status === "ARCHIVED" ? " 촬영이 끝난 행사라 지금은 볼 수만 있어요." : ""}
+                <Sentences text={`이 행사의 꾸미기와 프레임을 고칠 수 있어요. 저장해도 참가자 화면은 그대로이고, 운영 담당이 게시하면 반영돼요.${event.status === "CAPTURE_CLOSED" || event.status === "ARCHIVED" ? " 촬영이 끝난 행사라 지금은 볼 수만 있어요." : ""}`} />
               </p>
             ) : access !== undefined && !can("MANAGE_EVENT") ? (
               <p className="text-[13px] text-(--hc-muted)">행사 설정과 게시는 「행사 설정·게시」 권한이 있어야 바꿀 수 있어요.</p>
@@ -1083,7 +1083,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     행사 고객
                   </h3>
                   <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-                    신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 이미 찍은 사진도 모두 보이고, 공간의 다른 행사는 보이지 않아요.
+                    <Sentences text="신랑신부처럼 이 행사 사진만 볼 분을 초대해요. 이미 찍은 사진도 모두 보이고, 공간의 다른 행사는 보이지 않아요." />
                   </p>
                   <StudioEventCustomers
                     key={customersVersion}
@@ -1099,7 +1099,7 @@ export function EventStudio({ eventId }: { eventId: string }) {
                     행사 운영자
                   </h3>
                   <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-                    운영 담당 멤버에게 이 행사만 맡겨요. 공간의 다른 행사는 보이지 않아요.
+                    <Sentences text="운영 담당 멤버에게 이 행사만 맡겨요. 공간의 다른 행사는 보이지 않아요." />
                   </p>
                   <StudioEventOperators
                     key={operatorsVersion}
@@ -1326,7 +1326,7 @@ function Section({
           <h3 className="text-[18px] font-bold">{title}</h3>
           {aside}
         </div>
-        {description ? <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">{description}</p> : null}
+        {description ? <p className="max-w-[65ch] text-[13px] text-(--hc-muted)"><Sentences text={description} /></p> : null}
       </div>
       {children}
     </section>
@@ -1359,7 +1359,7 @@ function Field({
       {cloneElement(children, { id, ...(help ? { "aria-describedby": helpId } : {}) })}
       {help ? (
         <p id={helpId} className={`max-w-[65ch] text-[12px] ${invalid ? "text-(--hc-danger)" : "text-(--hc-muted)"}`}>
-          {help}
+          <Sentences text={help} />
         </p>
       ) : null}
     </div>
