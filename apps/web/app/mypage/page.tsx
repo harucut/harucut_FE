@@ -94,6 +94,12 @@ const SECTION_META: Record<SectionId, { title: string; sub: string }> = {
  */
 const SECTIONS: SectionId[] = ["account", "plan", "notif", "frames", "pref"];
 
+/** MY 아래의 약관·정책 줄. 법무 화면(app/terms, app/privacy)을 연다. */
+const POLICY_LINKS = [
+  { href: "/terms", label: "서비스 이용약관" },
+  { href: "/privacy", label: "개인정보처리방침" },
+] as const;
+
 export default function MyPage() {
   const studioAccess = useStudioAccess();
   const router = useRouter();
@@ -880,6 +886,28 @@ export default function MyPage() {
     return SECTION_META[id].sub;
   };
 
+  /*
+    약관과 개인정보처리방침은 언제든 찾을 수 있어야 한다(2026-11-14). 개인정보처리방침은 그 이름 그대로 다른 안내와
+    따로 한 줄을 준다 — 쉽게 확인할 수 있게 공개하라는 것이 개인정보 보호법의 요구다. 동의 여부는 위 「알림·약관 동의」가
+    맡고, 여기는 전문을 연다. 이용이 제한된 계정에도 같은 줄을 둔다.
+  */
+  const policyLinks = (
+    <nav aria-label="약관 및 정책" className="hc-surface-card overflow-hidden rounded-[20px] border">
+      {POLICY_LINKS.map(({ href, label }, index) => (
+        <Link
+          key={href}
+          href={href}
+          className={`flex min-h-14 items-center gap-3.5 px-5 py-3.5 transition hover:bg-(--hc-surface-soft) ${
+            index > 0 ? "border-t border-(--hc-border-subtle)" : ""
+          }`}
+        >
+          <span className="min-w-0 flex-1 text-[15px] font-bold">{label}</span>
+          <ChevronRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
+        </Link>
+      ))}
+    </nav>
+  );
+
   const logoutAndExit = (
     <>
       <button
@@ -976,6 +1004,7 @@ export default function MyPage() {
         ) : blocked ? (
           <>
             <BlockedAccountPanel user={user} />
+            <div className="mt-5">{policyLinks}</div>
             <div className="mt-5">{logoutAndExit}</div>
           </>
         ) : (
@@ -1079,6 +1108,8 @@ export default function MyPage() {
               );
             })}
             </div>
+
+            {policyLinks}
 
             <div className="mt-1">{logoutAndExit}</div>
 

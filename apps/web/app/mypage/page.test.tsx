@@ -212,3 +212,26 @@ describe("정지 계정", () => {
     expect(screen.queryByRole("heading", { name: "이용이 제한된 계정이에요" })).not.toBeInTheDocument();
   });
 });
+
+/*
+  이용약관과 개인정보처리방침은 MY 에서 언제든 연다(2026-11-14). 개인정보처리방침은 이름 그대로 한 줄을 준다 —
+  쉽게 확인할 수 있게 공개하라는 것이 개인정보 보호법의 요구다. 이용이 제한된 계정에도 같은 줄이 있다.
+*/
+describe("약관 및 정책", () => {
+  it("이용약관과 개인정보처리방침으로 가는 줄이 있다", async () => {
+    await renderWithPlanTier("BASIC");
+
+    const policies = screen.getByRole("navigation", { name: "약관 및 정책" });
+    expect(within(policies).getByRole("link", { name: "서비스 이용약관" })).toHaveAttribute("href", "/terms");
+    expect(within(policies).getByRole("link", { name: "개인정보처리방침" })).toHaveAttribute("href", "/privacy");
+  });
+
+  it("이용이 제한된 계정도 약관과 개인정보처리방침을 연다", async () => {
+    mockGetMyUserInfo.mockResolvedValue({ ...BASE_USER, userStatus: "BLOCKED" } as unknown as UserInfo);
+    render(<MyPage />);
+    await screen.findByRole("heading", { name: "이용이 제한된 계정이에요" });
+
+    const policies = screen.getByRole("navigation", { name: "약관 및 정책" });
+    expect(within(policies).getByRole("link", { name: "개인정보처리방침" })).toHaveAttribute("href", "/privacy");
+  });
+});
