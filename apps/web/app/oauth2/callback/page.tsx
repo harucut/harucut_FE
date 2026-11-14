@@ -20,6 +20,7 @@ import { COMPANY } from "@harucut/shared";
 import { ApiRequestError, clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { reactivateAccount } from "@/lib/auth/authApi";
+import { WithdrawalRecoveryDialog } from "@/components/auth/WithdrawalRecoveryDialog";
 import { buildPathWithRedirect, resolveRedirectTarget } from "@/lib/redirect";
 import { SOCIAL_LOGIN_FAILED_MESSAGE, startSocialLogin } from "@/lib/authLogin";
 import {
@@ -63,6 +64,9 @@ export default function OAuthCallbackPage() {
   const [canRetry, setCanRetry] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [deadEnd, setDeadEnd] = useState<DeadEnd | null>(null);
+  // 탈퇴를 신청한 계정 — 이메일 로그인과 같은 창으로 묻는다(WithdrawalRecoveryDialog).
+  const [askRecovery, setAskRecovery] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const isHandlingRef = useRef(false);
   // 돌아갈 곳은 세션 저장소에서 **한 번만** 꺼낼 수 있다(consume 이 읽으면서 지운다).
   // 다시 시도가 그 값을 잃으면 원래 가려던 화면 대신 늘 기본 경로로 떨어진다.
@@ -102,53 +106,10 @@ export default function OAuthCallbackPage() {
 
         const userStatus = readUserStatus(response.data);
         if (userStatus === "DELETED_REQUESTED") {
-          const shouldReactivate = window.confirm(
-            "탈퇴 신청한 계정이에요. 재등록을 진행할까요?",
-          );
-
-          if (!shouldReactivate) {
-            await clientApi.delete("/api/client/logout").catch(() => undefined);
-            if (!cancelled) {
-              window.location.href = "/login";
-            }
-            return;
-          }
-
-          setMessage("재등록을 처리하는 중이에요.");
-
-          try {
-            await reactivateAccount();
-          } catch (reactivateError) {
-            console.error(reactivateError);
-            await clientApi.delete("/api/client/logout").catch(() => undefined);
-            alert("재등록 처리에 실패했어요. 다시 시도해 주세요.");
-            if (!cancelled) {
-              window.location.href = "/login";
-            }
-            return;
-          }
-
-          // 복구는 됐지만 지금 쿠키로는 아무것도 못 한다 — 토큰에 status=DELETED_REQUESTED 가
-          // 박혀 있고 reactivate 는 새 쿠키를 주지 않은 채 서버의 refresh 토큰까지 지운다.
-          // 이메일 로그인과 달리 여기엔 다시 쓸 자격증명이 없으므로, 들어온 소셜 인가를
-          // 한 번 더 태워 지금 상태의 토큰을 받는다(정지 중이었다면 BLOCKED). 계정은 이미 복구됐으니 이번엔 그대로 통과한다.
-          // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
-          const provider = readSocialLoginProvider();
-          if (cancelled) return;
-
-          if (provider && !hasSocialLoginReactivated()) {
-            setMessage("탈퇴를 취소했어요. 로그인을 마무리하는 중이에요.");
-            markSocialLoginReactivated();
-            // 소비해 버린 돌아갈 곳을 다시 심어야 두 번째 콜백이 같은 곳으로 보낸다.
-            startSocialLogin(provider, redirectTarget);
-            return;
-          }
-
-          // 제공자를 모르거나(세션 저장소가 비었을 때) 이미 한 번 다시 태웠는데도 여전히
-          // 탈퇴요청이면, 더 왕복시키지 않고 사용자가 직접 로그인하게 한다.
-          clearSocialLoginProvider();
-          alert("탈퇴를 취소했어요. 다시 로그인해 주세요.");
-          window.location.href = "/login";
+          // 답은 창의 두 버튼이 이어 받는다(keepWithdrawal · cancelWithdrawal).
+          // 한때 브라우저 기본 확인창(window.confirm)이었다 — 모바일 사파리에서 탭을 멈추고,
+          // 이메일 로그인과 다른 말로 같은 것을 물었다.
+          setAskRecovery(true);
           return;
         }
 
@@ -176,10 +137,13 @@ export default function OAuthCallbackPage() {
           // 서버가 이 자격증명을 거부했다 — 이때만 쿠키를 정리하고 다시 로그인시킨다.
           await clientApi.delete("/api/client/logout").catch(() => undefined);
           clearSocialLoginProvider();
-          alert("로그인하지 못했어요. 다시 로그인해 주세요.");
-          if (!cancelled) {
-            window.location.href = "/login";
-          }
+          if (cancelled) return;
+          // 브라우저 기본 알림 대신 제공자 실패(?error=)와 같은 끝 화면을 쓴다.
+          setMessage(SOCIAL_LOGIN_FAILED_MESSAGE);
+          setDeadEnd({
+            loginHref: buildPathWithRedirect("/login?socialError=1", redirectTarget),
+            showSupport: false,
+          });
           return;
         }
 
@@ -202,6 +166,54 @@ export default function OAuthCallbackPage() {
       isHandlingRef.current = false;
     };
   }, [retryKey]);
+
+  /** 탈퇴를 그대로 둔다 — 방금 받은 세션을 지우고 로그인 화면으로 돌아간다. */
+  const keepWithdrawal = async () => {
+    setAskRecovery(false);
+    await clientApi.delete("/api/client/logout").catch(() => undefined);
+    clearSocialLoginProvider();
+    window.location.href = "/login";
+  };
+
+  const cancelWithdrawal = async () => {
+    setRecovering(true);
+    try {
+      await reactivateAccount();
+    } catch (reactivateError) {
+      console.error(reactivateError);
+      await clientApi.delete("/api/client/logout").catch(() => undefined);
+      clearSocialLoginProvider();
+      setAskRecovery(false);
+      setRecovering(false);
+      setMessage("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      setDeadEnd({ loginHref: "/login", showSupport: false });
+      return;
+    }
+
+    // 복구는 됐지만 지금 쿠키로는 아무것도 못 한다 — 토큰에 status=DELETED_REQUESTED 가
+    // 박혀 있고 reactivate 는 새 쿠키를 주지 않은 채 서버의 refresh 토큰까지 지운다.
+    // 이메일 로그인과 달리 여기엔 다시 쓸 자격증명이 없으므로, 들어온 소셜 인가를
+    // 한 번 더 태워 지금 상태의 토큰을 받는다(정지 중이었다면 BLOCKED). 계정은 이미 복구됐으니 이번엔 그대로 통과한다.
+    // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
+    const provider = readSocialLoginProvider();
+    if (provider && !hasSocialLoginReactivated()) {
+      setMessage("탈퇴를 취소했어요. 로그인을 마무리하는 중이에요.");
+      markSocialLoginReactivated();
+      // 소비해 버린 돌아갈 곳을 다시 심어야 두 번째 콜백이 같은 곳으로 보낸다.
+      startSocialLogin(provider, redirectTargetRef.current ?? resolveRedirectTarget(null));
+      return;
+    }
+
+    // 제공자를 모르거나(세션 저장소가 비었을 때) 이미 한 번 다시 태웠는데도 여전히
+    // 탈퇴요청이면, 더 왕복시키지 않고 사용자가 직접 로그인하게 한다. 쓸 수 없는 쿠키는
+    // 지운다 — 남겨 두면 로그인 화면이 그 세션을 보고 같은 질문을 또 한다.
+    await clientApi.delete("/api/client/logout").catch(() => undefined);
+    clearSocialLoginProvider();
+    setAskRecovery(false);
+    setRecovering(false);
+    setMessage("탈퇴를 취소했어요. 다시 로그인해 주세요.");
+    setDeadEnd({ loginHref: "/login", showSupport: false });
+  };
 
   return (
     <main className="hc-page-app min-h-dvh px-4 py-6 text-(--hc-text)">
@@ -242,6 +254,13 @@ export default function OAuthCallbackPage() {
           </a>
         ) : null}
       </div>
+      {askRecovery ? (
+        <WithdrawalRecoveryDialog
+          running={recovering}
+          onKeep={() => void keepWithdrawal()}
+          onRecover={() => void cancelWithdrawal()}
+        />
+      ) : null}
     </main>
   );
 }

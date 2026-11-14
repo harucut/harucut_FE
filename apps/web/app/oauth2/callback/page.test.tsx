@@ -122,6 +122,14 @@ it("서버가 자격증명을 거부하면(401) 세션을 정리한다", async (
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"),
   );
   expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+  // 브라우저 기본 알림 없이, 제공자 실패와 같은 끝 화면으로 이유와 돌아갈 길을 말한다.
+  expect(
+    await screen.findByText("로그인을 마치지 못했어요. 다시 시도해 주세요."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "로그인으로 돌아가기" }),
+  ).toHaveAttribute("href", "/login?socialError=1&redirectTo=%2Fhome");
+  expect(window.alert).not.toHaveBeenCalled();
 });
 
 /*
@@ -205,18 +213,93 @@ it.each(["DELETED"])(
   상태는 서버 봉투 전체에서 읽는다(lib/authUserStatus.ts 의 readUserStatus). 예전엔 이 화면만
   봉투 안쪽을 따로 읽었다 — 읽는 자리가 갈라지면 한쪽만 고쳐져 복구 분기가 조용히 빠진다.
 */
-it("탈퇴요청 계정은 복구한 뒤 같은 제공자로 인가를 한 번 더 탄다", async () => {
-  mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
-  window.sessionStorage.setItem("social-login-provider", "kakao");
-  mockGet.mockResolvedValue(statusOf("DELETED_REQUESTED"));
-  mockReactivateAccount.mockResolvedValue(undefined);
-  jest.spyOn(window, "confirm").mockReturnValue(true);
+describe("탈퇴요청 계정", () => {
+  beforeEach(() => {
+    mockGet.mockResolvedValue(statusOf("DELETED_REQUESTED"));
+  });
 
-  render(<OAuthCallbackPage />);
+  async function findRecoveryDialog() {
+    return screen.findByRole("dialog", { name: "탈퇴를 취소할까요?" });
+  }
 
-  await waitFor(() =>
-    expect(mockStartSocialLogin).toHaveBeenCalledWith("kakao", "/history"),
-  );
-  expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
-  expect(mockDelete).not.toHaveBeenCalled();
+  it("이메일 로그인과 같은 창으로 묻고, 브라우저 기본 확인창은 쓰지 않는다", async () => {
+    const confirmSpy = jest.spyOn(window, "confirm");
+
+    render(<OAuthCallbackPage />);
+
+    const dialog = await findRecoveryDialog();
+    expect(dialog).toHaveAccessibleDescription(
+      "탈퇴를 신청한 계정이에요. 취소하면 지금처럼 하루컷을 쓸 수 있어요.",
+    );
+    expect(confirmSpy).not.toHaveBeenCalled();
+    // 묻기만 했다 — 답하기 전에는 복구도 로그아웃도 하지 않는다.
+    expect(mockReactivateAccount).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("복구한 뒤 같은 제공자로 인가를 한 번 더 탄다", async () => {
+    mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+    mockReactivateAccount.mockResolvedValue(undefined);
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
+
+    await waitFor(() =>
+      expect(mockStartSocialLogin).toHaveBeenCalledWith("kakao", "/history"),
+    );
+    expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("「로그아웃」을 고르면 복구하지 않고 방금 받은 세션을 지운다", async () => {
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "로그아웃" }));
+
+    await waitFor(() =>
+      expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"),
+    );
+    expect(mockReactivateAccount).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem("social-login-provider")).toBeNull();
+  });
+
+  it("제공자를 모르면 복구한 뒤 쓸 수 없는 세션을 지우고 다시 로그인해 달라고 한다", async () => {
+    mockReactivateAccount.mockResolvedValue(undefined);
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
+
+    expect(
+      await screen.findByText("탈퇴를 취소했어요. 다시 로그인해 주세요."),
+    ).toBeInTheDocument();
+    expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+    expect(mockStartSocialLogin).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "로그인으로 돌아가기" }),
+    ).toHaveAttribute("href", "/login");
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("복구에 실패하면 세션을 지우고 이 화면에서 이유를 말한다", async () => {
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+    mockReactivateAccount.mockRejectedValue(new Error("network"));
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
+
+    expect(
+      await screen.findByText("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요."),
+    ).toBeInTheDocument();
+    expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+    expect(mockStartSocialLogin).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.alert).not.toHaveBeenCalled();
+  });
 });

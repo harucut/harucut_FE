@@ -62,8 +62,13 @@ function ForgotPasswordPageContent() {
             const ok = await flow.submitNewPassword();
             if (!ok) return;
 
-            alert("비밀번호가 변경되었어요. 다시 로그인해 주세요.");
-            router.push(loginHref);
+            // 브라우저 기본 알림 대신 로그인 화면이 폼 위에 말한다 — 마이페이지에서 바꾼 뒤와 같은 안내다.
+            router.push(
+              buildPathWithRedirect(
+                "/login?passwordChanged=1",
+                searchParams.get("redirectTo"),
+              ),
+            );
           }}
           onRestart={flow.restart}
           onGoLogin={() => router.push(loginHref)}

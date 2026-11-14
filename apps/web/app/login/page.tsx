@@ -9,7 +9,7 @@ import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { WithdrawalRecoveryDialog } from "@/components/auth/WithdrawalRecoveryDialog";
 import { Sentences } from "@/components/ui/Sentences";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail } from "@/lib/authValidation";
@@ -301,15 +301,10 @@ function LoginPageContent() {
         <GuestTrialStartButton className="inline-flex min-h-11 items-center justify-center text-[14px] font-semibold text-(--hc-text) underline underline-offset-4 transition hover:text-(--hc-primary-strong)" />
       </form>
       {recovery ? (
-        <ConfirmDialog
-          title="탈퇴를 취소할까요?"
-          description="탈퇴를 신청한 계정이에요. 취소하면 지금처럼 하루컷을 쓸 수 있어요."
-          confirmLabel="탈퇴 취소하기"
-          runningLabel="취소하는 중"
-          cancelLabel="로그아웃"
+        <WithdrawalRecoveryDialog
           running={recovering}
-          onClose={() => void keepWithdrawal()}
-          onConfirm={() => void cancelWithdrawal()}
+          onKeep={() => void keepWithdrawal()}
+          onRecover={() => void cancelWithdrawal()}
         />
       ) : null}
     </AuthPageShell>
