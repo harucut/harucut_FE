@@ -56,10 +56,6 @@ jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
 }));
 
-jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
-  GeneratedAssetDownloadCard: () => <div data-testid="generated-asset-card" />,
-}));
-
 jest.mock("@/components/theme/editor/ThemeEditorPage", () => ({
   ThemeEditorPage: ({ frameId }: { frameId: string }) => (
     <div data-testid="theme-editor-page">{frameId}</div>

@@ -23,11 +23,14 @@ test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운�
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
   const downloadLink = page.getByRole("link", { name: "사진 저장", exact: true });
   await expect(downloadLink).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("계정 기록에 보관할 수 없어요");
-  await expect(page.getByRole("button", { name: "공유 링크 만들기" })).toHaveCount(0);
-  await page.getByText("파일 이름 바꾸기").click();
-  await page.getByLabel("파일 이름", { exact: true }).fill("POC-기기저장");
-  await page.getByRole("button", { name: "파일명 수정" }).click();
+  await expect(page.getByText("이 사진은 기록에 보관되지 않아요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "공유", exact: true })).toHaveCount(0);
+  // 이름 바꾸기는 ⋯ 안의 창이다(2026-11-15 완성 화면 시안 A — 기록의 사진 보기와 같다).
+  await page.getByRole("button", { name: "더보기", exact: true }).click();
+  await page.getByRole("button", { name: "이름 바꾸기", exact: true }).click();
+  await page.getByLabel("사진 이름", { exact: true }).fill("POC-기기저장");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   const completed = page.waitForEvent("download");
   await downloadLink.click();
   const download = await completed;
@@ -41,7 +44,7 @@ test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운�
   await page.screenshot({ path: info.outputPath("member-local-result.png"), fullPage: true });
   await page.reload();
   await expect(downloadLink).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("계정 기록에 보관할 수 없어요");
+  await expect(page.getByText("이 사진은 기록에 보관되지 않아요.")).toBeVisible();
   expect(writes).toEqual([]);
 });
 

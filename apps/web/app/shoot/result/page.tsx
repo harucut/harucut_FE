@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { GeneratedAssetDownloadCard } from "@/components/frame/GeneratedAssetDownloadCard";
+import { Download, Ellipsis, PencilLine, Share2 } from "lucide-react";
+import { BrandMark } from "@/components/layout/BrandMark";
+import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -16,6 +17,7 @@ import {
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
 import {
+  DISPLAY_NAME_MAX_LENGTH,
   buildDefaultDisplayName,
   buildDownloadFilename,
   sanitizeDisplayName,
@@ -27,7 +29,7 @@ import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
-import { getNativeSaveErrorMessage, nativeNotify } from "@/lib/nativeBridge";
+import { getNativeSaveErrorMessage, isNativeShell, nativeNotify } from "@/lib/nativeBridge";
 import { hasServerPush } from "@/lib/pushDevices";
 import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
@@ -216,8 +218,14 @@ export default function ShootResultPage() {
   // 실패했을 때 imageResult 는 이미 null 이라, 이 값을 안 바꾸면 아래 effect 의
   // 의존성이 하나도 안 변해 effect 가 다시 돌지 않는다 — 버튼을 눌러도 "대기 중"에서 멈췄다.
   const [retryNonce, setRetryNonce] = useState(0);
-  const [imageNameDraft, setImageNameDraft] = useState(imageResult?.displayName ?? "");
+  // 이름 바꾸기는 기록과 같은 창(SingleFieldDialog)이고 ⋯ 안에서 연다(2026-11-15 시안 A).
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [isSavingImageName, setIsSavingImageName] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuBoxRef = useRef<HTMLDivElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuId = useId();
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
   const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
@@ -234,6 +242,25 @@ export default function ShootResultPage() {
     key: string;
     run: Promise<GeneratedFourcutAsset>;
   } | null>(null);
+
+  // ⋯ 메뉴는 밖을 누르거나 Escape 로 닫는다(기록의 사진 보기와 같다).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuBoxRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      moreButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   const showStatusNotice = (title: string, message: string) => {
     setNotice({
@@ -350,7 +377,6 @@ export default function ShootResultPage() {
   if (syncedImageResult !== imageResult) {
     setSyncedImageResult(imageResult);
     setImageState(imageResult ? "done" : "idle");
-    setImageNameDraft(imageResult?.displayName ?? "");
     // 새 결과는 다시 불러 본다 — 앞 결과가 못 열렸다고 이것까지 접어 두면 안 된다.
     setIsResultImageBroken(false);
   }
@@ -672,30 +698,27 @@ export default function ShootResultPage() {
     return resolvedName;
   };
 
-  const handleSaveImageName = async () => {
+  // 실패해도 창을 닫지 않고 그 창에 말한다 — 기록의 이름 바꾸기와 같다(SingleFieldDialog).
+  const handleSaveImageName = async (draft: string) => {
     if (!imageResult) return;
 
     setIsSavingImageName(true);
+    setRenameError(null);
     try {
-      const nextName = sanitizeDisplayName(imageNameDraft, imageResult.displayName);
-      if (nextName === imageResult.displayName) {
-        setImageNameDraft(imageResult.displayName);
-        return;
+      const nextName = sanitizeDisplayName(draft, imageResult.displayName);
+      if (nextName !== imageResult.displayName) {
+        if (imageResult.localBlob) {
+          setImageResult({ ...imageResult, displayName: nextName });
+        } else {
+          await syncDisplayName(imageResult, draft, (displayName) =>
+            setImageResult({ ...imageResult, displayName }),
+          );
+        }
       }
-
-      if (imageResult.localBlob) {
-        setImageResult({ ...imageResult, displayName: nextName });
-        setImageNameDraft(nextName);
-        return;
-      }
-
-      const resolvedName = await syncDisplayName(imageResult, imageNameDraft, (displayName) =>
-        setImageResult({ ...imageResult, displayName }),
-      );
-      setImageNameDraft(resolvedName);
+      setRenameOpen(false);
     } catch (error) {
       console.error(error);
-      showStatusNotice("이름을 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
+      setRenameError("이름을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsSavingImageName(false);
     }
@@ -779,7 +802,7 @@ export default function ShootResultPage() {
   */
   const handleGuestLogin = async () => {
     // 보관에 실패했을 때 무엇을 하라고 할지. 아직 완성본이 없으면 "내려받으라"고 할 수 없다 —
-    // 가리킬 다운로드 카드가 화면에 없다(imageResult 일 때만 그린다).
+    // 「사진 저장」이 아직 「만드는 중…」으로 잠겨 있다.
     const retryHint = imageResult
       ? "먼저 이미지를 내려받아 주세요."
       : "결과가 다 만들어진 뒤에 다시 눌러 주세요.";
@@ -874,76 +897,127 @@ export default function ShootResultPage() {
     }
   };
 
-  // 세로로 긴 사진은 폭으로 맞추면 화면 두 개 높이가 된다. 높이로 묶어 사진과 저장 버튼을 한 화면에 둔다.
+  // 세로로 긴 사진은 폭으로 맞추면 화면 두 개 높이가 된다. 높이로 묶어 사진과 저장 단추 줄을 한 화면에 둔다.
   const tallLayout = layout.totalHeight > layout.totalWidth;
-  const photoSizeClass = tallLayout ? "h-[min(62svh,680px)] w-auto max-w-full" : "h-auto w-full";
+  const photoSizeClass = tallLayout ? "h-[min(64svh,680px)] w-auto max-w-full" : "h-auto w-full";
 
+  // 화면에는 제목을 두지 않는다(2026-11-15 「완성에 네컷 완성 너무 아냐 / 텍스트 없애」). 읽기 프로그램에만 쓴다.
   const heading = imageResult
     ? "네 컷 완성"
     : imageState === "error"
       ? "네 컷을 만들지 못했어요"
       : "네 컷을 만들고 있어요";
 
-  // 다음에 할 일. 저장 버튼보다 낮은 무게로 같은 줄에 놓는다.
-  const nextSteps = (
+  const handleRetry = () => {
+    imageGenerationKeyRef.current = null;
+    if (guestImageUrlRef.current?.startsWith("blob:")) {
+      URL.revokeObjectURL(guestImageUrlRef.current);
+    }
+    guestImageUrlRef.current = null;
+    clearResults();
+    if (retryNeedsNewJob) {
+      discardComposeIdempotency();
+      setRetryNeedsNewJob(false);
+    }
+    setImageState("idle");
+    setImageError(null);
+    // 실패했을 때 imageResult 는 이미 null 이라 clearResults() 만으로는
+    // effect 의존성이 하나도 안 바뀐다. 이 값을 올려야 실제로 다시 돈다.
+    setRetryNonce((nonce) => nonce + 1);
+  };
+
+  /*
+    아래 단추 줄은 기록에서 사진을 열었을 때와 같다 — [사진 저장 · 공유 · ⋯](components/history/HistoryPhotoViewer).
+    주 버튼 한 자리가 상태를 말한다: 만드는 중이면 잠긴 「만드는 중…」, 다 되면 「사진 저장」, 실패하면 그다음 할 일.
+    같은 자리라 다 만들어져도 화면이 움직이지 않는다.
+  */
+  const localBlob = imageResult?.localBlob ?? null;
+  const primaryClass =
+    "hc-button-primary flex h-13 flex-1 items-center justify-center gap-2 rounded-full text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:opacity-45";
+  const roundButton =
+    "hc-button-secondary grid size-13 shrink-0 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45";
+  const menuItem =
+    "flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] font-semibold transition hover:bg-(--hc-surface-muted)";
+  const saveContent = (
     <>
-      <Link
-        href={
-          guestMode
-            ? fromUpload
-              ? "/shoot/upload"
-              : "/shoot/capture"
-            : "/shoot/select"
-        }
-        className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition"
-      >
-        {guestMode && !fromUpload ? "다시 찍기" : "사진 다시 고르기"}
-      </Link>
-      {guestMode ? (
-        <button
-          type="button"
-          onClick={handleGuestLogin}
-          disabled={isHandingOffToLogin}
-          className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition disabled:opacity-40"
-        >
-          {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 저장하기"}
-        </button>
-      ) : (
-        <Link
-          href="/home"
-          className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-center text-[13px] font-semibold transition"
-        >
-          홈으로 가기
-        </Link>
-      )}
+      <Download aria-hidden className="size-4.5" strokeWidth={2.2} />
+      {isDownloadingImage ? "저장 중" : "사진 저장"}
     </>
   );
 
-  return (
-    <main className="hc-page-app flex min-h-dvh flex-col px-4 pb-0 pt-6 text-(--hc-text) lg:px-8 lg:pt-10">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 lg:max-w-3xl">
-        <header className="text-center">
-          <h1 className="text-[34px] font-extrabold leading-tight tracking-[-0.03em]">{heading}</h1>
-          {guestMode ? (
-            <p className="mx-auto mt-1 max-w-[46ch] break-keep text-[13px] leading-[1.6] text-(--hc-muted)">
-              <Sentences text="이미지는 지금 바로 내려받을 수 있어요. 기록 보관과 링크 공유는 로그인 뒤에 열려요." />
-            </p>
-          ) : null}
-        </header>
+  let primary: ReactNode;
+  if (imageResult && localBlob) {
+    primary = (
+      <a
+        href={imageResult.downloadUrl ?? imageResult.objectUrl}
+        download={buildDownloadFilename(imageResult.displayName, localBlob.type === "image/jpeg" ? "jpg" : "png")}
+        aria-disabled={isDownloadingImage || undefined}
+        onClick={(event) => {
+          if (isDownloadingImage) {
+            event.preventDefault();
+            return;
+          }
+          // Safari는 실제 링크의 기본 동작으로 받는다. 클릭 뒤 URL을 폐기하지 않는다.
+          // 앱 셸만 네이티브 저장 브리지(사진첩)를 쓴다.
+          if (isNativeShell()) {
+            event.preventDefault();
+            void handleDownloadImage();
+          }
+        }}
+        className={primaryClass}
+      >
+        {saveContent}
+      </a>
+    );
+  } else if (imageResult) {
+    primary = (
+      <button type="button" onClick={() => void handleDownloadImage()} disabled={isDownloadingImage} className={primaryClass}>
+        {saveContent}
+      </button>
+    );
+  } else if (imageState === "error") {
+    // 다시 해서 달라질 수 있으면 다시 시도, 아니면(없는 프레임 등) 사진은 두고 프레임만 다시 고른다.
+    primary = isImageErrorRetryable ? (
+      <button type="button" onClick={handleRetry} className={primaryClass}>
+        다시 시도
+      </button>
+    ) : (
+      // 링크가 아니라 버튼이다 — 누르면 이동이 아니라 확인이 먼저다(handleReselectFrame 주석).
+      <button type="button" onClick={handleReselectFrame} className={primaryClass}>
+        프레임 다시 고르기
+      </button>
+    );
+  } else {
+    primary = (
+      <button type="button" disabled className={primaryClass}>
+        만드는 중…
+      </button>
+    );
+  }
 
+  // 화면의 글은 이 한 줄뿐이다 — 실패한 까닭, 또는 기록에 남지 않는 사진이라는 것(기기에만 저장된다).
+  const message = imageError
+    ? { danger: true, text: imageError }
+    : localBlob && !guestMode
+      ? { danger: false, text: "이 사진은 기록에 보관되지 않아요. 기기에 저장해 주세요." }
+      : null;
+
+  return (
+    <main className="hc-page-app flex min-h-dvh flex-col px-4 pb-0 pt-[max(0.75rem,env(safe-area-inset-top))] text-(--hc-text) lg:px-8 lg:pt-6">
+      {/* 넓은 화면도 기록의 사진 보기(max-w-xl)만큼만 — 더 넓히면 「사진 저장」 하나가 화면을 가로지른다. */}
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-xl">
         {/*
-          준비 중일 때만 상태를 둔다. 완성되면 그림과 저장 버튼이 곧 상태다.
+          뒤로가기 자리에 로고 — 누르면 홈(2026-11-15 「최종적으로 완성되었을땐 다시 고르기를 막아야해 / 뒤로가기 대신에
+          거기다가 로고를 넣고 홈으로」). 완성된 촬영은 다시 고르지 않는다(shootSessionStore 의 completed). 홈으로 가는
+          길은 이 로고 하나라 오른쪽 위 X 는 두지 않는다.
         */}
-        {isPreparing ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className="flex items-center justify-center gap-1.5 text-[13px] text-(--hc-muted)"
-          >
-            <span className="font-semibold text-(--hc-text)">결과 준비 중</span>
-            <span>{imageState === "processing" ? "생성 중…" : "대기 중"}</span>
-          </p>
-        ) : null}
+        <header className="flex h-11 shrink-0 items-center">
+          <BrandMark href={guestMode ? "/" : "/home"} label={guestMode ? "하루컷 처음으로" : "하루컷 홈"} />
+        </header>
+        <h1 className="sr-only">{heading}</h1>
+        <p role="status" aria-live="polite" className="sr-only">
+          {isPreparing ? "네 컷을 만들고 있어요." : imageResult ? "네 컷이 완성됐어요." : ""}
+        </p>
 
         {/*
           다 되면 **저장된 그림 자체**를 보여준다.
@@ -960,7 +1034,7 @@ export default function ShootResultPage() {
 
           아직 만들어지는 중이거나 완성본을 못 불러왔을 때만 미리보기가 자리를 지킨다.
         */}
-        <section className="flex w-full justify-center">
+        <section className="flex w-full flex-1 items-center justify-center py-5">
           {resultImageSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -982,84 +1056,106 @@ export default function ShootResultPage() {
               borderColor={effectiveBorderColor}
               outputFilter={outputFilter}
               theme={themeData}
-              className={tallLayout ? "h-[min(62svh,680px)]! w-auto!" : "w-full!"}
+              className={tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"}
             />
           )}
         </section>
 
-        {imageError ? <p className="text-center text-[13px] text-(--hc-danger)">{imageError}</p> : null}
+        {/* 주 버튼이 페이지 높이를 기준으로 화면 아래에 붙는다 — 사진을 보는 동안에도 저장은 엄지 아래다. */}
+        <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2.5 bg-linear-to-t from-(--background) from-75% to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 lg:-mx-8 lg:px-8">
+          {message ? (
+            <p className={`text-center text-[13px] leading-[1.6] ${message.danger ? "text-(--hc-danger)" : "text-(--hc-muted)"}`}>
+              <Sentences text={message.text} />
+            </p>
+          ) : null}
 
-        {imageState === "error" && isImageErrorRetryable ? (
-          <button
-            type="button"
-            onClick={() => {
-              imageGenerationKeyRef.current = null;
-              if (guestImageUrlRef.current?.startsWith("blob:")) {
-                URL.revokeObjectURL(guestImageUrlRef.current);
-              }
-              guestImageUrlRef.current = null;
-              clearResults();
-              if (retryNeedsNewJob) {
-                discardComposeIdempotency();
-                setRetryNeedsNewJob(false);
-              }
-              setImageState("idle");
-              setImageError(null);
-              // 실패했을 때 imageResult 는 이미 null 이라 clearResults() 만으로는
-              // effect 의존성이 하나도 안 바뀐다. 이 값을 올려야 실제로 다시 돈다.
-              setRetryNonce((nonce) => nonce + 1);
-            }}
-            className="hc-button-secondary mx-auto inline-flex h-11 items-center rounded-full border px-5 text-[13px] font-semibold transition"
-          >
-            다시 준비하기
-          </button>
-        ) : null}
+          {/* 비회원은 공유·⋯ 대신 이 한 줄 — 보관하는 것은 재료라 만드는 중이어도 실패한 뒤여도 된다(handleGuestLogin). */}
+          {guestMode ? (
+            <button
+              type="button"
+              onClick={() => void handleGuestLogin()}
+              disabled={isHandingOffToLogin}
+              className="hc-button-secondary flex h-12 w-full items-center justify-center rounded-full border text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 기록에 보관"}
+            </button>
+          ) : null}
 
-        {imageState === "error" && !isImageErrorRetryable ? (
-          // 링크가 아니라 버튼이다 — 누르면 이동이 아니라 확인이 먼저다(위 주석 참고).
-          <button
-            type="button"
-            onClick={handleReselectFrame}
-            className="hc-button-secondary mx-auto inline-flex h-11 w-fit items-center rounded-full border px-5 text-[13px] font-semibold transition"
-          >
-            프레임 다시 고르기
-          </button>
-        ) : null}
-
-        {!guestMode && imageResult?.localBlob ? (
-          <p role="status" className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4 text-sm leading-relaxed text-(--hc-text)">
-            <Sentences text="지금은 이 프레임의 결과를 계정 기록에 보관할 수 없어요. 사진은 완성됐으니 아래에서 기기에 내려받아 주세요. 링크 공유는 계정에 보관된 사진에서 사용할 수 있어요." />
-          </p>
-        ) : null}
-
-        {imageResult ? (
-          <GeneratedAssetDownloadCard
-            description={
-              imageResult.localBlob
-                ? "다운로드한 이미지는 파일 앱의 다운로드 폴더에서 찾을 수 있어요."
-                : undefined
-            }
-            asset={imageResult}
-            draftName={imageNameDraft}
-            onChangeName={setImageNameDraft}
-            onSaveName={handleSaveImageName}
-            onDownload={handleDownloadImage}
-            onShare={imageResult.localBlob ? undefined : handleShareImage}
-            localDownload={imageResult.localBlob ? {
-              href: imageResult.downloadUrl ?? imageResult.objectUrl,
-              filename: buildDownloadFilename(imageResult.displayName, imageResult.localBlob.type === "image/jpeg" ? "jpg" : "png"),
-            } : undefined}
-            isSavingName={isSavingImageName}
-            isDownloading={isDownloadingImage}
-            isSharing={isSharingImage}
-            extraActions={nextSteps}
-          />
-        ) : (
-          <div className="flex flex-wrap items-center justify-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">{nextSteps}</div>
-        )}
+          <div className="flex gap-2.5">
+            {primary}
+            {!guestMode && imageState !== "error" ? (
+              <>
+                {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}
+                {!localBlob ? (
+                  <button
+                    type="button"
+                    aria-label="공유"
+                    aria-busy={isSharingImage || undefined}
+                    onClick={() => void handleShareImage()}
+                    disabled={!imageResult || isSharingImage}
+                    className={roundButton}
+                  >
+                    <Share2 aria-hidden className="size-5" />
+                  </button>
+                ) : null}
+                <div ref={menuBoxRef} className="relative">
+                  <button
+                    ref={moreButtonRef}
+                    type="button"
+                    aria-label="더보기"
+                    aria-expanded={menuOpen}
+                    aria-controls={menuOpen ? menuId : undefined}
+                    onClick={() => setMenuOpen((open) => !open)}
+                    disabled={!imageResult}
+                    className={roundButton}
+                  >
+                    <Ellipsis aria-hidden className="size-5" />
+                  </button>
+                  {menuOpen ? (
+                    <div
+                      id={menuId}
+                      className="hc-surface-card absolute bottom-full right-0 mb-2 flex w-44 flex-col rounded-2xl border p-1.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          // 창을 닫으면 포커스가 ⋯ 로 돌아오게, 열기 전에 거기 둔다(메뉴 줄은 곧 사라진다).
+                          moreButtonRef.current?.focus();
+                          setRenameError(null);
+                          setRenameOpen(true);
+                        }}
+                        className={menuItem}
+                      >
+                        <PencilLine aria-hidden className="size-4.5" />
+                        이름 바꾸기
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
 
         <canvas ref={canvasRef} className="hidden" />
       </div>
+
+      {renameOpen && imageResult ? (
+        <SingleFieldDialog
+          title="이름 바꾸기"
+          label="사진 이름"
+          initialValue={imageResult.displayName}
+          maxLength={DISPLAY_NAME_MAX_LENGTH}
+          saving={isSavingImageName}
+          error={renameError}
+          onClose={() => {
+            setRenameOpen(false);
+            setRenameError(null);
+          }}
+          onSubmit={(nextName) => void handleSaveImageName(nextName)}
+        />
+      ) : null}
     </main>
   );
 }

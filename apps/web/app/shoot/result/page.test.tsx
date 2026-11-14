@@ -11,6 +11,8 @@ import { CopyFailedError } from "@/lib/share";
 // 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 을 펼쳐 두었다.
 import { buildFrameContentKey } from "@/lib/shootSessionStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import { sentenceText } from "@/tests/sentenceText";
+import { updateMediaDisplayName } from "@/lib/userMediaApi";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -94,33 +96,6 @@ jest.mock("@/components/layout/PageHeader", () => ({
 
 jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
-}));
-
-// 카드의 공유 액션을 그대로 연결해 회원 링크와 게스트 파일을 각각 검증한다.
-jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
-  GeneratedAssetDownloadCard: ({
-    onDownload,
-    onShare,
-    shareLabel,
-    extraActions,
-  }: {
-    onDownload: () => void;
-    onShare?: () => void;
-    shareLabel?: string;
-    extraActions?: React.ReactNode;
-  }) => (
-    <div data-testid="generated-asset-card">
-      <button type="button" onClick={onDownload}>
-        이미지 다운로드
-      </button>
-      {onShare ? (
-        <button type="button" onClick={onShare}>
-          {shareLabel ?? "공유 링크 만들기"}
-        </button>
-      ) : null}
-      {extraActions}
-    </div>
-  ),
 }));
 
 /*
@@ -337,18 +312,84 @@ describe("ShootResultPage", () => {
     mockComposeFramePng.mockResolvedValueOnce(new Blob(["jpeg"], { type: "image/jpeg" }));
     jest.spyOn(console, "error").mockImplementation(() => {});
     render(<ShootResultPage />);
-    await screen.findByRole("button", { name: "이미지 다운로드" });
+    // 기기에서 만든 사진은 실제 링크로 내려받는다(Safari 는 링크의 기본 동작으로만 받는다).
+    await screen.findByRole("link", { name: "사진 저장" });
     expect(mockUseShootSession.getState().imageResult?.localBlob?.type).toBe("image/jpeg");
-    expect(screen.getByRole("status")).toHaveTextContent("계정 기록에 보관할 수 없어요");
-    expect(screen.queryByRole("button", { name: "공유 링크 만들기" })).toBeNull();
+    expect(screen.getByText("이 사진은 기록에 보관되지 않아요.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "공유" })).toBeNull();
     expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  /*
+    완성 화면 — 시안 A(2026-11-15). 「최종적으로 완성되었을땐 다시 고르기를 막아야해 / 뒤로가기 대신에 거기다가
+    로고를 넣고 홈으로」. 제목도 다시 고르는 단추도 없고, 머리 줄은 홈으로 가는 로고 하나다.
+  */
+  it("완성되면 머리 줄은 홈으로 가는 로고 하나이고, 다시 고르는 길은 없다", async () => {
+    render(<ShootResultPage />);
+    await screen.findByRole("button", { name: "사진 저장" });
+
+    expect(screen.getByRole("link", { name: "하루컷 홈" })).toHaveAttribute("href", "/home");
+    expect(screen.queryByRole("link", { name: /다시 고르기|다시 찍기|홈으로 가기/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /다시 고르기|다시 찍기|닫기/ })).toBeNull();
+    // 제목은 읽기 프로그램에만 남는다.
+    expect(screen.getByRole("heading", { name: "네 컷 완성" })).toHaveClass("sr-only");
+  });
+
+  it("비회원의 로고는 처음 화면으로 간다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+    mockComposeFramePng.mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" }));
+    render(<ShootResultPage />);
+    await screen.findByRole("link", { name: "사진 저장" });
+
+    expect(screen.getByRole("link", { name: "하루컷 처음으로" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("button", { name: "로그인하고 기록에 보관" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "더보기" })).toBeNull();
+  });
+
+  it("만드는 동안 저장·공유·⋯ 는 같은 자리에서 잠겨 있다", async () => {
+    mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
+    render(<ShootResultPage />);
+
+    expect(await screen.findByRole("button", { name: "만드는 중…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "공유" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "더보기" })).toBeDisabled();
+  });
+
+  it("이름 바꾸기는 ⋯ 안에서 기록과 같은 창으로 고친다", async () => {
+    jest.mocked(updateMediaDisplayName).mockResolvedValue({ displayName: "바다에서" } as never);
+    render(<ShootResultPage />);
+    await screen.findByRole("button", { name: "사진 저장" });
+
+    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "이름 바꾸기" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "사진 이름" }), { target: { value: "바다에서" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(updateMediaDisplayName).toHaveBeenCalledWith(expect.anything(), "바다에서"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(mockUseShootSession.getState().imageResult?.displayName).toBe("바다에서");
+  });
+
+  it("이름 저장에 실패하면 창을 닫지 않고 그 창에 말한다", async () => {
+    jest.mocked(updateMediaDisplayName).mockRejectedValue(new Error("down"));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    render(<ShootResultPage />);
+    await screen.findByRole("button", { name: "사진 저장" });
+
+    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "이름 바꾸기" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "사진 이름" }), { target: { value: "바다에서" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    expect(await screen.findByText(sentenceText("이름을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."))).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("권한 오류를 로컬 저장 성공으로 바꾸지 않는다", async () => {
     mockSaveFourcutToServer.mockRejectedValueOnce(Object.assign(new Error("forbidden"), { status: 403 }));
     jest.spyOn(console, "error").mockImplementation(() => {});
     render(<ShootResultPage />);
-    await screen.findByText("이미지를 준비하지 못했어요. 다시 시도해 주세요.");
+    await screen.findByText(sentenceText("이미지를 준비하지 못했어요. 다시 시도해 주세요."));
     expect(mockComposeFramePng).not.toHaveBeenCalled();
     expect(mockUseShootSession.getState().imageResult).toBeNull();
   });
@@ -356,7 +397,7 @@ describe("ShootResultPage", () => {
   it("회원 JPEG 다운로드는 서버 경로의 확장자를 사용한다", async () => {
     mockGetMediaDownloadUrl.mockResolvedValueOnce("https://example.com/job-1.jpg?signature=redacted");
     render(<ShootResultPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "이미지 다운로드" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 저장" }));
     await waitFor(() => expect(mockDownloadFromUrl).toHaveBeenCalledWith(
       "https://example.com/job-1.jpg?signature=redacted", expect.stringMatching(/\.jpg$/),
     ));
@@ -366,7 +407,7 @@ describe("ShootResultPage", () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
     mockComposeFramePng.mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" }));
     render(<ShootResultPage />);
-    await screen.findByRole("button", { name: "이미지 다운로드" });
+    await screen.findByRole("link", { name: "사진 저장" });
     expect(mockComposeFramePng.mock.calls[0][0]).toMatchObject({ mimeType: "image/jpeg", quality: 0.92 });
     expect(screen.queryByRole("button", { name: /공유|사진에 저장/ })).toBeNull();
     expect(screen.queryByText("비회원 체험 결과 안내")).toBeNull();
@@ -432,20 +473,20 @@ describe("ShootResultPage", () => {
     expect(await screen.findByTestId("frame-preview")).toBeInTheDocument();
   });
 
-  it("합성이 실패하면 사유를 보여주고, 다시 준비하기가 실제로 다시 시도한다", async () => {
+  it("합성이 실패하면 사유를 보여주고, 다시 시도가 실제로 다시 시도한다", async () => {
     mockSaveFourcutToServer.mockRejectedValueOnce(new Error("boom"));
 
     render(<ShootResultPage />);
 
     await waitFor(() => {
       expect(
-        screen.getByText("이미지를 준비하지 못했어요. 다시 시도해 주세요."),
+        screen.getByText(sentenceText("이미지를 준비하지 못했어요. 다시 시도해 주세요.")),
       ).toBeInTheDocument();
     });
 
     // 실패했을 때 imageResult 는 이미 null 이라, 재시도가 상태를 비우는 것만으로는
     // effect 의존성이 하나도 안 바뀐다. 그래서 예전에는 눌러도 아무 일이 없었다.
-    fireEvent.click(screen.getByRole("button", { name: "다시 준비하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
 
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
@@ -467,11 +508,11 @@ describe("ShootResultPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("이미지를 준비하지 못했어요. 다시 시도해 주세요."),
+        screen.getByText(sentenceText("이미지를 준비하지 못했어요. 다시 시도해 주세요.")),
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "다시 준비하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
 
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
@@ -492,7 +533,7 @@ describe("ShootResultPage", () => {
 
     render(<ShootResultPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "다시 준비하기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "다시 시도" }));
 
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
@@ -545,12 +586,12 @@ describe("ShootResultPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요."),
+        screen.getByText(sentenceText("고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요.")),
       ).toBeInTheDocument();
     });
 
     expect(
-      screen.queryByRole("button", { name: "다시 준비하기" }),
+      screen.queryByRole("button", { name: "다시 시도" }),
     ).not.toBeInTheDocument();
 
     /*
@@ -577,7 +618,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 저장하기",
+      name: "로그인하고 기록에 보관",
     });
     fireEvent.click(loginButton);
 
@@ -616,7 +657,7 @@ describe("ShootResultPage", () => {
     });
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 저장하기",
+      name: "로그인하고 기록에 보관",
     });
     fireEvent.click(loginButton);
 
@@ -641,7 +682,7 @@ describe("ShootResultPage", () => {
     render(<ShootResultPage />);
 
     const loginButton = await screen.findByRole("button", {
-      name: "로그인하고 저장하기",
+      name: "로그인하고 기록에 보관",
     });
     expect(mockUseShootSession.getState().imageResult).toBeNull();
 
@@ -672,12 +713,12 @@ describe("ShootResultPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("이미지를 준비하지 못했어요. 다시 시도해 주세요."),
+        screen.getByText(sentenceText("이미지를 준비하지 못했어요. 다시 시도해 주세요.")),
       ).toBeInTheDocument();
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "로그인하고 저장하기" }),
+      screen.getByRole("button", { name: "로그인하고 기록에 보관" }),
     );
 
     await waitFor(() => {
@@ -701,7 +742,7 @@ describe("ShootResultPage", () => {
     mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
 
     render(<ShootResultPage />);
-    await screen.findByText("결과 준비 중");
+    await screen.findByRole("button", { name: "만드는 중…" });
 
     const pending = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(pending);
@@ -727,13 +768,13 @@ describe("ShootResultPage", () => {
 
     render(<ShootResultPage />);
 
-    // 합성이 끝나야 다운로드 카드가 뜬다.
+    // 합성이 끝나야 「사진 저장」이 풀린다.
     await waitFor(() => {
       expect(mockUseShootSession.getState().imageResult).not.toBeNull();
     });
 
     const downloadButton = await screen.findByRole("button", {
-      name: "이미지 다운로드",
+      name: "사진 저장",
     });
     fireEvent.click(downloadButton);
 
@@ -770,7 +811,7 @@ describe("ShootResultPage", () => {
       expect(mockUseShootSession.getState().imageResult).not.toBeNull();
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "이미지 다운로드" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 저장" }));
 
     await waitFor(() => {
       expect(useGuestTrialStore.getState().notice?.message).toBe(
@@ -795,7 +836,7 @@ describe("ShootResultPage", () => {
       expect(mockUseShootSession.getState().imageResult).not.toBeNull();
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "이미지 다운로드" }));
+    fireEvent.click(await screen.findByRole("button", { name: "사진 저장" }));
 
     await waitFor(() => {
       expect(useGuestTrialStore.getState().notice?.title).toBe(
@@ -824,7 +865,7 @@ describe("ShootResultPage", () => {
       expect(mockUseShootSession.getState().imageResult).not.toBeNull();
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "공유 링크 만들기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "공유" }));
 
     await waitFor(() => {
       expect(useGuestTrialStore.getState().notice?.title).toBe(
@@ -844,7 +885,7 @@ describe("ShootResultPage", () => {
       expect(mockUseShootSession.getState().imageResult).not.toBeNull();
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "공유 링크 만들기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "공유" }));
 
     await waitFor(() => {
       expect(useGuestTrialStore.getState().notice?.title).toBe(
@@ -1077,7 +1118,7 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText("결과 준비 중")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "만드는 중…" })).toBeDisabled();
 
     // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다.
     act(() => {
@@ -1099,7 +1140,7 @@ describe("ShootResultPage", () => {
       "src",
       "https://example.com/a.png",
     );
-    expect(screen.queryByText("결과 준비 중")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "만드는 중…" })).not.toBeInTheDocument();
     // 이어받히며 끊긴 첫 실행도 완료를 기다리고 있었다. 그 실행이 `cancelled` 를 "떠났다"로
     // 읽고 알리면, 결과를 보고 있는 사람에게 "완성됐어요" 가 뜬다.
     expect(mockNativeNotify).not.toHaveBeenCalled();
