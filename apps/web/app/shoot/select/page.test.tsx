@@ -7,7 +7,7 @@
  * 그래서 잠금은 내용이 아니라 remoteFrameId 로 가른다. 조회 중에도 열지 않는다 —
  * 판정이 뒤집히는 순간 이미 고른 값이 사라진다.
  */
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import ShootSelectPage from "@/app/shoot/select/page";
 import type { RemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
@@ -58,13 +58,13 @@ jest.mock("@/components/layout/PageHeader", () => ({
     title: ReactNode;
     backHref?: string;
     backLabel?: string;
-    onBackClick?: (event: { preventDefault: () => void }) => void;
+    onBackClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
   }) => (
     <div>
       {title}
       {/* 이동은 진짜 Link 가 한다. 여기서는 눌렀을 때 함께 하는 일만 본다. */}
       {backHref ? (
-        <button type="button" aria-label={backLabel} onClick={(event) => onBackClick?.(event)} />
+        <a href={backHref} aria-label={backLabel} onClick={(event) => { event.preventDefault(); onBackClick?.(event); }} />
       ) : null}
     </div>
   ),
@@ -163,14 +163,24 @@ test("꾸민 프레임을 안 쓰면 배경색을 고를 수 있다", () => {
 */
 test("다시 찍기는 찍은 사진을 비우고 촬영으로 간다", () => {
   render(<ShootSelectPage />);
-  fireEvent.click(screen.getByRole("button", { name: "다시 찍기" }));
+  fireEvent.click(screen.getByRole("link", { name: "다시 찍기" }));
   expect(mockShootSession.resetShots).toHaveBeenCalledTimes(1);
 });
+
+// 새 탭으로 여는 클릭은 이 탭을 떠나지 않는다. 찍은 사진은 이 탭에만 있어 지우면 되찾을 길이 없다.
+test.each([{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { button: 1 }])(
+  "새 탭으로 여는 다시 찍기(%o)는 사진을 비우지 않는다",
+  (init) => {
+    render(<ShootSelectPage />);
+    fireEvent.click(screen.getByRole("link", { name: "다시 찍기" }), init);
+    expect(mockShootSession.resetShots).not.toHaveBeenCalled();
+  },
+);
 
 test("불러온 사진은 비우지 않고 불러오기 화면이 다시 고르게 둔다", () => {
   mockShootSession.source = "upload";
   render(<ShootSelectPage />);
-  fireEvent.click(screen.getByRole("button", { name: "사진 다시 고르기" }));
+  fireEvent.click(screen.getByRole("link", { name: "사진 다시 고르기" }));
   expect(mockShootSession.resetShots).not.toHaveBeenCalled();
 });
 

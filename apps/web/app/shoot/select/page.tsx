@@ -79,7 +79,16 @@ export default function ShootSelectPage() {
           backLabel={fromUpload ? "사진 다시 고르기" : "다시 찍기"}
           // 다시 찍기는 처음부터 새로 찍는다. 찍은 사진을 들고 가면 촬영 화면이 다 찍은 것으로 보고
           // 이 화면으로 되돌린다(useCaptureFlow). 불러온 사진은 불러오기 화면이 다시 고르게 둔다.
-          onBackClick={fromUpload ? undefined : () => resetShots()}
+          // 새 탭·새 창으로 여는 클릭(⌘/Ctrl/Shift/Alt, 가운데 단추)은 이 탭을 떠나지 않으니 비우지 않는다 —
+          // 찍은 사진은 이 탭의 저장소에만 있어 새 탭으로 가지 않는다.
+          onBackClick={
+            fromUpload
+              ? undefined
+              : (event) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  resetShots();
+                }
+          }
         />
 
 
