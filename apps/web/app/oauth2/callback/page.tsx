@@ -21,8 +21,8 @@ import { ApiRequestError, clientApi } from "@/lib/clientApi";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { reactivateAccount } from "@/lib/auth/authApi";
 import { WithdrawalRecoveryDialog } from "@/components/auth/WithdrawalRecoveryDialog";
-import { buildPathWithRedirect, resolveRedirectTarget } from "@/lib/redirect";
-import { SOCIAL_LOGIN_FAILED_MESSAGE, startSocialLogin } from "@/lib/authLogin";
+import { buildPathWithRedirect, replaceLocation, resolveRedirectTarget } from "@/lib/redirect";
+import { startSocialLogin } from "@/lib/authLogin";
 import {
   RESTRICTED_ACCOUNT_MESSAGE,
   isUnusableUserStatus,
@@ -87,13 +87,13 @@ export default function OAuthCallbackPage() {
       // 제공자 화면에서 취소했거나 인가가 실패했다 — 백엔드는 실패도 이 콜백으로 보내고
       // `?error=` 만 붙인다. 새로 받은 세션이 없으니 물어볼 것도 지울 것도 없다.
       // 상태를 물으면 세션 없는 401 이 「일시적인 문제」나 「다시 로그인」으로 둔갑한다.
+      //
+      // 실패를 이 화면에서 말하지 않고 로그인 화면으로 바로 돌려보낸다(2026-11-14). 예전에는 여기서
+      // 「로그인하지 못했어요」 카드와 「로그인으로 돌아가기」를 보이고, 로그인 화면이 같은 말을 한 번 더 했다.
+      // 다시 시도할 단추는 로그인 화면에 있다 — 폼 위 한 줄(socialError=1)이면 된다.
       if (new URLSearchParams(window.location.search).has("error")) {
         clearSocialLoginProvider();
-        setMessage(SOCIAL_LOGIN_FAILED_MESSAGE);
-        setDeadEnd({
-          loginHref: buildPathWithRedirect("/login?socialError=1", redirectTarget),
-          showSupport: false,
-        });
+        replaceLocation(buildPathWithRedirect("/login?socialError=1", redirectTarget));
         return;
       }
 
@@ -138,12 +138,8 @@ export default function OAuthCallbackPage() {
           await clientApi.delete("/api/client/logout").catch(() => undefined);
           clearSocialLoginProvider();
           if (cancelled) return;
-          // 브라우저 기본 알림 대신 제공자 실패(?error=)와 같은 끝 화면을 쓴다.
-          setMessage(SOCIAL_LOGIN_FAILED_MESSAGE);
-          setDeadEnd({
-            loginHref: buildPathWithRedirect("/login?socialError=1", redirectTarget),
-            showSupport: false,
-          });
+          // 제공자 실패(?error=)와 같다 — 로그인 화면이 폼 위 한 줄로 말한다.
+          replaceLocation(buildPathWithRedirect("/login?socialError=1", redirectTarget));
           return;
         }
 

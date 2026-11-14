@@ -40,6 +40,13 @@ jest.mock("@/lib/auth/authApi", () => ({
   reactivateAccount: () => mockReactivateAccount(),
 }));
 
+// 로그인 화면으로 돌려보내는 것도 문서 이동이라 목적지만 받는다(lib/redirect 의 replaceLocation).
+const mockReplaceLocation = jest.fn();
+jest.mock("@/lib/redirect", () => ({
+  ...jest.requireActual("@/lib/redirect"),
+  replaceLocation: (href: string) => mockReplaceLocation(href),
+}));
+
 // 인가를 다시 태우는 것은 문서 이동이라 jsdom 에서 볼 수 없다 — 부른 인자로 본다.
 jest.mock("@/lib/authLogin", () => ({
   ...jest.requireActual("@/lib/authLogin"),
@@ -122,13 +129,11 @@ it("서버가 자격증명을 거부하면(401) 세션을 정리한다", async (
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"),
   );
   expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
-  // 브라우저 기본 알림 없이, 제공자 실패와 같은 끝 화면으로 이유와 돌아갈 길을 말한다.
-  expect(
-    await screen.findByText("로그인을 마치지 못했어요. 다시 시도해 주세요."),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByRole("link", { name: "로그인으로 돌아가기" }),
-  ).toHaveAttribute("href", "/login?socialError=1&redirectTo=%2Fhome");
+  // 이 화면에서 말하지 않고 로그인 화면으로 돌려보낸다 — 그 화면이 폼 위 한 줄로 말한다.
+  await waitFor(() =>
+    expect(mockReplaceLocation).toHaveBeenCalledWith("/login?socialError=1&redirectTo=%2Fhome"),
+  );
+  expect(screen.queryByRole("heading", { name: "로그인하지 못했어요" })).toBeNull();
   expect(window.alert).not.toHaveBeenCalled();
 });
 
@@ -146,24 +151,19 @@ describe("제공자가 실패로 돌려보낸 경우(?error=)", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("아무것도 묻거나 지우지 않고 실패를 알린 뒤 로그인으로 돌려보낸다", async () => {
+  it("아무것도 묻거나 지우지 않고 로그인 화면으로 바로 돌려보낸다", async () => {
     mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
     window.sessionStorage.setItem("social-login-provider", "kakao");
 
     render(<OAuthCallbackPage />);
 
-    expect(
-      await screen.findByText("로그인을 마치지 못했어요. 다시 시도해 주세요."),
-    ).toBeInTheDocument();
-    // 제목이 「처리 중」으로 남으면 본문과 반대 말을 한다.
-    expect(
-      screen.getByRole("heading", { name: "로그인하지 못했어요" }),
-    ).toBeInTheDocument();
-    // 원래 가려던 곳을 잃지 않는다. 로그인 화면도 같은 이유를 폼 위에 남긴다(socialError).
-    expect(
-      screen.getByRole("link", { name: "로그인으로 돌아가기" }),
-    ).toHaveAttribute("href", "/login?socialError=1&redirectTo=%2Fhistory");
-    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+    // 원래 가려던 곳을 잃지 않는다. 실패 이유는 로그인 화면이 폼 위 한 줄로 말한다(socialError).
+    await waitFor(() =>
+      expect(mockReplaceLocation).toHaveBeenCalledWith("/login?socialError=1&redirectTo=%2Fhistory"),
+    );
+    // 중간 실패 화면(제목·「로그인으로 돌아가기」)을 거치지 않는다 — 같은 말을 두 번 하지 않는다.
+    expect(screen.queryByRole("heading", { name: "로그인하지 못했어요" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "로그인으로 돌아가기" })).toBeNull();
 
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();

@@ -235,9 +235,8 @@ describe("LoginPage 소셜 로그인 실패 안내", () => {
 
     render(<LoginPage />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "로그인을 마치지 못했어요. 다시 시도해 주세요.",
-    );
+    // 한 문장이다 — 다시 시도할 단추가 바로 아래 있다(2026-11-14).
+    expect(screen.getByRole("alert").textContent).toBe("로그인을 마치지 못했어요.");
   });
 
   it("socialError 가 없으면 아무 안내도 띄우지 않는다", () => {

@@ -9,15 +9,18 @@
   인증 경계라 클라이언트 전환을 쓰지 않는다(app/oauth2/callback/page.tsx 머리말).
 */
 
-import { useEffect, useRef, useState } from "react";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { useEffect, useRef } from "react";
 import { exchangeAppLoginCode } from "@/lib/auth/authApi";
-import { Sentences } from "@/components/ui/Sentences";
+import { replaceLocation } from "@/lib/redirect";
 
-const FALLBACK = "로그인을 마치지 못했어요. 다시 로그인해 주세요.";
+/**
+ * 코드가 없거나 교환에 실패하면 로그인 화면으로 돌려보낸다. 그 화면이 폼 위 한 줄
+ * (「로그인을 마치지 못했어요.」, socialError=1)로 말하고, 다시 시도할 단추도 거기 있다.
+ * 예전에는 여기서 실패 문장과 「로그인으로 돌아가기」를 따로 보였다(2026-11-14 소셜 콜백과 맞춤).
+ */
+const LOGIN_AFTER_FAILURE = "/login?socialError=1";
 
 export default function AppLoginCallbackPage() {
-  const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
   useEffect(() => {
@@ -32,33 +35,24 @@ export default function AppLoginCallbackPage() {
     window.history.replaceState(null, "", window.location.pathname);
 
     if (!code || !codeVerifier) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- 주소를 한 번 읽어 정하는 값
-      setError(FALLBACK);
+      replaceLocation(LOGIN_AFTER_FAILURE);
       return;
     }
     exchangeAppLoginCode(code, codeVerifier)
       .then(() => {
-        window.location.replace("/oauth2/callback");
+        replaceLocation("/oauth2/callback");
       })
-      .catch((cause) => setError(getUserFacingApiErrorMessage(cause, FALLBACK)));
+      .catch((cause: unknown) => {
+        console.error(cause);
+        replaceLocation(LOGIN_AFTER_FAILURE);
+      });
   }, []);
 
   return (
     <main className="hc-page-app flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-(--hc-text)">
-      {error ? (
-        <>
-          <p role="alert" className="text-center text-[15px]">
-            <Sentences text={error} />
-          </p>
-          <a href="/login" className="hc-button-primary flex h-11 items-center rounded-full px-5 text-[14px] font-semibold">
-            로그인으로 돌아가기
-          </a>
-        </>
-      ) : (
-        <p role="status" className="text-[15px] text-(--hc-muted)">
-          로그인을 마치는 중이에요.
-        </p>
-      )}
+      <p role="status" className="text-[15px] text-(--hc-muted)">
+        로그인을 마치는 중이에요.
+      </p>
     </main>
   );
 }

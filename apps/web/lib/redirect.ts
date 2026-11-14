@@ -57,3 +57,11 @@ export function buildPathWithRedirect(
   url.searchParams.set("redirectTo", redirectTo);
   return `${url.pathname}${url.search}`;
 }
+
+/**
+ * 문서를 새로 받아 옮긴다(뒤로 가기에 지금 화면을 남기지 않는다).
+ * jsdom 의 location 은 갈아 끼울 수 없어, 목적지를 시험에서 보려고 한 곳에 모은다.
+ */
+export function replaceLocation(href: string) {
+  window.location.replace(href);
+}
