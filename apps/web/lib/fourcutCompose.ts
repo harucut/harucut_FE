@@ -380,13 +380,19 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
       console.error(`[compose] 서버 합성 실패: ${error.reason}`);
     }
 
-    // 실패 코드가 있으면 그것으로 고른다(원본·자산·시간 초과). 없거나 UNKNOWN·RENDER_FAILED 면 지금까지의 문구.
+    // 문구가 따로 있는 실패 코드(프레임 파일·시간 초과)는 그것으로 고른다(lib/composeFailure.ts).
     const copy = composeFailureCopy(error.code);
     if (copy) return { ...copy, newJobOnRetry: copy.retryable };
 
+    /*
+      나머지는 다시 시도한다(2026-11-15). 예전에는 「서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.」로
+      프레임을 다시 고르게 했다 — 같은 입력이면 같은 실패라고 봤는데, 다시 시도는 새 작업이라(새 멱등키, 원본도
+      기기에서 다시 올린다) 일시 장애면 풀린다. 다른 프레임을 고르라는 것도 짐작이었다. 완성되어야 다음으로 간다.
+    */
     return {
-      message: "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",
-      retryable: false,
+      message: "네컷을 만들지 못했어요. 다시 시도해 주세요.",
+      retryable: true,
+      newJobOnRetry: true,
     };
   }
 

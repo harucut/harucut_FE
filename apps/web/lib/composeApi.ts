@@ -161,7 +161,7 @@ async function pollComposeJob(
     /*
       상한에 걸린 것만 이름을 바꾼다. 사용자가 끊은 것은 AbortError 그대로 올린다 —
       호출부는 그 이름으로 취소를 가려내고(clientApi 의 `isAbortError` 와 같은 규약),
-      `describeComposeFailure` 는 ComposeTimeoutError 만 재시도 가능으로 읽는다.
+      `describeComposeFailure` 는 ComposeTimeoutError 를 「잠시 후 다시 시도」로 읽는다.
       취소를 상한으로 바꾸면 떠난 사람의 취소가 "잠시 후 다시 시도해 주세요"가 된다.
 
       상한이 지났으면 무슨 오류가 왔든 상한으로 접는다 — 기다린 시간은 이미 넘겼고

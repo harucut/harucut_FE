@@ -763,7 +763,8 @@ describe("composeFourcutOnServer — 같은 멱등키면 원본을 다시 올리
  * 앞에 예외 클래스명이 붙으므로 언어를 따지지 않고 전부 버린다.
  */
 describe("describeComposeFailure", () => {
-  const FALLBACK = "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.";
+  // 다시 해서 풀리는 실패의 기본 문구(2026-11-15). 다시 시도는 새 작업이라 newJobOnRetry 다.
+  const RETRY = { message: "네컷을 만들지 못했어요. 다시 시도해 주세요.", retryable: true, newJobOnRetry: true };
 
   it.each([
     ["S3 원문", "NoSuchKeyException: The specified key does not exist. (Service: S3, Status Code: 404)"],
@@ -773,18 +774,15 @@ describe("describeComposeFailure", () => {
   ])("%s 은 화면에 올리지 않고 우리 문구로 때운다", (_label, reason) => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
 
-    expect(describeComposeFailure(new ComposeFailedError(reason))).toEqual({
-      message: FALLBACK,
-      retryable: false,
-    });
+    expect(describeComposeFailure(new ComposeFailedError(reason))).toEqual(RETRY);
 
     error.mockRestore();
   });
 
-  // 합성 실패 코드(app-shell §8)가 있으면 할 일을 말한다. UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT·모르는 값은 기본 문구 그대로다.
+  // 문구가 따로 있는 실패 코드(app-shell §8). 프레임 파일 문제만 다른 프레임으로 — 같은 프레임으로는 몇 번을 해도 같다.
   // 다시 시도할 수 있는 서버 확정 실패(TIMED_OUT)는 새 작업으로 다시 보낸다(newJobOnRetry).
   it.each([
-    ["SOURCE_MISSING", "사진을 찾을 수 없어요. 다시 찍어 주세요.", false],
+    ["ASSET_MISSING", "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", false],
     ["ASSET_UNREADABLE", "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", false],
     ["TIMED_OUT", "사진을 만드는 데 시간이 너무 걸렸어요. 다시 시도해 주세요.", true],
   ])("실패 코드 %s 이면 그에 맞는 문구를 쓴다", (code, message, retryable) => {
@@ -802,11 +800,16 @@ describe("describeComposeFailure", () => {
     });
   });
 
-  it.each(["UNKNOWN", "RENDER_FAILED", "OUTPUT_CONFLICT", "SOMETHING_NEW"])("실패 코드 %s 는 기본 문구다", (code) => {
-    const error = jest.spyOn(console, "error").mockImplementation(() => {});
-    expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual({ message: FALLBACK, retryable: false });
-    error.mockRestore();
-  });
+  // 원본을 서버가 잃었거나(SOURCE_*) 재접수가 바닥나도(DISPATCH_EXHAUSTED) 다시 찍을 일은 아니다 — 원본은 기기에 있고,
+  // 다시 시도는 그것을 다시 올려 새 작업으로 만든다.
+  it.each(["UNKNOWN", "RENDER_FAILED", "OUTPUT_CONFLICT", "SOURCE_MISSING", "SOURCE_UNREADABLE", "DISPATCH_EXHAUSTED", "SOMETHING_NEW"])(
+    "실패 코드 %s 는 다시 시도한다",
+    (code) => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {});
+      expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual(RETRY);
+      error.mockRestore();
+    },
+  );
 
   it("사유는 버리되 콘솔에는 남긴다 — 원인 추적을 잃지 않게", () => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
