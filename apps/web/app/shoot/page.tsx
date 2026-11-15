@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FrameChooser, type FrameChoice } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { markUploadEntryChecked, resolveMembership } from "@/lib/authSession";
+import { resolveMembership } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
@@ -128,7 +128,6 @@ function ShootPageContent() {
     const membership = verdict === "unknown" ? accessMode : verdict;
     if (membership === "member") {
       if (verdict === "member" && accessMode === "guest") exitGuestMode();
-      markUploadEntryChecked();
       return true;
     }
     if (verdict === "guest" && accessMode !== "guest") enterGuestMode();
@@ -175,10 +174,9 @@ function ShootPageContent() {
       return;
     }
     if (session.shots.length > 0) session.resetShots();
+    // 갤러리에서 불러오기는 따로 화면이 없다 — 사진 고르기 화면 안에서 불러온다(2026-11-15).
     if (source === "upload") {
-      // 인증 프록시가 되돌릴 때도 프레임을 보존한다.
-      const next = new URLSearchParams({ frame: frameId });
-      router.push(`/shoot/upload?${next.toString()}`);
+      router.push("/shoot/select");
       return;
     }
     // 촬영 화면에는 뒤로가기 단추가 없다(2026-11-15). 기기·브라우저의 뒤로가기로 돌아와도 고른 레이아웃이 남게
@@ -196,7 +194,7 @@ function ShootPageContent() {
     const resumePath = finished
       ? "/shoot/result"
       : session.frameId
-        ? session.shots.length >= 4 ? "/shoot/select" : session.source === "upload" ? "/shoot/upload" : "/shoot/capture"
+        ? session.shots.length >= 4 || session.source === "upload" ? "/shoot/select" : "/shoot/capture"
         : "/shoot?keepShots=1";
     const homeHref = accessMode === "guest" ? "/" : "/home";
     return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">

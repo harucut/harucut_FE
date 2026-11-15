@@ -84,20 +84,18 @@ matcher에는 보호 라우트가 아닌 `/oauth2/callback`도 들어 있습니�
    참조하므로 비워 둔다
 4. **살아 있는 access면 통과** — 미들웨어가 그 자리에서 확인할 수 있는 유일한 "지금 회원"
    근거다. 게스트 쿠키가 함께 있어도 **걷지 않고**, 5의 게스트 차단도 적용하지 않는다
-5. **게스트 쿠키가 있으면** `isGuestAllowedPath(pathname)`로 가른다 — **인증 쿠키 판정(6)
-   보다 먼저 본다**(아래 「`/shoot/upload`는…」 절)
-   ([`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts) — 상수 둘도 여기 있다)
-   - `GUEST_MEMBER_ONLY_PREFIXES`(`/shoot/upload`)에 걸리면 **먼저 막는다**
-   - 남은 것 중 `GUEST_ALLOWED_PREFIXES`(`/shoot`)로 시작하면 통과 —
+5. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 **있기만 하면** 통과 — 유효성은 보지
+   않는다. 게스트 쿠키가 함께 있어도 통과시키고, 죽은 토큰은 화면이 인증 API 응답으로 처리한다
+6. **게스트 쿠키만 있으면** `isGuestAllowedPath(pathname)`로 가른다
+   ([`apps/web/lib/protectedPaths.ts`](../apps/web/lib/protectedPaths.ts))
+   - `GUEST_ALLOWED_PREFIXES`(`/shoot`)로 시작하면 통과 —
      비회원에게 여는 범위는 "찍고 그 사진을 받는 것"까지다
    - 그 외 보호 경로: `/shoot?guestNotice=restricted`로 리다이렉트
-6. 인증 쿠키(`accessToken` 또는 `refreshToken`)가 **있기만 하면** 통과 — 유효성은 보지
-   않는다. 게스트 쿠키가 없는 사람만 여기 닿는다(있으면 5에서 갈렸다)
 7. 그 외에는 `/login?redirectTo=...`
 
-**6이 왜 맨 아래인가**가 이 흐름의 전부입니다. 6은 쿠키가 있는지만 보므로 죽은 토큰도
-"로그인"으로 읽습니다. 그래서 5(게스트 차단)를 6보다 앞에 뒀습니다 — 6이 먼저였을 때는
-「게스트 쿠키 + `refreshToken` 쿠키」를 든 사람이 회원 전용 경로를 그냥 지나갔습니다.
+예전에는 5보다 앞에 **회원 전용 촬영 경로**(`/shoot/upload`, 갤러리 불러오기 화면) 차단이 있었다 —
+5가 쿠키가 있는지만 보므로 「게스트 쿠키 + 죽은 `refreshToken`」을 든 사람이 그 화면을 지나갔기
+때문이다. 2026-11-15 그 화면을 사진 고르기 안으로 합치며 그 차단도 걷었다(아래 「갤러리 불러오기는…」 절).
 
 ```text
 /oauth2/callback + 살아 있는 access O + 게스트 O   -> 통과 (게스트 쿠키 삭제)
@@ -106,11 +104,9 @@ matcher에는 보호 라우트가 아닌 `/oauth2/callback`도 들어 있습니�
 /shoot/start + 인증 쿠키 O                         -> /shoot?checkSession=1 (심지 않는다 — 화면이 판정한다)
 /shoot·/shoot/... + 쿠키 없음                      -> /login  (옛 `event` 쿼리가 있어도 같다)
 살아 있는 access O (보호 경로 전부)                -> 통과 (게스트 쿠키가 있어도 그대로 둔다)
-게스트 쿠키 O + /shoot/upload                      -> /shoot?guestNotice=restricted  ← 회원 전용
-게스트 쿠키 O + 그 밖의 /shoot/*                   -> 통과
+게스트 쿠키 O + /shoot/*                           -> 통과
 게스트 쿠키 O + 그 외 보호 경로                    -> /shoot?guestNotice=restricted
-게스트 쿠키 O + 죽은 인증 쿠키                     -> 위 세 줄 그대로  ← 5가 6보다 먼저
-게스트 쿠키 X + 인증 쿠키 O                        -> 통과 (유효성은 보지 않는다)
+인증 쿠키 O (게스트 쿠키가 있어도, 죽은 토큰이어도) -> 통과 (유효성은 보지 않는다 — 화면이 인증 API 로 처리)
 쿠키 없음                                          -> /login?redirectTo=<원래 경로와 쿼리>
 ```
 
@@ -159,91 +155,34 @@ access 는 무상태로 `exp` 까지 통과하고, 회수 대상은 Redis 의 re
 점이 없는 쿠키는 파싱 전에 돌아 나오기 때문에, 그 둘이 없으면 `catch`가 `true`를 돌려주도록
 뒤집어도 이 파일 전체가 통과했습니다.
 
-### `/shoot/upload`는 `/shoot` 아래지만 회원 전용이다
+### 갤러리 불러오기는 경로가 아니라 사진 고르기 화면 안의 칸이다 (2026-11-15)
 
-갤러리 불러오기는 원래 `/upload`(회원 전용)였다. 촬영 흐름으로 합치면서 `/shoot/upload`로
-옮겨 왔는데, `/shoot` 접두사 허용이 **비회원에게도 딸려 열어 버렸다.** 그래서
-`GUEST_MEMBER_ONLY_PREFIXES`가 따로 있고, 판정에서 허용보다 **먼저** 걸린다.
+갤러리 불러오기는 원래 `/upload`, 그다음 `/shoot/upload`(회원 전용 경로)였다. `/shoot` 접두사 허용이
+비회원에게도 딸려 열어 버려서 프록시에 회원 전용 예외(`GUEST_MEMBER_ONLY_PREFIXES`)를 두고, 화면도
+`resolveMembership()`으로 한 번 더 막았다.
 
-범위를 정하는 곳과 집행하는 곳이 다르다. 약관 제8조와 `@harucut/shared`의
-`GUEST_ALLOWED_ITEMS`가 비회원 범위를 "사진 촬영과 이미지 저장"으로 못박고,
-`protectedPaths.ts`가 그것을 경로로 집행한다. 코드가 약관보다 넓으면 화면이 거짓말을 한다.
-
-경계는 접두사가 아니라 세그먼트로 본다(`hasPrefix`) — `/shoot/uploads`는 막히지 않는다.
-
-**이 차단은 인증 쿠키 통과(위 6)보다 먼저 걸려야 한다.** 6은 쿠키가 있는지만 보므로,
-「게스트 쿠키 + `refreshToken` 쿠키」를 든 방문자가 6에서 먼저 통과해 이 차단에 **닿지도
-못했다.** 그 조합은 지금도 만들어진다 — 인증 쿠키가 남은 브라우저로 QR을 찍으면 화면이
-회원이 아니라고 판정할 때 `enterGuestMode()`가 체험 쿠키를 심고 refresh 쿠키는 그대로다
-(위 「행사 QR 진입」). 살아 있는 access를 든 사람만 이 차단을 비켜간다(위 4) — 그 사람은
-실제로 회원이라 인증 API가 답한다.
-
-**프록시와 화면이 각각 다른 시점을 막는다. 둘 다 필요하다.**
+2026-11-15 사용자가 「프레임 고르고 나면 바로 사진 고르기로 들어가서 거기서 올릴 수 있게」를 정해 따로 있던
+화면을 없앴다. 이제 불러오기는 `/shoot/select`의 사진 목록 맨 앞 「사진 불러오기」 칸이고, 프록시에는 회원 전용
+예외가 없다. 비회원 범위(약관 제8조 · `@harucut/shared`의 `GUEST_ALLOWED_ITEMS` — "사진 촬영과 이미지 저장")는
+화면이 지킨다.
 
 | 막는 곳 | 언제 | 무엇을 보는가 |
 |---|---|---|
-| 프록시(위 5) | **요청이 올 때** | 그 요청에 실려 온 게스트 쿠키 |
-| [`app/shoot/upload/page.tsx`](../apps/web/app/shoot/upload/page.tsx) | **화면이 열린 뒤** | `resolveMembership()`(쿠키가 아니다 — 아래) |
+| [`app/shoot/page.tsx`](../apps/web/app/shoot/page.tsx) 「사진 고르러 가기」 | **들어가기 전** | `resolveMembership()` — 비회원·세션이 끊긴 회원은 그 자리에서 회원 전용 안내. 서버가 답하지 못하면 이 기기가 아는 상태(`accessMode`)를 따른다 |
+| [`app/shoot/select/page.tsx`](../apps/web/app/shoot/select/page.tsx) | **화면에 있는 동안** | `accessMode` — 회원에게만 불러오기 칸이 있다. 그 사이 비회원이 되면 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다 |
 
-프록시만으로는 못 막는 자리가 있다. 게스트 쿠키는 **요청 뒤에 심길 수 있다** — 회원 후보
-진입(`/shoot?checkSession=1`)이 그렇다(인증 쿠키가 남은 브라우저는 프록시를 그대로 지나가고,
-회원이 아니라는 판정은 화면이 인증 왕복 뒤에 내린다). 그 사이 `/shoot?source=upload&checkSession=1`에서 확인을 누르면 업로드
-화면이 **먼저** 열리고, 뒤늦게 게스트가 되어도 프록시는 다시 볼 기회가 없다.
+실제 집행은 백엔드다 — 불러온 사진으로 만드는 것은 서버 합성이고, 비회원에게는 인증 API가 401이다.
 
-화면 쪽은 쿠키만 보고 판단하지 않는다. 게스트 쿠키가 남아 있는데 세션은 멀쩡한 회원이
-있고(이 판정이 붙기 전 배포에서 체험을 눌러 본 사람), 반대로 `accessMode`의 초깃값이
-`"member"`라 쿠키로 잠그면 잠금이 처음부터 풀려 있다. 그래서 기준은 **서버의 답**이다 —
-이 화면은 언제나 `resolveMembership()`을 부르고, 그 답에 따라 넷으로 갈린다.
-
-| 답 | 하는 일 |
-|---|---|
-| `member` | 낡은 게스트 쿠키가 있으면 걷고(`exitGuestMode`), 조작을 연다 |
-| `guest` | `enterGuestMode()`로 상태를 사실에 맞추고, 진행 중이던 변환을 버린 뒤 되돌린다 |
-| `unknown` | 내보내지 않고 **잠근 채로** 둔다. 왜 잠겼는지 말하고 「다시 확인」을 준다 |
-| (판정 전) | 잠긴 상태로 기다린다 |
-
-**「내보낸다」와 「쓰게 둔다」는 다른 문이다.** 내보내는 것은 확정된 `guest`뿐이고, 쓰게 두는
-것은 `member`가 확인된 뒤다. 그러지 않으면 이미 게스트인 사람이 조회 실패를 틈타 갤러리
-불러오기를 끝까지 쓴다 — 그 뒤 고르기·결과는 게스트 허용 경로라 아무도 막지 않는다.
-잠그는 것은 사진 고르기 버튼·파일 입력·「다음 단계로」 셋 다다.
-
-`guest`로 확정되면 **진행 중이던 변환도 버린다**(`importGenerationRef`). 그 결과는 이 화면이
-아니라 전역 촬영 세션에 담기므로, 화면을 내보내는 것만으로는 안 막힌다.
-
-떠난 뒤에 답이 와도 **이동은 접고 쿠키 전환은 한다.** 이동은 이 화면의 일이라 떠났으면
-접어야 하지만(사용자가 옮겨 간 화면을 덮어쓴다), 쿠키는 전역이라 접으면 다음 화면이 거짓
-상태로 돈다.
-
-값은 왕복 하나다 — 회원도 이 화면에 올 때마다 그것을 기다린 뒤에야 사진을 고른다. 회원 전용
-화면에서 회원임을 확인하고 여는 값으로 봤고, 재발급은 `clientApi`가 하나로 묶어 불어나지 않는다.
-
-**되돌릴 때는 행사 상태를 들고 간다.** `/shoot`은 쿼리도 `keepShots`도 없는 진입을 새 촬영으로
-보고 세션을 비우므로, 고정된 `/shoot?guestNotice=restricted`로 보내면 행사 배너와 QR이 지정한
-프레임이 사라진다. 프록시는 세션을 못 보니 **요청에 실려 온 것만** 옮길 수 있어, 프레임 선택
-화면이 갤러리 불러오기로 보낼 때 `frame`·`event`를 주소에 싣는다
-([`app/shoot/page.tsx`](../apps/web/app/shoot/page.tsx)). 업로드 화면은 그 값을 세션에서 꺼낸다.
-
-이 셋 중 하나라도 지우면 막지 못하는 순간이 생긴다. 「화면이 `accessMode`를 안 보니 프록시가
-유일한 집행 지점이다」는 **예전 설명이고, 지금은 사실이 아니다.**
-
-**한계.** 이 차단은 인가가 아니라 "우리가 게스트로 그려 주고 있는 화면"을 막는 것이다.
-브라우저에서 체험 쿠키를 지우고 `refreshToken`에 아무 값이나 넣으면 6으로 지나간다(값을
-보지 않는다). 실제 집행은 백엔드가 한다 — 백엔드에 비회원 개념이 없어 인증 API가 401이다.
-
-회귀 고정: [`apps/web/lib/routeContracts.test.ts`](../apps/web/lib/routeContracts.test.ts)의
-"갤러리 불러오기는 회원만" / "이름이 비슷한 다른 경로까지 막지는 않는다",
-[`apps/web/proxy.test.ts`](../apps/web/proxy.test.ts)의
-「proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때」(회원 전용 경로·촬영 밖 보호 경로는
-막고, 촬영 흐름은 지나가고, 살아 있는 access를 들었으면 통과),
-그리고 `apps/web/tests/e2e/guards.spec.ts`의 `guestBlockedRoutes = ["/history", "/theme", "/shoot/upload"]`.
+회귀 고정: `app/shoot/page.test.tsx`의 「사진 불러오기에 들어가기 전 회원 확인」, `app/shoot/select/page.test.tsx`의
+「갤러리에서 불러오기」, `tests/e2e/production-qa.spec.ts`의 회원 불러오기 흐름.
 
 ### 주소 모양 — 판정 전에 정규화한다
 
 App Router는 한 라우트를 사람이 치는 주소로만 부르지 않는다. 세그먼트 프리페치는
-`/shoot/upload.segments/_tree.segment` 같은 주소로 들어온다. 프록시가 받는
+`/shoot/select.segments/_tree.segment` 같은 주소로 들어온다. 프록시가 받는
 `nextUrl.pathname`에는 그 꼬리표가 그대로 남아 있어서, 문자열을 있는 그대로 비교하면
-**같은 페이지인데 회원 전용 판정만 빗나갔다** — 게스트 쿠키로 그 주소를 부르면
-`/shoot/upload` 차단을 지나쳐 `/shoot` 허용에 걸렸다.
+**같은 페이지인데 판정이 빗나간다** — 예전 회원 전용 경로(`/shoot/upload`)에서 게스트 쿠키로 그 주소를
+부르면 차단을 지나쳐 `/shoot` 허용에 걸렸다.
 
 `toRoutePath()`(protectedPaths.ts)가 세그먼트마다 첫 `.`에서 잘라 한 갈래로 되돌린다.
 꼬리표를 나열해 지우지 않는 이유는, 새 꼬리표가 생겨도 열리는 쪽이 아니라 닫히는 쪽으로
@@ -254,8 +193,8 @@ App Router는 한 라우트를 사람이 치는 주소로만 부르지 않는다
 않으면 **닫히는 쪽**으로 떨어지기 때문이다(꾸민 주소는 여전히 보호 경로로 잡힌다).
 
 이 규칙을 다시 구현하려는 사람에게: `toRoutePath` 자체를 부르는 단위 테스트는 **아직 없다**.
-`routeContracts.test.ts`가 잡는 것은 `/shoot/upload`와 `/shoot/uploads` 경계까지고,
-정규화가 실제로 걸리는지는 `proxy.test.ts`가 주소 여덟 모양(`UPLOAD_ADDRESSES`)을
+`routeContracts.test.ts`가 잡는 것은 세그먼트 경계(`/shootings`는 촬영이 아니다)까지고,
+정규화가 실제로 걸리는지는 `proxy.test.ts`가 세그먼트 프리페치 주소(`/shoot/select.segments/...`)를
 프록시에 통과시켜 간접적으로만 고정한다.
 
 ### 회원 후보 진입 (`/shoot?checkSession=1` — 판정은 화면이)

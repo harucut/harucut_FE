@@ -7,7 +7,6 @@ import {
 } from "@/lib/guestTrialShared";
 import {
   isGuestAllowedPath,
-  isGuestMemberOnlyPath,
   isBlockedAccountPath,
   isProtectedPath,
 } from "@/lib/protectedPaths";
@@ -19,9 +18,8 @@ import {
  * (app/shoot/page.tsx). 그래서 고정된 `/shoot?guestNotice=restricted` 로 보내면 방금 고른
  * 프레임이 사라진다 — 막는 것은 회원 전용 경로 하나지 촬영 전체가 아니다.
  *
- * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 그래서 프레임 선택
- * 화면이 갤러리 불러오기로 보낼 때 `frame` 을 주소에 싣는다(그 화면 주석 참고) —
- * 이 함수가 그것을 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
+ * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 주소에 `frame` 이 실려 왔으면
+ * 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
  */
 function restrictedShootUrl(req: NextRequest) {
   const url = new URL("/shoot", req.url);
@@ -177,37 +175,6 @@ export async function proxy(req: NextRequest) {
   }
 
   /*
-    **게스트로 그려 주는 화면은 회원 전용 촬영 경로에 못 들어간다 — 인증 쿠키가 있어도.**
-
-    구멍이었다. 예전에는 아래 hasAuthCookie() 가 먼저였고, 그 판정은 쿠키가 **있는지만**
-    보므로 「게스트 쿠키 + refreshToken 쿠키」를 함께 든 방문자가 `/shoot/upload`
-    (GUEST_MEMBER_ONLY_PREFIXES)를 그냥 지나갔다 — 게스트 차단에 닿지도 못했다. 예전에
-    있던 행사 QR 분기(`/shoot?event=`, 지금은 없다 — 행사는 `/e/{slug}` 로 옮겼다)가 그 조합을
-    흔하게 만들었다(예전에 로그인해 둔 브라우저 + 방금 심은 체험 쿠키). 랜딩의 「가입 없이
-    체험하기」로도 같은 조합이 생긴다. 화면은 이미 게스트다 —
-    accessMode 는 이 쿠키만 보고(guestTrialStore 의 hydrateGuestMode), `/shoot/upload`
-    화면에는 그것을 다시 보는 검사가 없다. 프록시가 유일한 집행 지점이었고 뚫려 있었다.
-    비회원 범위는 약관 제8조와 `@harucut/shared` 의 GUEST_ALLOWED_ITEMS 가 "사진 촬영과
-    이미지 저장"으로 못박는다.
-
-    **막는 자리를 이 경로들로만 좁힌다.** 한때 게스트 판정 전체를 hasAuthCookie 앞으로
-    옮겼는데, 그러면 access 만 만료된 회원이 체험 쿠키를 받은 뒤 `/home`·
-    `/mypage`·`/history` 까지 통째로 막혔다 — 예전에는 지나가던 사람이고, 여기서 막을
-    이유도 없다(그 경로들은 백엔드가 집행한다). 구멍은 `/shoot/upload` 하나였으므로 거기만
-    닫는다.
-
-    죽은 access 쿠키(형식이 깨졌거나 exp 가 지난)와 체험 쿠키를 함께 든 사람도 같은 구멍
-    이었고, 같이 닫힌다.
-
-    **이 판정은 인가가 아니다.** 브라우저에서 체험 쿠키를 지우면 아래 통과에 걸린다 —
-    쿠키 값을 보지 않기 때문이다. 여기서 막는 것은 "우리가 게스트로 그려 주고 있는 화면이
-    회원 전용 경로로 넘어가는 것"까지고, 실제 집행은 백엔드가 한다.
-  */
-  if (guestMode && isGuestMemberOnlyPath(pathname)) {
-    return NextResponse.redirect(restrictedShootUrl(req));
-  }
-
-  /*
     여기까지 온 사람은 인증 쿠키가 **있기만 하면** 통과시킨다.
 
     이 판정은 쿠키가 있는지만 본다 — 서버가 이미 버린 죽은 토큰도 로그인으로 읽힌다
@@ -216,8 +183,9 @@ export async function proxy(req: NextRequest) {
     확신할 수 없어서다(위 「세션 유효성을 백엔드에 묻지 않는다」). 회원이었던 사람을
     로그인으로 튕기는 대신, 화면이 인증 API 응답을 보고 처리하게 둔다.
 
-    죽은 토큰이 여기서 로그인으로 읽힌다는 것이, 회원 전용 경로 차단을 이 판정보다 앞에
-    둔 이유다. 순서를 되돌리지 않는다.
+    예전에는 이 판정보다 앞에 회원 전용 촬영 경로(갤러리 불러오기 화면) 차단이 있었다 — 죽은 토큰이 여기서
+    로그인으로 읽혀 그 화면을 지나갔기 때문이다. 2026-11-15 그 화면을 사진 고르기 안으로 합치며 걷었다.
+    불러오기 칸은 화면이 회원에게만 보인다(app/shoot/select/page.tsx).
 
     **여기서 게스트 쿠키를 지우지는 않는다** — 걷는 자리는 소셜 콜백 하나뿐이다(위).
   */

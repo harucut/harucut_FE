@@ -33,7 +33,6 @@ describe("끝난 촬영", () => {
   // 완성본이 어디에 있든(계정 기록·이 기기) 끝난 촬영이다.
   it.each([
     ["/shoot/capture", "account"],
-    ["/shoot/upload", "device"],
     ["/shoot/select", "account"],
     ["/shoot/select", "device"],
   ] as const)("%s 에 오면(%s) 그리지 않고 완성 화면으로 보낸다", (path, completed) => {

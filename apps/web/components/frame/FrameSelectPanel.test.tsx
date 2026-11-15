@@ -191,3 +191,57 @@ it("꾸미기로 넘어가면 다섯 번째 안내를 바로 거둔다", () => {
   fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
   expect(screen.getByRole("status")).toHaveTextContent("");
 });
+
+// 갤러리에서 불러오기(2026-11-15) — 따로 화면 없이 사진 목록 맨 앞 칸으로 불러온다.
+describe("사진 불러오기 칸", () => {
+  const renderPanel = (props: Partial<Parameters<typeof FrameSelectPanel>[0]> = {}) =>
+    render(
+      <FrameSelectPanel
+        frameId="classic-4"
+        media={[]}
+        maxSelect={4}
+        nextButtonLabel="다음 단계"
+        incompleteButtonLabel="4장을 골라 주세요"
+        onToggleSelect={jest.fn()}
+        onNext={jest.fn()}
+        selectedIndexes={[null, null, null, null]}
+        {...props}
+      />,
+    );
+
+  it("사진이 없어도 불러오기 칸이 목록이다", () => {
+    const onAddPhotos = jest.fn();
+    renderPanel({ onAddPhotos, photosNotice: "앨범에서 여러 장을 한 번에 고를 수 있어요." });
+
+    fireEvent.click(screen.getByRole("button", { name: "사진 불러오기" }));
+    expect(onAddPhotos).toHaveBeenCalled();
+    expect(screen.getByText("앨범에서 여러 장을 한 번에 고를 수 있어요.").closest("[role=status]")).not.toBeNull();
+    expect(screen.queryByText(/찍은 사진이 없어요|선택 가능한 사진이 아직 없어요/)).toBeNull();
+  });
+
+  it("불러온 사진 앞에 칸이 있고, 불러오는 동안·가득 차면 잠긴다", () => {
+    const { rerender } = renderPanel({ onAddPhotos: jest.fn(), media: [{ src: "/1.png" }], addingPhotos: true });
+    expect(screen.getByRole("button", { name: "불러오는 중…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "1번 사진 선택" })).toBeInTheDocument();
+
+    rerender(
+      <FrameSelectPanel
+        frameId="classic-4"
+        media={[{ src: "/1.png" }]}
+        maxSelect={4}
+        nextButtonLabel="다음 단계"
+        onToggleSelect={jest.fn()}
+        onNext={jest.fn()}
+        selectedIndexes={[null, null, null, null]}
+        onAddPhotos={jest.fn()}
+        addPhotosDisabled
+      />,
+    );
+    expect(screen.getByRole("button", { name: "사진 불러오기" })).toBeDisabled();
+  });
+
+  it("불러오기를 주지 않으면(촬영) 칸이 없다", () => {
+    renderPanel({ media: [{ src: "/1.png" }] });
+    expect(screen.queryByRole("button", { name: "사진 불러오기" })).toBeNull();
+  });
+});

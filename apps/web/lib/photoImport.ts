@@ -19,7 +19,7 @@ import { UNSUPPORTED_UPLOAD_MESSAGE } from "@/lib/presignedUploadApi";
  *
  * 크기만 줄인다. 이유가 둘이다.
  *  1. 이 화면은 한 번에 **칸 수 × 6장**(지금 24장)을 담는다
- *     (`app/shoot/upload/page.tsx` 의 `PHOTOS_PER_SLOT`). 그 전부가 data URL 문자열로
+ *     (`app/shoot/select/page.tsx` 의 `PHOTOS_PER_SLOT`). 그 전부가 data URL 문자열로
  *     세션과 DOM 에 남아서, 요즘 폰 사진을 원본 크기로 담으면 모바일 웹뷰가 이 흐름만으로
  *     멎는다. (예전 주석은 「비회원 인계가 localStorage 5MB 에 걸린다」고 적었는데 그 이유는
  *     더는 맞지 않는다 — 인계는 IndexedDB 로 옮겼다. docs/README.md 「인계 보관소를

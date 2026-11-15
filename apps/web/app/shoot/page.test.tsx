@@ -22,12 +22,10 @@ jest.mock("next/navigation", () => ({
 }));
 
 const mockResolveMembership = jest.fn();
-const mockMarkUploadEntryChecked = jest.fn();
 
 // 회원 여부 판정만 갈아 끼운다 — 스토어와 쿠키는 실제 구현을 그대로 태운다.
 jest.mock("@/lib/authSession", () => ({
   resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
-  markUploadEntryChecked: () => mockMarkUploadEntryChecked(),
 }));
 
 jest.mock("@/hooks/useMyFrames", () => ({
@@ -158,15 +156,15 @@ describe("갤러리 불러오기로 보내는 주소", () => {
     mockResolveMembership.mockResolvedValue("member");
   });
 
-  // 옛 event 쿼리가 남아 있어도 옮기지 않는다 — 되돌아갈 때 고른 프레임만 지킨다.
-  it("프레임만 실어 보낸다", async () => {
+  // 갤러리에서 불러오기는 사진 고르기 화면 안에서 한다 — 옛 event 쿼리는 들고 가지 않는다.
+  it("불러오기는 사진 고르기로 간다", async () => {
     mockQuery = "source=upload&event=hongdae-2026";
     mockChosenFrameId = "classic-4";
 
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
   });
 
   // 반대쪽 못 — 촬영 경로는 예전 주소 그대로다(프록시가 막는 경로가 아니다). 회원인지 묻지도 않는다.
@@ -212,12 +210,12 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
   }
 
-  it("회원이면 들여보내고, 불러오기 화면이 다시 묻지 않게 적어 둔다", async () => {
+  // 불러오기는 따로 화면이 없다 — 회원이면 바로 사진 고르기로 가서 거기서 불러온다(2026-11-15).
+  it("회원이면 바로 사진 고르기로 들여보낸다", async () => {
     mockResolveMembership.mockResolvedValue("member");
     pressConfirm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
-    expect(mockMarkUploadEntryChecked).toHaveBeenCalled();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -228,7 +226,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
 
     expect(screen.getByRole("button", { name: "확인" })).toBeDisabled();
     await act(async () => answer("member"));
-    expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4");
+    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
   });
 
   // 세션이 끊긴 회원 — 들여보내지 않고 이 자리에서 안내 창. 카메라 쪽 프레임 고르기로 바꾸고 고른 프레임은 둔다.
@@ -239,7 +237,6 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith(RESTRICTED));
     expect(mockPush).not.toHaveBeenCalled();
     expect(useGuestTrialStore.getState().accessMode).toBe("guest");
-    expect(mockMarkUploadEntryChecked).not.toHaveBeenCalled();
   });
 
   // 서버가 못 답해도 로그인해 있으면 막지 않는다 — 「확인하지 못했어요」는 로그인한 사람에게 할 말이 아니다.
@@ -247,7 +244,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     mockResolveMembership.mockResolvedValue("unknown");
     pressConfirm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
@@ -267,7 +264,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     mockResolveMembership.mockResolvedValue("member");
     pressConfirm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
 

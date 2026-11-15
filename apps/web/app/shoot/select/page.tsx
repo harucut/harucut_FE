@@ -12,6 +12,18 @@ import { DEFAULT_FOURCUT_FILTER } from "@/lib/frameFilters";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { RetryButton } from "@/components/ui/LoadFailed";
+import { usePhotoImport } from "@/hooks/usePhotoImport";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
+
+/**
+ * 담아 둘 수 있는 최대 장수 = 칸 수 × 이 배수(갤러리에서 불러올 때).
+ *
+ * 앨범에서 수백 장을 고르면 그 전부가 화소 예산(5.76MP)까지 줄인 JPEG data URL 로 디코딩·재인코딩된 뒤 세션과
+ * DOM 에 남는다. 쓰는 것은 칸 수만큼뿐인데 모바일 웹뷰에서는 이 흐름만으로 수백 MB 를 잡아 화면이 멈춘다.
+ * 고르고 남을 만큼은 받고 그 위는 변환 전에 자른다.
+ */
+const PHOTOS_PER_SLOT = 6;
 
 export default function ShootSelectPage() {
   const router = useRouter();
@@ -29,6 +41,7 @@ export default function ShootSelectPage() {
     setPhotoName,
     source,
     resetShots,
+    importPhotos,
   } = useShootSession();
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
   const fromUpload = source === "upload";
@@ -44,7 +57,30 @@ export default function ShootSelectPage() {
   useEffect(() => {
     if (isGuest && outputFilter !== DEFAULT_FOURCUT_FILTER) setOutputFilter(DEFAULT_FOURCUT_FILTER);
   }, [isGuest, outputFilter, setOutputFilter]);
-  const sourceHref = fromUpload ? "/shoot/upload" : "/shoot/capture";
+  /*
+    갤러리에서 불러오기는 따로 화면이 없다 — 프레임을 고르면 바로 이 화면이고, 사진 목록 맨 앞 「사진 불러오기」
+    칸으로 불러온다(2026-11-15 「프레임 고르고 나면 바로 사진 고르기로 들어가서 거기서 올릴 수 있게」). 뒤로가기는
+    프레임을 다시 고르는 것이고, 불러온 사진은 들고 간다(keepShots — 갤러리 사진은 어느 프레임에도 다시 쓴다).
+    불러오기는 회원만 쓴다. 들어오기 전에 프레임 고르기가 확인했고(app/shoot/page.tsx), 여기서는 이 기기가 아는
+    상태로 칸을 보인다. 그 사이 비회원이 되면 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다(아래 effect).
+  */
+  const sourceHref = fromUpload ? "/shoot?source=upload&keepShots=1" : "/shoot/capture";
+  const canImport = fromUpload && guestHydrated && accessMode === "member";
+  const slotCount = frameId ? FRAME_LAYOUTS[frameId].slots.length : 4;
+  // 꺼내 쓴다 — 훅이 돌려주는 묶음에 ref 가 섞여 있어 묶음째 렌더에서 읽으면 React Compiler 가 막는다.
+  const {
+    inputRef: importInputRef,
+    open: openImport,
+    onChange: onImportChange,
+    isImporting,
+    notice: importNotice,
+    cancel: cancelImport,
+    full: importFull,
+  } = usePhotoImport({
+    maxPhotos: slotCount * PHOTOS_PER_SLOT,
+    currentCount: shots.length,
+    onImported: importPhotos,
+  });
   // 성공과 실패를 따로 받는다. 못 읽은 것을 "꾸민 프레임이 아니다"로 뭉개면
   // 잠겨야 할 테두리 색 고르기가 열린다.
   const {
@@ -61,10 +97,23 @@ export default function ShootSelectPage() {
       return;
     }
 
-    if (!shots.length) {
+    // 찍은 사진이 없으면 찍으러 돌아간다. 불러오기는 사진이 없을 때 이 화면에서 불러온다.
+    if (!shots.length && !fromUpload) {
       router.replace(sourceHref);
     }
-  }, [frameId, router, shots.length, sourceHref]);
+  }, [frameId, fromUpload, router, shots.length, sourceHref]);
+
+  /*
+    불러온 사진은 비회원이 쓰지 못한다. 이 화면에 있는 동안 비회원으로 바뀌면(세션이 끊겼다고 확인됨) 진행 중이던
+    변환과 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다 — 고르기·결과는 비회원도 쓰는 경로라, 남겨 두면 그
+    사진으로 기기에서 합성까지 간다. 사진을 먼저 비워야 /shoot 가 「촬영하던 사진이 있어요」를 띄우지 않는다.
+  */
+  useEffect(() => {
+    if (!fromUpload || !isGuest) return;
+    cancelImport();
+    resetShots();
+    router.replace(`/shoot?guestNotice=restricted${frameId ? `&frame=${frameId}` : ""}`);
+  }, [cancelImport, fromUpload, isGuest, frameId, resetShots, router]);
 
   useEffect(() => { router.prefetch("/shoot/result"); }, [router, selectedIndexes]);
 
@@ -95,7 +144,7 @@ export default function ShootSelectPage() {
         <PageHeader
           title="사진 선택"
           backHref={sourceHref}
-          backLabel={fromUpload ? "사진 다시 고르기" : "다시 찍기"}
+          backLabel={fromUpload ? "프레임 다시 고르기" : "다시 찍기"}
           // 다시 찍기는 처음부터 새로 찍는다. 찍은 사진을 들고 가면 촬영 화면이 다 찍은 것으로 보고
           // 이 화면으로 되돌린다(useCaptureFlow). 불러온 사진은 불러오기 화면이 다시 고르게 둔다.
           // 새 탭·새 창으로 여는 클릭(⌘/Ctrl/Shift/Alt, 가운데 단추)은 이 탭을 떠나지 않으니 비우지 않는다 —
@@ -124,15 +173,31 @@ export default function ShootSelectPage() {
           </div>
         ) : null}
 
+        {/* 갤러리 선택기. 보이지 않게 두고 「사진 불러오기」 칸이 연다(hooks/usePhotoImport). */}
+        {fromUpload ? (
+          <input
+            ref={importInputRef}
+            type="file"
+            accept={SUPPORTED_IMAGE_ACCEPT}
+            multiple
+            onChange={(event) => void onImportChange(event)}
+            disabled={!canImport}
+            className="hidden"
+          />
+        ) : null}
+
         <FrameSelectPanel
           frameId={frameId ?? null}
           images={shots}
           selectedIndexes={selectedIndexes}
           maxSelect={4}
-          emptyStateText={
-            fromUpload
-              ? "불러온 사진이 없어요. 사진을 다시 골라 주세요."
-              : "찍은 사진이 없어요. 다시 찍어 주세요."
+          emptyStateText="찍은 사진이 없어요. 다시 찍어 주세요."
+          onAddPhotos={canImport ? () => void openImport() : undefined}
+          addingPhotos={isImporting}
+          addPhotosDisabled={importFull}
+          photosNotice={
+            importNotice ??
+            (canImport && shots.length === 0 ? "앨범에서 여러 장을 한 번에 고를 수 있어요. 고른 사진은 빈 칸부터 차례로 들어가요." : null)
           }
           incompleteButtonLabel="4장을 골라 주세요"
           nextButtonLabel="다음 단계로"

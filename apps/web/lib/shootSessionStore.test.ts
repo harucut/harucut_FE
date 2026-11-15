@@ -225,3 +225,23 @@ describe("프레임만 다시 고르기", () => {
     expect(useShootSession.getState().shotsFrameId).toBeNull();
   });
 });
+
+// 갤러리에서 불러온 사진은 빈 칸부터 차례로 들어간다(2026-11-15) — 앨범에서 이미 골라 온 사진이다.
+describe("갤러리에서 불러오기", () => {
+  beforeEach(() => useShootSession.getState().reset());
+
+  it("빈 칸부터 차례로 넣고, 칸이 다 차면 나머지는 목록에만 담는다", () => {
+    useShootSession.getState().importPhotos(["a", "b", "c", "d", "e", "f"]);
+    const { shots, selectedIndexes } = useShootSession.getState();
+    expect(shots).toEqual(["a", "b", "c", "d", "e", "f"]);
+    expect(selectedIndexes).toEqual([0, 1, 2, 3]);
+  });
+
+  it("이미 고른 칸은 그대로 두고 빈 칸만 채운다", () => {
+    const store = useShootSession.getState();
+    store.importPhotos(["a", "b"]);
+    store.toggleSelect(0); // 첫 칸을 비운다
+    useShootSession.getState().importPhotos(["c", "d"]);
+    expect(useShootSession.getState().selectedIndexes).toEqual([2, 1, 3, null]);
+  });
+});

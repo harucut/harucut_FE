@@ -42,10 +42,12 @@ const mockShootSession = {
   setOutputFilter: jest.fn(),
   source: "capture" as "capture" | "upload",
   resetShots: jest.fn(),
+  importPhotos: jest.fn(),
 };
 
+const mockReplace = jest.fn();
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: jest.fn(), push: jest.fn(), prefetch: jest.fn() }),
+  useRouter: () => ({ replace: mockReplace, push: jest.fn(), prefetch: jest.fn() }),
 }));
 
 jest.mock("@/components/layout/PageHeader", () => ({
@@ -74,9 +76,19 @@ jest.mock("@/components/layout/PageHeader", () => ({
 jest.mock("@/components/frame/FrameSelectPanel", () => ({
   FrameSelectPanel: ({
     renderExtraControls,
+    onAddPhotos,
+    photosNotice,
   }: {
     renderExtraControls?: () => ReactNode;
-  }) => <div data-testid="frame-select-panel">{renderExtraControls?.()}</div>,
+    onAddPhotos?: () => void;
+    photosNotice?: string | null;
+  }) => (
+    <div data-testid="frame-select-panel">
+      {photosNotice ? <p data-testid="photos-notice">{photosNotice}</p> : null}
+      {onAddPhotos ? <button type="button" onClick={onAddPhotos}>사진 불러오기</button> : null}
+      {renderExtraControls?.()}
+    </div>
+  ),
 }));
 
 jest.mock("@/hooks/useRemoteFrameTheme", () => ({
@@ -93,7 +105,7 @@ const colorPicker = () => screen.queryByRole("group", { name: "테두리 색" })
 beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(mockThemeState, { data: null, error: null, isLoading: false });
-  Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null, source: "capture", outputFilter: "NONE" });
+  Object.assign(mockShootSession, { frameId: "grid-4", remoteFrameId: null, source: "capture", outputFilter: "NONE", shots: ["/shot-1.png"] });
   // 기본은 쿠키를 읽은 회원이다. 비회원 시험은 따로 바꾼다.
   useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
 });
@@ -181,13 +193,6 @@ test.each([{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { button: 1
   },
 );
 
-test("불러온 사진은 비우지 않고 불러오기 화면이 다시 고르게 둔다", () => {
-  mockShootSession.source = "upload";
-  render(<ShootSelectPage />);
-  fireEvent.click(screen.getByRole("link", { name: "사진 다시 고르기" }));
-  expect(mockShootSession.resetShots).not.toHaveBeenCalled();
-});
-
 // 「비회원이면 보정은 선택 못하도록 해」(2026-11-15). 견본은 잠긴 채 보이고, 남아 있던 보정은 기본으로 되돌린다.
 test("비회원은 보정을 고를 수 없고, 고른 보정이 남아 있으면 기본으로 되돌린다", () => {
   useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
@@ -206,4 +211,51 @@ test("회원은 보정을 그대로 고른다", () => {
 
   expect(screen.queryByText("회원 전용")).toBeNull();
   expect(mockShootSession.setOutputFilter).not.toHaveBeenCalled();
+});
+
+/*
+  갤러리에서 불러오기(2026-11-15 「프레임 고르고 나면 바로 사진 고르기로 들어가서 거기서 올릴 수 있게」). 따로
+  화면이 없고, 이 화면의 사진 목록 맨 앞 칸으로 불러온다. 회원에게만 그 칸이 있다.
+*/
+describe("갤러리에서 불러오기", () => {
+  beforeEach(() => {
+    Object.assign(mockShootSession, { source: "upload", shots: [] });
+  });
+
+  test("사진이 없어도 돌려보내지 않고, 회원에게 불러오기 칸과 안내를 준다", () => {
+    render(<ShootSelectPage />);
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "사진 불러오기" })).toBeInTheDocument();
+    expect(screen.getByTestId("photos-notice")).toHaveTextContent("고른 사진은 빈 칸부터 차례로 들어가요.");
+    expect(document.querySelector('input[type="file"]')).not.toBeNull();
+  });
+
+  test("뒤로가기는 불러온 사진을 들고 프레임을 다시 고른다", () => {
+    render(<ShootSelectPage />);
+
+    const back = screen.getByRole("link", { name: "프레임 다시 고르기" });
+    expect(back).toHaveAttribute("href", "/shoot?source=upload&keepShots=1");
+    fireEvent.click(back);
+    expect(mockShootSession.resetShots).not.toHaveBeenCalled();
+  });
+
+  // 그 사이 비회원이 되면(세션이 끊겼다고 확인됨) 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다.
+  test("비회원이면 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다", () => {
+    mockShootSession.shots = ["/upload-1.png"];
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    render(<ShootSelectPage />);
+
+    expect(screen.queryByRole("button", { name: "사진 불러오기" })).toBeNull();
+    expect(mockShootSession.resetShots).toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted&frame=grid-4");
+  });
+
+  test("찍은 사진(촬영)이 없으면 그대로 찍으러 돌아간다", () => {
+    Object.assign(mockShootSession, { source: "capture", shots: [] });
+    render(<ShootSelectPage />);
+
+    expect(mockReplace).toHaveBeenCalledWith("/shoot/capture");
+    expect(screen.queryByRole("button", { name: "사진 불러오기" })).toBeNull();
+  });
 });

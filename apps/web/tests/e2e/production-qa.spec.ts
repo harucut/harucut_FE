@@ -32,10 +32,14 @@ test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 �
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/shoot?source=upload");
   await page.getByRole("button", { name: "사진 고르러 가기", exact: true }).click();
+  // 불러오기는 따로 화면이 없다 — 사진 고르기 화면의 「사진 불러오기」 칸으로 불러온다(2026-11-15).
+  await page.waitForURL(/\/shoot\/select$/);
+  await expect(page.getByRole("button", { name: "사진 불러오기", exact: true })).toBeVisible();
   const buffer = await readFile("public/demo/cut-1.webp");
-  await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
-  await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  for (const n of [4, 2, 3, 1]) await page.getByRole("button", { name: `${n}번 사진 선택`, exact: true }).click();
+  await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4, 5].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
+  // 앨범에서 골라 온 사진은 빈 칸부터 차례로 들어간다 — 네 장을 다시 누르지 않는다.
+  await expect(page.getByRole("button", { name: "4번 사진 선택 해제 (현재 4번째로 선택됨)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "5번 사진 — 4장을 다 골라 더 선택할 수 없어요", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "꾸미기", exact: true }).click();
   await page.getByLabel("사진 이름", { exact: true }).fill("POC-회원");
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();

@@ -10,7 +10,7 @@ import { Sentences } from "@/components/ui/Sentences";
  * 끝난 촬영(완성본이 나온 촬영)으로는 돌아가지 않는 단계들(2026-11-15). 기기 뒤로가기·주소·예전 기록으로
  * 여기 오면 완성 화면으로 보낸다 — 「최종적으로 완성되었을땐 다시 고르기를 막아야해」(shootSessionStore 의 completed).
  */
-const STEP_PATHS = new Set(["/shoot/capture", "/shoot/upload", "/shoot/select"]);
+const STEP_PATHS = new Set(["/shoot/capture", "/shoot/select"]);
 
 export function ShootSessionBoundary({ children }: { children: ReactNode }) {
   const { ready, error } = useShootPersistence();

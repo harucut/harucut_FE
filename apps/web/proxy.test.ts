@@ -46,21 +46,6 @@ function accessToken(secondsFromNow: number) {
   return `accessToken=header.${claims}.signature`;
 }
 
-/*
-  App Router 가 같은 페이지를 부르는 주소 모양들. 프록시가 받는 pathname 은 사람이 치는
-  주소가 아니라 이 모양들이기도 하다(`.rsc` 는 Next 가 먼저 떼어낸 뒤 넘긴다).
-*/
-const UPLOAD_ADDRESSES = [
-  "/shoot/upload",
-  "/shoot/upload/",
-  "/shoot/upload.segments/_tree.segment",
-  "/shoot/upload.segments/shoot.segment",
-  "/shoot/upload.html",
-  "/shoot/upload.json",
-  "/shoot/upload.meta",
-  "/shoot/upload.txt",
-];
-
 describe("proxy 비회원 체험 분기", () => {
   test("촬영 흐름은 그대로 지나간다", async () => {
     const steps = [
@@ -88,23 +73,11 @@ describe("proxy 비회원 체험 분기", () => {
   });
 
   /*
-    회귀. 갤러리 불러오기는 회원 전용인데, 차단이 `/shoot/upload` 문자열만 보고 있었다.
-    Next 가 같은 페이지를 `/shoot/upload.segments/_tree.segment` 로도 부르기 때문에
-    비회원 쿠키만 가진 사람이 그 주소로 부르면 차단을 지나쳐 `/shoot` 허용에 걸렸다.
-    주소 모양마다 판정이 갈리지 않는지 전부 확인한다.
+    사진 고르기 화면도 비회원에게 열려 있다. 갤러리에서 불러오기는 그 화면 안의 칸이고(2026-11-15 따로 있던
+    화면을 합쳤다) 회원에게만 보인다 — 막는 것은 화면이다(app/shoot/select/page.tsx).
   */
-  test.each(UPLOAD_ADDRESSES)(
-    "갤러리 불러오기는 %s 로 불러도 막는다",
-    async (path) => {
-      const response = await proxy(guestRequest(path));
-
-      expect(response.status).toBe(307);
-      expect(response.headers.get("location")).toBe(GUEST_RESTRICTED);
-    },
-  );
-
-  test("이름이 비슷한 다른 경로까지 막지는 않는다", async () => {
-    const response = await proxy(guestRequest("/shoot/uploads"));
+  test("사진 고르기는 세그먼트 프리페치 주소로 불러도 지나간다", async () => {
+    const response = await proxy(guestRequest("/shoot/select.segments/_tree.segment"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
@@ -122,11 +95,11 @@ describe("proxy 비회원 체험 분기", () => {
 
 describe("proxy 비인증 분기", () => {
   test("쿠키가 없으면 로그인으로 보낸다", async () => {
-    const response = await proxy(request("/shoot/upload"));
+    const response = await proxy(request("/shoot/select"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      `${ORIGIN}/login?redirectTo=%2Fshoot%2Fupload`,
+      `${ORIGIN}/login?redirectTo=%2Fshoot%2Fselect`,
     );
   });
 
@@ -257,14 +230,9 @@ describe("proxy 체험 쿠키 속성", () => {
 });
 
 /*
-  회귀. **「게스트 쿠키 + 인증 쿠키」 조합이 회원 전용 경로를 그냥 지나갔다.**
-
-  통과 판정(hasAuthCookie)이 게스트 판정보다 앞에 있었고, 그 판정은 쿠키가 있는지만 본다.
-  그래서 체험 쿠키를 든 사람이라도 `refreshToken` 쿠키가 하나 남아 있으면 `/shoot/upload`
-  차단에 **닿지도 못했다.** 그 조합은 흔하다 — 예전에 로그인해 둔 브라우저로 체험을
-  시작하면 체험 쿠키가 심기고 refresh 쿠키는 남는다(그때는 옛 행사 QR 분기도 같은 조합을
-  만들었다. 그 분기는 지금 없다). 화면 쪽 방어도 없다
-  (app/shoot/upload/page.tsx 는 accessMode 를 보지 않는다).
+  「게스트 쿠키 + 죽은 인증 쿠키」 조합. 프록시는 쿠키가 있는지만 보고 유효성은 화면이 인증 API 로 처리한다.
+  예전에는 이 조합이 회원 전용 촬영 경로(갤러리 불러오기 화면)를 지나가 그 경로만 앞에서 막았다 — 2026-11-15 그
+  화면을 사진 고르기 안으로 합치며 그 차단도 걷었다. 남은 규칙이 그대로인지 본다.
 */
 describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", () => {
   const DEAD_SESSIONS: [string, string][] = [
@@ -280,28 +248,6 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     return request(path, `${cookie}; ${GUEST_TRIAL_COOKIE}=1`);
   }
 
-  test.each(DEAD_SESSIONS)(
-    "%s 가 있어도 회원 전용 경로는 막는다",
-    async (_label, cookie) => {
-      const response = await proxy(guestWith("/shoot/upload", cookie));
-
-      expect(response.status).toBe(307);
-      expect(response.headers.get("location")).toBe(GUEST_RESTRICTED);
-    },
-  );
-
-  test("세그먼트 프리페치 주소로 불러도 막는다", async () => {
-    const response = await proxy(
-      guestWith(
-        "/shoot/upload.segments/_tree.segment",
-        "refreshToken=revoked-elsewhere",
-      ),
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(GUEST_RESTRICTED);
-  });
-
   /*
     반대쪽 못 — **촬영 밖 보호 경로까지 막지는 않는다.**
 
@@ -311,8 +257,8 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     죽었는지 구별하지 못하므로(같은 쿠키 모양이다) 여기서 막는 것은 멀쩡한 회원을
     쫓아내는 쪽으로도 똑같이 작동한다.
 
-    구멍은 `/shoot/upload` 하나였다. 그 경로만 닫고, 나머지는 이 파일이 원래 세워 둔 규칙
-    ―「쿠키가 있으면 통과시키고 유효성은 화면이 인증 API 응답으로 처리한다」― 을 그대로 둔다.
+    이 파일이 원래 세워 둔 규칙 ―「쿠키가 있으면 통과시키고 유효성은 화면이 인증 API 응답으로 처리한다」― 을
+    그대로 둔다.
   */
   test.each(DEAD_SESSIONS)(
     "%s 가 있어도 촬영 밖 보호 경로는 인증 쿠키를 믿고 지나간다",
@@ -326,43 +272,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     },
   );
 
-  /*
-    다만 인증 쿠키가 **아예 없는** 체험 쿠키 단독은 예전 그대로 막힌다 — 위 완화가
-    게스트 차단 자체를 끄지 않았다는 못이다.
-  */
-  /*
-    회귀 — **되돌릴 때 고른 프레임을 잃지 않는다.**
-
-    게스트 쿠키가 이미 있으면 이 차단은 **화면이 마운트되기 전에** 걸린다. 그래서 업로드
-    화면에 넣은 보존 로직이 아예 돌지 않는다 — 프록시가 고정 주소로 보내면 `/shoot` 이
-    쿼리 없는 진입을 새 촬영으로 보고 세션을 비워, 고른 프레임이 사라진다.
-
-    미들웨어는 세션을 못 보므로 요청에 실려 온 것만 옮긴다 — 프레임 선택 화면이 그것을
-    싣는다(app/shoot/page.tsx). 옛 `event` 쿼리는 옮기지 않는다.
-  */
-  test("회원 전용 경로를 막을 때 프레임 쿼리만 들려 보낸다", async () => {
-    const response = await proxy(
-      request(
-        "/shoot/upload?frame=classic-4&event=hongdae-2026",
-        `${GUEST_TRIAL_COOKIE}=1`,
-      ),
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(
-      `${GUEST_RESTRICTED}&frame=classic-4`,
-    );
-  });
-
-  // 실려 오지 않았으면 옮길 것도 없다 — 예전 주소 모양이 그대로 동작한다.
-  test("실려 온 것이 없으면 예전 주소 그대로 되돌린다", async () => {
-    const response = await proxy(
-      request("/shoot/upload", `${GUEST_TRIAL_COOKIE}=1`),
-    );
-
-    expect(response.headers.get("location")).toBe(GUEST_RESTRICTED);
-  });
-
+  // 다만 인증 쿠키가 **아예 없는** 체험 쿠키 단독은 예전 그대로 막힌다 — 게스트 차단 자체를 끄지 않았다는 못이다.
   test("체험 쿠키만 있으면 촬영 밖 보호 경로는 그대로 막는다", async () => {
     const response = await proxy(request("/history", `${GUEST_TRIAL_COOKIE}=1`));
 
@@ -374,7 +284,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     "%s 가 있어도 촬영 흐름은 그대로 지나간다",
     async (_label, cookie) => {
       // 구멍을 닫으면서 "가입 없이 바로 촬영"까지 닫아 버리면 체험 흐름이 죽는다.
-      for (const path of ["/shoot", "/shoot/capture", "/shoot/result"]) {
+      for (const path of ["/shoot", "/shoot/capture", "/shoot/select", "/shoot/result"]) {
         const response = await proxy(guestWith(path, cookie));
 
         expect(response.status).toBe(200);
@@ -388,7 +298,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     남아 있어도 회원 경로를 그대로 쓴다 — 그 사람은 실제로 회원이라 인증 API 가 답한다.
     이 못이 없으면 "게스트 쿠키가 있으면 무조건 게스트"로 고쳐도 위가 전부 통과한다.
   */
-  test.each(["/shoot/upload", "/home", "/mypage"])(
+  test.each(["/home", "/mypage"])(
     "살아 있는 access 를 들었으면 %s 도 통과한다",
     async (path) => {
       const response = await proxy(

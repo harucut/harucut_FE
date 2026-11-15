@@ -80,15 +80,11 @@ describe("guest trial contract", () => {
   });
 
   /*
-    회귀. 갤러리 불러오기는 원래 `/upload` 였고 회원 전용이었다. 촬영 흐름으로 합치면서
-    `/shoot/upload` 로 옮겨 왔는데, `/shoot` 접두사 허용에 딸려 비회원에게도 열렸다.
+    갤러리에서 불러오기는 따로 경로가 없다 — 사진 고르기 화면 안의 칸이고, 회원에게만 보인다(2026-11-15). 예전
+    `/shoot/upload` 는 회원 전용 예외였다. 경계는 세그먼트로 본다 — 이름이 비슷한 다른 경로를 촬영으로 읽지 않는다.
   */
-  test("갤러리 불러오기는 회원만", () => {
-    expect(isGuestAllowedPath("/shoot/upload")).toBe(false);
-  });
-
-  test("이름이 비슷한 다른 경로까지 막지는 않는다", () => {
-    expect(isGuestAllowedPath("/shoot/uploads")).toBe(true);
+  test("경계는 세그먼트로 본다", () => {
+    expect(isGuestAllowedPath("/shootings")).toBe(false);
   });
 
   test("보호 경로 중 촬영 밖은 비회원에게 열지 않는다", () => {

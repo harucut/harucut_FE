@@ -207,6 +207,11 @@ export type ShootSessionState = {
   toggleSelect: (index: number) => void;
   addShotPhoto: (photoDataUrl: string) => void;
   addShotPhotos: (photoDataUrls: string[]) => void;
+  /**
+   * 갤러리에서 불러온 사진을 담고, **비어 있는 칸부터 차례로 넣는다**(2026-11-15). 앨범에서 이미 골라 온
+   * 사진이라 네 장을 한 번 더 누르게 하지 않는다. 이미 고른 칸은 건드리지 않는다.
+   */
+  importPhotos: (photoDataUrls: string[]) => void;
   removeShotPhoto: (index: number) => void;
   resetShots: () => void;
   /**
@@ -373,6 +378,20 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       shotsFrameId: state.shotsFrameId ?? state.frameId,
       imageResult: null,
     })),
+
+  importPhotos: (photoDataUrls) =>
+    set((state) => {
+      let selectedIndexes = state.selectedIndexes;
+      photoDataUrls.forEach((_, offset) => {
+        if (selectedIndexes.includes(null)) selectedIndexes = toggleIndexInSlots(selectedIndexes, state.shots.length + offset);
+      });
+      return {
+        shots: [...state.shots, ...photoDataUrls],
+        shotsFrameId: state.shotsFrameId ?? state.frameId,
+        selectedIndexes,
+        imageResult: null,
+      };
+    }),
 
   // 한 장을 빼면 그 뒤 사진의 번호가 하나씩 당겨진다. 고른 자리는 번호로 들고 있으므로
   // 같이 비운다 — 그대로 두면 사용자가 고른 것과 다른 사진이 슬롯에 들어간다.

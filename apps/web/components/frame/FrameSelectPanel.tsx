@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LayoutGrid, WandSparkles } from "lucide-react";
+import { ImagePlus, LayoutGrid, WandSparkles } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { SLOT_COLORS } from "@/constants/colors";
@@ -28,6 +28,17 @@ type FrameSelectPanelProps = {
   themeData?: ThemeExportJson | null;
   borderColor?: string;
   outputFilter?: FourcutFilterId;
+  /**
+   * 갤러리에서 불러오기(2026-11-15). 주면 사진 목록 맨 앞에 「사진 불러오기」 칸이 생긴다 — 프레임을 고른 뒤
+   * 따로 불러오기 화면을 지나지 않고 여기서 불러온다. 사진이 없을 때도 이 칸 하나가 목록이다.
+   */
+  onAddPhotos?: () => void;
+  /** 불러오는 중 — 칸이 「불러오는 중…」으로 잠긴다. */
+  addingPhotos?: boolean;
+  /** 더 담을 자리가 없다. */
+  addPhotosDisabled?: boolean;
+  /** 사진 목록 바로 위 한 줄(불러오기 안내·제외 안내). */
+  photosNotice?: string | null;
 };
 
 export function FrameSelectPanel({
@@ -45,6 +56,10 @@ export function FrameSelectPanel({
   themeData = null,
   borderColor,
   outputFilter = "NONE",
+  onAddPhotos,
+  addingPhotos = false,
+  addPhotosDisabled = false,
+  photosNotice = null,
 }: FrameSelectPanelProps) {
   const baseItems: FrameMedia[] = useMemo(() => {
     if (media && media.length) return media;
@@ -149,12 +164,30 @@ export function FrameSelectPanel({
         ) : (
           <>
             <section className="space-y-2">
-              {baseItems.length === 0 ? (
+              {photosNotice ? (
+                // 제외 안내는 오류가 아니라 알림이다 — 위험색(빨강)을 쓰지 않는다.
+                <p role="status" className="text-[12px] leading-[1.6] text-(--hc-muted)">
+                  <Sentences text={photosNotice} />
+                </p>
+              ) : null}
+              {baseItems.length === 0 && !onAddPhotos ? (
                 <div className="rounded-2xl border border-dashed border-(--hc-border) bg-(--hc-surface) p-4 text-center text-[12px] text-(--hc-muted)">
                   <Sentences text={emptyStateText} />
                 </div>
               ) : (
                 <div className={`grid gap-2 ${aspectRatio > 1 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-4"} lg:grid-cols-5`}>
+                  {onAddPhotos ? (
+                    <button
+                      type="button"
+                      onClick={onAddPhotos}
+                      disabled={addingPhotos || addPhotosDisabled}
+                      style={{ aspectRatio }}
+                      className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--hc-border-strong) bg-(--hc-surface) text-[13px] font-semibold text-(--hc-text) transition hover:bg-(--hc-surface-muted) disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ImagePlus aria-hidden className="size-5" />
+                      {addingPhotos ? "불러오는 중…" : "사진 불러오기"}
+                    </button>
+                  ) : null}
                   {baseItems.map((item, index) => {
                     const slotIndex = selectedIndexes.indexOf(index);
                     const isSelected = slotIndex !== -1;
