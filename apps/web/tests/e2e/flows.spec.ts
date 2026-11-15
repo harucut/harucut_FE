@@ -21,16 +21,32 @@ test("login page preserves redirectTo in auth links", async ({ page }) => {
 test("signup page preserves redirectTo in the login link", async ({ page }) => {
   await page.goto("/signup?redirectTo=%2Fmypage");
 
-  await expect(page.locator('a[href="/login?redirectTo=%2Fmypage"]')).toBeVisible();
+  // 폰에서는 머리 줄의 뒤로가기(「로그인으로」)도 로그인으로 간다(5414f18). 로그인으로 가는 길은 모두 돌아갈 곳을 들고 간다.
+  await expect(page.getByRole("link", { name: "이미 계정이 있다면 로그인" })).toHaveAttribute("href", "/login?redirectTo=%2Fmypage");
+  for (const link of await page.locator('a[href^="/login"]').all()) {
+    await expect(link).toHaveAttribute("href", "/login?redirectTo=%2Fmypage");
+  }
 });
 
-for (const route of ["/login", "/signup", "/forgot-password"]) {
-  test(`brand link on ${route} returns to the landing page`, async ({ page }) => {
+/*
+  머리 줄에서 나가는 길. 인증 화면은 AuthPageShell 분할 레이아웃이라 <header>가 없다.
+  넓은 화면은 왼쪽 패널의 로고(「하루컷 홈」)가 처음 화면으로 간다. 폰은 로고 대신 뒤로가기 + 가운데 제목이다
+  (5414f18 「로그인·가입 화면을 폰에서는 뒤로가기 + 가운데 제목으로」) — 로그인은 처음 화면으로, 가입·비밀번호 찾기는 로그인으로.
+*/
+const AUTH_EXITS = [
+  { route: "/login", mobile: { name: "처음 화면으로", url: /\/$/ } },
+  { route: "/signup", mobile: { name: "로그인으로", url: /\/login$/ } },
+  { route: "/forgot-password", mobile: { name: "로그인으로", url: /\/login$/ } },
+];
+for (const { route, mobile } of AUTH_EXITS) {
+  test(`header link on ${route} leaves the auth screen`, async ({ page, isMobile }) => {
     await page.goto(route);
-    // 인증 화면은 AuthPageShell 분할 레이아웃이라 <header>가 없다. 브랜드 로고(BrandMark)는
-    // 데스크톱 좌측 패널과 모바일 상단에 각각 있고 뷰포트에 따라 하나만 보이므로,
-    // 접근성 이름으로 실제 보이는 링크를 집는다.
-    await page.getByRole("link", { name: "하루컷 홈" }).click();
-    await expect(page).toHaveURL(/\/$/);
+    if (isMobile) {
+      await page.getByRole("link", { name: mobile.name, exact: true }).click();
+      await expect(page).toHaveURL(mobile.url);
+    } else {
+      await page.getByRole("link", { name: "하루컷 홈" }).click();
+      await expect(page).toHaveURL(/\/$/);
+    }
   });
 }
