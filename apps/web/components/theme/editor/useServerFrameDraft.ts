@@ -38,8 +38,6 @@ const SAME_DEVICE_SLACK_MS = 2000;
 
 export type ServerDraftStatus = "idle" | "saving" | "saved" | "error" | "tooLarge";
 
-type Found = { draftId: string; revision: number; updatedAt: string; document: ServerEditorDocument };
-
 function newestFirst(a: FrameDraftSummary, b: FrameDraftSummary) {
   return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
 }
@@ -85,8 +83,9 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
  *
  * 규칙
  *  - 열 때 이 판형의 서버 초안을 찾기 **전에는** 쓰지 않는다. 먼저 쓰면 초안이 두 벌 생긴다.
- *  - 다른 기기의 초안이 더 새로우면 복원을 묻고, 답하기 전에는 쓰지 않는다 — 덮으면 그 기기의
- *    작업이 사라진다.
+ *  - 다른 기기의 초안이 더 새로우면 묻지 않고 그 초안으로 연다(2026-11-15 「다른 기기의 초안은 뭐야. 다른 기기 꺼를
+ *    가지고 있으면 그냥 그걸로 보여주면 되지」). 예전에는 「다른 기기에서 …에 편집한 초안이 있어요」로 [지금 화면 유지]·
+ *    [초안 불러오기]를 물었다. 더 새로운 쪽을 여는 것이라 그 기기의 작업은 사라지지 않는다.
  *  - 다른 기기가 먼저 저장했으면(DRAFT-001) 멈추고 고르게 한다. 조용히 덮지 않는다.
  *  - 너무 크면(DRAFT-002) 이 세션은 이 기기에만 둔다. 로컬 초안은 계속 돈다.
  *  - 이번 세션에 편집이 없으면 새 초안을 만들지 않는다.
@@ -108,11 +107,13 @@ export function useServerFrameDraft(options: {
     savedScopeRef.current = savedScope;
   }, [savedScope]);
   const [status, setStatus] = useState<ServerDraftStatus>("idle");
-  const [offer, setOffer] = useState<{ updatedAt: string } | null>(null);
+  /** 다른 기기의 더 새로운 초안으로 열었다 — 이 기기의 더 오래된 복구본은 버린다(ThemeEditorPage). */
+  const [restored, setRestored] = useState(false);
+  /** 열 때 서버 초안 찾기가 끝났다. 이 기기의 복구본은 그 뒤에 판단한다 — 먼저 되살리면 더 새로운 서버 초안과 엇갈린다. */
+  const [settled, setSettled] = useState(false);
   const [conflict, setConflict] = useState<{ revision: number | null } | null>(null);
 
   const draftRef = useRef<{ draftId: string; revision: number } | null>(null);
-  const foundRef = useRef<Found | null>(null);
   const discoveredRef = useRef(false);
   const blockedRef = useRef(false);
   const lastSentRef = useRef<string | null>(null);
@@ -210,7 +211,6 @@ export function useServerFrameDraft(options: {
           if (!document) continue;
           if (cancelled) return;
           draftRef.current = { draftId: draft.draftId, revision: draft.revision };
-          foundRef.current = { draftId: draft.draftId, revision: draft.revision, updatedAt: draft.updatedAt, document };
 
           const current = currentDocument();
           if (current && JSON.stringify(current.document) === JSON.stringify(document)) {
@@ -226,8 +226,10 @@ export function useServerFrameDraft(options: {
               : null
             : (loadEditorDraft(ownerId, frameId)?.savedAt ?? null);
           if (localSavedAt === null || Date.parse(draft.updatedAt) > localSavedAt + SAME_DEVICE_SLACK_MS) {
-            blockedRef.current = true;
-            setOffer({ updatedAt: draft.updatedAt });
+            await hydrateFromDocument(ownerId, document);
+            if (cancelled) return;
+            lastSentRef.current = JSON.stringify(document);
+            setRestored(true);
           }
           break;
         }
@@ -236,6 +238,7 @@ export function useServerFrameDraft(options: {
       }
       if (cancelled) return;
       discoveredRef.current = true;
+      setSettled(true);
       // 찾는 동안(또는 계정을 알기 전에) 한 편집은 예약된 저장이 찾기 전이라 건너뛰었을 수 있다. 지금 한 번 맡긴다
       // — 다음 편집을 기다리면 그대로 다른 기기로 옮겼을 때 그 편집이 서버에 없다(Codex 리뷰 #528).
       if (!blockedRef.current && useThemeEditorStore.getState().past.length > 0) void syncRef.current();
@@ -258,21 +261,6 @@ export function useServerFrameDraft(options: {
       unsubscribe();
     };
   }, [ownerId, sync]);
-
-  const restoreOffer = useCallback(async () => {
-    const found = foundRef.current;
-    if (!ownerId || !found) return;
-    await hydrateFromDocument(ownerId, found.document);
-    lastSentRef.current = JSON.stringify(found.document);
-    blockedRef.current = false;
-    setOffer(null);
-  }, [ownerId]);
-
-  const dismissOffer = useCallback(() => {
-    // 다음 편집이 이 기기 내용으로 그 초안을 덮는다 — 사용자가 고른 것이다.
-    blockedRef.current = false;
-    setOffer(null);
-  }, []);
 
   const overwriteConflict = useCallback(() => {
     if (draftRef.current && conflict?.revision != null) {
@@ -305,5 +293,5 @@ export function useServerFrameDraft(options: {
     if (draft) await deleteFrameDraft(draft.draftId).catch(() => {});
   }, []);
 
-  return { status, offer, conflict, restoreOffer, dismissOffer, overwriteConflict, reloadConflict, finish };
+  return { status, restored, settled, conflict, overwriteConflict, reloadConflict, finish };
 }

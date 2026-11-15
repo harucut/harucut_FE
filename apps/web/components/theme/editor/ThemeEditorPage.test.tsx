@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
 import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "@/lib/themeEditorDraft";
 
@@ -191,13 +191,14 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 
 const mockServerDraftFinish = jest.fn().mockResolvedValue(undefined);
 const mockServerDraftArgs = jest.fn();
+/** 서버 초안 찾기 결과. 다른 기기의 더 새로운 초안으로 열었으면 restored. */
+const mockServerDraftState = { restored: false, settled: true };
 jest.mock("@/components/theme/editor/useServerFrameDraft", () => ({
   useServerFrameDraft: (args: unknown) => (mockServerDraftArgs(args), {
     status: "idle",
-    offer: null,
+    restored: mockServerDraftState.restored,
+    settled: mockServerDraftState.settled,
     conflict: null,
-    restoreOffer: jest.fn(),
-    dismissOffer: jest.fn(),
     overwriteConflict: jest.fn(),
     reloadConflict: jest.fn(),
     finish: mockServerDraftFinish,
@@ -529,25 +530,38 @@ describe("ThemeEditorPage save flow", () => {
     });
     afterEach(() => {
       editorStoreState.past = [];
+      Object.assign(mockServerDraftState, { restored: false, settled: true });
     });
 
-    it("남은 편집이 있으면 묻고, 이어서 편집하면 되살린다", async () => {
+    // 「다른 기기 꺼를 가지고 있으면 그냥 그걸로 보여주면 되지」(2026-11-15) — 남은 편집은 묻지 않고 되살린다.
+    it("남은 편집이 있으면 묻지 않고 되살린다", async () => {
       await seedDraft();
       render(<ThemeEditorPage frameId="classic-4" />);
-      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
-      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
-
-      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
       await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
       expect(editorStoreState.hydrateDraft.mock.calls[0][0]).toMatchObject({ backgroundColor: "abcdef" });
+      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
+    });
+
+    it("서버 초안 찾기가 끝나기 전에는 되살리지 않는다 — 더 새로운 다른 기기 초안과 엇갈린다", async () => {
+      mockServerDraftState.settled = false;
+      await seedDraft();
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
+    it("다른 기기의 더 새로운 초안으로 열었으면 이 기기의 더 오래된 편집은 버린다", async () => {
+      mockServerDraftState.restored = true;
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull());
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
     });
 
     // 되살리면 이력이 비워진다. 그 뒤 이력이 다시 비었다는 것은 저장본이 아니라 되살린 편집으로 돌아왔다는 뜻이다.
     it("되살린 편집 위에서 고쳤다 되돌려도 복구본을 지우지 않는다", async () => {
       await seedDraft();
       render(<ThemeEditorPage frameId="classic-4" />);
-      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
-      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
       await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
 
@@ -576,15 +590,6 @@ describe("ThemeEditorPage save flow", () => {
       editorStoreState.past = [];
       storeListeners.forEach((listener) => listener());
       await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull(), { timeout: 3000 });
-    });
-
-    it("저장본 유지를 고르면 묻지 않고 지운다", async () => {
-      await seedDraft();
-      render(<ThemeEditorPage frameId="classic-4" />);
-      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
-      fireEvent.click(within(section).getByRole("button", { name: "저장본 유지" }));
-      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
-      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull();
     });
 
     it("다른 기기가 먼저 저장해 버전이 바뀌었으면 묻지 않는다", async () => {
