@@ -187,7 +187,7 @@ describe("프레임만 다시 고르기", () => {
     store.setFrameId("classic-4");
     store.addShotPhotos(["data:image/jpeg;base64,a", "data:image/jpeg;base64,b"]);
     store.toggleSelect(0);
-    store.setBorderColor("#1ED760");
+    store.setOutputFilter("B&W");
 
     useShootSession.getState().resetFrameSelection();
 
@@ -226,22 +226,24 @@ describe("프레임만 다시 고르기", () => {
   });
 });
 
-// 갤러리에서 불러온 사진은 빈 칸부터 차례로 들어간다(2026-11-15) — 앨범에서 이미 골라 온 사진이다.
+// 갤러리에서 불러온 사진은 목록에만 올라가고 칸에는 눌러서 넣는다(2026-11-15 「올라간 다음에 선택해서 넣는 거야
+// 자동으로 안 넣어져」). 그 전에는 빈 칸부터 차례로 들어갔다.
 describe("갤러리에서 불러오기", () => {
   beforeEach(() => useShootSession.getState().reset());
 
-  it("빈 칸부터 차례로 넣고, 칸이 다 차면 나머지는 목록에만 담는다", () => {
-    useShootSession.getState().importPhotos(["a", "b", "c", "d", "e", "f"]);
+  it("불러온 사진은 목록에만 담고 칸은 비워 둔다", () => {
+    useShootSession.getState().addShotPhotos(["a", "b", "c", "d", "e", "f"]);
     const { shots, selectedIndexes } = useShootSession.getState();
     expect(shots).toEqual(["a", "b", "c", "d", "e", "f"]);
-    expect(selectedIndexes).toEqual([0, 1, 2, 3]);
+    expect(selectedIndexes).toEqual([null, null, null, null]);
   });
 
-  it("이미 고른 칸은 그대로 두고 빈 칸만 채운다", () => {
+  it("이미 고른 칸은 더 불러와도 그대로다", () => {
     const store = useShootSession.getState();
-    store.importPhotos(["a", "b"]);
-    store.toggleSelect(0); // 첫 칸을 비운다
-    useShootSession.getState().importPhotos(["c", "d"]);
-    expect(useShootSession.getState().selectedIndexes).toEqual([2, 1, 3, null]);
+    store.addShotPhotos(["a", "b"]);
+    store.toggleSelect(1);
+    useShootSession.getState().addShotPhotos(["c", "d"]);
+    expect(useShootSession.getState().shots).toEqual(["a", "b", "c", "d"]);
+    expect(useShootSession.getState().selectedIndexes).toEqual([1, null, null, null]);
   });
 });

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Share2 } from "lucide-react";
+import Link from "next/link";
+import { Check, Download, Home, Share2 } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import type { FrameId } from "@/constants/frames";
@@ -32,7 +33,7 @@ import { hasServerPush } from "@/lib/pushDevices";
 import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
-import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
+import { DEFAULT_FRAME_BACKGROUND_COLOR, resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
@@ -187,7 +188,6 @@ export default function ShootResultPage() {
     remoteFrameId,
     shots,
     selectedIndexes,
-    borderColor,
     outputFilter,
     photoName,
     imageResult,
@@ -220,6 +220,14 @@ export default function ShootResultPage() {
   // 이름은 꾸미기에서 붙이고, 완성 뒤 바꾸는 것은 기록에서만 한다(2026-11-15 「추후 이름 변경 자체는 기록 페이지에서만」).
   // 그래서 이 화면에는 ⋯ 메뉴도 이름 바꾸기 창도 없다.
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  /*
+    저장을 마친 완성본(2026-11-15 「저장 누르면 사진이 저장되었어요. 홈으로 가기 이런 거 있는 게 좋을까?」).
+    예전에는 저장해도 화면에 아무 변화가 없었다 — 앱은 사진첩에 조용히 넣고 끝나, 됐는지 알 길이 없었다.
+    이제 저장되면 단추 위에 한 줄로 말하고, 주 버튼이 다음 할 일(홈으로)로 바뀐다. 다시 저장은 옆 동그란 단추로 남긴다 —
+    브라우저는 받기 창을 닫아 버려도 알 수 없고, 비회원 사진은 이 화면을 떠나면 이 기기에 남지 않는다.
+    완성본이 바뀌면(다시 만들기) 저장 표시도 따라 풀리도록 무엇을 저장했는지로 든다. 앱은 사진첩에 넣으므로 그렇게 말한다.
+  */
+  const [savedResult, setSavedResult] = useState<{ result: GeneratedFourcutAsset; album: boolean } | null>(null);
   const [isSharingImage, setIsSharingImage] = useState(false);
   const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
   // 완성본 주소가 열리지 않는가(만료된 조회 URL·오프라인). 참이면 미리보기로 되돌아간다.
@@ -283,10 +291,10 @@ export default function ShootResultPage() {
     }
   }, [frameId, imageSources.length, router, selectedCount, shots.length]);
 
-  // 고른 색이 곧 저장본의 색이다 — 회원 경로는 이 값을 합성 요청에 실어 보내고,
-  // 비회원 경로는 브라우저가 이 색으로 그린다. 꾸민 프레임이면 프레임에 저장된 배경이
+  // 프레임 카드의 종이 색이 곧 저장본의 색이다(꾸미기에 테두리 색이 없다, 2026-11-15). 회원 경로는 이 값을 합성
+  // 요청에 실어 보내고, 비회원 경로는 브라우저가 이 색으로 그린다. 꾸민 프레임이면 프레임에 저장된 배경이
   // 우선한다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
-  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, DEFAULT_FRAME_BACKGROUND_COLOR);
   const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
   /*
     색이 결과물을 바꾸는가.
@@ -713,6 +721,7 @@ export default function ShootResultPage() {
           blob,
           buildDownloadFilename(imageResult.displayName, blob.type === "image/jpeg" ? "jpg" : "png"),
         );
+        setSavedResult({ result: imageResult, album: isNativeShell() });
         return;
       }
 
@@ -721,6 +730,7 @@ export default function ShootResultPage() {
         url,
         buildDownloadFilename(imageResult.displayName, getImageExtension(url) ?? imageResult.extension ?? getImageExtension(imageResult.displayName) ?? "jpg"),
       );
+      setSavedResult({ result: imageResult, album: isNativeShell() });
     } catch (error) {
       console.error(error);
       showStatusNotice(
@@ -885,43 +895,73 @@ export default function ShootResultPage() {
     "hc-button-primary flex h-13 flex-1 items-center justify-center gap-2 rounded-full text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:opacity-45";
   const roundButton =
     "hc-button-secondary grid size-13 shrink-0 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45";
-  const saveContent = (
-    <>
-      <Download aria-hidden className="size-4.5" strokeWidth={2.2} />
-      {isDownloadingImage ? "저장 중" : "사진 저장"}
-    </>
-  );
-
-  let primary: ReactNode;
-  if (imageResult && localBlob) {
-    primary = (
-      <a
-        href={imageResult.downloadUrl ?? imageResult.objectUrl}
-        download={buildDownloadFilename(imageResult.displayName, localBlob.type === "image/jpeg" ? "jpg" : "png")}
-        aria-disabled={isDownloadingImage || undefined}
-        onClick={(event) => {
-          if (isDownloadingImage) {
-            event.preventDefault();
-            return;
-          }
-          // Safari는 실제 링크의 기본 동작으로 받는다. 클릭 뒤 URL을 폐기하지 않는다.
-          // 앱 셸만 네이티브 저장 브리지(사진첩)를 쓴다.
-          if (isNativeShell()) {
-            event.preventDefault();
-            void handleDownloadImage();
-          }
-        }}
-        className={primaryClass}
-      >
-        {saveContent}
-      </a>
+  const saved = imageResult != null && savedResult?.result === imageResult;
+  /*
+    저장 단추. 다 되면 주 버튼이고, 저장한 뒤에는 옆의 동그란 「다시 저장」이다(savedResult 주석).
+    기기에서 만든 사진은 실제 링크로 받는다 — Safari 는 링크의 기본 동작으로만 받는다. 클릭 뒤 URL 을 폐기하지
+    않는다. 앱 셸만 네이티브 저장 브리지(사진첩)를 쓰고, 그 답을 받은 뒤에야 저장됐다고 말한다. 브라우저 링크는
+    받기를 넘긴 순간을 저장으로 본다(그 뒤는 브라우저 몫이라 알 수 없다).
+  */
+  const renderSave = (round: boolean) => {
+    if (!imageResult) return null;
+    const className = round ? roundButton : primaryClass;
+    const content = round ? (
+      <Download aria-hidden className="size-5" />
+    ) : (
+      <>
+        <Download aria-hidden className="size-4.5" strokeWidth={2.2} />
+        {isDownloadingImage ? "저장 중" : "사진 저장"}
+      </>
     );
-  } else if (imageResult) {
-    primary = (
-      <button type="button" onClick={() => void handleDownloadImage()} disabled={isDownloadingImage} className={primaryClass}>
-        {saveContent}
+    if (localBlob) {
+      return (
+        <a
+          href={imageResult.downloadUrl ?? imageResult.objectUrl}
+          download={buildDownloadFilename(imageResult.displayName, localBlob.type === "image/jpeg" ? "jpg" : "png")}
+          aria-label={round ? "사진 다시 저장" : undefined}
+          aria-disabled={isDownloadingImage || undefined}
+          onClick={(event) => {
+            if (isDownloadingImage) {
+              event.preventDefault();
+              return;
+            }
+            if (isNativeShell()) {
+              event.preventDefault();
+              void handleDownloadImage();
+              return;
+            }
+            setSavedResult({ result: imageResult, album: false });
+          }}
+          className={className}
+        >
+          {content}
+        </a>
+      );
+    }
+    return (
+      <button
+        type="button"
+        aria-label={round ? "사진 다시 저장" : undefined}
+        onClick={() => void handleDownloadImage()}
+        disabled={isDownloadingImage}
+        className={className}
+      >
+        {content}
       </button>
     );
+  };
+
+  let primary: ReactNode;
+  if (imageResult && saved) {
+    // 저장했으면 다음 할 일은 나가는 것이다. 비회원의 처음은 랜딩이다(위 로고와 같은 곳).
+    primary = (
+      <Link href={guestMode ? "/" : "/home"} className={primaryClass}>
+        <Home aria-hidden className="size-4.5" strokeWidth={2.2} />
+        {guestMode ? "처음으로" : "홈으로 가기"}
+      </Link>
+    );
+  } else if (imageResult) {
+    primary = renderSave(false);
   } else if (imageState === "error") {
     // 다시 해서 달라질 수 있으면 다시 시도, 아니면(없는 프레임 등) 사진은 두고 프레임만 다시 고른다.
     primary = isImageErrorRetryable ? (
@@ -1037,6 +1077,13 @@ export default function ShootResultPage() {
             </p>
           ) : null}
 
+          {saved ? (
+            <p role="status" className="flex items-center justify-center gap-1.5 text-[13px] font-semibold text-(--hc-text)">
+              <Check aria-hidden className="size-4" strokeWidth={2.6} />
+              {savedResult?.album ? "사진첩에 저장했어요" : "사진을 저장했어요"}
+            </p>
+          ) : null}
+
           {/* 비회원은 공유·⋯ 대신 이 한 줄 — 보관하는 것은 재료라 실패한 뒤여도 된다(handleGuestLogin). */}
           {guestMode && !isPreparing ? (
             <button
@@ -1052,6 +1099,7 @@ export default function ShootResultPage() {
           {primary ? (
             <div className="flex gap-2.5">
               {primary}
+              {saved ? renderSave(true) : null}
               {!guestMode && imageResult ? (
                 <>
                   {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}

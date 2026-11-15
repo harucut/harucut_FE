@@ -14,7 +14,6 @@ import {
   DEFAULT_FOURCUT_FILTER,
   type FourcutFilterId,
 } from "@/lib/frameFilters";
-import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 /**
@@ -161,7 +160,11 @@ export type ShootSessionState = {
    */
   shotsFrameId: FrameId | null;
   selectedIndexes: SelectionSlot[];
-  borderColor: string;
+  /*
+    테두리 색은 고르지 않는다(2026-11-15 「프레임 고르고 왔으면 사진 고르고 꾸미기에서 색상 변경은 없어도 되겠다」).
+    프레임을 고를 때 본 카드의 종이 색(기본 프레임은 DEFAULT_FRAME_BACKGROUND_COLOR, 꾸민 프레임은 저장된 배경)이
+    곧 완성본의 색이다 — 그래서 세션에 색이 없다.
+  */
   outputFilter: FourcutFilterId;
   /**
    * 꾸미기에서 붙인 사진 이름(2026-11-15 「사진 이름도 마지막에 바꾸는 게 아니라 꾸미기에서 넣으면 되지 않을까?」).
@@ -179,17 +182,17 @@ export type ShootSessionState = {
    * (ShootSessionBoundary).
    *
    * - `account`: 계정 기록에 남았다(서버 합성). /create 은 새 촬영으로 시작한다 — 사진은 기록에서 본다.
-   * - `device`: 이 기기에서만 만들었다(비회원, 기본 프레임이 없는 회원). 세션을 지우면 사진이 사라지므로
-   *   /create 이 「완성한 사진이 있어요」로 다시 보게 한다(「비회원은 … 로컬에 저장되도록」, 2026-11-15).
+   * - `device`: 이 기기에서 그렸다(비회원). 비회원 사진은 이 기기에 남기지 않으므로(lib/shootSessionPersistence.ts)
+   *   이 탭을 떠나면 사라진다 — 완성 화면에서 저장하거나 「로그인하고 보관하기」로 옮긴다. /create 에 오면 새 촬영이다
+   *   (2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아」 — 그 전에는 「완성한 사진이 있어요」로 다시 보게 했다).
    *
-   * 새로고침 뒤에도 막혀야 하므로 임시 보관에 같이 싣는다. 새 촬영(reset·resetShots)에서 풀린다.
+   * 회원은 새로고침 뒤에도 막혀야 하므로 임시 보관에 같이 싣는다. 새 촬영(reset·resetShots)에서 풀린다.
    */
   completed: ShootCompletion | null;
 
   setFrameId: (id: FrameId) => void;
   setSource: (source: ShootSource) => void;
   setRemoteFrameId: (id: number | null) => void;
-  setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
   setPhotoName: (name: string) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
@@ -207,11 +210,6 @@ export type ShootSessionState = {
   toggleSelect: (index: number) => void;
   addShotPhoto: (photoDataUrl: string) => void;
   addShotPhotos: (photoDataUrls: string[]) => void;
-  /**
-   * 갤러리에서 불러온 사진을 담고, **비어 있는 칸부터 차례로 넣는다**(2026-11-15). 앨범에서 이미 골라 온
-   * 사진이라 네 장을 한 번 더 누르게 하지 않는다. 이미 고른 칸은 건드리지 않는다.
-   */
-  importPhotos: (photoDataUrls: string[]) => void;
   removeShotPhoto: (index: number) => void;
   resetShots: () => void;
   /**
@@ -234,7 +232,6 @@ const initialState: Pick<
   | "shots"
   | "shotsFrameId"
   | "selectedIndexes"
-  | "borderColor"
   | "outputFilter"
   | "photoName"
   | "imageResult"
@@ -247,7 +244,6 @@ const initialState: Pick<
   shots: [],
   shotsFrameId: null,
   selectedIndexes: createEmptySlots(),
-  borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
   outputFilter: DEFAULT_FOURCUT_FILTER,
   photoName: "",
   imageResult: null,
@@ -267,12 +263,6 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   setRemoteFrameId: (id) =>
     set({
       remoteFrameId: id,
-      imageResult: null,
-    }),
-
-  setBorderColor: (borderColor) =>
-    set({
-      borderColor,
       imageResult: null,
     }),
 
@@ -357,7 +347,6 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
 
   setSource: (source) => set({ source }),
 
-
   toggleSelect: (index) =>
     set({
       selectedIndexes: toggleIndexInSlots(get().selectedIndexes, index),
@@ -378,20 +367,6 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       shotsFrameId: state.shotsFrameId ?? state.frameId,
       imageResult: null,
     })),
-
-  importPhotos: (photoDataUrls) =>
-    set((state) => {
-      let selectedIndexes = state.selectedIndexes;
-      photoDataUrls.forEach((_, offset) => {
-        if (selectedIndexes.includes(null)) selectedIndexes = toggleIndexInSlots(selectedIndexes, state.shots.length + offset);
-      });
-      return {
-        shots: [...state.shots, ...photoDataUrls],
-        shotsFrameId: state.shotsFrameId ?? state.frameId,
-        selectedIndexes,
-        imageResult: null,
-      };
-    }),
 
   // 한 장을 빼면 그 뒤 사진의 번호가 하나씩 당겨진다. 고른 자리는 번호로 들고 있으므로
   // 같이 비운다 — 그대로 두면 사용자가 고른 것과 다른 사진이 슬롯에 들어간다.

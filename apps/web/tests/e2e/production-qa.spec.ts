@@ -37,10 +37,17 @@ test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 �
   await expect(page.getByRole("button", { name: "사진 불러오기", exact: true })).toBeVisible();
   const buffer = await readFile("public/demo/cut-1.webp");
   await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4, 5].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
-  // 앨범에서 골라 온 사진은 빈 칸부터 차례로 들어간다 — 네 장을 다시 누르지 않는다.
-  await expect(page.getByRole("button", { name: "4번 사진 선택 해제 (현재 4번째로 선택됨)", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "5번 사진 — 4장을 다 골라 더 선택할 수 없어요", exact: true })).toBeVisible();
+  // 불러온 사진은 목록에 올라갈 뿐이다 — 칸에는 찍은 사진처럼 눌러서 넣는다(2026-11-15 「자동으로 안 넣어져」).
+  await expect(page.getByRole("button", { name: "5번 사진 선택", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "4장을 골라 주세요", exact: true })).toBeDisabled();
+  for (const index of [2, 1, 4, 5]) {
+    await page.getByRole("button", { name: `${index}번 사진 선택`, exact: true }).click();
+  }
+  await expect(page.getByRole("button", { name: "5번 사진 선택 해제 (현재 4번째로 선택됨)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "3번 사진 — 4장을 다 골라 더 선택할 수 없어요", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "꾸미기", exact: true }).click();
+  // 테두리 색은 고르지 않는다 — 고른 프레임 카드의 색 그대로다(2026-11-15).
+  await expect(page.getByRole("group", { name: "테두리 색" })).toHaveCount(0);
   await page.getByLabel("사진 이름", { exact: true }).fill("POC-회원");
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
   const save = page.getByRole("button", { name: "사진 저장", exact: true });
@@ -56,6 +63,10 @@ test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 �
   // macOS WebKit은 파일명의 한글을 분해형으로 돌려줄 수 있다.
   expect(download.suggestedFilename().normalize("NFC")).toMatch(/^POC-회원\.(webp|jpe?g|png)$/);
   expect(await download.failure()).toBeNull();
+  // 저장하면 됐다고 말하고 주 버튼이 홈으로 바뀐다. 다시 저장은 옆 동그란 단추다.
+  await expect(page.getByText("사진을 저장했어요", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "홈으로 가기", exact: true })).toHaveAttribute("href", "/home");
+  await expect(page.getByRole("button", { name: "사진 다시 저장", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("member-server-result.png"), fullPage: true });
 });
 

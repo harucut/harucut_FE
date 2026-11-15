@@ -10,7 +10,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { DEFAULT_FOURCUT_FILTER } from "@/lib/frameFilters";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
-import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
+import { DEFAULT_FRAME_BACKGROUND_COLOR, resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { RetryButton } from "@/components/ui/LoadFailed";
 import { usePhotoImport } from "@/hooks/usePhotoImport";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -32,16 +32,14 @@ export default function ShootSelectPage() {
     remoteFrameId,
     shots,
     selectedIndexes,
-    borderColor,
     outputFilter,
     photoName,
     toggleSelect,
-    setBorderColor,
     setOutputFilter,
     setPhotoName,
     source,
     resetShots,
-    importPhotos,
+    addShotPhotos,
   } = useShootSession();
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
   const fromUpload = source === "upload";
@@ -61,6 +59,8 @@ export default function ShootSelectPage() {
     갤러리에서 불러오기는 따로 화면이 없다 — 프레임을 고르면 바로 이 화면이고, 사진 목록 맨 앞 「사진 불러오기」
     칸으로 불러온다(2026-11-15 「프레임 고르고 나면 바로 사진 고르기로 들어가서 거기서 올릴 수 있게」). 뒤로가기는
     프레임을 다시 고르는 것이고, 불러온 사진은 들고 간다(keepShots — 갤러리 사진은 어느 프레임에도 다시 쓴다).
+    불러온 사진은 목록에 올라갈 뿐이고, 칸에는 찍은 사진처럼 눌러서 넣는다(2026-11-15 「올라간 다음에 선택해서 넣는
+    거야 자동으로 안 넣어져」). 예전에는 빈 칸부터 차례로 들어갔고, 그걸 말하는 안내 한 줄이 목록 위에 있었다.
     불러오기는 회원만 쓴다. 들어오기 전에 프레임 고르기가 확인했고(app/create/page.tsx), 여기서는 이 기기가 아는
     상태로 칸을 보인다. 그 사이 비회원이 되면 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다(아래 effect).
   */
@@ -79,10 +79,9 @@ export default function ShootSelectPage() {
   } = usePhotoImport({
     maxPhotos: slotCount * PHOTOS_PER_SLOT,
     currentCount: shots.length,
-    onImported: importPhotos,
+    onImported: addShotPhotos,
   });
-  // 성공과 실패를 따로 받는다. 못 읽은 것을 "꾸민 프레임이 아니다"로 뭉개면
-  // 잠겨야 할 테두리 색 고르기가 열린다.
+  // 꾸민 프레임의 내용(장식·배경). 못 읽으면 미리보기가 완성본과 달라지므로 실패를 따로 받아 아래 배너로 말한다.
   const {
     data: themeData,
     error: themeError,
@@ -117,19 +116,13 @@ export default function ShootSelectPage() {
 
   useEffect(() => { router.prefetch("/create/result"); }, [router, selectedIndexes]);
 
-  // 잠금은 내용이 아니라 "꾸민 프레임인가"로 가른다. 서버 합성은 remoteFrameId 만 보고
-  // 프레임에 저장된 배경을 쓰며 보낸 색은 버린다(lib/fourcutCompose.ts 의 usesStoredBackground).
-  // 내용을 못 읽었다고 고르기를 열어 주면, 고른 색은 저장될 때 조용히 사라진다.
-  // 꾸민 프레임이면 꾸미기에 테두리 고르기가 아예 없다. 못 읽었으면 그 사실은 아래 배너가 말한다.
-  const hasCustomFrame = remoteFrameId != null;
   // 보정 견본에는 내 사진을 깐다 — 고른 첫 장, 아직 안 골랐으면 찍은 첫 장.
   const firstSelected = selectedIndexes.find((index) => index != null);
   const samplePhoto = shots[firstSelected ?? 0] ?? null;
-  // 고른 색이 곧 저장본의 색이다 — 서버 합성에 그 색을 실어 보낸다. 꾸민 프레임일 때만
-  // 프레임에 저장된 배경을 쓴다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
-  // 내용을 못 읽었으면 미리보기는 마지막으로 고른 색으로 그리는데 저장본은 프레임에 저장된
-  // 배경으로 나온다 — 그래서 아래 배너로 못 읽었다는 사실을 말한다.
-  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
+  // 프레임 카드의 종이 색이 곧 저장본의 색이다(꾸미기에 테두리 색이 없다). 꾸민 프레임은 저장된 배경을 쓴다
+  // (resolveFrameBackgroundColor 가 themeData 를 먼저 본다). 내용을 못 읽었으면 미리보기는 기본 종이 색으로
+  // 그리는데 저장본은 프레임에 저장된 배경으로 나온다 — 그래서 아래 배너로 못 읽었다는 사실을 말한다.
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, DEFAULT_FRAME_BACKGROUND_COLOR);
 
   // 고르기 화면 기록을 완성 화면으로 바꿔 낀다(2026-11-15). 완성된 뒤에는 다시 고르지 않는데, 기록에 이 화면이
   // 남아 있으면 뒤로가기가 여기 들렀다가 완성 화면으로 되돌려져(ShootSessionBoundary) 먹지 않는 것처럼 보인다.
@@ -160,14 +153,14 @@ export default function ShootSelectPage() {
         />
 
 
-        {/* 조회가 실패해도 테두리 색은 잠긴 채다. 왜 못 바꾸는지와 되살릴 길을 같이 준다. */}
+        {/* 꾸민 프레임을 못 읽었다. 미리보기가 완성본과 다를 수 있다는 사실과 되살릴 길을 같이 준다. */}
         {themeError ? (
           <div
             role="status"
             className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-(--hc-border) bg-(--hc-surface) px-4 py-3"
           >
             <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-              프레임을 불러오지 못해 배경색을 바꿀 수 없어요.
+              프레임을 불러오지 못해 미리보기가 완성본과 다를 수 있어요.
             </p>
             <RetryButton onClick={reloadTheme} />
           </div>
@@ -195,10 +188,7 @@ export default function ShootSelectPage() {
           onAddPhotos={canImport ? () => void openImport() : undefined}
           addingPhotos={isImporting}
           addPhotosDisabled={importFull}
-          photosNotice={
-            importNotice ??
-            (canImport && shots.length === 0 ? "앨범에서 여러 장을 한 번에 고를 수 있어요. 고른 사진은 빈 칸부터 차례로 들어가요." : null)
-          }
+          photosNotice={importNotice}
           incompleteButtonLabel="4장을 골라 주세요"
           nextButtonLabel="다음 단계로"
           onToggleSelect={toggleSelect}
@@ -208,11 +198,8 @@ export default function ShootSelectPage() {
           outputFilter={outputFilter}
           renderExtraControls={() => (
             <FrameOutputOptionsPanel
-              borderColor={borderColor}
-              onBorderColorChange={setBorderColor}
               outputFilter={outputFilter}
               onOutputFilterChange={setOutputFilter}
-              hasCustomFrame={hasCustomFrame}
               samplePhoto={samplePhoto}
               filtersLocked={filtersLocked}
               photoName={photoName}

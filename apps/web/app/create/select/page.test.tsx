@@ -1,11 +1,10 @@
 /**
- * 이 화면에서 났던 회귀 하나를 못박는다 — 꾸민 프레임의 내용을 못 읽으면 잠겨야 할
- * 배경색 고르기가 열렸다. 서버 합성은 remoteFrameId 만 보고 프레임에 저장된 배경을 쓰므로
- * (lib/fourcutCompose.ts 의 usesStoredBackground) 그때 고른 색은 저장되면서 버려진다.
- * 사용자에게는 "골랐는데 안 먹었다"로만 보이는 실패다.
+ * 사진 고르기 화면.
  *
- * 그래서 잠금은 내용이 아니라 remoteFrameId 로 가른다. 조회 중에도 열지 않는다 —
- * 판정이 뒤집히는 순간 이미 고른 값이 사라진다.
+ * 꾸미기에 테두리 색이 없다(2026-11-15 「프레임 고르고 왔으면 사진 고르고 꾸미기에서 색상 변경은 없어도 되겠다」)
+ * — 고른 프레임 카드의 색이 곧 완성본의 색이다. 예전에는 기본 프레임이면 여기서 색을 다시 골랐고, 꾸민 프레임은
+ * 저장된 배경을 쓰느라 고르기를 잠갔다(그 잠금이 프레임 내용을 못 읽으면 풀리던 회귀가 이 파일의 시작이었다).
+ * 꾸민 프레임을 못 읽으면 미리보기가 완성본과 다를 수 있다는 사실과 다시 부를 길은 그대로 준다.
  */
 import type { MouseEvent, ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -35,14 +34,12 @@ const mockShootSession = {
   remoteFrameId: null as number | null,
   shots: ["/shot-1.png"],
   selectedIndexes: [0, null, null, null] as Array<number | null>,
-  borderColor: "#18181a",
   outputFilter: "NONE" as string,
   toggleSelect: noop,
-  setBorderColor: jest.fn(),
   setOutputFilter: jest.fn(),
   source: "capture" as "capture" | "upload",
   resetShots: jest.fn(),
-  importPhotos: jest.fn(),
+  addShotPhotos: jest.fn(),
 };
 
 const mockReplace = jest.fn();
@@ -99,7 +96,7 @@ jest.mock("@/lib/shootSessionStore", () => ({
   useShootSession: () => mockShootSession,
 }));
 
-/** 테두리 색 견본 묶음. 꾸민 프레임이면 통째로 없다. */
+/** 예전 테두리 색 견본 묶음. 이제 어느 프레임에서도 없다. */
 const colorPicker = () => screen.queryByRole("group", { name: "테두리 색" });
 
 beforeEach(() => {
@@ -110,14 +107,13 @@ beforeEach(() => {
   useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
 });
 
-test("꾸민 프레임의 조회가 실패해도 테두리 색 고르기는 잠긴 채다", () => {
+test("꾸민 프레임의 조회가 실패하면 배너 하나만 말하고, 테두리 색 고르기는 그때도 없다", () => {
   mockShootSession.remoteFrameId = 7;
   Object.assign(mockThemeState, { error: new Error("boom") });
 
   render(<ShootSelectPage />);
 
   expect(colorPicker()).toBeNull();
-  // 못 바꾸는 까닭은 화면 위 배너 하나가 사실대로 말한다(다음 시험). 꾸미기 안에서 다시 말하지 않는다.
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
 
@@ -128,21 +124,20 @@ test("조회에 실패하면 사실대로 말하고 다시 부를 길을 준다"
   render(<ShootSelectPage />);
 
   expect(screen.getByRole("status")).toHaveTextContent(
-    "프레임을 불러오지 못해 배경색을 바꿀 수 없어요.",
+    "프레임을 불러오지 못해 미리보기가 완성본과 다를 수 있어요.",
   );
 
   fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
   expect(mockReload).toHaveBeenCalledTimes(1);
 });
 
-test("조회 중에는 열어 두지 않는다 — 곧 뒤집힐 판정이다", () => {
+test("조회 중에는 실패 배너를 미리 띄우지 않는다", () => {
   mockShootSession.remoteFrameId = 7;
   Object.assign(mockThemeState, { isLoading: true });
 
   render(<ShootSelectPage />);
 
-  expect(colorPicker()).toBeNull();
-  // 아직 실패가 아니라 조회 중이다. 실패 배너를 미리 띄우지 않는다.
+  // 아직 실패가 아니라 조회 중이다.
   expect(screen.queryByRole("status")).toBeNull();
   // 보정은 꾸민 프레임에서도 고른다.
   expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
@@ -159,18 +154,13 @@ test("꾸민 프레임을 읽어 왔으면 테두리는 프레임이 정한다 �
   expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
 });
 
-test("꾸민 프레임을 안 쓰면 테두리 색을 고를 수 있다", () => {
+test("기본 프레임이어도 테두리 색은 고르지 않는다 — 고른 프레임 카드의 색 그대로다", () => {
   render(<ShootSelectPage />);
 
-  expect(colorPicker()).not.toBeNull();
+  expect(colorPicker()).toBeNull();
+  expect(screen.queryByText("테두리")).toBeNull();
+  expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
   expect(screen.queryByRole("status")).toBeNull();
-});
-
-test("견본을 누르면 세션에 '#rrggbb' 로 넣는다", () => {
-  render(<ShootSelectPage />);
-
-  fireEvent.click(screen.getByRole("button", { name: "블러시 핑크" }));
-  expect(mockShootSession.setBorderColor).toHaveBeenCalledWith("#f4c6d0");
 });
 
 /*
@@ -201,8 +191,6 @@ test("비회원은 보정을 고를 수 없고, 고른 보정이 남아 있으�
 
   expect(screen.getByText("회원 전용")).toBeInTheDocument();
   expect(mockShootSession.setOutputFilter).toHaveBeenCalledWith("NONE");
-  // 테두리 색은 비회원도 고른다.
-  expect(colorPicker()).not.toBeNull();
 });
 
 test("회원은 보정을 그대로 고른다", () => {
@@ -222,12 +210,13 @@ describe("갤러리에서 불러오기", () => {
     Object.assign(mockShootSession, { source: "upload", shots: [] });
   });
 
-  test("사진이 없어도 돌려보내지 않고, 회원에게 불러오기 칸과 안내를 준다", () => {
+  // 안내 한 줄(「고른 사진은 빈 칸부터 차례로 들어가요」)은 뺐다 — 불러온 사진은 목록에 올라가고 눌러서 넣는다(2026-11-15).
+  test("사진이 없어도 돌려보내지 않고, 회원에게 불러오기 칸만 준다", () => {
     render(<ShootSelectPage />);
 
     expect(mockReplace).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "사진 불러오기" })).toBeInTheDocument();
-    expect(screen.getByTestId("photos-notice")).toHaveTextContent("고른 사진은 빈 칸부터 차례로 들어가요.");
+    expect(screen.queryByTestId("photos-notice")).toBeNull();
     expect(document.querySelector('input[type="file"]')).not.toBeNull();
   });
 

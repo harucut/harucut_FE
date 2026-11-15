@@ -285,6 +285,10 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 
 ### 배경색은 요청에 실어 보낸다 (2026-09-01 스키마 재확인)
 
+> 2026-11-15 부터 사용자는 꾸미기에서 테두리 색을 고르지 않는다(「프레임 고르고 왔으면 꾸미기에서 색상 변경은
+> 없어도 되겠다」). 기본 프레임은 프레임 고르기 카드의 종이 색(`DEFAULT_FRAME_BACKGROUND_COLOR`, `#fafaf7`)을
+> 그대로 보낸다 — 요청 모양은 아래 그대로다.
+
 `ComposeRequest` 의 필드는 **넷**이다. `frameId`·`sourceKeys`·`idempotencyKey` 가 필수이고
 **`backgroundColor` 가 선택**으로 하나 더 있다(`pattern: ^#[0-9a-fA-F]{6}$`).
 직접 보려면 `curl -s http://localhost:8080/v3/api-docs | jq '.components.schemas.ComposeRequest'`.

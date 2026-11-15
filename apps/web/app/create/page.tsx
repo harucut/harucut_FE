@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { resolveMembership } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { isGuestVisitor, useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
 import { Sentences } from "@/components/ui/Sentences";
@@ -47,14 +47,17 @@ function ShootPageContent() {
   */
   const keepShots = searchParams.get("keepShots") === "1";
   /*
-    들고 있는 사진이 있으면 먼저 묻는다. 끝난 촬영(shootSessionStore 의 completed)은 어디에 남았는지로 가른다 —
-    계정 기록에 남은 사진은 기록에서 보면 되니 새 촬영으로 시작하고, 이 기기에만 있는 완성 사진(비회원 등)은
-    지우면 사라지므로 「완성한 사진이 있어요」로 다시 보게 한다. 끝난 촬영은 `keepShots` 로 와도 이어 고르지 않는다.
+    회원이 찍던 사진을 들고 있으면 먼저 묻는다(「촬영하던 사진이 있어요」). 끝난 촬영(shootSessionStore 의 completed)은
+    묻지 않고 새 촬영으로 시작한다 — 회원 사진은 기록에 남았다. `keepShots` 로 와도 끝난 촬영은 이어 고르지 않는다.
+
+    비회원은 묻지 않는다(2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려 / 그러면 당연히 새로 시작
+    화면도 없어져야겠지?」). 비회원 사진은 이 기기에 남기지 않으니(lib/shootSessionPersistence.ts) 이 화면에 오면 새
+    촬영이다 — 같은 탭에서 들고 온 사진도 지운다(프레임만 다시 고르는 `keepShots` 는 빼고). 예전에는 비회원에게도 「이어서 만들기」·「새로 시작하기」와,
+    이 기기에서 만든 완성 사진을 다시 보는 「완성한 사진이 있어요」가 떴다.
   */
-  const [resumeAvailable, setResumeAvailable] = useState(() => {
+  const [resumeOffered, setResumeOffered] = useState(() => {
     const session = useShootSession.getState();
-    if (session.shots.length === 0) return false;
-    if (session.completed) return session.completed === "device";
+    if (session.shots.length === 0 || session.completed || isGuestVisitor()) return false;
     return !keepShots;
   });
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -65,6 +68,8 @@ function ShootPageContent() {
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const guestHydrated = useGuestTrialStore((state) => state.hydrated);
   const { frames, isLoading, error, refresh } = useMyFrames(guestHydrated && accessMode === "member");
+  // 이 화면에 있는 동안 비회원으로 확정돼도(아래 checkSession) 묻던 것을 거두고 새 촬영으로 간다.
+  const resumeAvailable = resumeOffered && !(guestHydrated && accessMode === "guest");
 
   useEffect(() => {
     // `keepShots` 없는 진입은 **새 촬영**이다. 이어 가는 진입은 찍은 사진만 두고 프레임을 다시 고른다.
@@ -189,30 +194,19 @@ function ShootPageContent() {
 
   if (resumeAvailable) {
     const session = useShootSession.getState();
-    // 이 기기에만 있는 완성 사진. 다시 고르는 것이 아니라 그 완성 화면을 다시 연다(기기에서 다시 그린다).
-    const finished = session.completed === "device";
-    const resumePath = finished
-      ? "/create/result"
-      : session.frameId
-        ? session.shots.length >= 4 || session.source === "upload" ? "/create/select" : "/create/capture"
-        : "/create?keepShots=1";
-    const homeHref = accessMode === "guest" ? "/" : "/home";
+    const resumePath = session.frameId
+      ? session.shots.length >= 4 || session.source === "upload" ? "/create/select" : "/create/capture"
+      : "/create?keepShots=1";
     return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">
       <div className="mx-auto flex max-w-md flex-col gap-4">
-        <PageHeader
-          title={finished ? "완성한 사진이 있어요" : "촬영하던 사진이 있어요"}
-          backHref={homeHref}
-          backLabel={accessMode === "guest" ? "처음으로" : "홈으로"}
-        />
-        <p><Sentences text={finished
-          ? "이 기기에만 있는 사진이에요. 마지막 작업부터 24시간이 지나면 지워져요."
-          : `${session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.`} /></p>
+        <PageHeader title="촬영하던 사진이 있어요" backHref="/home" backLabel="홈으로" />
+        <p><Sentences text={`${session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.`} /></p>
         <button type="button" className="hc-pressable min-h-11 rounded-xl bg-(--hc-primary) px-4 py-3 font-semibold text-(--hc-primary-contrast)" onClick={() => {
           if (session.frameId) router.push(resumePath);
-          else { router.replace(resumePath); setResumeAvailable(false); }
-        }}>{finished ? "사진 보기" : "이어서 만들기"}</button>
+          else { router.replace(resumePath); setResumeOffered(false); }
+        }}>이어서 만들기</button>
         <button type="button" className="hc-pressable min-h-11 rounded-xl border border-(--hc-border) px-4 py-3" onClick={() => setConfirmRestart(true)}>새로 시작하기</button>
-        {confirmRestart && <ConfirmDialog running={false} title="새로 시작할까요?" description={finished ? "완성한 사진이 이 기기에서 지워져요." : `임시 보관한 사진 ${session.shots.length}장이 이 기기에서 지워져요.`} confirmLabel="사진 지우고 시작" destructive onClose={() => setConfirmRestart(false)} onConfirm={() => { reset(); setConfirmRestart(false); setResumeAvailable(false); }} />}
+        {confirmRestart && <ConfirmDialog running={false} title="새로 시작할까요?" description={`임시 보관한 사진 ${session.shots.length}장이 이 기기에서 지워져요.`} confirmLabel="사진 지우고 시작" destructive onClose={() => setConfirmRestart(false)} onConfirm={() => { reset(); setConfirmRestart(false); setResumeOffered(false); }} />}
       </div>
     </main>;
   }
@@ -240,10 +234,16 @@ function ShootPageContent() {
           confirmBusy={checking}
           onSelectionChange={() => setConfirmProblem(null)}
         />
+        {/*
+          찍어 둔 사진을 들고 칸 모양이 다른 프레임을 고르면 묻는다(slotRatioMatches). 찍은 사진은 찍을 때 칸 모양대로
+          잘려 남아서 다른 모양의 칸에는 넣을 수 없다 — 넣으면 얼굴이 잘린다. 다시 찍으면 찍어 둔 사진은 지워진다.
+          예전 제목 「새 비율로 다시 찍을까요?」는 무엇이 사라지는지 말하지 않아 무슨 창인지 알 수 없었다(2026-11-15
+          「새 비율로 다시 찍을까요는 뭐야 / 다시 찍으면 찍어둔 건 사라지는 거지」). 제목이 먼저 그 일을 말한다.
+        */}
         {pendingFrame ? <ConfirmDialog
-          title="새 비율로 다시 찍을까요?"
-          description="선택한 프레임은 사진 비율이 달라요. 다시 찍으면 현재 사진이 이 기기에서 지워져요. 사진을 남기려면 취소하고 같은 비율의 프레임을 골라 주세요."
-          confirmLabel="사진 지우고 다시 찍기" destructive running={false}
+          title="찍어 둔 사진을 지울까요?"
+          description={`고른 프레임은 칸 모양이 달라서 찍어 둔 사진 ${useShootSession.getState().shots.length}장을 넣을 수 없어요. 사진을 두려면 취소하고 같은 모양의 프레임을 골라 주세요.`}
+          confirmLabel="지우고 다시 찍기" destructive running={false}
           onClose={() => setPendingFrame(null)}
           onConfirm={() => { const choice = pendingFrame; setPendingFrame(null); void confirmFrame(choice, true); }}
         /> : null}
