@@ -26,7 +26,7 @@ const mockGetMyUserInfo = jest.fn();
 const mockDeleteMedia = jest.fn();
 const mockGetMediaDownloadUrl = jest.fn();
 const mockGetImageUrlByKey = jest.fn();
-const mockShareOrCopyLink = jest.fn();
+const mockSharePhoto = jest.fn();
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/history",
@@ -49,10 +49,10 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 }));
 
 // 공유 동작만 목으로 갈아 끼우고 실패 판정(isCopyFailedError)은 진짜를 쓴다 — 판정까지
-// 목으로 덮으면 이 파일이 자기 목만 확인하게 된다.
+// 목으로 덮으면 이 파일이 자기 목만 확인하게 된다. 파일·링크 갈래는 lib/share.test.ts 가 본다.
 jest.mock("@/lib/share", () => ({
   ...jest.requireActual("@/lib/share"),
-  shareOrCopyLink: (...args: unknown[]) => mockShareOrCopyLink(...args),
+  sharePhoto: (...args: unknown[]) => mockSharePhoto(...args),
 }));
 
 // 화면 껍데기는 이 테스트가 보는 것과 무관하고, 각자 라우팅·세션을 따로 건드린다.
@@ -185,7 +185,11 @@ beforeEach(() => {
   mockGetMediaDownloadUrl.mockResolvedValue(
     "https://cdn.example.com/media/7.png?download=1",
   );
-  mockShareOrCopyLink.mockResolvedValue("copied");
+  // 파일을 못 넘기는 브라우저처럼 — 보기 주소를 받아 링크를 복사한다.
+  mockSharePhoto.mockImplementation(async ({ getUrl }: { getUrl: () => Promise<string> }) => {
+    await getUrl();
+    return "copied";
+  });
   // 실패 경로는 console.error 로 원인을 남긴다. 테스트 출력까지 더럽힐 이유는 없다.
   jest.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -381,7 +385,7 @@ describe("기록 화면의 실패 알림", () => {
 */
 describe("기록 화면의 공유 실패 안내", () => {
   it("복사만 막혔으면 링크는 만들었다고 말한다", async () => {
-    mockShareOrCopyLink.mockRejectedValue(new CopyFailedError());
+    mockSharePhoto.mockRejectedValue(new CopyFailedError());
 
     const viewer = await openViewer();
     await act(async () => {
@@ -404,10 +408,26 @@ describe("기록 화면의 공유 실패 안내", () => {
     });
 
     expect(
-      screen.getByText("공유 링크를 준비하지 못했어요."),
+      screen.getByText("사진을 공유하지 못했어요."),
     ).toBeInTheDocument();
-    // 주소를 못 받았으면 공유까지 가지도 않는다 — 복사 안내가 뜨면 그것이 거짓말이다.
-    expect(mockShareOrCopyLink).not.toHaveBeenCalled();
+    // 주소를 못 받았으면 복사했다고 말하지 않는다 — 그 안내가 뜨면 거짓말이다.
+    expect(screen.queryByText(/복사했어요/)).not.toBeInTheDocument();
+  });
+
+  /*
+    공유는 사진 파일을 넘긴다(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로」). 파일을 못 넘겨 링크로 갈 때는 보기
+    주소(inline)를 쓴다 — 내려받기 주소는 받은 사람이 열면 파일로 받아져 사진이 보이지 않는다.
+  */
+  it("링크로 갈 때는 내려받기 주소가 아니라 보기 주소를 쓴다", async () => {
+    const viewer = await openViewer();
+    await act(async () => {
+      fireEvent.click(within(viewer).getByRole("button", { name: "공유" }));
+    });
+
+    const args = mockSharePhoto.mock.calls[0][0] as { getUrl: () => Promise<string>; filename: string };
+    await expect(args.getUrl()).resolves.toBe("https://cdn.example.com/media/7.png");
+    expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
+    expect(args.filename).toMatch(/\.png$/);
   });
 });
 

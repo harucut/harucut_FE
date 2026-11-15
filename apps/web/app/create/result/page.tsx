@@ -30,11 +30,12 @@ import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
 import { getNativeSaveErrorMessage, isNativeShell, nativeNotify } from "@/lib/nativeBridge";
 import { hasServerPush } from "@/lib/pushDevices";
-import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, sharePhoto } from "@/lib/share";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { getMediaDownloadUrl } from "@/lib/userMediaApi";
+import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { Sentences } from "@/components/ui/Sentences";
@@ -379,6 +380,15 @@ export default function ShootResultPage() {
   const resultImageSrc = isResultImageBroken
     ? null
     : imageResult?.objectUrl ?? null;
+
+  // 공유할 사진. 회원 완성본만 공유한다(비회원은 공유 단추가 없다). 파일 공유가 되는 브라우저에서 미리 받아 둔다.
+  const shareFilename = imageResult
+    ? buildDownloadFilename(imageResult.displayName, imageResult.extension ?? getImageExtension(imageResult.objectUrl) ?? "jpg")
+    : "";
+  const shareFile = usePreparedPhotoFile(
+    imageResult && !imageResult.localBlob ? imageResult.objectUrl : null,
+    shareFilename,
+  );
 
   useEffect(() => {
     if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
@@ -818,11 +828,14 @@ export default function ShootResultPage() {
 
     setIsSharingImage(true);
     try {
-      const url = await getMediaDownloadUrl(imageResult.mediaId);
-      const result = await shareOrCopyLink({
+      // 사진 파일을 기기 공유 창에 넘긴다(lib/share.ts 의 sharePhoto). 파일을 못 넘기면 보기 주소를 링크로 보낸다 —
+      // 화면에 띄운 그 주소라 받은 사람이 열면 사진이 보인다. 예전의 내려받기 주소는 열면 파일로 받아졌다.
+      const result = await sharePhoto({
+        file: shareFile,
+        getUrl: async () => imageResult.objectUrl,
+        filename: shareFilename,
         title: `${imageResult.displayName} | 하루컷`,
         text: "방금 완성한 하루컷 이미지예요.",
-        url,
       });
 
       if (result === "copied") {
@@ -844,7 +857,7 @@ export default function ShootResultPage() {
         return;
       }
       showStatusNotice(
-        "이미지 링크를 준비하지 못했어요",
+        "사진을 공유하지 못했어요",
         getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
       );
     } finally {

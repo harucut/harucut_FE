@@ -197,13 +197,13 @@ jest.mock("@/lib/userMediaApi", () => ({
   getMediaDownloadUrl: (...args: unknown[]) => mockGetMediaDownloadUrl(...args),
 }));
 
-const mockShareOrCopyLink = jest.fn();
+const mockSharePhoto = jest.fn();
 
 // 공유 동작만 목으로 갈아 끼우고 실패 판정(isCopyFailedError)은 진짜를 쓴다 — 판정까지
-// 목으로 덮으면 아래 회귀 테스트가 자기 목만 확인하게 된다.
+// 목으로 덮으면 아래 회귀 테스트가 자기 목만 확인하게 된다. 파일·링크 갈래는 lib/share.test.ts 가 본다.
 jest.mock("@/lib/share", () => ({
   ...jest.requireActual("@/lib/share"),
-  shareOrCopyLink: (...args: unknown[]) => mockShareOrCopyLink(...args),
+  sharePhoto: (...args: unknown[]) => mockSharePhoto(...args),
 }));
 
 const mockNativeNotify = jest.fn();
@@ -923,8 +923,7 @@ describe("ShootResultPage", () => {
     자리에서 막힌다. 하나로 묶으면 그 사람은 기다렸다 다시 누르는 헛수고를 반복한다.
   */
   it("복사만 막힌 실패는 링크가 만들어졌다고 말한다", async () => {
-    mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/download.png");
-    mockShareOrCopyLink.mockRejectedValue(new CopyFailedError());
+    mockSharePhoto.mockRejectedValue(new CopyFailedError());
 
     render(<ShootResultPage />);
     await waitFor(() => {
@@ -943,8 +942,8 @@ describe("ShootResultPage", () => {
     );
   });
 
-  it("링크 주소를 못 받은 실패는 준비 실패로 말한다", async () => {
-    mockGetMediaDownloadUrl.mockRejectedValue(new Error("presign failed"));
+  it("공유가 실패하면 사진을 공유하지 못했다고 말한다 — 네이티브 원문은 띄우지 않는다", async () => {
+    mockSharePhoto.mockRejectedValue(new Error("Failed to share the file: activity not found"));
 
     render(<ShootResultPage />);
     await waitFor(() => {
@@ -955,14 +954,43 @@ describe("ShootResultPage", () => {
 
     await waitFor(() => {
       expect(useGuestTrialStore.getState().notice?.title).toBe(
-        "이미지 링크를 준비하지 못했어요",
+        "사진을 공유하지 못했어요",
       );
     });
     expect(useGuestTrialStore.getState().notice?.message).toBe(
       "잠시 후 다시 시도해 주세요.",
     );
-    // 주소를 못 받았으면 공유까지 가지도 않는다 — 복사 안내가 뜨면 그것이 거짓말이다.
-    expect(mockShareOrCopyLink).not.toHaveBeenCalled();
+  });
+
+  /*
+    공유는 사진 파일을 넘긴다(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로 보낼 수 있는, 스토리에 올릴 수도」).
+    파일을 못 넘겨 링크로 갈 때는 화면에 띄운 보기 주소를 쓴다 — 예전의 내려받기 주소는 받은 사람이 열면 파일로 받아져
+    사진이 보이지 않았다(「받은 사람은 사진만 볼 수 있게」).
+  */
+  it("공유는 사진 파일로, 링크로 갈 때는 내려받기 주소가 아니라 보기 주소로 간다", async () => {
+    mockSharePhoto.mockResolvedValue("shared");
+
+    render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "공유" }));
+
+    await waitFor(() => expect(mockSharePhoto).toHaveBeenCalledTimes(1));
+    const args = mockSharePhoto.mock.calls[0][0] as {
+      file: File | null;
+      getUrl: () => Promise<string>;
+      filename: string;
+      title: string;
+    };
+    // jsdom 에는 파일 공유가 없어 받아 둔 파일이 없다(hooks/usePreparedPhotoFile.ts).
+    expect(args.file).toBeNull();
+    expect(args.filename).toMatch(/\.(jpg|png)$/);
+    await expect(args.getUrl()).resolves.toBe("https://example.com/image");
+    expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
+    // 공유 창이 열렸으면 따로 알리지 않는다.
+    expect(useGuestTrialStore.getState().notice).toBeNull();
   });
 
   /*

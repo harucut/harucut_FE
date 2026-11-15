@@ -52,6 +52,7 @@
 | 2 | `camera-permission` | `nativeEnsureCameraPermission` 의 `CAMERA_PERMISSION_SHELL_VERSION` |
 | 3 | `iap-products` · `iap-purchase` · `iap-restore` · `iap-finish`(앱 구독, P4-B) | `supportsStorePurchase` 의 `STORE_PURCHASE_SHELL_VERSION`(`packages/shared/src/store-purchase.ts`). 모르는 셸이면 업데이트를 안내한다 — 웹 결제로 우회하지 않는다 |
 | 4 | `push-token`(서버 푸시 기기 등록) | `nativePushToken` 의 `PUSH_TOKEN_SHELL_VERSION`. 알림 권한이 있을 때만 토큰을 준다 — 권한은 묻지 않는다 |
+| 5 | `share-image`(사진 파일 공유, `expo-sharing`) | `nativeShareImage` 의 `SHARE_IMAGE_SHELL_VERSION`. 모르는 셸이면 예전처럼 링크를 `share` 로 넘긴다(`lib/share.ts` 의 `sharePhoto`). 답은 공유 창이 닫혀야 와서 10분까지 기다린다 |
 
 답을 기다리지 않는 메시지(`haptic`·`theme`)는 옛 셸이 흘려도 잃을 것이 없어 판 수를 보지 않는다.
 
@@ -60,7 +61,7 @@
 | 기능 | 왜 웹이 못 하나 |
 |---|---|
 | 사진첩 저장 | 웹 표준에 사진첩 쓰기 API 가 없다. WebView 에서는 `<a download>` 도 blob 도 안 먹는다 |
-| 공유 시트 | 안드로이드 WebView 에 `navigator.share` 가 없다 |
+| 공유 시트 | 안드로이드 WebView 에 `navigator.share` 가 없다. **사진은 링크가 아니라 파일로 넘긴다**(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로 보낼 수 있는, 스토리에 올릴 수도」 · 「하단에서 스륵 올라오는 일반적인 거」) — 셸이 보기 주소에서 캐시로 받아 `expo-sharing` 으로 기기 공유 창에 넘긴다(`shareRemoteImage`). RN `Share` 는 안드로이드에서 글자만 넘겨 쓸 수 없다. 받은 파일은 받는 앱이 다 읽도록 바로 지우지 않고, 다음 공유 때 한 시간 지난 것을 걷는다. **새 앱 빌드 필요 · 실기기 미확인** |
 | 햅틱 | `navigator.vibrate` 가 iOS 에서 동작하지 않는다 |
 | **알림** | WebView 안에는 Notification API 가 없다. iOS WKWebView 는 미지원, 안드로이드는 권한 UI 가 없어 조용히 거절된다 |
 | **상태바 색** | 웹은 상태바를 못 만진다. 웹이 자기 테마를 알려 주면 셸이 맞춘다 |

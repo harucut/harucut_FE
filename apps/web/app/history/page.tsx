@@ -26,7 +26,7 @@ import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
-import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
+import { isCopyFailedError, sharePhoto } from "@/lib/share";
 import {
   getUserMediaPreviewUrl,
   getUserMediaTitle,
@@ -39,6 +39,7 @@ import {
 } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
 import { SegmentButton } from "@/components/ui/SegmentButton";
+import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
 import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type ViewMode = "grid" | "calendar";
@@ -327,6 +328,13 @@ export default function HistoryPage() {
     photoId === null ? -1 : items.findIndex((item) => item.mediaId === photoId);
   const viewing = photoIndex >= 0;
 
+  // 보고 있는 사진을 공유할 파일로 미리 받아 둔다(hooks/usePreparedPhotoFile.ts). 옆 사진으로 넘기면 그 사진을 받는다.
+  const viewingItem = viewing ? items[photoIndex] : null;
+  const viewingFilename = viewingItem
+    ? buildDownloadFilename(getUserMediaTitle(viewingItem), getMediaExtension(viewingItem))
+    : "";
+  const viewingFile = usePreparedPhotoFile(viewingItem?.viewUrl?.trim() || null, viewingFilename);
+
   const openPhoto = useCallback((item: UserMedia) => {
     // 목록에서 남은 지난 결과를 사진 위로 끌고 가지 않는다.
     setFeedback(null);
@@ -395,15 +403,17 @@ export default function HistoryPage() {
     setSharingId(item.mediaId);
 
     try {
-      // 다운로드 URL은 Content-Disposition: attachment가 박혀 있어 링크를 받은 사람에게
-      // 이미지가 바로 보이지 않는다. 공유에는 인라인 조회 URL을 쓴다(둘 다 24시간 유효).
-      const url =
-        (await getImageUrlByKey(item.s3Key)) ??
-        (await getMediaDownloadUrl(item.mediaId));
-      const result = await shareOrCopyLink({
+      // 사진 파일을 기기 공유 창에 넘긴다(lib/share.ts 의 sharePhoto). 주소는 앱이 내려받을 때와 파일을 못 넘겨 링크로 갈
+      // 때만 받는다. 다운로드 URL은 Content-Disposition: attachment가 박혀 있어 링크를 받은 사람에게
+      // 이미지가 바로 보이지 않는다. 링크에는 인라인 조회 URL을 쓴다(둘 다 24시간 유효).
+      const result = await sharePhoto({
+        file: item.mediaId === viewingItem?.mediaId ? viewingFile : null,
+        getUrl: async () =>
+          (await getImageUrlByKey(item.s3Key)) ??
+          (await getMediaDownloadUrl(item.mediaId)),
+        filename: buildDownloadFilename(getUserMediaTitle(item), getMediaExtension(item)),
         title: `${getUserMediaTitle(item)} | 하루컷`,
         text: "사진 공유 링크",
-        url,
       });
 
       if (result === "copied") {
@@ -425,7 +435,7 @@ export default function HistoryPage() {
           ? "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."
           : getUserFacingApiErrorMessage(
               shareError,
-              "공유 링크를 준비하지 못했어요.",
+              "사진을 공유하지 못했어요.",
             ),
       });
     } finally {

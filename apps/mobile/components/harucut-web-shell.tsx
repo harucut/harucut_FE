@@ -38,6 +38,7 @@ import {
   saveRemoteImage,
   setScreenOrientation,
   shareLink,
+  shareRemoteImage,
   showLocalNotification,
   transferFilename,
   type BridgeMessage,
@@ -280,6 +281,9 @@ export function HarucutWebShell() {
             message.id,
             await shareLink({ title: message.title, message: message.message, url: message.url }),
           );
+          return;
+        case 'share-image':
+          reply(askerUrl, message.id, await shareRemoteImage(message.url, message.filename));
           return;
         case 'notify-permission':
           reply(askerUrl, message.id, await ensureNotificationPermission());
