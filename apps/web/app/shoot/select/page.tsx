@@ -22,9 +22,11 @@ export default function ShootSelectPage() {
     selectedIndexes,
     borderColor,
     outputFilter,
+    photoName,
     toggleSelect,
     setBorderColor,
     setOutputFilter,
+    setPhotoName,
     source,
     resetShots,
   } = useShootSession();
@@ -148,6 +150,8 @@ export default function ShootSelectPage() {
               hasCustomFrame={hasCustomFrame}
               samplePhoto={samplePhoto}
               filtersLocked={filtersLocked}
+              photoName={photoName}
+              onPhotoNameChange={setPhotoName}
             />
           )}
         />

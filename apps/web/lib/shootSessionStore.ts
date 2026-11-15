@@ -163,6 +163,11 @@ export type ShootSessionState = {
   selectedIndexes: SelectionSlot[];
   borderColor: string;
   outputFilter: FourcutFilterId;
+  /**
+   * 꾸미기에서 붙인 사진 이름(2026-11-15 「사진 이름도 마지막에 바꾸는 게 아니라 꾸미기에서 넣으면 되지 않을까?」).
+   * 비워 두면 날짜·시간 이름(buildDefaultDisplayName)이 붙는다. 완성 뒤 이름 바꾸기는 기록에서만 한다.
+   */
+  photoName: string;
   imageResult: GeneratedFourcutAsset | null;
   composeIdempotency: ComposeIdempotency | null;
   /**
@@ -186,6 +191,7 @@ export type ShootSessionState = {
   setRemoteFrameId: (id: number | null) => void;
   setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
+  setPhotoName: (name: string) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
   ensureComposeIdempotencyKey: (
     generationKey: string,
@@ -225,6 +231,7 @@ const initialState: Pick<
   | "selectedIndexes"
   | "borderColor"
   | "outputFilter"
+  | "photoName"
   | "imageResult"
   | "composeIdempotency"
   | "completed"
@@ -237,6 +244,7 @@ const initialState: Pick<
   selectedIndexes: createEmptySlots(),
   borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
   outputFilter: DEFAULT_FOURCUT_FILTER,
+  photoName: "",
   imageResult: null,
   composeIdempotency: null,
   completed: null,
@@ -268,6 +276,9 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
       outputFilter,
       imageResult: null,
     }),
+
+  // 이름은 그림을 바꾸지 않는다 — 완성본을 비우지 않는다.
+  setPhotoName: (photoName) => set({ photoName }),
 
   // 완성본이 들어오는 순간 이 촬영은 끝난다(completed 주석). 비울 때는 표시를 건드리지 않는다 — 끝난 촬영을 다시 열지 않는다.
   setImageResult: (imageResult) =>

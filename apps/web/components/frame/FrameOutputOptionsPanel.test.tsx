@@ -74,4 +74,20 @@ describe("FrameOutputOptionsPanel", () => {
     // 테두리 색은 그대로 고른다.
     expect(screen.getByRole("group", { name: "테두리 색" })).toBeInTheDocument();
   });
+
+  // 이름은 꾸미기에서 붙인다(2026-11-15). 완성 뒤 바꾸는 것은 기록에서만 한다.
+  it("사진 이름을 붙이면 넘기고, 비워 두면 날짜와 시간으로 붙는다고 알려 준다", () => {
+    const onPhotoNameChange = jest.fn();
+    renderPanel({ photoName: "", onPhotoNameChange });
+
+    const field = screen.getByRole("textbox", { name: "사진 이름" });
+    expect(field).toHaveAttribute("placeholder", "비워 두면 날짜와 시간으로 붙어요");
+    fireEvent.change(field, { target: { value: "바다에서" } });
+    expect(onPhotoNameChange).toHaveBeenCalledWith("바다에서");
+  });
+
+  it("이름을 받을 곳이 없으면 이름 칸도 없다", () => {
+    renderPanel();
+    expect(screen.queryByRole("textbox", { name: "사진 이름" })).toBeNull();
+  });
 });

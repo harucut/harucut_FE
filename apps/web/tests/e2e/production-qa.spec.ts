@@ -20,17 +20,15 @@ test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운�
   await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
   for (const n of [4, 2, 3, 1]) await page.getByRole("button", { name: `${n}번 사진 선택`, exact: true }).click();
+  // 이름은 꾸미기에서 붙인다(2026-11-15). 완성 화면에는 이름 바꾸기가 없고, 바꾸는 것은 기록에서만 한다.
+  await page.getByRole("button", { name: "꾸미기", exact: true }).click();
+  await page.getByLabel("사진 이름", { exact: true }).fill("POC-기기저장");
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
   const downloadLink = page.getByRole("link", { name: "사진 저장", exact: true });
   await expect(downloadLink).toBeVisible();
   await expect(page.getByText("이 사진은 기록에 보관되지 않아요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "공유", exact: true })).toHaveCount(0);
-  // 이름 바꾸기는 ⋯ 안의 창이다(2026-11-15 완성 화면 시안 A — 기록의 사진 보기와 같다).
-  await page.getByRole("button", { name: "더보기", exact: true }).click();
-  await page.getByRole("button", { name: "이름 바꾸기", exact: true }).click();
-  await page.getByLabel("사진 이름", { exact: true }).fill("POC-기기저장");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "더보기", exact: true })).toHaveCount(0);
   const completed = page.waitForEvent("download");
   await downloadLink.click();
   const download = await completed;

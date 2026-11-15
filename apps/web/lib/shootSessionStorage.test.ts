@@ -133,3 +133,17 @@ test("완성 표시는 새로고침 뒤에도 남고, 표시가 생기기 전 �
   expect(restored?.shots).toEqual(shots);
   expect(restored?.completed).toBeNull();
 });
+
+// 꾸미기에서 붙인 사진 이름(2026-11-15)도 새로고침 뒤 그대로다. 이름이 없던 예전 보관물은 빈 이름으로 읽는다.
+test("사진 이름을 보관하고, 이름이 없던 예전 보관물은 빈 이름으로 읽는다", async () => {
+  await writeShootDraft({ ...draft(), photoName: "바다에서" }, now);
+  expect((await readShootDraft(now))?.photoName).toBe("바다에서");
+
+  const meta = mockData.get("meta") as Record<string, unknown>;
+  const { photoName: _dropped, ...older } = meta;
+  void _dropped;
+  mockData.set("meta", older);
+  const restored = await readShootDraft(now);
+  expect(restored?.shots).toEqual(shots);
+  expect(restored?.photoName).toBe("");
+});

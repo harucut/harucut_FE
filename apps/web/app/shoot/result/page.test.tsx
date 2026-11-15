@@ -31,6 +31,7 @@ type MockShootSessionState = {
   selectedIndexes: Array<number | null>;
   borderColor: string;
   outputFilter: "NONE";
+  photoName: string;
   imageResult: GeneratedFourcutAsset | null;
   // 멱등키는 컴포넌트가 아니라 **세션**이 들고 있다(lib/shootSessionStore.ts).
   // 목도 그렇게 맞춰야 "페이지를 다시 열면 새 키가 잡힌다"는 결함을 관측할 수 있다.
@@ -55,6 +56,7 @@ const mockUseShootSession = create<MockShootSessionState>((set, get) => ({
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
   borderColor: "#111827",
   outputFilter: "NONE",
+  photoName: "",
   imageResult: null,
   composeIdempotency: null,
   setImageResult: (imageResult) => set({ imageResult }),
@@ -95,7 +97,8 @@ jest.mock("@/components/layout/PageHeader", () => ({
 }));
 
 jest.mock("@/components/frame/FramePreview", () => ({
-  FramePreview: () => <div data-testid="frame-preview" />,
+  // 만드는 동안 흐림(hc-making-blur)은 className 으로 온다 — 그대로 붙여 둔다.
+  FramePreview: ({ className }: { className?: string }) => <div data-testid="frame-preview" className={className} />,
 }));
 
 /*
@@ -260,6 +263,7 @@ describe("ShootResultPage", () => {
       selectedIndexes: [0, 1, 2, 3],
       borderColor: "#111827",
       outputFilter: "NONE",
+      photoName: "",
       imageResult: null,
       composeIdempotency: null,
     });
@@ -346,44 +350,63 @@ describe("ShootResultPage", () => {
     expect(screen.queryByRole("button", { name: "더보기" })).toBeNull();
   });
 
-  // 「완성되어야 넘어가도록 … 중간에 로딩 페이지든 생성을 안내해주는 게」(2026-11-15). 만드는 동안은 단추 없이 안내 한 줄이다.
-  it("만드는 동안에는 단추 없이 「네 컷을 만들고 있어요」만 보인다", async () => {
+  /*
+    만드는 동안(2026-11-15 「네 컷을 만들고 있어요보다는 사진을 살짝 흐리게 하고 그 위에 로딩이 돌아가면서 로딩바를
+    채워주든」). 고른 네 장이 흐리게 깔리고 가운데 고리가 차오른다. 단추도 보이는 글도 없다 — 읽기 프로그램에만 말한다.
+  */
+  it("만드는 동안에는 흐린 미리보기 위에 고리만 있고 단추·글이 없다", async () => {
     mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
-    render(<ShootResultPage />);
+    const { container } = render(<ShootResultPage />);
 
-    expect(screen.getByText("네 컷을 만들고 있어요", { selector: "p" })).toBeInTheDocument();
+    expect(container.querySelector(".hc-making-blur")).not.toBeNull();
+    expect(container.querySelector(".hc-making-ring")).not.toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("네 컷을 만들고 있어요.");
+    expect(screen.getByRole("status")).toHaveClass("sr-only");
+    expect(screen.queryByText("네 컷을 만들고 있어요", { selector: "p:not(.sr-only)" })).toBeNull();
     expect(screen.queryByRole("button", { name: /사진 저장|공유|더보기|다시 시도/ })).toBeNull();
     expect(screen.queryByRole("link", { name: "사진 저장" })).toBeNull();
   });
 
-  it("이름 바꾸기는 ⋯ 안에서 기록과 같은 창으로 고친다", async () => {
-    jest.mocked(updateMediaDisplayName).mockResolvedValue({ displayName: "바다에서" } as never);
+  // 이름은 꾸미기에서 붙이고, 완성 뒤 바꾸는 것은 기록에서만 한다(2026-11-15). 이 화면에는 ⋯·이름 바꾸기가 없다.
+  it("완성 화면에는 이름 바꾸기가 없다", async () => {
     render(<ShootResultPage />);
     await screen.findByRole("button", { name: "사진 저장" });
 
-    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
-    fireEvent.click(screen.getByRole("button", { name: "이름 바꾸기" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "사진 이름" }), { target: { value: "바다에서" } });
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
-
-    await waitFor(() => expect(updateMediaDisplayName).toHaveBeenCalledWith(expect.anything(), "바다에서"));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(mockUseShootSession.getState().imageResult?.displayName).toBe("바다에서");
+    expect(screen.getByRole("button", { name: "공유" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "더보기" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "이름 바꾸기" })).toBeNull();
+    expect(updateMediaDisplayName).not.toHaveBeenCalled();
   });
 
-  it("이름 저장에 실패하면 창을 닫지 않고 그 창에 말한다", async () => {
-    jest.mocked(updateMediaDisplayName).mockRejectedValue(new Error("down"));
-    jest.spyOn(console, "error").mockImplementation(() => {});
+  it("꾸미기에서 붙인 이름으로 서버 기록을 남긴다", async () => {
+    mockUseShootSession.setState({ photoName: "  바다에서 " });
     render(<ShootResultPage />);
     await screen.findByRole("button", { name: "사진 저장" });
 
-    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
-    fireEvent.click(screen.getByRole("button", { name: "이름 바꾸기" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "사진 이름" }), { target: { value: "바다에서" } });
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    expect(mockSaveFourcutToServer).toHaveBeenCalledWith(
+      expect.objectContaining({ displayName: "바다에서", initialDisplayName: "바다에서" }),
+    );
+  });
 
-    expect(await screen.findByText(sentenceText("이름을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."))).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  // 비워 두면 날짜·시간 이름이고, 서버가 붙인 이름을 바꾸지 않는다.
+  it("이름을 비워 두면 서버 이름을 바꾸지 않는다", async () => {
+    render(<ShootResultPage />);
+    await screen.findByRole("button", { name: "사진 저장" });
+
+    expect(mockSaveFourcutToServer).toHaveBeenCalledWith(
+      expect.objectContaining({ displayName: expect.stringMatching(/^harucut_\d{8}_\d{6}$/), initialDisplayName: undefined }),
+    );
+  });
+
+  // 기기에서 만든 사진(비회원 등)은 그 이름이 저장 파일 이름이 된다.
+  it("기기에서 만든 사진은 꾸미기 이름을 파일 이름으로 쓴다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest" });
+    mockUseShootSession.setState({ photoName: "우리 첫 네컷" });
+    mockComposeFramePng.mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" }));
+    render(<ShootResultPage />);
+
+    const link = await screen.findByRole("link", { name: "사진 저장" });
+    expect(link).toHaveAttribute("download", "우리 첫 네컷.jpg");
   });
 
   it("권한 오류를 로컬 저장 성공으로 바꾸지 않는다", async () => {
@@ -680,7 +703,7 @@ describe("ShootResultPage", () => {
     mockComposeFramePng.mockReturnValue(new Promise(() => {}));
     render(<ShootResultPage />);
 
-    expect(await screen.findByText("네 컷을 만들고 있어요", { selector: "p" })).toBeInTheDocument();
+    expect(await screen.findByText("네 컷을 만들고 있어요.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "로그인하고 보관하기" })).toBeNull();
   });
 
@@ -721,7 +744,7 @@ describe("ShootResultPage", () => {
     mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
 
     render(<ShootResultPage />);
-    await screen.findByText("네 컷을 만들고 있어요", { selector: "p" });
+    await screen.findByText("네 컷을 만들고 있어요.");
 
     const pending = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(pending);
@@ -1097,7 +1120,7 @@ describe("ShootResultPage", () => {
     await waitFor(() => {
       expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText("네 컷을 만들고 있어요", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText("네 컷을 만들고 있어요.")).toBeInTheDocument();
 
     // 첫 합성이 아직 돌고 있는 동안 테마가 도착한다.
     act(() => {
@@ -1119,7 +1142,7 @@ describe("ShootResultPage", () => {
       "src",
       "https://example.com/a.png",
     );
-    expect(screen.queryByText("네 컷을 만들고 있어요", { selector: "p" })).not.toBeInTheDocument();
+    expect(screen.queryByText("네 컷을 만들고 있어요.")).not.toBeInTheDocument();
     // 이어받히며 끊긴 첫 실행도 완료를 기다리고 있었다. 그 실행이 `cancelled` 를 "떠났다"로
     // 읽고 알리면, 결과를 보고 있는 사람에게 "완성됐어요" 가 뜬다.
     expect(mockNativeNotify).not.toHaveBeenCalled();

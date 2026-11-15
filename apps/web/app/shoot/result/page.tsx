@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Ellipsis, PencilLine, Share2 } from "lucide-react";
+import { Download, Share2 } from "lucide-react";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -17,7 +16,6 @@ import {
   type FrameSource,
 } from "@/lib/canvas/composeFrame";
 import {
-  DISPLAY_NAME_MAX_LENGTH,
   buildDefaultDisplayName,
   buildDownloadFilename,
   sanitizeDisplayName,
@@ -35,7 +33,7 @@ import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { updateMediaDisplayName, getMediaDownloadUrl } from "@/lib/userMediaApi";
+import { getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { Sentences } from "@/components/ui/Sentences";
@@ -191,6 +189,7 @@ export default function ShootResultPage() {
     selectedIndexes,
     borderColor,
     outputFilter,
+    photoName,
     imageResult,
     setImageResult,
     ensureComposeIdempotencyKey,
@@ -218,14 +217,8 @@ export default function ShootResultPage() {
   // 실패했을 때 imageResult 는 이미 null 이라, 이 값을 안 바꾸면 아래 effect 의
   // 의존성이 하나도 안 변해 effect 가 다시 돌지 않는다 — 버튼을 눌러도 "대기 중"에서 멈췄다.
   const [retryNonce, setRetryNonce] = useState(0);
-  // 이름 바꾸기는 기록과 같은 창(SingleFieldDialog)이고 ⋯ 안에서 연다(2026-11-15 시안 A).
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renameError, setRenameError] = useState<string | null>(null);
-  const [isSavingImageName, setIsSavingImageName] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuBoxRef = useRef<HTMLDivElement | null>(null);
-  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
-  const menuId = useId();
+  // 이름은 꾸미기에서 붙이고, 완성 뒤 바꾸는 것은 기록에서만 한다(2026-11-15 「추후 이름 변경 자체는 기록 페이지에서만」).
+  // 그래서 이 화면에는 ⋯ 메뉴도 이름 바꾸기 창도 없다.
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
   const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
@@ -247,24 +240,6 @@ export default function ShootResultPage() {
     run: Promise<GeneratedFourcutAsset>;
   } | null>(null);
 
-  // ⋯ 메뉴는 밖을 누르거나 Escape 로 닫는다(기록의 사진 보기와 같다).
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!menuBoxRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setMenuOpen(false);
-      moreButtonRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [menuOpen]);
 
   const showStatusNotice = (title: string, message: string) => {
     setNotice({
@@ -449,6 +424,10 @@ export default function ShootResultPage() {
     */
     const imageGenerationKey = `${runKey}#${composeKey}:image`;
 
+    // 꾸미기에서 붙인 이름(2026-11-15). 비워 두면 날짜·시간 이름이다. 완성 뒤 이름 바꾸기는 기록에서만 한다.
+    const chosenName = photoName.trim();
+    const outputName = chosenName ? sanitizeDisplayName(chosenName, defaultDisplayName) : defaultDisplayName;
+
     // 기본 프레임이 운영에 없어도 원본을 버리지 않고 기기에 저장할 수 있게 한다.
     // localBlob이 있으면 계정 기록이 아니라는 사실을 표시하고 서버 이름/공유 API를 부르지 않는다.
     async function prepareLocalOutput() {
@@ -486,7 +465,7 @@ export default function ShootResultPage() {
         mediaId: -1,
         objectUrl,
         downloadUrl,
-        displayName: defaultDisplayName,
+        displayName: outputName,
         localBlob: blob,
       });
       setImageState("done");
@@ -501,7 +480,7 @@ export default function ShootResultPage() {
       setIsImageErrorRetryable(true);
       setImageState("processing");
 
-      const displayName = defaultDisplayName;
+      const displayName = outputName;
 
       try {
         if (guestMode) {
@@ -558,6 +537,9 @@ export default function ShootResultPage() {
                 frameId: frameId as FrameId,
                 remoteFrameId,
                 displayName,
+                // 서버는 날짜·시간 이름으로 만든다. 꾸미기에서 이름을 붙였으면 다 된 뒤 그 이름으로 바꾼다
+                // (이미 바꾼 기록이면 그대로 둔다 — lib/fourcutProcessing.ts).
+                initialDisplayName: chosenName ? displayName : undefined,
                 idempotencyKey,
                 backgroundColor: effectiveBorderColor,
               });
@@ -666,6 +648,7 @@ export default function ShootResultPage() {
     imageSources,
     layout,
     outputFilter,
+    photoName,
     selectedCount,
     setImageResult,
     themeData,
@@ -689,44 +672,6 @@ export default function ShootResultPage() {
 
   const isPreparing = imageState === "processing" || imageState === "idle";
 
-  const syncDisplayName = async (
-    asset: NonNullable<typeof imageResult>,
-    nextName: string,
-    updateAsset: (displayName: string) => void,
-  ) => {
-    const sanitizedName = sanitizeDisplayName(nextName, asset.displayName);
-    const updated = await updateMediaDisplayName(asset.mediaId, sanitizedName);
-    const resolvedName = updated.displayName?.trim() || sanitizedName;
-
-    updateAsset(resolvedName);
-    return resolvedName;
-  };
-
-  // 실패해도 창을 닫지 않고 그 창에 말한다 — 기록의 이름 바꾸기와 같다(SingleFieldDialog).
-  const handleSaveImageName = async (draft: string) => {
-    if (!imageResult) return;
-
-    setIsSavingImageName(true);
-    setRenameError(null);
-    try {
-      const nextName = sanitizeDisplayName(draft, imageResult.displayName);
-      if (nextName !== imageResult.displayName) {
-        if (imageResult.localBlob) {
-          setImageResult({ ...imageResult, displayName: nextName });
-        } else {
-          await syncDisplayName(imageResult, draft, (displayName) =>
-            setImageResult({ ...imageResult, displayName }),
-          );
-        }
-      }
-      setRenameOpen(false);
-    } catch (error) {
-      console.error(error);
-      setRenameError("이름을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setIsSavingImageName(false);
-    }
-  };
 
   /**
    * 로그인 뒤 다시 만들 수 있도록 재료를 보관한다.
@@ -931,20 +876,19 @@ export default function ShootResultPage() {
   };
 
   /*
-    아래 단추 줄은 기록에서 사진을 열었을 때와 같다 — [사진 저장 · 공유 · ⋯](components/history/HistoryPhotoViewer).
-    다 되면 「사진 저장」, 실패하면 그다음 할 일(다시 시도·프레임 다시 고르기)이 주 버튼이다.
+    아래 단추 줄은 [사진 저장 · 공유]다. 다 되면 「사진 저장」, 실패하면 그다음 할 일(다시 시도·프레임 다시 고르기)이
+    주 버튼이다. 이름은 꾸미기에서 붙이고 바꾸는 것은 기록에서만 한다 — 그래서 ⋯ 메뉴가 없다(2026-11-15).
 
-    만드는 동안에는 단추가 없다(2026-11-15 「완성되어야 넘어가도록 … 중간에 로딩 페이지든 생성을 안내해주는 게」).
-    서버 합성은 원본을 올리고 다 그릴 때까지 몇 초 걸린다 — 그동안 고른 네 장을 프레임에 넣어 빛이 지나가게 하고
-    (행사 결과 화면의 ev-developing) 「네 컷을 만들고 있어요」만 둔다. 다 되면 그 자리에서 현상되듯 나타난다.
+    만드는 동안에는 단추도 글도 없다(2026-11-15 「네 컷을 만들고 있어요보다는 사진을 살짝 흐리게 하고 그 위에 로딩이
+    돌아가면서 로딩바를 채워주든」). 고른 네 장을 프레임에 넣어 흐리게 깔고, 가운데 고리가 차오른다. 서버 합성이
+    얼마나 걸릴지는 모르므로 고리는 처음엔 빠르게, 갈수록 느리게 92% 까지만 찬다(globals.css 의 hc-making-ring) —
+    다 되면 흐림이 걷히며 완성본이 나타난다(ev-develop 를 같은 흐림에서 시작한다).
   */
   const localBlob = imageResult?.localBlob ?? null;
   const primaryClass =
     "hc-button-primary flex h-13 flex-1 items-center justify-center gap-2 rounded-full text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:opacity-45";
   const roundButton =
     "hc-button-secondary grid size-13 shrink-0 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45";
-  const menuItem =
-    "flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] font-semibold transition hover:bg-(--hc-surface-muted)";
   const saveContent = (
     <>
       <Download aria-hidden className="size-4.5" strokeWidth={2.2} />
@@ -1019,7 +963,7 @@ export default function ShootResultPage() {
         </header>
         <h1 className="sr-only">{heading}</h1>
         <p role="status" aria-live="polite" className="sr-only">
-          {imageResult ? "네 컷이 완성됐어요." : ""}
+          {imageResult ? "네 컷이 완성됐어요." : isPreparing ? "네 컷을 만들고 있어요." : ""}
         </p>
 
         {/*
@@ -1049,30 +993,50 @@ export default function ShootResultPage() {
               style={{
                 aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
               }}
-              className={`${photoSizeClass} rounded-lg bg-(--hc-surface-strong) object-contain shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${waited ? "ev-develop" : ""}`}
+              // 기다린 사람에게는 만드는 동안의 흐림에서 시작해 걷힌다(아래 hc-making-blur 와 같은 값).
+              className={`${photoSizeClass} rounded-lg bg-(--hc-surface-strong) object-contain shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${waited ? "ev-develop [--develop-from:blur(6px)_saturate(0.75)_brightness(1.08)]" : ""}`}
               onError={() => setIsResultImageBroken(true)}
             />
           ) : (
-            <FramePreview
-              frameId={frameId}
-              media={previewImage}
-              borderColor={effectiveBorderColor}
-              outputFilter={outputFilter}
-              theme={themeData}
-              // 만드는 동안 빛이 지나간다. 어두운 프레임과 사진 위라 밝은 빛이어야 보인다(globals.css 의 ev-developing).
-              className={`${tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"} ${isPreparing ? "ev-developing [--developing-sheen:rgba(255,255,255,0.3)]" : ""}`}
-            />
+            <div className={`relative ${tallLayout ? "" : "w-full"}`}>
+              <FramePreview
+                frameId={frameId}
+                media={previewImage}
+                borderColor={effectiveBorderColor}
+                outputFilter={outputFilter}
+                theme={themeData}
+                // 만드는 동안 고른 네 장이 흐리게 깔린다(globals.css 의 hc-making-blur).
+                className={`${tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"} ${isPreparing ? "hc-making-blur" : ""}`}
+              />
+              {isPreparing ? (
+                <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <span className="grid size-16 place-items-center rounded-full bg-[rgba(20,20,15,0.42)] shadow-[0_8px_24px_rgba(0,0,0,0.22)]">
+                    <svg viewBox="0 0 48 48" className="size-11 -rotate-90">
+                      <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        fill="none"
+                        stroke="var(--hc-primary)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        pathLength={100}
+                        strokeDasharray="100"
+                        className="hc-making-ring"
+                      />
+                    </svg>
+                  </span>
+                </div>
+              ) : null}
+            </div>
           )}
         </section>
 
         {/* 주 버튼이 페이지 높이를 기준으로 화면 아래에 붙는다 — 사진을 보는 동안에도 저장은 엄지 아래다. */}
         <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2.5 bg-linear-to-t from-(--background) from-75% to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 lg:-mx-8 lg:px-8">
-          {/* 만드는 동안은 단추 대신 이 한 줄. 단추 줄과 같은 높이라 다 되어도 사진이 밀리지 않는다. */}
-          {isPreparing ? (
-            <p role="status" className="flex h-13 items-center justify-center text-[15px] font-semibold text-(--hc-muted)">
-              네 컷을 만들고 있어요
-            </p>
-          ) : null}
+          {/* 만드는 동안은 단추 자리를 비워 둔다. 단추 줄과 같은 높이라 다 되어도 사진이 밀리지 않는다. */}
+          {isPreparing ? <div aria-hidden className="h-13" /> : null}
           {message ? (
             <p className={`text-center text-[13px] leading-[1.6] ${message.danger ? "text-(--hc-danger)" : "text-(--hc-muted)"}`}>
               <Sentences text={message.text} />
@@ -1109,41 +1073,6 @@ export default function ShootResultPage() {
                       <Share2 aria-hidden className="size-5" />
                     </button>
                   ) : null}
-                  <div ref={menuBoxRef} className="relative">
-                    <button
-                      ref={moreButtonRef}
-                      type="button"
-                      aria-label="더보기"
-                      aria-expanded={menuOpen}
-                      aria-controls={menuOpen ? menuId : undefined}
-                      onClick={() => setMenuOpen((open) => !open)}
-                      disabled={!imageResult}
-                      className={roundButton}
-                    >
-                      <Ellipsis aria-hidden className="size-5" />
-                    </button>
-                    {menuOpen ? (
-                      <div
-                        id={menuId}
-                        className="hc-surface-card absolute bottom-full right-0 mb-2 flex w-44 flex-col rounded-2xl border p-1.5"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            // 창을 닫으면 포커스가 ⋯ 로 돌아오게, 열기 전에 거기 둔다(메뉴 줄은 곧 사라진다).
-                            moreButtonRef.current?.focus();
-                            setRenameError(null);
-                            setRenameOpen(true);
-                          }}
-                          className={menuItem}
-                        >
-                          <PencilLine aria-hidden className="size-4.5" />
-                          이름 바꾸기
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
                 </>
               ) : null}
             </div>
@@ -1153,21 +1082,6 @@ export default function ShootResultPage() {
         <canvas ref={canvasRef} className="hidden" />
       </div>
 
-      {renameOpen && imageResult ? (
-        <SingleFieldDialog
-          title="이름 바꾸기"
-          label="사진 이름"
-          initialValue={imageResult.displayName}
-          maxLength={DISPLAY_NAME_MAX_LENGTH}
-          saving={isSavingImageName}
-          error={renameError}
-          onClose={() => {
-            setRenameOpen(false);
-            setRenameError(null);
-          }}
-          onSubmit={(nextName) => void handleSaveImageName(nextName)}
-        />
-      ) : null}
     </main>
   );
 }

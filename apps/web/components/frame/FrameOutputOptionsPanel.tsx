@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+import { DISPLAY_NAME_MAX_LENGTH } from "@/lib/fourcutOutput";
 import { FOURCUT_FILTERS, type FourcutFilterId } from "@/lib/frameFilters";
 import { normalizeHexColor } from "@/lib/themeBackground";
 import { ColorSwatches, SWATCH_SELECTED_RING } from "@/components/ui/ColorSwatches";
@@ -18,6 +20,13 @@ type FrameOutputOptionsPanelProps = {
    * 「회원 전용」이 붙는다. 고른 값은 부른 쪽이 기본으로 되돌린다.
    */
   filtersLocked?: boolean;
+  /**
+   * 사진 이름(2026-11-15 「사진 이름도 마지막에 바꾸는 게 아니라 꾸미기에서 넣으면 되지 않을까?」). 완성되면 기록에
+   * 그 이름으로 남고, 기기에 저장하는 파일 이름도 된다. 비워 두면 날짜·시간으로 붙는다. 나중에 바꾸는 것은 기록에서만 한다.
+   * 주지 않으면 이름 칸이 없다.
+   */
+  photoName?: string;
+  onPhotoNameChange?: (name: string) => void;
 };
 
 /**
@@ -40,7 +49,10 @@ export function FrameOutputOptionsPanel({
   hasCustomFrame,
   samplePhoto = null,
   filtersLocked = false,
+  photoName,
+  onPhotoNameChange,
 }: FrameOutputOptionsPanelProps) {
+  const nameId = useId();
   return (
     <div className="flex flex-col gap-5">
       {hasCustomFrame ? null : (
@@ -99,6 +111,23 @@ export function FrameOutputOptionsPanel({
           })}
         </div>
       </section>
+
+      {onPhotoNameChange ? (
+        <section className="flex flex-col gap-2.5">
+          <label htmlFor={nameId} className="text-[14px] font-extrabold text-(--hc-text)">
+            사진 이름
+          </label>
+          <input
+            id={nameId}
+            value={photoName ?? ""}
+            onChange={(event) => onPhotoNameChange(event.target.value)}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            placeholder="비워 두면 날짜와 시간으로 붙어요"
+            enterKeyHint="done"
+            className="hc-input w-full rounded-xl border px-3.5 py-3 text-[14px]"
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
