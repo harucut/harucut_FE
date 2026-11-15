@@ -11,7 +11,7 @@
  * 환경이 node 인 이유: jsdom 에는 `Response` 가 없어 응답을 만들 수 없다.
  * `lib/clientApi.test.ts` 도 같은 이유로 node 다. 이 파일에는 DOM 이 필요 없다.
  */
-import { resolveMembership } from "@/lib/authSession";
+import { markUploadEntryChecked, resolveMembership, uploadEntryCheckedRecently } from "@/lib/authSession";
 
 const originalFetch = global.fetch;
 
@@ -171,6 +171,23 @@ describe("resolveMembership", () => {
       await jest.advanceTimersByTimeAsync(31_000);
 
       await expect(pending).resolves.toBe("unknown");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+// 프레임 고르기가 「사진 고르러 가기」에서 확인하고 들여보낸 것을 불러오기 화면이 믿는 시간(app/shoot/page.tsx).
+describe("사진 불러오기 진입 메모", () => {
+  it("들여보낸 뒤 1분 동안만 기억한다", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-11-15T12:00:00Z"));
+    try {
+      expect(uploadEntryCheckedRecently()).toBe(false);
+      markUploadEntryChecked();
+      expect(uploadEntryCheckedRecently()).toBe(true);
+      // 새로고침·주소 직접 입력처럼 그 단추를 거치지 않은 진입은 화면이 다시 묻는다.
+      jest.setSystemTime(new Date("2026-11-15T12:01:00Z"));
+      expect(uploadEntryCheckedRecently()).toBe(false);
     } finally {
       jest.useRealTimers();
     }

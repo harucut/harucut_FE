@@ -117,13 +117,13 @@ describe("FrameChooser 확인 버튼", () => {
 
 // 저장한 프레임의 촬영 전 확인(2026-11-15, app/shoot). 까닭은 확인 단추 바로 위 한 줄, 확인하는 동안은 단추가 잠긴다.
 describe("FrameChooser 촬영 전 확인 표시", () => {
-  it("쓸 수 없는 까닭을 단추 위에 말하고, 확인하는 동안은 「프레임 확인 중…」으로 잠근다", () => {
+  it("쓸 수 없는 까닭을 단추 위에 말하고, 확인하는 동안은 「확인 중…」으로 잠근다", () => {
     const { rerender } = renderChooser({ confirmNotice: "고른 프레임을 찾을 수 없어요. 다른 프레임을 골라 주세요." });
     expect(screen.getByRole("alert")).toHaveTextContent("고른 프레임을 찾을 수 없어요.");
 
     rerender({ confirmNotice: null, confirmBusy: true });
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("button", { name: "프레임 확인 중…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "확인 중…" })).toBeDisabled();
   });
 
   it("다른 프레임을 고르면 바깥에 알린다 — 앞서 고른 프레임의 안내를 거두게", () => {

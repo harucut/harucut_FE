@@ -6,6 +6,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 let mockQuery = "";
 let mockChosenFrameId: FrameId = "grid-4";
 let mockChosenRemoteFrameId: number | null = null;
@@ -16,15 +17,17 @@ jest.mock("@/lib/savedFrameCheck", () => ({
 }));
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
   useSearchParams: () => new URLSearchParams(mockQuery),
 }));
 
 const mockResolveMembership = jest.fn();
+const mockMarkUploadEntryChecked = jest.fn();
 
 // 회원 여부 판정만 갈아 끼운다 — 스토어와 쿠키는 실제 구현을 그대로 태운다.
 jest.mock("@/lib/authSession", () => ({
   resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
+  markUploadEntryChecked: () => mockMarkUploadEntryChecked(),
 }));
 
 jest.mock("@/hooks/useMyFrames", () => ({
@@ -151,28 +154,129 @@ describe("갤러리 불러오기로 보내는 주소", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useShootSession.setState({ shots: [], shotsFrameId: null });
+    useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
+    mockResolveMembership.mockResolvedValue("member");
   });
 
   // 옛 event 쿼리가 남아 있어도 옮기지 않는다 — 되돌아갈 때 고른 프레임만 지킨다.
-  it("프레임만 실어 보낸다", () => {
+  it("프레임만 실어 보낸다", async () => {
     mockQuery = "source=upload&event=hongdae-2026";
     mockChosenFrameId = "classic-4";
 
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4");
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
   });
 
-  // 반대쪽 못 — 촬영 경로는 예전 주소 그대로다(프록시가 막는 경로가 아니다).
-  it("촬영으로 갈 때는 주소를 건드리지 않는다", () => {
+  // 반대쪽 못 — 촬영 경로는 예전 주소 그대로다(프록시가 막는 경로가 아니다). 회원인지 묻지도 않는다.
+  it("촬영으로 갈 때는 주소를 건드리지 않는다", async () => {
     mockQuery = "";
     mockChosenFrameId = "grid-4";
 
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    expect(mockPush).toHaveBeenCalledWith("/shoot/capture");
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/capture"));
+    expect(mockResolveMembership).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  ── 사진 불러오기는 들어가기 **전에** 막는다(2026-11-15) ──
+
+  「회원인지 확인을 못 했으면 업로드 페이지에 들여보내는 게 아니라 모달로 안내를 하든 해야지? 로그인이 된 상태면
+  그러면 안 되는 거고」 「들어오기 전에 막는 게 맞는 거 같은데」. 예전에는 불러오기 화면에 먼저 들여보내고 그 안에서
+  물었다. 지금은 「사진 고르러 가기」를 누를 때 묻고, 회원이 아니면 이 화면에서 회원 전용 안내 창을 띄운다.
+*/
+describe("사진 불러오기에 들어가기 전 회원 확인", () => {
+  const RESTRICTED = "/shoot?guestNotice=restricted&frame=classic-4";
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQuery = "source=upload";
+    mockChosenFrameId = "classic-4";
+    useShootSession.getState().reset();
+    useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
+    document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  });
+  // 들고 온 사진·체험 상태를 다음 describe 로 넘기지 않는다.
+  afterEach(() => {
+    useShootSession.getState().reset();
+    useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
+    mockQuery = "";
+  });
+
+  function pressConfirm() {
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+  }
+
+  it("회원이면 들여보내고, 불러오기 화면이 다시 묻지 않게 적어 둔다", async () => {
+    mockResolveMembership.mockResolvedValue("member");
+    pressConfirm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
+    expect(mockMarkUploadEntryChecked).toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("확인하는 동안은 단추가 잠긴다", async () => {
+    let answer!: (value: string) => void;
+    mockResolveMembership.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    pressConfirm();
+
+    expect(screen.getByRole("button", { name: "확인" })).toBeDisabled();
+    await act(async () => answer("member"));
+    expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4");
+  });
+
+  // 세션이 끊긴 회원 — 들여보내지 않고 이 자리에서 안내 창. 카메라 쪽 프레임 고르기로 바꾸고 고른 프레임은 둔다.
+  it("비회원으로 확인되면 들여보내지 않고 체험으로 돌려 안내 창을 띄운다", async () => {
+    mockResolveMembership.mockResolvedValue("guest");
+    pressConfirm();
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith(RESTRICTED));
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useGuestTrialStore.getState().accessMode).toBe("guest");
+    expect(mockMarkUploadEntryChecked).not.toHaveBeenCalled();
+  });
+
+  // 서버가 못 답해도 로그인해 있으면 막지 않는다 — 「확인하지 못했어요」는 로그인한 사람에게 할 말이 아니다.
+  it("판정할 수 없어도 로그인해 있으면 들여보낸다", async () => {
+    mockResolveMembership.mockResolvedValue("unknown");
+    pressConfirm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(useGuestTrialStore.getState().accessMode).toBe("member");
+  });
+
+  it("판정할 수 없고 체험 중이면 안내 창이다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    mockResolveMembership.mockResolvedValue("unknown");
+    pressConfirm();
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith(RESTRICTED));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  // 체험 쿠키는 남았는데 세션은 멀쩡한 회원 — 쿠키만 보고 막으면 쿠키가 만료될 때까지 회원 기능을 잃는다.
+  it("낡은 체험 쿠키를 든 회원은 쿠키를 걷고 들여보낸다", async () => {
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    mockResolveMembership.mockResolvedValue("member");
+    pressConfirm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/upload?frame=classic-4"));
+    expect(useGuestTrialStore.getState().accessMode).toBe("member");
+  });
+
+  // 들고 온 갤러리 사진이 있으면 불러오기 화면을 지나지 않는다 — 묻지 않고 고르기로 간다.
+  it("들고 온 사진이 있으면 묻지 않는다", () => {
+    renderWithKeptShots("upload");
+
+    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+    expect(mockResolveMembership).not.toHaveBeenCalled();
   });
 });
 

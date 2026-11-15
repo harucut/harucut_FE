@@ -151,9 +151,9 @@ export function FramePickerConfirm({
   onConfirm: () => void;
   confirmDisabled?: boolean;
   confirmLabel?: string;
-  /** 고른 프레임을 쓸 수 없는 까닭(촬영 전 확인, app/shoot). 단추 바로 위 한 줄이다. */
+  /** 넘어갈 수 없는 까닭(촬영 전 확인 — 저장한 프레임·사진 불러오기의 회원 확인, app/shoot). 단추 바로 위 한 줄이다. */
   notice?: string | null;
-  /** 고른 프레임을 확인하는 중 — 단추가 「프레임 확인 중…」으로 잠긴다. */
+  /** 넘어가기 전에 확인하는 중 — 단추가 「확인 중…」으로 잠긴다. */
   busy?: boolean;
 }) {
   return (
@@ -169,7 +169,7 @@ export function FramePickerConfirm({
         onClick={onConfirm}
         className="hc-button-primary inline-flex h-14 w-full items-center justify-center rounded-full px-5 text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-50 md:h-12 md:w-auto md:min-w-50 md:px-6 md:text-[15px]"
       >
-        {busy ? "프레임 확인 중…" : confirmLabel}
+        {busy ? "확인 중…" : confirmLabel}
       </button>
     </div>
   );

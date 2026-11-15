@@ -65,6 +65,25 @@ export type Membership =
  */
 const STATUS_DEADLINE_MS = 30_000;
 
+/**
+ * 프레임 고르기가 사진 불러오기로 **방금 들여보냈는가**(이 탭, 1분 안).
+ *
+ * 사진 불러오기는 회원만 쓰고, 그 판정은 들어가기 **전에** 한다 — 「사진 고르러 가기」를 누를 때
+ * (app/shoot/page.tsx, 2026-11-15 「들어오기 전에 막는 게 맞는 거 같은데」). 들여보낸 쪽이 여기 적어 두면
+ * 불러오기 화면은 같은 왕복을 또 기다리며 조작을 잠그지 않는다. 새로고침·주소 직접 입력처럼 그 단추를
+ * 거치지 않은 진입만 화면이 다시 묻는다.
+ */
+let uploadEntryCheckedAt = 0;
+const UPLOAD_ENTRY_FRESH_MS = 60_000;
+
+export function markUploadEntryChecked() {
+  uploadEntryCheckedAt = Date.now();
+}
+
+export function uploadEntryCheckedRecently() {
+  return Date.now() - uploadEntryCheckedAt < UPLOAD_ENTRY_FRESH_MS;
+}
+
 export async function resolveMembership(): Promise<Membership> {
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), STATUS_DEADLINE_MS);

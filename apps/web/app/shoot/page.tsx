@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FrameChooser, type FrameChoice } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { resolveMembership } from "@/lib/authSession";
+import { markUploadEntryChecked, resolveMembership } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
@@ -79,6 +79,7 @@ function ShootPageContent() {
   // 인증 쿠키가 남아 있는 방문자만 확인한다. 이미 체험 중인 방문자는 API를 부르지 않는다.
   const checkSession = searchParams.get("checkSession") === "1";
   const enterGuestMode = useGuestTrialStore((state) => state.enterGuestMode);
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
   const hydrated = useGuestTrialStore((state) => state.hydrated);
 
   useEffect(() => {
@@ -102,17 +103,55 @@ function ShootPageContent() {
     게 맞지 않을까?」, lib/savedFrameCheck.ts). 예전에는 다 찍고 고른 뒤 합성에서야 「프레임을 불러오지 못했어요」가
     떴다. 문제가 있으면 확인 단추 바로 위에 까닭을 말하고 이 화면에 둔다. 다른 프레임을 고르면 안내는 거둔다.
     기본 레이아웃은 확인할 것이 없다(서버의 기본 프레임이 없으면 기기 합성으로 넘어간다).
+
+    사진 불러오기도 **들어가기 전에** 막는다(2026-11-15 「회원인지 확인을 못 했으면 업로드 페이지에 들여보내는 게
+    아니라 모달로 안내를 하든 해야지? 로그인이 된 상태면 그러면 안 되는 거고」 「들어오기 전에 막는 게 맞는 거
+    같은데」). 예전에는 불러오기 화면에 먼저 들여보내고 그 안에서 물었다 — 답이 늦으면 조작이 잠긴 채 기다렸고,
+    못 받으면 로그인한 사람에게도 「회원인지 확인하지 못했어요」를 띄웠다. 지금은 「사진 고르러 가기」를 누를 때
+    묻는다(mayEnterUpload).
   */
-  const [checkingFrame, setCheckingFrame] = useState(false);
-  const [frameProblem, setFrameProblem] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [confirmProblem, setConfirmProblem] = useState<string | null>(null);
+
+  /*
+    사진 불러오기에 들여보내도 되는가. 회원이면 들여보내고, 아니면 이 자리에서 회원 전용 안내 창을 띄운다.
+
+    서버가 답하지 못하면(`unknown`) **이 기기가 아는 상태를 따른다** — 로그인해 있으면 들여보내고, 체험 중이면
+    안내 창이다. 잠깐 못 물어봤다고 로그인한 사람을 막지 않는다. 쿠키는 확정된 답에만 바꾼다
+    (체험 쿠키는 남았는데 세션은 멀쩡한 회원은 걷고, 세션이 끊긴 회원은 체험으로 돌린다 — 불러오기 화면과 같은 판단).
+
+    안내 창은 프록시가 비회원을 되돌릴 때와 같은 자리에 띄운다 — 카메라로 찍는 프레임 고르기, 고른 프레임은 그대로.
+    「촬영 계속하기」를 누르면 그대로 찍으러 갈 수 있다. `guestNotice` 는 GuestTrialBridge 가 읽고 주소에서 걷는다.
+  */
+  const mayEnterUpload = async (frameId: FrameId) => {
+    const verdict = await resolveMembership();
+    const membership = verdict === "unknown" ? accessMode : verdict;
+    if (membership === "member") {
+      if (verdict === "member" && accessMode === "guest") exitGuestMode();
+      markUploadEntryChecked();
+      return true;
+    }
+    if (verdict === "guest" && accessMode !== "guest") enterGuestMode();
+    router.replace(`/shoot?${new URLSearchParams({ guestNotice: "restricted", frame: frameId }).toString()}`);
+    return false;
+  };
+
   const confirmFrame = async (choice: FrameChoice, allowReset = false) => {
-    if (choice.remoteFrameId != null && !allowReset) {
-      setCheckingFrame(true);
-      setFrameProblem(null);
-      const problem = await checkSavedFrame(choice.remoteFrameId);
-      setCheckingFrame(false);
+    // 「사진 지우고 다시 찍기」로 확인하고 온 길(allowReset)은 이미 이 확인을 지났다.
+    const savedFrameId = allowReset ? null : choice.remoteFrameId;
+    // 갤러리 사진을 들고 있으면 불러오기 화면을 지나지 않고 고르기로 간다(proceedWithFrame).
+    const entersUpload = source === "upload" && useShootSession.getState().shots.length === 0;
+    if (savedFrameId != null || entersUpload) {
+      setChecking(true);
+      setConfirmProblem(null);
+      if (entersUpload && !(await mayEnterUpload(choice.frameId))) {
+        setChecking(false);
+        return;
+      }
+      const problem = savedFrameId != null ? await checkSavedFrame(savedFrameId) : null;
+      setChecking(false);
       if (problem) {
-        setFrameProblem(problem);
+        setConfirmProblem(problem);
         return;
       }
     }
@@ -199,9 +238,9 @@ function ShootPageContent() {
           // 비회원은 프레임 조회 자체가 인증이 필요해 목록을 볼 수 없다.
           hideSavedFrames={accessMode !== "member"}
           onConfirm={(choice) => void confirmFrame(choice)}
-          confirmNotice={frameProblem}
-          confirmBusy={checkingFrame}
-          onSelectionChange={() => setFrameProblem(null)}
+          confirmNotice={confirmProblem}
+          confirmBusy={checking}
+          onSelectionChange={() => setConfirmProblem(null)}
         />
         {pendingFrame ? <ConfirmDialog
           title="새 비율로 다시 찍을까요?"

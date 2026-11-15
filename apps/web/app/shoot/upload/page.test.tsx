@@ -47,10 +47,13 @@ jest.mock("@/lib/shootSessionStore", () => ({
 }));
 
 const mockResolveMembership = jest.fn();
+/** 프레임 고르기가 「사진 고르러 가기」에서 막 확인하고 들여보냈는가(lib/authSession). 기본은 거치지 않은 진입이다. */
+let mockEntryChecked = false;
 
 // 회원 여부 판정만 갈아 끼운다 — 스토어와 쿠키는 실제 구현을 그대로 태운다.
 jest.mock("@/lib/authSession", () => ({
   resolveMembership: (...args: unknown[]) => mockResolveMembership(...args),
+  uploadEntryCheckedRecently: () => mockEntryChecked,
 }));
 
 jest.mock("@/lib/photoImport", () => ({
@@ -90,6 +93,7 @@ beforeEach(() => {
   });
   // 평범한 경우는 회원이다. 게스트 갈래는 아래 describe 가 따로 세운다.
   mockResolveMembership.mockResolvedValue("member");
+  mockEntryChecked = false;
   document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
   sessionState.frameId = "classic-4";
   sessionState.shots = [];
@@ -363,60 +367,69 @@ describe("게스트는 갤러리 불러오기에 머무르지 못한다", () => 
   });
 
   /*
-    못 물어봤으면 내보내지는 않는다 — 서버가 잠깐 흔들렸다고 회원을 쫓아내지 않는다.
-    **다만 쓰게 두지도 않는다.** 그것만 두면 이미 게스트인 사람이 그 틈에 갤러리
-    불러오기를 끝까지 쓴다(그 뒤 결과 화면은 같은 `accessMode` 를 보고 브라우저에서
-    합성한다). 내보내는 것은 확정된 게스트뿐이고, 쓰게 두는 것은 회원으로 확인된 뒤다.
+    서버가 답하지 못하면(`unknown`) **이 기기가 아는 상태를 따른다**(2026-11-15). 체험 중이면 내보낸다 —
+    그냥 열어 두면 이미 게스트인 사람이 그 틈에 갤러리 불러오기를 끝까지 쓴다(그 뒤 결과 화면은 같은
+    `accessMode` 를 보고 브라우저에서 합성한다). 쿠키는 확정된 답에만 바꾸므로 그대로다.
   */
-  it("판정할 수 없으면 내보내지도, 쓰게 두지도 않는다", async () => {
+  it("판정할 수 없으면 체험 중인 사람은 내보낸다", async () => {
     mockResolveMembership.mockResolvedValue("unknown");
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
 
     render(<ShootUploadPage />);
 
-    await act(async () => {});
-    expect(mockReplace).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted&frame=classic-4");
+    });
     expect(useGuestTrialStore.getState().accessMode).toBe("guest");
     expect(screen.getByRole("button", { name: "사진 고르기" })).toBeDisabled();
   });
 
   /*
-    회귀 — **잠긴 이유를 말하고 다시 해 볼 길을 준다.**
-
-    `unknown` 에서 잠그기만 하면, 서버가 잠깐 흔들린 것만으로 멀쩡한 회원이 화면을 새로
-    열기 전까지 아무것도 못 한다 — 안내조차 없이. effect 의 의존성도 안 바뀌므로 저절로
-    다시 묻지도 않는다.
+    회귀 — **로그인한 사람에게 「회원인지 확인하지 못했어요」를 보이지 않는다**(2026-11-15 「로그인이 된 상태면
+    그러면 안 되는 거고」). 예전에는 서버가 잠깐 못 답하면 잠근 채 그 안내와 「다시 확인」을 띄웠다.
+    로그인해 있으면 연다 — 실제로 세션이 끊겼어도 합성은 서버가 인증으로 다시 막는다.
   */
-  it("판정하지 못하면 이유를 말하고 다시 확인할 수 있다", async () => {
+  it("판정할 수 없어도 로그인해 있으면 연다", async () => {
     mockResolveMembership.mockResolvedValue("unknown");
 
     render(<ShootUploadPage />);
 
-    const retry = await screen.findByRole("button", { name: "다시 확인" });
-    expect(screen.getByText(/회원인지 확인하지 못했어요/)).toBeInTheDocument();
-
-    // 서버가 돌아왔다. 다시 확인하면 잠금이 풀린다.
-    mockResolveMembership.mockResolvedValue("member");
-    fireEvent.click(retry);
-
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "사진 고르기" }),
-      ).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: "사진 고르기" })).not.toBeDisabled();
     });
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.queryByText(/확인하지 못했어요/)).toBeNull();
     expect(screen.queryByRole("button", { name: "다시 확인" })).toBeNull();
   });
 
-  // 반대쪽 못 — 회원으로 확인된 평범한 경우에는 그 안내가 뜨지 않는다.
-  it("회원으로 확인되면 안내가 뜨지 않는다", async () => {
+  /*
+    판정은 들어오기 **전에** 한다 — 프레임 고르기의 「사진 고르러 가기」(app/shoot/page.tsx). 그 길로 막 들어왔으면
+    같은 왕복을 또 기다리며 잠그지 않는다.
+  */
+  it("프레임 고르기가 막 확인하고 들여보냈으면 묻지 않고 처음부터 연다", async () => {
+    mockEntryChecked = true;
+
     render(<ShootUploadPage />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "사진 고르기" }),
-      ).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "사진 고르기" })).not.toBeDisabled();
+    await act(async () => {});
+    expect(mockResolveMembership).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  // 반대쪽 못 — 막 들여보냈어도 그 뒤 체험 상태로 바뀌면 다시 묻고 내보낸다.
+  it("막 들여보냈어도 뒤에 게스트가 되면 되돌린다", async () => {
+    mockEntryChecked = true;
+    render(<ShootUploadPage />);
+
+    mockResolveMembership.mockResolvedValue("guest");
+    act(() => {
+      useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
     });
-    expect(screen.queryByText(/회원인지 확인하지 못했어요/)).toBeNull();
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted&frame=classic-4");
+    });
   });
 
   /*
