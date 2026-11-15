@@ -111,6 +111,19 @@ describe("사진 · 꾸미기 전환", () => {
     expect(screen.getByRole("button", { name: "2번 사진 선택" })).toBeInTheDocument();
   });
 
+  // 1·2·3·4 는 고르는 순서다. 꾸미기에서는 완성될 모습 그대로 본다(2026-11-15).
+  it("꾸미기에서는 미리보기에 고르는 순서 숫자를 달지 않는다", () => {
+    renderPanel([0, 1, null, null]);
+    expect(screen.queryAllByText("1").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    expect(screen.queryAllByText("1")).toHaveLength(0);
+    expect(screen.queryAllByText("2")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "사진" }));
+    expect(screen.queryAllByText("1").length).toBeGreaterThan(0);
+  });
+
   it("꾸미기 내용을 주지 않으면 전환 단추도 없다", () => {
     render(
       <FrameSelectPanel

@@ -123,7 +123,8 @@ export function FrameSelectPanel({
                 theme={themeData}
                 borderColor={borderColor}
                 outputFilter={outputFilter}
-                markSlots
+                // 1·2·3·4 는 고르는 순서다. 꾸미기에서는 완성될 모습 그대로 본다(2026-11-15 「꾸미기로 넘어갔을 때는 사진에 1,2,3,4 그거 안 뜨게」).
+                markSlots={!decorating}
                 className="max-h-full w-auto max-w-full"
               />
             </div>
@@ -256,7 +257,8 @@ export function FrameSelectPanel({
                 theme={themeData}
                 borderColor={borderColor}
                 outputFilter={outputFilter}
-                markSlots
+                // 1·2·3·4 는 고르는 순서다. 꾸미기에서는 완성될 모습 그대로 본다(2026-11-15 「꾸미기로 넘어갔을 때는 사진에 1,2,3,4 그거 안 뜨게」).
+                markSlots={!decorating}
                 className="w-full max-w-60"
               />
             </div>
