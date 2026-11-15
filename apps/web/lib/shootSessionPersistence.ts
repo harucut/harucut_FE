@@ -38,9 +38,9 @@ function enqueueSave(state: ShootSessionState) {
  * 비회원 결과를 로그인 뒤 기록으로 옮기는 보관은 따로다(lib/pendingGuestSave.ts).
  *
  * 회원은 남긴다 — 다만 「이어서 만들기」는 없다(같은 날 「회원도 없애도 될 거 같아. 도중에 나가면 새로 찍어야지」).
- * 만들기(/create)에 다시 들어오면 새 촬영이라 비운다. 남겨 두는 까닭은 단계 화면(찍기·고르기·완성)에서 새로고침되거나
+ * 만들기(/create)에 다시 들어오면 새 촬영이라 비운다. 남겨 두는 까닭은 사진 고르기·완성 화면에서 새로고침되거나
  * 앱이 백그라운드에서 죽은 문서를 다시 띄울 때 그 화면이 사진과 함께 그대로 돌아오게 하는 것, 그리고 서버 합성의
- * 멱등키·완성 표시를 새로고침 너머로 지키는 것이다.
+ * 멱등키·완성 표시를 새로고침 너머로 지키는 것이다. 촬영 화면은 예외다 — 찍던 사진은 이어 찍지 않고 비운다(useCaptureFlow).
  */
 export function initializeShootSession(): Promise<void> {
   if (initialization) return initialization;

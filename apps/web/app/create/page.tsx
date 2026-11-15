@@ -59,8 +59,8 @@ function ShootPageContent() {
     비회원에게는 기기에서 만든 완성 사진을 다시 보는 「완성한 사진이 있어요」도 있었다(비회원 것은 같은 날 먼저 걷었다).
     `keepShots` 로 오는 길(합성 실패 뒤 「프레임 다시 고르기」, 불러오기의 「프레임 다시 고르기」)만 찍은 사진을 두고
     프레임을 다시 고른다. 끝난 촬영은 `keepShots` 로 와도 사진을 들고 가지 않는다 — 같은 사진으로 다시 만드는 길이 된다.
-    회원의 임시 보관(lib/shootSessionPersistence.ts)은 남는다 — 단계 화면에서 새로고침되거나 앱이 문서를 다시 띄울 때
-    그 화면이 그대로 돌아오게 하는 몫이다. 여기 다시 오면 그것도 비운다.
+    회원의 임시 보관(lib/shootSessionPersistence.ts)은 남는다 — 사진 고르기·완성 화면에서 새로고침되거나 앱이 문서를
+    다시 띄울 때 그 화면이 그대로 돌아오게 하는 몫이다. 여기 다시 오면 그것도 비운다.
   */
   useEffect(() => {
     if (keepShots && !useShootSession.getState().completed) resetFrameSelection();

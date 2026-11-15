@@ -56,7 +56,7 @@ export function useCaptureFlow() {
   });
   const [cameraFacingMode, setCameraFacingMode] =
     useState<CameraFacingMode>("user");
-  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩이 사라진다).
+  // 타이머 간격은 "촬영 시작 전에만" 고를 수 있다(촬영 중에는 칩을 숨긴다 — 2026-11-15 「찍는 와중에는 시간 고르는 거 안 보이게」).
   const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(3);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -140,6 +140,19 @@ export function useCaptureFlow() {
   useEffect(() => {
     if (!shooting.isShooting && shots.length >= MAX_SHOTS) router.replace("/create/select");
   }, [shooting.isShooting, shots.length, router]);
+
+  /*
+    찍던 사진은 이어 찍지 않는다(2026-11-15 「찍던 사진 있음은 대체 왜 안 빠지는 거냐고 삭제하라고」 — 「도중에 나가면
+    새로 찍어야지」). 덜 찍은 채로 이 화면에 들어오면(새로고침, 앱이 백그라운드에서 죽은 문서를 다시 띄움) 그 사진을 비우고
+    0/8 부터 다시 찍는다. 예전에는 「카메라 켜기」 → 「이어서 찍기」로 남은 컷부터 이었다. 다 찍은 채로 들어오면 위 effect 가
+    고르기로 보낸다. 들어오는 순간 한 번만 본다 — 찍는 동안 늘어나는 사진을 비우면 안 된다.
+  */
+  const enteredRef = useRef(false);
+  useEffect(() => {
+    if (enteredRef.current) return;
+    enteredRef.current = true;
+    if (shots.length > 0 && shots.length < MAX_SHOTS) resetShots();
+  }, [shots.length, resetShots]);
 
   useEffect(() => {
     router.prefetch("/create/select");
@@ -480,8 +493,8 @@ export function useCaptureFlow() {
     router.replace("/create/select");
   }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, setNotice, router]);
 
-  // 전체 자동 촬영 시작
-  const startShooting = useCallback((restart = true) => {
+  // 전체 자동 촬영 시작 — 늘 처음(0/8)부터다. 이어 찍는 길은 없다(위 「찍던 사진은 이어 찍지 않는다」).
+  const startShooting = useCallback(() => {
     if (!isCameraReady) {
       setNotice({
         actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
@@ -494,9 +507,8 @@ export function useCaptureFlow() {
     // 이미 촬영 중이면 재시작 무시(시작 버튼 더블탭으로 중복 시작되는 것 방지).
     if (isShootingRef.current) return;
 
-    if (!restart && shotCount >= MAX_SHOTS) return;
-    if (restart) resetShots();
-    lastFinishedShotRef.current = restart ? -1 : shotCount - 1;
+    resetShots();
+    lastFinishedShotRef.current = -1;
     router.prefetch("/create/select");
     router.prefetch("/create/result");
     // 사용자 동작 안에서 오디오를 열어 iOS의 자동 재생 제한에 걸리지 않게 한다.
@@ -512,15 +524,19 @@ export function useCaptureFlow() {
 
     // 선택한 간격으로 카운트다운을 돌려 8장을 자동 연속 촬영.
     setShooting((s) => ({ isShooting: true, countdown: timerSeconds, cycle: s.cycle + 1 }));
-  }, [isCameraReady, resetShots, setNotice, timerSeconds, shotCount, router]);
+  }, [isCameraReady, resetShots, setNotice, timerSeconds, router]);
 
-  // 앱 전환이나 화면 잠금 중에는 새 사진을 찍지 않는다. 이미 찍은 사진은 그대로 둔다.
+  /*
+    찍는 도중에 화면을 떠나면(앱 전환·화면 잠금·카메라가 끊김) 촬영을 멈추고 찍은 사진을 비운다 — 돌아오면 0/8 부터 다시
+    찍는다(2026-11-15 「도중에 나가면 새로 찍어야지」). 예전에는 찍은 컷을 두고 남은 컷부터 「이어서 찍기」로 이었다.
+  */
   useEffect(() => {
     const pause = () => {
       isShootingRef.current = false;
       shootGenerationRef.current += 1;
       setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
       stopStream();
+      resetShots();
     };
     const onVisibility = () => { if (document.visibilityState === "hidden") pause(); };
     const track = streamRef.current?.getVideoTracks()[0];
@@ -532,7 +548,7 @@ export function useCaptureFlow() {
       window.removeEventListener("pagehide", pause);
       track?.removeEventListener("ended", pause);
     };
-  }, [isCameraReady, stopStream]);
+  }, [isCameraReady, stopStream, resetShots]);
 
   useEffect(() => {
     if (!shooting.isShooting || !navigator.wakeLock || document.visibilityState !== "visible") return;
@@ -597,7 +613,6 @@ export function useCaptureFlow() {
 
     startCamera,
     startShooting,
-    resumeShooting: () => startShooting(false),
     handleShootNow,
     switchCamera,
 

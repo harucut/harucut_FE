@@ -27,7 +27,6 @@ export default function CapturePage() {
     setTimerSeconds,
     startCamera,
     startShooting,
-    resumeShooting,
     handleShootNow,
     switchCamera,
     canFlipCamera,
@@ -105,23 +104,25 @@ export default function CapturePage() {
       테마와 무관하게 어둡다(hc-stage-dark): 밝은 면 위의 프리뷰는 액자처럼 보이고,
       셔터와 숫자가 사진보다 밝아진다.
 
-      자리는 격자 하나가 방향에 따라 바꾼다(2026-11-15 「회전에 따라 옆으로 들면 그거에 맞춰서 넓어질 수도 있어야 해」).
-        - 세로: 위에서부터 장수 · 프리뷰 · 간격 칩 · 셔터. 프리뷰는 남는 칸의 **가운데**다(「공간이 남더라도 위에 붙는
-          게 아니라 가운데에 있어야 하지 않을까?」 — 예전에는 가로로 긴 칸을 렌즈 가까이 위에 붙였다).
-        - 가로: 프리뷰가 왼쪽 전체 높이를 쓰고, 오른쪽 한 줄에 장수(위) · 셔터(가운데) · 간격 칩(아래). 폰을 옆으로
-          들면 세로 배치로는 위아래 띠(장수·칩·셔터)가 짧은 높이를 먹어 프리뷰가 작아진다. 옆 배치에서는 844×390 에서
-          세로 4컷 프리뷰가 519×366 이다(실측). 오른쪽 줄은
-          폭을 고정해 카메라를 켜 「카메라 켜기」가 셔터로 바뀌어도 프리뷰 크기가 그대로다.
+      자리는 격자 하나가 바꾼다(2026-11-15 「회전에 따라 옆으로 들면 그거에 맞춰서 넓어질 수도 있어야 해」).
+        - 세로(기본): 위에서부터 장수 · 프리뷰 · 간격 칩 · 셔터. 프리뷰는 남는 칸의 **가운데**다(「공간이 남더라도 위에
+          붙는 게 아니라 가운데에 있어야 하지 않을까?」 — 예전에는 가로로 긴 칸을 렌즈 가까이 위에 붙였다).
+          컴퓨터·노트북은 창이 가로로 길어도 늘 이 배치다(「데스크톱일 때는 항상 아래에 … 컴퓨터, 노트북일 때는 고정」).
+          넓은 화면은 폭을 max-w-2xl 까지 쓴다.
+        - 옆(touch-landscape — 터치 기기를 옆으로 든 때, globals.css): 프리뷰가 왼쪽 전체 높이를 쓰고, 오른쪽 한 줄에
+          장수(위) · 셔터(가운데) · 간격 칩(아래). 폰·태블릿은 돌리는 대로 따라간다. 폰을 옆으로 들면 세로 배치로는
+          위아래 띠(장수·칩·셔터)가 짧은 높이를 먹어 프리뷰가 작아진다. 옆 배치에서는 844×390 에서 세로 4컷 프리뷰가
+          519×366 이다(실측). 오른쪽 줄은 폭을 고정해 카메라를 켜 「카메라 켜기」가 셔터로 바뀌어도 프리뷰 크기가 그대로다.
       앱은 세로 고정이지만 이 화면에서만 기기를 돌리는 대로 돈다(useRotatableScreen — 셸에 알린다).
     */
-    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text) landscape:pl-[max(1rem,env(safe-area-inset-left))] landscape:pr-[max(1rem,env(safe-area-inset-right))]">
+    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text) touch-landscape:pl-[max(1rem,env(safe-area-inset-left))] touch-landscape:pr-[max(1rem,env(safe-area-inset-right))]">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
         preload="auto"
         className="hidden"
       />
-      <div className="mx-auto grid min-h-0 w-full max-w-md flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3 [grid-template-areas:'count'_'stage'_'chips'_'shutter'] landscape:max-w-5xl landscape:grid-cols-[minmax(0,1fr)_10rem] landscape:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] landscape:gap-x-4 landscape:gap-y-0 landscape:[grid-template-areas:'stage_count'_'stage_.'_'stage_shutter'_'stage_.'_'stage_chips']">
+      <div className="mx-auto grid min-h-0 w-full max-w-md flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3 [grid-template-areas:'count'_'stage'_'chips'_'shutter'] md:max-w-2xl touch-landscape:max-w-5xl touch-landscape:grid-cols-[minmax(0,1fr)_10rem] touch-landscape:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] touch-landscape:gap-x-4 touch-landscape:gap-y-0 touch-landscape:[grid-template-areas:'stage_count'_'stage_.'_'stage_shutter'_'stage_.'_'stage_chips']">
         {/*
           제목과 뒤로가기는 두지 않는다(2026-11-15). 찍기 시작하면 다 찍을 때까지 이 화면이고, 찍기 전에 프레임을
           바꾸려면 기기·브라우저의 뒤로가기로 돌아간다 — 고른 프레임은 /create 이 주소에 적어 두어 그대로 남는다.
@@ -236,11 +237,14 @@ export default function CapturePage() {
         </div>
 
         {/*
-          간격 칩(3·5·8초)은 찍는 동안에도 그대로 있다. 숫자가 프리뷰로 올라가 이 자리가 비었고, 찍는 중에 바꾸면 다음
-          컷부터 그 간격으로 센다(useCaptureFlow 가 컷마다 timerSeconds 를 다시 읽는다). 가로 배치에서는 오른쪽 줄
+          간격 칩(3·5·8초)은 찍기 전에만 보인다(2026-11-15 「찍는 와중에는 시간 고르는 거 안 보이게 하라고」). 찍는 동안은
+          자리를 그대로 둔 채 숨긴다(invisible) — 칸이 사라지면 프리뷰가 커졌다 작아졌다 한다. 옆 배치에서는 오른쪽 줄
           맨 아래라 폭이 좁아 시계 아이콘을 뺀다.
         */}
-        <div className="flex h-14 items-center justify-center gap-2 [grid-area:chips] landscape:gap-1.5">
+        <div
+          aria-hidden={isShooting || undefined}
+          className={`flex h-14 items-center justify-center gap-2 [grid-area:chips] touch-landscape:gap-1.5 ${isShooting ? "invisible" : ""}`}
+        >
           {TIMER_OPTIONS.map((seconds) => {
             const active = timerSeconds === seconds;
             return (
@@ -250,13 +254,13 @@ export default function CapturePage() {
                 onClick={() => setTimerSeconds(seconds)}
                 aria-pressed={active}
                 aria-label={`${seconds}초 간격`}
-                className={`inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition landscape:px-3 ${
+                className={`inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition touch-landscape:px-3 ${
                   active
                     ? "bg-(--hc-text) text-(--background)"
                     : "bg-transparent text-(--hc-text) ring-1 ring-(--hc-stage-line)"
                 }`}
               >
-                <Timer aria-hidden className="h-3.5 w-3.5 landscape:hidden" />
+                <Timer aria-hidden className="h-3.5 w-3.5 touch-landscape:hidden" />
                 {seconds}s
               </button>
             );
@@ -278,14 +282,14 @@ export default function CapturePage() {
           카메라가 켜지면 그 자리는 끝까지 **같은 셔터**다(2026-11-09). 예전에는 시작 전에만 「찍기 시작」
           알약이었다가 찍는 동안 셔터로 바뀌었고, 멈추면 그 위에 「찍은 사진 고르기」·「이어서 찍기」,
           가운데에 「처음부터 다시 찍기」가 섰다. 고르기는 다 찍고 넘어간 다음 화면(/create/select)이
-          하고, 찍는 동안 처음부터 다시 찍는 길은 두지 않는다. 셔터가 하는 일만 상황에 따라 다르다 —
-          시작 · 지금 한 컷(#404) · 멈췄던 데서 이어 찍기. 다 찍은 채로는 이 화면에 머물지 않는다 —
-          고르기 화면으로 넘어간다(useCaptureFlow). 다시 찍는 길은 고르기 화면의 「다시 찍기」다.
+          하고, 찍는 동안 처음부터 다시 찍는 길은 두지 않는다. 셔터가 하는 일은 둘이다 — 시작 · 지금 한 컷(#404).
+          찍던 사진을 이어 찍는 길은 없다 — 도중에 떠나면 찍은 사진을 비우고 0/8 부터 다시다(useCaptureFlow).
+          다 찍은 채로는 이 화면에 머물지 않는다 — 고르기 화면으로 넘어간다. 다시 찍는 길은 고르기 화면의 「다시 찍기」다.
 
           중단 버튼은 두지 않는다 — 찍기 시작하면 다 찍을 때까지다. 기기·브라우저의 뒤로가기로 떠나면 언마운트가
           스트림과 진행 중인 인코딩을 정리한다. 카메라 전환도 찍기 전에만 둔다(2026-11-15) — 찍는 동안에는
-          잠가 둔 단추였을 뿐이다. 전환은 아이콘만이고 따로 떠 있어서, 있든 없든 셔터는 제자리다 — 세로에서는
-          셔터 왼쪽, 가로에서는 셔터 아래 빈자리.
+          잠가 둔 단추였을 뿐이다. 전환은 아이콘만이고 따로 떠 있어서, 있든 없든 셔터는 제자리다 — 세로 배치에서는
+          셔터 왼쪽, 옆 배치에서는 셔터 아래 빈자리.
         */}
         <div className="relative flex h-22 items-center justify-center [grid-area:shutter] [@media(max-height:700px)]:h-18">
           {canFlipCamera && !isShooting && shots.length === 0 ? (
@@ -294,7 +298,7 @@ export default function CapturePage() {
               onClick={() => void switchCamera()}
               aria-label="카메라 전환"
               title="카메라 전환"
-              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border landscape:left-1/2 landscape:top-full landscape:mt-4 landscape:-translate-x-1/2 landscape:translate-y-0"
+              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border touch-landscape:left-1/2 touch-landscape:top-full touch-landscape:mt-4 touch-landscape:-translate-x-1/2 touch-landscape:translate-y-0"
             >
               <SwitchCamera className="h-5 w-5" />
             </button>
@@ -303,9 +307,9 @@ export default function CapturePage() {
           {isShooting || isCameraReady ? (
             <button
               type="button"
-              onClick={isShooting ? handleShootNow : shots.length === 0 ? () => startShooting() : resumeShooting}
+              onClick={isShooting ? handleShootNow : startShooting}
               // 모양은 하나지만 하는 일은 상황마다 다르다. 화면에 글자가 없으니 보조기술에는 그 일을 말한다.
-              aria-label={isShooting ? "바로 찍기" : shots.length === 0 ? "찍기 시작" : "이어서 찍기"}
+              aria-label={isShooting ? "바로 찍기" : "찍기 시작"}
               // 셔터는 손가락이 닿는 순간 눌려야 한다(apple-design §1). 눌림은 물리 피드백이라 살짝 줄어든다.
               className="grid h-18 w-18 place-items-center rounded-full border-4 border-(--hc-text) transition active:scale-[0.96] [@media(max-height:700px)]:h-15 [@media(max-height:700px)]:w-15"
             >

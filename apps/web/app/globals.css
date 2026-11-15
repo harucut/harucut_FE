@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/*
+  촬영 화면의 옆 배치는 **터치 기기를 옆으로 든 때**만이다(2026-11-15 「데스크톱일 때는 항상 아래에 … 태블릿은 대응해
+  줘야 하지만 컴퓨터, 노트북일 때는 고정」). 마우스·트랙패드가 주 입력인 컴퓨터는 창이 가로로 길어도 세로 배치(장수·간격·
+  셔터가 프리뷰 아래)다. 폰·태블릿은 돌리는 대로 따라간다(app/create/capture/page.tsx).
+*/
+@custom-variant touch-landscape (@media (orientation: landscape) and (pointer: coarse));
+
 /* STUDIO 디자인 — 라이트: 웜 오프화이트 + 라임(#BDE528). 라임은 채움/보더용,
    그 위 글자는 어둡게(#141803). 본문 텍스트/보조는 AA 통과 값으로 둔다. */
 :root {

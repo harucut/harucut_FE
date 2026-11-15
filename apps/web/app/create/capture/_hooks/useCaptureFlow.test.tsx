@@ -161,25 +161,42 @@ afterEach(() => {
   Reflect.deleteProperty(document, "visibilityState");
 });
 
-it("촬영 화면에 돌아와도 사진을 지우지 않고 남은 컷부터 이어간다", async () => {
+/*
+  찍던 사진은 이어 찍지 않는다(2026-11-15 「찍던 사진 있음은 대체 왜 안 빠지는 거냐고 삭제하라고」 — 「도중에 나가면 새로
+  찍어야지」). 덜 찍은 채 들어오면 비우고, 찍는 도중에 화면을 떠나면 멈추고 비운다 — 돌아오면 0/8 부터다.
+*/
+it("덜 찍은 채 들어오면 찍던 사진을 비우고 처음부터 찍는다", () => {
   mockShots = ["one", "two", "three"];
+  renderHook(() => useCaptureFlow());
+  expect(mockResetShots).toHaveBeenCalledTimes(1);
+  expect(mockShots).toEqual([]);
+  expect(mockReplace).not.toHaveBeenCalledWith("/create/select");
+});
+
+it("찍는 도중에 화면을 떠나면 촬영을 멈추고 찍은 사진을 비운다", async () => {
   installCamera(1920, 1080);
   const { result } = renderHook(() => useCaptureFlow());
-  expect(mockResetShots).not.toHaveBeenCalled();
-  expect(result.current.shotCount).toBe(3);
   const { canvas } = createFakeCanvas();
   result.current.videoRef.current = createFakeVideo(1920, 1080) as unknown as HTMLVideoElement;
   result.current.canvasRef.current = canvas as unknown as HTMLCanvasElement;
   await act(async () => { await result.current.startCamera(); });
-  act(() => { result.current.resumeShooting(); });
+  act(() => { result.current.startShooting(); });
   act(() => { result.current.handleShootNow(); });
-  await waitFor(() => expect(result.current.shotCount).toBe(4));
-  expect(mockShots.slice(0, 3)).toEqual(["one", "two", "three"]);
+  await waitFor(() => expect(mockShots).toHaveLength(1));
+  mockResetShots.mockClear();
+
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
   act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+
   expect(result.current.isShooting).toBe(false);
-  expect(result.current.shotCount).toBe(4);
-  expect(mockResetShots).not.toHaveBeenCalled();
+  expect(result.current.isCameraReady).toBe(false);
+  expect(mockResetShots).toHaveBeenCalledTimes(1);
+  expect(mockShots).toEqual([]);
+});
+
+it("찍기 시작은 늘 처음부터다 — 이어서 찍는 길이 없다", () => {
+  const { result } = renderHook(() => useCaptureFlow());
+  expect("resumeShooting" in result.current).toBe(false);
 });
 
 /*
@@ -193,7 +210,7 @@ it("다 찍은 채 들어오면 고르기 화면으로 넘긴다", () => {
   expect(mockResetShots).not.toHaveBeenCalled();
 });
 
-it("덜 찍었으면 촬영 화면에 남는다", () => {
+it("덜 찍었으면 고르기로 보내지 않는다 — 이 화면에서 처음부터 찍는다", () => {
   mockShots = ["one", "two", "three"];
   renderHook(() => useCaptureFlow());
   expect(mockReplace).not.toHaveBeenCalledWith("/create/select");
