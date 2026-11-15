@@ -709,6 +709,7 @@ describe("ShootResultPage", () => {
 
   it("게스트 합성이 실패한 뒤에 눌러도 원본 4장을 보관한다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
+    mockUseShootSession.setState({ photoName: "우리 첫 네컷" });
     mockComposeFramePng.mockRejectedValue(new Error("compose failed"));
 
     render(<ShootResultPage />);
@@ -728,6 +729,8 @@ describe("ShootResultPage", () => {
     });
     expect(mockSetPendingGuestSave.mock.calls[0][0]).toMatchObject({
       sources: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
+      // 꾸미기에서 붙인 이름은 만들지 못한 뒤에도 따라간다 — 로그인하면 기록에 그 이름으로 남는다.
+      displayName: "우리 첫 네컷",
     });
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith(

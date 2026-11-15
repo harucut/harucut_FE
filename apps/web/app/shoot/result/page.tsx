@@ -698,9 +698,11 @@ export default function ShootResultPage() {
         // 빼면 서버가 프레임에 저장된 배경으로 그려, 방금 내려받은 그림과 색이 갈린다.
         // 꾸민 프레임이어도 그대로 넣는다(서버 합성 쪽에서 알아서 버린다).
         backgroundColor: effectiveBorderColor,
-        // 사용자가 결과 화면에서 이름을 고쳤으면 그 이름으로 남긴다.
+        // 꾸미기에서 붙인 이름으로 남긴다 — 기기에서 만들지 못한 뒤에 눌러도 같다.
         // 기본값을 쓰면 공들여 붙인 이름이 로그인 직후 조용히 사라진다.
-        displayName: imageResult?.displayName?.trim() || defaultDisplayName,
+        displayName:
+          imageResult?.displayName?.trim() ||
+          (photoName.trim() ? sanitizeDisplayName(photoName, defaultDisplayName) : defaultDisplayName),
       },
       Date.now(),
     );
