@@ -14,6 +14,7 @@ import {
   DEFAULT_FOURCUT_FILTER,
   type FourcutFilterId,
 } from "@/lib/frameFilters";
+import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
 
 /**
@@ -160,11 +161,11 @@ export type ShootSessionState = {
    */
   shotsFrameId: FrameId | null;
   selectedIndexes: SelectionSlot[];
-  /*
-    테두리 색은 고르지 않는다(2026-11-15 「프레임 고르고 왔으면 사진 고르고 꾸미기에서 색상 변경은 없어도 되겠다」).
-    프레임을 고를 때 본 카드의 종이 색(기본 프레임은 DEFAULT_FRAME_BACKGROUND_COLOR, 꾸민 프레임은 저장된 배경)이
-    곧 완성본의 색이다 — 그래서 세션에 색이 없다.
-  */
+  /**
+   * 꾸미기에서 고른 테두리 색. 기본 프레임에만 쓴다 — 저장한(꾸민) 프레임은 프레임에 저장된 배경이 정하고 꾸미기에
+   * 고르기가 없다(components/frame/FrameOutputOptionsPanel.tsx 의 hasCustomFrame).
+   */
+  borderColor: string;
   outputFilter: FourcutFilterId;
   /**
    * 꾸미기에서 붙인 사진 이름(2026-11-15 「사진 이름도 마지막에 바꾸는 게 아니라 꾸미기에서 넣으면 되지 않을까?」).
@@ -193,6 +194,7 @@ export type ShootSessionState = {
   setFrameId: (id: FrameId) => void;
   setSource: (source: ShootSource) => void;
   setRemoteFrameId: (id: number | null) => void;
+  setBorderColor: (color: string) => void;
   setOutputFilter: (filter: FourcutFilterId) => void;
   setPhotoName: (name: string) => void;
   setImageResult: (asset: GeneratedFourcutAsset | null) => void;
@@ -232,6 +234,7 @@ const initialState: Pick<
   | "shots"
   | "shotsFrameId"
   | "selectedIndexes"
+  | "borderColor"
   | "outputFilter"
   | "photoName"
   | "imageResult"
@@ -244,6 +247,7 @@ const initialState: Pick<
   shots: [],
   shotsFrameId: null,
   selectedIndexes: createEmptySlots(),
+  borderColor: DEFAULT_FRAME_BACKGROUND_COLOR,
   outputFilter: DEFAULT_FOURCUT_FILTER,
   photoName: "",
   imageResult: null,
@@ -263,6 +267,12 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   setRemoteFrameId: (id) =>
     set({
       remoteFrameId: id,
+      imageResult: null,
+    }),
+
+  setBorderColor: (borderColor) =>
+    set({
+      borderColor,
       imageResult: null,
     }),
 

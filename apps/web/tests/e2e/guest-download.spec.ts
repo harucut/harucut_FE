@@ -8,8 +8,8 @@ import { installCanvasCamera, shootUntilSelect, storedDraftShotCount } from "./f
 
   예전에는 IndexedDB 에 촬영본을 심고 결과 화면을 열었다. 비회원이 찍던 사진은 2026-11-15 부터 이 기기에 남지
   않아(「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려」) 그 초안을 읽지 않는다. 그래서 캔버스 카메라로
-  실제로 찍는다(fixtures/canvasCamera.ts). 저장하면 「사진을 저장했어요」와 「처음으로」가 뜨고, 다시 저장은
-  옆 동그란 단추로 한다(「저장 누르면 사진이 저장되었어요. 홈으로 가기 이런 거 있는 게 좋을까?」).
+  실제로 찍는다(fixtures/canvasCamera.ts). 저장하면 단추 줄 위에 「사진을 저장했어요 · 처음으로」가 뜨고, 단추는
+  그대로라 다시 저장도 같은 단추다(「저장 누르면 사진이 저장되었어요. 홈으로 가기 이런 거」, 「버튼 크기 달라지고」).
 */
 test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운로드한다", async ({ page }, info) => {
   const apiRequests: string[] = [];
@@ -52,10 +52,10 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
     URL.revokeObjectURL(image.src);
   });
 
-  const resave = page.getByRole("link", { name: "사진 다시 저장", exact: true });
-  for (const link of [save, resave]) {
+  // 단추는 저장한 뒤에도 그대로다 — 다시 저장도 같은 단추다.
+  for (let attempt = 0; attempt < 2; attempt++) {
     const completed = page.waitForEvent("download");
-    await link.click();
+    await save.click();
     const download = await completed;
     expect(await download.failure()).toBeNull();
     expect(download.suggestedFilename()).toMatch(/\.jpg$/);
@@ -64,10 +64,10 @@ test("비회원은 API 없이 결과를 만들고 같은 JPEG를 반복 다운�
     expect(bytes.length).toBeGreaterThan(10_000);
     expect(bytes.equals(expectedBytes)).toBe(true);
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    // 저장하면 됐다고 말하고, 주 버튼이 처음으로 가는 길이 된다.
+    // 저장하면 단추 줄 위에 저장했다는 말과 처음으로 가는 길이 뜬다.
     await expect(page.getByText("사진을 저장했어요", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "처음으로", exact: true })).toHaveAttribute("href", "/");
-    expect(await resave.getAttribute("href")).toBe(href);
+    expect(await save.getAttribute("href")).toBe(href);
   }
   // iPhone 다운로드 확인창을 닫을 때까지 파일 주소가 유효해야 한다.
   expect(await page.evaluate(async (url) => (await fetch(url!)).ok, href)).toBe(true);

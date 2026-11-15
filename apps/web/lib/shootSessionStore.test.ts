@@ -187,7 +187,7 @@ describe("프레임만 다시 고르기", () => {
     store.setFrameId("classic-4");
     store.addShotPhotos(["data:image/jpeg;base64,a", "data:image/jpeg;base64,b"]);
     store.toggleSelect(0);
-    store.setOutputFilter("B&W");
+    store.setBorderColor("#1ED760");
 
     useShootSession.getState().resetFrameSelection();
 

@@ -10,7 +10,7 @@ import { useShootSession } from "@/lib/shootSessionStore";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { DEFAULT_FOURCUT_FILTER } from "@/lib/frameFilters";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
-import { DEFAULT_FRAME_BACKGROUND_COLOR, resolveFrameBackgroundColor } from "@/lib/themeBackground";
+import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { RetryButton } from "@/components/ui/LoadFailed";
 import { usePhotoImport } from "@/hooks/usePhotoImport";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
@@ -32,9 +32,11 @@ export default function ShootSelectPage() {
     remoteFrameId,
     shots,
     selectedIndexes,
+    borderColor,
     outputFilter,
     photoName,
     toggleSelect,
+    setBorderColor,
     setOutputFilter,
     setPhotoName,
     source,
@@ -81,7 +83,8 @@ export default function ShootSelectPage() {
     currentCount: shots.length,
     onImported: addShotPhotos,
   });
-  // 꾸민 프레임의 내용(장식·배경). 못 읽으면 미리보기가 완성본과 달라지므로 실패를 따로 받아 아래 배너로 말한다.
+  // 성공과 실패를 따로 받는다. 못 읽은 것을 "꾸민 프레임이 아니다"로 뭉개면
+  // 잠겨야 할 테두리 색 고르기가 열린다.
   const {
     data: themeData,
     error: themeError,
@@ -116,13 +119,22 @@ export default function ShootSelectPage() {
 
   useEffect(() => { router.prefetch("/create/result"); }, [router, selectedIndexes]);
 
+  /*
+    테두리 색은 기본 프레임에서만 고른다 — 저장한(꾸민) 프레임을 골랐으면 꾸미기에 색 고르기가 없다(2026-11-15
+    「저장된 프레임 골랐을 때만 색 고르는 걸 없애라는 거였지」). 잠금은 내용이 아니라 "꾸민 프레임인가"로 가른다.
+    서버 합성은 remoteFrameId 만 보고 프레임에 저장된 배경을 쓰며 보낸 색은 버린다(lib/fourcutCompose.ts 의
+    usesStoredBackground). 내용을 못 읽었다고 고르기를 열어 주면, 고른 색은 저장될 때 조용히 사라진다.
+    못 읽었으면 그 사실은 아래 배너가 말한다.
+  */
+  const hasCustomFrame = remoteFrameId != null;
   // 보정 견본에는 내 사진을 깐다 — 고른 첫 장, 아직 안 골랐으면 찍은 첫 장.
   const firstSelected = selectedIndexes.find((index) => index != null);
   const samplePhoto = shots[firstSelected ?? 0] ?? null;
-  // 프레임 카드의 종이 색이 곧 저장본의 색이다(꾸미기에 테두리 색이 없다). 꾸민 프레임은 저장된 배경을 쓴다
-  // (resolveFrameBackgroundColor 가 themeData 를 먼저 본다). 내용을 못 읽었으면 미리보기는 기본 종이 색으로
-  // 그리는데 저장본은 프레임에 저장된 배경으로 나온다 — 그래서 아래 배너로 못 읽었다는 사실을 말한다.
-  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, DEFAULT_FRAME_BACKGROUND_COLOR);
+  // 고른 색이 곧 저장본의 색이다 — 서버 합성에 그 색을 실어 보낸다. 꾸민 프레임일 때만
+  // 프레임에 저장된 배경을 쓴다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
+  // 내용을 못 읽었으면 미리보기는 마지막으로 고른 색으로 그리는데 저장본은 프레임에 저장된
+  // 배경으로 나온다 — 그래서 아래 배너로 못 읽었다는 사실을 말한다.
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
 
   // 고르기 화면 기록을 완성 화면으로 바꿔 낀다(2026-11-15). 완성된 뒤에는 다시 고르지 않는데, 기록에 이 화면이
   // 남아 있으면 뒤로가기가 여기 들렀다가 완성 화면으로 되돌려져(ShootSessionBoundary) 먹지 않는 것처럼 보인다.
@@ -153,14 +165,14 @@ export default function ShootSelectPage() {
         />
 
 
-        {/* 꾸민 프레임을 못 읽었다. 미리보기가 완성본과 다를 수 있다는 사실과 되살릴 길을 같이 준다. */}
+        {/* 조회가 실패해도 테두리 색은 잠긴 채다. 왜 못 바꾸는지와 되살릴 길을 같이 준다. */}
         {themeError ? (
           <div
             role="status"
             className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-(--hc-border) bg-(--hc-surface) px-4 py-3"
           >
             <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-              프레임을 불러오지 못해 미리보기가 완성본과 다를 수 있어요.
+              프레임을 불러오지 못해 배경색을 바꿀 수 없어요.
             </p>
             <RetryButton onClick={reloadTheme} />
           </div>
@@ -198,8 +210,11 @@ export default function ShootSelectPage() {
           outputFilter={outputFilter}
           renderExtraControls={() => (
             <FrameOutputOptionsPanel
+              borderColor={borderColor}
+              onBorderColorChange={setBorderColor}
               outputFilter={outputFilter}
               onOutputFilterChange={setOutputFilter}
+              hasCustomFrame={hasCustomFrame}
               samplePhoto={samplePhoto}
               filtersLocked={filtersLocked}
               photoName={photoName}

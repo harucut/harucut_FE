@@ -1,17 +1,20 @@
 /**
  * 사진 고르기의 「꾸미기」(2026-11-14, 시안 B).
  *
- * 보정은 설명 문구 없이 내 사진에 그 보정을 입힌 견본으로 고르고, 사진 이름을 붙인다. 테두리 색은 고르지
- * 않는다(2026-11-15 「프레임 고르고 왔으면 꾸미기에서 색상 변경은 없어도 되겠다」) — 고른 프레임 카드의 색이 곧
- * 완성본의 색이다.
+ * 테두리 색은 편집기와 같은 동그란 견본(+ 「다른 색」)으로 고르고, 보정은 설명 문구 없이 내 사진에 그 보정을
+ * 입힌 견본으로 고른다. 꾸민 프레임은 테두리를 프레임이 정하므로 고르기가 아예 없다 — 서버 합성이 보낸 색을
+ * 버려, 고르게 두면 고른 색이 저장될 때 조용히 사라진다.
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 
 function renderPanel(overrides: Partial<Parameters<typeof FrameOutputOptionsPanel>[0]> = {}) {
   const props = {
+    borderColor: "#18181a",
+    onBorderColorChange: jest.fn(),
     outputFilter: "NONE" as const,
     onOutputFilterChange: jest.fn(),
+    hasCustomFrame: false,
     samplePhoto: "/shot-1.png",
     ...overrides,
   };
@@ -20,12 +23,28 @@ function renderPanel(overrides: Partial<Parameters<typeof FrameOutputOptionsPane
 }
 
 describe("FrameOutputOptionsPanel", () => {
-  it("테두리 색은 고르지 않는다 — 견본도 「다른 색」도 없고 보정만 고른다", () => {
-    renderPanel();
+  it("지금 테두리 색 견본에만 고른 표시가 붙고, 견본을 누르면 '#rrggbb' 로 넘긴다", () => {
+    const props = renderPanel();
 
-    expect(screen.queryByText("테두리")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "잉크 차콜" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "민트" })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "민트" }));
+    expect(props.onBorderColorChange).toHaveBeenCalledWith("#cde9d8");
+  });
+
+  it("목록에 없는 색은 「다른 색」으로 고르고, 색 코드 입력칸은 없다", () => {
+    const props = renderPanel();
+
+    fireEvent.change(screen.getByLabelText("다른 색 고르기"), { target: { value: "#123456" } });
+    expect(props.onBorderColorChange).toHaveBeenCalledWith("#123456");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("꾸민 프레임이면 테두리 고르기가 없고 보정만 고른다", () => {
+    renderPanel({ hasCustomFrame: true });
+
     expect(screen.queryByRole("group", { name: "테두리 색" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("다른 색 고르기")).not.toBeInTheDocument();
     expect(screen.getByRole("group", { name: "보정" })).toBeInTheDocument();
   });
 
@@ -52,6 +71,8 @@ describe("FrameOutputOptionsPanel", () => {
     chips.forEach((chip) => expect(chip).toBeDisabled());
     fireEvent.click(chips[1]);
     expect(props.onOutputFilterChange).not.toHaveBeenCalled();
+    // 테두리 색은 그대로 고른다.
+    expect(screen.getByRole("group", { name: "테두리 색" })).toBeInTheDocument();
   });
 
   // 이름은 꾸미기에서 붙인다(2026-11-15). 완성 뒤 바꾸는 것은 기록에서만 한다.

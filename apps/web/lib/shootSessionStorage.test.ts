@@ -58,7 +58,7 @@ beforeEach(async () => {
 
 test("사진은 Blob으로 한 번만 쓰고 선택·필터·멱등키는 새로고침 뒤 그대로 복원한다", async () => {
   const initial = draft();
-  const generationKey = JSON.stringify({ frameId: initial.frameId, remoteFrameId: null, borderColor: null, outputFilter: "NONE", imageSources: shots });
+  const generationKey = JSON.stringify({ frameId: initial.frameId, remoteFrameId: null, borderColor: initial.borderColor, outputFilter: "NONE", imageSources: shots });
   initial.composeIdempotency = { generationKey, idempotencyKey: "one-job", frameContentKey: null };
   await writeShootDraft(initial, now);
   expect(mockPut.mock.calls.filter(([value]) => (value as { blob?: Blob }).blob instanceof Blob)).toHaveLength(4);

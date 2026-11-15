@@ -261,13 +261,14 @@ export function FrameSelectPanel({
           >
             {limitNotice ? (
               <span className="rounded-2xl bg-(--hc-text) px-4 py-2.5 text-center text-[12px] font-semibold text-(--hc-surface) shadow-(--hc-card-shadow)">
-                <Sentences text={`${maxSelect}장까지만 담을 수 있어요. 바꾸려면 담은 사진을 먼저 눌러 빼 주세요.`} />
+                {/* 「바꾸려면 담은 사진을 먼저 눌러 빼 주세요」는 뺐다(2026-11-15 「추가 설명은 삭제」) — 한 문장만. */}
+                {`${maxSelect}장까지만 담을 수 있어요.`}
               </span>
             ) : null}
           </p>
           {/*
             「선택 초기화」 단추는 뺐다(2026-11-15). 새로고침처럼 생겨 무엇을 하는지 알 수 없었고, 담은 사진은 다시
-            누르면 빠진다 — 같은 일을 하는 길이 둘이었다. 다 담은 뒤 다섯 번째를 누르면 위 안내가 그 길을 말한다.
+            누르면 빠진다 — 같은 일을 하는 길이 둘이었다. 다 담은 뒤 다섯 번째를 누르면 위 안내가 「4장까지만」을 말한다.
           */}
           <button
             type="button"

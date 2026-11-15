@@ -9,7 +9,7 @@ import type { ShootSessionState } from "@/lib/shootSessionStore";
 
 export type ShootDraft = Pick<ShootSessionState,
   "frameId" | "remoteFrameId" | "source" | "shots" | "shotsFrameId" |
-  "selectedIndexes" | "outputFilter" | "photoName" | "composeIdempotency" | "completed">;
+  "selectedIndexes" | "borderColor" | "outputFilter" | "photoName" | "composeIdempotency" | "completed">;
 export const SHOOT_DRAFT_TTL = 24 * 60 * 60 * 1000;
 const STORE = "session";
 const META = "meta";
@@ -23,7 +23,7 @@ function encodeDraft(draft: ShootDraft, keys: string[], now: number): StoredDraf
   // Zustand 상태에는 함수도 있다. Pick 타입은 런타임 필드를 제거하지 않으므로
   // 나머지 전개(...meta)로 쓰면 IndexedDB가 DataCloneError로 전체 저장을 거부한다.
   const { shots, composeIdempotency, frameId, remoteFrameId, source, shotsFrameId,
-    selectedIndexes, outputFilter, photoName, completed } = draft;
+    selectedIndexes, borderColor, outputFilter, photoName, completed } = draft;
   let composition = null;
   if (composeIdempotency) {
     try {
@@ -34,7 +34,7 @@ function encodeDraft(draft: ShootDraft, keys: string[], now: number): StoredDraf
       }
     } catch { /* 이전 입력이 현재 사진을 가리키지 않으면 복원할 멱등키도 없다. */ }
   }
-  return { frameId, remoteFrameId, source, shotsFrameId, selectedIndexes,
+  return { frameId, remoteFrameId, source, shotsFrameId, selectedIndexes, borderColor,
     outputFilter, photoName, composeIdempotency: composition, completed, shotKeys: keys, savedAt: now };
 }
 
@@ -50,7 +50,7 @@ function validMeta(value: unknown, now: number): value is StoredDraft {
     meta.shotKeys.every((key) => typeof key === "string" && /^photo:[\w-]+$/.test(key)) &&
     Array.isArray(meta.selectedIndexes) && meta.selectedIndexes.length === 4 &&
     meta.selectedIndexes.every((index) => index === null || (Number.isInteger(index) && index >= 0 && index < meta.shotKeys.length)) &&
-    // 테두리 색은 2026-11-15 에 걷었다. 예전 초안에 남은 `borderColor` 는 읽지 않는다 — 그 때문에 초안을 버리지도 않는다.
+    typeof meta.borderColor === "string" && /^#?[a-f\d]{6}$/i.test(meta.borderColor) &&
     // 완성 표시는 2026-11-15 에 생겼다. 그 전에 보관한 초안에는 없다 — 없으면 아직 안 끝난 촬영이다.
     (meta.completed === undefined || meta.completed === null || meta.completed === "account" || meta.completed === "device") &&
     // 이름이 없던 예전 임시 보관도 읽는다(빈 이름).
@@ -96,7 +96,7 @@ export async function readShootDraft(now = Date.now()): Promise<ShootDraft | nul
     return {
       frameId: meta.frameId, remoteFrameId: meta.remoteFrameId, source: meta.source,
       shots, shotsFrameId: meta.shotsFrameId, selectedIndexes: meta.selectedIndexes,
-      outputFilter: meta.outputFilter, photoName: meta.photoName ?? "",
+      borderColor: meta.borderColor, outputFilter: meta.outputFilter, photoName: meta.photoName ?? "",
       composeIdempotency: composition, completed: meta.completed ?? null,
     };
   } finally { db.close(); }

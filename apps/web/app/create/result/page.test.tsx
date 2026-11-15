@@ -29,6 +29,7 @@ type MockShootSessionState = {
   remoteFrameId: number | null;
   shots: string[];
   selectedIndexes: Array<number | null>;
+  borderColor: string;
   outputFilter: "NONE";
   photoName: string;
   imageResult: GeneratedFourcutAsset | null;
@@ -53,6 +54,7 @@ const mockUseShootSession = create<MockShootSessionState>((set, get) => ({
   remoteFrameId: null as number | null,
   shots: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
   selectedIndexes: [0, 1, 2, 3] as Array<number | null>,
+  borderColor: "#111827",
   outputFilter: "NONE",
   photoName: "",
   imageResult: null,
@@ -150,7 +152,7 @@ jest.mock("@/hooks/useRemoteFrameTheme", () => ({
 jest.mock("@/lib/themeBackground", () => ({
   resolveFrameBackgroundColor: (_theme: unknown, borderColor: string) =>
     borderColor,
-  // 기본 프레임의 종이 색. 꾸미기에서 색을 고르지 않으므로 화면이 이 값을 그대로 쓴다.
+  // 화면은 안 쓰지만 진짜 세션 스토어가 초깃값으로 읽는다(아래 스토어 테스트).
   DEFAULT_FRAME_BACKGROUND_COLOR: "#111827",
 }));
 
@@ -259,6 +261,7 @@ describe("ShootResultPage", () => {
       remoteFrameId: null,
       shots: ["/shot-1.png", "/shot-2.png", "/shot-3.png", "/shot-4.png"],
       selectedIndexes: [0, 1, 2, 3],
+      borderColor: "#111827",
       outputFilter: "NONE",
       photoName: "",
       imageResult: null,
@@ -435,26 +438,31 @@ describe("ShootResultPage", () => {
   });
 
   /*
-    저장하면 됐다고 말하고 다음 할 일을 준다(2026-11-15 「저장 누르면 사진이 저장되었어요. 홈으로 가기 이런 거 있는 게
-    좋을까?」). 예전에는 저장해도 화면이 그대로라 됐는지 알 수 없었다. 다시 저장할 길은 옆 동그란 단추로 남는다.
+    저장하면 단추 줄 위에 「사진을 저장했어요 · 홈으로 가기」가 떠 있다(2026-11-15 「저장 누르면 사진이 저장되었어요. 홈으로
+    가기 이런 거」). 단추는 저장 전과 같다 — 모양·크기·이름이 안 바뀌고 다시 저장도 같은 단추다(「그러면 막 버튼 크기
+    달라지고 그러니깐」). 모달처럼 막지 않는다.
   */
-  it("저장하면 단추 위에 한 줄로 말하고, 주 버튼이 홈으로 가기로 바뀐다", async () => {
+  it("저장하면 단추 줄 위에 저장했다는 말과 홈으로 가는 길이 뜨고, 단추는 그대로다", async () => {
     mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/job-1.jpg");
     mockDownloadFromUrl.mockResolvedValue(undefined);
     render(<ShootResultPage />);
+    const save = await screen.findByRole("button", { name: "사진 저장" });
     expect(screen.queryByText("사진을 저장했어요")).toBeNull();
+    expect(screen.queryByRole("link", { name: "홈으로 가기" })).toBeNull();
 
-    fireEvent.click(await screen.findByRole("button", { name: "사진 저장" }));
+    fireEvent.click(save);
 
     expect(await screen.findByText("사진을 저장했어요")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "홈으로 가기" })).toHaveAttribute("href", "/home");
-    expect(screen.queryByRole("button", { name: "사진 저장" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "사진 다시 저장" }));
-    await waitFor(() => expect(mockDownloadFromUrl).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    // 단추 줄은 그대로 — 같은 저장 단추와 공유. 다시 저장은 같은 단추로 한다.
+    expect(screen.getByRole("button", { name: "사진 저장" })).toBe(save);
     expect(screen.getByRole("button", { name: "공유" })).toBeInTheDocument();
+    fireEvent.click(save);
+    await waitFor(() => expect(mockDownloadFromUrl).toHaveBeenCalledTimes(2));
   });
 
-  it("저장하지 못하면 저장했다고 말하지 않고 저장 단추를 그대로 둔다", async () => {
+  it("저장하지 못하면 저장했다고 말하지 않는다", async () => {
     mockGetMediaDownloadUrl.mockResolvedValue("https://example.com/job-1.jpg");
     mockDownloadFromUrl.mockRejectedValue(new Error("network"));
     jest.spyOn(console, "error").mockImplementation(() => {});
@@ -464,11 +472,10 @@ describe("ShootResultPage", () => {
 
     await waitFor(() => expect(useGuestTrialStore.getState().notice?.title).toBe("이미지를 다운로드하지 못했어요"));
     expect(screen.queryByText("사진을 저장했어요")).toBeNull();
-    expect(screen.getByRole("button", { name: "사진 저장" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "홈으로 가기" })).toBeNull();
   });
 
-  it("비회원은 저장하면 처음으로 가는 길이 주 버튼이 되고, 보관하기는 그대로다", async () => {
+  it("비회원은 저장하면 처음으로 가는 길이 뜨고, 저장 단추와 보관하기는 그대로다", async () => {
     useGuestTrialStore.setState({ accessMode: "guest" });
     mockComposeFramePng.mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" }));
     render(<ShootResultPage />);
@@ -477,7 +484,7 @@ describe("ShootResultPage", () => {
 
     expect(await screen.findByText("사진을 저장했어요")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "처음으로" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "사진 다시 저장" })).toHaveAttribute("download");
+    expect(screen.getByRole("link", { name: "사진 저장" })).toHaveAttribute("download");
     expect(screen.getByRole("button", { name: "로그인하고 보관하기" })).toBeInTheDocument();
   });
 
@@ -959,11 +966,11 @@ describe("ShootResultPage", () => {
   });
 
   /*
-    프레임 카드의 종이 색은 합성 요청에 실려 가야 한다(`ComposeRequest.backgroundColor`). 꾸미기에서 색을 고르지
-    않으므로(2026-11-15) 기본 프레임은 늘 그 색이다. 보내지 않으면 서버가 프레임에 저장된 배경으로 그려서,
-    프레임을 고를 때 본 카드와 내려받는 파일의 색이 갈릴 수 있다.
+    고른 배경색은 합성 요청에 실려 가야 한다(`ComposeRequest.backgroundColor`).
+    보내지 않으면 서버가 프레임에 저장된 배경으로 그려서, 화면에서 고른 색과
+    내려받는 파일의 색이 서로 다른 그림이 된다.
   */
-  it("회원 저장에 프레임 카드의 종이 색을 실어 보낸다", async () => {
+  it("회원 저장에 고른 배경색을 실어 보낸다", async () => {
     mockSaveFourcutToServer.mockResolvedValue({
       mediaId: 7,
       objectUrl: "https://example.com/a.png",
@@ -978,6 +985,43 @@ describe("ShootResultPage", () => {
     });
     expect(mockSaveFourcutToServer).toHaveBeenCalledWith(
       expect.objectContaining({ backgroundColor: "#111827" }),
+    );
+  });
+
+  /*
+    색을 바꾸면 다시 만들어야 한다.
+
+    서버는 같은 멱등키로 색만 바꿔 보내면 **기존 작업을 그대로 재생한다.** 그래서 색이
+    합성 키에 들어 있지 않으면, 사용자가 색을 바꿔도 예전 색 그대로인 그림이 나온다.
+    (예전에는 반대로 색을 키에서 빼는 것이 맞았다 — 그때는 서버가 색을 받지 않았고,
+     늦게 도착하는 서버 배경 조회 때문에 색이 저절로 바뀌어 합성이 두 번 돌았다.
+     그 조회를 걷어냈으므로 이제 색은 사용자가 바꿀 때만 바뀐다.)
+  */
+  it("배경색을 바꾸면 새로 합성한다", async () => {
+    mockSaveFourcutToServer.mockResolvedValue({
+      mediaId: 7,
+      objectUrl: "https://example.com/a.png",
+      downloadUrl: "https://example.com/a.png",
+      displayName: "harucut",
+    });
+
+    const view = render(<ShootResultPage />);
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(1);
+    });
+
+    // 사용자가 다른 색을 골랐다. 실제 스토어의 setBorderColor 는 색을 바꾸면서
+    // imageResult 를 함께 비운다(lib/shootSessionStore.ts) — 그 동작을 그대로 흉내낸다.
+    act(() => {
+      mockUseShootSession.setState({ borderColor: "#ffffff", imageResult: null });
+    });
+    view.rerender(<ShootResultPage />);
+
+    await waitFor(() => {
+      expect(mockSaveFourcutToServer).toHaveBeenCalledTimes(2);
+    });
+    expect(mockSaveFourcutToServer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: "#ffffff" }),
     );
   });
 

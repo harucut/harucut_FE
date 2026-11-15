@@ -167,7 +167,7 @@ it("네 장을 다 고른 뒤 다섯 번째를 누르면 담지 않고 까닭을
 
   expect(onToggleSelect).not.toHaveBeenCalled();
   expect(screen.getByRole("status").textContent).toBe(
-    "4장까지만 담을 수 있어요. 바꾸려면 담은 사진을 먼저 눌러 빼 주세요.",
+    "4장까지만 담을 수 있어요.",
   );
 });
 
