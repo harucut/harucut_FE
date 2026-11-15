@@ -36,8 +36,10 @@ it("열린 링크는 사진을 돌려주고, 토큰은 Authorization 으로 넘�
   expect(init.cache).toBe("no-store");
 });
 
-it("백엔드가 거절하면(없는 토큰·삭제·보관 기간 지남) 닫힌 링크다", async () => {
-  fetchMock.mockResolvedValue(new Response("{}", { status: 404 }));
+it("백엔드가 거절하면(없는 토큰·삭제·보관 기간 지남 404, 틀린 토큰 과다 시도 429) 닫힌 링크다", async () => {
+  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "MEDIA-002", status: 404 }), { status: 404 }));
+  await expect(fetchSharedPhoto(TOKEN)).resolves.toEqual({ status: "closed" });
+  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "GEN-061", status: 429 }), { status: 429 }));
   await expect(fetchSharedPhoto(TOKEN)).resolves.toEqual({ status: "closed" });
 });
 

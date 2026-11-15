@@ -92,6 +92,7 @@ export async function getMediaDownloadUrl(mediaId: number) {
 /**
  * 사진 공유 링크의 토큰(2026-11-16). 같은 사진이면 같은 토큰이다(백엔드가 멱등으로 준다) — 먼저 올린 글의 링크가 살아
  * 있고, 다시 복사해도 같은 주소다. 받는 사람은 `/s/<토큰>` 에서 사진만 본다(lib/mediaShareLink.ts).
+ * 남의·없는 사진은 404 GEN-031, 보관 기간이 지난 사진은 403 SUBS-002 다 — 화면 문구는 공유 창이 고른다.
  */
 export async function createMediaShareLink(mediaId: number) {
   const res = await clientApi.post<ApiEnvelope<{ token?: string | null }>>(

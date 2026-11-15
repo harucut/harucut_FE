@@ -52,6 +52,8 @@ export async function fetchSharedPhoto(token: string): Promise<SharedPhotoLookup
       signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     });
     if (response.status >= 500) return { status: "unavailable" };
+    // 404 MEDIA-002(닫힘·무효 전부)와 429 GEN-061(틀린 토큰을 너무 많이 시도)은 둘 다 닫힌 링크다 — 맞는 토큰은 세지 않아
+    // 429 가 나지 않는다(백엔드 feat/media-share-link).
     if (!response.ok) return { status: "closed" };
     const body = (await response.json()) as { data?: Partial<SharedPhoto> | null };
     const data = body.data;
