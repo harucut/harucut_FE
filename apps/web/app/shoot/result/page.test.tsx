@@ -311,17 +311,25 @@ describe("ShootResultPage", () => {
     expect(call.idempotencyKey).toMatch(/^web-key-\d+$/);
   });
 
-  it("운영 기본 프레임이 없으면 회원도 로컬 JPEG를 내려받고 계정 미보관 안내를 본다", async () => {
+  /*
+    회원은 언제나 서버가 만든다(2026-11-15 「기기 저장만 가능은 대체 뭐」). 서버에 기본 프레임이 없어도 기기에서
+    몰래 만들어 「기록에 보관되지 않아요」로 떨어지지 않는다 — 기본 프레임은 백엔드가 늘 갖도록 보장한다.
+    없으면 다른 실패처럼 까닭을 말한다.
+  */
+  it("기본 프레임이 없어도 회원 사진을 기기에서 몰래 만들지 않는다", async () => {
     mockSaveFourcutToServer.mockRejectedValueOnce(new SystemFrameMissingError());
-    mockComposeFramePng.mockResolvedValueOnce(new Blob(["jpeg"], { type: "image/jpeg" }));
+    mockDescribeComposeFailure.mockReturnValueOnce({
+      message: "이 프레임으로는 아직 저장할 수 없어요. 다른 프레임을 골라 주세요.",
+      retryable: false,
+    });
     jest.spyOn(console, "error").mockImplementation(() => {});
     render(<ShootResultPage />);
-    // 기기에서 만든 사진은 실제 링크로 내려받는다(Safari 는 링크의 기본 동작으로만 받는다).
-    await screen.findByRole("link", { name: "사진 저장" });
-    expect(mockUseShootSession.getState().imageResult?.localBlob?.type).toBe("image/jpeg");
-    expect(screen.getByText("이 사진은 기록에 보관되지 않아요.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "공유" })).toBeNull();
-    expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
+
+    expect(await screen.findByText(sentenceText("이 프레임으로는 아직 저장할 수 없어요. 다른 프레임을 골라 주세요."))).toBeInTheDocument();
+    expect(mockComposeFramePng).not.toHaveBeenCalled();
+    expect(mockUseShootSession.getState().imageResult).toBeNull();
+    expect(screen.queryByText(/기록에 보관되지 않아요/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "사진 저장" })).toBeNull();
   });
 
   /*
@@ -352,9 +360,10 @@ describe("ShootResultPage", () => {
 
   /*
     만드는 동안(2026-11-15 「네 컷을 만들고 있어요보다는 사진을 살짝 흐리게 하고 그 위에 로딩이 돌아가면서 로딩바를
-    채워주든」). 고른 네 장이 흐리게 깔리고 가운데 고리가 차오른다. 단추도 보이는 글도 없다 — 읽기 프로그램에만 말한다.
+    채워주든」). 고른 네 장이 흐리게 깔리고 가운데 고리가 차오르며, 그 아래 「네 컷을 만들고 있어요」 한 줄이 있다
+    (「그래도 생성 중이라는 텍스트는 있어도 좋지 않을까?」). 단추는 없다.
   */
-  it("만드는 동안에는 흐린 미리보기 위에 고리만 있고 단추·글이 없다", async () => {
+  it("만드는 동안에는 흐린 미리보기 위에 고리와 한 줄만 있고 단추가 없다", async () => {
     mockSaveFourcutToServer.mockReturnValue(new Promise(() => {}));
     const { container } = render(<ShootResultPage />);
 
@@ -362,7 +371,8 @@ describe("ShootResultPage", () => {
     expect(container.querySelector(".hc-making-ring")).not.toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent("네 컷을 만들고 있어요.");
     expect(screen.getByRole("status")).toHaveClass("sr-only");
-    expect(screen.queryByText("네 컷을 만들고 있어요", { selector: "p:not(.sr-only)" })).toBeNull();
+    // 보이는 한 줄은 고리 옆에 있고, 읽기 프로그램은 상태 줄로 한 번만 듣는다.
+    expect(screen.getByText("네 컷을 만들고 있어요", { selector: "span" }).closest("[aria-hidden]")).not.toBeNull();
     expect(screen.queryByRole("button", { name: /사진 저장|공유|더보기|다시 시도/ })).toBeNull();
     expect(screen.queryByRole("link", { name: "사진 저장" })).toBeNull();
   });

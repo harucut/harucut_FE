@@ -22,7 +22,7 @@ import {
   getImageExtension,
   type GeneratedFourcutAsset,
 } from "@/lib/fourcutOutput";
-import { describeComposeFailure, SystemFrameMissingError } from "@/lib/fourcutCompose";
+import { describeComposeFailure } from "@/lib/fourcutCompose";
 import { saveFourcutToServer } from "@/lib/fourcutProcessing";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { setPendingGuestSave } from "@/lib/pendingGuestSave";
@@ -428,8 +428,11 @@ export default function ShootResultPage() {
     const chosenName = photoName.trim();
     const outputName = chosenName ? sanitizeDisplayName(chosenName, defaultDisplayName) : defaultDisplayName;
 
-    // 기본 프레임이 운영에 없어도 원본을 버리지 않고 기기에 저장할 수 있게 한다.
-    // localBlob이 있으면 계정 기록이 아니라는 사실을 표시하고 서버 이름/공유 API를 부르지 않는다.
+    // 비회원은 기기에서 그린다. localBlob 이 있으면 계정 기록이 아니므로 서버 이름·공유 API 를 부르지 않는다.
+    //
+    // 회원은 언제나 서버가 그린다(2026-11-15 「기기 저장만 가능은 대체 뭐」). 예전에는 서버에 기본(시스템) 프레임이
+    // 없으면 회원도 여기로 떨어져 「이 사진은 기록에 보관되지 않아요」가 떴다 — 기본 프레임은 서버가 늘 갖도록
+    // 백엔드가 보장하고(시스템 프레임 4종), 화면은 그 폴백을 두지 않는다. 없으면 다른 실패처럼 까닭을 말한다.
     async function prepareLocalOutput() {
       const blob = await composeFrameImage({
         layout: currentLayout,
@@ -588,16 +591,6 @@ export default function ShootResultPage() {
         // 미뤄 둔 알림이 풀린다 — 앞 요청은 성공했는데 이 재시도만 죽은 경우가 그렇다.
         releaseComposeWait();
         if (cancelled) return;
-
-        if (error instanceof SystemFrameMissingError && remoteFrameId == null) {
-          try {
-            await prepareLocalOutput();
-            return;
-          } catch (localError) {
-            error = localError;
-          }
-          if (cancelled) return;
-        }
 
         // 실패 사유를 버리지 않는다. 프레임을 바꾸면 되는 실패인지, 기다리면 되는 실패인지
         // 사용자가 알아야 한다(lib/fourcutCompose.ts describeComposeFailure).
@@ -881,8 +874,9 @@ export default function ShootResultPage() {
     아래 단추 줄은 [사진 저장 · 공유]다. 다 되면 「사진 저장」, 실패하면 그다음 할 일(다시 시도·프레임 다시 고르기)이
     주 버튼이다. 이름은 꾸미기에서 붙이고 바꾸는 것은 기록에서만 한다 — 그래서 ⋯ 메뉴가 없다(2026-11-15).
 
-    만드는 동안에는 단추도 글도 없다(2026-11-15 「네 컷을 만들고 있어요보다는 사진을 살짝 흐리게 하고 그 위에 로딩이
-    돌아가면서 로딩바를 채워주든」). 고른 네 장을 프레임에 넣어 흐리게 깔고, 가운데 고리가 차오른다. 서버 합성이
+    만드는 동안에는 단추가 없다(2026-11-15 「네 컷을 만들고 있어요보다는 사진을 살짝 흐리게 하고 그 위에 로딩이
+    돌아가면서 로딩바를 채워주든」). 고른 네 장을 프레임에 넣어 흐리게 깔고, 가운데 고리가 차오르며 그 아래에
+    「네 컷을 만들고 있어요」 한 줄을 둔다(「그래도 생성 중이라는 텍스트는 있어도 좋지 않을까?」). 서버 합성이
     얼마나 걸릴지는 모르므로 고리는 처음엔 빠르게, 갈수록 느리게 92% 까지만 찬다(globals.css 의 hc-making-ring) —
     다 되면 흐림이 걷히며 완성본이 나타난다(ev-develop 를 같은 흐림에서 시작한다).
   */
@@ -944,12 +938,6 @@ export default function ShootResultPage() {
     primary = null;
   }
 
-  // 화면의 글은 이 한 줄뿐이다 — 실패한 까닭, 또는 기록에 남지 않는 사진이라는 것(기기에만 저장된다).
-  const message = imageError
-    ? { danger: true, text: imageError }
-    : localBlob && !guestMode
-      ? { danger: false, text: "이 사진은 기록에 보관되지 않아요. 기기에 저장해 주세요." }
-      : null;
 
   return (
     <main className="hc-page-app flex min-h-dvh flex-col px-4 pb-0 pt-[max(0.75rem,env(safe-area-inset-top))] text-(--hc-text) lg:px-8 lg:pt-6">
@@ -1011,8 +999,10 @@ export default function ShootResultPage() {
                 className={`${tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"} ${isPreparing ? "hc-making-blur" : ""}`}
               />
               {isPreparing ? (
+                // 고리 아래에 무엇을 하는 중인지 한 줄(2026-11-15 「그래도 생성 중이라는 텍스트는 있어도 좋지 않을까?」).
+                // 읽기 프로그램은 위 상태 줄이 같은 말을 하므로 여기는 숨긴다.
                 <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
-                  <span className="grid size-16 place-items-center rounded-full bg-[rgba(20,20,15,0.42)] shadow-[0_8px_24px_rgba(0,0,0,0.22)]">
+                  <span className="flex flex-col items-center gap-3 rounded-3xl bg-[rgba(20,20,15,0.5)] px-6 pb-4 pt-5 shadow-[0_8px_24px_rgba(0,0,0,0.22)]">
                     <svg viewBox="0 0 48 48" className="size-11 -rotate-90">
                       <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
                       <circle
@@ -1028,6 +1018,7 @@ export default function ShootResultPage() {
                         className="hc-making-ring"
                       />
                     </svg>
+                    <span className="text-[14px] font-semibold text-white">네 컷을 만들고 있어요</span>
                   </span>
                 </div>
               ) : null}
@@ -1039,9 +1030,10 @@ export default function ShootResultPage() {
         <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2.5 bg-linear-to-t from-(--background) from-75% to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 lg:-mx-8 lg:px-8">
           {/* 만드는 동안은 단추 자리를 비워 둔다. 단추 줄과 같은 높이라 다 되어도 사진이 밀리지 않는다. */}
           {isPreparing ? <div aria-hidden className="h-13" /> : null}
-          {message ? (
-            <p className={`text-center text-[13px] leading-[1.6] ${message.danger ? "text-(--hc-danger)" : "text-(--hc-muted)"}`}>
-              <Sentences text={message.text} />
+          {/* 화면의 글은 실패한 까닭 한 줄뿐이다. */}
+          {imageError ? (
+            <p className="text-center text-[13px] leading-[1.6] text-(--hc-danger)">
+              <Sentences text={imageError} />
             </p>
           ) : null}
 

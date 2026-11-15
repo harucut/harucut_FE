@@ -5,13 +5,29 @@ import { stubAuthenticatedApi } from "./fixtures/apiStub";
 
 const envelope = (data: unknown) => ({ code: "GEN-000", status: 200, data });
 
-test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운로드까지 복구", async ({ page, baseURL }, info) => {
+/*
+  회원 사진은 언제나 서버가 만들어 기록에 남긴다(2026-11-15 「기기 저장만 가능은 대체 뭐」). 예전 이 시험은 서버에
+  기본 프레임이 없을 때 기기에서 만들어 「이 사진은 기록에 보관되지 않아요」로 내려받는 폴백을 봤다 — 기본 프레임은
+  백엔드가 늘 갖도록 보장하고 그 폴백은 걷었다. 이름은 꾸미기에서 붙이고(완성 화면에는 이름 바꾸기가 없다), 서버가
+  붙인 날짜 이름을 다 된 뒤 그 이름으로 바꾼다.
+*/
+test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 받기까지", async ({ page, baseURL }, info) => {
   await stubAuthenticatedApi(page);
   await page.context().addCookies([{ name: "accessToken", value: "qa-member", url: baseURL! }]);
-  await page.route("**/api/client/user/frame", (route) => route.fulfill({ json: envelope([]) }));
-  const writes: string[] = [];
+  // 막 만든 기록은 서버가 붙인 날짜 이름이다 — 그래야 꾸미기 이름으로 바꾼다(이미 바꾼 기록은 건드리지 않는다).
+  await page.route(
+    (url) => url.pathname === "/api/client/user/media",
+    (route) => route.fulfill({ json: envelope([{ mediaId: 9100, s3Key: "uploads/users/a11y/result.webp", displayName: "harucut_20261115_143000", createdAt: "2026-11-15T14:30:00.000000" }]) }),
+  );
+  const renamed: string[] = [];
+  await page.route("**/api/client/user/media/9100/display-name", (route) => {
+    const { displayName } = route.request().postDataJSON() as { displayName: string };
+    renamed.push(displayName);
+    return route.fulfill({ json: envelope({ mediaId: 9100, s3Key: "uploads/users/a11y/result.webp", displayName, createdAt: "2026-11-15T14:30:00.000000" }) });
+  });
+  const composed: string[] = [];
   page.on("request", (request) => {
-    if (request.method() !== "GET" && request.url().includes("/api/client/")) writes.push(new URL(request.url()).pathname);
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/client/user/media/compose") composed.push(request.url());
   });
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/shoot?source=upload");
@@ -20,30 +36,23 @@ test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운�
   await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
   for (const n of [4, 2, 3, 1]) await page.getByRole("button", { name: `${n}번 사진 선택`, exact: true }).click();
-  // 이름은 꾸미기에서 붙인다(2026-11-15). 완성 화면에는 이름 바꾸기가 없고, 바꾸는 것은 기록에서만 한다.
   await page.getByRole("button", { name: "꾸미기", exact: true }).click();
-  await page.getByLabel("사진 이름", { exact: true }).fill("POC-기기저장");
+  await page.getByLabel("사진 이름", { exact: true }).fill("POC-회원");
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  const downloadLink = page.getByRole("link", { name: "사진 저장", exact: true });
-  await expect(downloadLink).toBeVisible();
-  await expect(page.getByText("이 사진은 기록에 보관되지 않아요.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "공유", exact: true })).toHaveCount(0);
+  const save = page.getByRole("button", { name: "사진 저장", exact: true });
+  await expect(save).toBeVisible();
+  expect(composed).toHaveLength(1);
+  expect(renamed).toEqual(["POC-회원"]);
+  await expect(page.getByText(/기록에 보관되지 않아요/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "공유", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "더보기", exact: true })).toHaveCount(0);
   const completed = page.waitForEvent("download");
-  await downloadLink.click();
+  await save.click();
   const download = await completed;
   // macOS WebKit은 파일명의 한글을 분해형으로 돌려줄 수 있다.
-  expect(download.suggestedFilename().normalize("NFC")).toBe("POC-기기저장.jpg");
+  expect(download.suggestedFilename().normalize("NFC")).toMatch(/^POC-회원\.(webp|jpe?g|png)$/);
   expect(await download.failure()).toBeNull();
-  const bytes = await readFile((await download.path())!);
-  expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
-  expect(bytes.length).toBeGreaterThan(10_000);
-  expect(writes).toEqual([]); // 원본 업로드·합성·이름 변경 API를 호출하지 않는다.
-  await page.screenshot({ path: info.outputPath("member-local-result.png"), fullPage: true });
-  await page.reload();
-  await expect(downloadLink).toBeVisible();
-  await expect(page.getByText("이 사진은 기록에 보관되지 않아요.")).toBeVisible();
-  expect(writes).toEqual([]);
+  await page.screenshot({ path: info.outputPath("member-server-result.png"), fullPage: true });
 });
 
 test("빈 활성 약관은 체험으로 안내하고 재조회가 성공하면 가입 폼을 연다", async ({ page }, info) => {
