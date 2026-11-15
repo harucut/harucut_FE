@@ -28,13 +28,16 @@ type Props = {
   confirmNotice?: string | null;
   /** 넘어가기 전에 확인하는 중. 확인 단추가 「확인 중…」으로 잠긴다. */
   confirmBusy?: boolean;
-  /** 고른 것이 바뀌었다 — 앞서 고른 프레임의 안내를 거둘 때 쓴다. */
-  onSelectionChange?: () => void;
+  /** 고른 것이 바뀌었다 — 바뀐 선택을 넘긴다(앞서 고른 프레임의 안내를 거둘 때, 주 버튼 이름을 고를 때). */
+  onSelectionChange?: (choice: FrameChoice) => void;
 
   /** 비회원처럼 저장한 프레임을 볼 수 없는 경우. */
   hideSavedFrames?: boolean;
-  /** 저장한 프레임을 고르지 않고 눌러서 바로 연다(꾸미기). 주면 컷 구성으로 거르지도 않는다(SavedFramesSection). */
-  onOpenSavedFrame?: (frame: RemoteFrame) => void;
+  /**
+   * 저장한 프레임을 컷 구성으로 거르지 않고 모두 보인다(꾸미기). 위에서 새 프레임의 컷 구성을 바꿨다고 고칠 프레임이
+   * 목록에서 사라지면 안 된다. 만들기는 거른다 — 고른 컷 구성으로 찍기 때문이다.
+   */
+  showAllSavedFrames?: boolean;
 
   /** 고르기 위(배너·게이지). */
   children?: ReactNode;
@@ -66,7 +69,7 @@ export function FrameChooser({
   confirmBusy,
   onSelectionChange,
   hideSavedFrames,
-  onOpenSavedFrame,
+  showAllSavedFrames,
   children,
   belowPicker,
 }: Props) {
@@ -120,7 +123,7 @@ export function FrameChooser({
         onChangeSelected={(nextFrameId) => {
           setManualFrameId(nextFrameId);
           setSelectedRemoteFrameId(null);
-          onSelectionChange?.();
+          onSelectionChange?.({ frameId: nextFrameId, remoteFrameId: null });
         }}
       />
 
@@ -138,10 +141,10 @@ export function FrameChooser({
           onSelectRemoteFrame={(frame) => {
             setManualFrameId(frameIdFromFrameType(frame.frameType));
             setSelectedRemoteFrameId(frame.frameId);
-            onSelectionChange?.();
+            onSelectionChange?.({ frameId: frameIdFromFrameType(frame.frameType), remoteFrameId: frame.frameId });
           }}
           onRefresh={onRefresh}
-          onOpen={onOpenSavedFrame}
+          filterByLayout={!showAllSavedFrames}
         />
       )}
 

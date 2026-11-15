@@ -126,10 +126,10 @@ describe("FrameChooser 촬영 전 확인 표시", () => {
     expect(screen.getByRole("button", { name: "확인 중…" })).toBeDisabled();
   });
 
-  it("다른 프레임을 고르면 바깥에 알린다 — 앞서 고른 프레임의 안내를 거두게", () => {
+  it("다른 프레임을 고르면 바뀐 선택을 바깥에 알린다 — 앞서 고른 프레임의 안내를 거두거나 주 버튼 이름을 고르게", () => {
     const onSelectionChange = jest.fn();
     renderChooser({ frames: [frame()], onSelectionChange });
     fireEvent.click(screen.getByRole("button", { name: /행사 프레임/ }));
-    expect(onSelectionChange).toHaveBeenCalled();
+    expect(onSelectionChange).toHaveBeenLastCalledWith(expect.objectContaining({ remoteFrameId: frame().frameId }));
   });
 });

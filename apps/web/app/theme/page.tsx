@@ -7,8 +7,7 @@ import { resolveFrameCapacity } from "@/components/frame/FrameCapacityMeter";
 import { FrameChooser } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
-import { frameIdFromFrameType } from "@/lib/frameApi";
+import type { SubscriptionUsage } from "@/lib/api-types";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
 import { Sentences } from "@/components/ui/Sentences";
@@ -56,11 +55,13 @@ function ThemePageContent() {
   // 서버가 한도 도달을 확인한 경우만 신규 진입을 막는다. 기존 프레임 수정은 계속 가능하다.
   const isAtCapacity = usage !== null && capacity.atCapacity;
 
-  const handleOpenRemoteFrame = (frame: RemoteFrame) => {
-    setFrameId(frameIdFromFrameType(frame.frameType));
-    setRemoteFrameId(frame.frameId);
-    router.push("/theme/sticker");
-  };
+  /*
+    고른 저장 프레임(2026-11-15 「프레임 꾸미기 이미 있던 거 골랐으면 수정하기 같은 걸로 뜨게」). 저장한 프레임을 고르면 주
+    버튼이 「수정하기」가 되고 그 프레임을 연다. 위에서 컷 구성(큰 카드)을 누르면 풀리고 「새 프레임 만들기」로 돌아간다.
+    보관함이 가득해도 고치는 것은 된다 — 막는 것은 새로 만드는 것뿐이다.
+  */
+  const [editingFrameId, setEditingFrameId] = useState<number | null>(null);
+  const editing = editingFrameId != null && frames.some((frame) => frame.frameId === editingFrameId);
 
   return (
     <main className="hc-page-app flex min-h-dvh flex-col px-2 pb-0 pt-6 text-(--hc-text) sm:px-4 md:pb-6 lg:px-8 lg:py-10">
@@ -98,17 +99,23 @@ function ThemePageContent() {
           onRefresh={refresh}
           // 라벨은 "불러오는 중…"인데 버튼은 눌렸다. 눌러도 조용히 빠져나가서, 목록이
           // 늦게 오는 날에는 아무 반응 없는 버튼이 됐다. 상태와 라벨을 맞춘다.
-          confirmDisabled={isLoading || isAtCapacity}
-          confirmLabel={isLoading ? "불러오는 중…" : isAtCapacity ? "저장 공간을 확인해 주세요" : "새 프레임 만들기"}
-          // 확인은 **언제나 새 프레임**이다. 저장한 프레임은 고르는 대상이 아니라 눌러서 여는
-          // 대상이다 — 카드를 누르면 바로 편집기로 간다(onOpenSavedFrame).
-          onConfirm={({ frameId }) => {
+          confirmDisabled={editing ? false : isLoading || isAtCapacity}
+          confirmLabel={editing ? "수정하기" : isLoading ? "불러오는 중…" : isAtCapacity ? "저장 공간을 확인해 주세요" : "새 프레임 만들기"}
+          onSelectionChange={({ remoteFrameId }) => setEditingFrameId(remoteFrameId)}
+          showAllSavedFrames
+          onConfirm={({ frameId, remoteFrameId }) => {
+            // 저장한 프레임을 골랐으면 그 프레임을 고친다.
+            if (remoteFrameId != null) {
+              setFrameId(frameId);
+              setRemoteFrameId(remoteFrameId);
+              router.push("/theme/sticker");
+              return;
+            }
             if (isLoading || isAtCapacity) return;
             setFrameId(frameId);
             setRemoteFrameId(null);
             router.push("/theme/sticker");
           }}
-          onOpenSavedFrame={handleOpenRemoteFrame}
           belowPicker={
             /*
               몇 개까지 되는지는 **만들기 전에** 알아야 한다 — 만든 뒤에 알면 늦다.

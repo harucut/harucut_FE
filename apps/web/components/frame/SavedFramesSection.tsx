@@ -22,14 +22,15 @@ type SavedFramesSectionProps = {
   onSelectRemoteFrame: (frame: RemoteFrame) => void;
   onRefresh: () => void;
   /**
-   * 누르면 바로 여는 목록(꾸미기 — 눌러서 고친다). 주면 고르는 목록이 아니다: 컷 구성으로 거르지
-   * 않고, 고른 표시도 없다.
+   * 위에서 고른 컷 구성으로 거르는가(기본 true — 만들기는 그 구성으로 찍는다). 꾸미기는 false 다 — 새 프레임의 컷
+   * 구성을 바꿨다고 고칠 프레임이 목록에서 사라지면 안 된다.
    *
-   * 예전에는 꾸미기에서도 카드를 누르면 체크만 붙고 고치는 길은 카드 아래 「수정하기」였다.
-   * 꾸미기의 주 버튼은 언제나 「새 프레임 만들기」라, 카드를 누르고 그 버튼을 누르면 고치려던
-   * 프레임 대신 빈 새 프레임이 열렸다(2026-11-09 바꿈).
+   * 꾸미기도 눌러서 **고른다**(2026-11-15 「프레임 꾸미기 이미 있던 거 골랐으면 수정하기 같은 걸로 뜨게」) — 고르면
+   * 주 버튼이 「수정하기」가 되고 그 프레임을 연다(app/theme/page.tsx). 2026-11-09 부터 이날까지는 누르면 바로
+   * 편집기로 갔다 — 그 전에는 고르면 체크만 붙고 주 버튼은 늘 「새 프레임 만들기」라, 누르면 고치려던 프레임 대신 빈
+   * 새 프레임이 열렸기 때문이다. 이제 주 버튼이 고른 것을 따라가 그 문제가 없다.
    */
-  onOpen?: (frame: RemoteFrame) => void;
+  filterByLayout?: boolean;
 };
 
 export function SavedFramesSection({
@@ -42,15 +43,14 @@ export function SavedFramesSection({
   selectedRemoteFrameId,
   onSelectRemoteFrame,
   onRefresh,
-  onOpen,
+  filterByLayout = true,
 }: SavedFramesSectionProps) {
-  // 여는 목록은 거르지 않는다 — 위에서 새 프레임의 컷 구성을 바꿨다고 고칠 프레임이 사라지면 안 된다.
   const matchingFrames = useMemo(
     () =>
-      selectedFrameId && !onOpen
+      selectedFrameId && filterByLayout
         ? frames.filter((frame) => matchesFrameType(selectedFrameId, frame.frameType))
         : frames,
-    [frames, selectedFrameId, onOpen],
+    [frames, selectedFrameId, filterByLayout],
   );
 
   // 상단 게이지는 "보관 1개"라고 하는데 이 목록은 "저장한 프레임이 없어요"라고 말하는
@@ -119,7 +119,7 @@ export function SavedFramesSection({
         // 폰에서는 한 줄로 넘긴다. 세로로 쌓으면 프레임 몇 개만으로 위의 큰 카드와 아래 버튼이 멀어진다.
         <div className="-mx-2 mt-1 flex gap-2.5 overflow-x-auto px-2 pb-1 scrollbar-none [-ms-overflow-style:none] sm:-mx-4 sm:px-4 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 lg:grid-cols-6 [&::-webkit-scrollbar]:hidden">
           {matchingFrames.map((frame) => {
-            const isSelected = !onOpen && selectedRemoteFrameId === frame.frameId;
+            const isSelected = selectedRemoteFrameId === frame.frameId;
             const previewFrameId = frameIdFromFrameType(frame.frameType);
             const name = frame.title || `프레임 #${frame.frameId}`;
 
@@ -127,8 +127,8 @@ export function SavedFramesSection({
               <article key={frame.frameId} className="flex w-27 shrink-0 flex-col gap-1.5 md:w-auto">
                 <button
                   type="button"
-                  onClick={() => (onOpen ? onOpen(frame) : onSelectRemoteFrame(frame))}
-                  aria-pressed={onOpen ? undefined : isSelected}
+                  onClick={() => onSelectRemoteFrame(frame)}
+                  aria-pressed={isSelected}
                   className="flex min-w-0 flex-col gap-1.5 text-left"
                 >
                   <span
@@ -160,8 +160,6 @@ export function SavedFramesSection({
                   </span>
                   <span className="truncate text-[13px] font-semibold text-(--hc-text)">
                     {name}
-                    {/* 눌러서 무엇이 되는지는 화면 읽기 프로그램에도 말한다. 보이는 이름은 그대로 앞에 온다. */}
-                    {onOpen ? <span className="sr-only"> 수정하기</span> : null}
                   </span>
                 </button>
               </article>
