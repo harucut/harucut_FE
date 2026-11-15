@@ -1,6 +1,6 @@
 export const PROTECTED_PATHS = [
   "/home",
-  "/shoot",
+  "/create",
   "/history",
   "/theme",
   "/mypage",
@@ -22,10 +22,10 @@ export function isProtectedPath(pathname: string) {
  * 게스트 자격으로 찍는데, 다운로드까지 막으면 "참가자는 가입 없이 찍고 그 자리에서 가져가요"
  * 라는 판매 문구가 사실이 아니게 된다.
  */
-const GUEST_ALLOWED_PREFIXES = ["/shoot"] as const;
+const GUEST_ALLOWED_PREFIXES = ["/create"] as const;
 
 function hasPrefix(pathname: string, prefix: string) {
-  // "/shootings" 같은 다른 경로가 "/shoot" 에 걸리지 않게 경계를 본다.
+  // "/creators" 같은 다른 경로가 "/create" 에 걸리지 않게 경계를 본다.
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
@@ -60,7 +60,7 @@ export function isGuestAllowedPath(pathname: string) {
   /*
     촬영 흐름 안에는 회원만 쓰는 것이 하나 있다 — 갤러리에서 불러오기. 예전에는 따로 화면(/shoot/upload)이라
     여기서 막았는데, 2026-11-15 사진 고르기 화면 안으로 합쳤다. 이제 그 칸은 화면이 회원에게만 보이고, 들어가기
-    전 확인은 프레임 고르기가 한다(app/shoot/page.tsx · app/shoot/select/page.tsx).
+    전 확인은 프레임 고르기가 한다(app/create/page.tsx · app/create/select/page.tsx). 촬영 흐름 주소는 2026-11-15 /shoot 에서 /create 로 옮겼다.
   */
   return GUEST_ALLOWED_PREFIXES.some((prefix) => hasPrefix(toRoutePath(pathname), prefix));
 }

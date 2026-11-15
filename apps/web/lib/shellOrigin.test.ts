@@ -17,7 +17,7 @@ describe("릴리스 주소와 운영 소셜 콜백", () => {
   it("개발 모드에서만 로컬 원점을 쓴다", () => {
     expect(resolveShellOrigin("http://localhost:3000/", WEB, true)).toBe("http://localhost:3000");
   });
-  it.each(["javascript:alert(1)", "https://name:secret@www.harucut.com", "http://localhost:3000/shoot", "not a url"])("잘못된 개발 설정 %s는 버린다", (value) => {
+  it.each(["javascript:alert(1)", "https://name:secret@www.harucut.com", "http://localhost:3000/create", "not a url"])("잘못된 개발 설정 %s는 버린다", (value) => {
     expect(resolveShellOrigin(value, WEB, true)).toBe(WEB);
   });
   it("apex 콜백의 성공·실패 쿼리를 같은 WebView의 www로 옮긴다", () => {
@@ -49,7 +49,7 @@ describe("originOf", () => {
 
 describe("isSameOrigin", () => {
   it("같은 오리진이면 경로가 달라도 통과", () => {
-    expect(isSameOrigin("https://www.harucut.com/shoot/result", WEB)).toBe(true);
+    expect(isSameOrigin("https://www.harucut.com/create/result", WEB)).toBe(true);
   });
 
   /*

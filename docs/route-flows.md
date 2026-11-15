@@ -23,7 +23,7 @@
 
 ```text
 /  -> 랜딩 페이지
-   -> /shoot              히어로 주 CTA(「가입 없이 체험하기」 → 안내 모달 → 게스트 체험 쿠키)
+   -> /create              히어로 주 CTA(「가입 없이 체험하기」 → 안내 모달 → 게스트 체험 쿠키)
    -> /login              히어로 보조 CTA · 하단 CTA · 헤더 CTA(헤더 CTA 는 좁은 화면에서 숨긴다)
    -> /features           헤더 nav · 본문 「기능 자세히 보기」
    -> /enterprise         헤더 nav · 본문 「행사 도입 알아보기」
@@ -39,18 +39,18 @@
 /login?redirectTo=<원래 경로와 쿼리>
 ```
 
-게스트 체험 쿠키가 있으면 `/shoot/*`만 예외로 통과합니다. 자세한 분기는
+게스트 체험 쿠키가 있으면 `/create/*`만 예외로 통과합니다. 자세한 분기는
 [docs/auth-routing.md](./auth-routing.md)의 "게스트 체험 모드" 절을 참고합니다.
 
 ## 촬영 임시 보관
 
-촬영 원본과 선택 순서·배경색·필터·합성 멱등키를 IndexedDB에 보관한다. `/shoot` 레이아웃은
+촬영 원본과 선택 순서·배경색·필터·합성 멱등키를 IndexedDB에 보관한다. `/create` 레이아웃은
 복원을 마친 뒤 자식 페이지를 열어, 새로고침 직후 빈 세션으로 오인한 리다이렉트를 막는다.
 원본은 컷별 Blob으로 저장하고 선택 변경 때 원본을 다시 쓰지 않는다. 결과물 blob URL은
 문서 수명에 묶이므로 보관하지 않고 원본에서 다시 만든다. 서버 합성 전에는 멱등키 쓰기를 기다린다.
 
 - 마지막 변경부터 24시간. 만료되거나 손상된 보관물은 사진까지 지운다.
-- `/shoot` 재진입 시 기존 사진이 있으면 이어 만들기·새로 시작하기를 제공한다. 새로 시작은 삭제 확인 후 실행한다.
+- `/create` 재진입 시 기존 사진이 있으면 이어 만들기·새로 시작하기를 제공한다. 새로 시작은 삭제 확인 후 실행한다.
 - 앱 전환·카메라 트랙 중단 시 자동 촬영을 멈춘다. 이미 찍은 컷은 유지하며 남은 컷부터 이어 찍는다.
 - 명시적 로그아웃·탈퇴 시 촬영 세션, 편집 초안, 게스트 저장 인계를 정리한다.
 - 저장소 차단·용량 부족은 화면에 알린다. 브라우저 데이터 삭제, 쓰기가 끝나기 전 강제 종료까지 복구를 보장하지 않는다.
@@ -59,26 +59,30 @@
 소유자: `shootSessionStorage.ts`, `shootSessionPersistence.ts`, `ShootSessionBoundary.tsx`.
 단위 테스트로 왕복·만료·실패·로그아웃 경합을 검증했으며, 실제 브라우저 재시작 시험은 별도 QA 항목이다.
 
-## 촬영 흐름
+## 만들기 흐름
+
+주소는 2026-11-15 `/shoot`(촬영)에서 `/create`(만들기)로 옮겼다 — 찍든 갤러리에서 불러오든 같은 흐름이다.
+예전 `/shoot/*` 주소는 `next.config.ts` 의 redirects 가 `/create/*` 로 넘긴다(`/shoot/upload` 는 `/create?source=upload`).
 
 ```text
-/shoot
+/create
   -> 프레임과 선택 가능한 드래프트를 고른다
   -> shootSession에 frameId/draftId를 저장한다
-  -> /shoot/capture
+  -> /create/capture          (사진 찍기)
+  -> /create/select           (?source=upload — 갤러리에서 불러오기. 회원만, 「사진 고르러 가기」에서 확인)
 
-/shoot/capture
+/create/capture
   -> frameId가 필요하다
   -> 프레임 없이 슬롯 비율만 반영해 8장을 촬영한다
-  -> /shoot/select
+  -> /create/select
 
-/shoot/select
+/create/select
   -> frameId가 필요하다
-  -> 촬영 결과가 필요하다
-  -> 4장을 선택한다
-  -> /shoot/result
+  -> 촬영 결과가 필요하다(불러오기는 없어도 된다 — 목록 맨 앞 「사진 불러오기」 칸으로 불러오고, 빈 칸부터 차례로 들어간다)
+  -> 4장을 선택하고 꾸민다(테두리·보정·사진 이름)
+  -> /create/result
 
-/shoot/result
+/create/result
   -> frameId가 필요하다
   -> 촬영 결과가 필요하다
   -> 정확히 4칸이 선택되어 있어야 한다
@@ -89,12 +93,12 @@
 클라이언트 측 복귀 규칙:
 
 ```text
-/shoot/capture  frameId 없음          -> /shoot
-/shoot/select   frameId 없음          -> /shoot
-/shoot/select   shots 없음            -> /shoot/capture
-/shoot/result   frameId 없음          -> /shoot
-/shoot/result   shots 없음            -> /shoot/select
-/shoot/result   4장 선택 안 됨       -> /shoot/select
+/create/capture  frameId 없음          -> /create
+/create/select   frameId 없음          -> /create
+/create/select   shots 없음(찍기)      -> /create/capture
+/create/result   frameId 없음          -> /create
+/create/result   shots 없음            -> /create/select
+/create/result   4장 선택 안 됨       -> /create/select
 ```
 
 ## 테마 흐름

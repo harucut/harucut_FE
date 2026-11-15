@@ -3,7 +3,7 @@ import { ShootSessionBoundary } from "@/components/shoot/ShootSessionBoundary";
 import { useShootSession } from "@/lib/shootSessionStore";
 
 const mockReplace = jest.fn();
-let mockPath = "/shoot/select";
+let mockPath = "/create/select";
 
 jest.mock("next/navigation", () => ({
   usePathname: () => mockPath,
@@ -32,19 +32,19 @@ describe("끝난 촬영", () => {
 
   // 완성본이 어디에 있든(계정 기록·이 기기) 끝난 촬영이다.
   it.each([
-    ["/shoot/capture", "account"],
-    ["/shoot/select", "account"],
-    ["/shoot/select", "device"],
+    ["/create/capture", "account"],
+    ["/create/select", "account"],
+    ["/create/select", "device"],
   ] as const)("%s 에 오면(%s) 그리지 않고 완성 화면으로 보낸다", (path, completed) => {
     mockPath = path;
     useShootSession.setState({ completed });
     render(<ShootSessionBoundary><p>단계 화면</p></ShootSessionBoundary>);
 
     expect(screen.queryByText("단계 화면")).toBeNull();
-    expect(mockReplace).toHaveBeenCalledWith("/shoot/result");
+    expect(mockReplace).toHaveBeenCalledWith("/create/result");
   });
 
-  it.each(["/shoot/result", "/shoot"])("%s 는 그대로 그린다", (path) => {
+  it.each(["/create/result", "/create"])("%s 는 그대로 그린다", (path) => {
     mockPath = path;
     useShootSession.setState({ completed: "device" });
     render(<ShootSessionBoundary><p>화면</p></ShootSessionBoundary>);
@@ -54,7 +54,7 @@ describe("끝난 촬영", () => {
   });
 
   it("끝나지 않은 촬영은 고르기 화면을 그대로 그린다", () => {
-    mockPath = "/shoot/select";
+    mockPath = "/create/select";
     render(<ShootSessionBoundary><p>고르기</p></ShootSessionBoundary>);
 
     expect(screen.getByText("고르기")).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import ShootPage from "@/app/shoot/page";
+import ShootPage from "@/app/create/page";
 import { GUEST_TRIAL_COOKIE } from "@/lib/guestTrialShared";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
@@ -95,7 +95,7 @@ describe("프레임을 다시 고를 때 들고 온 사진", () => {
   it("업로드 사진은 슬롯 비율이 달라져도 남는다", () => {
     renderWithKeptShots("upload");
     expect(useShootSession.getState().shots).toEqual(SHOTS);
-    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+    expect(mockPush).toHaveBeenCalledWith("/create/select");
   });
 
   it("사진 비율이 바뀌어도 확인 전에는 촬영본을 지우지 않는다", () => {
@@ -104,7 +104,7 @@ describe("프레임을 다시 고를 때 들고 온 사진", () => {
     expect(mockPush).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "사진 지우고 다시 찍기" }));
     expect(useShootSession.getState().shots).toEqual([]);
-    expect(mockPush).toHaveBeenCalledWith("/shoot/capture");
+    expect(mockPush).toHaveBeenCalledWith("/create/capture");
   });
 
   it("촬영본도 슬롯 비율이 같으면 그대로 쓴다", () => {
@@ -112,11 +112,11 @@ describe("프레임을 다시 고를 때 들고 온 사진", () => {
     mockChosenFrameId = "wide-4";
     renderWithKeptShots("camera");
     expect(useShootSession.getState().shots).toEqual(SHOTS);
-    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+    expect(mockPush).toHaveBeenCalledWith("/create/select");
   });
 });
 
-/** 한 SPA 세션 안에서 `/shoot` 에 다시 서는 것 — 스토어는 모듈 수준이라 그대로 남는다. */
+/** 한 SPA 세션 안에서 `/create` 에 다시 서는 것 — 스토어는 모듈 수준이라 그대로 남는다. */
 function enterShoot(query: string) {
   mockQuery = query;
   return render(<ShootPage />);
@@ -143,7 +143,7 @@ describe("옛 행사 쿼리", () => {
 
   그 경로는 회원 전용이라 게스트 쿠키가 이미 있으면 **화면이 마운트되기 전에** 프록시가
   막는다. 프록시는 세션을 못 보므로, 되돌릴 주소에 넣을 것이 요청에 실려 있지 않으면
-  고른 프레임이 사라진다 — `/shoot` 은 쿼리 없는 진입을 새 촬영으로 보고 세션을 비운다.
+  고른 프레임이 사라진다 — `/create` 은 쿼리 없는 진입을 새 촬영으로 보고 세션을 비운다.
 
   업로드 화면 자체는 이 쿼리를 읽지 않는다(세션에서 같은 값을 꺼낸다). 싣는 이유는
   **프록시가 되돌릴 때 잃지 않기 위해서**다.
@@ -164,7 +164,7 @@ describe("갤러리 불러오기로 보내는 주소", () => {
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/select"));
   });
 
   // 반대쪽 못 — 촬영 경로는 예전 주소 그대로다(프록시가 막는 경로가 아니다). 회원인지 묻지도 않는다.
@@ -175,7 +175,7 @@ describe("갤러리 불러오기로 보내는 주소", () => {
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/capture"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/capture"));
     expect(mockResolveMembership).not.toHaveBeenCalled();
   });
 });
@@ -188,7 +188,7 @@ describe("갤러리 불러오기로 보내는 주소", () => {
   물었다. 지금은 「사진 고르러 가기」를 누를 때 묻고, 회원이 아니면 이 화면에서 회원 전용 안내 창을 띄운다.
 */
 describe("사진 불러오기에 들어가기 전 회원 확인", () => {
-  const RESTRICTED = "/shoot?guestNotice=restricted&frame=classic-4";
+  const RESTRICTED = "/create?guestNotice=restricted&frame=classic-4";
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -215,7 +215,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     mockResolveMembership.mockResolvedValue("member");
     pressConfirm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/select"));
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -226,7 +226,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
 
     expect(screen.getByRole("button", { name: "확인" })).toBeDisabled();
     await act(async () => answer("member"));
-    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+    expect(mockPush).toHaveBeenCalledWith("/create/select");
   });
 
   // 세션이 끊긴 회원 — 들여보내지 않고 이 자리에서 안내 창. 카메라 쪽 프레임 고르기로 바꾸고 고른 프레임은 둔다.
@@ -244,7 +244,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     mockResolveMembership.mockResolvedValue("unknown");
     pressConfirm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/select"));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
@@ -264,7 +264,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
     mockResolveMembership.mockResolvedValue("member");
     pressConfirm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/select"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/select"));
     expect(useGuestTrialStore.getState().accessMode).toBe("member");
   });
 
@@ -272,7 +272,7 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
   it("들고 온 사진이 있으면 묻지 않는다", () => {
     renderWithKeptShots("upload");
 
-    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+    expect(mockPush).toHaveBeenCalledWith("/create/select");
     expect(mockResolveMembership).not.toHaveBeenCalled();
   });
 });
@@ -280,8 +280,8 @@ describe("사진 불러오기에 들어가기 전 회원 확인", () => {
 /*
   ── 회원 후보 진입(`checkSession=1`): 게스트 전환은 **여기서** 판정한다 ──
 
-  랜딩의 「가입 없이 체험하기」(`/shoot/start`)는 인증 쿠키가 남은 방문자를 체험 쿠키 없이
-  `/shoot?checkSession=1` 로 보낸다. 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다.
+  랜딩의 「가입 없이 체험하기」(`/create/start`)는 인증 쿠키가 남은 방문자를 체험 쿠키 없이
+  `/create?checkSession=1` 로 보낸다. 그 쿠키가 살아 있는지는 미들웨어가 알 수 없다.
   한때 미들웨어가 「살아 있는 access 가 아니면 심는다」로 점쳤는데, access 만 자연 만료되고
   refresh 는 멀쩡한 회원(흔하다)이 7일짜리 체험 쿠키를 받아 기록·커스텀 프레임을 잃었다.
 
@@ -418,7 +418,7 @@ describe("기존 촬영 복구", () => {
     render(<ShootPage />);
     expect(useShootSession.getState().shots).toEqual(SHOTS);
     fireEvent.click(screen.getByRole("button", { name: "이어서 만들기" }));
-    expect(mockPush).toHaveBeenCalledWith("/shoot/select");
+    expect(mockPush).toHaveBeenCalledWith("/create/select");
   });
   // 완성본이 나온 촬영은 끝났다(2026-11-15) — 이어 만들면 같은 사진을 다시 고르게 된다.
   it("기록에 남은 완성 사진은 이어 만들지 않고 새 촬영으로 시작한다", () => {
@@ -441,7 +441,7 @@ describe("기존 촬영 복구", () => {
     expect(screen.getByRole("heading", { name: "완성한 사진이 있어요" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "이어서 만들기" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "사진 보기" }));
-    expect(mockPush).toHaveBeenCalledWith("/shoot/result");
+    expect(mockPush).toHaveBeenCalledWith("/create/result");
     expect(useShootSession.getState().shots).toEqual(SHOTS);
   });
   it("이 기기에만 있는 완성 사진도 지우겠다고 확인하면 새 촬영으로 시작한다", () => {
@@ -500,7 +500,7 @@ describe("저장한 프레임의 촬영 전 확인", () => {
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/capture"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/capture"));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -509,7 +509,7 @@ describe("저장한 프레임의 촬영 전 확인", () => {
     render(<ShootPage />);
     fireEvent.click(screen.getByRole("button", { name: "확인" }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/shoot/capture"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/create/capture"));
     expect(mockCheckSavedFrame).not.toHaveBeenCalled();
   });
 });

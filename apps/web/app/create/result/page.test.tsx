@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { create } from "zustand";
-import ShootResultPage from "@/app/shoot/result/page";
+import ShootResultPage from "@/app/create/result/page";
 import { newIdempotencyKey } from "@/lib/composeApi";
 import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
@@ -629,14 +629,14 @@ describe("ShootResultPage", () => {
     ).not.toBeInTheDocument();
 
     /*
-      **사진을 두고** 프레임 화면으로 간다. 예전에는 `/shoot` 이 세션을 통째로 reset() 해서
-      찍은 8장까지 지웠고(app/shoot/page.tsx), 화면 문구("다른 프레임을 골라 주세요")는
+      **사진을 두고** 프레임 화면으로 간다. 예전에는 `/create` 이 세션을 통째로 reset() 해서
+      찍은 8장까지 지웠고(app/create/page.tsx), 화면 문구("다른 프레임을 골라 주세요")는
       사진이 남는다고 읽혀서 어긋났다. 이제 `keepShots=1` 로 보내고, 사진을 쓸 수 있는지
-      (슬롯 비율이 같은지)는 /shoot 이 판단한다 — 그래서 여기서는 경고할 것이 없다.
+      (슬롯 비율이 같은지)는 /create 이 판단한다 — 그래서 여기서는 경고할 것이 없다.
     */
     fireEvent.click(screen.getByRole("button", { name: "프레임 다시 고르기" }));
 
-    expect(mockPush).toHaveBeenCalledWith("/shoot?keepShots=1");
+    expect(mockPush).toHaveBeenCalledWith("/create?keepShots=1");
     // 잃는 것이 없으므로 확인 안내도 뜨지 않는다.
     expect(useGuestTrialStore.getState().notice).toBeNull();
   });

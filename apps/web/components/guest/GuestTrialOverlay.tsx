@@ -50,7 +50,7 @@ export function GuestTrialOverlay() {
         return;
       case "go-shoot":
         clearNotice();
-        router.push("/shoot");
+        router.push("/create");
         return;
       default:
         clearNotice();

@@ -202,7 +202,7 @@ describe("SignupPage 약관 동의 보관", () => {
     render(<SignupPage />);
     expect(screen.queryByRole("button", { name: "회원가입" })).toBeNull();
     expect(screen.queryByTestId("social-login")).toBeNull();
-    expect(screen.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/shoot/start");
+    expect(screen.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/create/start");
     fireEvent.click(screen.getByRole("button", { name: "다시 확인하기" }));
     expect(mockActiveTerms.reload).toHaveBeenCalledTimes(1);
     expect(mockSignupWithEmail).not.toHaveBeenCalled();

@@ -2,7 +2,7 @@
 //
 // 이 파일이 생긴 이유: 갤러리 불러오기 고지가 두 번 사라졌다.
 //   bbfdcbf `/decorate`·`/upload` 제거 — 약관·처리방침에서 "업로드" 문구를 8곳 지웠다.
-//              그런데 갤러리 불러오기는 없어진 게 아니라 `/shoot/upload` 로 옮겨졌을 뿐이다.
+//              그런데 갤러리 불러오기는 없어진 게 아니라 `/shoot/upload` 로 옮겨졌을 뿐이다(지금은 사진 고르기 화면 안).
 //   009e905 그 중 7곳을 되살렸다 — 약관 제4조(서비스의 제공 및 변경) 하나가 빠졌다.
 //
 // 고른 사진 네 장은 회원 합성 경로에서 서버로 올라간다
@@ -43,7 +43,7 @@ describe('서비스 이용약관 — 갤러리 불러오기 고지', () => {
     expect(mentionsGallery(sectionText(TERMS_OF_SERVICE, '제6조'))).toBe(true);
   });
 
-  // 코드(apps/web/lib/protectedPaths.ts 의 GUEST_MEMBER_ONLY_PREFIXES = ["/shoot/upload"])가
+  // 코드(apps/web/app/create/page.tsx 의 mayEnterUpload, app/create/select/page.tsx 의 불러오기 칸)가
   // 갤러리 불러오기를 회원 전용으로 막는다. 약관이 그 범위를 같이 적어야 화면과 어긋나지 않는다.
   it('제8조 비회원 범위가 갤러리 불러오기를 회원 전용으로 적는다', () => {
     expect(mentionsGallery(sectionText(TERMS_OF_SERVICE, '제8조'))).toBe(true);

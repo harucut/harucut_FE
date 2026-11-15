@@ -24,7 +24,7 @@ type Props = {
   confirmLabel: string;
   confirmDisabled?: boolean;
   onConfirm: (choice: FrameChoice) => void;
-  /** 넘어갈 수 없는 까닭 — 확인 단추 바로 위 한 줄(촬영 전 확인, app/shoot). */
+  /** 넘어갈 수 없는 까닭 — 확인 단추 바로 위 한 줄(촬영 전 확인, app/create). */
   confirmNotice?: string | null;
   /** 넘어가기 전에 확인하는 중. 확인 단추가 「확인 중…」으로 잠긴다. */
   confirmBusy?: boolean;
@@ -45,7 +45,7 @@ type Props = {
 /**
  * 프레임 고르는 화면 한 벌.
  *
- * `/shoot`·`/upload`·`/theme` 가 각자 같은 화면을 들고 있었다. 셋 다 주소의 `?frame=` 을
+ * `/create`·`/upload`·`/theme` 가 각자 같은 화면을 들고 있었다. 셋 다 주소의 `?frame=` 을
  * 읽고, 목록에서 고른 것과 손으로 고른 것을 합쳐 하나의 선택으로
  * 만들고, FramePicker 와 저장 목록을 같은 순서로 그렸다. 다른 것은 확인 버튼 문구와
  * 어디로 보내는지, 그리고 화면마다 하나씩 얹히는 것(게이지·행사 배너)뿐이었다.

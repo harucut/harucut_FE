@@ -13,7 +13,7 @@ type Props = {
  *
  * 두 길은 **사진이 어디서 오는지만 다르다.** 프레임 고르기부터 4장 고르기·서버 합성·
  * 내려받기까지는 같은 화면을 지나므로, 여기서 정하는 것은 사실상 첫 화면 하나다.
- * 그래서 무엇으로 갈지는 상태가 아니라 주소가 들고 간다(`/shoot?source=upload`).
+ * 그래서 무엇으로 갈지는 상태가 아니라 주소가 들고 간다(`/create?source=upload`).
  *
  * 링크로 두는 이유: 사용자가 새 탭으로 열거나 주소를 복사할 수 있어야 한다.
  * onClick 으로 router.push 를 하면 그게 전부 막힌다.
@@ -49,14 +49,14 @@ export function RecordSourceDialog({ open, onClose }: Props) {
 
         <div className="mt-4 flex flex-col gap-2">
           <Link
-            href="/shoot"
+            href="/create"
             onClick={onClose}
             className="hc-button-primary flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-extrabold"
           >
             사진 찍기
           </Link>
           <Link
-            href="/shoot?source=upload"
+            href="/create?source=upload"
             onClick={onClose}
             className="hc-button-secondary flex h-12 items-center justify-center rounded-full border px-5 text-[15px] font-extrabold"
           >

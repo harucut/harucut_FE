@@ -667,7 +667,7 @@ describe("composeFourcutOnServer — 올리기", () => {
 });
 
 /**
- * 「다시 준비하기」는 **같은 멱등키로** 다시 온다(app/shoot/result/page.tsx).
+ * 「다시 준비하기」는 **같은 멱등키로** 다시 온다(app/create/result/page.tsx).
  *
  * 멱등키가 덮는 것은 합성 접수부터라, 그 앞의 원본 4장은 재시도마다 새 S3 키로 또 올라갔다.
  * 서버는 기존 작업을 재생하며 그 key 를 쳐다보지도 않으니 4장은 그대로 고아가 된다 —

@@ -312,7 +312,7 @@ Playwright 로 두 엔진에서 실제로 호출해 확인했다(2026-08-28):
 ## 촬영 권한은 이미 정상이다 — 확인한 결과
 
 카메라는 웹의 `getUserMedia` 로 WebView 안에서 그대로 돈다
-(`apps/web/app/shoot/capture/_hooks/useCaptureFlow.ts`). 네이티브 카메라로 바꿀 필요가 없다.
+(`apps/web/app/create/capture/_hooks/useCaptureFlow.ts`). 네이티브 카메라로 바꿀 필요가 없다.
 `react-native-webview` 가 **런타임 권한까지 직접 요청**하기 때문이다 —
 `RNCWebChromeClient.onPermissionRequest` 가 `RESOURCE_VIDEO_CAPTURE` 를
 `Manifest.permission.CAMERA` 로 옮겨 `requestPermissions` 를 부른다(소스 확인).
@@ -329,7 +329,7 @@ chooser 에서 "카메라로 찍기" 항목이 빠졌다(`RNCWebViewModuleImpl.j
 지금은 **웹이 선택기를 열기 전에 셸에 권한을 부탁한다** — `camera-permission` 브리지
 메시지(`apps/web/lib/nativeBridge.ts` `nativeEnsureCameraPermission` ↔
 `apps/mobile/lib/native-bridge.ts` `ensureCameraPermission`), 호출부는
-`apps/web/app/shoot/upload/page.tsx` 의 「사진 고르기」 버튼이다. `notify-permission` 과
+`apps/web/hooks/usePhotoImport.ts` — 사진 고르기 화면의 「사진 불러오기」 칸이다(2026-11-15 불러오기 화면을 합쳤다). `notify-permission` 과
 같은 모양이다 — 시점은 웹이 고르고 권한은 셸이 받는다.
 
 **거절해도 그대로 진행한다.** 갤러리는 열리므로 사용자가 하려던 일은 계속할 수 있다.
@@ -411,7 +411,7 @@ URL 에 토큰도, 교환용 코드도 없다.
 (`components/harucut-web-shell.tsx`). 브리지에 앱 → 웹 메시지를 새로 만들지 않고 지금 WebView 에서 주소만 연다.
 
 **로컬 알림(`nativeNotify`)은 지금도 아무 데도 가지 않는다** — data 를 싣지 않는다. 그래서 그 본문은 「기록 화면에서 볼 수
-있어요」다(`apps/web/app/shoot/result/page.tsx` 의 `notifyServerComposeDone`). 서버 푸시를 등록한 기기(`lib/pushDevices.ts`
+있어요」다(`apps/web/app/create/result/page.tsx` 의 `notifyServerComposeDone`). 서버 푸시를 등록한 기기(`lib/pushDevices.ts`
 `hasServerPush`)에서는 같은 일을 두 번 알리지 않게 로컬 알림을 띄우지 않는다.
 
 서버 푸시 등록: 마이페이지 「알림 켜기」로 권한을 받으면, 그리고 로그인한 화면(AppNav)이 열릴 때마다 Expo 푸시 토큰을

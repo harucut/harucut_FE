@@ -61,10 +61,10 @@ export default function ShootSelectPage() {
     갤러리에서 불러오기는 따로 화면이 없다 — 프레임을 고르면 바로 이 화면이고, 사진 목록 맨 앞 「사진 불러오기」
     칸으로 불러온다(2026-11-15 「프레임 고르고 나면 바로 사진 고르기로 들어가서 거기서 올릴 수 있게」). 뒤로가기는
     프레임을 다시 고르는 것이고, 불러온 사진은 들고 간다(keepShots — 갤러리 사진은 어느 프레임에도 다시 쓴다).
-    불러오기는 회원만 쓴다. 들어오기 전에 프레임 고르기가 확인했고(app/shoot/page.tsx), 여기서는 이 기기가 아는
+    불러오기는 회원만 쓴다. 들어오기 전에 프레임 고르기가 확인했고(app/create/page.tsx), 여기서는 이 기기가 아는
     상태로 칸을 보인다. 그 사이 비회원이 되면 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다(아래 effect).
   */
-  const sourceHref = fromUpload ? "/shoot?source=upload&keepShots=1" : "/shoot/capture";
+  const sourceHref = fromUpload ? "/create?source=upload&keepShots=1" : "/create/capture";
   const canImport = fromUpload && guestHydrated && accessMode === "member";
   const slotCount = frameId ? FRAME_LAYOUTS[frameId].slots.length : 4;
   // 꺼내 쓴다 — 훅이 돌려주는 묶음에 ref 가 섞여 있어 묶음째 렌더에서 읽으면 React Compiler 가 막는다.
@@ -93,7 +93,7 @@ export default function ShootSelectPage() {
 
   useEffect(() => {
     if (!frameId) {
-      router.replace("/shoot");
+      router.replace("/create");
       return;
     }
 
@@ -106,16 +106,16 @@ export default function ShootSelectPage() {
   /*
     불러온 사진은 비회원이 쓰지 못한다. 이 화면에 있는 동안 비회원으로 바뀌면(세션이 끊겼다고 확인됨) 진행 중이던
     변환과 불러온 사진을 버리고 회원 전용 안내로 돌려보낸다 — 고르기·결과는 비회원도 쓰는 경로라, 남겨 두면 그
-    사진으로 기기에서 합성까지 간다. 사진을 먼저 비워야 /shoot 가 「촬영하던 사진이 있어요」를 띄우지 않는다.
+    사진으로 기기에서 합성까지 간다. 사진을 먼저 비워야 /create 가 「촬영하던 사진이 있어요」를 띄우지 않는다.
   */
   useEffect(() => {
     if (!fromUpload || !isGuest) return;
     cancelImport();
     resetShots();
-    router.replace(`/shoot?guestNotice=restricted${frameId ? `&frame=${frameId}` : ""}`);
+    router.replace(`/create?guestNotice=restricted${frameId ? `&frame=${frameId}` : ""}`);
   }, [cancelImport, fromUpload, isGuest, frameId, resetShots, router]);
 
-  useEffect(() => { router.prefetch("/shoot/result"); }, [router, selectedIndexes]);
+  useEffect(() => { router.prefetch("/create/result"); }, [router, selectedIndexes]);
 
   // 잠금은 내용이 아니라 "꾸민 프레임인가"로 가른다. 서버 합성은 remoteFrameId 만 보고
   // 프레임에 저장된 배경을 쓰며 보낸 색은 버린다(lib/fourcutCompose.ts 의 usesStoredBackground).
@@ -135,7 +135,7 @@ export default function ShootSelectPage() {
   // 남아 있으면 뒤로가기가 여기 들렀다가 완성 화면으로 되돌려져(ShootSessionBoundary) 먹지 않는 것처럼 보인다.
   // 촬영 화면이 다 찍고 여기로 올 때 replace 하는 것과 같은 까닭이다.
   const handleNext = () => {
-    router.replace("/shoot/result");
+    router.replace("/create/result");
   };
 
   return (

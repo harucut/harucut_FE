@@ -216,7 +216,7 @@ DELETE /api/auth/devices/{token}                                       // 해제
 재시도가 원본을 매번 새로 올리던 것은 **이제 아니다.** `composeFourcutOnServer` 가
 올리기에 성공한 4장을 그때 쓴 멱등키에 묶어 들고 있다가(`lastUploadedSources`), 같은
 멱등키로 다시 오면 굽기도 올리기도 건너뛴다. 결과 화면의 「다시 준비하기」는 `retryNonce`
-를 멱등키에서 빼 뒀으므로(`apps/web/app/shoot/result/page.tsx`) 같은 키로 돌아온다 —
+를 멱등키에서 빼 뒀으므로(`apps/web/app/create/result/page.tsx`) 같은 키로 돌아온다 —
 **같은 탭에서 버튼을 몇 번 눌러도 원본은 한 벌뿐이다.**
 
 그래서 아래 수치는 "재시도 1회당 4개"가 아니다. 남는 경로만 남았고, 넷이다.

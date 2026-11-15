@@ -131,7 +131,7 @@ function ShootPageContent() {
       return true;
     }
     if (verdict === "guest" && accessMode !== "guest") enterGuestMode();
-    router.replace(`/shoot?${new URLSearchParams({ guestNotice: "restricted", frame: frameId }).toString()}`);
+    router.replace(`/create?${new URLSearchParams({ guestNotice: "restricted", frame: frameId }).toString()}`);
     return false;
   };
 
@@ -170,21 +170,21 @@ function ShootPageContent() {
     setRemoteFrameId(remoteFrameId);
     setSource(source);
     if (session.shots.length > 0 && reusable) {
-      router.push("/shoot/select");
+      router.push("/create/select");
       return;
     }
     if (session.shots.length > 0) session.resetShots();
     // 갤러리에서 불러오기는 따로 화면이 없다 — 사진 고르기 화면 안에서 불러온다(2026-11-15).
     if (source === "upload") {
-      router.push("/shoot/select");
+      router.push("/create/select");
       return;
     }
     // 촬영 화면에는 뒤로가기 단추가 없다(2026-11-15). 기기·브라우저의 뒤로가기로 돌아와도 고른 레이아웃이 남게
-    // 이 화면 주소에 적어 둔다 — 예전 단추가 `/shoot?frame=` 로 보내던 것과 같은 자리로 돌아온다.
+    // 이 화면 주소에 적어 둔다 — 예전 단추가 `/create?frame=` 로 보내던 것과 같은 자리로 돌아온다.
     const here = new URLSearchParams(searchParams.toString());
     here.set("frame", frameId);
     window.history.replaceState(null, "", `?${here.toString()}`);
-    router.push("/shoot/capture");
+    router.push("/create/capture");
   };
 
   if (resumeAvailable) {
@@ -192,10 +192,10 @@ function ShootPageContent() {
     // 이 기기에만 있는 완성 사진. 다시 고르는 것이 아니라 그 완성 화면을 다시 연다(기기에서 다시 그린다).
     const finished = session.completed === "device";
     const resumePath = finished
-      ? "/shoot/result"
+      ? "/create/result"
       : session.frameId
-        ? session.shots.length >= 4 || session.source === "upload" ? "/shoot/select" : "/shoot/capture"
-        : "/shoot?keepShots=1";
+        ? session.shots.length >= 4 || session.source === "upload" ? "/create/select" : "/create/capture"
+        : "/create?keepShots=1";
     const homeHref = accessMode === "guest" ? "/" : "/home";
     return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">
       <div className="mx-auto flex max-w-md flex-col gap-4">

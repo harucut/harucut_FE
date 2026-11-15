@@ -33,10 +33,10 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
     };
   }))).toBeGreaterThan(0);
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
-  await page.goto("/shoot"); // 새 문서: 메모리 상태를 잃고 IndexedDB에서 복원한다.
+  await page.goto("/create"); // 새 문서: 메모리 상태를 잃고 IndexedDB에서 복원한다.
   await expect(page.getByRole("button", { name: "이어서 만들기" })).toBeVisible();
   await page.getByRole("button", { name: "이어서 만들기" }).click();
-  await expect(page).toHaveURL(/\/shoot\/capture$/);
+  await expect(page).toHaveURL(/\/create\/capture$/);
   const camera = page.getByRole("button", { name: "카메라 켜기", exact: true });
   const resume = page.getByRole("button", { name: "이어서 찍기", exact: true });
   // 권한을 허용한 브라우저는 문서가 다시 열리면 카메라를 자동으로 시작한다.
@@ -50,10 +50,10 @@ test("촬영한 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다
   await resume.click();
   // 다 찍으면 사진 고르기 화면으로 넘어간다. 고르기는 그 화면에서만 한다 — 촬영 화면에는 고르기 단추가 없다.
   await expect(async () => {
-    if (!/\/shoot\/select$/.test(page.url())) {
+    if (!/\/create\/select$/.test(page.url())) {
       await page.getByRole("button", { name: "바로 찍기", exact: true }).click({ timeout: 1_000 });
     }
-    expect(page.url()).toMatch(/\/shoot\/select$/);
+    expect(page.url()).toMatch(/\/create\/select$/);
   }).toPass({ timeout: 60_000 });
   await page.context().setOffline(false);
   for (let index = 1; index <= 4; index++) {

@@ -15,7 +15,7 @@
  * `window.ImageCapture` 는 jsdom 에 없어서 스틸 경로는 자동으로 꺼지고 영상 프레임 경로로 간다.
  */
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { useCaptureFlow } from "@/app/shoot/capture/_hooks/useCaptureFlow";
+import { useCaptureFlow } from "@/app/create/capture/_hooks/useCaptureFlow";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type { FrameId } from "@/constants/frames";
 
@@ -189,14 +189,14 @@ it("촬영 화면에 돌아와도 사진을 지우지 않고 남은 컷부터 �
 it("다 찍은 채 들어오면 고르기 화면으로 넘긴다", () => {
   mockShots = Array.from({ length: 8 }, (_, index) => `shot-${index}`);
   renderHook(() => useCaptureFlow());
-  expect(mockReplace).toHaveBeenCalledWith("/shoot/select");
+  expect(mockReplace).toHaveBeenCalledWith("/create/select");
   expect(mockResetShots).not.toHaveBeenCalled();
 });
 
 it("덜 찍었으면 촬영 화면에 남는다", () => {
   mockShots = ["one", "two", "three"];
   renderHook(() => useCaptureFlow());
-  expect(mockReplace).not.toHaveBeenCalledWith("/shoot/select");
+  expect(mockReplace).not.toHaveBeenCalledWith("/create/select");
 });
 
 describe("useCaptureFlow 촬영본 크기", () => {

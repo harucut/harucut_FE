@@ -30,10 +30,10 @@ test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 �
     if (request.method() === "POST" && new URL(request.url()).pathname === "/api/client/user/media/compose") composed.push(request.url());
   });
   page.on("dialog", (dialog) => dialog.accept());
-  await page.goto("/shoot?source=upload");
+  await page.goto("/create?source=upload");
   await page.getByRole("button", { name: "사진 고르러 가기", exact: true }).click();
   // 불러오기는 따로 화면이 없다 — 사진 고르기 화면의 「사진 불러오기」 칸으로 불러온다(2026-11-15).
-  await page.waitForURL(/\/shoot\/select$/);
+  await page.waitForURL(/\/create\/select$/);
   await expect(page.getByRole("button", { name: "사진 불러오기", exact: true })).toBeVisible();
   const buffer = await readFile("public/demo/cut-1.webp");
   await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4, 5].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
@@ -67,7 +67,7 @@ test("빈 활성 약관은 체험으로 안내하고 재조회가 성공하면 �
   await page.goto("/signup?redirectTo=%2Fhistory");
   await expect(page.getByText(/회원가입을 잠시 이용할 수 없어요/)).toBeVisible();
   await expect(page.getByRole("button", { name: "회원가입", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/shoot/start");
+  await expect(page.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/create/start");
   await page.screenshot({ path: info.outputPath("signup-unavailable.png"), fullPage: true });
   registered = true;
   await page.getByRole("button", { name: "다시 확인하기" }).click();

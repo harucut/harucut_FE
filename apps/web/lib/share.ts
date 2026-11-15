@@ -38,7 +38,7 @@ export async function copyText(value: string) {
       return;
     } catch (error) {
       // 권한 거부·문서 포커스 상실·사용자 활성화 만료다. 두 호출부 모두 공유 전에 presign
-      // 왕복을 한 번 끼우므로(app/history/page.tsx 의 getImageUrlByKey, app/shoot/result
+      // 왕복을 한 번 끼우므로(app/history/page.tsx 의 getImageUrlByKey, app/create/result
       // /page.tsx 의 getMediaDownloadUrl), 그 await 뒤에는 제스처가 풀렸다고 보고 WebKit 이
       // NotAllowedError 로 거절한다. 여기서 그대로 나가면 아래 execCommand 폴백이 시도조차
       // 되지 않는다 — hooks/useExternalBrowserRedirect.ts 의 복사 폴백도 같은 판단이다.

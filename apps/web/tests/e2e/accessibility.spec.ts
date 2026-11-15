@@ -24,7 +24,7 @@ const publicRoutes = [
 // 정작 가장 복잡한 UI가 한 번도 검사되지 않는다.
 const authenticatedRoutes = [
   "/home",
-  "/shoot",
+  "/create",
   "/theme",
   "/history",
   "/mypage",

@@ -66,7 +66,7 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
  * 것으로 바꾼다(`lib/canvas/personCutout.ts`). 토글이 어디서 오는지는 `resolveComposeFrame`
  * 이 갖는다.
  *
- * 구운 픽셀이 사용자 눈에 닿는 곳은 결과 화면이다 — `app/shoot/result/page.tsx` 가 완성본을
+ * 구운 픽셀이 사용자 눈에 닿는 곳은 결과 화면이다 — `app/create/result/page.tsx` 가 완성본을
  * 그대로 띄운다. 원본으로 만든 미리보기를 그 자리에 두면 화면과 저장본이 갈린다.
  *
  * ## 슬롯 크기로 잘라서 올린다

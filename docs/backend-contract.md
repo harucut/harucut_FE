@@ -299,7 +299,7 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 프론트는 이미 보낸다 — `lib/composeApi.ts:63`(타입),
 `lib/fourcutCompose.ts:544` 의 `wantedBackgroundColor`(꾸민 프레임이면 색을 빼고
 저장된 배경을 쓴다)와 `:398-409` 의 `submitCompose`(그래도 이미지 배경이라 400 이면
-색만 빼고 한 번 더 보낸다), 호출부는 `app/shoot/result/page.tsx:366`(합성)과
+색만 빼고 한 번 더 보낸다), 호출부는 `app/create/result/page.tsx:366`(합성)과
 `:525`(로그인 후 재합성).
 회원 잠금과 우회 훅도 걷혔다: `components/frame/FrameOutputOptionsPanel.tsx:25-27` 의
 `backgroundLocked` 는 이제 `hasCustomFrame` 이고(꾸민 프레임만 잠근다),
@@ -583,7 +583,7 @@ required 와 항목의 키를 맞춘다 — `POST /api/auth/terms/consents` 가 
 
    `FrameResponse` 에 `updatedAt`·`version` 이 없어 서버 값으로는 지문을 만들 수 없다.
    지금은 프론트가 읽어 온 내용에서 직접 만든다 — `lib/shootSessionStore.ts:74`
-   `buildFrameContentKey`, 호출부는 `app/shoot/result/page.tsx:274·:356` 이
+   `buildFrameContentKey`, 호출부는 `app/create/result/page.tsx:274·:356` 이
    `ensureComposeIdempotencyKey(generationKey, themeData)` 로 지문을 넘긴다.
    지문을 `generationKey` 에 **직접 넣지 않은** 이유는 프레임 내용이 네트워크로 늦게
    도착하기 때문이다 — 모르는 동안 키가 흔들리면 진행 중인 합성이 버려지고 같은 네컷이

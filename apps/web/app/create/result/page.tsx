@@ -274,12 +274,12 @@ export default function ShootResultPage() {
 
   useEffect(() => {
     if (!frameId) {
-      router.replace("/shoot");
+      router.replace("/create");
       return;
     }
 
     if (!shots.length || selectedCount !== 4 || imageSources.length !== 4) {
-      router.replace("/shoot/select");
+      router.replace("/create/select");
     }
   }, [frameId, imageSources.length, router, selectedCount, shots.length]);
 
@@ -649,7 +649,7 @@ export default function ShootResultPage() {
 
   /*
     촬영본은 메모리에만 있다(lib/shootSessionStore.ts 는 비영속). 새로고침 한 번에 원본
-    4장이 사라지고 화면은 /shoot 으로 튕긴다 — 회원도 마찬가지다.
+    4장이 사라지고 화면은 /create 으로 튕긴다 — 회원도 마찬가지다.
 
     - 회원: 보관함에 결과가 남는 순간(imageResult)이 안전선이다. 그 전(생성 중·합성 실패)
       에는 경고한다. 실패 화면에서 새로고침하는 것이 가장 흔한 손실 경로다.
@@ -657,7 +657,7 @@ export default function ShootResultPage() {
 
     회원이 합성을 접수시킨 뒤(서버는 계속 그려 보관함에 남긴다) 탭을 닫으면 확인창이 한 번
     헛뜬다. 접수 여부를 화면이 알 수 있는 상태값이 없고, 같은 흐름의 앞 세 단계가 이미
-    shots.length > 0 만 보므로(app/shoot/capture·select·upload) 그쪽에 맞춘다.
+    shots.length > 0 만 보므로(app/create/capture·select·upload) 그쪽에 맞춘다.
   */
   useUnsavedWorkGuard(shots.length > 0 && (!imageResult || Boolean(imageResult.localBlob)));
 
@@ -777,24 +777,24 @@ export default function ShootResultPage() {
     router.push(GUEST_LOGIN_HANDOFF_PATH);
   };
 
-  // 업로드로 왔으면 업로드 쪽 프레임 고르기로 돌아간다. 그냥 /shoot 으로 보내면
+  // 업로드로 왔으면 업로드 쪽 프레임 고르기로 돌아간다. 그냥 /create 으로 보내면
   // 다음이 카메라라, 갤러리로 만들던 사람이 촬영 화면에 떨어진다.
-  // `keepShots=1` — 찍은 사진을 두고 프레임만 다시 고른다(app/shoot/page.tsx).
+  // `keepShots=1` — 찍은 사진을 두고 프레임만 다시 고른다(app/create/page.tsx).
   const reselectFrameHref = fromUpload
-    ? "/shoot?source=upload&keepShots=1"
-    : "/shoot?keepShots=1";
+    ? "/create?source=upload&keepShots=1"
+    : "/create?keepShots=1";
 
   /*
     **사진은 두고 프레임만 바꾼다.**
 
-    예전에는 이 링크가 `/shoot` 로 보냈고, 그 화면은 들어오자마자 세션을 통째로 `reset()`
+    예전에는 이 링크가 `/create` 로 보냈고, 그 화면은 들어오자마자 세션을 통째로 `reset()`
     했다 — 프레임만 바뀌는 것이 아니라 찍은 8장과 고른 4장이 함께 사라졌다. 이 자리의 안내는
     "다른 프레임을 골라 주세요"(lib/fourcutCompose.ts)라 사진은 그대로라는 뜻으로 읽히는데
-    실제로는 사진이 먼저 없어졌고, /shoot/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
+    실제로는 사진이 먼저 없어졌고, /create/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
 
     지금은 `keepShots=1` 로 보낸다. 사진을 그대로 들고 프레임 화면에 서고, 고른 프레임의 슬롯
     비율이 같으면 곧장 고르는 화면으로 간다. 비율이 다르면(세로 4컷 → 네모 4컷) 그 사진을
-    쓸 수 없으므로 그때 비우고 촬영으로 보낸다 — 판단은 /shoot 이 한다.
+    쓸 수 없으므로 그때 비우고 촬영으로 보낸다 — 판단은 /create 이 한다.
   */
   const handleReselectFrame = () => {
     router.push(reselectFrameHref);

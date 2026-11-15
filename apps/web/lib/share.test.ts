@@ -4,7 +4,7 @@
  * 이 파일이 지키는 계약은 둘이다.
  *
  * 1. **네이티브 공유 실패를 사용자 취소로 삼키지 않는다.** 호출부(app/history/page.tsx,
- *    app/shoot/result/page.tsx)는 `cancelled` 에 아무 안내도 띄우지 않고 catch 에서만 문구를
+ *    app/create/result/page.tsx)는 `cancelled` 에 아무 안내도 띄우지 않고 catch 에서만 문구를
  *    낸다. 그래서 실패를 `cancelled` 로 돌려주면 공유 버튼이 눌러도 아무 일 없는 것처럼 끝난다.
  *    구분 기준은 `reason` 이다 — 사용자가 시트를 닫은 dismissedAction 에는 없고
  *    (apps/mobile/lib/native-bridge.ts 의 shareLink), `Share.share()` 예외와 브리지

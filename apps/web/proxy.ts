@@ -14,15 +14,15 @@ import {
 /**
  * 게스트를 촬영 화면으로 되돌릴 주소. **고른 프레임을 들고 간다.**
  *
- * `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다
- * (app/shoot/page.tsx). 그래서 고정된 `/shoot?guestNotice=restricted` 로 보내면 방금 고른
+ * `/create` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다
+ * (app/create/page.tsx). 그래서 고정된 `/create?guestNotice=restricted` 로 보내면 방금 고른
  * 프레임이 사라진다 — 막는 것은 회원 전용 경로 하나지 촬영 전체가 아니다.
  *
  * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 주소에 `frame` 이 실려 왔으면
  * 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
  */
 function restrictedShootUrl(req: NextRequest) {
-  const url = new URL("/shoot", req.url);
+  const url = new URL("/create", req.url);
   url.searchParams.set("guestNotice", "restricted");
 
   const frame = req.nextUrl.searchParams.get("frame")?.trim();
@@ -115,7 +115,7 @@ export async function proxy(req: NextRequest) {
   // 인증 쿠키가 있는 회원은 새 체험 쿠키로 덮지 않고, 도착한 화면에서 만료·정지를 확인한다.
   if (pathname === PUBLIC_SHOOT_ENTRY) {
     const memberCandidate = !guestMode && hasAuthCookie(req);
-    const target = new URL(memberCandidate ? "/shoot?checkSession=1" : "/shoot", req.url);
+    const target = new URL(memberCandidate ? "/create?checkSession=1" : "/create", req.url);
     const response = NextResponse.redirect(target);
     response.headers.set("Cache-Control", "private, no-store");
     return memberCandidate ? response : startGuestTrial(response, req.nextUrl.protocol === "https:");
@@ -185,7 +185,7 @@ export async function proxy(req: NextRequest) {
 
     예전에는 이 판정보다 앞에 회원 전용 촬영 경로(갤러리 불러오기 화면) 차단이 있었다 — 죽은 토큰이 여기서
     로그인으로 읽혀 그 화면을 지나갔기 때문이다. 2026-11-15 그 화면을 사진 고르기 안으로 합치며 걷었다.
-    불러오기 칸은 화면이 회원에게만 보인다(app/shoot/select/page.tsx).
+    불러오기 칸은 화면이 회원에게만 보인다(app/create/select/page.tsx).
 
     **여기서 게스트 쿠키를 지우지는 않는다** — 걷는 자리는 소셜 콜백 하나뿐이다(위).
   */
@@ -209,7 +209,7 @@ export async function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     "/home/:path*",
-    "/shoot/:path*",
+    "/create/:path*",
     "/history/:path*",
     "/theme/:path*",
     "/mypage",

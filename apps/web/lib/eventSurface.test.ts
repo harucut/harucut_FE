@@ -7,7 +7,7 @@ describe("isEventSurfacePath", () => {
   });
 
   // 접두사만 보면 개인 서비스의 다른 경로까지 걸린다.
-  it.each(["/", "/enterprise", "/events", "/reactivate", "/home", "/shoot", "/boothx", null, undefined])(
+  it.each(["/", "/enterprise", "/events", "/reactivate", "/home", "/create", "/boothx", null, undefined])(
     "%s 는 행사 화면이 아니다",
     (path) => {
       expect(isEventSurfacePath(path)).toBe(false);

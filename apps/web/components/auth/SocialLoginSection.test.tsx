@@ -9,9 +9,9 @@ jest.mock("@/lib/authLogin", () => ({ startSocialLogin: (...args: unknown[]) => 
 beforeEach(() => { mockGoogleAvailable = true; mockStart.mockClear(); });
 
 it("일반 웹에서는 구글 로그인을 제공한다", () => {
-  render(<SocialLoginSection redirectTo="/shoot" />);
+  render(<SocialLoginSection redirectTo="/create" />);
   fireEvent.click(screen.getByRole("button", { name: /Google/ }));
-  expect(mockStart).toHaveBeenCalledWith("google", "/shoot");
+  expect(mockStart).toHaveBeenCalledWith("google", "/create");
 });
 
 it("구글을 시스템 브라우저로 여는 셸에서는 버튼을 보이고 안내를 띄우지 않는다", () => {

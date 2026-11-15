@@ -596,7 +596,7 @@ describe("TermsConsentBridge", () => {
 });
 
 test.each([false, true])("비회원 촬영에서는 약관·인증 API를 부르지 않는다 (복원 완료 %s)", async (hydrated) => {
-  mockPathname = "/shoot";
+  mockPathname = "/create";
   useGuestTrialStore.setState({ accessMode: "guest", hydrated });
   render(<TermsConsentBridge />);
   await act(async () => {});

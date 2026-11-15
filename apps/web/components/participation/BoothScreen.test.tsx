@@ -357,7 +357,7 @@ describe("연결 화면의 개인 계정 로그아웃", () => {
     global.fetch = originalFetch;
   });
 
-  // 촬영 보관물에는 계정 구분이 없다. 남기면 다음 계정이 /shoot/select 에서 앞사람 사진을 이어받는다.
+  // 촬영 보관물에는 계정 구분이 없다. 남기면 다음 계정이 /create/select 에서 앞사람 사진을 이어받는다.
   it("로그아웃하면 이 기기의 개인 사진까지 지운 뒤에 끝났다고 말한다", async () => {
     const fetchMock = serve(200);
     let finishClear = () => {};

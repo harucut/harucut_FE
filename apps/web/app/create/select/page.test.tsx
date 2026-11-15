@@ -9,7 +9,7 @@
  */
 import type { MouseEvent, ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import ShootSelectPage from "@/app/shoot/select/page";
+import ShootSelectPage from "@/app/create/select/page";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import type { RemoteFrameThemeState } from "@/hooks/useRemoteFrameTheme";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
@@ -235,7 +235,7 @@ describe("갤러리에서 불러오기", () => {
     render(<ShootSelectPage />);
 
     const back = screen.getByRole("link", { name: "프레임 다시 고르기" });
-    expect(back).toHaveAttribute("href", "/shoot?source=upload&keepShots=1");
+    expect(back).toHaveAttribute("href", "/create?source=upload&keepShots=1");
     fireEvent.click(back);
     expect(mockShootSession.resetShots).not.toHaveBeenCalled();
   });
@@ -248,14 +248,14 @@ describe("갤러리에서 불러오기", () => {
 
     expect(screen.queryByRole("button", { name: "사진 불러오기" })).toBeNull();
     expect(mockShootSession.resetShots).toHaveBeenCalled();
-    expect(mockReplace).toHaveBeenCalledWith("/shoot?guestNotice=restricted&frame=grid-4");
+    expect(mockReplace).toHaveBeenCalledWith("/create?guestNotice=restricted&frame=grid-4");
   });
 
   test("찍은 사진(촬영)이 없으면 그대로 찍으러 돌아간다", () => {
     Object.assign(mockShootSession, { source: "capture", shots: [] });
     render(<ShootSelectPage />);
 
-    expect(mockReplace).toHaveBeenCalledWith("/shoot/capture");
+    expect(mockReplace).toHaveBeenCalledWith("/create/capture");
     expect(screen.queryByRole("button", { name: "사진 불러오기" })).toBeNull();
   });
 });

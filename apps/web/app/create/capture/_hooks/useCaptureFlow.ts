@@ -83,7 +83,7 @@ export function useCaptureFlow() {
    *
    * 한 컷의 인코딩(toBlob → FileReader)은 비동기라, 그 사이에 화면을 떠나면(기기·브라우저의 뒤로 가기)
    * 언마운트 뒤에 결과가 돌아온다. 그대로 두면 떠난 세션에 사진이 얹히고, 마지막 컷을
-   * 인코딩하던 중이었다면 떠난 화면에서 /shoot/select 로 다시 밀어 넣는다.
+   * 인코딩하던 중이었다면 떠난 화면에서 /create/select 로 다시 밀어 넣는다.
    * 시작·언마운트 때마다 번호를 올리고, 인코딩 전후로 번호가 같은지 본다.
    */
   const shootGenerationRef = useRef(0);
@@ -127,7 +127,7 @@ export function useCaptureFlow() {
 
   // 프레임 없이 들어오면 되돌리기
   useEffect(() => {
-    if (!frameId) router.replace("/shoot");
+    if (!frameId) router.replace("/create");
   }, [frameId, router]);
 
   /*
@@ -138,12 +138,12 @@ export function useCaptureFlow() {
     고르기만 남았고, 다시 찍는 길은 고르기 화면의 「다시 찍기」 하나다.
   */
   useEffect(() => {
-    if (!shooting.isShooting && shots.length >= MAX_SHOTS) router.replace("/shoot/select");
+    if (!shooting.isShooting && shots.length >= MAX_SHOTS) router.replace("/create/select");
   }, [shooting.isShooting, shots.length, router]);
 
   useEffect(() => {
-    router.prefetch("/shoot/select");
-    router.prefetch("/shoot/result");
+    router.prefetch("/create/select");
+    router.prefetch("/create/result");
   }, [router]);
 
   // 카메라 스트림 종료 및 상태 초기화
@@ -477,7 +477,7 @@ export function useCaptureFlow() {
     setShooting((s) => ({ isShooting: false, countdown: null, cycle: s.cycle + 1 }));
     // 촬영 화면 기록을 고르기 화면으로 바꿔 낀다. 쌓으면 고르기 화면에서 뒤로 갈 때 다 찍은 촬영
     // 화면에 들렀다가(위 effect) 곧장 되돌아와, 뒤로가기가 먹지 않는 것처럼 보인다.
-    router.replace("/shoot/select");
+    router.replace("/create/select");
   }, [shotCount, capturePhotoToDataUrl, addShotPhoto, timerSeconds, setNotice, router]);
 
   // 전체 자동 촬영 시작
@@ -497,8 +497,8 @@ export function useCaptureFlow() {
     if (!restart && shotCount >= MAX_SHOTS) return;
     if (restart) resetShots();
     lastFinishedShotRef.current = restart ? -1 : shotCount - 1;
-    router.prefetch("/shoot/select");
-    router.prefetch("/shoot/result");
+    router.prefetch("/create/select");
+    router.prefetch("/create/result");
     // 사용자 동작 안에서 오디오를 열어 iOS의 자동 재생 제한에 걸리지 않게 한다.
     const audio = shutterAudioRef.current;
     if (audio) {

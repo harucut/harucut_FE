@@ -376,7 +376,7 @@ export default function HistoryPage() {
         kind: "error",
         // 네이티브 안내를 먼저 본다 — 사진첩 권한이 막힌 실패는 재시도로 풀리지 않아
         // 폴백 문구("잠시 후 다시 시도해 주세요")가 거짓말이 된다(lib/nativeBridge.ts).
-        // 문구는 결과 화면과 한 벌로 맞춘다(app/shoot/result/page.tsx) — 같은 실패를
+        // 문구는 결과 화면과 한 벌로 맞춘다(app/create/result/page.tsx) — 같은 실패를
         // 두 화면이 다르게 말하지 않는다.
         text: `이미지를 다운로드하지 못했어요. ${
           getNativeSaveErrorMessage(downloadError) ??

@@ -21,7 +21,7 @@ function guestRequest(path: string) {
   return request(path, `${GUEST_TRIAL_COOKIE}=1`);
 }
 
-const GUEST_RESTRICTED = `${ORIGIN}/shoot?guestNotice=restricted`;
+const GUEST_RESTRICTED = `${ORIGIN}/create?guestNotice=restricted`;
 
 /** 로그인했던 흔적만 남은 쿠키. JWT 모양이 아니라 프록시가 살아 있다고 볼 수 없다. */
 const STALE_AUTH = "accessToken=stale-session";
@@ -49,10 +49,10 @@ function accessToken(secondsFromNow: number) {
 describe("proxy 비회원 체험 분기", () => {
   test("촬영 흐름은 그대로 지나간다", async () => {
     const steps = [
-      "/shoot",
-      "/shoot/capture",
-      "/shoot/select",
-      "/shoot/result",
+      "/create",
+      "/create/capture",
+      "/create/select",
+      "/create/result",
     ];
 
     for (const path of steps) {
@@ -65,7 +65,7 @@ describe("proxy 비회원 체험 분기", () => {
 
   test("촬영 흐름은 세그먼트 프리페치 주소로 불러도 지나간다", async () => {
     const response = await proxy(
-      guestRequest("/shoot/capture.segments/_tree.segment"),
+      guestRequest("/create/capture.segments/_tree.segment"),
     );
 
     expect(response.status).toBe(200);
@@ -74,10 +74,10 @@ describe("proxy 비회원 체험 분기", () => {
 
   /*
     사진 고르기 화면도 비회원에게 열려 있다. 갤러리에서 불러오기는 그 화면 안의 칸이고(2026-11-15 따로 있던
-    화면을 합쳤다) 회원에게만 보인다 — 막는 것은 화면이다(app/shoot/select/page.tsx).
+    화면을 합쳤다) 회원에게만 보인다 — 막는 것은 화면이다(app/create/select/page.tsx).
   */
   test("사진 고르기는 세그먼트 프리페치 주소로 불러도 지나간다", async () => {
-    const response = await proxy(guestRequest("/shoot/select.segments/_tree.segment"));
+    const response = await proxy(guestRequest("/create/select.segments/_tree.segment"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
@@ -95,11 +95,11 @@ describe("proxy 비회원 체험 분기", () => {
 
 describe("proxy 비인증 분기", () => {
   test("쿠키가 없으면 로그인으로 보낸다", async () => {
-    const response = await proxy(request("/shoot/select"));
+    const response = await proxy(request("/create/select"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      `${ORIGIN}/login?redirectTo=%2Fshoot%2Fselect`,
+      `${ORIGIN}/login?redirectTo=%2Fcreate%2Fselect`,
     );
   });
 
@@ -121,7 +121,7 @@ describe("proxy 비인증 분기", () => {
 */
 describe("proxy 회원 전환", () => {
   test("인증 쿠키가 남아 있어도 비회원 체험 쿠키를 지우지 않는다", async () => {
-    for (const path of ["/shoot", "/shoot/capture"]) {
+    for (const path of ["/create", "/create/capture"]) {
       const response = await proxy(
         request(path, `${STALE_AUTH}; ${GUEST_TRIAL_COOKIE}=1`),
       );
@@ -183,13 +183,13 @@ describe("proxy 회원 전환", () => {
 
 /*
   옛 행사 QR 주소(`/shoot?event=…`)는 걷어냈다 — 행사는 `/e/{slug}` 로 옮겼고, 배포한 QR 이
-  없어 호환하지 않는다(기획 R3·R4 검수 D01). 이 주소는 이제 평범한 `/shoot` 이다.
+  없어 호환하지 않는다(기획 R3·R4 검수 D01). 이 주소는 이제 평범한 `/create` 이다.
   예전에는 쿠키 없는 방문자에게 여기서 체험 쿠키를 심었다. 체험은 이제 랜딩의 공개 진입점
-  (`/shoot/start`)에서만 시작한다.
+  (`/create/start`)에서만 시작한다.
 */
 describe("proxy 옛 행사 QR 주소", () => {
   test("event 쿼리가 있어도 체험 쿠키를 심지 않고 로그인으로 보낸다", async () => {
-    const path = "/shoot?frame=classic&event=hongdae-2026";
+    const path = "/create?frame=classic&event=hongdae-2026";
     const response = await proxy(request(path));
 
     expect(response.status).toBe(307);
@@ -201,13 +201,13 @@ describe("proxy 옛 행사 QR 주소", () => {
 });
 
 /*
-  심는 체험 쿠키의 **속성**까지 고정한다. 지금 심는 자리는 공개 진입점(`/shoot/start`) 하나다.
+  심는 체험 쿠키의 **속성**까지 고정한다. 지금 심는 자리는 공개 진입점(`/create/start`) 하나다.
   클라이언트(guestTrialStore.setGuestCookie)가 심는 것과 같아야 한쪽이 심고 다른 쪽이 못
-  읽는 일이 없다. 값만 보면 max-age 를 60초로 줄여도, path 를 `/shoot` 으로 좁혀도 통과한다.
+  읽는 일이 없다. 값만 보면 max-age 를 60초로 줄여도, path 를 `/create` 으로 좁혀도 통과한다.
 */
 describe("proxy 체험 쿠키 속성", () => {
   test("심는 체험 쿠키의 속성은 클라이언트와 같은 값이다", async () => {
-    const cookie = (await proxy(request("/shoot/start"))).cookies.get(GUEST_TRIAL_COOKIE);
+    const cookie = (await proxy(request("/create/start"))).cookies.get(GUEST_TRIAL_COOKIE);
 
     expect(cookie?.value).toBe("1");
     // 기간은 공유 상수와 대조한다 — 숫자를 여기 또 적으면 그게 세 번째 사본이 된다.
@@ -221,7 +221,7 @@ describe("proxy 체험 쿠키 속성", () => {
     // 로컬 개발(http://localhost:3000)에서 Secure 를 붙이면 브라우저가 아예 저장하지 않아
     // 체험이 시작되지 않는다.
     const response = await proxy(
-      new NextRequest(new URL("/shoot/start", "http://localhost:3000")),
+      new NextRequest(new URL("/create/start", "http://localhost:3000")),
     );
 
     expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
@@ -284,7 +284,7 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
     "%s 가 있어도 촬영 흐름은 그대로 지나간다",
     async (_label, cookie) => {
       // 구멍을 닫으면서 "가입 없이 바로 촬영"까지 닫아 버리면 체험 흐름이 죽는다.
-      for (const path of ["/shoot", "/shoot/capture", "/shoot/select", "/shoot/result"]) {
+      for (const path of ["/create", "/create/capture", "/create/select", "/create/result"]) {
         const response = await proxy(guestWith(path, cookie));
 
         expect(response.status).toBe(200);
@@ -316,19 +316,19 @@ describe("proxy 게스트 쿠키와 죽은 인증 쿠키가 함께 있을 때", 
 // 공개 CTA에서 백엔드 조회를 하지 않고 새 문서가 정확한 체험 쿠키를 받는다.
 describe("공개 촬영 진입", () => {
   test("새 방문자는 체험 쿠키를 받고 촬영으로 간다", async () => {
-    const response = await proxy(request("/shoot/start"));
-    expect(response.headers.get("location")).toBe(`${ORIGIN}/shoot`);
+    const response = await proxy(request("/create/start"));
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/create`);
     expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
     expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
   test("인증 쿠키가 있는 회원은 체험으로 덮지 않고 세션 확인 경로로 간다", async () => {
-    const response = await proxy(request("/shoot/start", "refreshToken=existing-member"));
-    expect(response.headers.get("location")).toBe(`${ORIGIN}/shoot?checkSession=1`);
+    const response = await proxy(request("/create/start", "refreshToken=existing-member"));
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/create?checkSession=1`);
     expect(response.cookies.get(GUEST_TRIAL_COOKIE)).toBeUndefined();
   });
   test("체험 쿠키가 있으면 남은 인증 쿠키와 무관하게 로컬 촬영을 유지한다", async () => {
-    const response = await proxy(request("/shoot/start", `${GUEST_TRIAL_COOKIE}=1; ${accessToken(3600)}`));
-    expect(response.headers.get("location")).toBe(`${ORIGIN}/shoot`);
+    const response = await proxy(request("/create/start", `${GUEST_TRIAL_COOKIE}=1; ${accessToken(3600)}`));
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/create`);
     expect(response.cookies.get(GUEST_TRIAL_COOKIE)?.value).toBe("1");
   });
 });
