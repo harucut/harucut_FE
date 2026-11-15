@@ -410,7 +410,12 @@ describe("회원 후보 진입의 게스트 전환", () => {
   });
 });
 
-describe("기존 촬영 복구", () => {
+/*
+  만들기에 들어오면 늘 새 촬영이다 — 찍던 사진이 있어도 묻지 않는다(2026-11-15 「회원도 없애도 될 거 같아. 도중에 나가면
+  새로 찍어야지」). 예전 「촬영하던 사진이 있어요」(이어서 만들기·새로 시작하기)와 비회원의 「완성한 사진이 있어요」는 없다.
+  프레임만 다시 고르는 길(keepShots)만 찍은 사진을 들고 간다.
+*/
+describe("만들기에 다시 들어올 때", () => {
   beforeEach(() => {
     mockPush.mockClear();
     mockQuery = "";
@@ -420,39 +425,25 @@ describe("기존 촬영 복구", () => {
     useShootSession.setState({ frameId: "classic-4", shotsFrameId: "classic-4", shots: SHOTS });
   });
   afterEach(() => {
-    document.cookie = `${GUEST_TRIAL_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
   });
-  it("다시 들어오면 사진을 지우지 않고 이어 만들기를 안내한다", () => {
+
+  it.each(["member", "guest"] as const)("%s 는 찍던 사진이 있어도 묻지 않고 새 촬영으로 시작한다", (accessMode) => {
+    useGuestTrialStore.setState({ accessMode, hydrated: true });
     render(<ShootPage />);
-    expect(useShootSession.getState().shots).toEqual(SHOTS);
-    fireEvent.click(screen.getByRole("button", { name: "이어서 만들기" }));
-    expect(mockPush).toHaveBeenCalledWith("/create/select");
+    expect(screen.queryByRole("heading", { name: "촬영하던 사진이 있어요" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "이어서 만들기" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "새로 시작하기" })).toBeNull();
+    expect(useShootSession.getState().shots).toEqual([]);
+    expect(screen.getByRole("button", { name: "확인" })).toBeInTheDocument();
   });
   // 완성본이 나온 촬영은 끝났다(2026-11-15) — 이어 만들면 같은 사진을 다시 고르게 된다.
-  it("기록에 남은 완성 사진은 이어 만들지 않고 새 촬영으로 시작한다", () => {
-    useShootSession.setState({ completed: "account" });
-    render(<ShootPage />);
-    expect(screen.queryByRole("button", { name: "이어서 만들기" })).toBeNull();
-    expect(useShootSession.getState().shots).toEqual([]);
-    expect(useShootSession.getState().completed).toBeNull();
-  });
   it("기록에 남은 완성 사진은 keepShots 로 와도 사진을 들고 가지 않는다", () => {
     mockQuery = "keepShots=1";
     useShootSession.setState({ completed: "account" });
     render(<ShootPage />);
     expect(useShootSession.getState().shots).toEqual([]);
-  });
-  /*
-    비회원이 찍던 사진은 두지 않는다(2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려 / 그러면 당연히
-    새로 시작 화면도 없어져야겠지?」). 묻지 않고 새 촬영이다 — 같은 탭에서 들고 온 사진이어도.
-  */
-  it("비회원은 찍던 사진이 있어도 묻지 않고 새 촬영으로 시작한다", () => {
-    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
-    render(<ShootPage />);
-    expect(screen.queryByRole("heading", { name: "촬영하던 사진이 있어요" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "새로 시작하기" })).toBeNull();
-    expect(useShootSession.getState().shots).toEqual([]);
+    expect(useShootSession.getState().completed).toBeNull();
   });
   it("비회원이 이 기기에서 만든 완성 사진도 다시 보여 주지 않는다", () => {
     useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
@@ -463,33 +454,13 @@ describe("기존 촬영 복구", () => {
     expect(useShootSession.getState().shots).toEqual([]);
     expect(useShootSession.getState().completed).toBeNull();
   });
-  it("스토어가 쿠키를 읽기 전이어도 체험 쿠키가 있으면 묻지 않는다", () => {
-    useGuestTrialStore.setState({ accessMode: "member", hydrated: false });
-    document.cookie = `${GUEST_TRIAL_COOKIE}=1; path=/`;
-    render(<ShootPage />);
-    expect(screen.queryByRole("heading", { name: "촬영하던 사진이 있어요" })).toBeNull();
-  });
-  it("묻는 동안 비회원으로 확정되면 묻던 것을 거두고 새 촬영으로 간다", () => {
-    render(<ShootPage />);
-    expect(screen.getByRole("heading", { name: "촬영하던 사진이 있어요" })).toBeInTheDocument();
-    act(() => useGuestTrialStore.setState({ accessMode: "guest", hydrated: true }));
-    expect(screen.queryByRole("heading", { name: "촬영하던 사진이 있어요" })).toBeNull();
-    expect(useShootSession.getState().shots).toEqual([]);
-  });
-  // 프레임만 다시 고르는 길(합성 실패 뒤 「프레임 다시 고르기」)은 비회원도 사진을 들고 간다.
-  it("비회원도 keepShots 로 오면 찍은 사진을 두고 프레임만 다시 고른다", () => {
+  // 프레임만 다시 고르는 길(합성 실패 뒤 「프레임 다시 고르기」)은 찍은 사진을 들고 간다.
+  it.each(["member", "guest"] as const)("%s 도 keepShots 로 오면 찍은 사진을 두고 프레임만 다시 고른다", (accessMode) => {
     mockQuery = "keepShots=1";
-    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    useGuestTrialStore.setState({ accessMode, hydrated: true });
     render(<ShootPage />);
     expect(useShootSession.getState().shots).toEqual(SHOTS);
     expect(useShootSession.getState().frameId).toBeNull();
-  });
-  it("새 촬영은 삭제를 확인한 뒤에만 사진을 비운다", () => {
-    render(<ShootPage />);
-    fireEvent.click(screen.getByRole("button", { name: "새로 시작하기" }));
-    expect(useShootSession.getState().shots).toEqual(SHOTS);
-    fireEvent.click(screen.getByRole("button", { name: "사진 지우고 시작" }));
-    expect(useShootSession.getState().shots).toEqual([]);
   });
 });
 

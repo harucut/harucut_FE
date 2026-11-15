@@ -6,13 +6,15 @@ import { shootUntilSelect, storedDraftShotCount } from "./fixtures/canvasCamera"
 test.use({ launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] } });
 
 /*
-  찍던 사진을 이 기기에 남기는 것은 회원뿐이다(2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려 /
-  그러면 당연히 새로 시작 화면도 없어져야겠지?」, lib/shootSessionPersistence.ts).
-    - 회원: 앱 전환·문서 재시작 뒤에도 「촬영하던 사진이 있어요」로 이어서 찍는다.
-    - 비회원: 이 기기에 쓰지 않는다. 문서를 다시 열면 묻지 않고 새 촬영이다.
+  찍던 사진을 이 기기에 남기는 것은 회원뿐이고(2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려」,
+  lib/shootSessionPersistence.ts), 「이어서 만들기」는 누구에게도 없다(같은 날 「회원도 없애도 될 거 같아. 도중에 나가면
+  새로 찍어야지」).
+    - 회원: 촬영 화면에서 문서가 다시 열려도(새로고침·앱이 죽은 문서를 다시 띄움) 그 화면이 사진과 함께 돌아온다.
+      만들기에 다시 들어오면 묻지 않고 새 촬영이다.
+    - 비회원: 이 기기에 쓰지 않는다. 문서를 다시 열면 새 촬영이다.
 */
 
-test("회원이 찍은 컷은 앱 전환과 문서 재시작 뒤에도 이어서 쓴다", async ({ page, baseURL }) => {
+test("회원이 찍은 컷은 촬영 화면이 다시 열려도 남고, 만들기에 다시 들어오면 새 촬영이다", async ({ page, baseURL }) => {
   page.on("dialog", async (dialog) => {
     if (dialog.type() === "beforeunload") await dialog.accept();
     else await dialog.dismiss();
@@ -29,16 +31,22 @@ test("회원이 찍은 컷은 앱 전환과 문서 재시작 뒤에도 이어서
   // 실제 카메라 결과를 저장했는지 기다린다. 테스트가 스토어나 보관물을 만들어 넣지 않는다.
   await expect.poll(() => storedDraftShotCount(page)).toBeGreaterThan(0);
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
-  await page.goto("/create"); // 새 문서: 메모리 상태를 잃고 IndexedDB에서 복원한다.
-  await expect(page.getByRole("heading", { name: "촬영하던 사진이 있어요" })).toBeVisible();
-  await page.getByRole("button", { name: "이어서 만들기" }).click();
+  // 같은 촬영 화면의 새 문서: 메모리 상태를 잃고 IndexedDB 에서 복원한다(앱이 백그라운드에서 죽은 문서를 다시 띄울 때와 같다).
+  await page.reload();
   await expect(page).toHaveURL(/\/create\/capture$/);
+  await expect(page.getByLabel(/8컷 중 [1-8]컷 촬영됨/)).toBeVisible();
   const camera = page.getByRole("button", { name: "카메라 켜기", exact: true });
   const resume = page.getByRole("button", { name: "이어서 찍기", exact: true });
   // 권한을 허용한 브라우저는 문서가 다시 열리면 카메라를 자동으로 시작한다.
   await expect(camera.or(resume)).toBeVisible();
   if (await camera.isVisible()) await camera.click();
   await expect(resume).toBeVisible();
+
+  // 만들기에 다시 들어오면 묻지 않고 새 촬영이다 — 찍던 사진도 비운다.
+  await page.goto("/create");
+  await expect(page.getByRole("button", { name: "이 프레임으로 찍기", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "촬영하던 사진이 있어요" })).toHaveCount(0);
+  await expect.poll(() => storedDraftShotCount(page)).toBe(0);
 });
 
 test("비회원이 찍은 컷은 이 기기에 남지 않고, 통신이 끊겨도 끝까지 만들어 받는다", async ({ page }, testInfo) => {

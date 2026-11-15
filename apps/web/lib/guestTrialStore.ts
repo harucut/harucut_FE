@@ -135,7 +135,7 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
  * 지금 이 방문자가 체험 중인가. 스토어가 아직 쿠키를 읽기 전이면 쿠키를 직접 본다.
  *
  * 상태를 바꾸지 않으니 렌더 중에도 부를 수 있다 — hydrateGuestMode 를 여기서 부르면 다른 구독자를 렌더 도중에 깨운다.
- * 찍던 사진을 이 기기에 남길지 정할 때 쓴다(lib/shootSessionPersistence.ts, app/create/page.tsx).
+ * 찍던 사진을 이 기기에 남길지 정할 때 쓴다(lib/shootSessionPersistence.ts).
  */
 export function isGuestVisitor() {
   const { hydrated, accessMode } = useGuestTrialStore.getState();

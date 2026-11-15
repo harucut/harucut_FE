@@ -8,10 +8,9 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { resolveMembership } from "@/lib/authSession";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import { isGuestVisitor, useGuestTrialStore } from "@/lib/guestTrialStore";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { useShootSession } from "@/lib/shootSessionStore";
 import type { FrameId } from "@/constants/frames";
-import { Sentences } from "@/components/ui/Sentences";
 import { checkSavedFrame } from "@/lib/savedFrameCheck";
 
 /**
@@ -46,21 +45,6 @@ function ShootPageContent() {
     아래 reset() 을 지나며 8장을 통째로 지웠다("다른 프레임을 골라 주세요" 라고 안내해 놓고).
   */
   const keepShots = searchParams.get("keepShots") === "1";
-  /*
-    회원이 찍던 사진을 들고 있으면 먼저 묻는다(「촬영하던 사진이 있어요」). 끝난 촬영(shootSessionStore 의 completed)은
-    묻지 않고 새 촬영으로 시작한다 — 회원 사진은 기록에 남았다. `keepShots` 로 와도 끝난 촬영은 이어 고르지 않는다.
-
-    비회원은 묻지 않는다(2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려 / 그러면 당연히 새로 시작
-    화면도 없어져야겠지?」). 비회원 사진은 이 기기에 남기지 않으니(lib/shootSessionPersistence.ts) 이 화면에 오면 새
-    촬영이다 — 같은 탭에서 들고 온 사진도 지운다(프레임만 다시 고르는 `keepShots` 는 빼고). 예전에는 비회원에게도 「이어서 만들기」·「새로 시작하기」와,
-    이 기기에서 만든 완성 사진을 다시 보는 「완성한 사진이 있어요」가 떴다.
-  */
-  const [resumeOffered, setResumeOffered] = useState(() => {
-    const session = useShootSession.getState();
-    if (session.shots.length === 0 || session.completed || isGuestVisitor()) return false;
-    return !keepShots;
-  });
-  const [confirmRestart, setConfirmRestart] = useState(false);
   const [pendingFrame, setPendingFrame] = useState<FrameChoice | null>(null);
   // 촬영으로 갈지 불러오기로 갈지는 **주소가 들고 있다.** 상태가 아니라 "다음 단계가
   // 무엇인가"라는 라우팅 정보라, 새로고침하거나 링크를 공유해도 그대로여야 한다.
@@ -68,18 +52,22 @@ function ShootPageContent() {
   const accessMode = useGuestTrialStore((state) => state.accessMode);
   const guestHydrated = useGuestTrialStore((state) => state.hydrated);
   const { frames, isLoading, error, refresh } = useMyFrames(guestHydrated && accessMode === "member");
-  // 이 화면에 있는 동안 비회원으로 확정돼도(아래 checkSession) 묻던 것을 거두고 새 촬영으로 간다.
-  const resumeAvailable = resumeOffered && !(guestHydrated && accessMode === "guest");
 
+  /*
+    만들기에 들어오면 늘 **새 촬영**이다 — 찍던 사진이 있어도 묻지 않고 비운다(2026-11-15 「회원도 없애도 될 거 같아.
+    도중에 나가면 새로 찍어야지」). 예전에는 「촬영하던 사진이 있어요」로 이어서 만들기·새로 시작하기를 물었고,
+    비회원에게는 기기에서 만든 완성 사진을 다시 보는 「완성한 사진이 있어요」도 있었다(비회원 것은 같은 날 먼저 걷었다).
+    `keepShots` 로 오는 길(합성 실패 뒤 「프레임 다시 고르기」, 불러오기의 「프레임 다시 고르기」)만 찍은 사진을 두고
+    프레임을 다시 고른다. 끝난 촬영은 `keepShots` 로 와도 사진을 들고 가지 않는다 — 같은 사진으로 다시 만드는 길이 된다.
+    회원의 임시 보관(lib/shootSessionPersistence.ts)은 남는다 — 단계 화면에서 새로고침되거나 앱이 문서를 다시 띄울 때
+    그 화면이 그대로 돌아오게 하는 몫이다. 여기 다시 오면 그것도 비운다.
+  */
   useEffect(() => {
-    // `keepShots` 없는 진입은 **새 촬영**이다. 이어 가는 진입은 찍은 사진만 두고 프레임을 다시 고른다.
-    if (resumeAvailable) return;
-    // 끝난 촬영은 `keepShots` 로 와도 사진을 들고 가지 않는다 — 같은 사진으로 다시 만드는 길이 된다.
     if (keepShots && !useShootSession.getState().completed) resetFrameSelection();
     else reset();
     // reset 이 출처를 기본값으로 되돌린다. 주소가 진실이므로 다시 심는다.
     setSource(source);
-  }, [resumeAvailable, keepShots, reset, resetFrameSelection, setSource, source]);
+  }, [keepShots, reset, resetFrameSelection, setSource, source]);
 
   // 인증 쿠키가 남아 있는 방문자만 확인한다. 이미 체험 중인 방문자는 API를 부르지 않는다.
   const checkSession = searchParams.get("checkSession") === "1";
@@ -191,25 +179,6 @@ function ShootPageContent() {
     window.history.replaceState(null, "", `?${here.toString()}`);
     router.push("/create/capture");
   };
-
-  if (resumeAvailable) {
-    const session = useShootSession.getState();
-    const resumePath = session.frameId
-      ? session.shots.length >= 4 || session.source === "upload" ? "/create/select" : "/create/capture"
-      : "/create?keepShots=1";
-    return <main className="hc-page-app min-h-dvh p-6 text-(--hc-text)">
-      <div className="mx-auto flex max-w-md flex-col gap-4">
-        <PageHeader title="촬영하던 사진이 있어요" backHref="/home" backLabel="홈으로" />
-        <p><Sentences text={`${session.shots.length}장을 이 기기에 임시 보관 중이에요. 마지막 작업부터 24시간 동안 이어서 만들 수 있어요.`} /></p>
-        <button type="button" className="hc-pressable min-h-11 rounded-xl bg-(--hc-primary) px-4 py-3 font-semibold text-(--hc-primary-contrast)" onClick={() => {
-          if (session.frameId) router.push(resumePath);
-          else { router.replace(resumePath); setResumeOffered(false); }
-        }}>이어서 만들기</button>
-        <button type="button" className="hc-pressable min-h-11 rounded-xl border border-(--hc-border) px-4 py-3" onClick={() => setConfirmRestart(true)}>새로 시작하기</button>
-        {confirmRestart && <ConfirmDialog running={false} title="새로 시작할까요?" description={`임시 보관한 사진 ${session.shots.length}장이 이 기기에서 지워져요.`} confirmLabel="사진 지우고 시작" destructive onClose={() => setConfirmRestart(false)} onConfirm={() => { reset(); setConfirmRestart(false); setResumeOffered(false); }} />}
-      </div>
-    </main>;
-  }
 
   return (
     <main className="hc-page-app flex min-h-dvh flex-col px-2 pb-0 pt-6 text-(--hc-text) sm:px-4 md:pb-6 lg:px-8 lg:py-10">
