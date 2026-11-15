@@ -6,6 +6,7 @@ import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { isNativeShell } from "@/lib/nativeBridge";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { useDarkStage } from "@/hooks/useDarkStage";
+import { useRotatableScreen } from "@/hooks/useRotatableScreen";
 import { useStageFit } from "@/hooks/useStageFit";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { useCaptureFlow } from "./_hooks/useCaptureFlow";
@@ -42,6 +43,8 @@ export default function CapturePage() {
 
   // 뷰파인더는 테마와 무관하게 검다(DESIGN.md 「테마 정책」의 예외 하나). 상태바도 그동안 다크.
   useDarkStage();
+  // 앱에서도 이 화면만은 기기를 돌리는 대로 돈다 — 가로로 찍는 사람이 많다(아래 가로 배치).
+  useRotatableScreen();
 
   // 찍은 컷이 있는데 아직 저장 전이면, 새로고침/이탈 시 유실 경고를 띄운다.
   useUnsavedWorkGuard(shots.length > 0);
@@ -109,7 +112,7 @@ export default function CapturePage() {
           들면 세로 배치로는 위아래 띠(장수·칩·셔터)가 짧은 높이를 먹어 프리뷰가 작아진다. 옆 배치에서는 844×390 에서
           세로 4컷 프리뷰가 519×366 이다(실측). 오른쪽 줄은
           폭을 고정해 카메라를 켜 「카메라 켜기」가 셔터로 바뀌어도 프리뷰 크기가 그대로다.
-      앱(WebView)은 지금 세로로 잠겨 있어 가로 배치는 브라우저에서만 보인다(apps/mobile/app.json 의 orientation).
+      앱은 세로 고정이지만 이 화면에서만 기기를 돌리는 대로 돈다(useRotatableScreen — 셸에 알린다).
     */
     <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text) landscape:pl-[max(1rem,env(safe-area-inset-left))] landscape:pr-[max(1rem,env(safe-area-inset-right))]">
       <audio

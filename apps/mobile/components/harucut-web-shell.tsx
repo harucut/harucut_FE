@@ -36,6 +36,7 @@ import {
   pushChunk,
   saveBase64Chunks,
   saveRemoteImage,
+  setScreenOrientation,
   shareLink,
   showLocalNotification,
   transferFilename,
@@ -70,6 +71,13 @@ const INJECT_BEFORE_LOAD = `
 
 /** 웹의 소셜 로그인 콜백 경로. 공개 라우트 목록(AGENTS.md)과 같은 값이다. */
 const WEB_OAUTH_CALLBACK_PATH = '/oauth2/callback';
+
+/**
+ * 앱 창이 돌아가도 되는 웹 화면 — 촬영 화면 하나(2026-11-15, lib/native-bridge.ts 의 setScreenOrientation).
+ * 웹이 들어오며 `orientation: free` 를, 떠나며 `portrait` 를 보낸다. 셸은 그 밖의 주소로 가면 스스로 다시 세로로
+ * 잠근다 — 전체 새로고침·다른 문서로의 이동처럼 웹이 떠나는 신호를 못 보내는 길이 있어서다.
+ */
+const ROTATABLE_WEB_PATH = '/create/capture';
 
 /**
  * 콘텐츠 프로세스가 죽었을 때 스스로 다시 띄우는 횟수 상한 (iOS·macOS).
@@ -294,6 +302,12 @@ export function HarucutWebShell() {
           // 답을 기다리지 않는다 — 화면 밝기를 맞추는 일이라 실패할 것도 없다.
           setScheme(message.scheme === 'light' ? 'light' : 'dark');
           return;
+        case 'orientation':
+          // 웹의 촬영 화면이 들어오며 free, 떠나며 portrait 를 보낸다. 보낸 문서의 주소로 다시 거르지 않는다 —
+          // 앱 라우터가 주소를 바꾸는 순간과 메시지가 닿는 순간이 어긋나면 촬영 화면이 잠긴 채로 남는다.
+          // 벗어난 뒤에 남는 것은 handleNavigation 이 다시 잠근다.
+          setScreenOrientation(message.mode === 'free' ? 'free' : 'portrait');
+          return;
         // 앱 구독(P4-B). 셸은 스토어만 부르고, 서버 제출은 웹이 한다(lib/store-purchase.ts).
         case 'iap-products':
           reply(askerUrl, message.id, await storeProducts(message.productIds));
@@ -387,6 +401,9 @@ export function HarucutWebShell() {
 
     if (url !== previousUrl) {
       currentUrlRef.current = url;
+
+      // 촬영 화면을 벗어나면 세로로 되돌린다(ROTATABLE_WEB_PATH). 풀어 주는 것은 웹의 몫이라 여기서는 잠그기만 한다.
+      if (!(isWebOrigin(url) && pathnameOf(url) === ROTATABLE_WEB_PATH)) setScreenOrientation('portrait');
 
       // 주소가 바뀔 때마다 다시 판단한다 — 콜백 바로 다음 화면 하나에서만 참이다.
       historyResetPendingRef.current =
@@ -482,9 +499,15 @@ export function HarucutWebShell() {
             셸이 또 비우면 두 번 비게 된다.
 
             셸이 비운 만큼 WebView 가 상태바 뒤로 나가지 않으므로 iOS 의 env top 은 0 이 된다.
+
+            옆은 양쪽 다 셸이 비운다. 앱을 옆으로 돌리는 것은 촬영 화면뿐인데(setScreenOrientation), 그때 노치·카메라
+            구멍·안드로이드의 3버튼 내비바가 옆으로 온다. 안드로이드 env 는 위처럼 믿을 수 없고, iOS 는 셸이 비운 만큼
+            env left·right 가 0 이 돼 두 번 비지 않는다. 세로에서는 두 값이 0 이라 달라지는 것이 없다.
           */
           paddingTop: insets.top,
           paddingBottom: Platform.OS === 'android' ? insets.bottom : 0,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
           backgroundColor: stage,
         },
       ]}>

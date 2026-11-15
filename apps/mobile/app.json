@@ -3,7 +3,7 @@
     "name": "harucut",
     "slug": "harucut-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "harucut",
     "userInterfaceStyle": "automatic",
@@ -39,6 +39,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
       "expo-iap",
       [
         "expo-media-library",

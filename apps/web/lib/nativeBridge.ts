@@ -374,6 +374,18 @@ export function nativeSetColorScheme(scheme: "light" | "dark") {
   post({ type: "theme", scheme });
 }
 
+/**
+ * 앱 창을 돌려도 되는가. 앱은 세로 고정이고 촬영 화면만 기기를 돌리는 대로 따라간다(2026-11-15 「앱 회전 촬영 때만
+ * 해주는 건? 가로로 찍는 사람도 많으니깐」) — 호출부는 hooks/useRotatableScreen.ts 하나다.
+ *
+ * 답을 기다리지 않는다. 이 메시지를 모르는 옛 셸은 그냥 지나가고 세로 고정 그대로라, 판 수로 거르지 않는다
+ * (apps/mobile/lib/native-bridge.ts 의 BRIDGE_VERSION 주석). 브라우저에서는 아무 일도 안 한다 — 폰 브라우저는 원래 돈다.
+ */
+export function nativeSetOrientation(mode: "free" | "portrait") {
+  if (!isNativeShell()) return;
+  post({ type: "orientation", mode });
+}
+
 // ── 앱 구독 구매·복원(P4-B, R5 12절) ──
 
 /**
