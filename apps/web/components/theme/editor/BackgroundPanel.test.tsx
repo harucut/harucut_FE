@@ -5,7 +5,7 @@
  * 색 코드 입력칸은 없앴다 — 다른 색을 쓰려면 코드를 알아야 했다. 배경 사진은 큰 단추 하나로 넣고,
  * 깔았으면 바꾸기·지우기를 둔다. 사진을 깔았을 때 어떤 색도 고른 것처럼 보이면 안 된다.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { BackgroundPanel } from "@/components/theme/editor/BackgroundPanel";
 
 const mockSetBackgroundColor = jest.fn();
@@ -42,11 +42,18 @@ describe("BackgroundPanel", () => {
     expect(mockSetBackgroundColor).toHaveBeenCalledWith("f4c6d0");
   });
 
-  it("목록에 없는 색은 색 고르기 창으로 고르고, 색 코드 입력칸은 없다", () => {
+  // 「다른 색」은 기기의 색 고르기 창이 아니라 우리 창(CustomColorSheet)이다(2026-11-15).
+  it("목록에 없는 색은 「다른 색」 창에서 고르고, 색 코드 입력칸은 없다", () => {
     render(<BackgroundPanel frameId="classic-4" />);
 
-    fireEvent.change(screen.getByLabelText("다른 색 고르기"), { target: { value: "#123456" } });
-    expect(mockSetBackgroundColor).toHaveBeenCalledWith("#123456");
+    fireEvent.click(screen.getByRole("button", { name: "다른 색 고르기" }));
+    const dialog = screen.getByRole("dialog", { name: "다른 색" });
+    fireEvent.keyDown(within(dialog).getByRole("slider", { name: "채도와 밝기" }), { key: "ArrowUp", shiftKey: true });
+    fireEvent.click(within(dialog).getByRole("button", { name: "이 색으로" }));
+
+    expect(mockSetBackgroundColor).toHaveBeenCalledWith(expect.stringMatching(/^#[0-9a-f]{6}$/));
+    expect(mockSetBackgroundColor).not.toHaveBeenCalledWith("#18181a");
+    expect(screen.queryByRole("dialog", { name: "다른 색" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("배경색 코드")).not.toBeInTheDocument();
   });
 

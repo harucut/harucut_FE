@@ -5,7 +5,7 @@
  * 입힌 견본으로 고른다. 꾸민 프레임은 테두리를 프레임이 정하므로 고르기가 아예 없다 — 서버 합성이 보낸 색을
  * 버려, 고르게 두면 고른 색이 저장될 때 조용히 사라진다.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { FrameOutputOptionsPanel } from "@/components/frame/FrameOutputOptionsPanel";
 
 function renderPanel(overrides: Partial<Parameters<typeof FrameOutputOptionsPanel>[0]> = {}) {
@@ -33,11 +33,24 @@ describe("FrameOutputOptionsPanel", () => {
     expect(props.onBorderColorChange).toHaveBeenCalledWith("#cde9d8");
   });
 
-  it("목록에 없는 색은 「다른 색」으로 고르고, 색 코드 입력칸은 없다", () => {
+  // 「테두리 색 고르는 거 한 줄로 / 보여주는 거 5개 색 맘대로 할 수 있는 거 한 개」(2026-11-15).
+  it("테두리 색은 견본 다섯과 「다른 색」 하나다", () => {
+    renderPanel();
+    expect(within(screen.getByRole("group", { name: "테두리 색" })).getAllByRole("button")).toHaveLength(6);
+  });
+
+  it("목록에 없는 색은 「다른 색」 창에서 고르고, 색 코드 입력칸은 없다", () => {
     const props = renderPanel();
 
-    fireEvent.change(screen.getByLabelText("다른 색 고르기"), { target: { value: "#123456" } });
-    expect(props.onBorderColorChange).toHaveBeenCalledWith("#123456");
+    fireEvent.click(screen.getByRole("button", { name: "다른 색 고르기" }));
+    const dialog = screen.getByRole("dialog", { name: "다른 색" });
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    fireEvent.keyDown(within(dialog).getByRole("slider", { name: "색상" }), { key: "ArrowRight", shiftKey: true });
+    fireEvent.keyDown(within(dialog).getByRole("slider", { name: "채도와 밝기" }), { key: "ArrowUp", shiftKey: true });
+    fireEvent.click(within(dialog).getByRole("button", { name: "이 색으로" }));
+
+    expect(props.onBorderColorChange).toHaveBeenCalledWith(expect.stringMatching(/^#[0-9a-f]{6}$/));
+    expect(props.onBorderColorChange).not.toHaveBeenCalledWith("#18181a");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
