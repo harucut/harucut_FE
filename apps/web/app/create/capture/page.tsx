@@ -80,8 +80,15 @@ export default function CapturePage() {
     ready: stageReady,
   } = useStageFit(stageBase, { fitToContainerHeight: true });
 
-  // 가로로 긴 칸은 폭에 묶여 화면이 남는다. 프리뷰를 렌즈 가까이 올리고 남는 자리를 숫자에 준다. 세로 칸은 프리뷰가 높이를 다 쓴다.
-  const wideSlot = currentSlot ? currentSlot.width >= currentSlot.height : false;
+  /*
+    카운트다운은 프리뷰 정중앙에 떠 있다(2026-11-15 「타이머는 사진 위에 떠 있어도 되지 않을까, 카메라 정중앙에 방해가
+    안 되는 수준으로」). 예전에는 얼굴을 가린다고 프리뷰 밖 아래 띠에 두었다. 가리지 않게 작고 옅게 둔다 — 프리뷰
+    짧은 변의 22%(40~96px), 흰색 80%에 옅은 그림자 하나. 밝은 하늘 앞에서도 그림자가 숫자 테두리를 잡아 준다.
+    예전 링(96px)처럼 얼굴을 덮지 않고, 화면 전체를 어둡게 덮는 막도 두지 않는다.
+  */
+  const countSize = stageReady
+    ? Math.max(40, Math.min(96, Math.round(Math.min(viewW, viewH) * 0.22)))
+    : 56;
 
   return (
     /*
@@ -94,15 +101,23 @@ export default function CapturePage() {
       검은 면 하나로 두면 남는 공간이 카메라의 어두운 면이 된다 — 카메라 앱이 그렇다.
       테마와 무관하게 어둡다(hc-stage-dark): 밝은 면 위의 프리뷰는 액자처럼 보이고,
       셔터와 숫자가 사진보다 밝아진다.
+
+      자리는 격자 하나가 방향에 따라 바꾼다(2026-11-15 「회전에 따라 옆으로 들면 그거에 맞춰서 넓어질 수도 있어야 해」).
+        - 세로: 위에서부터 장수 · 프리뷰 · 간격 칩 · 셔터. 프리뷰는 남는 칸의 **가운데**다(「공간이 남더라도 위에 붙는
+          게 아니라 가운데에 있어야 하지 않을까?」 — 예전에는 가로로 긴 칸을 렌즈 가까이 위에 붙였다).
+        - 가로: 프리뷰가 왼쪽 전체 높이를 쓰고, 오른쪽 한 줄에 장수(위) · 셔터(가운데) · 간격 칩(아래). 폰을 옆으로
+          들면 세로 배치로는 프리뷰가 손바닥만 해진다(844×390 에서 세로 4컷 프리뷰 높이 약 120px). 오른쪽 줄은
+          폭을 고정해 카메라를 켜 「카메라 켜기」가 셔터로 바뀌어도 프리뷰 크기가 그대로다.
+      앱(WebView)은 지금 세로로 잠겨 있어 가로 배치는 브라우저에서만 보인다(apps/mobile/app.json 의 orientation).
     */
-    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text)">
+    <main className="hc-stage-dark flex h-dvh flex-col overflow-hidden bg-(--background) px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-(--hc-text) landscape:pl-[max(1rem,env(safe-area-inset-left))] landscape:pr-[max(1rem,env(safe-area-inset-right))]">
       <audio
         ref={shutterAudioRef}
         src="/shutter.mp3"
         preload="auto"
         className="hidden"
       />
-      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-3">
+      <div className="mx-auto grid min-h-0 w-full max-w-md flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3 [grid-template-areas:'count'_'stage'_'chips'_'shutter'] landscape:max-w-5xl landscape:grid-cols-[minmax(0,1fr)_10rem] landscape:grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] landscape:gap-x-4 landscape:gap-y-0 landscape:[grid-template-areas:'stage_count'_'stage_.'_'stage_shutter'_'stage_.'_'stage_chips']">
         {/*
           제목과 뒤로가기는 두지 않는다(2026-11-15). 찍기 시작하면 다 찍을 때까지 이 화면이고, 찍기 전에 프레임을
           바꾸려면 기기·브라우저의 뒤로가기로 돌아간다 — 고른 프레임은 /create 이 주소에 적어 두어 그대로 남는다.
@@ -120,7 +135,7 @@ export default function CapturePage() {
         <p
           role="img"
           aria-label={`${MAX_SHOTS}컷 중 ${shotCount}컷 촬영됨`}
-          className="shrink-0 text-center font-mono text-[18px] font-bold tabular-nums"
+          className="text-center font-mono text-[18px] font-bold tabular-nums [grid-area:count]"
         >
           {shotCount}
           <span className="text-(--hc-muted)">/{MAX_SHOTS}</span>
@@ -129,7 +144,7 @@ export default function CapturePage() {
         {/* 카메라 무대 — 프레임 없이, 선택한 프레임 슬롯과 같은 비율의 프리뷰만 보여준다. */}
         <div
           ref={stageRef}
-          className={`relative mx-auto flex min-h-0 w-full flex-1 justify-center ${wideSlot ? "items-start" : "items-center"}`}
+          className="relative flex min-h-0 min-w-0 items-center justify-center [grid-area:stage]"
         >
           <canvas ref={canvasRef} className="hidden" />
 
@@ -165,9 +180,8 @@ export default function CapturePage() {
               />
 
               {/*
-                프리뷰 위에 얹는 것은 둘뿐이다 — 카메라가 꺼져 있을 때의 안내와 카운트다운.
-                타이머 칩과 시작 버튼은 얼굴 위가 아니라 아래 띠에 있다. 카메라를 켜면 프리뷰는
-                프리뷰만 보여 준다.
+                프리뷰 위에 얹는 것은 셋뿐이다 — 카메라가 꺼져 있을 때의 안내, 카운트다운, 찍힌 순간의 플래시.
+                간격 칩과 셔터는 얼굴 위가 아니라 프리뷰 밖에 있다.
               */}
               {!isCameraReady ? (
                 <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 px-6 text-center">
@@ -189,10 +203,19 @@ export default function CapturePage() {
                 </div>
               ) : null}
 
-              {/*
-                찍힌 순간의 플래시. 카운트다운은 여기 없다 — 아래 띠에 있다(그 자리 주석 참고).
-                컷마다 새로 재생하려고 shotCount 로 키를 준다.
-              */}
+              {/* 매 초 key 를 바꿔 숫자가 바뀔 때마다 살짝 튀어 오른다(hc-count-tick, 모션을 끈 기기에서는 멈춘다). */}
+              {isShooting && countdown != null ? (
+                <span
+                  key={countdown}
+                  aria-hidden
+                  className="hc-count-tick pointer-events-none absolute inset-0 z-10 grid place-items-center font-bold leading-none tabular-nums text-white/80 [text-shadow:0_2px_18px_rgba(0,0,0,0.35)]"
+                  style={{ fontSize: countSize }}
+                >
+                  {countdown}
+                </span>
+              ) : null}
+
+              {/* 찍힌 순간의 플래시. 컷마다 새로 재생하려고 shotCount 로 키를 준다. */}
               {shotCount > 0 ? (
                 <span
                   key={shotCount}
@@ -209,46 +232,31 @@ export default function CapturePage() {
         </div>
 
         {/*
-          간격을 **고르던 자리에서 그 간격을 센다.** 시작 전에는 3·5·8초 칩, 촬영 중에는 남은 초.
-
-          카운트다운이 프리뷰 밖에 있는 이유:
-            - 얼굴을 가리지 않는다. 예전 링(96px)은 세로 4컷 프리뷰 높이의 38% 를 덮었다.
-            - 대비가 보장된다. 무대 배경(`--background`, 기본 #0B0B0C) 위라 뒤에 뭐가 찍히든 글자가 읽힌다.
-              얼굴 위에 있을 때는 밝은 하늘 앞에서 1.4:1 까지 떨어졌고, 그걸 가리려고 화면을
-              30% 어둡게 덮어야 했다 — 그 스크림도 같이 사라졌다.
-            - 라임이 하나로 돌아온다. 몇 장째인지는 위 장수(3/8)가 말한다.
-          높이를 72px 로 고정해 두 상태가 같은 자리를 쓴다 — 시작해도 아래 띠가 움직이지 않는다.
+          간격 칩(3·5·8초)은 찍는 동안에도 그대로 있다. 숫자가 프리뷰로 올라가 이 자리가 비었고, 찍는 중에 바꾸면 다음
+          컷부터 그 간격으로 센다(useCaptureFlow 가 컷마다 timerSeconds 를 다시 읽는다). 가로 배치에서는 오른쪽 줄
+          맨 아래라 폭이 좁아 시계 아이콘을 뺀다.
         */}
-        <div className={`flex shrink-0 items-center justify-center gap-2 ${wideSlot ? "h-[clamp(4.5rem,18svh,9rem)]" : "h-18"}`}>
-          {isShooting ? (
-            // key 로 매 초 애니메이션을 새로 재생한다 — 링의 연속 스윕을 대신하는 메트로놈.
-            <span
-              key={countdown ?? 0}
-              className={`hc-count-tick font-extrabold leading-none tabular-nums text-(--hc-text) ${wideSlot ? "text-[clamp(3.5rem,15svh,7.5rem)]" : "text-[56px]"}`}
-            >
-              {countdown}
-            </span>
-          ) : (
-            TIMER_OPTIONS.map((seconds) => {
-              const active = timerSeconds === seconds;
-              return (
-                <button
-                  key={seconds}
-                  type="button"
-                  onClick={() => setTimerSeconds(seconds)}
-                  aria-pressed={active}
-                  className={`inline-flex h-11 items-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition ${
-                    active
-                      ? "bg-(--hc-text) text-(--background)"
-                      : "bg-transparent text-(--hc-text) ring-1 ring-(--hc-stage-line)"
-                  }`}
-                >
-                  <Timer className="h-3.5 w-3.5" />
-                  {seconds}s
-                </button>
-              );
-            })
-          )}
+        <div className="flex h-14 items-center justify-center gap-2 [grid-area:chips] landscape:gap-1.5">
+          {TIMER_OPTIONS.map((seconds) => {
+            const active = timerSeconds === seconds;
+            return (
+              <button
+                key={seconds}
+                type="button"
+                onClick={() => setTimerSeconds(seconds)}
+                aria-pressed={active}
+                aria-label={`${seconds}초 간격`}
+                className={`inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-4 text-[13px] font-semibold tabular-nums transition landscape:px-3 ${
+                  active
+                    ? "bg-(--hc-text) text-(--background)"
+                    : "bg-transparent text-(--hc-text) ring-1 ring-(--hc-stage-line)"
+                }`}
+              >
+                <Timer aria-hidden className="h-3.5 w-3.5 landscape:hidden" />
+                {seconds}s
+              </button>
+            );
+          })}
         </div>
 
         {/*
@@ -260,7 +268,7 @@ export default function CapturePage() {
         </p>
 
         {/*
-          아래 띠. 가운데 자리 하나가 **카메라 켜기 → 셔터**로 바뀐다. 켜고 → 찍는 이어지는 한 동작이라
+          셔터 자리. 가운데 자리 하나가 **카메라 켜기 → 셔터**로 바뀐다. 켜고 → 찍는 이어지는 한 동작이라
           같은 자리여야 한다(apple-design 공간 일관성).
 
           카메라가 켜지면 그 자리는 끝까지 **같은 셔터**다(2026-11-09). 예전에는 시작 전에만 「찍기 시작」
@@ -272,16 +280,17 @@ export default function CapturePage() {
 
           중단 버튼은 두지 않는다 — 찍기 시작하면 다 찍을 때까지다. 기기·브라우저의 뒤로가기로 떠나면 언마운트가
           스트림과 진행 중인 인코딩을 정리한다. 카메라 전환도 찍기 전에만 둔다(2026-11-15) — 찍는 동안에는
-          잠가 둔 단추였을 뿐이다. 전환은 아이콘만이고 따로 떠 있어서, 있든 없든 셔터는 정중앙이다.
+          잠가 둔 단추였을 뿐이다. 전환은 아이콘만이고 따로 떠 있어서, 있든 없든 셔터는 제자리다 — 세로에서는
+          셔터 왼쪽, 가로에서는 셔터 아래 빈자리.
         */}
-        <div className="relative flex h-22 shrink-0 items-center justify-center [@media(max-height:700px)]:h-18">
+        <div className="relative flex h-22 items-center justify-center [grid-area:shutter] [@media(max-height:700px)]:h-18">
           {canFlipCamera && !isShooting && shots.length === 0 ? (
             <button
               type="button"
               onClick={() => void switchCamera()}
               aria-label="카메라 전환"
               title="카메라 전환"
-              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border"
+              className="hc-button-icon absolute left-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border landscape:left-1/2 landscape:top-full landscape:mt-4 landscape:-translate-x-1/2 landscape:translate-y-0"
             >
               <SwitchCamera className="h-5 w-5" />
             </button>
