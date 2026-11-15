@@ -25,6 +25,8 @@ test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 �
     renamed.push(displayName);
     return route.fulfill({ json: envelope({ mediaId: 9100, s3Key: "uploads/users/a11y/result.webp", displayName, createdAt: "2026-11-15T14:30:00.000000" }) });
   });
+  // 공유 창이 열릴 때 받는 사람 페이지 링크를 받아 둔다(2026-11-16).
+  await page.route("**/api/client/user/media/9100/share-link", (route) => route.fulfill({ json: envelope({ token: "tok_qa_0123456789abcdef" }) }));
   const composed: string[] = [];
   page.on("request", (request) => {
     if (request.method() === "POST" && new URL(request.url()).pathname === "/api/client/user/media/compose") composed.push(request.url());
@@ -67,6 +69,12 @@ test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 �
   await expect(page.getByText("사진을 저장했어요", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "홈으로 가기", exact: true })).toHaveAttribute("href", "/home");
   await expect(save).toBeVisible();
+  // 공유는 아래에서 올라오는 공유 창이다(2026-11-16 「하단에서 스륵 올라오는 일반적인 거」). 링크는 창을 열 때 받아 둔다.
+  await page.getByRole("button", { name: "공유", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "사진 공유하기" });
+  await expect(sheet.getByRole("button", { name: "링크 복사", exact: true })).toBeEnabled();
+  await sheet.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("member-server-result.png"), fullPage: true });
 });
 

@@ -80,6 +80,16 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
+      // 사진 공유 링크(/s/<token>, 2026-11-16)도 주소가 곧 사진을 보는 권한이다. 토큰이 경로에 있어(미리보기 수집기가 og:image 를
+      // 가져가야 한다) 더더욱 리퍼러로 넘기지 않는다. 그림·내려받기 주소(/s/<token>/image·/download)도 같다.
+      {
+        source: "/s/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
       // public/ 의 정적 자산에는 캐시 정책이 없어 매 방문마다 다시 받아왔다.
       // 스티커 PNG 30장·OG 이미지·셔터음이 여기 들어 있다. 파일명에 해시가 없어
       // 영구 immutable 은 못 주지만, 하루 캐시 + 하루 stale-while-revalidate 로

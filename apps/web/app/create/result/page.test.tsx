@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { create } from "zustand";
 import ShootResultPage from "@/app/create/result/page";
 import { newIdempotencyKey } from "@/lib/composeApi";
@@ -6,8 +6,6 @@ import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 import { SystemFrameMissingError } from "@/lib/fourcutCompose";
 import { NativeSaveError } from "@/lib/nativeBridge";
-// 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 로 펼쳐 둔 것을 가져온다.
-import { CopyFailedError } from "@/lib/share";
 // 목이 아니라 진짜다 — 아래 jest.mock 이 requireActual 을 펼쳐 두었다.
 import { buildFrameContentKey } from "@/lib/shootSessionStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
@@ -192,19 +190,14 @@ jest.mock("@/lib/fourcutCompose", () => ({
 
 const mockGetMediaDownloadUrl = jest.fn();
 
+const mockCreateMediaShareLink = jest.fn();
 jest.mock("@/lib/userMediaApi", () => ({
   updateMediaDisplayName: jest.fn(),
   getMediaDownloadUrl: (...args: unknown[]) => mockGetMediaDownloadUrl(...args),
+  createMediaShareLink: (...args: unknown[]) => mockCreateMediaShareLink(...args),
 }));
 
-const mockSharePhoto = jest.fn();
-
-// 공유 동작만 목으로 갈아 끼우고 실패 판정(isCopyFailedError)은 진짜를 쓴다 — 판정까지
-// 목으로 덮으면 아래 회귀 테스트가 자기 목만 확인하게 된다. 파일·링크 갈래는 lib/share.test.ts 가 본다.
-jest.mock("@/lib/share", () => ({
-  ...jest.requireActual("@/lib/share"),
-  sharePhoto: (...args: unknown[]) => mockSharePhoto(...args),
-}));
+// 공유 창 안의 갈래(파일·링크·복사)는 components/share/PhotoShareSheet.test.tsx 가 본다. 여기서는 창이 뜨고 무엇을 넘기는지만 본다.
 
 const mockNativeNotify = jest.fn();
 
@@ -916,14 +909,12 @@ describe("ShootResultPage", () => {
   });
 
   /*
-    공유 실패는 두 갈래고, 사용자가 할 일이 다르다.
-
-    링크를 못 만든 것은 잠시 뒤 다시 누르면 되지만, 링크는 만들어 놓고 브라우저가 복사를
-    막은 것은(lib/share.ts 의 CopyFailedError) 복사를 허용하기 전에는 몇 번을 눌러도 같은
-    자리에서 막힌다. 하나로 묶으면 그 사람은 기다렸다 다시 누르는 헛수고를 반복한다.
+    공유를 누르면 아래에서 공유 창이 올라온다(2026-11-16 「하단에서 스륵 올라오는 일반적인 거」 + 참고 그림).
+    링크는 받는 사람 페이지(/s/<토큰>)다 — 예전의 내려받기 주소는 받은 사람이 열면 파일로 받아져 사진이 보이지 않았다.
   */
-  it("복사만 막힌 실패는 링크가 만들어졌다고 말한다", async () => {
-    mockSharePhoto.mockRejectedValue(new CopyFailedError());
+  it("공유를 누르면 공유 창이 뜨고, 링크는 받는 사람 페이지다", async () => {
+    mockCreateMediaShareLink.mockResolvedValue("tok_0123456789abcdef");
+    const open = jest.spyOn(window, "open").mockReturnValue(null);
 
     render(<ShootResultPage />);
     await waitFor(() => {
@@ -932,65 +923,19 @@ describe("ShootResultPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "공유" }));
 
-    await waitFor(() => {
-      expect(useGuestTrialStore.getState().notice?.title).toBe(
-        "링크를 복사하지 못했어요",
-      );
-    });
-    expect(useGuestTrialStore.getState().notice?.message).toBe(
-      "링크는 만들었지만 브라우저가 복사를 막았어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요.",
+    const sheet = await screen.findByRole("dialog", { name: "사진 공유하기" });
+    expect(mockCreateMediaShareLink).toHaveBeenCalledWith(1);
+    const x = within(sheet).getByRole("button", { name: "X" });
+    await waitFor(() => expect(x).toBeEnabled());
+    fireEvent.click(x);
+    expect(open).toHaveBeenCalledWith(
+      `https://x.com/intent/tweet?url=${encodeURIComponent("http://localhost/s/tok_0123456789abcdef")}`,
+      "_blank",
+      "noopener,noreferrer",
     );
-  });
-
-  it("공유가 실패하면 사진을 공유하지 못했다고 말한다 — 네이티브 원문은 띄우지 않는다", async () => {
-    mockSharePhoto.mockRejectedValue(new Error("Failed to share the file: activity not found"));
-
-    render(<ShootResultPage />);
-    await waitFor(() => {
-      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
-    });
-
-    fireEvent.click(await screen.findByRole("button", { name: "공유" }));
-
-    await waitFor(() => {
-      expect(useGuestTrialStore.getState().notice?.title).toBe(
-        "사진을 공유하지 못했어요",
-      );
-    });
-    expect(useGuestTrialStore.getState().notice?.message).toBe(
-      "잠시 후 다시 시도해 주세요.",
-    );
-  });
-
-  /*
-    공유는 사진 파일을 넘긴다(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로 보낼 수 있는, 스토리에 올릴 수도」).
-    파일을 못 넘겨 링크로 갈 때는 화면에 띄운 보기 주소를 쓴다 — 예전의 내려받기 주소는 받은 사람이 열면 파일로 받아져
-    사진이 보이지 않았다(「받은 사람은 사진만 볼 수 있게」).
-  */
-  it("공유는 사진 파일로, 링크로 갈 때는 내려받기 주소가 아니라 보기 주소로 간다", async () => {
-    mockSharePhoto.mockResolvedValue("shared");
-
-    render(<ShootResultPage />);
-    await waitFor(() => {
-      expect(mockUseShootSession.getState().imageResult).not.toBeNull();
-    });
-
-    fireEvent.click(await screen.findByRole("button", { name: "공유" }));
-
-    await waitFor(() => expect(mockSharePhoto).toHaveBeenCalledTimes(1));
-    const args = mockSharePhoto.mock.calls[0][0] as {
-      file: File | null;
-      getUrl: () => Promise<string>;
-      filename: string;
-      title: string;
-    };
-    // jsdom 에는 파일 공유가 없어 받아 둔 파일이 없다(hooks/usePreparedPhotoFile.ts).
-    expect(args.file).toBeNull();
-    expect(args.filename).toMatch(/\.(jpg|png)$/);
-    await expect(args.getUrl()).resolves.toBe("https://example.com/image");
+    // 내려받기 주소를 만들지 않는다.
     expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
-    // 공유 창이 열렸으면 따로 알리지 않는다.
-    expect(useGuestTrialStore.getState().notice).toBeNull();
+    open.mockRestore();
   });
 
   /*

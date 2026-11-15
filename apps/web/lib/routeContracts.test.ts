@@ -59,6 +59,13 @@ describe("route protection contract", () => {
     expect(isProtectedPath("/admin")).toBe(true);
   });
 
+  // 사진 공유 링크(/s/<토큰>, 2026-11-16)는 받은 사람이 로그인 없이 연다. 보호 경로 접두사(/studio 등)에 걸리지 않는다.
+  test("사진 공유 링크는 보호 경로가 아니다", () => {
+    expect(isProtectedPath("/s/tok_0123456789abcdef")).toBe(false);
+    expect(isProtectedPath("/s/tok_0123456789abcdef/image")).toBe(false);
+    expect(proxySource).not.toContain('"/s/:path*"');
+  });
+
   test("does not treat public auth routes as protected", () => {
     expect(isProtectedPath("/")).toBe(false);
     expect(isProtectedPath("/login")).toBe(false);

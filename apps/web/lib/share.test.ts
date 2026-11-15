@@ -288,6 +288,15 @@ describe("사진 공유", () => {
     expect(clipboard).not.toHaveBeenCalled();
   });
 
+  it("받는 사람 링크를 주면 파일 대신 그 링크를 보낸다 — 사진 주소는 받으러 가지 않는다", async () => {
+    const clipboard = stubClipboard();
+    const { getUrl, value } = args(null);
+
+    await expect(sharePhoto({ ...value, link: "https://www.harucut.com/s/tok_0123456789abcdef" })).resolves.toBe("copied");
+    expect(clipboard).toHaveBeenCalledWith("https://www.harucut.com/s/tok_0123456789abcdef");
+    expect(getUrl).not.toHaveBeenCalled();
+  });
+
   it("파일을 받아 두지 못한 PC 는 보기 링크를 복사한다", async () => {
     const clipboard = stubClipboard();
 

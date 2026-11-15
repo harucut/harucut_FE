@@ -9,7 +9,7 @@
 
 4~8번은 셸과 무관하다(합성 원본 정리, 요금제 한도, 프레임 수정 시각, 셀 누끼 렌더 주체,
 합성 실패 코드). 창구가 같아 여기 모아 둔다.
-**막는 것은 1~4번이고, 5~8번은 답 대기이거나 「있으면 좋음」이다.**
+**막는 것은 1~4번과 9번(사진 공유 링크, 2026-11-16)이고, 5~8번은 답 대기이거나 「있으면 좋음」이다.**
 
 **백엔드에 남은 요청은 이 문서가 소유한다.** 다른 문서가 같은 목록을 복제하면 해결된 항목이
 한쪽에만 지워진다 — `docs/backend-contract.md` 의 테두리색 항목이 실제로 그렇게 됐다.
@@ -420,6 +420,30 @@ UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT(결과·썸네일 쌍 검증 실패, D09
 
 **프론트가 할 일 (열리면)**: `describeComposeFailure` 의 `ComposeFailedError` 분기에 코드별
 문구를 더한다. 고정 한 문장이 나가는 자리 하나만 바뀐다.
+
+---
+
+## 9. 사진 공유 링크 (필수 — 공유 창의 스레드·X·링크 복사가 이것을 쓴다)
+
+**요청(2026-11-16, 하루컷 백엔드 세션에 보냄 — 답 대기)**. 사용자 결정: 「받은 사람은 사진만 볼 수 있게 다운로드 할 수 있는」,
+링크는 **그 사진이 주인 기록에 보이는 동안** 열린다(지우거나 보관 기간 BASIC 3일·PLUS 3개월·PRO 무제한이 지나면 닫힌다). 따로
+만료일은 없다.
+
+**무엇을** (경로·이름은 백엔드가 바꿔도 된다 — 받은 계약에 맞춘다)
+1. 링크 만들기(로그인·본인 사진만) — `POST /api/auth/user/media/{mediaId}/share-link` → `{ token }`. 같은 사진이면 몇 번을 눌러도
+   같은 토큰(먼저 올린 글의 링크가 살아 있게).
+2. 링크 열기(비로그인) — `GET /api/public/media-shares` + `Authorization: Bearer <token>` → `{ displayName, createdAt, imageUrl,
+   downloadUrl }`. 두 주소는 짧은 서명 주소(inline·attachment). 무효·삭제·보관 기간 지남·탈퇴는 **같은 오류 하나**(링크가 있었는지
+   새지 않게). 토큰 128비트 이상, 응답 캐시 금지, 요청 제한.
+
+**프론트(만들어 둠, 제안 계약 기준)**
+- 공유 창 `components/share/PhotoShareSheet.tsx` 가 열릴 때 1을 부른다(`lib/userMediaApi.ts` 의 `createMediaShareLink`,
+  프록시 `app/api/client/user/media/[mediaId]/share-link`).
+- 받는 사람 페이지 `app/s/[token]/page.tsx` 가 서버에서 2를 부른다(`lib/server/mediaShareServer.ts`). og:image 와 사진은
+  `/s/<token>/image`, 저장은 `/s/<token>/download` — 부를 때마다 2를 다시 불러 새 서명 주소로 302 한다.
+
+**막는 것**: 이것이 없으면 공유 창의 스레드·X·링크 복사가 「링크를 만들지 못했어요」로 멈춘다. 카카오톡·인스타그램(사진 파일)은
+이것 없이도 된다.
 
 ---
 

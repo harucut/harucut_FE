@@ -841,6 +841,28 @@ body {
 }
 
 /*
+  아래에서 올라오는 시트 — 공유 창(2026-11-16 「하단에서 스륵 올라오는 일반적인 거」). 휴대폰 폭에서는 화면 아래에 붙어
+  올라오고 뒤가 천천히 어두워진다. 넓은 화면에서는 다른 창처럼 가운데에 뜬다(위의 기본 등장). 곡선은 iOS 시트와 같은
+  계열이다 — 빨리 나와서 끝에서 부드럽게 선다. 움직임 줄이기를 켠 사람에게는 그냥 나타난다.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .hc-modal:has(> .hc-sheet) {
+    transition: background-color 240ms ease-out;
+  }
+  @starting-style {
+    .hc-modal:has(> .hc-sheet) { background-color: rgba(0, 0, 0, 0); }
+  }
+  @media (max-width: 639px) {
+    .hc-modal > .hc-sheet[role="dialog"] {
+      transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    @starting-style {
+      .hc-modal > .hc-sheet[role="dialog"] { opacity: 1; transform: translateY(100%); }
+    }
+  }
+}
+
+/*
   가입 약관 체크칸(TermsConsentFieldset). 기본 체크박스는 테두리 색을 바꿀 수 없어서, 빠진 필수 약관을
   칸 테두리로 빨갛게 보이려고 직접 그린다(2026-11-14). 체크한 색은 예전처럼 라임이다.
   빈 칸 테두리는 --hc-muted 다 — 옅은 테두리 토큰은 바탕과 대비가 3:1 에 못 미쳐 칸이 안 보인다(WCAG 1.4.11).

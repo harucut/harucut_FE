@@ -30,12 +30,13 @@ import { setPendingGuestSave } from "@/lib/pendingGuestSave";
 import { buildPathWithRedirect } from "@/lib/redirect";
 import { getNativeSaveErrorMessage, isNativeShell, nativeNotify } from "@/lib/nativeBridge";
 import { hasServerPush } from "@/lib/pushDevices";
-import { isCopyFailedError, sharePhoto } from "@/lib/share";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
 import { getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
+import { PhotoShareSheet } from "@/components/share/PhotoShareSheet";
+import { sharedPhotoTitle } from "@/lib/mediaShareLink";
 import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import { Sentences } from "@/components/ui/Sentences";
@@ -230,7 +231,8 @@ export default function ShootResultPage() {
     완성본이 바뀌면(다시 만들기) 저장 표시도 따라 풀리도록 무엇을 저장했는지로 든다. 앱은 사진첩에 넣으므로 그렇게 말한다.
   */
   const [savedResult, setSavedResult] = useState<{ result: GeneratedFourcutAsset; album: boolean } | null>(null);
-  const [isSharingImage, setIsSharingImage] = useState(false);
+  // 공유 창(components/share/PhotoShareSheet.tsx). 단추를 누르면 아래에서 올라온다.
+  const [shareOpen, setShareOpen] = useState(false);
   const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
   // 완성본 주소가 열리지 않는가(만료된 조회 URL·오프라인). 참이면 미리보기로 되돌아간다.
   const [isResultImageBroken, setIsResultImageBroken] = useState(false);
@@ -821,50 +823,6 @@ export default function ShootResultPage() {
     router.push(reselectFrameHref);
   };
 
-  const handleShareImage = async () => {
-    if (!imageResult || isSharingImage) return;
-
-    if (imageResult.localBlob) return;
-
-    setIsSharingImage(true);
-    try {
-      // 사진 파일을 기기 공유 창에 넘긴다(lib/share.ts 의 sharePhoto). 파일을 못 넘기면 보기 주소를 링크로 보낸다 —
-      // 화면에 띄운 그 주소라 받은 사람이 열면 사진이 보인다. 예전의 내려받기 주소는 열면 파일로 받아졌다.
-      const result = await sharePhoto({
-        file: shareFile,
-        getUrl: async () => imageResult.objectUrl,
-        filename: shareFilename,
-        title: `${imageResult.displayName} | 하루컷`,
-        text: "방금 완성한 하루컷 이미지예요.",
-      });
-
-      if (result === "copied") {
-        showStatusNotice(
-          "링크를 복사했어요",
-          "하루 동안 열리는 이미지 링크예요. 바로 붙여넣어 공유할 수 있어요.",
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      // 링크는 이미 만들어졌고 복사만 거부당한 경우다(lib/share.ts 의 CopyFailedError).
-      // "링크를 준비하지 못했어요 / 잠시 후 다시" 로 말하면 원인도 틀리고, 사용자는
-      // 기다렸다 다시 눌러 같은 자리에서 또 막힌다 — 해야 할 일이 다르므로 갈라 안내한다.
-      if (isCopyFailedError(error)) {
-        showStatusNotice(
-          "링크를 복사하지 못했어요",
-          "링크는 만들었지만 브라우저가 복사를 막았어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요.",
-        );
-        return;
-      }
-      showStatusNotice(
-        "사진을 공유하지 못했어요",
-        getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
-      );
-    } finally {
-      setIsSharingImage(false);
-    }
-  };
-
   // 세로로 긴 사진은 폭으로 맞추면 화면 두 개 높이가 된다. 높이로 묶어 사진과 저장 단추 줄을 한 화면에 둔다.
   const tallLayout = layout.totalHeight > layout.totalWidth;
   const photoSizeClass = tallLayout ? "h-[min(64svh,680px)] w-auto max-w-full" : "h-auto w-full";
@@ -1114,9 +1072,8 @@ export default function ShootResultPage() {
                       <button
                         type="button"
                         aria-label="공유"
-                        aria-busy={isSharingImage || undefined}
-                        onClick={() => void handleShareImage()}
-                        disabled={!imageResult || isSharingImage}
+                        aria-haspopup="dialog"
+                        onClick={() => setShareOpen(true)}
                         className={roundButton}
                       >
                         <Share2 aria-hidden className="size-5" />
@@ -1131,6 +1088,17 @@ export default function ShootResultPage() {
 
         <canvas ref={canvasRef} className="hidden" />
       </div>
+
+      {imageResult && !imageResult.localBlob ? (
+        <PhotoShareSheet
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          mediaId={imageResult.mediaId}
+          title={sharedPhotoTitle(imageResult.displayName, new Date().toISOString())}
+          thumbnailSrc={resultImageSrc}
+          photo={{ file: shareFile, getUrl: async () => imageResult.objectUrl, filename: shareFilename }}
+        />
+      ) : null}
 
     </main>
   );

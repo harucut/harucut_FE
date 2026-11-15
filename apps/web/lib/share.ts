@@ -149,6 +149,10 @@ type SharePhotoArgs = {
    */
   getUrl: () => Promise<string>;
   filename: string;
+  /**
+   * 파일을 못 넘길 때 대신 보낼 링크. 공유 창은 받는 사람 페이지(`/s/<토큰>`)를 준다 — 없으면 위 사진 주소를 보낸다.
+   */
+  link?: string;
   /** 링크로 갈 때만 싣는다. 파일로 갈 때는 사진만 간다. */
   title: string;
   text?: string;
@@ -167,11 +171,11 @@ type SharePhotoArgs = {
  *    (shareOrCopyLink). 보기 링크라 받은 사람이 열면 사진이 화면에 뜬다 — 예전의 내려받기 링크(attachment)는 열면 파일로
  *    받아지고 사진은 보이지 않았다.
  */
-export async function sharePhoto({ file, getUrl, filename, title, text }: SharePhotoArgs): Promise<ShareLinkResult> {
+export async function sharePhoto({ file, getUrl, filename, link, title, text }: SharePhotoArgs): Promise<ShareLinkResult> {
   if (isNativeShell()) {
     const url = await getUrl();
     const native = await nativeShareImage(url, filename);
-    if (!native) return shareOrCopyLink({ title, text, url });
+    if (!native) return shareOrCopyLink({ title, text, url: link ?? url });
     if (native.ok) return "shared";
     // 사진을 못 받았거나 공유 창을 못 띄웠다. 링크로 돌려도 같은 주소라 열리지 않는다 — 호출부가 실패를 알린다.
     throw new Error(native.reason?.trim() || NATIVE_SHARE_FAILED);
@@ -182,7 +186,7 @@ export async function sharePhoto({ file, getUrl, filename, title, text }: ShareP
     if (shared === "shared" || shared === "cancelled") return shared;
   }
 
-  return shareOrCopyLink({ title, text, url: await getUrl() });
+  return shareOrCopyLink({ title, text, url: link ?? (await getUrl()) });
 }
 
 /** 이미 받아 둔 사진을 공유 시트로 넘긴다. iOS 는 여기서 「이미지 저장」을 골라야 사진첩에 들어간다. */

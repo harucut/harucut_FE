@@ -91,8 +91,7 @@ type Props = {
   index: number;
   notice: HistoryNoticeValue | null;
   downloading: boolean;
-  sharing: boolean;
-  /** 이름 바꾸기·지우기 창이 위에 떠 있다. 그동안 화살표 키로 사진을 넘기지 않는다(입력칸의 커서 이동이다). */
+  /** 이름 바꾸기·지우기·공유 창이 위에 떠 있다. 그동안 화살표 키로 사진을 넘기지 않는다(입력칸의 커서 이동이다). */
   covered: boolean;
   onIndexChange: (index: number) => void;
   onClose: () => void;
@@ -117,7 +116,6 @@ export function HistoryPhotoViewer({
   index,
   notice,
   downloading,
-  sharing,
   covered,
   onIndexChange,
   onClose,
@@ -266,9 +264,8 @@ export function HistoryPhotoViewer({
             <button
               type="button"
               aria-label="공유"
-              aria-busy={sharing}
+              aria-haspopup="dialog"
               onClick={() => onShare(item)}
-              disabled={sharing}
               className={roundButton}
             >
               <Share2 aria-hidden className="size-5" />
