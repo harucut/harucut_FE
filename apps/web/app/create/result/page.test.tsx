@@ -191,10 +191,12 @@ jest.mock("@/lib/fourcutCompose", () => ({
 const mockGetMediaDownloadUrl = jest.fn();
 
 const mockCreateMediaShareLink = jest.fn();
+const mockFindMyMedia = jest.fn();
 jest.mock("@/lib/userMediaApi", () => ({
   updateMediaDisplayName: jest.fn(),
   getMediaDownloadUrl: (...args: unknown[]) => mockGetMediaDownloadUrl(...args),
   createMediaShareLink: (...args: unknown[]) => mockCreateMediaShareLink(...args),
+  findMyMedia: (...args: unknown[]) => mockFindMyMedia(...args),
 }));
 
 // 공유 창 안의 갈래(파일·링크·복사)는 components/share/PhotoShareSheet.test.tsx 가 본다. 여기서는 창이 뜨고 무엇을 넘기는지만 본다.
@@ -204,10 +206,19 @@ const mockNativeNotify = jest.fn();
 // nativeNotify 만 갈아 끼우고 나머지는 진짜를 쓴다. getNativeSaveErrorMessage 를 목으로
 // 덮으면 "네이티브 사유를 믿을지 말지" 판정이 통째로 사라져, 아래 회귀 테스트가
 // 자기 목만 확인하게 된다.
-jest.mock("@/lib/nativeBridge", () => ({
-  ...jest.requireActual("@/lib/nativeBridge"),
-  nativeNotify: (...args: unknown[]) => mockNativeNotify(...args),
-}));
+// 앱 셸 안의 사진 공유만 따로 본다. 평소에는 진짜(브라우저)로 둔다.
+let mockInNativeShell = false;
+const mockNativeShareImage = jest.fn();
+jest.mock("@/lib/nativeBridge", () => {
+  const actual = jest.requireActual("@/lib/nativeBridge");
+  return {
+    ...actual,
+    nativeNotify: (...args: unknown[]) => mockNativeNotify(...args),
+    isNativeShell: () => mockInNativeShell || actual.isNativeShell(),
+    nativeShareImage: (...args: unknown[]) =>
+      mockInNativeShell ? mockNativeShareImage(...args) : actual.nativeShareImage(...args),
+  };
+});
 
 /** `document.visibilityState` 를 갈아 끼운다(jsdom 은 항상 "visible" 이다). */
 function stubVisibility(state: "hidden" | "visible") {
@@ -936,6 +947,31 @@ describe("ShootResultPage", () => {
     // 내려받기 주소를 만들지 않는다.
     expect(mockGetMediaDownloadUrl).not.toHaveBeenCalled();
     open.mockRestore();
+  });
+
+  // Codex 리뷰 #604 — 완성 화면을 오래 열어 두면 합성 때 받은 서명 주소가 만료돼, 앱이 그 주소를 내려받다 실패했다.
+  it("앱에서 카카오톡으로 보낼 때는 누를 때 새로 받은 사진 주소를 넘긴다", async () => {
+    mockCreateMediaShareLink.mockResolvedValue("tok_0123456789abcdef");
+    mockFindMyMedia.mockResolvedValue({ mediaId: 1, viewUrl: "https://example.com/fresh-view" });
+    mockNativeShareImage.mockResolvedValue({ ok: true });
+    mockInNativeShell = true;
+    try {
+      render(<ShootResultPage />);
+      await waitFor(() => {
+        expect(mockUseShootSession.getState().imageResult).not.toBeNull();
+      });
+      fireEvent.click(await screen.findByRole("button", { name: "공유" }));
+      const sheet = await screen.findByRole("dialog", { name: "사진 공유하기" });
+      const kakao = within(sheet).getByRole("button", { name: "카카오톡" });
+      await waitFor(() => expect(kakao).toBeEnabled());
+      fireEvent.click(kakao);
+
+      await waitFor(() => expect(mockNativeShareImage).toHaveBeenCalled());
+      expect(mockFindMyMedia).toHaveBeenCalledWith(1);
+      expect(mockNativeShareImage.mock.calls[0][0]).toBe("https://example.com/fresh-view");
+    } finally {
+      mockInNativeShell = false;
+    }
   });
 
   /*

@@ -504,6 +504,36 @@ describe("저장한 프레임의 촬영 전 확인", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // Codex 리뷰 #604 — 확인 중에 잠기는 것은 확인 단추뿐이라, 늦게 온 답이 이전 선택으로 촬영을 시작했다.
+  it("확인하는 사이 다른 프레임을 고르면 늦게 온 답으로 찍으러 가지 않는다", async () => {
+    let resolveCheck: (v: string | null) => void = () => {};
+    mockCheckSavedFrame.mockImplementation(() => new Promise((resolve) => (resolveCheck = resolve)));
+    render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+    expect(screen.getByRole("button", { name: "확인" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "다른 프레임" }));
+    // 고르면 확인 단추가 다시 풀린다.
+    expect(screen.getByRole("button", { name: "확인" })).not.toBeDisabled();
+    await act(async () => {
+      resolveCheck(null);
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useShootSession.getState().remoteFrameId).toBeNull();
+  });
+
+  it("확인하는 사이 화면을 떠나면 촬영 화면으로 데려가지 않는다", async () => {
+    let resolveCheck: (v: string | null) => void = () => {};
+    mockCheckSavedFrame.mockImplementation(() => new Promise((resolve) => (resolveCheck = resolve)));
+    const { unmount } = render(<ShootPage />);
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+    unmount();
+    await act(async () => {
+      resolveCheck(null);
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it("기본 레이아웃은 확인하지 않는다", async () => {
     mockChosenRemoteFrameId = null;
     render(<ShootPage />);

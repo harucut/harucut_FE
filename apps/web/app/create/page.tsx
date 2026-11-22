@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FrameChooser, type FrameChoice } from "@/components/frame/FrameChooser";
@@ -105,6 +105,23 @@ function ShootPageContent() {
   */
   const [checking, setChecking] = useState(false);
   const [confirmProblem, setConfirmProblem] = useState<string | null>(null);
+  /*
+    확인 회차. 확인(저장 프레임·회원 여부)을 기다리는 사이 다른 프레임을 고르거나 화면을 떠나면 바뀐다 — 늦게 온 답으로
+    이전에 고른 프레임을 촬영에 넘기거나, 이미 떠난 사람을 촬영 화면으로 데려가지 않는다(Codex 리뷰 #604).
+    확인 중에 잠기는 것은 확인 단추뿐이라 고르기와 뒤로가기는 그동안에도 된다.
+  */
+  const confirmRoundRef = useRef(0);
+  useEffect(
+    () => () => {
+      confirmRoundRef.current += 1;
+    },
+    [],
+  );
+  const changeSelection = () => {
+    confirmRoundRef.current += 1;
+    setChecking(false);
+    setConfirmProblem(null);
+  };
 
   /*
     사진 불러오기에 들여보내도 되는가. 회원이면 들여보내고, 아니면 이 자리에서 회원 전용 안내 창을 띄운다.
@@ -116,8 +133,10 @@ function ShootPageContent() {
     안내 창은 프록시가 비회원을 되돌릴 때와 같은 자리에 띄운다 — 카메라로 찍는 프레임 고르기, 고른 프레임은 그대로.
     「촬영 계속하기」를 누르면 그대로 찍으러 갈 수 있다. `guestNotice` 는 GuestTrialBridge 가 읽고 주소에서 걷는다.
   */
-  const mayEnterUpload = async (frameId: FrameId) => {
+  const mayEnterUpload = async (frameId: FrameId, current: () => boolean) => {
     const verdict = await resolveMembership();
+    // 묻는 사이 다른 프레임을 골랐거나 화면을 떠났으면 아무것도 하지 않는다.
+    if (!current()) return false;
     const membership = verdict === "unknown" ? accessMode : verdict;
     if (membership === "member") {
       if (verdict === "member" && accessMode === "guest") exitGuestMode();
@@ -129,6 +148,8 @@ function ShootPageContent() {
   };
 
   const confirmFrame = async (choice: FrameChoice, allowReset = false) => {
+    const round = ++confirmRoundRef.current;
+    const current = () => confirmRoundRef.current === round;
     // 「사진 지우고 다시 찍기」로 확인하고 온 길(allowReset)은 이미 이 확인을 지났다.
     const savedFrameId = allowReset ? null : choice.remoteFrameId;
     // 갤러리 사진을 들고 있으면 불러오기 화면을 지나지 않고 고르기로 간다(proceedWithFrame).
@@ -136,11 +157,12 @@ function ShootPageContent() {
     if (savedFrameId != null || entersUpload) {
       setChecking(true);
       setConfirmProblem(null);
-      if (entersUpload && !(await mayEnterUpload(choice.frameId))) {
-        setChecking(false);
+      if (entersUpload && !(await mayEnterUpload(choice.frameId, current))) {
+        if (current()) setChecking(false);
         return;
       }
       const problem = savedFrameId != null ? await checkSavedFrame(savedFrameId) : null;
+      if (!current()) return;
       setChecking(false);
       if (problem) {
         setConfirmProblem(problem);
@@ -201,7 +223,7 @@ function ShootPageContent() {
           onConfirm={(choice) => void confirmFrame(choice)}
           confirmNotice={confirmProblem}
           confirmBusy={checking}
-          onSelectionChange={() => setConfirmProblem(null)}
+          onSelectionChange={changeSelection}
         />
         {/*
           찍어 둔 사진을 들고 칸 모양이 다른 프레임을 고르면 묻는다(slotRatioMatches). 찍은 사진은 찍을 때 칸 모양대로

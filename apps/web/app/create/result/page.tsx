@@ -33,7 +33,7 @@ import { hasServerPush } from "@/lib/pushDevices";
 import { flushShootSession } from "@/lib/shootSessionPersistence";
 import { useShootSession } from "@/lib/shootSessionStore";
 import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
-import { getMediaDownloadUrl } from "@/lib/userMediaApi";
+import { findMyMedia, getMediaDownloadUrl } from "@/lib/userMediaApi";
 import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
 import { PhotoShareSheet } from "@/components/share/PhotoShareSheet";
 import { sharedPhotoTitle } from "@/lib/mediaShareLink";
@@ -1096,7 +1096,19 @@ export default function ShootResultPage() {
           mediaId={imageResult.mediaId}
           title={sharedPhotoTitle(imageResult.displayName, new Date().toISOString())}
           thumbnailSrc={resultImageSrc}
-          photo={{ file: shareFile, getUrl: async () => imageResult.objectUrl, filename: shareFilename }}
+          photo={{
+            file: shareFile,
+            /*
+              앱이 사진을 받을 주소 — 누를 때 새로 받는다. 합성 때 받은 서명 주소는 완성 화면을 오래 열어 두면 만료되고, 앱은
+              그 주소를 내려받다 실패하면 링크로 돌리지 않는다(Codex 리뷰 #604). 다운로드 주소는 첨부로 내려가 인라인
+              조회 주소를 먼저 쓴다(기록 화면과 같다).
+            */
+            getUrl: async () => {
+              const media = await findMyMedia(imageResult.mediaId).catch(() => null);
+              return media?.viewUrl?.trim() || (await getMediaDownloadUrl(imageResult.mediaId));
+            },
+            filename: shareFilename,
+          }}
         />
       ) : null}
 

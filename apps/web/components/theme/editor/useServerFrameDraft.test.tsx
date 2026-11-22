@@ -1,5 +1,9 @@
 import { act, renderHook } from "@testing-library/react";
-import { SERVER_DRAFT_DEBOUNCE_MS, useServerFrameDraft } from "@/components/theme/editor/useServerFrameDraft";
+import {
+  SERVER_DRAFT_DEBOUNCE_MS,
+  SERVER_DRAFT_DISCOVERY_DEADLINE_MS,
+  useServerFrameDraft,
+} from "@/components/theme/editor/useServerFrameDraft";
 import { clearEditorDraft } from "@/lib/themeEditorDraft";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 
@@ -302,6 +306,42 @@ describe("Codex 리뷰 반영", () => {
     expect(useThemeEditorStore.getState().backgroundColor).toBe("123456");
     expect(result.current.restored).toBe(true);
     expect(result.current.conflict).toBeNull();
+  });
+
+  // #604: 찾기가 멈추면 settled 가 오지 않아 이 기기 복구본이 영영 판단되지 않았다.
+  it("서버 초안 찾기가 상한을 넘기면 서버 초안 없이 정하고, 늦게 온 답과 이후 편집은 서버에 쓰지 않는다", async () => {
+    let resolveList: (v: unknown) => void = () => {};
+    mockList.mockImplementation(() => new Promise((resolve) => (resolveList = resolve)));
+    const { result } = renderDraftHook();
+    await flush();
+    expect(result.current.settled).toBe(false);
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(SERVER_DRAFT_DISCOVERY_DEADLINE_MS);
+    });
+    expect(result.current.settled).toBe(true);
+    expect(result.current.restored).toBe(false);
+
+    // 늦게 온 더 새로운 초안은 넣지 않는다 — 이 기기 복구본이 이미 그 자리를 맡았다.
+    mockGet.mockResolvedValue({
+      draftId: "Dr9",
+      frameId: null,
+      revision: 5,
+      updatedAt: "2026-10-26T01:00:00Z",
+      document: serverDoc("123456"),
+    });
+    await act(async () => {
+      resolveList([{ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z" }]);
+    });
+    await flush();
+    expect(useThemeEditorStore.getState().backgroundColor).not.toBe("123456");
+    expect(result.current.restored).toBe(false);
+
+    // 무엇이 있는지 모른 채 쓰면 초안이 두 벌 생긴다 — 이 세션은 서버에 쓰지 않는다.
+    act(() => useThemeEditorStore.getState().setBackgroundColor("ff0000"));
+    await afterDebounce();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   // 편집기 상태는 전역 스토어다. 나간 편집기의 늦은 응답이 다음에 연 편집기를 덮으면 안 된다.

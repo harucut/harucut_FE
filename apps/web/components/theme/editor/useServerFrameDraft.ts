@@ -24,6 +24,12 @@ import type { ThemeExportJson } from "@/lib/types/themeEditor";
 export const SERVER_DRAFT_DEBOUNCE_MS = 4000;
 
 /**
+ * 열 때 서버 초안 찾기를 이만큼 기다린다. 이 기기 복구본은 찾기가 끝나야 판단하고 그동안 새 편집은 기기에 남지 않으므로
+ * 오래 막지 않는다. 실측이 아니다 — 그림 하나를 기다리는 상한(lib/savedFrameCheck.ts 의 ASSET_TIMEOUT_MS)과 맞췄다.
+ */
+export const SERVER_DRAFT_DISCOVERY_DEADLINE_MS = 15_000;
+
+/**
  * 열 때 문서까지 받아 볼 초안 수의 상한. 새 프레임 초안 목록에는 판형 넷이 섞여 오므로, 판형마다 하나씩만 있어도
  * 넷이다 — 셋으로 자르면 가장 오래된 판형의 초안을 영영 못 찾았다(Codex 리뷰 #528). 맞는 것을 찾으면 멈춘다.
  * 상한은 비정상적으로 많이 쌓인 경우의 요청 폭주를 막는 값이다.
@@ -101,6 +107,7 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument, c
  *    가지고 있으면 그냥 그걸로 보여주면 되지」). 예전에는 「다른 기기에서 …에 편집한 초안이 있어요」로 [지금 화면 유지]·
  *    [초안 불러오기]를 물었다. 더 새로운 쪽을 여는 것이라 그 기기의 작업은 사라지지 않는다.
  *  - 다만 이 화면에서 이미 고쳤으면 더 새로운 초안이어도 덮지 않고, 아래 충돌처럼 어느 쪽을 남길지 고르게 한다.
+ *  - 찾기가 상한(SERVER_DRAFT_DISCOVERY_DEADLINE_MS) 안에 끝나지 않으면 서버 초안 없이 간다. 이 세션은 서버 초안을 쓰지 않는다.
  *  - 다른 기기가 먼저 저장했으면(DRAFT-001) 멈추고 고르게 한다. 조용히 덮지 않는다.
  *  - 너무 크면(DRAFT-002) 이 세션은 이 기기에만 둔다. 로컬 초안은 계속 돈다.
  *  - 이번 세션에 편집이 없으면 새 초안을 만들지 않는다.
@@ -227,7 +234,19 @@ export function useServerFrameDraft(options: {
   useEffect(() => {
     if (!ownerId || !ready) return;
     let cancelled = false;
+    // 상한을 넘겨 찾기를 그만뒀다. 늦게 온 답은 버린다 — 이 기기 복구본이 이미 그 자리를 맡았다.
+    let gaveUp = false;
+    const stale = () => cancelled || gaveUp;
     discoveredRef.current = false;
+    /*
+      찾기가 응답 없이 멈추면 settled 가 영영 오지 않아 이 기기 복구본을 되살리지 못하고, 그동안의 새 편집은 기기에도
+      남지 않는다(ThemeEditorPage 의 로컬 자동 저장이 복구 판단을 기다린다, Codex 리뷰 #604). 상한을 넘기면 서버 초안 없이
+      정한다 — 이 세션은 서버 초안을 쓰지 않는다. 무엇이 있는지 모른 채 쓰면 초안이 두 벌 생긴다.
+    */
+    const deadline = setTimeout(() => {
+      gaveUp = true;
+      setSettled(true);
+    }, SERVER_DRAFT_DISCOVERY_DEADLINE_MS);
     (async () => {
       try {
         const summaries = (await listFrameDrafts(remoteFrameId ?? "new", workspaceId)).sort(newestFirst);
@@ -235,7 +254,7 @@ export function useServerFrameDraft(options: {
           const draft = await getFrameDraft(summary.draftId);
           const document = parseServerDocument(draft.document, frameId);
           if (!document) continue;
-          if (cancelled) return;
+          if (stale()) return;
           draftRef.current = { draftId: draft.draftId, revision: draft.revision };
 
           const current = currentDocument();
@@ -256,9 +275,9 @@ export function useServerFrameDraft(options: {
             // 쪽을 남길지 고르게 한다. 조회와 주소 받기는 오래 걸릴 수 있고 그동안에도 편집기는 열려 있다. 고르기
             // 전에는 쓰지 않는다 — 그 기기의 초안을 조용히 덮지 않게(Codex 리뷰 #604).
             // 그사이 편집기를 나갔으면(cancelled) 아무것도 넣지 않는다 — 새 편집기는 이력을 비우므로 편집 여부로는 못 거른다.
-            const canApply = () => !cancelled && !hasUserEdits();
+            const canApply = () => !stale() && !hasUserEdits();
             const applied = canApply() && (await hydrateFromDocument(ownerId, document, canApply));
-            if (cancelled) return;
+            if (stale()) return;
             if (applied) {
               lastSentRef.current = JSON.stringify(document);
               setRestored(true);
@@ -271,8 +290,10 @@ export function useServerFrameDraft(options: {
         }
       } catch {
         // 찾지 못하면 이번 세션은 새 초안으로 시작한다. 로컬 초안은 그대로 돈다.
+      } finally {
+        clearTimeout(deadline);
       }
-      if (cancelled) return;
+      if (stale()) return;
       discoveredRef.current = true;
       setSettled(true);
       // 찾는 동안(또는 계정을 알기 전에) 한 편집은 예약된 저장이 찾기 전이라 건너뛰었을 수 있다. 지금 한 번 맡긴다
@@ -281,6 +302,7 @@ export function useServerFrameDraft(options: {
     })();
     return () => {
       cancelled = true;
+      clearTimeout(deadline);
     };
   }, [ownerId, ready, frameId, remoteFrameId, workspaceId]);
 
