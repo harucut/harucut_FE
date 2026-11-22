@@ -2,6 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 게시 확인·성공처럼 한 번 멈춰 읽어야 하는 내용을 담는 시트. 휴대폰에서는 아래에서 올라오고 넓은 화면에서는 가운데 뜬다.
@@ -42,7 +43,7 @@ export function StudioSheet({
           </h2>
           {description ? (
             <p id={`${id}-desc`} className="text-[13px] leading-[1.6] text-(--hc-muted)">
-              {description}
+              <Sentences text={description} />
             </p>
           ) : null}
         </div>

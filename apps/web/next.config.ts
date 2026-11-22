@@ -27,6 +27,20 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // 워크스페이스 공통 패키지는 TS 소스로 배포되므로 빌드에서 트랜스파일한다
   transpilePackages: ["@harucut/shared"],
+  /*
+    만들기 흐름 주소는 2026-11-15 `/shoot`(촬영)에서 `/create`(만들기)로 옮겼다 — 사진을 찍든 갤러리에서
+    불러오든 같은 흐름이라 「촬영」이 맞지 않았다(사용자 「프레임 고르는 걸 /shoot 이라고 안 하고 만드는 걸로 해서
+    통일」). 예전 주소(북마크·앱에 남은 기록·오래된 링크)는 새 주소로 넘긴다. 쿼리는 그대로 따라간다.
+    따로 있던 갤러리 불러오기 화면(`/shoot/upload`)은 없어졌다 — 불러오기로 시작하는 프레임 고르기로 보낸다.
+    임시 이동(307)으로 둔다 — 브라우저가 기억하지 않아 다시 바꿀 수 있다.
+  */
+  async redirects() {
+    return [
+      { source: "/shoot/upload", destination: "/create?source=upload", permanent: false },
+      { source: "/shoot", destination: "/create", permanent: false },
+      { source: "/shoot/:path*", destination: "/create/:path*", permanent: false },
+    ];
+  },
   async headers() {
     return [
       // Studio 의 행사 화면 미리보기만 같은 출처의 iframe 에 뜰 수 있다. 데이터 없이, 부모가 보낸 값만 그린다.
@@ -60,6 +74,16 @@ const nextConfig: NextConfig = {
       // 초대 링크(/invite#<token>)도 토큰이 곧 권한이다. 결과 링크와 같은 이유로 막는다.
       {
         source: "/invite",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      // 사진 공유 링크(/s/<token>, 2026-11-16)도 주소가 곧 사진을 보는 권한이다. 토큰이 경로에 있어(미리보기 수집기가 og:image 를
+      // 가져가야 한다) 더더욱 리퍼러로 넘기지 않는다. 그림·내려받기 주소(/s/<token>/image·/download)도 같다.
+      {
+        source: "/s/:path*",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },
           { key: "Cache-Control", value: "no-store" },

@@ -54,6 +54,7 @@ import { freeTextErrorMessage, localFreeTextProblem, normalizeFreeText } from "@
 import { safeAssetUrl } from "@/lib/event/pageTheme";
 import { FreeTextComposer, type FreeTextValue } from "@/components/participation/FreeTextComposer";
 import { FrameWithPhotos, frameFitStyle, rotatedPhotos } from "@/components/participation/FrameWithPhotos";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 개인 휴대폰 참가 `/e/{slug}`(기획 R5 4절, ADR-0007 §5).
@@ -433,15 +434,15 @@ export function EventParticipation({ slug, initialEvent = null }: { slug: string
         {step.kind === "unavailable" ? (
           <div className="flex flex-1 flex-col justify-center gap-3 pb-[40svh]">
             <EventTitle>{eventName}</EventTitle>
-            <p role="alert" className="text-[16px] leading-relaxed text-(--ev-muted)">{step.message}</p>
+            <p role="alert" className="text-[16px] leading-relaxed text-(--ev-muted)"><Sentences text={step.message} /></p>
           </div>
         ) : null}
 
         {error ? (
-          <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)">{error}</p>
+          <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)"><Sentences text={error} /></p>
         ) : null}
         {notice ? (
-          <p role="status" className="text-[14px] font-semibold">{notice}</p>
+          <p role="status" className="text-[14px] font-semibold"><Sentences text={notice} /></p>
         ) : null}
 
         {step.kind === "intro" && event ? (
@@ -607,7 +608,7 @@ export function IntroStep({ event, frames, busy, onJoin }: { event: PublicEvent;
         ) : null}
         {event.captureOpen ? (
           <p className="break-keep text-center text-[12px] leading-relaxed text-(--ev-muted)">
-            이 기기에서 찍은 사진은 이 브라우저로 다시 들어오면 볼 수 있어요. 결과 링크를 저장해 두면 다른 기기에서도 받아요.
+            <Sentences text="이 기기에서 찍은 사진은 이 브라우저로 다시 들어오면 볼 수 있어요. 결과 링크를 저장해 두면 다른 기기에서도 받아요." />
           </p>
         ) : null}
         <ConsentSummary items={event.consentItems} />
@@ -909,11 +910,11 @@ export function CameraProblem({
   return (
     <section className="ev-step flex flex-1 flex-col justify-center gap-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <p role="alert" className="ev-readable break-keep text-[18px] font-bold leading-relaxed">
-        {state === "denied"
+        <Sentences text={state === "denied"
           ? "카메라를 쓸 수 있게 허용해 주세요. 브라우저 설정에서 이 사이트의 카메라 권한을 켠 뒤 다시 시도해 주세요."
           : state === "unsupported"
             ? "이 브라우저에서는 카메라를 쓸 수 없어요. Safari나 Chrome에서 이 링크를 열어 주세요."
-            : "카메라를 켜지 못했어요. 다른 앱이 카메라를 쓰고 있다면 닫은 뒤 다시 시도해 주세요."}
+            : "카메라를 켜지 못했어요. 다른 앱이 카메라를 쓰고 있다면 닫은 뒤 다시 시도해 주세요."} />
       </p>
       {state === "denied" ? (
         <ul className="ev-readable flex list-disc flex-col gap-1.5 pl-5 text-[14px] leading-relaxed text-(--ev-muted)">
@@ -941,7 +942,7 @@ export function CameraProblem({
           {copied ? "링크를 복사했어요. Safari나 Chrome에 붙여 넣어 주세요" : "링크 복사"}
         </EventButton>
       )}
-      {copied === false ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)">복사하지 못했어요. 주소창의 주소를 길게 눌러 복사해 주세요.</p> : null}
+      {copied === false ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)"><Sentences text="복사하지 못했어요. 주소창의 주소를 길게 눌러 복사해 주세요." /></p> : null}
       {onLeave ? (
         <EventButton tone="quiet" size="md" onClick={onLeave}>
           {leaveLabel ?? "뒤로"}
@@ -1390,7 +1391,7 @@ export function CaptureAndSend({
           <video ref={videoRef} playsInline muted aria-label="카메라 화면" className="size-full -scale-x-100 object-cover" />
           {cameraState !== "ready" && !allTaken ? (
             <p role="status" className="absolute inset-0 flex items-center justify-center break-keep px-6 text-center text-[15px] font-semibold text-white/85">
-              카메라를 켜고 있어요. 권한을 물으면 허용해 주세요…
+              <Sentences text="카메라를 켜고 있어요. 권한을 물으면 허용해 주세요…" />
             </p>
           ) : null}
           {flash > 0 ? <span key={flash} aria-hidden className="hc-capture-flash pointer-events-none absolute inset-0 bg-white" /> : null}
@@ -1458,8 +1459,8 @@ export function CaptureAndSend({
               </details>
             ) : null}
             <EventActionBar>
-              {error ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)">{error}</p> : null}
-              {sending ? <p role="status" className="text-center text-[15px] font-semibold text-(--ev-muted)">{sending}</p> : null}
+              {error ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)"><Sentences text={error} /></p> : null}
+              {sending ? <p role="status" className="text-center text-[15px] font-semibold text-(--ev-muted)"><Sentences text={sending} /></p> : null}
               <EventButton size={booth ? "booth" : "xl"} disabled={Boolean(sending) || freeTextBlocked} aria-busy={Boolean(sending)} onClick={() => void send()}>
                 이 사진으로 만들기
               </EventButton>
@@ -1498,7 +1499,7 @@ export function CaptureAndSend({
           <p aria-live="polite" className="sr-only">
             {hasShots ? `${SHOT_COUNT - emptyCount}번째 사진을 찍었어요.` : ""}
           </p>
-          {error ? <p role="alert" className="text-center text-[14px] font-semibold text-(--ev-danger)">{error}</p> : null}
+          {error ? <p role="alert" className="text-center text-[14px] font-semibold text-(--ev-danger)"><Sentences text={error} /></p> : null}
           {running ? (
             <EventButton tone="quiet" size={booth ? "booth" : "xl"} onClick={pauseShooting}>
               <Pause aria-hidden className={booth ? "size-[1em]" : "size-5"} />

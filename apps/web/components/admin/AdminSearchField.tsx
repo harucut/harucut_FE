@@ -9,6 +9,7 @@ import {
   type AdminEventItem,
   type AdminWorkspaceItem,
 } from "@/lib/admin/cmsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const EVENT_STATUS_LABEL: Record<AdminEventItem["status"], string> = {
   DRAFT: "초안",
@@ -79,7 +80,7 @@ export function AdminSearchField(props: Props) {
       </div>
       {error ? (
         <p role="alert" className="text-[12px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
       {results ? (

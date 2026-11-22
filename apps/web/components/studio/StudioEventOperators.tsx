@@ -11,6 +11,7 @@ import {
   type EventOperation,
   type Member,
 } from "@/lib/studio/accessApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 행사 운영자 배정(ADR-0009 §3, P3-2). OWNER·ADMIN 이 공간의 운영 담당(OPERATOR)에게 이 행사의 운영 권한을 준다.
@@ -74,7 +75,7 @@ export function StudioEventOperators({
   if (error) {
     return (
       <p role="alert" className="text-[13px] text-(--hc-danger)">
-        {error}
+        <Sentences text={error} />
       </p>
     );
   }
@@ -82,7 +83,7 @@ export function StudioEventOperators({
   if (operators.length === 0) {
     return (
       <p className="text-[13px] text-(--hc-muted)">
-        운영 담당 멤버가 없어요. 멤버를 「운영 담당」으로 초대하거나 역할을 바꾸면 이 행사를 맡길 수 있어요.
+        <Sentences text="운영 담당 멤버가 없어요. 멤버를 「운영 담당」으로 초대하거나 역할을 바꾸면 이 행사를 맡길 수 있어요." />
       </p>
     );
   }
@@ -91,7 +92,7 @@ export function StudioEventOperators({
     <div className="flex flex-col gap-3">
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       <ul className="flex flex-col gap-2">
@@ -136,7 +137,7 @@ export function StudioEventOperators({
         })}
       </ul>
       <p className="text-[12px] text-(--hc-muted)">
-        사진 권한은 따로 줘요. 프로젝트 멤버로 받은 권한은 프로젝트에서 관리해요.
+        <Sentences text="사진 권한은 따로 줘요. 프로젝트 멤버로 받은 권한은 프로젝트에서 관리해요." />
       </p>
     </div>
   );

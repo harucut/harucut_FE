@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDateTime } from "@/components/admin/adminShared";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 서버 AuditLogPage.Item. 시스템·탈퇴 사용자가 한 일이면 actorName 키가 없다. */
 export type AuditLogItem = {
@@ -128,7 +129,7 @@ export function AuditLogList({
       {error ? (
         <div className="flex flex-col items-start gap-3">
           <p role="alert" className="text-[14px] text-(--hc-danger)">
-            {error}
+            <Sentences text={error} />
           </p>
           <button
             type="button"

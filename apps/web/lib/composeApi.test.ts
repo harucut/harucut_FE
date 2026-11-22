@@ -200,8 +200,8 @@ describe("waitForCompose", () => {
 
     await jest.advanceTimersByTimeAsync(90_000);
 
-    // 결과 화면이 재시도 UI 를 띄우는 실패다(fourcutCompose 의 describeComposeFailure 가
-    // ComposeTimeoutError 만 retryable 로 읽는다). 다른 오류로 접으면 재시도가 사라진다.
+    // 결과 화면이 「잠시 후 다시 시도」를 띄우는 실패다(fourcutCompose 의 describeComposeFailure).
+    // 다른 오류로 접으면 기다리면 풀릴 실패가 다른 사유로 읽힌다.
     expect(seen.error).toBeInstanceOf(ComposeTimeoutError);
   });
 

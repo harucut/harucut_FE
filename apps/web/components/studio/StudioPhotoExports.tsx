@@ -11,6 +11,7 @@ import {
   type PhotoFilter,
   type PhotoExport,
 } from "@/lib/studio/photosApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 export const STATUS_LABEL: Record<ExportStatus, string> = {
   PENDING: "기다리는 중",
@@ -186,7 +187,7 @@ export function StudioPhotoExports({
         )}
       </div>
       <p className="text-[12px] text-(--hc-muted)">
-        한 번에 {MAX_EXPORT_PHOTOS.toLocaleString("ko-KR")}장까지 묶어요. 다 된 묶음은 24시간 동안 받을 수 있어요.
+        <Sentences text={`한 번에 ${MAX_EXPORT_PHOTOS.toLocaleString("ko-KR")}장까지 묶어요. 다 된 묶음은 24시간 동안 받을 수 있어요.`} />
       </p>
       {tooMany ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
@@ -195,7 +196,7 @@ export function StudioPhotoExports({
       ) : null}
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       {loadError ? (

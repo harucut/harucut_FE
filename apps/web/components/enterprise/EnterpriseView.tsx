@@ -7,6 +7,7 @@ import { MarketingNav } from "@/components/layout/MarketingNav";
 import { COMPANY } from "@/constants/company";
 import { DEMO_WEDDING_PHOTOS } from "@/constants/demoPhotos";
 import { DEMO_WEDDING_THEME } from "@/constants/demoTheme";
+import { Sentences } from "@/components/ui/Sentences";
 
 // 행사에서 실제로 일어나는 순서. 주최자가 하는 일과 참가자가 하는 일을 갈라서 적는다 —
 // "누가 무엇을 하는지"가 섞이면 도입을 검토하는 쪽이 자기 일을 가늠할 수 없다.
@@ -281,8 +282,8 @@ export function EnterpriseView() {
               도입 문의
             </h2>
             <p className="text-[14px] leading-[1.7] text-(--hc-muted)">
-              아래를 남기면 담당자가 확인하고 {COMPANY.hours} 안에 연락드려요.
-              메일로 보내셔도 돼요.
+              {/* 양식 머리의 짧은 안내라 문장마다 줄을 나눈다(Sentences). 위쪽 소개 문단들은 본문이라 그대로 둔다. */}
+              <Sentences text={`아래를 남기면 담당자가 확인하고 ${COMPANY.hours} 안에 연락드려요. 메일로 보내셔도 돼요.`} />
             </p>
           </div>
           <div className="hc-surface-card rounded-[20px] border p-6 lg:p-8">

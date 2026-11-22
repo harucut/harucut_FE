@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { supportsGoogleLogin } from "@/lib/nativeBridge";
 import { startSocialLogin } from "@/lib/authLogin";
 import { GoogleMark, KakaoMark, NaverMark } from "./socialMarks";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   mode?: "login" | "signup";
@@ -72,7 +73,7 @@ export function SocialLoginSection({ mode = "login", redirectTo }: Props) {
       </div>
       {googleAvailable ? null : (
         <p className="text-[12px] leading-relaxed text-(--hc-muted)">
-          구글 로그인은 앱을 업데이트하면 쓸 수 있어요. 지금은 카카오·네이버 또는 이메일로 로그인해 주세요.
+          <Sentences text="구글 로그인은 앱을 업데이트하면 쓸 수 있어요. 지금은 카카오·네이버 또는 이메일로 로그인해 주세요." />
         </p>
       )}
     </section>

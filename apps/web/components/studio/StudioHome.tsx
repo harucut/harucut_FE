@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { AccountLink } from "@/components/layout/AccountLink";
 import { rememberStudioAccess } from "@/hooks/useStudioAccess";
 import { getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { defaultConsentTemplate } from "@/lib/studio/eventSections";
@@ -29,6 +30,7 @@ import { StudioWorkspaceFrames } from "@/components/studio/StudioWorkspaceFrames
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { PERMISSION_LABEL, isThemeOnlyAccess, listMyEvents, listWorkspaceAuditLogs, type MyEvent } from "@/lib/studio/accessApi";
 import { getMyUserInfo } from "@/lib/userApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 행사는 조직 공간에만 만든다 — 개인 공간은 회원 탈퇴 때 통째로 지워진다(백엔드 fork #15, R5 14절). */
 function organizationsOf(workspaces: Workspace[]) {
@@ -184,7 +186,9 @@ export function StudioHome() {
       <AppNav />
       <div className="mx-auto flex w-full max-w-200 flex-col gap-6 px-4 py-5 sm:py-6 lg:py-8">
         <div className="lg:hidden">
-          <PageHeader backHref="/home" backLabel="홈" />
+          {/* 행사 운영의 첫 화면이라 뒤로 갈 곳이 없다. 예전 「<」는 개인 홈으로 갔다 — 개인 화면과 섞지 않는다(2026-11-14).
+              계정(로그아웃·개인 화면)은 데스크톱과 같은 사람 아이콘으로 간다. */}
+          <PageHeader rightSlot={<AccountLink />} />
         </div>
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
@@ -192,13 +196,13 @@ export function StudioHome() {
               {customerOnly ? "내 행사 사진" : current?.role === "DESIGNER" ? "디자인 작업" : framesOnly ? "공간 프레임" : "행사 운영"}
             </h1>
             <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
-              {customerOnly
+              <Sentences text={customerOnly
                 ? "초대받은 행사의 사진을 보고 받을 수 있어요."
                 : current?.role === "DESIGNER"
                   ? "이 공간의 프레임을 만들고, 행사의 꾸미기와 프레임을 고쳐요. 게시는 운영 담당이 해요."
                   : current?.role === "VIEWER"
                     ? "이 공간의 프레임을 볼 수 있어요. 만들거나 고치려면 관리자에게 디자이너 권한을 요청해 주세요."
-                    : "행사 참가 링크와 QR, 촬영 기간, 참가 동의를 정하고 게시해요."}
+                    : "행사 참가 링크와 QR, 촬영 기간, 참가 동의를 정하고 게시해요."} />
             </p>
           </div>
           {canCreate && !noEvents && events ? (
@@ -215,7 +219,7 @@ export function StudioHome() {
 
         {current?.kind === "ENTERPRISE" && worksOnEvents ? (
           <p className="rounded-2xl border border-(--hc-border) bg-(--hc-surface-soft) px-4 py-3 text-[13px] leading-relaxed text-(--hc-muted)">
-            이 공간은 업체 공간이에요. 행사 사진은 멤버가 받지 않고, 링크를 받은 고객이 받아요. 찍은 수와 사용량은 여기서 관리할 수 있어요.
+            <Sentences text="이 공간은 업체 공간이에요. 행사 사진은 멤버가 받지 않고, 링크를 받은 고객이 받아요. 찍은 수와 사용량은 여기서 관리할 수 있어요." />
           </p>
         ) : null}
 
@@ -227,7 +231,7 @@ export function StudioHome() {
         {load.state === "error" ? (
           <div className="flex flex-col items-start gap-3">
             <p role="alert" className="text-[14px] text-(--hc-danger)">
-              {load.message}
+              <Sentences text={load.message} />
             </p>
             <button
               type="button"
@@ -357,7 +361,7 @@ export function StudioHome() {
                 {eventsError ? (
                   <div className="flex flex-col items-start gap-3">
                     <p role="alert" className="text-[14px] text-(--hc-danger)">
-                      {eventsError}
+                      <Sentences text={eventsError} />
                     </p>
                     <button
                       type="button"
@@ -378,9 +382,9 @@ export function StudioHome() {
                 ) : null}
                 {noEvents ? (
                   <p className="max-w-[65ch] text-[14px] text-(--hc-muted)">
-                    {canCreate
+                    <Sentences text={canCreate
                       ? "아직 만든 행사가 없어요. 위에서 이름과 주소를 정하면 시작할 수 있어요."
-                      : "아직 볼 수 있는 행사가 없어요."}
+                      : "아직 볼 수 있는 행사가 없어요."} />
                   </p>
                 ) : null}
                 {sharedUsage ? (
@@ -454,7 +458,7 @@ export function StudioHome() {
             {current.role === "OPERATOR" ? (
               <div className="flex flex-col gap-2">
                 <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-                  운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요.
+                  <Sentences text="운영 담당은 맡은 행사만 보여요. 새 행사는 맡은 프로젝트의 행사 화면에서 복제해 만들 수 있어요." />
                 </p>
                 <LeaveWorkspaceButton
                   key={current.workspaceId}
@@ -584,7 +588,7 @@ function CreateWorkspaceCard({ onCreated }: { onCreated: (workspace: Workspace) 
     >
       <h2 className="text-[18px] font-bold">먼저 회사·팀 이름을 알려 주세요</h2>
       <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-        이 이름으로 행사를 운영하는 공간을 만들어요. 행사 사진과 프레임은 개인 계정이 아니라 이 공간에 남아요.
+        <Sentences text="이 이름으로 행사를 운영하는 공간을 만들어요. 행사 사진과 프레임은 개인 계정이 아니라 이 공간에 남아요." />
       </p>
       <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
         회사·팀 이름
@@ -600,7 +604,7 @@ function CreateWorkspaceCard({ onCreated }: { onCreated: (workspace: Workspace) 
       </label>
       {error ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
@@ -699,12 +703,12 @@ function CreateEventCard({
           />
         </span>
         <p id="studio-slug-help" className={`text-[12px] ${slugProblem ? "text-(--hc-danger)" : "text-(--hc-muted)"}`}>
-          영문 소문자·숫자·하이픈 3~40자. 게시한 뒤에는 바꿀 수 없어요.
+          <Sentences text="영문 소문자·숫자·하이픈 3~40자. 게시한 뒤에는 바꿀 수 없어요." />
         </p>
       </div>
       {error ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">

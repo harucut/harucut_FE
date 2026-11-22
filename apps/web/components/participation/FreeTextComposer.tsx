@@ -14,6 +14,7 @@ import {
 import type { EventFrameRef } from "@/lib/event/types";
 import { outputLogoRect } from "@/lib/event/outputLogo";
 import { FrameWithPhotos } from "@/components/participation/FrameWithPhotos";
+import { Sentences } from "@/components/ui/Sentences";
 
 export type FreeTextValue = { text: string; styleId: string };
 
@@ -171,7 +172,7 @@ export function FreeTextComposer({
 
       {help ? (
         <p id={`${id}-help`} role="alert" className="text-[13px] text-(--ev-danger)">
-          {help}
+          <Sentences text={help} />
         </p>
       ) : null}
 

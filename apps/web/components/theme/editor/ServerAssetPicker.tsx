@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ServerAsset } from "@/lib/serverAssets";
+import { Sentences } from "@/components/ui/Sentences";
 
 export function ServerAssetPicker({
   assets,
@@ -95,7 +96,7 @@ export function ServerAssetPicker({
       </div>
       {error ? (
         <p role="alert" className="text-sm text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
     </div>

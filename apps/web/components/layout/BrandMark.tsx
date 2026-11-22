@@ -6,6 +6,8 @@ import { BRAND_MARK_BODY, BRAND_MARK_COLORS, BRAND_MARK_GLYPH, BRAND_MARK_VIEWBO
 type BrandMarkProps = {
   href: string;
   tone?: "light";
+  /** 가는 곳의 이름(읽기 프로그램). 행사 운영 화면의 로고는 개인 홈이 아니라 행사 운영 첫 화면으로 간다. */
+  label?: string;
 };
 
 /*
@@ -36,13 +38,14 @@ function HieutMark({ size = 30 }: { size?: number }) {
 export function BrandMark({
   href,
   tone,
+  label = "하루컷 홈",
 }: BrandMarkProps) {
   // tone="light" 는 테마와 무관하게 어두운 무대(마케팅·로그인) 위에 설 때만 쓴다.
   const labelColor = tone === "light" ? "#FFFFFF" : "var(--hc-text)";
   return (
     <Link
       href={href}
-      aria-label="하루컷 홈"
+      aria-label={label}
       className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-90"
     >
       <HieutMark size={30} />

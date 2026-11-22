@@ -14,7 +14,7 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockSetNotice = jest.fn();
 
-let mockPathname = "/shoot/result";
+let mockPathname = "/create/result";
 let mockAccessMode: "guest" | "member" = "member";
 /** 브리지가 clientApi 에 등록한 만료 핸들러. 테스트가 직접 부른다. */
 let expiredHandler: (() => void) | null = null;
@@ -54,10 +54,10 @@ beforeEach(() => {
   mockPush.mockClear();
   mockReplace.mockClear();
   mockSetNotice.mockClear();
-  mockPathname = "/shoot/result";
+  mockPathname = "/create/result";
   mockAccessMode = "member";
   expiredHandler = null;
-  window.history.replaceState({}, "", "/shoot/result");
+  window.history.replaceState({}, "", "/create/result");
 });
 
 test("촬영 화면에서 만료되면 이동하지 않고 이유를 먼저 말한다", () => {
@@ -77,7 +77,7 @@ test("촬영 화면에서 만료되면 이동하지 않고 이유를 먼저 말�
 });
 
 test("안내의 로그인 버튼은 쿼리까지 그대로인 원래 화면으로 돌아온다", () => {
-  window.history.replaceState({}, "", "/shoot/result?event=%EC%97%AC%EB%A6%84");
+  window.history.replaceState({}, "", "/create/result?event=%EC%97%AC%EB%A6%84");
   render(<SessionExpiryBridge />);
   expire();
 
@@ -85,7 +85,7 @@ test("안내의 로그인 버튼은 쿼리까지 그대로인 원래 화면으�
     (action) => action.id === "go-login",
   );
   expect(loginAction?.href).toBe(
-    `/login?redirectTo=${encodeURIComponent("/shoot/result?event=%EC%97%AC%EB%A6%84")}`,
+    `/login?redirectTo=${encodeURIComponent("/create/result?event=%EC%97%AC%EB%A6%84")}`,
   );
 });
 
@@ -113,8 +113,8 @@ test("안내를 닫고 떠났다가 같은 화면으로 돌아오면 다시 안�
   rerender(<SessionExpiryBridge />);
 
   // 같은 보호 경로로 복귀.
-  mockPathname = "/shoot/result";
-  window.history.replaceState({}, "", "/shoot/result");
+  mockPathname = "/create/result";
+  window.history.replaceState({}, "", "/create/result");
   rerender(<SessionExpiryBridge />);
   expire();
 

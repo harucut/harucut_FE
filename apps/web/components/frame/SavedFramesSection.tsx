@@ -8,6 +8,8 @@ import { FrameWithPhotos, frameFitStyle } from "@/components/participation/Frame
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType, matchesFrameType } from "@/lib/frameApi";
+import { Sentences } from "@/components/ui/Sentences";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type SavedFramesSectionProps = {
   title: string;
@@ -20,14 +22,15 @@ type SavedFramesSectionProps = {
   onSelectRemoteFrame: (frame: RemoteFrame) => void;
   onRefresh: () => void;
   /**
-   * 누르면 바로 여는 목록(꾸미기 — 눌러서 고친다). 주면 고르는 목록이 아니다: 컷 구성으로 거르지
-   * 않고, 고른 표시도 없다.
+   * 위에서 고른 컷 구성으로 거르는가(기본 true — 만들기는 그 구성으로 찍는다). 꾸미기는 false 다 — 새 프레임의 컷
+   * 구성을 바꿨다고 고칠 프레임이 목록에서 사라지면 안 된다.
    *
-   * 예전에는 꾸미기에서도 카드를 누르면 체크만 붙고 고치는 길은 카드 아래 「수정하기」였다.
-   * 꾸미기의 주 버튼은 언제나 「새 프레임 만들기」라, 카드를 누르고 그 버튼을 누르면 고치려던
-   * 프레임 대신 빈 새 프레임이 열렸다(2026-11-09 바꿈).
+   * 꾸미기도 눌러서 **고른다**(2026-11-15 「프레임 꾸미기 이미 있던 거 골랐으면 수정하기 같은 걸로 뜨게」) — 고르면
+   * 주 버튼이 「수정하기」가 되고 그 프레임을 연다(app/theme/page.tsx). 2026-11-09 부터 이날까지는 누르면 바로
+   * 편집기로 갔다 — 그 전에는 고르면 체크만 붙고 주 버튼은 늘 「새 프레임 만들기」라, 누르면 고치려던 프레임 대신 빈
+   * 새 프레임이 열렸기 때문이다. 이제 주 버튼이 고른 것을 따라가 그 문제가 없다.
    */
-  onOpen?: (frame: RemoteFrame) => void;
+  filterByLayout?: boolean;
 };
 
 export function SavedFramesSection({
@@ -40,15 +43,14 @@ export function SavedFramesSection({
   selectedRemoteFrameId,
   onSelectRemoteFrame,
   onRefresh,
-  onOpen,
+  filterByLayout = true,
 }: SavedFramesSectionProps) {
-  // 여는 목록은 거르지 않는다 — 위에서 새 프레임의 컷 구성을 바꿨다고 고칠 프레임이 사라지면 안 된다.
   const matchingFrames = useMemo(
     () =>
-      selectedFrameId && !onOpen
+      selectedFrameId && filterByLayout
         ? frames.filter((frame) => matchesFrameType(selectedFrameId, frame.frameType))
         : frames,
-    [frames, selectedFrameId, onOpen],
+    [frames, selectedFrameId, filterByLayout],
   );
 
   // 상단 게이지는 "보관 1개"라고 하는데 이 목록은 "저장한 프레임이 없어요"라고 말하는
@@ -79,54 +81,45 @@ export function SavedFramesSection({
     <section className="min-w-0">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-bold">{title}</h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          aria-label="새로고침"
-          title="새로고침"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text)"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
+        {/* 못 불러왔으면 아래 「다시 시도」가 같은 일을 한다 — 같은 길을 두 번 두지 않는다. */}
+        {failedWithNothing ? null : (
+          <button
+            type="button"
+            onClick={onRefresh}
+            aria-label="새로고침"
+            title="새로고침"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text)"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* 목록은 남아 있는데 새로고침만 실패한 경우. 목록을 지우지 않고 위에만 알린다. */}
       {error && !failedWithNothing ? (
         <p role="alert" className="mt-3 text-[11px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
 
       {isLoading ? (
         <p className="mt-3 text-[12px] text-(--hc-muted)">불러오는 중…</p>
       ) : failedWithNothing ? (
-        <div role="alert" className="mt-3 flex flex-col items-start gap-2">
-          <p className="text-[12px] text-(--hc-danger)">{error}</p>
-          {/* 실패를 사라짐으로 읽지 않게 못 박는다. 이 문장이 없으면 사용자는 공들여
-              꾸민 프레임이 날아간 줄 안다. */}
-          <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
-            저장한 프레임이 사라진 것은 아니에요. 잠시 후 다시 시도해 주세요.
-          </p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="hc-button-secondary rounded-full border px-3 py-1 text-[11px] font-medium"
-          >
-            다시 시도
-          </button>
+        // 「불러오지 못했어요」 한 줄과 다시 시도 — 홈·기록의 실패와 같은 모양이다(2026-11-14).
+        <div className="mt-3">
+          <LoadFailed message={error ?? ""} onRetry={onRefresh} />
         </div>
       ) : hiddenByFilter ? (
         <p className="mt-2 text-[12px] leading-[1.6] text-(--hc-muted)">
-          보관 중인 프레임 {frames.length}개는 지금 고른 것과 컷 구성이 달라요. 위에서 같은
-          구성을 고르면 바로 나타나요.
+          <Sentences text={`보관 중인 프레임 ${frames.length}개는 지금 고른 것과 컷 구성이 달라요. 위에서 같은 구성을 고르면 바로 나타나요.`} />
         </p>
       ) : matchingFrames.length === 0 ? (
-        <p className="mt-2 text-[12px] text-(--hc-muted)">{emptyText}</p>
+        <p className="mt-2 text-[12px] text-(--hc-muted)"><Sentences text={emptyText} /></p>
       ) : (
         // 폰에서는 한 줄로 넘긴다. 세로로 쌓으면 프레임 몇 개만으로 위의 큰 카드와 아래 버튼이 멀어진다.
         <div className="-mx-2 mt-1 flex gap-2.5 overflow-x-auto px-2 pb-1 scrollbar-none [-ms-overflow-style:none] sm:-mx-4 sm:px-4 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 lg:grid-cols-6 [&::-webkit-scrollbar]:hidden">
           {matchingFrames.map((frame) => {
-            const isSelected = !onOpen && selectedRemoteFrameId === frame.frameId;
+            const isSelected = selectedRemoteFrameId === frame.frameId;
             const previewFrameId = frameIdFromFrameType(frame.frameType);
             const name = frame.title || `프레임 #${frame.frameId}`;
 
@@ -134,8 +127,8 @@ export function SavedFramesSection({
               <article key={frame.frameId} className="flex w-27 shrink-0 flex-col gap-1.5 md:w-auto">
                 <button
                   type="button"
-                  onClick={() => (onOpen ? onOpen(frame) : onSelectRemoteFrame(frame))}
-                  aria-pressed={onOpen ? undefined : isSelected}
+                  onClick={() => onSelectRemoteFrame(frame)}
+                  aria-pressed={isSelected}
                   className="flex min-w-0 flex-col gap-1.5 text-left"
                 >
                   <span
@@ -167,8 +160,6 @@ export function SavedFramesSection({
                   </span>
                   <span className="truncate text-[13px] font-semibold text-(--hc-text)">
                     {name}
-                    {/* 눌러서 무엇이 되는지는 화면 읽기 프로그램에도 말한다. 보이는 이름은 그대로 앞에 온다. */}
-                    {onOpen ? <span className="sr-only"> 수정하기</span> : null}
                   </span>
                 </button>
               </article>

@@ -30,6 +30,7 @@ import {
 } from "@/lib/admin/cmsApi";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { toServerDateTime } from "@/lib/studio/eventTime";
+import { Sentences } from "@/components/ui/Sentences";
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
   DRAFT: "초안",
@@ -362,7 +363,7 @@ export function AdminContracts({
 
       {error ? (
         <p role="alert" className="text-[14px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : !items ? (
         <p className="text-[13px] text-(--hc-muted)">불러오는 중…</p>
@@ -424,7 +425,7 @@ export function AdminContracts({
                   {/* 두 버튼의 결과가 같아 보여서 고를 기준을 적는다. 다른 것은 기록에 남는 이유다. */}
                   {contract.status === "ACTIVE" ? (
                     <p className="w-full text-[12px] text-(--hc-muted)">
-                      둘 다 이용권을 지금 끝내요. 다 이행해 마쳤으면 종료, 잘못 만들었거나 무효가 됐으면 취소를 골라요.
+                      <Sentences text="둘 다 이용권을 지금 끝내요. 다 이행해 마쳤으면 종료, 잘못 만들었거나 무효가 됐으면 취소를 골라요." />
                     </p>
                   ) : null}
                 </div>

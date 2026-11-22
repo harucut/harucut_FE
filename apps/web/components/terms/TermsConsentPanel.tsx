@@ -12,6 +12,7 @@ import {
   termsContentHref,
   type MyTermsConsent,
 } from "@/lib/termsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 내 약관 동의 현황과 **선택 약관 철회** 수단.
@@ -196,7 +197,8 @@ export function TermsConsentPanel() {
                           (isUnreadable(item.code) && !agreed)
                         }
                         onChange={(e) => void toggle(item, e.target.checked)}
-                        className="h-4 w-4 accent-(--hc-primary) disabled:opacity-50"
+                        // 가입 화면과 같은 둥근 체크칸(globals.css .hc-checkbox). 잠긴 칸은 그 클래스가 흐리게 그린다.
+                        className="hc-checkbox"
                       />
                       <span>
                         <span
@@ -234,9 +236,9 @@ export function TermsConsentPanel() {
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
                   <p className="ml-6 text-[11px] text-(--hc-muted)">
-                    {contentState === "loading"
+                    <Sentences text={contentState === "loading"
                       ? "약관 본문을 불러오는 중이에요."
-                      : "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."}
+                      : "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."} />
                   </p>
                 ) : null}
               </div>
@@ -250,8 +252,7 @@ export function TermsConsentPanel() {
       ) : null}
 
       <p className="text-[12px] leading-5 text-(--hc-muted)">
-        필수 약관은 서비스 이용에 반드시 필요해 철회할 수 없어요. 동의를 거두시려면
-        아래 회원 탈퇴를 이용해 주세요.
+        <Sentences text="필수 약관은 서비스 이용에 반드시 필요해 철회할 수 없어요. 동의를 거두시려면 아래 회원 탈퇴를 이용해 주세요." />
       </p>
       <p className="text-[13px] leading-5 text-(--hc-muted)">
         푸시·주간 리마인더 알림은 순차적으로 추가될 예정이에요.

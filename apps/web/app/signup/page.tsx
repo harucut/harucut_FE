@@ -39,6 +39,7 @@ import {
   useEmailVerification,
   VERIFICATION_EXPIRED_MESSAGE,
 } from "./_hooks/useEmailVerification";
+import { Sentences } from "@/components/ui/Sentences";
 
 type SignupFieldName = Extract<
   AuthFieldName,
@@ -156,9 +157,8 @@ function SignupPageContent() {
       (item) => item.required && !consents[item.code],
     );
     if (missingRequired.length > 0) {
-      nextErrors.consent = `${missingRequired
-        .map((item) => item.title)
-        .join(", ")}에 동의해야 가입할 수 있어요.`;
+      // 어느 약관인지는 그 체크칸이 빨갛게 말한다. 문장은 할 일 하나만(2026-11-14).
+      nextErrors.consent = "필수 약관에 동의해 주세요.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -236,12 +236,12 @@ function SignupPageContent() {
 
   if (!activeTerms.fromServer) {
     return (
-      <AuthPageShell title="회원가입" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
+      <AuthPageShell title="회원가입" backHref={loginHref} backLabel="로그인으로" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
         <div className="flex flex-col gap-4">
           <p role="status" className="text-sm leading-relaxed text-(--hc-text)">
-            {activeTerms.status === "loading"
+            <Sentences text={activeTerms.status === "loading"
               ? "가입에 필요한 약관을 확인하고 있어요."
-              : "가입에 필요한 약관을 불러오지 못해 회원가입을 잠시 이용할 수 없어요. 가입 없이도 사진을 만들고 기기에 내려받을 수 있어요."}
+              : "가입에 필요한 약관을 불러오지 못해 회원가입을 잠시 이용할 수 없어요. 가입 없이도 사진을 만들고 기기에 내려받을 수 있어요."} />
           </p>
           {activeTerms.status !== "loading" ? (
             <button type="button" onClick={activeTerms.reload} className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold">다시 확인하기</button>
@@ -255,20 +255,25 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
+      backHref={loginHref}
+      backLabel="로그인으로"
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
           {/* 로그인 페이지의 대응 문구와 같은 토큰을 쓴다. 하드코딩 text-zinc-500 은 다크에서 어긋났다. */}
           <p className="mt-2 text-center text-[13px] leading-6 text-(--hc-muted)">
-            소셜 계정으로도 가입할 수 있어요.{" "}
-            <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-              서비스 이용약관
-            </Link>
-            과{" "}
-            <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-              개인정보 처리방침
-            </Link>
-            을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
+            {/* 문장마다 줄을 나눈다 — 링크가 들어 있어 Sentences 대신 같은 모양(문장 블록 + 사이 빈칸)을 직접 둔다. */}
+            <span className="block text-balance">소셜 계정으로도 가입할 수 있어요.</span>{" "}
+            <span className="block text-balance">
+              <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                서비스 이용약관
+              </Link>
+              과{" "}
+              <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                개인정보 처리방침
+              </Link>
+              을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
+            </span>
           </p>
           <p className="mt-2 text-center text-[14px] text-(--hc-muted)">
             이미 계정이 있으신가요?{" "}
@@ -285,7 +290,7 @@ function SignupPageContent() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
           <p role="alert" tabIndex={-1} className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
-            {errors.common}
+            <Sentences text={errors.common} />
           </p>
         ) : null}
 
@@ -317,7 +322,7 @@ function SignupPageContent() {
           />
           {emailVerification.codeExpiresAt && !emailVerification.isEmailVerified ? (
             <p className="text-[12px] leading-relaxed text-(--hc-muted)">
-              메일이 오지 않으면 스팸함을 확인해 주세요. 계속 오지 않으면 카카오·네이버로도 시작할 수 있어요.
+              <Sentences text="메일이 오지 않으면 스팸함을 확인해 주세요. 계속 오지 않으면 카카오·네이버로도 시작할 수 있어요." />
             </p>
           ) : null}
         </div>

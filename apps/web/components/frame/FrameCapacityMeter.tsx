@@ -1,7 +1,7 @@
 "use client";
 
 import { PAYMENTS_ENABLED } from "@/constants/company";
-import { Lock, Sparkles } from "lucide-react";
+import { Lock } from "lucide-react";
 import { buildGaugeDots, type GaugeDotState, type PlanInfo } from "@/constants/planLimits";
 import type { SubscriptionUsage } from "@/lib/api-types";
 
@@ -96,8 +96,7 @@ export function FrameCapacityMeter({
     <section className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4 lg:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-(--hc-accent-soft-bg) px-3 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
-            <Sparkles className="h-3.5 w-3.5" />
+          <span className="inline-flex h-7 items-center rounded-full bg-(--hc-accent-soft-bg) px-3 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
             {name}
           </span>
           <div className="min-w-0">

@@ -32,7 +32,7 @@ export function getImageExtension(...candidates: Array<string | null | undefined
  * (2026-09-07 확인). 넘겨 보내면 400 이 오고 사유가 영문이라 안내가
  * 「잠시 후 다시 시도해 주세요」로 뭉개진다 — 기다려도 풀리지 않는 실패다.
  *
- * 입력창에도 같은 상한이 걸려 있지만(components/frame/GeneratedAssetDownloadCard.tsx),
+ * 입력창에도 같은 상한이 걸려 있지만(완성 화면의 이름 바꾸기 창 — app/create/result/page.tsx),
  * **화면이 유일한 입구가 아니다.** 비회원 인계 보관물의 이름은 저장소에서 그대로 읽혀
  * `saveFourcutToServer` 로 곧장 들어오고(components/guest/GuestTrialBridge.tsx),
  * 그 보관물을 검사하는 곳은 길이를 보지 않는다(lib/pendingGuestSave.ts 의 `normalizeMeta`).

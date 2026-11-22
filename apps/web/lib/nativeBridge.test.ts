@@ -18,6 +18,7 @@ import {
   nativeSetColorScheme,
   nativeShare,
   nativePushToken,
+  nativeShareImage,
   nativeStoreFinish,
   nativeStoreProducts,
   nativeStorePurchase,
@@ -469,6 +470,26 @@ describe("판 수로 가르는 기능", () => {
     plantShell(undefined);
     expect(await nativePushToken()).toBeNull();
     expect(window.ReactNativeWebView?.postMessage).not.toHaveBeenCalled();
+  });
+
+  /*
+    사진 파일 공유는 판 5 에서 들어왔다(expo-sharing). 그 앞의 셸은 `share-image` 를 몰라 답이 오지 않는다 —
+    보내면 공유 단추가 10분 동안 묶인다. 그 셸에서는 null 이고, 호출부는 예전처럼 링크를 공유한다(lib/share.ts).
+  */
+  it("사진 파일 공유는 판 5 셸에만 보낸다. 옛 셸과 판 수 없는 셸은 null", async () => {
+    plantShell(4);
+    expect(await nativeShareImage("https://cdn.example/a.jpg", "a.jpg")).toBeNull();
+    plantShell(undefined);
+    expect(await nativeShareImage("https://cdn.example/a.jpg", "a.jpg")).toBeNull();
+    expect(window.ReactNativeWebView?.postMessage).not.toHaveBeenCalled();
+
+    const posted = enterShell(5);
+    const promise = nativeShareImage("https://cdn.example/a.jpg", "우리 넷.jpg");
+    expect(posted).toEqual([
+      expect.objectContaining({ type: "share-image", url: "https://cdn.example/a.jpg", filename: "우리 넷.jpg" }),
+    ]);
+    replyTo(posted, "share-image", { ok: true });
+    await expect(promise).resolves.toEqual({ ok: true });
   });
 
   it("구글 로그인은 셸 밖과 판 4 이상에서 연다. 옛 셸과 판 수 없는 셸은 막는다", () => {

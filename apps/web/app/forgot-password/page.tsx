@@ -20,6 +20,8 @@ function ForgotPasswordPageContent() {
   return (
     <AuthPageShell
       title="비밀번호 찾기"
+      backHref={loginHref}
+      backLabel="로그인으로"
       description={flow.description}
       footer={
         // 메일이 늦거나 스팸함으로 가면 여기서 멈춘다. 코드를 보낸 뒤(인증 전)에만 일러 둔다.
@@ -60,8 +62,13 @@ function ForgotPasswordPageContent() {
             const ok = await flow.submitNewPassword();
             if (!ok) return;
 
-            alert("비밀번호가 변경되었어요. 다시 로그인해 주세요.");
-            router.push(loginHref);
+            // 브라우저 기본 알림 대신 로그인 화면이 폼 위에 말한다 — 마이페이지에서 바꾼 뒤와 같은 안내다.
+            router.push(
+              buildPathWithRedirect(
+                "/login?passwordChanged=1",
+                searchParams.get("redirectTo"),
+              ),
+            );
           }}
           onRestart={flow.restart}
           onGoLogin={() => router.push(loginHref)}

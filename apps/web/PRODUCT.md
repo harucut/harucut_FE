@@ -36,7 +36,7 @@ web
 
 ## Operating Context
 
-- **개인 촬영**: `/shoot` → `/shoot/capture`(8장) → `/shoot/select`(4컷 선택) → `/shoot/result`(서버 합성 → 기록).
+- **개인 촬영**: `/create` → `/create/capture`(8장) → `/create/select`(4컷 선택) → `/create/result`(서버 합성 → 기록).
 - **프레임 제작**: `/theme/*` 에디터. 하단 6탭(사진·프레임색·텍스트·스티커·누끼·레이어). 회원 전용.
 - **기록**: `/history`에 날짜별로 쌓이고, 원본 재다운로드와 링크 공유가 된다.
 - **행사 참가**: `/e/{slug}` QR 진입 → 동의 → 그 행사 프레임으로 촬영 → 가입 없이 `/r#토큰` 에서 수령. 현장에서 짧게 끝나야 하는 흐름이다.

@@ -11,6 +11,7 @@ import {
   type FreeTextSettings,
   type TextStyle,
 } from "@/lib/event/freeText";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Enabled = Extract<FreeTextSettings, { enabled: true }>;
 
@@ -307,7 +308,7 @@ export function StudioFreeText({
             />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-                칸을 끌어 옮기고, 오른쪽 아래 점을 끌어 크기를 바꿔요. 참가자가 쓴 글자는 이 칸 안에 맞춰 그려요.
+                <Sentences text="칸을 끌어 옮기고, 오른쪽 아래 점을 끌어 크기를 바꿔요. 참가자가 쓴 글자는 이 칸 안에 맞춰 그려요." />
               </p>
               <details className="group">
                 <summary className="flex h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-(--hc-muted) transition hover:text-(--hc-text) [&::-webkit-details-marker]:hidden">
@@ -339,7 +340,7 @@ export function StudioFreeText({
             {stylesError ? (
               <div className="flex flex-col items-start gap-2">
                 <p role="alert" className="text-[13px] text-(--hc-danger)">
-                  {stylesError}
+                  <Sentences text={stylesError} />
                 </p>
                 <button
                   type="button"

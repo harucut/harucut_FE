@@ -53,12 +53,10 @@ describe("SavedFramesSection", () => {
   it("불러오지 못했으면 없다고 말하지 않는다", () => {
     renderSection({ error: ERROR, frames: [] });
 
-    expect(screen.getByText(ERROR)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR);
     expect(screen.queryByText(EMPTY)).not.toBeInTheDocument();
-    // 사라진 게 아니라는 것까지 말해 준다.
-    expect(
-      screen.getByText(/저장한 프레임이 사라진 것은 아니에요/),
-    ).toBeInTheDocument();
+    // 「불러오지 못했어요」가 이미 없어진 것이 아니라는 말이다. 덧붙이던 문장은 뺐다(2026-11-14).
+    expect(screen.queryByText(/사라진 것은 아니에요/)).not.toBeInTheDocument();
   });
 
   it("불러오지 못했으면 다시 시도할 자리를 준다", () => {
@@ -106,30 +104,26 @@ describe("SavedFramesSection", () => {
   });
 
   /*
-    꾸미기는 저장한 프레임을 고르지 않고 연다(2026-11-09). 예전에는 카드를 누르면 체크만 붙고,
-    주 버튼 「새 프레임 만들기」를 누르면 고치려던 프레임 대신 빈 새 프레임이 열렸다.
+    꾸미기도 눌러서 고른다(2026-11-15 「프레임 꾸미기 이미 있던 거 골랐으면 수정하기 같은 걸로 뜨게」) — 고르면 주 버튼이
+    「수정하기」가 된다(app/theme/page.tsx). 꾸미기는 컷 구성으로 거르지 않는다.
   */
-  describe("눌러서 여는 목록(꾸미기)", () => {
-    it("누르면 그 프레임을 열고, 고른 표시나 따로 된 「수정하기」 단추는 없다", () => {
-      const onOpen = jest.fn();
+  describe("꾸미기(컷 구성으로 거르지 않음)", () => {
+    it("누르면 고르고, 고른 카드에 표시가 붙는다", () => {
       const onSelectRemoteFrame = jest.fn();
       const saved = frame({ frameId: 7, title: "크리스마스 4컷" });
-      renderSection({ frames: [saved], onOpen, onSelectRemoteFrame });
+      renderSection({ frames: [saved], onSelectRemoteFrame, filterByLayout: false, selectedRemoteFrameId: 7 });
 
-      const card = screen.getByRole("button", { name: "크리스마스 4컷 수정하기" });
-      expect(card).not.toHaveAttribute("aria-pressed");
-      expect(screen.getAllByRole("button", { name: /수정하기/ })).toHaveLength(1);
-
+      const card = screen.getByRole("button", { name: "크리스마스 4컷" });
+      expect(card).toHaveAttribute("aria-pressed", "true");
       fireEvent.click(card);
-      expect(onOpen).toHaveBeenCalledWith(saved);
-      expect(onSelectRemoteFrame).not.toHaveBeenCalled();
+      expect(onSelectRemoteFrame).toHaveBeenCalledWith(saved);
     });
 
     it("위에서 새 프레임의 컷 구성을 바꿔도 고칠 프레임을 거르지 않는다", () => {
       renderSection({
         frames: [frame({ frameType: "GRID", title: "네모 프레임" })],
         selectedFrameId: "classic-4",
-        onOpen: jest.fn(),
+        filterByLayout: false,
       });
 
       expect(screen.getByText("네모 프레임")).toBeInTheDocument();
@@ -138,3 +132,23 @@ describe("SavedFramesSection", () => {
   });
 });
 
+
+// 못 불러왔을 때 다시 부르는 길은 「다시 시도」 하나다(2026-11-14) — 제목 옆 새로고침 아이콘을 함께 두지 않는다.
+it("못 불러왔을 때는 제목 옆 새로고침 아이콘을 숨긴다", () => {
+  render(
+    <SavedFramesSection
+      title="저장한 프레임"
+      emptyText="저장한 프레임이 없어요."
+      selectedFrameId={null}
+      frames={[]}
+      isLoading={false}
+      error="저장한 프레임을 불러오지 못했어요."
+      selectedRemoteFrameId={null}
+      onSelectRemoteFrame={jest.fn()}
+      onRefresh={jest.fn()}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "새로고침" })).not.toBeInTheDocument();
+});

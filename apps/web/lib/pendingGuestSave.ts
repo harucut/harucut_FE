@@ -30,14 +30,14 @@ import type { FourcutFilterId } from "@/lib/frameFilters";
  * false 만 돌려줘 인계가 조용히 사라졌다.
  *
  * 더 줄이는 것은 답이 아니다. 촬영은 이미 슬롯 크기까지만 담고 있고
- * (app/shoot/capture/_hooks/useCaptureFlow.ts 의 `outputScale`), 그 아래로 줄이면 이 PR 이
+ * (app/create/capture/_hooks/useCaptureFlow.ts 의 `outputScale`), 그 아래로 줄이면 이 PR 이
  * 없애려던 서버 확대가 그대로 돌아온다. 그래서 **저장소를 바꾼다** — IndexedDB 는 base64
  * +33% 가 없는 Blob 을 그대로 담고, 5MB 벽도 없다.
  *
  * 바깥에서 보이는 모양은 그대로다. 들어오고 나가는 `sources` 는 화면이 들고 있는 data URL
  * 그대로이고(변환은 이 파일 안에서만 한다), 달라진 것은 **API 가 비동기라는 것 하나**다.
  * 호출부는 전부 effect·이벤트 핸들러 안이라 그대로 `await` 하면 된다
- * (components/guest/GuestTrialBridge.tsx, app/shoot/result/page.tsx).
+ * (components/guest/GuestTrialBridge.tsx, app/create/result/page.tsx).
  *
  * IndexedDB 를 못 쓰는 자리(사생활 보호 모드, 저장소 차단)에서는 **닫힌 실패**로 끝낸다 —
  * false·null 을 돌려주고, 호출부가 "먼저 내려받으라"고 안내한다. 없애려는 것은 실패가

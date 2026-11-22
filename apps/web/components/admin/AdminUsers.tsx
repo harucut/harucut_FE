@@ -5,6 +5,7 @@ import { adminErrorMessage, formatDateTime } from "@/components/admin/adminShare
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { getApiErrorDetails } from "@/lib/apiError";
 import { blockUser, searchUsers, unblockUser, type AdminUser } from "@/lib/admin/cmsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 type PendingAction = { user: AdminUser; action: "block" | "unblock" };
 
@@ -98,12 +99,12 @@ export function AdminUsers() {
       </form>
       {error ? (
         <p role="alert" className="text-[14px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       {users?.length === 0 ? <p className="text-[14px] text-(--hc-muted)">이 이메일로 가입한 계정이 없어요.</p> : null}

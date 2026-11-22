@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { TermsFullText } from "@/components/terms/TermsFullText";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { clientApi } from "@/lib/clientApi";
@@ -16,6 +16,7 @@ import {
   type MyTermsConsent,
 } from "@/lib/termsApi";
 import { unregisterPushDevice } from "@/lib/pushDevices";
+import { Sentences } from "@/components/ui/Sentences";
 
 const LOCAL_CLEAR_DEADLINE_MS = 3_000;
 
@@ -277,10 +278,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         aria-labelledby="terms-reconsent-title"
         className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-(--hc-card-shadow)"
       >
-        <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
-          <FileText className="h-5 w-5" />
-        </span>
-        <h2 id="terms-reconsent-title" className="mt-4 text-[18px] font-extrabold">
+        {/* 제목 위 문서 아이콘 타일은 뺐다(2026-11-14) — 제목이 이미 무슨 창인지 말한다. */}
+        <h2 id="terms-reconsent-title" className="text-[18px] font-extrabold">
           {revised ? "약관이 개정되었어요" : "약관 동의가 필요해요"}
         </h2>
         <p className="mt-1.5 text-[13px] leading-6 text-(--hc-muted)">
@@ -298,7 +297,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                 <TermsFullText title={item.title} content={href ? null : contentByCode[item.code]}>
                   {(fullTextToggle) => (
                     <div className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
-                      <label className="flex min-w-0 flex-1 items-center gap-2">
+                      <label className="flex min-w-0 flex-1 items-center gap-3">
                         <input
                           type="checkbox"
                           checked={checked[item.code] ?? false}
@@ -316,7 +315,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                             }));
                             setTouched((current) => ({ ...current, [item.code]: true }));
                           }}
-                          className="h-4 w-4 accent-(--hc-primary)"
+                          // 가입 화면과 같은 둥근 체크칸(globals.css .hc-checkbox, 2026-11-14).
+                          className="hc-checkbox"
                         />
                         <span>
                           <span
@@ -374,7 +374,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         {/* 저장 실패는 알려야 한다 — 다이얼로그 안에 있는 스크린리더 사용자에게도. */}
         {error ? (
           <p role="alert" className="mt-3 text-[12px] text-(--hc-danger)">
-            {error}
+            <Sentences text={error} />
           </p>
         ) : null}
 

@@ -18,6 +18,14 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+/** 글을 쓰는 칸. 열 때 이런 칸이 있으면 그 칸에 바로 포커스를 준다 — 이름 바꾸기·비밀번호 창. */
+const TEXT_ENTRY_TYPES = new Set(["text", "email", "password", "search", "tel", "url", "number"]);
+
+function isTextEntry(element: HTMLElement) {
+  if (element instanceof HTMLTextAreaElement) return true;
+  return element instanceof HTMLInputElement && TEXT_ENTRY_TYPES.has(element.type);
+}
+
 /**
  * 지금 열려 있는 다이얼로그 목록. **키보드는 이 중 화면 맨 위 하나만 갖는다** — Escape 도,
  * 열릴 때의 초기 포커스도, Tab 트랩도.
@@ -167,11 +175,19 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
         (element) => element.offsetParent !== null,
       );
 
-    // 첫 컨트롤로 옮긴다. 없으면 컨테이너 자체에 준다(제목을 읽어 주도록).
+    /*
+      열 때 포커스는 다이얼로그 자체가 받는다. 글을 쓰는 칸이 있으면 그 칸이 받는다.
+
+      예전에는 첫 컨트롤로 옮겼다. 크롬은 사용자가 아직 아무것도 누르지 않은 때(페이지를 열자마자
+      뜬 창)에 스크립트가 옮긴 포커스를 키보드 포커스로 보고 테두리를 그린다 — 「로그인이 풀렸어요」의
+      X, 탈퇴 대기 창의 「로그아웃」에 검은 테두리가 붙어 눌린 것처럼 보였다(2026-11-14).
+      다이얼로그 자체는 누르는 것이 아니라 테두리를 그리지 않고(globals.css), 화면 낭독기는 제목과
+      설명을 읽는다. 키보드는 Tab 한 번에 첫 컨트롤로 간다(아래 keydown).
+    */
     const focusInside = () => {
-      const first = focusables()[0];
-      if (first) {
-        first.focus();
+      const field = focusables().find(isTextEntry);
+      if (field) {
+        field.focus();
         return;
       }
       container.setAttribute("tabindex", "-1");
@@ -227,7 +243,9 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
         다시 훑으며 모달 뒤쪽 요소로 새어 나갔다 — `aria-modal` 을 선언해 놓고 트랩이
         풀린 상태다. 아래에 깔린 다이얼로그에 남아 있던 포커스도 여기서 회수한다.
       */
-      if (!container.contains(active)) {
+      // 열 때 포커스는 다이얼로그 자체에 있다. 브라우저에 맡기면 Shift+Tab 이 다이얼로그 앞쪽,
+      // 곧 뒤 화면으로 빠진다. 둘 다 Tab 은 첫 컨트롤, Shift+Tab 은 마지막 컨트롤로 보낸다.
+      if (!container.contains(active) || active === container) {
         event.preventDefault();
         (event.shiftKey ? lastItem : firstItem).focus();
         return;

@@ -1,0 +1,1107 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Check, ChevronRight, Download, Share2 } from "lucide-react";
+import { BrandMark } from "@/components/layout/BrandMark";
+import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
+import type { FrameId } from "@/constants/frames";
+import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { blobToDataUrl } from "@/lib/canvas/loaders";
+import {
+  composeFrameImage,
+  downloadBlob,
+  downloadFromUrl,
+  type FrameSource,
+} from "@/lib/canvas/composeFrame";
+import {
+  buildDefaultDisplayName,
+  buildDownloadFilename,
+  sanitizeDisplayName,
+  getImageExtension,
+  type GeneratedFourcutAsset,
+} from "@/lib/fourcutOutput";
+import { describeComposeFailure } from "@/lib/fourcutCompose";
+import { saveFourcutToServer } from "@/lib/fourcutProcessing";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { setPendingGuestSave } from "@/lib/pendingGuestSave";
+import { buildPathWithRedirect } from "@/lib/redirect";
+import { getNativeSaveErrorMessage, isNativeShell, nativeNotify } from "@/lib/nativeBridge";
+import { hasServerPush } from "@/lib/pushDevices";
+import { flushShootSession } from "@/lib/shootSessionPersistence";
+import { useShootSession } from "@/lib/shootSessionStore";
+import { resolveFrameBackgroundColor } from "@/lib/themeBackground";
+import { findMyMedia, getMediaDownloadUrl } from "@/lib/userMediaApi";
+import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
+import { PhotoShareSheet } from "@/components/share/PhotoShareSheet";
+import { sharedPhotoTitle } from "@/lib/mediaShareLink";
+import { useRemoteFrameTheme } from "@/hooks/useRemoteFrameTheme";
+import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
+import { Sentences } from "@/components/ui/Sentences";
+
+// 비회원이 로그인으로 넘어갈 때 쓰는 경로. 로그인 후 /home에서 보관해 둔 결과물을 자동 저장한다.
+const GUEST_LOGIN_HANDOFF_PATH = buildPathWithRedirect(
+  "/login",
+  "/home?resumeSave=1",
+);
+
+type ProcessingState = "idle" | "processing" | "done" | "error";
+
+/*
+  ── 완성 알림은 이 화면의 수명 밖에 있다 ──
+
+  마이페이지는 「앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때 알려드려요」라고 안내한다
+  (components/mobile/NativeNotificationSetting.tsx). 그 사람은 결과 화면을 떠난 사람이라,
+  판정에 필요한 값을 컴포넌트가 들고 있으면 안 된다 — 마운트와 함께 사라진다. 그래서
+  아래 둘은 모듈에 둔다.
+*/
+
+/**
+ * 이 탭이 **마지막으로 기다리는** 서버 합성과, 그 완료를 이미 알렸는지.
+ *
+ * 한 합성의 완료를 기다리는 실행이 여럿일 수 있다 — 늦게 도착한 테마로 effect 가 다시 돌면
+ * 새 실행이 같은 약속을 이어받고(pendingServerComposeRef), 화면을 나갔다 들어오면 같은
+ * 멱등키로 한 번 더 접수한다. 마지막 것 하나만, 한 번만 알린다: 앞선 것까지 알리면 알림이
+ * 두 번 뜨고, 사진·색·프레임을 바꿔 새 합성이 시작된 경우에는 **사용자가 버린 합성**까지
+ * "완성됐어요"가 된다.
+ *
+ * **같은 작업인지는 멱등키로 본다 — Promise 객체로 보지 않는다.** `pendingServerComposeRef`
+ * 는 컴포넌트 ref 라 화면을 나갔다 들어오면 비어 있고, 그때 같은 멱등키로 접수해도 Promise
+ * 는 새것이다. 객체로 대조하면 그 순간 앞 실행이 「최신이 아니다」로 밀려, 재진입 요청이
+ * 네트워크 오류로 실패하고 **앞 요청만 성공한** 경우에 아무도 알리지 않는다. 멱등키는 같은
+ * 작업이면 같고(위 ensureComposeIdempotencyKey), 사진·색·프레임이 바뀌면 달라진다 —
+ * 「버린 합성은 알리지 않는다」도 그대로 지켜진다.
+ */
+let latestServerCompose: {
+  idempotencyKey: string;
+  /** 알렸거나, 화면에 보여 줬다. 둘 다 「이 합성으로 할 일이 끝났다」는 뜻이다. */
+  notified: boolean;
+  /** 서버가 결과를 줬는가. 알림은 이것이 참일 때만 뜬다. */
+  completed: boolean;
+  /**
+   * 이 합성을 아직 기다리고 있는 실행의 수.
+   *
+   * 하나라도 남아 있으면 **그쪽이 결과를 화면에 보여 줄지도 모른다** — 그때 알리면 보고
+   * 있는 사람에게 알림이 뜬다. 그래서 기다리는 동안은 미룬다. 마지막 실행까지 끝났는데도
+   * 아무도 보여 주지 않았으면(전부 떠났거나 실패했으면) 그때 알린다.
+   */
+  waiting: number;
+} | null = null;
+
+/**
+ * 서버 합성이 끝났다고 알린다 — **아무도 결과를 못 본 채 기다리는 실행이 다 떨어졌을 때만.**
+ *
+ * 판정을 「결과 화면이 떠 있는가」로 두지 않는다. 떠 있어도 아직 돌고 있는 중이면 사용자는
+ * 아무것도 못 봤다. 그때 마운트만 보고 알림을 **버리면**, 뒤이어 그 실행이 시간 초과로
+ * 죽고 사용자가 떠났을 때 서버에 완성본이 있는데도 알림은 끝내 오지 않는다. 그래서 버리지
+ * 않고 **미룬다** — 기다리는 실행이 남아 있으면 그냥 돌아가고, 그 실행이 끝나거나 끊길 때
+ * 이 함수를 다시 부른다(`waiting`).
+ *
+ * 반대로 그 실행이 결과를 그렸으면 `markServerComposeSeen` 이 「봤다」로 닫아 둔다.
+ *
+ * 덮는 것은 둘이다. ① 앱 셸 안에서 다른 화면으로 옮겨 간 때 ② 문서만 hidden 이고 JS 는
+ * 아직 도는 때(안드로이드 WebView 가 대표적이다).
+ *
+ * ⚠️ **앱을 완전히 벗어난 경우는 이걸로 못 덮는다.** 앱이 백그라운드로 가면 OS 가 WebView 의
+ * 자바스크립트를 멈춰서 폴링도 이 함수도 돌지 않고, 돌아왔을 때는 이미 visible 이다.
+ * 브라우저 탭도 아니다 — 셸 밖에서는 nativeNotify 가 그 자리에서 null 을 돌려주고 아무 일도
+ * 하지 않는다(lib/nativeBridge.ts 의 isNativeShell 검사).
+ *
+ * 앱을 벗어난 사이의 알림은 서버가 보내야 한다 — 기기 토큰 등록 엔드포인트가 필요하고,
+ * docs/app-shell-backend-requests.md 3번에 적어 뒀다.
+ *
+ * 미리 예약(secondsFromNow)해 두는 것으로 때우지 않는다. 지금 브리지에는 **취소 메시지가
+ * 없어서**, 합성이 실패했거나 사용자가 화면을 보고 있어도 "완성됐어요"가 뜬다.
+ */
+/** 이 합성을 기다리기 시작했다고 알린다. 끝나거나 끊길 때 반드시 짝을 맞춘다. */
+function beginWaitingForCompose(idempotencyKey: string) {
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.waiting += 1;
+}
+
+/**
+ * 더는 이 합성을 기다리지 않는다 — 결과를 받았거나, 실패했거나, 화면이 끊겼다.
+ *
+ * 짝이 다 떨어지면 그 자리에서 알림 판정을 한 번 더 돌린다. 「기다리는 동안 미뤄 둔」
+ * 알림이 풀리는 자리가 바로 여기다.
+ */
+function endWaitingForCompose(idempotencyKey: string) {
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.waiting -= 1;
+  notifyServerComposeDone(idempotencyKey);
+}
+
+/**
+ * 이 합성은 **결과를 눈으로 본 것으로** 친다. 나중에 끝나는 같은 작업은 알리지 않는다.
+ *
+ * 같은 멱등키를 기다리는 실행이 둘일 수 있다(나갔다 들어오면 새 인스턴스가 같은 키로 한 번
+ * 더 접수한다). 그중 빠른 쪽이 **화면에 결과를 그렸다면** 사용자는 이미 봤다. 그런데 그때는
+ * 화면이 보이는 중이라 `notifyServerComposeDone` 이 「알릴 필요 없음」으로 그냥 돌아가고,
+ * `notified` 는 false 로 남는다. 그 뒤 사용자가 화면을 떠나고 느린 쪽이 끝나면 조건이 전부
+ * 맞아떨어져 **이미 본 결과에 대한 완성 알림**이 뒤늦게 뜬다.
+ *
+ * 그래서 「알렸다」와 「보여 줬다」를 같은 자리에 기록한다. 둘 다 이 합성에 대해 사용자에게
+ * 할 일이 끝났다는 뜻이다.
+ *
+ * 부르는 자리는 **결과를 실제로 그린 실행 하나뿐**이다(`cancelled` 가 아닌 쪽). 떠난 화면
+ * 뒤에서 조용히 끝난 실행은 아무것도 보여 주지 않았으므로 여기 오지 않는다 — 그것까지
+ * 여기서 접으면 「화면을 떠난 사람에게 알린다」가 통째로 죽는다.
+ *
+ * 그리고 **문서가 가려져 있으면 그린 것도 본 것이 아니다.** 그 경우는 알림이 제 몫을 하는
+ * 자리라 여기서 접지 않는다(안드로이드 WebView 가 대표적이다 — 아래 notifyServerComposeDone).
+ */
+function markServerComposeSeen(idempotencyKey: string) {
+  if (document.visibilityState !== "visible") return;
+  if (latestServerCompose?.idempotencyKey !== idempotencyKey) return;
+  latestServerCompose.notified = true;
+}
+
+function notifyServerComposeDone(idempotencyKey: string) {
+  const compose = latestServerCompose;
+  if (compose?.idempotencyKey !== idempotencyKey) return;
+  if (compose.notified || !compose.completed || compose.waiting > 0) return;
+
+  compose.notified = true;
+  // 서버 푸시를 받는 기기면 서버가 알린다 — 같은 일을 두 번 알리지 않는다.
+  if (hasServerPush()) return;
+  void nativeNotify({
+    title: "네컷이 완성됐어요",
+    /*
+      **눌러서 갈 곳을 약속하지 않는다.**
+
+      본문은 「눌러서 보러 가기」였는데, 눌러도 가지지 않는다 — 셸에 알림 응답 리스너가
+      없고(`apps/mobile/app/_layout.tsx`: "딥링크를 실제로 쓰게 되면 여기에 핸들러가
+      붙는다"), 브리지에도 앱이 웹에 경로를 넘길 메시지가 없다. 탭하면 앱이 앞으로 올 뿐
+      보고 있던 화면 그대로다. 그래서 실제로 되는 것만 적는다.
+
+      탭 이동을 붙이려면 셸의 알림 응답 처리와 브리지 양쪽(웹↔앱)이 같이 필요하다 —
+      docs/mobile-shell.md 「알림을 눌렀을 때」에 무엇이 없는지 적어 뒀다.
+    */
+    body: "기록 화면에서 볼 수 있어요",
+  });
+}
+
+export default function ShootResultPage() {
+  const router = useRouter();
+  const {
+    frameId,
+    remoteFrameId,
+    shots,
+    selectedIndexes,
+    borderColor,
+    outputFilter,
+    photoName,
+    imageResult,
+    setImageResult,
+    ensureComposeIdempotencyKey,
+    discardComposeIdempotency,
+    clearResults,
+    source,
+  } = useShootSession();
+  // 갤러리에서 온 사진이면 "다시 찍기"이라고 말하면 안 된다 — 찍은 적이 없다.
+  const fromUpload = source === "upload";
+  const themeData = useRemoteFrameTheme(remoteFrameId, frameId);
+  const accessMode = useGuestTrialStore((state) => state.accessMode);
+  const hydrated = useGuestTrialStore((state) => state.hydrated);
+  const setNotice = useGuestTrialStore((state) => state.setNotice);
+  const guestMode = accessMode === "guest";
+  const [imageState, setImageState] = useState<ProcessingState>(
+    imageResult ? "done" : "idle",
+  );
+  const [imageError, setImageError] = useState<string | null>(null);
+  // 다시 시도해서 달라질 수 있는 실패인지. 없는 프레임이나 서버가 못 읽는 스티커처럼
+  // 몇 번을 눌러도 같은 결과인 실패에서는 재시도 버튼을 감춘다.
+  const [isImageErrorRetryable, setIsImageErrorRetryable] = useState(true);
+  // 서버가 실패로 확정한 작업이면 다시 시도할 때 새 멱등키로 새 작업을 접수한다(describeComposeFailure.newJobOnRetry).
+  const [retryNeedsNewJob, setRetryNeedsNewJob] = useState(false);
+  // 재시도 버튼이 실제로 다시 돌게 하는 값.
+  // 실패했을 때 imageResult 는 이미 null 이라, 이 값을 안 바꾸면 아래 effect 의
+  // 의존성이 하나도 안 변해 effect 가 다시 돌지 않는다 — 버튼을 눌러도 "대기 중"에서 멈췄다.
+  const [retryNonce, setRetryNonce] = useState(0);
+  // 이름은 꾸미기에서 붙이고, 완성 뒤 바꾸는 것은 기록에서만 한다(2026-11-15 「추후 이름 변경 자체는 기록 페이지에서만」).
+  // 그래서 이 화면에는 ⋯ 메뉴도 이름 바꾸기 창도 없다.
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  /*
+    저장을 마친 완성본(2026-11-15 「저장 누르면 사진이 저장되었어요. 홈으로 가기 이런 거 있는 게 좋을까?」).
+    예전에는 저장해도 화면에 아무 변화가 없었다 — 앱은 사진첩에 조용히 넣고 끝나, 됐는지 알 길이 없었다.
+    이제 저장되면 단추 줄 위에 「사진을 저장했어요 · 홈으로 가기」 한 줄이 떠 있다. 단추는 그대로라 다시 저장도 같은
+    단추다 — 브라우저는 받기 창을 닫아 버려도 알 수 없고, 비회원 사진은 이 화면을 떠나면 이 기기에 남지 않는다.
+    완성본이 바뀌면(다시 만들기) 저장 표시도 따라 풀리도록 무엇을 저장했는지로 든다. 앱은 사진첩에 넣으므로 그렇게 말한다.
+  */
+  const [savedResult, setSavedResult] = useState<{ result: GeneratedFourcutAsset; album: boolean } | null>(null);
+  // 공유 창(components/share/PhotoShareSheet.tsx). 단추를 누르면 아래에서 올라온다.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [isHandingOffToLogin, setIsHandingOffToLogin] = useState(false);
+  // 완성본 주소가 열리지 않는가(만료된 조회 URL·오프라인). 참이면 미리보기로 되돌아간다.
+  const [isResultImageBroken, setIsResultImageBroken] = useState(false);
+  // 이 화면에서 만드는 것을 기다렸는가. 기다린 사람에게만 완성본이 현상되듯 나타난다(행사 결과 화면과 같다).
+  // 이미 다 된 결과로 돌아온 사람은 바로 본다.
+  const [waited, setWaited] = useState(false);
+  if (!imageResult && imageState !== "error" && !waited) setWaited(true);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const guestImageUrlRef = useRef<string | null>(null);
+  const imageGenerationKeyRef = useRef<string | null>(null);
+  /*
+    진행 중인 **서버 합성**. 같은 실행 키로 effect 가 다시 돌면 새로 시작하지 않고 이걸 이어받는다.
+    왜 이어받아야 하는지는 아래 호출부 주석에 적어 뒀다.
+  */
+  const pendingServerComposeRef = useRef<{
+    key: string;
+    run: Promise<GeneratedFourcutAsset>;
+  } | null>(null);
+
+
+  const showStatusNotice = (title: string, message: string) => {
+    setNotice({
+      actions: [{ id: "dismiss", label: "닫기", variant: "secondary" }],
+      message,
+      title,
+    });
+  };
+
+  const selectedCount = useMemo(
+    () => selectedIndexes.filter((index) => index != null).length,
+    [selectedIndexes],
+  );
+
+  const selectedShots = useMemo(
+    () => selectedIndexes.map((index) => (index == null ? null : shots[index] ?? null)),
+    [selectedIndexes, shots],
+  );
+  // 원본 4장으로 만드는 **구도 미리보기**. 완성 전(과 완성본을 못 불러왔을 때)만 쓴다 —
+  // 저장본에는 누끼와 서버가 그린 장식이 더 들어간다(아래 결과 영역 주석 참고).
+  const previewImage = useMemo(
+    () => selectedShots.map((photo): FrameMedia | null => (photo ? { src: photo } : null)),
+    [selectedShots],
+  );
+  const imageSources: FrameSource[] = useMemo(
+    () =>
+      selectedShots
+        .map((photo) => (photo ? { src: photo } : null))
+        .filter((source) => source !== null),
+    [selectedShots],
+  );
+
+  useEffect(() => {
+    if (!frameId) {
+      router.replace("/create");
+      return;
+    }
+
+    if (!shots.length || selectedCount !== 4 || imageSources.length !== 4) {
+      router.replace("/create/select");
+    }
+  }, [frameId, imageSources.length, router, selectedCount, shots.length]);
+
+  // 고른 색이 곧 저장본의 색이다 — 회원 경로는 이 값을 합성 요청에 실어 보내고,
+  // 비회원 경로는 브라우저가 이 색으로 그린다. 꾸민 프레임이면 프레임에 저장된 배경이
+  // 우선한다(resolveFrameBackgroundColor 가 themeData 를 먼저 본다).
+  const effectiveBorderColor = resolveFrameBackgroundColor(themeData, borderColor);
+  const layout = frameId ? FRAME_LAYOUTS[frameId as FrameId] : null;
+  /*
+    색이 결과물을 바꾸는가.
+
+    - 비회원: 브라우저가 그리므로 고른 색이 그대로 그림이 된다 → 바꾼다.
+    - 회원 + 기본 프레임: 합성 요청에 색을 실어 보낸다 → 바꾼다.
+    - 회원 + 꾸민 프레임: 서버가 **프레임에 저장된 배경**을 쓴다(색을 보내지 않는다) → 안 바꾼다.
+
+    마지막 경우가 중요하다. 꾸민 프레임의 배경은 `useRemoteFrameTheme` 이 **나중에** 읽어 와서
+    `effectiveBorderColor` 를 한 번 바꾼다. 그 값이 아래 키에 들어 있으면 진행 중이던 합성이
+    통째로 버려지고 새 멱등키로 다시 돈다 — 같은 네컷이 두 벌 남는다.
+  */
+  const colorAffectsOutput = guestMode || remoteFrameId == null;
+
+  /*
+    "이 입력으로 한 번만 만든다"를 가리키는 키.
+
+    **결과를 바꾸지 않는 값은 넣지 않는다.** 넣으면 값이 늦게 도착할 때마다 진행 중인 작업이
+    취소되고 다시 시작한다. (2026-08-24 에 실제로 보관함에 같은 이름의 mediaId 두 개가 남았다.)
+    반대로 결과를 바꾸는 값을 빼면, 서버가 같은 멱등키로 온 요청을 기존 작업으로 재생해서
+    사용자가 색을 바꿔도 예전 그림이 그대로 나온다. 둘 다 조용히 틀리므로 기준을 위에 적어 뒀다.
+
+    재시도용 nonce 도 넣지 않는다 — 결과를 바꾸는 값이 아니다(아래 runKey 참고).
+
+    **프레임 내용도 여기 넣지 않는다.** 내용(themeData)은 늦게 도착하는 값이라 여기 들어가면
+    위의 첫 번째 함정을 그대로 밟는다. 대신 아래 effect 가 세션에 내용을 통째로 넘겨
+    멱등키에서만 따진다 — 모르는 동안은 키를 흔들지 않고, 알고 나서 달라졌을 때만 새 키가
+    나간다(lib/shootSessionStore.ts).
+  */
+  const generationKey = useMemo(
+    () =>
+      JSON.stringify({
+        frameId,
+        remoteFrameId,
+        borderColor: colorAffectsOutput ? effectiveBorderColor : null,
+        outputFilter,
+        imageSources: imageSources.map((source) => source.src),
+      }),
+    [
+      colorAffectsOutput,
+      effectiveBorderColor,
+      frameId,
+      imageSources,
+      outputFilter,
+      remoteFrameId,
+    ],
+  );
+
+  /*
+    effect 를 다시 돌리기 위한 키. **generationKey 와 분리한다.**
+
+    재시도는 같은 입력으로 같은 작업을 다시 가리키는 것이라 멱등키가 그대로여야 한다.
+    이 nonce 가 generationKey 에 들어 있으면 재시도마다 새 멱등키가 잡히고, 서버는
+    기존 작업을 재생하는 대신 새로 그린다 — 합성은 이미 끝났는데 그 뒤 다운로드 주소
+    조회가 실패하거나 폴링이 시간을 넘긴 경우(둘 다 재시도 가능한 오류로 뜬다),
+    같은 네컷이 보관함에 두 벌 남는다.
+  */
+  const runKey = `${generationKey}#${retryNonce}`;
+
+  // 합성 입력(generationKey)이 바뀔 때마다 기본 파일명을 새로 만든다.
+  // buildDefaultDisplayName()은 시각 기반이라 인자가 없고, 호출할 때마다 값이 달라진다.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const defaultDisplayName = useMemo(() => buildDefaultDisplayName(), [generationKey]);
+
+  // 합성 결과가 바뀌면 상태를 렌더 중에 맞춘다(effect로 하면 렌더가 한 번 더 돈다).
+  const [syncedImageResult, setSyncedImageResult] = useState(imageResult);
+  if (syncedImageResult !== imageResult) {
+    setSyncedImageResult(imageResult);
+    setImageState(imageResult ? "done" : "idle");
+    // 새 결과는 다시 불러 본다 — 앞 결과가 못 열렸다고 이것까지 접어 두면 안 된다.
+    setIsResultImageBroken(false);
+  }
+
+  /*
+    완성본을 화면에 띄울 주소. 못 불러오면 null 로 떨어져 아래 미리보기로 되돌아간다.
+
+    계정에 보관한 결과는 만료되는 조회 URL 이고(lib/fourcutProcessing.ts), 기기 합성 결과는
+    메모리 blob 이라 새로고침하면 원본으로 다시 만든다. 주소가 열리지 않으면 빈 사각형
+    대신 원본 미리보기를 보여 준다.
+  */
+  const resultImageSrc = isResultImageBroken
+    ? null
+    : imageResult?.objectUrl ?? null;
+
+  // 공유할 사진. 회원 완성본만 공유한다(비회원은 공유 단추가 없다). 파일 공유가 되는 브라우저에서 미리 받아 둔다.
+  const shareFilename = imageResult
+    ? buildDownloadFilename(imageResult.displayName, imageResult.extension ?? getImageExtension(imageResult.objectUrl) ?? "jpg")
+    : "";
+  const shareFile = usePreparedPhotoFile(
+    imageResult && !imageResult.localBlob ? imageResult.objectUrl : null,
+    shareFilename,
+  );
+
+  useEffect(() => {
+    if (!frameId || !layout || selectedCount !== 4 || imageSources.length !== 4) return;
+
+    /*
+      **쿠키를 읽기 전에는 어느 쪽으로도 그리지 않는다.**
+
+      accessMode 의 초깃값은 "member" 라, hydrateGuestMode() 가 반영되기 전에는 진짜
+      비회원도 회원으로 읽힌다. 그 값으로 아래 분기를 타면 비회원이 인증 전용 서버 합성을
+      불러 401 을 맞는다. 반대로 초깃값을 게스트로 넘겨짚어도 안 된다 — 브라우저가 그린
+      그림이 imageResult 에 박히면 회원인데도 기록에 아무것도 남지 않는다.
+      그래서 넘겨짚지 않고 **기다린다**(hydrated 가 참이 되면 effect 가 다시 돈다).
+    */
+    if (!hydrated) return;
+
+    let cancelled = false;
+    /** 이 실행이 결과(성공이든 실패든)를 남겼는가. 아래 cleanup 이 쓴다. */
+    let settled = false;
+    /**
+     * 이 실행이 기다린다고 등록해 둔 멱등키. 아직 안 풀었으면 값이 있다.
+     *
+     * 끝나는 길이 셋이라(성공 · 실패 · 화면이 끊김) 한 번만 풀리도록 여기서 잠근다 —
+     * 두 번 풀면 셈이 음수가 되어 다른 실행의 알림이 먼저 나간다.
+     */
+    let waitingForComposeKey: string | null = null;
+    const releaseComposeWait = () => {
+      if (waitingForComposeKey === null) return;
+      const key = waitingForComposeKey;
+      waitingForComposeKey = null;
+      endWaitingForCompose(key);
+    };
+    const currentLayout = layout;
+
+    /*
+      이번 실행이 쓸 멱등키를 **결과를 확인하기 전에** 확정한다.
+
+      `remoteFrameId` 는 프레임 내용을 고쳐도 그대로다(수정은 같은 id 로 가는 PUT 이다).
+      그래서 내용이 바뀌었는지는 세션이 프레임 지문으로 따진다(lib/shootSessionStore.ts).
+      바뀌었으면 여기서 새 키가 잡히면서 `imageResult` 까지 버려진다 — 그래야 아래
+      `if (imageResult) return` 을 통과해 다시 합성한다. 늦게 도착한 테마를 합성 뒤에
+      확인하면 화면에는 이미 수정 전 그림이 박힌 뒤라 아무도 그것을 걷어내지 못한다.
+
+      게스트는 브라우저가 그리므로 서버 멱등키가 없다(빈 문자열).
+    */
+    const composeKey = guestMode
+      ? ""
+      : ensureComposeIdempotencyKey(generationKey, themeData);
+
+    /*
+      "이 실행은 이미 했다"를 가리키는 값. **멱등키를 함께 넣는다** — 프레임을 고쳐 키가
+      새로 잡히면 이 값도 달라져야, 아래 검사를 통과해 다시 합성한다.
+    */
+    const imageGenerationKey = `${runKey}#${composeKey}:image`;
+
+    // 꾸미기에서 붙인 이름(2026-11-15). 비워 두면 날짜·시간 이름이다. 완성 뒤 이름 바꾸기는 기록에서만 한다.
+    const chosenName = photoName.trim();
+    const outputName = sanitizeDisplayName(chosenName, defaultDisplayName);
+
+    // 비회원은 기기에서 그린다. localBlob 이 있으면 계정 기록이 아니므로 서버 이름·공유 API 를 부르지 않는다.
+    //
+    // 회원은 언제나 서버가 그린다(2026-11-15 「기기 저장만 가능은 대체 뭐」). 예전에는 서버에 기본(시스템) 프레임이
+    // 없으면 회원도 여기로 떨어져 「이 사진은 기록에 보관되지 않아요」가 떴다 — 기본 프레임은 서버가 늘 갖도록
+    // 백엔드가 보장하고(시스템 프레임 4종), 화면은 그 폴백을 두지 않는다. 없으면 다른 실패처럼 까닭을 말한다.
+    async function prepareLocalOutput() {
+      const blob = await composeFrameImage({
+        layout: currentLayout,
+        borderColor: effectiveBorderColor,
+        sources: imageSources,
+        outputFilter,
+        theme: themeData,
+        canvas: canvasRef.current ?? undefined,
+        mimeType: "image/jpeg",
+        quality: 0.92,
+      });
+
+      // iPhone Safari는 blob 링크의 확인창을 띄워도 다운로드 프로세스가
+      // 바이트를 받지 못할 수 있다. 클릭 전에 파일 자체를 담은 URL을 준비한다.
+      // 미리보기 Blob URL의 수명과 무관하며 서버로 사진을 보내지 않는다.
+      const downloadUrl = await blobToDataUrl(blob);
+
+      if (cancelled) return;
+
+      const objectUrl = URL.createObjectURL(blob);
+      if (cancelled) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+
+      if (guestImageUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(guestImageUrlRef.current);
+      }
+
+      guestImageUrlRef.current = objectUrl;
+      settled = true;
+      setImageResult({
+        mediaId: -1,
+        objectUrl,
+        downloadUrl,
+        displayName: outputName,
+        localBlob: blob,
+      });
+      setImageState("done");
+    }
+
+    async function prepareOutputs() {
+      if (imageResult) return;
+      if (imageGenerationKeyRef.current === imageGenerationKey) return;
+
+      imageGenerationKeyRef.current = imageGenerationKey;
+      setImageError(null);
+      setIsImageErrorRetryable(true);
+      setImageState("processing");
+
+      const displayName = outputName;
+
+      try {
+        if (guestMode) {
+          await prepareLocalOutput();
+          return;
+        }
+
+        // 로그인 사용자는 **서버가 그린다.** 화면 미리보기는 아래 <FramePreview> 가
+        // DOM 으로 그리므로 여기서 캔버스 합성을 할 이유가 없다.
+        //
+        // 예전에는 회원 경로에서도 위 composeFrameImage 을 먼저 돌렸는데, 그 결과를 쓰는 곳이
+        // 개발자용 디버그 전역 하나뿐이었다. 최대 16MP 캔버스 합성과 PNG 인코딩을 매번
+        // 헛돌리며 서버 합성 시작을 그만큼 늦췄고, 더 나쁘게는 그 로컬 합성이 실패하면
+        // 멀쩡히 성공했을 서버 저장까지 통째로 취소됐다.
+
+        /*
+          멱등키는 **세션에서 이어받는다.** 컴포넌트가 들고 있으면 안 된다.
+
+          아래 cleanup 은 `cancelled` 만 세울 뿐 이미 나간 합성을 되돌리지 못한다 —
+          결과를 기다리는 중에 '사진 다시 고르기'나 뒤로가기로 화면을 떠나도 서버는 계속
+          그려서 보관함에 결과를 남긴다. 그런데 재진입은 이 컴포넌트를 새로 마운트하므로,
+          키가 컴포넌트에 있으면 그때마다 새로 잡혀 같은 네컷이 한 벌 더 접수된다
+          (앞선 실행의 결과는 `cancelled` 때문에 세션에도 안 남아 막아 주지 못한다).
+
+          재시도 버튼도 같은 이유로 이 키를 그대로 쓴다 — 입력과 프레임 내용이 그대로면
+          키도 그대로다. 위에서 이미 확정해 둔 값이라 여기서는 읽기만 한다.
+        */
+        const idempotencyKey = ensureComposeIdempotencyKey(generationKey, themeData);
+        await flushShootSession();
+        if (cancelled) return;
+
+        /*
+          **같은 실행 키의 합성은 하나뿐이다 — 돌고 있으면 이어받는다.**
+
+          아래 cleanup 이 실행 키를 비우므로, 꾸민 프레임의 테마가 이 합성 도중에 도착하면
+          다시 도는 effect 가 "아직 안 했다"고 보고 여기까지 온다. 그때 한 번 더 부르면
+          멱등키가 같아도 **원본 4장이 새 S3 키로 다시 올라간다** — 멱등키가 덮는 것은 그
+          뒤의 합성 접수뿐이라(lib/fourcutCompose.ts 의 uploadSources 는 그 앞이다), 서버가
+          합성을 재생해도 새로 올라간 4장은 아무도 안 쓰는 채 버킷에 남는다. 프론트에는
+          지울 방법도 없다.
+
+          이어받아도 결과는 같다 — 이 요청은 `themeData` 를 보지 않는다(꾸민 프레임의 배경과
+          누끼는 서버가 `remoteFrameId` 로 읽고, 보낸 색은 버린다). 내용이 진짜 달라졌다면
+          위에서 멱등키가 새로 잡히고, 그러면 이 키도 달라져 새 실행이 시작된다.
+        */
+        const pending = pendingServerComposeRef.current;
+        const run =
+          pending?.key === imageGenerationKey
+            ? pending.run
+            : saveFourcutToServer({
+                sources: imageSources.map((source) => source.src),
+                layout: currentLayout,
+                outputFilter,
+                frameId: frameId as FrameId,
+                remoteFrameId,
+                displayName,
+                // 서버는 날짜·시간 이름으로 만든다. 꾸미기에서 이름을 붙였으면 다 된 뒤 그 이름으로 바꾼다
+                // (이미 바꾼 기록이면 그대로 둔다 — lib/fourcutProcessing.ts).
+                initialDisplayName: chosenName ? displayName : undefined,
+                idempotencyKey,
+                backgroundColor: effectiveBorderColor,
+              });
+        pendingServerComposeRef.current = { key: imageGenerationKey, run };
+        // 이 탭이 기다리는 합성이 바뀌었으면 알림 대상도 그것으로 옮긴다(위 latestServerCompose).
+        // 같은 멱등키면 그대로 둔다 — 재진입해 새 Promise 로 접수해도 같은 작업이다.
+        if (latestServerCompose?.idempotencyKey !== idempotencyKey) {
+          latestServerCompose = {
+            idempotencyKey,
+            notified: false,
+            completed: false,
+            waiting: 0,
+          };
+        }
+        // 이 실행이 결과를 기다린다. cleanup 이 먼저 끊어도 짝이 맞도록 표시를 남긴다.
+        beginWaitingForCompose(idempotencyKey);
+        waitingForComposeKey = idempotencyKey;
+
+        const asset = await run;
+        if (latestServerCompose?.idempotencyKey === idempotencyKey) {
+          latestServerCompose.completed = true;
+        }
+
+        if (!cancelled) {
+          settled = true;
+          setImageResult(asset);
+          setImageState("done");
+          // 사용자에게 결과를 보여 줬다. 같은 작업을 기다리던 느린 실행이 나중에 끝나도
+          // 다시 알리지 않는다(위 markServerComposeSeen).
+          markServerComposeSeen(idempotencyKey);
+        }
+
+        /*
+          알림은 **`cancelled` 밖에 둔다.** `cancelled` 는 "떠난 화면에 상태를 쓰지 않는다"는
+          뜻이지 "약속한 알림을 접는다"는 뜻이 아니다. 안에 두면 결과를 기다리다 '홈으로
+          가기'로 옮겨 간 사람 — 마이페이지가 알려 주겠다고 안내한 바로 그 사람 — 만 알림을
+          못 받는다. 누구에게 알릴지는 notifyServerComposeDone 이 판정한다(위).
+        */
+        // 이 실행은 결과를 받았다. 짝을 풀고 — 이미 끊겨서 풀린 뒤였다면 그냥 —
+        // 알림 판정을 돌린다. 판정 자체는 여러 번 불러도 한 번만 알린다.
+        releaseComposeWait();
+        notifyServerComposeDone(idempotencyKey);
+      } catch (error) {
+        console.error(error);
+        // 이 실행은 더 기다리지 않는다. 같은 합성을 기다리던 마지막 실행이었다면, 여기서
+        // 미뤄 둔 알림이 풀린다 — 앞 요청은 성공했는데 이 재시도만 죽은 경우가 그렇다.
+        releaseComposeWait();
+        if (cancelled) return;
+
+        // 실패 사유를 버리지 않는다. 프레임을 바꾸면 되는 실패인지, 기다리면 되는 실패인지
+        // 사용자가 알아야 한다(lib/fourcutCompose.ts describeComposeFailure).
+        const failure = describeComposeFailure(error);
+        settled = true;
+        setImageState("error");
+        setImageError(failure.message);
+        setIsImageErrorRetryable(failure.retryable);
+        setRetryNeedsNewJob(Boolean(failure.newJobOnRetry));
+      }
+    }
+
+    void prepareOutputs();
+
+    return () => {
+      cancelled = true;
+      // 결과를 기다리던 중에 끊겼다. 짝을 여기서 맞춘다 — 안 맞추면 이 합성은 영원히
+      // "누가 기다리는 중"으로 남아 알림이 나가지 않는다.
+      releaseComposeWait();
+
+      /*
+        끝맺지 못하고 끊겼으면 이 키를 "처리했다"고 남겨 두면 안 된다.
+
+        키는 비동기 작업을 **시작하기 전에** 찍힌다. 그래서 작업이 도는 도중 의존성이 바뀌면
+        (꾸민 프레임의 테마가 늦게 도착하는 경우가 그렇다) 이 cleanup 이 결과를 버리는데,
+        다시 도는 effect 는 같은 키를 보고 "이미 했다"며 그냥 돌아간다.
+        아무도 결과를 만들지 않아 화면이 영원히 "처리 중"에 남는다.
+
+        비우는 것은 **effect 를 다시 돌리기 위해서지 합성을 다시 시키기 위해서가 아니다.**
+        진행 중인 서버 합성은 위 `pendingServerComposeRef` 가 붙잡고 있어서, 다시 도는
+        실행이 그것을 이어받아 결과를 받아 간다 — 원본이 두 번 올라가지 않는다.
+      */
+      if (!settled && imageGenerationKeyRef.current === imageGenerationKey) {
+        imageGenerationKeyRef.current = null;
+      }
+    };
+  }, [
+    defaultDisplayName,
+    effectiveBorderColor,
+    ensureComposeIdempotencyKey,
+    frameId,
+    generationKey,
+    runKey,
+    hydrated,
+    remoteFrameId,
+    guestMode,
+    imageResult,
+    imageSources,
+    layout,
+    outputFilter,
+    photoName,
+    selectedCount,
+    setImageResult,
+    themeData,
+  ]);
+
+  /*
+    촬영본은 메모리에만 있다(lib/shootSessionStore.ts 는 비영속). 새로고침 한 번에 원본
+    4장이 사라지고 화면은 /create 으로 튕긴다 — 회원도 마찬가지다.
+
+    - 회원: 보관함에 결과가 남는 순간(imageResult)이 안전선이다. 그 전(생성 중·합성 실패)
+      에는 경고한다. 실패 화면에서 새로고침하는 것이 가장 흔한 손실 경로다.
+    - 비회원: 결과물도 메모리 blob 이라 만들어진 뒤에도 계속 경고한다.
+
+    회원이 합성을 접수시킨 뒤(서버는 계속 그려 보관함에 남긴다) 탭을 닫으면 확인창이 한 번
+    헛뜬다. 접수 여부를 화면이 알 수 있는 상태값이 없고, 같은 흐름의 앞 세 단계가 이미
+    shots.length > 0 만 보므로(app/create/capture·select·upload) 그쪽에 맞춘다.
+  */
+  useUnsavedWorkGuard(shots.length > 0 && (!imageResult || Boolean(imageResult.localBlob)));
+
+  if (!frameId || !layout) return null;
+
+  const isPreparing = imageState === "processing" || imageState === "idle";
+
+
+  /**
+   * 로그인 뒤 다시 만들 수 있도록 재료를 보관한다.
+   *
+   * 완성본이 아니라 원본 4장을 담는다 — 완성본을 등록하는 API 가 없어졌고, 재료가 더 작다.
+   * 로그인을 마치면 GuestTrialBridge 가 이걸로 서버 합성을 돌린다.
+   *
+   * 보관은 IndexedDB 라 비동기다(lib/pendingGuestSave.ts). 여기 두 호출부는 모두 이미
+   * 비동기 핸들러 안이라 `await` 로 끝난다.
+   */
+  const storeGuestHandoff = async () => {
+    // 4장이 다 차기 전에는 보관하지 않는다. 보관물은 한 벌이라 못 쓰는 것이 앞서 남긴
+    // 온전한 한 벌을 덮어쓰고, 읽는 쪽은 그것을 버리면서 지운다(lib/pendingGuestSave.ts
+    // 의 hasFourSources) — 인계가 통째로 사라진다.
+    if (!frameId || imageSources.length !== 4) return false;
+
+    return setPendingGuestSave(
+      {
+        sources: imageSources.map((source) => source.src),
+        frameId: frameId as FrameId,
+        remoteFrameId,
+        outputFilter,
+        // 고른 색이 곧 저장본의 색이다 — 로그인 후 재합성에도 같은 색을 실어 보낸다.
+        // 빼면 서버가 프레임에 저장된 배경으로 그려, 방금 내려받은 그림과 색이 갈린다.
+        // 꾸민 프레임이어도 그대로 넣는다(서버 합성 쪽에서 알아서 버린다).
+        backgroundColor: effectiveBorderColor,
+        // 꾸미기에서 붙인 이름으로 남긴다 — 기기에서 만들지 못한 뒤에 눌러도 같다.
+        // 기본값을 쓰면 공들여 붙인 이름이 로그인 직후 조용히 사라진다.
+        displayName: imageResult?.displayName?.trim() || sanitizeDisplayName(photoName, defaultDisplayName),
+      },
+      Date.now(),
+    );
+  };
+
+  const handleDownloadImage = async () => {
+    if (!imageResult) return;
+
+    setIsDownloadingImage(true);
+    try {
+      if (imageResult.localBlob) {
+        const blob = imageResult.localBlob;
+        // 앱 셸 안에서는 네이티브가 사진첩에 넣는다 — 끝날 때까지 기다려야 실패를 잡는다.
+        await downloadBlob(
+          blob,
+          buildDownloadFilename(imageResult.displayName, blob.type === "image/jpeg" ? "jpg" : "png"),
+        );
+        setSavedResult({ result: imageResult, album: isNativeShell() });
+        return;
+      }
+
+      const url = await getMediaDownloadUrl(imageResult.mediaId);
+      await downloadFromUrl(
+        url,
+        buildDownloadFilename(imageResult.displayName, getImageExtension(url) ?? imageResult.extension ?? getImageExtension(imageResult.displayName) ?? "jpg"),
+      );
+      setSavedResult({ result: imageResult, album: isNativeShell() });
+    } catch (error) {
+      console.error(error);
+      showStatusNotice(
+        "이미지를 다운로드하지 못했어요",
+        // 앱에서 사진첩 권한이 막힌 실패는 네이티브 안내를 그대로 띄운다 —
+        // "설정에서 켜 주세요" 는 재시도로 풀리지 않아 폴백 문구가 거짓말이 된다.
+        getNativeSaveErrorMessage(error) ??
+          getUserFacingApiErrorMessage(error, "잠시 후 다시 시도해 주세요."),
+      );
+    } finally {
+      setIsDownloadingImage(false);
+    }
+  };
+
+  /*
+    비회원이 로그인으로 이동할 때 **원본 4장과 만드는 방법**을 보관한다. OAuth 는 전체 페이지
+    리다이렉트라 메모리 세션이 통째로 사라지므로, 로그인 전에 IndexedDB 로 옮겨 둔다.
+
+    **완성본(`imageResult`)을 기다리지 않는다** — 보관하는 것은 완성본이 아니라 재료라,
+    아직 만드는 중이어도 합성이 실패한 뒤여도 그대로 만들어진다. 예전에는 완성본이 없으면
+    보관을 통째로 건너뛰고 로그인으로 보냈는데, 그래서 결과를 기다리다 누른 사람과 실패
+    화면에서 누른 사람만 로그인 뒤에 이어받을 것이 하나도 없었다.
+  */
+  const handleGuestLogin = async () => {
+    // 보관에 실패했을 때 무엇을 하라고 할지. 아직 완성본이 없으면(합성이 실패한 화면) "내려받으라"고 할 수 없다 —
+    // 내려받을 사진이 없다. 만드는 동안에는 이 단추가 없다(로딩 화면).
+    const retryHint = imageResult
+      ? "먼저 이미지를 내려받아 주세요."
+      : "결과가 다 만들어진 뒤에 다시 눌러 주세요.";
+
+    setIsHandingOffToLogin(true);
+    try {
+      const stored = await storeGuestHandoff();
+      if (!stored) {
+        showStatusNotice(
+          "결과를 보관하지 못했어요",
+          // 원인을 단정하지 않는다. 용량만이 아니라 사생활 보호 모드·저장소 차단도
+          // 여기로 온다(lib/pendingGuestSave.ts).
+          `이 브라우저에 사진을 잠시 담아 두지 못했어요. ${retryHint}`,
+        );
+        return;
+      }
+    } catch (error) {
+      console.error(error);
+      showStatusNotice(
+        "결과를 보관하지 못했어요",
+        `로그인하는 사이에 사진이 사라질 수 있어요. ${retryHint}`,
+      );
+      return;
+    } finally {
+      setIsHandingOffToLogin(false);
+    }
+
+    router.push(GUEST_LOGIN_HANDOFF_PATH);
+  };
+
+  // 업로드로 왔으면 업로드 쪽 프레임 고르기로 돌아간다. 그냥 /create 으로 보내면
+  // 다음이 카메라라, 갤러리로 만들던 사람이 촬영 화면에 떨어진다.
+  // `keepShots=1` — 찍은 사진을 두고 프레임만 다시 고른다(app/create/page.tsx).
+  const reselectFrameHref = fromUpload
+    ? "/create?source=upload&keepShots=1"
+    : "/create?keepShots=1";
+
+  /*
+    **사진은 두고 프레임만 바꾼다.**
+
+    예전에는 이 링크가 `/create` 로 보냈고, 그 화면은 들어오자마자 세션을 통째로 `reset()`
+    했다 — 프레임만 바뀌는 것이 아니라 찍은 8장과 고른 4장이 함께 사라졌다. 이 자리의 안내는
+    "다른 프레임을 골라 주세요"(lib/fourcutCompose.ts)라 사진은 그대로라는 뜻으로 읽히는데
+    실제로는 사진이 먼저 없어졌고, /create/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
+
+    지금은 `keepShots=1` 로 보낸다. 사진을 그대로 들고 프레임 화면에 서고, 고른 프레임의 슬롯
+    비율이 같으면 곧장 고르는 화면으로 간다. 비율이 다르면(세로 4컷 → 네모 4컷) 그 사진을
+    쓸 수 없으므로 그때 비우고 촬영으로 보낸다 — 판단은 /create 이 한다.
+  */
+  const handleReselectFrame = () => {
+    router.push(reselectFrameHref);
+  };
+
+  // 세로로 긴 사진은 폭으로 맞추면 화면 두 개 높이가 된다. 높이로 묶어 사진과 저장 단추 줄을 한 화면에 둔다.
+  const tallLayout = layout.totalHeight > layout.totalWidth;
+  const photoSizeClass = tallLayout ? "h-[min(64svh,680px)] w-auto max-w-full" : "h-auto w-full";
+
+  // 화면에는 제목을 두지 않는다(2026-11-15 「완성에 네컷 완성 너무 아냐 / 텍스트 없애」). 읽기 프로그램에만 쓴다.
+  const heading = imageResult
+    ? "네 컷 완성"
+    : imageState === "error"
+      ? "네 컷을 만들지 못했어요"
+      : "네 컷을 만들고 있어요";
+
+  const handleRetry = () => {
+    imageGenerationKeyRef.current = null;
+    if (guestImageUrlRef.current?.startsWith("blob:")) {
+      URL.revokeObjectURL(guestImageUrlRef.current);
+    }
+    guestImageUrlRef.current = null;
+    clearResults();
+    if (retryNeedsNewJob) {
+      discardComposeIdempotency();
+      setRetryNeedsNewJob(false);
+    }
+    setImageState("idle");
+    setImageError(null);
+    // 실패했을 때 imageResult 는 이미 null 이라 clearResults() 만으로는
+    // effect 의존성이 하나도 안 바뀐다. 이 값을 올려야 실제로 다시 돈다.
+    setRetryNonce((nonce) => nonce + 1);
+  };
+
+  /*
+    아래 단추 줄은 [사진 저장 · 공유]다. 다 되면 「사진 저장」, 실패하면 그다음 할 일(다시 시도·프레임 다시 고르기)이
+    주 버튼이다. 이름은 꾸미기에서 붙이고 바꾸는 것은 기록에서만 한다 — 그래서 ⋯ 메뉴가 없다(2026-11-15).
+
+    만드는 동안에는 단추가 없다(2026-11-15 「네 컷을 만들고 있어요보다는 사진을 살짝 흐리게 하고 그 위에 로딩이
+    돌아가면서 로딩바를 채워주든」). 고른 네 장을 프레임에 넣어 흐리게 깔고, 가운데 고리가 차오르며 그 아래에
+    「네 컷을 만들고 있어요」 한 줄을 둔다(「그래도 생성 중이라는 텍스트는 있어도 좋지 않을까?」). 서버 합성이
+    얼마나 걸릴지는 모르므로 고리는 처음엔 빠르게, 갈수록 느리게 92% 까지만 찬다(globals.css 의 hc-making-ring) —
+    다 되면 흐림이 걷히며 완성본이 나타난다(ev-develop 를 같은 흐림에서 시작한다).
+  */
+  const localBlob = imageResult?.localBlob ?? null;
+  const primaryClass =
+    "hc-button-primary flex h-13 flex-1 items-center justify-center gap-2 rounded-full text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:opacity-45";
+  const saved = imageResult != null && savedResult?.result === imageResult;
+  /*
+    저장 단추는 저장한 뒤에도 그대로다 — 모양도 크기도 이름도 안 바뀐다(2026-11-15 「그러면 막 버튼 크기 달라지고
+    그러니깐」, 같은 일을 하는 단추는 모양을 바꾸지 않는다). 다시 저장도 같은 단추다. 저장됐다는 말과 다음 길(홈으로)은
+    단추 줄 위에 떠 있는 한 줄이 한다(아래 savedToast).
+    기기에서 만든 사진은 실제 링크로 받는다 — Safari 는 링크의 기본 동작으로만 받는다. 클릭 뒤 URL 을 폐기하지
+    않는다. 앱 셸만 네이티브 저장 브리지(사진첩)를 쓰고, 그 답을 받은 뒤에야 저장됐다고 말한다. 브라우저 링크는
+    받기를 넘긴 순간을 저장으로 본다(그 뒤는 브라우저 몫이라 알 수 없다).
+  */
+  const saveContent = (
+    <>
+      <Download aria-hidden className="size-4.5" strokeWidth={2.2} />
+      {isDownloadingImage ? "저장 중" : "사진 저장"}
+    </>
+  );
+
+  let primary: ReactNode = null;
+  if (imageResult && localBlob) {
+    primary = (
+      <a
+        href={imageResult.downloadUrl ?? imageResult.objectUrl}
+        download={buildDownloadFilename(imageResult.displayName, localBlob.type === "image/jpeg" ? "jpg" : "png")}
+        aria-disabled={isDownloadingImage || undefined}
+        onClick={(event) => {
+          if (isDownloadingImage) {
+            event.preventDefault();
+            return;
+          }
+          if (isNativeShell()) {
+            event.preventDefault();
+            void handleDownloadImage();
+            return;
+          }
+          setSavedResult({ result: imageResult, album: false });
+        }}
+        className={primaryClass}
+      >
+        {saveContent}
+      </a>
+    );
+  } else if (imageResult) {
+    primary = (
+      <button type="button" onClick={() => void handleDownloadImage()} disabled={isDownloadingImage} className={primaryClass}>
+        {saveContent}
+      </button>
+    );
+  } else if (imageState === "error") {
+    // 다시 해서 달라질 수 있으면 다시 시도, 아니면(없는 프레임 등) 사진은 두고 프레임만 다시 고른다.
+    primary = isImageErrorRetryable ? (
+      <button type="button" onClick={handleRetry} className={primaryClass}>
+        다시 시도
+      </button>
+    ) : (
+      // 링크가 아니라 버튼이다 — 누르면 이동이 아니라 확인이 먼저다(handleReselectFrame 주석).
+      <button type="button" onClick={handleReselectFrame} className={primaryClass}>
+        프레임 다시 고르기
+      </button>
+    );
+  }
+
+
+  return (
+    <main className="hc-page-app flex min-h-dvh flex-col px-4 pb-0 pt-[max(0.75rem,env(safe-area-inset-top))] text-(--hc-text) lg:px-8 lg:pt-6">
+      {/* 넓은 화면도 기록의 사진 보기(max-w-xl)만큼만 — 더 넓히면 「사진 저장」 하나가 화면을 가로지른다. */}
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-xl">
+        {/*
+          뒤로가기 자리에 로고 — 누르면 홈(2026-11-15 「최종적으로 완성되었을땐 다시 고르기를 막아야해 / 뒤로가기 대신에
+          거기다가 로고를 넣고 홈으로」). 완성된 촬영은 다시 고르지 않는다(shootSessionStore 의 completed). 홈으로 가는
+          길은 이 로고 하나라 오른쪽 위 X 는 두지 않는다.
+        */}
+        <header className="flex h-11 shrink-0 items-center">
+          <BrandMark href={guestMode ? "/" : "/home"} label={guestMode ? "하루컷 처음으로" : "하루컷 홈"} />
+        </header>
+        <h1 className="sr-only">{heading}</h1>
+        <p role="status" aria-live="polite" className="sr-only">
+          {saved
+            ? savedResult?.album ? "사진첩에 저장했어요." : "사진을 저장했어요."
+            : imageResult ? "네 컷이 완성됐어요." : isPreparing ? "네 컷을 만들고 있어요." : ""}
+        </p>
+
+        {/*
+          다 되면 **저장된 그림 자체**를 보여준다.
+
+          FramePreview 는 고른 원본 4장을 DOM 으로 겹쳐 그리는 구도 미리보기라, 저장본과
+          갈리는 자리가 있다. 회원 경로는 누끼(배경 제거)를 올리기 전에 픽셀에 굽고
+          (`lib/fourcutCompose.ts`) 프레임 장식은 서버가 그리는데, 둘 다 이 미리보기에는
+          없다 — 사용자는 배경이 그대로 남은 그림을 본 뒤 배경이 지워진 그림을 내려받았다.
+          비회원도 마찬가지로 브라우저가 그린 결과가 따로 있다.
+
+          미리보기에 누끼를 다시 굽는 길로 가지 않는다. 세그멘테이션은 실기기에서 장당
+          약 1초인데(lib/canvas/personCutout.ts), 그 픽셀은 이미 결과물 안에 들어 있다.
+          같은 일을 두 번 하는 대신 이미 만들어진 것을 띄운다.
+
+          아직 만들어지는 중이거나 완성본을 못 불러왔을 때만 미리보기가 자리를 지킨다.
+        */}
+        <section className="flex w-full flex-1 items-center justify-center py-5">
+          {resultImageSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resultImageSrc}
+              alt="완성된 네컷 결과"
+              decoding="async"
+              // 완성본은 레이아웃과 같은 비율로 그려진다. 미리 잡아 두면 늦게 도착해도
+              // 화면이 밀리지 않는다.
+              style={{
+                aspectRatio: `${layout.totalWidth} / ${layout.totalHeight}`,
+              }}
+              // 기다린 사람에게는 만드는 동안의 흐림에서 시작해 걷힌다(아래 hc-making-blur 와 같은 값).
+              className={`${photoSizeClass} rounded-lg bg-(--hc-surface-strong) object-contain shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${waited ? "ev-develop [--develop-from:blur(6px)_saturate(0.75)_brightness(1.08)]" : ""}`}
+              onError={() => setIsResultImageBroken(true)}
+            />
+          ) : (
+            <div className={`relative ${tallLayout ? "" : "w-full"}`}>
+              <FramePreview
+                frameId={frameId}
+                media={previewImage}
+                borderColor={effectiveBorderColor}
+                outputFilter={outputFilter}
+                theme={themeData}
+                // 만드는 동안 고른 네 장이 흐리게 깔린다(globals.css 의 hc-making-blur).
+                className={`${tallLayout ? "h-[min(64svh,680px)]! w-auto!" : "w-full!"} ${isPreparing ? "hc-making-blur" : ""}`}
+              />
+              {isPreparing ? (
+                // 고리 아래에 무엇을 하는 중인지 한 줄(2026-11-15 「그래도 생성 중이라는 텍스트는 있어도 좋지 않을까?」).
+                // 읽기 프로그램은 위 상태 줄이 같은 말을 하므로 여기는 숨긴다.
+                <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <span className="flex flex-col items-center gap-3 rounded-3xl bg-[rgba(20,20,15,0.5)] px-6 pb-4 pt-5 shadow-[0_8px_24px_rgba(0,0,0,0.22)]">
+                    <svg viewBox="0 0 48 48" className="size-11 -rotate-90">
+                      <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        fill="none"
+                        stroke="var(--hc-primary)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        pathLength={100}
+                        strokeDasharray="100"
+                        className="hc-making-ring"
+                      />
+                    </svg>
+                    <span className="text-[14px] font-semibold text-white">네 컷을 만들고 있어요</span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </section>
+
+        {/* 주 버튼이 페이지 높이를 기준으로 화면 아래에 붙는다 — 사진을 보는 동안에도 저장은 엄지 아래다. */}
+        <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2.5 bg-linear-to-t from-(--background) from-75% to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 lg:-mx-8 lg:px-8">
+          {/* 만드는 동안은 단추 자리를 비워 둔다. 단추 줄과 같은 높이라 다 되어도 사진이 밀리지 않는다. */}
+          {isPreparing ? <div aria-hidden className="h-13" /> : null}
+          {/* 화면의 글은 실패한 까닭 한 줄뿐이다. */}
+          {imageError ? (
+            <p className="text-center text-[13px] leading-[1.6] text-(--hc-danger)">
+              <Sentences text={imageError} />
+            </p>
+          ) : null}
+
+          {/*
+            단추 묶음. 저장 확인(2026-11-15 「저장 누르면 사진이 저장되었어요. 홈으로 가기 이런 거」)은 이 묶음 바로 위에 떠
+            있어 자리를 차지하지 않는다 — 나타나도 사진·단추가 밀리지 않고, 비회원의 「로그인하고 보관하기」도 가리지 않는다.
+            모달처럼 막지 않아 닫을 필요가 없고, 이어서 공유하거나 다시 저장할 수 있다. 다음 길(홈으로)을 그 안에 둔다.
+            읽기 프로그램은 위 상태 줄이 알린다.
+          */}
+          <div className="relative flex flex-col gap-2.5">
+            {saved ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3">
+                <p className="pointer-events-auto inline-flex h-11 items-center rounded-full bg-(--hc-text) pl-4 text-[13px] font-semibold text-(--background) shadow-(--hc-card-shadow)">
+                  <Check aria-hidden className="mr-1.5 size-4" strokeWidth={2.6} />
+                  <span>{savedResult?.album ? "사진첩에 저장했어요" : "사진을 저장했어요"}</span>
+                  <Link href={guestMode ? "/" : "/home"} className="ml-1 inline-flex h-11 items-center gap-0.5 rounded-full pl-2 pr-4 font-extrabold">
+                    {guestMode ? "처음으로" : "홈으로 가기"}
+                    <ChevronRight aria-hidden className="size-4" strokeWidth={2.4} />
+                  </Link>
+                </p>
+              </div>
+            ) : null}
+
+            {/* 비회원은 공유·⋯ 대신 이 한 줄 — 보관하는 것은 재료라 실패한 뒤여도 된다(handleGuestLogin). */}
+            {guestMode && !isPreparing ? (
+              <button
+                type="button"
+                onClick={() => void handleGuestLogin()}
+                disabled={isHandingOffToLogin}
+                className="hc-button-secondary flex h-12 w-full items-center justify-center rounded-full border text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isHandingOffToLogin ? "결과 보관 중…" : "로그인하고 보관하기"}
+              </button>
+            ) : null}
+
+            {primary ? (
+              <div className="flex gap-2.5">
+                {primary}
+                {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}
+                {!guestMode && imageResult && !localBlob ? (
+                  <button
+                    type="button"
+                    aria-label="공유"
+                    aria-haspopup="dialog"
+                    onClick={() => setShareOpen(true)}
+                    className="hc-button-secondary grid size-13 shrink-0 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Share2 aria-hidden className="size-5" />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+
+      {imageResult && !imageResult.localBlob ? (
+        <PhotoShareSheet
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          mediaId={imageResult.mediaId}
+          title={sharedPhotoTitle(imageResult.displayName, new Date().toISOString())}
+          thumbnailSrc={resultImageSrc}
+          photo={{
+            file: shareFile,
+            /*
+              앱이 사진을 받을 주소 — 누를 때 새로 받는다. 합성 때 받은 서명 주소는 완성 화면을 오래 열어 두면 만료되고, 앱은
+              그 주소를 내려받다 실패하면 링크로 돌리지 않는다(Codex 리뷰 #604). 다운로드 주소는 첨부로 내려가 인라인
+              조회 주소를 먼저 쓴다(기록 화면과 같다).
+            */
+            getUrl: async () => {
+              const media = await findMyMedia(imageResult.mediaId).catch(() => null);
+              return media?.viewUrl?.trim() || (await getMediaDownloadUrl(imageResult.mediaId));
+            },
+            filename: shareFilename,
+          }}
+        />
+      ) : null}
+
+    </main>
+  );
+}

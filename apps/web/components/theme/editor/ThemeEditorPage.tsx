@@ -47,6 +47,7 @@ import {
   useServerFrameDraft,
   type ServerDraftStatus,
 } from "@/components/theme/editor/useServerFrameDraft";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 서버 초안 상태 줄. 빈 문자열이면 아무것도 띄우지 않는다. */
 const SERVER_DRAFT_STATUS_TEXT: Record<ServerDraftStatus, string> = {
@@ -57,12 +58,6 @@ const SERVER_DRAFT_STATUS_TEXT: Record<ServerDraftStatus, string> = {
   tooLarge: "초안이 너무 커서 이 기기에만 보관해요.",
 };
 
-function formatDraftTime(iso: string) {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? "최근"
-    : date.toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 // 새 프레임을 만들 때 채워 두는 기본 이름·설명
 const DEFAULT_FRAME_TITLE = "새 테마 프레임";
@@ -197,6 +192,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       ) {
         return;
       }
+      // 창(저장·지우기 확인)이 떠 있으면 뒤 캔버스를 움직이지 않는다. 창은 열 때 자기 자신에 포커스를
+      // 두므로(useModalDialog) 버튼 검사만으로는 방향키·되돌리기가 뒤 레이어로 샌다.
+      if (target instanceof Element && target.closest('[aria-modal="true"]')) return;
       // 방향키: 고른 레이어를 움직인다. 버튼·링크에 포커스가 있으면 그 조작을 가로채지 않는다.
       const arrow = ARROWS[event.key];
       if (arrow && !event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -322,6 +320,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   }, [localRecovery]);
   // 「이어서 편집」으로 되살린 상태인가. 되살리면 이력이 비워지므로, 이력이 비었다고 저장본으로 돌아온 것이 아니다.
   const recoveredLocalDraftRef = useRef(false);
+  // 편집 세션 번호 — 편집기를 나가거나 다른 프레임을 열면 바뀐다. 편집기 상태는 전역 스토어라, 그 전에 시작한 복구가
+  // 늦게 끝나면 다음 편집기에 이전 복구본이 들어간다(Codex 리뷰 #604).
+  const editorSessionRef = useRef(0);
+  useEffect(
+    () => () => {
+      editorSessionRef.current += 1;
+    },
+    [remoteFrameId, frameId],
+  );
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -480,7 +487,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     ready: remoteFrameId ? isRemoteFrameSettled && !loadError : true,
   });
 
-  // 이 기기에 남은 저장본 편집이 있으면 묻는다. 저장본을 불러온 뒤라야 무엇 위에 되살리는지 알 수 있다.
+  // 이 기기에 남은 저장본 편집이 있으면 되살린다(아래 effect). 저장본을 불러온 뒤라야 무엇 위에 되살리는지 알 수 있다.
   useEffect(() => {
     if (!remoteFrameId || !draftOwnerId || savedScope?.remoteFrameId !== remoteFrameId) return;
     // 그사이 이미 고치기 시작했으면 묻지 않는다. 다음 자동 저장이 지금 편집으로 바꾼다.
@@ -506,6 +513,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const restoreLocalRecovery = async () => {
     const draft = localRecovery;
     if (!draft) return;
+    const session = editorSessionRef.current;
     setLocalRecovery(null);
     // 저장본의 이미지 주소는 서명 URL 이라 하루 뒤면 죽는다. key 로 새로 받는다. 이 기기의 로컬 이미지(data:)는 그대로다.
     const resolved = await resolveThemeAssetUrls({
@@ -518,9 +526,28 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       draft.background.type === "IMAGE" && draft.background.key
         ? { ...draft.background, url: (await getImageUrlByKey(draft.background.key)) ?? draft.background.url }
         : draft.background;
+    // 주소를 받는 사이 편집기를 나갔거나 다른 프레임을 열었으면, 또는 고치기 시작했으면 덮지 않는다(아래 effect 와 같은 규칙).
+    if (editorSessionRef.current !== session || useThemeEditorStore.getState().past.length > 0) return;
     recoveredLocalDraftRef.current = true;
     hydrateDraft({ ...draft, background, components: resolved.components as EditorDraft["components"] }, { preserveHidden: true });
   };
+
+  /*
+    이 기기에 남은 저장본 편집은 묻지 않고 되살린다 — 다만 서버 초안 찾기가 끝난 뒤에 판단한다. 다른 기기의 초안이 더
+    새로워 그것으로 열었으면(serverDraft.restored) 이 기기의 더 오래된 편집은 버린다. 찾기 결과(바깥의 비동기 답)에 맞춰
+    한 번 정하는 것이라 effect 에서 상태를 거둔다.
+  */
+  useEffect(() => {
+    if (!localRecovery || !serverDraft.settled) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 서버 초안 찾기가 끝난 뒤 한 번만 정한다 */
+    if (serverDraft.restored) dropLocalRecovery();
+    // 찾는 사이 이미 고치기 시작했으면 되살리지 않는다 — 되살리면 그 편집과 되돌리기 이력이 사라진다(Codex 리뷰 #604).
+    // 복구본을 꺼낼 때와 같은 규칙이다 — 다음 자동 저장이 남은 복구본을 지금 편집으로 바꾼다.
+    else if (useThemeEditorStore.getState().past.length > 0) setLocalRecovery(null);
+    else void restoreLocalRecovery();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 복구본·찾기 결과가 바뀔 때만 판단한다
+  }, [localRecovery, serverDraft.settled, serverDraft.restored]);
 
   // 새 프레임 작업 시: 새로고침/이탈로 남은 WIP 초안(localStorage)이 있으면 복원한다.
   // 원격 프레임 수정 중에는 저장본을 불러오므로 초안 복원을 하지 않는다.
@@ -853,72 +880,23 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         </div>
         {loadError || actionError ? (
           <p role="alert" className="text-[12px] text-(--hc-danger)">
-            {loadError ?? actionError}
+            <Sentences text={loadError ?? actionError} />
           </p>
         ) : null}
 
-        {serverDraft.offer ? (
-          <section
-            aria-label="다른 기기의 초안"
-            className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-card) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
-          >
-            <p>
-              다른 기기에서 {formatDraftTime(serverDraft.offer.updatedAt)}에 편집한 초안이 있어요.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={serverDraft.dismissOffer}
-                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
-              >
-                지금 화면 유지
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // 서버 초안을 고르면 이 기기의 더 오래된 편집은 묻지 않는다.
-                  dropLocalRecovery();
-                  void serverDraft.restoreOffer();
-                }}
-                className="hc-button-primary h-11 rounded-full px-4 text-[13px] font-semibold"
-              >
-                초안 불러오기
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {localRecovery && !serverDraft.offer ? (
-          <section
-            aria-label="이 기기의 저장 안 한 편집"
-            className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) bg-(--hc-card) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
-          >
-            <p>이 기기에 {formatDraftTime(new Date(localRecovery.savedAt).toISOString())}에 저장하지 않은 편집이 있어요.</p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={dropLocalRecovery}
-                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
-              >
-                저장본 유지
-              </button>
-              <button
-                type="button"
-                onClick={() => void restoreLocalRecovery()}
-                className="hc-button-primary h-11 rounded-full px-4 text-[13px] font-semibold"
-              >
-                이어서 편집
-              </button>
-            </div>
-          </section>
-        ) : null}
-
+        {/*
+          남아 있는 편집은 묻지 않고 그대로 연다(2026-11-15 「다른 기기의 초안은 뭐야. 다른 기기 꺼를 가지고 있으면 그냥 그걸로
+          보여주면 되지」). 예전에는 「다른 기기에서 …에 편집한 초안이 있어요」([지금 화면 유지]·[초안 불러오기])와
+          「이 기기에 …에 저장하지 않은 편집이 있어요」([저장본 유지]·[이어서 편집])를 물었다. 더 새로운 쪽이 이긴다 —
+          다른 기기의 초안이 더 새로우면 그것(useServerFrameDraft), 아니면 이 기기의 편집(아래 effect).
+          둘이 동시에 고친 충돌만은 어느 쪽을 남길지 묻는다.
+        */}
         {serverDraft.conflict ? (
           <section
             aria-label="초안 충돌"
             className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
           >
-            <p>다른 기기에서 이 초안을 먼저 고쳤어요. 어느 쪽을 남길까요?</p>
+            <p><Sentences text="다른 기기에서 이 초안을 먼저 고쳤어요. 어느 쪽을 남길까요?" /></p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -940,7 +918,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
         {SERVER_DRAFT_STATUS_TEXT[serverDraft.status] ? (
           <p role="status" className="text-[12px] text-(--hc-muted)">
-            {SERVER_DRAFT_STATUS_TEXT[serverDraft.status]}
+            <Sentences text={SERVER_DRAFT_STATUS_TEXT[serverDraft.status]} />
           </p>
         ) : null}
 
@@ -1095,7 +1073,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
               ) : null}
               {versionConflict ? (
                 <div className="flex flex-col gap-2 rounded-xl border border-(--hc-danger-border) p-3 text-[12px]">
-                  <p>다른 기기에서 이 프레임을 먼저 저장했어요. 어떻게 할까요?</p>
+                  <p><Sentences text="다른 기기에서 이 프레임을 먼저 저장했어요. 어떻게 할까요?" /></p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { StudioEventUsage } from "@/components/studio/StudioEventUsage";
 import type { EventUsage } from "@/lib/studio/usageApi";
+import { sentenceText } from "@/tests/sentenceText";
 
 const NOW = Date.parse("2026-10-26T00:00:00Z");
 
@@ -26,7 +27,7 @@ it("남은 촬영과 기간·범위·기능을 보여 준다", () => {
   render(<StudioEventUsage usage={usage()} error={null} now={NOW} onRefresh={jest.fn()} />);
   expect(screen.getByText("377")).toBeInTheDocument();
   expect(screen.getByRole("meter", { name: "합성 사용량" })).toHaveAttribute("aria-valuenow", "123");
-  expect(screen.getByText("완성 120장 · 만드는 중 3장. 만들지 못한 사진은 세지 않아요.")).toBeInTheDocument();
+  expect(screen.getByText(sentenceText("완성 120장 · 만드는 중 3장. 만들지 못한 사진은 세지 않아요."))).toBeInTheDocument();
   expect(screen.getByText("이 행사")).toBeInTheDocument();
   expect(screen.getByText("행사 화면 디자인 · 사진 묶음 받기")).toBeInTheDocument();
   expect(screen.queryByText(/증설·연장 문의/)).not.toBeInTheDocument();

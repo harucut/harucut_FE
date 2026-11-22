@@ -9,6 +9,8 @@ import { AuthField } from "@/components/auth/AuthField";
 import { SocialLoginSection } from "@/components/auth/SocialLoginSection";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
+import { WithdrawalRecoveryDialog } from "@/components/auth/WithdrawalRecoveryDialog";
+import { Sentences } from "@/components/ui/Sentences";
 import { LOGIN_FIELDS } from "@/components/auth/authFields";
 import { validateEmail } from "@/lib/authValidation";
 import { loginWithEmail, reactivateAccount } from "@/lib/auth/authApi";
@@ -52,7 +54,24 @@ function LoginPageContent() {
     redirectTo,
   );
 
-  useRedirectIfAuthenticated(redirectTarget);
+  /*
+    탈퇴 대기 계정은 로그인한 뒤 모달로 탈퇴를 취소할지 묻는다(2026-11-14).
+
+    예전에는 로그인 직후 브라우저 확인창으로 묻고, 거절하면 「탈퇴 취소 후 다시 로그인할 수 있어요」를
+    띄웠다. 소셜로 들어온 탈퇴 대기 계정은 묻는 자리가 아예 없었다 — 막힌 API 에서 이 화면으로
+    돌아오기만 했다(AccountRecoveryBridge). 이제 둘 다 같은 모달이다.
+    - 이메일로 로그인: 자격증명이 아직 손에 있어 복구 뒤 조용히 다시 로그인해 들어간다.
+    - 이미 있던 세션(소셜 등): 복구해도 지금 토큰은 옛 상태라 쓸 수 없고 재발급도 막힌다(아래 주석).
+      로그아웃하고 다시 로그인해 달라고 말한다.
+    탈퇴를 그대로 두면(로그아웃) 아무 문구도 남기지 않는다 — 스스로 고른 것이다.
+  */
+  const [recovery, setRecovery] = useState<{ email: string; password: string } | "session" | null>(null);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveredNotice, setRecoveredNotice] = useState(false);
+
+  useRedirectIfAuthenticated(redirectTarget, (userStatus) => {
+    if (userStatus === "DELETED_REQUESTED") setRecovery("session");
+  });
   const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,6 +81,58 @@ function LoginPageContent() {
       ? { common: SOCIAL_LOGIN_FAILED_MESSAGE }
       : {},
   );
+
+  const logout = () => clientApi.delete("/api/client/logout").catch(() => undefined);
+
+  // 탈퇴를 그대로 둔다 — 받은 세션만 지우고 이 화면에 남는다.
+  const keepWithdrawal = async () => {
+    setRecovery(null);
+    await logout();
+  };
+
+  const cancelWithdrawal = async () => {
+    const target = recovery;
+    if (!target) return;
+    setRecovering(true);
+    try {
+      try {
+        await reactivateAccount();
+      } catch (reactivateError) {
+        console.error(reactivateError);
+        await logout();
+        setErrors({ common: "탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요." });
+        return;
+      }
+
+      /*
+        복구됐다고 지금 쿠키가 쓸 수 있게 되는 것은 아니다.
+        받은 토큰에는 status=DELETED_REQUESTED 가 박혀 있고, reactivate 는 새 쿠키를 주지 않으면서
+        서버의 refresh 토큰까지 지운다 — 재발급도 막힌다(AUTH-011). 그대로 보내면 /home 에 도착한 뒤
+        모든 요청이 403(GEN-021)으로 막힌다. 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
+      */
+      if (target === "session") {
+        await logout();
+        setRecoveredNotice(true);
+        return;
+      }
+
+      // 자격증명이 아직 손에 있으니 조용히 다시 로그인해 지금 상태의 토큰을 받는다(정지 중이었다면 BLOCKED).
+      try {
+        await loginWithEmail(target.email, target.password);
+      } catch (reloginError) {
+        console.error(reloginError);
+        await logout();
+        setErrors({ common: "탈퇴는 취소됐어요. 다시 로그인해 주세요." });
+        return;
+      }
+
+      exitGuestMode();
+      window.location.href = redirectTarget;
+    } finally {
+      setRecovery(null);
+      setRecovering(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -96,45 +167,9 @@ function LoginPageContent() {
       const loginData = await loginWithEmail(email, password);
 
       if (loginData?.userStatus === "DELETED_REQUESTED") {
-        const shouldReactivate = window.confirm(
-          "회원 탈퇴 요청 상태예요. 탈퇴를 취소하고 계속 로그인할까요?",
-        );
-
-        if (!shouldReactivate) {
-          await clientApi.delete("/api/client/logout").catch(() => undefined);
-          setErrors({
-            common: "탈퇴 취소 후 다시 로그인할 수 있어요.",
-          });
-          return;
-        }
-
-        try {
-          await reactivateAccount();
-        } catch (reactivateError) {
-          console.error(reactivateError);
-          await clientApi.delete("/api/client/logout").catch(() => undefined);
-          setErrors({
-            common: "탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.",
-          });
-          return;
-        }
-
-        // 복구됐다고 지금 쿠키가 쓸 수 있게 되는 것은 아니다.
-        // 방금 받은 토큰에는 status=DELETED_REQUESTED 가 박혀 있고, reactivate 는 새 쿠키를
-        // 주지 않으면서 서버의 refresh 토큰까지 지운다 — 재발급도 막힌다(AUTH-011).
-        // 그대로 보내면 사용자는 /home 에 도착한 뒤 모든 요청이 403(GEN-021)으로 막힌다.
-        // 자격증명이 아직 이 함수 안에 있으니 조용히 다시 로그인해 지금 상태의 토큰을 받는다(정지 중이었다면 BLOCKED).
-        // 근거: docs/backend-contract.md "탈퇴 요청 → 복구 생애주기"
-        try {
-          await loginWithEmail(email, password);
-        } catch (reloginError) {
-          console.error(reloginError);
-          await clientApi.delete("/api/client/logout").catch(() => undefined);
-          setErrors({
-            common: "탈퇴는 취소됐어요. 다시 로그인해 주세요.",
-          });
-          return;
-        }
+        // 로그인은 됐다. 들여보내기 전에 모달로 탈퇴를 취소할지 묻는다(위 recovery 주석).
+        setRecovery({ email, password });
+        return;
       } else if (isUnusableUserStatus(loginData?.userStatus ?? null)) {
         // 탈퇴 계정 — 쿠키는 받았어도 일반 API 가 전부 막힌다. 들여보내면 아무것도 못 하는
         // 홈에 갇히므로 받은 세션을 지우고 이 화면에서 이유와 문의처를 말한다.
@@ -189,17 +224,22 @@ function LoginPageContent() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {searchParams.get("joined") === "1" && !errors.common ? (
           <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
-            가입이 끝났어요. 방금 만든 계정으로 로그인해 주세요.
+            <Sentences text="가입이 끝났어요. 방금 만든 계정으로 로그인해 주세요." />
           </p>
         ) : null}
         {searchParams.get("passwordChanged") === "1" && !errors.common ? (
           <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
-            비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요.
+            <Sentences text="비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요." />
+          </p>
+        ) : null}
+        {recoveredNotice && !errors.common ? (
+          <p role="status" className="hc-feedback rounded-xl border px-3.5 py-2.5 text-[13px]">
+            <Sentences text="탈퇴를 취소했어요. 다시 로그인해 주세요." />
           </p>
         ) : null}
         {errors.common ? (
           <p role="alert" className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
-            {errors.common}
+            <Sentences text={errors.common} />
             {errors.support ? (
               <>
                 {" "}
@@ -257,6 +297,13 @@ function LoginPageContent() {
         {/* 주 CTA(로그인)와 같은 무게의 알약이 다섯 개 서 있었다. 체험은 보조 길이라 글자로 둔다. 누르는 면은 44px. */}
         <GuestTrialStartButton className="inline-flex min-h-11 items-center justify-center text-[14px] font-semibold text-(--hc-text) underline underline-offset-4 transition hover:text-(--hc-primary-strong)" />
       </form>
+      {recovery ? (
+        <WithdrawalRecoveryDialog
+          running={recovering}
+          onKeep={() => void keepWithdrawal()}
+          onRecover={() => void cancelWithdrawal()}
+        />
+      ) : null}
     </AuthPageShell>
   );
 }

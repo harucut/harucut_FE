@@ -291,6 +291,22 @@ export async function nativeShare(args: { title?: string; message?: string; url:
   return request({ type: "share", ...args }, { timeoutMs: 120_000 });
 }
 
+/** `share-image` 를 처리하는 셸의 최소 판 수(native-bridge.ts 의 BRIDGE_VERSION). */
+const SHARE_IMAGE_SHELL_VERSION = 5;
+
+/**
+ * 사진 **파일**을 앱 공유 창에 넘긴다. 네이티브가 이 주소에서 내려받아 넘긴다(apps/mobile/lib/native-bridge.ts 의
+ * shareRemoteImage). 셸 밖이거나 이 메시지를 모르는 옛 셸이면 null — 호출부는 링크 공유로 간다(lib/share.ts 의 sharePhoto).
+ *
+ * 답은 공유 창이 닫혀야 온다. 받는 앱에서 글을 쓰거나 스토리를 꾸미는 동안 열려 있을 수 있어 넉넉히 기다린다.
+ */
+export async function nativeShareImage(url: string, filename: string) {
+  const shell = getNativeShell();
+  // 판 수를 안 실은 셸도 이 메시지를 모르는 셸이다(`undefined < 5` 는 false 라 그냥 비교하면 통과한다).
+  if (!shell || typeof shell.version !== "number" || shell.version < SHARE_IMAGE_SHELL_VERSION) return null;
+  return request({ type: "share-image", url, filename }, { timeoutMs: 10 * 60_000 });
+}
+
 /** 셔터 같은 순간의 진동. 답을 기다리지 않는다 — 늦게 오면 촬영보다 뒤에 울린다. */
 export function nativeHaptic(style: "light" | "medium" | "heavy" = "medium") {
   if (!isNativeShell()) return;
@@ -372,6 +388,18 @@ export async function nativeNotify(args: {
 export function nativeSetColorScheme(scheme: "light" | "dark") {
   if (!isNativeShell()) return;
   post({ type: "theme", scheme });
+}
+
+/**
+ * 앱 창을 돌려도 되는가. 앱은 세로 고정이고 촬영 화면만 기기를 돌리는 대로 따라간다(2026-11-15 「앱 회전 촬영 때만
+ * 해주는 건? 가로로 찍는 사람도 많으니깐」) — 호출부는 hooks/useRotatableScreen.ts 하나다.
+ *
+ * 답을 기다리지 않는다. 이 메시지를 모르는 옛 셸은 그냥 지나가고 세로 고정 그대로라, 판 수로 거르지 않는다
+ * (apps/mobile/lib/native-bridge.ts 의 BRIDGE_VERSION 주석). 브라우저에서는 아무 일도 안 한다 — 폰 브라우저는 원래 돈다.
+ */
+export function nativeSetOrientation(mode: "free" | "portrait") {
+  if (!isNativeShell()) return;
+  post({ type: "orientation", mode });
 }
 
 // ── 앱 구독 구매·복원(P4-B, R5 12절) ──

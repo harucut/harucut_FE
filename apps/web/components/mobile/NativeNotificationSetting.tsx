@@ -6,6 +6,7 @@ import {
   nativeRequestNotificationPermission,
 } from "@/lib/nativeBridge";
 import { registerPushDevice } from "@/lib/pushDevices";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 앱에서만 보이는 알림 설정.
@@ -21,7 +22,7 @@ import { registerPushDevice } from "@/lib/pushDevices";
  * 셸 여부는 앱이 켜진 뒤로 바뀌지 않으므로 구독은 빈 함수다.
  *
  * **약속하는 범위를 좁게 쓴다.** 이 알림은 웹이 완성 응답을 받은 뒤에 셸에 던지는
- * 로컬 알림이라(app/shoot/result/page.tsx), 앱을 완전히 벗어나면 OS 가 WebView 의 JS 를
+ * 로컬 알림이라(app/create/result/page.tsx), 앱을 완전히 벗어나면 OS 가 WebView 의 JS 를
  * 멈춰 아무것도 뜨지 않는다. 앱을 떠난 사이에도 알리려면 서버 푸시가 붙어야 하고,
  * 필요한 엔드포인트는 docs/app-shell-backend-requests.md 3번에 적어 뒀다.
  */
@@ -60,8 +61,7 @@ export function NativeNotificationSetting() {
     <div className="flex flex-col gap-2">
       <p className="text-[13px] font-bold">알림</p>
       <p className="text-[12px] leading-[1.6] text-(--hc-muted)">
-        네컷 합성은 최대 1분 넘게 걸려요. 앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때
-        알려드려요.
+        <Sentences text="네컷 합성은 최대 1분 넘게 걸려요. 앱을 켜 둔 채 다른 화면을 보고 있으면 다 됐을 때 알려드려요." />
       </p>
       <button
         type="button"

@@ -1,6 +1,6 @@
 "use client";
 
-import { NativeSaveError, nativeSaveImageUrl, nativeShare } from "@/lib/nativeBridge";
+import { NativeSaveError, isNativeShell, nativeSaveImageUrl, nativeShare, nativeShareImage } from "@/lib/nativeBridge";
 
 type ShareLinkArgs = {
   title: string;
@@ -38,7 +38,7 @@ export async function copyText(value: string) {
       return;
     } catch (error) {
       // 권한 거부·문서 포커스 상실·사용자 활성화 만료다. 두 호출부 모두 공유 전에 presign
-      // 왕복을 한 번 끼우므로(app/history/page.tsx 의 getImageUrlByKey, app/shoot/result
+      // 왕복을 한 번 끼우므로(app/history/page.tsx 의 getImageUrlByKey, app/create/result
       // /page.tsx 의 getMediaDownloadUrl), 그 await 뒤에는 제스처가 풀렸다고 보고 WebKit 이
       // NotAllowedError 로 거절한다. 여기서 그대로 나가면 아래 execCommand 폴백이 시도조차
       // 되지 않는다 — hooks/useExternalBrowserRedirect.ts 의 복사 폴백도 같은 판단이다.
@@ -128,6 +128,65 @@ function clickDownloadLink(href: string, filename: string) {
   document.body.appendChild(link);
   link.click();
   link.remove();
+}
+
+/**
+ * 받아 온 사진의 형식. 저장소가 형식을 비워 보내거나 `application/octet-stream` 이면 파일 이름으로 정한다 — 그대로 두면
+ * 브라우저가 사진으로 보지 않아 파일 공유를 거절하고(navigator.canShare), 받는 앱도 사진으로 알아보지 못한다.
+ */
+export function photoFileType(blob: Blob, filename: string) {
+  if (blob.type.startsWith("image/")) return blob.type;
+  const ext = filename.split(".").pop()?.toLowerCase();
+  return ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+}
+
+type SharePhotoArgs = {
+  /** 미리 받아 둔 사진 파일(hooks/usePreparedPhotoFile.ts). 없으면 브라우저에서는 링크로 간다. */
+  file: File | null;
+  /**
+   * 사진 **보기** 주소. 앱은 여기서 내려받아 넘기고, 파일을 못 넘기면 이 주소를 링크로 보낸다. 파일을 넘길 수 있으면 부르지
+   * 않는다 — 누른 뒤 서버를 한 번 다녀오면 그사이 제스처가 풀려 브라우저가 공유 창을 거절한다.
+   */
+  getUrl: () => Promise<string>;
+  filename: string;
+  /**
+   * 파일을 못 넘길 때 대신 보낼 링크. 공유 창은 받는 사람 페이지(`/s/<토큰>`)를 준다 — 없으면 위 사진 주소를 보낸다.
+   */
+  link?: string;
+  /** 링크로 갈 때만 싣는다. 파일로 갈 때는 사진만 간다. */
+  title: string;
+  text?: string;
+};
+
+/**
+ * 사진을 기기 공유 창에 넘긴다 — 링크가 아니라 사진 파일이다(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로 보낼 수
+ * 있는, 스토리에 올릴 수도」 · 「x, thread 도」 · 「하단에서 스륵 올라오는 일반적인 거」).
+ *
+ * 휴대폰 아래에서 올라오는 그 공유 창이다. 기기에 깔린 앱(카카오톡·인스타그램·X·스레드 같은)이 목록에 뜨고, 고른 앱이
+ * 사진을 받는다. 글자도 링크도 같이 싣지 않는다 — 받은 사람에게는 사진만 간다(「받은 사람은 사진만 볼 수 있게」).
+ *
+ * 1. 앱: 네이티브가 주소에서 내려받아 넘긴다(nativeShareImage). 이 메시지를 모르는 옛 앱은 예전처럼 링크를 넘긴다.
+ * 2. 브라우저: 미리 받아 둔 파일을 넘긴다(navigator.share files).
+ * 3. 그 밖(PC 처럼 파일 공유가 안 되는 브라우저, 받아 두지 못함, 브라우저가 거절함): 보기 링크를 공유 창에 넘기거나 복사한다
+ *    (shareOrCopyLink). 보기 링크라 받은 사람이 열면 사진이 화면에 뜬다 — 예전의 내려받기 링크(attachment)는 열면 파일로
+ *    받아지고 사진은 보이지 않았다.
+ */
+export async function sharePhoto({ file, getUrl, filename, link, title, text }: SharePhotoArgs): Promise<ShareLinkResult> {
+  if (isNativeShell()) {
+    const url = await getUrl();
+    const native = await nativeShareImage(url, filename);
+    if (!native) return shareOrCopyLink({ title, text, url: link ?? url });
+    if (native.ok) return "shared";
+    // 사진을 못 받았거나 공유 창을 못 띄웠다. 링크로 돌려도 같은 주소라 열리지 않는다 — 호출부가 실패를 알린다.
+    throw new Error(native.reason?.trim() || NATIVE_SHARE_FAILED);
+  }
+
+  if (file) {
+    const shared = await sharePhotoFile(file);
+    if (shared === "shared" || shared === "cancelled") return shared;
+  }
+
+  return shareOrCopyLink({ title, text, url: link ?? (await getUrl()) });
 }
 
 /** 이미 받아 둔 사진을 공유 시트로 넘긴다. iOS 는 여기서 「이미지 저장」을 골라야 사진첩에 들어간다. */

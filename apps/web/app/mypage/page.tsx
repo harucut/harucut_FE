@@ -1,6 +1,8 @@
 "use client";
 
 import { clearLocalUserData } from "@/lib/localUserData";
+import { Sentences } from "@/components/ui/Sentences";
+import { RetryButton } from "@/components/ui/LoadFailed";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -92,6 +94,12 @@ const SECTION_META: Record<SectionId, { title: string; sub: string }> = {
  * 덤으로 이 파일이 `isDesktop` 뒤에 들고 있던 레이아웃 두 벌이 한 벌이 됐다.
  */
 const SECTIONS: SectionId[] = ["account", "plan", "notif", "frames", "pref"];
+
+/** MY 아래의 약관·정책 줄. 법무 화면(app/terms, app/privacy)을 연다. */
+const POLICY_LINKS = [
+  { href: "/terms", label: "서비스 이용약관" },
+  { href: "/privacy", label: "개인정보처리방침" },
+] as const;
 
 export default function MyPage() {
   const studioAccess = useStudioAccess();
@@ -559,13 +567,7 @@ export default function MyPage() {
           <p className="text-center text-[11px] text-(--hc-muted)">
             {statsError}
           </p>
-          <button
-            type="button"
-            onClick={() => void fetchStats()}
-            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11px] font-semibold"
-          >
-            다시 시도
-          </button>
+          <RetryButton onClick={() => void fetchStats()} />
         </div>
       ) : null}
     </div>
@@ -751,7 +753,7 @@ export default function MyPage() {
             "무기한"처럼 읽힐 빈 값을 두지 않는다. */}
         {periodEnd ? (
           <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
-            {subscription?.autoRenew === false || subscription?.status === "CANCELED"
+            <Sentences text={subscription?.autoRenew === false || subscription?.status === "CANCELED"
               ? `${periodEnd.toLocaleDateString("ko-KR", {
                   year: "numeric",
                   month: "long",
@@ -761,12 +763,12 @@ export default function MyPage() {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
-                })}에 갱신돼요.`}
+                })}에 갱신돼요.`} />
           </p>
         ) : null}
         {subscription?.status === "PAST_DUE" ? (
           <p className="mt-1 text-[12px] font-medium text-(--hc-danger)">
-            정기 결제가 실패했어요. 결제 수단을 확인해 주세요.
+            <Sentences text="정기 결제가 실패했어요. 결제 수단을 확인해 주세요." />
           </p>
         ) : null}
         {/* 해지·변경은 결제한 곳에서만 된다(P4-B) — 어디서 관리하는지 말해 준다. */}
@@ -814,7 +816,7 @@ export default function MyPage() {
         </div>
         {couponError ? (
           <p role="alert" className="text-[12px] font-medium text-(--hc-danger)">
-            {couponError}
+            <Sentences text={couponError} />
           </p>
         ) : null}
         {couponNotice ? (
@@ -879,6 +881,28 @@ export default function MyPage() {
     return SECTION_META[id].sub;
   };
 
+  /*
+    약관과 개인정보처리방침은 언제든 찾을 수 있어야 한다(2026-11-14). 개인정보처리방침은 그 이름 그대로 다른 안내와
+    따로 한 줄을 준다 — 쉽게 확인할 수 있게 공개하라는 것이 개인정보 보호법의 요구다. 동의 여부는 위 「알림·약관 동의」가
+    맡고, 여기는 전문을 연다. 이용이 제한된 계정에도 같은 줄을 둔다.
+  */
+  const policyLinks = (
+    <nav aria-label="약관 및 정책" className="hc-surface-card overflow-hidden rounded-[20px] border">
+      {POLICY_LINKS.map(({ href, label }, index) => (
+        <Link
+          key={href}
+          href={href}
+          className={`flex min-h-14 items-center gap-3.5 px-5 py-3.5 transition hover:bg-(--hc-surface-soft) ${
+            index > 0 ? "border-t border-(--hc-border-subtle)" : ""
+          }`}
+        >
+          <span className="min-w-0 flex-1 text-[15px] font-bold">{label}</span>
+          <ChevronRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
+        </Link>
+      ))}
+    </nav>
+  );
+
   const logoutAndExit = (
     <>
       <button
@@ -912,7 +936,7 @@ export default function MyPage() {
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
       {/* 정지 계정은 갈 곳이 여기뿐이다. 눌러도 돌아오는 메뉴를 두지 않는다. */}
-      {blocked ? null : <AppNav userInitial={user?.username} />}
+      {blocked ? null : <AppNav />}
 
       {/* 한 칸이므로 폭을 좁힌다. 예전 1000px 는 좌우 두 칸이 나눠 쓰던 폭이라,
           그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
@@ -946,7 +970,7 @@ export default function MyPage() {
                   : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
               }
             >
-              {notice.text}
+              <Sentences text={notice.text} />
             </div>
           </div>
         ) : null}
@@ -956,7 +980,7 @@ export default function MyPage() {
             role="alert"
             className="mt-3 text-[12px] text-(--hc-danger)"
           >
-            {loadError}
+            <Sentences text={loadError} />
           </p>
         ) : null}
 
@@ -975,6 +999,7 @@ export default function MyPage() {
         ) : blocked ? (
           <>
             <BlockedAccountPanel user={user} />
+            <div className="mt-5">{policyLinks}</div>
             <div className="mt-5">{logoutAndExit}</div>
           </>
         ) : (
@@ -999,7 +1024,8 @@ export default function MyPage() {
             {/* 섹션끼리는 바깥 간격보다 좁게 둔다. 프로필·스탯과 같은 20px 를 주면
                 다섯 장이 각자 떠 있는 것처럼 보여 한 목록으로 읽히지 않았다. */}
             <div className="flex flex-col gap-3">
-            {/* 행사를 맡은 계정의 입구. 개인 설정보다 먼저 찾는 곳이라 첫 줄에 둔다. */}
+            {/* 행사를 맡은 계정의 입구. 개인 화면에서 행사 운영으로 가는 길은 이 한 줄뿐이다 — 홈과 상단 메뉴에는
+                두지 않는다(2026-11-14, 개인 화면과 행사 운영을 섞지 않는다). 개인 설정보다 먼저 찾는 곳이라 첫 줄에 둔다. */}
             {studioAccess ? (
               <Link
                 href="/studio"
@@ -1077,6 +1103,8 @@ export default function MyPage() {
               );
             })}
             </div>
+
+            {policyLinks}
 
             <div className="mt-1">{logoutAndExit}</div>
 

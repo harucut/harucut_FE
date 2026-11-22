@@ -33,8 +33,8 @@ async function enableGuestContext(page: Page) {
 
 const protectedRoutes = [
   "/home",
-  "/shoot",
-  "/shoot/capture",
+  "/create",
+  "/create/capture",
   "/theme",
   "/theme/sticker",
   "/history",
@@ -53,21 +53,21 @@ for (const route of protectedRoutes) {
 }
 
 test("preserves the original query string in redirectTo", async ({ page }) => {
-  await page.goto("/shoot/capture?mode=retry");
+  await page.goto("/create/capture?mode=retry");
 
   await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
   await expect
     .poll(() => new URL(page.url()).searchParams.get("redirectTo"))
-    .toBe("/shoot/capture?mode=retry");
+    .toBe("/create/capture?mode=retry");
 });
 
 /**
  * 옛 행사 QR 주소(`/shoot?event=`)는 걷어냈다. 행사는 `/e/{slug}` 로 옮겼고 배포한 QR 이 없어
- * 호환하지 않는다(기획 R3·R4 검수 D01). 이 주소는 이제 평범한 `/shoot` 이다 — 쿠키가 없으면
+ * 호환하지 않는다(기획 R3·R4 검수 D01). 이 주소는 이제 평범한 `/create` 이다 — 쿠키가 없으면
  * 로그인으로 가고, 체험 쿠키를 심지 않는다.
  */
 test("treats the retired event QR address as a plain protected shoot route", async ({ page }) => {
-  await page.goto("/shoot?frame=classic-4&event=%EC%97%AC%EB%A6%84%20%ED%8C%AC%EB%AF%B8%ED%8C%85");
+  await page.goto("/create?frame=classic-4&event=%EC%97%AC%EB%A6%84%20%ED%8C%AC%EB%AF%B8%ED%8C%85");
 
   await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
   const cookies = await page.context().cookies();
@@ -75,27 +75,29 @@ test("treats the retired event QR address as a plain protected shoot route", asy
 });
 
 /**
- * 촬영 화면에서 "프레임 다시 선택"으로 돌아와도 고른 컷 구성이 살아 있어야 한다.
+ * 촬영 화면에서 뒤로가기로 돌아와도 고른 컷 구성이 살아 있어야 한다.
  *
- * 돌아오는 주소에 프레임 쿼리가 없으면 세션이 초기화되면서 컷 구성이 사라진다.
+ * 촬영 화면에는 뒤로가기 단추가 없다(2026-11-15) — 기기·브라우저의 뒤로가기다. 돌아오는 주소에 프레임
+ * 쿼리가 없으면 세션이 초기화되면서 컷 구성이 사라진다. 그래서 /create 이 떠나기 전에 주소에 적어 둔다.
  */
 test("keeps the chosen frame when going back to frame selection", async ({ page }) => {
-  // 랜딩의 「가입 없이 체험하기」와 같은 진입이다 — 체험 쿠키를 받고 /shoot 으로 간다.
-  await page.goto("/shoot/start");
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
+  // 랜딩의 「가입 없이 체험하기」와 같은 진입이다 — 체험 쿠키를 받고 /create 으로 간다.
+  await page.goto("/create/start");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/create");
 
   await page.getByRole("button", { name: "이 프레임으로 찍기" }).click();
-  await page.waitForURL("**/shoot/capture");
+  await page.waitForURL("**/create/capture");
 
-  await page.getByRole("link", { name: "프레임 다시 선택" }).click();
-  // `**/shoot**` 로 기다리면 아직 /shoot/capture 인 상태에서 바로 통과한다.
-  await page.waitForURL((url) => new URL(url).pathname === "/shoot");
+  await expect(page.getByRole("link", { name: "프레임 다시 선택" })).toHaveCount(0);
+  await page.goBack();
+  // `**/create**` 로 기다리면 아직 /create/capture 인 상태에서 바로 통과한다.
+  await page.waitForURL((url) => new URL(url).pathname === "/create");
   await expect(page.getByRole("heading", { name: "프레임 선택" })).toBeVisible();
   expect(new URL(page.url()).searchParams.get("frame")).not.toBeNull();
 });
 
 // 게스트 체험은 촬영까지다. 찍고 그 이미지를 받는 데까지만 열려 있다.
-const guestAllowedRoutes = ["/shoot"];
+const guestAllowedRoutes = ["/create"];
 
 for (const route of guestAllowedRoutes) {
   test(`keeps guests on ${route} instead of the login page`, async ({
@@ -108,18 +110,18 @@ for (const route of guestAllowedRoutes) {
   });
 }
 
-// 게스트에게 열린 곳은 /shoot 뿐이다(lib/protectedPaths.ts GUEST_ALLOWED_PREFIXES).
+// 게스트에게 열린 곳은 /create 뿐이다(lib/protectedPaths.ts GUEST_ALLOWED_PREFIXES).
 // 화면 문구가 "기록 보관·프레임 만들기는 가입 후"라고 말하는 것과 실제 권한이 맞아야 한다.
-// /shoot/upload 는 접두사로는 열린 /shoot 안에 있는 회원 전용 예외다
+// 갤러리 불러오기는 따로 경로가 없다 — 사진 고르기 화면 안의 칸이다(2026-11-15). 촬영 밖 보호 경로만 막는다.
 // (같은 파일 GUEST_MEMBER_ONLY_PREFIXES). 갤러리 불러오기는 가입 후다.
-const guestBlockedRoutes = ["/history", "/theme", "/shoot/upload"];
+const guestBlockedRoutes = ["/history", "/theme"];
 
 for (const route of guestBlockedRoutes) {
   test(`redirects guests away from ${route}`, async ({ page }) => {
     await enableGuestContext(page);
     await page.goto(route);
 
-    await expect.poll(() => new URL(page.url()).pathname).toBe("/shoot");
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/create");
     await expect
       .poll(() => new URL(page.url()).searchParams.get("guestNotice"))
       .toBe("restricted");
@@ -127,8 +129,8 @@ for (const route of guestBlockedRoutes) {
 }
 
 const lateStepRoutes = [
-  { route: "/shoot/select", expected: "/shoot" },
-  { route: "/shoot/result", expected: "/shoot" },
+  { route: "/create/select", expected: "/create" },
+  { route: "/create/result", expected: "/create" },
   { route: "/theme/sticker", expected: "/theme" },
 ] as const;
 
@@ -185,7 +187,7 @@ test.describe("정지 계정", () => {
     await page.context().addCookies([{ name: "accessToken", value: accessToken(status), url: baseURL }]);
   }
 
-  for (const route of ["/home", "/shoot", "/history", "/theme", "/studio", "/admin"]) {
+  for (const route of ["/home", "/create", "/history", "/theme", "/studio", "/admin"]) {
     test(`${route} 는 마이페이지로 돌아간다`, async ({ page }) => {
       await signIn(page, "BLOCKED");
       await page.goto(route);

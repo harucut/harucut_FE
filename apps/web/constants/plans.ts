@@ -49,8 +49,6 @@ export const PRICING_SUBTITLE = PAYMENTS_ENABLED
 export const PRICING_SUBTITLE_AUTHED = PAYMENTS_ENABLED
   ? "현재 이용 중인 플랜과 제공 한도를 확인해 주세요."
   : "현재 계정에 적용된 한도를 확인해 주세요. 개인 유료 요금제는 준비 중이에요.";
-// 결제 미오픈 안내 — 요금제 카드 CTA·footnote가 함께 쓴다.
-export const PRICING_BILLING_PENDING = "결제 기능은 준비 중이에요.";
 // 요금제를 내릴 때의 안내(비활성화 정책).
 export const PRICING_DOWNGRADE_NOTE =
   "요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.";

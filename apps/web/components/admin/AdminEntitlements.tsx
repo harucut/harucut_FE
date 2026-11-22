@@ -24,6 +24,7 @@ import {
   type EntitlementImpact,
 } from "@/lib/admin/cmsApi";
 import { toServerDateTime } from "@/lib/studio/eventTime";
+import { Sentences } from "@/components/ui/Sentences";
 
 type GrantDraft = {
   workspaceId: string;
@@ -229,7 +230,7 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
 
       {error ? (
         <p role="alert" className="text-[14px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : !items ? (
         <p className="text-[13px] text-(--hc-muted)">불러오는 중…</p>
@@ -362,15 +363,13 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
                   <div role="group" aria-label="이용권 회수" className="flex flex-col gap-2 rounded-xl border border-(--hc-danger-border) p-3">
                     {open.impactError ? (
                       <p role="alert" className="text-(--hc-danger)">
-                        {open.impactError}
+                        <Sentences text={open.impactError} />
                       </p>
                     ) : !open.impact ? (
                       <p className="text-(--hc-muted)">영향을 확인하는 중…</p>
                     ) : (
                       <p>
-                        운영 중 행사 {open.impact.liveEvents.length}개
-                        {open.impact.liveEvents.length ? `(${open.impact.liveEvents.join(", ")})` : ""} · 아직 끝나지 않은 합성{" "}
-                        {open.impact.openReservations}건. 회수하면 새 게시·촬영을 받지 않고, 접수된 합성은 그대로 마무리돼요.
+                        <Sentences text={`운영 중 행사 ${open.impact.liveEvents.length}개${open.impact.liveEvents.length ? `(${open.impact.liveEvents.join(", ")})` : ""} · 아직 끝나지 않은 합성 ${open.impact.openReservations}건. 회수하면 새 게시·촬영을 받지 않고, 접수된 합성은 그대로 마무리돼요.`} />
                       </p>
                     )}
                     <label className="flex flex-col gap-1">

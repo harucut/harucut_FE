@@ -1,8 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
-import { Check, ImagePlus } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import type { FrameId } from "@/constants/frames";
-import { BACKGROUND_COLORS } from "@/constants/colors";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { toUploadableFile } from "@/lib/imageDecode";
 import { frameTypeFromFrameId } from "@/lib/frameApi";
@@ -18,19 +17,8 @@ import {
   UPLOAD_TOO_LARGE_MESSAGE,
   UploadValidationError,
 } from "@/lib/presignedUploadApi";
-
-/** 고른 견본의 테두리. 견본과 사이를 띄워 밝은 색·어두운 색 어디서나 보인다. */
-const SELECTED_RING = "outline-2 outline-offset-2 outline-(--hc-text)";
-/** 목록에 없는 색을 고르는 견본. 무지개로 「아무 색이나」를 말한다. */
-const RAINBOW =
-  "conic-gradient(from 90deg, #ff5f5f, #ffbf4d, #f6f05a, #5fd38a, #4db8ff, #8a6bff, #ff5fc8, #ff5f5f)";
-
-/** 밝은 색 위에는 어두운 체크, 어두운 색 위에는 흰 체크. */
-function SelectedCheck({ hex }: { hex: string }) {
-  const n = Number.parseInt(hex, 16);
-  const luma = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  return <Check aria-hidden strokeWidth={3} className={`size-4 ${luma > 150 ? "text-[#14140F]" : "text-white"}`} />;
-}
+import { Sentences } from "@/components/ui/Sentences";
+import { ColorSwatches } from "@/components/ui/ColorSwatches";
 
 export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
   const background = useThemeEditorStore((s) => s.background);
@@ -59,9 +47,6 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
     setBackgroundColor(value);
   };
   const isImage = background.type === "IMAGE";
-  const current = backgroundColor.toLowerCase();
-  const presetSelected = !isImage && BACKGROUND_COLORS.some((color) => color.value === current);
-  const customSelected = !isImage && !presetSelected;
   const openFilePicker = () => fileRef.current?.click();
 
   return (
@@ -90,40 +75,13 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
         못 미치면 세로로 늘어나 타원이 된다. 예전에는 이름 붙은 상자 다섯 개 뒤에 색 코드
         입력칸이 있어, 다른 색을 쓰려면 코드를 알아야 했다. 목록에 없는 색은 맨 끝 무지개 견본이
         기기의 색 고르기 창을 연다. 배경 사진을 깔았으면 어떤 색도 고른 상태로 그리지 않는다.
+        사진 고르기의 테두리 색도 같은 견본을 쓴다(components/ui/ColorSwatches).
       */}
-      <div role="group" aria-label="배경색" className="flex flex-wrap gap-2.5">
-        {BACKGROUND_COLORS.map((color) => {
-          const selected = !isImage && current === color.value;
-          return (
-            <button
-              key={color.id}
-              type="button"
-              onClick={() => pickBackgroundColor(color.value)}
-              aria-pressed={selected}
-              aria-label={color.label}
-              title={color.label}
-              className={`grid size-11 place-items-center rounded-full border border-black/10 transition ${selected ? SELECTED_RING : ""}`}
-              style={{ backgroundColor: `#${color.value}` }}
-            >
-              {selected ? <SelectedCheck hex={color.value} /> : null}
-            </button>
-          );
-        })}
-        <span
-          title="다른 색"
-          className={`relative grid size-11 place-items-center rounded-full border border-black/10 has-focus-visible:outline-2 has-focus-visible:outline-offset-3 has-focus-visible:outline-(--hc-text) ${customSelected ? SELECTED_RING : ""}`}
-          style={{ background: customSelected ? `#${current}` : RAINBOW }}
-        >
-          {customSelected ? <SelectedCheck hex={current} /> : null}
-          <input
-            type="color"
-            aria-label="다른 색 고르기"
-            value={`#${current}`}
-            onChange={(e) => pickBackgroundColor(e.target.value)}
-            className="absolute inset-0 size-full cursor-pointer rounded-full opacity-0"
-          />
-        </span>
-      </div>
+      <ColorSwatches
+        label="배경색"
+        value={isImage ? null : backgroundColor}
+        onChange={pickBackgroundColor}
+      />
 
       {/*
         배경 사진은 한 줄짜리 큰 단추로 둔다. 예전에는 작은 「배경 이미지」 단추 밑에 형식·용량
@@ -226,7 +184,7 @@ export function BackgroundPanel({ frameId }: { frameId: FrameId }) {
       />
       {backgroundError ? (
         <p role="alert" className="text-sm leading-5 text-(--hc-danger)">
-          {backgroundError}
+          <Sentences text={backgroundError} />
         </p>
       ) : null}
     </section>

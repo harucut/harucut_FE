@@ -1,5 +1,13 @@
 import { Stack } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+/*
+  앱은 세로 고정으로 시작한다 — 돌아가는 것은 촬영 화면뿐이다(lib/native-bridge.ts 의 setScreenOrientation).
+  iOS 는 app.json 의 expo-screen-orientation 플러그인(initialOrientation)이 첫 화면부터 잠근다. 안드로이드는 그
+  플러그인 값을 쓰지 않아(app.json orientation 이 default 라 매니페스트에 고정이 없다) 여기서 한 번 잠근다.
+*/
+void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => undefined);
 
 /**
  * 앱 전체가 웹 셸 하나다.

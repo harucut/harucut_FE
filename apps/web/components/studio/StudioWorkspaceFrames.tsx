@@ -20,6 +20,7 @@ import {
   type PickableFrameVersion,
 } from "@/lib/studio/studioApi";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import { Sentences } from "@/components/ui/Sentences";
 
 export function layoutName(layout: EventLayout) {
   return getFrameConfig(frameIdFromFrameType(layout)).name;
@@ -78,7 +79,7 @@ export function WorkspaceFrameList({
     <div className="flex flex-col gap-2">
       {notice ? (
         <p role="status" className="text-[13px]">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       {frames.length > 0 ? (
@@ -204,7 +205,7 @@ export function StudioWorkspaceFrames({ workspaceId, readOnly }: { workspaceId: 
     return (
       <div className="flex flex-col items-start gap-3">
         <p role="alert" className="text-[14px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
         <button type="button" onClick={() => void load()} className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold">
           다시 시도

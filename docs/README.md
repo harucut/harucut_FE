@@ -194,7 +194,7 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 5MB)는 인계를 IndexedDB 로 옮기면서 사라졌다. 지금 남은 이유는 둘이다.
 
 1. **화면이 한 번에 드는 양.** 갤러리 불러오기는 칸 수 × 6장(지금 24장)을 전부 data URL 로
-   세션과 DOM 에 담는다(`app/shoot/upload/page.tsx` 의 `PHOTOS_PER_SLOT`). 원본 크기로
+   세션과 DOM 에 담는다(`app/create/select/page.tsx` 의 `PHOTOS_PER_SLOT` — 갤러리 불러오기는 2026-11-15 사진 고르기 화면 안으로 합쳤다). 원본 크기로
    담으면 모바일 웹뷰가 이 흐름만으로 멎는다.
 2. **슬롯보다 큰 화소는 어차피 잘린다** — 올리는 시간만 늘린다.
 

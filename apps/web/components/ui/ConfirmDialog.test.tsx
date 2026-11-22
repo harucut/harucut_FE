@@ -199,8 +199,10 @@ describe("ConfirmDialog", () => {
   it("실행 중으로 올라가도 Tab 이 포커스를 다이얼로그 안으로 되끌어온다", () => {
     const { setRunning } = renderDialog({ running: false });
 
-    // 열릴 때 훅이 첫 컨트롤로 포커스를 넣는다.
-    expect(document.activeElement).toBe(cancelButton());
+    // 열릴 때 훅은 다이얼로그 자체에 포커스를 둔다. 안의 컨트롤에 포커스가 있던 상태를 만든다
+    // (disabled 로 바뀐 버튼은 jsdom 에서 blur 가 안 먹어, 실행 중에도 눌리는 취소에 둔다).
+    expect(document.activeElement).toBe(screen.getByRole("dialog"));
+    cancelButton().focus();
 
     setRunning(true);
 

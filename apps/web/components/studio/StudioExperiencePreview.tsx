@@ -7,6 +7,7 @@ import {
   type EventPreviewData,
   type EventPreviewScreen,
 } from "@/components/participation/EventPreview";
+import { Sentences } from "@/components/ui/Sentences";
 
 type DeviceId = "phone" | "booth-portrait" | "booth-landscape";
 
@@ -139,7 +140,7 @@ export function StudioExperiencePreview({ data }: { data: EventPreviewData }) {
         ))}
       </div>
       <p className="text-[12px] leading-relaxed text-(--hc-muted)">
-        사진은 시험 사진이에요. 프레임 위 장식이 사진에 겹치는 모양은 게시 뒤 시험 촬영으로 확인해 주세요.
+        <Sentences text="사진은 시험 사진이에요. 프레임 위 장식이 사진에 겹치는 모양은 게시 뒤 시험 촬영으로 확인해 주세요." />
       </p>
     </section>
   );

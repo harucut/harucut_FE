@@ -199,10 +199,11 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 ## 기본 프레임 = 시스템 프레임
 
 2026-10-18 운영 QA: 신규 회원의 목록이 빈 배열이라 기본 프레임 저장이 실패했다.
-웹 POC는 `SystemFrameMissingError`일 때만 브라우저 JPEG 합성으로 복구한다.
-기기 다운로드는 가능하지만 계정 기록·링크 공유는 제공하지 않으며 결과 화면에 이를 표시한다.
-시스템 프레임 등록 후에는 같은 화면이 서버 합성·계정 보관을 사용한다.
-권한 오류나 임의의 서버 실패를 성공으로 바꾸는 폴백은 아니다.
+한때 웹은 `SystemFrameMissingError`일 때 브라우저 JPEG 합성으로 복구하고 결과 화면에 「이 사진은 기록에 보관되지
+않아요」를 띄웠다. 2026-11-15 그 폴백을 걷었다(사용자 「기기 저장만 가능은 대체 뭐」) — 회원 사진은 언제나 서버가
+만들어 기록에 남는다. 기본 프레임 4종은 백엔드가 모든 환경에 늘 있도록 보장하기로 BE 세션에 요청했다
+(관리자 API 없이도 있게, 멱등). 그 보장이 들어오기 전 시스템 프레임이 없는 서버에서는 회원의 기본 레이아웃
+합성이 「이 프레임으로는 아직 저장할 수 없어요」로 실패한다 — FE 묶음보다 BE 보장이 먼저 들어가야 한다.
 
 `compose` 의 `frameId` 는 **내 프레임이거나 시스템 프레임**이어야 한다.
 시스템 프레임은 관리자(`POST /api/admin/frames`, ROLE_ADMIN)가 만들고,
@@ -298,7 +299,7 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 프론트는 이미 보낸다 — `lib/composeApi.ts:63`(타입),
 `lib/fourcutCompose.ts:544` 의 `wantedBackgroundColor`(꾸민 프레임이면 색을 빼고
 저장된 배경을 쓴다)와 `:398-409` 의 `submitCompose`(그래도 이미지 배경이라 400 이면
-색만 빼고 한 번 더 보낸다), 호출부는 `app/shoot/result/page.tsx:366`(합성)과
+색만 빼고 한 번 더 보낸다), 호출부는 `app/create/result/page.tsx:366`(합성)과
 `:525`(로그인 후 재합성).
 회원 잠금과 우회 훅도 걷혔다: `components/frame/FrameOutputOptionsPanel.tsx:25-27` 의
 `backgroundLocked` 는 이제 `hasCustomFrame` 이고(꾸민 프레임만 잠근다),
@@ -582,7 +583,7 @@ required 와 항목의 키를 맞춘다 — `POST /api/auth/terms/consents` 가 
 
    `FrameResponse` 에 `updatedAt`·`version` 이 없어 서버 값으로는 지문을 만들 수 없다.
    지금은 프론트가 읽어 온 내용에서 직접 만든다 — `lib/shootSessionStore.ts:74`
-   `buildFrameContentKey`, 호출부는 `app/shoot/result/page.tsx:274·:356` 이
+   `buildFrameContentKey`, 호출부는 `app/create/result/page.tsx:274·:356` 이
    `ensureComposeIdempotencyKey(generationKey, themeData)` 로 지문을 넘긴다.
    지문을 `generationKey` 에 **직접 넣지 않은** 이유는 프레임 내용이 네트워크로 늦게
    도착하기 때문이다 — 모르는 동안 키가 흔들리면 진행 중인 합성이 버려지고 같은 네컷이

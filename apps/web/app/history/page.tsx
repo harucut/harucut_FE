@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Image as ImageIcon,
   LayoutGrid,
 } from "lucide-react";
 import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
@@ -27,7 +26,6 @@ import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
-import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import {
   getUserMediaPreviewUrl,
   getUserMediaTitle,
@@ -39,6 +37,10 @@ import {
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
+import { SegmentButton } from "@/components/ui/SegmentButton";
+import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
+import { PhotoShareSheet } from "@/components/share/PhotoShareSheet";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type ViewMode = "grid" | "calendar";
 
@@ -207,7 +209,8 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Notice | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const [sharingId, setSharingId] = useState<number | null>(null);
+  // 공유 창에 올린 사진(components/share/PhotoShareSheet.tsx). 보기 화면 위에 아래에서 올라온다.
+  const [shareTarget, setShareTarget] = useState<UserMedia | null>(null);
   // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
   // 대상 자체를 들고 있어야 다이얼로그가 지금 이름을 초깃값으로 받을 수 있다.
   const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
@@ -326,6 +329,13 @@ export default function HistoryPage() {
     photoId === null ? -1 : items.findIndex((item) => item.mediaId === photoId);
   const viewing = photoIndex >= 0;
 
+  // 보고 있는 사진을 공유할 파일로 미리 받아 둔다(hooks/usePreparedPhotoFile.ts). 옆 사진으로 넘기면 그 사진을 받는다.
+  const viewingItem = viewing ? items[photoIndex] : null;
+  const viewingFilename = viewingItem
+    ? buildDownloadFilename(getUserMediaTitle(viewingItem), getMediaExtension(viewingItem))
+    : "";
+  const viewingFile = usePreparedPhotoFile(viewingItem?.viewUrl?.trim() || null, viewingFilename);
+
   const openPhoto = useCallback((item: UserMedia) => {
     // 목록에서 남은 지난 결과를 사진 위로 끌고 가지 않는다.
     setFeedback(null);
@@ -375,7 +385,7 @@ export default function HistoryPage() {
         kind: "error",
         // 네이티브 안내를 먼저 본다 — 사진첩 권한이 막힌 실패는 재시도로 풀리지 않아
         // 폴백 문구("잠시 후 다시 시도해 주세요")가 거짓말이 된다(lib/nativeBridge.ts).
-        // 문구는 결과 화면과 한 벌로 맞춘다(app/shoot/result/page.tsx) — 같은 실패를
+        // 문구는 결과 화면과 한 벌로 맞춘다(app/create/result/page.tsx) — 같은 실패를
         // 두 화면이 다르게 말하지 않는다.
         text: `이미지를 다운로드하지 못했어요. ${
           getNativeSaveErrorMessage(downloadError) ??
@@ -387,48 +397,6 @@ export default function HistoryPage() {
       });
     } finally {
       setDownloadingId(null);
-    }
-  };
-
-  const handleShare = async (item: UserMedia) => {
-    setSharingId(item.mediaId);
-
-    try {
-      // 다운로드 URL은 Content-Disposition: attachment가 박혀 있어 링크를 받은 사람에게
-      // 이미지가 바로 보이지 않는다. 공유에는 인라인 조회 URL을 쓴다(둘 다 24시간 유효).
-      const url =
-        (await getImageUrlByKey(item.s3Key)) ??
-        (await getMediaDownloadUrl(item.mediaId));
-      const result = await shareOrCopyLink({
-        title: `${getUserMediaTitle(item)} | 하루컷`,
-        text: "사진 공유 링크",
-        url,
-      });
-
-      if (result === "copied") {
-        setFeedback({
-          kind: "ok",
-          text: "공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.",
-        });
-      } else if (result === "shared") {
-        setFeedback({ kind: "ok", text: "공유 창을 열었어요." });
-      }
-    } catch (shareError) {
-      console.error(shareError);
-      setFeedback({
-        kind: "error",
-        // 링크를 못 만든 것과 만들어 놓고 복사만 거부당한 것을 한 문구로 묶지 않는다 — 사용자가
-        // 할 일이 다르다. 앞은 잠시 뒤 다시 누르면 되지만, 뒤는 복사를 허용하기 전에는 몇 번을
-        // 눌러도 같은 자리에서 막힌다(lib/share.ts 의 CopyFailedError).
-        text: isCopyFailedError(shareError)
-          ? "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."
-          : getUserFacingApiErrorMessage(
-              shareError,
-              "공유 링크를 준비하지 못했어요.",
-            ),
-      });
-    } finally {
-      setSharingId(null);
     }
   };
 
@@ -561,19 +529,9 @@ export default function HistoryPage() {
                   { id: "calendar", label: "달력", Icon: CalendarDays },
                 ] as const
               ).map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setView(id)}
-                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
-                    view === id
-                      ? "bg-white text-[#0B0B0C]"
-                      : "text-(--hc-muted)"
-                  }`}
-                >
-                  <Icon className="h-3.75 w-3.75" />
+                <SegmentButton key={id} active={view === id} onClick={() => setView(id)} Icon={Icon}>
                   {label}
-                </button>
+                </SegmentButton>
               ))}
             </div>
           </div>
@@ -608,17 +566,8 @@ export default function HistoryPage() {
             ))}
           </div>
         ) : error ? (
-          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
-          <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p role="alert" className="text-[13px] text-(--hc-muted)">{error}</p>
-            <button
-              type="button"
-              onClick={() => setReloadKey((prev) => prev + 1)}
-              className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
-            >
-              다시 시도
-            </button>
-          </div>
+          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼(홈·저장한 프레임과 같은 모양).
+          <LoadFailed message={error} onRetry={() => setReloadKey((prev) => prev + 1)} />
         ) : view === "calendar" ? (
           <CalendarView
             items={items}
@@ -629,7 +578,7 @@ export default function HistoryPage() {
           />
         ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <ImageIcon className="h-7 w-7 text-(--hc-muted-soft)" />
+            {/* 빈 화면의 큰 그림 아이콘은 뺐다(2026-11-14) — 문장과 버튼이 할 일을 말한다. */}
             <p className="text-[13px] text-(--hc-muted)">
               저장한 기록이 아직 없어요.
             </p>
@@ -703,14 +652,31 @@ export default function HistoryPage() {
           index={photoIndex}
           notice={feedback}
           downloading={downloadingId === photoId}
-          sharing={sharingId === photoId}
-          covered={Boolean(renameTarget || deleteTarget)}
+          covered={Boolean(renameTarget || deleteTarget || shareTarget)}
           onIndexChange={showPhotoAt}
           onClose={closePhoto}
           onDownload={(item) => void handleDownload(item)}
-          onShare={(item) => void handleShare(item)}
+          onShare={setShareTarget}
           onRename={handleStartRename}
           onDelete={setDeleteTarget}
+        />
+      ) : null}
+      {shareTarget ? (
+        <PhotoShareSheet
+          open
+          onClose={() => setShareTarget(null)}
+          mediaId={shareTarget.mediaId}
+          title={getUserMediaTitle(shareTarget)}
+          thumbnailSrc={getUserMediaPreviewUrl(shareTarget)}
+          photo={{
+            file: shareTarget.mediaId === viewingItem?.mediaId ? viewingFile : null,
+            // 앱이 사진을 받을 주소. 다운로드 URL은 Content-Disposition: attachment가 박혀 있어
+            // 인라인 조회 URL을 먼저 쓴다(둘 다 24시간 유효).
+            getUrl: async () =>
+              (await getImageUrlByKey(shareTarget.s3Key)) ??
+              (await getMediaDownloadUrl(shareTarget.mediaId)),
+            filename: buildDownloadFilename(getUserMediaTitle(shareTarget), getMediaExtension(shareTarget)),
+          }}
         />
       ) : null}
       {deleteTarget ? (
@@ -767,7 +733,6 @@ function CalendarView({
   if (!activeMonth) {
     return (
       <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-        <CalendarDays className="h-7 w-7 text-(--hc-muted-soft)" />
         <p className="text-[13px] text-(--hc-muted)">
           달력으로 볼 기록이 아직 없어요.
         </p>

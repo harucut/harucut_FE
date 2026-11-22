@@ -6,6 +6,8 @@ import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import * as Sharing from 'expo-sharing';
 import { PermissionsAndroid, Platform, Share } from 'react-native';
 
 /**
@@ -15,11 +17,13 @@ import { PermissionsAndroid, Platform, Share } from 'react-native';
  *
  * 여기서 처리하는 것은 웹이 **할 수 없는** 것만이다:
  *  - 사진첩 저장: 웹 표준에 사진첩 쓰기 API 가 없다. WebView 에서는 `<a download>` 도 안 먹는다.
- *  - 공유 시트: 안드로이드 WebView 에 navigator.share 가 없다.
+ *  - 공유 시트: 안드로이드 WebView 에 navigator.share 가 없다. 사진 파일은 RN Share 로도 못 넘긴다(안드로이드는 글자만).
  *  - 햅틱: 웹 navigator.vibrate 는 iOS 에서 동작하지 않는다.
  *  - 알림: 웹 Notification API 는 WebView 안에서 아예 없다. iOS WKWebView 는 지원하지 않고
  *    안드로이드 WebView 도 권한 UI 가 없어 조용히 거절된다. 앱을 벗어난 뒤(백그라운드)
  *    알릴 방법은 네이티브뿐이다.
+ *  - 화면 방향: 앱은 세로로 고정이고 촬영 화면에서만 돌아간다. 웹은 앱 창의 회전을 바꿀 수 없다
+ *    (screen.orientation.lock 은 전체 화면 웹에서만, WebView 에서는 없다).
  */
 
 /**
@@ -39,8 +43,11 @@ import { PermissionsAndroid, Platform, Share } from 'react-native';
  * - 3 — 앱 구독 `iap-products`·`iap-purchase`·`iap-restore`·`iap-finish` 추가(P4-B, lib/store-purchase.ts)
  * - 4 — 서버 푸시 `push-token` 추가(Expo 푸시 토큰, 알림 권한이 있을 때만). 구글 로그인을 시스템 브라우저로 가로채는
  *   셸(lib/app-login.ts)이 들어 있다고 보장되는 첫 판이기도 하다 — 웹은 이 판부터 구글 버튼을 보인다.
+ * - (판 그대로) 화면 방향 `orientation` 추가(2026-11-15). 답을 기다리지 않는 메시지라 판을 올리지 않는다 —
+ *   모르는 옛 셸은 그냥 지나가고 세로 고정 그대로다.
+ * - 5 — 사진 파일 공유 `share-image` 추가(2026-11-15, expo-sharing). 옛 셸에서 웹은 예전처럼 링크를 공유한다.
  */
-export const BRIDGE_VERSION = 4;
+export const BRIDGE_VERSION = 5;
 
 export type BridgeMessage =
   | { type: 'save-url'; id: string; url: string; filename: string }
@@ -52,7 +59,9 @@ export type BridgeMessage =
   | { type: 'save-chunk'; id: string; index: number; data: string }
   | { type: 'save-end'; id: string }
   | { type: 'share'; id: string; title?: string; message?: string; url: string }
+  | { type: 'share-image'; id: string; url: string; filename: string }
   | { type: 'haptic'; style?: 'light' | 'medium' | 'heavy' }
+  | { type: 'orientation'; mode: 'free' | 'portrait' }
   | { type: 'iap-products'; id: string; productIds: string[] }
   | { type: 'iap-purchase'; id: string; productId: string; accountToken: string }
   | { type: 'iap-restore'; id: string; sync?: boolean }
@@ -236,9 +245,9 @@ async function ensurePermission(): Promise<BridgeResult> {
 let tempDirSeq = 0;
 const TEMP_ROOT = `${FileSystem.cacheDirectory}harucut-save/`;
 
-function newTempDir() {
+function newTempDir(root = TEMP_ROOT) {
   tempDirSeq += 1;
-  return `${TEMP_ROOT}${Date.now()}-${tempDirSeq}/`;
+  return `${root}${Date.now()}-${tempDirSeq}/`;
 }
 
 /**
@@ -257,16 +266,16 @@ function newTempDir() {
  * 모듈 수준 타이머는 두지 않는다(앱이 사는 내내 남는다). 저장이 시작되는 순간이 곧 지난
  * 찌꺼기를 되찾을 수 있는 순간이라, 그때 훑는다.
  */
-async function sweepStaleTempDirs() {
+async function sweepStaleTempDirs(root = TEMP_ROOT, ttlMs = TRANSFER_TTL_MS) {
   try {
-    const names = await FileSystem.readDirectoryAsync(TEMP_ROOT);
+    const names = await FileSystem.readDirectoryAsync(root);
     const now = Date.now();
     await Promise.all(
       names.map(async (name) => {
         const startedAt = Number(name.split("-")[0]);
         if (!Number.isFinite(startedAt)) return;
-        if (now - startedAt <= TRANSFER_TTL_MS) return;
-        await FileSystem.deleteAsync(`${TEMP_ROOT}${name}`, { idempotent: true });
+        if (now - startedAt <= ttlMs) return;
+        await FileSystem.deleteAsync(`${root}${name}`, { idempotent: true });
       }),
     );
   } catch {
@@ -432,6 +441,74 @@ export async function shareLink(args: {
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : '공유에 실패했어요.' };
   }
+}
+
+/** 공유할 사진을 받아 두는 폴더. 저장 폴더(TEMP_ROOT)와 따로 둔다 — 지우는 때가 다르다(shareRemoteImage). */
+const SHARE_ROOT = `${FileSystem.cacheDirectory}harucut-share/`;
+const SHARE_TTL_MS = 60 * 60_000;
+
+/** 받는 앱이 사진으로 알아보게 형식을 붙인다. 웹이 넘기는 이름에는 확장자가 있다(lib/fourcutOutput.ts 의 buildDownloadFilename). */
+function imageMimeType(filename: string) {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+/**
+ * 사진 **파일**을 기기 공유 창에 넘긴다(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로 보낼 수 있는, 스토리에 올릴 수도」,
+ * 「하단에서 스륵 올라오는 일반적인 거」). 링크가 아니라 사진이라, 공유 창에서 고른 앱이 사진을 그대로 받는다.
+ *
+ * RN Share 는 안드로이드에서 글자만 넘긴다 — 그래서 expo-sharing 이다. expo-sharing 은 기기 안의 파일만 넘기므로 먼저
+ * 캐시에 내려받는다.
+ *
+ * 받은 파일은 공유가 끝나도 바로 지우지 않는다. 안드로이드는 받는 앱에 파일 주소(content URI)만 넘기고, 공유 창은 받는
+ * 앱을 띄우자마자 돌아올 수 있다 — 그때 지우면 받는 앱이 아직 못 읽은 사진이 사라진다. 다음 공유가 시작될 때 한 시간
+ * 지난 것을 걷는다(sweepStaleTempDirs). 못 받았으면 남길 까닭이 없어 바로 지운다.
+ *
+ * 공유 창은 보냈는지 그냥 닫았는지 알려 주지 않는다(iOS·안드로이드 모두 닫히면 끝난다). 닫히면 성공으로 답한다.
+ */
+export async function shareRemoteImage(url: string, filename: string): Promise<BridgeResult> {
+  void sweepStaleTempDirs(SHARE_ROOT, SHARE_TTL_MS);
+  const dir = newTempDir(SHARE_ROOT);
+  const name = safeFilename(filename);
+  let downloaded = false;
+
+  try {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    const result = await FileSystem.downloadAsync(url, `${dir}${name}`);
+    if (result.status !== 200) {
+      return { ok: false, reason: `이미지를 받지 못했어요 (${result.status})` };
+    }
+    downloaded = true;
+    await Sharing.shareAsync(result.uri, { mimeType: imageMimeType(name), dialogTitle: '사진 공유' });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : '공유에 실패했어요.' };
+  } finally {
+    // 만료된 주소의 403 본문도 파일로 남는다(saveRemoteImage 주석). 사진을 못 받았으면 폴더째 지운다.
+    if (!downloaded) void FileSystem.deleteAsync(dir, { idempotent: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * 앱 창의 방향. 평소에는 세로로 고정하고, 촬영 화면에서만 기기를 돌리는 대로 따라간다(2026-11-15 「앱 회전 촬영 때만
+ * 해주는 건? 가로로 찍는 사람도 많으니깐」).
+ *
+ * `free` 는 시스템에 맡긴다(unlockAsync = OrientationLock.DEFAULT) — iOS 는 거꾸로 든 세로만 빼고 돌고, 안드로이드는
+ * 사용자의 자동 회전 설정을 따른다. 세로 고정을 켜 둔 사람의 화면은 돌리지 않는다. 앱은 세로 고정으로 시작하고
+ * (app.json 의 expo-screen-orientation 플러그인 initialOrientation, 안드로이드는 RootLayout 이 다시 잠근다),
+ * 셸은 촬영 화면이 아닌 주소로 가면 다시 세로로 잠근다(components/harucut-web-shell.tsx) — 웹이 떠나면서 보내는
+ * `portrait` 를 놓쳐도 돌아간 채로 남지 않는다.
+ *
+ * 답을 기다리지 않는다. 실패해도 화면은 세로로 그대로 보인다.
+ */
+export function setScreenOrientation(mode: 'free' | 'portrait') {
+  const task =
+    mode === 'free'
+      ? ScreenOrientation.unlockAsync()
+      : ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  void task.catch(() => undefined);
 }
 
 export function haptic(style: 'light' | 'medium' | 'heavy' = 'medium') {

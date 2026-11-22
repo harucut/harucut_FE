@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useCallback } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   /** 다이얼로그 제목. 무엇을 바꾸는지 말한다. */
@@ -101,7 +102,7 @@ export function SingleFieldDialog({
         <h2 id="single-field-dialog-title" className="text-[18px] font-extrabold">
           {title}
         </h2>
-        {description ? <p className="mt-2 text-[13px] leading-relaxed text-(--hc-muted)">{description}</p> : null}
+        {description ? <p className="mt-2 text-[13px] leading-relaxed text-(--hc-muted)"><Sentences text={description} /></p> : null}
 
         <form
           onSubmit={(event) => {
@@ -139,7 +140,7 @@ export function SingleFieldDialog({
               role="alert"
               className="mt-2 text-[12px] font-medium text-(--hc-danger)"
             >
-              {error}
+              <Sentences text={error} />
             </p>
           ) : null}
 

@@ -2,6 +2,7 @@
 
 import { EmailCodeSection } from "../EmailCodeSection";
 import type { Errors } from "@/app/forgot-password/_hooks/useForgotPasswordFlow";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   email: string;
@@ -61,7 +62,7 @@ export function VerifyCodeForm({
       />
 
       {errors.common ? (
-        <p role="alert" className="text-[12px] text-(--hc-danger)">{errors.common}</p>
+        <p role="alert" className="text-[12px] text-(--hc-danger)"><Sentences text={errors.common} /></p>
       ) : null}
 
       {/* 아직 아무것도 하지 않았으면 되돌릴 것도 없다 — 코드를 보낸 뒤에만 '처음부터'가 뜬다. */}

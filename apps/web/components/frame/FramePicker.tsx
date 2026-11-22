@@ -5,11 +5,15 @@ import { Check } from "lucide-react";
 import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import { FRAME_CONFIGS, type FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { DEFAULT_FRAME_BACKGROUND_COLOR } from "@/lib/themeBackground";
+import { Sentences } from "@/components/ui/Sentences";
 
 type FramePickerLayoutMode = "carousel" | "grid";
 
-/** 프린트 종이 색. 예시 사진을 넣은 실물처럼 보여 준다 — 빈 칸만 보면 무엇이 나오는지 그려지지 않는다. */
-const PRINT_PAPER = "#FFFFFF";
+/**
+ * 프린트 종이 색. 예시 사진을 넣은 실물처럼 보여 준다 — 빈 칸만 보면 무엇이 나오는지 그려지지 않는다.
+ * 고른 뒤의 기본 테두리 색과 같은 값이다 — 카드에서 본 그대로 사진 고르기·결과물에 나온다(2026-11-15).
+ */
 
 /** 손을 뗀 뒤 이만큼 움직임이 없으면 가운데 온 카드를 고른 것으로 친다. */
 const SWIPE_SETTLE_MS = 120;
@@ -140,20 +144,31 @@ export function FramePickerConfirm({
   onConfirm,
   confirmDisabled = false,
   confirmLabel = "선택한 프레임으로 진행하기",
+  notice,
+  busy = false,
 }: {
   onConfirm: () => void;
   confirmDisabled?: boolean;
   confirmLabel?: string;
+  /** 넘어갈 수 없는 까닭(촬영 전 확인 — 저장한 프레임·사진 불러오기의 회원 확인, app/create). 단추 바로 위 한 줄이다. */
+  notice?: string | null;
+  /** 넘어가기 전에 확인하는 중 — 단추가 「확인 중…」으로 잠긴다. */
+  busy?: boolean;
 }) {
   return (
-    <div className="sticky bottom-0 z-20 -mx-2 mt-auto bg-linear-to-t from-(--background) from-70% to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-6 sm:-mx-4 sm:px-4 md:static md:mx-0 md:flex md:justify-end md:bg-none md:p-0">
+    <div className="sticky bottom-0 z-20 -mx-2 mt-auto bg-linear-to-t from-(--background) from-70% to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-6 sm:-mx-4 sm:px-4 md:static md:mx-0 md:flex md:flex-col md:items-end md:bg-none md:p-0">
+      {notice ? (
+        <p role="alert" className="mb-3 text-center text-[13px] leading-[1.6] text-(--hc-danger) md:text-right">
+          <Sentences text={notice} />
+        </p>
+      ) : null}
       <button
         type="button"
-        disabled={confirmDisabled}
+        disabled={confirmDisabled || busy}
         onClick={onConfirm}
         className="hc-button-primary inline-flex h-14 w-full items-center justify-center rounded-full px-5 text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-50 md:h-12 md:w-auto md:min-w-50 md:px-6 md:text-[15px]"
       >
-        {confirmLabel}
+        {busy ? "확인 중…" : confirmLabel}
       </button>
     </div>
   );
@@ -198,7 +213,7 @@ function FramePickerCard({
         <FramePreview
           frameId={frameId}
           images={DEMO_PHOTOS}
-          borderColor={PRINT_PAPER}
+          borderColor={DEFAULT_FRAME_BACKGROUND_COLOR}
           imageLoading="eager"
           className="max-h-full max-w-full border-0!"
         />

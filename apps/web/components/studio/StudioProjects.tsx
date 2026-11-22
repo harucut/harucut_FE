@@ -13,6 +13,7 @@ import {
   type BrandDefaults,
   type Project,
 } from "@/lib/studio/projectsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 프로젝트와 브랜드 기본값(ADR-0009 §2, P3-1). 조직 공간 OWNER·ADMIN 만 쓴다.
@@ -62,7 +63,7 @@ export function StudioProjects({ workspaceId }: { workspaceId: string }) {
   if (error) {
     return (
       <p role="alert" className="text-[13px] text-(--hc-danger)">
-        {error}
+        <Sentences text={error} />
       </p>
     );
   }
@@ -72,7 +73,7 @@ export function StudioProjects({ workspaceId }: { workspaceId: string }) {
     <div className="flex flex-col gap-4">
       {notice ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
 
@@ -132,7 +133,7 @@ export function StudioProjects({ workspaceId }: { workspaceId: string }) {
 
       {projects.length === 0 ? (
         <p className="text-[13px] text-(--hc-muted)">
-          아직 프로젝트가 없어요. 여러 행사를 시즌·고객별로 묶고 기본값을 함께 쓰고 싶을 때 만들어요.
+          <Sentences text="아직 프로젝트가 없어요. 여러 행사를 시즌·고객별로 묶고 기본값을 함께 쓰고 싶을 때 만들어요." />
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -242,7 +243,7 @@ export function StudioProjects({ workspaceId }: { workspaceId: string }) {
         </ul>
       )}
       <p className="text-[12px] text-(--hc-muted)">
-        보관한 프로젝트는 기존 행사를 그대로 두고, 새 행사에는 고를 수 없어요. 게시한 행사는 프로젝트를 바꿀 수 없어요.
+        <Sentences text="보관한 프로젝트는 기존 행사를 그대로 두고, 새 행사에는 고를 수 없어요. 게시한 행사는 프로젝트를 바꿀 수 없어요." />
       </p>
     </div>
   );

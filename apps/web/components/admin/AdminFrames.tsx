@@ -14,6 +14,7 @@ import {
   type SystemFrame,
 } from "@/lib/admin/cmsApi";
 import { parseAssetTitle } from "@/lib/serverAssets";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 시스템 프레임 발행. 시스템 기본 프레임은 프레임마다 한 번 발행해야 행사에서 고를 수 있다(docs/plan-implementation-status.md).
@@ -65,7 +66,7 @@ export function AdminFrames() {
     return (
       <div className="flex flex-col items-start gap-3">
         <p role="alert" className="text-[14px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
         <button type="button" onClick={() => void load()} className="hc-button-secondary h-11 rounded-full px-4 text-[13px] font-semibold">
           다시 시도
@@ -87,7 +88,7 @@ export function AdminFrames() {
   return (
     <div className="flex flex-col gap-3">
       <p className="max-w-[65ch] text-[13px] leading-relaxed text-(--hc-muted)">
-        발행해야 행사 설정의 프레임 목록에 나타나요. 고친 뒤에는 새로 발행해 주세요. 이미 게시한 행사는 고른 발행본을 그대로 써요.
+        <Sentences text="발행해야 행사 설정의 프레임 목록에 나타나요. 고친 뒤에는 새로 발행해 주세요. 이미 게시한 행사는 고른 발행본을 그대로 써요." />
       </p>
       {publishable.length === 0 ? <p className="text-[14px] text-(--hc-muted)">발행할 시스템 프레임이 없어요.</p> : null}
       <ul className="flex flex-col divide-y divide-(--hc-border)">

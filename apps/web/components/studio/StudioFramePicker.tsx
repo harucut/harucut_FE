@@ -13,6 +13,7 @@ import {
   type FrameRef,
   type PickableFrameVersion,
 } from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 export { layoutName };
 
@@ -103,7 +104,7 @@ export function StudioFramePicker({
     return (
       <div className="flex flex-col gap-2">
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
         <button type="button" onClick={() => void load()} className="hc-button-secondary h-11 self-start rounded-full px-4 text-[13px] font-semibold">
           다시 불러오기
@@ -126,9 +127,9 @@ export function StudioFramePicker({
             <legend className="mb-1 text-[14px] font-semibold">{layoutName(layout)}</legend>
             {candidates.length === 0 ? (
               <p className="text-[13px] text-(--hc-muted)">
-                {manage
+                <Sentences text={manage
                   ? "고를 수 있는 발행본이 없어요. 아래 「공간 프레임」에서 만들고 발행해 주세요."
-                  : "고를 수 있는 발행본이 없어요. 행사 화면의 「공간 프레임」에서 만들고 발행해 주세요."}
+                  : "고를 수 있는 발행본이 없어요. 행사 화면의 「공간 프레임」에서 만들고 발행해 주세요."} />
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
@@ -188,8 +189,7 @@ export function StudioFramePicker({
       {unknownRefs.length > 0 ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) p-3 text-[13px]">
           <p>
-            지금 고를 수 없는 발행본이 연결돼 있어요. 허용하지 않은 판형이거나, 더 새 발행본이 나왔거나
-            회수됐거나 원본 프레임이 지워졌을 수 있어요. 위에서 다시 고른 뒤 빼 주세요.
+            <Sentences text="지금 고를 수 없는 발행본이 연결돼 있어요. 허용하지 않은 판형이거나, 더 새 발행본이 나왔거나 회수됐거나 원본 프레임이 지워졌을 수 있어요. 위에서 다시 고른 뒤 빼 주세요." />
           </p>
           <ul className="flex flex-col gap-1">
             {unknownRefs.map((ref) => (
@@ -218,7 +218,7 @@ export function StudioFramePicker({
             공간 프레임
           </h3>
           <p className="text-[12px] text-(--hc-muted)">
-            고친 프레임은 「새 버전 발행」을 눌러야 고를 수 있어요. 이미 게시한 행사는 고른 발행본을 그대로 써요.
+            <Sentences text="고친 프레임은 「새 버전 발행」을 눌러야 고를 수 있어요. 이미 게시한 행사는 고른 발행본을 그대로 써요." />
           </p>
           {editLocked ? (
             <p className="text-[12px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 프레임을 만들거나 고칠 수 있어요.</p>

@@ -36,6 +36,7 @@ import {
 } from "@/lib/event/eventApi";
 import { RESULT_FAILED_RETAKE_COPY, pageThemeCopy } from "@/lib/event/pageTheme";
 import type { CaptureRun, EventFrameRef, PublicEvent, ResultStatus } from "@/lib/event/types";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 현장 부스 `/booth`(기획 R5 4절 「부스의 등록과 한 팀의 이용 과정」, ADR-0007 §7).
@@ -377,13 +378,13 @@ export function BoothScreen() {
           ) : null}
         </header>
 
-        {error ? <p role="alert" className="text-[clamp(1rem,2.2vmin,1.25rem)] font-semibold text-(--ev-danger)">{error}</p> : null}
+        {error ? <p role="alert" className="text-[clamp(1rem,2.2vmin,1.25rem)] font-semibold text-(--ev-danger)"><Sentences text={error} /></p> : null}
         {warning ? (
           <p
             role="status"
             className="fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-40 w-max max-w-[90vw] -translate-x-1/2 rounded-full bg-(--ev-text) px-6 py-3 text-center text-[clamp(1rem,2.2vmin,1.25rem)] font-bold text-(--ev-bg) shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
           >
-            곧 처음 화면으로 돌아가요. 계속하려면 화면을 눌러 주세요.
+            <Sentences text="곧 처음 화면으로 돌아가요. 계속하려면 화면을 눌러 주세요." />
           </p>
         ) : null}
 
@@ -395,7 +396,7 @@ export function BoothScreen() {
 
         {phase.kind === "unavailable" ? (
           <p role="alert" className="flex flex-1 items-center justify-center break-keep text-center text-[clamp(1.125rem,3vmin,2rem)] font-semibold text-(--ev-muted)">
-            {phase.message}
+            <Sentences text={phase.message} />
           </p>
         ) : null}
 
@@ -404,7 +405,7 @@ export function BoothScreen() {
         {/* 이미 연결된 기기에서 새 연결 코드 QR 을 찍었다. 말없이 옮기지 않고 묻는다. 손님 앞에서는 묻지 않는다. */}
         {pairCode && device && operatorScreen && phase.kind !== "pairing" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-(--ev-border) bg-(--ev-card) p-4">
-            <p className="break-keep text-[15px] font-semibold">새 연결 코드를 받았어요. 이 기기를 그 행사로 옮길까요?</p>
+            <p className="break-keep text-[15px] font-semibold"><Sentences text="새 연결 코드를 받았어요. 이 기기를 그 행사로 옮길까요?" /></p>
             <div className="flex shrink-0 gap-2">
               <button type="button" onClick={() => setPairCode(null)} className="h-11 rounded-full border border-(--ev-border) px-4 text-[14px] font-bold">
                 그대로 두기
@@ -555,7 +556,7 @@ export function BoothIdleView({
                 {pageThemeCopy(event.theme, "welcome", "")}
               </p>
             ) : null}
-            {blocked ? <p role="alert" className="break-keep text-[clamp(1rem,2.4vmin,1.5rem)] font-semibold text-(--ev-danger)">{blocked}</p> : null}
+            {blocked ? <p role="alert" className="break-keep text-[clamp(1rem,2.4vmin,1.5rem)] font-semibold text-(--ev-danger)"><Sentences text={blocked} /></p> : null}
             <EventButton size="booth" disabled={busy || Boolean(blocked)} aria-busy={busy} onClick={onStart}>
               {busy ? "잠시만요…" : "사진 찍기"}
             </EventButton>
@@ -698,7 +699,7 @@ export function BoothResultView({
       <section className="ev-step flex flex-1 flex-col items-center justify-center gap-[clamp(1.5rem,4vmin,3.5rem)] pb-[max(clamp(1.25rem,3vmin,2.5rem),env(safe-area-inset-bottom))]">
         <div className="ev-readable flex w-full max-w-2xl flex-col items-center gap-[clamp(1.25rem,3.5vmin,2.5rem)] text-center">
           <p role="alert" className="break-keep text-[clamp(1.5rem,4.2vmin,2.75rem)] font-extrabold leading-tight tracking-[-0.02em]">
-            {message}
+            <Sentences text={message} />
           </p>
           <EventButton size="booth" onClick={onNext}>
             처음으로
@@ -731,7 +732,7 @@ export function BoothResultView({
           휴대폰 카메라로 QR을 찍어 사진을 받아 가세요
         </h2>
         <p role="status" className="break-keep text-[clamp(1.125rem,2.6vmin,1.5rem)] text-(--ev-muted)">
-          {message}
+          <Sentences text={message} />
         </p>
         {/* QR 은 한 번 넘기면 다시 볼 수 없다. 같은 무게로 누르게 두지 않는다. */}
         <EventButton tone={armed ? "primary" : "quiet"} size="xl" className="mt-[clamp(0.25rem,1vmin,0.75rem)]" onClick={onNext}>
@@ -788,7 +789,7 @@ function BoothCameraPreview({ onClose }: { onClose: () => void }) {
       <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <video ref={videoRef} playsInline muted className="max-h-full max-w-full -scale-x-100 rounded-2xl bg-[#18181a]" />
       </div>
-      <p role="status" className="break-keep text-center text-[clamp(1rem,2.4vmin,1.375rem)] text-(--ev-muted)">{statusText}</p>
+      <p role="status" className="break-keep text-center text-[clamp(1rem,2.4vmin,1.375rem)] text-(--ev-muted)"><Sentences text={statusText} /></p>
       <EventButton
         size="xl"
         className="max-w-md"
@@ -855,11 +856,11 @@ function PersonalSessionNotice() {
       cancelled = true;
     };
   }, []);
-  if (!signedIn) return message ? <p role="status" className="text-center text-[14px] font-semibold">{message}</p> : null;
+  if (!signedIn) return message ? <p role="status" className="text-center text-[14px] font-semibold"><Sentences text={message} /></p> : null;
   return (
     <div className="flex flex-col items-center gap-2 text-center">
-      {message ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)">{message}</p> : null}
-      <p className="break-keep text-[14px] text-(--ev-muted)">이 기기에 개인 계정이 로그인돼 있어요. 손님이 쓰는 기기라면 로그아웃해 주세요.</p>
+      {message ? <p role="alert" className="text-[14px] font-semibold text-(--ev-danger)"><Sentences text={message} /></p> : null}
+      <p className="break-keep text-[14px] text-(--ev-muted)"><Sentences text="이 기기에 개인 계정이 로그인돼 있어요. 손님이 쓰는 기기라면 로그아웃해 주세요." /></p>
       <button
         type="button"
         disabled={leaving}

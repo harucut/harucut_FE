@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
@@ -13,7 +13,6 @@ import { STORE_PURCHASES_ENABLED } from "@harucut/shared";
 import {
   ENTERPRISE_TEASER,
   PLANS,
-  PRICING_BILLING_PENDING,
   PRICING_DOWNGRADE_NOTE,
   PRICING_HEADLINE,
   PRICING_SUBTITLE,
@@ -305,10 +304,6 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               <span className="rounded-full bg-(--hc-primary) px-2 py-0.5 text-[11px] font-bold text-(--hc-primary-contrast)">
                 {ENTERPRISE_TEASER.badge}
               </span>
-              {/* 다른 카드가 모두 가격을 보여주므로 여기도 값이 어떻게 정해지는지 밝힌다. */}
-              <span className="text-[12px] font-semibold text-(--hc-accent-soft-text)">
-                {ENTERPRISE_TEASER.price}
-              </span>
             </div>
             <p className="max-w-130 text-[13px] leading-[1.7] text-(--hc-text)">
               {ENTERPRISE_TEASER.desc}
@@ -331,20 +326,22 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </h2>
           <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} />
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
-            가격은 부가세 포함이에요. {PRICING_BILLING_PENDING}
-            <br />
             {PRICING_DOWNGRADE_NOTE}
           </p>
         </section>
 
-        {/* FAQ */}
-        <section className="flex flex-col gap-4">
-          <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
+        {/*
+          FAQ — 가운데에 세우고, 질문 줄 오른쪽 끝의 화살표로 접었다 편다(2026-11-14).
+          예전에는 「+」 동그라미가 45도 돌아 「×」가 됐다 — 닫기처럼 보여 펼친 것인지 알기 어려웠다.
+        */}
+        <section className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+          <h2 className="text-center text-[20px] font-extrabold tracking-tight lg:text-[22px]">
             자주 묻는 질문
           </h2>
           <div className="flex flex-col">
             {faqItems.map((item, i) => {
               const on = open === i;
+              const answerId = `pricing-faq-${i}`;
               return (
                 <div
                   key={item.q}
@@ -354,23 +351,20 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
                     type="button"
                     onClick={() => setOpen(on ? -1 : i)}
                     aria-expanded={on}
+                    aria-controls={answerId}
                     className="flex w-full items-center justify-between gap-4 py-4 text-left"
                   >
                     <span className="text-[15px] font-bold tracking-tight text-(--hc-text)">
                       {item.q}
                     </span>
-                    <span
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-(--hc-border-strong) text-(--hc-muted) transition-transform"
-                      style={{ transform: on ? "rotate(45deg)" : "none" }}
-                    >
-                      +
-                    </span>
+                    <ChevronDown
+                      aria-hidden
+                      className={`h-5 w-5 shrink-0 text-(--hc-muted) transition-transform ${on ? "rotate-180" : ""}`}
+                    />
                   </button>
-                  {on ? (
-                    <p className="mb-4 max-w-170 text-[14px] leading-[1.65] text-(--hc-muted)">
-                      {item.a}
-                    </p>
-                  ) : null}
+                  <p id={answerId} hidden={!on} className="mb-4 text-[14px] leading-[1.65] text-(--hc-muted)">
+                    {item.a}
+                  </p>
                 </div>
               );
             })}

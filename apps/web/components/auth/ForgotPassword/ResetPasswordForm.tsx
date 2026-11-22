@@ -2,6 +2,7 @@
 
 import { AuthField } from "@/components/auth/AuthField";
 import type { Errors } from "@/app/forgot-password/_hooks/useForgotPasswordFlow";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   newPassword: string;
@@ -36,7 +37,7 @@ export function ResetPasswordForm({
     >
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
         <p className="text-[11px] text-zinc-400">
-          인증이 완료되었어요. 새 비밀번호를 입력해 주세요.
+          <Sentences text="인증이 완료되었어요. 새 비밀번호를 입력해 주세요." />
         </p>
       </div>
 
@@ -67,7 +68,7 @@ export function ResetPasswordForm({
       />
 
       {errors.common ? (
-        <p role="alert" className="text-[12px] text-(--hc-danger)">{errors.common}</p>
+        <p role="alert" className="text-[12px] text-(--hc-danger)"><Sentences text={errors.common} /></p>
       ) : null}
 
       {/* 로그인·회원가입 CTA 와 같은 h-12 · 15px · 800. 이 화면만 36px·11px 였다. */}

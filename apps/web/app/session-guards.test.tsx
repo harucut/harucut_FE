@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
-import ShootSelectPage from "@/app/shoot/select/page";
-import ShootResultPage from "@/app/shoot/result/page";
+import ShootSelectPage from "@/app/create/select/page";
+import ShootResultPage from "@/app/create/result/page";
 import StickerEditorPage from "@/app/theme/sticker/page";
 import type { FourcutFilterId } from "@/lib/frameFilters";
 
@@ -56,10 +56,6 @@ jest.mock("@/components/frame/FramePreview", () => ({
   FramePreview: () => <div data-testid="frame-preview" />,
 }));
 
-jest.mock("@/components/frame/GeneratedAssetDownloadCard", () => ({
-  GeneratedAssetDownloadCard: () => <div data-testid="generated-asset-card" />,
-}));
-
 jest.mock("@/components/theme/editor/ThemeEditorPage", () => ({
   ThemeEditorPage: ({ frameId }: { frameId: string }) => (
     <div data-testid="theme-editor-page">{frameId}</div>
@@ -99,28 +95,28 @@ describe("page-level multistep session guards", () => {
     });
   });
 
-  test("/shoot/select sends users back to /shoot when frameId is missing", async () => {
+  test("/create/select sends users back to /create when frameId is missing", async () => {
     shootSessionState.shots = ["/shot-1.png"];
 
     render(<ShootSelectPage />);
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/shoot");
+      expect(mockReplace).toHaveBeenCalledWith("/create");
     });
   });
 
-  test("/shoot/select sends users back to /shoot/capture when shots are missing", async () => {
+  test("/create/select sends users back to /create/capture when shots are missing", async () => {
     shootSessionState.frameId = "classic-4";
     shootSessionState.shots = [];
 
     render(<ShootSelectPage />);
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/shoot/capture");
+      expect(mockReplace).toHaveBeenCalledWith("/create/capture");
     });
   });
 
-  test("/shoot/result sends users back to /shoot/select when 4 picks are not ready", async () => {
+  test("/create/result sends users back to /create/select when 4 picks are not ready", async () => {
     shootSessionState.frameId = "classic-4";
     shootSessionState.shots = ["/shot-1.png"];
     shootSessionState.selectedIndexes = [0, null, null, null];
@@ -128,11 +124,11 @@ describe("page-level multistep session guards", () => {
     render(<ShootResultPage />);
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/shoot/select");
+      expect(mockReplace).toHaveBeenCalledWith("/create/select");
     });
   });
 
-  test("/shoot/result sends users back to /shoot/select when selected sources are missing", async () => {
+  test("/create/result sends users back to /create/select when selected sources are missing", async () => {
     shootSessionState.frameId = "classic-4";
     shootSessionState.shots = ["/shot-1.png"];
     shootSessionState.selectedIndexes = [0, 1, 2, 3];
@@ -140,7 +136,7 @@ describe("page-level multistep session guards", () => {
     render(<ShootResultPage />);
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/shoot/select");
+      expect(mockReplace).toHaveBeenCalledWith("/create/select");
     });
   });
 

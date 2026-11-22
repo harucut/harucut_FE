@@ -25,7 +25,7 @@ export default function NotFound() {
             홈으로
           </Link>
           <Link
-            href="/shoot"
+            href="/create"
             className="w-full rounded-full border border-(--hc-border) px-5 py-3 text-[16px] font-semibold text-(--hc-text) transition hover:border-(--hc-border-strong) sm:w-auto"
           >
             촬영하러 가기

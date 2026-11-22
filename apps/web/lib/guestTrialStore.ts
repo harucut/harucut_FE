@@ -65,7 +65,9 @@ type GuestTrialStore = {
 // 여기서는 상황에 맞는 문장으로 감싸기만 한다.
 // 조사는 withJosa 로 고른다. 손으로 붙여 두면 목록 끝 항목이 바뀔 때마다 어긋난다 —
 // 실제로 "이미지 저장를", "프레임 만들기은" 이 나가고 있었다.
-const GUEST_ALLOWED_SCOPE = `체험 중에는 ${withJosa(GUEST_ALLOWED_ITEMS, "을/를")} 이용할 수 있어요.`;
+// 되는 쪽은 「만」으로 닫는다(2026-11-15 「~를 이용할 수 있어요가 아니라 ~만 이용할 수 있어요」) — 막힌 사람에게
+// 띄우는 안내라 "이것들은 된다"가 아니라 "이것들뿐이다"가 말하려는 것이다. 「만」은 받침과 무관해 withJosa 가 필요 없다.
+const GUEST_ALLOWED_SCOPE = `체험 중에는 ${GUEST_ALLOWED_ITEMS}만 이용할 수 있어요.`;
 const GUEST_MEMBER_ONLY_SCOPE = `${withJosa(GUEST_MEMBER_ONLY_ITEMS, "은/는")} 로그인 후에 이용할 수 있어요.`;
 
 function hasGuestCookie() {
@@ -128,3 +130,14 @@ export const useGuestTrialStore = create<GuestTrialStore>((set) => ({
       },
     }),
 }));
+
+/**
+ * 지금 이 방문자가 체험 중인가. 스토어가 아직 쿠키를 읽기 전이면 쿠키를 직접 본다.
+ *
+ * 상태를 바꾸지 않으니 렌더 중에도 부를 수 있다 — hydrateGuestMode 를 여기서 부르면 다른 구독자를 렌더 도중에 깨운다.
+ * 찍던 사진을 이 기기에 남길지 정할 때 쓴다(lib/shootSessionPersistence.ts).
+ */
+export function isGuestVisitor() {
+  const { hydrated, accessMode } = useGuestTrialStore.getState();
+  return hydrated ? accessMode === "guest" : hasGuestCookie();
+}

@@ -8,10 +8,10 @@
 | `app/_layout.tsx` | 안전영역 provider 와 헤더 없는 Stack |
 | `app/index.tsx` | 유일한 라우트 — 셸을 띄운다 |
 | `components/harucut-web-shell.tsx` | WebView, 안전영역, 상태바 색, 하드웨어 뒤로가기, 외부 링크 |
-| `lib/native-bridge.ts` | 웹이 보내는 요청 처리(사진첩 저장·공유·햅틱·알림) |
+| `lib/native-bridge.ts` | 웹이 보내는 요청 처리(사진첩 저장·공유·햅틱·알림·화면 방향) |
 | `constants/shell.ts` | 웹/백엔드 오리진, 셸 UA 토큰, OAuth 판정 |
 
-네이티브가 맡는 열 가지와 그 이유는 [`docs/mobile-shell.md`](../../docs/mobile-shell.md) 에 있다.
+네이티브가 맡는 열한 가지와 그 이유는 [`docs/mobile-shell.md`](../../docs/mobile-shell.md) 에 있다.
 **"모바일 화면을 고쳐라"의 정답은 거의 항상 `apps/web`** 이다.
 
 ## 실행

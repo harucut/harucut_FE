@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
 import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "@/lib/themeEditorDraft";
 
@@ -191,13 +191,14 @@ jest.mock("@/lib/presignedUploadApi", () => ({
 
 const mockServerDraftFinish = jest.fn().mockResolvedValue(undefined);
 const mockServerDraftArgs = jest.fn();
+/** 서버 초안 찾기 결과. 다른 기기의 더 새로운 초안으로 열었으면 restored. */
+const mockServerDraftState = { restored: false, settled: true };
 jest.mock("@/components/theme/editor/useServerFrameDraft", () => ({
   useServerFrameDraft: (args: unknown) => (mockServerDraftArgs(args), {
     status: "idle",
-    offer: null,
+    restored: mockServerDraftState.restored,
+    settled: mockServerDraftState.settled,
     conflict: null,
-    restoreOffer: jest.fn(),
-    dismissOffer: jest.fn(),
     overwriteConflict: jest.fn(),
     reloadConflict: jest.fn(),
     finish: mockServerDraftFinish,
@@ -529,25 +530,84 @@ describe("ThemeEditorPage save flow", () => {
     });
     afterEach(() => {
       editorStoreState.past = [];
+      Object.assign(mockServerDraftState, { restored: false, settled: true });
     });
 
-    it("남은 편집이 있으면 묻고, 이어서 편집하면 되살린다", async () => {
+    // 「다른 기기 꺼를 가지고 있으면 그냥 그걸로 보여주면 되지」(2026-11-15) — 남은 편집은 묻지 않고 되살린다.
+    it("남은 편집이 있으면 묻지 않고 되살린다", async () => {
       await seedDraft();
       render(<ThemeEditorPage frameId="classic-4" />);
-      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
-      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
-
-      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
       await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
       expect(editorStoreState.hydrateDraft.mock.calls[0][0]).toMatchObject({ backgroundColor: "abcdef" });
+      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
+    });
+
+    it("서버 초안 찾기가 끝나기 전에는 되살리지 않는다 — 더 새로운 다른 기기 초안과 엇갈린다", async () => {
+      mockServerDraftState.settled = false;
+      await seedDraft();
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
+    // Codex 리뷰 #604 — 찾기가 끝난 뒤 늦게 되살리면 그사이 한 편집과 되돌리기 이력이 사라졌다.
+    it("서버 초안을 찾는 사이 고치기 시작했으면 남은 편집으로 덮지 않는다", async () => {
+      mockServerDraftState.settled = false;
+      await seedDraft();
+      const { container, rerender } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+
+      editorStoreState.past = [{}];
+      mockServerDraftState.settled = true;
+      rerender(<ThemeEditorPage frameId="classic-4" />);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
+    // 편집기 상태는 전역 스토어다. 나간 편집기의 늦은 복구가 다음에 연 편집기를 덮으면 안 된다.
+    it("복구본 배경 주소를 받는 사이 편집기를 나갔으면 다음 편집기에 넣지 않는다", async () => {
+      const { getImageUrlByKey } = jest.requireMock("@/lib/presignedUploadApi") as { getImageUrlByKey: jest.Mock };
+      let resolveUrl: (v: string) => void = () => {};
+      getImageUrlByKey.mockImplementation((key: string) =>
+        key === "uploads/users/u1/bg.png" ? new Promise((resolve) => (resolveUrl = resolve)) : Promise.resolve(null),
+      );
+      try {
+        await saveEditorDraft({
+          ownerId: DRAFT_OWNER,
+          saved: SCOPE,
+          frameId: "classic-4",
+          backgroundColor: "abcdef",
+          background: { type: "IMAGE", key: "uploads/users/u1/bg.png" },
+          cellCutouts: [false, false, false, false],
+          components: [],
+          now: Date.now(),
+        });
+        const { unmount } = render(<ThemeEditorPage frameId="classic-4" />);
+        await waitFor(() => expect(getImageUrlByKey).toHaveBeenCalledWith("uploads/users/u1/bg.png"));
+        unmount();
+        await act(async () => {
+          resolveUrl("https://s3.example.com/bg.png");
+        });
+        expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+      } finally {
+        getImageUrlByKey.mockImplementation(() => Promise.resolve(null));
+      }
+    });
+
+    it("다른 기기의 더 새로운 초안으로 열었으면 이 기기의 더 오래된 편집은 버린다", async () => {
+      mockServerDraftState.restored = true;
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull());
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
     });
 
     // 되살리면 이력이 비워진다. 그 뒤 이력이 다시 비었다는 것은 저장본이 아니라 되살린 편집으로 돌아왔다는 뜻이다.
     it("되살린 편집 위에서 고쳤다 되돌려도 복구본을 지우지 않는다", async () => {
       await seedDraft();
       render(<ThemeEditorPage frameId="classic-4" />);
-      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
-      fireEvent.click(within(section).getByRole("button", { name: "이어서 편집" }));
       await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
 
@@ -576,15 +636,6 @@ describe("ThemeEditorPage save flow", () => {
       editorStoreState.past = [];
       storeListeners.forEach((listener) => listener());
       await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull(), { timeout: 3000 });
-    });
-
-    it("저장본 유지를 고르면 묻지 않고 지운다", async () => {
-      await seedDraft();
-      render(<ThemeEditorPage frameId="classic-4" />);
-      const section = await screen.findByRole("region", { name: "이 기기의 저장 안 한 편집" });
-      fireEvent.click(within(section).getByRole("button", { name: "저장본 유지" }));
-      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
-      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull();
     });
 
     it("다른 기기가 먼저 저장해 버전이 바뀌었으면 묻지 않는다", async () => {
@@ -1114,6 +1165,19 @@ describe("ThemeEditorPage 방향키 이동", () => {
     fireEvent.keyDown(input, { key: "ArrowLeft" });
     expect(editorStoreState.nudge).not.toHaveBeenCalled();
     input.remove();
+  });
+
+  // 창은 열 때 자기 자신에 포커스를 둔다(useModalDialog). 그 상태의 방향키가 뒤 레이어를 움직이면 안 된다.
+  it("창이 떠 있으면 방향키로 뒤 레이어를 움직이지 않는다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.tabIndex = -1;
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(dialog, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+    dialog.remove();
   });
 });
 

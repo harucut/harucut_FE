@@ -1,132 +1,133 @@
 "use client";
 
-import { BORDER_COLORS } from "@/constants/colors";
-import {
-  FOURCUT_FILTERS,
-  type FourcutFilterId,
-} from "@/lib/frameFilters";
+import { useId } from "react";
+import { DISPLAY_NAME_MAX_LENGTH } from "@/lib/fourcutOutput";
+import { FOURCUT_FILTERS, type FourcutFilterId } from "@/lib/frameFilters";
 import { normalizeHexColor } from "@/lib/themeBackground";
+import { ColorSwatches, SWATCH_SELECTED_RING } from "@/components/ui/ColorSwatches";
 
 type FrameOutputOptionsPanelProps = {
   borderColor: string;
   onBorderColorChange: (color: string) => void;
   outputFilter: FourcutFilterId;
   onOutputFilterChange: (filter: FourcutFilterId) => void;
+  /** 꾸민 프레임을 골랐는가. 그 배경은 프레임에 저장돼 있어 테두리 색을 고르지 않는다. */
   hasCustomFrame: boolean;
+  /** 보정 견본에 깔 사진 — 고른 첫 장, 아직 안 골랐으면 찍은 첫 장. */
+  samplePhoto?: string | null;
   /**
-   * 꾸민 프레임인데 그 내용을 못 읽은 상태. 잠금 여부는 그대로지만 **이유가 다르다** —
-   * 프레임이 배경을 정해 뒀다는 안내를 못 읽은 경우에까지 띄우면 사실이 아닌 말이 된다.
+   * 보정을 고를 수 없다 — 비회원(2026-11-15 「비회원이면 보정은 선택 못하도록 해」). 견본은 보이되 잠기고
+   * 「회원 전용」이 붙는다. 고른 값은 부른 쪽이 기본으로 되돌린다.
    */
-  themeUnavailable?: boolean;
+  filtersLocked?: boolean;
+  /**
+   * 사진 이름(2026-11-15 「사진 이름도 마지막에 바꾸는 게 아니라 꾸미기에서 넣으면 되지 않을까?」). 완성되면 기록에
+   * 그 이름으로 남고, 기기에 저장하는 파일 이름도 된다. 비워 두면 날짜·시간으로 붙는다. 나중에 바꾸는 것은 기록에서만 한다.
+   * 주지 않으면 이름 칸이 없다.
+   */
+  photoName?: string;
+  onPhotoNameChange?: (name: string) => void;
 };
 
+/**
+ * 사진 고르기의 「꾸미기」(2026-11-14, 시안 B). 미리보기 바로 아래 [사진 | 꾸미기] 전환의 꾸미기 쪽이다.
+ *
+ * 예전에는 사진 여덟 장 밑에 「출력 옵션」 상자가 있어 폰에서는 스크롤해야 보였고, 고르는 동안 미리보기가
+ * 화면 밖에 있었다. 색은 이름표 단추 다섯 개와 색 코드 입력칸, 보정은 설명 문구가 붙은 상자 넷이었다.
+ * 이제 색은 편집기와 같은 동그란 견본이고, 보정은 내 사진에 그 보정을 입힌 견본이다. 고르면 위 미리보기에
+ * 바로 보인다.
+ *
+ * 꾸민 프레임은 테두리 고르기를 아예 두지 않는다. 서버 합성은 프레임에 저장된 배경을 쓰고 보낸 색을
+ * 버린다(lib/fourcutCompose.ts 의 usesStoredBackground) — 고르게 두면 고른 색이 저장될 때 조용히 사라진다.
+ * 프레임 내용을 못 읽었을 때도 같고, 그때는 화면 위 배너가 사실과 다시 불러올 길을 말한다(사진 선택 화면).
+ */
 export function FrameOutputOptionsPanel({
   borderColor,
   onBorderColorChange,
   outputFilter,
   onOutputFilterChange,
   hasCustomFrame,
-  themeUnavailable = false,
+  samplePhoto = null,
+  filtersLocked = false,
+  photoName,
+  onPhotoNameChange,
 }: FrameOutputOptionsPanelProps) {
-  // 회원도 색을 고를 수 있다 — 서버 합성이 `ComposeRequest.backgroundColor` 를 받는다.
-  // 잠기는 것은 꾸민 프레임뿐이다. 그 배경은 프레임에 저장돼 있고 이미지일 수도 있다.
-  // 프레임 내용을 못 읽었을 때도 잠긴다 — 서버는 그래도 저장된 배경을 쓰기 때문이다.
-  const backgroundLocked = hasCustomFrame;
+  const nameId = useId();
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <div>
-            <h2 className="text-xs font-medium text-zinc-200">출력 옵션</h2>
-          </div>
+    <div className="flex flex-col gap-5">
+      {hasCustomFrame ? null : (
+        <section className="flex flex-col gap-2.5">
+          <h2 className="text-[14px] font-extrabold text-(--hc-text)">테두리</h2>
+          {/* 견본은 '#' 없는 값을, 「다른 색」은 '#rrggbb' 를 준다. 세션에는 '#rrggbb' 로 둔다. */}
+          <ColorSwatches
+            label="테두리 색"
+            value={borderColor}
+            onChange={(color) => onBorderColorChange(normalizeHexColor(color))}
+          />
+        </section>
+      )}
 
-          {backgroundLocked ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] text-zinc-400">
-              {themeUnavailable
-                ? "프레임 내용을 확인하지 못했어요. 배경 색상은 프레임에 저장된 색으로 저장돼요."
-                : "꾸민 프레임을 선택해서 배경 색상은 프레임 설정을 그대로 사용해요."}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap gap-2">
-                {BORDER_COLORS.map((color) => (
-                  <button
-                    key={color.id}
-                    type="button"
-                    onClick={() => onBorderColorChange(color.value)}
-                    className={[
-                      "inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[12px]",
-                      borderColor === color.value
-                        ? "border-(--hc-primary-line) text-(--hc-primary-strong)"
-                        : "border-zinc-700 text-zinc-300",
-                    ].join(" ")}
-                  >
-                    <span
-                      className="h-3 w-3 rounded-full border border-black/10"
-                      style={{ backgroundColor: color.value }}
-                    />
-                    <span>{color.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  aria-label="배경색 고르기"
-                  value={normalizeHexColor(borderColor)}
-                  onChange={(e) => onBorderColorChange(e.target.value)}
-                  className="hc-input h-11 w-12 shrink-0 rounded-lg border"
-                />
-                <input
-                  aria-label="배경색 HEX 코드"
-                  value={borderColor}
-                  onChange={(e) => onBorderColorChange(normalizeHexColor(e.target.value))}
-                  className="hc-input h-11 min-w-0 flex-1 rounded-lg border px-3 font-mono text-[13px] tracking-[0.06em]"
-                  placeholder="#23262d"
-                  inputMode="text"
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  maxLength={7}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div>
-            <h3 className="text-xs font-medium text-zinc-200">보정 필터</h3>
-            <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
-              고른 보정 필터는 미리보기와 최종 이미지에 똑같이 적용돼요.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {FOURCUT_FILTERS.map((filter) => (
+      <section className="flex flex-col gap-2.5">
+        <h2 className="flex items-baseline gap-2 text-[14px] font-extrabold text-(--hc-text)">
+          보정
+          {filtersLocked ? <span className="text-[12px] font-semibold text-(--hc-muted)">회원 전용</span> : null}
+        </h2>
+        <div role="group" aria-label="보정" className="flex flex-wrap gap-3">
+          {FOURCUT_FILTERS.map((filter) => {
+            const selected = outputFilter === filter.id;
+            return (
               <button
                 key={filter.id}
                 type="button"
+                aria-pressed={selected}
+                disabled={filtersLocked}
                 onClick={() => onOutputFilterChange(filter.id)}
-                className={[
-                  "min-h-11 rounded-2xl border px-3 py-2.5 text-left transition-colors",
-                  outputFilter === filter.id
-                    ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg)"
-                    : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500",
-                ].join(" ")}
+                className="flex flex-col items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-45"
               >
-                <span className="block text-[12px] font-semibold text-zinc-100">
+                <span
+                  className={`block size-16 overflow-hidden rounded-2xl border border-(--hc-border) bg-(--hc-surface-muted) ${
+                    selected ? SWATCH_SELECTED_RING : ""
+                  }`}
+                >
+                  {samplePhoto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={samplePhoto}
+                      alt=""
+                      className="size-full object-cover"
+                      style={{ filter: filter.cssFilter }}
+                    />
+                  ) : null}
+                </span>
+                <span
+                  className={`text-[12px] ${
+                    selected ? "font-extrabold text-(--hc-text)" : "font-semibold text-(--hc-muted)"
+                  }`}
+                >
                   {filter.label}
                 </span>
-                <span className="mt-1 block text-[12px] text-zinc-400">
-                  {filter.description}
-                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      </div>
-    </section>
+      </section>
+
+      {onPhotoNameChange ? (
+        <section className="flex flex-col gap-2.5">
+          <label htmlFor={nameId} className="text-[14px] font-extrabold text-(--hc-text)">
+            사진 이름
+          </label>
+          <input
+            id={nameId}
+            value={photoName ?? ""}
+            onChange={(event) => onPhotoNameChange(event.target.value)}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            placeholder="비워 두면 날짜와 시간으로 붙어요"
+            enterKeyHint="done"
+            className="hc-input w-full rounded-xl border px-3.5 py-3 text-[14px]"
+          />
+        </section>
+      ) : null}
+    </div>
   );
 }

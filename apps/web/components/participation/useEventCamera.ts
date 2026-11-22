@@ -6,7 +6,7 @@ import { centerCrop } from "@/lib/canvas/captureCrop";
 /**
  * 행사 참가·부스 촬영용 카메라.
  *
- * 개인 촬영 훅(app/shoot/capture/_hooks/useCaptureFlow)은 개인 촬영 저장소·게스트 상태·라우터에
+ * 개인 촬영 훅(app/create/capture/_hooks/useCaptureFlow)은 개인 촬영 저장소·게스트 상태·라우터에
  * 묶여 있어 행사 흐름에 가져오지 않는다. 화면이 쓰는 것만 둔다: 스트림 시작·정지, 한 장 찍기.
  *
  * 권한이 없거나 브라우저가 카메라를 못 쓰면 상태로 알릴 뿐 **갤러리 불러오기로 대신하지 않는다**

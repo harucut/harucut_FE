@@ -13,6 +13,7 @@ import {
   type Member,
 } from "@/lib/studio/accessApi";
 import { listProjectMembers, putProjectMember, removeProjectMember } from "@/lib/studio/projectsApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Grant = { operations: EventOperation[]; permissions: EventPermission[] };
 
@@ -79,7 +80,7 @@ export function StudioProjectMembers({ projectId, workspaceId }: { projectId: st
   if (error) {
     return (
       <p role="alert" className="text-[13px] text-(--hc-danger)">
-        {error}
+        <Sentences text={error} />
       </p>
     );
   }
@@ -87,7 +88,7 @@ export function StudioProjectMembers({ projectId, workspaceId }: { projectId: st
   if (operators.length === 0) {
     return (
       <p className="text-[13px] text-(--hc-muted)">
-        운영 담당 멤버가 없어요. 멤버를 「운영 담당」으로 초대하거나 역할을 바꾸면 이 프로젝트를 맡길 수 있어요.
+        <Sentences text="운영 담당 멤버가 없어요. 멤버를 「운영 담당」으로 초대하거나 역할을 바꾸면 이 프로젝트를 맡길 수 있어요." />
       </p>
     );
   }
@@ -106,7 +107,7 @@ export function StudioProjectMembers({ projectId, workspaceId }: { projectId: st
     <div className="flex flex-col gap-3">
       {notice ? (
         <p role="alert" className="text-[13px] text-(--hc-danger)">
-          {notice}
+          <Sentences text={notice} />
         </p>
       ) : null}
       <ul className="flex flex-col gap-2">
@@ -208,7 +209,7 @@ export function StudioProjectMembers({ projectId, workspaceId }: { projectId: st
         })}
       </ul>
       <p className="text-[12px] text-(--hc-muted)">
-        프로젝트 권한은 이 프로젝트의 모든 행사에 같이 적용돼요. 행사마다 따로 준 권한은 행사 화면에서 관리해요.
+        <Sentences text="프로젝트 권한은 이 프로젝트의 모든 행사에 같이 적용돼요. 행사마다 따로 준 권한은 행사 화면에서 관리해요." />
       </p>
     </div>
   );

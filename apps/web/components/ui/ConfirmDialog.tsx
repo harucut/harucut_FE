@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   /** 무엇을 하려는지. 질문이 아니라 할 일을 적는다("사진을 지울까요?"). */
@@ -15,6 +16,8 @@ type Props = {
   running: boolean;
   /** 되돌릴 수 없는 동작이면 실행 버튼을 위험색으로 그린다. */
   destructive?: boolean;
+  /** 닫기 버튼 문구. 실행 문구에도 「취소」가 들어가면(「탈퇴 취소하기」) 헷갈리니 하는 일을 적는다. */
+  cancelLabel?: string;
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -36,6 +39,7 @@ export function ConfirmDialog({
   runningLabel,
   running,
   destructive = false,
+  cancelLabel = "취소",
   onClose,
   onConfirm,
 }: Props) {
@@ -109,7 +113,8 @@ export function ConfirmDialog({
             id="confirm-dialog-desc"
             className="mt-2 text-[13px] leading-[1.6] text-(--hc-muted)"
           >
-            {description}
+            {/* 문장마다 새 줄에서 시작한다 — 좁은 창에서 문장 중간에 줄이 넘어가지 않게(Sentences). */}
+            <Sentences text={description} />
           </p>
         ) : null}
 
@@ -138,7 +143,7 @@ export function ConfirmDialog({
             aria-disabled={running}
             className="hc-button-secondary flex-1 rounded-full border px-5 py-3 text-[13px] font-semibold aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           >
-            취소
+            {cancelLabel}
           </button>
           <button
             type="button"

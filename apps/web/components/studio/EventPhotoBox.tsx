@@ -24,6 +24,7 @@ import {
   type PhotoFilter,
   type PhotoStatus,
 } from "@/lib/studio/photosApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 const STATUS_FILTERS: Array<{ value: PhotoStatus | ""; label: string }> = [
   { value: "", label: "전체" },
@@ -265,7 +266,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
         <h1 className="break-words text-[30px] font-extrabold tracking-tight">{access?.name ? `${access.name} 사진함` : "사진함"}</h1>
         {/* 보관 종료 배치(ADR-0008 §7)가 기한이 지난 결과를 지운다 — 사진함에서도 빠진다. */}
         <p className="max-w-[65ch] text-[13px] text-(--hc-muted)">
-          사진은 만든 날부터 행사의 보관 기간이 지나면 지워져요. 필요한 사진은 미리 받아 두세요.
+          <Sentences text="사진은 만든 날부터 행사의 보관 기간이 지나면 지워져요. 필요한 사진은 미리 받아 두세요." />
         </p>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -344,7 +345,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
         {error ? (
           <div className="flex flex-col items-start gap-3">
             <p role="alert" className="text-[14px] text-(--hc-danger)">
-              {error}
+              <Sentences text={error} />
             </p>
             <button
               type="button"
@@ -358,7 +359,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
         ) : null}
         {notice && viewingIndex < 0 ? (
           <p role="status" className="text-[13px]">
-            {notice}
+            <Sentences text={notice} />
           </p>
         ) : null}
 
@@ -380,7 +381,7 @@ export function EventPhotoBox({ eventId }: { eventId: string }) {
               </button>
             </div>
           ) : (
-            <p className="text-[14px] text-(--hc-muted)">아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요.</p>
+            <p className="text-[14px] text-(--hc-muted)"><Sentences text="아직 찍은 사진이 없어요. 참가자가 사진을 만들면 여기에 모여요." /></p>
           )
         ) : null}
 

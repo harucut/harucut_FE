@@ -313,3 +313,14 @@ it("운영 담당에게는 꾸밀 행사 칸이 없다", async () => {
   await screen.findByText("운영 담당은 맡은 행사만 보여요.", { exact: false });
   expect(screen.queryByRole("heading", { name: "꾸밀 행사" })).not.toBeInTheDocument();
 });
+
+// 행사 운영은 개인 화면과 섞지 않는다(2026-11-14). 폰의 첫 화면에서 개인 홈으로 가는 「<」를 두지 않고,
+// 계정은 데스크톱과 같은 사람 아이콘(MY)으로 간다.
+it("행사 운영 첫 화면에는 개인 홈으로 가는 길이 없고, 계정으로 가는 사람 아이콘만 있다", async () => {
+  mockListWorkspaces.mockResolvedValue([ORG]);
+  render(<StudioHome />);
+  await screen.findByRole("heading", { name: "행사 운영" });
+
+  expect(screen.getByRole("link", { name: "마이페이지" })).toHaveAttribute("href", "/mypage");
+  expect(document.querySelector('a[href="/home"]')).toBeNull();
+});

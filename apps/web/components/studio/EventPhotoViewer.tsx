@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { getEventPhotoDownload, type Photo } from "@/lib/studio/photosApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 /** 원본 주소(5분)를 이만큼만 다시 쓴다. 넘으면 새로 받는다. */
 const FULL_URL_TTL_MS = 4 * 60_000;
@@ -155,7 +156,7 @@ export function EventPhotoViewer({
         <footer className="flex flex-col items-center gap-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           {notice ? (
             <p role="status" className="text-center text-[13px] text-white/85">
-              {notice}
+              <Sentences text={notice} />
             </p>
           ) : null}
           {canDownload || canDelete ? (

@@ -9,7 +9,7 @@
 
 4~8번은 셸과 무관하다(합성 원본 정리, 요금제 한도, 프레임 수정 시각, 셀 누끼 렌더 주체,
 합성 실패 코드). 창구가 같아 여기 모아 둔다.
-**막는 것은 1~4번이고, 5~8번은 답 대기이거나 「있으면 좋음」이다.**
+**막는 것은 1~4번이고(9번 사진 공유 링크는 백엔드 완료·PR 대기, 2026-11-16), 5~8번은 답 대기이거나 「있으면 좋음」이다.**
 
 **백엔드에 남은 요청은 이 문서가 소유한다.** 다른 문서가 같은 목록을 복제하면 해결된 항목이
 한쪽에만 지워진다 — `docs/backend-contract.md` 의 테두리색 항목이 실제로 그렇게 됐다.
@@ -216,7 +216,7 @@ DELETE /api/auth/devices/{token}                                       // 해제
 재시도가 원본을 매번 새로 올리던 것은 **이제 아니다.** `composeFourcutOnServer` 가
 올리기에 성공한 4장을 그때 쓴 멱등키에 묶어 들고 있다가(`lastUploadedSources`), 같은
 멱등키로 다시 오면 굽기도 올리기도 건너뛴다. 결과 화면의 「다시 준비하기」는 `retryNonce`
-를 멱등키에서 빼 뒀으므로(`apps/web/app/shoot/result/page.tsx`) 같은 키로 돌아온다 —
+를 멱등키에서 빼 뒀으므로(`apps/web/app/create/result/page.tsx`) 같은 키로 돌아온다 —
 **같은 탭에서 버튼을 몇 번 눌러도 원본은 한 벌뿐이다.**
 
 그래서 아래 수치는 "재시도 1회당 4개"가 아니다. 남는 경로만 남았고, 넷이다.
@@ -420,6 +420,36 @@ UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT(결과·썸네일 쌍 검증 실패, D09
 
 **프론트가 할 일 (열리면)**: `describeComposeFailure` 의 `ComposeFailedError` 분기에 코드별
 문구를 더한다. 고정 한 문장이 나가는 자리 하나만 바뀐다.
+
+---
+
+## 9. 사진 공유 링크 (백엔드 완료 — PR 대기, 공유 창의 스레드·X·링크 복사가 이것을 쓴다)
+
+**완료(2026-11-16)**: 하루컷 백엔드가 `feat/media-share-link`(7943eba, develop 기준)에 만들었다. PR 은 사용자가 연다
+(https://github.com/harucut/Harucut/pull/new/feat/media-share-link). 마이그레이션 V39(`media_share`)가 붙는다 — **백엔드가
+먼저 배포돼야** 프론트의 공유 링크가 열린다. 계약은 요청한 제안 그대로다.
+
+1. 링크 만들기(회원) — `POST /api/auth/user/media/{mediaId}/share-link` → `{ token }`. 사진마다 하나, 늘 같은 토큰(동시에 두 번
+   눌러도 같다). 토큰은 32바이트 base64url 43자. 오류: 남의·없는 사진 404 `GEN-031`, 보관 기간 지남 403 `SUBS-002`, 그 밖은
+   회원 경로 공통.
+2. 링크 열기(비로그인) — `GET /api/public/media-shares` + `Authorization: Bearer <token>` → `{ displayName, createdAt, imageUrl,
+   downloadUrl }`. 두 주소는 5분짜리 서명 주소(inline·attachment). `createdAt` 은 KST, 소수 초가 붙을 수 있다. 닫힘·무효는
+   전부 404 `MEDIA-002` 하나(토큰 없음·틀림·삭제·보관 기간 지남·주인 탈퇴 요청·탈퇴·정지). 틀린 토큰만 IP 당 분당 30회에서
+   429 `GEN-061` — 프론트는 둘 다 닫힌 링크로 다룬다. BFF 비밀과 방문자 IP 를 넘기면 방문자 단위로 센다.
+3. 닫기(DELETE)는 없다. 사진을 지우면 링크도 닫힌다.
+
+**알아 둘 것**
+- 주인이 정지·탈퇴 요청 상태면 닫히고, 풀리면 같은 링크가 다시 열린다.
+- 보관 기간: 지금 develop 은 세 요금제 모두 무제한이다(「임시로 통일」). `UserMediaController` 설명의 BASIC 3일·PLUS 3개월은
+  예전 값이다. 정책이 돌아오면 링크도 주인 사진 목록과 같은 판정으로 닫힌다.
+- 토큰은 원문으로 저장한다(같은 링크를 다시 줘야 해서). `/s/<token>` 이 호스팅 접근 기록에 남는다 — 프론트에는 분석 도구가 없다.
+
+**프론트(만들어 둠)**
+- 공유 창 `components/share/PhotoShareSheet.tsx` 가 열릴 때 1을 부른다(`lib/userMediaApi.ts` 의 `createMediaShareLink`,
+  프록시 `app/api/client/user/media/[mediaId]/share-link`).
+- 받는 사람 페이지 `app/s/[token]/page.tsx` 가 서버에서 2를 부른다(`lib/server/mediaShareServer.ts`). og:image 와 사진은
+  `/s/<token>/image`, 저장은 `/s/<token>/download` — 부를 때마다 2를 다시 불러 새 서명 주소로 302 한다.
+- 실제 백엔드로는 아직 눌러 보지 않았다. 계약 모양은 백엔드 OpenAPI(`docs/api/openapi.generated.json`)와 대조했다.
 
 ---
 

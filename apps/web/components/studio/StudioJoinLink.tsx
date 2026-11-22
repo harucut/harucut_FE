@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { QrCode } from "@/components/qr/QrCode";
 import { isNativeShell, nativeSaveImageBlob } from "@/lib/nativeBridge";
+import { Sentences } from "@/components/ui/Sentences";
 
 
 /** 화면의 QR 을 흰 여백까지 넣은 1024px PNG 로 굽는다. SVG 파일은 사진첩·인쇄소에서 열리지 않는 곳이 많다. */
@@ -132,7 +133,7 @@ export function StudioJoinLink({
         <p className="text-[12px] text-(--hc-muted)">PC 에서는 휴대폰 카메라로 QR 을 찍으면 내 폰에서 열려요.</p>
         {notice ? (
           <p role="status" className="text-[13px]">
-            {notice}
+            <Sentences text={notice} />
           </p>
         ) : null}
       </div>

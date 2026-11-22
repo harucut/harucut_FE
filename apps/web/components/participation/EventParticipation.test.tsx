@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { ApiRequestError } from "@/lib/clientApi";
 import { RESULT_POLL_MS, EventParticipation } from "@/components/participation/EventParticipation";
 import type { PublicEvent } from "@/lib/event/types";
+import { sentenceText } from "@/tests/sentenceText";
 
 const mockPush = jest.fn();
 jest.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -396,7 +397,7 @@ it("회차 시작이 한도로 막히면(ENT-002) 촬영 화면 대신 마감 �
   render(<EventParticipation slug="wedding-1027" />);
   fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
-  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(await screen.findByText(sentenceText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요."))).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "찍기 시작" })).not.toBeInTheDocument();
 });
 
@@ -409,7 +410,7 @@ it("촬영 한도에 걸리면 이미 만든 사진 목록으로 돌아가 받�
   render(<EventParticipation slug="wedding-1027" />);
   fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
 
-  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(await screen.findByText(sentenceText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요."))).toBeInTheDocument();
   expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
 });
 
@@ -423,7 +424,7 @@ it("합성 접수가 한도로 막혀도(ENT-002) 다시 보내지 않고 마감
   await shootAll();
 
   fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
-  expect(await screen.findByText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요.")).toBeInTheDocument();
+  expect(await screen.findByText(sentenceText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요."))).toBeInTheDocument();
   expect(api.submitEventCompose).toHaveBeenCalledTimes(1);
 });
 
@@ -471,7 +472,7 @@ describe("Codex 리뷰 반영(#523)", () => {
     api.listParticipantResults.mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }));
     fireEvent.click(screen.getByRole("button", { name: "다시 확인" }));
 
-    expect(await screen.findByText("사진 목록을 다시 확인하지 못했어요. 잠시 후 다시 눌러 주세요.")).toBeInTheDocument();
+    expect(await screen.findByText(sentenceText("사진 목록을 다시 확인하지 못했어요. 잠시 후 다시 눌러 주세요."))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
   });

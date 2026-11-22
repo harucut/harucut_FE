@@ -4,4 +4,4 @@ export const GUEST_TRIAL_COOKIE = "harucut_guest_trial";
 export const GUEST_TRIAL_COOKIE_MAX_AGE = 604800;
 
 /** 공개 CTA. 프론트 프록시가 쿠키만 보고 촬영으로 보내며 백엔드를 부르지 않는다. */
-export const PUBLIC_SHOOT_ENTRY = "/shoot/start";
+export const PUBLIC_SHOOT_ENTRY = "/create/start";

@@ -14,6 +14,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { COMPANY, CLIENT_REISSUE_UNAVAILABLE_CODE } from "@harucut/shared";
 import OAuthCallbackPage from "@/app/oauth2/callback/page";
 import { ApiRequestError } from "@/lib/clientApi";
+import { sentenceText } from "@/tests/sentenceText";
 
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
@@ -38,6 +39,13 @@ jest.mock("@/lib/socialLoginRedirect", () => ({
 
 jest.mock("@/lib/auth/authApi", () => ({
   reactivateAccount: () => mockReactivateAccount(),
+}));
+
+// 로그인 화면으로 돌려보내는 것도 문서 이동이라 목적지만 받는다(lib/redirect 의 replaceLocation).
+const mockReplaceLocation = jest.fn();
+jest.mock("@/lib/redirect", () => ({
+  ...jest.requireActual("@/lib/redirect"),
+  replaceLocation: (href: string) => mockReplaceLocation(href),
 }));
 
 // 인가를 다시 태우는 것은 문서 이동이라 jsdom 에서 볼 수 없다 — 부른 인자로 본다.
@@ -85,7 +93,7 @@ it("일시적인 실패에서는 세션을 지우지 않고 사유와 다시 시
 
   expect(
     await screen.findByText(
-      "일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      sentenceText("일시적인 문제로 로그인 상태를 갱신하지 못했어요. 잠시 후 다시 시도해 주세요."),
     ),
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
@@ -122,6 +130,12 @@ it("서버가 자격증명을 거부하면(401) 세션을 정리한다", async (
     expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"),
   );
   expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+  // 이 화면에서 말하지 않고 로그인 화면으로 돌려보낸다 — 그 화면이 폼 위 한 줄로 말한다.
+  await waitFor(() =>
+    expect(mockReplaceLocation).toHaveBeenCalledWith("/login?socialError=1&redirectTo=%2Fhome"),
+  );
+  expect(screen.queryByRole("heading", { name: "로그인하지 못했어요" })).toBeNull();
+  expect(window.alert).not.toHaveBeenCalled();
 });
 
 /*
@@ -138,24 +152,19 @@ describe("제공자가 실패로 돌려보낸 경우(?error=)", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("아무것도 묻거나 지우지 않고 실패를 알린 뒤 로그인으로 돌려보낸다", async () => {
+  it("아무것도 묻거나 지우지 않고 로그인 화면으로 바로 돌려보낸다", async () => {
     mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
     window.sessionStorage.setItem("social-login-provider", "kakao");
 
     render(<OAuthCallbackPage />);
 
-    expect(
-      await screen.findByText("로그인을 마치지 못했어요. 다시 시도해 주세요."),
-    ).toBeInTheDocument();
-    // 제목이 「처리 중」으로 남으면 본문과 반대 말을 한다.
-    expect(
-      screen.getByRole("heading", { name: "로그인하지 못했어요" }),
-    ).toBeInTheDocument();
-    // 원래 가려던 곳을 잃지 않는다. 로그인 화면도 같은 이유를 폼 위에 남긴다(socialError).
-    expect(
-      screen.getByRole("link", { name: "로그인으로 돌아가기" }),
-    ).toHaveAttribute("href", "/login?socialError=1&redirectTo=%2Fhistory");
-    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+    // 원래 가려던 곳을 잃지 않는다. 실패 이유는 로그인 화면이 폼 위 한 줄로 말한다(socialError).
+    await waitFor(() =>
+      expect(mockReplaceLocation).toHaveBeenCalledWith("/login?socialError=1&redirectTo=%2Fhistory"),
+    );
+    // 중간 실패 화면(제목·「로그인으로 돌아가기」)을 거치지 않는다 — 같은 말을 두 번 하지 않는다.
+    expect(screen.queryByRole("heading", { name: "로그인하지 못했어요" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "로그인으로 돌아가기" })).toBeNull();
 
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();
@@ -185,7 +194,7 @@ it.each(["DELETED"])(
     render(<OAuthCallbackPage />);
 
     expect(
-      await screen.findByText("이용이 제한된 계정이에요. 고객센터로 문의해 주세요."),
+      await screen.findByText(sentenceText("이용이 제한된 계정이에요. 고객센터로 문의해 주세요.")),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "로그인하지 못했어요" }),
@@ -205,18 +214,93 @@ it.each(["DELETED"])(
   상태는 서버 봉투 전체에서 읽는다(lib/authUserStatus.ts 의 readUserStatus). 예전엔 이 화면만
   봉투 안쪽을 따로 읽었다 — 읽는 자리가 갈라지면 한쪽만 고쳐져 복구 분기가 조용히 빠진다.
 */
-it("탈퇴요청 계정은 복구한 뒤 같은 제공자로 인가를 한 번 더 탄다", async () => {
-  mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
-  window.sessionStorage.setItem("social-login-provider", "kakao");
-  mockGet.mockResolvedValue(statusOf("DELETED_REQUESTED"));
-  mockReactivateAccount.mockResolvedValue(undefined);
-  jest.spyOn(window, "confirm").mockReturnValue(true);
+describe("탈퇴요청 계정", () => {
+  beforeEach(() => {
+    mockGet.mockResolvedValue(statusOf("DELETED_REQUESTED"));
+  });
 
-  render(<OAuthCallbackPage />);
+  async function findRecoveryDialog() {
+    return screen.findByRole("dialog", { name: "탈퇴를 취소할까요?" });
+  }
 
-  await waitFor(() =>
-    expect(mockStartSocialLogin).toHaveBeenCalledWith("kakao", "/history"),
-  );
-  expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
-  expect(mockDelete).not.toHaveBeenCalled();
+  it("이메일 로그인과 같은 창으로 묻고, 브라우저 기본 확인창은 쓰지 않는다", async () => {
+    const confirmSpy = jest.spyOn(window, "confirm");
+
+    render(<OAuthCallbackPage />);
+
+    const dialog = await findRecoveryDialog();
+    expect(dialog).toHaveAccessibleDescription(
+      "탈퇴를 신청한 계정이에요. 취소하면 지금처럼 하루컷을 쓸 수 있어요.",
+    );
+    expect(confirmSpy).not.toHaveBeenCalled();
+    // 묻기만 했다 — 답하기 전에는 복구도 로그아웃도 하지 않는다.
+    expect(mockReactivateAccount).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("복구한 뒤 같은 제공자로 인가를 한 번 더 탄다", async () => {
+    mockConsumeSocialLoginRedirect.mockReturnValueOnce("/history");
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+    mockReactivateAccount.mockResolvedValue(undefined);
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
+
+    await waitFor(() =>
+      expect(mockStartSocialLogin).toHaveBeenCalledWith("kakao", "/history"),
+    );
+    expect(mockReactivateAccount).toHaveBeenCalledTimes(1);
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("「로그아웃」을 고르면 복구하지 않고 방금 받은 세션을 지운다", async () => {
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "로그아웃" }));
+
+    await waitFor(() =>
+      expect(mockDelete).toHaveBeenCalledWith("/api/client/logout"),
+    );
+    expect(mockReactivateAccount).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem("social-login-provider")).toBeNull();
+  });
+
+  it("제공자를 모르면 복구한 뒤 쓸 수 없는 세션을 지우고 다시 로그인해 달라고 한다", async () => {
+    mockReactivateAccount.mockResolvedValue(undefined);
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
+
+    expect(
+      await screen.findByText(sentenceText("탈퇴를 취소했어요. 다시 로그인해 주세요.")),
+    ).toBeInTheDocument();
+    expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+    expect(mockStartSocialLogin).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "로그인으로 돌아가기" }),
+    ).toHaveAttribute("href", "/login");
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("복구에 실패하면 세션을 지우고 이 화면에서 이유를 말한다", async () => {
+    window.sessionStorage.setItem("social-login-provider", "kakao");
+    mockReactivateAccount.mockRejectedValue(new Error("network"));
+
+    render(<OAuthCallbackPage />);
+    await findRecoveryDialog();
+    fireEvent.click(screen.getByRole("button", { name: "탈퇴 취소하기" }));
+
+    expect(
+      await screen.findByText(sentenceText("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.")),
+    ).toBeInTheDocument();
+    expect(mockDelete).toHaveBeenCalledWith("/api/client/logout");
+    expect(mockStartSocialLogin).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.alert).not.toHaveBeenCalled();
+  });
 });
