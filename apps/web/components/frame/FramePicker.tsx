@@ -14,7 +14,6 @@ type FramePickerLayoutMode = "carousel" | "grid";
  * 프린트 종이 색. 예시 사진을 넣은 실물처럼 보여 준다 — 빈 칸만 보면 무엇이 나오는지 그려지지 않는다.
  * 고른 뒤의 기본 테두리 색과 같은 값이다 — 카드에서 본 그대로 사진 고르기·결과물에 나온다(2026-11-15).
  */
-const PRINT_PAPER = DEFAULT_FRAME_BACKGROUND_COLOR;
 
 /** 손을 뗀 뒤 이만큼 움직임이 없으면 가운데 온 카드를 고른 것으로 친다. */
 const SWIPE_SETTLE_MS = 120;
@@ -214,7 +213,7 @@ function FramePickerCard({
         <FramePreview
           frameId={frameId}
           images={DEMO_PHOTOS}
-          borderColor={PRINT_PAPER}
+          borderColor={DEFAULT_FRAME_BACKGROUND_COLOR}
           imageLoading="eager"
           className="max-h-full max-w-full border-0!"
         />

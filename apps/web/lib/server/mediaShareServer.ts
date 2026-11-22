@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { headers } from "next/headers";
+import { bffForwardHeaders } from "@/lib/server/bffForwardHeaders";
 import { isShareToken } from "@/lib/mediaShareLink";
 
 /** 받는 사람 페이지에 그릴 사진. 주소는 짧게 열리는 서명 주소라 화면에 그대로 박지 않는다(아래 SharedPhotoLookup). */
@@ -34,16 +34,7 @@ export async function fetchSharedPhoto(token: string): Promise<SharedPhotoLookup
   if (!isShareToken(token)) return { status: "closed" };
   if (!base) return { status: "unavailable" };
 
-  const forwarded: Record<string, string> = { authorization: `Bearer ${token}` };
-  const secret = process.env.BFF_SHARED_SECRET;
-  if (secret) {
-    const incoming = await headers();
-    const clientIp = incoming.get("x-forwarded-for") ?? incoming.get("x-real-ip");
-    if (clientIp) {
-      forwarded["x-harucut-bff-secret"] = secret;
-      forwarded["x-harucut-client-ip"] = clientIp;
-    }
-  }
+  const forwarded = { authorization: `Bearer ${token}`, ...(await bffForwardHeaders()) };
 
   try {
     const response = await fetch(`${base}/api/public/media-shares`, {

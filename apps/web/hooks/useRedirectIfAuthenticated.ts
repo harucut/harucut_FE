@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { useRouter } from "next/navigation";
 
 /**
@@ -14,11 +14,8 @@ export function useRedirectIfAuthenticated(
   onUnusableSession?: (userStatus: string) => void,
 ) {
   const router = useRouter();
-  // 콜백은 렌더마다 새 함수라 effect 를 다시 돌리지 않게 ref 로 읽는다.
-  const onUnusableRef = useRef(onUnusableSession);
-  useEffect(() => {
-    onUnusableRef.current = onUnusableSession;
-  }, [onUnusableSession]);
+  // 콜백은 렌더마다 새 함수라 effect 를 다시 돌리지 않게 Effect Event 로 읽는다.
+  const onUnusable = useEffectEvent((userStatus: string) => onUnusableSession?.(userStatus));
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +32,7 @@ export function useRedirectIfAuthenticated(
 
         const data = (await res.json()) as { authenticated?: boolean; userStatus?: string | null };
         if (!data.authenticated) {
-          if (data.userStatus) onUnusableRef.current?.(data.userStatus);
+          if (data.userStatus) onUnusable(data.userStatus);
           return;
         }
 

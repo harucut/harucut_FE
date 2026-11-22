@@ -19,7 +19,7 @@ export function usePreparedPhotoFile(url: string | null, filename: string): File
   const [prepared, setPrepared] = useState<{ url: string; file: File } | null>(null);
 
   useEffect(() => {
-    if (!url || isNativeShell() || typeof navigator === "undefined" || typeof navigator.canShare !== "function") return;
+    if (!url || isNativeShell() || typeof navigator.canShare !== "function") return;
     const controller = new AbortController();
     void fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: controller.signal })
       .then((response) => (response.ok ? response.blob() : null))

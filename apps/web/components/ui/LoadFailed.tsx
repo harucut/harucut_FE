@@ -8,19 +8,16 @@ import { Sentences } from "@/components/ui/Sentences";
  */
 export function RetryButton({
   onClick,
-  disabled,
   className = "",
 }: {
   onClick: () => void;
-  disabled?: boolean;
   className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={`hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-[13px] font-semibold disabled:opacity-50 ${className}`}
+      className={`hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-5 text-[13px] font-semibold ${className}`}
     >
       다시 시도
     </button>

@@ -447,7 +447,7 @@ export default function ShootResultPage() {
 
     // 꾸미기에서 붙인 이름(2026-11-15). 비워 두면 날짜·시간 이름이다. 완성 뒤 이름 바꾸기는 기록에서만 한다.
     const chosenName = photoName.trim();
-    const outputName = chosenName ? sanitizeDisplayName(chosenName, defaultDisplayName) : defaultDisplayName;
+    const outputName = sanitizeDisplayName(chosenName, defaultDisplayName);
 
     // 비회원은 기기에서 그린다. localBlob 이 있으면 계정 기록이 아니므로 서버 이름·공유 API 를 부르지 않는다.
     //
@@ -714,9 +714,7 @@ export default function ShootResultPage() {
         backgroundColor: effectiveBorderColor,
         // 꾸미기에서 붙인 이름으로 남긴다 — 기기에서 만들지 못한 뒤에 눌러도 같다.
         // 기본값을 쓰면 공들여 붙인 이름이 로그인 직후 조용히 사라진다.
-        displayName:
-          imageResult?.displayName?.trim() ||
-          (photoName.trim() ? sanitizeDisplayName(photoName, defaultDisplayName) : defaultDisplayName),
+        displayName: imageResult?.displayName?.trim() || sanitizeDisplayName(photoName, defaultDisplayName),
       },
       Date.now(),
     );
@@ -865,8 +863,6 @@ export default function ShootResultPage() {
   const localBlob = imageResult?.localBlob ?? null;
   const primaryClass =
     "hc-button-primary flex h-13 flex-1 items-center justify-center gap-2 rounded-full text-[16px] font-extrabold disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:opacity-45";
-  const roundButton =
-    "hc-button-secondary grid size-13 shrink-0 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45";
   const saved = imageResult != null && savedResult?.result === imageResult;
   /*
     저장 단추는 저장한 뒤에도 그대로다 — 모양도 크기도 이름도 안 바뀐다(2026-11-15 「그러면 막 버튼 크기 달라지고
@@ -883,7 +879,7 @@ export default function ShootResultPage() {
     </>
   );
 
-  let primary: ReactNode;
+  let primary: ReactNode = null;
   if (imageResult && localBlob) {
     primary = (
       <a
@@ -925,8 +921,6 @@ export default function ShootResultPage() {
         프레임 다시 고르기
       </button>
     );
-  } else {
-    primary = null;
   }
 
 
@@ -1065,21 +1059,17 @@ export default function ShootResultPage() {
             {primary ? (
               <div className="flex gap-2.5">
                 {primary}
-                {!guestMode && imageResult ? (
-                  <>
-                    {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}
-                    {!localBlob ? (
-                      <button
-                        type="button"
-                        aria-label="공유"
-                        aria-haspopup="dialog"
-                        onClick={() => setShareOpen(true)}
-                        className={roundButton}
-                      >
-                        <Share2 aria-hidden className="size-5" />
-                      </button>
-                    ) : null}
-                  </>
+                {/* 기기에서 만든 사진은 계정에 없어 링크를 만들 수 없다. */}
+                {!guestMode && imageResult && !localBlob ? (
+                  <button
+                    type="button"
+                    aria-label="공유"
+                    aria-haspopup="dialog"
+                    onClick={() => setShareOpen(true)}
+                    className="hc-button-secondary grid size-13 shrink-0 place-items-center rounded-full border disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Share2 aria-hidden className="size-5" />
+                  </button>
                 ) : null}
               </div>
             ) : null}

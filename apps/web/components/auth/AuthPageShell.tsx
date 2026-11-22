@@ -22,8 +22,6 @@ type Props = {
   무대의 두 프레임은 다른 사람들이다(2026-11-14). 같은 넉 장이 두 번 보였다 — 랜딩에서 먼저 고친 것과
   같은 까닭이다. 세로 4컷은 카페의 친구 둘, 2×2 는 커플이다(constants/demoPhotos.ts).
 */
-const STRIP_PHOTOS = DEMO_PHOTOS;
-const GRID_PHOTOS = DEMO_COUPLE_PHOTOS;
 
 export function AuthPageShell({ title, description, children, footer, backHref = "/", backLabel = "처음 화면으로" }: Props) {
   return (
@@ -51,7 +49,7 @@ export function AuthPageShell({ title, description, children, footer, backHref =
           >
             <FramePreview
               frameId="classic-4"
-              images={STRIP_PHOTOS}
+              images={DEMO_PHOTOS}
               borderColor="#0B0B0C"
               className="h-full! w-auto!"
             />
@@ -66,7 +64,7 @@ export function AuthPageShell({ title, description, children, footer, backHref =
           >
             <FramePreview
               frameId="grid-4"
-              images={GRID_PHOTOS}
+              images={DEMO_COUPLE_PHOTOS}
               borderColor="#0B0B0C"
               className="h-full! w-auto!"
             />

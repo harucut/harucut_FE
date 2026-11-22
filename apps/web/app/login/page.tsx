@@ -100,7 +100,6 @@ function LoginPageContent() {
       } catch (reactivateError) {
         console.error(reactivateError);
         await logout();
-        setRecovery(null);
         setErrors({ common: "탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요." });
         return;
       }
@@ -113,7 +112,6 @@ function LoginPageContent() {
       */
       if (target === "session") {
         await logout();
-        setRecovery(null);
         setRecoveredNotice(true);
         return;
       }
@@ -124,15 +122,14 @@ function LoginPageContent() {
       } catch (reloginError) {
         console.error(reloginError);
         await logout();
-        setRecovery(null);
         setErrors({ common: "탈퇴는 취소됐어요. 다시 로그인해 주세요." });
         return;
       }
 
-      setRecovery(null);
       exitGuestMode();
       window.location.href = redirectTarget;
     } finally {
+      setRecovery(null);
       setRecovering(false);
     }
   };

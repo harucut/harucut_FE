@@ -172,18 +172,23 @@ export default function OAuthCallbackPage() {
     window.location.href = "/login";
   };
 
+  // 쓸 수 없는 쿠키를 지우고 막다른 길에서 로그인으로 보낸다. 남겨 두면 로그인 화면이 그 세션을 보고 같은 질문을 또 한다.
+  const endAtLogin = async (message: string) => {
+    await clientApi.delete("/api/client/logout").catch(() => undefined);
+    clearSocialLoginProvider();
+    setAskRecovery(false);
+    setRecovering(false);
+    setMessage(message);
+    setDeadEnd({ loginHref: "/login", showSupport: false });
+  };
+
   const cancelWithdrawal = async () => {
     setRecovering(true);
     try {
       await reactivateAccount();
     } catch (reactivateError) {
       console.error(reactivateError);
-      await clientApi.delete("/api/client/logout").catch(() => undefined);
-      clearSocialLoginProvider();
-      setAskRecovery(false);
-      setRecovering(false);
-      setMessage("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.");
-      setDeadEnd({ loginHref: "/login", showSupport: false });
+      await endAtLogin("탈퇴 취소에 실패했어요. 잠시 후 다시 시도해 주세요.");
       return;
     }
 
@@ -202,14 +207,8 @@ export default function OAuthCallbackPage() {
     }
 
     // 제공자를 모르거나(세션 저장소가 비었을 때) 이미 한 번 다시 태웠는데도 여전히
-    // 탈퇴요청이면, 더 왕복시키지 않고 사용자가 직접 로그인하게 한다. 쓸 수 없는 쿠키는
-    // 지운다 — 남겨 두면 로그인 화면이 그 세션을 보고 같은 질문을 또 한다.
-    await clientApi.delete("/api/client/logout").catch(() => undefined);
-    clearSocialLoginProvider();
-    setAskRecovery(false);
-    setRecovering(false);
-    setMessage("탈퇴를 취소했어요. 다시 로그인해 주세요.");
-    setDeadEnd({ loginHref: "/login", showSupport: false });
+    // 탈퇴요청이면, 더 왕복시키지 않고 사용자가 직접 로그인하게 한다.
+    await endAtLogin("탈퇴를 취소했어요. 다시 로그인해 주세요.");
   };
 
   return (

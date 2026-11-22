@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { headers } from "next/headers";
+import { bffForwardHeaders } from "@/lib/server/bffForwardHeaders";
 import type { PublicEvent } from "@/lib/event/types";
 
 /** 첫 화면을 오래 붙잡지 않는다. 늦으면 브라우저가 받는다(지금까지와 같은 경로). */
@@ -12,16 +12,7 @@ const SERVER_FETCH_TIMEOUT_MS = 1_500;
 export const loadPublicEventOnServer = cache(async (slug: string): Promise<PublicEvent | null> => {
   const base = process.env.NEXT_PUBLIC_BASE_URL;
   if (!base || !/^[a-z0-9-]{3,40}$/.test(slug)) return null;
-  const forwarded: Record<string, string> = {};
-  const secret = process.env.BFF_SHARED_SECRET;
-  if (secret) {
-    const incoming = await headers();
-    const clientIp = incoming.get("x-forwarded-for") ?? incoming.get("x-real-ip");
-    if (clientIp) {
-      forwarded["x-harucut-bff-secret"] = secret;
-      forwarded["x-harucut-client-ip"] = clientIp;
-    }
-  }
+  const forwarded = await bffForwardHeaders();
   try {
     const response = await fetch(`${base}/api/public/events/${encodeURIComponent(slug)}`, {
       cache: "no-store",

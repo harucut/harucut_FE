@@ -184,16 +184,12 @@ function ShootPageContent() {
     setFrameId(frameId);
     setRemoteFrameId(remoteFrameId);
     setSource(source);
-    if (session.shots.length > 0 && reusable) {
+    // 갤러리에서 불러오기는 따로 화면이 없다 — 사진 고르기 화면 안에서 불러온다(2026-11-15).
+    if (source === "upload" || (reusable && session.shots.length > 0)) {
       router.push("/create/select");
       return;
     }
     if (session.shots.length > 0) session.resetShots();
-    // 갤러리에서 불러오기는 따로 화면이 없다 — 사진 고르기 화면 안에서 불러온다(2026-11-15).
-    if (source === "upload") {
-      router.push("/create/select");
-      return;
-    }
     // 촬영 화면에는 뒤로가기 단추가 없다(2026-11-15). 기기·브라우저의 뒤로가기로 돌아와도 고른 레이아웃이 남게
     // 이 화면 주소에 적어 둔다 — 예전 단추가 `/create?frame=` 로 보내던 것과 같은 자리로 돌아온다.
     const here = new URLSearchParams(searchParams.toString());

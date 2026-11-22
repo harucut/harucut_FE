@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ImagePlus, Scissors, Sticker, Type, X } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import {

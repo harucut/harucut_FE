@@ -369,7 +369,7 @@ export function AdminEntitlements({ reloadKey = 0 }: { reloadKey?: number }) {
                       <p className="text-(--hc-muted)">영향을 확인하는 중…</p>
                     ) : (
                       <p>
-                        <Sentences text={`운영 중 행사 ${open.impact.liveEvents.length}개${open.impact.liveEvents.length ? `(${open.impact.liveEvents.join(", ")})` : ""} · 아직 끝나지 않은 합성${" "}${open.impact.openReservations}건. 회수하면 새 게시·촬영을 받지 않고, 접수된 합성은 그대로 마무리돼요.`} />
+                        <Sentences text={`운영 중 행사 ${open.impact.liveEvents.length}개${open.impact.liveEvents.length ? `(${open.impact.liveEvents.join(", ")})` : ""} · 아직 끝나지 않은 합성 ${open.impact.openReservations}건. 회수하면 새 게시·촬영을 받지 않고, 접수된 합성은 그대로 마무리돼요.`} />
                       </p>
                     )}
                     <label className="flex flex-col gap-1">

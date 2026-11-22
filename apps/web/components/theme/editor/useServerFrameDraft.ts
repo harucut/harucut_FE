@@ -75,7 +75,7 @@ function hasUserEdits() {
  * 주소를 받는 사이 편집이 들어왔으면(canApply 가 false) 들이지 않고 false 를 돌려준다 — 들이면 방금 한 편집과
  * 되돌리기 이력까지 덮는다(Codex 리뷰 #604).
  */
-async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument, canApply: () => boolean = () => true) {
+async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument, canApply: () => boolean) {
   const resolved = await resolveThemeAssetUrls({
     frameId: doc.frameId,
     components: doc.components as ThemeExportJson["components"],

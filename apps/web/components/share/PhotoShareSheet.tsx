@@ -226,11 +226,7 @@ export function PhotoShareSheet({ open, onClose, mediaId, title, thumbnailSrc, p
             </p>
             <RetryButton
               onClick={() => {
-                setFetched((prev) => {
-                  const next = { ...prev };
-                  delete next[mediaId];
-                  return next;
-                });
+                setFetched((prev) => ({ ...prev, [mediaId]: { status: "loading" } }));
                 setAttempt((value) => value + 1);
               }}
             />

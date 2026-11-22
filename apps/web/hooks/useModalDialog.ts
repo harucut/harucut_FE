@@ -243,15 +243,9 @@ export function useModalDialog(isOpen: boolean, onClose: () => void) {
         다시 훑으며 모달 뒤쪽 요소로 새어 나갔다 — `aria-modal` 을 선언해 놓고 트랩이
         풀린 상태다. 아래에 깔린 다이얼로그에 남아 있던 포커스도 여기서 회수한다.
       */
-      if (!container.contains(active)) {
-        event.preventDefault();
-        (event.shiftKey ? lastItem : firstItem).focus();
-        return;
-      }
-
       // 열 때 포커스는 다이얼로그 자체에 있다. 브라우저에 맡기면 Shift+Tab 이 다이얼로그 앞쪽,
-      // 곧 뒤 화면으로 빠진다. Tab 은 첫 컨트롤, Shift+Tab 은 마지막 컨트롤로 보낸다.
-      if (active === container) {
+      // 곧 뒤 화면으로 빠진다. 둘 다 Tab 은 첫 컨트롤, Shift+Tab 은 마지막 컨트롤로 보낸다.
+      if (!container.contains(active) || active === container) {
         event.preventDefault();
         (event.shiftKey ? lastItem : firstItem).focus();
         return;

@@ -5,7 +5,7 @@ import { useModalDialog } from "@/hooks/useModalDialog";
 
 type Hsv = { h: number; s: number; v: number };
 
-const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+const clamp = (value: number) => Math.min(1, Math.max(0, value));
 
 /** '#rrggbb'·'rrggbb' → HSV(h 0~360, s·v 0~1). 읽지 못하면 잉크(#18181a)로 본다. */
 export function hexToHsv(hex: string): Hsv {

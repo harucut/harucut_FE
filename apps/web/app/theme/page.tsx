@@ -104,16 +104,10 @@ function ThemePageContent() {
           onSelectionChange={({ remoteFrameId }) => setEditingFrameId(remoteFrameId)}
           showAllSavedFrames
           onConfirm={({ frameId, remoteFrameId }) => {
-            // 저장한 프레임을 골랐으면 그 프레임을 고친다.
-            if (remoteFrameId != null) {
-              setFrameId(frameId);
-              setRemoteFrameId(remoteFrameId);
-              router.push("/theme/sticker");
-              return;
-            }
-            if (isLoading || isAtCapacity) return;
+            // 저장한 프레임을 골랐으면 그 프레임을 고친다. 새로 만들기만 목록을 다 읽고 자리가 있을 때 된다.
+            if (remoteFrameId == null && (isLoading || isAtCapacity)) return;
             setFrameId(frameId);
-            setRemoteFrameId(null);
+            setRemoteFrameId(remoteFrameId);
             router.push("/theme/sticker");
           }}
           belowPicker={
