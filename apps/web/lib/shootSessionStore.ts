@@ -383,7 +383,8 @@ export const useShootSession = create<ShootSessionState>((set, get) => ({
   removeShotPhoto: (index) =>
     set((state) => ({
       shots: state.shots.filter((_, i) => i !== index),
-      selectedIndexes: createEmptySlots(),
+      // 고르기와 빼기가 한 화면이다 — 뺀 사진만 칸에서 빠지고, 뒤 사진들은 번호가 하나씩 당겨진다. 다른 칸은 그대로 둔다.
+      selectedIndexes: state.selectedIndexes.map((s) => (s == null || s === index ? null : s > index ? s - 1 : s)),
       imageResult: null,
     })),
 

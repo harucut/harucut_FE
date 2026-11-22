@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, LayoutGrid, WandSparkles } from "lucide-react";
+import { ImagePlus, LayoutGrid, WandSparkles, X } from "lucide-react";
 import { FramePreview, type FrameMedia } from "@/components/frame/FramePreview";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import { SLOT_COLORS } from "@/constants/colors";
@@ -39,6 +39,11 @@ type FrameSelectPanelProps = {
   addPhotosDisabled?: boolean;
   /** 사진 목록 바로 위 한 줄(불러오기 안내·제외 안내). */
   photosNotice?: string | null;
+  /**
+   * 불러온 사진 빼기. 주면 사진마다 「빼기」가 생긴다 — 자리가 다 찬 뒤에도 잘못 담은 사진을 바꿀 수 있게(Codex 리뷰 #604,
+   * 예전 불러오기 화면의 빼기 단추와 같은 모양). 찍은 사진은 다시 찍으므로 주지 않는다.
+   */
+  onRemovePhoto?: (index: number) => void;
 };
 
 export function FrameSelectPanel({
@@ -60,6 +65,7 @@ export function FrameSelectPanel({
   addingPhotos = false,
   addPhotosDisabled = false,
   photosNotice = null,
+  onRemovePhoto,
 }: FrameSelectPanelProps) {
   const baseItems: FrameMedia[] = useMemo(() => {
     if (media && media.length) return media;
@@ -162,7 +168,6 @@ export function FrameSelectPanel({
         {decorating ? (
           <section className="pt-1 pb-2">{renderExtraControls?.()}</section>
         ) : (
-          <>
             <section className="space-y-2">
               {photosNotice ? (
                 // 제외 안내는 오류가 아니라 알림이다 — 위험색(빨강)을 쓰지 않는다.
@@ -196,8 +201,8 @@ export function FrameSelectPanel({
                     const slotColor = isSelected ? SLOT_COLORS[slotIndex % SLOT_COLORS.length] : null;
 
                     return (
+                      <div key={index} className="relative">
                       <button
-                        key={index}
                         type="button"
                         onClick={() => handleToggle(index, isSelected)}
                         style={slotColor ? { aspectRatio, borderColor: slotColor, boxShadow: `0 0 0 2px ${slotColor}` } : { aspectRatio }}
@@ -210,7 +215,7 @@ export function FrameSelectPanel({
                               : `${index + 1}번 사진 선택`
                         }
                         className={[
-                          "group relative overflow-hidden rounded-xl border bg-black text-left transition",
+                          "group relative block w-full overflow-hidden rounded-xl border bg-black text-left transition",
                           isSelected
                             ? ""
                             : isFull
@@ -236,12 +241,25 @@ export function FrameSelectPanel({
                           </span>
                         ) : null}
                       </button>
+                      {/* 칸 번호 배지(오른쪽 위)와 겹치지 않게 왼쪽 위. 보이는 원은 24px, 눌리는 면은 44px. */}
+                      {onRemovePhoto ? (
+                        <button
+                          type="button"
+                          onClick={() => onRemovePhoto(index)}
+                          aria-label={`${index + 1}번 사진 빼기`}
+                          className="absolute left-0 top-0 grid size-11 place-items-center rounded-full"
+                        >
+                          <span className="grid size-6 place-items-center rounded-full bg-black/70 text-white">
+                            <X aria-hidden className="size-3.5" />
+                          </span>
+                        </button>
+                      ) : null}
+                      </div>
                     );
                   })}
                 </div>
               )}
             </section>
-          </>
         )}
 
         {/* 흐름의 주 CTA 는 업로드 화면(h-12 · 15px · 800)과 같은 크기다. 화면마다 달랐다.

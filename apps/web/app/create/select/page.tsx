@@ -42,6 +42,7 @@ export default function ShootSelectPage() {
     source,
     resetShots,
     addShotPhotos,
+    removeShotPhoto,
   } = useShootSession();
   // 사진이 어디서 왔는지는 여기서 **문구에만** 쓴다. 고르는 방식도, 그 뒤 합성도 같다.
   const fromUpload = source === "upload";
@@ -200,6 +201,7 @@ export default function ShootSelectPage() {
           onAddPhotos={canImport ? () => void openImport() : undefined}
           addingPhotos={isImporting}
           addPhotosDisabled={importFull}
+          onRemovePhoto={canImport ? removeShotPhoto : undefined}
           photosNotice={importNotice}
           incompleteButtonLabel="4장을 골라 주세요"
           nextButtonLabel="다음 단계로"

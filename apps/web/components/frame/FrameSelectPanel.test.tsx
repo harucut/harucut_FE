@@ -20,6 +20,21 @@ describe("FrameSelectPanel", () => {
     jest.clearAllMocks();
   });
 
+  // Codex 리뷰 #604 — 불러온 사진이 상한에 차면 잘못 담은 사진을 바꿀 길이 없었다.
+  it("빼기를 주면 사진마다 빼기 단추가 생기고, 누르면 그 사진을 뺀다", () => {
+    const onRemovePhoto = jest.fn();
+    render(<FrameSelectPanel {...baseProps} selectedIndexes={[null, null, null, null]} onRemovePhoto={onRemovePhoto} />);
+    fireEvent.click(screen.getByRole("button", { name: "2번 사진 빼기" }));
+    expect(onRemovePhoto).toHaveBeenCalledWith(1);
+    // 빼기는 고르기가 아니다.
+    expect(baseProps.onToggleSelect).not.toHaveBeenCalled();
+  });
+
+  it("찍은 사진처럼 빼기를 주지 않으면 빼기 단추가 없다", () => {
+    render(<FrameSelectPanel {...baseProps} selectedIndexes={[null, null, null, null]} />);
+    expect(screen.queryByRole("button", { name: /사진 빼기$/ })).toBeNull();
+  });
+
   // 선택 개수가 maxSelect보다 작으면 다음 버튼은 비활성화되어야 합니다.
   it("disables next button when selected count is not enough", () => {
     render(

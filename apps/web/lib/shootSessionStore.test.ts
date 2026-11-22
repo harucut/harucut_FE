@@ -247,3 +247,15 @@ describe("갤러리에서 불러오기", () => {
     expect(useShootSession.getState().selectedIndexes).toEqual([1, null, null, null]);
   });
 });
+
+// 고르기와 빼기가 한 화면이 됐다(Codex 리뷰 #604) — 사진 하나를 빼도 다른 칸에 고른 사진은 그대로다.
+describe("removeShotPhoto", () => {
+  it("뺀 사진만 칸에서 빠지고, 뒤 사진들은 번호가 하나씩 당겨진다", () => {
+    useShootSession.getState().reset();
+    useShootSession.setState({ shots: ["a", "b", "c", "d", "e"], selectedIndexes: [4, 1, 0, 2] });
+    useShootSession.getState().removeShotPhoto(1);
+    const state = useShootSession.getState();
+    expect(state.shots).toEqual(["a", "c", "d", "e"]);
+    expect(state.selectedIndexes).toEqual([3, null, 0, 1]);
+  });
+});
