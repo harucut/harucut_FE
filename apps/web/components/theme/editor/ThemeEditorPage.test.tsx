@@ -550,6 +550,22 @@ describe("ThemeEditorPage save flow", () => {
       expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
     });
 
+    // Codex 리뷰 #604 — 찾기가 끝난 뒤 늦게 되살리면 그사이 한 편집과 되돌리기 이력이 사라졌다.
+    it("서버 초안을 찾는 사이 고치기 시작했으면 남은 편집으로 덮지 않는다", async () => {
+      mockServerDraftState.settled = false;
+      await seedDraft();
+      const { container, rerender } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+
+      editorStoreState.past = [{}];
+      mockServerDraftState.settled = true;
+      rerender(<ThemeEditorPage frameId="classic-4" />);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
     it("다른 기기의 더 새로운 초안으로 열었으면 이 기기의 더 오래된 편집은 버린다", async () => {
       mockServerDraftState.restored = true;
       await seedDraft();

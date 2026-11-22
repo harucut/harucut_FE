@@ -516,6 +516,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       draft.background.type === "IMAGE" && draft.background.key
         ? { ...draft.background, url: (await getImageUrlByKey(draft.background.key)) ?? draft.background.url }
         : draft.background;
+    // 주소를 받는 사이 고치기 시작했으면 덮지 않는다(아래 effect 와 같은 규칙).
+    if (useThemeEditorStore.getState().past.length > 0) return;
     recoveredLocalDraftRef.current = true;
     hydrateDraft({ ...draft, background, components: resolved.components as EditorDraft["components"] }, { preserveHidden: true });
   };
@@ -529,6 +531,9 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     if (!localRecovery || !serverDraft.settled) return;
     /* eslint-disable react-hooks/set-state-in-effect -- 서버 초안 찾기가 끝난 뒤 한 번만 정한다 */
     if (serverDraft.restored) dropLocalRecovery();
+    // 찾는 사이 이미 고치기 시작했으면 되살리지 않는다 — 되살리면 그 편집과 되돌리기 이력이 사라진다(Codex 리뷰 #604).
+    // 복구본을 꺼낼 때와 같은 규칙이다 — 다음 자동 저장이 남은 복구본을 지금 편집으로 바꾼다.
+    else if (useThemeEditorStore.getState().past.length > 0) setLocalRecovery(null);
     else void restoreLocalRecovery();
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 복구본·찾기 결과가 바뀔 때만 판단한다

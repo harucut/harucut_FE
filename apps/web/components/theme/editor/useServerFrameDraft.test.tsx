@@ -247,5 +247,59 @@ describe("Codex 리뷰 반영", () => {
     expect(mockGet).toHaveBeenCalledWith("Dr3");
     expect(result.current.restored).toBe(true);
   });
+
+  // #604: 서버 초안을 받는 사이 고친 것이 늦게 도착한 자동 복원에 덮였다(되돌리기 이력까지).
+  it("서버 초안을 찾는 사이 고쳤으면 덮지 않고, 어느 쪽을 남길지 고를 때까지 쓰지 않는다", async () => {
+    mockList.mockResolvedValue([{ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z" }]);
+    let resolveGet: (v: unknown) => void = () => {};
+    mockGet.mockImplementation(() => new Promise((resolve) => (resolveGet = resolve)));
+    const { result } = renderDraftHook();
+    await flush();
+    expect(mockGet).toHaveBeenCalledWith("Dr9");
+
+    act(() => useThemeEditorStore.getState().setBackgroundColor("ff0000"));
+    await act(async () => {
+      resolveGet({ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z", document: serverDoc("123456") });
+    });
+    await flush();
+
+    expect(useThemeEditorStore.getState().backgroundColor).toBe("ff0000");
+    expect(useThemeEditorStore.getState().past.length).toBeGreaterThan(0);
+    expect(result.current.restored).toBe(false);
+    expect(result.current.conflict).toEqual({ revision: 5 });
+    await afterDebounce();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  // 새 프레임은 계정을 안 순간 이 기기 임시본을 되살린다. 그것은 고친 것이 아니다 — 더 새로운 다른 기기 초안이 이긴다.
+  it("찾는 사이 이 기기 임시본을 되살린 것은 편집으로 치지 않는다", async () => {
+    mockList.mockResolvedValue([{ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z" }]);
+    let resolveGet: (v: unknown) => void = () => {};
+    mockGet.mockImplementation(() => new Promise((resolve) => (resolveGet = resolve)));
+    const { result } = renderDraftHook();
+    await flush();
+
+    act(() =>
+      useThemeEditorStore.getState().hydrateDraft({
+        ownerId: OWNER,
+        frameId: "classic-4",
+        backgroundColor: "abcdef",
+        background: { type: "COLOR", value: "abcdef" },
+        cellCutouts: [false, false, false, false],
+        cells: null,
+        components: [],
+        savedAt: Date.parse("2026-10-26T00:00:00Z"),
+      }),
+    );
+    await act(async () => {
+      resolveGet({ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z", document: serverDoc("123456") });
+    });
+    await flush();
+
+    expect(useThemeEditorStore.getState().backgroundColor).toBe("123456");
+    expect(result.current.restored).toBe(true);
+    expect(result.current.conflict).toBeNull();
+  });
 });
 

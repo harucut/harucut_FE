@@ -56,8 +56,20 @@ function currentDocument() {
   });
 }
 
-/** 서버 문서를 편집기에 들인다. key 로 된 이미지는 그릴 주소를 먼저 붙인다(저장본을 열 때와 같다). */
-async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
+/**
+ * 이번 세션에 사용자가 고친 것이 있다. 저장본 불러오기와 초안 들이기(hydrateDraft)는 되돌리기 이력을 비우고 편집만
+ * 이력을 쌓는다 — 그래서 이 기기 임시본을 되살린 것은 편집으로 치지 않는다(내용을 견주면 그것까지 편집으로 본다).
+ */
+function hasUserEdits() {
+  return useThemeEditorStore.getState().past.length > 0;
+}
+
+/**
+ * 서버 문서를 편집기에 들인다. key 로 된 이미지는 그릴 주소를 먼저 붙인다(저장본을 열 때와 같다).
+ * 주소를 받는 사이 편집이 들어왔으면(canApply 가 false) 들이지 않고 false 를 돌려준다 — 들이면 방금 한 편집과
+ * 되돌리기 이력까지 덮는다(Codex 리뷰 #604).
+ */
+async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument, canApply: () => boolean = () => true) {
   const resolved = await resolveThemeAssetUrls({
     frameId: doc.frameId,
     components: doc.components as ThemeExportJson["components"],
@@ -66,6 +78,7 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
     doc.background.type === "IMAGE" && doc.background.key
       ? { ...doc.background, url: (await getImageUrlByKey(doc.background.key)) ?? undefined }
       : doc.background;
+  if (!canApply()) return false;
   useThemeEditorStore.getState().hydrateDraft({
     ownerId,
     frameId: doc.frameId,
@@ -76,6 +89,7 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
     components: resolved.components as ServerEditorDocument["components"],
     savedAt: Date.now(),
   }, { preserveHidden: true });
+  return true;
 }
 
 /**
@@ -86,6 +100,7 @@ async function hydrateFromDocument(ownerId: string, doc: ServerEditorDocument) {
  *  - 다른 기기의 초안이 더 새로우면 묻지 않고 그 초안으로 연다(2026-11-15 「다른 기기의 초안은 뭐야. 다른 기기 꺼를
  *    가지고 있으면 그냥 그걸로 보여주면 되지」). 예전에는 「다른 기기에서 …에 편집한 초안이 있어요」로 [지금 화면 유지]·
  *    [초안 불러오기]를 물었다. 더 새로운 쪽을 여는 것이라 그 기기의 작업은 사라지지 않는다.
+ *  - 다만 이 화면에서 이미 고쳤으면 더 새로운 초안이어도 덮지 않고, 아래 충돌처럼 어느 쪽을 남길지 고르게 한다.
  *  - 다른 기기가 먼저 저장했으면(DRAFT-001) 멈추고 고르게 한다. 조용히 덮지 않는다.
  *  - 너무 크면(DRAFT-002) 이 세션은 이 기기에만 둔다. 로컬 초안은 계속 돈다.
  *  - 이번 세션에 편집이 없으면 새 초안을 만들지 않는다.
@@ -226,10 +241,19 @@ export function useServerFrameDraft(options: {
               : null
             : (loadEditorDraft(ownerId, frameId)?.savedAt ?? null);
           if (localSavedAt === null || Date.parse(draft.updatedAt) > localSavedAt + SAME_DEVICE_SLACK_MS) {
-            await hydrateFromDocument(ownerId, document);
+            // 이 화면에서 이미 고쳤으면(찾는 사이든 그 전이든) 덮지 않는다 — 더 새로운 초안이 있다는 것만 알리고 어느
+            // 쪽을 남길지 고르게 한다. 조회와 주소 받기는 오래 걸릴 수 있고 그동안에도 편집기는 열려 있다. 고르기
+            // 전에는 쓰지 않는다 — 그 기기의 초안을 조용히 덮지 않게(Codex 리뷰 #604).
+            const canApply = () => !hasUserEdits();
+            const applied = canApply() && (await hydrateFromDocument(ownerId, document, canApply));
             if (cancelled) return;
-            lastSentRef.current = JSON.stringify(document);
-            setRestored(true);
+            if (applied) {
+              lastSentRef.current = JSON.stringify(document);
+              setRestored(true);
+            } else {
+              blockedRef.current = true;
+              setConflict({ revision: draft.revision });
+            }
           }
           break;
         }

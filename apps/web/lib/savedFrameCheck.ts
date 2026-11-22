@@ -11,6 +11,14 @@ import type { ThemeExportJson } from "@/lib/types/themeEditor";
 const ASSET_TIMEOUT_MS = 15_000;
 
 /**
+ * 확인 전체(프레임 조회·주소 받기·그림 열기)를 이만큼 기다린다. 프레임 조회나 주소 요청이 응답 없이 멈추면 그림
+ * 상한(위)까지 가지도 못해 찍기 단추가 「확인 중…」으로 영영 잠겼다(Codex 리뷰 #604). 넘기면 다시 누르게 한다.
+ * 실측이 아니다 — 안 끝나면 사용자가 갇히는 곳에 이미 건 상한(lib/authSession.ts 의 STATUS_DEADLINE_MS 등)과 맞췄다.
+ */
+export const SAVED_FRAME_CHECK_TIMEOUT_MS = 30_000;
+const CHECK_FAILED = "프레임을 불러오지 못했어요. 잠시 후 다시 눌러 주세요.";
+
+/**
  * 저장한(꾸민) 프레임을 그릴 수 있는 모양으로 — 배경 그림과 스티커의 주소를 붙인다.
  * 배경 IMAGE 와 컴포넌트 자산은 key 로만 저장돼 있다. 주소를 못 받으면 비워 둔다(그리는 쪽은 색으로 폴백한다).
  */
@@ -50,7 +58,15 @@ function loadImage(url: string) {
  * 읽어 보면 알고, 마지막은 서버 합성이 쓰는 그 파일을 브라우저로 열어 보면 안다(같은 저장소의 같은 객체).
  * 서버만 못 읽는 경우(GEN-002·003)는 여기서 다 거르지 못한다 — 그때는 완성 화면이 프레임을 다시 고르게 한다.
  */
-export async function checkSavedFrame(remoteFrameId: number): Promise<string | null> {
+export function checkSavedFrame(remoteFrameId: number): Promise<string | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve(CHECK_FAILED), SAVED_FRAME_CHECK_TIMEOUT_MS);
+  });
+  return Promise.race([inspectSavedFrame(remoteFrameId), deadline]).finally(() => clearTimeout(timer));
+}
+
+async function inspectSavedFrame(remoteFrameId: number): Promise<string | null> {
   let frame: RemoteFrame;
   try {
     frame = await getFrame(remoteFrameId);
@@ -60,7 +76,7 @@ export async function checkSavedFrame(remoteFrameId: number): Promise<string | n
     if (code?.startsWith("SUBS-") || status === 403) {
       return getUserFacingApiErrorMessage(error, "지금 요금제로는 이 프레임을 쓸 수 없어요.");
     }
-    return "프레임을 불러오지 못했어요. 잠시 후 다시 눌러 주세요.";
+    return CHECK_FAILED;
   }
 
   if (frame.cells?.length && !freeCellsEnabled()) return "이 프레임은 아직 촬영에 쓸 수 없어요. 곧 열릴 예정이에요.";
@@ -70,7 +86,7 @@ export async function checkSavedFrame(remoteFrameId: number): Promise<string | n
     theme = await themeWithAssetUrls(frame);
   } catch (error) {
     console.error(error);
-    return "프레임을 불러오지 못했어요. 잠시 후 다시 눌러 주세요.";
+    return CHECK_FAILED;
   }
 
   /*
