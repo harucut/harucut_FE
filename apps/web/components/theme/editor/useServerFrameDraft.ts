@@ -137,6 +137,17 @@ export function useServerFrameDraft(options: {
   const stoppedRef = useRef(false);
   // 저장 중에 들어온 편집은 끝난 뒤 한 번 더 쓴다 — 자기 자신을 부르므로 ref 로 잇는다.
   const syncRef = useRef<() => Promise<void>>(async () => {});
+  /*
+    편집 세션 번호. 편집기를 나가거나 다른 프레임을 열면 바뀐다. 편집기 상태는 전역 스토어라, 그 전에 시작한 불러오기가
+    늦게 끝나면 다음 편집기에 이전 초안이 들어간다(Codex 리뷰 #604).
+  */
+  const sessionRef = useRef(0);
+  useEffect(
+    () => () => {
+      sessionRef.current += 1;
+    },
+    [ownerId, frameId, remoteFrameId, workspaceId],
+  );
 
   const sync = useCallback(async () => {
     if (!ownerId || stoppedRef.current || !discoveredRef.current || blockedRef.current) return;
@@ -244,7 +255,8 @@ export function useServerFrameDraft(options: {
             // 이 화면에서 이미 고쳤으면(찾는 사이든 그 전이든) 덮지 않는다 — 더 새로운 초안이 있다는 것만 알리고 어느
             // 쪽을 남길지 고르게 한다. 조회와 주소 받기는 오래 걸릴 수 있고 그동안에도 편집기는 열려 있다. 고르기
             // 전에는 쓰지 않는다 — 그 기기의 초안을 조용히 덮지 않게(Codex 리뷰 #604).
-            const canApply = () => !hasUserEdits();
+            // 그사이 편집기를 나갔으면(cancelled) 아무것도 넣지 않는다 — 새 편집기는 이력을 비우므로 편집 여부로는 못 거른다.
+            const canApply = () => !cancelled && !hasUserEdits();
             const applied = canApply() && (await hydrateFromDocument(ownerId, document, canApply));
             if (cancelled) return;
             if (applied) {
@@ -297,11 +309,15 @@ export function useServerFrameDraft(options: {
 
   const reloadConflict = useCallback(async () => {
     if (!ownerId || !draftRef.current) return;
+    // 불러오는 사이 편집기를 나갔거나 다른 프레임을 열었으면 그 편집기에 넣지 않는다.
+    const session = sessionRef.current;
+    const live = () => sessionRef.current === session;
     const draft = await getFrameDraft(draftRef.current.draftId);
+    if (!live()) return;
     const document = parseServerDocument(draft.document, frameId);
     draftRef.current = { draftId: draft.draftId, revision: draft.revision };
     if (document) {
-      await hydrateFromDocument(ownerId, document);
+      if (!(await hydrateFromDocument(ownerId, document, live))) return;
       lastSentRef.current = JSON.stringify(document);
     }
     blockedRef.current = false;

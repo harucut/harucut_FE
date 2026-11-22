@@ -20,8 +20,9 @@ jest.mock("@/lib/frameDraftApi", () => ({
 }));
 
 jest.mock("@/lib/assetUploadApi", () => ({ uploadAsset: jest.fn() }));
+const mockGetImageUrlByKey = jest.fn();
 jest.mock("@/lib/presignedUploadApi", () => ({
-  getImageUrlByKey: async (key: string) => `https://s3.example.com/${key}`,
+  getImageUrlByKey: (...args: unknown[]) => mockGetImageUrlByKey(...args),
 }));
 
 const OWNER = "owner-1";
@@ -64,6 +65,7 @@ beforeEach(() => {
   useThemeEditorStore.getState().reset();
   useThemeEditorStore.getState().setFrameId("classic-4");
   mockList.mockResolvedValue([]);
+  mockGetImageUrlByKey.mockImplementation(async (key: string) => `https://s3.example.com/${key}`);
   let revision = 0;
   const saved = async () => ({ draftId: "Dr1", frameId: null, revision: ++revision, updatedAt: "2026-10-26T00:00:00Z" });
   mockCreate.mockImplementation(saved);
@@ -300,6 +302,65 @@ describe("Codex 리뷰 반영", () => {
     expect(useThemeEditorStore.getState().backgroundColor).toBe("123456");
     expect(result.current.restored).toBe(true);
     expect(result.current.conflict).toBeNull();
+  });
+
+  // 편집기 상태는 전역 스토어다. 나간 편집기의 늦은 응답이 다음에 연 편집기를 덮으면 안 된다.
+  it("배경 주소를 받는 사이 편집기를 나갔으면 이전 초안을 다음 편집기에 넣지 않는다", async () => {
+    mockList.mockResolvedValue([{ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z" }]);
+    mockGet.mockResolvedValue({
+      draftId: "Dr9",
+      frameId: null,
+      revision: 5,
+      updatedAt: "2026-10-26T01:00:00Z",
+      document: { ...serverDoc("123456"), background: { type: "IMAGE", key: "uploads/users/u1/bg.png" } },
+    });
+    let resolveUrl: (v: string) => void = () => {};
+    mockGetImageUrlByKey.mockImplementation(() => new Promise((resolve) => (resolveUrl = resolve)));
+    const { unmount } = renderDraftHook();
+    await flush();
+    await flush();
+    expect(mockGetImageUrlByKey).toHaveBeenCalledWith("uploads/users/u1/bg.png");
+
+    unmount();
+    // 다른 프레임을 연다 — 새 편집기는 이력을 비우므로 편집 여부로는 못 거른다.
+    act(() => {
+      useThemeEditorStore.getState().reset();
+      useThemeEditorStore.getState().setFrameId("classic-4");
+    });
+    const opened = useThemeEditorStore.getState().background;
+    await act(async () => {
+      resolveUrl("https://s3.example.com/bg.png");
+    });
+    expect(useThemeEditorStore.getState().background).toEqual(opened);
+  });
+
+  it("충돌에서 다른 기기 내용을 불러오는 사이 편집기를 나갔으면 다음 편집기에 넣지 않는다", async () => {
+    const { result, unmount } = renderDraftHook();
+    await flush();
+    act(() => useThemeEditorStore.getState().setBackgroundColor("ff0000"));
+    await afterDebounce();
+    mockUpdate.mockRejectedValueOnce(apiError("DRAFT-001", { revision: 7, updatedAt: "2026-10-26T02:00:00Z" }));
+    act(() => useThemeEditorStore.getState().setBackgroundColor("00ff00"));
+    await afterDebounce();
+    expect(result.current.conflict).toEqual({ revision: 7 });
+
+    let resolveGet: (v: unknown) => void = () => {};
+    mockGet.mockImplementation(() => new Promise((resolve) => (resolveGet = resolve)));
+    let reloading: Promise<void> = Promise.resolve();
+    act(() => {
+      reloading = result.current.reloadConflict();
+    });
+    unmount();
+    act(() => {
+      useThemeEditorStore.getState().reset();
+      useThemeEditorStore.getState().setFrameId("classic-4");
+    });
+    const opened = useThemeEditorStore.getState().backgroundColor;
+    await act(async () => {
+      resolveGet({ draftId: "Dr1", frameId: null, revision: 7, updatedAt: "2026-10-26T02:00:00Z", document: serverDoc("123456") });
+      await reloading;
+    });
+    expect(useThemeEditorStore.getState().backgroundColor).toBe(opened);
   });
 });
 

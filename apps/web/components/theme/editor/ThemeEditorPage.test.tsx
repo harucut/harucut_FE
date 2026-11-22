@@ -566,6 +566,36 @@ describe("ThemeEditorPage save flow", () => {
       expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
     });
 
+    // 편집기 상태는 전역 스토어다. 나간 편집기의 늦은 복구가 다음에 연 편집기를 덮으면 안 된다.
+    it("복구본 배경 주소를 받는 사이 편집기를 나갔으면 다음 편집기에 넣지 않는다", async () => {
+      const { getImageUrlByKey } = jest.requireMock("@/lib/presignedUploadApi") as { getImageUrlByKey: jest.Mock };
+      let resolveUrl: (v: string) => void = () => {};
+      getImageUrlByKey.mockImplementation((key: string) =>
+        key === "uploads/users/u1/bg.png" ? new Promise((resolve) => (resolveUrl = resolve)) : Promise.resolve(null),
+      );
+      try {
+        await saveEditorDraft({
+          ownerId: DRAFT_OWNER,
+          saved: SCOPE,
+          frameId: "classic-4",
+          backgroundColor: "abcdef",
+          background: { type: "IMAGE", key: "uploads/users/u1/bg.png" },
+          cellCutouts: [false, false, false, false],
+          components: [],
+          now: Date.now(),
+        });
+        const { unmount } = render(<ThemeEditorPage frameId="classic-4" />);
+        await waitFor(() => expect(getImageUrlByKey).toHaveBeenCalledWith("uploads/users/u1/bg.png"));
+        unmount();
+        await act(async () => {
+          resolveUrl("https://s3.example.com/bg.png");
+        });
+        expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+      } finally {
+        getImageUrlByKey.mockImplementation(() => Promise.resolve(null));
+      }
+    });
+
     it("다른 기기의 더 새로운 초안으로 열었으면 이 기기의 더 오래된 편집은 버린다", async () => {
       mockServerDraftState.restored = true;
       await seedDraft();

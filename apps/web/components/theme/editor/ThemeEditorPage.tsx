@@ -320,6 +320,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   }, [localRecovery]);
   // 「이어서 편집」으로 되살린 상태인가. 되살리면 이력이 비워지므로, 이력이 비었다고 저장본으로 돌아온 것이 아니다.
   const recoveredLocalDraftRef = useRef(false);
+  // 편집 세션 번호 — 편집기를 나가거나 다른 프레임을 열면 바뀐다. 편집기 상태는 전역 스토어라, 그 전에 시작한 복구가
+  // 늦게 끝나면 다음 편집기에 이전 복구본이 들어간다(Codex 리뷰 #604).
+  const editorSessionRef = useRef(0);
+  useEffect(
+    () => () => {
+      editorSessionRef.current += 1;
+    },
+    [remoteFrameId, frameId],
+  );
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -504,6 +513,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const restoreLocalRecovery = async () => {
     const draft = localRecovery;
     if (!draft) return;
+    const session = editorSessionRef.current;
     setLocalRecovery(null);
     // 저장본의 이미지 주소는 서명 URL 이라 하루 뒤면 죽는다. key 로 새로 받는다. 이 기기의 로컬 이미지(data:)는 그대로다.
     const resolved = await resolveThemeAssetUrls({
@@ -516,8 +526,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       draft.background.type === "IMAGE" && draft.background.key
         ? { ...draft.background, url: (await getImageUrlByKey(draft.background.key)) ?? draft.background.url }
         : draft.background;
-    // 주소를 받는 사이 고치기 시작했으면 덮지 않는다(아래 effect 와 같은 규칙).
-    if (useThemeEditorStore.getState().past.length > 0) return;
+    // 주소를 받는 사이 편집기를 나갔거나 다른 프레임을 열었으면, 또는 고치기 시작했으면 덮지 않는다(아래 effect 와 같은 규칙).
+    if (editorSessionRef.current !== session || useThemeEditorStore.getState().past.length > 0) return;
     recoveredLocalDraftRef.current = true;
     hydrateDraft({ ...draft, background, components: resolved.components as EditorDraft["components"] }, { preserveHidden: true });
   };
