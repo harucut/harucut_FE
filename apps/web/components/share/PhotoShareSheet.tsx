@@ -260,11 +260,11 @@ function Target({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className="flex w-[60px] flex-col items-center gap-1.5 rounded-2xl py-1 transition disabled:opacity-40"
+        className="flex w-15 flex-col items-center gap-1.5 rounded-2xl py-1 transition disabled:opacity-40"
       >
         {/* 어두운 화면에서도 검은 원의 테두리가 보이게 안쪽에 옅은 선을 둔다. */}
         <span
-          className={`grid size-[52px] place-items-center rounded-full shadow-[inset_0_0_0_1px_rgba(128,128,128,0.18)] ${circle}`}
+          className={`grid size-13 place-items-center rounded-full shadow-[inset_0_0_0_1px_rgba(128,128,128,0.18)] ${circle}`}
         >
           {children}
         </span>

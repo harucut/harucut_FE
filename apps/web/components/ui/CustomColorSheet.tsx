@@ -111,7 +111,7 @@ export function CustomColorSheet({
     setHsv((prev) => ({ ...prev, h: (prev.h + move + 360) % 360 }));
   };
 
-  const thumb = "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]";
+  const thumb = "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-3 border-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]";
 
   return (
     <div className="fixed inset-0 z-120 flex items-end justify-center hc-modal px-4 py-6 sm:items-center">
