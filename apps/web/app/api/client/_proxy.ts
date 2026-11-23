@@ -74,8 +74,8 @@ const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
  * 가 화면별 폴백을 그대로 돌려주고, 로그인 화면이라면 백엔드가 죽은 것을
  * "이메일 또는 비밀번호가 올바르지 않아요" 라고 말한다. 코드를 바꿀 때는 표도 같이 고친다.
  *
- * 상수를 import 하지 않고 문자열로 두는 이유: 이 트리의 route 34개가 전부
- * `runtime = "edge"` 라 `@harucut/shared` 배럴을 끌어오면 edge 번들에 shared 가 통째로 딸려 온다.
+ * 상수를 import 하지 않고 문자열로 둔다. 처음 이유(route 가 전부 edge 라 shared 배럴이
+ * edge 번들에 딸려 온다)는 2026-11-23 Node 로 옮기며 사라졌다 — 짝은 `_proxy.test.ts` 가 지킨다.
  *
  * 영문 `message` 는 그대로 둔다 — 화면에는 안 나가고(apiError.ts 가 버린다) 로그가 읽는 값이다.
  */

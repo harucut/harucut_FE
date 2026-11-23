@@ -1,7 +1,5 @@
 import { proxyJson, validatePublicId, validateResourceId } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** `frameId` 는 프레임 id(숫자) 또는 `new`(새 프레임 초안)만 넘긴다. 그 밖의 값은 서버도 400 GEN-005 다. */
