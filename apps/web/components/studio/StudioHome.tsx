@@ -84,7 +84,8 @@ export function StudioHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [events, setEvents] = useState<StudioEvent[] | null>(null);
+  // 받은 공간과 함께 둔다. 공간을 바꾼 뒤 새 목록이 늦으면 이전 공간의 목록을 그 공간 것처럼 보이지 않는다(Codex 리뷰 #606).
+  const [loadedEvents, setLoadedEvents] = useState<{ workspaceId: string; list: StudioEvent[] } | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [myEvents, setMyEvents] = useState<MyEvent[]>([]);
   const [customerLoaded, setCustomerLoaded] = useState(false);
@@ -99,6 +100,13 @@ export function StudioHome() {
   const requested = searchParams.get("workspace");
   const current = organizations.find((w) => w.workspaceId === requested) ?? organizations[0] ?? null;
   const currentId = current?.workspaceId ?? null;
+  const events = loadedEvents?.workspaceId === currentId ? loadedEvents.list : null;
+  // 공간을 바꾸면 열어 둔 복제 폼도 닫는다 — 이전 공간의 행사를 복제하지 않게.
+  const [cloningIn, setCloningIn] = useState(currentId);
+  if (cloningIn !== currentId) {
+    setCloningIn(currentId);
+    setCloning(null);
+  }
   // 행사 목록은 운영 역할만 부를 수 있다(서버 403). 디자이너·보기 전용에게는 오류가 아니라 프레임 작업 자리를 보인다.
   const worksOnEvents = current?.role === "OWNER" || current?.role === "ADMIN" || current?.role === "OPERATOR";
   const framesOnly = current !== null && !worksOnEvents;
@@ -141,12 +149,12 @@ export function StudioHome() {
     listEvents(currentId)
       .then((list) => {
         if (cancelled) return;
-        setEvents(list);
+        setLoadedEvents({ workspaceId: currentId, list });
         setEventsError(null);
       })
       .catch((error) => {
         if (cancelled) return;
-        setEvents(null);
+        setLoadedEvents(null);
         setEventsError(getUserFacingApiErrorMessage(error, "행사 목록을 불러오지 못했어요."));
       });
     return () => {

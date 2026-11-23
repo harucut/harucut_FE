@@ -54,6 +54,8 @@ export function InviteAccept() {
     }
     setView({ kind: "loading" });
     const membership = await resolveMembership();
+    // 그사이 다른 초대 링크로 바뀌었으면(아래 hashchange) 이 답은 버린다.
+    if (tokenRef.current !== token) return;
     if (membership === "guest") {
       setView({ kind: "need-login" });
       return;
@@ -63,8 +65,10 @@ export function InviteAccept() {
       return;
     }
     try {
-      setView({ kind: "preview", preview: await previewInvitation(token) });
+      const preview = await previewInvitation(token);
+      if (tokenRef.current === token) setView({ kind: "preview", preview });
     } catch (error) {
+      if (tokenRef.current !== token) return;
       const { code, status } = getApiErrorDetails(error);
       // 세션이 끝났다(다른 탭에서 로그아웃 등). 초대의 실패가 아니다 — 토큰은 남기고 로그인으로 잇는다.
       if (status === 401) {
@@ -82,17 +86,26 @@ export function InviteAccept() {
   }, []);
 
   useEffect(() => {
-    const fragment = window.location.hash.replace(/^#/, "");
-    if (isInviteToken(fragment)) {
-      stashInviteToken(fragment);
-      tokenRef.current = fragment;
-      // 토큰을 주소창·방문 기록에서 지운다. 화면은 sessionStorage 로 이어 간다.
-      window.history.replaceState(null, "", "/invite");
-    } else {
-      tokenRef.current = readInviteToken();
-    }
+    const pickUp = (fromHashOnly: boolean) => {
+      const fragment = window.location.hash.replace(/^#/, "");
+      if (isInviteToken(fragment)) {
+        stashInviteToken(fragment);
+        tokenRef.current = fragment;
+        // 토큰을 주소창·방문 기록에서 지운다. 화면은 sessionStorage 로 이어 간다.
+        window.history.replaceState(null, "", "/invite");
+      } else if (fromHashOnly) {
+        return;
+      } else {
+        tokenRef.current = readInviteToken();
+      }
+      void load();
+    };
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 판정
-    void load();
+    pickUp(false);
+    // 같은 탭에 다른 초대 링크를 붙여 넣으면 fragment 만 바뀌어 다시 마운트되지 않는다 — 그 토큰으로 다시 읽는다(Codex 리뷰 #606).
+    const onHashChange = () => pickUp(true);
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, [load]);
 
   const accept = async (preview: InvitationPreview) => {

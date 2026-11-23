@@ -768,3 +768,39 @@ describe("hydrateDraft 의 숨김", () => {
     expect(useThemeEditorStore.getState().components[0].hidden).toBe(false);
   });
 });
+
+// Codex 리뷰 #606 — 자동 저장이 올린 사진(source 가 key, 원본은 renderUrl)은 복원 뒤 사진 목록에서 빠져 누끼·다시 넣기를 못 썼다.
+describe("hydrateDraft 의 사진 목록", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const photo = (source: string, renderUrl?: string) => ({
+    id: "p1",
+    type: "PHOTO" as const,
+    source,
+    ...(renderUrl ? { renderUrl } : {}),
+    x: 0, y: 0, width: 10, height: 10, scale: 1, rotation: 0, zIndex: 1,
+  });
+  const draftWith = (components: ReturnType<typeof photo>[]) => ({
+    ownerId: "u",
+    frameId: "classic-4" as const,
+    backgroundColor: "111827",
+    background: { type: "COLOR" as const, value: "111827" },
+    cellCutouts: [false, false, false, false],
+    components,
+    savedAt: 1,
+  });
+
+  it("아직 안 올린 사진은 예전처럼 원본으로 되살린다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draftWith([photo(PNG)]));
+    const [asset] = useThemeEditorStore.getState().assets.photos;
+    expect(asset).toMatchObject({ src: PNG });
+    expect(asset.s3Key).toBeUndefined();
+  });
+
+  it("자동 저장이 올린 사진도 원본으로 되살리고 올린 key 를 잇는다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draftWith([photo("uploads/users/u1/a.png", PNG)]));
+    const photos = useThemeEditorStore.getState().assets.photos;
+    expect(photos).toHaveLength(1);
+    expect(photos[0]).toMatchObject({ src: PNG, s3Key: "uploads/users/u1/a.png" });
+    expect(photos[0].file).toBeInstanceOf(File);
+  });
+});

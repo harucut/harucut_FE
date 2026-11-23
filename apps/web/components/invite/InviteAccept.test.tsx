@@ -141,3 +141,23 @@ it("필수 약관에 막혀 실패하면 다시 확인할 수 있고, 동의 뒤
   fireEvent.click(await screen.findByRole("button", { name: "다시 확인" }));
   expect(await screen.findByRole("button", { name: "초대 받기" })).toBeInTheDocument();
 });
+
+// Codex 리뷰 #606 — 같은 탭에 다른 초대 링크를 붙여 넣으면 fragment 만 바뀌어, 이전 초대를 보여 주고 이전 초대를 받았다.
+it("같은 탭에서 다른 초대 링크로 바뀌면 그 초대를 다시 읽고 그것을 받는다", async () => {
+  const OTHER = "Zz9_yYx8-wWv7uUt6sSr5qQp4oOn3mMl2kKj1iIh0gG";
+  window.history.replaceState(null, "", `/invite#${TOKEN}`);
+  render(<InviteAccept />);
+  await screen.findByText("하루컷 웨딩팀");
+
+  mockPreview.mockResolvedValue({ ...WORKSPACE_PREVIEW, workspaceName: "두 번째 팀" });
+  await act(async () => {
+    window.history.replaceState(null, "", `/invite#${OTHER}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await screen.findByText("두 번째 팀");
+  expect(mockPreview).toHaveBeenLastCalledWith(OTHER);
+
+  mockAccept.mockResolvedValue({ kind: "WORKSPACE", workspaceId: "WsB" });
+  fireEvent.click(screen.getByRole("button", { name: "초대 받기" }));
+  await waitFor(() => expect(mockAccept).toHaveBeenCalledWith(OTHER));
+});
