@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
-import { canonicalOAuthCallbackUrl } from '@harucut/shared';
+import * as Notifications from 'expo-notifications';
+import { appLoginProviderOf, canonicalOAuthCallbackUrl } from '@harucut/shared';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,6 +19,7 @@ import { StatusBar } from 'expo-status-bar';
 import {
   SHELL_PLATFORM,
   SHELL_USER_AGENT_TOKEN,
+  getApiOrigin,
   getWebOrigin,
   isOAuthFlowUrl,
   isWebOrigin,
@@ -29,16 +31,26 @@ import {
   ensureAndroidChannel,
   ensureCameraPermission,
   ensureNotificationPermission,
+  getPushToken,
   haptic,
   pushChunk,
   saveBase64Chunks,
   saveRemoteImage,
+  setScreenOrientation,
   shareLink,
+  shareRemoteImage,
   showLocalNotification,
   transferFilename,
   type BridgeMessage,
   type BridgeResult,
 } from '@/lib/native-bridge';
+import { startAppLogin } from '@/lib/app-login';
+import {
+  finishPurchases,
+  purchaseSubscription,
+  restoreSubscriptions,
+  storeProducts,
+} from '@/lib/store-purchase';
 
 const WEB_ORIGIN = getWebOrigin();
 const START_URL = `${WEB_ORIGIN}/home`;
@@ -60,6 +72,13 @@ const INJECT_BEFORE_LOAD = `
 
 /** 웹의 소셜 로그인 콜백 경로. 공개 라우트 목록(AGENTS.md)과 같은 값이다. */
 const WEB_OAUTH_CALLBACK_PATH = '/oauth2/callback';
+
+/**
+ * 앱 창이 돌아가도 되는 웹 화면 — 촬영 화면 하나(2026-11-15, lib/native-bridge.ts 의 setScreenOrientation).
+ * 웹이 들어오며 `orientation: free` 를, 떠나며 `portrait` 를 보낸다. 셸은 그 밖의 주소로 가면 스스로 다시 세로로
+ * 잠근다 — 전체 새로고침·다른 문서로의 이동처럼 웹이 떠나는 신호를 못 보내는 길이 있어서다.
+ */
+const ROTATABLE_WEB_PATH = '/create/capture';
 
 /**
  * 콘텐츠 프로세스가 죽었을 때 스스로 다시 띄우는 횟수 상한 (iOS·macOS).
@@ -139,6 +158,13 @@ export function HarucutWebShell() {
   */
   const [webViewSession, setWebViewSession] = useState({ key: 0, uri: START_URL });
   /*
+    지금 문서가 다 떴는가. 뜨는 중에 넣은 스크립트는 곧 올라올 문서에 덮여 사라진다 — 앱이 꺼진 채 알림을 눌러
+    열리면 알림 응답이 첫 문서보다 먼저 와서, 이동을 넣어도 시작 화면(/home)이 그 위를 덮었다(Codex #567).
+  */
+  const documentReadyRef = useRef(false);
+  // 시스템 브라우저 로그인이 떠 있는 동안 두 번째 시작을 막는다(두 번 누름·리다이렉트 반복).
+  const appLoginPendingRef = useRef(false);
+  /*
     상태바 글자색은 웹 테마를 따라간다.
 
     웹은 라이트/다크/시스템 3택이다(ColorThemePreferencePanel). 예전에는 셸이 'light' 로
@@ -150,6 +176,46 @@ export function HarucutWebShell() {
   // 채널이 없으면 안드로이드 8+ 에서 알림이 조용히 버려진다. 한 번만 만든다.
   useEffect(() => {
     void ensureAndroidChannel();
+  }, []);
+
+  /*
+    서버 푸시를 눌렀을 때 갈 곳(푸시 data.type). 합성 완료·실패는 기록, 결제·구독 안내는 마이페이지.
+    알림이 셸을 연 경우(앱이 꺼져 있었음)와 켜져 있던 경우를 같이 받는다. 주소는 우리 웹 안으로만 연다.
+  */
+  useEffect(() => {
+    const route = (data: Record<string, unknown> | undefined) => {
+      const type = data?.type;
+      const path =
+        type === 'COMPOSE_DONE' || type === 'COMPOSE_FAILED'
+          ? '/history'
+          : type === 'PAYMENT_FAILED' || type === 'SUBSCRIPTION_EXPIRING'
+            ? '/mypage'
+            : null;
+      if (!path) return;
+      const url = `${WEB_ORIGIN}${path}`;
+      if (documentReadyRef.current && webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(url)}); true;`);
+        return;
+      }
+      // 아직 뜨는 중이면 그 문서를 버리고 목적지를 시작 주소로 새로 띄운다. 실패해도 「다시 시도」가 이 주소를 연다.
+      cancelTransfers();
+      currentUrlRef.current = null;
+      historyResetPendingRef.current = false;
+      canGoBackRef.current = false;
+      documentReadyRef.current = false;
+      setWebViewSession((session) => ({ key: session.key + 1, uri: url }));
+    };
+    // 처리한 응답은 지운다 — 남겨 두면 다음에 앱을 그냥 열어도(셸이 다시 마운트되면) 같은 알림으로 또 이동한다.
+    const handle = (response: Notifications.NotificationResponse | null) => {
+      if (!response) return;
+      Notifications.clearLastNotificationResponse();
+      route(response.notification.request.content.data as Record<string, unknown> | undefined);
+    };
+    void Notifications.getLastNotificationResponseAsync()
+      .then(handle)
+      .catch(() => undefined);
+    const subscription = Notifications.addNotificationResponseReceivedListener(handle);
+    return () => subscription.remove();
   }, []);
 
   const reply = useCallback((askerUrl: string, id: string, result: BridgeResult) => {
@@ -216,6 +282,9 @@ export function HarucutWebShell() {
             await shareLink({ title: message.title, message: message.message, url: message.url }),
           );
           return;
+        case 'share-image':
+          reply(askerUrl, message.id, await shareRemoteImage(message.url, message.filename));
+          return;
         case 'notify-permission':
           reply(askerUrl, message.id, await ensureNotificationPermission());
           return;
@@ -236,6 +305,28 @@ export function HarucutWebShell() {
         case 'theme':
           // 답을 기다리지 않는다 — 화면 밝기를 맞추는 일이라 실패할 것도 없다.
           setScheme(message.scheme === 'light' ? 'light' : 'dark');
+          return;
+        case 'orientation':
+          // 웹의 촬영 화면이 들어오며 free, 떠나며 portrait 를 보낸다. 보낸 문서의 주소로 다시 거르지 않는다 —
+          // 앱 라우터가 주소를 바꾸는 순간과 메시지가 닿는 순간이 어긋나면 촬영 화면이 잠긴 채로 남는다.
+          // 벗어난 뒤에 남는 것은 handleNavigation 이 다시 잠근다.
+          setScreenOrientation(message.mode === 'free' ? 'free' : 'portrait');
+          return;
+        // 앱 구독(P4-B). 셸은 스토어만 부르고, 서버 제출은 웹이 한다(lib/store-purchase.ts).
+        case 'iap-products':
+          reply(askerUrl, message.id, await storeProducts(message.productIds));
+          return;
+        case 'iap-purchase':
+          reply(askerUrl, message.id, await purchaseSubscription(message.productId, message.accountToken));
+          return;
+        case 'iap-restore':
+          reply(askerUrl, message.id, await restoreSubscriptions(message.sync === true));
+          return;
+        case 'iap-finish':
+          reply(askerUrl, message.id, await finishPurchases(message.proofs));
+          return;
+        case 'push-token':
+          reply(askerUrl, message.id, await getPushToken());
           return;
         default:
           return;
@@ -314,6 +405,9 @@ export function HarucutWebShell() {
 
     if (url !== previousUrl) {
       currentUrlRef.current = url;
+
+      // 촬영 화면을 벗어나면 세로로 되돌린다(ROTATABLE_WEB_PATH). 풀어 주는 것은 웹의 몫이라 여기서는 잠그기만 한다.
+      if (!(isWebOrigin(url) && pathnameOf(url) === ROTATABLE_WEB_PATH)) setScreenOrientation('portrait');
 
       // 주소가 바뀔 때마다 다시 판단한다 — 콜백 바로 다음 화면 하나에서만 참이다.
       historyResetPendingRef.current =
@@ -409,9 +503,15 @@ export function HarucutWebShell() {
             셸이 또 비우면 두 번 비게 된다.
 
             셸이 비운 만큼 WebView 가 상태바 뒤로 나가지 않으므로 iOS 의 env top 은 0 이 된다.
+
+            옆은 양쪽 다 셸이 비운다. 앱을 옆으로 돌리는 것은 촬영 화면뿐인데(setScreenOrientation), 그때 노치·카메라
+            구멍·안드로이드의 3버튼 내비바가 옆으로 온다. 안드로이드 env 는 위처럼 믿을 수 없고, iOS 는 셸이 비운 만큼
+            env left·right 가 0 이 돼 두 번 비지 않는다. 세로에서는 두 값이 0 이라 달라지는 것이 없다.
           */
           paddingTop: insets.top,
           paddingBottom: Platform.OS === 'android' ? insets.bottom : 0,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
           backgroundColor: stage,
         },
       ]}>
@@ -437,6 +537,7 @@ export function HarucutWebShell() {
         onMessage={onMessage}
         onLoadEnd={() => {
           setIsLoading(false);
+          documentReadyRef.current = true;
           /*
             문서가 한 번 다 떴으면 그 뒤의 사망은 새 사건이다 — 되살리기 예산을 되돌린다
             (MAX_CONTENT_PROCESS_RELOADS 주석).
@@ -469,7 +570,10 @@ export function HarucutWebShell() {
           여기서 끊지 못한다 — 그래서 실패 경로의 정리는 onError 가 직접 한다.
         */
         onLoadStart={(event) => {
-          if (Platform.OS !== 'android' || event.nativeEvent.loading) cancelTransfers();
+          if (Platform.OS !== 'android' || event.nativeEvent.loading) {
+            cancelTransfers();
+            documentReadyRef.current = false;
+          }
         }}
         onNavigationStateChange={(state) => {
           handleNavigation(state.url, state.loading, state.canGoBack);
@@ -477,13 +581,39 @@ export function HarucutWebShell() {
         onShouldStartLoadWithRequest={(request) => {
           // WKWebView는 iframe 탐색도 알린다. 하위 프레임이 Safari나 외부 앱을 열게 하지 않는다.
           if (request.isTopFrame === false) return true;
-          const canonicalCallback = canonicalOAuthCallbackUrl(request.url, WEB_ORIGIN);
-          if (canonicalCallback) {
+          const openFresh = (uri: string) => {
             cancelTransfers();
             currentUrlRef.current = null;
             historyResetPendingRef.current = false;
             canGoBackRef.current = false;
-            setWebViewSession((session) => ({ key: session.key + 1, uri: canonicalCallback }));
+            setWebViewSession((session) => ({ key: session.key + 1, uri }));
+          };
+          const canonicalCallback = canonicalOAuthCallbackUrl(request.url, WEB_ORIGIN);
+          if (canonicalCallback) {
+            openFresh(canonicalCallback);
+            return false;
+          }
+          // 구글 로그인은 시스템 브라우저로 연다(P4) — WebView 안 OAuth 는 구글이 막는다. 돌아온 코드는
+          // 웹 교환 화면이 이 WebView 안에서 바꿔야 쿠키가 여기 남는다(lib/app-login.ts).
+          if (appLoginProviderOf(request.url, getApiOrigin())) {
+            if (!appLoginPendingRef.current) {
+              appLoginPendingRef.current = true;
+              void startAppLogin(request.url, WEB_ORIGIN)
+                .then((uri) => {
+                  if (!uri) return;
+                  // 지금 WebView 안에서 이동한다 — 새로 올리면 sessionStorage 가 사라져 로그인 뒤 돌아갈 곳과
+                  // 제공자(lib/socialLoginRedirect.ts)를 잃는다(Codex #562). WebView 가 없을 때만 새로 올린다.
+                  if (webViewRef.current) {
+                    webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(uri)}); true;`);
+                  } else {
+                    openFresh(uri);
+                  }
+                })
+                .catch(() => undefined)
+                .finally(() => {
+                  appLoginPendingRef.current = false;
+                });
+            }
             return false;
           }
           // 우리 웹이면 그대로 연다. 오리진을 통째로 견준다 — 접두사 비교는
@@ -605,8 +735,8 @@ export function HarucutWebShell() {
       />
       {isLoading ? (
         <View style={[styles.loading, { backgroundColor: stage }]} pointerEvents="none">
-          {/* 라이트 무대에서 #1ED760 은 2.6:1 이라 잘 안 보인다. 웹의 라이트 초록과 같은 값. */}
-          <ActivityIndicator color={scheme === 'light' ? '#16B454' : '#1ED760'} size="large" />
+          {/* 라이트 무대에서 #C8F135 은 2.6:1 이라 잘 안 보인다. 웹의 라이트 초록과 같은 값. */}
+          <ActivityIndicator color={scheme === 'light' ? '#BDE528' : '#C8F135'} size="large" />
         </View>
       ) : null}
     </View>
@@ -658,11 +788,11 @@ const styles = StyleSheet.create({
   fallbackTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   fallbackBody: { color: '#B3B3B3', fontSize: 14, textAlign: 'center' },
   retryButton: {
-    backgroundColor: '#1ED760',
+    backgroundColor: '#C8F135',
     borderRadius: 999,
     marginTop: 10,
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  retryLabel: { color: '#06140A', fontSize: 15, fontWeight: '800' },
+  retryLabel: { color: '#141803', fontSize: 15, fontWeight: '800' },
 });

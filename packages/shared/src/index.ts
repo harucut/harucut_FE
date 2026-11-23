@@ -1,6 +1,6 @@
 export { validateEmail, validatePassword, validateUsername } from './auth-validation';
 export { COMPANY, PAYMENTS_ENABLED } from './company';
-export { hasFinalConsonant, josa, withJosa, type JosaPair } from './josa';
+export { hasFinalConsonant, josa, withJosa } from './josa';
 export {
   ENTERPRISE_FACTS,
   PLAN_FACTS,
@@ -14,11 +14,9 @@ export {
   PRIVACY_POLICY,
   TERMS_OF_SERVICE,
   type LegalDocument,
-  type LegalSection,
 } from './legal';
-export { PLAN_ERROR_MESSAGES, getPlanErrorMessage } from './plan-errors';
+export { getPlanErrorMessage } from './plan-errors';
 export {
-  API_ERROR_MESSAGES,
   CLIENT_NETWORK_UNREACHABLE_CODE,
   CLIENT_REISSUE_UNAVAILABLE_CODE,
   getApiErrorMessageByCode,
@@ -28,13 +26,11 @@ export {
   serverDateTimeToMillis,
 } from './server-datetime';
 export {
-  LOGIN_PLATFORM_LABELS,
   getLoginPlatformLabel,
 } from './login-platform';
 export {
   DEFAULT_FOURCUT_FILTER,
   FOURCUT_FILTER_DEFINITIONS,
-  type FourcutFilterDefinition,
   type FourcutFilterId,
 } from './fourcut-filters';
 export {
@@ -43,11 +39,10 @@ export {
   GUEST_TRIAL_CTA_LABEL,
 } from './guest-trial';
 export {
-  BRAND_MARK_BAR,
-  BRAND_MARK_BAR_SHADES,
   BRAND_MARK_BODY,
+  BRAND_MARK_COLORS,
+  BRAND_MARK_GLYPH,
   BRAND_MARK_VIEWBOX,
-  brandMarkBarRect,
   brandMarkToSvg,
 } from './brand-mark';
 export {
@@ -57,12 +52,9 @@ export {
   SOCIAL_MARK_SIZE,
   SOCIAL_PROVIDER_ORDER,
   socialMarkToSvg,
-  type MarkGeometry,
-  type MarkPath,
   type SocialProvider,
 } from './social-marks';
 export {
-  OAUTH_PROVIDER_DOMAINS,
   isOAuthFlowUrl,
   isSameOrigin,
   originOf,
@@ -70,7 +62,23 @@ export {
   canonicalOAuthCallbackUrl,
 } from './shell-origin';
 export {
-  NATIVE_FILENAME_MAX_BYTES,
-  clampFilenameBytes,
-  safeNativeFilename,
-} from './native-filename';
+  APP_LOGIN_CALLBACK,
+  appLoginIntentPath,
+  appLoginProviderOf,
+  appLoginStartUrl,
+  appLoginWebUrl,
+  parseAppLoginCallback,
+  toBase64Url,
+} from './app-login';
+export { safeNativeFilename } from './native-filename';
+export {
+  STORE_PRODUCT_IDS,
+  STORE_PURCHASES_ENABLED,
+  storePurchasesOpenOn,
+  STORE_PURCHASE_SHELL_VERSION,
+  storeConflictSource,
+  storePlatformOf,
+  subscriptionManageHint,
+  type StorePlatform,
+  type SubscriptionSource,
+} from './store-purchase';

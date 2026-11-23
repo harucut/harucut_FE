@@ -1,6 +1,7 @@
 "use client";
 
-import { Lock, Sparkles } from "lucide-react";
+import { PAYMENTS_ENABLED } from "@/constants/company";
+import { Lock } from "lucide-react";
 import { buildGaugeDots, type GaugeDotState, type PlanInfo } from "@/constants/planLimits";
 import type { SubscriptionUsage } from "@/lib/api-types";
 
@@ -95,8 +96,7 @@ export function FrameCapacityMeter({
     <section className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4 lg:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-(--hc-accent-soft-bg) px-3 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
-            <Sparkles className="h-3.5 w-3.5" />
+          <span className="inline-flex h-7 items-center rounded-full bg-(--hc-accent-soft-bg) px-3 text-[12px] font-extrabold text-(--hc-accent-soft-text)">
             {name}
           </span>
           <div className="min-w-0">
@@ -108,7 +108,9 @@ export function FrameCapacityMeter({
             </p>
             <p className="mt-0.5 text-[11px] text-(--hc-muted)">
               {unlimited
-                ? "무제한으로 저장할 수 있어요"
+                ? PAYMENTS_ENABLED
+                  ? "무제한으로 저장할 수 있어요"
+                  : "지금은 한도 없이 저장할 수 있어요"
                 : noCapacity
                   ? "지금 요금제로는 프레임을 저장할 수 없어요"
                   : overCapacity
@@ -149,7 +151,7 @@ function GaugeDot({ state }: { state: GaugeDotState }) {
   const className = [
     "inline-grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border-[1.5px]",
     state === "filled"
-      ? "border-(--hc-primary) bg-(--hc-primary)"
+      ? "border-(--hc-primary-line) bg-(--hc-primary)"
       : state === "empty"
         ? "border-(--hc-border-strong) bg-transparent"
         : "border-(--hc-border-subtle) bg-transparent",

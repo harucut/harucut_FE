@@ -1,9 +1,10 @@
 "use client";
 
-import { BadgeCheck, Clock3, Mail } from "lucide-react";
+import { BadgeCheck, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthField } from "@/components/auth/AuthField";
 import { EMAIL_FIELD } from "@/components/auth/authFields";
+import { Sentences } from "@/components/ui/Sentences";
 
 type Props = {
   email: string;
@@ -17,7 +18,6 @@ type Props = {
   isVerified: boolean;
   codeExpiresAt?: number | null;
   /** 인증을 마친 상태가 서버에서 만료되는 시각. 이 값이 있으면 인증 뒤에도 남은 시간을 보여 준다. */
-  verifiedExpiresAt?: number | null;
   emailError?: string | null;
   codeError?: string | null;
   onSend: (email: string) => Promise<boolean>;
@@ -57,14 +57,13 @@ export function EmailCodeSection({
   isVerifying,
   isVerified,
   codeExpiresAt = null,
-  verifiedExpiresAt = null,
   emailError,
   codeError,
   onSend,
   onVerify,
 }: Props) {
-  // 인증 전에는 코드 시계(5분), 인증 뒤에는 인증 유효 시계(10분)가 돈다. 둘 다 없으면 멈춘다.
-  const activeDeadline = isVerified ? verifiedExpiresAt : codeExpiresAt;
+  // 시계는 코드 입력(5분)에만 보인다. 인증 뒤 가입까지의 10분은 보이지 않게 두고, 지나면 훅이 인증을 풀며 알린다.
+  const activeDeadline = isVerified ? null : codeExpiresAt;
 
   // 이 state 는 값을 쓰려고 두는 게 아니라 1초마다 다시 그리게 하려고 둔다.
   // 남은 시간은 아래에서 그릴 때마다 직접 잰다(secondsUntil 주석 참고).
@@ -83,7 +82,6 @@ export function EmailCodeSection({
   }, [activeDeadline]);
 
   const remainingSeconds = secondsUntil(codeExpiresAt);
-  const verifiedRemainingSeconds = secondsUntil(verifiedExpiresAt);
 
   const hasSentCode = Boolean(codeExpiresAt);
   const isExpired = hasSentCode && remainingSeconds === 0;
@@ -113,18 +111,10 @@ export function EmailCodeSection({
           나타납니다"까지 붙었는데, 그건 사용자가 알아야 할 사실이 아니라 화면이 스스로를
           설명하는 말이었다. 이메일을 고치면 실제로 그렇게 되므로 미리 알려 줄 필요가 없다. */}
       {isVerified ? (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) px-3 py-2">
+        <div className="rounded-2xl border border-(--hc-accent-soft-border) bg-(--hc-accent-soft-bg) px-3 py-2">
           <p className="text-[11px] font-medium text-(--hc-text)">
             이메일 인증이 완료되었어요.
           </p>
-          {/* 인증을 마쳐도 시계는 계속 돈다 — 서버가 인증 기록을 10분만 들고 있다.
-              예전에는 여기서 카운트다운이 사라져서, 남은 칸을 채우다 시간을 넘긴 사람은
-              가입 버튼을 눌러야 비로소 실패를 알았다. */}
-          {verifiedExpiresAt ? (
-            <span className="hc-button-secondary shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums">
-              {formatRemainingTime(verifiedRemainingSeconds)} 안에 가입
-            </span>
-          ) : null}
         </div>
       ) : (
         <>
@@ -137,23 +127,16 @@ export function EmailCodeSection({
               }`}
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Clock3
-                    size={14}
-                    className={
-                      isExpired ? "text-(--hc-danger)" : "text-(--hc-primary-strong)"
-                    }
-                  />
-                  <p
-                    className={`text-[11px] ${
-                      isExpired ? "text-(--hc-danger)" : "text-(--hc-text)"
-                    }`}
-                  >
-                    {isExpired
-                      ? "인증 시간이 만료되었어요. 코드를 다시 보내 주세요."
-                      : "인증 코드가 전송되었어요. 5분 안에 입력해 주세요."}
-                  </p>
-                </div>
+                {/* 문장 앞 시계 아이콘은 뺐다(2026-11-14) — 남은 시간은 오른쪽 숫자가 말한다. */}
+                <p
+                  className={`text-[11px] ${
+                    isExpired ? "text-(--hc-danger)" : "text-(--hc-text)"
+                  }`}
+                >
+                  <Sentences text={isExpired
+                    ? "인증 시간이 만료되었어요. 코드를 다시 보내 주세요."
+                    : "인증 코드가 전송되었어요. 5분 안에 입력해 주세요."} />
+                </p>
                 {!isExpired ? (
                   <span className="hc-button-secondary rounded-full border px-2 py-0.5 text-[11px] font-medium">
                     {formatRemainingTime(remainingSeconds)}
@@ -217,7 +200,7 @@ export function EmailCodeSection({
 
           {codeError ? (
             <p id="email-code-error" role="alert" className="text-[12px] text-(--hc-danger)">
-              {codeError}
+              <Sentences text={codeError} />
             </p>
           ) : null}
         </>

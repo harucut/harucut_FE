@@ -1,3 +1,4 @@
+import type { FreeCell } from "@/lib/frameCells";
 import type { FrameId } from "@/constants/frames";
 
 export type ComponentType = "PHOTO" | "STICKER" | "TEXT";
@@ -43,6 +44,22 @@ export type BaseComponent = {
    * 합성이 400 GEN-002 로 죽는다. 글자나 스타일이 바뀌면 반드시 다시 구워야 한다.
    */
   renderedKey?: string;
+
+  /**
+   * PHOTO·STICKER: 이 이미지를 올린 공통 자산(`FRAME_ASSET`)의 public id.
+   * 있으면 서버는 `source` 대신 이 자산의 key 를 쓴다 — **`source` 를 바꿀 때 같이 지워야 한다.**
+   * 남겨 두면 누끼로 바꾼 사진이 아니라 옛 사진이 저장된다.
+   */
+  assetId?: string;
+
+  /** TEXT 전용. 구운 글자 층을 올린 자산(`TEXT_RENDER`)의 public id. */
+  renderedAssetId?: string;
+
+  /**
+   * TEXT 전용. 지금 들고 있는 구운 PNG 가 **어떤 입력으로** 구워졌는지(`textBakeSignature`).
+   * 저장할 때 지금 값과 같으면 다시 굽지 않는다. 다르면 문구나 스타일이 바뀐 것이다.
+   */
+  renderedFor?: string;
 
   x: number;
   y: number;
@@ -91,6 +108,8 @@ export type ThemeBackground =
   | {
       type: "IMAGE";
       key?: string;
+      /** 배경 이미지를 올린 자산(`FRAME_ASSET`) public id. 있으면 서버가 이 자산의 key 를 쓴다. */
+      assetId?: string;
       opacity?: number;
       // 클라이언트에서 key를 해석해 채우는 렌더 전용 URL (서버 전송 X).
       url?: string;
@@ -102,6 +121,8 @@ export type ThemeExportJson = {
   // 셀별 누끼(배경 제거) 상태. 서버 계약에도 `cellCutouts` 가 있어 그대로 저장된다
   // (boolean 4개 고정, 촬영 슬롯 순서). 생략하면 서버는 전부 끈 것으로 본다.
   cellCutouts?: boolean[];
+  /** 자유 사진 칸(P5). 없으면 frameId 의 고정 레이아웃(lib/frameCells.ts). */
+  cells?: FreeCell[];
   components: Array<{
     id: string;
     type: ComponentType;
@@ -111,6 +132,17 @@ export type ThemeExportJson = {
     renderUrl?: string;
     /** TEXT 전용. 구운 글자 층의 S3 key. */
     renderedKey?: string;
+    /** PHOTO·STICKER 의 자산 public id. */
+    assetId?: string;
+    /** TEXT 의 구운 글자 층 자산 public id. */
+    renderedAssetId?: string;
+    /** TEXT 의 구운 PNG 가 맞는 입력의 지문. 서버로 보내지 않는다. */
+    renderedFor?: string;
+    /**
+     * 편집기 잠금. 저장·재열기에서 유지한다(고도화 P1 F1-3). 서버는 이 값을 인가 근거로 쓰지 않는다 —
+     * 행사 편집 정책은 발행본과 서버 허용 목록이 정한다(기획 R5 5절).
+     */
+    locked?: boolean;
     x: number;
     y: number;
     width: number;

@@ -14,12 +14,13 @@
   라우트는 1개다. 마지막 파일은 **어느 오리진이 브리지를 부를 수 있는지**를 쥔다 —
   브리지의 문이라 목록에서 빠뜨리면 보안 경계 변경을 놓친다.
 - **그래서 "모바일 화면을 고쳐라"의 정답은 거의 항상 `apps/web` 이다.**
-- 네이티브가 맡는 것은 여덟 가지다: 사진첩 저장 · 공유 시트 · 햅틱 · **알림** · **상태바 색** ·
-  **안전영역** · **카메라 권한(안드로이드)** · 하드웨어 뒤로가기. **이 목록의 소유자는
+- 네이티브가 맡는 것은 열한 가지다: 사진첩 저장 · 공유 시트 · 햅틱 · **알림** · **상태바 색** ·
+  **안전영역** · **카메라 권한(안드로이드)** · 하드웨어 뒤로가기 · **구글 로그인(시스템 브라우저)** · **앱 구독 결제(스토어)** ·
+  **화면 방향(촬영 화면만 회전)**. **이 목록의 소유자는
   [`docs/mobile-shell.md`](docs/mobile-shell.md) 「네이티브가 맡는 것과 그 이유」 표다** —
   ADR-0003 「경계선」은 2026-08-18 에 이렇게 정했다는 기록이고, 그 뒤로 목록이 달라졌다.
-  `harucut://` 딥링크는 **아직 구현되지 않았다**(`app.json` 에 scheme 만 있고 들어오는
-  URL 을 받는 코드가 없다). 목록에 없는 일을 셸에 얹지 않는다.
+  `harucut://` 로 받는 것은 **앱 로그인 콜백(`harucut://oauth2/callback`) 하나뿐**이다 — 시스템 브라우저
+  로그인 세션이 직접 받는다(`apps/mobile/lib/app-login.ts`). 그 밖의 들어오는 딥링크는 없다. 목록에 없는 일을 셸에 얹지 않는다.
 - 브리지는 `apps/web/lib/nativeBridge.ts` ↔ `apps/mobile/lib/native-bridge.ts` **한 쌍**이다.
   한쪽만 고치면 프로토콜이 갈라진다. 항상 같이 고친다.
 - expo-router 라우트를 새로 만들지 않는다 — ADR-0003 을 되돌리는 일이다.
@@ -39,9 +40,9 @@
   `roots` 로 끌어다 돌린다.
 - `docs/`: 진입점은 [`docs/README.md`](docs/README.md).
 - `scripts/`: 검증 스크립트는 `verify_workspace.py`, `check_backend_contract.py`,
-  `check_backend_contract_test.py` 셋이다. 나머지 둘은 검증이 아니다 —
+  `check_backend_contract_test.py` 셋이다. 나머지는 검증이 아니다 —
   `camera-probe.html`(실기기에서 열어 카메라를 실측하는 페이지)와
-  `gen-notification-icon.mjs`(알림 아이콘 생성기).
+  `gen-brand-icons.mjs`(웹·앱 아이콘 생성기), `gen-notification-icon.mjs`(알림 아이콘 생성기).
   웹 전용 검사 하나가 더 있다 — `apps/web/scripts/check-canonical-classes.mjs`
   (`pnpm check:classes:web`). 임의값 Tailwind 클래스 중 **같은 CSS 를 만드는 정규형이 있는 것**을
   막는다. 추측이 아니라 후보를 실제로 컴파일해 값으로 비교한다.
@@ -54,7 +55,7 @@
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | 라우트 보호·게스트 허용 판정      | `apps/web/lib/protectedPaths.ts` (`PROTECTED_PATHS`, `GUEST_ALLOWED_PREFIXES`, `GUEST_MEMBER_ONLY_PREFIXES`, `isGuestAllowedPath`) | 분기 순서는 `apps/web/proxy.ts`, 문서는 [`docs/auth-routing.md`](docs/auth-routing.md) |
 | 게스트가 되는 것·안 되는 것(문구) | `packages/shared/src/guest-trial.ts`                                                                                               | 실제 권한은 `protectedPaths.ts` 가 정한다. 문구와 권한이 갈리면 화면이 거짓말을 한다   |
-| 합성 멱등키                       | `apps/web/lib/shootSessionStore.ts` 의 `ensureComposeIdempotencyKey`                                                               | 호출처 `apps/web/app/shoot/result/page.tsx`, `apps/web/lib/pendingGuestSave.ts`        |
+| 합성 멱등키                       | `apps/web/lib/shootSessionStore.ts` 의 `ensureComposeIdempotencyKey`                                                               | 호출처 `apps/web/app/create/result/page.tsx`, `apps/web/lib/pendingGuestSave.ts`        |
 | 프레임 **내용**이 달라졌는가      | `apps/web/lib/shootSessionStore.ts` 의 `buildFrameContentKey`                                                                      | 편집기 저장(`ThemeEditorPage`)도 이 함수로 판정한다. 이탈 경고용 `buildEditorSignature` 로 대신하면 안 된다 — 그림에 안 나오는 값까지 본다 |
 | 저장 요청에서 빠지는 컴포넌트     | `apps/web/lib/frameApi.ts` 의 `isBlankSourceComponent`                                                                             | `toCreateFrameRequest` 의 필터와 위 지문이 **같은 함수**를 쓴다. 갈라지면 서버에 안 가는 레이어로 멱등키가 버려진다 |
 | 브라우저 보관물의 기한 판정       | `apps/web/lib/pendingStorageTtl.ts` 의 `isFreshSavedAt`                                                                            | 게스트 인계(`pendingGuestSave.ts`)와 약관 동의(`pendingTermsConsent.ts`)가 같이 쓴다. 둘 다 공용 기기에서 앞사람 것이 넘어가지 않게 하는 장치다 |
@@ -65,8 +66,8 @@
 
 라우트 목록도 여기 복사하지 않는다. 공개·보호 경로의 진실은 `apps/web/lib/protectedPaths.ts`,
 설명과 분기표는 [`docs/auth-routing.md`](docs/auth-routing.md) 가 갖는다.
-비인증 접근은 `/login?redirectTo=...` 로 보내고, 예외 둘(게스트 체험, 행사 QR `&event=`)도
-그 문서에 있다.
+비인증 접근은 `/login?redirectTo=...` 로 보내고, 예외(게스트 체험)도 그 문서에 있다.
+행사 참가(`/e`·`/r`·`/booth`)와 사진 공유 링크(`/s/<토큰>`)는 계정 세션을 쓰지 않는다 — 옛 `/shoot?event=` 는 걷어냈다.
 
 ## 브랜치 · 커밋 · PR
 
@@ -77,6 +78,7 @@
 - 이슈·PR 제목: **`<type>: <한국어 요약>`** — 스코프 없이.
 - `<type>` 은 `feat` `fix` `refactor` `docs` `chore` `ci` `test` `perf` 중 하나.
 - `main`, `develop`, `develop_loop` 에는 직접 commit/push 하지 않는다.
+- `main` 은 `develop` 릴리스 PR 로만 받는다. 봇 PR 도 예외가 아니다 — Dependabot 보안 업데이트는 `target-branch` 를 무시하고 `main` 으로 열리므로, 보이면 닫고 패치는 `develop` 에 넣는다.
 - `자동 생성`, `auto-generated` 같은 일반 제목은 금지한다.
 
 **훅은 지금 꺼져 있다.** `git config core.hooksPath` 가 빈 값이라 `.git/hooks` 를 본다.

@@ -20,10 +20,8 @@ jobs:
             exit 0
           fi
 
-          if [ "$PR_AUTHOR" = "dependabot[bot]" ]; then
-            exit 0
-          fi
-
+          # 봇도 예외가 아니다. Dependabot 보안 업데이트는 target-branch 를 무시하고 기본 브랜치(main)로 PR 을 연다.
+          # 머지되면 운영 배포가 되므로 여기서 막는다. 패치는 develop 에 넣어 릴리스로 내보낸다(사용자 지시 2026-11-02).
           if [ "$HEAD_REF" != "develop" ]; then
             echo "::error::main 대상 PR은 develop 브랜치에서만 열 수 있습니다."
             exit 1

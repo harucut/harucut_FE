@@ -50,3 +50,63 @@ describe("FramePreview", () => {
   });
 });
 
+
+// 자유 사진 칸(P5) — 칸마다 회전·모양을 그리고, 사진은 그 칸의 shotIndex 번째를 넣는다.
+it("자유 칸이면 칸의 회전·모양과 사진 순서를 따른다", () => {
+  const cells = [0, 1, 2, 3].map((i) => ({
+    x: 150,
+    y: 200 + i * 1280,
+    width: 1700,
+    height: 1200,
+    rotation: i === 0 ? 10 : 0,
+    shape: i === 1 ? ({ type: "ELLIPSE" } as const) : ({ type: "RECT", cornerRadius: 0 } as const),
+    shotIndex: [3, 2, 1, 0][i],
+  }));
+  const { container } = render(
+    <FramePreview
+      frameId="classic-4"
+      theme={{ ...theme, cells }}
+      images={["/a.png", "/b.png", "/c.png", "/d.png"]}
+    />,
+  );
+  const imgs = Array.from(container.querySelectorAll("img"));
+  expect(imgs.map((img) => img.getAttribute("src"))).toEqual(["/d.png", "/c.png", "/b.png", "/a.png"]);
+  expect(imgs[0].style.transform).toBe("rotate(10deg)");
+  expect(imgs[1].style.borderRadius).toBe("50%");
+  // Codex #567: 회전한 칸이 프레임 밖으로 나오지 않게 경계에서 자른다(저장 미리보기 PNG 와 같게).
+  expect(container.firstElementChild).toHaveClass("overflow-hidden");
+});
+
+it("고정 레이아웃이면 바깥 상자를 자르지 않는다(예전 그대로)", () => {
+  const { container } = render(<FramePreview frameId="classic-4" images={["/a.png"]} />);
+  expect(container.firstElementChild).not.toHaveClass("overflow-hidden");
+});
+
+/*
+  사진 고르기에서는 칸마다 다른 색과 번호를 그린다(2026-11-14). 예전에는 빈 칸이 진회색이라 어두운
+  프레임 위에서 보이지 않았고, 다음 사진이 어느 칸에 들어갈지 알 수 없었다.
+*/
+describe("칸 표시(markSlots)", () => {
+  it("빈 칸은 칸 색으로 옅게 칠하고 번호를 쓰고, 찬 칸은 그 색 테두리와 번호를 단다", () => {
+    const { container } = render(
+      <FramePreview frameId="classic-4" media={[{ src: "/one.png" }, null, null, null]} markSlots />,
+    );
+
+    const text = container.textContent ?? "";
+    for (const number of ["1", "2", "3", "4"]) expect(text).toContain(number);
+
+    const empty = Array.from(container.querySelectorAll<HTMLElement>("div.border-dashed"));
+    expect(empty).toHaveLength(3);
+    // 칸마다 색이 다르다.
+    expect(new Set(empty.map((node) => node.style.borderColor)).size).toBe(3);
+
+    const filledFrame = container.querySelector<HTMLElement>("span[aria-hidden].z-10");
+    expect(filledFrame?.style.boxShadow).toContain("inset");
+  });
+
+  it("다른 곳의 미리보기는 칸 표시 없이 예전 그대로다", () => {
+    const { container } = render(<FramePreview frameId="classic-4" media={[null, null, null, null]} />);
+    expect(container.querySelectorAll("div.border-dashed")).toHaveLength(0);
+    expect(container.textContent).toBe("");
+  });
+});

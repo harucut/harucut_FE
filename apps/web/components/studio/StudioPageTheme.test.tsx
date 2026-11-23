@@ -1,0 +1,175 @@
+import { useState } from "react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { PAGE_THEME_PRESETS, StudioPageTheme } from "@/components/studio/StudioPageTheme";
+import { lowContrastPairs } from "@/lib/event/pageTheme";
+import type { PageTheme } from "@/lib/event/pageTheme";
+
+const mockUpload = jest.fn();
+const mockGetAsset = jest.fn();
+
+jest.mock("@/lib/assetUploadApi", () => ({
+  uploadAsset: (...a: unknown[]) => mockUpload(...a),
+  getAsset: (...a: unknown[]) => mockGetAsset(...a),
+}));
+
+let latest: PageTheme | null = null;
+
+function Harness({ initial = { schemaVersion: 1 } as PageTheme, value }: { initial?: PageTheme; value?: PageTheme }) {
+  const [theme, setTheme] = useState<PageTheme>(value ?? initial);
+  const [shown, setShown] = useState<PageTheme | undefined>(value);
+  if (value !== shown) {
+    // 부모가 테마를 통째로 바꾼 경우(다시 불러오기)를 흉내 낸다.
+    setShown(value);
+    if (value) setTheme(value);
+  }
+  return (
+    <StudioPageTheme
+      workspaceId="Ws1"
+      value={theme}
+      onChange={(apply) =>
+        setTheme((prev) => {
+          const next = apply(prev);
+          latest = next;
+          return next;
+        })
+      }
+    />
+  );
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  latest = null;
+});
+
+it("색을 바꾸면 미리보기에 바로 얹고, 대비가 모자라면 알린다", () => {
+  render(<Harness />);
+  expect(screen.queryByText("글자가 잘 안 읽힐 수 있어요.")).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("버튼 색 값"), { target: { value: "#FFE066" } });
+  expect(latest?.colors?.accent).toBe("#FFE066");
+  expect(screen.getByLabelText("행사 화면 미리보기")).toHaveStyle({ "--ev-accent": "#FFE066" });
+  expect(screen.getByText(/버튼 글자 \/ 버튼 대비/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "기본 색으로" }));
+  expect(latest?.colors).toEqual({});
+  expect(screen.queryByText("글자가 잘 안 읽힐 수 있어요.")).not.toBeInTheDocument();
+});
+
+// 로고·배경은 공간 자산(PAGE_THEME_ASSET)이다 — 이 행사가 속한 공간으로 올린다.
+it("로고를 이 공간의 테마 자산으로 올리고 그 id 를 테마에 둔다", async () => {
+  mockUpload.mockResolvedValue({ assetId: "AsLogo", key: "k", url: "https://s3/logo.png" });
+  render(<Harness />);
+  const file = new File(["x"], "logo.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("로고 올리기"), { target: { files: [file] } });
+
+  await waitFor(() => expect(latest?.logoAssetId).toBe("AsLogo"));
+  expect(mockUpload).toHaveBeenCalledWith({ file, purpose: "PAGE_THEME_ASSET", workspaceId: "Ws1" });
+  expect(screen.getByAltText("고른 로고")).toHaveAttribute("src", "https://s3/logo.png");
+
+  fireEvent.click(screen.getByRole("button", { name: "빼기" }));
+  expect(latest?.logoAssetId).toBeUndefined();
+});
+
+it("이미 고른 배경은 짧은 조회 주소로 미리 보여 준다", async () => {
+  mockGetAsset.mockResolvedValue({ assetId: "AsBg", status: "VERIFIED", url: "https://s3/bg.png" });
+  render(<Harness initial={{ schemaVersion: 1, backgroundAssetId: "AsBg" }} />);
+  expect(await screen.findByAltText("고른 배경 이미지")).toHaveAttribute("src", "https://s3/bg.png");
+  expect(mockGetAsset).toHaveBeenCalledWith("AsBg");
+});
+
+it("올리기에 실패하면 서버 문구로 알리고 테마는 그대로 둔다", async () => {
+  mockUpload.mockRejectedValue(new Error("boom"));
+  render(<Harness />);
+  fireEvent.change(screen.getByLabelText("배경 이미지 올리기"), {
+    target: { files: [new File(["x"], "bg.jpg", { type: "image/jpeg" })] },
+  });
+  expect(await screen.findByRole("alert")).toHaveTextContent("이미지를 올리지 못했어요.");
+  expect(latest?.backgroundAssetId).toBeUndefined();
+});
+
+// 화면 문구는 기능 없이 쓸 수 있다 — 디자인(색·글꼴·이미지)만 CUSTOM_THEME 이 필요하다.
+it("디자인 기능이 없는 이용권이면 색을 바꿀 때만 알리고, 문구만 바꾸면 알리지 않는다", () => {
+  function WithFeatures() {
+    const [theme, setTheme] = useState<PageTheme>({ schemaVersion: 1 });
+    return <StudioPageTheme workspaceId="Ws1" value={theme} onChange={setTheme} features={[]} />;
+  }
+  render(<WithFeatures />);
+  fireEvent.change(screen.getByLabelText("처음 화면 · 부스 대기 화면"), { target: { value: "어서 오세요" } });
+  expect(screen.queryByText(/디자인 기능이 없어요/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("바탕 색 값"), { target: { value: "#FFF8F3" } });
+  expect(screen.getByText(/디자인 기능이 없어요/)).toBeInTheDocument();
+});
+
+// Codex 리뷰(#544): 업로드를 기다리는 사이 고친 색이 업로드 완료로 되돌아가면 안 된다.
+it("로고를 올리는 사이 바꾼 색은 업로드가 끝나도 남는다", async () => {
+  let finishUpload: (value: unknown) => void = () => {};
+  mockUpload.mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
+  render(<Harness />);
+  fireEvent.change(screen.getByLabelText("로고 올리기"), {
+    target: { files: [new File(["x"], "logo.png", { type: "image/png" })] },
+  });
+  fireEvent.change(screen.getByLabelText("바탕 색 값"), { target: { value: "#FFF8F3" } });
+
+  await act(async () => finishUpload({ assetId: "AsLogo", key: "k", url: "https://s3/logo.png" }));
+  expect(latest?.logoAssetId).toBe("AsLogo");
+  expect(latest?.colors?.bg).toBe("#FFF8F3");
+});
+
+// Codex 리뷰(#544): 다시 불러온 테마의 배경이 바뀌거나 빠지면 미리보기도 따라가야 한다.
+it("테마의 자산 ID 가 바뀌면 미리보기도 그 ID 로 바꾸고, 빠지면 지운다", async () => {
+  mockGetAsset.mockImplementation(async (id: string) => ({ assetId: id, status: "VERIFIED", url: `https://s3/${id}.png` }));
+  const { rerender } = render(<Harness value={{ schemaVersion: 1, backgroundAssetId: "AsOld" }} />);
+  expect(await screen.findByAltText("고른 배경 이미지")).toHaveAttribute("src", "https://s3/AsOld.png");
+
+  rerender(<Harness value={{ schemaVersion: 1, backgroundAssetId: "AsNew" }} />);
+  await waitFor(() => expect(screen.getByAltText("고른 배경 이미지")).toHaveAttribute("src", "https://s3/AsNew.png"));
+
+  rerender(<Harness value={{ schemaVersion: 1 }} />);
+  await waitFor(() => expect(screen.queryByAltText("고른 배경 이미지")).not.toBeInTheDocument());
+  expect(screen.getByLabelText("행사 화면 미리보기").style.backgroundImage).toBe("");
+});
+
+describe("프리셋", () => {
+  it("모든 프리셋의 글자 짝이 읽힌다", () => {
+    for (const preset of PAGE_THEME_PRESETS) {
+      expect(lowContrastPairs(preset.colors)).toEqual([]);
+    }
+  });
+
+  it("프리셋은 색과 글꼴을 한 번에 넣고, 한 번은 되돌릴 수 있다", () => {
+    render(<Harness initial={{ schemaVersion: 1, colors: { bg: "#123456" } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "웨딩 아이보리" }));
+    expect(latest?.colors?.accent).toBe("#7A5F2E");
+    expect(latest?.font).toBe("NANUM_MYEONGJO");
+    expect(screen.getByRole("button", { name: "웨딩 아이보리" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+    expect(latest?.colors).toEqual({ bg: "#123456" });
+    expect(screen.queryByRole("button", { name: "되돌리기" })).not.toBeInTheDocument();
+  });
+
+  it("「기본 색으로」도 되돌릴 수 있다", () => {
+    render(<Harness initial={{ schemaVersion: 1, colors: { bg: "#123456" } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "기본 색으로" }));
+    expect(latest?.colors).toEqual({});
+    fireEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+    expect(latest?.colors).toEqual({ bg: "#123456" });
+  });
+
+  it("색 값 형식이 틀리면 칸에서 알린다", () => {
+    render(<Harness />);
+    const input = screen.getByLabelText("바탕 색 값");
+    fireEvent.change(input, { target: { value: "#12" } });
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("#RRGGBB 로 적어 주세요.")).toBeInTheDocument();
+  });
+
+  it("문구 칸은 비웠을 때 쓰일 기본 문구를 보여 준다", () => {
+    render(<Harness />);
+    expect(screen.getByLabelText("처음 화면 · 부스 대기 화면")).toHaveAttribute(
+      "placeholder",
+      "휴대폰 카메라로 네 컷을 찍어 행사 사진을 만들어요.",
+    );
+  });
+});

@@ -25,8 +25,7 @@ export function startSocialLogin(
 }
 
 /**
- * 제공자 화면에서 취소했거나 인가가 실패했을 때의 안내.
- * 콜백(`?error=`)과 그 콜백이 돌려보내는 로그인 화면(`?socialError=1`)이 같은 문구를 쓴다.
+ * 소셜·앱 로그인을 끝내지 못하고 로그인 화면(`?socialError=1`)으로 돌아왔을 때 폼 위에 띄우는 한 줄.
+ * 다시 시도할 단추가 바로 아래 있어서 「다시 시도해 주세요」는 붙이지 않는다(2026-11-14 한 문장으로 줄임).
  */
-export const SOCIAL_LOGIN_FAILED_MESSAGE =
-  "로그인을 마치지 못했어요. 다시 시도해 주세요.";
+export const SOCIAL_LOGIN_FAILED_MESSAGE = "로그인을 마치지 못했어요.";

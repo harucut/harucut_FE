@@ -16,7 +16,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     q: "비회원도 사용할 수 있나요?",
     // 실제로 비회원이 할 수 있는 범위 — 찍고 그 이미지를 받는 데까지다.
     // 권한의 출처는 lib/protectedPaths.ts 의 GUEST_ALLOWED_PREFIXES 이고, 이미지는
-    // app/shoot/result/page.tsx 의 guestMode 분기가 blob 으로 바로 내려받는다.
+    // app/create/result/page.tsx 의 guestMode 분기가 blob 으로 바로 내려받는다.
     // 다운로드가 열려 있어야 행사 참가자의 "가입 없이 그 자리에서 가져간다"가 성립한다.
     // 목록은 @harucut/shared 한 벌에서 읽는다. 문장째 적어 두면 모달·안내와 갈라진다 —
     // 실제로 갤러리 불러오기가 목록에 붙는 동안 이 문장만 옛 세 항목으로 남아 있었다.

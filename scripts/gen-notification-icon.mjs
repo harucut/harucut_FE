@@ -2,13 +2,13 @@
  * 안드로이드 알림의 **작은 아이콘** PNG 를 웹 로고와 같은 소스에서 뽑는다.
  *
  * 왜 필요한가: 안드로이드는 상태바 아이콘을 그릴 때 **알파 채널만 본다.** 색은 통째로
- * 버리고 실루엣을 한 가지 색(우리는 `app.json` 의 `#1ED760`)으로 칠한다. 그래서 로고를
- * 그대로 구우면 바깥 라운드 사각형이 완전 불투명이라 화면에는 **초록 사각형 하나**만
- * 뜬다 — 네 칸이 그 안에 묻힌다.
+ * 버리고 실루엣을 한 가지 색(우리는 `app.json` 의 `#C8F135`)으로 칠한다. 그래서 로고를
+ * 그대로 구우면 바깥 라운드 사각형이 완전 불투명이라 화면에는 **색 사각형 하나**만
+ * 뜬다 — ㅎ 이 그 안에 묻힌다.
  *
  * 지금이 그 상태다. `app.json` 의 expo-notifications 플러그인에 `icon` 이 없어서
  * 안드로이드가 앱 아이콘을 대신 쓰고, 같은 이유로 뭉개진 사각형이 나온다.
- * 그래서 **몸통을 버리고 칸만** 불투명 흰색으로 남긴 실루엣을 굽는다.
+ * 그래서 **몸통을 버리고 ㅎ 만** 불투명 흰색으로 남긴 실루엣을 굽는다.
  *
  * 실행: node scripts/gen-notification-icon.mjs
  *
@@ -55,7 +55,7 @@ const SIZE = 96;
 const CONTENT_RATIO = 0.86;
 
 const { width: vbWidth, height: vbHeight } = BRAND_MARK_VIEWBOX;
-// 세로가 긴 마크다. 정사각 캔버스에 넣으려면 높이를 기준으로 맞춰야 잘리지 않는다.
+// 정사각 마크다. 비율은 좌표계에서 읽는다(마크가 바뀌어도 잘리지 않게).
 const markHeight = Math.round(SIZE * CONTENT_RATIO);
 const markWidth = Math.round(markHeight * (vbWidth / vbHeight));
 
@@ -80,7 +80,7 @@ const page = await browser.newPage({
 await page.setContent(html);
 
 // `omitBackground` 가 있어야 알파가 남는다. 없으면 흰 배경이 통째로 불투명해져,
-// 안드로이드가 화면 전체를 초록 사각형으로 칠한다 — 고치려던 그 증상 그대로다.
+// 안드로이드가 화면 전체를 색 사각형으로 칠한다 — 고치려던 그 증상 그대로다.
 const png = await page.locator('#stage').screenshot({ omitBackground: true });
 await browser.close();
 

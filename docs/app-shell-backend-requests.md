@@ -9,7 +9,7 @@
 
 4~8번은 셸과 무관하다(합성 원본 정리, 요금제 한도, 프레임 수정 시각, 셀 누끼 렌더 주체,
 합성 실패 코드). 창구가 같아 여기 모아 둔다.
-**막는 것은 1~4번이고, 5~8번은 답 대기이거나 「있으면 좋음」이다.**
+**막는 것은 1~4번이고(9번 사진 공유 링크는 백엔드 완료·PR 대기, 2026-11-16), 5~8번은 답 대기이거나 「있으면 좋음」이다.**
 
 **백엔드에 남은 요청은 이 문서가 소유한다.** 다른 문서가 같은 목록을 복제하면 해결된 항목이
 한쪽에만 지워진다 — `docs/backend-contract.md` 의 테두리색 항목이 실제로 그렇게 됐다.
@@ -82,12 +82,16 @@ POST /api/harucut/oauth2/exchange
 앱은 이 요청을 **WebView 안에서** 보낸다. 그래야 Set-Cookie 가 WebView 쿠키 저장소에 남아
 이후 모든 화면이 로그인 상태가 된다.
 
-### 프론트가 할 일 (백엔드가 열리면)
+### 프론트가 할 일 — 만들었다(P4-A)
 
-1. 셸이 `/oauth2/authorization/google` 로의 이동을 가로채 `?client=app` 을 붙여 Custom Tabs 로 연다
-2. `harucut://oauth2/callback?code=...` 딥링크를 받는다
-3. 그 코드를 WebView 안에서 `POST /api/harucut/oauth2/exchange` 로 교환한다
-4. 웹을 새로고침한다 — 쿠키가 생겼으니 로그인 상태로 뜬다
+백엔드 계약은 PKCE 를 더해 정해졌다(fork P4-A): 시작에 `code_challenge`(S256), 교환에 `codeVerifier`, 실패는 400 `AUTH-041` 하나.
+
+1. 셸이 `/oauth2/authorization/google` 로의 이동을 가로채 verifier 를 만들고 `?client=app&code_challenge=…` 를 붙여
+   시스템 브라우저(ASWebAuthenticationSession·Custom Tabs)로 연다 — `apps/mobile/lib/app-login.ts`
+2. `harucut://oauth2/callback?code=...` 로 돌아오면 그 세션이 닫히며 주소를 받는다
+3. WebView 에 `/oauth2/app-callback#code=…&verifier=…` 를 연다. 그 화면이 WebView 안에서
+   `POST /api/client/auth/oauth2/exchange`(→ `/api/harucut/oauth2/exchange`)로 교환한다
+4. 교환되면 `/oauth2/callback` 으로 문서를 새로 받는다 — 소셜 로그인 콜백이 하던 상태 확인·체험 쿠키 정리·이동을 그대로 탄다
 
 카카오·네이버는 WebView 안에서 그대로 진행되므로 이 경로가 필요 없다(지금도 동작한다).
 
@@ -212,7 +216,7 @@ DELETE /api/auth/devices/{token}                                       // 해제
 재시도가 원본을 매번 새로 올리던 것은 **이제 아니다.** `composeFourcutOnServer` 가
 올리기에 성공한 4장을 그때 쓴 멱등키에 묶어 들고 있다가(`lastUploadedSources`), 같은
 멱등키로 다시 오면 굽기도 올리기도 건너뛴다. 결과 화면의 「다시 준비하기」는 `retryNonce`
-를 멱등키에서 빼 뒀으므로(`apps/web/app/shoot/result/page.tsx`) 같은 키로 돌아온다 —
+를 멱등키에서 빼 뒀으므로(`apps/web/app/create/result/page.tsx`) 같은 키로 돌아온다 —
 **같은 탭에서 버튼을 몇 번 눌러도 원본은 한 벌뿐이다.**
 
 그래서 아래 수치는 "재시도 1회당 4개"가 아니다. 남는 경로만 남았고, 넷이다.
@@ -228,6 +232,10 @@ DELETE /api/auth/devices/{token}                                       // 해제
 - **입력이 진짜 달라지면** `ensureComposeIdempotencyKey` 가 새 키를 만든다 —
   프레임·테마·레이아웃·필터·색·원본 중 하나라도 바뀔 때다. 이때의 새 업로드는 옳다.
   다만 앞선 합성이 실패로 끝났다면 그 4장은 그대로 남는다.
+
+**서버가 이제 지운다(BE 원본 정리 배치).** 원본은 발급 24시간 뒤 삭제가 예약되고, 개인 합성 접수가 그 예약을
+회수한다. 그래서 캐시는 **23시간만** 믿는다(`SOURCE_REUSE_MS`) — 그보다 오래 들고 같은 멱등키로 재시도하면
+지워진 key 로 접수해 SOURCE_MISSING 으로 실패한다. 새 키로 다시 올리는 것은 이 규칙과 무관하다.
 
 접수 이후(`compose` 400/폴링 시간 초과) 실패로 남는 4장은 캐시와 무관하게 그대로다.
 캐시는 **같은 시도를 반복할 때 사본이 불어나는 것**을 막을 뿐, 한 번 올라간 것을
@@ -353,7 +361,12 @@ URL(`renderUrl`·`background.url`)은 뺀다 — 넣으면 내용이 그대로�
 
 ---
 
-## 7. 셀 누끼를 서버가 그리는지 알려 주세요 (답 대기)
+## 7. 셀 누끼를 서버가 그리는지 알려 주세요 (답 받음 — 서버는 그리지 않는다)
+
+**답(2026-10-27, 백엔드 fork 코드 확인)**: 서버·합성 Lambda 는 `cellCutouts` 로 아무것도 그리지 않는다(ComposeSpec 주석·렌더러 확인).
+**프론트가 원본 픽셀에 구워 올리는 지금 방식이 계약이다.** 두 번 그려질 일은 없고, 이 레포에서 끌 것도 없다.
+아래 「실측 기록」의 어두운 가장자리는 예전 브라우저 합성의 비네트 효과였고 지금은 걷어냈다(`lib/canvas/composeFrame.ts`).
+
 
 **무엇을**: `ComposeSpec.cellCutouts` 를 합성 Lambda 가 실제로 그리는가.
 
@@ -373,7 +386,12 @@ jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `Compo
 
 ---
 
-## 8. 합성이 실패하면 사유 문자열 말고 **에러 코드**도 주세요 (있으면 좋음)
+## 8. 합성이 실패하면 사유 문자열 말고 **에러 코드**도 주세요 (백엔드 진행 중 — 프론트는 받을 준비 끝)
+
+**진행(2026-10-27)**: 백엔드가 `ComposeJobResponse.failureCode`(FAILED 일 때만, SOURCE_MISSING · SOURCE_UNREADABLE · ASSET_MISSING ·
+ASSET_UNREADABLE · TIMED_OUT · RENDER_FAILED · OUTPUT_CONFLICT · UNKNOWN)를 더한다. 프론트는 `lib/composeFailure.ts` 로 문구를 고른다 — 키가 없거나
+UNKNOWN·RENDER_FAILED·OUTPUT_CONFLICT(결과·썸네일 쌍 검증 실패, D09 — 출력 계약 2 이후)·모르는 값이면 지금 문구다. 합성 Lambda 배포 전에는 운영 실패가 TIMED_OUT·UNKNOWN 만 나온다.
+
 
 **무엇을**: `ComposeJobResponse` 에 실패 코드 한 필드(`failureCode` 같은 이름). 값은 우리가
 문구로 옮길 수 있는 **닫힌 집합**이면 된다 — 원본을 읽지 못함 / 프레임 자산을 읽지 못함 /
@@ -402,6 +420,36 @@ jar 에서 `ComposeSpecAssembler` 가 `Frame.getCellCutouts()` 를 읽어 `Compo
 
 **프론트가 할 일 (열리면)**: `describeComposeFailure` 의 `ComposeFailedError` 분기에 코드별
 문구를 더한다. 고정 한 문장이 나가는 자리 하나만 바뀐다.
+
+---
+
+## 9. 사진 공유 링크 (백엔드 완료 — PR 대기, 공유 창의 스레드·X·링크 복사가 이것을 쓴다)
+
+**완료(2026-11-16)**: 하루컷 백엔드가 `feat/media-share-link`(7943eba, develop 기준)에 만들었다. PR 은 사용자가 연다
+(https://github.com/harucut/Harucut/pull/new/feat/media-share-link). 마이그레이션 V39(`media_share`)가 붙는다 — **백엔드가
+먼저 배포돼야** 프론트의 공유 링크가 열린다. 계약은 요청한 제안 그대로다.
+
+1. 링크 만들기(회원) — `POST /api/auth/user/media/{mediaId}/share-link` → `{ token }`. 사진마다 하나, 늘 같은 토큰(동시에 두 번
+   눌러도 같다). 토큰은 32바이트 base64url 43자. 오류: 남의·없는 사진 404 `GEN-031`, 보관 기간 지남 403 `SUBS-002`, 그 밖은
+   회원 경로 공통.
+2. 링크 열기(비로그인) — `GET /api/public/media-shares` + `Authorization: Bearer <token>` → `{ displayName, createdAt, imageUrl,
+   downloadUrl }`. 두 주소는 5분짜리 서명 주소(inline·attachment). `createdAt` 은 KST, 소수 초가 붙을 수 있다. 닫힘·무효는
+   전부 404 `MEDIA-002` 하나(토큰 없음·틀림·삭제·보관 기간 지남·주인 탈퇴 요청·탈퇴·정지). 틀린 토큰만 IP 당 분당 30회에서
+   429 `GEN-061` — 프론트는 둘 다 닫힌 링크로 다룬다. BFF 비밀과 방문자 IP 를 넘기면 방문자 단위로 센다.
+3. 닫기(DELETE)는 없다. 사진을 지우면 링크도 닫힌다.
+
+**알아 둘 것**
+- 주인이 정지·탈퇴 요청 상태면 닫히고, 풀리면 같은 링크가 다시 열린다.
+- 보관 기간: 지금 develop 은 세 요금제 모두 무제한이다(「임시로 통일」). `UserMediaController` 설명의 BASIC 3일·PLUS 3개월은
+  예전 값이다. 정책이 돌아오면 링크도 주인 사진 목록과 같은 판정으로 닫힌다.
+- 토큰은 원문으로 저장한다(같은 링크를 다시 줘야 해서). `/s/<token>` 이 호스팅 접근 기록에 남는다 — 프론트에는 분석 도구가 없다.
+
+**프론트(만들어 둠)**
+- 공유 창 `components/share/PhotoShareSheet.tsx` 가 열릴 때 1을 부른다(`lib/userMediaApi.ts` 의 `createMediaShareLink`,
+  프록시 `app/api/client/user/media/[mediaId]/share-link`).
+- 받는 사람 페이지 `app/s/[token]/page.tsx` 가 서버에서 2를 부른다(`lib/server/mediaShareServer.ts`). og:image 와 사진은
+  `/s/<token>/image`, 저장은 `/s/<token>/download` — 부를 때마다 2를 다시 불러 새 서명 주소로 302 한다.
+- 실제 백엔드로는 아직 눌러 보지 않았다. 계약 모양은 백엔드 OpenAPI(`docs/api/openapi.generated.json`)와 대조했다.
 
 ---
 

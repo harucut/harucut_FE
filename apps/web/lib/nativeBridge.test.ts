@@ -17,6 +17,15 @@ import {
   nativeSaveImageUrl,
   nativeSetColorScheme,
   nativeShare,
+  nativePushToken,
+  nativeShareImage,
+  nativeStoreFinish,
+  nativeStoreProducts,
+  nativeStorePurchase,
+  nativeStoreRestore,
+  supportsGoogleLogin,
+  supportsStorePurchase,
+  type BridgeFailureCode,
 } from "@/lib/nativeBridge";
 
 type Posted = { type: string; id?: string; [key: string]: unknown };
@@ -27,7 +36,7 @@ type Posted = { type: string; id?: string; [key: string]: unknown };
  * 옛 앱 바이너리로 최신 웹을 여는 경우는 낮은 값을 넘겨 흉내 낸다 — 웹은 이 숫자로 보낼
  * 메시지를 가른다.
  */
-const SHELL_VERSION = 2;
+const SHELL_VERSION = 3;
 
 function enterShell(version = SHELL_VERSION) {
   const posted: Posted[] = [];
@@ -50,7 +59,7 @@ function leaveShell() {
 function replyTo(
   posted: Posted[],
   type: string,
-  result: { ok: boolean; reason?: string; code?: "photo-permission-blocked" },
+  result: { ok: boolean; reason?: string; code?: BridgeFailureCode; data?: unknown },
 ) {
   const message = posted.find((item) => item.type === type);
   if (!message?.id) throw new Error(`${type} 메시지를 못 찾았다`);
@@ -320,7 +329,8 @@ describe("카메라 권한", () => {
     열린다. 업데이트를 미룬 사용자에게는 예전처럼 「사진 찍기」 항목만 빠지면 된다.
   */
   it("이 메시지를 모르는 옛 셸에는 보내지 않는다", async () => {
-    const posted = enterShell(SHELL_VERSION - 1);
+    // 카메라 권한은 판 2 에서 들어왔다 — 판 1 셸이 모른다.
+    const posted = enterShell(1);
     await expect(nativeEnsureCameraPermission()).resolves.toBeNull();
     expect(posted).toHaveLength(0);
   });
@@ -362,5 +372,134 @@ describe("테마 전달", () => {
     const posted = enterShell();
     nativeSetColorScheme("light");
     expect(posted).toContainEqual({ type: "theme", scheme: "light" });
+  });
+});
+
+/*
+  앱 구독(P4-B). 구버전 셸에는 메시지를 보내지 않는다 — 받을 분기가 없어 결제 창 시간(15분)만큼 버튼이 묶인다.
+  셸이 준 값은 걸러 읽는다 — 결과 모양이 틀리면 증빙을 서버에 보내지 않는다.
+*/
+describe("앱 구독 브리지", () => {
+  afterEach(leaveShell);
+
+  it("브라우저와 구버전 셸에서는 보내지 않는다", async () => {
+    expect(supportsStorePurchase()).toBe(false);
+    expect(await nativeStorePurchase("p", "t")).toBeNull();
+    const posted = enterShell(2);
+    expect(supportsStorePurchase()).toBe(false);
+    expect(await nativeStoreRestore()).toBeNull();
+    expect(posted).toHaveLength(0);
+  });
+
+  it("구매 결과의 증빙을 돌려주고, 닫았으면 문구 없이, 실패면 셸 문구를 코드가 있을 때만 쓴다", async () => {
+    const posted = enterShell(3);
+    const bought = nativeStorePurchase("harucut.plus.monthly", "acct-1");
+    await waitFor(() => posted.some((m) => m.type === "iap-purchase"));
+    expect(posted[0]).toMatchObject({ type: "iap-purchase", productId: "harucut.plus.monthly", accountToken: "acct-1" });
+    replyTo(posted, "iap-purchase", { ok: true, data: { productId: "harucut.plus.monthly", proof: "jws-1" } });
+    expect(await bought).toEqual({ ok: true, value: { productId: "harucut.plus.monthly", proof: "jws-1" } });
+
+    posted.length = 0;
+    const cancelled = nativeStorePurchase("harucut.plus.monthly", "acct-1");
+    await waitFor(() => posted.length > 0);
+    replyTo(posted, "iap-purchase", { ok: false, code: "purchase-cancelled" });
+    expect(await cancelled).toEqual({ ok: false, message: null });
+
+    posted.length = 0;
+    const failed = nativeStorePurchase("harucut.plus.monthly", "acct-1");
+    await waitFor(() => posted.length > 0);
+    replyTo(posted, "iap-purchase", { ok: false, reason: "Billing unavailable" });
+    expect(await failed).toEqual({ ok: false, message: "스토어에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요." });
+  });
+
+  it("모양이 틀린 결과는 버린다", async () => {
+    const posted = enterShell(3);
+    const products = nativeStoreProducts(["a"]);
+    await waitFor(() => posted.length > 0);
+    replyTo(posted, "iap-products", { ok: true, data: [{ productId: "a", displayPrice: "₩3,900", title: "플러스" }, { productId: 1 }, null] });
+    expect(await products).toEqual({ ok: true, value: [{ productId: "a", displayPrice: "₩3,900", title: "플러스" }] });
+
+    posted.length = 0;
+    const restored = nativeStoreRestore({ sync: true });
+    await waitFor(() => posted.length > 0);
+    replyTo(posted, "iap-restore", { ok: true, data: [{ productId: "a", proof: "" }, { productId: "a", proof: "t1" }] });
+    expect(await restored).toEqual({ ok: true, value: [{ productId: "a", proof: "t1" }] });
+    expect(posted[0]).toMatchObject({ type: "iap-restore", sync: true });
+
+    posted.length = 0;
+    void nativeStoreFinish(["t1"]);
+    await waitFor(() => posted.length > 0);
+    expect(posted[0]).toMatchObject({ type: "iap-finish", proofs: ["t1"] });
+  });
+});
+
+// 서버 푸시 토큰(판 4). 구버전 셸에는 보내지 않고, 셸이 준 값은 문자열일 때만 믿는다.
+describe("푸시 토큰 브리지", () => {
+  afterEach(leaveShell);
+
+  it("판 4 셸에서만 묻고 토큰을 돌려준다", async () => {
+    const old = enterShell(3);
+    expect(await nativePushToken()).toBeNull();
+    expect(old).toHaveLength(0);
+    leaveShell();
+
+    const posted = enterShell(4);
+    const token = nativePushToken();
+    await waitFor(() => posted.length > 0);
+    expect(posted[0]).toMatchObject({ type: "push-token" });
+    replyTo(posted, "push-token", { ok: true, data: { token: "ExponentPushToken[x]" } });
+    expect(await token).toBe("ExponentPushToken[x]");
+  });
+
+  it("권한이 없어 실패하면 null", async () => {
+    const posted = enterShell(4);
+    const token = nativePushToken();
+    await waitFor(() => posted.length > 0);
+    replyTo(posted, "push-token", { ok: false });
+    expect(await token).toBeNull();
+  });
+});
+
+describe("판 수로 가르는 기능", () => {
+  const plantShell = (version: unknown) => {
+    (window as unknown as { __HARUCUT_NATIVE__: unknown }).__HARUCUT_NATIVE__ = { version, platform: "android" };
+    window.ReactNativeWebView = { postMessage: jest.fn() };
+  };
+
+  it("판 수를 안 실은 셸에는 푸시 토큰을 묻지 않는다(묻으면 답이 오지 않는다)", async () => {
+    plantShell(undefined);
+    expect(await nativePushToken()).toBeNull();
+    expect(window.ReactNativeWebView?.postMessage).not.toHaveBeenCalled();
+  });
+
+  /*
+    사진 파일 공유는 판 5 에서 들어왔다(expo-sharing). 그 앞의 셸은 `share-image` 를 몰라 답이 오지 않는다 —
+    보내면 공유 단추가 10분 동안 묶인다. 그 셸에서는 null 이고, 호출부는 예전처럼 링크를 공유한다(lib/share.ts).
+  */
+  it("사진 파일 공유는 판 5 셸에만 보낸다. 옛 셸과 판 수 없는 셸은 null", async () => {
+    plantShell(4);
+    expect(await nativeShareImage("https://cdn.example/a.jpg", "a.jpg")).toBeNull();
+    plantShell(undefined);
+    expect(await nativeShareImage("https://cdn.example/a.jpg", "a.jpg")).toBeNull();
+    expect(window.ReactNativeWebView?.postMessage).not.toHaveBeenCalled();
+
+    const posted = enterShell(5);
+    const promise = nativeShareImage("https://cdn.example/a.jpg", "우리 넷.jpg");
+    expect(posted).toEqual([
+      expect.objectContaining({ type: "share-image", url: "https://cdn.example/a.jpg", filename: "우리 넷.jpg" }),
+    ]);
+    replyTo(posted, "share-image", { ok: true });
+    await expect(promise).resolves.toEqual({ ok: true });
+  });
+
+  it("구글 로그인은 셸 밖과 판 4 이상에서 연다. 옛 셸과 판 수 없는 셸은 막는다", () => {
+    delete window.__HARUCUT_NATIVE__;
+    expect(supportsGoogleLogin()).toBe(true);
+    plantShell(3);
+    expect(supportsGoogleLogin()).toBe(false);
+    plantShell(undefined);
+    expect(supportsGoogleLogin()).toBe(false);
+    plantShell(4);
+    expect(supportsGoogleLogin()).toBe(true);
   });
 });

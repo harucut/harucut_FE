@@ -9,8 +9,10 @@ import {
 import {
   ApiRequestError,
   clientApi,
+  registerAccountBlockedHandler,
   registerDeletionRequestedHandler,
   registerSessionExpiredHandler,
+  registerTermsConsentRequiredHandler,
 } from "@/lib/clientApi";
 
 // 실제 응답 형태 그대로(2026-08-20 실측, docs/backend-contract.md).
@@ -41,6 +43,37 @@ function urlOf(input: RequestInfo | URL) {
 function flushAsync() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+describe("clientApi — 정지 계정(AUTH-042) 감지", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    registerAccountBlockedHandler(null);
+    global.fetch = originalFetch;
+  });
+
+  it("403 AUTH-042 면 핸들러를 부르고 오류는 그대로 올린다", async () => {
+    const onBlocked = jest.fn();
+    registerAccountBlockedHandler(onBlocked);
+    global.fetch = jest.fn(async () =>
+      new Response(JSON.stringify({ code: "AUTH-042", status: 403, message: "This account is blocked." }), { status: 403 }),
+    ) as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/events/Ev1")).rejects.toMatchObject({ status: 403, code: "AUTH-042" });
+    expect(onBlocked).toHaveBeenCalledTimes(1);
+  });
+
+  it("다른 403 에는 부르지 않는다", async () => {
+    const onBlocked = jest.fn();
+    registerAccountBlockedHandler(onBlocked);
+    global.fetch = jest.fn(async () =>
+      new Response(JSON.stringify({ code: "PHOTO-001", status: 403, message: "x" }), { status: 403 }),
+    ) as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/events/Ev1/photos")).rejects.toMatchObject({ status: 403 });
+    expect(onBlocked).not.toHaveBeenCalled();
+  });
+});
 
 describe("clientApi — 탈퇴요청(GEN-021) 감지", () => {
   const originalFetch = global.fetch;
@@ -116,6 +149,100 @@ describe("clientApi — 탈퇴요청(GEN-021) 감지", () => {
     await flushAsync();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("clientApi — 필수 약관 미동의(TERMS-004) 감지", () => {
+  const originalFetch = global.fetch;
+
+  function termsRequired() {
+    return new Response(
+      JSON.stringify({
+        code: "TERMS-004",
+        status: 403,
+        message: "Required terms consent is missing or outdated.",
+      }),
+      { status: 403, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  afterEach(() => {
+    registerTermsConsentRequiredHandler(null);
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  it("403 TERMS-004 면 재동의 핸들러를 부르고 오류는 그대로 던진다", async () => {
+    const onTermsConsentRequired = jest.fn();
+    registerTermsConsentRequiredHandler(onTermsConsentRequired);
+    const fetchMock = jest.fn(async () => termsRequired());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({
+      status: 403,
+      code: "TERMS-004",
+    });
+
+    expect(onTermsConsentRequired).toHaveBeenCalledTimes(1);
+    // 탈퇴요청 확인(/api/auth/status)으로 새지 않는다.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("핸들러가 동의 완료를 알리면 한 번만 다시 보낸다", async () => {
+    registerTermsConsentRequiredHandler(() => Promise.resolve(true));
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(termsRequired())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "GEN-000", status: 200, data: 1 }), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("다시 보내도 막히면 더 돌지 않고 오류를 던진다", async () => {
+    registerTermsConsentRequiredHandler(() => Promise.resolve(true));
+    const fetchMock = jest.fn(async () => termsRequired());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({ code: "TERMS-004" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("동의가 정리되지 않았으면 다시 보내지 않는다", async () => {
+    registerTermsConsentRequiredHandler(() => Promise.resolve(false));
+    const fetchMock = jest.fn(async () => termsRequired());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toMatchObject({ code: "TERMS-004" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("호출부가 시간 제한으로 끊으면 약관 창을 기다리지 않고 끝난다", async () => {
+    registerTermsConsentRequiredHandler(() => new Promise<boolean>(() => {}));
+    global.fetch = jest.fn(async () => termsRequired()) as unknown as typeof fetch;
+    const controller = new AbortController();
+
+    const pending = clientApi.get("/api/client/user/frame", { signal: controller.signal });
+    await flushAsync();
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: "TERMS-004" });
+  });
+
+  it("다른 403 에는 재동의 핸들러를 부르지 않는다", async () => {
+    const onTermsConsentRequired = jest.fn();
+    registerTermsConsentRequiredHandler(onTermsConsentRequired);
+    global.fetch = jest.fn(async () => accessDenied()) as unknown as typeof fetch;
+
+    await expect(clientApi.get("/api/client/user/frame")).rejects.toBeDefined();
+    await flushAsync();
+
+    expect(onTermsConsentRequired).not.toHaveBeenCalled();
+  });
+
+  it("문구가 있다", () => {
+    expect(getApiErrorMessageByCode("TERMS-004")).toBeTruthy();
   });
 });
 

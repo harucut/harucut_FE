@@ -3,7 +3,7 @@
     "name": "harucut",
     "slug": "harucut-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "harucut",
     "userInterfaceStyle": "automatic",
@@ -40,6 +40,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
+      "expo-iap",
+      [
         "expo-media-library",
         {
           "savePhotosPermission": "촬영한 네컷을 사진첩에 저장할 때 사용해요.",
@@ -64,7 +71,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#1ED760"
+          "color": "#C8F135"
         }
       ]
     ],

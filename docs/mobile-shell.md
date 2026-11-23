@@ -23,8 +23,8 @@
 운영 백엔드가 `https://harucut.com/oauth2/callback`으로 돌려보내면 해당 경로만 같은 WebView의
 `https://www.harucut.com/oauth2/callback`으로 옮긴다. apex 전체를 브리지 허용 목록에 넣지 않는다.
 이 경로는 백엔드 세션 쿠키가 `.harucut.com`에 발급되는 기존 구성에 의존하므로 출시 전 실계정으로 확인한다.
-구글은 WebView 로그인 정책이 별개이므로 이 수정만으로 구글 로그인이 지원되는 것은 아니다.
-앱에서는 구글 버튼을 표시하지 않고 웹 브라우저 이용을 안내한다. 일반 웹의 구글 버튼은 유지한다.
+구글은 WebView 로그인 정책이 별개라 이 경로를 타지 않는다. 셸이 구글 시작을 가로채 시스템 브라우저로 인증한다(아래 표).
+웹은 브리지 판 4 이상의 셸에서만 구글 버튼을 보이고, 옛 셸에는 업데이트를 안내한다(`supportsGoogleLogin`).
 근거는 [Google OAuth의 보안 브라우저 정책](https://developers.google.com/identity/protocols/oauth2/policies#secure-browsers)이다.
 
 **앱에 web 타깃은 없다.** Expo 프로젝트라 `expo start --web` 이 있을 법하지만 이 앱에서는
@@ -50,6 +50,9 @@
 |---|---|---|
 | 1 | 사진첩 저장 · 공유 · 햅틱 · 알림 · 상태바 색 | 없음 — 셸이면 그대로 보낸다 |
 | 2 | `camera-permission` | `nativeEnsureCameraPermission` 의 `CAMERA_PERMISSION_SHELL_VERSION` |
+| 3 | `iap-products` · `iap-purchase` · `iap-restore` · `iap-finish`(앱 구독, P4-B) | `supportsStorePurchase` 의 `STORE_PURCHASE_SHELL_VERSION`(`packages/shared/src/store-purchase.ts`). 모르는 셸이면 업데이트를 안내한다 — 웹 결제로 우회하지 않는다 |
+| 4 | `push-token`(서버 푸시 기기 등록) | `nativePushToken` 의 `PUSH_TOKEN_SHELL_VERSION`. 알림 권한이 있을 때만 토큰을 준다 — 권한은 묻지 않는다 |
+| 5 | `share-image`(사진 파일 공유, `expo-sharing`) | `nativeShareImage` 의 `SHARE_IMAGE_SHELL_VERSION`. 모르는 셸이면 예전처럼 링크를 `share` 로 넘긴다(`lib/share.ts` 의 `sharePhoto`). 답은 공유 창이 닫혀야 와서 10분까지 기다린다 |
 
 답을 기다리지 않는 메시지(`haptic`·`theme`)는 옛 셸이 흘려도 잃을 것이 없어 판 수를 보지 않는다.
 
@@ -58,13 +61,16 @@
 | 기능 | 왜 웹이 못 하나 |
 |---|---|
 | 사진첩 저장 | 웹 표준에 사진첩 쓰기 API 가 없다. WebView 에서는 `<a download>` 도 blob 도 안 먹는다 |
-| 공유 시트 | 안드로이드 WebView 에 `navigator.share` 가 없다 |
+| 공유 시트 | 안드로이드 WebView 에 `navigator.share` 가 없다. **사진은 링크가 아니라 파일로 넘긴다**(2026-11-15 「카톡으로 바로 보내거나 인스타로 바로 보낼 수 있는, 스토리에 올릴 수도」) — 웹의 공유 창(`components/share/PhotoShareSheet.tsx`)에서 카카오톡·인스타그램을 누르면 셸이 보기 주소에서 캐시로 받아 `expo-sharing` 으로 기기 공유 창에 넘긴다(`shareRemoteImage`). 같은 창의 스레드·X 는 웹이 `window.open` 으로 연 글쓰기 주소를 셸이 `onOpenWindow` → `Linking.openURL` 로 앱(없으면 브라우저)에 넘긴다. RN `Share` 는 안드로이드에서 글자만 넘겨 쓸 수 없다. 받은 파일은 받는 앱이 다 읽도록 바로 지우지 않고, 다음 공유 때 한 시간 지난 것을 걷는다. **새 앱 빌드 필요 · 실기기 미확인** |
 | 햅틱 | `navigator.vibrate` 가 iOS 에서 동작하지 않는다 |
 | **알림** | WebView 안에는 Notification API 가 없다. iOS WKWebView 는 미지원, 안드로이드는 권한 UI 가 없어 조용히 거절된다 |
 | **상태바 색** | 웹은 상태바를 못 만진다. 웹이 자기 테마를 알려 주면 셸이 맞춘다 |
-| **안전영역** | WebView 안에서는 `env(safe-area-inset-*)` 가 믿을 만하지 않다 — 안드로이드 WebView 는 edge-to-edge 로 상태바·내비바 뒤까지 그리면서 그 높이를 env 에 주지 않고, iOS 는 react-native-webview 기본값(`contentInsetAdjustmentBehavior=never`)이라 스크롤뷰가 상태바를 비키지 않는다. 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)을 비우고 무대색(`STAGE_COLORS`)으로 칠한다. iOS 하단 홈 인디케이터만 웹의 `env(safe-area-inset-bottom)` 이 맡는다 |
+| **안전영역** | WebView 안에서는 `env(safe-area-inset-*)` 가 믿을 만하지 않다 — 안드로이드 WebView 는 edge-to-edge 로 상태바·내비바 뒤까지 그리면서 그 높이를 env 에 주지 않고, iOS 는 react-native-webview 기본값(`contentInsetAdjustmentBehavior=never`)이라 스크롤뷰가 상태바를 비키지 않는다. 셸이 `insets.top`(양쪽)·`insets.bottom`(안드로이드)·`insets.left`·`insets.right`(양쪽 — 옆으로 돌린 촬영 화면의 노치·내비바)를 비우고 무대색(`STAGE_COLORS`)으로 칠한다. iOS 하단 홈 인디케이터만 웹의 `env(safe-area-inset-bottom)` 이 맡는다 |
 | **카메라 권한(안드로이드)** | 웹 권한이 아니라 앱 권한이다. 셸이 `CAMERA` 를 선언해 두었는데 런타임 권한이 없으면 WebView 가 파일 선택기에서 「사진 찍기」를 통째로 뺀다 |
 | 하드웨어 뒤로가기 | 셸이 안 잡으면 어느 화면에서든 앱이 통째로 닫힌다 |
+| **화면 방향(촬영 화면만 회전)** | 웹은 앱 창의 회전을 바꿀 수 없다(`screen.orientation.lock` 은 전체 화면 웹에서만, WebView 에는 없다). 앱은 세로 고정으로 시작하고(`app.json` 의 `expo-screen-orientation` 플러그인 `initialOrientation`, 안드로이드는 `app/_layout.tsx` 가 다시 잠금), 촬영 화면(`/create/capture`)이 들어오며 `orientation: free`, 떠나며 `portrait` 를 보낸다(웹 `hooks/useRotatableScreen.ts`). `free` 는 시스템에 맡겨 사용자의 세로 고정 설정을 따른다. 셸은 촬영 화면이 아닌 주소로 가면 스스로 다시 잠근다. 2026-11-15 「앱 회전 촬영 때만 해주는 건? 가로로 찍는 사람도 많으니깐」. **새 앱 빌드 필요 · 실기기 미확인** |
+| **구글 로그인(시스템 브라우저)** | 구글은 임베디드 WebView 의 OAuth 를 `disallowed_useragent` 로 막는다. 셸이 백엔드의 구글 로그인 시작을 가로채 PKCE challenge 를 붙여 ASWebAuthenticationSession·Custom Tabs 로 열고, `harucut://oauth2/callback?code=` 로 돌아오면 코드와 verifier 를 웹 교환 화면(`/oauth2/app-callback#…`)에 넘긴다. 교환은 WebView 안의 웹이 해야 쿠키가 이 WebView 에 남는다(`apps/mobile/lib/app-login.ts`, 규칙은 `packages/shared/src/app-login.ts`). 교환 화면은 **지금 WebView 안에서** 연다 — 새로 올리면 sessionStorage(로그인 뒤 돌아갈 곳·제공자)가 사라진다. 안드로이드는 콜백을 일반 링크로도 보내므로 `app/+native-intent.tsx` 가 라우터 이동을 막는다. 카카오·네이버는 WebView 안에서 그대로 된다 |
+| **앱 구독 결제(스토어)** | 개인 앱의 디지털 구독은 스토어 인앱 결제로만 판다(R5 12절). StoreKit·Play Billing 은 네이티브만 부를 수 있다. 셸은 상품 조회·구매·복원·거래 마치기만 하고(`apps/mobile/lib/store-purchase.ts`, `expo-iap`), 증빙의 서버 제출은 웹이 한다. 서버가 받아들인 뒤에만 거래를 마친다 — 제출이 실패한 구매는 스토어가 다시 보내고 「구매 복원」이 다시 제출한다. 화면에 여는지는 `STORE_PURCHASES_ENABLED`(사업 결정, 기본 꺼짐). **실기기·스토어 상품 미확인** |
 
 ## 셸이 WebView 를 부리는 길 — `ref`
 
@@ -308,7 +314,7 @@ Playwright 로 두 엔진에서 실제로 호출해 확인했다(2026-08-28):
 ## 촬영 권한은 이미 정상이다 — 확인한 결과
 
 카메라는 웹의 `getUserMedia` 로 WebView 안에서 그대로 돈다
-(`apps/web/app/shoot/capture/_hooks/useCaptureFlow.ts`). 네이티브 카메라로 바꿀 필요가 없다.
+(`apps/web/app/create/capture/_hooks/useCaptureFlow.ts`). 네이티브 카메라로 바꿀 필요가 없다.
 `react-native-webview` 가 **런타임 권한까지 직접 요청**하기 때문이다 —
 `RNCWebChromeClient.onPermissionRequest` 가 `RESOURCE_VIDEO_CAPTURE` 를
 `Manifest.permission.CAMERA` 로 옮겨 `requestPermissions` 를 부른다(소스 확인).
@@ -325,7 +331,7 @@ chooser 에서 "카메라로 찍기" 항목이 빠졌다(`RNCWebViewModuleImpl.j
 지금은 **웹이 선택기를 열기 전에 셸에 권한을 부탁한다** — `camera-permission` 브리지
 메시지(`apps/web/lib/nativeBridge.ts` `nativeEnsureCameraPermission` ↔
 `apps/mobile/lib/native-bridge.ts` `ensureCameraPermission`), 호출부는
-`apps/web/app/shoot/upload/page.tsx` 의 「사진 고르기」 버튼이다. `notify-permission` 과
+`apps/web/hooks/usePhotoImport.ts` — 사진 고르기 화면의 「사진 불러오기」 칸이다(2026-11-15 불러오기 화면을 합쳤다). `notify-permission` 과
 같은 모양이다 — 시점은 웹이 고르고 권한은 셸이 받는다.
 
 **거절해도 그대로 진행한다.** 갤러리는 열리므로 사용자가 하려던 일은 계속할 수 있다.
@@ -401,24 +407,18 @@ URL 에 토큰도, 교환용 코드도 없다.
 
 ## 알림을 눌렀을 때
 
-**아무 데도 가지 않는다.** 앱이 앞으로 올 뿐 WebView 는 보고 있던 경로 그대로다.
+**서버 푸시는 갈 곳으로 간다**(P4 이후). 셸이 `addNotificationResponseReceivedListener`(앱이 꺼져 있었으면
+`getLastNotificationResponseAsync`)로 응답을 받아, 푸시 `data.type` 으로 우리 웹 안의 경로를 연다 —
+`COMPOSE_DONE`·`COMPOSE_FAILED` 는 `/history`, `PAYMENT_FAILED`·`SUBSCRIPTION_EXPIRING` 은 `/mypage`
+(`components/harucut-web-shell.tsx`). 브리지에 앱 → 웹 메시지를 새로 만들지 않고 지금 WebView 에서 주소만 연다.
 
-없는 것이 둘이다. 셸에 알림 응답 리스너가 없고(`apps/mobile/app/_layout.tsx` —
-"딥링크를 실제로 쓰게 되면 여기에 핸들러가 붙는다"), 브리지에 **들어오는 경로**를 웹으로
-넘길 메시지가 없다. `harucut://` 도 scheme 만 등록돼 있다.
+**로컬 알림(`nativeNotify`)은 지금도 아무 데도 가지 않는다** — data 를 싣지 않는다. 그래서 그 본문은 「기록 화면에서 볼 수
+있어요」다(`apps/web/app/create/result/page.tsx` 의 `notifyServerComposeDone`). 서버 푸시를 등록한 기기(`lib/pushDevices.ts`
+`hasServerPush`)에서는 같은 일을 두 번 알리지 않게 로컬 알림을 띄우지 않는다.
 
-그래서 합성 완료 알림의 본문은 「눌러서 보러 가기」가 아니라 「기록 화면에서 볼 수
-있어요」다(`apps/web/app/shoot/result/page.tsx` 의 `notifyServerComposeDone`). **되는 것만
-적는다** — 안 되는 동작을 약속하면 사용자는 알림이 고장 난 것으로 읽는다.
-
-붙이려면 같은 커밋에서 셋을 함께 고쳐야 한다.
-
-1. 셸: `Notifications.addNotificationResponseReceivedListener` 로 응답을 받고, 알림에
-   실어 둔 경로를 꺼낸다.
-2. 브리지 한 쌍(`apps/web/lib/nativeBridge.ts` ↔ `apps/mobile/lib/native-bridge.ts`):
-   앱 → 웹 방향 메시지를 새로 만든다. 지금 브리지는 웹이 묻고 앱이 답하는 모양뿐이라
-   앱이 먼저 말을 거는 경로 자체가 없다.
-3. `nativeNotify` 에 목적지 경로를 실어 보내는 인자를 더한다.
+서버 푸시 등록: 마이페이지 「알림 켜기」로 권한을 받으면, 그리고 로그인한 화면(AppNav)이 열릴 때마다 Expo 푸시 토큰을
+`POST /api/client/devices` 로 등록한다. 로그아웃 전에 `…/devices/unregister`(본문에 토큰)로 해제한다.
+**실제 발송은 서버의 Expo Push 설정과 EAS 프로젝트의 FCM/APNs 자격이 있어야 간다 — 실연동 미확인.**
 
 ## 디자인/에셋으로 필요한 것
 

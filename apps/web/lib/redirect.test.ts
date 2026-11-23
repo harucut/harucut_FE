@@ -7,8 +7,8 @@ import {
 describe("redirect helpers", () => {
   test("accepts internal product routes", () => {
     expect(getSafeRedirectPath("/mypage")).toBe("/mypage");
-    expect(getSafeRedirectPath("/shoot/capture?step=2")).toBe(
-      "/shoot/capture?step=2",
+    expect(getSafeRedirectPath("/create/capture?step=2")).toBe(
+      "/create/capture?step=2",
     );
   });
 
@@ -39,8 +39,8 @@ describe("redirect helpers", () => {
     expect(buildPathWithRedirect("/login", "/mypage")).toBe(
       "/login?redirectTo=%2Fmypage",
     );
-    expect(buildPathWithRedirect("/signup", "/shoot/capture?mode=retry")).toBe(
-      "/signup?redirectTo=%2Fshoot%2Fcapture%3Fmode%3Dretry",
+    expect(buildPathWithRedirect("/signup", "/create/capture?mode=retry")).toBe(
+      "/signup?redirectTo=%2Fcreate%2Fcapture%3Fmode%3Dretry",
     );
     expect(buildPathWithRedirect("/login", "https://example.com")).toBe(
       "/login",

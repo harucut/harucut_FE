@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { Sentences } from "@/components/ui/Sentences";
 
 /**
  * 렌더 중 예외가 났을 때의 화면.
@@ -31,8 +32,7 @@ export default function GlobalRouteError({
           화면을 여는 데 실패했어요
         </h1>
         <p className="mt-3 text-[15px] leading-[1.75] text-(--hc-muted)">
-          잠시 후 다시 시도해 보세요. 계속 같은 화면이 나오면 홈으로 돌아간 뒤
-          다시 들어와 주세요.
+          <Sentences text="잠시 후 다시 시도해 보세요. 계속 같은 화면이 나오면 홈으로 돌아간 뒤 다시 들어와 주세요." />
         </p>
 
         <div className="mt-7 flex flex-col items-center gap-2.5 sm:flex-row sm:justify-center">

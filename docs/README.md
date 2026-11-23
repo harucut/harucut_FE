@@ -17,7 +17,9 @@
 | 앱 QA 수동 확인 | [mobile-qa-checklist.md](./mobile-qa-checklist.md) |
 | harucut 앱 이름·설명과 vailen 운영 표기 | [release/store-listing-ko.md](./release/store-listing-ko.md) |
 | 웹·앱 출시 변경과 검증 범위 및 남은 조건 | [release/launch-status.md](./release/launch-status.md) |
-| 디자인 검수(2026-09-06) — 어떻게 봤고 무엇이 남았나 | [design-audit-2026-09-06.md](./design-audit-2026-09-06.md) |
+| 디자인 검수 — 어떻게 봤고 무엇이 남았나 | [2026-11-02(행사·Studio)](./design-audit-2026-11-02.md) · [2026-09-06(개인)](./design-audit-2026-09-06.md) |
+| 고도화 구현 진행 상태 — 작업 목록·의존·사용자에게 필요한 것 | [plan-implementation-status.md](./plan-implementation-status.md) |
+| 고도화 기획서 코드 검수 — 최신 판정은 R5 (이전 회차는 기록용) | [R5 판정](./plan-review-r5-verdict-2026-10-26.md) · [R4 판정](./plan-review-r4-verdict-2026-10-26.md) · [R4](./plan-review-r4-2026-10-26.md) · [R3](./plan-review-r3-2026-10-26.md) · [R1](./plan-review-2026-10-25.md) |
 | 왜 이렇게 정했나 | [adr/](./adr/) |
 | 지난 계획 — **실행 기준 아님** | [archive/](./archive/) (각 문서 머리에 왜 보관인지 적혀 있다) |
 
@@ -37,7 +39,17 @@
 # 로컬 백엔드를 띄운 뒤 (docs/local-backend.md)
 pnpm check:contract                                          # 요약
 python3 scripts/check_backend_contract.py --show-required    # 스웨거 required 목록까지
+
+# CI 가 쓰는 기준 — 백엔드 develop 이 남긴 계약 산출물과 대조(백엔드를 띄우지 않아도 된다)
+python3 scripts/check_backend_contract.py \
+  --spec https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/openapi.generated.json \
+  --error-codes https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/error-codes.generated.json
 ```
+
+CI(`backend-contract.yml`)는 운영 스웨거가 아니라 **백엔드 develop 의 계약 산출물**로 판정한다.
+develop 에서는 프론트가 운영보다 앞서서, 운영과만 대조하면 아직 배포하지 않은 API 의 BFF 경로가
+전부 「백엔드에 없다」로 떨어진다. 운영 대조는 정보용 단계로 남아 있다. 새 API 를 쓰는 프론트 PR 은
+백엔드 develop 에 그 API(와 갱신된 산출물)가 먼저 들어간 뒤에 merge 한다.
 
 인자를 넘길 때 **`--` 를 끼우지 않는다.** pnpm 10 은 `--` 를 스크립트에 그대로 넘기고
 argparse 가 `unrecognized arguments: -- --show-required` 로 끊는다(종료코드 2).
@@ -182,7 +194,7 @@ E2E 를 돌릴 때는 `NEXT_PUBLIC_DEV_AUTH_BYPASS` 가 켜져 있으면 인증 
 5MB)는 인계를 IndexedDB 로 옮기면서 사라졌다. 지금 남은 이유는 둘이다.
 
 1. **화면이 한 번에 드는 양.** 갤러리 불러오기는 칸 수 × 6장(지금 24장)을 전부 data URL 로
-   세션과 DOM 에 담는다(`app/shoot/upload/page.tsx` 의 `PHOTOS_PER_SLOT`). 원본 크기로
+   세션과 DOM 에 담는다(`app/create/select/page.tsx` 의 `PHOTOS_PER_SLOT` — 갤러리 불러오기는 2026-11-15 사진 고르기 화면 안으로 합쳤다). 원본 크기로
    담으면 모바일 웹뷰가 이 흐름만으로 멎는다.
 2. **슬롯보다 큰 화소는 어차피 잘린다** — 올리는 시간만 늘린다.
 
@@ -292,7 +304,7 @@ BASIC 계정으로 프레임 저장 성공(200), jar 의 `PlanTier` enum 이 세
 
 | 무엇 | 누가 | 왜 막혔나 |
 |---|---|---|
-| 앱 구글 로그인 | **백엔드** | 구글이 임베디드 WebView 를 막는다(여기서 **재현은 못 했다** — 실기기와 구글 왕복이 필요하다). 외부 브라우저로 열면 쿠키가 브라우저에 남아 앱은 로그아웃 상태 — 일회용 코드 교환이 필요하다 |
+| 앱 구글 로그인 실기기 확인 | **사용자** | 구현은 됐다 — 셸이 구글 시작을 시스템 브라우저로 가로채고 코드를 WebView 에서 교환한다(`apps/mobile/lib/app-login.ts`). 웹은 브리지 판 4 이상에서만 버튼을 보인다. 실기기 왕복과 구글 콘솔 리디렉션 URI 는 아직 확인하지 못했다 |
 | 비회원 서버 합성 | **백엔드** | 합성·업로드가 전부 인증 경로 아래. 행사 참가자 판매 문구와 어긋난다 |
 | 서버 발신 알림 | **백엔드** | 기기 토큰 등록 엔드포인트 0건. 로컬 알림만 넣었다 |
 | 요금제 정책 | **백엔드** | 위 "요금제" 절 |

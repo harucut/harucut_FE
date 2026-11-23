@@ -57,6 +57,22 @@ function Dialog({ name, onClose = () => undefined }: { name: string; onClose?: (
   );
 }
 
+/** 이름 바꾸기처럼 글 칸이 있는 창. 체크박스는 글 칸이 아니다. */
+function FieldDialog() {
+  const dialogRef = useModalDialog(true, () => undefined);
+
+  return (
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="이름 바꾸기">
+      <input type="checkbox" aria-label="동의" />
+      <button type="button">닫기</button>
+      <input aria-label="이름" />
+    </div>
+  );
+}
+
+/** 열 때 포커스는 다이얼로그 자체가 받는다 — 그 요소. */
+const dialog = (name: string) => screen.getByRole("dialog", { name });
+
 /**
  * 배경 위에 얹힌 모달. 실제 화면 구조와 같다 — z-index 는 훅이 쥔 요소가 아니라 그 위의
  * `fixed inset-0 z-[...]` 배경에 붙어 있다.
@@ -130,12 +146,30 @@ function stackedStage({ guestOpen, termsOpen }: { guestOpen: boolean; termsOpen:
 }
 
 describe("useModalDialog", () => {
-  it("열리면 첫 컨트롤로 포커스가 들어간다", () => {
+  /*
+    열 때는 다이얼로그 자체가 포커스를 받는다(2026-11-14). 첫 컨트롤로 옮기면 크롬이 페이지를 열자마자
+    뜬 창의 X·「로그아웃」에 키보드 테두리를 그렸다. 키보드는 Tab 한 번에 첫 컨트롤로 간다.
+  */
+  it("열리면 다이얼로그 자체로 포커스가 들어가고, Tab 은 첫 컨트롤로 간다", () => {
     render(<Dialog name="촬영 방식" />);
 
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "촬영 방식 처음" }),
-    );
+    expect(document.activeElement).toBe(dialog("촬영 방식"));
+
+    expect(pressTab().notPrevented).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "촬영 방식 처음" }));
+  });
+
+  it("다이얼로그 자체에서 Shift+Tab 은 뒤 화면이 아니라 마지막 컨트롤로 간다", () => {
+    render(<Dialog name="촬영 방식" />);
+
+    expect(pressTab({ shiftKey: true }).notPrevented).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "촬영 방식 마지막" }));
+  });
+
+  it("글을 쓰는 칸이 있으면 그 칸으로 포커스가 들어간다", () => {
+    render(<FieldDialog />);
+
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "이름" }));
   });
 
   it("모달이 둘 열려 있으면 맨 위 모달만 초기 포커스를 갖는다", () => {
@@ -147,7 +181,7 @@ describe("useModalDialog", () => {
     );
 
     // 배경 z-index 가 같으면 문서 순서가 갈라 준다 — 뒤에 오는 약관이 위에 얹힌다.
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
+    expect(document.activeElement).toBe(dialog("약관"));
   });
 
   it("아래에 깔릴 모달이 뒤늦게 열려도 포커스를 뺏지 않는다", () => {
@@ -170,7 +204,7 @@ describe("useModalDialog", () => {
     render(stackedStage({ guestOpen: true, termsOpen: true }));
 
     const termsFirst = screen.getByRole("button", { name: "약관 처음" });
-    expect(document.activeElement).toBe(termsFirst);
+    expect(document.activeElement).toBe(dialog("약관"));
 
     /*
       아래 모달이 자체 트랩을 들고 있으면 여기서 자기 첫 컨트롤로 감아 돌린다 — 포커스가
@@ -203,7 +237,7 @@ describe("useModalDialog", () => {
       열기 전 자리로 돌려주면 포커스가 모달 뒤쪽 화면으로 빠진다 — 안내는 열려 있는데 키보드로
       닿을 수 없다. 남은 것 중 맨 위가 새 임자다.
     */
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "게스트 처음" }));
+    expect(document.activeElement).toBe(dialog("게스트"));
   });
 
   it("아래 모달이 닫혀도 맨 위 모달이 포커스를 지킨다", async () => {
@@ -214,17 +248,17 @@ describe("useModalDialog", () => {
 
     // 게스트 안내가 먼저 열려 포커스를 쥐고, 그 위로 약관 재동의가 얹힌다.
     rerender(stackedStage({ guestOpen: true, termsOpen: false }));
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "게스트 처음" }));
+    expect(document.activeElement).toBe(dialog("게스트"));
 
     rerender(stackedStage({ guestOpen: true, termsOpen: true }));
-    const termsFirst = screen.getByRole("button", { name: "약관 처음" });
-    expect(document.activeElement).toBe(termsFirst);
+    const termsDialog = dialog("약관");
+    expect(document.activeElement).toBe(termsDialog);
 
     rerender(stackedStage({ guestOpen: false, termsOpen: true }));
     await nextFrame();
 
     // 닫힌 쪽의 "열기 전 자리"로 되돌리면 보이는 약관 모달에서 포커스를 뺏는다.
-    expect(document.activeElement).toBe(termsFirst);
+    expect(document.activeElement).toBe(termsDialog);
   });
 
   it("맨 위 모달 안의 Tab 은 막지 않는다", () => {
@@ -285,7 +319,7 @@ describe("useModalDialog", () => {
       </>,
     );
 
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
+    expect(document.activeElement).toBe(dialog("약관"));
     pressEscape();
 
     /*
@@ -314,7 +348,7 @@ describe("useModalDialog", () => {
     // 페이지 모달이 떠 있는 동안 인계 안내가 뒤늦게 도착한다 — 연 순서로는 게스트가 맨 위다.
     rerender(stage(true));
 
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "확인 처음" }));
+    expect(document.activeElement).toBe(dialog("확인"));
     pressEscape();
 
     // 보이는 모달이 닫히고, 뒤에 깔린 저장/버리기 확인은 살아 있어야 한다.
@@ -342,7 +376,7 @@ describe("useModalDialog", () => {
     // 나중에 열리고 문서 순서도 뒤지만, 배경 z-index 가 낮아 약관 밑에 깔린다.
     rerender(stage(true));
 
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "약관 처음" }));
+    expect(document.activeElement).toBe(dialog("약관"));
     pressEscape();
 
     expect(closeTerms).toHaveBeenCalledTimes(1);
@@ -367,7 +401,7 @@ describe("useModalDialog", () => {
     );
     await nextFrame();
 
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "게스트 처음" }));
+    expect(document.activeElement).toBe(dialog("게스트"));
     pressEscape();
 
     expect(closeGuest).toHaveBeenCalledTimes(1);

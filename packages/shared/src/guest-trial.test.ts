@@ -1,13 +1,14 @@
 // 비회원에게 "안 되는 것"을 세는 화면 문구가 실제 차단 범위보다 좁지 않은지 본다.
 //
 // 이 파일이 생긴 이유: 갤러리 불러오기가 목록에서 빠져 있었다.
-//   apps/web/proxy.ts 는 비회원의 `/shoot/upload` 를 막아 `/shoot?guestNotice=restricted` 로
-//   돌려보내고, 그 화면의 모달(guestTrialStore 의 showGuestRestrictedNotice)은
+//   비회원이 갤러리 불러오기에 들어가려 하면 `/create?guestNotice=restricted` 로 돌려보내고
+//   (예전에는 프록시가 `/shoot/upload` 를, 2026-11-15 부터는 프레임 고르기의 「사진 고르러 가기」가 막는다),
+//   그 화면의 모달(guestTrialStore 의 showGuestRestrictedNotice)은
 //   GUEST_MEMBER_ONLY_ITEMS 를 그대로 읽는다. 즉 막힌 사람은 **방금 막힌 것만 빼고**
 //   나머지 세 가지를 안내받았다.
 //
 // 범위를 쥔 곳은 셋이다.
-//   코드: apps/web/lib/protectedPaths.ts 의 GUEST_MEMBER_ONLY_PREFIXES(`/shoot/upload`)
+//   코드: apps/web/app/create/page.tsx 의 mayEnterUpload · app/create/select/page.tsx 의 불러오기 칸(회원만)
 //   고지: 약관 제8조(비회원 체험)
 //   화면: 여기 GUEST_MEMBER_ONLY_ITEMS
 // 한쪽만 바뀌면 화면이 거짓말을 한다. 이 파일은 화면과 고지가 같은 것을 가리키는지 붙잡는다.
@@ -42,7 +43,7 @@ function termsSectionText(headingPrefix: string) {
 }
 
 describe('비회원 회원 전용 목록 — 갤러리 불러오기', () => {
-  // 회귀 지점. 목록에 없으면 `/shoot/upload` 에서 막힌 사람이 이유를 못 듣는다.
+  // 회귀 지점. 목록에 없으면 갤러리 불러오기에서 막힌 사람이 이유를 못 듣는다.
   it('회원 전용 목록이 갤러리에서 사진 불러오기를 적는다', () => {
     expect(mentionsGallery(GUEST_MEMBER_ONLY_ITEMS)).toBe(true);
   });

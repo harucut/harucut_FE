@@ -54,6 +54,11 @@ jest.mock("@/lib/imageDecode", () => ({
   toUploadableFile: (file: File) => mockToUploadableFile(file),
 }));
 
+// 운영 스티커 목록은 서버에서 온다. 이 파일이 보는 것과 무관하니 비워 둔다.
+jest.mock("@/hooks/useServerAssets", () => ({
+  useServerAssets: () => ({ stickers: [], backgrounds: [] }),
+}));
+
 /** 크기를 마음대로 정한 파일. jsdom 의 File 은 내용만큼만 size 를 준다. */
 function fileOfSize(name: string, type: string, size: number) {
   const file = new File(["x"], name, { type });
@@ -89,9 +94,9 @@ function noticeText() {
   return screen.queryByRole("status")?.textContent ?? null;
 }
 
-/** 변환이 끝나 버튼 글자가 「업로드 중」에서 돌아올 때까지 기다린다. */
+/** 변환이 끝나 올리기 칸 글자가 「올리는 중」에서 돌아올 때까지 기다린다. */
 function waitForIdle() {
-  return screen.findByText("추가");
+  return screen.findByText("내 사진");
 }
 
 beforeEach(() => {
@@ -291,5 +296,43 @@ describe("누끼 실패 안내", () => {
       fireEvent.click(cutoutButton(container));
     });
     expect(noticeText()).toBeNull();
+  });
+});
+
+/*
+  사진과 스티커는 쓰는 사람에게 같은 것이라 한 탭에 둔다(2026-11-09). 구분은 우리 쪽에만 남는다 —
+  내 사진은 PHOTO, 스티커는 STICKER 층으로 얹힌다(저장·누끼가 그 구분을 쓴다).
+*/
+describe("사진·스티커 한 탭", () => {
+  it("탭은 스티커·텍스트 둘이고, 한 칸에 내 사진 올리기와 기본 스티커가 함께 있다", () => {
+    renderPanel();
+
+    expect(screen.getByRole("button", { name: "스티커" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "텍스트" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: "사진" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /내 사진/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "네 컷 스트립" })).toBeInTheDocument();
+  });
+
+  it("스토어 탭이 사진이어도 같은 탭으로 보인다", () => {
+    mockStoreState.tab = "PHOTO";
+    renderPanel();
+    expect(screen.getByRole("button", { name: "스티커" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("스티커는 STICKER 로, 내 사진은 PHOTO 로 얹는다", () => {
+    renderPanel([{ id: "asset-1", src: "blob:one", name: "one.png" }]);
+
+    fireEvent.click(screen.getByRole("button", { name: "네 컷 스트립" }));
+    expect(mockStoreState.addComponentFromAsset).toHaveBeenCalledWith("STICKER", "/stickers/01-fourcut.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "one.png" }));
+    expect(mockStoreState.addComponentFromAsset).toHaveBeenCalledWith("PHOTO", "blob:one");
+  });
+
+  it("설명 문구 없이 시작한다", () => {
+    renderPanel();
+    expect(screen.queryByText(/여러 번 사용할 수 있고/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/아직 업로드한 사진이 없어요/)).not.toBeInTheDocument();
   });
 });

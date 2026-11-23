@@ -1,0 +1,842 @@
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { EventStudio } from "@/components/studio/EventStudio";
+import { ApiRequestError } from "@/lib/clientApi";
+import { useThemeSession } from "@/lib/themeSessionStore";
+import type { StudioEvent } from "@/lib/studio/studioApi";
+
+const mockGetEvent = jest.fn();
+const mockPush = jest.fn();
+const mockListVersions = jest.fn();
+const mockListFrames = jest.fn();
+const mockPublishFrame = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+const mockUpdate = jest.fn();
+const mockRun = jest.fn();
+
+jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
+jest.mock("@/lib/studio/studioApi", () => ({
+  ...jest.requireActual("@/lib/studio/studioApi"),
+  getEvent: (...args: unknown[]) => mockGetEvent(...args),
+  updateEventSettings: (...args: unknown[]) => mockUpdate(...args),
+  runEventAction: (...args: unknown[]) => mockRun(...args),
+  listPickableFrameVersions: (...args: unknown[]) => mockListVersions(...args),
+  listWorkspaceFrames: (...args: unknown[]) => mockListFrames(...args),
+  publishFrameVersion: (...args: unknown[]) => mockPublishFrame(...args),
+  listBoothDevices: async () => [],
+}));
+const mockUsage = jest.fn();
+jest.mock("@/lib/studio/usageApi", () => ({ getEventUsage: (...a: unknown[]) => mockUsage(...a) }));
+const mockThemeUpload = jest.fn();
+jest.mock("@/lib/assetUploadApi", () => ({
+  ...jest.requireActual("@/lib/assetUploadApi"),
+  uploadAsset: (...a: unknown[]) => mockThemeUpload(...a),
+}));
+const mockEffective = jest.fn();
+const mockProjects = jest.fn();
+const mockWsDefaults = jest.fn();
+jest.mock("@/lib/studio/projectsApi", () => ({
+  ...jest.requireActual("@/lib/studio/projectsApi"),
+  getEffectiveSettings: (...a: unknown[]) => mockEffective(...a),
+  listProjects: (...a: unknown[]) => mockProjects(...a),
+  getWorkspaceBrandDefaults: (...a: unknown[]) => mockWsDefaults(...a),
+}));
+const mockMyEvents = jest.fn();
+const mockMembers = jest.fn();
+const mockGrants = jest.fn();
+const mockAssign = jest.fn();
+jest.mock("@/lib/studio/accessApi", () => ({
+  ...jest.requireActual("@/lib/studio/accessApi"),
+  listEventGrants: (...a: unknown[]) => mockGrants(...a),
+  listMyEvents: (...a: unknown[]) => mockMyEvents(...a),
+  listMembers: (...a: unknown[]) => mockMembers(...a),
+  assignEventOperator: (...a: unknown[]) => mockAssign(...a),
+  removeEventGrant: (...a: unknown[]) => mockRemoveGrant(...a),
+}));
+const mockRemoveGrant = jest.fn();
+jest.mock("@/lib/event/eventApi", () => ({
+  getTextStyles: async () => [
+    { id: "pretendard-bold-dark", label: "굵게 · 검정", weight: 700, color: "#111111" },
+    { id: "pretendard-bold-light", label: "굵게 · 흰색", weight: 700, color: "#FFFFFF" },
+  ],
+}));
+
+function myAccess(access: Record<string, unknown>) {
+  mockMyEvents.mockResolvedValue([{ eventId: "Ev1", name: "", status: "DRAFT", access }]);
+}
+
+const VERSION_CLASSIC = {
+  frameVersionId: 41,
+  frameId: 7,
+  versionNo: 2,
+  frameType: "CLASSIC",
+  title: "웨딩 세로",
+  previewUrl: null,
+  source: "WORKSPACE",
+  publishedAt: "2026-10-26T00:00:00Z",
+};
+const VERSION_SYSTEM = { ...VERSION_CLASSIC, frameVersionId: 9, frameId: 201, versionNo: 1, title: "기본 세로", source: "SYSTEM" };
+
+function apiError(code: string, data?: unknown) {
+  return Object.assign(new Error(code), { code, data: { code, data } });
+}
+
+function event(overrides: Partial<StudioEvent> = {}): StudioEvent {
+  return {
+    eventId: "Ev1",
+    workspaceId: "Ws1",
+    status: "DRAFT",
+    paused: false,
+    captureOpen: false,
+    settingsVersion: 3,
+    currentExperienceVersion: null,
+    joinUrlPath: "/e/wedding-1027",
+    settings: {
+      name: "민지 ♥ 준호 결혼식",
+      slug: "wedding-1027",
+      byodEnabled: true,
+      boothEnabled: false,
+      allowedLayouts: ["CLASSIC"],
+      consentItems: [
+        { code: "photo", title: "사진 수집·이용 동의", body: "신랑신부가 받아요.", required: true, version: 2 },
+        { code: "share", title: "공유 동의", body: "행사 후 공유해요.", required: false, version: 1 },
+      ],
+      resultRetentionDays: 30,
+    },
+    ...overrides,
+  };
+}
+
+async function renderStudio(initial = event()) {
+  mockGetEvent.mockResolvedValue(initial);
+  render(<EventStudio eventId="Ev1" />);
+  await screen.findByRole("heading", { name: initial.settings.name ?? "" });
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  window.localStorage.clear();
+  mockListVersions.mockResolvedValue([VERSION_CLASSIC, VERSION_SYSTEM]);
+  mockListFrames.mockResolvedValue([{ frameId: 7, title: "웨딩 세로", frameType: "CLASSIC", components: [] }]);
+  useThemeSession.getState().reset();
+  mockEffective.mockRejectedValue(new Error("no sources"));
+  mockProjects.mockResolvedValue([]);
+  mockWsDefaults.mockResolvedValue({});
+  mockUsage.mockResolvedValue({ composeQuota: 0, used: 0, reserved: 0, remaining: 0 });
+  myAccess({ role: "OWNER", permissions: [], operations: ["MANAGE_EVENT", "MANAGE_BOOTH", "INVITE_CUSTOMERS"] });
+  mockMembers.mockResolvedValue([]);
+  mockGrants.mockResolvedValue([]);
+});
+
+it("게시한 행사는 참가 링크를 이 화면의 오리진에 붙여 QR 과 함께 보여 준다", async () => {
+  await renderStudio(event({ status: "LIVE", captureOpen: true }));
+  expect(screen.getByText(`${window.location.origin}/e/wedding-1027`)).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "행사 참가 링크 QR" })).toBeInTheDocument();
+});
+
+// 초안에는 아직 참가할 수 없다 — 나눠 줄 QR 대신 게시까지 남은 일을 보여 준다.
+it("초안은 QR 대신 체크리스트를 보여 주고, 줄을 누르면 그 구역으로 간다", async () => {
+  await renderStudio();
+  expect(screen.queryByRole("img", { name: "행사 참가 링크 QR" })).not.toBeInTheDocument();
+  expect(screen.getByText(`${window.location.origin}/e/wedding-1027`)).toBeInTheDocument();
+  // 프레임이 없고 이용권이 없다.
+  expect(screen.getByText("고른 레이아웃마다 프레임을 하나 이상 골라 주세요")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /프레임 해야 해요/ })).toHaveAttribute("href", "#frames");
+  expect(document.getElementById("frames")).not.toBeNull();
+});
+
+it("목차는 고칠 구역에 표시를 달고, 권한이 있는 구역만 싣는다", async () => {
+  await renderStudio();
+  const nav = screen.getByRole("navigation", { name: "행사 설정 목차" });
+  expect(within(nav).getByRole("link", { name: /프레임.*확인이 필요해요/ })).toHaveAttribute("href", "#frames");
+  expect(within(nav).queryByRole("link", { name: /^부스/ })).not.toBeInTheDocument();
+  expect(within(nav).getByRole("link", { name: "개요" })).toBeInTheDocument();
+});
+
+it("운영 중이면 계기판에 남은 촬영과 진행 수를 보여 준다", async () => {
+  mockUsage.mockResolvedValue({
+    entitlement: { scope: "EVENT", validFrom: "2026-01-01T00:00:00Z", validTo: "2999-01-01T00:00:00Z" },
+    composeQuota: 500,
+    used: 12,
+    reserved: 3,
+    remaining: 485,
+  });
+  await renderStudio(event({ status: "LIVE", captureOpen: true }));
+  const meter = await screen.findByRole("meter", { name: "촬영 한도 사용량" });
+  expect(meter).toHaveAttribute("aria-valuenow", "15");
+  expect(screen.getByText("지금 이 링크로 참가자가 촬영할 수 있어요.")).toBeInTheDocument();
+});
+
+it("이용권이 없으면 맨 위에서 먼저 알린다", async () => {
+  await renderStudio();
+  expect(await screen.findByText(/이용권이 없어 아직 게시할 수 없어요/)).toBeInTheDocument();
+});
+
+// 게시는 주소가 잠기고 참가자에게 열리는 일이라 한 번 더 보여 주고 묻는다.
+it("게시는 내용을 확인한 뒤에 보내고, 끝나면 QR 을 건넨다", async () => {
+  await renderStudio();
+  mockRun.mockResolvedValueOnce(event({ status: "LIVE", captureOpen: true, settingsVersion: 7, hasUnpublishedChanges: false }));
+
+  fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
+  expect(mockRun).not.toHaveBeenCalled();
+  const dialog = await screen.findByRole("dialog", { name: "이대로 게시할까요?" });
+  expect(within(dialog).getByText("주소는 게시한 뒤에 바꿀 수 없어요.")).toBeInTheDocument();
+  expect(within(dialog).getByText("개인 휴대폰")).toBeInTheDocument();
+
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: "이대로 게시" }));
+  });
+  expect(mockRun).toHaveBeenCalledWith("Ev1", "publish");
+  const done = await screen.findByRole("dialog", { name: "게시했어요" });
+  expect(within(done).getByRole("button", { name: "QR 저장" })).toBeInTheDocument();
+  expect(within(done).getByRole("button", { name: "링크 복사" })).toBeInTheDocument();
+  expect(within(done).getByRole("img", { name: "행사 참가 링크 QR" })).toHaveAttribute("width", "240");
+  fireEvent.click(within(done).getByRole("button", { name: "닫기" }));
+
+  // 행사 설정은 게시본과 같아도 위 단계 기본값이 바뀌었을 수 있다. 다시 게시할 길은 열어 두되 강조하지 않는다.
+  expect(screen.getByRole("button", { name: "다시 게시" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "다시 게시" })).not.toHaveClass("hc-button-primary");
+});
+
+it("게시 뒤에 설정을 저장하면 아직 게시 안 함을 알리고 다시 게시할 수 있다", async () => {
+  await renderStudio(event({ status: "LIVE", captureOpen: true, settingsVersion: 3, hasUnpublishedChanges: true }));
+  expect(screen.getByText("저장했지만 아직 게시 안 함")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "바뀐 설정 게시" })).toBeEnabled();
+});
+
+it("동의문의 일수가 보관 일수와 다르면 경고한다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "결과 링크로 90일 동안 받을 수 있어요." } });
+  expect(screen.getByText(/동의문에는 90일이라고 적혀 있는데, 결과 보관 일수는 30일이에요/)).toBeInTheDocument();
+});
+
+// 참가자는 동의문을 믿고 동의한다. 90일이라고 읽었는데 30일에 지워지면 안 된다.
+it("동의문 일수가 다르면 확인하기 전에는 게시하지 못한다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, consentItems: [{ code: "photo", title: "사진", body: "결과 링크로 90일 동안 받아요.", required: true, version: 1 }] } }));
+  fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
+  const dialog = await screen.findByRole("dialog", { name: "이대로 게시할까요?" });
+  expect(within(dialog).getByRole("button", { name: "이대로 게시" })).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: /보관 기간과 다른 내용이에요/ }));
+  expect(within(dialog).getByRole("button", { name: "이대로 게시" })).toBeEnabled();
+});
+
+it("적힌 일수가 하나면 보관 일수로 고쳐 준다. 게시 확인은 이때 사라진다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "결과 링크로 90일 동안 받아요. 행사 7일 전까지 철회해요." } });
+  // 일수가 둘이면 어느 쪽이 보관 기간인지 사람만 안다.
+  expect(screen.queryByRole("button", { name: /동의문을 \d+일로 고치기/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "결과 링크로 90일 동안 받아요." } });
+  fireEvent.click(screen.getByRole("button", { name: "동의문을 30일로 고치기" }));
+  expect(screen.getAllByLabelText("본문")[0]).toHaveValue("결과 링크로 30일 동안 받아요.");
+  expect(screen.queryByText(/동의문에는/)).not.toBeInTheDocument();
+});
+
+it("참가 주소 형식이 틀리면 칸에서 바로 알린다", async () => {
+  await renderStudio();
+  const input = screen.getByLabelText("참가 주소");
+  fireEvent.change(input, { target: { value: "ab" } });
+  expect(input).toHaveAttribute("aria-invalid", "true");
+});
+
+// 뒤로 가면 저장 안 한 입력이 사라진다. 묻지 않으면 조용히 잃는다.
+it("저장하지 않은 변경이 있으면 목록으로 나가기 전에 묻는다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText("행사 이름"), { target: { value: "바뀐 이름" } });
+
+  // 넓은 화면(목차)과 좁은 화면(뒤로) 링크가 함께 그려진다. 둘 다 같은 확인을 거친다.
+  fireEvent.click(screen.getAllByRole("link", { name: "행사 목록" })[0]);
+  const dialog = await screen.findByRole("dialog", { name: "저장하지 않고 나갈까요?" });
+  expect(mockPush).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "저장하지 않고 나가기" }));
+  expect(mockPush).toHaveBeenCalledWith("/studio?workspace=Ws1");
+});
+
+/*
+  참가자 동의 기록은 「어느 버전의 문구」에 대한 것이다. 바꾼 문구에 옛 버전을 남기면 예전 동의가
+  새 문구에 대한 것처럼 읽히고, 그대로인 문구에 새 버전을 매기면 기록이 가리키는 문구가 흐려진다.
+*/
+it("문구를 바꾼 동의 항목만 version 을 올려 저장한다", async () => {
+  await renderStudio();
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+  fireEvent.change(screen.getAllByLabelText("본문")[0], { target: { value: "신랑신부와 사진 업체가 받아요." } });
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  const [eventId, settingsVersion, settings] = mockUpdate.mock.calls[0];
+  expect(eventId).toBe("Ev1");
+  expect(settingsVersion).toBe(3);
+  expect(settings.consentItems.map((c: { code: string; version: number }) => [c.code, c.version])).toEqual([
+    ["photo", 3],
+    ["share", 1],
+  ]);
+  // 바뀐 필드만 보낸다 — 상속받은 값을 행사 직접 값으로 굳히지 않는다(ADR-0009 §2-3).
+  expect(Object.keys(settings)).toEqual(["consentItems"]);
+});
+
+it("다른 곳이 먼저 바꿨으면(EVENT-005) 묻고, 덮어쓰기를 고르면 서버 버전으로 다시 저장한다", async () => {
+  await renderStudio();
+  mockUpdate.mockRejectedValueOnce(apiError("EVENT-005", { currentSettingsVersion: 7 }));
+  mockUpdate.mockResolvedValueOnce(event({ settingsVersion: 8 }));
+
+  fireEvent.change(screen.getByLabelText("행사 이름"), { target: { value: "민지 ♥ 준호" } });
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  fireEvent.click(await screen.findByRole("button", { name: "내 설정으로 덮어쓰기" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+  expect(mockUpdate.mock.calls[1][1]).toBe(7);
+});
+
+it("게시 검증에 걸리면(EVENT-003) 할 일을 설정 묶음별로 보여 준다", async () => {
+  await renderStudio();
+  mockRun.mockRejectedValueOnce(
+    apiError("EVENT-003", {
+      violations: [
+        { field: "frames", reason: "제공 프레임이 하나 이상 있어야 한다" },
+        { field: "allowedLayouts", reason: "CLASSIC 에 연결된 프레임이 없다" },
+      ],
+    }),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "게시하기" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "이대로 게시" }));
+
+  expect(await screen.findByText("게시하려면 아래를 고쳐 주세요.")).toBeInTheDocument();
+  expect(screen.getByText(/허용할 레이아웃을 하나 이상 고르고/)).toBeInTheDocument();
+  expect(screen.getByText(/제공 프레임을 확인해 주세요/)).toBeInTheDocument();
+  // 서버 사유는 번역해서 고칠 칸 옆에 둔다. 개발자 말투나 판형 코드를 그대로 내보내지 않는다.
+  const frames = document.getElementById("frames")!;
+  expect(within(frames).getByText("세로 4컷에 연결된 프레임이 없어요.")).toBeInTheDocument();
+  expect(screen.queryByText(/CLASSIC/)).not.toBeInTheDocument();
+  const fix = screen.getAllByRole("link", { name: "고치러 가기" });
+  expect(fix.map((link) => link.getAttribute("href"))).toEqual(["#frames", "#frames"]);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+// 저장 안 한 설정이 있는 채로 게시하면 운영자가 본 화면과 게시본이 다르다.
+it("저장하지 않은 설정이 있으면 게시하지 못한다", async () => {
+  await renderStudio();
+  fireEvent.click(screen.getByLabelText("현장 부스"));
+  expect(screen.getByRole("button", { name: "게시하기" })).toBeDisabled();
+  expect(screen.getByText("바꾼 설정을 저장한 뒤 게시할 수 있어요.")).toBeInTheDocument();
+});
+
+it("게시한 뒤에는 참가 주소를 바꿀 수 없고, 운영 중이면 일시 중지·촬영 종료를 고른다", async () => {
+  await renderStudio(event({ status: "LIVE", captureOpen: true, currentExperienceVersion: 1 }));
+  expect(screen.getByLabelText("참가 주소")).toBeDisabled();
+  expect(screen.getByLabelText("참가 주소")).toHaveAccessibleDescription("게시한 뒤에는 바꿀 수 없어요.");
+
+  mockRun.mockResolvedValueOnce(event({ status: "LIVE", paused: true }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "일시 중지" }));
+  });
+  expect(mockRun).toHaveBeenCalledWith("Ev1", "pause");
+  expect(screen.getByRole("button", { name: "다시 열기" })).toBeInTheDocument();
+});
+
+// 되돌릴 수 없는 전환이라 한 번 묻는다.
+it("촬영 종료는 확인을 받은 뒤에 보낸다", async () => {
+  await renderStudio(event({ status: "LIVE", captureOpen: true }));
+  mockRun.mockResolvedValueOnce(event({ status: "CAPTURE_CLOSED" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "촬영 종료" }));
+  expect(mockRun).not.toHaveBeenCalled();
+  const dialog = await screen.findByRole("dialog");
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: "촬영 종료" }));
+  });
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith("Ev1", "close-capture"));
+});
+
+it("처음 고른 프레임이 기본이 되고, 저장하면 고른 발행본을 보낸다", async () => {
+  await renderStudio();
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+  fireEvent.click(await screen.findByRole("checkbox", { name: /웨딩 세로/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /기본 세로/ }));
+  expect(screen.getByRole("radio", { name: "웨딩 세로 기본 프레임으로 정하기" })).toBeChecked();
+
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2].frames).toEqual([
+    { frameVersionId: 41, layoutType: "CLASSIC", isDefault: true, sortOrder: 1 },
+    { frameVersionId: 9, layoutType: "CLASSIC", isDefault: false, sortOrder: 2 },
+  ]);
+});
+
+// 남기면 게시 검사가 「허용하지 않은 레이아웃의 프레임」으로 막는다.
+it("허용 레이아웃을 빼면 그 판형의 프레임도 같이 뺀다", async () => {
+  await renderStudio(
+    event({
+      settings: {
+        ...event().settings,
+        frames: [{ frameVersionId: 41, layoutType: "CLASSIC", isDefault: true, sortOrder: 1 }],
+      },
+    }),
+  );
+  mockUpdate.mockResolvedValue(event());
+
+  fireEvent.click(screen.getByLabelText("세로 4컷"));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toMatchObject({ allowedLayouts: [], frames: [] });
+});
+
+it("행사용 프레임 만들기는 편집기를 이 공간 맥락으로 열고 여기로 돌아오게 한다", async () => {
+  await renderStudio();
+  fireEvent.click(await screen.findByRole("button", { name: "세로 4컷 만들기" }));
+
+  expect(useThemeSession.getState()).toMatchObject({
+    frameId: "classic-4",
+    remoteFrameId: null,
+    workspaceId: "Ws1",
+    returnTo: "/studio/events/Ev1",
+  });
+  expect(mockPush).toHaveBeenCalledWith("/theme/sticker");
+});
+
+// 편집기로 떠나면 저장 안 한 설정이 사라진다.
+it("저장 안 한 설정이 있으면 프레임을 만들러 떠나지 않는다", async () => {
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText("행사 이름"), { target: { value: "바뀐 이름" } });
+  expect(await screen.findByRole("button", { name: "세로 4컷 만들기" })).toBeDisabled();
+});
+
+it("공간 프레임을 발행하면 고르기 목록을 다시 받는다", async () => {
+  await renderStudio();
+  mockPublishFrame.mockResolvedValue({ frameVersionId: 42, versionNo: 3 });
+  fireEvent.click(await screen.findByRole("button", { name: "새 버전 발행" }));
+
+  await waitFor(() => expect(mockPublishFrame).toHaveBeenCalledWith(7));
+  await waitFor(() => expect(mockListVersions).toHaveBeenCalledTimes(2));
+  expect(screen.getByText(/3번째 발행본을 만들었어요/)).toBeInTheDocument();
+});
+
+// 부스 관리는 저장된 설정에서 현장 부스를 켠 행사에만 보인다.
+it("현장 부스를 켠 행사에만 부스 기기 관리를 보여 준다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, boothEnabled: true } }));
+  expect(await screen.findByRole("heading", { name: "부스 기기" })).toBeInTheDocument();
+});
+
+it("현장 부스를 끈 행사에는 부스 기기 관리가 없다", async () => {
+  await renderStudio();
+  expect(screen.queryByRole("heading", { name: "부스 기기" })).not.toBeInTheDocument();
+});
+
+// P2B-4 — 행사 화면 꾸미기는 설정 저장과 같은 PATCH 로 간다. 빈 문구·빈 색은 빼고 보낸다.
+it("꾸민 문구와 글꼴만 테마로 저장한다", async () => {
+  await renderStudio();
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+  fireEvent.change(screen.getByLabelText("처음 화면 · 부스 대기 화면"), { target: { value: "와 주셔서 고마워요" } });
+  fireEvent.change(screen.getByLabelText("글꼴"), { target: { value: "GOWUN_DODUM" } });
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  // 출처를 못 받으면(여기서는 effective-settings 실패) 지금 테마 전체를 보낸다 — 브랜딩은 끈 값도 명시한다.
+  expect(mockUpdate.mock.calls[0][2].theme).toEqual({
+    schemaVersion: 1,
+    font: "GOWUN_DODUM",
+    copy: { welcome: "와 주셔서 고마워요" },
+    branding: { hideHarucutBranding: false, outputLogo: "NONE" },
+  });
+});
+
+it("이용권이 없으면 사용량 자리에 문의를 두고, 디자인을 바꾸면 게시 전에 미리 알린다", async () => {
+  await renderStudio();
+  expect(await screen.findByText("아직 이 행사에 적용된 이용권이 없어요.")).toBeInTheDocument();
+  expect(mockUsage).toHaveBeenCalledWith("Ev1");
+
+  fireEvent.change(screen.getByLabelText("글꼴"), { target: { value: "NANUM_MYEONGJO" } });
+  expect(screen.getByText(/지금 이용권에는 행사 화면 디자인 기능이 없어요/)).toBeInTheDocument();
+});
+
+// ADR-0008 §7 — 보관 기간이 지나면 사진함에서도 지워진다. 이용권 상한이 있으면 그 안에서만 정한다.
+it("보관 일수 설명에 사진이 지워진다는 것과 이용권 상한을 알린다", async () => {
+  mockUsage.mockResolvedValue({
+    entitlement: { scope: "WORKSPACE", validFrom: "2026-10-01T00:00:00Z", validTo: "2026-12-31T00:00:00Z", features: [] },
+    composeQuota: 100,
+    used: 0,
+    reserved: 0,
+    remaining: 100,
+    retentionDays: 60,
+  });
+  await renderStudio();
+  const input = screen.getByLabelText("보관 일수");
+  await waitFor(() => expect(input).toHaveAttribute("max", "60"));
+  expect(input).toHaveAccessibleDescription(/지나면 사진이 지워지니.*지금 이용권으로는 60일까지/);
+});
+
+// Codex 리뷰(#544): 업로드 중 저장하면 저장 응답이 업로드 결과(자산 ID)를 덮어 이미지가 사라진다.
+it("행사 화면 이미지를 올리는 동안에는 설정 저장을 막는다", async () => {
+  let finish: (value: unknown) => void = () => {};
+  mockThemeUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText(/^행사 이름/), { target: { value: "새 이름" } });
+  fireEvent.change(screen.getByLabelText("로고 올리기"), {
+    target: { files: [new File(["x"], "logo.png", { type: "image/png" })] },
+  });
+  expect(await screen.findByRole("button", { name: "이미지 올리는 중…" })).toBeDisabled();
+
+  await act(async () => finish({ assetId: "AsLogo", key: "k", url: "https://s3/logo.png" }));
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeEnabled();
+});
+
+// ADR-0009 §2 — 공간·프로젝트 기본값을 받은 값은 출처를 보이고, 「기본값 따르기」는 그 필드를 null 로 보낸다.
+it("상속받은 값의 출처를 보이고, 기본값 따르기는 그 필드만 null 로 보낸다", async () => {
+  mockEffective.mockResolvedValue({
+    settings: {},
+    sources: { name: "EVENT", allowedLayouts: "PROJECT", resultRetentionDays: "EVENT", consentItems: "EVENT" },
+  });
+  mockProjects.mockResolvedValue([{ projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x", brandDefaults: { resultRetentionDays: 60 } }]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pj1" } }));
+
+  expect(await screen.findByText("프로젝트 기본값")).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole("button", { name: "기본값 따르기" })[0]);
+  expect(screen.getByText("저장하면 기본값을 따라요")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ resultRetentionDays: null });
+});
+
+it("초안 행사는 프로젝트를 고를 수 있고, 게시한 행사는 막는다", async () => {
+  mockProjects.mockResolvedValue([
+    { projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x" },
+    { projectId: "Pj2", workspaceId: "Ws1", name: "지난 시즌", archived: true, createdAt: "x" },
+  ]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio();
+  const select = await screen.findByLabelText("프로젝트");
+  expect(within(select).queryByRole("option", { name: /지난 시즌/ })).not.toBeInTheDocument();
+  fireEvent.change(select, { target: { value: "Pj1" } });
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ projectId: "Pj1" });
+});
+
+// Codex 리뷰(#553): 상속받은 브랜딩을 이 행사만 끄면 끈 값을 명시해야 한다 — 키를 빼면 위 단계 값이 다시 켜진다.
+it("상속받은 하루컷 표시 숨김을 끄면 끈 값을 테마에 담아 보낸다", async () => {
+  mockEffective.mockResolvedValue({
+    settings: {},
+    sources: { "theme.branding.hideHarucutBranding": "PROJECT", "theme.branding.outputLogo": "PROJECT" },
+  });
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(
+    event({ settings: { ...event().settings, theme: { schemaVersion: 1, branding: { hideHarucutBranding: true, outputLogo: "NONE" } } } }),
+  );
+  await screen.findByText("프로젝트 기본값");
+  fireEvent.click(screen.getByLabelText("하루컷 표시 숨기기"));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({
+    theme: { schemaVersion: 1, branding: { hideHarucutBranding: false } },
+  });
+});
+
+// Codex 리뷰(#553): 출처를 다시 받기 전에 저장하면 옛 출처로 테마를 담아 방금 정한 키를 지운다.
+it("출처를 받기 전에는 설정 저장을 막는다", async () => {
+  mockEffective.mockImplementation(() => new Promise(() => {}));
+  await renderStudio();
+  fireEvent.change(screen.getByLabelText(/^행사 이름/), { target: { value: "새 이름" } });
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+});
+
+// Codex 리뷰(#553): 「기본값 따르기」 뒤에 같은 섹션을 다시 고치면 그 입력을 저장해야 한다.
+it("기본값 따르기를 고른 뒤 다시 고치면 따르기를 풀고 새 값을 보낸다", async () => {
+  mockEffective.mockResolvedValue({ settings: {}, sources: { resultRetentionDays: "EVENT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pj1", workspaceId: "Ws1", name: "봄 웨딩", archived: false, createdAt: "x", brandDefaults: { resultRetentionDays: 60 } }]);
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pj1" } }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "기본값 따르기" }));
+  fireEvent.change(screen.getByLabelText("보관 일수"), { target: { value: "45" } });
+  expect(screen.queryByText("저장하면 기본값을 따라요")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ resultRetentionDays: 45 });
+});
+
+/*
+  상시 캠페인(ADR-0009 §4)은 종료 시각 없이 「촬영 종료」로 끝낸다. 종료 시각을 남기면 게시 검사(EVENT-003)에서 막히므로
+  상시로 바꾸는 순간 비운다. 행사 종류는 게시 전에만 바뀐다.
+*/
+it("상시 캠페인으로 바꾸면 종료 시각을 비우고 종류와 함께 저장한다", async () => {
+  await renderStudio(event({ settings: { ...event().settings, captureEndsAt: "2026-11-01T18:00:00+09:00" } }));
+  mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+  expect(screen.getByLabelText("종료")).toHaveValue("2026-11-01T18:00");
+
+  fireEvent.change(screen.getByLabelText("행사 종류"), { target: { value: "ALWAYS_ON" } });
+  expect(screen.queryByLabelText("종료")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ kind: "ALWAYS_ON", captureEndsAt: null });
+});
+
+// 게시한 상시 행사에 종료 시각을 넣으면 서버가 GEN-002 로 막는다 — 남은 값은 지우기만 할 수 있게 한다.
+it("저장된 상시 캠페인에 종료 시각이 남아 있으면 지우기만 하고, 게시한 행사는 종류를 바꾸지 못한다", async () => {
+  await renderStudio(
+    event({ status: "LIVE", settings: { ...event().settings, kind: "ALWAYS_ON", captureEndsAt: "2026-11-01T18:00:00+09:00" } }),
+  );
+  mockUpdate.mockResolvedValue(event({ status: "LIVE", settingsVersion: 4 }));
+  expect(screen.getByLabelText("행사 종류")).toHaveValue("ALWAYS_ON");
+  expect(screen.getByLabelText("행사 종류")).toBeDisabled();
+  expect(screen.queryByLabelText("종료")).not.toBeInTheDocument();
+  // 종류는 바뀌지 않았으니 보내지 않는다.
+  expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "종료 시각 지우기" }));
+  fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  expect(mockUpdate.mock.calls[0][2]).toEqual({ captureEndsAt: null });
+});
+
+/*
+  운영 담당(OPERATOR)은 받은 운영 권한의 칸만 쓴다(ADR-0009 §3, P3-2). 막힌 칸을 보여 주면 누를 때마다 403 이 난다.
+*/
+it("운영 담당은 받은 운영 권한의 칸만 보고, 설정·게시·복제·운영자 배정·프로젝트 변경은 막힌다", async () => {
+  myAccess({ role: "OPERATOR", permissions: [], operations: ["INVITE_CUSTOMERS"], sources: { INVITE_CUSTOMERS: "EVENT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pr1", name: "봄 시즌", archived: false, brandDefaults: null }]);
+  await renderStudio(event({ settings: { ...event().settings, boothEnabled: true, projectId: "Pr1" } }));
+
+  expect(await screen.findByRole("heading", { name: "행사 고객" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "게시와 운영" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "부스 기기" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "행사 운영자" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "설정 저장" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "행사 복제" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("행사 이름")).toBeDisabled();
+  expect(screen.getByLabelText("프로젝트")).toBeDisabled();
+});
+
+it("운영 담당이 프로젝트에서 행사 설정 권한을 받았으면 설정과 복제를 쓴다", async () => {
+  myAccess({ role: "OPERATOR", permissions: [], operations: ["MANAGE_EVENT"], sources: { MANAGE_EVENT: "PROJECT" } });
+  mockProjects.mockResolvedValue([{ projectId: "Pr1", name: "봄 시즌", archived: false, brandDefaults: null }]);
+  await renderStudio(event({ settings: { ...event().settings, projectId: "Pr1" } }));
+
+  expect(await screen.findByRole("heading", { name: "게시와 운영" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "행사 복제" })).toBeInTheDocument();
+  expect(screen.getByLabelText("행사 이름")).toBeEnabled();
+  // 프로젝트 변경은 OWNER·ADMIN 만.
+  expect(screen.getByLabelText("프로젝트")).toBeDisabled();
+  expect(screen.queryByRole("heading", { name: "행사 고객" })).not.toBeInTheDocument();
+});
+
+// 프레임을 만들고 고치고 회수하는 일은 서버가 OWNER·ADMIN·DESIGNER 에게만 연다. 누르면 403 이 날 칸을 보이지 않는다.
+it("운영 담당은 발행본을 고르기만 하고, 공간 프레임 관리 칸은 보지 않는다", async () => {
+  myAccess({ role: "OPERATOR", permissions: [], operations: ["MANAGE_EVENT"], sources: { MANAGE_EVENT: "EVENT" } });
+  await renderStudio();
+  await waitFor(() => expect(screen.getByLabelText("행사 이름")).toBeEnabled());
+  expect(await screen.findByText("웨딩 세로", { exact: false })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "공간 프레임" })).not.toBeInTheDocument();
+  expect(screen.queryByText("발행본 회수")).not.toBeInTheDocument();
+});
+
+it("관리자는 운영 담당에게 이 행사의 운영 권한을 정해 저장한다", async () => {
+  mockMembers.mockResolvedValue([
+    { userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" },
+    { userId: "u-de", name: "디자인 민", role: "DESIGNER", joinedAt: "" },
+  ]);
+  mockGrants.mockResolvedValue([
+    { grantId: 1, userId: "u-op", name: "운영 지수", permissions: [], operations: ["MANAGE_BOOTH"], createdAt: "" },
+  ]);
+  mockAssign.mockResolvedValue({
+    grantId: 1,
+    userId: "u-op",
+    name: "운영 지수",
+    permissions: [],
+    operations: ["MANAGE_EVENT", "MANAGE_BOOTH"],
+    createdAt: "",
+  });
+  await renderStudio();
+
+  const section = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await within(section).findByText("운영 지수");
+  expect(within(section).queryByText("디자인 민")).not.toBeInTheDocument();
+  expect(within(section).getByRole("checkbox", { name: "부스 기기" })).toBeChecked();
+
+  fireEvent.click(within(section).getByRole("checkbox", { name: "행사 설정·게시" }));
+  fireEvent.click(within(section).getByRole("button", { name: "저장" }));
+
+  await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("Ev1", "u-op", ["MANAGE_EVENT", "MANAGE_BOOTH"]));
+  expect(await within(section).findByText("운영 권한을 저장했어요.")).toBeInTheDocument();
+  expect(within(section).queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+});
+
+// 운영자 배정이 권한 행을 새로 만들면 같은 화면의 「행사 고객」에도 보여야 사진 권한을 이어서 줄 수 있다(Codex #554).
+it("운영자를 처음 배정하면 행사 고객 목록을 다시 받아 새 행을 보인다", async () => {
+  mockMembers.mockResolvedValue([{ userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" }]);
+  const row = { grantId: 2, userId: "u-op", name: "운영 지수", permissions: [], operations: ["MANAGE_BOOTH"], createdAt: "" };
+  mockGrants.mockResolvedValue([]);
+  mockAssign.mockImplementation(async () => {
+    mockGrants.mockResolvedValue([row]);
+    return row;
+  });
+  await renderStudio();
+
+  const customers = (await screen.findByRole("heading", { name: "행사 고객" })).closest("section")!;
+  const operators = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await within(operators).findByText("운영 지수");
+  expect(within(customers).queryByText("운영 지수")).not.toBeInTheDocument();
+
+  fireEvent.click(within(operators).getByRole("checkbox", { name: "부스 기기" }));
+  fireEvent.click(within(operators).getByRole("button", { name: "저장" }));
+
+  expect(await within(customers).findByText("운영 지수")).toBeInTheDocument();
+});
+
+// 거꾸로, 「행사 고객」에서 운영자의 행을 회수하면 운영 권한도 함께 사라진다 — 운영자 칸이 지운 권한을 계속 보이면 안 된다(Codex #554).
+it("행사 고객에서 운영자의 행을 회수하면 운영자 칸을 다시 받는다", async () => {
+  mockMembers.mockResolvedValue([{ userId: "u-op", name: "운영 지수", role: "OPERATOR", joinedAt: "" }]);
+  const row = { grantId: 2, userId: "u-op", name: "운영 지수", permissions: ["VIEW_PHOTOS"], operations: ["MANAGE_BOOTH"], createdAt: "" };
+  mockGrants.mockResolvedValue([row]);
+  mockRemoveGrant.mockImplementation(async () => {
+    mockGrants.mockResolvedValue([]);
+  });
+  await renderStudio();
+
+  const customers = (await screen.findByRole("heading", { name: "행사 고객" })).closest("section")!;
+  const operators = (await screen.findByRole("heading", { name: "행사 운영자" })).closest("section")!;
+  await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).toBeChecked());
+
+  fireEvent.click(await within(customers).findByRole("button", { name: "권한 회수" }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText(/운영 권한도 함께 빠져요/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "권한 회수" }));
+
+  await waitFor(() => expect(mockRemoveGrant).toHaveBeenCalledWith("Ev1", 2));
+  await waitFor(() => expect(within(operators).getByRole("checkbox", { name: "부스 기기" })).not.toBeChecked());
+});
+
+describe("참가자 문구(D06)", () => {
+  it("켜면 기본 칸·첫 글꼴로 freeText 만 보낸다", async () => {
+    await renderStudio();
+    mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+
+    const toggle = screen.getByRole("checkbox", { name: "참가자가 문구를 직접 써요" });
+    // 글꼴 목록이 오기 전에는 켤 수 없다 — 켜는 순간 첫 글꼴을 고르기 때문이다.
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    expect(screen.getByRole("checkbox", { name: /굵게 · 검정/ })).toBeChecked();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "최대 글자 수" }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const settings = mockUpdate.mock.calls[0][2];
+    expect(Object.keys(settings)).toEqual(["freeText"]);
+    expect(settings.freeText).toEqual({
+      enabled: true,
+      box: { x: 0.1, y: 0.86, width: 0.8, height: 0.08 },
+      styleIds: ["pretendard-bold-dark"],
+      maxLength: 12,
+      maxLines: 1,
+    });
+  });
+
+  // 기본값이 켠 문구를 이 행사만 끄려면 null(=상속)이 아니라 명시값을 보내야 한다.
+  it("상속받아 켜진 문구를 끄면 enabled:false 를 보낸다", async () => {
+    await renderStudio(
+      event({
+        settings: {
+          ...event().settings,
+          freeText: { enabled: true, box: { x: 0, y: 0.9, width: 1, height: 0.1 }, styleIds: ["pretendard-bold-dark"] },
+        },
+      }),
+    );
+    mockUpdate.mockResolvedValue(event({ settingsVersion: 4 }));
+    const toggle = screen.getByRole("checkbox", { name: "참가자가 문구를 직접 써요" });
+    expect(toggle).toBeChecked();
+    expect(screen.getByRole("button", { name: "설정 저장" })).toBeDisabled();
+
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(mockUpdate.mock.calls[0][2]).toEqual({ freeText: { enabled: false } });
+  });
+
+  it("칸이 프레임 밖으로 나가면 알린다", async () => {
+    await renderStudio();
+    const toggle = screen.getByRole("checkbox", { name: "참가자가 문구를 직접 써요" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "너비(%)" }), { target: { value: "95" } });
+    expect(screen.getByText("문구 칸이 프레임 밖으로 나가요.")).toBeInTheDocument();
+  });
+});
+
+// 디자이너는 꾸미기와 프레임만 고치고 게시하지 않는다. 다른 칸은 서버가 403 으로 막으니 아예 보이지 않는다.
+describe("디자이너(EDIT_THEME)", () => {
+  const live = () => event({ status: "LIVE", captureOpen: true, hasUnpublishedChanges: false });
+
+  beforeEach(() => {
+    myAccess({ role: "DESIGNER", permissions: [], operations: ["EDIT_THEME"] });
+  });
+
+  it("프레임과 꾸미기만 보이고 게시·복제·이용권은 없다", async () => {
+    await renderStudio(live());
+
+    expect(await screen.findByText(/운영 담당이 게시하면 반영돼요/)).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "행사 설정 목차" });
+    expect(within(nav).getByRole("link", { name: /프레임/ })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /디자인/ })).toBeInTheDocument();
+    for (const name of ["개요", "기본·일정", "참가 방식", "동의", "부스", "사람", "이용권"]) {
+      expect(within(nav).queryByRole("link", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByLabelText("행사 이름")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "허용 레이아웃" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "참가 동의" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "참가자 문구" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "게시와 운영" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /게시/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "행사 복제" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "사진함" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "제공 프레임" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "행사 화면 꾸미기" })).toBeInTheDocument();
+  });
+
+  it("저장 본문에는 고친 테마만 실린다", async () => {
+    const initial = live();
+    mockUpdate.mockResolvedValue(initial);
+    await renderStudio(initial);
+
+    fireEvent.change(await screen.findByLabelText("문의처(사진을 못 받았을 때 보여요)"), { target: { value: "안내 데스크" } });
+    fireEvent.click(screen.getByRole("button", { name: "설정 저장" }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const patch = mockUpdate.mock.calls[0][2];
+    expect(Object.keys(patch)).toEqual(["theme"]);
+    expect(patch.theme.copy.contact).toBe("안내 데스크");
+  });
+
+  it("사용량을 받지 못해도(403) 화면이 막히지 않는다", async () => {
+    mockUsage.mockRejectedValue(new ApiRequestError({ status: 403, code: "GEN-021" }));
+    await renderStudio(live());
+    expect(await screen.findByRole("heading", { name: "행사 화면 꾸미기" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("촬영이 끝난 행사는 볼 수만 있다", async () => {
+    await renderStudio(event({ status: "CAPTURE_CLOSED" }));
+    expect(await screen.findByText(/지금은 볼 수만 있어요/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "설정 저장" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("문의처(사진을 못 받았을 때 보여요)")).toBeDisabled();
+  });
+
+  it("사진 권한을 따로 받은 디자이너는 사진함으로 갈 수 있다", async () => {
+    myAccess({ role: "DESIGNER", permissions: ["VIEW_PHOTOS"], operations: ["EDIT_THEME"] });
+    await renderStudio(live());
+    expect(await screen.findByRole("link", { name: "사진함" })).toHaveAttribute("href", "/studio/events/Ev1/photos");
+  });
+});
+
+it("관리자의 운영 권한에 EDIT_THEME 이 더 있어도 전체 설정을 그대로 쓴다", async () => {
+  myAccess({ role: "OWNER", permissions: [], operations: ["MANAGE_EVENT", "MANAGE_BOOTH", "INVITE_CUSTOMERS", "EDIT_THEME"] });
+  await renderStudio();
+  expect(await screen.findByRole("heading", { name: "게시와 운영" })).toBeInTheDocument();
+  expect(screen.getByLabelText("행사 이름")).toBeEnabled();
+});

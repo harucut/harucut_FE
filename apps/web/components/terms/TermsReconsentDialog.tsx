@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { TermsFullText } from "@/components/terms/TermsFullText";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { clientApi } from "@/lib/clientApi";
 import {
@@ -14,6 +15,10 @@ import {
   submitTermsConsents,
   type MyTermsConsent,
 } from "@/lib/termsApi";
+import { unregisterPushDevice } from "@/lib/pushDevices";
+import { Sentences } from "@/components/ui/Sentences";
+
+const LOCAL_CLEAR_DEADLINE_MS = 3_000;
 
 type Props = {
   consents: MyTermsConsent[];
@@ -227,6 +232,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
     if (isSubmitting || isLoggingOut) return;
     setIsLoggingOut(true);
     setError(null);
+    // 푸시 해제는 쿠키가 있을 때 해야 한다(마이페이지와 같은 순서). 기한이 있고 실패를 삼키므로 출구를 막지 않는다.
+    await unregisterPushDevice();
     try {
       await clientApi.delete("/api/client/logout");
     } catch (err) {
@@ -242,6 +249,13 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         return;
       }
     }
+    // 공용 기기에 앞사람의 사진과 편집 초안을 남기지 않는다. 다만 이 화면의 유일한 출구라 저장소가 멈춰도 나가는 길은 막지 않는다.
+    // 지우기는 삭제 표식을 먼저 남기므로, 끝까지 못 기다려도 다음 문서가 사진을 되살리지 않는다.
+    // 이 대화상자는 모든 화면에 깔린다. 편집기 스토어까지 끌고 오지 않게 쓸 때만 불러온다.
+    await Promise.race([
+      import("@/lib/localUserData").then(({ clearLocalUserData }) => clearLocalUserData()).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, LOCAL_CLEAR_DEADLINE_MS)),
+    ]);
     // 이동을 시작하면 잠금을 풀지 않는다. 떠나는 동안 한 번 더 눌리지 않게 한다.
     // 클라이언트 전환이 아니라 문서를 새로 받는다 — 로그아웃 직후라 쿠키가 바뀌었고,
     // 스토어에 남은 세션 캐시와 RSC 캐시를 통째로 버려야 한다(app/oauth2/callback 주석 참고).
@@ -250,7 +264,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-130 flex items-end justify-center bg-[rgba(10,24,45,0.6)] px-4 py-6 sm:items-center">
+    <div className="fixed inset-0 z-130 flex items-end justify-center bg-black/60 px-4 py-6 sm:items-center">
       {/*
         목록은 서버 약관 수만큼 늘어나고 전문을 펼치면 더 늘어난다. 패널이 뷰포트를 넘으면
         제출·로그아웃 버튼이 화면 밖으로 잘리는데, 이 다이얼로그는 닫을 수도 없다.
@@ -264,10 +278,8 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         aria-labelledby="terms-reconsent-title"
         className="hc-surface-card max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border p-6 shadow-(--hc-card-shadow)"
       >
-        <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border">
-          <FileText className="h-5 w-5" />
-        </span>
-        <h2 id="terms-reconsent-title" className="mt-4 text-[18px] font-extrabold">
+        {/* 제목 위 문서 아이콘 타일은 뺐다(2026-11-14) — 제목이 이미 무슨 창인지 말한다. */}
+        <h2 id="terms-reconsent-title" className="text-[18px] font-extrabold">
           {revised ? "약관이 개정되었어요" : "약관 동의가 필요해요"}
         </h2>
         <p className="mt-1.5 text-[13px] leading-6 text-(--hc-muted)">
@@ -281,49 +293,60 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
             const href = contentHref(item.code);
             return (
               <div key={item.code} className="flex flex-col gap-1">
-                <label className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
-                  <input
-                    type="checkbox"
-                    checked={checked[item.code] ?? false}
-                    // 읽을 수 없는 약관은 **새로 체크하는 것만** 막는다. 이 화면을 띄운
-                    // 김에 예전 동의를 거두는 길까지 잠그지 않는다(TermsConsentPanel 과
-                    // 같은 규칙).
-                    disabled={
-                      isSubmitting ||
-                      (isUnreadable(item.code) && !checked[item.code])
-                    }
-                    onChange={(e) => {
-                      setChecked((current) => ({
-                        ...current,
-                        [item.code]: e.target.checked,
-                      }));
-                      setTouched((current) => ({ ...current, [item.code]: true }));
-                    }}
-                    className="h-4 w-4 accent-(--hc-primary)"
-                  />
-                  <span>
-                    <span
-                      className={
-                        item.required
-                          ? "text-(--hc-primary-strong)"
-                          : "text-(--hc-muted)"
-                      }
-                    >
-                      {item.required ? "[필수]" : "[선택]"}
-                    </span>{" "}
-                    {item.title}
-                  </span>
-                  {href ? (
-                    <Link
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-auto shrink-0 text-[11px] text-(--hc-muted) underline underline-offset-4"
-                    >
-                      보기
-                    </Link>
-                  ) : null}
-                </label>
+                {/* 정적 링크가 없는 약관은 서버가 준 전문을 줄 오른쪽 끝 아이콘으로 그 자리에서 펼친다. */}
+                <TermsFullText title={item.title} content={href ? null : contentByCode[item.code]}>
+                  {(fullTextToggle) => (
+                    <div className="flex items-center gap-2 rounded-xl border border-(--hc-border) bg-(--hc-surface-muted) p-3 text-[13px]">
+                      <label className="flex min-w-0 flex-1 items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={checked[item.code] ?? false}
+                          // 읽을 수 없는 약관은 **새로 체크하는 것만** 막는다. 이 화면을 띄운
+                          // 김에 예전 동의를 거두는 길까지 잠그지 않는다(TermsConsentPanel 과
+                          // 같은 규칙).
+                          disabled={
+                            isSubmitting ||
+                            (isUnreadable(item.code) && !checked[item.code])
+                          }
+                          onChange={(e) => {
+                            setChecked((current) => ({
+                              ...current,
+                              [item.code]: e.target.checked,
+                            }));
+                            setTouched((current) => ({ ...current, [item.code]: true }));
+                          }}
+                          // 가입 화면과 같은 둥근 체크칸(globals.css .hc-checkbox, 2026-11-14).
+                          className="hc-checkbox"
+                        />
+                        <span>
+                          <span
+                            className={
+                              item.required
+                                ? "text-(--hc-primary-strong)"
+                                : "text-(--hc-muted)"
+                            }
+                          >
+                            {item.required ? "[필수]" : "[선택]"}
+                          </span>{" "}
+                          {item.title}
+                        </span>
+                      </label>
+                      {href ? (
+                        <Link
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`${item.title} 전문 보기`}
+                          className="-my-3 -mr-2 ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-full text-(--hc-muted) hover:text-(--hc-text)"
+                        >
+                          <ChevronRight aria-hidden className="h-4 w-4" />
+                        </Link>
+                      ) : (
+                        fullTextToggle
+                      )}
+                    </div>
+                  )}
+                </TermsFullText>
                 {/* 읽을 수단이 없으면 왜 동의할 수 없는지 말한다. */}
                 {isUnreadable(item.code) ? (
                   <p className="ml-6 text-[11px] text-(--hc-muted)">
@@ -331,17 +354,6 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
                       ? "약관 본문을 불러오는 중이에요."
                       : "약관 본문을 불러오지 못했어요."}
                   </p>
-                ) : null}
-                {/* 정적 링크가 없는 약관은 서버가 준 전문을 그 자리에서 펼친다. */}
-                {!href && contentByCode[item.code] ? (
-                  <details className="ml-6">
-                    <summary className="cursor-pointer text-[11px] text-(--hc-muted) underline underline-offset-4">
-                      전문 보기
-                    </summary>
-                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-(--hc-surface-muted) p-2 text-[11px] leading-5 text-(--hc-muted)">
-                      {contentByCode[item.code]}
-                    </p>
-                  </details>
                 ) : null}
               </div>
             );
@@ -362,7 +374,7 @@ export function TermsReconsentDialog({ consents, onDone, contentHref }: Props) {
         {/* 저장 실패는 알려야 한다 — 다이얼로그 안에 있는 스크린리더 사용자에게도. */}
         {error ? (
           <p role="alert" className="mt-3 text-[12px] text-(--hc-danger)">
-            {error}
+            <Sentences text={error} />
           </p>
         ) : null}
 

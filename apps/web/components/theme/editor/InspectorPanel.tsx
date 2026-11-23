@@ -1,8 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
+import { COMPONENT_TYPE_LABEL } from "@/components/theme/editor/LayersPanel";
+import { NUDGE_STEP } from "@/constants/editorNudge";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import type { EditorComponent, TextStyleJson } from "@/lib/types/themeEditor";
+import { Sentences } from "@/components/ui/Sentences";
 
 type OpacityStyle = { opacity?: number };
 
@@ -25,6 +29,7 @@ export function InspectorPanel() {
   const components = useThemeEditorStore((s) => s.components);
   const activeId = useThemeEditorStore((s) => s.activeId);
   const update = useThemeEditorStore((s) => s.updateComponent);
+  const nudge = useThemeEditorStore((s) => s.nudge);
 
   // 현재 선택된 컴포넌트
   const active = useMemo(
@@ -49,7 +54,7 @@ export function InspectorPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">속성</p>
-        <span className="text-[11px] text-(--hc-muted)">{active.type}</span>
+        <span className="text-[11px] text-(--hc-muted)">{COMPONENT_TYPE_LABEL[active.type]}</span>
       </div>
 
       {/* 공통 */}
@@ -110,6 +115,34 @@ export function InspectorPanel() {
           </label>
         ))}
       </div>
+
+      {/*
+        손잡이를 끌지 않는 대체 조작. 작은 손잡이는 손가락으로 정확히 잡기 어렵고, 키보드만 쓰는
+        사람은 끌 수가 없다(기획 R5 5절). 캔버스에서 레이어를 고른 뒤 방향키로도 움직인다.
+      */}
+      <div className="flex items-center gap-3">
+        <span className="w-14 text-[12px] text-zinc-400">이동</span>
+        <div className="flex gap-1">
+          {([
+            ["왼쪽으로 이동", -NUDGE_STEP, 0, ArrowLeft],
+            ["위로 이동", 0, -NUDGE_STEP, ArrowUp],
+            ["아래로 이동", 0, NUDGE_STEP, ArrowDown],
+            ["오른쪽으로 이동", NUDGE_STEP, 0, ArrowRight],
+          ] as const).map(([label, dx, dy, Icon]) => (
+            <button
+              key={label}
+              type="button"
+              aria-label={label}
+              title={`${label} (방향키)`}
+              disabled={active.locked}
+              onClick={() => nudge(active.id, dx, dy)}
+              className="flex size-11 items-center justify-center rounded-lg border border-(--hc-border-strong) text-(--hc-text) disabled:opacity-35"
+            >
+              <Icon className="size-4" aria-hidden />
+            </button>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -148,7 +181,7 @@ function TextInspector({
         </Row>
         {isBlank ? (
           <p id={blankHintId} className="pl-[4.25rem] text-[11px] text-amber-300">
-            글자가 비어 있어요. 이 레이어는 저장되지 않아요.
+            <Sentences text="글자가 비어 있어요. 이 레이어는 저장되지 않아요." />
           </p>
         ) : null}
       </div>

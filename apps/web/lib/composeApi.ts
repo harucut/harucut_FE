@@ -41,6 +41,8 @@ export type ComposeJob = {
   mediaId?: number | null;
   /** FAILED 일 때만 있다. */
   failureReason?: string | null;
+  /** FAILED 일 때만. 화면 문구는 이 값으로 고른다(lib/composeFailure.ts). */
+  failureCode?: string | null;
 };
 
 export type ComposeRequest = {
@@ -85,7 +87,10 @@ export async function getComposeJob(
 }
 
 export class ComposeFailedError extends Error {
-  constructor(readonly reason: string | null | undefined) {
+  constructor(
+    readonly reason: string | null | undefined,
+    readonly code?: string | null,
+  ) {
     super(reason ?? "합성에 실패했어요.");
     this.name = "ComposeFailedError";
   }
@@ -156,7 +161,7 @@ async function pollComposeJob(
     /*
       상한에 걸린 것만 이름을 바꾼다. 사용자가 끊은 것은 AbortError 그대로 올린다 —
       호출부는 그 이름으로 취소를 가려내고(clientApi 의 `isAbortError` 와 같은 규약),
-      `describeComposeFailure` 는 ComposeTimeoutError 만 재시도 가능으로 읽는다.
+      `describeComposeFailure` 는 ComposeTimeoutError 를 「잠시 후 다시 시도」로 읽는다.
       취소를 상한으로 바꾸면 떠난 사람의 취소가 "잠시 후 다시 시도해 주세요"가 된다.
 
       상한이 지났으면 무슨 오류가 왔든 상한으로 접는다 — 기다린 시간은 이미 넘겼고
@@ -230,7 +235,7 @@ export async function waitForCompose(
     if (!job) continue;
 
     if (job.status === "DONE") return job;
-    if (job.status === "FAILED") throw new ComposeFailedError(job.failureReason);
+    if (job.status === "FAILED") throw new ComposeFailedError(job.failureReason, job.failureCode);
     if (elapsed >= timeoutMs) throw new ComposeTimeoutError();
 
     // 이 기다림에는 signal 을 걸지 않았다. 남는 지연은 최대 intervalMs 하나뿐이고

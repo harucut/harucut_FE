@@ -5,43 +5,77 @@ import { stubAuthenticatedApi } from "./fixtures/apiStub";
 
 const envelope = (data: unknown) => ({ code: "GEN-000", status: 200, data });
 
-test("운영 기본 프레임 누락: 회원 업로드부터 실제 JPEG 다운로드까지 복구", async ({ page, baseURL }, info) => {
+/*
+  회원 사진은 언제나 서버가 만들어 기록에 남긴다(2026-11-15 「기기 저장만 가능은 대체 뭐」). 예전 이 시험은 서버에
+  기본 프레임이 없을 때 기기에서 만들어 「이 사진은 기록에 보관되지 않아요」로 내려받는 폴백을 봤다 — 기본 프레임은
+  백엔드가 늘 갖도록 보장하고 그 폴백은 걷었다. 이름은 꾸미기에서 붙이고(완성 화면에는 이름 바꾸기가 없다), 서버가
+  붙인 날짜 이름을 다 된 뒤 그 이름으로 바꾼다.
+*/
+test("회원 업로드부터 서버가 만든 사진을 꾸미기 이름으로 받기까지", async ({ page, baseURL }, info) => {
   await stubAuthenticatedApi(page);
   await page.context().addCookies([{ name: "accessToken", value: "qa-member", url: baseURL! }]);
-  await page.route("**/api/client/user/frame", (route) => route.fulfill({ json: envelope([]) }));
-  const writes: string[] = [];
+  // 막 만든 기록은 서버가 붙인 날짜 이름이다 — 그래야 꾸미기 이름으로 바꾼다(이미 바꾼 기록은 건드리지 않는다).
+  await page.route(
+    (url) => url.pathname === "/api/client/user/media",
+    (route) => route.fulfill({ json: envelope([{ mediaId: 9100, s3Key: "uploads/users/a11y/result.webp", displayName: "harucut_20261115_143000", createdAt: "2026-11-15T14:30:00.000000" }]) }),
+  );
+  const renamed: string[] = [];
+  await page.route("**/api/client/user/media/9100/display-name", (route) => {
+    const { displayName } = route.request().postDataJSON() as { displayName: string };
+    renamed.push(displayName);
+    return route.fulfill({ json: envelope({ mediaId: 9100, s3Key: "uploads/users/a11y/result.webp", displayName, createdAt: "2026-11-15T14:30:00.000000" }) });
+  });
+  // 공유 창이 열릴 때 받는 사람 페이지 링크를 받아 둔다(2026-11-16).
+  await page.route("**/api/client/user/media/9100/share-link", (route) => route.fulfill({ json: envelope({ token: "tok_qa_0123456789abcdef" }) }));
+  const composed: string[] = [];
   page.on("request", (request) => {
-    if (request.method() !== "GET" && request.url().includes("/api/client/")) writes.push(new URL(request.url()).pathname);
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/client/user/media/compose") composed.push(request.url());
   });
   page.on("dialog", (dialog) => dialog.accept());
-  await page.goto("/shoot?source=upload");
+  await page.goto("/create?source=upload");
   await page.getByRole("button", { name: "사진 고르러 가기", exact: true }).click();
+  // 불러오기는 따로 화면이 없다 — 사진 고르기 화면의 「사진 불러오기」 칸으로 불러온다(2026-11-15).
+  await page.waitForURL(/\/create\/select$/);
+  await expect(page.getByRole("button", { name: "사진 불러오기", exact: true })).toBeVisible();
   const buffer = await readFile("public/demo/cut-1.webp");
-  await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
+  await page.locator('input[type="file"]').setInputFiles([1, 2, 3, 4, 5].map((n) => ({ name: `qa-${n}.webp`, mimeType: "image/webp", buffer })));
+  // 불러온 사진은 목록에 올라갈 뿐이다 — 칸에는 찍은 사진처럼 눌러서 넣는다(2026-11-15 「자동으로 안 넣어져」).
+  await expect(page.getByRole("button", { name: "5번 사진 선택", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "4장을 골라 주세요", exact: true })).toBeDisabled();
+  for (const index of [2, 1, 4, 5]) {
+    await page.getByRole("button", { name: `${index}번 사진 선택`, exact: true }).click();
+  }
+  await expect(page.getByRole("button", { name: "5번 사진 선택 해제 (현재 4번째로 선택됨)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "3번 사진 — 4장을 다 골라 더 선택할 수 없어요", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "꾸미기", exact: true }).click();
+  // 기본 프레임은 테두리 색을 고른다 — 고르지 않는 것은 저장한 프레임일 때뿐이다(2026-11-15).
+  await expect(page.getByRole("group", { name: "테두리 색" })).toBeVisible();
+  await page.getByLabel("사진 이름", { exact: true }).fill("POC-회원");
   await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  for (const n of [4, 2, 3, 1]) await page.getByRole("button", { name: `${n}번 사진 선택`, exact: true }).click();
-  await page.getByRole("button", { name: "다음 단계로", exact: true }).click();
-  const downloadLink = page.getByRole("link", { name: "다운로드", exact: true });
-  await expect(downloadLink).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("계정 기록에 보관할 수 없어요");
-  await expect(page.getByRole("button", { name: "공유 링크 만들기" })).toHaveCount(0);
-  await page.getByLabel("파일 이름").fill("POC-기기저장");
-  await page.getByRole("button", { name: "파일명 수정" }).click();
+  const save = page.getByRole("button", { name: "사진 저장", exact: true });
+  await expect(save).toBeVisible();
+  expect(composed).toHaveLength(1);
+  expect(renamed).toEqual(["POC-회원"]);
+  await expect(page.getByText(/기록에 보관되지 않아요/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "공유", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "더보기", exact: true })).toHaveCount(0);
   const completed = page.waitForEvent("download");
-  await downloadLink.click();
+  await save.click();
   const download = await completed;
   // macOS WebKit은 파일명의 한글을 분해형으로 돌려줄 수 있다.
-  expect(download.suggestedFilename().normalize("NFC")).toBe("POC-기기저장.jpg");
+  expect(download.suggestedFilename().normalize("NFC")).toMatch(/^POC-회원\.(webp|jpe?g|png)$/);
   expect(await download.failure()).toBeNull();
-  const bytes = await readFile((await download.path())!);
-  expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
-  expect(bytes.length).toBeGreaterThan(10_000);
-  expect(writes).toEqual([]); // 원본 업로드·합성·이름 변경 API를 호출하지 않는다.
-  await page.screenshot({ path: info.outputPath("member-local-result.png"), fullPage: true });
-  await page.reload();
-  await expect(downloadLink).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("계정 기록에 보관할 수 없어요");
-  expect(writes).toEqual([]);
+  // 저장하면 단추 줄 위에 저장했다는 말과 홈으로 가는 길이 뜬다. 단추는 그대로다.
+  await expect(page.getByText("사진을 저장했어요", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "홈으로 가기", exact: true })).toHaveAttribute("href", "/home");
+  await expect(save).toBeVisible();
+  // 공유는 아래에서 올라오는 공유 창이다(2026-11-16 「하단에서 스륵 올라오는 일반적인 거」). 링크는 창을 열 때 받아 둔다.
+  await page.getByRole("button", { name: "공유", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "사진 공유하기" });
+  await expect(sheet.getByRole("button", { name: "링크 복사", exact: true })).toBeEnabled();
+  await sheet.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("member-server-result.png"), fullPage: true });
 });
 
 test("빈 활성 약관은 체험으로 안내하고 재조회가 성공하면 가입 폼을 연다", async ({ page }, info) => {
@@ -52,7 +86,7 @@ test("빈 활성 약관은 체험으로 안내하고 재조회가 성공하면 �
   await page.goto("/signup?redirectTo=%2Fhistory");
   await expect(page.getByText(/회원가입을 잠시 이용할 수 없어요/)).toBeVisible();
   await expect(page.getByRole("button", { name: "회원가입", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/shoot/start");
+  await expect(page.getByRole("link", { name: "가입 없이 체험하기" })).toHaveAttribute("href", "/create/start");
   await page.screenshot({ path: info.outputPath("signup-unavailable.png"), fullPage: true });
   registered = true;
   await page.getByRole("button", { name: "다시 확인하기" }).click();

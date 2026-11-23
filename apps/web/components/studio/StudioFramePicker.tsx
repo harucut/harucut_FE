@@ -1,0 +1,239 @@
+"use client";
+
+import { useCallback, useEffect, useId, useState } from "react";
+import { FrameWithPhotos, frameFitStyle } from "@/components/participation/FrameWithPhotos";
+import { WorkspaceFrameList, layoutName } from "@/components/studio/StudioWorkspaceFrames";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
+import type { RemoteFrame } from "@/lib/api-types";
+import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import {
+  listPickableFrameVersions,
+  listWorkspaceFrames,
+  type EventLayout,
+  type FrameRef,
+  type PickableFrameVersion,
+} from "@/lib/studio/studioApi";
+import { Sentences } from "@/components/ui/Sentences";
+
+export { layoutName };
+
+/**
+ * 고른 발행본 목록을 서버 규칙에 맞춘다 — 순서는 고른 순서, 기본은 전체에서 정확히 하나.
+ * 기본이 없으면(첫 선택·기본을 뺀 경우) 남은 첫째를 기본으로 둔다. 게시 검사가 「기본 프레임은
+ * 정확히 하나」를 요구해서, 운영자가 따로 누르지 않아도 맞게 둔다.
+ */
+export function normalizeFrameRefs(refs: FrameRef[]): FrameRef[] {
+  const hasDefault = refs.some((r) => r.isDefault);
+  let seenDefault = false;
+  return refs.map((ref, index) => {
+    const isDefault = hasDefault ? ref.isDefault && !seenDefault : index === 0;
+    if (isDefault) seenDefault = true;
+    return { ...ref, isDefault, sortOrder: index + 1 };
+  });
+}
+
+type Catalog = { versions: PickableFrameVersion[]; frames: RemoteFrame[] };
+
+export function StudioFramePicker({
+  workspaceId,
+  layouts,
+  value,
+  onChange,
+  disabled,
+  editLocked,
+  onEditFrame,
+  onCreateFrame,
+  onCatalog,
+}: {
+  workspaceId: string;
+  /** 허용 레이아웃. 여기 없는 판형의 발행본은 고를 수 없다(게시 검사와 같다). */
+  layouts: EventLayout[];
+  value: FrameRef[];
+  onChange: (next: FrameRef[]) => void;
+  disabled?: boolean;
+  /** 저장 안 한 설정이 있으면 편집기로 떠나지 않는다 — 돌아오면 그 설정이 사라진다. */
+  editLocked?: boolean;
+  /** 둘 다 없으면 고르기만 한다 — 공간·프로젝트 기본값처럼 편집기로 떠날 수 없는 자리. 「공간 프레임」 관리 칸을 그리지 않는다. */
+  onEditFrame?: (frame: RemoteFrame) => void;
+  onCreateFrame?: (layout: EventLayout) => void;
+  /** 받은 발행본 목록을 알려 준다 — 참가자 문구 칸을 실제 프레임 위에서 잡을 때 쓴다. */
+  onCatalog?: (versions: PickableFrameVersion[]) => void;
+}) {
+  const radioName = useId();
+  const manage = Boolean(onEditFrame && onCreateFrame);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [versions, frames] = await Promise.all([
+        listPickableFrameVersions(workspaceId),
+        listWorkspaceFrames(workspaceId),
+      ]);
+      setCatalog({ versions, frames });
+      onCatalog?.(versions);
+      setError(null);
+    } catch (cause) {
+      setError(getUserFacingApiErrorMessage(cause, "프레임 목록을 불러오지 못했어요. 아래에서 다시 불러와 주세요."));
+    }
+  }, [workspaceId, onCatalog]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
+    void load();
+  }, [load]);
+
+  const selectedIds = new Set(value.map((r) => r.frameVersionId));
+  const known = new Set(catalog?.versions.map((v) => v.frameVersionId) ?? []);
+  // 목록에 없거나, 허용하지 않은 판형이라 위에서 보이지 않는 연결 — 숨은 채 저장되면 게시가 막힌다(Codex #559).
+  const unknownRefs = catalog
+    ? value.filter((r) => !known.has(r.frameVersionId) || !layouts.includes(r.layoutType))
+    : [];
+
+  const toggle = (version: PickableFrameVersion, on: boolean) => {
+    const next = on
+      ? [...value, { frameVersionId: version.frameVersionId, layoutType: version.frameType, isDefault: false, sortOrder: 0 }]
+      : value.filter((r) => r.frameVersionId !== version.frameVersionId);
+    onChange(normalizeFrameRefs(next));
+  };
+
+  const makeDefault = (frameVersionId: number) =>
+    onChange(normalizeFrameRefs(value.map((r) => ({ ...r, isDefault: r.frameVersionId === frameVersionId }))));
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-2">
+        <p role="alert" className="text-[13px] text-(--hc-danger)">
+          <Sentences text={error} />
+        </p>
+        <button type="button" onClick={() => void load()} className="hc-button-secondary h-11 self-start rounded-full px-4 text-[13px] font-semibold">
+          다시 불러오기
+        </button>
+      </div>
+    );
+  }
+  if (!catalog) return <p className="text-[13px] text-(--hc-muted)">프레임 목록을 불러오는 중…</p>;
+
+  return (
+    <div className="flex flex-col gap-5">
+      {layouts.length === 0 ? (
+        <p className="text-[13px] text-(--hc-muted)">허용 레이아웃을 먼저 고르면 그 판형의 프레임을 고를 수 있어요.</p>
+      ) : null}
+
+      {layouts.map((layout) => {
+        const candidates = catalog.versions.filter((v) => v.frameType === layout);
+        return (
+          <fieldset key={layout} disabled={disabled} className="flex flex-col gap-2">
+            <legend className="mb-1 text-[14px] font-semibold">{layoutName(layout)}</legend>
+            {candidates.length === 0 ? (
+              <p className="text-[13px] text-(--hc-muted)">
+                <Sentences text={manage
+                  ? "고를 수 있는 발행본이 없어요. 아래 「공간 프레임」에서 만들고 발행해 주세요."
+                  : "고를 수 있는 발행본이 없어요. 행사 화면의 「공간 프레임」에서 만들고 발행해 주세요."} />
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {candidates.map((version) => {
+                  const checked = selectedIds.has(version.frameVersionId);
+                  const ref = value.find((r) => r.frameVersionId === version.frameVersionId);
+                  return (
+                    <li key={version.frameVersionId} className="hc-surface-well flex items-center gap-3 rounded-2xl p-2">
+                      {version.previewUrl ? (
+                        <span aria-hidden className="flex h-24 w-16 shrink-0 items-center justify-center [container-type:size]">
+                          <FrameWithPhotos
+                            frame={{ layoutType: version.frameType, previewUrl: version.previewUrl }}
+                            photos={DEMO_PHOTOS}
+                            className="rounded-[3px]"
+                            style={frameFitStyle(version.frameType)}
+                          />
+                        </span>
+                      ) : (
+                        <span aria-hidden className="h-24 w-16 shrink-0 rounded-md bg-(--hc-border)" />
+                      )}
+                      <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-[14px]">
+                        <input
+                          type="checkbox"
+                          className="size-5 shrink-0"
+                          checked={checked}
+                          onChange={(e) => toggle(version, e.target.checked)}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold">{version.title || "이름 없는 프레임"}</span>
+                          <span className="block text-[12px] text-(--hc-muted)">
+                            {version.source === "SYSTEM" ? "기본 제공" : "우리 공간"} · {version.versionNo}번째 발행본
+                          </span>
+                        </span>
+                      </label>
+                      {checked ? (
+                        <label className="flex min-h-11 shrink-0 items-center gap-1.5 text-[13px]">
+                          <input
+                            type="radio"
+                            name={radioName}
+                            className="size-4"
+                            aria-label={`${version.title || "이름 없는 프레임"} 기본 프레임으로 정하기`}
+                            checked={Boolean(ref?.isDefault)}
+                            onChange={() => makeDefault(version.frameVersionId)}
+                          />
+                          기본
+                        </label>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </fieldset>
+        );
+      })}
+
+      {unknownRefs.length > 0 ? (
+        <div className="flex flex-col gap-2 rounded-2xl border border-(--hc-border) p-3 text-[13px]">
+          <p>
+            <Sentences text="지금 고를 수 없는 발행본이 연결돼 있어요. 허용하지 않은 판형이거나, 더 새 발행본이 나왔거나 회수됐거나 원본 프레임이 지워졌을 수 있어요. 위에서 다시 고른 뒤 빼 주세요." />
+          </p>
+          <ul className="flex flex-col gap-1">
+            {unknownRefs.map((ref) => (
+              <li key={ref.frameVersionId} className="flex items-center justify-between gap-2">
+                <span>
+                  {layoutName(ref.layoutType)} · 발행본 #{ref.frameVersionId}
+                  {ref.isDefault ? " · 기본" : ""}
+                </span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="h-11 rounded-full px-3 text-(--hc-danger)"
+                  onClick={() => onChange(normalizeFrameRefs(value.filter((r) => r.frameVersionId !== ref.frameVersionId)))}
+                >
+                  빼기
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {manage ? (
+        <section aria-labelledby="studio-workspace-frames" className="flex flex-col gap-2">
+          <h3 id="studio-workspace-frames" className="text-[14px] font-semibold">
+            공간 프레임
+          </h3>
+          <p className="text-[12px] text-(--hc-muted)">
+            <Sentences text="고친 프레임은 「새 버전 발행」을 눌러야 고를 수 있어요. 이미 게시한 행사는 고른 발행본을 그대로 써요." />
+          </p>
+          {editLocked ? (
+            <p className="text-[12px] text-(--hc-muted)">바꾼 설정을 저장한 뒤 프레임을 만들거나 고칠 수 있어요.</p>
+          ) : null}
+          <WorkspaceFrameList
+            frames={catalog.frames}
+            versions={catalog.versions}
+            layouts={layouts}
+            editLocked={editLocked}
+            onEditFrame={onEditFrame}
+            onCreateFrame={onCreateFrame}
+            onPublished={load}
+          />
+        </section>
+      ) : null}
+    </div>
+  );
+}

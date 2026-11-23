@@ -2,15 +2,19 @@
 
 import { Eye, EyeOff } from "lucide-react";
 import { useId, useMemo, useState, type InputHTMLAttributes } from "react";
+import { Sentences } from "@/components/ui/Sentences";
 
 type AuthFieldProps = {
   label: string;
   error?: string | null;
+  /** 문장 없이 칸만 빨갛게 표시한다(문장은 다른 칸이 말할 때). */
+  invalid?: boolean;
 } & InputHTMLAttributes<HTMLInputElement>;
 
 export function AuthField({
   label,
   error,
+  invalid = false,
   id,
   type,
   ...inputProps
@@ -41,13 +45,13 @@ export function AuthField({
           type={inputType}
           className={[
             "hc-input h-11 w-full rounded-xl border px-3.5 pr-12 text-[14px]",
-            error ? "border-(--hc-danger-border)" : "",
+            error || invalid ? "border-(--hc-danger)" : "",
           ].join(" ")}
           {...(type === "email"
             ? { spellCheck: false, autoCapitalize: "none", inputMode: "email" as const }
             : {})}
           {...inputProps}
-          aria-invalid={error ? true : inputProps["aria-invalid"]}
+          aria-invalid={error || invalid ? true : inputProps["aria-invalid"]}
           aria-describedby={[inputProps["aria-describedby"], error ? errorId : null].filter(Boolean).join(" ") || undefined}
         />
 
@@ -65,7 +69,7 @@ export function AuthField({
       </div>
 
       {error ? (
-        <p id={errorId} role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)">{error}</p>
+        <p id={errorId} role="alert" className="text-[12px] leading-relaxed text-(--hc-danger)"><Sentences text={error} /></p>
       ) : null}
     </div>
   );

@@ -1,0 +1,327 @@
+import type { ApiEnvelope } from "@/lib/api-types";
+import { requireData } from "@/lib/apiEnvelope";
+import { clientApi } from "@/lib/clientApi";
+import type { AuditLogPage } from "@/components/audit/AuditLogList";
+import type { EntitlementFeature } from "@/lib/studio/usageApi";
+
+/**
+ * 하루컷 플랫폼 CMS(ADR-0008 §6-1, R5 10절). 문의 → 계약 → 이용권으로 잇는 운영 도구다.
+ * 플랫폼 ADMIN 만 쓴다 — 백엔드가 /api/admin/** 전체에 ADMIN 을 요구한다. 고객 Studio 의 공간 관리자 역할과 다르다.
+ */
+export type InquiryStatus = "NEW" | "CONTACTED" | "QUOTED" | "WON" | "LOST";
+
+export type Inquiry = {
+  inquiryId: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  organizerType: "PERSONAL" | "BUSINESS";
+  /** 서버가 이어 붙인 문자열(예: "BYOD,BOOTH"). */
+  channels: string;
+  expectedDate?: string | null;
+  expectedCount?: number | null;
+  message: string;
+  status: InquiryStatus;
+  assigneeNote?: string | null;
+  createdAt: string;
+};
+
+export type EntitlementTerms = {
+  composeQuota: number;
+  retentionDays?: number;
+  maxBoothDevices?: number;
+  maxLiveEvents?: number;
+  features?: EntitlementFeature[];
+};
+
+export type ContractStatus = "DRAFT" | "ACTIVE" | "ENDED" | "CANCELLED";
+export type EntitlementScope = "WORKSPACE" | "EVENT";
+
+export type PaymentEvidence = { kind: "PORTONE" | "BANK_TRANSFER" | "OTHER"; reference: string };
+
+export type ContractRequest = {
+  workspaceId: string;
+  contractorName: string;
+  scope: EntitlementScope;
+  eventIds?: string[];
+  amount?: number;
+  currency?: string;
+  startsAt: string;
+  endsAt: string;
+  paymentEvidence?: PaymentEvidence;
+  entitlement: EntitlementTerms;
+};
+
+export type Contract = ContractRequest & {
+  contractId: string;
+  /** 공간 이름. 서버가 아직 안 주면 비어 있고, 화면은 ID 를 쓴다. */
+  workspaceName?: string | null;
+  status: ContractStatus;
+  createdAt: string;
+  /** 결제 근거(PORTONE)를 PortOne 조회로 대조해 확인한 시각. 없으면 아직 확인 전. */
+  paymentVerifiedAt?: string | null;
+};
+
+/** 계약 대상 찾기 — 조직 공간만 나온다(개인 공간은 계약 대상이 아니다). 최신순 최대 20건. */
+export type AdminWorkspaceItem = {
+  workspaceId: string;
+  name: string;
+  type: "PERSONAL" | "ORGANIZATION";
+  /** 업체(ENTERPRISE) 공간이면 멤버가 사진을 받지 않는다. 개인 공간은 늘 HOST. 옛 서버면 키가 없다. */
+  kind?: "HOST" | "ENTERPRISE";
+  ownerEmails: string[];
+  createdAt: string;
+};
+
+export type AdminEventItem = {
+  eventId: string;
+  slug: string;
+  name: string;
+  status: "DRAFT" | "LIVE" | "CAPTURE_CLOSED" | "ARCHIVED";
+  workspaceId: string;
+  workspaceName: string;
+  createdAt: string;
+};
+
+/** 검색어는 두 글자 이상이어야 한다(아니면 400 GEN-002). */
+export const ADMIN_SEARCH_MIN = 2;
+
+export type Entitlement = {
+  entitlementId: string;
+  scope: EntitlementScope;
+  workspaceId: string;
+  /** 공간 이름. 서버가 아직 안 주면 비어 있고, 화면은 ID 를 쓴다. */
+  workspaceName?: string | null;
+  eventId?: string | null;
+  source: "CONTRACT" | "MANUAL";
+  contractId?: string | null;
+  status: "ACTIVE" | "REVOKED";
+  terms: EntitlementTerms;
+  used: number;
+  reserved: number;
+  validFrom: string;
+  validTo: string;
+  grantorNote?: string | null;
+  revokeReason?: string | null;
+  /** 행사 배분(ADR-0009 §5)이면 부모(기업 총량) 이용권. 기간·기능·조건은 부모를 따른다. */
+  parentEntitlementId?: string | null;
+  /** 부모일 때 활성 배분 합. 남은 배분 가능량 = terms.composeQuota − allocatedQuota. */
+  allocatedQuota?: number | null;
+};
+
+export type ManualGrantRequest = {
+  workspaceId: string;
+  /** 있으면 행사 범위. */
+  eventId?: string;
+  grantorNote: string;
+  validFrom: string;
+  validTo: string;
+  terms: EntitlementTerms;
+};
+
+export type EntitlementImpact = { liveEvents: string[]; openReservations: number };
+
+
+export async function listInquiries(): Promise<Inquiry[]> {
+  const res = await clientApi.get<ApiEnvelope<Inquiry[]>>(`/api/client/admin/inquiries`);
+  return res.data.data ?? [];
+}
+
+export async function updateInquiry(
+  inquiryId: string,
+  patch: { status?: InquiryStatus; assigneeNote?: string },
+): Promise<Inquiry> {
+  const res = await clientApi.patch<ApiEnvelope<Inquiry>>(`/api/client/admin/inquiries/${encodeURIComponent(inquiryId)}`, patch);
+  return requireData(res.data, "문의");
+}
+
+export async function listContracts(): Promise<Contract[]> {
+  const res = await clientApi.get<ApiEnvelope<Contract[]>>(`/api/client/admin/contracts`);
+  return res.data.data ?? [];
+}
+
+export async function createContract(contract: ContractRequest): Promise<Contract> {
+  const res = await clientApi.post<ApiEnvelope<Contract>>(`/api/client/admin/contracts`, contract);
+  return requireData(res.data, "계약");
+}
+
+/** DRAFT→ACTIVE(이용권 생성)·CANCELLED, ACTIVE→ENDED·CANCELLED. 나머지는 409 ENT-003. */
+export async function changeContractStatus(
+  contractId: string,
+  status: ContractStatus,
+  signal?: AbortSignal,
+): Promise<Contract> {
+  const res = await clientApi.patch<ApiEnvelope<Contract>>(
+    `/api/client/admin/contracts/${encodeURIComponent(contractId)}`,
+    { status },
+    { signal },
+  );
+  return requireData(res.data, "계약");
+}
+
+/**
+ * PORTONE 근거를 PortOne 조회로 다시 대조한다(웹훅이 근거 등록보다 먼저 와서 확인되지 않은 계약용).
+ * 맞으면 paymentVerifiedAt 이 채워진 계약. 근거 없음·연동 꺼짐·불일치는 400 GEN-002. 실연동 미확인.
+ */
+export async function verifyContractPayment(contractId: string, signal?: AbortSignal): Promise<Contract> {
+  const res = await clientApi.post<ApiEnvelope<Contract>>(
+    `/api/client/admin/contracts/${encodeURIComponent(contractId)}/payment-verification`,
+    undefined,
+    { signal },
+  );
+  return requireData(res.data, "계약");
+}
+
+export async function listEntitlements(): Promise<Entitlement[]> {
+  const res = await clientApi.get<ApiEnvelope<Entitlement[]>>(`/api/client/admin/entitlements`);
+  return res.data.data ?? [];
+}
+
+export async function grantEntitlement(grant: ManualGrantRequest): Promise<Entitlement> {
+  const res = await clientApi.post<ApiEnvelope<Entitlement>>(`/api/client/admin/entitlements`, grant);
+  return requireData(res.data, "이용권");
+}
+
+export async function getEntitlementImpact(entitlementId: string): Promise<EntitlementImpact> {
+  const res = await clientApi.get<ApiEnvelope<EntitlementImpact>>(
+    `/api/client/admin/entitlements/${encodeURIComponent(entitlementId)}/impact`,
+  );
+  return requireData(res.data, "회수 영향");
+}
+
+export async function revokeEntitlement(entitlementId: string, reason: string): Promise<Entitlement> {
+  const res = await clientApi.post<ApiEnvelope<Entitlement>>(
+    `/api/client/admin/entitlements/${encodeURIComponent(entitlementId)}/revoke`,
+    { reason },
+  );
+  return requireData(res.data, "이용권");
+}
+
+/** 기업 총량(공간 범위)에서 행사 하나에 배분. 같은 공간의 행사만, 같은 행사엔 활성 배분 하나. 합이 넘으면 409 ENT-005. */
+export async function allocateEntitlement(parentId: string, eventId: string, composeQuota: number): Promise<Entitlement> {
+  const res = await clientApi.post<ApiEnvelope<Entitlement>>(
+    `/api/client/admin/entitlements/${encodeURIComponent(parentId)}/allocations`,
+    { eventId, composeQuota },
+  );
+  return requireData(res.data, "배분");
+}
+
+/** 배분량 바꾸기 — 늘리면 합 검사(ENT-005), 이미 사용·예약한 양 아래로 줄이면 ENT-006. */
+export async function resizeAllocation(childId: string, composeQuota: number): Promise<Entitlement> {
+  const res = await clientApi.patch<ApiEnvelope<Entitlement>>(
+    `/api/client/admin/entitlements/${encodeURIComponent(childId)}`,
+    { composeQuota },
+  );
+  return requireData(res.data, "배분");
+}
+
+export async function searchWorkspaces(query: string): Promise<AdminWorkspaceItem[]> {
+  const res = await clientApi.get<ApiEnvelope<AdminWorkspaceItem[]>>(
+    `/api/client/admin/workspaces?query=${encodeURIComponent(query)}`,
+  );
+  return res.data.data ?? [];
+}
+
+export type WorkspaceKind = "HOST" | "ENTERPRISE";
+
+/** 공간을 업체(ENTERPRISE)·주최자(HOST)로 바꾼다. 조직 공간만 된다. 사유는 감사 로그에 남는다. */
+export async function setWorkspaceKind(
+  workspaceId: string,
+  kind: WorkspaceKind,
+  reason: string,
+): Promise<{ workspaceId: string; kind: WorkspaceKind }> {
+  const res = await clientApi.patch<ApiEnvelope<{ workspaceId: string; kind: WorkspaceKind }>>(
+    `/api/client/admin/workspaces/${encodeURIComponent(workspaceId)}/kind`,
+    { kind, reason },
+  );
+  return requireData(res.data, "공간 종류");
+}
+
+export async function searchEvents(query: string): Promise<AdminEventItem[]> {
+  const res = await clientApi.get<ApiEnvelope<AdminEventItem[]>>(
+    `/api/client/admin/events?query=${encodeURIComponent(query)}`,
+  );
+  return res.data.data ?? [];
+}
+
+// ── 시스템 프레임 · 감사 로그 ──
+
+export type SystemFrame = {
+  frameId: number;
+  title?: string | null;
+  frameType: "CLASSIC" | "WIDE" | "GRID" | "POLAROID";
+  updatedAt?: string | null;
+};
+
+export async function listSystemFrames(): Promise<SystemFrame[]> {
+  const res = await clientApi.get<ApiEnvelope<SystemFrame[]>>("/api/client/admin/frames");
+  return res.data.data ?? [];
+}
+
+/** 시스템 프레임을 발행한다. 발행해야 행사에서 고를 수 있다. */
+export async function publishSystemFrame(frameId: number): Promise<{ frameVersionId: number; versionNo: number }> {
+  const res = await clientApi.post<ApiEnvelope<{ frameVersionId: number; versionNo: number }>>(
+    `/api/client/admin/frames/${frameId}/versions`,
+  );
+  return requireData(res.data, "발행본");
+}
+
+export type SystemFrameVersion = {
+  frameVersionId: number;
+  versionNo: number;
+  createdAt?: string | null;
+  revokedAt?: string | null;
+  revokedReason?: string | null;
+};
+
+export async function listSystemFrameVersions(frameId: number): Promise<SystemFrameVersion[]> {
+  const res = await clientApi.get<ApiEnvelope<SystemFrameVersion[]>>(`/api/client/admin/frames/${frameId}/versions`);
+  return res.data.data ?? [];
+}
+
+export async function revokeSystemFrameVersion(frameVersionId: number, reason: string) {
+  await clientApi.post(`/api/client/admin/frame-versions/${frameVersionId}/revoke`, { reason });
+}
+
+export async function restoreSystemFrameVersion(frameVersionId: number) {
+  await clientApi.post(`/api/client/admin/frame-versions/${frameVersionId}/restore`);
+}
+
+export type AdminUser = {
+  userId: string;
+  email?: string | null;
+  username?: string | null;
+  provider?: string | null;
+  /** `ROLE_USER` · `ROLE_ADMIN`. */
+  userRole?: string | null;
+  userStatus: string;
+  createdAt?: string | null;
+};
+
+/** 이메일이 정확히 같은 계정. 없으면 빈 목록이다. 소셜 계정 때문에 같은 이메일이 여러 행일 수 있다. */
+export async function searchUsers(email: string): Promise<AdminUser[]> {
+  const res = await clientApi.get<ApiEnvelope<AdminUser[]>>(`/api/client/admin/users?${new URLSearchParams({ email }).toString()}`);
+  return res.data.data ?? [];
+}
+
+export async function blockUser(userId: string, reason: string): Promise<{ userId: string; userStatus: string }> {
+  const res = await clientApi.post<ApiEnvelope<{ userId: string; userStatus: string }>>(
+    `/api/client/admin/users/${encodeURIComponent(userId)}/block`,
+    { reason },
+  );
+  return requireData(res.data, "계정 정지");
+}
+
+export async function unblockUser(userId: string, reason: string): Promise<{ userId: string; userStatus: string }> {
+  const res = await clientApi.post<ApiEnvelope<{ userId: string; userStatus: string }>>(
+    `/api/client/admin/users/${encodeURIComponent(userId)}/unblock`,
+    { reason },
+  );
+  return requireData(res.data, "정지 해제");
+}
+
+export async function listAuditLogs(cursor: string | null): Promise<AuditLogPage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
+  const res = await clientApi.get<ApiEnvelope<AuditLogPage>>(`/api/client/admin/audit-logs${query}`);
+  return res.data.data ?? { items: [] };
+}

@@ -11,18 +11,27 @@ type MobileTabBarProps = {
   // 공개 페이지 촬영 탭은 API 없이 체험 진입 경로로 이동한다.
   // (proxy가 비회원을 /login으로 막으므로) authed 페이지에서는 미지정.
   publicShoot?: boolean;
+  /**
+   * 화면에 같은 일을 하는 라임 버튼이 이미 있을 때 켠다(홈의 「지금 찍기」). 탭바의 촬영 버튼은
+   * 그동안 무채색으로 물러난다. 라임 알약이 둘이면 어느 쪽을 누를지 다시 생각한다(DESIGN.md 「한 화면 한 라임」).
+   */
+  quietShoot?: boolean;
 };
 
 // 폰/태블릿(< lg)에서만 보이는 앱 스타일 하단 탭바
 // (handoff app TabBar: 홈·기록·촬영(FAB)·프레임·MY 5탭).
 // 데스크톱(≥ lg)에서는 숨기고 기존 웹 네비게이션을 사용한다.
-export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
+export function MobileTabBar({ publicShoot = false, quietShoot = false }: MobileTabBarProps) {
   const pathname = usePathname();
   // 가운데 버튼도 홈 카드와 **같은 것**을 연다. 하나는 고르라고 하고 하나는 바로
   // 카메라로 가면, 같아 보이는 두 진입로가 다르게 동작한다.
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
+
+  const shootButtonStyle = quietShoot
+    ? { background: "var(--hc-neutral-button-bg)", color: "var(--hc-neutral-button-text)", boxShadow: "0 0 0 1px var(--hc-border), var(--hc-neutral-button-shadow)" }
+    : { background: "var(--hc-primary)" };
 
   const shootButtonClass =
     "-mt-7 grid h-13.5 w-13.5 place-items-center rounded-full text-(--hc-primary-contrast) shadow-(--hc-button-shadow) transition active:brightness-90";
@@ -66,7 +75,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           href={PUBLIC_SHOOT_ENTRY}
           aria-label="촬영"
           className={shootButtonClass}
-          style={{ background: "var(--hc-primary)" }}
+          style={shootButtonStyle}
         >
           <Camera className="h-6.5 w-6.5" />
         </a>
@@ -76,7 +85,7 @@ export function MobileTabBar({ publicShoot = false }: MobileTabBarProps) {
           aria-label="기록 남기기"
           onClick={() => setSourceDialogOpen(true)}
           className={shootButtonClass}
-          style={{ background: "var(--hc-primary)" }}
+          style={shootButtonStyle}
         >
           <Camera className="h-6.5 w-6.5" />
         </button>

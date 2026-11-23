@@ -5,12 +5,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Download,
-  Image as ImageIcon,
   LayoutGrid,
-  PencilLine,
-  Share2,
-  Trash2,
 } from "lucide-react";
 import { parseServerDateTime, serverDateTimeToMillis } from "@harucut/shared";
 import { getImageUrlByKey } from "@/lib/presignedUploadApi";
@@ -18,6 +13,11 @@ import {
   getApiErrorDetails,
   getUserFacingApiErrorMessage,
 } from "@/lib/apiError";
+import {
+  HistoryNotice,
+  HistoryPhotoViewer,
+  type HistoryNoticeValue,
+} from "@/components/history/HistoryPhotoViewer";
 import { AppNav } from "@/components/layout/AppNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { RecordSourceDialog } from "@/components/shoot/RecordSourceDialog";
@@ -26,7 +26,6 @@ import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
 import { downloadFromUrl } from "@/lib/canvas/composeFrame";
 import { getNativeSaveErrorMessage } from "@/lib/nativeBridge";
 import { buildDownloadFilename } from "@/lib/fourcutOutput";
-import { isCopyFailedError, shareOrCopyLink } from "@/lib/share";
 import {
   getUserMediaPreviewUrl,
   getUserMediaTitle,
@@ -38,6 +37,10 @@ import {
   updateMediaDisplayName,
 } from "@/lib/userMediaApi";
 import type { UserMedia } from "@/lib/api-types";
+import { SegmentButton } from "@/components/ui/SegmentButton";
+import { usePreparedPhotoFile } from "@/hooks/usePreparedPhotoFile";
+import { PhotoShareSheet } from "@/components/share/PhotoShareSheet";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type ViewMode = "grid" | "calendar";
 
@@ -47,9 +50,25 @@ type ViewMode = "grid" | "calendar";
  * 예전에는 다운로드·공유·삭제 실패를 `alert()` 로 알렸다. 브라우저 모달은 이 디자인의
  * 것이 아닌 데다, 확인을 누르기 전까지 방금 바뀐 화면을 가린다 — 마이페이지가 같은
  * 이유로 걷어낸 방식이다(app/mypage/page.tsx). 성공(초록)과 실패를 같은 색으로 그리지
- * 않으려고 종류를 함께 들고 다닌다.
+ * 않으려고 종류를 함께 들고 다닌다. 크게 보는 화면이 열려 있으면 그 안에서 말한다.
  */
-type Notice = { kind: "ok" | "error"; text: string };
+type Notice = HistoryNoticeValue;
+
+/**
+ * 크게 보는 사진은 주소에 둔다 — `/history?photo=<mediaId>`.
+ *
+ * 화면 상태로만 두면 뒤로가기(브라우저, 앱의 하드웨어 버튼 — 셸은 WebView 의 goBack 을 부른다)가
+ * 보기 화면을 닫지 않고 기록 화면째 떠나 버린다. 열 때 기록을 하나 쌓고(pushState), 옆 사진으로
+ * 넘길 때는 그 자리를 바꾼다(replaceState) — 몇 장을 넘겨 봤든 뒤로 한 번이면 목록이다.
+ * Next 는 직접 쌓은 기록에도 자기 상태를 붙여 두고 같은 화면 안에서 되돌린다(app-router 의 history 패치).
+ */
+const PHOTO_PARAM = "photo";
+
+function readPhotoParam(): number | null {
+  const raw = new URLSearchParams(window.location.search).get(PHOTO_PARAM);
+  const id = raw ? Number(raw) : Number.NaN;
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 /**
  * 상한을 넘겨 클라이언트가 끊은 삭제인가(lib/userMediaApi.ts 의 `MediaDeleteTimeoutError`).
@@ -121,6 +140,13 @@ function monthLabel(key: string) {
   return `${prefix}${MONTH_KO[(month ?? 1) - 1]}`;
 }
 
+/** 사진 아래의 날짜 — "11.02". 값이라 모노로 세운다. */
+function stripDate(item: UserMedia) {
+  const date = parseServerDateTime(item.createdAt);
+  if (!date) return null;
+  return `${`${date.getMonth() + 1}`.padStart(2, "0")}.${`${date.getDate()}`.padStart(2, "0")}`;
+}
+
 /** createdAt 기준 월별 그룹. 날짜 없는 항목은 '기타'로 마지막에 묶는다. */
 function groupByMonth(items: UserMedia[]) {
   const map = new Map<string, UserMedia[]>();
@@ -140,34 +166,38 @@ function groupByMonth(items: UserMedia[]) {
     .map((key) => ({ key, items: map.get(key) ?? [] }));
 }
 
-function MediaThumb({
-  item,
-  bare = false,
-}: {
-  item: UserMedia;
-  bare?: boolean;
-}) {
+function MediaThumb({ item }: { item: UserMedia }) {
   const previewUrl = getUserMediaPreviewUrl(item);
 
-  const shellClassName = bare
-    ? "relative grid h-full w-full place-items-center overflow-hidden"
-    : "hc-surface-well relative grid aspect-3/4 place-items-center overflow-hidden rounded-[18px] border bg-(--hc-surface-inset) p-2.5 transition group-hover:border-(--hc-border-strong)";
+  /*
+    사진을 칸 안에 인화물처럼 놓는다. 칸은 3:4 로 고정해 사진이 늦게 와도 목록이 밀리지 않고(#media- 스크롤이 어긋나지 않는다),
+    사진은 자르지도 늘이지도 않아 세로 띠는 띠로, 가로 사진은 가로로 보인다. 칸에 테두리를 두르지 않는다 — 이 화면의 주인공은 사진이다.
 
+    카드 전체가 버튼이라 span 으로 짓는다(버튼 안에는 div 를 둘 수 없다). 이름은 카드 글자가 읽으므로 사진의 alt 는 비운다.
+  */
   return (
-    <div className={shellClassName}>
-      {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={previewUrl}
-          alt={getUserMediaTitle(item)}
-          className={`absolute inset-0 h-full w-full object-contain ${bare ? "p-1" : "p-3"}`}
-        />
-      ) : (
-        <div className="grid h-full w-full place-items-center px-2 text-center text-[11px] text-(--hc-muted)">
-          미리보기를 준비하는 중이에요.
-        </div>
-      )}
-    </div>
+    <span className="relative block aspect-3/4">
+      {/* 안쪽을 띄워 둔다 — 그냥 두면 큰 사진이 칸을 키워(aspect-ratio 의 min-height:auto) 줄이 어긋난다. */}
+      <span className="absolute inset-0 flex items-center justify-center">
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt=""
+            loading="lazy"
+            className="max-h-full max-w-full rounded-md object-contain shadow-[0_10px_24px_rgba(0,0,0,0.28)]"
+          />
+        ) : (
+          // 카드 버튼의 이름(제목·날짜)에 섞여 읽히지 않게 한다.
+          <span
+            aria-hidden
+            className="grid h-full w-full place-items-center rounded-xl bg-(--hc-surface-muted) px-2 text-center text-[11px] text-(--hc-muted)"
+          >
+            미리보기를 준비하는 중이에요.
+          </span>
+        )}
+      </span>
+    </span>
   );
 }
 
@@ -179,7 +209,8 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Notice | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const [sharingId, setSharingId] = useState<number | null>(null);
+  // 공유 창에 올린 사진(components/share/PhotoShareSheet.tsx). 보기 화면 위에 아래에서 올라온다.
+  const [shareTarget, setShareTarget] = useState<UserMedia | null>(null);
   // 이름 바꾸기는 카드 안이 아니라 다이얼로그에서 한다(SingleFieldDialog 주석 참고).
   // 대상 자체를 들고 있어야 다이얼로그가 지금 이름을 초깃값으로 받을 수 있다.
   const [renameTarget, setRenameTarget] = useState<UserMedia | null>(null);
@@ -190,6 +221,18 @@ export default function HistoryPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // 크게 보는 사진(PHOTO_PARAM 주석). `?photo=` 로 들어오면 목록이 온 뒤 그 사진이 열린다.
+  // 서버에서 그릴 때는 주소를 모르지만, 목록이 비어 있어 보기 화면도 그리지 않으니 어긋나지 않는다.
+  const [photoId, setPhotoId] = useState<number | null>(() =>
+    typeof window === "undefined" ? null : readPhotoParam(),
+  );
+
+  // 뒤로·앞으로 가면 주소를 다시 읽는다.
+  useEffect(() => {
+    const onPopState = () => setPhotoId(readPhotoParam());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,6 +324,52 @@ export default function HistoryPage() {
     return calendarMonths[0] ?? null;
   }, [monthCursor, calendarMonths]);
 
+  // 없는 사진(지워졌거나 아직 목록이 안 왔다)을 가리키면 보기 화면을 그리지 않는다.
+  const photoIndex =
+    photoId === null ? -1 : items.findIndex((item) => item.mediaId === photoId);
+  const viewing = photoIndex >= 0;
+
+  // 보고 있는 사진을 공유할 파일로 미리 받아 둔다(hooks/usePreparedPhotoFile.ts). 옆 사진으로 넘기면 그 사진을 받는다.
+  const viewingItem = viewing ? items[photoIndex] : null;
+  const viewingFilename = viewingItem
+    ? buildDownloadFilename(getUserMediaTitle(viewingItem), getMediaExtension(viewingItem))
+    : "";
+  const viewingFile = usePreparedPhotoFile(viewingItem?.viewUrl?.trim() || null, viewingFilename);
+
+  const openPhoto = useCallback((item: UserMedia) => {
+    // 목록에서 남은 지난 결과를 사진 위로 끌고 가지 않는다.
+    setFeedback(null);
+    setPhotoId(item.mediaId);
+    window.history.pushState(
+      { historyPhoto: true },
+      "",
+      `?${PHOTO_PARAM}=${item.mediaId}`,
+    );
+  }, []);
+
+  const showPhotoAt = useCallback(
+    (index: number) => {
+      const item = items[index];
+      if (!item) return;
+      setPhotoId(item.mediaId);
+      // 이 화면에서 쌓은 기록인지는 그대로 들고 간다 — 닫을 때 되돌릴지 고르는 표시다.
+      window.history.replaceState(
+        { historyPhoto: window.history.state?.historyPhoto === true },
+        "",
+        `?${PHOTO_PARAM}=${item.mediaId}`,
+      );
+    },
+    [items],
+  );
+
+  const closePhoto = useCallback(() => {
+    setPhotoId(null);
+    // 이 화면에서 연 것이면 쌓은 기록을 되돌린다 — 닫기와 뒤로가기가 같은 자리에 닿게.
+    // `?photo=` 주소로 바로 들어왔으면 되돌릴 기록이 이 화면 것이 아니니 주소만 지운다.
+    if (window.history.state?.historyPhoto === true) window.history.back();
+    else window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   const handleDownload = async (item: UserMedia) => {
     setDownloadingId(item.mediaId);
 
@@ -296,7 +385,7 @@ export default function HistoryPage() {
         kind: "error",
         // 네이티브 안내를 먼저 본다 — 사진첩 권한이 막힌 실패는 재시도로 풀리지 않아
         // 폴백 문구("잠시 후 다시 시도해 주세요")가 거짓말이 된다(lib/nativeBridge.ts).
-        // 문구는 결과 화면과 한 벌로 맞춘다(app/shoot/result/page.tsx) — 같은 실패를
+        // 문구는 결과 화면과 한 벌로 맞춘다(app/create/result/page.tsx) — 같은 실패를
         // 두 화면이 다르게 말하지 않는다.
         text: `이미지를 다운로드하지 못했어요. ${
           getNativeSaveErrorMessage(downloadError) ??
@@ -308,48 +397,6 @@ export default function HistoryPage() {
       });
     } finally {
       setDownloadingId(null);
-    }
-  };
-
-  const handleShare = async (item: UserMedia) => {
-    setSharingId(item.mediaId);
-
-    try {
-      // 다운로드 URL은 Content-Disposition: attachment가 박혀 있어 링크를 받은 사람에게
-      // 이미지가 바로 보이지 않는다. 공유에는 인라인 조회 URL을 쓴다(둘 다 24시간 유효).
-      const url =
-        (await getImageUrlByKey(item.s3Key)) ??
-        (await getMediaDownloadUrl(item.mediaId));
-      const result = await shareOrCopyLink({
-        title: `${getUserMediaTitle(item)} | 하루컷`,
-        text: "사진 공유 링크",
-        url,
-      });
-
-      if (result === "copied") {
-        setFeedback({
-          kind: "ok",
-          text: "공유 링크를 복사했어요. 링크는 하루 동안 열려 있어요.",
-        });
-      } else if (result === "shared") {
-        setFeedback({ kind: "ok", text: "공유 창을 열었어요." });
-      }
-    } catch (shareError) {
-      console.error(shareError);
-      setFeedback({
-        kind: "error",
-        // 링크를 못 만든 것과 만들어 놓고 복사만 거부당한 것을 한 문구로 묶지 않는다 — 사용자가
-        // 할 일이 다르다. 앞은 잠시 뒤 다시 누르면 되지만, 뒤는 복사를 허용하기 전에는 몇 번을
-        // 눌러도 같은 자리에서 막힌다(lib/share.ts 의 CopyFailedError).
-        text: isCopyFailedError(shareError)
-          ? "링크는 만들었지만 복사가 막혔어요. 브라우저에서 복사를 허용한 뒤 다시 눌러 주세요."
-          : getUserFacingApiErrorMessage(
-              shareError,
-              "공유 링크를 준비하지 못했어요.",
-            ),
-      });
-    } finally {
-      setSharingId(null);
     }
   };
 
@@ -404,12 +451,18 @@ export default function HistoryPage() {
    */
   const handleDelete = async (item: UserMedia) => {
     setDeletingId(item.mediaId);
+    // 지운 사진을 보던 화면은 닫고 목록에서 결과를 말한다. 지우는 동안에는 확인 창이 막고
+    // 있어 다른 사진으로 넘어갈 수 없으니, 시작할 때 보던 사진이 곧 지운 사진이다.
+    const closeIfViewing = () => {
+      if (photoId === item.mediaId) closePhoto();
+    };
     try {
       await deleteMedia(item.mediaId);
       setItems((current) =>
         current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
       );
       setDeleteTarget(null);
+      closeIfViewing();
       setFeedback({ kind: "ok", text: "사진을 지웠어요." });
     } catch (error_) {
       console.error(error_);
@@ -436,6 +489,7 @@ export default function HistoryPage() {
           current.filter((currentItem) => currentItem.mediaId !== item.mediaId),
         );
         setDeleteTarget(null);
+        closeIfViewing();
         setFeedback({ kind: "ok", text: "이미 지워진 사진이에요." });
         return;
       }
@@ -463,7 +517,7 @@ export default function HistoryPage() {
           {/* 부제는 두지 않는다 — 개수는 달마다 붙은 「N컷」이 이미 말하고, 보관 기간은
               정작 필요한 자리(기록이 없을 때)에서 따로 안내한다. 늘 떠 있으면 자기
               사진을 보러 온 화면 맨 위에서 요금제부터 읽게 된다. */}
-          <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+          <h1 className="text-[34px] font-extrabold leading-tight tracking-[-0.03em]">
             기록
           </h1>
 
@@ -475,19 +529,9 @@ export default function HistoryPage() {
                   { id: "calendar", label: "달력", Icon: CalendarDays },
                 ] as const
               ).map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setView(id)}
-                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition ${
-                    view === id
-                      ? "bg-white text-[#0B0B0C]"
-                      : "text-(--hc-muted)"
-                  }`}
-                >
-                  <Icon className="h-3.75 w-3.75" />
+                <SegmentButton key={id} active={view === id} onClick={() => setView(id)} Icon={Icon}>
                   {label}
-                </button>
+                </SegmentButton>
               ))}
             </div>
           </div>
@@ -506,18 +550,9 @@ export default function HistoryPage() {
             아래로 흐르는 사진이 글자에 비쳐서다. 앱 네비와 같은 처리다. 네비(69px)가 뜨는
             lg 에서는 그 아래로 내린다 — z-20 이라 겹치는 1px 은 네비가 덮는다.
             바깥 여백은 안쪽 padding 으로 되돌려, 붙기 전 자리를 예전 그대로 둔다. */}
-        {feedback ? (
+        {feedback && !viewing ? (
           <div className="sticky top-0 z-20 -mx-4 -my-2 bg-(--hc-surface-soft) px-4 py-2 backdrop-blur-md lg:top-17">
-            <div
-              role="status"
-              className={
-                feedback.kind === "ok"
-                  ? "hc-feedback rounded-2xl border px-4 py-3 text-[12px]"
-                  : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
-              }
-            >
-              {feedback.text}
-            </div>
+            <HistoryNotice notice={feedback} />
           </div>
         ) : null}
 
@@ -531,27 +566,19 @@ export default function HistoryPage() {
             ))}
           </div>
         ) : error ? (
-          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼.
-          <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <p role="alert" className="text-[13px] text-(--hc-muted)">{error}</p>
-            <button
-              type="button"
-              onClick={() => setReloadKey((prev) => prev + 1)}
-              className="hc-button-secondary rounded-full border px-5 py-2 text-[13px] font-semibold"
-            >
-              다시 시도
-            </button>
-          </div>
+          // 조회 실패를 빈 상태로 위장하지 않는다. 실패 문구 + 재시도 버튼(홈·저장한 프레임과 같은 모양).
+          <LoadFailed message={error} onRetry={() => setReloadKey((prev) => prev + 1)} />
         ) : view === "calendar" ? (
           <CalendarView
             items={items}
             months={calendarMonths}
             activeMonth={activeMonth}
             onChangeMonth={setMonthCursor}
+            onOpenPhoto={openPhoto}
           />
         ) : items.length === 0 ? (
           <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-            <ImageIcon className="h-7 w-7 text-(--hc-muted-soft)" />
+            {/* 빈 화면의 큰 그림 아이콘은 뺐다(2026-11-14) — 문장과 버튼이 할 일을 말한다. */}
             <p className="text-[13px] text-(--hc-muted)">
               저장한 기록이 아직 없어요.
             </p>
@@ -570,95 +597,42 @@ export default function HistoryPage() {
             {groups.map((group) => (
               <section key={group.key} className="flex flex-col gap-4">
                 <div className="flex items-baseline gap-2.5">
-                  <h2 className="text-[19px] font-extrabold tracking-tight">
+                  <h2 className="text-[18px] font-extrabold tracking-tight">
                     {group.key === "unknown" ? "기타" : monthLabel(group.key)}
                   </h2>
-                  <span className="text-[13px] text-(--hc-muted)">
+                  <span className="font-mono text-[12px] tabular-nums text-(--hc-muted)">
                     {group.items.length}컷
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
-                  {group.items.map((item) => {
-                    const title = getUserMediaTitle(item);
-
-                    return (
-                      <article
-                        key={item.mediaId}
-                        // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
-                        id={`media-${item.mediaId}`}
-                        className="group flex scroll-mt-24 flex-col gap-2.5 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-(--hc-primary)"
+                  {group.items.map((item) => (
+                    <article
+                      key={item.mediaId}
+                      // 홈의 「최근 기록」 카드가 `/history#media-<id>` 로 들어온다.
+                      id={`media-${item.mediaId}`}
+                      className="min-w-0 scroll-mt-24 target:rounded-2xl target:outline-2 target:outline-offset-4 target:outline-(--hc-primary)"
+                    >
+                      {/* 카드는 사진·이름·날짜뿐이고, 누르면 크게 본다(2026-11-09, 기록 카드 시안 C안).
+                          저장·공유·지우기·이름 바꾸기는 보기 화면으로 옮겼다 — 카드마다 버튼 세 개가 줄을
+                          채워, 기록이 쌓이면 사진보다 버튼이 많았다. */}
+                      <button
+                        type="button"
+                        onClick={() => openPhoto(item)}
+                        className="flex w-full flex-col gap-2.5 rounded-2xl text-left"
                       >
                         <MediaThumb item={item} />
-
-                        <div className="flex flex-col gap-1">
-                          {/* 이름 옆 연필이 곧 "고치기"다 — 아래 줄에는 이 기록으로 할
-                              일(저장·공유)만 남기고, 이름은 제 자리에서 손댄다.
-
-                              연필은 카드 오른쪽 끝이 아니라 이름 바로 옆에 붙인다. 끝에
-                              두면 이름이 짧을수록 멀어져 무엇을 고치는 표시인지 흐려진다.
-                              이름이 길면 잘리면서 자연히 끝으로 간다. */}
-                          <div className="flex items-center gap-0.5">
-                            <p className="min-w-0 truncate text-[14px] font-bold tracking-tight">
-                              {title}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => handleStartRename(item)}
-                              aria-label={`이름 바꾸기: ${title}`}
-                              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-(--hc-muted) transition hover:bg-(--hc-surface-highlight) hover:text-(--hc-text)"
-                            >
-                              <PencilLine className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          <p className="text-[11px] text-(--hc-muted)">
-                            {parseServerDateTime(item.createdAt)
-                              ? parseServerDateTime(item.createdAt)!.toLocaleDateString(
-                                  "ko-KR",
-                                  { month: "long", day: "numeric" },
-                                )
-                              : "날짜 없음"}
-                          </p>
-                        </div>
-
-                        <div className="flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => void handleDownload(item)}
-                            disabled={downloadingId === item.mediaId}
-                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            <span>
-                              {downloadingId === item.mediaId ? "저장 중" : "저장"}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleShare(item)}
-                            disabled={sharingId === item.mediaId}
-                            className="hc-button-secondary flex flex-1 items-center justify-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
-                          >
-                            <Share2 className="h-3.5 w-3.5" />
-                            <span>
-                              {sharingId === item.mediaId ? "준비 중" : "공유"}
-                            </span>
-                          </button>
-                          {/* 삭제는 되돌릴 수 없어서 저장·공유와 같은 무게로 두지 않는다.
-                              글자 없이 아이콘만, 색도 한 단 낮춰 실수로 누르지 않게 한다. */}
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(item)}
-                            disabled={deletingId === item.mediaId}
-                            aria-label={`삭제: ${title}`}
-                            className="hc-button-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full border text-(--hc-muted) transition hover:text-(--hc-text) disabled:opacity-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
+                        <span className="flex flex-col gap-1">
+                          <span className="truncate text-[14px] font-bold tracking-tight">
+                            {getUserMediaTitle(item)}
+                          </span>
+                          <span className="font-mono text-[11px] tabular-nums text-(--hc-muted)">
+                            {stripDate(item) ?? "날짜 없음"}
+                          </span>
+                        </span>
+                      </button>
+                    </article>
+                  ))}
                 </div>
               </section>
             ))}
@@ -670,6 +644,41 @@ export default function HistoryPage() {
         open={sourceDialogOpen}
         onClose={() => setSourceDialogOpen(false)}
       />
+      {/* 아래 두 확인·입력 창보다 먼저 그린다. 창은 보기 화면 위에 뜨고(z-120 > z-110), 겹친 창의
+          키보드 임자를 가르는 useModalDialog 는 z-index 가 같으면 문서 순서로 본다. */}
+      {viewing ? (
+        <HistoryPhotoViewer
+          items={items}
+          index={photoIndex}
+          notice={feedback}
+          downloading={downloadingId === photoId}
+          covered={Boolean(renameTarget || deleteTarget || shareTarget)}
+          onIndexChange={showPhotoAt}
+          onClose={closePhoto}
+          onDownload={(item) => void handleDownload(item)}
+          onShare={setShareTarget}
+          onRename={handleStartRename}
+          onDelete={setDeleteTarget}
+        />
+      ) : null}
+      {shareTarget ? (
+        <PhotoShareSheet
+          open
+          onClose={() => setShareTarget(null)}
+          mediaId={shareTarget.mediaId}
+          title={getUserMediaTitle(shareTarget)}
+          thumbnailSrc={getUserMediaPreviewUrl(shareTarget)}
+          photo={{
+            file: shareTarget.mediaId === viewingItem?.mediaId ? viewingFile : null,
+            // 앱이 사진을 받을 주소. 다운로드 URL은 Content-Disposition: attachment가 박혀 있어
+            // 인라인 조회 URL을 먼저 쓴다(둘 다 24시간 유효).
+            getUrl: async () =>
+              (await getImageUrlByKey(shareTarget.s3Key)) ??
+              (await getMediaDownloadUrl(shareTarget.mediaId)),
+            filename: buildDownloadFilename(getUserMediaTitle(shareTarget), getMediaExtension(shareTarget)),
+          }}
+        />
+      ) : null}
       {deleteTarget ? (
         <ConfirmDialog
           title="이 사진을 지울까요?"
@@ -700,21 +709,30 @@ export default function HistoryPage() {
   );
 }
 
+/**
+ * 사진 달력(2026-11-09, 달력 시안 A안).
+ *
+ * 기록이 있는 날은 그날 사진이 칸을 채우고, 빈 날은 숫자만 둔다. 예전에는 빈 날까지 35칸이
+ * 모두 테두리 상자라 무거웠고, 기록은 손톱만 한 썸네일이라 무슨 사진인지 보이지 않았다.
+ * 기록 있는 날의 숫자는 흰 바탕 위 라임색이라 잘 읽히지도 않았다 — 지금은 사진 위 어두운
+ * 그러데이션에 흰 숫자다. 칸을 누르면 그날 첫 사진을 크게 보고, 하루 여러 장이면 「+N」을 붙인다.
+ */
 function CalendarView({
   items,
   months,
   activeMonth,
   onChangeMonth,
+  onOpenPhoto,
 }: {
   items: UserMedia[];
   months: string[];
   activeMonth: string | null;
   onChangeMonth: (key: string) => void;
+  onOpenPhoto: (item: UserMedia) => void;
 }) {
   if (!activeMonth) {
     return (
       <div className="hc-surface-card flex flex-col items-center gap-3 rounded-[20px] border p-8 text-center">
-        <CalendarDays className="h-7 w-7 text-(--hc-muted-soft)" />
         <p className="text-[13px] text-(--hc-muted)">
           달력으로 볼 기록이 아직 없어요.
         </p>
@@ -745,6 +763,12 @@ function CalendarView({
   const hasOlder = monthIndex < months.length - 1;
   const hasNewer = monthIndex > 0;
 
+  const now = new Date();
+  const today =
+    now.getFullYear() === year && now.getMonth() + 1 === month
+      ? now.getDate()
+      : null;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -758,7 +782,7 @@ function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <b className="min-w-30 text-center text-[20px] tracking-tight">
+          <b className="min-w-30 text-center text-[18px] tracking-tight">
             {year}년 {month}월
           </b>
           <button
@@ -776,7 +800,7 @@ function CalendarView({
         </span>
       </div>
 
-      <div className="grid grid-cols-7 gap-2.5">
+      <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5">
         {WEEKDAYS.map((label, index) => (
           <div
             key={label}
@@ -795,38 +819,69 @@ function CalendarView({
         ))}
 
         {cells.map((day, index) => {
-          const list = day ? byDay.get(day) : undefined;
+          if (!day) return <span key={index} aria-hidden />;
 
-          return (
-            <div
-              key={index}
-              className={`relative flex aspect-3/4 flex-col overflow-hidden rounded-xl border p-1.5 ${
-                day ? "hc-surface-card" : "border-transparent"
-              }`}
-            >
-              {day ? (
+          const list = byDay.get(day);
+          const isToday = day === today;
+
+          if (!list) {
+            return (
+              <div key={index} className="flex aspect-3/4 justify-center">
                 <span
-                  className="text-[11px] font-bold"
-                  style={{
-                    color: list
-                      ? "var(--hc-primary)"
-                      : "var(--hc-muted-soft)",
-                  }}
+                  aria-current={isToday ? "date" : undefined}
+                  className={`mt-1 grid size-7 place-items-center rounded-full text-[13px] font-semibold tabular-nums ${
+                    isToday
+                      ? "bg-(--hc-text) text-(--hc-surface)"
+                      : "text-(--hc-muted)"
+                  }`}
                 >
                   {day}
                 </span>
+              </div>
+            );
+          }
+
+          const cover = getUserMediaPreviewUrl(list[0]);
+          return (
+            <button
+              key={index}
+              type="button"
+              onClick={() => onOpenPhoto(list[0])}
+              aria-label={`${month}월 ${day}일 기록 ${list.length}컷`}
+              aria-current={isToday ? "date" : undefined}
+              className={`relative aspect-3/4 overflow-hidden rounded-xl bg-(--hc-surface-muted) ${
+                isToday ? "ring-2 ring-(--hc-text)" : ""
+              }`}
+            >
+              {cover ? (
+                // 네 컷 띠는 위에서부터 채운다 — 가운데로 자르면 두 사진 사이 여백이 칸을 차지한다.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={cover}
+                  alt=""
+                  loading="lazy"
+                  className="absolute inset-0 size-full object-cover object-top"
+                />
               ) : null}
-              {list ? (
-                <div className="relative mt-1 flex flex-1 items-center justify-center">
-                  <MediaThumb item={list[0]} bare />
-                  {list.length > 1 ? (
-                    <span className="absolute right-0 top-0 rounded-full bg-(--hc-primary) px-1.5 text-[11px] font-extrabold text-(--hc-primary-contrast)">
-                      +{list.length - 1}
-                    </span>
-                  ) : null}
-                </div>
+              <span
+                aria-hidden
+                className="absolute inset-0 bg-linear-to-b from-black/45 to-transparent to-45%"
+              />
+              <span
+                aria-hidden
+                className="absolute left-1.5 top-1 text-[12px] font-extrabold tabular-nums text-white"
+              >
+                {day}
+              </span>
+              {list.length > 1 ? (
+                <span
+                  aria-hidden
+                  className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 text-[10px] font-extrabold leading-4.5 text-white"
+                >
+                  +{list.length - 1}
+                </span>
               ) : null}
-            </div>
+            </button>
           );
         })}
       </div>

@@ -1,11 +1,15 @@
 ﻿"use client";
 
-import { RotateCcw } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 import { useMemo } from "react";
 import type { FrameId } from "@/constants/frames";
 import { FramePreview } from "@/components/frame/FramePreview";
+import { FrameWithPhotos, frameFitStyle } from "@/components/participation/FrameWithPhotos";
+import { DEMO_PHOTOS } from "@/constants/demoPhotos";
 import type { RemoteFrame } from "@/lib/api-types";
 import { frameIdFromFrameType, matchesFrameType } from "@/lib/frameApi";
+import { Sentences } from "@/components/ui/Sentences";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 
 type SavedFramesSectionProps = {
   title: string;
@@ -17,8 +21,16 @@ type SavedFramesSectionProps = {
   selectedRemoteFrameId: number | null;
   onSelectRemoteFrame: (frame: RemoteFrame) => void;
   onRefresh: () => void;
-  onAction?: (frame: RemoteFrame) => void;
-  actionLabel?: string;
+  /**
+   * 위에서 고른 컷 구성으로 거르는가(기본 true — 만들기는 그 구성으로 찍는다). 꾸미기는 false 다 — 새 프레임의 컷
+   * 구성을 바꿨다고 고칠 프레임이 목록에서 사라지면 안 된다.
+   *
+   * 꾸미기도 눌러서 **고른다**(2026-11-15 「프레임 꾸미기 이미 있던 거 골랐으면 수정하기 같은 걸로 뜨게」) — 고르면
+   * 주 버튼이 「수정하기」가 되고 그 프레임을 연다(app/theme/page.tsx). 2026-11-09 부터 이날까지는 누르면 바로
+   * 편집기로 갔다 — 그 전에는 고르면 체크만 붙고 주 버튼은 늘 「새 프레임 만들기」라, 누르면 고치려던 프레임 대신 빈
+   * 새 프레임이 열렸기 때문이다. 이제 주 버튼이 고른 것을 따라가 그 문제가 없다.
+   */
+  filterByLayout?: boolean;
 };
 
 export function SavedFramesSection({
@@ -31,15 +43,14 @@ export function SavedFramesSection({
   selectedRemoteFrameId,
   onSelectRemoteFrame,
   onRefresh,
-  onAction,
-  actionLabel = "열기",
+  filterByLayout = true,
 }: SavedFramesSectionProps) {
   const matchingFrames = useMemo(
     () =>
-      selectedFrameId
+      selectedFrameId && filterByLayout
         ? frames.filter((frame) => matchesFrameType(selectedFrameId, frame.frameType))
         : frames,
-    [frames, selectedFrameId],
+    [frames, selectedFrameId, filterByLayout],
   );
 
   // 상단 게이지는 "보관 1개"라고 하는데 이 목록은 "저장한 프레임이 없어요"라고 말하는
@@ -67,113 +78,90 @@ export function SavedFramesSection({
   // 남은 보관 여유는 상단 FrameCapacityMeter가 서버 사용량 기준으로 보여준다.
 
   return (
-    <section className="rounded-2xl border border-(--hc-border) bg-(--hc-surface) p-4">
+    <section className="min-w-0">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          aria-label="새로고침"
-          title="새로고침"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-(--hc-border) text-(--hc-muted) transition hover:border-(--hc-border-strong) hover:text-(--hc-text)"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
+        <h2 className="text-[15px] font-bold">{title}</h2>
+        {/* 못 불러왔으면 아래 「다시 시도」가 같은 일을 한다 — 같은 길을 두 번 두지 않는다. */}
+        {failedWithNothing ? null : (
+          <button
+            type="button"
+            onClick={onRefresh}
+            aria-label="새로고침"
+            title="새로고침"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text)"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* 목록은 남아 있는데 새로고침만 실패한 경우. 목록을 지우지 않고 위에만 알린다. */}
       {error && !failedWithNothing ? (
         <p role="alert" className="mt-3 text-[11px] text-(--hc-danger)">
-          {error}
+          <Sentences text={error} />
         </p>
       ) : null}
 
       {isLoading ? (
         <p className="mt-3 text-[12px] text-(--hc-muted)">불러오는 중…</p>
       ) : failedWithNothing ? (
-        <div role="alert" className="mt-3 flex flex-col items-start gap-2">
-          <p className="text-[12px] text-(--hc-danger)">{error}</p>
-          {/* 실패를 사라짐으로 읽지 않게 못 박는다. 이 문장이 없으면 사용자는 공들여
-              꾸민 프레임이 날아간 줄 안다. */}
-          <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
-            저장한 프레임이 사라진 것은 아니에요. 잠시 후 다시 시도해 주세요.
-          </p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="hc-button-secondary rounded-full border px-3 py-1 text-[11px] font-medium"
-          >
-            다시 시도
-          </button>
+        // 「불러오지 못했어요」 한 줄과 다시 시도 — 홈·기록의 실패와 같은 모양이다(2026-11-14).
+        <div className="mt-3">
+          <LoadFailed message={error ?? ""} onRetry={onRefresh} />
         </div>
       ) : hiddenByFilter ? (
         <p className="mt-2 text-[12px] leading-[1.6] text-(--hc-muted)">
-          보관 중인 프레임 {frames.length}개는 지금 고른 것과 컷 구성이 달라요. 위에서 같은
-          구성을 고르면 바로 나타나요.
+          <Sentences text={`보관 중인 프레임 ${frames.length}개는 지금 고른 것과 컷 구성이 달라요. 위에서 같은 구성을 고르면 바로 나타나요.`} />
         </p>
       ) : matchingFrames.length === 0 ? (
-        <p className="mt-2 text-[12px] text-(--hc-muted)">{emptyText}</p>
+        <p className="mt-2 text-[12px] text-(--hc-muted)"><Sentences text={emptyText} /></p>
       ) : (
-        <div className="mt-2 grid grid-cols-1 gap-3">
+        // 폰에서는 한 줄로 넘긴다. 세로로 쌓으면 프레임 몇 개만으로 위의 큰 카드와 아래 버튼이 멀어진다.
+        <div className="-mx-2 mt-1 flex gap-2.5 overflow-x-auto px-2 pb-1 scrollbar-none [-ms-overflow-style:none] sm:-mx-4 sm:px-4 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 lg:grid-cols-6 [&::-webkit-scrollbar]:hidden">
           {matchingFrames.map((frame) => {
             const isSelected = selectedRemoteFrameId === frame.frameId;
             const previewFrameId = frameIdFromFrameType(frame.frameType);
+            const name = frame.title || `프레임 #${frame.frameId}`;
 
             return (
-              <article
-                key={frame.frameId}
-                className={[
-                  "rounded-2xl border bg-(--hc-card) p-3 transition",
-                  isSelected
-                    ? "border-(--hc-primary)"
-                    : "border-(--hc-border) hover:border-(--hc-border-strong)",
-                ].join(" ")}
-              >
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => onSelectRemoteFrame(frame)}
-                    className="flex min-w-0 flex-1 gap-3 text-left"
+              <article key={frame.frameId} className="flex w-27 shrink-0 flex-col gap-1.5 md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => onSelectRemoteFrame(frame)}
+                  aria-pressed={isSelected}
+                  className="flex min-w-0 flex-col gap-1.5 text-left"
+                >
+                  <span
+                    className={[
+                      "relative grid aspect-3/4 w-full place-items-center overflow-hidden rounded-xl border bg-(--hc-surface) transition",
+                      isSelected
+                        ? "border-(--hc-primary-line) shadow-[0_0_0_1px_var(--hc-primary-line)]"
+                        : "border-(--hc-border) hover:border-(--hc-border-strong)",
+                    ].join(" ")}
                   >
-                    <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-xl border border-(--hc-border) bg-(--hc-surface)">
-                      {frame.source ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={frame.source}
-                          alt={frame.title || `프레임 #${frame.frameId}`}
-                          className="h-full w-full object-contain p-1"
+                    {frame.source ? (
+                      // 저장본 그림은 칸이 뚫려 있다. 예시 사진을 깔아 칸이 빈 프레임처럼 보이지 않게 한다.
+                      <span aria-hidden className="absolute inset-1.5 flex items-center justify-center [container-type:size]">
+                        <FrameWithPhotos
+                          frame={{ layoutType: frame.frameType, previewUrl: frame.source }}
+                          photos={DEMO_PHOTOS}
+                          loading="lazy"
+                          style={frameFitStyle(frame.frameType)}
                         />
-                      ) : (
-                        <FramePreview frameId={previewFrameId} />
-                      )}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-                      <div>
-                        <p className="truncate text-sm font-semibold text-(--hc-text)">
-                          {frame.title || `프레임 #${frame.frameId}`}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-[12px] text-(--hc-muted)">
-                          {frame.description || "저장한 프레임을 다음 단계에서 바로 적용할 수 있어요."}
-                        </p>
-                      </div>
-                      <span className="text-[12px] text-(--hc-muted)">
-                        {isSelected ? "선택됨" : "눌러서 선택"}
                       </span>
-                    </div>
-                  </button>
-
-                  {onAction ? (
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => onAction(frame)}
-                        className="hc-button-secondary rounded-full border px-3.5 py-1.5 text-[12px] font-semibold"
-                      >
-                        {actionLabel}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : (
+                      <FramePreview frameId={previewFrameId} className="max-h-full max-w-full" />
+                    )}
+                    {isSelected ? (
+                      <span aria-hidden className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-(--hc-primary) text-(--hc-primary-contrast)">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="truncate text-[13px] font-semibold text-(--hc-text)">
+                    {name}
+                  </span>
+                </button>
               </article>
             );
           })}

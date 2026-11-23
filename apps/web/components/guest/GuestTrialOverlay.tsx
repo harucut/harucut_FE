@@ -1,32 +1,11 @@
 "use client";
 
-import { Camera, CheckCircle2, Lock, Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
 import { useModalDialog } from "@/hooks/useModalDialog";
+import { Sentences } from "@/components/ui/Sentences";
 import { useGuestTrialStore } from "@/lib/guestTrialStore";
 
-function NoticeIcon({ icon }: { icon?: "camera" | "check" | "lock" | "sparkles" }) {
-  const Icon = useMemo(() => {
-    switch (icon) {
-      case "camera":
-        return Camera;
-      case "check":
-        return CheckCircle2;
-      case "lock":
-        return Lock;
-      case "sparkles":
-      default:
-        return Sparkles;
-    }
-  }, [icon]);
-
-  return (
-    <span className="hc-accent-chip inline-flex h-12 w-12 items-center justify-center rounded-3xl border shadow-(--hc-card-shadow)">
-      <Icon className="h-5 w-5" />
-    </span>
-  );
-}
 
 export function GuestTrialOverlay() {
   const router = useRouter();
@@ -71,7 +50,7 @@ export function GuestTrialOverlay() {
         return;
       case "go-shoot":
         clearNotice();
-        router.push("/shoot");
+        router.push("/create");
         return;
       default:
         clearNotice();
@@ -100,32 +79,31 @@ export function GuestTrialOverlay() {
         aria-labelledby="guest-notice-title"
         className="hc-surface-hero relative w-full max-w-115 rounded-4xl border p-5 backdrop-blur-xl sm:p-6"
       >
+        {/*
+          닫기는 X 글자 하나다(2026-11-14). 테두리 있는 흰 원은 누를 버튼이 하나 더 있는 것처럼 보였다.
+          보이는 것은 X 뿐이고 눌리는 면은 44px 다.
+        */}
         <button
           type="button"
           aria-label="알림 닫기"
           onClick={clearNotice}
-          className="hc-button-icon absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border text-(--hc-muted) transition"
+          className="absolute right-2.5 top-3.5 grid size-11 place-items-center rounded-full text-(--hc-muted) transition hover:text-(--hc-text) sm:right-3 sm:top-4.5"
         >
-          <X className="h-4 w-4" />
+          <X aria-hidden className="size-5" />
         </button>
 
         <div className="flex flex-col gap-4">
-          {notice.icon ? <NoticeIcon icon={notice.icon} /> : null}
-          {notice.eyebrow ? (
-            <span className="hc-accent-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-medium">
-              {notice.eyebrow}
-            </span>
-          ) : null}
-
+          {/* 칩(NOTICE 등)과 큰 아이콘은 뺐다(2026-11-09). 제목과 문장, 버튼만 둔다. */}
           <div className="space-y-2">
             <h2
               id="guest-notice-title"
-              className="text-[22px] font-semibold tracking-tight text-(--hc-text)"
+              // 칩이 빠져 제목이 맨 위로 왔다. 오른쪽 위 닫기(X, 눌리는 면 44px)와 겹치지 않게 비운다.
+              className="pr-10 text-[22px] font-semibold tracking-tight text-(--hc-text)"
             >
               {notice.title}
             </h2>
             <p className="text-[13px] leading-6 text-(--hc-muted)">
-              {notice.message}
+              <Sentences text={notice.message} />
             </p>
           </div>
 

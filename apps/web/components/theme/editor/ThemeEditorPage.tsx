@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ImagePlus, LayoutGrid, Layers, Paintbrush, Scissors, SlidersHorizontal } from "lucide-react";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import { useRouter } from "next/navigation";
 import type { FrameId } from "@/constants/frames";
@@ -8,8 +9,11 @@ import { BackgroundPanel } from "@/components/theme/editor/BackgroundPanel";
 import { CanvasStage } from "@/components/theme/editor/canvas/CanvasStage";
 import { AssetPanel } from "@/components/theme/editor/AssetPanel";
 import { LayersPanel } from "@/components/theme/editor/LayersPanel";
+import { NUDGE_STEP, NUDGE_STEP_LARGE } from "@/constants/editorNudge";
 import { InspectorPanel } from "@/components/theme/editor/InspectorPanel";
 import { CutoutPanel } from "@/components/theme/editor/CutoutPanel";
+import { CellsPanel } from "@/components/theme/editor/CellsPanel";
+import { freeCellsEnabled } from "@/lib/frameCells";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toCreateFrameRequest, toThemeExportJson } from "@/lib/frameApi";
@@ -21,18 +25,39 @@ import {
   getImageUrlByKey,
   uploadToS3WithPresigned,
 } from "@/lib/presignedUploadApi";
+import { uploadAsset } from "@/lib/assetUploadApi";
 import { renderThemePreviewPng } from "@/lib/canvas/renderThemePreview";
 import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
 import { useThemeSession } from "@/lib/themeSessionStore";
+import type { ThemeExportJson } from "@/lib/types/themeEditor";
 import { useModalDialog } from "@/hooks/useModalDialog";
 import { useUnsavedWorkGuard } from "@/hooks/useUnsavedWorkGuard";
 import {
-  clearEditorDraft,
+  discardEditorDraft,
   loadEditorDraft,
   saveEditorDraft,
+  type EditorDraft,
+  type SavedFrameScope,
+  draftOwnerKey,
 } from "@/lib/themeEditorDraft";
+import { getMyUserInfo } from "@/lib/userApi";
+import {
+  useServerFrameDraft,
+  type ServerDraftStatus,
+} from "@/components/theme/editor/useServerFrameDraft";
+import { Sentences } from "@/components/ui/Sentences";
+
+/** 서버 초안 상태 줄. 빈 문자열이면 아무것도 띄우지 않는다. */
+const SERVER_DRAFT_STATUS_TEXT: Record<ServerDraftStatus, string> = {
+  idle: "",
+  saving: "초안을 저장하는 중…",
+  saved: "초안을 저장했어요. 다른 기기에서도 이어서 편집할 수 있어요.",
+  error: "초안을 서버에 저장하지 못했어요. 이 기기에는 남아 있어요.",
+  tooLarge: "초안이 너무 커서 이 기기에만 보관해요.",
+};
+
 
 // 새 프레임을 만들 때 채워 두는 기본 이름·설명
 const DEFAULT_FRAME_TITLE = "새 테마 프레임";
@@ -56,6 +81,7 @@ function buildEditorSignature(
   background: ReturnType<typeof useThemeEditorStore.getState>["background"],
   backgroundColor: string,
   cellCutouts: boolean[],
+  cells: ReturnType<typeof useThemeEditorStore.getState>["cells"],
 ) {
   return JSON.stringify({
     components,
@@ -69,7 +95,54 @@ function buildEditorSignature(
         : { type: "COLOR", value: background.value },
     backgroundColor,
     cellCutouts,
+    cells,
   });
+}
+
+/**
+ * 모바일(< lg)에서 하단 시트에 띄울 도구. 데스크톱은 캔버스 옆에 전부 나란히 둔다.
+ *
+ * 예전에는 모바일에서도 패널을 캔버스 아래로 전부 쌓아서, 속성을 고치려면 캔버스를 화면 밖으로
+ * 밀어내고 내려가야 했다 — 고친 결과를 보면서 고칠 수가 없었다. 기획 R5 5절 「모바일은 캔버스를
+ * 유지하며 도구를 하단 시트로 연다」.
+ */
+const MOBILE_TOOLS = [
+  { id: "assets", label: "추가", Icon: ImagePlus },
+  { id: "background", label: "배경", Icon: Paintbrush },
+  { id: "cutout", label: "누끼", Icon: Scissors },
+  { id: "cells", label: "칸", Icon: LayoutGrid },
+  { id: "layers", label: "레이어", Icon: Layers },
+  { id: "inspector", label: "속성", Icon: SlidersHorizontal },
+] as const;
+type MobileTool = (typeof MOBILE_TOOLS)[number]["id"];
+
+const DESKTOP_QUERY = "(min-width: 1024px)";
+
+function subscribeViewport(onChange: () => void) {
+  const query = window.matchMedia?.(DESKTOP_QUERY);
+  query?.addEventListener?.("change", onChange);
+  window.addEventListener("resize", onChange);
+  return () => {
+    query?.removeEventListener?.("change", onChange);
+    window.removeEventListener("resize", onChange);
+  };
+}
+
+/**
+ * 모바일에서 캔버스에 줄 세로 상한. 위 헤더(약 92px)·여백과 아래 도구 시트(최대 30dvh)·도구
+ * 막대(64px)를 뺀 나머지다. 0.70h − 180 은 그 합(0.30h + 64 + 92 + 여백 24)을 뺀 값이다.
+ * 클래식처럼 세로로 긴 판형은 이 높이가 곧 캔버스 크기라, 넉넉히 잡되 시트에 가리지 않게 한다
+ * (e2e theme-editor-mobile 이 겹침을 잰다). 데스크톱은 undefined — 기본값(useStageFit)을 쓴다.
+ */
+function useMobileCanvasMaxHeight(): number | undefined {
+  return useSyncExternalStore(
+    subscribeViewport,
+    () =>
+      window.matchMedia?.(DESKTOP_QUERY).matches
+        ? undefined
+        : Math.max(200, Math.round(window.innerHeight * 0.7 - 180)),
+    () => undefined,
+  );
 }
 
 export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
@@ -85,7 +158,69 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   const editorComponents = useThemeEditorStore((s) => s.components);
   const storeFrameId = useThemeEditorStore((s) => s.frameId);
   const cellCutouts = useThemeEditorStore((s) => s.cellCutouts);
-  const { remoteFrameId } = useThemeSession();
+  const cells = useThemeEditorStore((s) => s.cells);
+  const undo = useThemeEditorStore((s) => s.undo);
+  const redo = useThemeEditorStore((s) => s.redo);
+  const nudge = useThemeEditorStore((s) => s.nudge);
+  const activeId = useThemeEditorStore((s) => s.activeId);
+  const mobileCanvasMaxHeight = useMobileCanvasMaxHeight();
+  const [mobileTool, setMobileTool] = useState<MobileTool>("assets");
+  // 캔버스에서 레이어를 새로 고르면 속성 시트로 넘긴다 — 고른 것을 바로 고치러 온 것이다.
+  const [seenActiveId, setSeenActiveId] = useState(activeId);
+  if (seenActiveId !== activeId) {
+    setSeenActiveId(activeId);
+    if (activeId) setMobileTool("inspector");
+  }
+
+  /*
+    되돌리기 단축키. Ctrl/⌘+Z 는 되돌리기, Ctrl/⌘+Shift+Z 와 Ctrl+Y 는 다시 하기다.
+    글자를 입력하는 칸에 포커스가 있으면 브라우저의 입력 되돌리기를 그대로 둔다 — 문구를
+    고치다 Ctrl+Z 를 눌렀는데 캔버스 레이어가 사라지면 안 된다.
+  */
+  useEffect(() => {
+    const ARROWS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+      // 창(저장·지우기 확인)이 떠 있으면 뒤 캔버스를 움직이지 않는다. 창은 열 때 자기 자신에 포커스를
+      // 두므로(useModalDialog) 버튼 검사만으로는 방향키·되돌리기가 뒤 레이어로 샌다.
+      if (target instanceof Element && target.closest('[aria-modal="true"]')) return;
+      // 방향키: 고른 레이어를 움직인다. 버튼·링크에 포커스가 있으면 그 조작을 가로채지 않는다.
+      const arrow = ARROWS[event.key];
+      if (arrow && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const activeId = useThemeEditorStore.getState().activeId;
+        if (!activeId || (target && ["BUTTON", "A"].includes(target.tagName))) return;
+        event.preventDefault();
+        const step = event.shiftKey ? NUDGE_STEP_LARGE : NUDGE_STEP;
+        nudge(activeId, arrow[0] * step, arrow[1] * step);
+        return;
+      }
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if ((key === "z" && event.shiftKey) || (key === "y" && event.ctrlKey)) {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undo, redo, nudge]);
+  const { remoteFrameId, workspaceId, returnTo } = useThemeSession();
+  // Studio 에서 행사용 프레임을 고치러 왔으면 그리로 돌아간다.
+  const exitTo = returnTo ?? "/theme";
   // 저장 다이얼로그에서 알려 준다. 예전에는 저장을 누른 순간 window.alert 로 끼어들었다.
   const hiddenLayerCount = editorComponents.filter((c) => c.hidden).length;
 
@@ -94,8 +229,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
   // 매번 이탈 경고가 떠서, 아무것도 고치지 않은 사용자까지 붙잡는다.
   const editorSignature = useMemo(
     () =>
-      buildEditorSignature(editorComponents, background, backgroundColor, cellCutouts),
-    [editorComponents, background, backgroundColor, cellCutouts],
+      buildEditorSignature(editorComponents, background, backgroundColor, cellCutouts, cells),
+    [editorComponents, background, backgroundColor, cellCutouts, cells],
   );
   // 기준은 프레임마다 새로 잡되, 스토어가 이 프레임 상태로 자리잡은 뒤에 잡는다.
   // 너무 일찍 잡으면 기준이 남의 상태가 된다.
@@ -163,6 +298,37 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     왕복 정규화 차이가 「고쳤다」로 잡히지 않는다.
   */
   const savedContentKeyRef = useRef<string | null>(null);
+  /**
+   * 불러온 저장본의 낙관적 잠금 버전(ADR-0006 §3). 수정 저장에 보내고, 응답의 새 값으로 바꾼다.
+   * 다른 기기가 먼저 저장했으면 서버가 409 FRAME-002 와 현재 버전을 준다 — 그때는 조용히 덮지 않고
+   * 사용자에게 고르게 한다(기획 R5 5절 「두 기기 편집은 version 기반으로 검사」, F16).
+   */
+  const frameVersionRef = useRef<number | null>(null);
+  // 바꾸면 저장본을 다시 받는다(버전 충돌 뒤 「저장본 다시 불러오기」).
+  const [remoteReloadNonce, setRemoteReloadNonce] = useState(0);
+  const [versionConflict, setVersionConflict] = useState<{ currentVersion: number | null } | null>(null);
+  /*
+    저장본 수정의 로컬 복구(R5 5절 「계정·공간·프레임·버전별로 분리」). 회선이 끊긴 채 고치다 창을 닫아도 이 기기에는 남는다.
+    범위에 버전이 들어가므로, 다른 기기가 먼저 저장했으면 옛 편집을 새 저장본 위에 되살리지 않는다.
+  */
+  const [savedScope, setSavedScope] = useState<SavedFrameScope | null>(null);
+  // 복구를 묻는 중인 초안. 답하기 전에는 자동 저장으로 덮지 않는다 — 되살릴 것이 사라진다.
+  const [localRecovery, setLocalRecovery] = useState<EditorDraft | null>(null);
+  const recoveryPendingRef = useRef(false);
+  useEffect(() => {
+    recoveryPendingRef.current = localRecovery !== null;
+  }, [localRecovery]);
+  // 「이어서 편집」으로 되살린 상태인가. 되살리면 이력이 비워지므로, 이력이 비었다고 저장본으로 돌아온 것이 아니다.
+  const recoveredLocalDraftRef = useRef(false);
+  // 편집 세션 번호 — 편집기를 나가거나 다른 프레임을 열면 바뀐다. 편집기 상태는 전역 스토어라, 그 전에 시작한 복구가
+  // 늦게 끝나면 다음 편집기에 이전 복구본이 들어간다(Codex 리뷰 #604).
+  const editorSessionRef = useRef(0);
+  useEffect(
+    () => () => {
+      editorSessionRef.current += 1;
+    },
+    [remoteFrameId, frameId],
+  );
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
@@ -199,16 +365,23 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       try {
         const remoteFrame = await getFrame(remoteFrameId);
         if (cancelled) return;
+        frameVersionRef.current = typeof remoteFrame.version === "number" ? remoteFrame.version : null;
         // 컴포넌트 자산은 S3 key 로 저장돼 있다. 그릴 주소를 먼저 붙여 두지 않으면
         // 캔버스에 빈칸이 뜨고, 그 상태로 다시 저장하면 미리보기까지 빈 채로 올라간다.
         const imported = await resolveThemeAssetUrls(toThemeExportJson(remoteFrame));
         if (cancelled) return;
         importJson(imported);
+        // 「저장본 다시 불러오기」로 다시 받았으면 이탈 경고 기준도 새 저장본이다. 비워 두면 아래(렌더)에서
+        // 지금 스토어(=새 저장본)의 지문으로 다시 잡는다. 안 비우면 처음 불러온 상태가 기준으로 남아,
+        // 아무것도 안 고쳐도 경고가 뜨고 처음 상태로 되돌리는 편집에는 경고가 사라진다.
+        setBaseline((prev) => ({ ...prev, signature: null }));
         savedContentKeyRef.current = buildFrameContentKey(
           useThemeEditorStore.getState().exportJson(),
         );
         setTitle(remoteFrame.title || "");
         setDescription(remoteFrame.description || "");
+        recoveredLocalDraftRef.current = false;
+        setSavedScope({ remoteFrameId, version: frameVersionRef.current });
         // 저장본이 에디터에 다 들어온 시점이 곧 편집 기준이다. 아래 배경 URL 해석까지
         // 기다리면, 그 사이 사용자가 고친 내용이 기준으로 잡혀 이탈 경고가 안 뜬다
         // (해석을 기다리는 동안에도 에디터는 조작 가능하다). 지문은 url을 안 보므로
@@ -259,13 +432,15 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     return () => {
       cancelled = true;
     };
-  }, [importJson, remoteFrameId, setBackgroundImageUrl]);
+  }, [importJson, remoteFrameId, setBackgroundImageUrl, remoteReloadNonce]);
 
   // 새 프레임(원격 id 없음)이면 기본 이름·설명을 채운다.
   // 원격 프레임에서 새 프레임으로 바뀌는 전환도 렌더 중에 맞춘다.
   const [syncedRemoteFrameId, setSyncedRemoteFrameId] = useState(remoteFrameId);
   if (syncedRemoteFrameId !== remoteFrameId) {
     setSyncedRemoteFrameId(remoteFrameId);
+    setSavedScope(null);
+    setLocalRecovery(null);
     if (!remoteFrameId) {
       setTitle(DEFAULT_FRAME_TITLE);
       setDescription(DEFAULT_FRAME_DESCRIPTION);
@@ -278,22 +453,128 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
   }, [resetPhotos]);
 
+  /*
+    초안의 주인. 초안은 계정 × 프레임 종류마다 따로 둔다(lib/themeEditorDraft.ts).
+    공용 기기에서 앞 사람이 로그아웃하지 않고 떠나도, 다음 사람이 그 사진이 든 초안을 복원하지
+    않게 하려면 지금 계정을 알아야 한다. 모르면 복원도 자동 저장도 하지 않는다 — 주인 없는
+    초안을 남기는 것보다 이번 편집의 자동 저장을 건너뛰는 편이 안전하다.
+
+    저장본 수정에서도 알아 둔다 — 서버 초안(useServerFrameDraft)이 계정을 알아야 켜진다. 로컬 초안의
+    복원·자동 저장·삭제는 각자 remoteFrameId 를 보고 새 프레임에서만 돈다.
+  */
+  const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getMyUserInfo()
+      .then((user) => {
+        // 공간 프레임의 로컬 초안은 개인 것과 섞이지 않게 공간까지 키에 넣는다 — 안 그러면
+        // 개인 새 프레임 초안이 행사용 프레임으로 복원된다.
+        if (!cancelled && user.id) setDraftOwnerId(draftOwnerKey(user.id, workspaceId));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
+  // 다른 기기에서 이어 편집하는 서버 초안(F1-5). 같은 기기의 새로고침 복구는 아래 로컬 초안이 맡는다.
+  const serverDraft = useServerFrameDraft({
+    ownerId: draftOwnerId,
+    frameId,
+    remoteFrameId,
+    workspaceId,
+    savedScope,
+    ready: remoteFrameId ? isRemoteFrameSettled && !loadError : true,
+  });
+
+  // 이 기기에 남은 저장본 편집이 있으면 되살린다(아래 effect). 저장본을 불러온 뒤라야 무엇 위에 되살리는지 알 수 있다.
+  useEffect(() => {
+    if (!remoteFrameId || !draftOwnerId || savedScope?.remoteFrameId !== remoteFrameId) return;
+    // 그사이 이미 고치기 시작했으면 묻지 않는다. 다음 자동 저장이 지금 편집으로 바꾼다.
+    if (useThemeEditorStore.getState().past.length > 0) return;
+    const draft = loadEditorDraft(draftOwnerId, frameId, savedScope);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 저장소는 브라우저에서만 읽는다
+    if (draft) setLocalRecovery(draft);
+  }, [remoteFrameId, draftOwnerId, savedScope, frameId]);
+
+  const discardLocalDraft = () => {
+    if (!draftOwnerId) return;
+    // 새 프레임 초안과 저장본 초안은 다른 칸이다. 저장본을 고치다 나가도 같은 판형의 새 프레임 초안은 남는다.
+    if (!remoteFrameId) discardEditorDraft(draftOwnerId, frameId);
+    else if (savedScope) discardEditorDraft(draftOwnerId, frameId, savedScope);
+  };
+
+  const dropLocalRecovery = () => {
+    recoveredLocalDraftRef.current = false;
+    setLocalRecovery(null);
+    discardLocalDraft();
+  };
+
+  const restoreLocalRecovery = async () => {
+    const draft = localRecovery;
+    if (!draft) return;
+    const session = editorSessionRef.current;
+    setLocalRecovery(null);
+    // 저장본의 이미지 주소는 서명 URL 이라 하루 뒤면 죽는다. key 로 새로 받는다. 이 기기의 로컬 이미지(data:)는 그대로다.
+    const resolved = await resolveThemeAssetUrls({
+      frameId: draft.frameId,
+      components: draft.components.map((c) =>
+        c.renderUrl?.startsWith("http") ? { ...c, renderUrl: undefined } : c,
+      ) as ThemeExportJson["components"],
+    });
+    const background =
+      draft.background.type === "IMAGE" && draft.background.key
+        ? { ...draft.background, url: (await getImageUrlByKey(draft.background.key)) ?? draft.background.url }
+        : draft.background;
+    // 주소를 받는 사이 편집기를 나갔거나 다른 프레임을 열었으면, 또는 고치기 시작했으면 덮지 않는다(아래 effect 와 같은 규칙).
+    if (editorSessionRef.current !== session || useThemeEditorStore.getState().past.length > 0) return;
+    recoveredLocalDraftRef.current = true;
+    hydrateDraft({ ...draft, background, components: resolved.components as EditorDraft["components"] }, { preserveHidden: true });
+  };
+
+  /*
+    이 기기에 남은 저장본 편집은 묻지 않고 되살린다 — 다만 서버 초안 찾기가 끝난 뒤에 판단한다. 다른 기기의 초안이 더
+    새로워 그것으로 열었으면(serverDraft.restored) 이 기기의 더 오래된 편집은 버린다. 찾기 결과(바깥의 비동기 답)에 맞춰
+    한 번 정하는 것이라 effect 에서 상태를 거둔다.
+  */
+  useEffect(() => {
+    if (!localRecovery || !serverDraft.settled) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 서버 초안 찾기가 끝난 뒤 한 번만 정한다 */
+    if (serverDraft.restored) dropLocalRecovery();
+    // 찾는 사이 이미 고치기 시작했으면 되살리지 않는다 — 되살리면 그 편집과 되돌리기 이력이 사라진다(Codex 리뷰 #604).
+    // 복구본을 꺼낼 때와 같은 규칙이다 — 다음 자동 저장이 남은 복구본을 지금 편집으로 바꾼다.
+    else if (useThemeEditorStore.getState().past.length > 0) setLocalRecovery(null);
+    else void restoreLocalRecovery();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 복구본·찾기 결과가 바뀔 때만 판단한다
+  }, [localRecovery, serverDraft.settled, serverDraft.restored]);
+
   // 새 프레임 작업 시: 새로고침/이탈로 남은 WIP 초안(localStorage)이 있으면 복원한다.
   // 원격 프레임 수정 중에는 저장본을 불러오므로 초안 복원을 하지 않는다.
   const didRestoreDraftRef = useRef(false);
   useEffect(() => {
-    if (remoteFrameId || didRestoreDraftRef.current) return;
+    if (remoteFrameId || !draftOwnerId || didRestoreDraftRef.current) return;
     didRestoreDraftRef.current = true;
-    const draft = loadEditorDraft();
-    if (draft && draft.frameId === frameId) {
-      hydrateDraft(draft);
-    }
-  }, [frameId, remoteFrameId, hydrateDraft]);
+    // 계정 조회는 왕복이라 그 사이 사용자가 이미 편집을 시작했을 수 있다. 그 편집을 초안으로
+    // 덮지 않는다(초안은 남아 있다가 다음 자동 저장이 새 편집으로 바꾼다).
+    // 배경색만 바꾼 편집은 아래 모양으로는 처음과 같아 보여서 히스토리로도 판정한다.
+    const s = useThemeEditorStore.getState();
+    const pristine =
+      s.past.length === 0 &&
+      s.components.length === 0 &&
+      s.background.type === "COLOR" &&
+      !s.cellCutouts.some(Boolean) &&
+      !s.cells;
+    if (!pristine) return;
+    const draft = loadEditorDraft(draftOwnerId, frameId);
+    if (draft) hydrateDraft(draft);
+  }, [frameId, remoteFrameId, hydrateDraft, draftOwnerId]);
 
   const stopDraftAutosaveRef = useRef<(() => void) | null>(null);
   // 편집 중 상태를 localStorage에 자동 저장(디바운스). S3 temp 업로드 대신 로컬 보관.
   useEffect(() => {
-    if (remoteFrameId) return;
+    // 저장본은 불러오기가 끝나 범위(버전)를 안 뒤에 시작한다. 불러오지 못했으면 지킬 기준이 없다.
+    if (!draftOwnerId || (remoteFrameId && !savedScope)) return;
     let timer: number | undefined;
     let idle: number | undefined;
     let stopped = false;
@@ -321,7 +602,8 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       idle = ric ? ric(() => run(), { timeout: 2000 }) : window.setTimeout(run, 0);
     };
 
-    const unsubscribe = useThemeEditorStore.subscribe(() => {
+    let editedThisSession = false;
+    const schedule = () => {
       cancelScheduled();
       timer = window.setTimeout(() => {
         whenIdle(() => {
@@ -329,18 +611,36 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           if (stopped) return;
           const s = useThemeEditorStore.getState();
           if (!s.frameId) return;
+          // 복구를 묻는 동안에는 남은 복구본을 건드리지 않는다.
+          if (remoteFrameId && recoveryPendingRef.current) return;
+          // 저장본은 불러오기와 배경 주소 주입도 스토어를 바꾼다. 손댄 것이 있을 때만 쓴다 — 안 그러면 안 고친 프레임을 열 때마다 복구를 묻는다.
+          // 이번에 손댔다가 되돌리기로 원본에 돌아왔으면 앞서 남긴 복구본을 지운다 — 남기면 새로고침 뒤 되돌린 편집이 되살아난다.
+          // 손대기 전에는 지우지 않는다. 불러오는 동안의 변경이 지난번 복구본을 지워 버리면 안 된다.
+          // 되살린 편집까지 되돌아왔으면 저장본이 아니다. 지우지 않고 아래에서 지금 모습을 남긴다 — 저장 안 한 내용이 아직 화면에 있다.
+          if (remoteFrameId && s.past.length === 0 && (!editedThisSession || !recoveredLocalDraftRef.current)) {
+            if (editedThisSession && savedScope) discardEditorDraft(draftOwnerId, s.frameId, savedScope);
+            editedThisSession = false;
+            return;
+          }
+          if (remoteFrameId) editedThisSession = true;
           // 레이어가 없어도 배경색·칸별 설정은 편집 내용이다. 함께 보관한다.
           void saveEditorDraft({
+            ownerId: draftOwnerId,
+            ...(remoteFrameId && savedScope ? { saved: savedScope } : {}),
             frameId: s.frameId,
             backgroundColor: s.backgroundColor,
             background: s.background,
             cellCutouts: s.cellCutouts,
+            cells: s.cells,
             components: s.components,
             now: Date.now(),
           });
         });
       }, 1000);
-    });
+    };
+    const unsubscribe = useThemeEditorStore.subscribe(schedule);
+    // 구독은 계정 조회가 끝난 뒤에 시작한다. 그 사이에 한 편집은 구독이 못 봤으니 지금 한 번 맡긴다.
+    if (useThemeEditorStore.getState().past.length > 0) schedule();
     const stop = () => {
       stopped = true;
       cancelScheduled();
@@ -348,7 +648,7 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     };
     stopDraftAutosaveRef.current = stop;
     return stop;
-  }, [remoteFrameId]);
+  }, [remoteFrameId, draftOwnerId, savedScope]);
 
   const openSaveDialog = () => {
     setDraftTitle(title);
@@ -371,8 +671,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
 
     setIsSaving(true);
     setSaveDialogError(null);
+    setVersionConflict(null);
     try {
-      if (!remoteFrameId) {
+      // 공간 프레임은 개인 요금제 한도를 받지 않는다(공간 상한은 서버가 FRAME-007 로 본다).
+      if (!remoteFrameId && !workspaceId) {
         const usage = await getSubscriptionUsage();
         if (!usage.frameRetentionUnlimited && usage.frameRetentionLimit >= 0 && usage.frameRetentionRemainingCount === 0) {
           setSaveDialogError("저장 공간이 없어요. 기존 프레임을 수정하거나 마이페이지에서 보관 한도를 확인해 주세요.");
@@ -386,15 +688,13 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         editorState.background.type === "IMAGE" &&
         !editorState.background.key
       ) {
-        // key 만 받아 둔다. 배경은 이미 고른 파일의 로컬 주소로 그려져 있고
-        // `setBackgroundImageKey` 도 url 을 건드리지 않으니, 업로드가 덤으로 해 주는
-        // 조회용 URL 해석(왕복 1회)은 버려진다 — 건너뛴다.
-        const { key } = await uploadToS3WithPresigned({
+        // 공통 자산으로 올린다(서버가 바이트를 열어 본다). 배경은 이미 고른 파일의 로컬
+        // 주소로 그려져 있고 `setBackgroundImageKey` 도 url 을 건드리지 않는다.
+        const { key, assetId } = await uploadAsset({
           file: editorState.pendingBackgroundFile,
-          type: PRESIGNED_UPLOAD_TYPES.FRAME,
-          skipUrlResolve: true,
+          purpose: "FRAME_ASSET",
         });
-        useThemeEditorStore.getState().setBackgroundImageKey(key);
+        useThemeEditorStore.getState().setBackgroundImageKey(key, assetId);
       }
 
       // 캔버스에 올라간 사진·스티커를 이 시점에 S3로 올리고, 글자 층을 구워 둔다
@@ -412,12 +712,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       const previewFile = new File([previewBlob], `theme-preview-${Date.now()}.png`, {
         type: "image/png",
       });
-      // 미리보기 PNG 는 저장 요청에 previewKey 로만 실린다 — 올린 뒤 이 화면에서
-      // 다시 그리지 않으므로 조회용 URL 해석(왕복 1회)을 건너뛴다.
+      // 미리보기 PNG 는 저장 요청에 previewKey 로만 실린다.
       const { key: previewKey } = await uploadToS3WithPresigned({
         file: previewFile,
         type: PRESIGNED_UPLOAD_TYPES.FRAME,
-        skipUrlResolve: true,
       });
 
       const body = toCreateFrameRequest(themeJson, {
@@ -427,7 +725,11 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
       });
 
       if (remoteFrameId) {
-        await updateFrame(remoteFrameId, body);
+        const saved = await updateFrame(remoteFrameId, {
+          ...body,
+          ...(frameVersionRef.current !== null ? { version: frameVersionRef.current } : {}),
+        });
+        frameVersionRef.current = typeof saved?.version === "number" ? saved.version : null;
         /*
           **합성 결과가 달라진 저장에만** 촬영 세션의 결과와 멱등키를 버린다.
 
@@ -451,20 +753,28 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         }
         savedContentKeyRef.current = savedContentKey;
       } else {
-        await createFrame(body);
+        await createFrame(workspaceId ? { ...body, workspaceId } : body);
       }
 
       stopDraftAutosaveRef.current?.();
-      clearEditorDraft();
+      discardLocalDraft();
+      void serverDraft.finish();
       // 저장했으니 지금 상태가 새 기준이다. 이탈 경고를 그대로 두면 저장 직후
       // /theme로 나가는 길에도 경고가 뜬다.
       setBaseline({ key: baselineKey, signature: editorSignature });
       setTitle(nextTitle);
       setDescription(nextDescription);
       setIsSaveDialogOpen(false);
-      router.push("/theme");
+      router.push(exitTo);
     } catch (error) {
       console.error(error);
+      const details = getApiErrorDetails(error);
+      if (details.code === "FRAME-002") {
+        const data = (error as { data?: { data?: { currentVersion?: unknown } } }).data?.data;
+        setVersionConflict({
+          currentVersion: typeof data?.currentVersion === "number" ? data.currentVersion : null,
+        });
+      }
       /*
         올리기 전에 우리가 걸러낸 것(형식·용량·빈 파일)만 자기 문구를 살린다.
         저장 한 번에 배경·사진·스티커·글자 층·미리보기가 줄줄이 올라가는데,
@@ -501,8 +811,10 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
     setIsDeleting(true);
     try {
       await deleteFrame(remoteFrameId);
+      stopDraftAutosaveRef.current?.();
+      discardLocalDraft();
       setIsDeleteConfirmOpen(false);
-      router.push("/theme");
+      router.push(exitTo);
     } catch (error) {
       console.error(error);
       setIsDeleteConfirmOpen(false);
@@ -545,13 +857,14 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
         */}
         <div className="sticky top-0 z-20 -mx-4 -mt-6 bg-(--hc-surface-soft) px-4 pb-2 pt-6 backdrop-blur-md lg:static lg:mx-0 lg:mt-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <PageHeader
-            backHref="/theme"
+            backHref={exitTo}
             backLabel="프레임 목록으로"
             title={remoteFrameId ? "프레임 수정" : "프레임 꾸미기"}
             onBackClick={() => {
               stopDraftAutosaveRef.current?.();
               useThemeEditorStore.getState().reset();
-              clearEditorDraft();
+              discardLocalDraft();
+              void serverDraft.finish();
             }}
             rightSlot={
               <button
@@ -565,29 +878,47 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
             }
           />
         </div>
-        {/*
-          삭제는 헤더에 같이 두지 않는다. 처음 뗀 이유는 겹침이었다 — 그때 PageHeader 는 제목
-          좌우로 7rem(112px)만 비웠고 `삭제`+`수정 저장`은 152px 이라 320px 에서 48px 겹쳤다.
-          그 원인은 이제 PageHeader 쪽에서 없앴다(칸이 실제 내용 폭을 갖는다). 그래도 떼어 둔
-          채로 두는 것은 아래 이유 때문이다.
-          한 줄 내려서 고정 바 밖에 두는 이유 — 되돌릴 수 없는 동작이라 캔버스 위에 붙박이로
-          띄워 둘 것이 아니고, 고정 바가 76px 그대로라 좁은 화면에서 캔버스도 안 뺏긴다.
-        */}
-        {remoteFrameId ? (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={isDeleting || isSaving}
-              className="inline-flex h-11 items-center rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger) hover:bg-(--hc-danger-soft-bg) disabled:opacity-50"
-            >
-              {isDeleting ? "삭제 중…" : "삭제"}
-            </button>
-          </div>
-        ) : null}
         {loadError || actionError ? (
           <p role="alert" className="text-[12px] text-(--hc-danger)">
-            {loadError ?? actionError}
+            <Sentences text={loadError ?? actionError} />
+          </p>
+        ) : null}
+
+        {/*
+          남아 있는 편집은 묻지 않고 그대로 연다(2026-11-15 「다른 기기의 초안은 뭐야. 다른 기기 꺼를 가지고 있으면 그냥 그걸로
+          보여주면 되지」). 예전에는 「다른 기기에서 …에 편집한 초안이 있어요」([지금 화면 유지]·[초안 불러오기])와
+          「이 기기에 …에 저장하지 않은 편집이 있어요」([저장본 유지]·[이어서 편집])를 물었다. 더 새로운 쪽이 이긴다 —
+          다른 기기의 초안이 더 새로우면 그것(useServerFrameDraft), 아니면 이 기기의 편집(아래 effect).
+          둘이 동시에 고친 충돌만은 어느 쪽을 남길지 묻는다.
+        */}
+        {serverDraft.conflict ? (
+          <section
+            aria-label="초안 충돌"
+            className="flex flex-col gap-2 rounded-2xl border border-(--hc-danger-border) p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p><Sentences text="다른 기기에서 이 초안을 먼저 고쳤어요. 어느 쪽을 남길까요?" /></p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void serverDraft.reloadConflict()}
+                className="h-11 rounded-full border border-(--hc-border) px-4 text-[13px] font-semibold"
+              >
+                다른 기기 내용 불러오기
+              </button>
+              <button
+                type="button"
+                onClick={serverDraft.overwriteConflict}
+                className="h-11 rounded-full border border-(--hc-danger-border) px-4 text-[13px] font-semibold text-(--hc-danger)"
+              >
+                이 기기 내용으로 덮어쓰기
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {SERVER_DRAFT_STATUS_TEXT[serverDraft.status] ? (
+          <p role="status" className="text-[12px] text-(--hc-muted)">
+            <Sentences text={SERVER_DRAFT_STATUS_TEXT[serverDraft.status]} />
           </p>
         ) : null}
 
@@ -597,43 +928,80 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
           </section>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 lg:gap-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:auto-rows-min">
-          <div className="lg:col-start-2 lg:row-start-1 min-w-0">
-            <AssetPanel />
-          </div>
-
-          <div className="lg:col-start-2 lg:row-start-2">
-            <BackgroundPanel frameId={frameId} />
-          </div>
-
-          <div className="order-first lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-3">
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">미리보기</p>
-                <p className="text-[12px] text-(--hc-muted)">
-                  스티커, 사진, 글을 조합해 나만의 프레임을 만들어요.
-                </p>
-              </div>
+        <div className="grid grid-cols-1 gap-4 pb-[calc(30dvh+5rem)] lg:gap-6 lg:pb-0 lg:grid-cols-[minmax(420px,1fr)_minmax(0,1fr)] lg:auto-rows-min">
+          {/* 도구를 내려가며 만져도 결과가 보이게 캔버스를 붙들어 둔다. */}
+          <div className="lg:sticky lg:top-6 lg:col-start-1 lg:row-span-6 lg:row-start-1 lg:self-start">
+            {/* 모바일은 캔버스 자리가 모자라 카드 테두리·제목 줄을 걷는다. */}
+            <section className="flex flex-col gap-3 lg:rounded-2xl lg:border lg:border-zinc-800 lg:bg-zinc-900/60 lg:p-4">
+              <p className="text-sm font-semibold max-lg:hidden">미리보기</p>
 
               {/* 캔버스가 스스로 크기를 정한다. 고정 높이를 주면 방금 늘린 캔버스가 잘린다. */}
-              <div className="flex min-h-82.5 items-center justify-center">
-                <CanvasStage />
+              <div className="flex items-center justify-center lg:min-h-82.5">
+                <CanvasStage maxHeight={mobileCanvasMaxHeight} />
               </div>
             </section>
           </div>
-
-          <div className="lg:col-start-2 lg:row-start-3">
-            <CutoutPanel />
-          </div>
-
-          <div className="lg:col-start-2 lg:row-start-4">
-            <LayersPanel />
-          </div>
-
-          <div className="lg:col-start-2 lg:row-start-5">
-            <InspectorPanel />
+          {/*
+            모바일: 고른 도구 하나만 하단 시트에 띄운다. 데스크톱: `lg:contents` 로 감싼 칸이
+            사라져 각 패널이 오른쪽 열의 제자리로 들어간다(예전 배치 그대로).
+          */}
+          <div
+            id="theme-editor-tool-sheet"
+            className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 max-h-[30dvh] overflow-y-auto overscroll-contain border-t border-(--hc-border) bg-(--hc-surface-soft) px-4 pb-3 pt-3 lg:contents"
+          >
+            <div className={`lg:col-start-2 lg:row-start-1 min-w-0 ${mobileTool === "assets" ? "" : "max-lg:hidden"}`}>
+              <AssetPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-2 ${mobileTool === "background" ? "" : "max-lg:hidden"}`}>
+              <BackgroundPanel frameId={frameId} />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-3 ${mobileTool === "cutout" ? "" : "max-lg:hidden"}`}>
+              <CutoutPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-4 ${mobileTool === "layers" ? "" : "max-lg:hidden"}`}>
+              <LayersPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-5 ${mobileTool === "inspector" ? "" : "max-lg:hidden"}`}>
+              <InspectorPanel />
+            </div>
+            <div className={`lg:col-start-2 lg:row-start-6 ${mobileTool === "cells" ? "" : "max-lg:hidden"}`}>
+              <CellsPanel />
+            </div>
           </div>
         </div>
+        {/* 되돌릴 수 없는 동작이다. 저장 옆에 두면 잘못 누른다. 하던 일을 다 지나간 맨 아래에 둔다. */}
+        {remoteFrameId ? (
+          <div className="flex justify-end border-t border-(--hc-border) pt-4">
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isDeleting || isSaving}
+              className="inline-flex h-11 items-center rounded-full px-4 text-[13px] font-semibold text-(--hc-danger) transition hover:bg-(--hc-surface-well) disabled:opacity-50"
+            >
+              {isDeleting ? "삭제 중…" : "이 프레임 삭제"}
+            </button>
+          </div>
+        ) : null}
+        <nav
+          aria-label="편집 도구"
+          className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-(--hc-border) bg-(--hc-card) pb-[env(safe-area-inset-bottom)] lg:hidden"
+        >
+          {MOBILE_TOOLS.filter(({ id }) => id !== "cells" || freeCellsEnabled() || cells !== null).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={mobileTool === id}
+              aria-controls="theme-editor-tool-sheet"
+              onClick={() => setMobileTool(id)}
+              className={`flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold ${
+                mobileTool === id ? "text-(--hc-text)" : "text-(--hc-muted)"
+              }`}
+            >
+              <Icon className="size-5" aria-hidden />
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {isDeleteConfirmOpen && remoteFrameId ? (
@@ -702,6 +1070,43 @@ export function ThemeEditorPage({ frameId }: { frameId: FrameId }) {
                 <p className="text-[11px] leading-5 text-(--hc-danger)">
                   {saveDialogError}
                 </p>
+              ) : null}
+              {versionConflict ? (
+                <div className="flex flex-col gap-2 rounded-xl border border-(--hc-danger-border) p-3 text-[12px]">
+                  <p><Sentences text="다른 기기에서 이 프레임을 먼저 저장했어요. 어떻게 할까요?" /></p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => {
+                        /*
+                          새로고침하지 않고 그 자리에서 저장본을 다시 받는다. 판형·저장본 id 는 메모리 세션이라
+                          새로고침하면 사라져 프레임 목록으로 튕긴다(Codex 리뷰 #524).
+                        */
+                        // 저장본을 고른 것이다. 이 편집을 다시 묻지 않는다.
+                        discardLocalDraft();
+                        setVersionConflict(null);
+                        setIsSaveDialogOpen(false);
+                        setRemoteReloadNonce((n) => n + 1);
+                      }}
+                      className="h-11 rounded-full border border-zinc-700 px-4 font-semibold"
+                    >
+                      저장본 다시 불러오기
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving || versionConflict.currentVersion === null}
+                      onClick={() => {
+                        // 서버의 현재 버전 위에 지금 편집을 덮어쓴다 — 사용자가 고른 경우에만.
+                        frameVersionRef.current = versionConflict.currentVersion;
+                        void onDone();
+                      }}
+                      className="h-11 rounded-full border border-(--hc-danger-border) px-4 font-semibold text-(--hc-danger)"
+                    >
+                      내 편집으로 덮어쓰기
+                    </button>
+                  </div>
+                </div>
               ) : null}
             </div>
 

@@ -54,7 +54,17 @@ describe("GET /api/auth/session", () => {
     });
   });
 
-  it.each(["DELETED", "BLOCKED"])(
+  // 정지 계정은 세션이 멀쩡하다. 마이페이지에서 로그아웃과 탈퇴를 쓴다.
+  it("calls a BLOCKED account authenticated", async () => {
+    global.fetch = jest.fn().mockResolvedValue(statusResponse("BLOCKED"));
+
+    const body = await (await GET(sessionRequest())).json();
+
+    expect(body.authenticated).toBe(true);
+    expect(body.userStatus).toBe("BLOCKED");
+  });
+
+  it.each(["DELETED"])(
     "does not call a %s account authenticated",
     async (userStatus) => {
       global.fetch = jest.fn().mockResolvedValue(statusResponse(userStatus));

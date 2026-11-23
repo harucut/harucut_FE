@@ -1,0 +1,488 @@
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { ApiRequestError } from "@/lib/clientApi";
+import { AdminConsole } from "@/components/admin/AdminConsole";
+
+const api = {
+  listInquiries: jest.fn(),
+  updateInquiry: jest.fn(),
+  listContracts: jest.fn(),
+  createContract: jest.fn(),
+  changeContractStatus: jest.fn(),
+  listEntitlements: jest.fn(),
+  grantEntitlement: jest.fn(),
+  getEntitlementImpact: jest.fn(),
+  revokeEntitlement: jest.fn(),
+  allocateEntitlement: jest.fn(),
+  resizeAllocation: jest.fn(),
+  searchWorkspaces: jest.fn(),
+  searchEvents: jest.fn(),
+  verifyContractPayment: jest.fn(),
+  listSystemFrames: jest.fn(),
+  publishSystemFrame: jest.fn(),
+  listAuditLogs: jest.fn(),
+  searchUsers: jest.fn(),
+};
+jest.mock("@/components/layout/AppNav", () => ({ AppNav: () => null }));
+jest.mock("@/lib/admin/cmsApi", () => ({
+  ...jest.requireActual("@/lib/admin/cmsApi"),
+  searchWorkspaces: (...a: unknown[]) => api.searchWorkspaces(...a),
+  searchEvents: (...a: unknown[]) => api.searchEvents(...a),
+  searchUsers: (...a: unknown[]) => api.searchUsers(...a),
+  verifyContractPayment: (...a: unknown[]) => api.verifyContractPayment(...a),
+  listInquiries: (...a: unknown[]) => api.listInquiries(...a),
+  updateInquiry: (...a: unknown[]) => api.updateInquiry(...a),
+  listContracts: (...a: unknown[]) => api.listContracts(...a),
+  createContract: (...a: unknown[]) => api.createContract(...a),
+  changeContractStatus: (...a: unknown[]) => api.changeContractStatus(...a),
+  listEntitlements: (...a: unknown[]) => api.listEntitlements(...a),
+  grantEntitlement: (...a: unknown[]) => api.grantEntitlement(...a),
+  getEntitlementImpact: (...a: unknown[]) => api.getEntitlementImpact(...a),
+  revokeEntitlement: (...a: unknown[]) => api.revokeEntitlement(...a),
+  allocateEntitlement: (...a: unknown[]) => api.allocateEntitlement(...a),
+  resizeAllocation: (...a: unknown[]) => api.resizeAllocation(...a),
+  listSystemFrames: (...a: unknown[]) => api.listSystemFrames(...a),
+  publishSystemFrame: (...a: unknown[]) => api.publishSystemFrame(...a),
+  listAuditLogs: (...a: unknown[]) => api.listAuditLogs(...a),
+}));
+
+const INQUIRY = {
+  inquiryId: "Iq1",
+  contactName: "김하루",
+  email: "haru@example.com",
+  organizerType: "BUSINESS",
+  channels: "BYOD,BOOTH",
+  expectedDate: "2026-12-05",
+  expectedCount: 200,
+  message: "행사 이름: 2026 여름 팬미팅",
+  status: "NEW",
+  createdAt: "2026-10-26T01:00:00Z",
+};
+
+const TERMS = { composeQuota: 500, retentionDays: 30, features: ["CUSTOM_THEME"] };
+const CONTRACT = {
+  contractId: "Ct1",
+  workspaceId: "Ws1",
+  contractorName: "하루컷 팬클럽",
+  scope: "WORKSPACE",
+  startsAt: "2026-11-01T00:00:00+09:00",
+  endsAt: "2026-12-31T23:59:00+09:00",
+  amount: 300000,
+  currency: "KRW",
+  entitlement: TERMS,
+  status: "DRAFT",
+  createdAt: "x",
+};
+const ENTITLEMENT = {
+  entitlementId: "En1",
+  scope: "WORKSPACE",
+  workspaceId: "Ws1",
+  source: "MANUAL",
+  status: "ACTIVE",
+  terms: TERMS,
+  used: 10,
+  reserved: 1,
+  validFrom: "2026-10-01T00:00:00Z",
+  validTo: "2026-12-31T00:00:00Z",
+  grantorNote: "파트너 체험",
+};
+
+function fill(scope: HTMLElement, label: RegExp, value: string) {
+  fireEvent.change(within(scope).getByLabelText(label), { target: { value } });
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  api.listInquiries.mockResolvedValue([INQUIRY]);
+  api.listContracts.mockResolvedValue([CONTRACT]);
+  api.listEntitlements.mockResolvedValue([ENTITLEMENT]);
+});
+
+it("플랫폼 관리자가 아니면(403) 그렇다고 알린다", async () => {
+  api.listInquiries.mockRejectedValue(new ApiRequestError({ status: 403, code: "AUTH-003", apiMessage: "x" }));
+  render(<AdminConsole />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("플랫폼 관리자만 쓸 수 있어요.");
+});
+
+it("문의 상태를 바꾸고 담당 메모를 남긴다", async () => {
+  api.updateInquiry.mockImplementation(async (_id: string, patch: object) => ({ ...INQUIRY, ...patch }));
+  render(<AdminConsole />);
+  expect(await screen.findByText("참가자 휴대폰 · 현장 부스")).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("상태"), { target: { value: "CONTACTED" } });
+  await waitFor(() => expect(api.updateInquiry).toHaveBeenCalledWith("Iq1", { status: "CONTACTED" }));
+
+  fireEvent.change(screen.getByLabelText("담당 메모"), { target: { value: "12/5 견적 요청" } });
+  fireEvent.click(screen.getByRole("button", { name: "메모 저장" }));
+  await waitFor(() => expect(api.updateInquiry).toHaveBeenLastCalledWith("Iq1", { assigneeNote: "12/5 견적 요청" }));
+});
+
+it("문의에서 계약을 만들면 계약자 이름을 채운 초안 칸을 열고, 한국 시간으로 보낸다", async () => {
+  api.createContract.mockResolvedValue({ ...CONTRACT, contractId: "Ct2" });
+  render(<AdminConsole />);
+  fireEvent.click(await screen.findByRole("button", { name: "계약 만들기" }));
+
+  const form = await screen.findByRole("form", { name: "새 계약" });
+  expect(within(form).getByLabelText(/계약자/)).toHaveValue("김하루");
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /금액/, "300000");
+  fill(form, /합성 한도/, "500");
+  fireEvent.click(within(form).getByLabelText("고른 행사만"));
+  fill(form, /행사 ID/, "Ev1, Ev2");
+  fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
+
+  await waitFor(() => expect(api.createContract).toHaveBeenCalled());
+  expect(api.createContract.mock.calls[0][0]).toEqual({
+    workspaceId: "Ws1",
+    contractorName: "김하루",
+    scope: "EVENT",
+    eventIds: ["Ev1", "Ev2"],
+    amount: 300000,
+    currency: "KRW",
+    startsAt: "2026-11-01T00:00:00+09:00",
+    endsAt: "2026-12-31T23:59:00+09:00",
+    entitlement: { composeQuota: 500, features: [] },
+  });
+});
+
+it("초안 계약을 확인 뒤에 적용하고, 전이가 막히면(ENT-003) 목록을 다시 받는다", async () => {
+  api.changeContractStatus.mockRejectedValueOnce(new ApiRequestError({ status: 409, code: "ENT-003", apiMessage: "x" }));
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "적용하기" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "적용하기" }));
+
+  await waitFor(() => expect(api.changeContractStatus).toHaveBeenCalledWith("Ct1", "ACTIVE", expect.any(AbortSignal)));
+  expect(await screen.findByText(/지금 상태에서는 바꿀 수 없어요/)).toBeInTheDocument();
+  await waitFor(() => expect(api.listContracts).toHaveBeenCalledTimes(2));
+});
+
+it("수동 이용권은 사유가 있어야 주고, 회수는 영향을 본 뒤 사유와 함께 한다", async () => {
+  api.grantEntitlement.mockResolvedValue({ ...ENTITLEMENT, entitlementId: "En2" });
+  api.getEntitlementImpact.mockResolvedValue({ liveEvents: ["Ev9"], openReservations: 2 });
+  api.revokeEntitlement.mockResolvedValue({ ...ENTITLEMENT, status: "REVOKED", revokeReason: "계약 해지" });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "수동 이용권 주기" }));
+  const form = screen.getByRole("form", { name: "수동 이용권 주기" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /^시작/, "2026-10-26T00:00");
+  fill(form, /^끝/, "2026-11-26T00:00");
+  fill(form, /합성 한도/, "50");
+  const submit = within(form).getByRole("button", { name: "이용권 주기" });
+  expect(submit).toBeDisabled();
+  fill(form, /부여 사유/, "파트너 체험 1개월");
+  fireEvent.click(submit);
+  await waitFor(() =>
+    expect(api.grantEntitlement).toHaveBeenCalledWith({
+      workspaceId: "Ws1",
+      grantorNote: "파트너 체험 1개월",
+      validFrom: "2026-10-26T00:00:00+09:00",
+      validTo: "2026-11-26T00:00:00+09:00",
+      terms: { composeQuota: 50, features: [] },
+    }),
+  );
+
+  fireEvent.click(screen.getAllByRole("button", { name: "회수" })[1]);
+  const panel = await screen.findByRole("group", { name: "이용권 회수" });
+  expect(await within(panel).findByText(/운영 중 행사 1개\(Ev9\) · 아직 끝나지 않은 합성 2건/)).toBeInTheDocument();
+  const revoke = within(panel).getByRole("button", { name: "회수하기" });
+  expect(revoke).toBeDisabled();
+  fireEvent.change(within(panel).getByLabelText(/회수 사유/), { target: { value: "계약 해지" } });
+  fireEvent.click(revoke);
+  await waitFor(() => expect(api.revokeEntitlement).toHaveBeenCalledWith("En1", "계약 해지"));
+  expect(await screen.findByText("회수됨")).toBeInTheDocument();
+});
+
+// 계약 대상은 ID 를 손으로 적지 않고 찾아 고른다. 행사 범위면 그 행사의 공간 ID 도 함께 채운다.
+it("행사를 찾아 고르면 행사 ID 와 그 공간 ID 를 채운다(두 글자 미만은 찾지 않는다)", async () => {
+  api.searchEvents.mockResolvedValue([
+    { eventId: "Ev7", slug: "wedding-1205", name: "민지 ♥ 준호", status: "LIVE", workspaceId: "Ws9", workspaceName: "웨딩홀 A", createdAt: "x" },
+  ]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fireEvent.click(within(form).getByLabelText("고른 행사만"));
+
+  const search = within(form).getByLabelText("행사 찾기");
+  fireEvent.change(search, { target: { value: "웨" } });
+  expect(within(form).getAllByRole("button", { name: "찾기" }).at(-1)).toBeDisabled();
+  fireEvent.change(search, { target: { value: "웨딩" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+
+  fireEvent.click(await within(form).findByRole("button", { name: /민지 ♥ 준호/ }));
+  expect(api.searchEvents).toHaveBeenCalledWith("웨딩");
+  expect(within(form).getByLabelText(/공간 ID/)).toHaveValue("Ws9");
+  expect(within(form).getByLabelText(/^행사 ID/)).toHaveValue("Ev7");
+  expect(api.createContract).not.toHaveBeenCalled();
+});
+
+it("PortOne 근거가 있는 계약은 결제 확인 여부를 보여 준다", async () => {
+  api.listContracts.mockResolvedValue([
+    { ...CONTRACT, paymentEvidence: { kind: "PORTONE", reference: "pay_1" }, paymentVerifiedAt: "2026-10-26T03:00:00Z" },
+    { ...CONTRACT, contractId: "Ct3", paymentEvidence: { kind: "PORTONE", reference: "pay_2" } },
+  ]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  expect(await screen.findByText(/pay_1 · 결제 확인됨/)).toBeInTheDocument();
+  expect(screen.getByText(/pay_2 · 결제 확인 전/)).toBeInTheDocument();
+});
+
+// Codex 리뷰(#546): 메모를 적고 저장 전에 상태를 바꿔도 적던 메모가 사라지면 안 된다.
+it("상태를 바꿔도 저장하지 않은 담당 메모는 그대로 둔다", async () => {
+  api.updateInquiry.mockImplementation(async (_id: string, patch: object) => ({ ...INQUIRY, ...patch }));
+  render(<AdminConsole />);
+  await screen.findByText("참가자 휴대폰 · 현장 부스");
+
+  fireEvent.change(screen.getByLabelText("담당 메모"), { target: { value: "견적 초안 작성 중" } });
+  fireEvent.change(screen.getByLabelText("상태"), { target: { value: "CONTACTED" } });
+  await waitFor(() => expect(api.updateInquiry).toHaveBeenCalledWith("Iq1", { status: "CONTACTED" }));
+
+  await waitFor(() => expect(screen.getByLabelText("상태")).toHaveValue("CONTACTED"));
+  expect(screen.getByLabelText("담당 메모")).toHaveValue("견적 초안 작성 중");
+  expect(screen.getByRole("button", { name: "메모 저장" })).toBeInTheDocument();
+});
+
+// Codex 리뷰(#546): 숫자 칸의 지수 표기를 parseInt 로 읽으면 1e6 원이 1 원이 된다.
+it("금액·한도의 지수 표기를 그대로 숫자로 보낸다", async () => {
+  api.createContract.mockResolvedValue({ ...CONTRACT, contractId: "Ct9" });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /계약자/, "하루컷 팬클럽");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /금액/, "1e6");
+  fill(form, /합성 한도/, "5e2");
+  fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
+  await waitFor(() => expect(api.createContract).toHaveBeenCalled());
+  expect(api.createContract.mock.calls[0][0]).toMatchObject({ amount: 1000000, entitlement: { composeQuota: 500 } });
+});
+
+// Codex 리뷰(#548): 검색어를 바꿔 다시 찾았는데 앞 검색 응답이 늦게 오면 그 결과로 덮으면 안 된다.
+it("마지막 검색의 결과만 보여 준다", async () => {
+  let releaseFirst: (value: unknown) => void = () => {};
+  api.searchWorkspaces
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseFirst = resolve; }))
+    .mockResolvedValueOnce([{ workspaceId: "WsB", name: "B 웨딩홀", type: "ORGANIZATION", ownerEmails: [], createdAt: "x" }]);
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+  fireEvent.click(await screen.findByRole("button", { name: "수동 이용권 주기" }));
+  const form = screen.getByRole("form", { name: "수동 이용권 주기" });
+  const search = within(form).getByLabelText("공간 찾기");
+
+  fireEvent.change(search, { target: { value: "AA" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+  fireEvent.change(search, { target: { value: "BB" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+  expect(await within(form).findByRole("button", { name: /B 웨딩홀/ })).toBeInTheDocument();
+
+  await act(async () => releaseFirst([{ workspaceId: "WsA", name: "A 웨딩홀", type: "ORGANIZATION", ownerEmails: [], createdAt: "x" }]));
+  expect(within(form).queryByRole("button", { name: /A 웨딩홀/ })).not.toBeInTheDocument();
+  expect(within(form).getByRole("button", { name: /B 웨딩홀/ })).toBeInTheDocument();
+});
+
+// Codex 리뷰(#546): 잘못 적은 금액을 빈칸처럼 빼고 보내면 입력 오류를 아무도 알리지 못한다.
+it("잘못 적은 금액·한도는 알리고 계약을 만들지 않는다", async () => {
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /계약자/, "하루컷 팬클럽");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /합성 한도/, "500");
+  fill(form, /금액/, "-1000");
+  expect(within(form).getAllByText("0 이상의 정수로 적어 주세요.").length).toBeGreaterThan(0);
+  expect(within(form).getByRole("button", { name: "초안으로 만들기" })).toBeDisabled();
+
+  fill(form, /금액/, "300000");
+  fill(form, /부스 기기 수/, "1.5");
+  expect(within(form).getByRole("button", { name: "초안으로 만들기" })).toBeDisabled();
+  fill(form, /부스 기기 수/, "2");
+  expect(within(form).getByRole("button", { name: "초안으로 만들기" })).toBeEnabled();
+});
+
+// Codex 리뷰(#546): 다른 탭을 보고 돌아와도 작성 중인 계약 초안이 남아야 한다.
+it("탭을 오가도 작성 중인 계약 초안을 지우지 않는다", async () => {
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  fill(screen.getByRole("form", { name: "새 계약" }), /계약자/, "작성 중 계약자");
+
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  expect(within(screen.getByRole("form", { name: "새 계약" })).getByLabelText(/계약자/)).toHaveValue("작성 중 계약자");
+});
+
+// Codex 리뷰(#546): 패널을 늘 마운트해 두면, 계약을 적용해 생긴 이용권이 이용권 탭에 안 보였다.
+it("계약을 적용하면 이용권 목록을 다시 받아 새 이용권을 보여 준다", async () => {
+  api.changeContractStatus.mockResolvedValue({ ...CONTRACT, status: "ACTIVE" });
+  render(<AdminConsole />);
+  await waitFor(() => expect(api.listEntitlements).toHaveBeenCalledTimes(1));
+  api.listEntitlements.mockResolvedValue([ENTITLEMENT, { ...ENTITLEMENT, entitlementId: "EnNew", source: "CONTRACT", contractId: "Ct1" }]);
+
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "적용하기" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "적용하기" }));
+  await waitFor(() => expect(api.listEntitlements).toHaveBeenCalledTimes(2));
+
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+  expect(await screen.findByText(/계약 Ct1/)).toBeInTheDocument();
+});
+
+// P2B-7 — 웹훅이 결제 근거 등록보다 먼저 오면 확인되지 않는다. 관리자가 다시 대조한다.
+it("확인 전인 PortOne 결제는 다시 확인하고, 맞지 않으면 무엇을 볼지 알린다", async () => {
+  const unverified = { ...CONTRACT, paymentEvidence: { kind: "PORTONE", reference: "pay_1" } };
+  api.listContracts.mockResolvedValue([unverified]);
+  api.verifyContractPayment
+    .mockRejectedValueOnce(new ApiRequestError({ status: 400, code: "GEN-002", apiMessage: "x" }))
+    .mockResolvedValueOnce({ ...unverified, paymentVerifiedAt: "2026-10-26T03:00:00Z" });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "결제 다시 확인" }));
+  expect(await screen.findByText(/결제 번호·상점·금액이 계약과 맞는지/)).toBeInTheDocument();
+  expect(api.verifyContractPayment).toHaveBeenCalledWith("Ct1", expect.any(AbortSignal));
+
+  fireEvent.click(screen.getByRole("button", { name: "결제 다시 확인" }));
+  expect(await screen.findByText("결제를 확인했어요.")).toBeInTheDocument();
+  expect(screen.getByText(/pay_1 · 결제 확인됨/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "결제 다시 확인" })).not.toBeInTheDocument();
+});
+
+it("같은 PortOne 결제 번호로 계약을 만들면(GEN-002) 이유를 알린다", async () => {
+  api.createContract.mockRejectedValue(new ApiRequestError({ status: 400, code: "GEN-002", apiMessage: "x" }));
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "계약" }));
+  fireEvent.click(await screen.findByRole("button", { name: "새 계약" }));
+  const form = screen.getByRole("form", { name: "새 계약" });
+  fill(form, /공간 ID/, "Ws1");
+  fill(form, /계약자/, "하루컷 팬클럽");
+  fill(form, /^시작/, "2026-11-01T00:00");
+  fill(form, /^끝/, "2026-12-31T23:59");
+  fill(form, /합성 한도/, "500");
+  fireEvent.change(within(form).getByLabelText(/종류/), { target: { value: "PORTONE" } });
+  fill(form, /참조/, "pay_1");
+  fireEvent.click(within(form).getByRole("button", { name: "초안으로 만들기" }));
+  expect(await screen.findByText(/같은 PortOne 결제 번호로 만든 계약이 이미 있는지/)).toBeInTheDocument();
+});
+
+// 기업 총량과 행사 배분(ADR-0009 §5, P3-4). 배분은 부모의 남은 양을 바꾸므로 목록을 다시 받는다.
+it("기업 총량에서 행사에 배분하고, 배분량을 바꾸며, 넘치면(ENT-005) 알린다", async () => {
+  const child = {
+    ...ENTITLEMENT,
+    entitlementId: "En7",
+    scope: "EVENT",
+    eventId: "Ev3",
+    parentEntitlementId: "En1",
+    terms: { ...TERMS, composeQuota: 200 },
+    used: 40,
+    reserved: 2,
+  };
+  api.listEntitlements.mockResolvedValue([{ ...ENTITLEMENT, allocatedQuota: 0 }]);
+  api.allocateEntitlement.mockImplementation(async () => {
+    api.listEntitlements.mockResolvedValue([child, { ...ENTITLEMENT, allocatedQuota: 200 }]);
+    return child;
+  });
+  render(<AdminConsole />);
+  fireEvent.click(screen.getByRole("tab", { name: "이용권" }));
+
+  expect(await screen.findByText(/행사 배분 0장 · 더 배분할 수 있는 양 500장/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "행사에 배분" }));
+  const form = screen.getByRole("form", { name: "행사에 배분" });
+  fill(form, /행사 ID/, "Ev3");
+  fill(form, /배분량/, "0");
+  expect(within(form).getByText("1 이상의 정수로 적어 주세요.")).toBeInTheDocument();
+  expect(within(form).getByRole("button", { name: "배분하기" })).toBeDisabled();
+  fill(form, /배분량/, "200");
+  fireEvent.click(within(form).getByRole("button", { name: "배분하기" }));
+
+  await waitFor(() => expect(api.allocateEntitlement).toHaveBeenCalledWith("En1", "Ev3", 200));
+  expect(await screen.findByText(/행사 배분 200장 · 더 배분할 수 있는 양 300장/)).toBeInTheDocument();
+  expect(screen.getByText("기업 총량 En1에서 배분")).toBeInTheDocument();
+
+  api.resizeAllocation.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-005", apiMessage: "x" }));
+  fireEvent.click(screen.getByRole("button", { name: "배분량 바꾸기" }));
+  const resize = screen.getByRole("form", { name: "배분량 바꾸기" });
+  expect(within(resize).getByLabelText(/배분량/)).toHaveValue(200);
+  expect(within(resize).getByText(/이미 쓴 42장/)).toBeInTheDocument();
+  fill(resize, /배분량/, "900");
+  fireEvent.click(within(resize).getByRole("button", { name: "바꾸기" }));
+
+  await waitFor(() => expect(api.resizeAllocation).toHaveBeenCalledWith("En7", 900));
+  expect(await screen.findByRole("alert")).toHaveTextContent("행사 배분 합계가 계약 총량을 넘어요.");
+});
+
+// 시스템 프레임은 발행해야 행사에서 고를 수 있는데 그 화면이 없었다(재대조 항목).
+it("시스템 프레임을 발행하고, 소재 항목은 발행 대상에서 뺀다", async () => {
+  api.listSystemFrames.mockResolvedValue([
+    { frameId: 3, title: "기본 세로", frameType: "CLASSIC", isSystem: true },
+    { frameId: 4, title: "[스티커] 하트", frameType: "CLASSIC", isSystem: true },
+  ]);
+  api.publishSystemFrame.mockResolvedValue({ frameVersionId: 31, versionNo: 2 });
+  render(<AdminConsole />);
+  expect(api.listSystemFrames).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("tab", { name: "시스템 프레임" }));
+  expect(await screen.findByText("기본 세로")).toBeInTheDocument();
+  expect(screen.queryByText("[스티커] 하트")).not.toBeInTheDocument();
+  expect(screen.getByText(/소재 1개는 발행 대상이 아니라/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "발행" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("2번째 발행본을 만들었어요.");
+  expect(api.publishSystemFrame).toHaveBeenCalledWith(3);
+});
+
+it("감사 로그를 사람 말로 보여 주고 다음 쪽을 잇는다", async () => {
+  api.listAuditLogs
+    .mockResolvedValueOnce({
+      items: [
+        { action: "EVENT_PUBLISHED", actorName: "박서연", eventId: "Ev1", createdAt: "2026-11-02T10:00:00+09:00" },
+        { action: "SOMETHING_NEW", createdAt: "2026-11-02T09:00:00+09:00", detail: "{\"a\":1}" },
+      ],
+      nextCursor: "c2",
+    })
+    .mockResolvedValueOnce({ items: [{ action: "BOOTH_PAIRED", createdAt: "2026-11-01T09:00:00+09:00" }] });
+  render(<AdminConsole />);
+
+  fireEvent.click(screen.getByRole("tab", { name: "감사 로그" }));
+  expect(await screen.findByText("행사를 게시했어요")).toBeInTheDocument();
+  expect(screen.getByText(/박서연/)).toBeInTheDocument();
+  // 모르는 코드는 숨기지 않고 그대로 보인다. 행동한 사람이 없으면 시스템이다.
+  expect(screen.getByText("SOMETHING_NEW")).toBeInTheDocument();
+  expect(within(screen.getByRole("tabpanel", { name: "감사 로그" })).getByText(/시스템/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+  expect(await screen.findByText("부스 기기를 연결했어요")).toBeInTheDocument();
+  expect(api.listAuditLogs).toHaveBeenLastCalledWith("c2");
+  expect(screen.queryByRole("button", { name: "더 보기" })).not.toBeInTheDocument();
+});
+
+it("감사 로그 권한이 없으면 플랫폼 관리자만이라고 알리고 다시 시도할 수 있다", async () => {
+  api.listAuditLogs.mockRejectedValueOnce(new ApiRequestError({ status: 403, code: "GEN-021", apiMessage: "x" }));
+  api.listAuditLogs.mockResolvedValueOnce({ items: [] });
+  render(<AdminConsole />);
+
+  fireEvent.click(screen.getByRole("tab", { name: "감사 로그" }));
+  const panel = await screen.findByRole("tabpanel", { name: "감사 로그" });
+  expect(await within(panel).findByRole("alert")).toHaveTextContent("플랫폼 관리자만");
+  fireEvent.click(within(panel).getByRole("button", { name: "다시 시도" }));
+  expect(await within(panel).findByText("아직 기록이 없어요.")).toBeInTheDocument();
+});
+
+it("계정 탭을 열면 이메일로 계정을 찾는다", async () => {
+  api.searchUsers.mockResolvedValue([{ userId: "UsAAAA", email: "a@example.com", userStatus: "ACTIVE" }]);
+  render(<AdminConsole />);
+  fireEvent.click(await screen.findByRole("tab", { name: "계정" }));
+  fireEvent.change(await screen.findByLabelText("이메일"), { target: { value: "a@example.com" } });
+  fireEvent.click(screen.getByRole("button", { name: "찾기" }));
+  await waitFor(() => expect(api.searchUsers).toHaveBeenCalledWith("a@example.com"));
+  expect(await screen.findByRole("button", { name: "정지" })).toBeInTheDocument();
+});

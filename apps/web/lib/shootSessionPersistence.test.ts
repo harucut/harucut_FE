@@ -80,3 +80,50 @@ test("보관 실패를 표시하고 후속 쓰기 성공 시 해제한다", asyn
   await m.flushShootSession();
   expect(m.useShootPersistence.getState().error).toBe(false);
 });
+
+/*
+  비회원이 찍던 사진은 이 기기에 남기지 않는다(2026-11-15 「비회원 촬영하던 사진 관리 안 해도 될 거 같아. 지워버려」).
+  예전에 남긴 것은 읽지 않고 지우며, 찍는 동안에도 쓰지 않는다. 지우기에 실패해도 「임시 보관하지 못했어요」를 띄우지 않는다.
+*/
+describe("비회원", () => {
+  async function asGuest() {
+    const m = await modules();
+    const { useGuestTrialStore } = await import("./guestTrialStore");
+    useGuestTrialStore.setState({ accessMode: "guest", hydrated: true });
+    return { ...m, useGuestTrialStore };
+  }
+
+  test("예전에 남긴 사진은 읽지 않고 지운다", async () => {
+    const m = await asGuest();
+    await m.initializeShootSession();
+    expect(mockRead).not.toHaveBeenCalled();
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(m.useShootPersistence.getState()).toMatchObject({ ready: true, error: false });
+  });
+
+  test("찍는 동안에도 이 기기에 쓰지 않는다", async () => {
+    const m = await asGuest();
+    await m.initializeShootSession();
+    m.useShootSession.getState().setFrameId("classic-4");
+    m.useShootSession.getState().addShotPhoto("data:image/jpeg;base64,cA==");
+    await m.flushShootSession();
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(m.useShootSession.getState().shots).toHaveLength(1);
+  });
+
+  test("지우기에 실패해도 보관 실패 안내를 띄우지 않는다", async () => {
+    mockDelete.mockRejectedValueOnce(new Error("blocked"));
+    const m = await asGuest();
+    await m.initializeShootSession();
+    expect(m.useShootPersistence.getState()).toMatchObject({ ready: true, error: false });
+  });
+
+  test("로그인해 회원이 되면 그때부터 다시 남긴다", async () => {
+    const m = await asGuest();
+    await m.initializeShootSession();
+    m.useGuestTrialStore.setState({ accessMode: "member", hydrated: true });
+    m.useShootSession.getState().setFrameId("wide-4");
+    await m.flushShootSession();
+    expect(mockWrite).toHaveBeenCalledTimes(1);
+  });
+});

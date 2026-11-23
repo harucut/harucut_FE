@@ -1,13 +1,20 @@
+import { FREE_CELL_COUNT, type FreeCell } from "@/lib/frameCells";
 import type { FrameId } from "@/constants/frames";
 import { FRAME_LAYOUTS } from "@/constants/frameLayouts";
 import type {
   RemoteFrameBackground,
   RemoteFrame,
+  RemoteFrameComponent,
   RemoteFrameType,
 } from "@/lib/api-types";
+import { textBakeSignature } from "@/lib/canvas/textBakeSignature";
 import type { ThemeBackground, ThemeExportJson } from "@/lib/types/themeEditor";
 
 export type CreateFrameRequest = {
+  /** 수정 저장(PUT) 전용 낙관적 잠금 버전. 생략하면 서버가 덮어쓴다(호환). */
+  version?: number;
+  /** 만들 공간(POST 에서만 의미가 있다). 생략하면 개인 공간. PUT 에 보내도 서버가 무시한다. */
+  workspaceId?: string;
   title: string;
   description: string;
   previewKey: string;
@@ -20,6 +27,8 @@ export type CreateFrameRequest = {
    * 생략하면 서버가 전부 끈 것으로 본다.
    */
   cellCutouts?: boolean[];
+  /** 자유 사진 칸(P5). 없으면 frameType 의 고정 레이아웃. PUT 은 전체 교체라 빼면 고정 레이아웃으로 돌아간다. */
+  cells?: FreeCell[];
   components: Array<{
     id?: string;
     type: "PHOTO" | "STICKER" | "TEXT";
@@ -29,6 +38,12 @@ export type CreateFrameRequest = {
      * 저장 시점에는 선택이지만 **없으면 그 프레임으로 합성이 400 GEN-002 로 죽는다.**
      */
     renderedKey?: string;
+    /** PHOTO·STICKER 의 자산 public id. 있으면 서버가 `source` 대신 그 자산의 key 를 쓴다. */
+    assetId?: string;
+    /** TEXT 의 구운 PNG 자산 public id. 있으면 `renderedKey` 대신 쓴다. */
+    renderedAssetId?: string;
+    /** 편집기 잠금(저장·재열기용). 인가 근거가 아니다. */
+    locked?: boolean;
     x: number;
     y: number;
     width: number;
@@ -111,6 +126,7 @@ function toRequestBackground(background?: ThemeBackground): RemoteFrameBackgroun
   return {
     type: "IMAGE",
     key: background.key,
+    ...(background.assetId ? { assetId: background.assetId } : {}),
     opacity: background.opacity ?? 1,
   };
 }
@@ -132,6 +148,7 @@ function toThemeBackground(background?: RemoteFrameBackground): ThemeBackground 
   return {
     type: "IMAGE",
     key: background.key,
+    ...(background.assetId ? { assetId: background.assetId } : {}),
     ...(background.url ? { url: background.url } : {}),
     opacity: background.opacity ?? 1,
   };
@@ -178,12 +195,16 @@ export function toCreateFrameRequest(
     background: toRequestBackground(json.background),
     // 4개가 아니면 서버가 거절하므로(minItems/maxItems 4) 온전할 때만 싣는다.
     ...(json.cellCutouts?.length === 4 ? { cellCutouts: [...json.cellCutouts] } : {}),
+    ...(json.cells?.length === FREE_CELL_COUNT ? { cells: json.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) } : {}),
     components: json.components
       .map((c) => ({
         type: c.type,
         // renderUrl 은 렌더 전용이라 보내지 않는다. 이미지 source 는 key 로 정규화한다.
         source: c.type === "TEXT" ? c.source : toStorageKey(c.source),
         ...(c.renderedKey ? { renderedKey: c.renderedKey } : {}),
+        ...(c.type !== "TEXT" && c.assetId ? { assetId: c.assetId } : {}),
+        ...(c.type === "TEXT" && c.renderedAssetId ? { renderedAssetId: c.renderedAssetId } : {}),
+        ...(c.locked ? { locked: true } : {}),
         x: c.x,
         y: c.y,
         width: c.width,
@@ -200,6 +221,25 @@ export function toCreateFrameRequest(
   };
 }
 
+/**
+ * 저장본의 구운 글자 층. 지문을 함께 남겨, 다시 저장할 때 문구·스타일·크기가 그대로면
+ * 다시 굽지 않게 한다(`textBakeSignature`). 예전 서버는 renderedKey 를 내려주지 않았다 —
+ * 그때는 아무것도 남지 않고 저장할 때 다시 굽는다.
+ */
+function renderedFrom(component: RemoteFrameComponent, source: string) {
+  if (!component.renderedKey) return {};
+  return {
+    renderedKey: component.renderedKey,
+    ...(component.renderedAssetId ? { renderedAssetId: component.renderedAssetId } : {}),
+    renderedFor: textBakeSignature({
+      source,
+      width: component.width,
+      height: component.height,
+      styleJson: (component.styleJson ?? component.style ?? {}) as Record<string, unknown>,
+    }),
+  };
+}
+
 export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
   return {
     frameId: frameIdFromFrameType(frame.frameType),
@@ -209,6 +249,8 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
       frame.cellCutouts?.length === 4
         ? [...frame.cellCutouts]
         : [false, false, false, false],
+    // 자유 칸 프레임일 때만 온다. 없으면 고정 레이아웃.
+    ...(frame.cells?.length === FREE_CELL_COUNT ? { cells: frame.cells.map((cell) => ({ ...cell, shape: { ...cell.shape } })) } : {}),
     components: frame.components.map((component, index) => {
       // 응답은 그릴 값(`source`)과 순수 key(`key`)를 따로 준다.
       // 스웨거: "수정 요청을 다시 만들 때 `source` 자리에 이 `key` 값을 넣는다."
@@ -225,6 +267,9 @@ export function toThemeExportJson(frame: RemoteFrame): ThemeExportJson {
         type: component.type,
         source: storageKey,
         ...(renderUrl ? { renderUrl } : {}),
+        ...(component.locked ? { locked: true } : {}),
+        ...(!isText && component.assetId ? { assetId: component.assetId } : {}),
+        ...(isText ? renderedFrom(component, rawSource) : {}),
         x: component.x,
         y: component.y,
         width: component.width,

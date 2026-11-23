@@ -1,3 +1,5 @@
+import type { SubscriptionSource } from "@harucut/shared";
+import type { FreeCell } from "@/lib/frameCells";
 /**
  * 모든 응답이 담기는 공통 봉투.
  *
@@ -29,6 +31,8 @@ export type UserInfo = {
   email: string;
   username: string;
   profileUrl: string | null;
+  /** BLOCKED 면 마이페이지에서 로그아웃과 탈퇴만 할 수 있다. */
+  userStatus?: UserStatus | null;
   // 서버 Provider enum 5종. 구글/애플 로그인도 실제로 내려온다.
   loginPlatform?: "GOOGLE" | "KAKAO" | "NAVER" | "APPLE" | "HARUCUT" | null;
   /**
@@ -76,6 +80,8 @@ export type RemoteFrameBackground =
   | {
       type: "IMAGE";
       key?: string;
+      /** 배경 이미지 자산 public id(ADR-0006 §2). 요청에 있으면 서버가 그 자산의 key 를 쓴다. */
+      assetId?: string;
       opacity?: number;
       // 서버가 채워 주는 조회용 서명 URL(응답 전용). 요청에 실어도 무시된다.
       url?: string;
@@ -96,8 +102,15 @@ export type RemoteFrameComponent = {
   zIndex?: number;
   style?: Record<string, unknown>;
   styleJson?: Record<string, unknown>;
-  // 참고: 서버는 `renderedKey` 를 **응답에 내려주지 않는다**(합성 전용).
-  // 그래서 저장된 TEXT 프레임을 다시 저장할 때는 글자 층을 항상 새로 구워야 한다.
+  /** 편집기 잠금(ADR-0006 §3). 인가 근거가 아니다. */
+  locked?: boolean;
+  /** TEXT 의 구운 글자 층 key·조회 URL. 예전 서버는 내려주지 않았다(그땐 다시 저장할 때마다 다시 구웠다). */
+  renderedKey?: string;
+  renderedUrl?: string;
+  /** PHOTO·STICKER 를 자산으로 저장했으면 그 public id. */
+  assetId?: string | null;
+  /** TEXT 의 구운 PNG 를 자산으로 저장했으면 그 public id. */
+  renderedAssetId?: string | null;
 };
 
 // GET /api/auth/user/frame 응답.
@@ -105,6 +118,8 @@ export type RemoteFrameComponent = {
 // 따라서 클라이언트가 보관 한도로 잠금 대상을 추정하면 안 된다(목록 = 사용 가능한 전부).
 export type RemoteFrame = {
   frameId: number;
+  /** 프레임이 속한 공간 public id. 시스템 프레임·공간이 없던 옛 프레임은 없다(백엔드 fork #18). */
+  workspaceId?: string | null;
   title: string;
   description?: string;
   source?: string;
@@ -116,9 +131,16 @@ export type RemoteFrame = {
   isSystem?: boolean;
   // 칸별 누끼(boolean 4개, 촬영 슬롯 순서). 서버가 저장·반환한다.
   cellCutouts?: boolean[];
+  /** 자유 사진 칸(P5) — 네 칸의 위치·크기·회전·모양·촬영 순번. 자유 칸 프레임일 때만 온다(lib/frameCells.ts). */
+  cells?: FreeCell[] | null;
   // frameType으로 서버가 고정하는 캔버스 크기(요청값은 저장되지 않는다).
   canvasWidth?: number;
   canvasHeight?: number;
+  /**
+   * 낙관적 잠금 버전(ADR-0006 §3). 수정 저장(PUT)에 그대로 보낸다. 서버 값과 다르면 409 FRAME-002
+   * 이고 `data.currentVersion` 에 서버의 현재 값이 실린다.
+   */
+  version?: number;
 };
 
 // GET /api/auth/user/subscription/usage 응답 (프레임 보관 한도·사용량).
@@ -152,6 +174,10 @@ export type Subscription = {
   /** BASIC 이면 키 자체가 없다. */
   currentPeriodEnd?: string | null;
   autoRenew?: boolean;
+  /** 구독 출처(P4-B). 해지·변경은 이 출처에서만 된다. BASIC 이면 키가 없다. */
+  source?: SubscriptionSource;
+  /** 계정마다 고정인 UUID. 앱 구매 때 애플 appAccountToken·구글 obfuscatedAccountId 로 싣는다. */
+  storeAccountToken?: string;
 };
 
 // GET /api/auth/coupons 응답 한 건.

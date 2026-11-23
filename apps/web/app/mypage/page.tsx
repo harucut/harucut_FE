@@ -1,6 +1,8 @@
 "use client";
 
 import { clearLocalUserData } from "@/lib/localUserData";
+import { Sentences } from "@/components/ui/Sentences";
+import { RetryButton } from "@/components/ui/LoadFailed";
 import { withRequestDeadline } from "@/lib/requestDeadline";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -13,8 +15,11 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Camera, ChevronRight, LogOut, PencilLine } from "lucide-react";
-import { getLoginPlatformLabel, josa, parseServerDateTime } from "@harucut/shared";
+import { getLoginPlatformLabel, josa, parseServerDateTime, subscriptionManageHint } from "@harucut/shared";
+import { COMPANY } from "@harucut/shared";
+import { BlockedAccountPanel } from "@/components/mypage/BlockedAccountPanel";
 import { PasswordChangeDialog } from "@/components/mypage/PasswordChangeDialog";
 import { SettingRow } from "@/components/mypage/SettingRow";
 import { SingleFieldDialog } from "@/components/ui/SingleFieldDialog";
@@ -23,10 +28,14 @@ import {
   resolveFrameCapacity,
 } from "@/components/frame/FrameCapacityMeter";
 import { AppNav } from "@/components/layout/AppNav";
+import { forgetStudioAccess, useStudioAccess } from "@/hooks/useStudioAccess";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { NativeNotificationSetting } from "@/components/mobile/NativeNotificationSetting";
+import { StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
+import { unregisterPushDevice } from "@/lib/pushDevices";
 import { ColorThemePreferencePanel } from "@/components/theme/ColorThemePreferencePanel";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
+import { PAYMENTS_ENABLED } from "@/constants/company";
 import { getPlanDisplayName } from "@/constants/plans";
 import { UploadValidationError } from "@/lib/presignedUploadApi";
 import { listMyCoupons, redeemCoupon } from "@/lib/couponApi";
@@ -34,8 +43,8 @@ import { resolvePlanInfo } from "@/constants/planLimits";
 import type { MyCoupon,
   Subscription,
   SubscriptionUsage } from "@/lib/api-types";
-import { clientApi } from "@/lib/clientApi";
-import { getUserFacingApiErrorMessage } from "@/lib/apiError";
+import { clientApi, reissueAccessToken } from "@/lib/clientApi";
+import { getApiErrorDetails, getUserFacingApiErrorMessage } from "@/lib/apiError";
 import { uploadProfileImage } from "@/lib/profileImageApi";
 import { SUPPORTED_IMAGE_ACCEPT } from "@/lib/presignedUploadApi";
 import {
@@ -86,13 +95,22 @@ const SECTION_META: Record<SectionId, { title: string; sub: string }> = {
  */
 const SECTIONS: SectionId[] = ["account", "plan", "notif", "frames", "pref"];
 
+/** MY 아래의 약관·정책 줄. 법무 화면(app/terms, app/privacy)을 연다. */
+const POLICY_LINKS = [
+  { href: "/terms", label: "서비스 이용약관" },
+  { href: "/privacy", label: "개인정보처리방침" },
+] as const;
+
 export default function MyPage() {
+  const studioAccess = useStudioAccess();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
+  const blocked = user?.userStatus === "BLOCKED";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
+  const [logoutAllOpen, setLogoutAllOpen] = useState(false);
 
   // 비밀번호는 이메일(HARUCUT) 가입 계정에만 있다.
   // 아직 user 를 못 읽었으면 폼도 안내문도 띄우지 않는다 — 소셜 계정에 폼이 잠깐 보였다
@@ -146,9 +164,11 @@ export default function MyPage() {
       const nextUser = await getMyUserInfo();
       setUser(nextUser);
       setLoadError(null);
+      return nextUser;
     } catch (error) {
       console.error(error);
       setLoadError("내 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -163,6 +183,14 @@ export default function MyPage() {
   const refreshUser = async () => {
     await loadUser();
   };
+
+  // 프록시는 토큰의 상태만 본다. 정지가 풀린 뒤에도 옛 토큰을 들고 있으면 access 가 끝날 때까지 계속 여기로 돌려보내므로,
+  // 돌려보내진 사람인데(표시) 실제로는 풀려 있으면 새 토큰을 받는다. 서버는 이 토큰으로도 이미 정상으로 답한다.
+  useEffect(() => {
+    if (!user || user.userStatus === "BLOCKED") return;
+    if (!new URLSearchParams(window.location.search).has("restricted")) return;
+    void reissueAccessToken().finally(() => router.replace("/mypage"));
+  }, [user, router]);
 
   // 스탯 3셀은 우리 실제 데이터(기록 미디어 / 이번 달 / 보관 프레임)로 매핑한다.
   // 조회에 실패하면 0이 아니라 statsError로 구분해 '기록이 사라진 것처럼' 보이지 않게 한다.
@@ -212,10 +240,12 @@ export default function MyPage() {
 
   // 최초 진입은 초기 상태(loading=true, loadError=null, statsError=null)와 같아
   // 별도 setState 없이 바로 조회한다. setState는 응답이 온 뒤에만 일어난다.
+  // 정지 계정 화면은 통계를 보여 주지 않고 이 조회들은 403 으로 막히므로, 내 정보로 상태를 본 뒤에 부른다.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 원격 조회
-    void loadUser();
-    void loadStats();
+    void loadUser().then((nextUser) => {
+      if (nextUser?.userStatus !== "BLOCKED") void loadStats();
+    });
   }, []);
 
   const closeNickname = useCallback(() => {
@@ -259,7 +289,13 @@ export default function MyPage() {
     try {
       await clientApi.patch("/api/client/auth/password/change", values);
       setPasswordOpen(false);
-      setNotice({ kind: "ok", text: "비밀번호를 바꿨어요." });
+      // 서버는 비밀번호가 바뀌면 이 기기까지 모든 세션을 끊는다. 그대로 두면 잠시 뒤 재발급이 실패해 「세션 만료」 창이 뜬다.
+      // 바꾼 사람에게는 왜 다시 로그인하는지 말하고 로그인으로 보낸다.
+      forgetStudioAccess();
+      await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/logout", { signal })).catch(() => {});
+      await clearLocalUserData();
+      router.push("/login?passwordChanged=1");
+      router.refresh();
     } catch (error) {
       console.error(error);
       setPasswordError(
@@ -318,12 +354,17 @@ export default function MyPage() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (scope: "device" | "all" = "device") => {
+    forgetStudioAccess();
     setNotice(null);
     setIsSubmitting(true);
 
     try {
-      await withRequestDeadline(30_000, (signal) => clientApi.delete("/api/client/logout", { signal }));
+      // 서버 푸시 해제는 로그아웃 **전에**(쿠키가 있어야 한다). 실패해도 로그아웃은 한다.
+      await unregisterPushDevice();
+      // 기본은 이 기기 세션만 끊는다. 잃어버린 폰처럼 다른 기기까지 끊어야 할 때를 위해 전체 로그아웃을 따로 둔다.
+      const path = scope === "all" ? "/api/client/logout/all" : "/api/client/logout";
+      await withRequestDeadline(30_000, (signal) => clientApi.delete(path, { signal }));
       await clearLocalUserData();
       router.push("/login");
       router.refresh();
@@ -332,6 +373,7 @@ export default function MyPage() {
       setNotice({ kind: "error", text: "로그아웃에 실패했어요." });
     } finally {
       setIsSubmitting(false);
+      setLogoutAllOpen(false);
     }
   };
 
@@ -346,7 +388,14 @@ export default function MyPage() {
       router.refresh();
     } catch (error) {
       console.error(error);
-      setNotice({ kind: "error", text: "회원 탈퇴에 실패했어요." });
+      setNotice({
+        kind: "error",
+        // 공간의 마지막 소유자는 탈퇴하지 못한다. 평소에는 소유자를 넘기면 되지만 정지 계정은 넘길 수 없다.
+        text:
+          blocked && getApiErrorDetails(error).code === "MEMBER-004"
+            ? `운영 중인 공간의 마지막 소유자라 바로 탈퇴할 수 없어요. ${COMPANY.email} 로 문의해 주세요.`
+            : getUserFacingApiErrorMessage(error, "회원 탈퇴에 실패했어요."),
+      });
       setExitOpen(false);
     } finally {
       setIsSubmitting(false);
@@ -363,6 +412,8 @@ export default function MyPage() {
   }, [notice]);
 
   const profileInitial = user?.username?.trim()?.[0] ?? "U";
+  // 프로필 이미지를 못 받으면(만료·삭제) 대체 글자가 원 안에 크게 넘치지 않게 이니셜로 돌아간다.
+  const [failedProfileUrl, setFailedProfileUrl] = useState<string | null>(null);
 
   /*
     서버 등급(BASIC/PLUS/PRO) 대신 사람이 읽는 이름(무료/베이직/프로)으로 보여준다.
@@ -389,7 +440,7 @@ export default function MyPage() {
     [user?.planTier, usage, stats?.frames],
   );
   const frameCapacityText = frameCapacity.unlimited
-    ? `보관한 프레임 ${frameCapacity.used}개 · 무제한`
+    ? `보관한 프레임 ${frameCapacity.used}개 · ${PAYMENTS_ENABLED ? "무제한" : "지금은 한도 없음"}`
     : `보관한 프레임 ${frameCapacity.used}/${frameCapacity.plan.limit}개`;
 
   const statCells = useMemo(
@@ -437,11 +488,12 @@ export default function MyPage() {
           className="grid h-full w-full place-items-center overflow-hidden rounded-full border border-(--hc-border) bg-(--hc-surface-highlight) font-extrabold text-(--hc-text)"
           style={{ fontSize: font }}
         >
-          {user?.profileUrl ? (
+          {user?.profileUrl && failedProfileUrl !== user.profileUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={user.profileUrl}
-              alt="프로필 이미지"
+              alt=""
+              onError={() => setFailedProfileUrl(user.profileUrl)}
               className="h-full w-full object-cover"
             />
           ) : (
@@ -486,7 +538,7 @@ export default function MyPage() {
           <div
             role="status"
             aria-label="프로필 이미지 올리는 중"
-            className="absolute inset-0 grid place-items-center rounded-full bg-[rgba(10,24,45,0.55)]"
+            className="absolute inset-0 grid place-items-center rounded-full bg-black/55"
           >
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white" />
           </div>
@@ -503,7 +555,7 @@ export default function MyPage() {
             key={cell.l}
             className={`flex-1 text-center ${i ? "border-l border-(--hc-border-subtle)" : ""}`}
           >
-            <div className="text-[21px] font-semibold tabular-nums">{cell.n}</div>
+            <div className="text-[24px] font-semibold tabular-nums">{cell.n}</div>
             <div className="mt-0.5 text-[12px] text-(--hc-muted)">
               {cell.l}
             </div>
@@ -515,13 +567,7 @@ export default function MyPage() {
           <p className="text-center text-[11px] text-(--hc-muted)">
             {statsError}
           </p>
-          <button
-            type="button"
-            onClick={() => void fetchStats()}
-            className="hc-button-secondary rounded-full border px-4 py-1.5 text-[11px] font-semibold"
-          >
-            다시 시도
-          </button>
+          <RetryButton onClick={() => void fetchStats()} />
         </div>
       ) : null}
     </div>
@@ -707,7 +753,7 @@ export default function MyPage() {
             "무기한"처럼 읽힐 빈 값을 두지 않는다. */}
         {periodEnd ? (
           <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
-            {subscription?.autoRenew === false || subscription?.status === "CANCELED"
+            <Sentences text={subscription?.autoRenew === false || subscription?.status === "CANCELED"
               ? `${periodEnd.toLocaleDateString("ko-KR", {
                   year: "numeric",
                   month: "long",
@@ -717,15 +763,28 @@ export default function MyPage() {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
-                })}에 갱신돼요.`}
+                })}에 갱신돼요.`} />
           </p>
         ) : null}
         {subscription?.status === "PAST_DUE" ? (
           <p className="mt-1 text-[12px] font-medium text-(--hc-danger)">
-            정기 결제가 실패했어요. 결제 수단을 확인해 주세요.
+            <Sentences text="정기 결제가 실패했어요. 결제 수단을 확인해 주세요." />
+          </p>
+        ) : null}
+        {/* 해지·변경은 결제한 곳에서만 된다(P4-B) — 어디서 관리하는지 말해 준다. */}
+        {subscriptionManageHint(subscription?.source) ? (
+          <p className="mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
+            {subscriptionManageHint(subscription?.source)}
           </p>
         ) : null}
       </div>
+
+      <StoreRestoreButton
+        onDone={(next) => {
+          setSubscription(next);
+          void refreshUser().catch(() => undefined);
+        }}
+      />
 
       <div className="flex flex-col gap-2">
         <label
@@ -757,7 +816,7 @@ export default function MyPage() {
         </div>
         {couponError ? (
           <p role="alert" className="text-[12px] font-medium text-(--hc-danger)">
-            {couponError}
+            <Sentences text={couponError} />
           </p>
         ) : null}
         {couponNotice ? (
@@ -822,16 +881,46 @@ export default function MyPage() {
     return SECTION_META[id].sub;
   };
 
+  /*
+    약관과 개인정보처리방침은 언제든 찾을 수 있어야 한다(2026-11-14). 개인정보처리방침은 그 이름 그대로 다른 안내와
+    따로 한 줄을 준다 — 쉽게 확인할 수 있게 공개하라는 것이 개인정보 보호법의 요구다. 동의 여부는 위 「알림·약관 동의」가
+    맡고, 여기는 전문을 연다. 이용이 제한된 계정에도 같은 줄을 둔다.
+  */
+  const policyLinks = (
+    <nav aria-label="약관 및 정책" className="hc-surface-card overflow-hidden rounded-[20px] border">
+      {POLICY_LINKS.map(({ href, label }, index) => (
+        <Link
+          key={href}
+          href={href}
+          className={`flex min-h-14 items-center gap-3.5 px-5 py-3.5 transition hover:bg-(--hc-surface-soft) ${
+            index > 0 ? "border-t border-(--hc-border-subtle)" : ""
+          }`}
+        >
+          <span className="min-w-0 flex-1 text-[15px] font-bold">{label}</span>
+          <ChevronRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
+        </Link>
+      ))}
+    </nav>
+  );
+
   const logoutAndExit = (
     <>
       <button
         type="button"
-        onClick={handleLogout}
+        onClick={() => void handleLogout()}
         disabled={isSubmitting}
         className="hc-button-secondary flex h-11 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-semibold disabled:opacity-50"
       >
         <LogOut className="h-4 w-4" />
         로그아웃
+      </button>
+      <button
+        type="button"
+        onClick={() => setLogoutAllOpen(true)}
+        disabled={isSubmitting}
+        className="mx-auto mt-1 flex min-h-11 w-fit items-center px-2 text-[13px] text-(--hc-muted) underline underline-offset-4"
+      >
+        모든 기기에서 로그아웃
       </button>
       <button
         type="button"
@@ -846,13 +935,14 @@ export default function MyPage() {
 
   return (
     <main className="hc-page-app min-h-dvh pb-[calc(90px+env(safe-area-inset-bottom))] text-(--hc-text) lg:pb-0">
-      <AppNav userInitial={user?.username} />
+      {/* 정지 계정은 갈 곳이 여기뿐이다. 눌러도 돌아오는 메뉴를 두지 않는다. */}
+      {blocked ? null : <AppNav />}
 
       {/* 한 칸이므로 폭을 좁힌다. 예전 1000px 는 좌우 두 칸이 나눠 쓰던 폭이라,
           그대로 두면 「비밀번호」 라벨과 오른쪽 「바꾸기」가 800px 넘게 떨어져
           한 줄로 읽히지 않는다. */}
       <div className="mx-auto w-full max-w-170 px-4 py-5 sm:py-6 lg:py-8">
-        <h1 className="text-[28px] font-extrabold tracking-tight lg:text-[34px]">
+        <h1 className="text-[30px] font-extrabold tracking-tight lg:text-[34px]">
           마이페이지
         </h1>
 
@@ -880,7 +970,7 @@ export default function MyPage() {
                   : "rounded-2xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-4 py-3 text-[12px] text-(--hc-danger)"
               }
             >
-              {notice.text}
+              <Sentences text={notice.text} />
             </div>
           </div>
         ) : null}
@@ -890,7 +980,7 @@ export default function MyPage() {
             role="alert"
             className="mt-3 text-[12px] text-(--hc-danger)"
           >
-            {loadError}
+            <Sentences text={loadError} />
           </p>
         ) : null}
 
@@ -906,6 +996,12 @@ export default function MyPage() {
               내 정보를 불러오지 못했어요.
             </p>
           </div>
+        ) : blocked ? (
+          <>
+            <BlockedAccountPanel user={user} />
+            <div className="mt-5">{policyLinks}</div>
+            <div className="mt-5">{logoutAndExit}</div>
+          </>
         ) : (
           <div className="mt-5 flex flex-col gap-5">
             {/* 프로필 — 아바타·이름·이메일 한 줄 */}
@@ -928,6 +1024,20 @@ export default function MyPage() {
             {/* 섹션끼리는 바깥 간격보다 좁게 둔다. 프로필·스탯과 같은 20px 를 주면
                 다섯 장이 각자 떠 있는 것처럼 보여 한 목록으로 읽히지 않았다. */}
             <div className="flex flex-col gap-3">
+            {/* 행사를 맡은 계정의 입구. 개인 화면에서 행사 운영으로 가는 길은 이 한 줄뿐이다 — 홈과 상단 메뉴에는
+                두지 않는다(2026-11-14, 개인 화면과 행사 운영을 섞지 않는다). 개인 설정보다 먼저 찾는 곳이라 첫 줄에 둔다. */}
+            {studioAccess ? (
+              <Link
+                href="/studio"
+                className="hc-surface-card flex items-center gap-3.5 rounded-[20px] border px-5 py-4 transition hover:border-(--hc-border-strong)"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-bold">행사 운영</span>
+                  <span className="block truncate text-[12px] text-(--hc-muted)">내 행사와 사진함</span>
+                </span>
+                <ChevronRight aria-hidden className="h-4.5 w-4.5 shrink-0 text-(--hc-muted)" />
+              </Link>
+            ) : null}
             {SECTIONS.map((id) => {
               const meta = SECTION_META[id];
               const body = sectionBody[id];
@@ -945,7 +1055,7 @@ export default function MyPage() {
                     첫 렌더에 항상 false 라, JS 로 정하면 데스크톱에서 접힌 채 한 번
                     그려졌다 펴지는 깜빡임이 생긴다.
                   */}
-                  <h2 className="hidden px-5 pt-5 text-[17px] font-extrabold lg:block">
+                  <h2 className="hidden px-5 pt-5 text-[16px] font-extrabold lg:block">
                     {meta.title}
                   </h2>
 
@@ -957,15 +1067,14 @@ export default function MyPage() {
                       onClick={() =>
                         setOpenMobile((prev) => (prev === id ? null : id))
                       }
-                      // 헤딩의 이름은 제목만. 부제까지 한 이름으로 읽히면 「계정 정보이메일, 닉네임…」이 된다.
-                      aria-label={meta.title}
-                      aria-describedby={`${bodyId}-sub`}
                       className="flex w-full items-center gap-3.5 px-5 py-4 text-left"
                     >
+                      {/* 이름은 보이는 글자 그대로다(WCAG 2.5.3). 쉼표가 없으면 「계정 정보이메일, 닉네임…」으로 붙어 읽힌다. */}
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15px] font-bold">
                           {meta.title}
                         </span>
+                        <span className="sr-only">, </span>
                         <span
                           id={`${bodyId}-sub`}
                           className="block truncate text-[12px] font-normal text-(--hc-muted)"
@@ -995,6 +1104,8 @@ export default function MyPage() {
             })}
             </div>
 
+            {policyLinks}
+
             <div className="mt-1">{logoutAndExit}</div>
 
             <p className="pb-2 text-center text-[11px] text-(--hc-muted)">
@@ -1003,12 +1114,26 @@ export default function MyPage() {
           </div>
         )}
       </div>
-      <MobileTabBar />
+      {blocked ? null : <MobileTabBar />}
+
+      {logoutAllOpen ? (
+        <ConfirmDialog
+          title="모든 기기에서 로그아웃할까요?"
+          description="이 기기를 포함해 로그인한 모든 휴대폰과 PC 에서 로그아웃돼요. 다시 쓰려면 기기마다 로그인해야 해요."
+          confirmLabel="모두 로그아웃"
+          runningLabel="로그아웃하는 중…"
+          running={isSubmitting}
+          onClose={() => setLogoutAllOpen(false)}
+          onConfirm={() => void handleLogout("all")}
+        />
+      ) : null}
 
       {exitOpen ? (
         <ConfirmDialog
           title="회원 탈퇴를 신청할까요?"
-          description="탈퇴 신청일부터 7일 안에 다시 로그인하면 계정을 복구할 수 있어요. 7일이 지나면 사진과 프레임이 모두 삭제돼요."
+          description={`탈퇴 신청일부터 7일 안에 다시 로그인하면 계정을 복구할 수 있어요. 7일이 지나면 사진과 프레임이 모두 삭제돼요.${
+            blocked ? " 복구해도 이용 제한은 그대로예요." : ""
+          }`}
           confirmLabel="탈퇴 신청"
           runningLabel="탈퇴 신청 중…"
           destructive

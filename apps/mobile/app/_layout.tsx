@@ -1,5 +1,13 @@
 import { Stack } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+/*
+  앱은 세로 고정으로 시작한다 — 돌아가는 것은 촬영 화면뿐이다(lib/native-bridge.ts 의 setScreenOrientation).
+  iOS 는 app.json 의 expo-screen-orientation 플러그인(initialOrientation)이 첫 화면부터 잠근다. 안드로이드는 그
+  플러그인 값을 쓰지 않아(app.json orientation 이 default 라 매니페스트에 고정이 없다) 여기서 한 번 잠근다.
+*/
+void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => undefined);
 
 /**
  * 앱 전체가 웹 셸 하나다.
@@ -12,9 +20,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
  * 경계는 components/harucut-web-shell.tsx 와 lib/native-bridge.ts 에 있다.
  *
  * expo-router 는 라우트가 하나뿐이라 라우팅 때문에 쓰는 것이 아니다. 엔트리(expo-router/entry)와
- * app.json 의 scheme 등록을 그대로 쓰려고 남긴다. `harucut://` 는 **아직 받는 코드가 없다** —
- * 소셜 로그인은 WebView 안에서 시작해 WebView 안에서 끝나고(constants/shell.ts 의 OAuth 판정),
- * 앱은 Linking 으로 밖으로 내보내기만 한다. 딥링크를 실제로 쓰게 되면 여기에 핸들러가 붙는다.
+ * app.json 의 scheme 등록을 그대로 쓰려고 남긴다. `harucut://` 로 받는 것은 앱 로그인 콜백 하나뿐이고
+ * 시스템 브라우저 세션이 직접 받는다(lib/app-login.ts). 라우터가 그 주소로 이동하지 않게
+ * app/+native-intent.tsx 가 막는다.
  */
 export default function RootLayout() {
   return (

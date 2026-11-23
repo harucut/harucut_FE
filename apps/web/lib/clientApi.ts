@@ -23,9 +23,14 @@ type ApiOptions = {
   headers?: HeadersInit;
   cache?: RequestCache;
   signal?: AbortSignal;
+  /**
+   * 약관 미동의(TERMS-004)여도 재동의 창을 열지 않고 오류만 돌려준다. 사람이 누르지 않은 조회용이다 —
+   * 요금제 화면을 읽는 사람을 현재 플랜 조회 하나 때문에 창으로 막지 않는다.
+   */
+  skipTermsGate?: boolean;
 };
 
-function extractEnvelopeLike(value: unknown): ApiEnvelopeLike | null {
+export function extractEnvelopeLike(value: unknown): ApiEnvelopeLike | null {
   if (!value || typeof value !== "object") return null;
 
   const record = value as Record<string, unknown>;
@@ -74,12 +79,46 @@ const SESSION_REFRESH_EXEMPT_PATHS = new Set<string>([
   "/api/client/logout",
 ]);
 
+// 정지 계정이 막힌 API 를 불렀을 때(403 AUTH-042) 호출되는 핸들러. 정지 계정의 자리는 마이페이지다.
+let onAccountBlocked: (() => void) | null = null;
+
+export function registerAccountBlockedHandler(handler: (() => void) | null) {
+  onAccountBlocked = handler;
+}
+
 // 탈퇴요청(DELETED_REQUESTED) 상태로 판정됐을 때 호출되는 핸들러.
 // 세션 만료와 **다르다** — 토큰은 멀쩡하고 계정 상태만 막힌 것이라 로그아웃시키면 안 된다.
 let onDeletionRequested: (() => void) | null = null;
 
 export function registerDeletionRequestedHandler(handler: (() => void) | null) {
   onDeletionRequested = handler;
+}
+
+// 서버가 필수 약관 미동의(TERMS-004)로 API 를 막았을 때 호출되는 핸들러.
+// 재동의 화면을 다시 띄우는 것은 TermsConsentBridge 가 맡는다. 탈퇴요청과 달리 상태를 다시
+// 묻지 않는다 — 이 코드는 그 뜻 하나로만 온다.
+//
+// 핸들러가 약속을 돌려주면 동의가 정리될 때까지 기다렸다가 true 면 그 요청을 한 번만 다시 보낸다.
+// 가입 직후 첫 로그인은 브리지가 동의를 서버에 보내는 동안 화면이 먼저 데이터를 불러 이 응답을 받는다 —
+// 방금 동의한 사람에게 「약관에 동의하면 계속 이용할 수 있어요」를 보여 주면 안 된다.
+// 재시도는 안전하다: 이 응답은 서버가 요청을 처리하기 전에 막은 것이다.
+type TermsConsentRequiredHandler = () => Promise<boolean> | void;
+let onTermsConsentRequired: TermsConsentRequiredHandler | null = null;
+
+export function registerTermsConsentRequiredHandler(handler: TermsConsentRequiredHandler | null) {
+  onTermsConsentRequired = handler;
+}
+
+/** 기다리기를 끊을 수 있게 — 호출부의 시간 제한이 약관 창에 묶여 끝나지 않으면 안 된다. */
+function settledOrAborted(settled: Promise<boolean>, signal?: AbortSignal): Promise<boolean> {
+  if (!signal) return settled;
+  if (signal.aborted) return Promise.resolve(false);
+  return Promise.race([
+    settled,
+    new Promise<boolean>((resolve) => {
+      signal.addEventListener("abort", () => resolve(false), { once: true });
+    }),
+  ]);
 }
 
 // 재발급까지 실패해 세션이 끊긴 것으로 판정됐을 때 호출되는 핸들러.
@@ -106,6 +145,11 @@ type ReissueResult = "ok" | "expired" | "unavailable";
  * 탈퇴요청인지 알 수 없다. 그래서 /api/auth/status 로 상태를 한 번 더 확인한다.
  */
 const ACCESS_DENIED_CODE = "GEN-021";
+const ACCOUNT_BLOCKED_CODE = "AUTH-042";
+
+// 로그인한 계정이 현재 필수 약관에 동의하지 않아 서버가 막았다는 코드.
+// 약관 조회·동의 제출·상태 조회 등 재동의에 필요한 경로는 서버가 이 검사에서 뺀다.
+const TERMS_CONSENT_REQUIRED_CODE = "TERMS-004";
 
 // 상태 조회 자체와 탈퇴 취소는 이 검사에서 빼야 한다(자기 자신을 다시 부르는 순환 방지).
 const DELETION_CHECK_EXEMPT_PATHS = new Set<string>([
@@ -218,7 +262,7 @@ function abortedAsUnavailable(signal: AbortSignal): Promise<ReissueResult> {
  * 회전 두 개, 곧 이 단일화가 막으려던 그 경쟁이다. 멈춘 왕복이 탭을 영영 막는 문제는
  * 이제 왕복 자체의 상한(`REISSUE_DEADLINE_MS`)이 맡는다.
  */
-function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
+export function reissueAccessToken(signal?: AbortSignal): Promise<ReissueResult> {
   if (!pendingReissue) {
     pendingReissue = requestReissue().finally(() => {
       pendingReissue = null;
@@ -247,6 +291,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   options: ApiOptions = {},
+  afterTermsConsent = false,
 ): Promise<ApiResult<T>> {
   const headers = new Headers(options.headers);
   const hasBody = body !== undefined;
@@ -346,6 +391,17 @@ async function request<T>(
       !DELETION_CHECK_EXEMPT_PATHS.has(path)
     ) {
       void checkDeletionRequested();
+    }
+
+    if (res.status === 403 && envelope?.code === ACCOUNT_BLOCKED_CODE) {
+      onAccountBlocked?.();
+    }
+
+    if (res.status === 403 && envelope?.code === TERMS_CONSENT_REQUIRED_CODE) {
+      const settled = options.skipTermsGate ? null : onTermsConsentRequired?.();
+      if (settled && !afterTermsConsent && (await settledOrAborted(settled, options.signal))) {
+        return request<T>(method, path, body, options, true);
+      }
     }
 
     throw new ApiRequestError<T>({

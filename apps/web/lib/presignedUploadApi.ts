@@ -15,11 +15,6 @@ type PresignedUploadData = {
   expiresIn: string;
 };
 
-type UploadedMediaInfo = {
-  objectUrl: string;
-  downloadUrl?: string;
-};
-
 /**
  * 파일 선택기에 넘기는 `accept`. **서버가 받는 형식보다 넓다.**
  *
@@ -108,97 +103,12 @@ type PresignedUploadRequest = {
   fileSize: number;
 };
 
-function normalizeRemoteUrl(value: string | null | undefined): string | null {
-  if (!value) return null;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
-  if (markdownMatch?.[1]) {
-    return markdownMatch[1];
-  }
-
-  const urlMatches = trimmed.match(/https?:\/\/[^\s)\]]+/gi);
-  if (urlMatches && urlMatches.length > 0) {
-    return urlMatches[urlMatches.length - 1];
-  }
-
-  return null;
-}
-
-function extractUploadedMediaInfo(value: unknown): UploadedMediaInfo | null {
-  if (typeof value === "string") {
-    const url = normalizeRemoteUrl(value);
-    return url ? { objectUrl: url, downloadUrl: url } : null;
-  }
-
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  const downloadUrl = normalizeRemoteUrl(
-    typeof record.downloadUrl === "string" ? record.downloadUrl : null,
-  );
-  const objectUrl =
-    normalizeRemoteUrl(typeof record.url === "string" ? record.url : null) ??
-    normalizeRemoteUrl(
-      typeof record.imageUrl === "string" ? record.imageUrl : null,
-    ) ??
-    normalizeRemoteUrl(
-      typeof record.presignedUrl === "string" ? record.presignedUrl : null,
-    ) ??
-    normalizeRemoteUrl(
-      typeof record.presignedImgUrl === "string" ? record.presignedImgUrl : null,
-    ) ??
-    normalizeRemoteUrl(
-      typeof record.signedUrl === "string" ? record.signedUrl : null,
-    ) ??
-    downloadUrl;
-
-  if (objectUrl) {
-    return {
-      objectUrl,
-      downloadUrl: downloadUrl ?? objectUrl,
-    };
-  }
-
-  return extractUploadedMediaInfo(record.data);
-}
-
 /**
- * 올린 파일의 조회용 URL 을 해석한다. 실패하면 `null`.
+ * 저장된 S3 key 를 화면·합성용 다운로드 URL 로 바꾼다. 실패하면 null(호출부가 색으로 채운다).
  *
- * 이 함수가 불리는 시점에 S3 PUT 은 이미 끝났고 `key` 도 손에 있다. 조회는 **화면에 그릴
- * 주소**를 얻으려는 것뿐이다 — 결과는 `themeEditorStore` 의 `renderUrl` 로만 가고
- * `frameApi` 가 저장 요청에서 그 필드를 빼기 때문에 서버에는 닿지 않는다. 그래서 401·5xx·
- * 네트워크로 조회가 실패해도 **성공한 업로드를 취소하면 안 된다** — 예전에는 여기서 던져서
- * 파일은 S3 에 올라간 채 저장만 죽었고, 사용자는 처음부터 다시 올려야 했다.
- *
- * 그렇다고 서명 쿼리만 뗀 업로드 주소로 떨어져서도 안 된다. 서명이 있어야 읽히는 버킷에서는
- * 그 주소가 열리지 않는데, `renderUrl` 에 실리면 `renderThemePreviewPng` 이 이미지 로드
- * 실패를 삼켜서 **사진·스티커가 빠진 썸네일**이 그대로 구워져 저장된다. 실패는 실패로
- * 돌려주고, 그릴 주소는 호출부가 쥔 이번 세션의 로컬 src 에 맡긴다.
- *
- * 같은 엔드포인트를 부르는 형제 `getImageUrlByKey` 와 규칙을 맞춘다(그쪽도 실패를 삼킨다).
+ * 서버는 URL 문자열 하나를 준다(`Response<String>`, BE `FileController.getPresignedImgUrl`).
+ * 예전에는 마크다운 링크·여섯 가지 키 이름까지 추측했는데, 계약이 문자열로 고정돼 쓸 일이 없다.
  */
-async function requestUploadedMediaInfo(
-  key: string,
-): Promise<UploadedMediaInfo | null> {
-  try {
-    const res = await clientApi.get<ApiEnvelope<unknown>>(
-      `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
-    );
-
-    return extractUploadedMediaInfo(res.data.data);
-  } catch {
-    // 응답 모양이 낯설 때와 같은 자리로 — 그릴 주소가 없다는 뜻이다.
-    return null;
-  }
-}
-
-// 저장된 S3 key를 화면/합성용 다운로드 URL로 해석한다. 실패 시 null(호출부에서 색 폴백).
 export async function getImageUrlByKey(key: string): Promise<string | null> {
   if (!key) return null;
 
@@ -206,8 +116,8 @@ export async function getImageUrlByKey(key: string): Promise<string | null> {
     const res = await clientApi.get<ApiEnvelope<unknown>>(
       `/api/client/user/files/presigned-img?key=${encodeURIComponent(key)}`,
     );
-    const info = extractUploadedMediaInfo(res.data.data);
-    return info?.downloadUrl ?? info?.objectUrl ?? null;
+    const url = res.data.data;
+    return typeof url === "string" && url.trim() ? url.trim() : null;
   } catch {
     return null;
   }
@@ -298,23 +208,15 @@ async function requestPresignedUpload(body: PresignedUploadRequest) {
 }
 
 /**
- * presign 발급 → S3 PUT → (선택) 조회용 URL 해석까지 한 번에.
+ * presign 발급 → S3 PUT. 저장에 필요한 `key` 만 돌려준다.
  *
- * `objectUrl` 은 **조회에 성공했을 때만** 채워진다. 비어 있으면 그릴 주소가 없다는 뜻이므로
- * 호출부는 자기가 쥔 로컬 src(blob URL·정적 경로)로 그린다 — 저장에 필요한 값은 `key` 뿐이라
- * 서버에 올라간 사본은 그대로 살아 있다.
+ * 화면에 그릴 주소는 여기서 만들지 않는다 — 부르는 곳(프레임 미리보기·합성 원본·프로필)이 전부
+ * key 만 쓰고, 그리는 쪽은 자기가 쥔 로컬 src 를 쓴다. 주소가 필요하면 `getImageUrlByKey` 를 따로 부른다.
  */
 export async function uploadToS3WithPresigned(opts: {
   file: File;
   type: PresignedUploadType;
-  /**
-   * 조회용 URL 해석을 건너뛴다.
-   *
-   * 합성 원본처럼 **key 만 필요한** 업로드에 쓴다. 원본은 합성 직후 서버가 지우므로
-   * 볼 일이 없는데, 기본 경로는 장당 presigned-img 를 한 번씩 더 부른다(4장이면 4번).
-   */
-  skipUrlResolve?: boolean;
-}) {
+}): Promise<{ key: string }> {
   const { file, type } = opts;
   // 지원 형식만 통과시킨다(아니면 여기서 throw). 파일명은 형식에 맞춰 정규화된 이름을 쓴다.
   const resolved = resolveUpload(file);
@@ -357,16 +259,5 @@ export async function uploadToS3WithPresigned(opts: {
     throw new Error(`S3 upload failed: ${uploadRes.status}`);
   }
 
-  if (opts.skipUrlResolve) {
-    return { key, objectUrl: undefined, downloadUrl: undefined };
-  }
-
-  // 업로드 가능한 형식은 전부 이미지라 항상 다운로드 URL을 해석해 본다.
-  // 해석에 실패해도 던지지 않는다 — URL 자리만 비우고 key 는 그대로 돌려준다.
-  const uploadedMediaInfo = await requestUploadedMediaInfo(key);
-  return {
-    key,
-    objectUrl: uploadedMediaInfo?.objectUrl,
-    downloadUrl: uploadedMediaInfo?.downloadUrl,
-  };
+  return { key };
 }

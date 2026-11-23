@@ -1,6 +1,6 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeEditorPage } from "@/components/theme/editor/ThemeEditorPage";
-import { clearEditorDraft, loadEditorDraft } from "@/lib/themeEditorDraft";
+import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "@/lib/themeEditorDraft";
 
 const mockPush = jest.fn();
 const mockSetFrameId = jest.fn();
@@ -11,7 +11,12 @@ const mockSetBackgroundColor = jest.fn();
 const mockSetBackgroundImageKey = jest.fn();
 const mockCreateFrame = jest.fn();
 const mockUsage = jest.fn();
-jest.mock("@/lib/userApi", () => ({ getSubscriptionUsage: () => mockUsage() }));
+jest.mock("@/lib/userApi", () => ({
+  getSubscriptionUsage: () => mockUsage(),
+  getMyUserInfo: () => mockUserInfo(),
+}));
+const mockUserInfo = jest.fn();
+const DRAFT_OWNER = "owner-1";
 const mockUpdateFrame = jest.fn();
 const mockDeleteFrame = jest.fn();
 const mockGetFrame = jest.fn();
@@ -42,6 +47,11 @@ const editorStoreState = {
   frameId: "classic",
   finalizeAssetsForSave: jest.fn().mockResolvedValue(undefined),
   hydrateDraft: jest.fn(),
+  past: [] as unknown[],
+  undo: jest.fn(),
+  redo: jest.fn(),
+  nudge: jest.fn(),
+  activeId: null as string | null,
 };
 
 function themeEditorStoreMock(selector: (s: typeof editorStoreState) => unknown) {
@@ -133,9 +143,13 @@ jest.mock("@/lib/themeEditorStore", () => ({
   useThemeEditorStore: themeEditorStoreMock,
 }));
 
+let mockWorkspaceId: string | null = null;
+let mockReturnTo: string | null = null;
 jest.mock("@/lib/themeSessionStore", () => ({
   useThemeSession: () => ({
     remoteFrameId: mockRemoteFrameId,
+    workspaceId: mockWorkspaceId,
+    returnTo: mockReturnTo,
   }),
 }));
 
@@ -175,6 +189,27 @@ jest.mock("@/lib/presignedUploadApi", () => ({
     ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type),
 }));
 
+const mockServerDraftFinish = jest.fn().mockResolvedValue(undefined);
+const mockServerDraftArgs = jest.fn();
+/** 서버 초안 찾기 결과. 다른 기기의 더 새로운 초안으로 열었으면 restored. */
+const mockServerDraftState = { restored: false, settled: true };
+jest.mock("@/components/theme/editor/useServerFrameDraft", () => ({
+  useServerFrameDraft: (args: unknown) => (mockServerDraftArgs(args), {
+    status: "idle",
+    restored: mockServerDraftState.restored,
+    settled: mockServerDraftState.settled,
+    conflict: null,
+    overwriteConflict: jest.fn(),
+    reloadConflict: jest.fn(),
+    finish: mockServerDraftFinish,
+  }),
+}));
+
+const mockUploadAsset = jest.fn();
+jest.mock("@/lib/assetUploadApi", () => ({
+  uploadAsset: (...args: unknown[]) => mockUploadAsset(...args),
+}));
+
 // 컴포넌트가 보는 것과 **같은** 클래스여야 instanceof 가 맞는다.
 const { UploadValidationError } = jest.requireMock("@/lib/presignedUploadApi") as {
   UploadValidationError: new (message: string) => Error;
@@ -191,6 +226,7 @@ describe("ThemeEditorPage save flow", () => {
   beforeEach(() => {
     mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
     jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
     clearEditorDraft();
     window.alert = mockAlert;
     mockRemoteFrameId = null;
@@ -249,11 +285,11 @@ describe("ThemeEditorPage save flow", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(200);
     });
-    expect(loadEditorDraft()).toBeNull();
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).toBeNull();
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1000);
     });
-    expect(loadEditorDraft()?.backgroundColor).toBe("abcdef");
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)?.backgroundColor).toBe("abcdef");
   });
 
   it("저장 성공 후 화면 이동이 늦어도 예약 초안이 되살아나지 않는다", async () => {
@@ -272,7 +308,7 @@ describe("ThemeEditorPage save flow", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(2000);
     });
-    expect(loadEditorDraft()).toBeNull();
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).toBeNull();
   });
 
   it("서버 저장이 실패하면 편집 초안의 자동 저장은 계속된다", async () => {
@@ -288,7 +324,34 @@ describe("ThemeEditorPage save flow", () => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1200);
     });
-    expect(loadEditorDraft()).not.toBeNull();
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
+  });
+
+  // 저장을 마친 편집을 다른 기기가 「이어 편집할 초안」으로 다시 묻지 않게 한다.
+  it("저장에 성공하면 서버 초안을 지운다", async () => {
+    const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+    confirmSave(container);
+    await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockServerDraftFinish).toHaveBeenCalledTimes(1));
+  });
+
+  // Studio 에서 연 행사용 프레임: 공간에 만들고, 개인 요금제 한도를 보지 않고, Studio 로 돌아간다.
+  it("공간 맥락이면 공간에 만들고 개인 한도를 보지 않고 돌아갈 곳으로 간다", async () => {
+    mockWorkspaceId = "WsOrg";
+    mockReturnTo = "/studio/events/Ev1";
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 0, frameRetentionRemainingCount: 0 });
+    try {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      confirmSave(container);
+      await waitFor(() => expect(mockCreateFrame).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "WsOrg" })));
+      expect(mockUsage).not.toHaveBeenCalled();
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/studio/events/Ev1"));
+      // 공간의 새 프레임 초안은 공간별로 가른다 — 개인 새 프레임 초안을 복구하지 않게.
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceId: "WsOrg" }));
+    } finally {
+      mockWorkspaceId = null;
+      mockReturnTo = null;
+    }
   });
 
   it("adds a local draft when creating a new frame", async () => {
@@ -298,10 +361,9 @@ describe("ThemeEditorPage save flow", () => {
 
     await waitFor(() => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
-      // 미리보기는 key 로만 저장 요청에 실린다 — 조회용 URL 을 얻는 왕복은 낭비라
-      // 건너뛴다. 빠지면 저장 한 번에 쓸모없는 요청이 하나 더 나간다.
+      // 미리보기는 key 로만 저장 요청에 실린다.
       expect(mockUploadPresigned).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "FRAME", skipUrlResolve: true }),
+        expect.objectContaining({ type: "FRAME" }),
       );
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
@@ -312,14 +374,15 @@ describe("ThemeEditorPage save flow", () => {
     로컬 주소로 그려져 있고 `setBackgroundImageKey` 도 url 을 건드리지 않는다.
     조회용 URL 해석이 되살아나면 저장할 때마다 쓸모없는 왕복이 두 번 늘어난다.
   */
-  it("배경·미리보기 업로드 모두 조회용 URL 해석을 건너뛴다", async () => {
+  // 배경은 공통 자산(서버가 바이트를 검증)으로, 미리보기는 해당 용도가 없어 presigned 로 올린다.
+  // 미리보기는 key 로만 실리므로 조회용 URL 해석(왕복 1회)을 건너뛴다.
+  it("배경은 자산으로 올리고 미리보기는 조회 URL 해석 없이 올린다", async () => {
     editorStoreState.background = { type: "IMAGE", key: null };
     editorStoreState.pendingBackgroundFile = new File(["bg"], "bg.png", {
       type: "image/png",
     });
-    mockUploadPresigned
-      .mockResolvedValueOnce({ key: "background-key" })
-      .mockResolvedValueOnce({ key: "preview-key" });
+    mockUploadAsset.mockResolvedValueOnce({ key: "background-key", assetId: "AsBg" });
+    mockUploadPresigned.mockResolvedValueOnce({ key: "preview-key" });
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -329,15 +392,291 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockCreateFrame).toHaveBeenCalledTimes(1);
     });
 
-    expect(mockSetBackgroundImageKey).toHaveBeenCalledWith("background-key");
-    expect(mockUploadPresigned).toHaveBeenCalledTimes(2);
-    for (const [args] of mockUploadPresigned.mock.calls) {
-      expect(args).toMatchObject({ skipUrlResolve: true });
+    expect(mockUploadAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: "FRAME_ASSET" }),
+    );
+    expect(mockSetBackgroundImageKey).toHaveBeenCalledWith("background-key", "AsBg");
+    expect(mockUploadPresigned).toHaveBeenCalledTimes(1);
+  });
+
+  // F16 — 두 기기 편집은 version 으로 검사한다. 불러온 버전을 보내고, 충돌하면 사용자가 고른다.
+  it("불러온 버전으로 수정 저장하고, 다른 기기가 먼저 저장했으면(FRAME-002) 덮어쓸지 묻는다", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockResolvedValue({
+      frameId: 7,
+      title: "saved",
+      frameType: "CLASSIC",
+      background: { type: "COLOR", value: "111827" },
+      components: [],
+      version: 3,
+    });
+    const conflict = Object.assign(new Error("conflict"), {
+      status: 409,
+      code: "FRAME-002",
+      data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+    });
+    mockUpdateFrame.mockRejectedValueOnce(conflict).mockResolvedValueOnce({ frameId: 7, version: 6 });
+
+    const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+    confirmSave(container);
+
+    await waitFor(() => expect(mockUpdateFrame).toHaveBeenCalledTimes(1));
+    expect(mockUpdateFrame.mock.calls[0][1]).toMatchObject({ version: 3 });
+    expect(mockPush).not.toHaveBeenCalled();
+
+    fireEvent.click(await findByRole("button", { name: "내 편집으로 덮어쓰기" }));
+    await waitFor(() => expect(mockUpdateFrame).toHaveBeenCalledTimes(2));
+    expect(mockUpdateFrame.mock.calls[1][1]).toMatchObject({ version: 5 });
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/theme"));
+  });
+
+  // Codex 리뷰(#524): 페이지를 새로고침하면 메모리 세션(판형·저장본 id)이 사라져 목록으로 튕겼다.
+  it("저장본 다시 불러오기는 새로고침 없이 그 자리에서 저장본을 다시 받는다", async () => {
+    mockRemoteFrameId = 7;
+    mockGetFrame.mockResolvedValue({
+      frameId: 7,
+      title: "saved",
+      frameType: "CLASSIC",
+      background: { type: "COLOR", value: "111827" },
+      components: [],
+      version: 3,
+    });
+    mockUpdateFrame.mockRejectedValueOnce(
+      Object.assign(new Error("conflict"), {
+        status: 409,
+        code: "FRAME-002",
+        data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+      }),
+    );
+    const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+    confirmSave(container);
+
+    fireEvent.click(await findByRole("button", { name: "저장본 다시 불러오기" }));
+    await waitFor(() => expect(mockGetFrame).toHaveBeenCalledTimes(2));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  // Codex 리뷰(#540): 다시 받은 저장본이 곧 새 기준이다 — 안 고쳤으면 이탈 경고가 뜨면 안 된다.
+  it("저장본을 다시 불러오면 이탈 경고 기준도 새 저장본으로 바꾼다", async () => {
+    mockRemoteFrameId = 7;
+    const saved = { frameId: 7, title: "saved", frameType: "CLASSIC", components: [], version: 3 };
+    mockGetFrame
+      .mockResolvedValueOnce({ ...saved, background: { type: "COLOR", value: "111827" } })
+      .mockResolvedValueOnce({ ...saved, background: { type: "COLOR", value: "FF0000" }, version: 5 });
+    mockUpdateFrame.mockRejectedValueOnce(
+      Object.assign(new Error("conflict"), {
+        status: 409,
+        code: "FRAME-002",
+        data: { code: "FRAME-002", status: 409, data: { currentVersion: 5 } },
+      }),
+    );
+    // 가짜 스토어도 실제처럼 불러온 배경을 반영하게 한다(편집 지문이 바뀌어야 기준선 문제가 드러난다).
+    const before = { background: editorStoreState.background, backgroundColor: editorStoreState.backgroundColor };
+    mockImportJson.mockImplementation((json: { background?: MockBackground }) => {
+      if (json.background?.type === "COLOR") {
+        editorStoreState.background = json.background;
+        editorStoreState.backgroundColor = json.background.value;
+      }
+    });
+    try {
+      const { container, findByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      confirmSave(container);
+      fireEvent.click(await findByRole("button", { name: "저장본 다시 불러오기" }));
+      await waitFor(() => expect(mockGetFrame).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(editorStoreState.backgroundColor.toUpperCase()).toBe("FF0000"));
+      // 스토어 값이 바뀐 것만으로는 부족하다 — 다시 그리고 이탈 경고 effect 가 돈 뒤에 본다.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const leave = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(leave);
+      expect(leave.defaultPrevented).toBe(false);
+    } finally {
+      mockImportJson.mockReset();
+      Object.assign(editorStoreState, before);
     }
+  });
+
+  // R5 5절: 저장본 수정도 이 기기에 복구 계층을 둔다. 회선이 끊긴 채 창을 닫아도 남고, 버전이 바뀌면 되살리지 않는다.
+  describe("저장본 수정의 로컬 복구", () => {
+    const SCOPE = { remoteFrameId: 7, version: 3 };
+    const seedDraft = (saved = SCOPE) =>
+      saveEditorDraft({
+        ownerId: DRAFT_OWNER,
+        saved,
+        frameId: "classic-4",
+        backgroundColor: "abcdef",
+        background: { type: "COLOR", value: "abcdef" },
+        cellCutouts: [false, false, false, false],
+        components: [],
+        now: Date.now(),
+      });
+
+    beforeEach(() => {
+      mockRemoteFrameId = 7;
+      editorStoreState.past = [];
+      mockGetFrame.mockResolvedValue({
+        frameId: 7,
+        version: 3,
+        title: "saved",
+        frameType: "CLASSIC",
+        background: { type: "COLOR", value: "111827" },
+        components: [],
+      });
+    });
+    afterEach(() => {
+      editorStoreState.past = [];
+      Object.assign(mockServerDraftState, { restored: false, settled: true });
+    });
+
+    // 「다른 기기 꺼를 가지고 있으면 그냥 그걸로 보여주면 되지」(2026-11-15) — 남은 편집은 묻지 않고 되살린다.
+    it("남은 편집이 있으면 묻지 않고 되살린다", async () => {
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+      expect(editorStoreState.hydrateDraft.mock.calls[0][0]).toMatchObject({ backgroundColor: "abcdef" });
+      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
+    });
+
+    it("서버 초안 찾기가 끝나기 전에는 되살리지 않는다 — 더 새로운 다른 기기 초안과 엇갈린다", async () => {
+      mockServerDraftState.settled = false;
+      await seedDraft();
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
+    // Codex 리뷰 #604 — 찾기가 끝난 뒤 늦게 되살리면 그사이 한 편집과 되돌리기 이력이 사라졌다.
+    it("서버 초안을 찾는 사이 고치기 시작했으면 남은 편집으로 덮지 않는다", async () => {
+      mockServerDraftState.settled = false;
+      await seedDraft();
+      const { container, rerender } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+
+      editorStoreState.past = [{}];
+      mockServerDraftState.settled = true;
+      rerender(<ThemeEditorPage frameId="classic-4" />);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
+    // 편집기 상태는 전역 스토어다. 나간 편집기의 늦은 복구가 다음에 연 편집기를 덮으면 안 된다.
+    it("복구본 배경 주소를 받는 사이 편집기를 나갔으면 다음 편집기에 넣지 않는다", async () => {
+      const { getImageUrlByKey } = jest.requireMock("@/lib/presignedUploadApi") as { getImageUrlByKey: jest.Mock };
+      let resolveUrl: (v: string) => void = () => {};
+      getImageUrlByKey.mockImplementation((key: string) =>
+        key === "uploads/users/u1/bg.png" ? new Promise((resolve) => (resolveUrl = resolve)) : Promise.resolve(null),
+      );
+      try {
+        await saveEditorDraft({
+          ownerId: DRAFT_OWNER,
+          saved: SCOPE,
+          frameId: "classic-4",
+          backgroundColor: "abcdef",
+          background: { type: "IMAGE", key: "uploads/users/u1/bg.png" },
+          cellCutouts: [false, false, false, false],
+          components: [],
+          now: Date.now(),
+        });
+        const { unmount } = render(<ThemeEditorPage frameId="classic-4" />);
+        await waitFor(() => expect(getImageUrlByKey).toHaveBeenCalledWith("uploads/users/u1/bg.png"));
+        unmount();
+        await act(async () => {
+          resolveUrl("https://s3.example.com/bg.png");
+        });
+        expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+      } finally {
+        getImageUrlByKey.mockImplementation(() => Promise.resolve(null));
+      }
+    });
+
+    it("다른 기기의 더 새로운 초안으로 열었으면 이 기기의 더 오래된 편집은 버린다", async () => {
+      mockServerDraftState.restored = true;
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull());
+      expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+    });
+
+    // 되살리면 이력이 비워진다. 그 뒤 이력이 다시 비었다는 것은 저장본이 아니라 되살린 편집으로 돌아왔다는 뜻이다.
+    it("되살린 편집 위에서 고쳤다 되돌려도 복구본을 지우지 않는다", async () => {
+      await seedDraft();
+      render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      // 한 번 고쳐 자동 저장이 돈 뒤
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      // 그 수정만 되돌린다.
+      editorStoreState.past = [];
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull();
+    });
+
+    it("되살리지 않고 고쳤다 되돌리면 저장본으로 돌아온 것이라 복구본을 지운다", async () => {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull(), { timeout: 3000 });
+
+      editorStoreState.past = [];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull(), { timeout: 3000 });
+    });
+
+    it("다른 기기가 먼저 저장해 버전이 바뀌었으면 묻지 않는다", async () => {
+      await seedDraft({ remoteFrameId: 7, version: 2 });
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      expect(screen.queryByRole("region", { name: "이 기기의 저장 안 한 편집" })).not.toBeInTheDocument();
+    });
+
+    it("손댄 뒤에만 자동 저장하고, 저장하면 지운다", async () => {
+      const { container } = render(<ThemeEditorPage frameId="classic-4" />);
+      await waitFor(() => expect(getPrimarySaveButton(container)).not.toBeDisabled());
+      await waitFor(() => expect(storeListeners.size).toBeGreaterThan(0));
+
+      // 불러오기와 배경 주소 주입도 스토어를 바꾼다. 손댄 것이 없으면 쓰지 않는다.
+      storeListeners.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull();
+
+      editorStoreState.past = [{}];
+      storeListeners.forEach((listener) => listener());
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).not.toBeNull(), { timeout: 3000 });
+
+      confirmSave(container);
+      await waitFor(() => expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object)));
+      await waitFor(() => expect(loadEditorDraft(DRAFT_OWNER, "classic-4", SCOPE)).toBeNull());
+    });
   });
 
   it("updates a remote frame without touching local drafts", async () => {
     mockRemoteFrameId = 7;
+    // 같은 판형으로 만들던 새 프레임 초안. 저장본을 고쳐 저장해도 남아야 한다.
+    await saveEditorDraft({
+      ownerId: DRAFT_OWNER,
+      frameId: "classic-4",
+      backgroundColor: "123456",
+      background: { type: "COLOR", value: "123456" },
+      cellCutouts: [false, false, false, false],
+      components: [],
+      now: Date.now(),
+    });
 
     const { container } = render(<ThemeEditorPage frameId="classic-4" />);
 
@@ -354,6 +693,18 @@ describe("ThemeEditorPage save flow", () => {
       expect(mockUpdateFrame).toHaveBeenCalledWith(7, expect.any(Object));
       expect(mockPush).toHaveBeenCalledWith("/theme");
     });
+    expect(loadEditorDraft(DRAFT_OWNER, "classic-4")).not.toBeNull();
+  });
+
+  // 서버 초안은 계정을 알아야 켜진다. 저장본 수정에서 계정을 안 물어 서버 초안이 꺼져 있었다.
+  it("저장본을 고칠 때도 서버 초안에 계정을 넘긴다", async () => {
+    mockRemoteFrameId = 7;
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() =>
+      expect(mockServerDraftArgs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ownerId: DRAFT_OWNER, remoteFrameId: 7 }),
+      ),
+    );
   });
 
   /*
@@ -660,11 +1011,210 @@ describe("ThemeEditorPage save flow", () => {
 
     const view = await renderLoadedEditor();
 
-    fireEvent.click(getButtonByText(view.container, "삭제"));
+    fireEvent.click(getButtonByText(view.container, "이 프레임 삭제"));
     fireEvent.click(getButtonByText(view.container, "지우기"));
 
     await waitFor(() => {
       expect(view.container.textContent).toContain("요청한 정보를 찾을 수 없어요.");
     });
+  });
+});
+
+describe("ThemeEditorPage 되돌리기 단축키", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+  });
+
+  it.each([
+    ["Ctrl+Z", { key: "z", ctrlKey: true }, "undo"],
+    ["⌘+Z", { key: "z", metaKey: true }, "undo"],
+    ["Ctrl+Shift+Z", { key: "Z", ctrlKey: true, shiftKey: true }, "redo"],
+    ["Ctrl+Y", { key: "y", ctrlKey: true }, "redo"],
+  ] as const)("%s 는 %s", (_label, init, action) => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.keyDown(window, init);
+    expect(editorStoreState[action]).toHaveBeenCalledTimes(1);
+    expect(editorStoreState[action === "undo" ? "redo" : "undo"]).not.toHaveBeenCalled();
+  });
+
+  // 문구를 고치다 Ctrl+Z 를 눌렀는데 캔버스 레이어가 사라지면 안 된다.
+  it("글자 입력 칸에서는 브라우저의 입력 되돌리기를 그대로 둔다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+    expect(editorStoreState.undo).not.toHaveBeenCalled();
+    input.remove();
+  });
+});
+
+describe("ThemeEditorPage 초안 복원과 계정", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.components = [];
+    editorStoreState.background = { type: "COLOR", value: "111827" };
+    editorStoreState.past = [];
+  });
+
+  afterEach(() => {
+    editorStoreState.past = [];
+    jest.useRealTimers();
+  });
+
+  async function stashDraft(ownerId: string) {
+    await saveEditorDraft({
+      ownerId,
+      frameId: "classic-4",
+      backgroundColor: "123456",
+      background: { type: "COLOR", value: "123456" },
+      cellCutouts: [false, false, false, false],
+      components: [],
+      now: Date.now(),
+    });
+  }
+
+  // 계정 조회가 끝나기 전에 배경색만 바꾼 경우다 — 자동 저장 구독은 아직 그 변경을 못 봤다.
+  it("계정을 알기 전에 한 편집도 초안에 남긴다", async () => {
+    jest.useFakeTimers();
+    editorStoreState.past = [{}];
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await act(async () => {}); // 계정 조회 응답
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1200);
+    });
+    expect(loadEditorDraft(DRAFT_OWNER, "classic" as never)).not.toBeNull();
+  });
+
+  it("계정을 알기 전에 편집을 시작했으면 예전 초안으로 덮지 않는다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    editorStoreState.past = [{}];
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
+
+  it("내 계정의 초안을 복원한다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(editorStoreState.hydrateDraft).toHaveBeenCalledTimes(1));
+  });
+
+  // 공용 기기에서 앞 사람이 로그아웃하지 않고 떠난 경우다.
+  it("다른 계정의 초안은 복원하지 않는다", async () => {
+    await stashDraft("someone-else");
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
+
+  it("계정을 알 수 없으면 복원하지 않는다", async () => {
+    await stashDraft(DRAFT_OWNER);
+    mockUserInfo.mockRejectedValue(new Error("network"));
+    render(<ThemeEditorPage frameId="classic-4" />);
+    await waitFor(() => expect(mockUserInfo).toHaveBeenCalled());
+    await act(async () => {});
+    expect(editorStoreState.hydrateDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("ThemeEditorPage 방향키 이동", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.activeId = "layer-1";
+  });
+
+  afterEach(() => {
+    editorStoreState.activeId = null;
+  });
+
+  it.each([
+    ["ArrowLeft", false, [-10, 0]],
+    ["ArrowDown", false, [0, 10]],
+    ["ArrowRight", true, [50, 0]],
+  ] as const)("%s(Shift %s) 는 고른 레이어를 움직인다", (key, shiftKey, [dx, dy]) => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.keyDown(window, { key, shiftKey });
+    expect(editorStoreState.nudge).toHaveBeenCalledWith("layer-1", dx, dy);
+  });
+
+  it("고른 레이어가 없으면 방향키를 가로채지 않는다", () => {
+    editorStoreState.activeId = null;
+    render(<ThemeEditorPage frameId="classic-4" />);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+  });
+
+  it("입력 칸의 방향키는 그대로 둔다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+    input.remove();
+  });
+
+  // 창은 열 때 자기 자신에 포커스를 둔다(useModalDialog). 그 상태의 방향키가 뒤 레이어를 움직이면 안 된다.
+  it("창이 떠 있으면 방향키로 뒤 레이어를 움직이지 않는다", () => {
+    render(<ThemeEditorPage frameId="classic-4" />);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.tabIndex = -1;
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(dialog, { key: "ArrowLeft" });
+    expect(editorStoreState.nudge).not.toHaveBeenCalled();
+    dialog.remove();
+  });
+});
+
+describe("ThemeEditorPage 모바일 도구 시트", () => {
+  beforeEach(() => {
+    mockUsage.mockResolvedValue({ frameRetentionUnlimited: false, frameRetentionLimit: 3, frameRetentionRemainingCount: 3 });
+    jest.clearAllMocks();
+    mockUserInfo.mockResolvedValue({ id: DRAFT_OWNER });
+    clearEditorDraft();
+    mockRemoteFrameId = null;
+    editorStoreState.activeId = null;
+  });
+
+  /** 모바일에서 보이는 패널. 데스크톱 배치는 CSS(`lg:`)가 맡아 jsdom 에서는 클래스로만 본다. */
+  function shownPanels(container: HTMLElement) {
+    return Array.from(
+      container.querySelectorAll("#theme-editor-tool-sheet > div"),
+    )
+      .filter((node) => !node.className.includes("max-lg:hidden"))
+      .map((node) => node.firstElementChild?.getAttribute("data-testid"));
+  }
+
+  it("처음에는 추가 도구 하나만 시트에 띄우고, 고른 도구로 바꾼다", () => {
+    const { container, getByRole } = render(<ThemeEditorPage frameId="classic-4" />);
+    expect(shownPanels(container)).toEqual(["asset-panel"]);
+
+    fireEvent.click(getByRole("button", { name: "레이어" }));
+    expect(shownPanels(container)).toEqual(["layers-panel"]);
+    expect(getByRole("button", { name: "레이어" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // 캔버스에서 고른 것을 바로 고치러 온 것이다.
+  it("레이어를 새로 고르면 속성 시트로 넘긴다", () => {
+    const { container, rerender } = render(<ThemeEditorPage frameId="classic-4" />);
+    editorStoreState.activeId = "layer-1";
+    rerender(<ThemeEditorPage frameId="classic-4" />);
+    expect(shownPanels(container)).toEqual(["inspector-panel"]);
+    editorStoreState.activeId = null;
   });
 });

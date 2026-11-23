@@ -20,6 +20,7 @@ import {
   waitForCompose,
 } from "@/lib/composeApi";
 import { frameTypeFromFrameId } from "@/lib/frameApi";
+import { FREE_CELL_COUNT, type FreeCell } from "@/lib/frameCells";
 import { isAssetFrame } from "@/lib/serverAssets";
 import {
   applyFilterPixels,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/presignedUploadApi";
 import type { RemoteFrame } from "@/lib/api-types";
 import { getFrame, listAllFrames } from "@/lib/remoteFrameApi";
+import { composeFailureCopy } from "@/lib/composeFailure";
 import type { FrameLayout } from "@/lib/canvas/composeFrame";
 
 /**
@@ -64,7 +66,7 @@ import type { FrameLayout } from "@/lib/canvas/composeFrame";
  * 것으로 바꾼다(`lib/canvas/personCutout.ts`). 토글이 어디서 오는지는 `resolveComposeFrame`
  * 이 갖는다.
  *
- * 구운 픽셀이 사용자 눈에 닿는 곳은 결과 화면이다 — `app/shoot/result/page.tsx` 가 완성본을
+ * 구운 픽셀이 사용자 눈에 닿는 곳은 결과 화면이다 — `app/create/result/page.tsx` 가 완성본을
  * 그대로 띄운다. 원본으로 만든 미리보기를 그 자리에 두면 화면과 저장본이 갈린다.
  *
  * ## 슬롯 크기로 잘라서 올린다
@@ -253,7 +255,20 @@ export type ComposeFrameTarget = {
    * 굽는다. 개수·저장·렌더링 계약은 `docs/backend-contract.md` 가 갖는다.
    */
   cellCutouts: boolean[];
+  /**
+   * 자유 사진 칸(P5). 있으면 원본 i 는 `shotIndex === i` 인 칸의 크기로 가공해 올린다 — 고정 슬롯 비율로 자르면
+   * 서버가 칸 비율로 한 번 더 잘라, 화면 미리보기(FramePreview 가 칸에 바로 맞춤)와 구도가 달라진다(Codex #567).
+   */
+  cells?: FreeCell[];
 };
+
+/** 네 칸이 모두 있고 촬영 순번이 0~3 으로 하나씩일 때만 자유 칸으로 본다. 아니면 고정 슬롯. */
+function readFreeCells(frame: RemoteFrame | null): FreeCell[] | undefined {
+  const cells = frame?.cells;
+  if (!cells || cells.length !== FREE_CELL_COUNT) return undefined;
+  const order = new Set(cells.map((cell) => cell.shotIndex));
+  return order.size === FREE_CELL_COUNT && [0, 1, 2, 3].every((i) => order.has(i)) ? cells : undefined;
+}
 
 /**
  * 프레임이 들고 있는 누끼 토글을 읽는다.
@@ -294,7 +309,8 @@ export async function resolveComposeFrame(
       return null;
     });
 
-    return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame) };
+    const cells = readFreeCells(frame);
+    return { frameId: remoteFrameId, cellCutouts: readCellCutouts(frame), ...(cells ? { cells } : {}) };
   }
 
   if (!frameId) throw new SystemFrameMissingError();
@@ -314,6 +330,11 @@ export type ComposeFailure = {
   message: string;
   /** 같은 조건으로 다시 눌러 성공할 여지가 있는가. */
   retryable: boolean;
+  /**
+   * 서버가 실패로 확정한 작업이라 다시 시도는 **새 작업**이어야 하는가(새 멱등키). 같은 키로는 실패한 작업이 그대로 돌아온다(Codex #565).
+   * 아직 결과를 모르는 폴링 시간 초과는 false — 진행 중인 작업을 이어받는다.
+   */
+  newJobOnRetry?: boolean;
 };
 
 /**
@@ -359,9 +380,19 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
       console.error(`[compose] 서버 합성 실패: ${error.reason}`);
     }
 
+    // 문구가 따로 있는 실패 코드(프레임 파일·시간 초과)는 그것으로 고른다(lib/composeFailure.ts).
+    const copy = composeFailureCopy(error.code);
+    if (copy) return { ...copy, newJobOnRetry: copy.retryable };
+
+    /*
+      나머지는 다시 시도한다(2026-11-15). 예전에는 「서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.」로
+      프레임을 다시 고르게 했다 — 같은 입력이면 같은 실패라고 봤는데, 다시 시도는 새 작업이라(새 멱등키, 원본도
+      기기에서 다시 올린다) 일시 장애면 풀린다. 다른 프레임을 고르라는 것도 짐작이었다. 완성되어야 다음으로 간다.
+    */
     return {
-      message: "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.",
-      retryable: false,
+      message: "네컷을 만들지 못했어요. 다시 시도해 주세요.",
+      retryable: true,
+      newJobOnRetry: true,
     };
   }
 
@@ -376,7 +407,16 @@ export function describeComposeFailure(error: unknown): ComposeFailure {
     };
   }
 
-  // 없는 프레임이거나 남의 프레임(GEN-031). 링크로 받은 전용 프레임에서 잘 난다.
+  // 자유 사진 칸 프레임은 합성 렌더가 열리기 전까지 촬영에 못 쓴다(P5, 서버 스위치 off — 409 FRAME-008).
+  // 되풀이해도 같으니 다른 프레임을 고르게 한다. 문구는 서버 코드 문구(api-error-messages)를 쓴다.
+  if (code === "FRAME-008") {
+    return {
+      message: getUserFacingApiErrorMessage(error, "이 프레임은 아직 촬영에 쓸 수 없어요."),
+      retryable: false,
+    };
+  }
+
+  // 없는 프레임이거나 남의 프레임(GEN-031). 고른 뒤 다른 기기에서 지운 프레임에서 난다.
   if (code === "GEN-031" || status === 404) {
     return {
       message: "고른 프레임을 찾을 수 없어요. 프레임을 다시 골라 주세요.",
@@ -454,7 +494,6 @@ async function uploadSources(files: File[]): Promise<string[]> {
       uploadToS3WithPresigned({
         file,
         type: PRESIGNED_UPLOAD_TYPES.FOURCUT_SOURCE,
-        skipUrlResolve: true,
       }),
     ),
   );
@@ -499,17 +538,25 @@ async function uploadSources(files: File[]): Promise<string[]> {
  * 합성이 성공한 뒤에도 비우지 않는다. 성공하면 서버가 원본을 지우므로 여기 남은 key 는
  * 이미 없는 객체를 가리키지만, 같은 키로 다시 접수하면 서버는 끝난 작업을 재생할 뿐 key 를
  * 보지 않는다. 비워 두면 그 재접수가 아무도 안 쓸 4장을 새로 만든다.
+ *
+ * **23시간만 믿는다.** 서버는 원본을 발급 24시간 뒤에 지운다(app-shell §4). 그보다 오래 들고
+ * 같은 멱등키로 재시도하면 지워진 key 로 접수해 SOURCE_MISSING 으로 실패한다 — 그 전에 버리고
+ * 새로 올린다(접수된 작업이 있었다면 서버는 어차피 key 를 보지 않는다).
  */
 let lastUploadedSources: {
   idempotencyKey: string;
   sourceKeys: string[];
+  uploadedAt: number;
 } | null = null;
 
-/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없으면 null(= 새로 올린다). */
+export const SOURCE_REUSE_MS = 23 * 60 * 60 * 1000;
+
+/** 이 멱등키로 이미 올려 둔 원본이 있으면 그 key 를 준다. 없거나 오래됐으면 null(= 새로 올린다). */
 function reusableSourceKeys(idempotencyKey: string | undefined): string[] | null {
   if (!idempotencyKey) return null;
 
-  return lastUploadedSources?.idempotencyKey === idempotencyKey
+  return lastUploadedSources?.idempotencyKey === idempotencyKey &&
+    Date.now() - lastUploadedSources.uploadedAt < SOURCE_REUSE_MS
     ? lastUploadedSources.sourceKeys
     : null;
 }
@@ -527,7 +574,7 @@ function rememberUploadedSources(
 ) {
   if (!idempotencyKey) return;
 
-  lastUploadedSources = { idempotencyKey, sourceKeys };
+  lastUploadedSources = { idempotencyKey, sourceKeys, uploadedAt: Date.now() };
 }
 
 /**
@@ -572,7 +619,7 @@ export async function composeFourcutOnServer(args: {
   // 실패할 운명이어도 원본 4장은 이미 S3 로 나간 뒤라 쓰이지 않을 파일만 남았다
   // (합성이 성공해야 서버가 원본을 지운다). 몇백 ms 를 아끼자고 치르기엔 비싼 값이다.
   // 누끼 토글도 여기서 같이 받는다 — 굽기가 그 값을 봐야 한다.
-  const { frameId: composeFrameId, cellCutouts } = await resolveComposeFrame(
+  const { frameId: composeFrameId, cellCutouts, cells } = await resolveComposeFrame(
     args.frameId,
     args.remoteFrameId,
   );
@@ -596,7 +643,7 @@ export async function composeFourcutOnServer(args: {
         prepared.sources.map(async (src, index) => {
           const blob = await renderSourceForSlot(
             src,
-            layout.slots[index],
+            cells?.find((cell) => cell.shotIndex === index) ?? layout.slots[index],
             outputFilter,
           );
           return new File([blob], `source-${index + 1}.jpg`, {

@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { AppNav } from "@/components/layout/AppNav";
 import { MarketingFooter } from "@/components/layout/MarketingFooter";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { GuestTrialStartButton } from "@/components/guest/GuestTrialStartButton";
 import { PAYMENTS_ENABLED } from "@/constants/company";
+import { STORE_PURCHASES_ENABLED } from "@harucut/shared";
 import {
   ENTERPRISE_TEASER,
   PLANS,
-  PRICING_BILLING_PENDING,
   PRICING_DOWNGRADE_NOTE,
   PRICING_HEADLINE,
   PRICING_SUBTITLE,
@@ -26,6 +26,7 @@ import { PRICING_FAQ } from "@/constants/faq";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import type { SubscriptionUsage } from "@/lib/api-types";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
+import { StoreBuyButton } from "@/components/subscription/StoreSubscriptionActions";
 
 // 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
 // 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로 비회원에겐 노출하지 않는다.
@@ -36,11 +37,14 @@ function PlanCard({
   plan,
   authed,
   current,
+  onPurchased,
 }: {
   plan: Plan;
   authed: boolean;
   /** 이 카드가 지금 이용 중인 플랜인지. */
   current: boolean;
+  /** 앱에서 구독을 마쳤다 — 현재 플랜을 다시 받는다. */
+  onPurchased?: () => void;
 }) {
   // 결제가 닫힌 동안에는 살 수 없는 카드를 강조하지 않는다. 시선은 지금 할 수 있는
   // 것(무료 시작)으로 보낸다. 결제가 열리면 원래대로 베이직이 강조된다.
@@ -54,9 +58,9 @@ function PlanCard({
     <div
       className={`relative flex flex-col rounded-[20px] border p-6 ${
         current
-          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow) ring-2 ring-(--hc-primary)"
+          ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow) ring-2 ring-(--hc-primary)"
           : hot
-            ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow)"
+            ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) shadow-(--hc-button-shadow)"
             : "hc-surface-card"
       }`}
     >
@@ -133,9 +137,22 @@ function PlanCard({
         지금 실제로 할 수 있는 것은 비회원이 무료로 가입하는 것 하나뿐이다.
       */}
       {current ? (
-        <span className="mt-5 flex h-12.5 w-full items-center justify-center rounded-full border border-(--hc-primary) text-[15px] font-extrabold text-(--hc-primary-strong)">
+        <span className="mt-5 flex h-12.5 w-full items-center justify-center rounded-full border border-(--hc-primary-line) text-[15px] font-extrabold text-(--hc-primary-strong)">
           현재 이용 중
         </span>
+      ) : authed && plan.id === "plus" ? (
+        /*
+          앱 안에서는 스토어로 판다(P4-B, STORE_PURCHASES_ENABLED 가 켜졌을 때). 브라우저면 지금처럼 결제 준비 중이다 —
+          스토어 결제를 웹 결제로 우회하지 않는다(R5 12절). 이미 플러스면 위 「현재 이용 중」이 먼저다.
+        */
+        <StoreBuyButton
+          onDone={onPurchased}
+          fallback={
+            <p className="mt-5 flex h-12.5 items-center justify-center text-[14px] font-semibold text-(--hc-muted)">
+              결제 준비 중
+            </p>
+          }
+        />
       ) : !isPurchasable ? (
         /*
           ₩3,900 이 적힌 카드에 "무료로 시작하기" 버튼이 달려 있었다. 누르면 무료 가입으로
@@ -175,6 +192,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
   const [currentPlanId, setCurrentPlanId] = useState<PlanId | null>(null);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
   const [usageFailed, setUsageFailed] = useState(false);
+  // 앱에서 구독을 마치면 올려 현재 플랜을 다시 받는다.
+  const [usageReload, setUsageReload] = useState(0);
 
   // 현재 플랜은 로그인 상태에서만 조회한다. 비회원까지 호출하면 clientApi가
   // 401 → 재발급 시도까지 태우게 되므로, 서버가 넘겨준 authed로 먼저 걸러낸다.
@@ -183,7 +202,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
     if (!authed) return;
     let cancelled = false;
 
-    getSubscriptionUsage()
+    // 읽으러 온 사람을 조회 하나로 약관 창에 막지 않는다. 약관은 구독을 누를 때 묻는다.
+    getSubscriptionUsage({ skipTermsGate: true })
       .then((current) => {
         if (!cancelled) {
           setUsage(current);
@@ -195,7 +215,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [authed]);
+  }, [authed, usageReload]);
 
   // 비회원 전용 FAQ("비회원도 사용할 수 있나요?")는 로그인 후엔 의미가 없다.
   const faqItems = authed
@@ -248,7 +268,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               key={plan.id}
               plan={plan}
               authed={authed}
-              current={PAYMENTS_ENABLED && currentPlanId === plan.id}
+              current={(PAYMENTS_ENABLED || STORE_PURCHASES_ENABLED) && currentPlanId === plan.id}
+              onPurchased={() => setUsageReload((n) => n + 1)}
             />
           ))}
         </section>
@@ -283,10 +304,6 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               <span className="rounded-full bg-(--hc-primary) px-2 py-0.5 text-[11px] font-bold text-(--hc-primary-contrast)">
                 {ENTERPRISE_TEASER.badge}
               </span>
-              {/* 다른 카드가 모두 가격을 보여주므로 여기도 값이 어떻게 정해지는지 밝힌다. */}
-              <span className="text-[12px] font-semibold text-(--hc-accent-soft-text)">
-                {ENTERPRISE_TEASER.price}
-              </span>
             </div>
             <p className="max-w-130 text-[13px] leading-[1.7] text-(--hc-text)">
               {ENTERPRISE_TEASER.desc}
@@ -309,20 +326,22 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </h2>
           <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} />
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
-            가격은 부가세 포함이에요. {PRICING_BILLING_PENDING}
-            <br />
             {PRICING_DOWNGRADE_NOTE}
           </p>
         </section>
 
-        {/* FAQ */}
-        <section className="flex flex-col gap-4">
-          <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
+        {/*
+          FAQ — 가운데에 세우고, 질문 줄 오른쪽 끝의 화살표로 접었다 편다(2026-11-14).
+          예전에는 「+」 동그라미가 45도 돌아 「×」가 됐다 — 닫기처럼 보여 펼친 것인지 알기 어려웠다.
+        */}
+        <section className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+          <h2 className="text-center text-[20px] font-extrabold tracking-tight lg:text-[22px]">
             자주 묻는 질문
           </h2>
           <div className="flex flex-col">
             {faqItems.map((item, i) => {
               const on = open === i;
+              const answerId = `pricing-faq-${i}`;
               return (
                 <div
                   key={item.q}
@@ -332,23 +351,20 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
                     type="button"
                     onClick={() => setOpen(on ? -1 : i)}
                     aria-expanded={on}
+                    aria-controls={answerId}
                     className="flex w-full items-center justify-between gap-4 py-4 text-left"
                   >
                     <span className="text-[15px] font-bold tracking-tight text-(--hc-text)">
                       {item.q}
                     </span>
-                    <span
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-(--hc-border-strong) text-(--hc-muted) transition-transform"
-                      style={{ transform: on ? "rotate(45deg)" : "none" }}
-                    >
-                      +
-                    </span>
+                    <ChevronDown
+                      aria-hidden
+                      className={`h-5 w-5 shrink-0 text-(--hc-muted) transition-transform ${on ? "rotate-180" : ""}`}
+                    />
                   </button>
-                  {on ? (
-                    <p className="mb-4 max-w-170 text-[14px] leading-[1.65] text-(--hc-muted)">
-                      {item.a}
-                    </p>
-                  ) : null}
+                  <p id={answerId} hidden={!on} className="mb-4 text-[14px] leading-[1.65] text-(--hc-muted)">
+                    {item.a}
+                  </p>
                 </div>
               );
             })}

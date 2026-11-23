@@ -17,7 +17,11 @@ import {
   validatePassword,
   validateUsername,
 } from "@/lib/authValidation";
-import { signupWithEmail } from "@/lib/auth/authApi";
+import { loginWithEmail, signupWithEmail } from "@/lib/auth/authApi";
+import { isUnusableUserStatus } from "@/lib/authUserStatus";
+import { clientApi } from "@/lib/clientApi";
+import { useGuestTrialStore } from "@/lib/guestTrialStore";
+import { forgetStudioAccess } from "@/hooks/useStudioAccess";
 import {
   getApiErrorDetails,
   getUserFacingApiErrorMessage,
@@ -35,6 +39,7 @@ import {
   useEmailVerification,
   VERIFICATION_EXPIRED_MESSAGE,
 } from "./_hooks/useEmailVerification";
+import { Sentences } from "@/components/ui/Sentences";
 
 type SignupFieldName = Extract<
   AuthFieldName,
@@ -64,6 +69,32 @@ function SignupPageContent() {
   const [consents, setConsents] = useState<Record<string, boolean>>({});
 
   const emailVerification = useEmailVerification();
+  const exitGuestMode = useGuestTrialStore((state) => state.exitGuestMode);
+
+  /**
+   * 가입했으면 바로 들인다(2026-11-09). 방금 만든 비밀번호를 곧바로 다시 치게 하지 않는다.
+   *
+   * 이메일은 가입 전에 인증을 마쳤으니 로그인이 된다. 성공하면 로그인 화면과 같은 일을 한다 —
+   * 이전 계정의 행사 운영 기억을 지우고, 비회원 체험을 끝내고, 돌아갈 곳으로 문서째 이동한다.
+   * 새 계정이라 탈퇴 요청·탈퇴 상태일 수 없지만, 그렇게 오거나 로그인이 실패하면 false 를 돌려
+   * 예전처럼 로그인 화면에서 「가입이 끝났어요」를 말하게 한다.
+   */
+  const signInRightAfterSignup = async (signupEmail: string, signupPassword: string) => {
+    try {
+      const loginData = await loginWithEmail(signupEmail, signupPassword);
+      if (isUnusableUserStatus(loginData?.userStatus ?? null)) {
+        await clientApi.delete("/api/client/logout").catch(() => undefined);
+        return false;
+      }
+      forgetStudioAccess();
+      exitGuestMode();
+      window.location.href = redirectTarget;
+      return true;
+    } catch (error) {
+      console.error(error);
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -126,9 +157,8 @@ function SignupPageContent() {
       (item) => item.required && !consents[item.code],
     );
     if (missingRequired.length > 0) {
-      nextErrors.consent = `${missingRequired
-        .map((item) => item.title)
-        .join(", ")}에 동의해야 가입할 수 있어요.`;
+      // 어느 약관인지는 그 체크칸이 빨갛게 말한다. 문장은 할 일 하나만(2026-11-14).
+      nextErrors.consent = "필수 약관에 동의해 주세요.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -148,9 +178,9 @@ function SignupPageContent() {
       });
 
       // 동의를 여기서 바로 보낼 수는 없다. `POST /api/auth/terms/consents` 는 인증이
-      // 필요한데 우리 가입은 계정만 만들고 로그인시키지 않는다. 그래서 사용자가 고른 값을
-      // 가입 이메일과 함께 보관해 두고, 로그인 직후 TermsConsentBridge 가 계정을 대조한
-      // 뒤 서버 장부에 기록한다.
+      // 필요한데 가입 요청은 계정만 만들고 세션을 주지 않는다(로그인은 아래에서 따로 한다).
+      // 그래서 사용자가 고른 값을 가입 이메일과 함께 보관해 두고, 로그인 직후
+      // TermsConsentBridge 가 계정을 대조한 뒤 서버 장부에 기록한다.
       //
       // 보관은 **가입이 성공한 뒤에만** 한다. 요청보다 앞서 남기면 가입이 깨졌을 때 선택만
       // 기기에 남고, 다음에 이 기기에서 로그인한 다른 계정의 법적 이력으로 붙는다.
@@ -167,7 +197,11 @@ function SignupPageContent() {
         );
       }
 
-      router.push(loginHref);
+      // 보관한 동의는 들어간 화면에서 TermsConsentBridge 가 기록한다(로그인 화면을 거칠 때와 같다).
+      if (await signInRightAfterSignup(signupEmail, password)) return;
+
+      // 자동 로그인이 안 됐으면 로그인 화면으로 보낸다. 말없이 보내면 가입이 됐는지 알 수 없다 — 다 됐다고 말해 준다.
+      router.push(`${loginHref}${loginHref.includes("?") ? "&" : "?"}joined=1`);
     } catch (error) {
       console.error(error);
 
@@ -187,6 +221,10 @@ function SignupPageContent() {
         emailVerification.reset();
         showErrors({ email: VERIFICATION_EXPIRED_MESSAGE });
       } else if (code === "AUTH-030") {
+        // 「인증 완료」 옆에 「이미 사용 중」이 같이 보이면 앞뒤가 안 맞는다. 보통은 코드를 보낼 때 서버가
+        // 막는다(가입된 이메일이면 코드를 안 보내고 AUTH-030). 인증과 가입 사이에 그 이메일로 가입이
+        // 끝난 드문 경우만 여기 온다 — 인증 상태를 풀고 이메일 칸에서 말한다.
+        emailVerification.reset();
         showErrors({ email: message });
       } else {
         showErrors({ common: message });
@@ -198,12 +236,12 @@ function SignupPageContent() {
 
   if (!activeTerms.fromServer) {
     return (
-      <AuthPageShell title="회원가입" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
+      <AuthPageShell title="회원가입" backHref={loginHref} backLabel="로그인으로" footer={<Link href={loginHref} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">이미 계정이 있다면 로그인</Link>}>
         <div className="flex flex-col gap-4">
           <p role="status" className="text-sm leading-relaxed text-(--hc-text)">
-            {activeTerms.status === "loading"
+            <Sentences text={activeTerms.status === "loading"
               ? "가입에 필요한 약관을 확인하고 있어요."
-              : "가입에 필요한 약관을 불러오지 못해 회원가입을 잠시 이용할 수 없어요. 가입 없이도 사진을 만들고 기기에 내려받을 수 있어요."}
+              : "가입에 필요한 약관을 불러오지 못해 회원가입을 잠시 이용할 수 없어요. 가입 없이도 사진을 만들고 기기에 내려받을 수 있어요."} />
           </p>
           {activeTerms.status !== "loading" ? (
             <button type="button" onClick={activeTerms.reload} className="hc-button-secondary inline-flex h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold">다시 확인하기</button>
@@ -217,20 +255,25 @@ function SignupPageContent() {
   return (
     <AuthPageShell
       title="회원가입"
+      backHref={loginHref}
+      backLabel="로그인으로"
       footer={
         <>
           <SocialLoginSection mode="signup" redirectTo={redirectTo} />
           {/* 로그인 페이지의 대응 문구와 같은 토큰을 쓴다. 하드코딩 text-zinc-500 은 다크에서 어긋났다. */}
           <p className="mt-2 text-center text-[13px] leading-6 text-(--hc-muted)">
-            소셜 계정으로도 가입할 수 있어요.{" "}
-            <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-              서비스 이용약관
-            </Link>
-            과{" "}
-            <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-              개인정보 처리방침
-            </Link>
-            을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
+            {/* 문장마다 줄을 나눈다 — 링크가 들어 있어 Sentences 대신 같은 모양(문장 블록 + 사이 빈칸)을 직접 둔다. */}
+            <span className="block text-balance">소셜 계정으로도 가입할 수 있어요.</span>{" "}
+            <span className="block text-balance">
+              <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                서비스 이용약관
+              </Link>
+              과{" "}
+              <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                개인정보 처리방침
+              </Link>
+              을 확인하고, 가입 후 표시되는 필수 약관에 동의해 주세요.
+            </span>
           </p>
           <p className="mt-2 text-center text-[14px] text-(--hc-muted)">
             이미 계정이 있으신가요?{" "}
@@ -247,7 +290,7 @@ function SignupPageContent() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.common ? (
           <p role="alert" tabIndex={-1} className="rounded-xl border border-(--hc-danger-border) bg-(--hc-danger-soft-bg) px-3.5 py-2.5 text-[13px] leading-[1.6] text-(--hc-danger)">
-            {errors.common}
+            <Sentences text={errors.common} />
           </p>
         ) : null}
 
@@ -268,7 +311,6 @@ function SignupPageContent() {
             isVerifying={emailVerification.isVerifyingCode}
             isVerified={emailVerification.isEmailVerified}
             codeExpiresAt={emailVerification.codeExpiresAt}
-            verifiedExpiresAt={emailVerification.verifiedExpiresAt}
             emailError={errors.email ?? emailVerification.emailError}
             codeError={emailVerification.codeError}
             onSend={emailVerification.sendCode}
@@ -280,7 +322,7 @@ function SignupPageContent() {
           />
           {emailVerification.codeExpiresAt && !emailVerification.isEmailVerified ? (
             <p className="text-[12px] leading-relaxed text-(--hc-muted)">
-              메일이 오지 않으면 스팸함을 확인해 주세요. 계속 오지 않으면 카카오·네이버로도 시작할 수 있어요.
+              <Sentences text="메일이 오지 않으면 스팸함을 확인해 주세요. 계속 오지 않으면 카카오·네이버로도 시작할 수 있어요." />
             </p>
           ) : null}
         </div>

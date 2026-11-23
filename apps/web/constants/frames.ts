@@ -3,17 +3,6 @@ export type FrameId = "classic-4" | "wide-4" | "grid-4" | "polaroid-4";
 export type FrameConfig = {
   id: FrameId;
   name: string;
-  slots: number;
-  /**
-   * 추천 프레임. **하나에만 붙인다.**
-   *
-   * 예전에는 네 프레임에 각각 BEST·MOOD·EDIT·THEME 를 달았다. 그런데 MOOD·EDIT·THEME 는
-   * 가로 4컷이 왜 MOOD 인지 설명하지 못하는 분위기 단어였고, 무엇보다 **넷 다 칩을 달면
-   * BEST 가 추천으로 안 읽힌다** — 추천 표시는 혼자일 때만 작동한다.
-   *
-   * 라벨 문구는 데이터가 아니라 FramePicker 가 정한다. 여기는 "어느 것이 추천인가"만 안다.
-   */
-  recommended?: boolean;
 };
 
 // 표시 이름은 배치 형태를 그대로 부른다(세로/가로/네모/즉석사진).
@@ -27,27 +16,10 @@ export type FrameConfig = {
 // id와 백엔드 enum(RemoteFrameType: CLASSIC·WIDE·GRID·POLAROID)은 서버 계약이라 건드리지 않는다 —
 // 이름만 바꾸고 매핑은 lib/frameApi.ts 그대로 둔다.
 export const FRAME_CONFIGS: FrameConfig[] = [
-  {
-    id: "classic-4",
-    recommended: true,
-    name: "세로 4컷",
-    slots: 4,
-  },
-  {
-    id: "wide-4",
-    name: "가로 4컷",
-    slots: 4,
-  },
-  {
-    id: "grid-4",
-    name: "네모 4컷",
-    slots: 4,
-  },
-  {
-    id: "polaroid-4",
-    name: "즉석사진 4컷",
-    slots: 4,
-  },
+  { id: "classic-4", name: "세로 4컷" },
+  { id: "wide-4", name: "가로 4컷" },
+  { id: "grid-4", name: "네모 4컷" },
+  { id: "polaroid-4", name: "즉석사진 4컷" },
 ];
 
 export function getFrameConfig(frameId: FrameId) {

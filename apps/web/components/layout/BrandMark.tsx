@@ -1,43 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import {
-  BRAND_MARK_BAR_SHADES,
-  BRAND_MARK_BODY,
-  BRAND_MARK_VIEWBOX,
-  brandMarkBarRect,
-} from "@harucut/shared";
+import { BRAND_MARK_BODY, BRAND_MARK_COLORS, BRAND_MARK_GLYPH, BRAND_MARK_VIEWBOX } from "@harucut/shared";
 
 type BrandMarkProps = {
   href: string;
   tone?: "light";
+  /** 가는 곳의 이름(읽기 프로그램). 행사 운영 화면의 로고는 개인 홈이 아니라 행사 운영 첫 화면으로 간다. */
+  label?: string;
 };
 
 /*
-  STUDIO 로고 — 딥다크 라운드 + 그린 4컷 스트립.
+  로고 — 딥다크 라운드 안의 ㅎ. 위 획은 셔터, 긴 획은 카메라 윗면, 동그라미는 렌즈다. 색은 렌즈의 점 하나.
 
-  좌표와 색은 `@harucut/shared` 가 쥔다. 앱 알림 아이콘도 같은 값에서 굽기 때문이다
-  (`scripts/gen-notification-icon.mjs`) — 여기 숫자를 적어 두면 한쪽만 고쳐져 갈라진다.
+  좌표와 색은 `@harucut/shared` 가 쥔다. 앱 아이콘도 같은 값에서 굽기 때문이다
+  (`scripts/gen-brand-icons.mjs`) — 여기 숫자를 적어 두면 한쪽만 고쳐져 갈라진다.
 */
-function FourCutMark({ size = 30 }: { size?: number }) {
-  const width = Math.round(size * (BRAND_MARK_VIEWBOX.width / BRAND_MARK_VIEWBOX.height));
+function HieutMark({ size = 30 }: { size?: number }) {
+  const { top, bar, ring, dot } = BRAND_MARK_GLYPH;
   return (
     <svg
-      width={width}
+      width={size}
       height={size}
       viewBox={`0 0 ${BRAND_MARK_VIEWBOX.width} ${BRAND_MARK_VIEWBOX.height}`}
       aria-hidden
       style={{ display: "block" }}
     >
-      <rect
-        width={BRAND_MARK_VIEWBOX.width}
-        height={BRAND_MARK_VIEWBOX.height}
-        rx={BRAND_MARK_BODY.radius}
-        fill={BRAND_MARK_BODY.fill}
-      />
-      {BRAND_MARK_BAR_SHADES.map((color, index) => (
-        <rect key={color} {...brandMarkBarRect(index)} fill={color} />
-      ))}
+      <rect width={BRAND_MARK_VIEWBOX.width} height={BRAND_MARK_VIEWBOX.height} rx={BRAND_MARK_BODY.radius} fill={BRAND_MARK_BODY.fill} />
+      <rect {...top} fill={BRAND_MARK_COLORS.glyph} />
+      <rect {...bar} fill={BRAND_MARK_COLORS.glyph} />
+      <circle cx={ring.cx} cy={ring.cy} r={ring.r} fill="none" stroke={BRAND_MARK_COLORS.glyph} strokeWidth={ring.strokeWidth} />
+      <circle {...dot} fill={BRAND_MARK_COLORS.accent} />
     </svg>
   );
 }
@@ -45,18 +38,20 @@ function FourCutMark({ size = 30 }: { size?: number }) {
 export function BrandMark({
   href,
   tone,
+  label = "하루컷 홈",
 }: BrandMarkProps) {
   // tone="light" 는 테마와 무관하게 어두운 무대(마케팅·로그인) 위에 설 때만 쓴다.
   const labelColor = tone === "light" ? "#FFFFFF" : "var(--hc-text)";
   return (
     <Link
       href={href}
-      aria-label="Harucut home"
+      aria-label={label}
       className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-90"
     >
-      <FourCutMark size={30} />
+      <HieutMark size={30} />
+      {/* 폰(640px 미만)에서는 언제나 마크만 둔다(2026-11-09). 이름은 링크의 aria-label 이 읽는다. */}
       <span
-        className="text-lg font-extrabold tracking-tight"
+        className="text-lg font-extrabold tracking-tight max-sm:hidden"
         style={{ color: labelColor }}
       >
         하루컷

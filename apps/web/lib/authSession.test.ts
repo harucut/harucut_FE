@@ -3,7 +3,7 @@
  * 회원 판정의 **세 갈래**를 못으로 박는다.
  *
  * 「지금 회원이 아니다」와 「지금은 알 수 없다」를 한 값으로 뭉치면, 서버가 잠깐 못 답한
- * 것만으로 멀쩡한 회원에게 7일짜리 게스트 쿠키가 심긴다(app/shoot/page.tsx 의 행사 전환).
+ * 것만으로 멀쩡한 회원에게 7일짜리 게스트 쿠키가 심긴다(app/create/page.tsx 의 행사 전환).
  * 그래서 이 파일은 `clientApi` 를 목으로 덮지 않고 **그 아래 `fetch` 만** 갈아 끼운다 —
  * 401 재발급·재시도와 「재발급 서버가 못 답함」 구분이 판정의 일부라, 목으로 덮으면
  * 지키려는 것이 통째로 테스트 밖으로 나간다.
@@ -55,10 +55,10 @@ describe("resolveMembership", () => {
   });
 
   /*
-    `/api/auth/status` 는 탈퇴요청·탈퇴·차단 계정에도 200 을 준다(복구 진입로를 열어 둔
+    `/api/auth/status` 는 탈퇴요청·탈퇴 계정에도 200 을 준다(복구 진입로를 열어 둔
     예외다). 그 200 을 회원으로 읽으면 아무것도 못 하는 화면으로 보내게 된다.
   */
-  it.each(["DELETED_REQUESTED", "DELETED", "BLOCKED"])(
+  it.each(["DELETED_REQUESTED", "DELETED"])(
     "%s 는 200 이어도 회원이 아니다",
     async (userStatus) => {
       routeFetch({ status: [() => statusOk(userStatus)] });
@@ -66,6 +66,13 @@ describe("resolveMembership", () => {
       await expect(resolveMembership()).resolves.toBe("guest");
     },
   );
+
+  // 정지 계정은 세션이 멀쩡하고 마이페이지와 탈퇴를 쓴다. 게스트로 읽으면 그 길이 막힌다.
+  it("BLOCKED 는 회원이다", async () => {
+    routeFetch({ status: [() => statusOk("BLOCKED")] });
+
+    await expect(resolveMembership()).resolves.toBe("member");
+  });
 
   // 액세스만 만료된 회원. 재발급이 되면 그대로 회원이다.
   it("401 뒤 재발급에 성공하면 회원이다", async () => {

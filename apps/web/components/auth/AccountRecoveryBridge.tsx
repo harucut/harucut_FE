@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { registerDeletionRequestedHandler } from "@/lib/clientApi";
+import { registerAccountBlockedHandler, registerDeletionRequestedHandler } from "@/lib/clientApi";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
-import { isProtectedPath } from "@/lib/protectedPaths";
+import { isBlockedAccountPath, isProtectedPath } from "@/lib/protectedPaths";
 
 /**
  * 탈퇴요청(DELETED_REQUESTED) 계정이 일반 API 에서 403(GEN-021)을 받았을 때 복구로 유도한다.
@@ -14,6 +14,9 @@ import { isProtectedPath } from "@/lib/protectedPaths";
  * 쿠키를 지우면 오히려 복구 진입로가 사라진다.
  *
  * 이 상태로는 어차피 보호 화면이 아무것도 못 부르므로 그냥 두면 빈 화면만 남는다.
+ *
+ * 정지 계정(403 AUTH-042)도 같은 자리에서 받는다. 이쪽은 로그인이 아니라 마이페이지로 보낸다 —
+ * 정지 전에 받은 토큰은 프록시를 지나치므로, 막힌 API 를 부르는 순간 여기서 돌려보낸다.
  */
 export function AccountRecoveryBridge() {
   const router = useRouter();
@@ -27,7 +30,13 @@ export function AccountRecoveryBridge() {
       const redirectTo = `${pathname}${window.location.search}`;
       router.replace(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
     });
-    return () => registerDeletionRequestedHandler(null);
+    registerAccountBlockedHandler(() => {
+      if (!isBlockedAccountPath(pathname)) router.replace("/mypage");
+    });
+    return () => {
+      registerDeletionRequestedHandler(null);
+      registerAccountBlockedHandler(null);
+    };
   }, [router, pathname]);
 
   return null;

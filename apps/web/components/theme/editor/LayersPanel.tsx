@@ -15,7 +15,17 @@ import {
   ChevronDown,
   Copy,
   Trash2,
+  Undo2,
+  Redo2,
+  Type,
 } from "lucide-react";
+
+/** 요소 종류를 부르는 말. 화면에 코드값(TEXT·STICKER)을 그대로 보이지 않는다. */
+export const COMPONENT_TYPE_LABEL: Record<EditorComponent["type"], string> = {
+  TEXT: "글자",
+  STICKER: "스티커",
+  PHOTO: "사진",
+};
 
 export function LayersPanel() {
   const {
@@ -28,8 +38,10 @@ export function LayersPanel() {
     moveLayerDown,
     toggleHidden,
     toggleLocked,
-    restoreRemoved,
-    canRestoreRemoved,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useThemeEditorStore(
     useShallow((s) => ({
       components: s.components,
@@ -41,8 +53,10 @@ export function LayersPanel() {
       moveLayerDown: s.moveLayerDown,
       toggleHidden: s.toggleHidden,
       toggleLocked: s.toggleLocked,
-      restoreRemoved: s.restoreRemoved,
-      canRestoreRemoved: s.canRestoreRemoved,
+      undo: s.undo,
+      redo: s.redo,
+      canUndo: s.past.length > 0,
+      canRedo: s.future.length > 0,
     })),
   );
 
@@ -52,18 +66,29 @@ export function LayersPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">레이어</p>
-        {/* 삭제 직후에만 뜬다. 지운 걸 되돌릴 길이 없으면 편집을 조심스러워한다. */}
-        {canRestoreRemoved ? (
+        {/* 지운 걸 되돌릴 길이 없으면 편집을 조심스러워한다. 이동·크기·삭제·추가 모두 여러 단계로 오간다. */}
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={restoreRemoved}
-            className="rounded-full border border-(--hc-border-strong) px-3 py-1 text-[11px] font-semibold text-(--hc-text)"
+            onClick={undo}
+            disabled={!canUndo}
+            aria-label="되돌리기"
+            title="되돌리기 (Ctrl/⌘+Z)"
+            className="flex size-9 items-center justify-center rounded-full border border-(--hc-border-strong) text-(--hc-text) disabled:opacity-35"
           >
-            삭제 되돌리기
+            <Undo2 className="size-4" aria-hidden />
           </button>
-        ) : (
-          <p className="text-[12px] text-(--hc-muted)">눌러서 선택</p>
-        )}
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            aria-label="다시 하기"
+            title="다시 하기 (Ctrl/⌘+Shift+Z)"
+            className="flex size-9 items-center justify-center rounded-full border border-(--hc-border-strong) text-(--hc-text) disabled:opacity-35"
+          >
+            <Redo2 className="size-4" aria-hidden />
+          </button>
+        </div>
       </div>
 
       {list.length === 0 ? (
@@ -119,10 +144,9 @@ function LayerRow({
   onToggleHidden: () => void;
   onToggleLocked: () => void;
 }) {
-  const title =
-    c.type === "TEXT"
-      ? `TEXT: ${c.source.slice(0, 10)}${c.source.length > 10 ? "…" : ""}`
-      : c.type;
+  const label = COMPONENT_TYPE_LABEL[c.type];
+  // 글자는 내용으로 알아본다. 스티커·사진은 옆의 그림으로 알아본다.
+  const title = c.type === "TEXT" ? `${c.source.slice(0, 14)}${c.source.length > 14 ? "…" : ""}` : label;
 
   // 레이어 제어 액션 목록
   const actions: {
@@ -182,7 +206,7 @@ function LayerRow({
       className={[
         "rounded-xl border p-2 flex items-center gap-2",
         active
-          ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) shadow-[0_14px_32px_var(--hc-shadow)]"
+          ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) shadow-[0_14px_32px_var(--hc-shadow)]"
           : "border-(--hc-border) bg-(--hc-surface-strong)",
         c.hidden ? "opacity-60" : "",
       ].join(" ")}
@@ -192,30 +216,26 @@ function LayerRow({
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 min-w-0"
       >
-        <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200">
-          {c.type}
-        </span>
-
         {c.type !== "TEXT" ? (
           <div className="h-8 w-8 overflow-hidden rounded-lg border border-zinc-800 bg-(--hc-surface-muted)">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={componentImageSrc(c)}
               crossOrigin="anonymous"
-              alt={c.type}
-              className="h-full w-full object-cover"
+              alt=""
+              className="h-full w-full object-contain"
               draggable={false}
             />
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-(--hc-surface-muted) flex items-center justify-center text-[11px] text-zinc-300">
-            T
+          <div className="h-8 w-8 rounded-lg border border-zinc-800 bg-(--hc-surface-muted) flex items-center justify-center text-zinc-300">
+            <Type aria-hidden size={14} />
           </div>
         )}
 
-        <div className="min-w-0">
+        <div className="min-w-0 text-left">
           <p className="text-xs text-zinc-200 truncate">{title}</p>
-          <p className="text-[11px] text-(--hc-muted)">zIndex {c.zIndex}</p>
+          {c.type === "TEXT" ? <p className="text-[11px] text-(--hc-muted)">{label}</p> : null}
         </div>
       </button>
 

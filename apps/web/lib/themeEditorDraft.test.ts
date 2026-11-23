@@ -9,7 +9,8 @@ import type { EditorComponent } from "@/lib/types/themeEditor";
 
 type DraftModule = typeof import("@/lib/themeEditorDraft");
 
-const DRAFT_KEY = "harucut:theme-editor-draft:v1";
+const OWNER = "Opwxk27uADEJ";
+const DRAFT_KEY = `harucut:theme-editor-draft:v2:${OWNER}:classic-4`;
 
 /** src 별 원본 바이트 수. base64 는 이 값의 약 4/3 이 된다. */
 let bodyBytes = new Map<string, number>();
@@ -32,6 +33,7 @@ function photoComponent(id: string, source: string): EditorComponent {
 
 function saveInput(sources: string[]) {
   return {
+    ownerId: OWNER,
     frameId: "classic-4" as const,
     backgroundColor: "#ffffff",
     background: { type: "COLOR" as const, value: "#ffffff" },
@@ -66,9 +68,9 @@ afterEach(() => jest.restoreAllMocks());
 test("하루가 지난 초안과 비정상 시각의 초안을 지운다", async () => {
   const { saveEditorDraft, loadEditorDraft } = await loadModule();
   await saveEditorDraft(saveInput(["data:image/png;base64,eA=="]));
-  expect(loadEditorDraft()).not.toBeNull();
+  expect(loadEditorDraft(OWNER, "classic-4")).not.toBeNull();
   jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000 + 86_400_001);
-  expect(loadEditorDraft()).toBeNull();
+  expect(loadEditorDraft(OWNER, "classic-4")).toBeNull();
   expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
 });
 
@@ -148,7 +150,7 @@ describe("saveEditorDraft 의 dataURL 캐시", () => {
     });
     finish({ blob: async () => new Blob(["old"], { type: "image/png" }) });
     await older;
-    expect(loadEditorDraft()?.components[0].source).toBe("data:image/png;base64,bmV3");
+    expect(loadEditorDraft(OWNER, "classic-4")?.components[0].source).toBe("data:image/png;base64,bmV3");
   });
 
   it("삭제 중이던 변환은 초안과 캐시를 되살리지 않는다", async () => {
@@ -185,6 +187,120 @@ describe("saveEditorDraft 의 dataURL 캐시", () => {
     await saveEditorDraft(saveInput(["data:image/png;base64,bmV3"]));
     finish({ blob: async () => new Blob(["old"], { type: "image/png" }) });
     await older;
-    expect(loadEditorDraft()?.components[0].source).toBe("data:image/png;base64,bmV3");
+    expect(loadEditorDraft(OWNER, "classic-4")?.components[0].source).toBe("data:image/png;base64,bmV3");
+  });
+});
+
+describe("초안은 계정 × 프레임 종류마다 따로 둔다", () => {
+  const OTHER = "OtherUser0001";
+
+  // 공용 기기에서 앞 사람이 로그아웃하지 않고 떠나도, 다음 사람이 그 사진을 복원하면 안 된다.
+  it("다른 계정의 초안은 복원하지 않고, 내가 저장할 때 지운다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    await saveEditorDraft({ ...saveInput(["data:image/png;base64,eA=="]), ownerId: OTHER });
+    expect(loadEditorDraft(OWNER, "classic-4")).toBeNull();
+    expect(loadEditorDraft(OTHER, "classic-4")).not.toBeNull();
+
+    await saveEditorDraft(saveInput([]));
+    expect(loadEditorDraft(OTHER, "classic-4")).toBeNull();
+    expect(loadEditorDraft(OWNER, "classic-4")).not.toBeNull();
+  });
+
+  it("프레임 종류가 다르면 서로 덮지 않는다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    await saveEditorDraft({ ...saveInput([]), backgroundColor: "#111111" });
+    await saveEditorDraft({ ...saveInput([]), frameId: "grid-4", backgroundColor: "#222222" });
+
+    expect(loadEditorDraft(OWNER, "classic-4")?.backgroundColor).toBe("#111111");
+    expect(loadEditorDraft(OWNER, "grid-4")?.backgroundColor).toBe("#222222");
+  });
+
+  it("모든 초안의 합이 예산을 넘으면 이 계정의 오래된 초안부터 버린다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    bodyBytes.set("blob:old", 2_000_000);
+    bodyBytes.set("blob:new", 2_000_000);
+    await saveEditorDraft({ ...saveInput(["blob:old"]), frameId: "grid-4", now: 1_700_000_000_000 });
+    await saveEditorDraft({ ...saveInput(["blob:new"]), now: 1_700_000_001_000 });
+
+    expect(loadEditorDraft(OWNER, "grid-4")).toBeNull();
+    expect(loadEditorDraft(OWNER, "classic-4")).not.toBeNull();
+  });
+
+  it("버리기(discard)는 그 프레임의 초안만 지운다", async () => {
+    const { saveEditorDraft, loadEditorDraft, discardEditorDraft } = await loadModule();
+    await saveEditorDraft(saveInput([]));
+    await saveEditorDraft({ ...saveInput([]), frameId: "grid-4" });
+
+    discardEditorDraft(OWNER, "classic-4");
+    expect(loadEditorDraft(OWNER, "classic-4")).toBeNull();
+    expect(loadEditorDraft(OWNER, "grid-4")).not.toBeNull();
+  });
+
+  // R5 5절: 계정·공간·프레임·버전별로 분리. 다른 기기가 먼저 저장한 뒤 옛 편집을 새 저장본 위에 되살리면 안 된다.
+  it("저장본 초안은 프레임·버전별로 따로 두고, 같은 판형의 새 프레임 초안과 섞이지 않는다", async () => {
+    const { saveEditorDraft, loadEditorDraft, discardEditorDraft } = await loadModule();
+    const saved = { remoteFrameId: 7, version: 3 };
+    await saveEditorDraft({ ...saveInput([]), backgroundColor: "111111" });
+    await saveEditorDraft({ ...saveInput([]), backgroundColor: "222222", saved });
+
+    expect(loadEditorDraft(OWNER, "classic-4")?.backgroundColor).toBe("111111");
+    expect(loadEditorDraft(OWNER, "classic-4", saved)?.backgroundColor).toBe("222222");
+    // 판형이 다르게 열려도 같은 저장본이면 찾는다(판형은 저장본이 정한다).
+    expect(loadEditorDraft(OWNER, "grid-4", saved)?.backgroundColor).toBe("222222");
+    // 버전이 바뀌었거나 다른 프레임이면 없다.
+    expect(loadEditorDraft(OWNER, "classic-4", { remoteFrameId: 7, version: 4 })).toBeNull();
+    expect(loadEditorDraft(OWNER, "classic-4", { remoteFrameId: 8, version: 3 })).toBeNull();
+
+    discardEditorDraft(OWNER, "classic-4", saved);
+    expect(loadEditorDraft(OWNER, "classic-4", saved)).toBeNull();
+    expect(loadEditorDraft(OWNER, "classic-4")?.backgroundColor).toBe("111111");
+  });
+
+  it("로그아웃 정리(clearEditorDraft)는 모든 계정의 초안을 지운다", async () => {
+    const { saveEditorDraft, loadEditorDraft, clearEditorDraft } = await loadModule();
+    await saveEditorDraft(saveInput([]));
+    window.localStorage.setItem("harucut:theme-editor-draft:v1", "{}");
+
+    clearEditorDraft();
+    expect(loadEditorDraft(OWNER, "classic-4")).toBeNull();
+    expect(window.localStorage.getItem("harucut:theme-editor-draft:v1")).toBeNull();
+  });
+
+  // 주인을 모르는 옛 초안은 누구 것인지 가릴 수 없다.
+  it("옛 v1 초안은 복원하지 않고 지운다", async () => {
+    const { loadEditorDraft } = await loadModule();
+    window.localStorage.setItem(
+      "harucut:theme-editor-draft:v1",
+      JSON.stringify({ frameId: "classic-4", components: [], savedAt: 1_700_000_000_000 }),
+    );
+    expect(loadEditorDraft(OWNER, "classic-4")).toBeNull();
+    expect(window.localStorage.getItem("harucut:theme-editor-draft:v1")).toBeNull();
+  });
+});
+
+describe("Codex 리뷰 반영", () => {
+  // #527 · #528: 자산으로 올린 뒤 source 는 key, renderUrl 만 이 기기의 blob 이다. blob 은 새로고침하면 죽는다.
+  it("올린 사진의 blob renderUrl 도 dataURL 로 남긴다", async () => {
+    const { saveEditorDraft, loadEditorDraft } = await loadModule();
+    const uploaded = { ...photoComponent("c0", "uploads/users/me/assets/As1.png"), renderUrl: "blob:local-photo", assetId: "As1" };
+    await saveEditorDraft({ ...saveInput([]), components: [uploaded] });
+
+    const restored = loadEditorDraft(OWNER, "classic-4")!.components[0];
+    expect(restored.source).toBe("uploads/users/me/assets/As1.png");
+    expect(restored.renderUrl).toMatch(/^data:image\//);
+  });
+
+  // #534: 공간을 붙인 주인 값을 다른 계정으로 보고 같은 계정의 다른 공간 초안을 지웠다.
+  it("같은 계정의 다른 공간·개인 초안은 남기고 다른 계정 것만 지운다", async () => {
+    const { saveEditorDraft, loadEditorDraft, draftOwnerKey } = await loadModule();
+    // 앞 사람이 남긴 초안 → 내가 개인·공간 A 를 편집 → 공간 B 를 편집.
+    await saveEditorDraft({ ...saveInput([]), ownerId: "OtherUser0001" });
+    await saveEditorDraft({ ...saveInput([]), ownerId: OWNER });
+    await saveEditorDraft({ ...saveInput([]), ownerId: draftOwnerKey(OWNER, "WsA") });
+    await saveEditorDraft({ ...saveInput([]), ownerId: draftOwnerKey(OWNER, "WsB") });
+
+    expect(loadEditorDraft(OWNER, "classic-4")).not.toBeNull();
+    expect(loadEditorDraft(draftOwnerKey(OWNER, "WsA"), "classic-4")).not.toBeNull();
+    expect(loadEditorDraft("OtherUser0001", "classic-4")).toBeNull();
   });
 });

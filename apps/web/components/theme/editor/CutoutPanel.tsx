@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Scissors } from "lucide-react";
 import { useThemeEditorStore } from "@/lib/themeEditorStore";
+import { Sentences } from "@/components/ui/Sentences";
 
 // 누끼(셀별 배경 제거) 패널.
 // 핸드오프 app-decorate "누끼" 탭과 동일한 개념: 칸을 선택하면 인물만 남기고
@@ -24,14 +24,11 @@ export function CutoutPanel() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">누끼</p>
-        <span className="inline-flex items-center gap-1 text-[12px] text-(--hc-muted)">
-          <Scissors size={13} /> 배경 제거
-        </span>
+        <span className="text-[12px] text-(--hc-muted)">배경 제거</span>
       </div>
 
       <p className="text-[13px] leading-[1.65] text-zinc-400">
-        아래 버튼으로 칸을 골라 인물만 남기고 배경을 지워요. 다시 누르면 원래대로
-        돌아와요. 미리보기에서 칸을 직접 눌러 토글하려면 ‘캔버스 칸 탭’을 켜세요.
+        <Sentences text="아래 버튼으로 칸을 골라 인물만 남기고 배경을 지워요. 다시 누르면 원래대로 돌아와요. 미리보기에서 칸을 바로 누르고 싶으면 아래 스위치를 켜세요." />
       </p>
 
       <button
@@ -40,12 +37,12 @@ export function CutoutPanel() {
         className={[
           "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
           cutMode
-            ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+            ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
             : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
         ].join(" ")}
         aria-pressed={cutMode}
       >
-        <span>캔버스 칸 탭으로 누끼</span>
+        <span>미리보기에서 칸 눌러 고르기</span>
         <span className="text-[11px]">{cutMode ? "켬" : "끔"}</span>
       </button>
 
@@ -60,7 +57,7 @@ export function CutoutPanel() {
               className={[
                 "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition",
                 on
-                  ? "border-(--hc-primary) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
+                  ? "border-(--hc-primary-line) bg-(--hc-accent-soft-bg) text-(--hc-primary-strong)"
                   : "border-(--hc-border) bg-(--hc-surface-strong) text-(--hc-muted)",
               ].join(" ")}
               aria-pressed={on}

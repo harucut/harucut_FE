@@ -24,6 +24,16 @@ jest.mock("@/lib/clientApi", () => ({
   },
 }));
 
+const mockClearLocalUserData = jest.fn();
+jest.mock("@/lib/localUserData", () => ({
+  clearLocalUserData: () => mockClearLocalUserData(),
+}));
+
+const mockUnregisterPushDevice = jest.fn();
+jest.mock("@/lib/pushDevices", () => ({
+  unregisterPushDevice: () => mockUnregisterPushDevice(),
+}));
+
 jest.mock("@/lib/termsApi", () => {
   const actual = jest.requireActual("@/lib/termsApi");
   return {
@@ -60,6 +70,8 @@ beforeEach(() => {
   mockFetchActive.mockResolvedValue([tosActive]);
   mockSubmit.mockResolvedValue(undefined);
   mockDelete.mockResolvedValue({ data: null, ok: true, status: 200 });
+  mockClearLocalUserData.mockResolvedValue(undefined);
+  mockUnregisterPushDevice.mockResolvedValue(undefined);
 });
 
 /**
@@ -143,7 +155,7 @@ describe("TermsReconsentDialog", () => {
 
     renderDialog([refundPolicy]);
 
-    expect(await screen.findByText("전문 보기")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "환불 정책 동의 전문 보기" })).toBeInTheDocument();
     expect(
       screen.getByText("환불은 결제일로부터 7일 이내에 가능합니다."),
     ).toBeInTheDocument();
@@ -192,7 +204,7 @@ describe("TermsReconsentDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "약관 본문 다시 불러오기" }));
 
     await waitFor(() => expect(screen.getByRole("checkbox")).toBeEnabled());
-    expect(screen.getByText("전문 보기")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "환불 정책 동의 전문 보기" })).toBeInTheDocument();
   });
 
   // 포커스를 쥔 요소가 disabled 로 바뀌면 브라우저가 포커스를 body 로 내려놓는다.
@@ -334,6 +346,39 @@ describe("TermsReconsentDialog", () => {
 
     await waitFor(() => expect(didNavigate(consoleError)).toBe(true));
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockClearLocalUserData).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  // 공용 기기에서 약관을 거절하고 나간 사람의 사진을 다음 계정이 이어받으면 안 된다.
+  it("로그아웃하면 이 기기의 개인 사진을 지운 뒤 나간다. 실패한 로그아웃에서는 지우지 않는다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockDelete.mockRejectedValueOnce(apiError(502));
+
+    renderDialog([tos]);
+    await screen.findByRole("checkbox");
+    const logout = screen.getByRole("button", { name: "동의하지 않고 로그아웃" });
+
+    fireEvent.click(logout);
+    await screen.findByRole("alert");
+    expect(mockClearLocalUserData).not.toHaveBeenCalled();
+
+    fireEvent.click(logout);
+    await waitFor(() => expect(didNavigate(consoleError)).toBe(true));
+    expect(mockClearLocalUserData).toHaveBeenCalledTimes(1);
+    expect(mockUnregisterPushDevice.mock.invocationCallOrder[1]).toBeLessThan(mockDelete.mock.invocationCallOrder[1]);
+    consoleError.mockRestore();
+  });
+
+  it("브라우저 저장소가 멈춰도 출구를 막지 않는다", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockClearLocalUserData.mockReturnValueOnce(new Promise(() => {}));
+
+    renderDialog([tos]);
+    await screen.findByRole("checkbox");
+    fireEvent.click(screen.getByRole("button", { name: "동의하지 않고 로그아웃" }));
+
+    await waitFor(() => expect(didNavigate(consoleError)).toBe(true), { timeout: 4_000 });
     consoleError.mockRestore();
   });
 

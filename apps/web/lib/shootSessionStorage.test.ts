@@ -106,3 +106,44 @@ test("다른 탭이 사진을 삭제해도 현재 사진을 빠짐없이 다시 
   await writeShootDraft(draft(), now);
   expect((await readShootDraft(now))?.shots).toEqual(shots);
 });
+
+/*
+  옛 행사 촬영(`/shoot?event=`)을 걷어내며 `eventName` 필드도 없앴다. 예전 앱이 쓴 보관물에는
+  그 필드가 남아 있다 — 검사가 남아 있으면 「무효」가 되어 **사진째** 지워진다(기획 R5 D01).
+*/
+test("옛 eventName 필드가 남은 보관물도 사진을 지우지 않고 복원한다", async () => {
+  await writeShootDraft(draft(), now);
+  const meta = mockData.get("meta") as Record<string, unknown>;
+  mockData.set("meta", { ...meta, eventName: "x".repeat(500) });
+
+  const restored = await readShootDraft(now);
+  expect(restored?.shots).toEqual(shots);
+  expect(restored).not.toHaveProperty("eventName");
+});
+
+// 완성 표시(2026-11-15)도 새로고침을 건넌다 — 안 그러면 새로고침 한 번으로 끝난 촬영을 다시 고를 수 있다.
+test("완성 표시는 새로고침 뒤에도 남고, 표시가 생기기 전 초안은 안 끝난 촬영으로 읽는다", async () => {
+  await writeShootDraft({ ...draft(), completed: "device" }, now);
+  expect((await readShootDraft(now))?.completed).toBe("device");
+
+  // 표시가 없던 시절의 초안 — 지우지 않고 그대로 읽는다.
+  const meta = mockData.get("meta") as Record<string, unknown>;
+  delete meta.completed;
+  const restored = await readShootDraft(now);
+  expect(restored?.shots).toEqual(shots);
+  expect(restored?.completed).toBeNull();
+});
+
+// 꾸미기에서 붙인 사진 이름(2026-11-15)도 새로고침 뒤 그대로다. 이름이 없던 예전 보관물은 빈 이름으로 읽는다.
+test("사진 이름을 보관하고, 이름이 없던 예전 보관물은 빈 이름으로 읽는다", async () => {
+  await writeShootDraft({ ...draft(), photoName: "바다에서" }, now);
+  expect((await readShootDraft(now))?.photoName).toBe("바다에서");
+
+  const meta = mockData.get("meta") as Record<string, unknown>;
+  const { photoName: _dropped, ...older } = meta;
+  void _dropped;
+  mockData.set("meta", older);
+  const restored = await readShootDraft(now);
+  expect(restored?.shots).toEqual(shots);
+  expect(restored?.photoName).toBe("");
+});

@@ -1,0 +1,771 @@
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiRequestError } from "@/lib/clientApi";
+import { RESULT_POLL_MS, EventParticipation } from "@/components/participation/EventParticipation";
+import type { PublicEvent } from "@/lib/event/types";
+import { sentenceText } from "@/tests/sentenceText";
+
+const mockPush = jest.fn();
+jest.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush }) }));
+
+const api = {
+  getPublicEvent: jest.fn(),
+  startByodSession: jest.fn(),
+  getParticipantSession: jest.fn(),
+  submitConsents: jest.fn(),
+  startCaptureRun: jest.fn(),
+  submitEventCompose: jest.fn(),
+  listParticipantResults: jest.fn(),
+  reissueResultAccess: jest.fn(),
+  revokeResultAccess: jest.fn(),
+  getParticipantDownload: jest.fn(),
+  previewFreeText: jest.fn(),
+};
+jest.mock("@/lib/event/eventApi", () => ({
+  getPublicEvent: (...a: unknown[]) => api.getPublicEvent(...a),
+  startByodSession: (...a: unknown[]) => api.startByodSession(...a),
+  getParticipantSession: (...a: unknown[]) => api.getParticipantSession(...a),
+  submitConsents: (...a: unknown[]) => api.submitConsents(...a),
+  startCaptureRun: (...a: unknown[]) => api.startCaptureRun(...a),
+  submitEventCompose: (...a: unknown[]) => api.submitEventCompose(...a),
+  listParticipantResults: (...a: unknown[]) => api.listParticipantResults(...a),
+  reissueResultAccess: (...a: unknown[]) => api.reissueResultAccess(...a),
+  revokeResultAccess: (...a: unknown[]) => api.revokeResultAccess(...a),
+  getParticipantDownload: (...a: unknown[]) => api.getParticipantDownload(...a),
+  previewFreeText: (...a: unknown[]) => api.previewFreeText(...a),
+}));
+
+const mockUpload = jest.fn();
+jest.mock("@/lib/event/captureUpload", () => ({
+  uploadCaptureInput: (...a: unknown[]) => mockUpload(...a),
+}));
+
+let mockCameraState = "ready";
+const mockCapture = jest.fn();
+jest.mock("@/components/participation/useEventCamera", () => ({
+  useEventCamera: () => ({
+    videoRef: { current: null },
+    state: mockCameraState,
+    start: jest.fn(),
+    stop: jest.fn(),
+    capture: () => mockCapture(),
+  }),
+}));
+
+function publicEvent(overrides: Partial<PublicEvent> = {}): PublicEvent {
+  return {
+    eventId: "evt-1",
+    name: "민지·현우 결혼식",
+    status: "LIVE",
+    captureOpen: true,
+    byodEnabled: true,
+    boothEnabled: false,
+    experienceVersion: 3,
+    allowedLayouts: ["CLASSIC"],
+    frames: [{ frameVersionId: 31, layoutType: "CLASSIC", sortOrder: 1, isDefault: true }],
+    consentItems: [
+      { code: "photo-collection", version: 2, title: "사진 수집·이용", required: true, body: "주최자가 30일 보관해요." },
+      { code: "marketing", version: 1, title: "홍보 사용", required: false },
+    ],
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  window.localStorage.clear();
+  mockCameraState = "ready";
+  URL.createObjectURL = jest.fn(() => "blob:shot");
+  URL.revokeObjectURL = jest.fn();
+  Object.defineProperty(globalThis, "crypto", {
+    value: { ...globalThis.crypto, randomUUID: () => "idem-1" },
+    configurable: true,
+  });
+  api.getPublicEvent.mockResolvedValue(publicEvent());
+  api.listParticipantResults.mockResolvedValue([]);
+  api.startCaptureRun.mockResolvedValue({ captureRunId: "run-1", experienceVersion: 3, stateVersion: 1, expiresAt: "x" });
+  mockCapture.mockResolvedValue(new Blob(["jpeg"], { type: "image/jpeg" }));
+  mockUpload.mockImplementation(async ({ slotIndex }: { slotIndex: number }) => `asset-${slotIndex}`);
+  api.submitEventCompose.mockResolvedValue({ jobId: 9, status: "PENDING", resultToken: "R".repeat(43), resultExpiresAt: "x" });
+});
+
+afterEach(() => jest.useRealTimers());
+
+function storeSession() {
+  window.localStorage.setItem(
+    "harucut:event:participant:evt-1",
+    JSON.stringify({ token: "p-token", participantId: "p-1", expiresAt: "2999-01-01T00:00:00Z" }),
+  );
+}
+
+async function shootAll() {
+  jest.useFakeTimers();
+  // 한 번 누르면 네 장을 이어서 찍는다.
+  fireEvent.click(screen.getByRole("button", { name: "찍기 시작" }));
+  // 카운트다운은 초마다 렌더가 다음 타이머를 건다. 한 act 에 몰아 보내면 첫 1초만 지난다. 다음 칸으로 넘어가는 타이머(0ms)도 함께 돈다.
+  for (let tick = 0; tick < 4 * 4; tick += 1) {
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1_000);
+    });
+  }
+  jest.useRealTimers();
+}
+
+describe("칸 다시 찍기", () => {
+  async function toReview() {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+    await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+    await shootAll();
+    await screen.findByRole("button", { name: "이 사진으로 만들기" });
+  }
+
+  async function armRetake(index: number) {
+    fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진 다시 찍기` }));
+    fireEvent.click(screen.getByRole("button", { name: `${index}번째 사진, 한 번 더 누르면 다시 찍어요` }));
+    await screen.findByRole("button", { name: "한 장 찍기" });
+  }
+
+  // 「한 장 찍기」 위에 네 장을 찍는다고 쓰면 무엇이 찍히는지 모른다.
+  it("다시 찍는 동안에는 그 칸만 찍는다고 말한다", async () => {
+    await toReview();
+    await armRetake(2);
+    expect(screen.getByText("버튼을 누르면 3초 뒤에 2번째 사진을 다시 찍어요.")).toBeInTheDocument();
+  });
+
+  // 새 사진을 찍기 전에 원본을 버리면 마음을 바꿀 수 없다.
+  it("찍기 전에 마음을 바꾸면 원래 사진으로 돌아가고, 이미 올린 칸을 다시 올리지 않는다", async () => {
+    await toReview();
+    // 올린 뒤의 재시도를 만든다. 접수만 실패한다.
+    api.submitEventCompose.mockRejectedValueOnce(new ApiRequestError({ status: 500, code: "GEN-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await screen.findByRole("alert");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    await armRetake(3);
+    fireEvent.click(screen.getByRole("button", { name: "그대로 둘게요" }));
+    await screen.findByRole("button", { name: "이 사진으로 만들기" });
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+  });
+
+  // 인코딩 중에 돌아가면 뒤늦게 온 새 사진이 되살린 원본을 덮고, 그 원본의 미리보기 주소까지 해제한다(Codex #577).
+  it("셔터가 눌린 뒤에는 원래 사진으로 돌아갈 수 없다. 새 사진으로 끝난다", async () => {
+    await toReview();
+    await armRetake(4);
+    let finishCapture: (photo: Blob) => void = () => {};
+    mockCapture.mockReturnValueOnce(new Promise<Blob>((resolve) => { finishCapture = resolve; }));
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "한 장 찍기" }));
+    for (let tick = 0; tick < 4; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_000);
+      });
+    }
+    const back = screen.getByRole("button", { name: "그대로 둘게요" });
+    expect(back).toBeDisabled();
+    fireEvent.click(back);
+
+    await act(async () => {
+      finishCapture(new Blob(["new"], { type: "image/jpeg" }));
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    jest.useRealTimers();
+    expect(await screen.findByRole("button", { name: "이 사진으로 만들기" })).toBeInTheDocument();
+    // 원본 주소 하나만 해제한다. 되살렸다가 덮이지 않았다.
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  // 접수 응답을 잃은 뒤 칸을 바꿔 다시 보내면 같은 키에 다른 입력이라 서버가 409 MEDIA-001 로 막는다.
+  it("보낸 뒤에 다시 찍은 사진은 그 칸만 올리고 새 멱등키로 보낸다", async () => {
+    let n = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { ...globalThis.crypto, randomUUID: () => `idem-${++n}` },
+      configurable: true,
+    });
+    // 올릴 때마다 서버는 새 자산 id 를 준다.
+    let uploads = 0;
+    mockUpload.mockImplementation(async () => `asset-${++uploads}`);
+    await toReview();
+    api.submitEventCompose.mockRejectedValueOnce(new ApiRequestError({ status: 500, code: "GEN-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await screen.findByRole("alert");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    await armRetake(1);
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "한 장 찍기" }));
+    for (let tick = 0; tick < 5; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_000);
+      });
+    }
+    jest.useRealTimers();
+    fireEvent.click(await screen.findByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+
+    expect(mockUpload).toHaveBeenCalledTimes(5);
+    const [first, second] = api.submitEventCompose.mock.calls.map((call) => call[2]);
+    expect(second.sourceAssetIds).toEqual(["asset-5", "asset-2", "asset-3", "asset-4"]);
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+  });
+
+  it("같은 사진을 그대로 다시 보내면 같은 멱등키를 쓴다", async () => {
+    let n = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { ...globalThis.crypto, randomUUID: () => `idem-${++n}` },
+      configurable: true,
+    });
+    await toReview();
+    api.submitEventCompose.mockRejectedValueOnce(new ApiRequestError({ status: 500, code: "GEN-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+    const [first, second] = api.submitEventCompose.mock.calls.map((call) => call[2]);
+    expect(second.idempotencyKey).toBe(first.idempotencyKey);
+  });
+
+  it("새 사진이 찍히면 원래 사진을 버린다", async () => {
+    await toReview();
+    await armRetake(1);
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "한 장 찍기" }));
+    for (let tick = 0; tick < 5; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_000);
+      });
+    }
+    jest.useRealTimers();
+    expect(await screen.findByRole("button", { name: "이 사진으로 만들기" })).toBeInTheDocument();
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+});
+
+it("없는 행사면 링크를 다시 확인하라고 안내한다", async () => {
+  api.getPublicEvent.mockRejectedValue(new ApiRequestError({ status: 404, code: "GEN-031" }));
+  render(<EventParticipation slug="nope-123" />);
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+});
+
+it("참여하면 이 행사에만 자격을 보관하고, 필수 동의 전에는 넘어가지 않는다", async () => {
+  api.startByodSession.mockResolvedValue({ participantToken: "p-new", participantId: "p-9", status: "RESTRICTED", expiresAt: "2999-01-01T00:00:00Z" });
+  api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+  render(<EventParticipation slug="wedding-1027" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+  const submit = await screen.findByRole("button", { name: "동의하고 계속" });
+  expect(JSON.parse(window.localStorage.getItem("harucut:event:participant:evt-1")!).token).toBe("p-new");
+  expect(submit).toBeDisabled();
+  expect(screen.getByText("주최자가 30일 보관해요.")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("checkbox", { name: /사진 수집·이용/ }));
+  fireEvent.click(submit);
+
+  // 받을 사진이 없으면 버튼 하나뿐인 화면을 건너뛰고 바로 촬영으로 간다.
+  expect(await screen.findByRole("button", { name: "찍기 시작" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "사진 찍기" })).not.toBeInTheDocument();
+  expect(api.submitConsents).toHaveBeenCalledWith("p-new", "evt-1", [
+    { code: "photo-collection", version: 2, decision: "AGREED" },
+    { code: "marketing", version: 1, decision: "DECLINED" },
+  ]);
+});
+
+it("저장된 자격이 유효하면 바로 이어 가고, 만료면(401) 그 행사의 자격만 버리고 처음으로 간다", async () => {
+  storeSession();
+  window.localStorage.setItem("harucut:event:participant:evt-other", JSON.stringify({ token: "x", participantId: "y", expiresAt: "2999-01-01T00:00:00Z" }));
+  api.getParticipantSession.mockRejectedValue(new ApiRequestError({ status: 401, code: "PART-001" }));
+
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByRole("button", { name: "참여하기" })).toBeInTheDocument();
+  expect(window.localStorage.getItem("harucut:event:participant:evt-1")).toBeNull();
+  expect(window.localStorage.getItem("harucut:event:participant:evt-other")).not.toBeNull();
+});
+
+it("프레임이 하나면 고르는 단계 없이 촬영으로 가고, 네 장을 올린 뒤 결과 링크(fragment)로 옮긴다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  render(<EventParticipation slug="wedding-1027" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+  expect(screen.queryByText("프레임을 골라 주세요")).not.toBeInTheDocument();
+  await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalledWith("p-token", "evt-1"));
+
+  await shootAll();
+  fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith(`/r#${"R".repeat(43)}`));
+  expect(mockUpload.mock.calls.map((c) => c[0].slotIndex)).toEqual([0, 1, 2, 3]);
+  expect(api.submitEventCompose).toHaveBeenCalledWith("p-token", "evt-1", {
+    captureRunId: "run-1",
+    frameVersionId: 31,
+    sourceAssetIds: ["asset-0", "asset-1", "asset-2", "asset-3"],
+    idempotencyKey: "idem-1",
+  });
+});
+
+it("전송이 중간에 실패하면 다시 보낼 때 이미 올린 칸은 다시 올리지 않는다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  mockUpload.mockImplementation(async ({ slotIndex }: { slotIndex: number }) => {
+    if (slotIndex === 2 && mockUpload.mock.calls.filter((c) => c[0].slotIndex === 2).length === 1) {
+      throw new ApiRequestError({ code: "CLIENT-004" });
+    }
+    return `asset-${slotIndex}`;
+  });
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+  await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+  await shootAll();
+
+  fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+
+  await waitFor(() => expect(mockPush).toHaveBeenCalled());
+  expect(mockUpload.mock.calls.map((c) => c[0].slotIndex)).toEqual([0, 1, 2, 2, 3]);
+});
+
+it("회차가 끝났으면(PART-003) 새 회차를 열고 처음부터 다시 올린다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun
+    .mockResolvedValueOnce({ captureRunId: "run-1", experienceVersion: 3, stateVersion: 1, expiresAt: "x" })
+    .mockResolvedValueOnce({ captureRunId: "run-2", experienceVersion: 3, stateVersion: 1, expiresAt: "x" });
+  api.submitEventCompose
+    .mockRejectedValueOnce(new ApiRequestError({ status: 409, code: "PART-003" }))
+    .mockResolvedValueOnce({ jobId: 9, status: "PENDING", resultToken: "R".repeat(43), resultExpiresAt: "x" });
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+  await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalledTimes(1));
+  await shootAll();
+
+  fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+
+  await waitFor(() => expect(mockPush).toHaveBeenCalled());
+  expect(mockUpload.mock.calls.map((c) => c[0].captureRunId)).toEqual([
+    "run-1", "run-1", "run-1", "run-1", "run-2", "run-2", "run-2", "run-2",
+  ]);
+  expect(api.submitEventCompose.mock.calls[1][2].captureRunId).toBe("run-2");
+});
+
+// R5 「배포형 체험의 촬영 전용 규칙」 — 권한이 없어도 갤러리 불러오기로 대신하지 않는다.
+it("카메라가 거부되면 권한 안내만 하고 파일 선택을 두지 않는다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  mockCameraState = "denied";
+  const { container } = render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+
+  expect(await screen.findByText(/카메라를 쓸 수 있게 허용해 주세요/)).toBeInTheDocument();
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+});
+
+it("프레임이 여럿이면 서버가 준 목록만 순서대로 보여 준다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.getPublicEvent.mockResolvedValue(
+    publicEvent({
+      allowedLayouts: ["CLASSIC", "GRID"],
+      frames: [
+        { frameVersionId: 41, layoutType: "GRID", sortOrder: 2, isDefault: false },
+        { frameVersionId: 31, layoutType: "CLASSIC", sortOrder: 1, isDefault: true },
+        { frameVersionId: 51, layoutType: "WIDE", sortOrder: 3, isDefault: false },
+      ],
+    }),
+  );
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+
+  expect(await screen.findByText("프레임을 골라 주세요")).toBeInTheDocument();
+  const choices = screen.getAllByRole("button", { pressed: undefined }).filter((b) => b.hasAttribute("aria-pressed"));
+  // 허용하지 않은 WIDE 는 서버가 실수로 보내도 그리지 않는다.
+  expect(choices).toHaveLength(2);
+  expect(choices[0]).toHaveAttribute("aria-pressed", "true");
+});
+
+// ADR-0008 §6-2 — 촬영 한도를 다 썼거나 이용권이 끝났으면(ENT-002) 찍기 전에 마감으로 보여 준다.
+it("회차 시작이 한도로 막히면(ENT-002) 촬영 화면 대신 마감 안내를 보여 준다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+
+  expect(await screen.findByText(sentenceText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요."))).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "찍기 시작" })).not.toBeInTheDocument();
+});
+
+// Codex 리뷰(#545): 한도에 걸려도 이미 만든 사진은 받을 수 있어야 한다 — 홈(사진 목록)으로 돌아간다.
+it("촬영 한도에 걸리면 이미 만든 사진 목록으로 돌아가 받을 수 있게 한다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.listParticipantResults.mockResolvedValue([{ jobId: 8, status: "DONE" }]);
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+
+  expect(await screen.findByText(sentenceText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요."))).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
+});
+
+it("합성 접수가 한도로 막혀도(ENT-002) 다시 보내지 않고 마감 안내로 간다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.submitEventCompose.mockRejectedValue(new ApiRequestError({ status: 409, code: "ENT-002" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+  await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+  await shootAll();
+
+  fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+  expect(await screen.findByText(sentenceText("지금은 촬영이 마감됐어요. 이미 만든 사진은 그대로 받을 수 있어요."))).toBeInTheDocument();
+  expect(api.submitEventCompose).toHaveBeenCalledTimes(1);
+});
+
+describe("Codex 리뷰 반영(#523)", () => {
+  // 다른 앱이 카메라를 쥐고 있으면(NotReadableError) 안내 없이 검은 화면만 남았다.
+  it("카메라를 켜지 못한 일반 오류도 안내하고 다시 시도를 둔다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    mockCameraState = "error";
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+
+    expect(await screen.findByText(/카메라를 켜지 못했어요/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+  });
+
+  // 만드는 중이던 사진이 서버에서 완성돼도 새로고침 전에는 받을 길이 없었다.
+  it("만드는 중인 사진이 있으면 다시 물어 완성되면 저장을 보인다", async () => {
+    jest.useFakeTimers();
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([{ jobId: 9, status: "PENDING" }]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByText(/만드는 중/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+
+    api.listParticipantResults.mockResolvedValue([{ jobId: 9, status: "DONE" }]);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(RESULT_POLL_MS);
+    });
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+  });
+
+  // Codex 리뷰(#541): 수동 갱신이 잠깐 실패했다고 완성 사진 목록까지 지우면 다시 누를 버튼도 사라진다.
+  it("다시 확인이 실패해도 있던 사진 목록은 그대로 두고 알린다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([
+      { jobId: 8, status: "DONE" },
+      { jobId: 9, status: "PENDING" },
+    ]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByRole("button", { name: "저장" })).toBeInTheDocument();
+
+    api.listParticipantResults.mockRejectedValueOnce(new ApiRequestError({ status: 503, code: "GEN-001", apiMessage: "x" }));
+    fireEvent.click(screen.getByRole("button", { name: "다시 확인" }));
+
+    expect(await screen.findByText(sentenceText("사진 목록을 다시 확인하지 못했어요. 잠시 후 다시 눌러 주세요."))).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 확인" })).toBeInTheDocument();
+  });
+
+  // Codex 리뷰(#541): 401 로 자격이 바뀐 뒤 도착한 이전 자격의 결과 응답이 새 참여의 목록에 붙으면 안 된다.
+  it("자격이 바뀐 뒤 도착한 이전 결과 응답은 버린다", async () => {
+    jest.useFakeTimers();
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValueOnce([{ jobId: 9, status: "PENDING" }]);
+    render(<EventParticipation slug="wedding-1027" />);
+    expect(await screen.findByText(/만드는 중/)).toBeInTheDocument();
+
+    // 폴링 요청은 늦게 끝난다.
+    let releaseOld: (value: unknown) => void = () => {};
+    api.listParticipantResults.mockImplementationOnce(() => new Promise((resolve) => { releaseOld = resolve; }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(RESULT_POLL_MS);
+    });
+
+    // 그사이 촬영을 열다 자격이 끝나(401) 새로 참여한다.
+    api.startCaptureRun.mockRejectedValueOnce(new ApiRequestError({ status: 401, code: "PART-001", apiMessage: "x" }));
+    api.startByodSession.mockResolvedValue({ participantToken: "p-new", participantId: "p-9", status: "RESTRICTED", expiresAt: "2999-01-01T00:00:00Z" });
+    api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValue([]);
+    fireEvent.click(screen.getByRole("button", { name: "사진 찍기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
+    expect(await screen.findByRole("button", { name: "찍기 시작" })).toBeInTheDocument();
+
+    await act(async () => releaseOld([{ jobId: 9, status: "DONE" }]));
+    expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/1번째 사진/)).not.toBeInTheDocument();
+  });
+});
+
+
+describe("참가자 자유 문구(D06)", () => {
+  const freeText = {
+    box: { x: 0.1, y: 0.86, width: 0.8, height: 0.08 },
+    maxLength: 10,
+    maxLines: 1,
+    styles: [
+      { id: "pretendard-bold-dark", label: "굵게 · 검정", weight: 700, color: "#111111" },
+      { id: "pretendard-regular-light", label: "보통 · 흰색", weight: 400, color: "#FFFFFF" },
+    ],
+  };
+
+  async function readyToSend() {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.getPublicEvent.mockResolvedValue(publicEvent({ freeText }));
+    api.previewFreeText.mockImplementation(async (_t: string, _e: string, body: { text: string; styleId: string }) => ({
+      ...body,
+      image: "data:image/png;base64,AAAA",
+      x: 10, y: 400, width: 200, height: 40, canvasWidth: 600, canvasHeight: 1800,
+    }));
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+    await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+    await shootAll();
+  }
+
+  it("자유 문구 행사가 아니면 문구 칸이 없다", async () => {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    render(<EventParticipation slug="wedding-1027" />);
+    fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+    await waitFor(() => expect(api.startCaptureRun).toHaveBeenCalled());
+    await shootAll();
+    expect(screen.queryByRole("textbox", { name: "사진에 넣을 문구" })).not.toBeInTheDocument();
+  });
+
+  it("비워 두면 문구를 싣지 않고 프레임 그대로 만든다", async () => {
+    await readyToSend();
+    expect(screen.getByRole("textbox", { name: "사진에 넣을 문구" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalled());
+    expect(api.submitEventCompose.mock.calls[0][2]).not.toHaveProperty("freeText");
+    expect(api.previewFreeText).not.toHaveBeenCalled();
+  });
+
+  it("쓴 문구와 고른 글꼴을 서버 미리보기로 보여 주고 합성에 싣는다", async () => {
+    await readyToSend();
+    fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "축하해요" } });
+    fireEvent.click(screen.getByRole("radio", { name: /보통 · 흰색/ }));
+
+    expect(await screen.findByAltText("미리보기: 축하해요")).toBeInTheDocument();
+    expect(api.previewFreeText).toHaveBeenLastCalledWith(
+      "p-token",
+      "evt-1",
+      { captureRunId: "run-1", frameVersionId: 31, text: "축하해요", styleId: "pretendard-regular-light" },
+      expect.anything(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalled());
+    expect(api.submitEventCompose.mock.calls[0][2].freeText).toEqual({ text: "축하해요", styleId: "pretendard-regular-light" });
+  });
+
+  it("글자 수를 넘으면 보내지 않고 이유를 알린다", async () => {
+    await readyToSend();
+    fireEvent.change(screen.getByRole("textbox", { name: "사진에 넣을 문구" }), { target: { value: "열한글자가넘는문구예요" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("10자까지 쓸 수 있어요.");
+    expect(screen.getByRole("button", { name: "이 사진으로 만들기" })).toBeDisabled();
+  });
+
+  it("서버가 문구를 거절하면(PART-008) 사유 문구를 보이고, 고친 문구는 새 멱등키로 보낸다", async () => {
+    let n = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { ...globalThis.crypto, randomUUID: () => `idem-${++n}` },
+      configurable: true,
+    });
+    api.submitEventCompose.mockRejectedValueOnce(
+      new ApiRequestError({
+        status: 400,
+        code: "PART-008",
+        data: { code: "PART-008", status: 400, data: { reason: "UNSUPPORTED_CHARACTER" } },
+      }),
+    );
+    await readyToSend();
+    const input = screen.getByRole("textbox", { name: "사진에 넣을 문구" });
+    fireEvent.change(input, { target: { value: "축하🎉" } });
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    expect(await screen.findByText(/쓸 수 없는 글자가 있어요/)).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "축하" } });
+    fireEvent.click(screen.getByRole("button", { name: "이 사진으로 만들기" }));
+    await waitFor(() => expect(api.submitEventCompose).toHaveBeenCalledTimes(2));
+    const [first, second] = api.submitEventCompose.mock.calls.map((c) => c[2]);
+    expect(second.freeText.text).toBe("축하");
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+  });
+});
+
+it("서버가 받아 둔 행사가 있으면 다시 묻지 않고 첫 화면부터 그 행사를 그린다", async () => {
+  render(<EventParticipation slug="wedding-1027" initialEvent={publicEvent({ name: "서버 행사" })} />);
+
+  expect(screen.getByRole("heading", { name: "서버 행사" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "참여하기" })).toBeInTheDocument();
+  await waitFor(() => expect(api.getPublicEvent).not.toHaveBeenCalled());
+});
+
+it("촬영 시간이 아니면 새 참가자에게 참여 버튼을 내밀지 않고, 사진 찾는 길을 말한다", async () => {
+  api.getPublicEvent.mockResolvedValue(publicEvent({ captureOpen: false }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByText(/결과 링크로 다시 받을 수 있어요/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "참여하기" })).not.toBeInTheDocument();
+});
+
+it("소유자가 모두 정지돼 참여가 막히면(EVENT-006) 참여 불가 화면으로 간다", async () => {
+  api.startByodSession.mockRejectedValue(new ApiRequestError({ status: 409, code: "EVENT-006" }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+  // 되돌아가 다시 시도하는 오류가 아니라 참여 불가 화면으로 바뀐다 — 참여하기 버튼이 사라진다.
+  await waitFor(() => expect(screen.queryByRole("button", { name: "참여하기" })).not.toBeInTheDocument());
+  expect(screen.getByRole("alert")).toBeInTheDocument();
+});
+
+it("촬영 시간인데 고를 프레임이 없으면 빈 촬영 화면 대신 준비 중이라고 알린다", async () => {
+  api.getPublicEvent.mockResolvedValue(publicEvent({ frames: [] }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("아직 촬영 준비 중");
+});
+
+// R5 301줄: 게시본이 바뀌면 옛 동의로는 서버가 받지 않는다.
+it("동의 문구 판이 바뀌었으면(400) 새 문구를 받아 다시 묻는다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "RESTRICTED" });
+  api.submitConsents.mockRejectedValueOnce(new ApiRequestError({ status: 400, code: "GEN-001" }));
+  render(<EventParticipation slug="wedding-1027" />);
+  fireEvent.click(await screen.findByRole("checkbox", { name: /사진 수집·이용/ }));
+  api.getPublicEvent.mockResolvedValue(
+    publicEvent({ experienceVersion: 9, consentItems: [{ code: "photo-collection", version: 3, title: "바뀐 사진 안내", required: true }] }),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "동의하고 계속" }));
+
+  expect(await screen.findByRole("checkbox", { name: /바뀐 사진 안내/ })).not.toBeChecked();
+  expect(screen.getByRole("alert")).toHaveTextContent("안내가 바뀌었어요");
+});
+
+it("회차가 새 게시본으로 열리면 행사를 다시 읽어 맞춘다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun.mockResolvedValue({ captureRunId: "run-1", experienceVersion: 99, stateVersion: 1, expiresAt: "x" });
+  render(<EventParticipation slug="wedding-1027" />);
+  await screen.findByRole("button", { name: "사진 찍기" });
+  api.getPublicEvent.mockClear();
+
+  fireEvent.click(screen.getByRole("button", { name: "사진 찍기" }));
+
+  await waitFor(() => expect(api.getPublicEvent).toHaveBeenCalledWith("wedding-1027"));
+});
+
+it("기능 권한이 회수되면(ENT-004) 하루컷을 꺼내지 않고 담당자 문의로 안내한다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.startCaptureRun.mockRejectedValue(new ApiRequestError({ status: 403, code: "ENT-004" }));
+  render(<EventParticipation slug="wedding-1027" />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "사진 찍기" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("행사 담당자에게 문의");
+  expect(alert).not.toHaveTextContent("하루컷");
+});
+
+it("선택 동의를 철회할 수 있다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.submitConsents.mockResolvedValue({ status: "ACTIVE" });
+  render(<EventParticipation slug="wedding-1027" />);
+  await screen.findByRole("button", { name: "사진 찍기" });
+
+  fireEvent.click(screen.getByRole("button", { name: "철회" }));
+
+  await waitFor(() =>
+    expect(api.submitConsents).toHaveBeenCalledWith("p-token", "evt-1", [{ code: "marketing", version: 1, decision: "WITHDRAWN" }]),
+  );
+  expect(await screen.findByText(/동의를 철회했어요/)).toBeInTheDocument();
+});
+
+it("보관 기한이 지난 사진은 저장 버튼 대신 기간이 지났다고 알린다", async () => {
+  storeSession();
+  api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+  api.listParticipantResults.mockResolvedValue([{ jobId: 1, status: "DONE", expiresAt: "2000-01-01T00:00:00Z" }]);
+  render(<EventParticipation slug="wedding-1027" />);
+
+  expect(await screen.findByText(/받을 수 있는 기간이 지났어요/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+});
+
+describe("보낸 링크 끊기", () => {
+  function home(results: unknown[]) {
+    storeSession();
+    api.getParticipantSession.mockResolvedValue({ status: "ACTIVE" });
+    api.listParticipantResults.mockResolvedValue(results);
+    render(<EventParticipation slug="wedding-1027" />);
+  }
+
+  it("한 번 더 눌러야 끊고, 끊은 뒤 다시 보내는 길을 알려 준다", async () => {
+    api.revokeResultAccess.mockResolvedValue({ revokedCount: 2 });
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "보낸 링크 끊기" }));
+    expect(api.revokeResultAccess).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" }));
+    await waitFor(() => expect(api.revokeResultAccess).toHaveBeenCalledWith("p-token", 9));
+    expect(await screen.findByText(/링크를 모두 끊었어요/)).toBeInTheDocument();
+  });
+
+  it("다른 곳을 누르면 처음으로 돌아간다", async () => {
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+    fireEvent.click(await screen.findByRole("button", { name: "보낸 링크 끊기" }));
+    fireEvent.blur(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" }));
+    expect(screen.getByRole("button", { name: "보낸 링크 끊기" })).toBeInTheDocument();
+    expect(api.revokeResultAccess).not.toHaveBeenCalled();
+  });
+
+  // iOS 는 버튼에 포커스를 주지 않아 blur 가 없다. 며칠 뒤 눌러도 바로 끊기면 안 된다.
+  it("한 번 눌러 둔 것은 잠시 뒤 풀린다", async () => {
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+    const button = await screen.findByRole("button", { name: "보낸 링크 끊기" });
+    jest.useFakeTimers();
+    fireEvent.click(button);
+    expect(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" })).toBeInTheDocument();
+    act(() => {
+      jest.advanceTimersByTime(4_000);
+    });
+    expect(screen.getByRole("button", { name: "보낸 링크 끊기" })).toBeInTheDocument();
+    expect(api.revokeResultAccess).not.toHaveBeenCalled();
+  });
+
+  it("실패하면 알리고 입력은 그대로 둔다", async () => {
+    api.revokeResultAccess.mockRejectedValue(new Error("down"));
+    home([{ jobId: 9, status: "DONE", expiresAt: "2999-01-01T00:00:00Z" }]);
+    fireEvent.click(await screen.findByRole("button", { name: "보낸 링크 끊기" }));
+    fireEvent.click(screen.getByRole("button", { name: "한 번 더 누르면 링크를 끊어요" }));
+    expect(await screen.findByText(/링크를 끊지 못했어요/)).toBeInTheDocument();
+  });
+
+  it("기간이 지났거나 아직 완성되지 않은 사진에는 없다", async () => {
+    home([
+      { jobId: 1, status: "DONE", expiresAt: "2000-01-01T00:00:00Z" },
+      { jobId: 2, status: "PENDING" },
+    ]);
+    await screen.findByText(/받을 수 있는 기간이 지났어요/);
+    expect(screen.queryByRole("button", { name: "보낸 링크 끊기" })).not.toBeInTheDocument();
+  });
+});

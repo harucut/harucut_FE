@@ -67,6 +67,12 @@ updates:
       - dependency-name: "eslint"
         update-types:
           - "version-update:semver-major"
+      # TypeScript 7(네이티브 컴파일러)은 typescript-eslint 가 지원하지 않는다 — eslint 가 「does not support TS 7.0」로
+      # 바로 멈춰 verify 가 깨진다(#494, 2026-10-26 확인: tsc·jest 는 통과, eslint 실패). typescript-eslint 가
+      # TS 7 을 지원하거나 TS 6 API 와 나란히 돌리는 구성으로 옮길 때 이 줄을 지운다.
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
       # Expo SDK가 버전을 고정하는 네이티브 런타임은 patch 포함 모든 자동 범프 금지.
       # RN 버전은 Expo의 bundledNativeModules.json 기준으로 SDK와 함께 갱신한다.
       # Expo 55에 RN 0.85를 섞던 구성은 iOS 컴파일이 실패해 공식 SDK 57 조합으로 정리했다.

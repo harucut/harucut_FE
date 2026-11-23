@@ -1,37 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuthBypass";
 import {
-  EVENT_ENTRY_QUERY,
   GUEST_TRIAL_COOKIE,
   GUEST_TRIAL_COOKIE_MAX_AGE,
   PUBLIC_SHOOT_ENTRY,
 } from "@/lib/guestTrialShared";
 import {
   isGuestAllowedPath,
-  isGuestMemberOnlyPath,
+  isBlockedAccountPath,
   isProtectedPath,
 } from "@/lib/protectedPaths";
 
 /**
- * 게스트를 촬영 화면으로 되돌릴 주소. **행사 상태를 들고 간다.**
+ * 게스트를 촬영 화면으로 되돌릴 주소. **고른 프레임을 들고 간다.**
  *
- * `/shoot` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다
- * (app/shoot/page.tsx). 그래서 고정된 `/shoot?guestNotice=restricted` 로 보내면 행사
- * 배너와 QR 이 지정한 프레임이 그대로 사라진다 — 막는 것은 회원 전용 경로 하나지 행사
- * 진입 전체가 아니다.
+ * `/create` 은 쿼리도 `keepShots` 도 없는 진입을 **새 촬영**으로 보고 세션을 비운다
+ * (app/create/page.tsx). 그래서 고정된 `/create?guestNotice=restricted` 로 보내면 방금 고른
+ * 프레임이 사라진다 — 막는 것은 회원 전용 경로 하나지 촬영 전체가 아니다.
  *
- * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 그래서 프레임 선택
- * 화면이 갤러리 불러오기로 보낼 때 `frame`·`event` 를 주소에 싣는다(그 화면 주석 참고) —
- * 이 함수가 그것을 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
+ * 미들웨어는 세션을 못 보므로 **요청에 실려 온 것만** 옮길 수 있다. 주소에 `frame` 이 실려 왔으면
+ * 되돌릴 주소로 옮긴다. 실려 오지 않았으면 옮길 것도 없다.
  */
 function restrictedShootUrl(req: NextRequest) {
-  const url = new URL("/shoot", req.url);
+  const url = new URL("/create", req.url);
   url.searchParams.set("guestNotice", "restricted");
 
-  for (const key of ["frame", EVENT_ENTRY_QUERY]) {
-    const value = req.nextUrl.searchParams.get(key)?.trim();
-    if (value) url.searchParams.set(key, value);
-  }
+  const frame = req.nextUrl.searchParams.get("frame")?.trim();
+  if (frame) url.searchParams.set("frame", frame);
 
   return url;
 }
@@ -62,20 +57,24 @@ function hasAuthCookie(req: NextRequest) {
  * 실제 집행은 백엔드가 한다 — 백엔드에 비회원 개념이 없어 인증 API 가 401 이다.
  */
 function hasLiveAccessToken(req: NextRequest) {
+  return isLiveAccess(readAccessClaims(req));
+}
+
+function readAccessClaims(req: NextRequest): { exp?: unknown; status?: unknown } | null {
   const payload = req.cookies.get("accessToken")?.value.split(".")[1];
-  if (!payload) return false;
+  if (!payload) return null;
 
   try {
     // JWT 는 base64url 이라 표준 base64 문자로 바꿔서 읽는다.
-    const claims = JSON.parse(
-      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
-    ) as { exp?: unknown };
-
-    return typeof claims.exp === "number" && claims.exp * 1000 > Date.now();
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: unknown; status?: unknown };
   } catch {
     // 우리가 아는 모양이 아니면 로그인했다고 볼 근거가 없다.
-    return false;
+    return null;
   }
+}
+
+function isLiveAccess(claims: { exp?: unknown } | null) {
+  return typeof claims?.exp === "number" && claims.exp * 1000 > Date.now();
 }
 
 function hasGuestTrialCookie(req: NextRequest) {
@@ -91,26 +90,6 @@ function hasGuestTrialCookie(req: NextRequest) {
  */
 function isSocialLoginCallback(pathname: string) {
   return pathname === SOCIAL_LOGIN_CALLBACK;
-}
-
-/**
- * 행사장 QR 진입인지 본다.
- *
- * QR을 찍은 참가자는 대개 쿠키가 하나도 없는 새 브라우저로 `/shoot?frame=...&event=...` 에
- * 도착한다. 이 검사가 없으면 프록시가 먼저 /login 으로 돌려보내서, "가입 없이 바로 찍는다"는
- * 행사 흐름이 정작 행사장에서만 동작하지 않는다.
- *
- * "대개"인 이유는 아래 호출부에 적혀 있다 — 예전에 로그인했던 브라우저로도 찍는다.
- *
- * 촬영 진입점(`/shoot`)에만 적용한다 — QR이 가리키는 주소가 거기이고, 하위 단계는
- * 이 진입에서 심긴 쿠키로 이어진다.
- *
- * **이 주소는 QR 전용이 아니다.** 촬영 화면의 "프레임 다시 선택"이 돌아가는 곳이
- * 같은 `/shoot?frame=…&event=…` 이라(app/shoot/capture/page.tsx 의 `backToFrameHref`),
- * 행사 촬영 도중에도 같은 판정이 다시 돈다. 아래 호출부의 「남는 한계」가 그 이야기다.
- */
-function isEventEntry(pathname: string, params: URLSearchParams) {
-  return pathname === "/shoot" && Boolean(params.get(EVENT_ENTRY_QUERY)?.trim());
 }
 
 /**
@@ -136,7 +115,7 @@ export async function proxy(req: NextRequest) {
   // 인증 쿠키가 있는 회원은 새 체험 쿠키로 덮지 않고, 도착한 화면에서 만료·정지를 확인한다.
   if (pathname === PUBLIC_SHOOT_ENTRY) {
     const memberCandidate = !guestMode && hasAuthCookie(req);
-    const target = new URL(memberCandidate ? "/shoot?checkSession=1" : "/shoot", req.url);
+    const target = new URL(memberCandidate ? "/create?checkSession=1" : "/create", req.url);
     const response = NextResponse.redirect(target);
     response.headers.set("Cache-Control", "private, no-store");
     return memberCandidate ? response : startGuestTrial(response, req.nextUrl.protocol === "https:");
@@ -174,60 +153,14 @@ export async function proxy(req: NextRequest) {
   }
 
   /*
-    행사 QR은 "가입 없이 체험하기"를 누른 것과 같은 자격이다 — 랜딩 버튼으로 누구나 얻을 수
-    있는 것과 같은 권한이므로 새로 여는 문이 아니다. 대신 행사 참가자는 그 버튼을 누를
-    기회 자체가 없으므로 여기서 대신 시작시킨다.
-
-    **인증 쿠키 판정보다 먼저 본다.** QR을 찍는 사람이 늘 빈 브라우저를 들고 오지는 않는다.
-    예전에 로그인했던 브라우저에 죽은 쿠키가 남아 있으면 아래 통과가 먼저 걸려 체험 쿠키를
-    심지 못했고, 그 방문자는 회원으로 읽히면서 인증 API 로는 401 을 받아 — 가입 없이
-    찍는다는 행사 흐름이 정확히 행사장에서 막혔다.
-
-    **막는 것은 인증 쿠키가 하나라도 있는 것이다 — 쿠키가 아예 없을 때만 심는다.**
-
-    한때 이 자리에서 「살아 있는 access」만 보고 비켜섰다. 서버가 회수한 refresh 는 쿠키만
-    봐서는 살아 있는 것과 구별되지 않으니, 회수된 쿠키를 든 행사 참가자를 회원으로 읽어
-    막아 버리지 말자는 뜻이었다. 그런데 그 판정은 **반대쪽을 더 크게 깼다** — access 만
-    자연 만료되고 refresh 는 멀쩡한 회원(흔하다)이 이 주소를 열면 7일짜리 체험 쿠키를 받고,
-    `clientApi` 가 재발급에 성공한 뒤에도 `guestTrialStore` 는 그 쿠키만 보고 게스트로
-    복원해 기록·커스텀 프레임을 잃는다. 진입 시점만의 이야기도 아니다 — 같은 주소가 촬영
-    화면의 "프레임 다시 선택" 목적지라(app/shoot/capture/page.tsx 의 `backToFrameHref`)
-    행사 촬영 도중에도 같은 판정이 다시 돈다.
-
-    **되살아날지 말지는 미들웨어가 점칠 일이 아니다.** 확실히 가리려면 재발급을 실제로
-    해 봐야 하는데, 만료된 access 로는 `/api/auth/status` 가 401 이라(백엔드는 refresh 를
-    access 로 받지 않는다 — docs/backend-contract.md 「토큰」의 AUTH-011 표) reissue 를
-    불러야 한다. 그것은 **토큰을 회전시키는 쓰기 요청**이고, 프록시는 RSC 프리페치를 포함한
-    모든 요청에 붙어 있어 한 번의 진입이 여러 번 회전시킬 수 있으며, 미들웨어가 돌려받은
-    새 쿠키를 응답에 실어 주지 못한 회전은 그대로 버려진다. 그 버려진 회전이 멀쩡한 세션을
-    실제로 끊는지는 **확인하지 않았다 — 추측이다**(계약 문서에 있는 것은 "이전 refresh 가
-    `REFRESH_GRACE:<jwt>` 로 남는다" 한 줄뿐이고, 유예의 개수·수명은 적혀 있지 않다).
-    확인된 것만 놓고 봐도 모든 진입에 검증 안 된 쓰기를 거는 쪽의 위험이 더 크다.
-
-    그래서 **판정을 할 수 있는 쪽으로 넘긴다.** 쿠키가 하나라도 있으면 여기서는 아무것도
-    심지 않고 아래 hasAuthCookie() 로 통과시키고, 화면이 `lib/authSession.ts` 의
-    `isUsableMember()` 로 — 재발급을 포함해 — 물어본 뒤 **정말 회원이 아닐 때만** 게스트로
-    전환한다(app/shoot/page.tsx). 클라이언트는 답을 받아 쿠키를 실을 수 있고 회전도 한 번뿐이다.
-
-    쿠키가 아예 없는 방문자는 물어볼 것도 없다 — 그 자리에서 심어야 `/shoot` 이 로그인으로
-    튕기지 않는다. 그것이 이 분기가 원래 뚫으려던 길이고, 여기 남는 것은 그 하나다.
-
-    행사 QR 은 "가입 없이 체험하기"를 누른 것과 같은 자격이라, 새로 여는 문은 아니다.
-
-    **남는 한계.** 화면 쪽 전환은 조회 한 번을 기다린다 — 그 사이(수백 ms)에는 회원 화면이
-    잠깐 보인다. 그리고 조회가 `unknown` 으로 떨어지면 전환하지 않으므로, 서버가 흔들리는
-    동안 **진짜 비회원**은 회원 화면을 보다가 인증 API 에서 막힌다. 서버가 돌아오면 다음
-    진입에서 판정된다 — 멀쩡한 회원을 7일 동안 게스트로 두는 쪽보다 낫다고 봤다.
+    정지 계정은 마이페이지만 쓴다. 다른 화면은 API 가 전부 403 AUTH-042 라 빈 화면만 남으니 미리 돌려보낸다.
+    위 hasLiveAccessToken 과 같은 이유로 서명은 보지 않는다 — 인가가 아니라 길 안내이고, 집행은 백엔드가 한다.
+    정지 전에 받은 토큰은 여기를 지나치고, 막힌 API 를 부르는 순간 AccountRecoveryBridge 가 같은 곳으로 보낸다.
   */
-  if (
-    isEventEntry(pathname, req.nextUrl.searchParams) &&
-    !guestMode &&
-    !hasAuthCookie(req)
-  ) {
-    return startGuestTrial(
-      NextResponse.next(),
-      req.nextUrl.protocol === "https:",
-    );
+  const accessClaims = readAccessClaims(req);
+  if (isLiveAccess(accessClaims) && accessClaims?.status === "BLOCKED" && !isBlockedAccountPath(pathname)) {
+    // 표시를 붙여 둔다. 그새 해제됐으면 토큰만 낡은 것이라 마이페이지가 새 토큰을 받는다(app/mypage/page.tsx).
+    return NextResponse.redirect(new URL("/mypage?restricted=1", req.url));
   }
 
   /*
@@ -242,36 +175,6 @@ export async function proxy(req: NextRequest) {
   }
 
   /*
-    **게스트로 그려 주는 화면은 회원 전용 촬영 경로에 못 들어간다 — 인증 쿠키가 있어도.**
-
-    구멍이었다. 예전에는 아래 hasAuthCookie() 가 먼저였고, 그 판정은 쿠키가 **있는지만**
-    보므로 「게스트 쿠키 + refreshToken 쿠키」를 함께 든 방문자가 `/shoot/upload`
-    (GUEST_MEMBER_ONLY_PREFIXES)를 그냥 지나갔다 — 게스트 차단에 닿지도 못했다. 위 행사 QR
-    분기가 refresh 를 더 이상 회원 근거로 보지 않게 되면서 행사 방문자 상당수가 정확히 그
-    조합이 된다(예전에 로그인해 둔 브라우저 + 방금 심은 체험 쿠키). 화면은 이미 게스트다 —
-    accessMode 는 이 쿠키만 보고(guestTrialStore 의 hydrateGuestMode), `/shoot/upload`
-    화면에는 그것을 다시 보는 검사가 없다. 프록시가 유일한 집행 지점이었고 뚫려 있었다.
-    비회원 범위는 약관 제8조와 `@harucut/shared` 의 GUEST_ALLOWED_ITEMS 가 "사진 촬영과
-    이미지 저장"으로 못박는다.
-
-    **막는 자리를 이 경로들로만 좁힌다.** 한때 게스트 판정 전체를 hasAuthCookie 앞으로
-    옮겼는데, 그러면 access 만 만료된 회원이 행사 주소를 열어 체험 쿠키를 받은 뒤 `/home`·
-    `/mypage`·`/history` 까지 통째로 막혔다 — 예전에는 지나가던 사람이고, 여기서 막을
-    이유도 없다(그 경로들은 백엔드가 집행한다). 구멍은 `/shoot/upload` 하나였으므로 거기만
-    닫는다.
-
-    죽은 access 쿠키(형식이 깨졌거나 exp 가 지난)와 체험 쿠키를 함께 든 사람도 같은 구멍
-    이었고, 같이 닫힌다.
-
-    **이 판정은 인가가 아니다.** 브라우저에서 체험 쿠키를 지우면 아래 통과에 걸린다 —
-    쿠키 값을 보지 않기 때문이다. 여기서 막는 것은 "우리가 게스트로 그려 주고 있는 화면이
-    회원 전용 경로로 넘어가는 것"까지고, 실제 집행은 백엔드가 한다.
-  */
-  if (guestMode && isGuestMemberOnlyPath(pathname)) {
-    return NextResponse.redirect(restrictedShootUrl(req));
-  }
-
-  /*
     여기까지 온 사람은 인증 쿠키가 **있기만 하면** 통과시킨다.
 
     이 판정은 쿠키가 있는지만 본다 — 서버가 이미 버린 죽은 토큰도 로그인으로 읽힌다
@@ -280,8 +183,9 @@ export async function proxy(req: NextRequest) {
     확신할 수 없어서다(위 「세션 유효성을 백엔드에 묻지 않는다」). 회원이었던 사람을
     로그인으로 튕기는 대신, 화면이 인증 API 응답을 보고 처리하게 둔다.
 
-    죽은 토큰이 여기서 로그인으로 읽힌다는 것이, 위 행사 QR 예외와 회원 전용 경로 차단을
-    둘 다 이 판정보다 앞에 둔 이유다. 순서를 되돌리지 않는다.
+    예전에는 이 판정보다 앞에 회원 전용 촬영 경로(갤러리 불러오기 화면) 차단이 있었다 — 죽은 토큰이 여기서
+    로그인으로 읽혀 그 화면을 지나갔기 때문이다. 2026-11-15 그 화면을 사진 고르기 안으로 합치며 걷었다.
+    불러오기 칸은 화면이 회원에게만 보인다(app/create/select/page.tsx).
 
     **여기서 게스트 쿠키를 지우지는 않는다** — 걷는 자리는 소셜 콜백 하나뿐이다(위).
   */
@@ -305,10 +209,12 @@ export async function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     "/home/:path*",
-    "/shoot/:path*",
+    "/create/:path*",
     "/history/:path*",
     "/theme/:path*",
     "/mypage",
+    "/studio/:path*",
+    "/admin/:path*",
     // 보호 경로는 아니지만 로그인이 끝나는 자리라, 게스트 쿠키를 걷으러 들어간다.
     // matcher 는 Next 가 빌드 때 읽으므로 문자열을 그대로 적는다 —
     // 위 SOCIAL_LOGIN_CALLBACK 과 같은 값이어야 한다(proxy.test.ts 가 확인한다).

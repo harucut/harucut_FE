@@ -13,6 +13,7 @@
  */
 import {
   composeFourcutOnServer,
+  SOURCE_REUSE_MS,
   describeComposeFailure,
   resolveComposeFrame,
   SystemFrameMissingError,
@@ -315,8 +316,6 @@ describe("composeFourcutOnServer", () => {
       expect(args.type).toBe("FOURCUT_SOURCE");
       // 원본은 사진이라 JPEG 으로 굽는다(PNG 면 10MB 제한에 걸린다).
       expect(args.file.type).toBe("image/jpeg");
-      // 합성 원본은 곧 서버가 지우므로 조회 URL 을 따로 받지 않는다.
-      expect(args.skipUrlResolve).toBe(true);
     }
 
     expect(mockRequestCompose).toHaveBeenCalledWith({
@@ -668,7 +667,7 @@ describe("composeFourcutOnServer — 올리기", () => {
 });
 
 /**
- * 「다시 준비하기」는 **같은 멱등키로** 다시 온다(app/shoot/result/page.tsx).
+ * 「다시 준비하기」는 **같은 멱등키로** 다시 온다(app/create/result/page.tsx).
  *
  * 멱등키가 덮는 것은 합성 접수부터라, 그 앞의 원본 4장은 재시도마다 새 S3 키로 또 올라갔다.
  * 서버는 기존 작업을 재생하며 그 key 를 쳐다보지도 않으니 4장은 그대로 고아가 된다 —
@@ -721,6 +720,22 @@ describe("composeFourcutOnServer — 같은 멱등키면 원본을 다시 올리
     );
   });
 
+  // 서버는 원본을 24시간 뒤에 지운다. 그 뒤에 같은 key 로 접수하면 SOURCE_MISSING 이다.
+  it("23시간이 지난 원본은 다시 쓰지 않고 새로 올린다", async () => {
+    const now = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    now.mockReturnValue(1_000_000 + SOURCE_REUSE_MS - 1);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(4);
+
+    now.mockReturnValue(1_000_000 + SOURCE_REUSE_MS);
+    await composeWith("retry-after-a-day");
+    expect(mockUpload).toHaveBeenCalledTimes(8);
+    now.mockRestore();
+  });
+
   // 절반만 올라간 key 를 기억하면, 다음 재시도가 모자란 원본으로 합성을 접수한다.
   it("올리다 실패한 원본은 기억하지 않는다", async () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -748,7 +763,8 @@ describe("composeFourcutOnServer — 같은 멱등키면 원본을 다시 올리
  * 앞에 예외 클래스명이 붙으므로 언어를 따지지 않고 전부 버린다.
  */
 describe("describeComposeFailure", () => {
-  const FALLBACK = "서버가 네컷을 완성하지 못했어요. 다른 프레임으로 시도해 주세요.";
+  // 다시 해서 풀리는 실패의 기본 문구(2026-11-15). 다시 시도는 새 작업이라 newJobOnRetry 다.
+  const RETRY = { message: "네컷을 만들지 못했어요. 다시 시도해 주세요.", retryable: true, newJobOnRetry: true };
 
   it.each([
     ["S3 원문", "NoSuchKeyException: The specified key does not exist. (Service: S3, Status Code: 404)"],
@@ -758,13 +774,42 @@ describe("describeComposeFailure", () => {
   ])("%s 은 화면에 올리지 않고 우리 문구로 때운다", (_label, reason) => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
 
-    expect(describeComposeFailure(new ComposeFailedError(reason))).toEqual({
-      message: FALLBACK,
-      retryable: false,
-    });
+    expect(describeComposeFailure(new ComposeFailedError(reason))).toEqual(RETRY);
 
     error.mockRestore();
   });
+
+  // 문구가 따로 있는 실패 코드(app-shell §8). 프레임 파일 문제만 다른 프레임으로 — 같은 프레임으로는 몇 번을 해도 같다.
+  // 다시 시도할 수 있는 서버 확정 실패(TIMED_OUT)는 새 작업으로 다시 보낸다(newJobOnRetry).
+  it.each([
+    ["ASSET_MISSING", "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", false],
+    ["ASSET_UNREADABLE", "프레임을 불러오지 못했어요. 다른 프레임으로 시도해 주세요.", false],
+    ["TIMED_OUT", "사진을 만드는 데 시간이 너무 걸렸어요. 다시 시도해 주세요.", true],
+  ])("실패 코드 %s 이면 그에 맞는 문구를 쓴다", (code, message, retryable) => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual({ message, retryable, newJobOnRetry: retryable });
+    error.mockRestore();
+  });
+
+  // 자유 사진 칸 프레임은 합성 렌더가 열리기 전까지 409 FRAME-008 — 다시 눌러도 같으니 다른 프레임으로.
+  it("자유 칸 프레임이 아직 막혀 있으면(FRAME-008) 재시도 대신 그 문구를 보인다", () => {
+    const error = Object.assign(new Error("x"), { status: 409, code: "FRAME-008", data: { code: "FRAME-008" } });
+    expect(describeComposeFailure(error)).toEqual({
+      message: "이 프레임은 아직 촬영에 쓸 수 없어요. 곧 열릴 예정이에요.",
+      retryable: false,
+    });
+  });
+
+  // 원본을 서버가 잃었거나(SOURCE_*) 재접수가 바닥나도(DISPATCH_EXHAUSTED) 다시 찍을 일은 아니다 — 원본은 기기에 있고,
+  // 다시 시도는 그것을 다시 올려 새 작업으로 만든다.
+  it.each(["UNKNOWN", "RENDER_FAILED", "OUTPUT_CONFLICT", "SOURCE_MISSING", "SOURCE_UNREADABLE", "DISPATCH_EXHAUSTED", "SOMETHING_NEW"])(
+    "실패 코드 %s 는 다시 시도한다",
+    (code) => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {});
+      expect(describeComposeFailure(new ComposeFailedError("x", code))).toEqual(RETRY);
+      error.mockRestore();
+    },
+  );
 
   it("사유는 버리되 콘솔에는 남긴다 — 원인 추적을 잃지 않게", () => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});
@@ -776,5 +821,46 @@ describe("describeComposeFailure", () => {
     );
 
     error.mockRestore();
+  });
+});
+
+// Codex #567: 자유 칸 프레임의 원본을 고정 슬롯 비율로 자르면 서버가 칸 비율로 한 번 더 잘라 미리보기와 구도가 달라진다.
+describe("composeFourcutOnServer — 자유 사진 칸(P5)", () => {
+  const cell = (shotIndex: number, width: number, height: number) => ({
+    x: 0, y: 0, width, height, rotation: 0, shape: { type: "ELLIPSE" as const }, shotIndex,
+  });
+
+  function canvasSizes() {
+    const sizes: Array<[number, number]> = [];
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: unknown[]) {
+      sizes.push([this.width, this.height]);
+      return (original as (...a: unknown[]) => unknown).apply(this, args);
+    } as typeof HTMLCanvasElement.prototype.getContext;
+    return sizes;
+  }
+
+  it("원본 i 를 shotIndex 가 i 인 칸의 크기로 가공해 올린다", async () => {
+    mockGetFrame.mockResolvedValue({
+      frameId: 99,
+      frameType: "CLASSIC",
+      components: [],
+      cells: [cell(2, 800, 800), cell(0, 1000, 500), cell(3, 600, 900), cell(1, 1200, 1200)],
+    });
+    const sizes = canvasSizes();
+    await composeFourcutOnServer({ sources: SOURCES, layout, outputFilter: "NONE", frameId: "classic-4", remoteFrameId: 99 });
+    expect(sizes).toEqual([[1000, 500], [1200, 1200], [800, 800], [600, 900]]);
+  });
+
+  it("칸이 넷이 아니거나 순번이 어긋나면 고정 슬롯으로 자른다", async () => {
+    mockGetFrame.mockResolvedValue({
+      frameId: 99,
+      frameType: "CLASSIC",
+      components: [],
+      cells: [cell(0, 800, 800), cell(0, 1000, 500), cell(3, 600, 900), cell(1, 1200, 1200)],
+    });
+    const sizes = canvasSizes();
+    await composeFourcutOnServer({ sources: SOURCES, layout, outputFilter: "NONE", frameId: "classic-4", remoteFrameId: 99 });
+    expect(sizes).toEqual(Array(4).fill([1700, 1200]));
   });
 });

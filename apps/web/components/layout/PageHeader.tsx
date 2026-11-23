@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 
 type Props = {
@@ -22,8 +22,8 @@ type Props = {
    * 제목 옆에 끼우면 제목의 일부처럼 읽힌다. 부가 정보는 제목이 아니라 오른쪽 열에 쌓는다.
    */
   rightBelow?: ReactNode;
-  /** 뒤로가기를 누를 때 함께 할 일(세션 정리 등). 이동 자체는 Link 가 한다. */
-  onBackClick?: () => void;
+  /** 뒤로가기를 누를 때 함께 할 일(세션 정리 등). 이동 자체는 Link 가 한다. 막으려면 event.preventDefault() 를 부른다. */
+  onBackClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 };
 
 /**

@@ -9,6 +9,7 @@
  */
 import { buildFrameContentKey, useShootSession } from "@/lib/shootSessionStore";
 import type { ThemeExportJson } from "@/lib/types/themeEditor";
+import type { GeneratedFourcutAsset } from "@/lib/fourcutOutput";
 
 function component(
   overrides: Partial<ThemeExportJson["components"][number]> = {},
@@ -134,10 +135,45 @@ describe("buildFrameContentKey", () => {
 
 /*
   합성이 되돌릴 수 없는 이유로 실패하면 결과 화면이 "프레임 다시 고르기" 를 안내한다.
-  그 길이 예전에는 `/shoot` 의 reset() 을 지나며 **찍은 8장을 통째로 지웠다** — 문구는
+  그 길이 예전에는 `/create` 의 reset() 을 지나며 **찍은 8장을 통째로 지웠다** — 문구는
   사진은 두고 프레임만 바꾼다는 뜻으로 읽히는데 실제로는 사진이 먼저 사라졌고,
-  /shoot/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
+  /create/select 에는 프레임을 바꾸는 UI 가 없어 우회로도 없었다.
 */
+// 「최종적으로 완성되었을땐 다시 고르기를 막아야해」(2026-11-15). 완성본이 한 번 나오면 그 촬영은 끝이다.
+describe("완성 표시", () => {
+  const initial = useShootSession.getState();
+  const asset = { mediaId: 7, displayName: "harucut_a", objectUrl: "blob:a" } as unknown as GeneratedFourcutAsset;
+
+  afterEach(() => {
+    useShootSession.setState(initial, true);
+  });
+
+  it("완성본이 들어오면 켜지고, 결과를 비워도 꺼지지 않는다", () => {
+    useShootSession.getState().setImageResult(asset);
+    expect(useShootSession.getState().completed).toBe("account");
+
+    useShootSession.getState().clearResults();
+    useShootSession.getState().setImageResult(null);
+    expect(useShootSession.getState().completed).toBe("account");
+  });
+
+  // 비회원·기본 프레임이 없는 회원은 이 기기에서 그린다. 그 사진은 기록에 없어 세션을 지우면 사라진다.
+  it("기기에서 그린 완성본이면 이 기기에만 있다고 남긴다", () => {
+    useShootSession.getState().setImageResult({ ...asset, localBlob: new Blob(["jpeg"], { type: "image/jpeg" }) } as GeneratedFourcutAsset);
+    expect(useShootSession.getState().completed).toBe("device");
+  });
+
+  it("새 촬영(사진 비우기·처음부터)에서만 꺼진다", () => {
+    useShootSession.getState().setImageResult(asset);
+    useShootSession.getState().resetShots();
+    expect(useShootSession.getState().completed).toBeNull();
+
+    useShootSession.getState().setImageResult(asset);
+    useShootSession.getState().reset();
+    expect(useShootSession.getState().completed).toBeNull();
+  });
+});
+
 describe("프레임만 다시 고르기", () => {
   const initial = useShootSession.getState();
 
@@ -145,10 +181,9 @@ describe("프레임만 다시 고르기", () => {
     useShootSession.setState(initial, true);
   });
 
-  it("촬영본과 그것을 찍은 프레임·출처·행사는 남기고 나머지를 되돌린다", () => {
+  it("촬영본과 그것을 찍은 프레임·출처는 남기고 나머지를 되돌린다", () => {
     const store = useShootSession.getState();
     store.setSource("upload");
-    store.setEventName("여름 팬미팅");
     store.setFrameId("classic-4");
     store.addShotPhotos(["data:image/jpeg;base64,a", "data:image/jpeg;base64,b"]);
     store.toggleSelect(0);
@@ -160,7 +195,6 @@ describe("프레임만 다시 고르기", () => {
     expect(next.shots).toHaveLength(2);
     expect(next.shotsFrameId).toBe("classic-4");
     expect(next.source).toBe("upload");
-    expect(next.eventName).toBe("여름 팬미팅");
     // 프레임 선택은 처음으로 — 이 화면에 다시 고르러 왔으므로.
     expect(next.frameId).toBeNull();
     expect(next.selectedIndexes.every((slot) => slot === null)).toBe(true);
@@ -189,5 +223,39 @@ describe("프레임만 다시 고르기", () => {
 
     expect(useShootSession.getState().shots).toHaveLength(0);
     expect(useShootSession.getState().shotsFrameId).toBeNull();
+  });
+});
+
+// 갤러리에서 불러온 사진은 목록에만 올라가고 칸에는 눌러서 넣는다(2026-11-15 「올라간 다음에 선택해서 넣는 거야
+// 자동으로 안 넣어져」). 그 전에는 빈 칸부터 차례로 들어갔다.
+describe("갤러리에서 불러오기", () => {
+  beforeEach(() => useShootSession.getState().reset());
+
+  it("불러온 사진은 목록에만 담고 칸은 비워 둔다", () => {
+    useShootSession.getState().addShotPhotos(["a", "b", "c", "d", "e", "f"]);
+    const { shots, selectedIndexes } = useShootSession.getState();
+    expect(shots).toEqual(["a", "b", "c", "d", "e", "f"]);
+    expect(selectedIndexes).toEqual([null, null, null, null]);
+  });
+
+  it("이미 고른 칸은 더 불러와도 그대로다", () => {
+    const store = useShootSession.getState();
+    store.addShotPhotos(["a", "b"]);
+    store.toggleSelect(1);
+    useShootSession.getState().addShotPhotos(["c", "d"]);
+    expect(useShootSession.getState().shots).toEqual(["a", "b", "c", "d"]);
+    expect(useShootSession.getState().selectedIndexes).toEqual([1, null, null, null]);
+  });
+});
+
+// 고르기와 빼기가 한 화면이 됐다(Codex 리뷰 #604) — 사진 하나를 빼도 다른 칸에 고른 사진은 그대로다.
+describe("removeShotPhoto", () => {
+  it("뺀 사진만 칸에서 빠지고, 뒤 사진들은 번호가 하나씩 당겨진다", () => {
+    useShootSession.getState().reset();
+    useShootSession.setState({ shots: ["a", "b", "c", "d", "e"], selectedIndexes: [4, 1, 0, 2] });
+    useShootSession.getState().removeShotPhoto(1);
+    const state = useShootSession.getState();
+    expect(state.shots).toEqual(["a", "c", "d", "e"]);
+    expect(state.selectedIndexes).toEqual([3, null, 0, 1]);
   });
 });

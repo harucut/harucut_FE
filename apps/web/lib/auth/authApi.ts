@@ -35,6 +35,14 @@ export async function signupWithEmail(args: {
   return res.data;
 }
 
+/**
+ * 앱 로그인(P4) 일회용 코드 교환. 응답 쿠키는 로그인과 같다 — WebView 안에서 불러야 쿠키가 WebView 에 남는다.
+ * 없음·만료·사용됨·검증값 불일치는 400 AUTH-041 하나, 형식 오류는 400 GEN-003.
+ */
+export async function exchangeAppLoginCode(code: string, codeVerifier: string) {
+  await clientApi.post("/api/client/auth/oauth2/exchange", { code, codeVerifier });
+}
+
 export async function reactivateAccount() {
   await clientApi.post<ApiEnvelope<null>>("/api/client/reactivate");
 }

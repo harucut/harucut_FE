@@ -9,13 +9,7 @@ test("맨 위 레이어를 먼저 보여 주고 위로 버튼이 실제 목록�
   useThemeEditorStore.getState().addText({ text: "위", fontSize: 24 });
   render(<LayersPanel />);
   expect(screen.getAllByRole("button", { name: "위로" })[0]).toBeDisabled();
-  expect(screen.getAllByText(/^TEXT:/).map((n) => n.textContent)).toEqual([
-    "TEXT: 위",
-    "TEXT: 아래",
-  ]);
+  expect(screen.getAllByText(/^(위|아래)$/).map((n) => n.textContent)).toEqual(["위", "아래"]);
   fireEvent.click(screen.getAllByRole("button", { name: "위로" })[1]);
-  expect(screen.getAllByText(/^TEXT:/).map((n) => n.textContent)).toEqual([
-    "TEXT: 아래",
-    "TEXT: 위",
-  ]);
+  expect(screen.getAllByText(/^(위|아래)$/).map((n) => n.textContent)).toEqual(["아래", "위"]);
 });

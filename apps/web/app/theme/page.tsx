@@ -1,21 +1,19 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { resolvePlanInfo } from "@/constants/planLimits";
 import { resolveFrameCapacity } from "@/components/frame/FrameCapacityMeter";
 import { FrameChooser } from "@/components/frame/FrameChooser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useMyFrames } from "@/hooks/useMyFrames";
-import type { RemoteFrame, SubscriptionUsage } from "@/lib/api-types";
-import { frameIdFromFrameType } from "@/lib/frameApi";
+import type { SubscriptionUsage } from "@/lib/api-types";
 import { useThemeSession } from "@/lib/themeSessionStore";
 import { getMyUserInfo, getSubscriptionUsage } from "@/lib/userApi";
+import { Sentences } from "@/components/ui/Sentences";
 
 function ThemePageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const queriedRemoteFrameId = Number(searchParams.get("remoteFrameId"));
   const { setFrameId, setRemoteFrameId, reset } = useThemeSession();
   const { frames, isLoading, error, refresh } = useMyFrames();
 
@@ -54,41 +52,21 @@ function ThemePageContent() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!Number.isFinite(queriedRemoteFrameId) || queriedRemoteFrameId <= 0) return;
-    if (isLoading) return;
-
-    const targetIndex = frames.findIndex(
-      (frame) => frame.frameId === queriedRemoteFrameId,
-    );
-    if (targetIndex === -1) return;
-
-    const targetFrame = frames[targetIndex];
-
-    setFrameId(frameIdFromFrameType(targetFrame.frameType));
-    setRemoteFrameId(targetFrame.frameId);
-    router.push("/theme/sticker");
-  }, [
-    frames,
-    isLoading,
-    queriedRemoteFrameId,
-    router,
-    setFrameId,
-    setRemoteFrameId,
-  ]);
-
   // 서버가 한도 도달을 확인한 경우만 신규 진입을 막는다. 기존 프레임 수정은 계속 가능하다.
   const isAtCapacity = usage !== null && capacity.atCapacity;
 
-  const handleOpenRemoteFrame = (frame: RemoteFrame) => {
-    setFrameId(frameIdFromFrameType(frame.frameType));
-    setRemoteFrameId(frame.frameId);
-    router.push("/theme/sticker");
-  };
+  /*
+    고른 저장 프레임(2026-11-15 「프레임 꾸미기 이미 있던 거 골랐으면 수정하기 같은 걸로 뜨게」). 저장한 프레임을 고르면 주
+    버튼이 「수정하기」가 되고 그 프레임을 연다. 위에서 컷 구성(큰 카드)을 누르면 풀리고 「새 프레임 만들기」로 돌아간다.
+    보관함이 가득해도 고치는 것은 된다 — 막는 것은 새로 만드는 것뿐이다.
+  */
+  const [editingFrameId, setEditingFrameId] = useState<number | null>(null);
+  const editing = editingFrameId != null && frames.some((frame) => frame.frameId === editingFrameId);
 
   return (
-    <main className="hc-page-app min-h-dvh px-2 py-6 text-(--hc-text) sm:px-4 lg:px-8 lg:py-10">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-5xl lg:gap-6">
+    <main className="hc-page-app flex min-h-dvh flex-col px-2 pb-0 pt-6 text-(--hc-text) sm:px-4 md:pb-6 lg:px-8 lg:py-10">
+      {/* 주 버튼이 화면 아래에 붙도록 안쪽이 남은 높이를 채운다(FramePickerConfirm). */}
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 md:max-w-3xl lg:max-w-5xl lg:gap-6">
         <PageHeader
           backHref="/home"
           backLabel="홈으로"
@@ -121,17 +99,17 @@ function ThemePageContent() {
           onRefresh={refresh}
           // 라벨은 "불러오는 중…"인데 버튼은 눌렸다. 눌러도 조용히 빠져나가서, 목록이
           // 늦게 오는 날에는 아무 반응 없는 버튼이 됐다. 상태와 라벨을 맞춘다.
-          confirmDisabled={isLoading || isAtCapacity}
-          confirmLabel={isLoading ? "불러오는 중…" : isAtCapacity ? "저장 공간을 확인해 주세요" : "새 프레임 만들기"}
-          // 확인은 **언제나 새 프레임**이다. 목록에서 고른 것은 컷 구성만 따라가고,
-          // 그 프레임을 이어서 고치는 길은 아래 "수정하기"다.
-          onConfirm={({ frameId }) => {
-            if (isLoading || isAtCapacity) return;
+          confirmDisabled={editing ? false : isLoading || isAtCapacity}
+          confirmLabel={editing ? "수정하기" : isLoading ? "불러오는 중…" : isAtCapacity ? "저장 공간을 확인해 주세요" : "새 프레임 만들기"}
+          onSelectionChange={({ remoteFrameId }) => setEditingFrameId(remoteFrameId)}
+          showAllSavedFrames
+          onConfirm={({ frameId, remoteFrameId }) => {
+            // 저장한 프레임을 골랐으면 그 프레임을 고친다. 새로 만들기만 목록을 다 읽고 자리가 있을 때 된다.
+            if (remoteFrameId == null && (isLoading || isAtCapacity)) return;
             setFrameId(frameId);
-            setRemoteFrameId(null);
+            setRemoteFrameId(remoteFrameId);
             router.push("/theme/sticker");
           }}
-          savedFrameAction={{ label: "수정하기", onAction: handleOpenRemoteFrame }}
           belowPicker={
             /*
               몇 개까지 되는지는 **만들기 전에** 알아야 한다 — 만든 뒤에 알면 늦다.
@@ -140,9 +118,9 @@ function ThemePageContent() {
             */
             isLoading ? null : isAtCapacity ? (
               <p className="-mt-1 text-[12px] leading-[1.6] text-(--hc-muted)">
-                {capacity.plan.limit <= 0 && !capacity.unlimited
+                <Sentences text={capacity.plan.limit <= 0 && !capacity.unlimited
                   ? "지금은 프레임을 보관할 수 없어요. 꾸민 프레임으로 촬영하려면 먼저 저장해야 해요."
-                  : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."}
+                  : "보관함이 가득 찼어요. 새로 저장하려면 기존 프레임을 지워야 해요."} />
               </p>
             ) : null
           }

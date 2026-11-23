@@ -1,6 +1,12 @@
 name: backend-contract
 
-# 운영 Swagger를 읽기만 한다. 테스트 계정 생성이나 서버 데이터 변경은 하지 않는다.
+# 스펙을 읽기만 한다. 테스트 계정 생성이나 서버 데이터 변경은 하지 않는다.
+#
+# 판정 기준은 백엔드 develop 이 남긴 계약 산출물이다(harucut/Harucut docs/api/*.generated.json).
+# develop 에서는 프론트가 운영보다 앞선다 — 운영 스웨거와만 대조하면 아직 배포하지 않은 API 의
+# BFF 경로가 전부 「백엔드에 없다」로 떨어진다(기획 R5 15절: 같은 커밋·버전의 스펙 산출물을 쓰고,
+# 검사를 끄거나 운영을 먼저 바꾸지 않는다). 백엔드는 ApiContractSnapshotTest 로 「파일 = 실제」를 지킨다.
+# 운영 대조는 정보용으로 남긴다 — 운영 배포(develop→main) 전에 무엇이 빠졌는지 보인다.
 on:
   workflow_dispatch:
   pull_request:
@@ -28,5 +34,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.10'
-      - name: Compare frontend with live production Swagger
+      - name: Compare frontend with backend develop contract artifacts
+        run: >-
+          python3 scripts/check_backend_contract.py
+          --spec https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/openapi.generated.json
+          --error-codes https://raw.githubusercontent.com/harucut/Harucut/develop/docs/api/error-codes.generated.json
+      - name: Compare frontend with live production Swagger (informational)
+        continue-on-error: true
         run: python3 scripts/check_backend_contract.py --base-url https://api.harucut.com

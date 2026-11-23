@@ -199,10 +199,11 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 ## 기본 프레임 = 시스템 프레임
 
 2026-10-18 운영 QA: 신규 회원의 목록이 빈 배열이라 기본 프레임 저장이 실패했다.
-웹 POC는 `SystemFrameMissingError`일 때만 브라우저 JPEG 합성으로 복구한다.
-기기 다운로드는 가능하지만 계정 기록·링크 공유는 제공하지 않으며 결과 화면에 이를 표시한다.
-시스템 프레임 등록 후에는 같은 화면이 서버 합성·계정 보관을 사용한다.
-권한 오류나 임의의 서버 실패를 성공으로 바꾸는 폴백은 아니다.
+한때 웹은 `SystemFrameMissingError`일 때 브라우저 JPEG 합성으로 복구하고 결과 화면에 「이 사진은 기록에 보관되지
+않아요」를 띄웠다. 2026-11-15 그 폴백을 걷었다(사용자 「기기 저장만 가능은 대체 뭐」) — 회원 사진은 언제나 서버가
+만들어 기록에 남는다. 기본 프레임 4종은 백엔드가 모든 환경에 늘 있도록 보장하기로 BE 세션에 요청했다
+(관리자 API 없이도 있게, 멱등). 그 보장이 들어오기 전 시스템 프레임이 없는 서버에서는 회원의 기본 레이아웃
+합성이 「이 프레임으로는 아직 저장할 수 없어요」로 실패한다 — FE 묶음보다 BE 보장이 먼저 들어가야 한다.
 
 `compose` 의 `frameId` 는 **내 프레임이거나 시스템 프레임**이어야 한다.
 시스템 프레임은 관리자(`POST /api/admin/frames`, ROLE_ADMIN)가 만들고,
@@ -298,7 +299,7 @@ BASIC 계정 실측 — ⚠️ **8-20 값이고 지금 서버와 다르다.** 8-
 프론트는 이미 보낸다 — `lib/composeApi.ts:63`(타입),
 `lib/fourcutCompose.ts:544` 의 `wantedBackgroundColor`(꾸민 프레임이면 색을 빼고
 저장된 배경을 쓴다)와 `:398-409` 의 `submitCompose`(그래도 이미지 배경이라 400 이면
-색만 빼고 한 번 더 보낸다), 호출부는 `app/shoot/result/page.tsx:366`(합성)과
+색만 빼고 한 번 더 보낸다), 호출부는 `app/create/result/page.tsx:366`(합성)과
 `:525`(로그인 후 재합성).
 회원 잠금과 우회 훅도 걷혔다: `components/frame/FrameOutputOptionsPanel.tsx:25-27` 의
 `backgroundLocked` 는 이제 `hasCustomFrame` 이고(꾸민 프레임만 잠근다),
@@ -582,7 +583,7 @@ required 와 항목의 키를 맞춘다 — `POST /api/auth/terms/consents` 가 
 
    `FrameResponse` 에 `updatedAt`·`version` 이 없어 서버 값으로는 지문을 만들 수 없다.
    지금은 프론트가 읽어 온 내용에서 직접 만든다 — `lib/shootSessionStore.ts:74`
-   `buildFrameContentKey`, 호출부는 `app/shoot/result/page.tsx:274·:356` 이
+   `buildFrameContentKey`, 호출부는 `app/create/result/page.tsx:274·:356` 이
    `ensureComposeIdempotencyKey(generationKey, themeData)` 로 지문을 넘긴다.
    지문을 `generationKey` 에 **직접 넣지 않은** 이유는 프레임 내용이 네트워크로 늦게
    도착하기 때문이다 — 모르는 동안 키가 흔들리면 진행 중인 합성이 버려지고 같은 네컷이
@@ -754,3 +755,17 @@ EOF
 - 결과 재진입은 동일 `mediaId`를 재생한다. 이름 PATCH는 조회와 분리하고, 게스트 인계의 최초 이름 지정만 서버 기본 이름인 경우 수행한다. 사용자가 바꾼 이름은 보존한다.
 - 미디어의 `createdAt: 2026-10-18T23:24:59.641949`는 실제 KST 생성 시각과 같았다. `userMediaApi`에서 시간대 없는 미디어 시각만 `+09:00`으로 정규화한다. 명시된 `Z`/오프셋과 다른 API의 UTC 계약은 변경하지 않는다. 서버가 오프셋을 명시하면 이 보정 없이도 동일하게 동작한다.
 - BASIC 사용량은 한도 `-1`, 무제한 `true`였고 커스텀 프레임 저장이 성공했다. 가격표는 현재 사용량 조회와 도입 예정 기준을 구분한다. 보관 기간은 사용량 응답에 없으므로 빈 기록을 기간 만료로 단정하지 않는다.
+
+## 2026-11-02 출시 전 범위
+
+경로·필드의 원본은 백엔드 develop 의 `docs/api/openapi.generated.json` 이다. 여기에는 거기서 읽히지 않는 약속만 적는다.
+
+- **사유:** 운영자 링크 회수, 프레임 회수, 계정 정지·해제는 `reason` 필수(1~500자). 어기면 400 `GEN-003`. 참가자 본인의 링크 회수는 사유가 없다.
+- **결과 링크 회수:** 작업의 링크를 전부 끊는다. 고를 수 없다(서버가 토큰 원문을 모른다). 응답은 `{ revokedCount }`. 끊긴 링크는 기존 401 `RESULT-001`.
+- **프레임 회수:** `FrameVersionResponse` 에 `revokedAt`·`revokedReason` 이 붙는다. 회수되지 않았으면 키가 없다. 발행본 목록(`.../versions`)에는 회수본도 오고, 고르기 목록에서는 빠진다. 최신 발행본이 회수되면 프레임이 고르기 목록에서 빠지고 이전 발행본으로 내려가지 않는다. 공개 행사 `frames` 에 `isDefault` 항목이 없을 수 있어 `find(isDefault) ?? list[0]` 으로 읽는다.
+- **계정 정지:** `GET /api/admin/users?email=` 은 배열이다(없으면 `[]`, 소셜 계정 때문에 같은 이메일이 여러 행일 수 있다). `userRole` 은 `ROLE_USER`·`ROLE_ADMIN` 이고 `provider` 는 이메일 가입이 `HARUCUT` 이다. 자기 자신과 마지막 ADMIN 은 403 `GEN-021` 이라 화면이 그 사정을 따로 말한다. 탈퇴 요청 중인 계정은 400 `AUTH-005` 다(정지로 덮으면 삭제 배치가 건너뛴다). 그래서 화면에 정지 버튼이 없다.
+- **정지 계정:** 쓰지는 못하고 마이페이지에서 로그아웃과 탈퇴만 한다(2026-11-02 사용자 결정). 로그인·소셜·앱 코드 교환·재발급은 정상이고 토큰 `status` 가 `BLOCKED` 다. 열린 것은 `/api/auth/status`, `/api/auth/user/info`(`userStatus` 포함, 요청마다 DB 상태), 로그아웃, 재발급, 탈퇴, 복구다. 그 밖은 403 `AUTH-042`. 탈퇴를 복구하면 ACTIVE 가 아니라 다시 BLOCKED 다. 공간의 마지막 소유자는 탈퇴가 `MEMBER-004` 로 막히는데 정지 계정은 소유자를 넘길 수 없어 문의로 안내한다.
+- **행사 고객의 사진 범위:** 초대받으면 언제 초대받았든 행사 사진을 모두 본다(2026-11-02 사용자 결정, 기획 R5 347줄과 다르게 갔다). 한때 있던 `includePast`·`photosFrom` 은 없앴다.
+- **디자이너:** `me/events` 행에서 `operations` 에 `EDIT_THEME` 이 있고 `MANAGE_EVENT` 가 없으면 꾸미기만 고치는 사람이다(`isThemeOnlyAccess`). OWNER·ADMIN 의 `operations` 는 `EDIT_THEME` 까지 넷이다. `PATCH` 는 `theme`·`frames` 만 받고 나머지는 403 `GEN-021`(`theme: null` 은 받는다). 게시는 `MANAGE_EVENT` 그대로다. 디자이너에게 200: 행사 조회, `effective-settings`, 공간 `frames`·`frame-versions`. 403: `usage`, `projects`, `brand-defaults` — 화면은 이 셋 없이 돈다.
+- **게시 위반:** 회수된 발행본은 `field: frames[n]`, `reason: 긴급 회수된 발행본이다`.
+- **문의처:** `copy.contact` 는 다른 문구처럼 200자 제한이고 공간·프로젝트 기본값에서 상속된다.

@@ -72,3 +72,52 @@ describe("SingleFieldDialog", () => {
     expect(screen.getByRole("button", { name: "닫기" })).not.toBeDisabled();
   });
 });
+
+describe("동작을 묻는 데 쓸 때", () => {
+  it("설명과 버튼 문구를 바꿀 수 있고, 진행 중 문구를 보여 준다", () => {
+    const { rerender } = render(
+      <SingleFieldDialog
+        title="회수할까요?"
+        description="새 촬영을 받지 못해요."
+        label="이유"
+        initialValue=""
+        submitLabel="회수"
+        submittingLabel="회수하는 중"
+        saving={false}
+        error={null}
+        onClose={jest.fn()}
+        onSubmit={jest.fn()}
+      />,
+    );
+    expect(screen.getByText("새 촬영을 받지 못해요.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회수" })).toBeInTheDocument();
+    rerender(
+      <SingleFieldDialog
+        title="회수할까요?"
+        label="이유"
+        initialValue=""
+        submitLabel="회수"
+        submittingLabel="회수하는 중"
+        saving
+        error={null}
+        onClose={jest.fn()}
+        onSubmit={jest.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "회수하는 중" })).toBeDisabled();
+  });
+
+  // React 이벤트는 포털을 지나도 트리를 따라 올라간다. 행사 설정 폼 안에서 열면 회수가 설정 저장까지 부른다.
+  it("제출이 바깥 폼으로 번지지 않는다", () => {
+    const onOuterSubmit = jest.fn();
+    const onSubmit = jest.fn();
+    render(
+      <div onSubmit={onOuterSubmit}>
+        <SingleFieldDialog title="회수할까요?" label="이유" initialValue="저작권" saving={false} error={null} onClose={jest.fn()} onSubmit={onSubmit} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    expect(onSubmit).toHaveBeenCalledWith("저작권");
+    expect(onOuterSubmit).not.toHaveBeenCalled();
+  });
+});

@@ -21,23 +21,10 @@ export type PlanId = SharedPlanId;
 export type PlanFeature = SharedPlanFeature;
 
 export type Plan = PlanFacts & {
-  /** 카드 버튼에 쓰는 라벨. 결제가 닫혀 있으면 PricingView 가 상태 표시로 갈아친다. */
-  cta: string;
   badge?: string;
 };
 
-const CTA_BY_ID: Record<PlanId, string> = {
-  basic: "무료로 시작하기",
-  plus: "베이직 시작하기",
-  // 가격표에 카드가 없어 실제로 쓰이지 않지만, PlanId 를 모두 채워 둬야
-  // 나중에 PRO 카드를 되살릴 때 라벨이 빠진 채로 나가지 않는다.
-  pro: "프로 시작하기",
-};
-
-export const PLANS: Plan[] = PLAN_FACTS.map((plan) => ({
-  ...plan,
-  cta: CTA_BY_ID[plan.id],
-}));
+export const PLANS: Plan[] = [...PLAN_FACTS];
 
 export const ENTERPRISE_TEASER = ENTERPRISE_FACTS;
 
@@ -62,8 +49,6 @@ export const PRICING_SUBTITLE = PAYMENTS_ENABLED
 export const PRICING_SUBTITLE_AUTHED = PAYMENTS_ENABLED
   ? "현재 이용 중인 플랜과 제공 한도를 확인해 주세요."
   : "현재 계정에 적용된 한도를 확인해 주세요. 개인 유료 요금제는 준비 중이에요.";
-// 결제 미오픈 안내 — 요금제 카드 CTA·footnote가 함께 쓴다.
-export const PRICING_BILLING_PENDING = "결제 기능은 준비 중이에요.";
 // 요금제를 내릴 때의 안내(비활성화 정책).
 export const PRICING_DOWNGRADE_NOTE =
   "요금제를 내리면 하위 플랜의 보관 기간·개수까지만 유지되고, 초과분은 삭제되지 않고 비활성화돼요.";

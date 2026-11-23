@@ -8,6 +8,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TermsConsentPanel } from "@/components/terms/TermsConsentPanel";
 import type { MyTermsConsent } from "@/lib/termsApi";
+import { sentenceText } from "@/tests/sentenceText";
 
 const mockFetchMine = jest.fn();
 const mockFetchActive = jest.fn();
@@ -86,7 +87,7 @@ describe("TermsConsentPanel", () => {
     const checkbox = await screen.findByRole("checkbox");
     await waitFor(() => expect(checkbox).toBeDisabled());
     expect(
-      screen.getByText("약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."),
+      screen.getByText(sentenceText("약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요.")),
     ).toBeInTheDocument();
 
     fireEvent.click(checkbox);
@@ -106,7 +107,7 @@ describe("TermsConsentPanel", () => {
 
     render(<TermsConsentPanel />);
 
-    expect(await screen.findByText("전문 보기")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "환불 정책 동의 전문 보기" })).toBeInTheDocument();
     expect(
       screen.getByText("환불은 결제일로부터 7일 이내에 가능합니다."),
     ).toBeInTheDocument();
@@ -147,7 +148,7 @@ describe("TermsConsentPanel", () => {
     // 본문을 못 읽는 상황이 맞는지 먼저 못 박는다.
     expect(
       await screen.findByText(
-        "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요.",
+        sentenceText("약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."),
       ),
     ).toBeInTheDocument();
 
@@ -178,7 +179,7 @@ describe("TermsConsentPanel", () => {
     // 본문을 못 읽는 상황이 맞는지 먼저 못 박는다.
     expect(
       await screen.findByText(
-        "약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요.",
+        sentenceText("약관 본문을 불러오지 못했어요. 잠시 후 새로고침해 주세요."),
       ),
     ).toBeInTheDocument();
 

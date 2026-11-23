@@ -1,17 +1,22 @@
-import { ASSET_QUEUE_WAIT_LIMIT_MS, useThemeEditorStore } from "@/lib/themeEditorStore";
+import {
+  ASSET_QUEUE_WAIT_LIMIT_MS,
+  EDITOR_HISTORY_COALESCE_MS,
+  EDITOR_HISTORY_LIMIT,
+  useThemeEditorStore,
+} from "@/lib/themeEditorStore";
+import { textBakeSignature } from "@/lib/canvas/textBakeSignature";
 import type { EditorComponent, ThemeExportJson } from "@/lib/types/themeEditor";
 
 const mockUpload = jest.fn();
 const mockRemoveImageBackground = jest.fn();
 
-jest.mock("@/lib/presignedUploadApi", () => ({
-  PRESIGNED_UPLOAD_TYPES: {
-    FRAME: "FRAME",
-    FRAME_COMPONENT: "FRAME_COMPONENT",
-    PROFILE: "PROFILE",
-    FOURCUT_SOURCE: "FOURCUT_SOURCE",
-  },
-  uploadToS3WithPresigned: (...args: unknown[]) => mockUpload(...args),
+jest.mock("@/lib/assetUploadApi", () => ({
+  uploadAsset: (...args: unknown[]) => mockUpload(...args),
+}));
+
+// jsdom 에는 캔버스가 없다. 굽기 결과는 PNG 하나로 흉내 낸다.
+jest.mock("@/lib/canvas/textLayer", () => ({
+  bakeTextLayerPng: async () => new Blob(["text"], { type: "image/png" }),
 }));
 
 // 실제 누끼 모델은 무겁고 브라우저 전용이라 테스트에서는 결과 파일만 흉내 낸다.
@@ -42,39 +47,191 @@ function ids() {
   return useThemeEditorStore.getState().components.map((c) => c.id);
 }
 
-describe("themeEditorStore 삭제 되돌리기", () => {
+describe("themeEditorStore 되돌리기·다시 하기", () => {
+  const store = () => useThemeEditorStore.getState();
+
   beforeEach(() => {
-    useThemeEditorStore.getState().reset();
-    useThemeEditorStore.getState().importJson(makeJson(["a", "b", "c"]));
+    jest.useFakeTimers();
+    store().reset();
+    store().importJson(makeJson(["a", "b", "c"]));
   });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** 묶음 판정 시간을 넘긴다 — 사람이 편집 사이에 손을 떼는 간격이다. */
+  function pause() {
+    jest.advanceTimersByTime(EDITOR_HISTORY_COALESCE_MS + 1);
+  }
 
   // 되돌리기가 "이전 상태로 되돌리기"가 아니면 이름값을 못한다. 예전에는 지운 것을 배열
   // 끝에 붙여서, 중간 레이어가 항상 맨 위로 올라오며 합성 결과가 달라졌다.
   it("중간 레이어를 지웠다 되돌리면 원래 쌓임 순서로 돌아온다", () => {
-    useThemeEditorStore.getState().remove("b");
+    store().remove("b");
     expect(ids()).toEqual(["a", "c"]);
 
-    useThemeEditorStore.getState().restoreRemoved();
+    store().undo();
     expect(ids()).toEqual(["a", "b", "c"]);
-    expect(useThemeEditorStore.getState().components.map((c) => c.zIndex)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(store().components.map((c) => c.zIndex)).toEqual([1, 2, 3]);
   });
 
-  // 삭제 기록이 프레임을 넘어 살아 있으면, 다른 프레임에서 되돌리기를 눌렀을 때
+  // 기획 F16 — 여러 번 이동·크기 변경·삭제·추가 뒤 왕복해 원상태로 돌아와야 한다.
+  it("이동·크기·삭제·추가를 여러 번 한 뒤 끝까지 되돌리고 다시 하면 그대로 오간다", () => {
+    const initial = store().components;
+
+    store().updateComponent("a", { x: 400, y: 500 });
+    pause();
+    store().updateComponent("b", { width: 900, height: 300 });
+    pause();
+    store().remove("c");
+    pause();
+    store().addText({ text: "새 글자" });
+    pause();
+    store().moveLayerDown(ids()[ids().length - 1]);
+    const edited = store().components;
+
+    expect(store().past).toHaveLength(5);
+    for (let i = 0; i < 5; i += 1) store().undo();
+    expect(store().components).toEqual(initial);
+    expect(store().past).toHaveLength(0);
+
+    for (let i = 0; i < 5; i += 1) store().redo();
+    expect(store().components).toEqual(edited);
+    expect(store().future).toHaveLength(0);
+  });
+
+  it("되돌린 뒤 새로 편집하면 다시 하기 이력을 버린다", () => {
+    store().remove("a");
+    store().undo();
+    expect(store().future).toHaveLength(1);
+
+    store().toggleHidden("b");
+    expect(store().future).toHaveLength(0);
+    store().redo();
+    expect(ids()).toEqual(["a", "b", "c"]);
+  });
+
+  // 투명도 슬라이더는 값이 바뀔 때마다 갱신된다. 하나하나 쌓이면 되돌리기를 수십 번 눌러야 한다.
+  it("같은 레이어의 같은 속성을 연달아 바꾸면 한 단계로 묶는다", () => {
+    store().updateComponent("a", { styleJson: { opacity: 0.9 } });
+    store().updateComponent("a", { styleJson: { opacity: 0.7 } });
+    store().updateComponent("a", { styleJson: { opacity: 0.5 } });
+    expect(store().past).toHaveLength(1);
+
+    pause();
+    store().updateComponent("a", { styleJson: { opacity: 0.3 } });
+    expect(store().past).toHaveLength(2);
+
+    store().updateComponent("b", { styleJson: { opacity: 0.3 } });
+    expect(store().past).toHaveLength(3);
+  });
+
+  it("이력은 상한까지만 남긴다", () => {
+    for (let i = 0; i < EDITOR_HISTORY_LIMIT + 10; i += 1) {
+      store().toggleHidden("a");
+    }
+    expect(store().past).toHaveLength(EDITOR_HISTORY_LIMIT);
+  });
+
+  it("되돌리면 사라진 레이어의 선택을 푼다", () => {
+    store().addText({ text: "선택" });
+    expect(store().activeId).not.toBeNull();
+
+    store().undo();
+    expect(store().activeId).toBeNull();
+  });
+
+  // 이력이 프레임을 넘어 살아 있으면, 다른 프레임에서 되돌리기를 눌렀을 때
   // 이전 프레임의 요소가 지금 프레임에 끼어들어 그대로 저장된다.
-  it("다른 프레임을 열면 삭제 기록을 버린다", () => {
-    useThemeEditorStore.getState().remove("b");
-    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(true);
+  it("다른 프레임을 열면 이력을 버린다", () => {
+    store().remove("b");
+    expect(store().past).toHaveLength(1);
 
-    useThemeEditorStore.getState().importJson(makeJson(["x", "y"]));
+    store().importJson(makeJson(["x", "y"]));
+    expect(store().past).toHaveLength(0);
 
-    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(false);
-    expect(useThemeEditorStore.getState().lastRemoved).toBeNull();
-
-    // 혹시 눌리더라도 이전 프레임의 요소가 들어오지 않아야 한다.
-    useThemeEditorStore.getState().restoreRemoved();
+    store().undo();
     expect(ids()).toEqual(["x", "y"]);
+  });
+});
+
+describe("themeEditorStore 잠금 저장·재열기(F1-3)", () => {
+  it("불러온 잠금을 유지하고, 내보낼 때도 싣는다", () => {
+    const json = makeJson(["a", "b"]);
+    json.components[0] = { ...json.components[0], locked: true };
+    useThemeEditorStore.getState().reset();
+    useThemeEditorStore.getState().importJson(json);
+
+    expect(useThemeEditorStore.getState().components.map((c) => c.locked)).toEqual([true, false]);
+    const exported = useThemeEditorStore.getState().exportJson()!;
+    expect(exported.components[0].locked).toBe(true);
+    expect(exported.components[1]).not.toHaveProperty("locked");
+  });
+});
+
+describe("themeEditorStore 이동(nudge)", () => {
+  const store = () => useThemeEditorStore.getState();
+
+  beforeEach(() => {
+    store().reset();
+    store().importJson(makeJson(["a"]));
+  });
+
+  it("고른 거리만큼 움직이고, 연달아 누른 이동은 되돌리기 한 단계다", () => {
+    store().nudge("a", 10, 0);
+    store().nudge("a", 0, -10);
+    expect(store().components[0]).toMatchObject({ x: 20, y: 10 });
+    expect(store().past).toHaveLength(1);
+
+    store().undo();
+    expect(store().components[0]).toMatchObject({ x: 10, y: 20 });
+  });
+
+  it("잠긴 레이어는 움직이지 않는다", () => {
+    store().toggleLocked("a");
+    const before = store().past.length;
+    store().nudge("a", 10, 10);
+    expect(store().components[0]).toMatchObject({ x: 10, y: 20 });
+    expect(store().past).toHaveLength(before);
+  });
+});
+
+describe("themeEditorStore 되돌리기와 배경 이미지", () => {
+  const store = () => useThemeEditorStore.getState();
+  let seq = 0;
+
+  beforeEach(() => {
+    seq = 0;
+    URL.createObjectURL = jest.fn(() => `blob:bg-${(seq += 1)}`);
+    URL.revokeObjectURL = jest.fn();
+    store().reset();
+    store().setFrameId("classic-4");
+  });
+
+  // 배경을 바꿀 때 이전 blob 주소는 해제된다. 되돌릴 때 그 죽은 주소를 다시 쓰면 빈 배경이 된다.
+  it("이전 배경 이미지로 되돌리면 파일로 주소를 다시 만든다", () => {
+    const first = new File(["a"], "a.png", { type: "image/png" });
+    const second = new File(["b"], "b.png", { type: "image/png" });
+    store().setBackgroundImage(first);
+    store().setBackgroundImage(second);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:bg-1");
+
+    store().undo();
+    const background = store().background;
+    expect(background.type).toBe("IMAGE");
+    expect(background.type === "IMAGE" && background.url).toBe("blob:bg-3");
+    expect(store().pendingBackgroundFile).toBe(first);
+  });
+
+  it("배경과 무관한 되돌리기는 배경 주소를 새로 만들지 않는다", () => {
+    store().setBackgroundImage(new File(["a"], "a.png", { type: "image/png" }));
+    store().addText({ text: "글자" });
+
+    store().undo();
+    const background = store().background;
+    expect(background.type === "IMAGE" && background.url).toBe("blob:bg-1");
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -135,7 +292,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     mockUpload.mockImplementation(async ({ file }: { file: File }) => {
       counter += 1;
       const key = `uploads/users/me/components/${counter}-${file.name}`;
-      return { key, objectUrl: `https://cdn.example.com/${key}?sig=x` };
+      return { key, assetId: `As${counter}` };
     });
     mockRemoveImageBackground.mockImplementation(
       async () => new File(["cut"], "photo-cutout.png", { type: "image/png" }),
@@ -426,18 +583,18 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     expect(useThemeEditorStore.getState().assets.photos).toHaveLength(1);
   });
 
-  it("업로드 key로 연결된 되돌리기 스냅샷도 원본 삭제 때 비운다", async () => {
+  it("업로드 key로 연결된 되돌리기 이력도 원본 삭제 때 비운다", async () => {
     const assetId = await placePhoto();
     await useThemeEditorStore.getState().finalizeAssetsForSave();
     useThemeEditorStore.getState().remove(PHOTO_LAYER_ID);
     expect(useThemeEditorStore.getState().removePhotoAsset(assetId).ok).toBe(true);
-    expect(useThemeEditorStore.getState().canRestoreRemoved).toBe(false);
-    useThemeEditorStore.getState().restoreRemoved();
+    expect(useThemeEditorStore.getState().past).toHaveLength(0);
+    useThemeEditorStore.getState().undo();
     expect(useThemeEditorStore.getState().components).toHaveLength(0);
   });
 
   it.each([false, true])(
-    "누끼 완료가 되돌리기 스냅샷도 갱신한다 (업로드: %s)",
+    "누끼 완료가 되돌리기 이력도 갱신한다 (업로드: %s)",
     async (uploaded) => {
       const assetId = await placePhoto();
       if (uploaded) await useThemeEditorStore.getState().finalizeAssetsForSave();
@@ -446,7 +603,7 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
         return new File(["cut"], "photo-cutout.png", { type: "image/png" });
       });
       await useThemeEditorStore.getState().removePhotoBackground(assetId);
-      useThemeEditorStore.getState().restoreRemoved();
+      useThemeEditorStore.getState().undo();
       expect(layer().source).toBe("blob:photo-cutout.png");
       expect(layer().renderUrl).toBeUndefined();
     },
@@ -476,5 +633,174 @@ describe("themeEditorStore 업로드 뒤 누끼 재적용", () => {
     expect(result).toEqual({ ok: false, reason: "NOT_FOUND" });
     expect(layer().source).toBe("blob:photo.png");
     expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("themeEditorStore 공통 자산 업로드", () => {
+  const TEXT_STYLE = { fontFamily: "Pretendard", fontSize: 48, color: "#111111", textAlign: "center" as const };
+
+  function textLayer(source: string, extra: Partial<EditorComponent> = {}): EditorComponent {
+    return {
+      id: "text-1",
+      type: "TEXT",
+      source,
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 120,
+      scale: 1,
+      rotation: 0,
+      zIndex: 1,
+      styleJson: TEXT_STYLE,
+      locked: false,
+      hidden: false,
+      ...extra,
+    } as EditorComponent;
+  }
+
+  function text() {
+    return useThemeEditorStore.getState().components.find((c) => c.id === "text-1") as EditorComponent;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    URL.createObjectURL = jest.fn((blob: Blob) => `blob:${(blob as File).name}`) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = jest.fn();
+    let counter = 0;
+    mockUpload.mockImplementation(async ({ file }: { file: File }) => {
+      counter += 1;
+      return { key: `uploads/users/me/components/${counter}-${file.name}`, assetId: `As${counter}` };
+    });
+    mockRemoveImageBackground.mockImplementation(
+      async () => new File(["cut"], "photo-cutout.png", { type: "image/png" }),
+    );
+    useThemeEditorStore.getState().reset();
+    useThemeEditorStore.getState().setFrameId("classic-4");
+  });
+
+  it("올린 사진의 자산 id 를 레이어에 남기고, 누끼로 바꾸면 지운다", async () => {
+    const store = useThemeEditorStore.getState();
+    await store.addPhotoAssets([new File(["raw"], "photo.png", { type: "image/png" })]);
+    const asset = useThemeEditorStore.getState().assets.photos[0];
+    useThemeEditorStore.setState({
+      components: [{ ...textLayer(""), id: "photo-1", type: "PHOTO", source: asset.src, styleJson: { opacity: 1 } } as EditorComponent],
+    });
+
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledWith(expect.objectContaining({ purpose: "FRAME_ASSET" }));
+    expect(useThemeEditorStore.getState().exportJson()?.components[0]).toEqual(
+      expect.objectContaining({ source: "uploads/users/me/components/1-photo.png", assetId: "As1" }),
+    );
+
+    // 남기면 서버가 source 대신 그 자산(누끼 전 원본)을 저장한다.
+    await useThemeEditorStore.getState().removePhotoBackground(asset.id);
+    expect(useThemeEditorStore.getState().components[0].assetId).toBeUndefined();
+  });
+
+  it("글자는 TEXT_RENDER 자산으로 굽고, 바뀌지 않았으면 다시 굽지 않는다", async () => {
+    useThemeEditorStore.setState({ components: [textLayer("안녕")] });
+
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+    expect(mockUpload).toHaveBeenCalledWith(expect.objectContaining({ purpose: "TEXT_RENDER" }));
+    expect(text()).toEqual(
+      expect.objectContaining({ renderedKey: "uploads/users/me/components/1-text-text-1.png", renderedAssetId: "As1" }),
+    );
+
+    // 저장이 뒤에서 실패해 다시 누른 경우 — 같은 글자를 또 올리지 않는다.
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+
+    useThemeEditorStore.setState({ components: [{ ...text(), source: "반가워" }] });
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).toHaveBeenCalledTimes(2);
+    expect(text().renderedAssetId).toBe("As2");
+  });
+
+  it("저장본의 구운 글자는 지문이 맞으면 그대로 쓴다", async () => {
+    // frameApi.toThemeExportJson 이 남기는 모양과 같다.
+    const saved = textLayer("안녕");
+    useThemeEditorStore.setState({
+      components: [
+        {
+          ...saved,
+          renderedKey: "uploads/users/me/components/saved.png",
+          renderedAssetId: "AsSaved",
+          renderedFor: textBakeSignature({ ...saved, styleJson: TEXT_STYLE }),
+        },
+      ],
+    });
+
+    await useThemeEditorStore.getState().finalizeAssetsForSave();
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(useThemeEditorStore.getState().exportJson()?.components[0]).toEqual(
+      expect.objectContaining({ renderedKey: "uploads/users/me/components/saved.png", renderedAssetId: "AsSaved" }),
+    );
+  });
+});
+
+// Codex 리뷰(#528): 서버 초안 복원이 숨긴 레이어를 모두 보이게 풀었다.
+describe("hydrateDraft 의 숨김", () => {
+  const hiddenLayer = {
+    id: "s1",
+    type: "STICKER" as const,
+    source: "/stickers/sticker-001.png",
+    x: 0, y: 0, width: 10, height: 10, scale: 1, rotation: 0, zIndex: 1,
+    hidden: true,
+  };
+  const draft = {
+    ownerId: "u",
+    frameId: "classic-4" as const,
+    backgroundColor: "111827",
+    background: { type: "COLOR" as const, value: "111827" },
+    cellCutouts: [false, false, false, false],
+    components: [hiddenLayer],
+    savedAt: 1,
+  };
+
+  it("서버 초안은 숨김을 지킨다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draft, { preserveHidden: true });
+    expect(useThemeEditorStore.getState().components[0].hidden).toBe(true);
+  });
+
+  it("로컬 초안은 예전처럼 숨김을 푼다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draft);
+    expect(useThemeEditorStore.getState().components[0].hidden).toBe(false);
+  });
+});
+
+// Codex 리뷰 #606 — 자동 저장이 올린 사진(source 가 key, 원본은 renderUrl)은 복원 뒤 사진 목록에서 빠져 누끼·다시 넣기를 못 썼다.
+describe("hydrateDraft 의 사진 목록", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const photo = (source: string, renderUrl?: string) => ({
+    id: "p1",
+    type: "PHOTO" as const,
+    source,
+    ...(renderUrl ? { renderUrl } : {}),
+    x: 0, y: 0, width: 10, height: 10, scale: 1, rotation: 0, zIndex: 1,
+  });
+  const draftWith = (components: ReturnType<typeof photo>[]) => ({
+    ownerId: "u",
+    frameId: "classic-4" as const,
+    backgroundColor: "111827",
+    background: { type: "COLOR" as const, value: "111827" },
+    cellCutouts: [false, false, false, false],
+    components,
+    savedAt: 1,
+  });
+
+  it("아직 안 올린 사진은 예전처럼 원본으로 되살린다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draftWith([photo(PNG)]));
+    const [asset] = useThemeEditorStore.getState().assets.photos;
+    expect(asset).toMatchObject({ src: PNG });
+    expect(asset.s3Key).toBeUndefined();
+  });
+
+  it("자동 저장이 올린 사진도 원본으로 되살리고 올린 key 를 잇는다", () => {
+    useThemeEditorStore.getState().hydrateDraft(draftWith([photo("uploads/users/u1/a.png", PNG)]));
+    const photos = useThemeEditorStore.getState().assets.photos;
+    expect(photos).toHaveLength(1);
+    expect(photos[0]).toMatchObject({ src: PNG, s3Key: "uploads/users/u1/a.png" });
+    expect(photos[0].file).toBeInstanceOf(File);
   });
 });

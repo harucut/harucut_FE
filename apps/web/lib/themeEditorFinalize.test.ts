@@ -11,14 +11,8 @@ import type { ThemeExportJson } from "@/lib/types/themeEditor";
 const mockUpload = jest.fn();
 const mockBake = jest.fn();
 
-jest.mock("@/lib/presignedUploadApi", () => ({
-  PRESIGNED_UPLOAD_TYPES: {
-    FRAME: "FRAME",
-    FRAME_COMPONENT: "FRAME_COMPONENT",
-    PROFILE: "PROFILE",
-    FOURCUT_SOURCE: "FOURCUT_SOURCE",
-  },
-  uploadToS3WithPresigned: (...args: unknown[]) => mockUpload(...args),
+jest.mock("@/lib/assetUploadApi", () => ({
+  uploadAsset: (...args: unknown[]) => mockUpload(...args),
 }));
 
 jest.mock("@/lib/canvas/textLayer", () => ({
@@ -39,7 +33,7 @@ beforeEach(() => {
   mockUpload.mockImplementation(async ({ file }: { file: File }) => {
     counter += 1;
     const key = `uploads/users/me/components/${counter}-${file.name}`;
-    return { key, objectUrl: `https://cdn.example.com/${key}?sig=x` };
+    return { key, assetId: `As${counter}` };
   });
   mockBake.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
 
@@ -72,10 +66,12 @@ describe("finalizeAssetsForSave", () => {
 
     const [component] = useThemeEditorStore.getState().components;
     expect(component.source).toMatch(/^uploads\/users\/me\/components\//);
-    // 화면에는 계속 그려야 하므로 렌더용 주소를 따로 남긴다.
-    expect(component.renderUrl).toMatch(/^https:\/\//);
+    // 화면에는 계속 그려야 하므로 렌더용 주소를 따로 남긴다. 자산 조회 URL 은 5분이면
+    // 끝나므로 이번 세션의 원래 주소를 쓴다.
+    expect(component.renderUrl).toBe("/stickers/sticker-001.png");
+    expect(component.assetId).toBe("As1");
     expect(mockUpload).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "FRAME_COMPONENT" }),
+      expect.objectContaining({ purpose: "FRAME_ASSET" }),
     );
   });
 
@@ -133,6 +129,8 @@ describe("finalizeAssetsForSave", () => {
 
     const [component] = useThemeEditorStore.getState().components;
     expect(component.renderedKey).toMatch(/^uploads\/users\/me\/components\//);
+    expect(component.renderedAssetId).toBe("As1");
+    expect(mockUpload).toHaveBeenCalledWith(expect.objectContaining({ purpose: "TEXT_RENDER" }));
     // 글자 내용은 source 그대로여야 한다 — 서버가 TEXT 의 source 를 글자로 읽는다.
     expect(component.source).toBe("오늘도, 네 컷");
   });

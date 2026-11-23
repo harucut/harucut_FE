@@ -140,6 +140,20 @@ export async function stubAuthenticatedApi(page: Page) {
     if (path.endsWith("/subscription/usage")) return json(SUBSCRIPTION_USAGE);
     if (path.endsWith("/files/presigned-img")) return json(PRESIGNED_IMAGE_URL);
     if (path.endsWith("/download-url")) return json(PRESIGNED_IMAGE_URL);
+    // 서버 초안(F1-5). `/user/frame` 보다 먼저 본다 — 그 조건이 이 경로까지 삼켜 프레임 목록을 돌려줬다.
+    // 기기 사이 초안은 없는 것으로 둔다. 있으면 편집 화면마다 「다른 기기의 초안」 배너가 뜬다.
+    if (path.includes("/user/frame-drafts")) {
+      if (method === "GET") return json(path.endsWith("/frame-drafts") ? [] : null);
+      if (method === "DELETE") return json(null);
+      return json({ draftId: "Dre2e", frameId: null, revision: 1, updatedAt: new Date().toISOString() });
+    }
+    // 공통 자산 업로드(F1-6): 의도 → S3 PUT(아래 가짜 주소) → 완료 확인.
+    if (path.endsWith("/assets/upload-intents")) {
+      return json({ assetId: "Ase2e", uploadUrl: `${url.origin}${S3_STUB_PATH}`, method: "PUT", headers: {} });
+    }
+    if (path.includes("/assets/") && path.endsWith("/complete")) {
+      return json({ assetId: "Ase2e", status: "VERIFIED", key: "uploads/users/a11y/assets/Ase2e.png" });
+    }
     if (path.includes("/user/frame")) return json(FRAMES);
     if (path.includes("/user/media")) return json(MEDIA);
 

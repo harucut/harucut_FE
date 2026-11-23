@@ -61,8 +61,6 @@ export function SessionExpiryBridge() {
           },
           { id: "dismiss", label: "이 화면에 머무르기", variant: "secondary" },
         ],
-        eyebrow: "NOTICE",
-        icon: "lock",
         message:
           "다시 로그인해야 저장하거나 불러올 수 있어요. 촬영 사진은 이 기기에 임시 보관되지만, 저장소를 사용할 수 없거나 창을 닫으면 작업을 잃을 수 있어요.",
         title: "로그인이 풀렸어요",
