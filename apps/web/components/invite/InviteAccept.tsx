@@ -100,7 +100,6 @@ export function InviteAccept() {
       }
       void load();
     };
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 판정
     pickUp(false);
     // 같은 탭에 다른 초대 링크를 붙여 넣으면 fragment 만 바뀌어 다시 마운트되지 않는다 — 그 토큰으로 다시 읽는다(Codex 리뷰 #606).
     const onHashChange = () => pickUp(true);
