@@ -114,6 +114,8 @@ export function InviteAccept() {
     setView({ kind: "accepting", preview });
     try {
       const accepted = await acceptInvitation(token);
+      // 받는 사이 다른 초대 링크로 바뀌었으면 새 초대의 토큰·화면을 건드리지 않는다(Codex 리뷰 #609).
+      if (tokenRef.current !== token) return;
       clearInviteToken();
       rememberStudioAccess();
       // 행사 고객(신랑신부 등)에게는 사진함이 제품의 전부다 — 운영 화면을 거치지 않고 바로 간다.
@@ -125,6 +127,7 @@ export function InviteAccept() {
             : "/studio",
       );
     } catch (error) {
+      if (tokenRef.current !== token) return;
       const { code, status } = getApiErrorDetails(error);
       if (status === 401) {
         setView({ kind: "need-login" });

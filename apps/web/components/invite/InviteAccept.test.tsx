@@ -161,3 +161,27 @@ it("같은 탭에서 다른 초대 링크로 바뀌면 그 초대를 다시 읽�
   fireEvent.click(screen.getByRole("button", { name: "초대 받기" }));
   await waitFor(() => expect(mockAccept).toHaveBeenCalledWith(OTHER));
 });
+
+// Codex 리뷰 #609 — 받는 중에 다른 초대 링크로 바뀌면, 이전 수락의 답이 새 초대의 토큰을 지우고 이전 공간으로 데려갔다.
+it("받는 중에 다른 초대 링크로 바뀌면 이전 수락의 답으로 새 초대를 건드리지 않는다", async () => {
+  const OTHER = "Zz9_yYx8-wWv7uUt6sSr5qQp4oOn3mMl2kKj1iIh0gG";
+  window.history.replaceState(null, "", `/invite#${TOKEN}`);
+  let finishAccept: (v: unknown) => void = () => {};
+  mockAccept.mockImplementation(() => new Promise((resolve) => (finishAccept = resolve)));
+  render(<InviteAccept />);
+  fireEvent.click(await screen.findByRole("button", { name: "초대 받기" }));
+
+  mockPreview.mockResolvedValue({ ...WORKSPACE_PREVIEW, workspaceName: "두 번째 팀" });
+  await act(async () => {
+    window.history.replaceState(null, "", `/invite#${OTHER}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await screen.findByText("두 번째 팀");
+
+  await act(async () => {
+    finishAccept({ kind: "WORKSPACE", workspaceId: "WsOrg" });
+  });
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(window.sessionStorage.getItem(KEY)).toBe(OTHER);
+  expect(screen.getByText("두 번째 팀")).toBeInTheDocument();
+});
