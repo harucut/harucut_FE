@@ -1193,18 +1193,22 @@ export const useThemeEditorStore = create<State>((set, get) => ({
   // 저장 시 finalizeAssetsForSave가 S3에 올릴 수 있게 한다.
   hydrateDraft: (draft, options) => {
     set(() => {
-      const photoSrcs = Array.from(
-        new Set(
-          draft.components
-            .filter((c) => c.type === "PHOTO")
-            .map((c) => c.source)
-            .filter((src) => src.startsWith("data:")),
-        ),
-      );
-      const photos: Asset[] = photoSrcs.map((src) => ({
+      // 사진 목록에 되살릴 원본(data URL)과 이미 올린 key. 자동 저장이 올린 사진은 source 가 key 로 바뀌고 원본은 renderUrl 에
+      // 남는다 — 그것도 되살려야 새로고침 뒤에도 누끼·다시 넣기를 쓴다(Codex 리뷰 #606).
+      const photoKeys = new Map<string, string | undefined>();
+      for (const c of draft.components) {
+        if (c.type !== "PHOTO") continue;
+        if (c.source.startsWith("data:")) {
+          if (!photoKeys.has(c.source)) photoKeys.set(c.source, undefined);
+        } else if (c.renderUrl?.startsWith("data:")) {
+          photoKeys.set(c.renderUrl, c.source);
+        }
+      }
+      const photos: Asset[] = [...photoKeys].map(([src, s3Key]) => ({
         id: uid("asset"),
         src,
         name: "draft.png",
+        ...(s3Key ? { s3Key } : {}),
         file: dataUrlToFile(src, `draft-${crypto.randomUUID()}.png`),
       }));
 

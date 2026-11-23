@@ -324,3 +324,21 @@ it("행사 운영 첫 화면에는 개인 홈으로 가는 길이 없고, 계정
   expect(screen.getByRole("link", { name: "마이페이지" })).toHaveAttribute("href", "/mypage");
   expect(document.querySelector('a[href="/home"]')).toBeNull();
 });
+
+// Codex 리뷰 #606 — 공간을 바꾼 뒤 새 목록이 늦으면 이전 공간의 행사가 지금 공간의 것처럼 보였다(누르면 이전 공간의 행사).
+it("공간을 바꾸면 새 목록이 올 때까지 이전 공간의 행사를 보이지 않는다", async () => {
+  mockListWorkspaces.mockResolvedValue([PERSONAL, ORG, ORG_B]);
+  mockListEvents.mockImplementation((workspaceId: string) =>
+    workspaceId === "WsOrg"
+      ? Promise.resolve([{ eventId: "EvA", status: "LIVE", paused: false, captureOpen: true, joinUrlPath: "/e/a", settings: { name: "A 공간 행사" } }])
+      : new Promise(() => {}),
+  );
+  mockQuery = "workspace=WsOrg";
+  const { rerender } = render(<StudioHome />);
+  await screen.findByRole("link", { name: /A 공간 행사/ });
+
+  mockQuery = "workspace=WsB";
+  rerender(<StudioHome />);
+  await waitFor(() => expect(mockListEvents).toHaveBeenCalledWith("WsB"));
+  expect(screen.queryByRole("link", { name: /A 공간 행사/ })).toBeNull();
+});
