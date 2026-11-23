@@ -166,11 +166,17 @@ export function useServerFrameDraft(options: {
     if (!draftRef.current && useThemeEditorStore.getState().past.length === 0) return;
 
     inFlightRef.current = true;
+    // 올리는 사이 편집기를 나가 다른 프레임을 열면 전역 스토어는 그 프레임이다 — 그 내용을 이 세션의 초안에 쓰지 않는다(Codex 리뷰 #606).
+    const session = sessionRef.current;
     try {
       setStatus("saving");
       await useThemeEditorStore.getState().uploadLocalImagesForDraft();
       // 올리는 사이 저장을 마쳤거나 버렸으면 새로 만들지 않는다.
       if (stoppedRef.current) return;
+      if (sessionRef.current !== session) {
+        setStatus("idle");
+        return;
+      }
       const built = currentDocument();
       if (!built) {
         setStatus("error");

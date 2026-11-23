@@ -344,6 +344,36 @@ describe("Codex 리뷰 반영", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
+  // #606: 자동 저장이 사진 올리기를 기다리는 사이 나가서 다른 프레임을 열면, 그 프레임 내용이 이전 초안에 쓰였다.
+  it("자동 저장이 사진을 올리는 사이 편집기를 나갔으면 다음 편집기의 내용을 이전 초안에 쓰지 않는다", async () => {
+    let finishUpload: () => void = () => {};
+    // reset 은 동작(함수)을 되돌리지 않는다 — 다음 시험에 새지 않게 끝에 되돌린다.
+    const upload = useThemeEditorStore.getState().uploadLocalImagesForDraft;
+    try {
+      const { unmount } = renderDraftHook();
+      await flush();
+      useThemeEditorStore.setState({
+        uploadLocalImagesForDraft: () => new Promise<void>((resolve) => (finishUpload = resolve)),
+      });
+      act(() => useThemeEditorStore.getState().setBackgroundColor("ff0000"));
+      await afterDebounce();
+
+      unmount();
+      act(() => {
+        useThemeEditorStore.getState().reset();
+        useThemeEditorStore.getState().setFrameId("classic-4");
+        useThemeEditorStore.getState().setBackgroundColor("00ff00");
+      });
+      await act(async () => {
+        finishUpload();
+      });
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    } finally {
+      useThemeEditorStore.setState({ uploadLocalImagesForDraft: upload });
+    }
+  });
+
   // 편집기 상태는 전역 스토어다. 나간 편집기의 늦은 응답이 다음에 연 편집기를 덮으면 안 된다.
   it("배경 주소를 받는 사이 편집기를 나갔으면 이전 초안을 다음 편집기에 넣지 않는다", async () => {
     mockList.mockResolvedValue([{ draftId: "Dr9", frameId: null, revision: 5, updatedAt: "2026-10-26T01:00:00Z" }]);
