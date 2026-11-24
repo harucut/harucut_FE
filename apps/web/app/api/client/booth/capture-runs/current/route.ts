@@ -1,7 +1,5 @@
 import { proxyJson } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** 기기의 활성 회차 — version 이 다르면 job·결과 토큰을 싣지 않는다. 부스 기기 자격(X-Booth-Token). 쿠키는 넘기지 않는다(ADR-0007). */

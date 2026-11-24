@@ -1,7 +1,5 @@
 import { proxyJson } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** 구독 사용량 조회 프록시 (프레임 보관 한도·사용량) */

@@ -1,7 +1,5 @@
 import { proxyJson, validatePublicId } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** 사진함 목록 쿼리 중 백엔드에 넘기는 것. 그 밖의 키는 버린다. */

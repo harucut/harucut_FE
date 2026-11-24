@@ -1,7 +1,5 @@
 import { proxyJson, validatePublicId } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** userId 는 회원 public id 또는 `me`(본인 탈퇴). */

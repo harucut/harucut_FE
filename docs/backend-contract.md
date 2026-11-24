@@ -152,9 +152,8 @@ COUPON  001 002 003 004 005 006 007 008
 
 - **문구표에 짝이 있어야 한다.** 표의 코드는 전부 `packages/shared/src/api-error-messages.ts`
   의 「클라이언트 자체 코드」 블록에 있다. 없는 코드를 내면 위 폴백 사고가 그대로 재현된다.
-  프록시 쪽은 상수를 import 하지 못하고(그 트리의 route 가 전부 `runtime = "edge"` 라
-  `@harucut/shared` 배럴을 끌어오면 edge 번들에 shared 가 통째로 딸려 온다) 문자열로만
-  맞춰 두므로, 코드 이름을 바꾸면 두 파일을 같은 커밋에서 고친다.
+  프록시 쪽은 상수를 import 하지 않고 문자열로만 맞춰 두므로, 코드 이름을 바꾸면 두 파일을
+  같은 커밋에서 고친다.
   회귀 고정: `app/api/client/_proxy.test.ts` 의
   "only invents codes that the shared message table can translate".
 - **대조에서 빼야 한다.** `scripts/check_backend_contract.py` 의 `CLIENT_ONLY_CODES` 가
