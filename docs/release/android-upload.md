@@ -26,7 +26,9 @@ jarsigner -verify harucut-play.aab
 5. 검증 로그의 `jar verified`와 업로드 인증서 지문을 확인한다. 자체 서명 업로드 인증서는
    공개 CA 체인이 없는 것이 정상이다. 이는 앱 내용의 서명 검증 실패와 구분한다.
 6. Play Console → 내부 테스트 → 새 버전에 서명한 AAB를 업로드한다. 앱 ID는
-   `com.harucut.app`, 등록 이름은 `harucut`, 운영자는 `vailen`이다.
+   `com.harucut.android`, 등록 이름은 `harucut`, 운영자는 `vailen`이다.
+   iOS 번들 ID(`com.harucut.app`)와 다르다 — Play 에서는 `com.harucut.app` 을 다른 계정이
+   이미 쓰고 있어 2026-11-24 첫 등록 때 바꿨다.
    첫 번들은 Console에서 올려야 하며 이후 자동 제출을 설정할 수 있다.
 
 빌드 성공만으로 업로드·게시가 끝난 것은 아니다. Console의 처리 결과, 테스트 링크,
