@@ -1,7 +1,5 @@
 import { proxyJson } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** 플랫폼 CMS — 행사 찾기(slug·이름). 검색어(query)만 넘긴다. ADMIN 은 백엔드가 본다. */

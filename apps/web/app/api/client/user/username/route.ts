@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildResponse, forward } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /**

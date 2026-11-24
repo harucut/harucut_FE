@@ -1,7 +1,5 @@
 import { buildResponse, forward } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** 회원 탈퇴 프록시 + 프론트 쿠키 만료 */

@@ -3,8 +3,6 @@ import { forward } from "@/app/api/client/_proxy";
 import { adaptSetCookiesForRequest } from "@/lib/server/setCookies";
 import { isUnusableUserStatus, readUserStatus } from "@/lib/authUserStatus";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export async function GET(req: Request) {

@@ -1,7 +1,5 @@
 import { proxyJson } from "@/app/api/client/_proxy";
 
-export const runtime = "edge";
-
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 /** 이용권 목록(ADMIN). */
