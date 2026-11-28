@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { StoreBuyButton, StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
+import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { StoreBuyButton, StoreRestoreButton, useStorePlusPrice } from "@/components/subscription/StoreSubscriptionActions";
 
 const shell = { native: false, supports: false, platform: "ios" };
 const mockBuy = jest.fn();
@@ -99,4 +99,18 @@ it("사기 전에 알릴 것이 있으면 결제 창 대신 안내를 보이고,
   fireEvent.click(screen.getByRole("button", { name: "그래도 구독하기" }));
   await waitFor(() => expect(mockBuy).toHaveBeenLastCalledWith({ confirmed: true }));
   expect(await screen.findByRole("button", { name: /앱에서 구독하기/ })).toBeInTheDocument();
+});
+
+// 스토어 가격 단계는 웹 가격표와 다를 수 있다(한국 ₩3,900 단계 없음). 앱에서는 카드가 스토어 값을 그대로 보인다.
+it("useStorePlusPrice 는 앱에서 파는 동안 스토어 가격을, 브라우저에서는 null 을 준다", async () => {
+  mockProducts.mockResolvedValue({ ok: true, value: [{ productId: "harucut.plus.monthly", displayPrice: "₩4,400", title: "베이직" }] });
+  const browser = renderHook(() => useStorePlusPrice());
+  await waitFor(() => expect(browser.result.current).toBeNull());
+  browser.unmount();
+  expect(mockProducts).not.toHaveBeenCalled();
+
+  shell.native = true;
+  shell.supports = true;
+  const app = renderHook(() => useStorePlusPrice());
+  await waitFor(() => expect(app.result.current).toBe("₩4,400"));
 });
