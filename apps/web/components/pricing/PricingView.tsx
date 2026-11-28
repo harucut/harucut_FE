@@ -326,7 +326,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         {/* 전체 스펙 비교 — 기능(행) × 플랜(열) 매트릭스 */}
         <section className="flex flex-col gap-4">
           <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
-            {PAYMENTS_ENABLED ? "전체 스펙 비교" : "예정 요금제 비교"}
+            {PAYMENTS_ENABLED || storeSaleOpen ? "전체 스펙 비교" : "예정 요금제 비교"}
           </h2>
           <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} />
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
