@@ -17,6 +17,7 @@ import {
   PRICING_HEADLINE,
   PRICING_SUBTITLE,
   PRICING_SUBTITLE_AUTHED,
+  PRICING_SUBTITLE_STORE,
   toPlanId,
   getPlanDisplayName,
   type Plan,
@@ -26,7 +27,7 @@ import { PRICING_FAQ } from "@/constants/faq";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import type { SubscriptionUsage } from "@/lib/api-types";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
-import { StoreBuyButton } from "@/components/subscription/StoreSubscriptionActions";
+import { StoreBuyButton, useStoreSaleOpen } from "@/components/subscription/StoreSubscriptionActions";
 
 // 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
 // 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로 비회원에겐 노출하지 않는다.
@@ -191,6 +192,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
   const [open, setOpen] = useState(0);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId | null>(null);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  // 앱(iOS)에서 플러스 구독 버튼이 보이는 동안에는 「유료 요금제는 준비 중」이라고 적지 않는다.
+  const storeSaleOpen = useStoreSaleOpen();
   const [usageFailed, setUsageFailed] = useState(false);
   // 앱에서 구독을 마치면 올려 현재 플랜을 다시 받는다.
   const [usageReload, setUsageReload] = useState(0);
@@ -237,7 +240,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             {PRICING_HEADLINE}
           </h1>
           <p className="mt-3 max-w-120 text-[14px] leading-normal text-(--hc-muted)">
-            {authed ? PRICING_SUBTITLE_AUTHED : PRICING_SUBTITLE}
+            {authed ? (storeSaleOpen ? PRICING_SUBTITLE_STORE : PRICING_SUBTITLE_AUTHED) : PRICING_SUBTITLE}
           </p>
         </header>
 
@@ -252,7 +255,8 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           </section>
         ) : null}
 
-        {!PAYMENTS_ENABLED ? (
+        {/* 앱에서 구독을 파는 동안에는 「도입 예정」이 사는 버튼과 어긋난다 — 그때는 카드만 보인다. */}
+        {!PAYMENTS_ENABLED && !storeSaleOpen ? (
           <div className="flex flex-col gap-2">
             <h2 className="text-lg font-bold">개인 요금제 · 도입 예정 기준</h2>
             <p className="text-sm leading-relaxed text-(--hc-muted)">

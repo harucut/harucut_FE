@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { StoreBuyButton, StoreRestoreButton } from "@/components/subscription/StoreSubscriptionActions";
+import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { StoreBuyButton, StoreRestoreButton, useStoreSaleOpen } from "@/components/subscription/StoreSubscriptionActions";
 
 const shell = { native: false, supports: false, platform: "ios" };
 const mockBuy = jest.fn();
@@ -99,4 +99,22 @@ it("사기 전에 알릴 것이 있으면 결제 창 대신 안내를 보이고,
   fireEvent.click(screen.getByRole("button", { name: "그래도 구독하기" }));
   await waitFor(() => expect(mockBuy).toHaveBeenLastCalledWith({ confirmed: true }));
   expect(await screen.findByRole("button", { name: /앱에서 구독하기/ })).toBeInTheDocument();
+});
+
+// 요금제 화면은 이 값으로 「유료 요금제는 준비 중」 문구를 바꾼다 — 사는 버튼이 보일 때만 참이어야 한다.
+it("useStoreSaleOpen 은 구매 버튼이 실제로 보이는 iOS 셸에서만 참이다", async () => {
+  const cases: Array<[boolean, boolean, string, boolean]> = [
+    [false, false, "ios", false],
+    [true, false, "ios", false],
+    [true, true, "android", false],
+    [true, true, "ios", true],
+  ];
+  for (const [native, supports, platform, expected] of cases) {
+    shell.native = native;
+    shell.supports = supports;
+    shell.platform = platform;
+    const { result, unmount } = renderHook(() => useStoreSaleOpen());
+    await waitFor(() => expect(result.current).toBe(expected));
+    unmount();
+  }
 });

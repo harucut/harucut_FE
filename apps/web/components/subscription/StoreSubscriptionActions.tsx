@@ -72,6 +72,14 @@ function Notice({ notice }: { notice: { kind: "ok" | "error"; text: string } | n
  * 앱에서 플러스 구독(P4-B). 앱 결제를 열지 않았거나(STORE_PURCHASES_ENABLED) 브라우저면 그리지 않는다 —
  * 웹 결제로 우회하지 않는다(R5 12절). 구버전 셸이면 업데이트를 안내한다.
  */
+/**
+ * 이 화면에서 지금 앱 구독을 팔고 있는가 — `StoreBuyButton` 이 진짜 버튼을 그리는 조건과 같다.
+ * 요금제 화면이 버튼 옆에 「유료 요금제는 준비 중」이라고 적지 않게 쓴다.
+ */
+export function useStoreSaleOpen(): boolean {
+  return useShell() === "ready";
+}
+
 export function StoreBuyButton({
   onDone,
   fallback = null,
