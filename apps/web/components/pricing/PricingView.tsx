@@ -27,7 +27,7 @@ import { PRICING_FAQ } from "@/constants/faq";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import type { SubscriptionUsage } from "@/lib/api-types";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
-import { StoreBuyButton, useStoreSaleOpen } from "@/components/subscription/StoreSubscriptionActions";
+import { StoreBuyButton, useStorePlusPrice, useStoreSaleOpen } from "@/components/subscription/StoreSubscriptionActions";
 
 // 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
 // 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로 비회원에겐 노출하지 않는다.
@@ -39,8 +39,11 @@ function PlanCard({
   authed,
   current,
   onPurchased,
+  storePrice,
 }: {
   plan: Plan;
+  /** 앱에서 스토어로 팔 때 스토어가 매긴 가격. 있으면 웹 가격표 값 대신 보인다. */
+  storePrice?: string | null;
   authed: boolean;
   /** 이 카드가 지금 이용 중인 플랜인지. */
   current: boolean;
@@ -84,7 +87,7 @@ function PlanCard({
       <div className="mb-0.5 mt-2.5 flex items-baseline gap-1.5">
         {/* 이름이 이미 '무료' 인 카드에 가격까지 '무료' 라고 쓰면 같은 말을 두 번 한다. 숫자 자리에는 숫자. */}
         <span className="text-[28px] font-extrabold leading-none tracking-[-0.6px] text-(--hc-text)">
-          {plan.price === "무료" ? "₩0" : plan.price}
+          {plan.price === "무료" ? "₩0" : (storePrice ?? plan.price)}
         </span>
         <span className="text-[13px] text-(--hc-muted)">{plan.sub}</span>
       </div>
@@ -194,6 +197,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
   // 앱(iOS)에서 플러스 구독 버튼이 보이는 동안에는 「유료 요금제는 준비 중」이라고 적지 않는다.
   const storeSaleOpen = useStoreSaleOpen();
+  const storePlusPrice = useStorePlusPrice();
   const [usageFailed, setUsageFailed] = useState(false);
   // 앱에서 구독을 마치면 올려 현재 플랜을 다시 받는다.
   const [usageReload, setUsageReload] = useState(0);
@@ -274,6 +278,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               authed={authed}
               current={(PAYMENTS_ENABLED || STORE_PURCHASES_ENABLED) && currentPlanId === plan.id}
               onPurchased={() => setUsageReload((n) => n + 1)}
+              storePrice={plan.id === "plus" ? storePlusPrice : null}
             />
           ))}
         </section>
@@ -328,7 +333,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
           <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
             {PAYMENTS_ENABLED || storeSaleOpen ? "전체 스펙 비교" : "예정 요금제 비교"}
           </h2>
-          <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} />
+          <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} plusPrice={storePlusPrice} />
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
             {PRICING_DOWNGRADE_NOTE}
           </p>

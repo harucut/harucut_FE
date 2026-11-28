@@ -80,22 +80,14 @@ export function useStoreSaleOpen(): boolean {
   return useShell() === "ready";
 }
 
-export function StoreBuyButton({
-  onDone,
-  fallback = null,
-}: {
-  onDone?: (subscription: Subscription) => void;
-  /** 브라우저이거나 앱 결제를 열지 않았을 때 그릴 것. */
-  fallback?: ReactNode;
-}) {
-  const shell = useShell();
+/**
+ * 스토어가 매긴 베이직(플러스) 가격 — 예: 「₩4,400」. 앱 구독을 팔지 않거나 아직 모르면 null.
+ * 스토어 가격 단계는 웹 가격표(₩3,900)와 다를 수 있어, 앱에서는 카드와 버튼 모두 이 값을 쓴다.
+ */
+export function useStorePlusPrice(known?: Shell | null): string | null {
+  const own = useShell();
+  const shell = known === undefined ? own : known;
   const [price, setPrice] = useState<string | null>(null);
-  const { busy, notice, confirm, cancelConfirm, start } = useStoreAction(
-    (confirmed) => buyPlusInApp({ confirmed }),
-    "플러스를 시작했어요.",
-    onDone,
-  );
-
   useEffect(() => {
     if (shell !== "ready" || !STORE_PURCHASES_ENABLED) return;
     let cancelled = false;
@@ -106,6 +98,25 @@ export function StoreBuyButton({
       cancelled = true;
     };
   }, [shell]);
+  return price;
+}
+
+export function StoreBuyButton({
+  onDone,
+  fallback = null,
+}: {
+  onDone?: (subscription: Subscription) => void;
+  /** 브라우저이거나 앱 결제를 열지 않았을 때 그릴 것. */
+  fallback?: ReactNode;
+}) {
+  const shell = useShell();
+  const price = useStorePlusPrice(shell);
+  const { busy, notice, confirm, cancelConfirm, start } = useStoreAction(
+    (confirmed) => buyPlusInApp({ confirmed }),
+    "플러스를 시작했어요.",
+    onDone,
+  );
+
 
   if (!STORE_PURCHASES_ENABLED || shell === null || shell === "browser") return <>{fallback}</>;
   if (shell === "outdated") return <p className="mt-5 text-center text-[13px] text-(--hc-muted)">{OUTDATED}</p>;

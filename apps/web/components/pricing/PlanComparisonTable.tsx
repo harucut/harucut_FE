@@ -23,9 +23,12 @@ const FEATURE_ROWS = PLANS[0].feats.map((feat, rowIndex) => {
 
 export function PlanComparisonTable({
   currentPlanId,
+  plusPrice,
 }: {
   /** 로그인 사용자의 현재 플랜. 해당 열 헤더에 "현재 플랜"을 붙인다. */
   currentPlanId?: PlanId | null;
+  /** 앱에서 스토어로 팔 때 스토어가 매긴 베이직 가격. 있으면 가격표 값 대신 보인다. */
+  plusPrice?: string | null;
 }) {
   return (
     // 좌우 거터만큼 빼내 표가 화면 끝까지 스크롤되게 한다.
@@ -61,7 +64,7 @@ export function PlanComparisonTable({
                   {plan.name}
                 </span>
                 <span className="mt-0.5 block text-[11px] font-medium text-(--hc-muted)">
-                  {plan.price === "무료" ? "₩0" : plan.price}
+                  {plan.price === "무료" ? "₩0" : plan.id === "plus" && plusPrice ? plusPrice : plan.price}
                   {plan.sub ? ` ${plan.sub}` : ""}
                 </span>
                 {currentPlanId === plan.id ? (
