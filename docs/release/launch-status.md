@@ -39,7 +39,7 @@ Expo 57 / RN 0.86.3 공식 조합과 peer를 고정했고 Android QA APK와 iOS 
 - Android `mobile-qa` CI는 `run-ci` 라벨이 있는 PR에서 APK를 빌드한다. Expo 기본 시험 서명을 쓰므로 Play 배포용이 아니다. 이 APK는 공식 운영 웹을 연다. 새 웹 배포 전에는 변경 전 웹이 보인다.
 - 로컬 iOS는 CocoaPods의 Hermes 다운로드가 차단돼 CI에서 네이티브 빌드를 검증했다. 서명 팀·앱 레코드·프로비저닝은 별도 확인이 필요하다.
 - 일반 웹의 소셜 로그인은 유지한다. 앱 구글 로그인은 시스템 브라우저 인증과 안전한 세션 인계가 준비되지 않아 웹 이용을 안내한다. 카카오/네이버는 실제 운영 계정으로 쿠키 범위·복귀·취소를 확인해야 한다.
-- App Store Connect와 Play Console에서 `com.harucut.app`에 해당하는 앱/팀을 확인하고, 심사용 계정과 개인정보 신고를 실제 데이터 처리와 맞춘다. vailen이라는 표시 이름만으로 판매자 계정이 선택되지는 않는다.
+- App Store Connect(iOS 번들 ID `com.harucut.app`)와 Play Console(앱 ID `com.harucut.android` — Play 의 `com.harucut.app` 은 다른 계정 소유)에서 해당 앱/팀을 확인하고, 심사용 계정과 개인정보 신고를 실제 데이터 처리와 맞춘다. vailen이라는 표시 이름만으로 판매자 계정이 선택되지는 않는다.
 - 운영 약관 데이터, 이메일 인증 발송, 시스템 기본 프레임 4종, 실제 BASIC 저장 한도는 운영 데이터/계정으로 재확인한다. 기존 세션의 관찰을 현재 사실로 단정하지 않는다.
 - 기존 `@imgly/background-removal`의 AGPL 조건과 현재 배포/라이선스 표기의 적합성은 아직 결정되지 않았다.
 

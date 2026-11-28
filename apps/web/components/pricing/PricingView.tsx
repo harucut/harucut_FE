@@ -27,7 +27,7 @@ import { PRICING_FAQ } from "@/constants/faq";
 import { getSubscriptionUsage } from "@/lib/userApi";
 import type { SubscriptionUsage } from "@/lib/api-types";
 import { PlanComparisonTable } from "@/components/pricing/PlanComparisonTable";
-import { StoreBuyButton, useStorePlusPrice, useStoreSaleOpen } from "@/components/subscription/StoreSubscriptionActions";
+import { StoreBuyButton, useStorePlusPrice } from "@/components/subscription/StoreSubscriptionActions";
 
 // 비로그인 방문자용 헤더는 랜딩/FAQ와 동일한 MarketingNav로 통일한다.
 // 앱 네비(홈·기록·MY)는 보호 라우트로 튕기므로 비회원에겐 노출하지 않는다.
@@ -195,9 +195,11 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
   const [open, setOpen] = useState(0);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId | null>(null);
   const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
-  // 앱(iOS)에서 플러스 구독 버튼이 보이는 동안에는 「유료 요금제는 준비 중」이라고 적지 않는다.
-  const storeSaleOpen = useStoreSaleOpen();
+  // 스토어가 매긴 베이직 가격. 앱(iOS)에서 실제로 팔 수 있는 상품을 받았을 때만 값이 있다.
   const storePlusPrice = useStorePlusPrice();
+  // 「유료 요금제는 준비 중」·「도입 예정」을 거두는 조건 — 로그인해 구독 버튼이 보이고, 스토어 상품도 받았을 때만.
+  // 로그인 전에는 버튼이 없고, 상품을 못 받으면 구매가 store-unavailable 로 끝나므로 예정 안내를 그대로 둔다.
+  const storeSelling = authed && storePlusPrice !== null;
   const [usageFailed, setUsageFailed] = useState(false);
   // 앱에서 구독을 마치면 올려 현재 플랜을 다시 받는다.
   const [usageReload, setUsageReload] = useState(0);
@@ -244,7 +246,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
             {PRICING_HEADLINE}
           </h1>
           <p className="mt-3 max-w-120 text-[14px] leading-normal text-(--hc-muted)">
-            {authed ? (storeSaleOpen ? PRICING_SUBTITLE_STORE : PRICING_SUBTITLE_AUTHED) : PRICING_SUBTITLE}
+            {storeSelling ? PRICING_SUBTITLE_STORE : authed ? PRICING_SUBTITLE_AUTHED : PRICING_SUBTITLE}
           </p>
         </header>
 
@@ -260,7 +262,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         ) : null}
 
         {/* 앱에서 구독을 파는 동안에는 「도입 예정」이 사는 버튼과 어긋난다 — 그때는 카드만 보인다. */}
-        {!PAYMENTS_ENABLED && !storeSaleOpen ? (
+        {!PAYMENTS_ENABLED && !storeSelling ? (
           <div className="flex flex-col gap-2">
             <h2 className="text-lg font-bold">개인 요금제 · 도입 예정 기준</h2>
             <p className="text-sm leading-relaxed text-(--hc-muted)">
@@ -278,7 +280,7 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
               authed={authed}
               current={(PAYMENTS_ENABLED || STORE_PURCHASES_ENABLED) && currentPlanId === plan.id}
               onPurchased={() => setUsageReload((n) => n + 1)}
-              storePrice={plan.id === "plus" ? storePlusPrice : null}
+              storePrice={plan.id === "plus" && authed ? storePlusPrice : null}
             />
           ))}
         </section>
@@ -331,9 +333,9 @@ export function PricingView({ authed = false }: { authed?: boolean }) {
         {/* 전체 스펙 비교 — 기능(행) × 플랜(열) 매트릭스 */}
         <section className="flex flex-col gap-4">
           <h2 className="text-[20px] font-extrabold tracking-tight lg:text-[22px]">
-            {PAYMENTS_ENABLED || storeSaleOpen ? "전체 스펙 비교" : "예정 요금제 비교"}
+            {PAYMENTS_ENABLED || storeSelling ? "전체 스펙 비교" : "예정 요금제 비교"}
           </h2>
-          <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} plusPrice={storePlusPrice} />
+          <PlanComparisonTable currentPlanId={PAYMENTS_ENABLED ? currentPlanId : null} plusPrice={authed ? storePlusPrice : null} />
           <p className="text-[11px] leading-[1.6] text-(--hc-muted)">
             {PRICING_DOWNGRADE_NOTE}
           </p>
